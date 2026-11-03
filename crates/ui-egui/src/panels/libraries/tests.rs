@@ -235,6 +235,71 @@ fn the_list_view_shows_names_and_takes_drops_by_row() {
     assert!(!shown(&texts, "Ocean Blue"), "{texts:?}");
 }
 
+/// Art dragged off the canvas, and a colour from elsewhere, are added where they are dropped: on
+/// another graphic's top or bottom half, just before or after it and in its group; on a group's
+/// header, into that group; away from the items, ungrouped at the end, as into an empty library.
+#[test]
+fn art_and_colours_dropped_from_elsewhere_go_where_they_are_dropped() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("library.create", json!({"name": "Brand"})).unwrap();
+    let art = |app: &mut VectorcraftApp, x: f64, name: Option<&str>| {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 10.0 + x, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        if let Some(name) = name {
+            app.run("library.add", json!({"kind": "graphic", "ids": [id], "name": name})).unwrap();
+        }
+        PanelDrag::Art(vec![vectorcraft_doc::NodeId(id)])
+    };
+    // An empty library takes a drop anywhere on the list.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame_at(&mut app, &ctx, 600.0, vec![]);
+    let drag = art(&mut app, 0.0, None);
+    drop_at(&mut app, &ctx, drag, egui::pos2(130.0, 200.0));
+    let graphics = |app: &mut VectorcraftApp| {
+        let got = app.run("library.get", json!({})).unwrap();
+        got["graphics"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap().to_string()).collect::<Vec<_>>()
+    };
+    assert_eq!(graphics(&mut app).len(), 1);
+    app.run("library.removeItem", json!({"kind": "graphic", "item": "graphic"})).unwrap();
+    art(&mut app, 10.0, Some("Badge"));
+    art(&mut app, 20.0, Some("Seal"));
+    app.run("library.createGroup", json!({"name": "Logos", "items": [{"kind": "graphic", "item": "Seal"}]})).unwrap();
+    crate::panels::set_pstate(&ctx, LIST_VIEW, true);
+    // Onto Badge's top half: before it, ungrouped.
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    let badge = at(&texts, "Badge");
+    let drag = art(&mut app, 30.0, None);
+    drop_at(&mut app, &ctx, drag, egui::pos2(badge.center().x, badge.top() - 2.0));
+    let first = graphics(&mut app).first().cloned().unwrap();
+    assert_eq!(graphics(&mut app)[1..], ["Badge", "Seal"]);
+    assert_eq!(group_names(&mut app)[0].1.len(), 1, "only Seal is in Logos");
+    // Onto Seal's bottom half: after it, in Logos.
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    let seal = at(&texts, "Seal");
+    let drag = art(&mut app, 40.0, None);
+    drop_at(&mut app, &ctx, drag, egui::pos2(seal.center().x, seal.bottom() + 2.0));
+    let names = graphics(&mut app);
+    assert_eq!(names[..3], [first.as_str(), "Badge", "Seal"]);
+    assert_eq!(group_names(&mut app)[0].1.len(), 2, "the new graphic is in Logos: {:?}", group_names(&mut app));
+    // A swatch onto Logos's header: a colour in Logos.
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    drop_at(&mut app, &ctx, PanelDrag::paint(Paint::solid(vectorcraft_color::Color::from_hex("#0044aa").unwrap())), at(&texts, "Logos").center());
+    let got = app.run("library.get", json!({})).unwrap();
+    let color = got["colors"][0]["name"].as_str().unwrap().to_string();
+    assert!(group_names(&mut app)[0].1.contains(&color), "{:?}", group_names(&mut app));
+    // Below the items: ungrouped, at the end.
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    // The last item is the graphic added after Seal, in the list's last section.
+    let below = at(&texts, "Seal").bottom() + 80.0;
+    let drag = art(&mut app, 50.0, None);
+    drop_at(&mut app, &ctx, drag, egui::pos2(130.0, below));
+    let got = app.run("library.get", json!({})).unwrap();
+    let last = got["graphics"].as_array().unwrap().last().unwrap()["id"].as_str().unwrap().to_string();
+    assert_eq!(graphics(&mut app).len(), 5);
+    assert!(!group_names(&mut app)[0].1.contains(&last), "{:?}", group_names(&mut app));
+}
+
 /// A long list scrolls inside the panel (its bottom bar stays in the window), and a drag held
 /// near the list's bottom edge scrolls it.
 #[test]

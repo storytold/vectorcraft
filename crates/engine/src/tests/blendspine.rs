@@ -115,6 +115,35 @@ fn spine_conversion_rejects_invalid_arguments_without_mutation() {
     }
 }
 
+/// #4819: Convert Selected Anchor Points to Smooth or Corner (the Control bar's and the Contextual
+/// Task Bar's buttons) converts the points of a selected blend's spine, as it converts every
+/// anchor of a path selected whole, in one undo step, the keys staying put.
+#[test]
+fn converting_anchors_of_a_selected_blend_converts_its_spine() {
+    let mut s = session();
+    let (a, b, g) = blend(&mut s);
+    s.execute("object.blend.spine.addAnchor", &json!({"id": g.0, "x": 55, "y": 5})).unwrap();
+    s.execute("object.blend.spine.moveAnchor", &json!({"id": g.0, "anchor": 1, "x": 55, "y": 105})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let keys = spec(&s, g).key_anchors;
+    s.execute("path.convertAnchors", &json!({"to": "smooth"})).unwrap();
+    let sp = spec(&s, g);
+    assert_eq!(sp.key_anchors, keys);
+    let middle = sp.spine.as_ref().unwrap().subpaths[0].anchors[1];
+    assert_eq!(middle.p, Point::new(55.0, 105.0));
+    assert!(middle.has_in() && middle.has_out(), "{middle:?}");
+    assert!((middle.h_in.y - 105.0).abs() < 1e-9 && (middle.h_out.y - 105.0).abs() < 1e-9, "tangent to the chord between its neighbors: {middle:?}");
+    assert!(middle.h_in.x < 55.0 && middle.h_out.x > 55.0, "{middle:?}");
+    assert_eq!(center(&node(&s, a)), Point::new(5.0, 5.0));
+    assert_eq!(center(&node(&s, b)), Point::new(105.0, 5.0));
+
+    s.execute("path.convertAnchors", &json!({"to": "corner"})).unwrap();
+    let corner = spec(&s, g).spine.unwrap().subpaths[0].anchors.clone();
+    assert!(corner.iter().all(|a| !a.has_in() && !a.has_out()), "{corner:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, g).spine.unwrap().subpaths[0].anchors[1], middle, "one undo step");
+}
+
 #[test]
 fn moving_a_key_point_moves_the_key_and_the_other_way_round() {
     let mut s = session();

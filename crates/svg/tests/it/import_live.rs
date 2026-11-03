@@ -20,6 +20,75 @@ fn open(body: &str) -> (Document, Vec<String>) {
     import_with_report(&svg(body)).unwrap()
 }
 
+#[test]
+fn decoded_id_selectors_do_not_recolor_bare_ellipses() {
+    for selector in ["circle&#91;id]", "ellipse&#x5b;id]", "circle[id]", "ellipse[id]", "circle[ id ]", r"ellipse[\69 d]"] {
+        let source = svg(&format!(
+            "<style>{selector} {{ fill: red }}</style><circle cx=\"40\" cy=\"50\" r=\"20\"/><ellipse cx=\"100\" cy=\"50\" rx=\"20\" ry=\"10\"/><circle id=\"c\" cx=\"40\" cy=\"100\" r=\"8\"/><ellipse id=\"e\" cx=\"100\" cy=\"100\" rx=\"12\" ry=\"8\"/>"
+        ));
+        let doc = import(&source).unwrap();
+        let actual = render_artboard(&doc);
+        let expected = resvg_render(&source, 200, 120);
+        assert_eq!((actual.width, actual.height), (expected.width, expected.height));
+        for (x, y) in [(40, 50), (100, 50), (40, 100), (100, 100)] {
+            let at = 4 * (y * actual.width + x) as usize;
+            assert_eq!(&actual.rgba[at..at + 4], &expected.rgba[at..at + 4], "{selector}: ({x}, {y})");
+        }
+    }
+}
+
+#[test]
+fn metadata_ids_preserve_attribute_selector_colors_and_metadata() {
+    for attrs in [r#"data-foo="kept""#, r#"xmlns:meta="https://example.org/metadata" meta:key="kept""#, r#"onclick="kept""#] {
+        let source = svg(&format!(
+            r#"<style>circle[id], ellipse[id] {{ fill:red }}</style><circle {attrs} cx="40" cy="50" r="20"/><ellipse {attrs} cx="100" cy="50" rx="20" ry="10"/>"#
+        ));
+        let doc = import(&source).unwrap();
+        let actual = render_artboard(&doc);
+        let expected = resvg_render(&source, 200, 120);
+        for (x, y) in [(40, 50), (100, 50)] {
+            let at = 4 * (y * actual.width + x) as usize;
+            assert_eq!(&actual.rgba[at..at + 4], &expected.rgba[at..at + 4], "{attrs}: ({x}, {y})");
+        }
+        let has_metadata = |doc: &Document| {
+            art(doc)
+                .into_iter()
+                .filter(|n| {
+                    n.extras().attrs.as_deref().is_some_and(|a| {
+                        a.data.iter().any(|(k, v)| k == "foo" && v == "kept")
+                            || a.foreign.iter().any(|a| a.ns == "https://example.org/metadata" && a.name == "key" && a.value == "kept")
+                            || a.events.iter().any(|(k, v)| k == "onclick" && v == "kept")
+                    })
+                })
+                .count()
+        };
+        assert_eq!(has_metadata(&doc), 2, "{attrs}");
+        let back = import(&export(&doc, &ExportOptions::default())).unwrap();
+        assert_eq!(has_metadata(&back), 2, "round trip: {attrs}");
+    }
+}
+
+#[test]
+fn metadata_id_styles_keep_the_original_cascade_and_structure() {
+    for body in [
+        r#"<style>circle[id] {fill:red} .dot {fill:blue} circle {fill:green}</style><circle class="dot" data-foo="kept" cx="40" cy="50" r="20"/>"#,
+        r#"<style>circle[id] {fill:red} circle {fill:blue}</style><style>circle {fill:green}</style><circle data-foo="kept" cx="40" cy="50" r="20"/>"#,
+        r#"<style>circle[id] {fill:red} circle {fill:blue!important}</style><circle style="fill:green" data-foo="kept" cx="40" cy="50" r="20"/>"#,
+        r#"<style>circle[id] {fill:red} circle {fill:blue!important}</style><circle style="fill:green!important" data-foo="kept" cx="40" cy="50" r="20"/>"#,
+        r#"<style>circle[id] {fill:red} g {fill:blue} circle + ellipse {fill:green}</style><g><circle data-foo="kept" cx="40" cy="50" r="20"/><ellipse cx="100" cy="50" rx="20" ry="10"/></g>"#,
+        r#"<style>circle[id] {fill:red} circle:first-child {fill:blue}</style><g><circle data-foo="kept" cx="40" cy="50" r="20"/><circle cx="100" cy="50" r="20"/></g>"#,
+        r#"<style>circle[id] {fill:red} #existing {fill:blue}</style><circle id="existing" data-foo="kept" cx="40" cy="50" r="20"/>"#,
+    ] {
+        let source = svg(body);
+        let actual = render_artboard(&import(&source).unwrap());
+        let expected = resvg_render(&source, 200, 120);
+        for (x, y) in [(40, 50), (100, 50)] {
+            let at = 4 * (y * actual.width + x) as usize;
+            assert_eq!(&actual.rgba[at..at + 4], &expected.rgba[at..at + 4], "{body}: ({x}, {y})");
+        }
+    }
+}
+
 /// All non-layer nodes in paint order.
 fn art(d: &Document) -> Vec<&Node> {
     let mut v = Vec::new();
@@ -376,7 +445,7 @@ fn symbols_and_effects_export_import_export_is_stable() {
         shapes::ellipse(Rect::new(0.0, 0.0, 20.0, 20.0)),
         Appearance::basic(Paint::solid(Color::rgb8(200, 30, 30)), Paint::None, 0.0),
     );
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art: Arc::new(dot) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(dot) });
     let l = d.layers[0].id;
     for x in [10.0, 60.0] {
         let id = d.alloc_id();

@@ -98,6 +98,17 @@ impl Panel {
 
     /// One frame with `events` (and `modifiers` held); returns the texts drawn and where.
     fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<Event>, modifiers: Modifiers) -> Vec<(String, Pos2)> {
+        self.frame_of(app, events, modifiers, show)
+    }
+
+    /// [`Self::frame`] drawing `draw` (the panel, or its menu) instead of the panel.
+    fn frame_of(
+        &mut self,
+        app: &mut VectorcraftApp,
+        events: Vec<Event>,
+        modifiers: Modifiers,
+        draw: fn(&mut VectorcraftApp, &mut Ui),
+    ) -> Vec<(String, Pos2)> {
         fn texts(s: &egui::Shape, out: &mut Vec<(String, Pos2)>) {
             match s {
                 egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.pos + t.galley.rect.center().to_vec2())),
@@ -114,7 +125,7 @@ impl Panel {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(260.0, 600.0))),
             ..Default::default()
         };
-        let mut out = self.ctx.run_ui(input, |ui| show(app, ui));
+        let mut out = self.ctx.run_ui(input, |ui| draw(app, ui));
         out.textures_delta.clear();
         let mut v = vec![];
         out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
@@ -143,6 +154,29 @@ impl Panel {
         self.frame(app, vec![Event::PointerMoved(at), b(true)], m);
         self.frame(app, vec![b(false)], m);
         self.frame(app, vec![], Modifiers::NONE)
+    }
+
+    /// A click at `at` on the panel menu (drawn alone); returns the menu's texts after it.
+    fn menu_click(&mut self, app: &mut VectorcraftApp, at: Pos2) -> Vec<(String, Pos2)> {
+        let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        self.frame_of(app, vec![Event::PointerMoved(at), b(true)], Modifiers::NONE, menu);
+        self.frame_of(app, vec![b(false)], Modifiers::NONE, menu);
+        self.frame_of(app, vec![], Modifiers::NONE, menu)
+    }
+
+    /// The first widget right of `at` on its row (last frame).
+    fn widget_after(&self, at: Pos2) -> Rect {
+        let mut v: Vec<Rect> = self.ctx.viewport(|vp| {
+            vp.prev_pass
+                .widgets
+                .layers()
+                .flat_map(|(_, w)| w.iter())
+                .map(|w| w.rect)
+                .filter(|r| (r.center().y - at.y).abs() < 8.0 && r.left() > at.x)
+                .collect()
+        });
+        v.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        *v.first().expect("a widget right of it")
     }
 
     /// The `size`-square widgets right of `at` on its row (last frame), left to right.
@@ -509,6 +543,31 @@ fn double_clicking_a_stop_opens_the_shared_popover_beside_it() {
     assert_eq!(app.session.selected_stop(), Some(1));
 }
 
+/// #4953: with a freeform point selected, clicking the Color swatch opens the popover for that
+/// point, which recolours it and leaves the other points as they were.
+#[test]
+fn the_freeform_color_swatch_opens_the_points_popover() {
+    let mut app = app(json!({"gradient": {"kind": "freeform"}}));
+    app.run("paint.freeform.selectPoint", json!({"index": 1})).unwrap();
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let label = text_at(&texts, "Color:").unwrap_or_else(|| panic!("the Color row: {texts:?}"));
+    let swatch = p.widget_after(label);
+    p.click(&mut app, swatch.center());
+    let d = app.ui.dialog.clone().expect("the popover opened");
+    assert_eq!(
+        (d.kind.as_str(), &d.fields["index"], &d.fields["screen"]),
+        ("gradientStop", &json!(1), &json!([swatch.left(), swatch.bottom() + 4.0]))
+    );
+    let points = |app: &VectorcraftApp| shown_points(&fill(app)).points.iter().map(|p| p.color.to_hex()).collect::<Vec<_>>();
+    let before = points(&app);
+    app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let mut want = before.clone();
+    want[1] = "#ff0000".into();
+    assert_eq!((fill(&app).gradient.kind, points(&app)), (GradientKind::Freeform, want));
+}
+
 #[test]
 fn the_stop_eyedropper_arms_the_eyedropper_for_the_stop() {
     let mut app = app(json!({"gradient": {}}));
@@ -578,4 +637,92 @@ fn the_stop_popover_has_an_eyedropper_for_a_stop() {
     let mut h = harness(app);
     h.run_steps(3);
     assert!(h.query_by_label(TIP).is_none(), "no eyedropper for a freeform point");
+}
+
+/// Where text `s` was drawn (menu items are drawn indented).
+fn text_at(texts: &[(String, Pos2)], s: &str) -> Option<Pos2> {
+    texts.iter().find(|(t, _)| t.trim_start() == s).map(|(_, at)| *at)
+}
+
+/// The Presets menu lists the presets by library (theme) and applies the one chosen to the
+/// gradient behind the active proxy, as one undo step; the menu then shows that preset.
+#[test]
+fn the_presets_menu_applies_a_preset_and_shows_it() {
+    let mut app = app(json!({"gradient": {"angle": 30}}));
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let label = text_at(&texts, "Presets:").unwrap_or_else(|| panic!("the Presets row: {texts:?}"));
+    let combo = p.widget_after(label);
+    let texts = p.click(&mut app, combo.center());
+    assert!(text_at(&texts, "Spectrum Gradients").is_some(), "a library's name heads its presets: {texts:?}");
+    let soft = text_at(&texts, "Soft Spectrum").expect("the library's presets");
+    let undo = app.session.doc().unwrap().history.undo.len();
+    p.click(&mut app, soft);
+    let preset = app.session.gradient_preset("Soft Spectrum").unwrap().gradient;
+    assert_eq!(fill(&app).gradient.stops, preset.stops);
+    assert_eq!(fill(&app).angle, 30.0, "the placement stays");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    assert!(text_at(&texts, "Soft Spectrum").is_some(), "the menu shows the preset: {texts:?}");
+    // With the Stroke proxy in front a solid stroke takes the preset; the fill keeps its own.
+    app.run("paint.setStroke", json!({"color": "#00ff00", "focus": false})).unwrap();
+    let stroke = p.widget("stroke-proxy");
+    p.click(&mut app, stroke.right_bottom() - vec2(2.0, 2.0));
+    assert!(!app.session.fill_active);
+    let texts = p.click(&mut app, combo.center());
+    p.click(&mut app, text_at(&texts, "Spectrum").expect("the first preset"));
+    let Paint::Gradient(st) = app.session.shown_stroke().unwrap().paint.clone() else { panic!("a gradient stroke") };
+    assert_eq!(st.gradient.stops, app.session.gradient_preset("Spectrum").unwrap().gradient.stops);
+    assert_eq!(fill(&app).gradient.stops, preset.stops);
+}
+
+/// The panel menu saves the gradient as a preset (named in a dialog), which the Presets menu then
+/// lists under Saved; Delete Gradient Preset removes it, and Hide Presets leaves the row out.
+#[test]
+fn the_panel_menu_saves_deletes_and_hides_presets() {
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    let mut p = Panel::new();
+    let texts = p.frame_of(&mut app, vec![], Modifiers::NONE, menu);
+    let save = text_at(&texts, "Save Gradient Preset…").unwrap_or_else(|| panic!("{texts:?}"));
+    assert!(app.session.active_saved_gradient_preset().is_none());
+    p.menu_click(&mut app, save);
+    let d = app.ui.dialog.take().expect("the name dialog");
+    assert_eq!((d.fields["__command"].as_str(), d.fields["name"].as_str()), (Some("gradient.presets.save"), Some("Gradient Preset 1")));
+    // The dialog's OK runs the command with the name typed.
+    app.run("gradient.presets.save", json!({"name": "Red Blue"})).unwrap();
+    assert_eq!(app.session.active_saved_gradient_preset(), Some("Red Blue"));
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let label = text_at(&texts, "Presets:").unwrap();
+    assert!(text_at(&texts, "Red Blue").is_some(), "the menu shows the saved preset the gradient is: {texts:?}");
+    let texts = p.click(&mut app, p.widget_after(label).center());
+    // The saved presets come after the libraries: scroll the menu to them.
+    let over = text_at(&texts, "Spectrum").expect("the menu is open");
+    let wheel = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, -5000.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Modifiers::NONE,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    p.frame(&mut app, vec![Event::PointerMoved(over), wheel], Modifiers::NONE);
+    let mut texts = vec![];
+    for _ in 0..30 {
+        texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    }
+    let saved = text_at(&texts, "Saved").unwrap_or_else(|| panic!("the saved presets have their heading: {texts:?}"));
+    assert!(texts.iter().any(|(t, at)| t.trim_start() == "Red Blue" && at.y > saved.y), "the saved preset under it: {texts:?}");
+    assert!(text_at(&texts, "Spectrum").is_none(), "rows scrolled out of view aren't drawn: {texts:?}");
+    // Delete Gradient Preset removes the one the gradient is.
+    let texts = p.frame_of(&mut app, vec![], Modifiers::NONE, menu);
+    p.menu_click(&mut app, text_at(&texts, "Delete Gradient Preset").unwrap());
+    assert!(app.session.prefs.gradient_presets.is_empty());
+    // Hide Presets leaves the row out; Show Presets brings it back.
+    let texts = p.frame_of(&mut app, vec![], Modifiers::NONE, menu);
+    let texts = p.menu_click(&mut app, text_at(&texts, "Hide Presets").unwrap());
+    assert!(text_at(&texts, "Show Presets").is_some());
+    assert!(text_at(&p.frame(&mut app, vec![], Modifiers::NONE), "Presets:").is_none());
+    let texts = p.frame_of(&mut app, vec![], Modifiers::NONE, menu);
+    p.menu_click(&mut app, text_at(&texts, "Show Presets").unwrap());
+    assert!(text_at(&p.frame(&mut app, vec![], Modifiers::NONE), "Presets:").is_some());
 }

@@ -38,28 +38,38 @@ pub const TOGGLES: &[&str] = &[
 
 /// The command an entry key runs.
 pub fn command_of(key: &str) -> CommandRef {
-    match key.strip_prefix("panel:") {
-        Some(panel) => CommandRef::with_params("window.panel", json!({ "panel": panel })),
-        None => CommandRef::new(key),
+    if let Some(panel) = key.strip_prefix("panel:") {
+        return CommandRef::with_params("window.panel", json!({ "panel": panel }));
     }
+    // An Effect menu item (#3296): what its item runs, its dialog unless it has no options.
+    if let Some(effect) = key.strip_prefix("effect:") {
+        let command = shortcut_editor::effect_items().iter().find(|e| e.effect == effect).map_or("effect.dialog", |e| e.command);
+        return CommandRef::with_params(command, json!({ "effect": effect }));
+    }
+    CommandRef::new(key)
 }
 
 /// The entry key of a command: `panel:<id>` for `window.panel {panel}`.
 pub fn entry_key(command: &CommandRef) -> String {
     match (command.id.as_str(), command.params.get("panel").and_then(Value::as_str)) {
         ("window.panel", Some(panel)) => format!("panel:{panel}"),
+        ("effect.dialog" | "effect.apply", _) if command.params.get("effect").and_then(Value::as_str).is_some() => {
+            format!("effect:{}", command.params.get("effect").and_then(Value::as_str).unwrap_or_default())
+        }
         _ => command.key(),
     }
 }
 
 /// The [`Overrides`] key of an entry key.
 pub fn stored_key(key: &str) -> String {
-    if key.starts_with("panel:") { command_of(key).key() } else { key.to_string() }
+    if key.starts_with("panel:") || key.starts_with("effect:") { command_of(key).key() } else { key.to_string() }
 }
 
 /// The entry key of an [`Overrides`] key.
 pub fn entry_of_stored(key: &str) -> String {
-    CommandRef::parse_key(key).filter(|c| c.id == "window.panel").map_or_else(|| key.to_string(), |c| entry_key(&c))
+    CommandRef::parse_key(key)
+        .filter(|c| matches!(c.id.as_str(), "window.panel" | "effect.dialog" | "effect.apply"))
+        .map_or_else(|| key.to_string(), |c| entry_key(&c))
 }
 
 // ---------- chord texts ----------
@@ -146,12 +156,26 @@ fn catalogue() -> Vec<Bindable> {
             if TOGGLES.contains(&e.key.as_str()) {
                 b = b.toggle();
             }
-            match shortcut_editor::default_of(&e.key).and_then(vc_binding) {
-                Some(d) => b.with_default(d),
-                None => b,
+            if let Some(d) = shortcut_editor::default_of(&e.key).and_then(vc_binding) {
+                b = b.with_default(d);
             }
+            for alias in default_aliases(&e.key) {
+                if let Some(d) = vc_binding(alias) {
+                    b = b.with_default(d);
+                }
+            }
+            b
         })
         .collect()
+}
+
+/// Additional defaults for commands whose primary shortcut remains in their command spec.
+fn default_aliases(key: &str) -> &'static [&'static str] {
+    match key {
+        "paint.lastColor" => &["Shift+,"],
+        "paint.lastGradient" => &["Shift+."],
+        _ => &[],
+    }
 }
 
 /// On the web, the browser's operating system once egui reports it ([`note_os`]).
@@ -398,9 +422,33 @@ mod tests {
         let unbound: Vec<(&str, &str)> = shortcut_editor::entries()
             .iter()
             .filter_map(|e| shortcut_editor::default_of(&e.key).map(|d| (e.key.as_str(), d)))
-            .filter(|(key, d)| vc_binding(d).map(|b| vec![b]) != Some(template().default_bindings(&command_of(key))))
+            .filter(|(key, d)| {
+                let mut expected: Vec<Binding> = vc_binding(d).into_iter().collect();
+                expected.extend(default_aliases(key).iter().filter_map(|alias| vc_binding(alias)));
+                expected != template().default_bindings(&command_of(key))
+            })
             .collect();
         assert_eq!(unbound, vec![], "every default text becomes the entry's binding");
+    }
+
+    #[test]
+    fn paint_defaults_have_two_bindings_and_reset_restores_both() {
+        for (key, plain, shifted) in [("paint.lastColor", ",", "Shift+,"), ("paint.lastGradient", ".", "Shift+.")] {
+            let command = command_of(key);
+            let defaults = template().default_bindings(&command);
+            assert_eq!(defaults, vec![vc_binding(plain).unwrap(), vc_binding(shifted).unwrap()], "{key}");
+            assert_eq!(
+                shortcut_editor::entry(key).map(|e| e.label.as_str()),
+                Some(if key == "paint.lastColor" { "Apply Last Color" } else { "Apply Last Gradient" })
+            );
+            assert_eq!(effective_with(template(), key).as_deref(), Some(plain));
+            let mut overrides = Overrides::new();
+            set_override(&mut overrides, key, "Shift+;");
+            assert_eq!(keymap_with(&overrides).bindings(&command), vec![vc_binding("Shift+;").unwrap()]);
+            shortcut_editor::reset_one(&mut overrides, key);
+            assert_eq!(keymap_with(&overrides).bindings(&command), defaults);
+        }
+        assert!(template().conflicts().is_empty());
     }
 
     /// The chords the operating system takes are refused, and no default uses one.

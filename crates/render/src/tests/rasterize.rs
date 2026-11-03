@@ -310,7 +310,7 @@ fn rasterize_and_shadows_paint_in_stack_order() {
         Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0),
     );
     art.appearance.effects.push(Effect { id: shadow.0.into(), params: shadow.1.clone(), visible: true });
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Shadowed".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Shadowed".into(), art: Arc::new(art) });
     let mut instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Shadowed".into(), xf: Affine::translate((20.0, 20.0)) });
     instance.appearance.effects.push(Effect { id: "rasterize".into(), params: json!({}), visible: true });
     let l = d.layers[0].id;

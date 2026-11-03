@@ -35,6 +35,15 @@ pub struct MeshQuad {
     pub corners: [(Color, f32); 4],
 }
 
+/// One flat-coloured piece of a mesh ([`GradientMesh::pieces`]): a closed outline through
+/// tessellation points, its colour and opacity.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MeshPiece {
+    pub pts: Vec<Point>,
+    pub color: Color,
+    pub opacity: f32,
+}
+
 /// Create Gradient Mesh → Appearance.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum MeshAppearance {
@@ -157,6 +166,76 @@ impl Coons {
 // Gradient meshes
 // =====================================================================================
 
+/// The handles, as offsets from `ends`, of the cubic from `ends.0` to `ends.1` that comes closest
+/// (least squares) to `side` between `span.0` and `span.1`; `None` when they can't be computed.
+/// Each point of the side is matched to the curve's nearest point, refined over a few rounds.
+fn fit_edge(side: &[Point], span: (f64, f64), ends: (Point, Point)) -> Option<(Vec2, Vec2)> {
+    const N: usize = 32;
+    const ROUNDS: usize = 6;
+    let (p0, p3) = (ends.0, ends.1);
+    let qs: Vec<Point> = (1..N).map(|i| Coons::sample(side, span.0 + (span.1 - span.0) * i as f64 / N as f64)).collect();
+    let mut ts: Vec<f64> = (1..N).map(|i| i as f64 / N as f64).collect();
+    let mut fit = None;
+    for _ in 0..ROUNDS {
+        let (mut c11, mut c12, mut c22) = (0.0, 0.0, 0.0);
+        let (mut x1, mut x2) = (Vec2::ZERO, Vec2::ZERO);
+        for (q, &t) in qs.iter().zip(&ts) {
+            let s = 1.0 - t;
+            let (b0, b1, b2, b3) = (s * s * s, 3.0 * s * s * t, 3.0 * s * t * t, t * t * t);
+            let r = q.to_vec2() - b0 * p0.to_vec2() - b3 * p3.to_vec2();
+            c11 += b1 * b1;
+            c12 += b1 * b2;
+            c22 += b2 * b2;
+            x1 += b1 * r;
+            x2 += b2 * r;
+        }
+        let det = c11 * c22 - c12 * c12;
+        if det.abs() < 1e-12 {
+            break;
+        }
+        let (p1, p2) = (((c22 * x1 - c12 * x2) / det).to_point(), ((c11 * x2 - c12 * x1) / det).to_point());
+        if !(p1.is_finite() && p2.is_finite()) {
+            break;
+        }
+        fit = Some((p1 - p0, p2 - p3));
+        // One Newton step towards the nearest point of the curve for each point of the side.
+        let c = CubicBez::new(p0, p1, p2, p3);
+        let (a, b, k) = (p1 - p0, p2 - p1, p3 - p2);
+        for (q, t) in qs.iter().zip(ts.iter_mut()) {
+            let s = 1.0 - *t;
+            let v = 3.0 * (s * s * a + 2.0 * s * *t * b + *t * *t * k);
+            let acc = 6.0 * (s * (b - a) + *t * (k - b));
+            let e = c.eval(*t) - *q;
+            let den = v.hypot2() + e.dot(acc);
+            if den.abs() > 1e-12 {
+                *t = (*t - e.dot(v) / den).clamp(0.0, 1.0);
+            }
+        }
+    }
+    fit
+}
+
+/// The handles of one cubic standing for two edges that meet at point `mid.0`, whose handles
+/// towards them are `mid.1` (towards `a`) and `mid.2` (towards `b`), as offsets from their outer
+/// ends: each outer handle grown back by the share of the curve its edge had, which undoes the
+/// split [`GradientMesh::insert_row`] and [`GradientMesh::insert_col`] make, so deleting a mesh
+/// line keeps the curve of the border it crossed (#3187). The share is the split parameter, read
+/// from the lengths of the middle handles. When the edges no longer fit one cubic (a point or a
+/// handle was moved since the split), the cubic grown back would not pass through the middle
+/// point, and the merged edge is straight.
+fn merged_handles(a: (Point, Vec2), mid: (Point, Vec2, Vec2), b: (Point, Vec2)) -> (Vec2, Vec2) {
+    let straight = ((b.0 - a.0) / 3.0, (a.0 - b.0) / 3.0);
+    let (la, lb) = (mid.1.hypot(), mid.2.hypot());
+    let t = la / (la + lb);
+    if !(0.01..=0.99).contains(&t) {
+        return straight;
+    }
+    let (ha, hb) = (a.1 / t, b.1 / (1.0 - t));
+    let through = CubicBez::new(a.0, a.0 + ha, b.0 + hb, b.0).eval(t);
+    let tol = 1e-3 * (a.0.distance(mid.0) + mid.0.distance(b.0)).max(1e-9);
+    if ha.is_finite() && hb.is_finite() && through.distance(mid.0) <= tol { (ha, hb) } else { straight }
+}
+
 /// `0, 1/n, …, 1` for `n` (clamped to 1..=200) even steps.
 fn even_steps(n: u32) -> Vec<f64> {
     let n = n.clamp(1, 200);
@@ -170,11 +249,22 @@ pub(super) fn grid_len(rows: u32, cols: u32) -> Option<usize> {
 }
 
 impl GradientMesh {
+    /// The most quads one tessellation ([`Self::quads`]) makes, and so the most patches a mesh can
+    /// have: about 170 bytes a quad, so about 170 MB. A file's mesh can have any number of patches
+    /// and the view any zoom; the subdivision per patch gives way before memory does, and a mesh
+    /// with more patches than that is malformed, like a point count that doesn't fit (#3592).
+    pub const MAX_QUADS: usize = 1 << 20;
+
     pub fn idx(&self, r: usize, c: usize) -> usize {
         r * (self.cols as usize + 1) + c
     }
     pub fn is_valid(&self) -> bool {
-        self.rows >= 1 && self.cols >= 1 && grid_len(self.rows, self.cols) == Some(self.points.len())
+        self.rows >= 1 && self.cols >= 1 && grid_len(self.rows, self.cols) == Some(self.points.len()) && self.patches() <= Self::MAX_QUADS
+    }
+
+    /// The number of patches (rows times columns), saturating.
+    fn patches(&self) -> usize {
+        (self.rows as usize).saturating_mul(self.cols as usize)
     }
 
     /// A 1×1 mesh from its four corners (bottom-left, top-left, top-right, bottom-right in u/v
@@ -263,7 +353,49 @@ impl GradientMesh {
     /// colour and opacity `color_at` gives at its position (a gradient fill's, say).
     pub fn for_path_with(path: &PathData, rows: u32, cols: u32, color_at: &dyn Fn(Point) -> (Color, f32)) -> Option<Self> {
         let coons = Coons::from_path(path)?;
-        Some(Self::from_grid(&even_steps(cols), &even_steps(rows), &|u, v| coons.eval(u, v), &|_, _, p| color_at(p)))
+        let (us, vs) = (even_steps(cols), even_steps(rows));
+        let mut m = Self::from_grid(&us, &vs, &|u, v| coons.eval(u, v), &|_, _, p| color_at(p));
+        m.fit_border(&coons, &us, &vs);
+        Some(m)
+    }
+
+    /// Give each edge on the mesh's border the handles that make it follow the outline it stands
+    /// for, in place of the handles [`Self::from_grid`] estimates from the surface's derivatives
+    /// (#3187). Where two border edges meet along a side, their handles are made collinear, so the
+    /// border stays smooth there; the four corners keep the handles their own edges were fitted with.
+    fn fit_border(&mut self, coons: &Coons, us: &[f64], vs: &[f64]) {
+        let (rows, cols) = (self.rows as usize, self.cols as usize);
+        if !self.is_valid() || us.len() != cols + 1 || vs.len() != rows + 1 {
+            return;
+        }
+        let edges = [(0, &coons.top), (rows, &coons.bottom)]
+            .map(|(r, side)| (r, side, true))
+            .into_iter()
+            .chain([(0, &coons.left), (cols, &coons.right)].map(|(c, side)| (c, side, false)));
+        for (line, side, along_u) in edges {
+            let (n, steps) = if along_u { (cols, us) } else { (rows, vs) };
+            for k in 0..n {
+                let (a, b, out, back) = if along_u {
+                    (self.idx(line, k), self.idx(line, k + 1), H_RIGHT, H_LEFT)
+                } else {
+                    (self.idx(k, line), self.idx(k + 1, line), H_DOWN, H_UP)
+                };
+                if let Some((h1, h2)) = fit_edge(side, (steps[k], steps[k + 1]), (self.points[a].p, self.points[b].p)) {
+                    self.points[a].handles[out] = h1;
+                    self.points[b].handles[back] = h2;
+                }
+            }
+            for k in 1..n {
+                let (i, out, back) = if along_u { (self.idx(line, k), H_RIGHT, H_LEFT) } else { (self.idx(k, line), H_DOWN, H_UP) };
+                let h = &mut self.points[i].handles;
+                let (fwd, bwd) = (h[out], h[back]);
+                let dir = (fwd.normalize() - bwd.normalize()).normalize();
+                if fwd.hypot2() > 0.0 && bwd.hypot2() > 0.0 && dir.is_finite() {
+                    h[out] = dir * fwd.hypot();
+                    h[back] = -dir * bwd.hypot();
+                }
+            }
+        }
     }
 
     /// Create Gradient Mesh → Appearance: lighten the points towards white, to the centre or to
@@ -347,13 +479,20 @@ impl GradientMesh {
         (Color::rgb(rgb[0], rgb[1], rgb[2]), op)
     }
 
-    /// Tessellate into `n`×`n` quads per patch, each coloured at its centre and its corners.
+    /// The quads per patch side [`Self::quads`] cuts at when `n` is asked: 1 to 64, and coarser
+    /// where the patches at `n` would pass [`Self::MAX_QUADS`] (a quad per patch is the least).
+    fn subdivision(&self, n: usize) -> usize {
+        n.clamp(1, 64).min(((Self::MAX_QUADS / self.patches().max(1)) as f64).sqrt() as usize).max(1)
+    }
+
+    /// Tessellate into `n`×`n` quads per patch ([`Self::subdivision`]), each coloured at its centre
+    /// and its corners.
     pub fn quads(&self, n: usize) -> Vec<MeshQuad> {
         if !self.is_valid() {
             return vec![];
         }
-        let n = n.clamp(1, 64);
-        let mut out = Vec::with_capacity(self.rows as usize * self.cols as usize * n * n);
+        let n = self.subdivision(n);
+        let mut out = Vec::with_capacity(self.patches() * n * n);
         let mut grid = vec![Point::ZERO; (n + 1) * (n + 1)];
         let mut colors = vec![(Color::default(), 0.0f32); (n + 1) * (n + 1)];
         for r in 0..self.rows as usize {
@@ -381,6 +520,105 @@ impl GradientMesh {
             }
         }
         out
+    }
+
+    /// Flat-coloured pieces covering the mesh, for outputs that can't shade a mesh smoothly (SVG,
+    /// Expand): each patch cut into `n`×`n` quads as by [`Self::quads`], then neighbouring quads
+    /// joined into square blocks as large as keeps the colour across each block within about one
+    /// 8-bit step. A patch of one colour is one piece; a patch whose colour changes a lot keeps
+    /// all its quads. A piece's outline runs through its quads' outer corners, so it covers what
+    /// they covered, and it takes the colour at its centre.
+    pub fn pieces(&self, n: usize) -> Vec<MeshPiece> {
+        let n = self.subdivision(n);
+        let quads = self.quads(n);
+        let cols = (self.cols as usize).max(1);
+        let mut out = Vec::with_capacity(quads.len());
+        for (k, patch) in quads.chunks_exact(n * n).enumerate() {
+            let (r, c) = (k / cols, k % cols);
+            let side = self.block_side(r, c, n, patch);
+            if side == 1 {
+                out.extend(patch.iter().map(|q| MeshPiece { pts: q.pts.to_vec(), color: q.color, opacity: q.opacity }));
+                continue;
+            }
+            // Tessellation point (i, j) of the patch (0..=n each), from a quad it is a corner of.
+            let at = |i: usize, j: usize| -> Option<Point> {
+                let (qi, qj) = (i.min(n - 1), j.min(n - 1));
+                let q = patch.get(qj * n + qi)?;
+                q.pts
+                    .get(match (i > qi, j > qj) {
+                        (false, false) => 0,
+                        (true, false) => 1,
+                        (true, true) => 2,
+                        (false, true) => 3,
+                    })
+                    .copied()
+            };
+            for j0 in (0..n).step_by(side) {
+                for i0 in (0..n).step_by(side) {
+                    let (i1, j1) = (i0 + side, j0 + side);
+                    // Around the block, in the quads' order: along its top, down its right side,
+                    // back along its bottom and up its left side.
+                    let ring = (i0..i1)
+                        .map(|i| (i, j0))
+                        .chain((j0..j1).map(|j| (i1, j)))
+                        .chain((i0 + 1..=i1).rev().map(|i| (i, j1)))
+                        .chain((j0 + 1..=j1).rev().map(|j| (i0, j)));
+                    let Some(pts) = ring.map(|(i, j)| at(i, j)).collect::<Option<Vec<Point>>>() else { continue };
+                    let half = side as f64 / 2.0;
+                    let (color, opacity) = self.color_at(r, c, (i0 as f64 + half) / n as f64, (j0 as f64 + half) / n as f64);
+                    out.push(MeshPiece { pts, color, opacity });
+                }
+            }
+        }
+        out
+    }
+
+    /// The side, in quads, of the blocks [`Self::pieces`] joins patch (r, c) into, cut into
+    /// `n`×`n` `quads`: the largest divisor of `n` that keeps the colour changing by at most one
+    /// 8-bit step across a block. 1 (no joining) where the patch folds over itself, as the outline
+    /// of a block across the fold wouldn't fill it as its quads do.
+    fn block_side(&self, r: usize, c: usize, n: usize, quads: &[MeshQuad]) -> usize {
+        let corner = |dr: usize, dc: usize| self.points.get(self.idx(r + dr, c + dc));
+        let (Some(p00), Some(p01), Some(p10), Some(p11)) = (corner(0, 0), corner(0, 1), corner(1, 0), corner(1, 1)) else {
+            return 1;
+        };
+        // Corners all in CMYK mix in their inks ([`Self::color_at`]); the RGB they show is checked too.
+        let inks = [p00, p01, p10, p11].iter().all(|p| matches!(p.color, Color::Cmyk { .. }));
+        let channels = |p: &MeshPoint| -> Vec<f32> {
+            let mut v = p.color.to_rgb().to_vec();
+            if inks && let Color::Cmyk { c, m, y, k } = p.color {
+                v.extend([c, m, y, k]);
+            }
+            v.push(p.opacity);
+            v
+        };
+        let [a, b, cc, d] = [p00, p01, p10, p11].map(channels);
+        // A bilinear patch changes across a block of side h (0..1 of the patch) by at most
+        // h × (du + dv) in each channel, du and dv its largest change along each parameter.
+        let mut steps = 0.0f32;
+        for k in 0..a.len() {
+            let ch = |v: &[f32]| v.get(k).copied().unwrap_or_default();
+            let du = (ch(&a) - ch(&b)).abs().max((ch(&cc) - ch(&d)).abs());
+            let dv = (ch(&a) - ch(&cc)).abs().max((ch(&b) - ch(&d)).abs());
+            steps = steps.max((du + dv) * 255.0);
+        }
+        if !steps.is_finite() {
+            return 1;
+        }
+        let side = (1..=n).rev().find(|&s| n.is_multiple_of(s) && (n / s) as f32 >= steps).unwrap_or(1);
+        if side > 1 {
+            // Every quad turning the same way: the patch doesn't fold, so a block's outline
+            // encloses just what its quads cover.
+            let turn = |q: &MeshQuad| {
+                let [a, b, c, d] = q.pts;
+                (b - a).cross(c - a) + (c - a).cross(d - a)
+            };
+            let first = quads.first().map(turn).unwrap_or_default();
+            if !quads.iter().all(|q| turn(q) * first > 0.0) {
+                return 1;
+            }
+        }
+        side
     }
 
     /// The mesh's outer boundary as a closed path.
@@ -466,12 +704,21 @@ impl GradientMesh {
 
     /// Which patch and local (u, v) contains `p` (sampled search; `None` outside the mesh).
     pub fn locate(&self, p: Point) -> Option<(usize, usize, f64, f64)> {
+        self.locate_within(p, 0.0)
+    }
+
+    /// As [`Self::locate`], and for a point outside the mesh within `tol` of its outline, the
+    /// patch and local (u, v) of the nearest point of the mesh's edge.
+    pub fn locate_within(&self, p: Point, tol: f64) -> Option<(usize, usize, f64, f64)> {
         if !self.is_valid() {
             return None;
         }
         let bp = self.outline().to_bezpath();
         if bp.winding(p) == 0 {
-            return None;
+            if tol.is_nan() || tol <= 0.0 {
+                return None;
+            }
+            return self.nearest_edge(p).filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
         }
         const N: usize = 16;
         let mut best = (f64::INFINITY, 0, 0, 0.0, 0.0);
@@ -506,6 +753,30 @@ impl GradientMesh {
             }
         }
         Some((r, c, u, v))
+    }
+
+    /// The point of the mesh's outer edge nearest `p`: its squared distance from `p`, and its
+    /// boundary patch and local (u, v).
+    fn nearest_edge(&self, p: Point) -> Option<(f64, usize, usize, f64, f64)> {
+        use vectorcraft_geom::kurbo::ParamCurveNearest;
+        let (rows, cols) = (self.rows as usize, self.cols as usize);
+        let mut best: Option<(f64, usize, usize, f64, f64)> = None;
+        let mut take = |e: CubicBez, at: (usize, usize, Option<f64>, Option<f64>)| {
+            let n = e.nearest(p, 1e-9);
+            if best.is_none_or(|b| n.distance_sq < b.0) {
+                let (r, c, u, v) = at;
+                best = Some((n.distance_sq, r, c, u.unwrap_or(n.t), v.unwrap_or(n.t)));
+            }
+        };
+        for c in 0..cols {
+            take(self.edge_u(0, c), (0, c, None, Some(0.0)));
+            take(self.edge_u(rows, c), (rows - 1, c, None, Some(1.0)));
+        }
+        for r in 0..rows {
+            take(self.edge_v(r, 0), (r, 0, Some(0.0), None));
+            take(self.edge_v(r, cols), (r, cols - 1, Some(1.0), None));
+        }
+        best
     }
 
     /// Index of the mesh point within `tol` of `p`.
@@ -595,9 +866,10 @@ impl GradientMesh {
         self.cols += 1;
     }
 
-    /// Mesh tool click: add a row and a column through `p` (inside the mesh). Returns the new point index.
-    pub fn add_lines_at(&mut self, p: Point) -> Option<usize> {
-        let (r, c, u, v) = self.locate(p)?;
+    /// Mesh tool click: add a row and a column through `p` (inside the mesh, or outside within
+    /// `tol` of its edge, through the nearest point of the edge). Returns the new point index.
+    pub fn add_lines_at(&mut self, p: Point, tol: f64) -> Option<usize> {
+        let (r, c, u, v) = self.locate_within(p, tol)?;
         let mut rr = r;
         let mut cc = c;
         let row_new = v > 0.02 && v < 0.98;
@@ -632,10 +904,11 @@ impl GradientMesh {
                 let above = self.idx(r - 1, cc);
                 let below = self.idx(r + 1, cc);
                 let mid = self.idx(r, cc);
-                let (pa, pm, pb) = (self.points[above].p, self.points[mid].p, self.points[below].p);
-                let _ = pm;
-                self.points[above].handles[H_DOWN] = (pb - pa) / 3.0;
-                self.points[below].handles[H_UP] = (pa - pb) / 3.0;
+                let (pa, pb, m) = (self.points[above].p, self.points[below].p, &self.points[mid]);
+                let hm = (m.p, m.handles[H_UP], m.handles[H_DOWN]);
+                let (down, up) = merged_handles((pa, self.points[above].handles[H_DOWN]), hm, (pb, self.points[below].handles[H_UP]));
+                self.points[above].handles[H_DOWN] = down;
+                self.points[below].handles[H_UP] = up;
             }
             self.points.drain(r * w..(r + 1) * w);
             self.rows -= 1;
@@ -646,9 +919,11 @@ impl GradientMesh {
             let rows = self.rows as usize;
             for rr in 0..=rows {
                 let (l, rt) = (rr * w + c - 1, rr * w + c + 1);
-                let (pl, pr) = (self.points[l].p, self.points[rt].p);
-                self.points[l].handles[H_RIGHT] = (pr - pl) / 3.0;
-                self.points[rt].handles[H_LEFT] = (pl - pr) / 3.0;
+                let (pl, pr, m) = (self.points[l].p, self.points[rt].p, &self.points[rr * w + c]);
+                let hm = (m.p, m.handles[H_LEFT], m.handles[H_RIGHT]);
+                let (right, left) = merged_handles((pl, self.points[l].handles[H_RIGHT]), hm, (pr, self.points[rt].handles[H_LEFT]));
+                self.points[l].handles[H_RIGHT] = right;
+                self.points[rt].handles[H_LEFT] = left;
             }
             let mut k = 0;
             self.points.retain(|_| {

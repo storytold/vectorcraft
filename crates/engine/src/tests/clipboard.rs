@@ -564,6 +564,75 @@ fn front_and_back_without_a_selection_use_the_current_layers_ends() {
 }
 
 #[test]
+fn front_and_back_beside_a_compound_paths_member_go_beside_the_compound_path() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a, b]);
+    let c = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let members = |s: &Session| doc(s).node(c).unwrap().children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>();
+    let before = members(&s);
+    let layer = |s: &Session| doc(s).layers[0].children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>();
+    // A compound path and a group, each pasted with one of the compound path's members selected.
+    let other = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[other]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    for copied in [c, group] {
+        copy(&mut s, &[copied]);
+        sel(&mut s, &[before[0]]);
+        let above = ids_of(&s.execute("edit.pasteInFront", &json!({})).unwrap());
+        let l = layer(&s);
+        let i = l.iter().position(|id| *id == c).unwrap();
+        assert_eq!(&l[i + 1..i + 2], &above[..], "right above the compound path");
+        sel(&mut s, &[before[1]]);
+        let below = ids_of(&s.execute("edit.pasteInBack", &json!({})).unwrap());
+        let l = layer(&s);
+        let i = l.iter().position(|id| *id == c).unwrap();
+        assert_eq!(&l[i - 1..i], &below[..], "right below the compound path");
+        assert_eq!(members(&s), before, "the compound path keeps its own members");
+    }
+    // A path still goes in front of the member, inside the compound path.
+    let loose = rect(&mut s, 60.0, 0.0, 10.0, 10.0);
+    copy(&mut s, &[loose]);
+    sel(&mut s, &[before[0]]);
+    let path = ids_of(&s.execute("edit.pasteInFront", &json!({})).unwrap());
+    assert_eq!(members(&s), [before[0], path[0], before[1]]);
+}
+
+#[test]
+fn paste_in_back_of_a_clipping_path_keeps_it_the_clipping_path() {
+    let mut s = session();
+    let children = |s: &Session, g: NodeId| doc(s).node(g).unwrap().children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>();
+    let loose = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+    let other = rect(&mut s, 220.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[other]);
+    let group = id_of(&s.execute("object.group", &json!({})).unwrap());
+    // A path as the clipping path, and a compound path as the clipping path (a group pasted in back
+    // of a member goes beside the compound path).
+    let art = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let mask = rect(&mut s, 10.0, 10.0, 50.0, 50.0);
+    sel(&mut s, &[art, mask]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    let art2 = rect(&mut s, 0.0, 120.0, 100.0, 100.0);
+    let (a, b) = (rect(&mut s, 10.0, 130.0, 20.0, 20.0), rect(&mut s, 40.0, 130.0, 20.0, 20.0));
+    sel(&mut s, &[a, b]);
+    let c = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    sel(&mut s, &[art2, c]);
+    let g2 = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    for (g, clipping, target, copies) in [(g, mask, mask, vec![loose, group]), (g2, c, a, vec![group])] {
+        assert_eq!(children(&s, g)[0], clipping);
+        for copied in copies {
+            copy(&mut s, &[copied]);
+            sel(&mut s, &[target]);
+            let pasted = ids_of(&s.execute("edit.pasteInBack", &json!({})).unwrap());
+            let ch = children(&s, g);
+            assert_eq!(ch[0], clipping, "the clipping path stays the bottom child");
+            assert_eq!(&ch[1..2], &pasted[..], "right above the clipping path");
+        }
+    }
+}
+
+#[test]
 fn paste_on_all_artboards_keeps_the_offset_to_the_source_artboard() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();

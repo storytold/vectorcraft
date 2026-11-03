@@ -150,6 +150,30 @@ fn import_image_then_paste_gives_an_image() {
     assert!(s.execute("clipboard.importImage", &json!({"dataBase64": "!!"})).is_err());
 }
 
+/// An image read apart from the session (off the UI thread in the desktop app) loads as
+/// `clipboard.importImage` loads its bytes: the same reply and clipboard, and the same errors.
+#[test]
+fn an_image_read_apart_loads_as_import_image_loads_it() {
+    let mut bmp = vec![];
+    image::RgbImage::from_pixel(30, 20, image::Rgb([200, 40, 40])).write_to(&mut std::io::Cursor::new(&mut bmp), image::ImageFormat::Bmp).unwrap();
+    let (mut at_once, mut apart) = (session(), session());
+    let p = json!({"mime": "image/bmp", "center": [100, 80]});
+    let mut with_data = p.clone();
+    with_data["dataBase64"] = json!(vectorcraft_format::base64_encode(&bmp));
+    let r = run(&mut at_once, "clipboard.importImage", with_data);
+    let read = crate::cmd::clipboard::read_image(&bmp).unwrap();
+    assert_eq!(apart.import_image_read(read, &p).unwrap(), r);
+    assert_eq!(apart.clipboard, at_once.clipboard);
+    assert!(apart.image_hand_off.is_none());
+    // Errors: bytes that aren't a picture, and a type that isn't a bitmap.
+    let not_a_picture = at_once.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(b"hello")})).unwrap_err();
+    assert_eq!(crate::cmd::clipboard::read_image(b"hello").err().map(|e| e.to_string()), Some(not_a_picture.to_string()));
+    let read = crate::cmd::clipboard::read_image(&bmp).unwrap();
+    let svg = apart.import_image_read(read, &json!({"mime": SVG})).unwrap_err();
+    assert!(svg.to_string().contains("isn't a bitmap"), "{svg}");
+    assert!(apart.image_hand_off.is_none() && apart.clipboard == at_once.clipboard, "nothing loaded");
+}
+
 /// A pasted PNG cut to half its length (a copied file still downloading) has a header but not
 /// all its pixels: importing it is an error, and the clipboard keeps what it held.
 #[test]
@@ -160,6 +184,7 @@ fn a_bitmap_whose_pixels_cant_be_read_is_not_pasted() {
     let cut = crate::tests_links::cut_png(600, 300);
     let e = s.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(&cut), "mime": "image/png"})).unwrap_err();
     assert!(e.to_string().ends_with("the image's pixels can't be read"), "{e}");
+    assert_eq!(crate::cmd::clipboard::read_image(&cut).err().map(|e| e.to_string()), Some(e.to_string()));
     assert_eq!(s.clipboard.nodes, held.nodes);
 }
 
@@ -323,6 +348,27 @@ fn type_only_copies_offer_their_text() {
     run(&mut s, "select.all", json!({}));
     run(&mut s, "edit.copy", json!({}));
     assert!(run(&mut s, "clipboard.exportText", json!({}))["text"].is_null());
+}
+
+/// Art too large to fit the clipboard's PNG side at the encoder's smallest scale gets no PNG,
+/// instead of a picture hundreds of megabytes large.
+#[test]
+fn copy_leaves_out_the_png_of_art_too_large_to_scale_down() {
+    let mut s = session();
+    let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 1_000_000, "height": 1_000_000}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [id]}));
+    run(&mut s, "edit.copy", json!({}));
+    assert!(!s.clipboard.flavour_types(false, false).contains(&PNG), "not offered either");
+    let (flavours, notes) = s.clipboard.flavours_with_warnings(false, false);
+    assert!(flavours.iter().all(|f| f.mime != PNG));
+    assert!(notes.iter().any(|n| n.contains("too large to copy as a picture")), "{notes:?}");
+    // Art that fits at that scale still gets its PNG, at most 4096 pixels a side.
+    let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 200_000, "height": 100}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [id]}));
+    run(&mut s, "edit.copy", json!({}));
+    let png = s.clipboard.flavours(false, false).into_iter().find(|f| f.mime == PNG).expect("a PNG");
+    let img = image::load_from_memory(&png.data).unwrap();
+    assert!(img.width() <= 4096 && img.height() <= 4096, "{}x{}", img.width(), img.height());
 }
 
 #[test]

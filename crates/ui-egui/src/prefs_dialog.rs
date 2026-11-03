@@ -125,7 +125,7 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
         scrub: p.scrub_numeric_fields,
         bare_points: p.numbers_without_units_are_points,
     };
-    let id = egui::Id::unique("dc-applied-prefs");
+    let id = applied_id();
     let prev: Option<Applied> = ctx.data(|d| d.get_temp::<Option<Applied>>(id)).flatten();
     if prev != Some(want) {
         theme::apply_with(ctx, want.brightness, want.accent, want.scheme);
@@ -158,6 +158,18 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.touch_screen = touch;
         crate::workspaces::sync_touch_workspace(app, touch);
     }
+}
+
+/// Where [`apply_runtime`] keeps the preferences it last pushed into `ctx`.
+fn applied_id() -> egui::Id {
+    egui::Id::unique("dc-applied-prefs")
+}
+
+/// [`apply_runtime`] with nothing recorded as applied, so the theme (brightness, accent, color
+/// scheme and canvas color) and the other UI-side preferences are pushed into `ctx` again.
+pub(crate) fn reapply(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    ctx.data_mut(|d| d.remove::<Option<Applied>>(applied_id()));
+    apply_runtime(app, ctx);
 }
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {

@@ -1,3 +1,6 @@
+use vectorcraft_doc::AnchorRef;
+use vectorcraft_geom::PathData;
+
 use super::spans::Span;
 use super::{
     BTreeSet, CornerKind, EngineError, LiveCorners, LiveShape, NodeId, NodeKind, Result, Session, Value, bad, check_numbers, check_switches,
@@ -249,17 +252,29 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
                 Some(k) => k.clone(),
                 None => c.picked(partial.as_deref()),
             };
-            let (selected, layout) = (partial.as_deref().map(|a| c.corners_of(a)), c.sources().to_vec());
-            set_corners(path, live, &picked, radius, kind);
-            // Direct-Selected corners stay selected as they gain or lose anchors.
-            if let (Some(anchors), Some(selected)) = (partial, selected)
-                && let Some(c) = LiveCorners::new(path, live.as_deref())
-                && c.sources() != layout
-            {
-                *anchors = c.anchors_of(&selected);
-            }
+            recut(path, live, partial, &picked, radius, kind);
         }
         Ok(())
     })?;
     ok()
+}
+
+/// [`set_corners`] with the Direct-Selected corners (`partial`, the path's selected anchors)
+/// staying selected as they gain or lose anchors.
+pub(in crate::cmd) fn recut(
+    path: &mut PathData,
+    live: &mut Option<Box<LiveShape>>,
+    partial: Option<&mut BTreeSet<AnchorRef>>,
+    picked: &BTreeSet<usize>,
+    radius: Option<f64>,
+    kind: Option<CornerKind>,
+) {
+    let before = LiveCorners::new(path, live.as_deref()).map(|c| (partial.as_deref().map(|a| c.corners_of(a)), c.sources().to_vec()));
+    set_corners(path, live, picked, radius, kind);
+    if let (Some(anchors), Some((Some(selected), layout))) = (partial, before)
+        && let Some(c) = LiveCorners::new(path, live.as_deref())
+        && c.sources() != layout
+    {
+        *anchors = c.anchors_of(&selected);
+    }
 }

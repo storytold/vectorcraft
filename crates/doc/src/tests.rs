@@ -55,6 +55,29 @@ fn doc_with_rects() -> (Document, NodeId, NodeId) {
     (d, a, b)
 }
 
+/// Output draws the background colors of the artboards asked for, and only theirs, as rectangles
+/// of those artboards on a layer below the art; without a color there is nothing to draw.
+#[test]
+fn artboard_fills_go_below_the_art() {
+    let (mut d, a, _) = doc_with_rects();
+    assert!(d.with_artboard_fills([0]).is_none(), "no color, no fill");
+    let second = Rect::new(700.0, 0.0, 800.0, 100.0);
+    d.artboards.push(Artboard { id: 2, rect: second, ..d.artboards[0].clone() });
+    let blue = vectorcraft_color::Color::cmyk(1.0, 0.5, 0.0, 0.0);
+    d.artboards[1].color = Some(blue);
+    assert!(d.with_artboard_fills([0]).is_none(), "only the artboards asked for");
+    let out = d.with_artboard_fills([0, 1]).unwrap();
+    assert_eq!(out.layers.len(), d.layers.len() + 1);
+    assert_eq!(out.layers[1..], d.layers[..], "the art stays as it was, above the fills");
+    let fills = out.layers[0].children().unwrap();
+    assert_eq!(out.layers[0].display_name(), "Artboard Fill");
+    assert_eq!(fills.len(), 1);
+    assert_eq!(fills[0].geometric_bounds(), Some(second));
+    assert_eq!(fills[0].appearance.fill_paint(), vectorcraft_color::Paint::solid(blue), "in the color's own model");
+    assert!(out.node(a).is_some() && out.node(fills[0].id).is_some() && fills[0].id != a);
+    assert_eq!(d.artboards, out.artboards);
+}
+
 #[test]
 fn new_document_has_layer_and_artboard() {
     let d = Document::new(612.0, 792.0);
@@ -202,7 +225,7 @@ fn art_on_a_locked_artboard_cannot_be_selected_or_edited() {
 fn art_on_artboard_measures_a_symbol_instance_by_its_art() {
     let mut d = Document::new(612.0, 792.0);
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
-    d.symbols.push(Symbol { name: "Box".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Box".into(), art: Arc::new(art) });
     let (layer, id) = (d.layers[0].id, d.alloc_id());
     d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((2.0, 2.0)) })).unwrap();
     // The art, (2, 2) to (12, 12), lies inside; the 20 × 20 square, (-8, -8) to (12, 12), doesn't.
@@ -386,6 +409,18 @@ fn char_position_round_trips() {
     assert!(plain.get("position").is_none() && plain.get("small_caps").is_none());
     let (scale, shift) = CharPosition::Subscript(ScriptMetrics::DEFAULT).scale_shift(10.0);
     assert!((scale - 0.583).abs() < 1e-9 && (shift + 3.33).abs() < 1e-9);
+}
+
+#[test]
+fn optical_kerning_round_trips_and_old_style_defaults_to_auto() {
+    let st = CharStyle { optical_kerning: true, kerning: Some(120.0), ..CharStyle::default() };
+    let value = serde_json::to_value(&st).unwrap();
+    assert_eq!(value["opticalKerning"], true);
+    assert_eq!(serde_json::from_value::<CharStyle>(value.clone()).unwrap(), st);
+    let mut old = value;
+    old.as_object_mut().unwrap().remove("opticalKerning");
+    assert!(!serde_json::from_value::<CharStyle>(old).unwrap().optical_kerning);
+    assert!(serde_json::to_value(CharStyle::default()).unwrap().get("opticalKerning").is_none());
 }
 
 #[test]

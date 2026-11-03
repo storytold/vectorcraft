@@ -1,11 +1,12 @@
 //! Glyphs panel: every character the current font maps (its cmap), drawn from the font's own
 //! outlines. Double-click inserts the character at the Type tool's caret (or appends it to the
-//! selected text objects).
+//! selected text objects). The character selected with the Type tool is highlighted in the grid.
 
 use std::collections::HashMap;
 
 use egui::{Color32, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
+use vectorcraft_doc::NodeKind;
 use vectorcraft_geom::{Affine, BezPath, PathEl};
 use vectorcraft_text::FontDb;
 
@@ -144,6 +145,28 @@ fn glyph_texture(ctx: &egui::Context, face: &vectorcraft_text::FontFace, gid: u3
     tex
 }
 
+/// The character the grid highlights: the first one of the Type tool's selected range, else the
+/// one before its caret. Public behaviour: the Glyphs panel shows the selected character's glyph
+/// (the overview page cited at [`CELL_STEPS`]). Walks the runs, not the characters, so it stays
+/// cheap on every frame.
+fn selected_char(app: &VectorcraftApp) -> Option<char> {
+    let (id, a, b) = super::character::text_editing(app)?;
+    let NodeKind::Text(t) = &app.session.active()?.doc.node(id)?.kind else { return None };
+    let (at, range) = (a.min(b), a != b);
+    let mut start = 0;
+    for run in &t.runs {
+        let end = start + run.text.len();
+        if range && (start..end).contains(&at) {
+            return run.text.get(at - start..)?.chars().next();
+        }
+        if !range && at > start && at <= end {
+            return run.text.get(..at - start)?.chars().next_back();
+        }
+        start = end;
+    }
+    None
+}
+
 /// Insert `ch` at the Type tool's caret, else append it to the selected text.
 fn insert(app: &mut VectorcraftApp, ctx: &egui::Context, ch: char) {
     let s = ch.to_string();
@@ -193,17 +216,35 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let px = (cell * ui.ctx().pixels_per_point()).round().clamp(8.0, 256.0) as u32;
     let list_h = (ui.available_height() - 64.0).max(cell * 3.0);
     let hover_id = egui::Id::unique("gl-hover");
-    egui::ScrollArea::vertical().max_height(list_h).auto_shrink([false, false]).show_rows(ui, cell, rows, |ui, range| {
-        for r in range {
+    let selected = selected_char(app);
+    // The selected character and the rows shown last frame: the grid scrolls to the selected glyph
+    // only when the selection moves to another character, so it still scrolls freely meanwhile.
+    let follow_id = egui::Id::unique("gl-follow");
+    let (followed, shown): (Option<char>, std::ops::Range<usize>) = ui.ctx().data(|d| d.get_temp(follow_id)).unwrap_or_default();
+    let mut area = egui::ScrollArea::vertical().max_height(list_h).auto_shrink([false, false]);
+    if selected != followed
+        && let Some(c) = selected
+        && let Ok(i) = chars.binary_search_by_key(&c, |x| x.0)
+        && !shown.contains(&(i / cols))
+    {
+        let row_h = cell + ui.spacing().item_spacing.y;
+        area = area.vertical_scroll_offset(((i / cols) as f32 + 0.5) * row_h - list_h * 0.5);
+    }
+    let shown = area.show_rows(ui, cell, rows, |ui, range| {
+        for r in range.clone() {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                 for &(c, gid) in chars.iter().skip(r * cols).take(cols) {
                     let (rect, resp) = ui.allocate_exact_size(vec2(cell, cell), Sense::click());
+                    let chosen = selected == Some(c);
                     if resp.hovered() {
                         ui.painter().rect_filled(rect, 2, t.hover);
                         ui.ctx().data_mut(|d| d.insert_temp(hover_id, (c, gid)));
+                    } else if chosen {
+                        ui.painter().rect_filled(rect, 2, t.row_selected);
                     }
-                    ui.painter().rect_stroke(rect.shrink(0.5), 0, egui::Stroke::new(0.5, t.border), egui::StrokeKind::Inside);
+                    let edge = if chosen { Stroke::new(1.5, t.accent) } else { Stroke::new(0.5, t.border) };
+                    ui.painter().rect_stroke(rect.shrink(0.5), 0, edge, StrokeKind::Inside);
                     let tex = glyph_texture(ui.ctx(), &face, gid, px);
                     ui.painter().image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), t.text_strong);
                     let resp = resp.on_hover_text(format!("U+{:04X}  {c}  (glyph {gid})\n{}", c as u32, tl!("Double-click to insert")));
@@ -213,7 +254,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         }
+        range
     });
+    ui.ctx().data_mut(|d| d.insert_temp(follow_id, (selected, shown.inner)));
     ui.add_space(4.0);
     let info = ui.ctx().data(|d| d.get_temp::<(char, u32)>(hover_id));
     ui.label(
@@ -295,12 +338,44 @@ mod tests {
 
     use super::*;
 
-    fn frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> (Vec<(String, Pos2)>, Vec<f32>) {
+    fn shapes(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<Shape> {
         let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 420.0))), events, ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| show(app, ui));
         out.textures_delta.clear();
-        let shapes: Vec<Shape> = out.shapes.into_iter().map(|c| c.shape).collect();
+        out.shapes.into_iter().map(|c| c.shape).collect()
+    }
+
+    fn frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> (Vec<(String, Pos2)>, Vec<f32>) {
+        let shapes = shapes(ctx, app, events);
         (text_anchors(&shapes), square_sides(&shapes))
+    }
+
+    /// The Type tool editing `text` in a new document.
+    fn editing(text: &str) -> (VectorcraftApp, serde_json::Value) {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 50, "text": text})).unwrap()["id"].clone();
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        (app, id)
+    }
+
+    fn select(app: &mut VectorcraftApp, start: usize, end: usize) {
+        app.session.set_tool_option("select", &json!({"start": start, "end": end}));
+    }
+
+    /// Centres of the highlighted (selected-character) cells.
+    fn highlighted(shapes: &[Shape], t: &Tokens) -> Vec<Pos2> {
+        fn walk(s: &Shape, fill: Color32, out: &mut Vec<Pos2>) {
+            match s {
+                Shape::Rect(r) if r.fill == fill => out.push(r.rect.center()),
+                Shape::Vec(v) => v.iter().for_each(|s| walk(s, fill, out)),
+                _ => {}
+            }
+        }
+        let mut out = vec![];
+        shapes.iter().for_each(|s| walk(s, t.row_selected, &mut out));
+        out
     }
 
     fn text_anchors(shapes: &[Shape]) -> Vec<(String, Pos2)> {
@@ -348,6 +423,67 @@ mod tests {
         let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(ctx, app, vec![egui::Event::PointerMoved(at), button(true)]);
         frame(ctx, app, vec![button(false)]);
+    }
+
+    #[test]
+    fn the_selected_character_is_the_range_start_or_the_one_before_the_caret() {
+        let (mut app, id) = editing("aHé");
+        select(&mut app, 1, 2);
+        assert_eq!(selected_char(&app), Some('H'));
+        select(&mut app, 2, 2);
+        assert_eq!(selected_char(&app), Some('H'));
+        select(&mut app, 4, 1);
+        assert_eq!(selected_char(&app), Some('H'), "a backward range starts at its lower end");
+        select(&mut app, 0, 0);
+        assert_eq!(selected_char(&app), None, "nothing before the caret");
+        // Across runs: a style on `H` alone splits the text into three runs.
+        app.run("text.setRangeStyle", json!({"id": id, "start": 1, "end": 2, "kerning": 50})).unwrap();
+        select(&mut app, 1, 1);
+        assert_eq!(selected_char(&app), Some('a'));
+        select(&mut app, 2, 2);
+        assert_eq!(selected_char(&app), Some('H'));
+        select(&mut app, 2, 4);
+        assert_eq!(selected_char(&app), Some('é'));
+        app.session.select_tool("select", Default::default()).unwrap();
+        assert_eq!(selected_char(&app), None, "only the Type tool's selection counts");
+    }
+
+    #[test]
+    fn the_selected_glyph_is_highlighted_and_scrolled_into_view() {
+        let (mut app, _) = editing("A");
+        let ctx = egui::Context::default();
+        let t = Tokens::get(&ctx);
+        let (texts, _) = frame(&ctx, &mut app, vec![]);
+        if texts.iter().any(|(t, _)| t.contains("No fonts are available")) {
+            eprintln!("glyphs highlight: no fonts installed, grid not drawn");
+            return;
+        }
+        let (family, style) = super::super::character::text_style(&app).map(|(s, _)| (s.font_family, s.font_style)).unwrap();
+        let face = FontDb::global().face(&family, &style).unwrap();
+        let chars: Vec<char> = face.chars().into_iter().map(|(c, _)| c).filter(|c| !c.is_control() && !c.is_whitespace()).collect();
+        let (Some(&first), Some(&last)) = (chars.first(), chars.last()) else { return };
+        if chars.len() < 200 {
+            eprintln!("glyphs highlight: font too small to need scrolling");
+            return;
+        }
+        let (mut app, _) = editing(&format!("{first}{last}"));
+        let end = first.len_utf8() + last.len_utf8();
+        select(&mut app, end, end);
+        let ctx = egui::Context::default();
+        // The caret sits after the last glyph of the font, far below the first screen of the grid.
+        let lit = highlighted(&shapes(&ctx, &mut app, vec![]), &t);
+        assert_eq!(lit.len(), 1, "the grid scrolled to the selected glyph and highlighted it: {lit:?}");
+        let lit = highlighted(&shapes(&ctx, &mut app, vec![]), &t);
+        assert_eq!(lit.len(), 1, "it stays highlighted");
+        // Highlighting the first character scrolls back up to it.
+        select(&mut app, 0, 1);
+        shapes(&ctx, &mut app, vec![]);
+        let top = highlighted(&shapes(&ctx, &mut app, vec![]), &t);
+        assert_eq!(top.len(), 1, "{top:?}");
+        assert!(top[0].y < lit[0].y, "the first glyph sits at the top of the grid: {top:?} vs {lit:?}");
+        // The caret at the start selects nothing.
+        select(&mut app, 0, 0);
+        assert!(highlighted(&shapes(&ctx, &mut app, vec![]), &t).is_empty());
     }
 
     #[test]

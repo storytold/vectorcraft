@@ -4,7 +4,7 @@
 //! ([`PatternDef::period`]) is rasterized at the device scale it is painted at, rounded up to a
 //! power of two and capped ([`raster_scale`]), and used as an image paint with `Extend::Repeat`,
 //! with the paint transform mapping pixels → pattern space → document. Tiles are cached per
-//! pattern name and raster scale (and ink plane, see [`crate::ink`]) within
+//! pattern name, raster scale, undecoded-image mark setting and ink plane (see [`crate::ink`]) within
 //! [`lru::PATTERN_BUDGET`]. A tile is used while the pattern's definition is the one it was
 //! rasterized from (art `Arc` identity, tile, tile type, overlap): the pattern's "revision", and,
 //! when its art shows more than itself (a symbol, another pattern, an image, type, a brush), while
@@ -33,9 +33,9 @@ use crate::{Frame, RenderOptions, Rendered, Renderer};
 /// Largest super-tile raster side (pixels).
 const MAX_TILE_PX: f64 = 2048.0;
 
-/// What a tile is kept under: the pattern's name and the bits of its raster scale
-/// ([`raster_scale`]).
-type TileKey = (String, u64, Ink);
+/// What a tile is kept under: the pattern's name, the bits of its raster scale
+/// ([`raster_scale`]), ink plane and undecoded-image mark setting.
+type TileKey = (String, u64, Ink, bool);
 
 /// What a tile was drawn from besides its pattern's own art, for art that shows more than itself:
 /// the art of every pattern and symbol and the pixels of every image in the document, the
@@ -93,6 +93,9 @@ struct TileEntry {
     /// ([`crate::paint::decode_failures`]): each frame that draws from the tile counts them
     /// again ([`crate::paint::add_decode_failures`]).
     failed: u64,
+    /// Whether an image in the art failed to draw while the tile was drawn: each frame that draws
+    /// from the tile counts it again ([`images_left_out`]).
+    image_left_out: bool,
 }
 
 struct PatternCache {
@@ -129,6 +132,13 @@ impl PatternCache {
 
 thread_local! {
     static CACHE: RefCell<PatternCache> = RefCell::new(PatternCache::default());
+    static IMAGES_LEFT_OUT: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many pattern tiles drawn on this thread so far left out an image of their art: opacity-mask
+/// art compares the count before and after it draws ([`Renderer::mask_values`]).
+pub(crate) fn images_left_out() -> u64 {
+    IMAGES_LEFT_OUT.with(std::cell::Cell::get)
 }
 
 fn same_art(a: &[Arc<Node>], b: &[Arc<Node>]) -> bool {
@@ -159,12 +169,22 @@ pub(crate) fn raster_scale(s: f64, period: (f64, f64)) -> f64 {
 
 /// Rasterize `region` (pattern space) of the infinite tiling into a `w`×`h` pixmap, colours as
 /// `ink` paints them.
-fn rasterize(r: &mut Renderer, doc: &Document, def: &PatternDef, region: Rect, w: u16, h: u16, ink: Ink) -> Pixmap {
-    let (w, h) = (w.max(1), h.max(1));
+fn rasterize(
+    r: &mut Renderer,
+    doc: &Document,
+    def: &PatternDef,
+    region: Rect,
+    size: (u16, u16),
+    ink: Ink,
+    mark_undecoded_images: bool,
+) -> (Pixmap, bool) {
+    let (w, h) = (size.0.max(1), size.1.max(1));
     let mut ctx = crate::single_threaded_context(w, h);
     let view = Affine::scale_non_uniform(w as f64 / region.width().max(1e-9), h as f64 / region.height().max(1e-9))
         * Affine::translate(-region.origin().to_vec2());
-    let opts = RenderOptions::default();
+    let opts = RenderOptions { mark_undecoded_images, ..Default::default() };
+    r.image_left_out = Some(false);
+    let pattern_images_left_out = images_left_out();
     r.check_plugins();
     r.check_symbols(doc);
     let symbols = doc.symbol_boxes().quick();
@@ -187,7 +207,7 @@ fn rasterize(r: &mut Renderer, doc: &Document, def: &PatternDef, region: Rect, w
             r.draw_arc(&mut ctx, &frame, a);
         }
     }
-    r.finish(&mut ctx, r.raster)
+    (r.finish(&mut ctx, r.raster), r.image_left_out.take().unwrap_or(false) || images_left_out() > pattern_images_left_out)
 }
 
 /// Run `f` with the shared off-screen renderer (None when nested too deep: a pattern whose art
@@ -242,7 +262,7 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
     let (pw, ph) = def.period();
     let scale = raster_scale(s, (pw, ph));
     let params = (def.tile, def.tile_type, def.overlap);
-    let key = (name.to_string(), scale.to_bits(), ink);
+    let key = (name.to_string(), scale.to_bits(), ink, f.opts.mark_undecoded_images);
     let cms = vectorcraft_color::cms::active();
     let hit = CACHE.with(|c| {
         let mut c = c.borrow_mut();
@@ -257,22 +277,30 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
                     && std::ptr::eq(e.cms.as_ptr(), Arc::as_ptr(&cms))
                     && e.deps.as_ref().is_none_or(|d| d.current(doc))
             })
-            .map(|e| (e.pixmap.clone(), e.sx, e.sy, e.failed))
+            .map(|e| (e.pixmap.clone(), e.sx, e.sy, e.failed, e.image_left_out))
     });
     let (pm, sx, sy) = match hit {
-        Some((pm, sx, sy, failed)) => {
+        Some((pm, sx, sy, failed, image_left_out)) => {
             crate::paint::add_decode_failures(failed);
+            if image_left_out {
+                IMAGES_LEFT_OUT.with(|n| n.set(n.get().saturating_add(1)));
+            }
             (pm, sx, sy)
         }
         None => {
             let w = (pw * scale).ceil().clamp(1.0, 4096.0) as u16;
             let h = (ph * scale).ceil().clamp(1.0, 4096.0) as u16;
             let before = crate::paint::decode_failures();
-            let Some(pm) = with_tile_renderer(|r| rasterize(r, doc, def, Rect::new(0.0, 0.0, pw, ph), w, h, ink)) else {
+            let Some((pm, image_left_out)) =
+                with_tile_renderer(|r| rasterize(r, doc, def, Rect::new(0.0, 0.0, pw, ph), (w, h), ink, f.opts.mark_undecoded_images))
+            else {
                 ctx.set_paint(missing());
                 return true;
             };
             let failed = crate::paint::decode_failures() - before;
+            if image_left_out {
+                IMAGES_LEFT_OUT.with(|n| n.set(n.get().saturating_add(1)));
+            }
             let pm = Arc::new(pm);
             let (sx, sy) = (w as f64 / pw, h as f64 / ph);
             let deps = crate::fx::Reads::of_all(def.art.iter().map(|a| &**a)).any().then(|| Deps::of(doc));
@@ -284,7 +312,8 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
                 let mut c = c.borrow_mut();
                 let tiles = &mut c.tiles[ink.index()];
                 let (t, bytes) = (tiles.tick(), size_of::<TileEntry>() + w as usize * h as usize * 4);
-                let entry = TileEntry { art: def.art.clone(), deps, cms: Arc::downgrade(&cms), params, sx, sy, pixmap: pm.clone(), failed };
+                let entry =
+                    TileEntry { art: def.art.clone(), deps, cms: Arc::downgrade(&cms), params, sx, sy, pixmap: pm.clone(), failed, image_left_out };
                 tiles.insert(key, entry, bytes, t);
             });
             (pm, sx, sy)
@@ -303,7 +332,7 @@ pub fn render_pattern_swatch(doc: &Document, name: &str, size: u32) -> Option<Re
     let side = w.max(h);
     let region = Rect::from_center_size((w / 2.0, h / 2.0), (side, side));
     let px = size.clamp(1, 1024) as u16;
-    let pm = with_tile_renderer(|r| rasterize(r, doc, def, region, px, px, Ink::Display))?;
+    let (pm, _) = with_tile_renderer(|r| rasterize(r, doc, def, region, (px, px), Ink::Display, false))?;
     Some(Rendered { width: px as u32, height: px as u32, pixels: pm.data_as_u8_slice().to_vec() })
 }
 

@@ -1,13 +1,20 @@
 //! Path Precision Tools in the interface: its submenu (Object › Plug-ins › Path Precision Tools),
-//! which selects its tools, opens the Anchor Inspector and runs Split / Add Points at Crossings;
-//! the Anchor Inspector panel (the selected anchor's position and handles as numbers, and the
-//! add-on's anchor edits); and its tools' options dialog (a double-click on the tool). Everything
-//! acts through `addon.pathtools.*` and `tool.setOption`.
+//! which selects its tools, opens its panels and runs Split / Add Points at Crossings, Divide into
+//! Dashes ([`dashes`]), Expand Dashes into Paths and Convert to Parametric Shape; the Anchor Inspector panel (the selected
+//! anchor's position and handles as numbers, the add-on's anchor edits, the Corner Tool's values,
+//! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
+//! ([`shape`]); and its tools' options dialog (a double-click on the tool). Everything acts through `addon.pathtools.*` and
+//! `tool.setOption`.
+
+pub mod corner;
+pub mod dashes;
+pub mod shape;
+pub mod shared_edge;
 
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_geom::Point;
-use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect};
+use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect, parametric_shape, slide_anchor};
 
 use crate::VectorcraftApp;
 use crate::dialogs::DialogSpec;
@@ -26,6 +33,20 @@ pub const KIND: &str = "pathToolOptions";
 const CLOSE_MODES: [(&str, &str); 3] = [("handles", "Keep Handles"), ("straight", "Straight"), ("smooth", "Smooth")];
 const LABEL_W: f32 = 64.0;
 
+/// The parameters of the add-on's Path Effects that pick one of some values, as (label, value).
+pub(crate) fn effect_choices(effect: &str, key: &str) -> Option<&'static [(&'static str, &'static str)]> {
+    use vectorcraft_effects::addons::path as fx;
+    match (effect, key) {
+        (fx::ADD_ANCHORS, "target") => Some(&[("All", "all"), ("Curved", "curved"), ("Straight", "straight")]),
+        (fx::ADD_ANCHORS, "spacing") => Some(&[("By Count", "count"), ("By Distance", "distance")]),
+        (fx::EXTEND, "startShape" | "endShape") => Some(&[("Straight", "straight"), ("Arc", "arc")]),
+        (fx::CLOSE, "mode") => Some(&[("Straight", "straight"), ("Smooth", "smooth")]),
+        (fx::RETRACT, "handles") => Some(&[("All", "all"), ("Shorter Than Length", "shorter")]),
+        (fx::SPLIT, "anchors") => Some(&[("Corner", "corner"), ("Smooth", "smooth"), ("Both", "both")]),
+        _ => None,
+    }
+}
+
 /// Object › Plug-ins › Path Precision Tools.
 pub fn menu() -> Vec<Item> {
     let tool = |label, id: &str| Item::Cmd(label, "tool.select", json!({ "tool": id }));
@@ -33,11 +54,19 @@ pub fn menu() -> Vec<Item> {
         tool("Anchor Eraser Brush", anchor_eraser::ID),
         tool("Extend Path Tool", extend_path::ID),
         tool("Measure & Inspect Tool", measure_inspect::ID),
+        tool("Parametric Shape Tool", parametric_shape::ID),
+        Item::Cmd("Corner Tool", corner::COMMAND, json!({})),
+        tool("Slide Anchor Along Path", slide_anchor::ID),
+        Item::Cmd("Shared Edge Merge Tool", shared_edge::COMMAND, json!({})),
         Item::Sep,
         Item::Cmd("Anchor Inspector", "window.panel", json!({ "panel": ID })),
+        Item::Cmd("Parametric Shape", "window.panel", json!({ "panel": shape::ID })),
         Item::Sep,
         Item::Cmd("Add Points at Crossings", "addon.pathtools.crossings", json!({})),
         Item::Cmd("Split at Crossings", "addon.pathtools.crossings", json!({ "cut": true })),
+        Item::Cmd("Divide into Dashes…", dashes::COMMAND, Value::Null),
+        Item::Cmd("Expand Dashes into Paths", "addon.pathtools.expandDashes", json!({})),
+        Item::Cmd("Convert to Parametric Shape", "addon.pathtools.shape.convert", json!({})),
     ]
 }
 
@@ -148,6 +177,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some((id, p)) = action {
         run(app, id, p);
     }
+    widgets::divider(ui);
+    corner::section(app, ui);
+    widgets::divider(ui);
+    shared_edge::section(app, ui);
 }
 
 // ---------- the tools' options ----------

@@ -12,6 +12,23 @@ fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value
 }
 
 #[test]
+fn control_lists_and_selects_optional_addon_tools() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let listed = input_request(&mut app, "ui.tool.list", json!({}));
+    assert_eq!(listed["ok"], true);
+    let groups = listed["result"].as_array().unwrap();
+    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
+        let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
+        assert_eq!(matching.len(), 1, "{}", tool.id);
+        assert_eq!(matching[0]["label"], tool.label);
+        assert!(matching[0]["shortcut"].is_null());
+        let selected = input_request(&mut app, "ui.tool.select", json!({"tool": tool.id}));
+        assert_eq!(selected["ok"], true, "{selected}");
+        assert_eq!(selected["result"]["tool"], tool.id);
+    }
+}
+
+#[test]
 fn ui_set_turns_the_image_trace_preview_off_and_on() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     assert!(app.ui.image_trace_preview);
@@ -20,6 +37,24 @@ fn ui_set_turns_the_image_trace_preview_off_and_on() {
         assert_eq!(r["ok"], true, "{r}");
         assert_eq!(app.ui.image_trace_preview, on);
     }
+}
+
+/// #3797: `ui.set` `outline` sets the active document's view; without a document it is an error
+/// and sets nothing else either.
+#[test]
+fn ui_set_outline_sets_the_active_documents_view() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    for params in [json!({"outline": false}), json!({"outline": true, "grid": true})] {
+        let r = input_request(&mut app, "ui.set", params);
+        assert_eq!(r["ok"], false, "{r}");
+    }
+    assert!(!app.ui.view.grid, "nothing is set");
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let r = input_request(&mut app, "ui.set", json!({"outline": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(app.outline_view());
+    assert_eq!(app.views.iter().map(|v| v.outline).collect::<Vec<_>>(), [false, true], "the other document stays in Preview");
 }
 
 #[test]
@@ -225,6 +260,37 @@ fn render_takes_the_artboard_asked_for() {
         assert_eq!(got, size.map(Some), "{params}: {r}");
     }
     assert!(request("ui.render", json!({"artboard": 2}))["error"].is_string());
+}
+
+#[test]
+fn synthetic_pointer_backquote_keeps_solid_object_in_place() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let tile = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.pattern.make", json!({"ids": [tile], "name": "Dots", "width": 20, "height": 20})).unwrap();
+    app.run("object.pattern.done", json!({})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("paint.setFill", json!({"ids": [id], "swatch": "Dots"})).unwrap();
+    let solid = app.run("shape.rectangle", json!({"x": 220, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("paint.setFill", json!({"ids": [solid], "color": "#3366cc"})).unwrap();
+    app.run("select.set", json!({"ids": [id, solid]})).unwrap();
+    let before = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let before_solid = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(solid)).unwrap().clone();
+    let r = input_request(
+        &mut app,
+        "ui.pointer",
+        json!({"events": [
+        {"kind": "down", "x": 125, "y": 125},
+        {"kind": "drag", "x": 145, "y": 125},
+        {"kind": "up", "x": 145, "y": 125}
+    ], "backquote": true}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    let after = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+    assert_eq!(after.geometric_bounds(), before.geometric_bounds());
+    assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(solid)).unwrap(), &before_solid);
+    let vectorcraft_color::Paint::Pattern { xf, .. } = after.appearance.fill_paint() else { panic!("pattern fill expected") };
+    assert_eq!(xf.as_coeffs()[4], 20.0, "synthetic backquote drag changes pattern paint");
 }
 
 /// `ui.pointer` replies with the key object: a click on one of two selected objects makes it

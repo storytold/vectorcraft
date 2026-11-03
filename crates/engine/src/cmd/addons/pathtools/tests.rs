@@ -4,7 +4,8 @@
 use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::NodeId;
+use vectorcraft_doc::{LiveCorners, LiveShape, NodeId};
+use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_geom::{AnchorKind, PathData, Point};
 use vectorcraft_tools::{PointerEvent, PointerKind};
 
@@ -272,4 +273,601 @@ fn crossings_add_anchors_or_cut_in_one_step() {
     assert_eq!(r["ids"].as_array().unwrap().len(), 4, "{r}");
     assert_eq!(steps(&s), n + 1);
     refuses(&mut s, "addon.pathtools.crossings", &[json!({"cut": "yes"}), json!({"ids": [123456]})]);
+}
+
+// ---------- Parametric Shape Tool ----------
+
+/// The parametric shape object `id` is now, as the tool reads it.
+fn shape_of(s: &Session, id: NodeId) -> Option<vectorcraft_pathops::addons::pathtools::shapes::ParametricShape> {
+    vectorcraft_tools::addons::parametric_shape::read(s.doc().unwrap().doc.node(id).unwrap())
+}
+
+fn star(s: &mut Session) -> NodeId {
+    let r = s.execute("addon.pathtools.shape.create", &json!({"kind": "star", "center": [200, 150], "width": 100, "height": 100})).unwrap();
+    id_of(&r)
+}
+
+#[test]
+fn create_draws_a_selected_parametric_shape_in_one_step() {
+    let mut s = session();
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.shape.create", &json!({"kind": "gear", "center": [200, 150], "count": 10, "a": 0.3, "radius": 2})).unwrap();
+    let id = id_of(&r);
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    assert_eq!((r["shape"]["kind"].clone(), r["shape"]["count"].clone(), r["shape"]["width"].clone()), (json!("gear"), json!(10), json!(100.0)));
+    assert_eq!(s.doc().unwrap().selection.objects, [id]);
+    let g = shape_of(&s, id).unwrap();
+    assert_eq!((g.count, g.a, g.radius), (10, 0.3, 2.0));
+    assert!(path(&s, id).anchor_count() > 40, "40 tooth corners, rounded");
+    // Every kind, with its defaults.
+    for kind in ["rectangle", "ellipse", "polygon", "star", "ring", "arrow", "cross", "heart", "gear", "bubble"] {
+        let id = id_of(&s.execute("addon.pathtools.shape.create", &json!({"kind": kind, "center": [50, 50]})).unwrap());
+        assert_eq!(shape_of(&s, id).map(|s| s.kind.id()), Some(kind));
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(steps(&s), n + 10);
+}
+
+#[test]
+fn set_changes_the_numbers_in_one_step_and_nothing_without_a_change() {
+    let mut s = session();
+    let id = star(&mut s);
+    assert_eq!(path(&s, id).anchor_count(), 10);
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "count": 8, "a": 0.3, "rotation": 15})).unwrap();
+    assert_eq!((r["shape"]["count"].clone(), r["shape"]["rotation"].clone()), (json!(8), json!(15.0)));
+    assert_eq!(path(&s, id).anchor_count(), 16);
+    assert_eq!(steps(&s), n + 1);
+    // The same numbers again, or none: no step.
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "count": 8})).unwrap();
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0})).unwrap();
+    assert_eq!(steps(&s), n + 1);
+    // Another kind takes its own defaults.
+    let r = s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "kind": "arrow"})).unwrap();
+    assert_eq!((r["shape"]["a"].clone(), r["shape"]["rotation"].clone()), (json!(0.4), json!(15.0)));
+    assert_eq!(path(&s, id).anchor_count(), 7);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).anchor_count(), 16);
+}
+
+#[test]
+fn bad_shape_params_are_refused() {
+    let mut s = session();
+    let id = star(&mut s);
+    let rect = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap());
+    let c = json!([10, 10]);
+    refuses(
+        &mut s,
+        "addon.pathtools.shape.create",
+        &[
+            json!({}),
+            json!({"center": null}),
+            json!({"center": [1]}),
+            json!({"center": "here"}),
+            json!({"center": [1e300, 0]}),
+            json!({"center": c, "kind": "cloud"}),
+            json!({"center": c, "kind": 3}),
+            json!({"center": c, "count": 2}),
+            json!({"center": c, "count": 1001}),
+            json!({"center": c, "count": 4.5}),
+            json!({"center": c, "width": 0}),
+            json!({"center": c, "height": 16385}),
+            json!({"center": c, "width": "40"}),
+            json!({"center": c, "kind": "star", "a": 2}),
+            json!({"center": c, "kind": "bubble", "b": -1.5}),
+            json!({"center": c, "radius": -1}),
+            json!({"center": c, "rotation": "up"}),
+        ],
+    );
+    refuses(
+        &mut s,
+        "addon.pathtools.shape.set",
+        &[json!({}), json!({"id": rect.0, "count": 6}), json!({"id": 999_999}), json!({"id": id.0, "count": 0}), json!({"id": id.0, "width": -5})],
+    );
+    s.execute("object.setProps", &json!({"ids": [id.0], "locked": true})).unwrap();
+    refuses(&mut s, "addon.pathtools.shape.set", &[json!({"id": id.0, "count": 6})]);
+}
+
+#[test]
+fn an_anchor_edit_makes_it_a_plain_path_and_transforms_keep_it_editable() {
+    let mut s = session();
+    let id = star(&mut s);
+    // Moved, turned and scaled with the ordinary commands: still the shape, at its new place.
+    s.execute("object.move", &json!({"dx": 20, "dy": -10})).unwrap();
+    assert!(shape_of(&s, id).is_some_and(|s| s.center.distance(Point::new(220.0, 140.0)) < 1e-6));
+    s.execute("object.rotate", &json!({"angle": 30, "origin": [220, 140]})).unwrap();
+    let r = shape_of(&s, id).unwrap();
+    assert!((r.rotation + 30.0).abs() < 1e-6, "30° counter-clockwise is −30 here: {r:?}");
+    s.execute("object.scale", &json!({"sx": 200, "origin": [220, 140]})).unwrap();
+    let r = shape_of(&s, id).unwrap();
+    assert!((r.width - 200.0).abs() < 1e-6 && r.center.distance(Point::new(220.0, 140.0)) < 1e-6, "{r:?}");
+    let n = steps(&s);
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "count": 6})).unwrap();
+    assert_eq!((path(&s, id).anchor_count(), steps(&s)), (12, n + 1));
+    assert!((shape_of(&s, id).unwrap().rotation + 30.0).abs() < 1e-6, "the turn stays");
+    // Stretched across its own axes (it is turned): skewed, so no longer.
+    s.execute("object.scale", &json!({"sx": 150, "sy": 100, "origin": [220, 140]})).unwrap();
+    assert_eq!(shape_of(&s, id), None);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(shape_of(&s, id).is_some(), "undo brings it back");
+    // An anchor moved by hand: a plain path, which `set` refuses.
+    select_anchors(&mut s, id, &[2]);
+    s.execute("addon.pathtools.setAnchor", &json!({"x": 0})).unwrap();
+    assert_eq!(shape_of(&s, id), None);
+    refuses(&mut s, "addon.pathtools.shape.set", &[json!({"id": id.0, "count": 7})]);
+}
+
+#[test]
+fn convert_makes_plain_shapes_parametric_in_one_step() {
+    let mut s = session();
+    let r = id_of(&s.execute("shape.rectangle", &json!({"x": 10, "y": 20, "width": 100, "height": 50})).unwrap());
+    let p = id_of(&s.execute("shape.polygon", &json!({"cx": 200, "cy": 150, "radius": 40, "sides": 7})).unwrap());
+    let st = id_of(&s.execute("shape.star", &json!({"cx": 300, "cy": 150, "radius1": 40, "radius2": 15})).unwrap());
+    select(&mut s, &[r, p, st]);
+    let n = steps(&s);
+    let out = s.execute("addon.pathtools.shape.convert", &json!({})).unwrap();
+    assert_eq!(out["ids"], json!([r.0, p.0]));
+    assert_eq!(steps(&s), n + 1);
+    assert_eq!(shape_of(&s, r).map(|s| s.kind.id()), Some("rectangle"));
+    assert_eq!(shape_of(&s, p).map(|s| (s.kind.id(), s.count)), Some(("polygon", 7)));
+    assert_eq!(shape_of(&s, st), None);
+    assert_eq!(path(&s, r).bounds().map(|b| b.center()), Some(Point::new(60.0, 45.0)));
+    // Nothing left to convert.
+    select(&mut s, &[r, st]);
+    refuses(&mut s, "addon.pathtools.shape.convert", &[json!({}), json!({"ids": [st.0]}), json!({"ids": [123456]})]);
+}
+
+#[test]
+fn the_shape_data_stays_out_of_svg_export() {
+    let mut s = session();
+    let id = star(&mut s);
+    s.execute("object.setProps", &json!({"ids": [id.0], "data": {"pivot": "1,2"}})).unwrap();
+    let key = vectorcraft_tools::addons::parametric_shape::KEY;
+    let node = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(node.extras().attrs.as_deref().is_some_and(|a| a.data.iter().any(|(k, _)| k == key)), "kept with the object");
+    assert!(shape_of(&s, id).is_some(), "setting other data keeps it a shape");
+    let svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
+    assert!(svg.contains("data-pivot=\"1,2\""), "the object's own data still goes out: {svg}");
+    assert!(!svg.contains(key) && !svg.contains("fp&quot;") && !svg.contains("\"fp\""), "{svg}");
+}
+
+#[test]
+fn the_tool_draws_one_step_per_drag_and_arrows_change_the_count() {
+    let mut s = session();
+    let view = ViewInfo { smart_guides: false, ..ViewInfo::default() };
+    s.select_tool("parametricShape", view).unwrap();
+    s.set_tool_option("kind", &json!("star"));
+    let n = steps(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 150.0), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 100.0), view).unwrap();
+    s.tool_key(vectorcraft_tools::ToolKey::Up, vectorcraft_tools::Mods::default(), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 90.0), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 90.0), view).unwrap();
+    assert_eq!(steps(&s), n + 1);
+    let id = *s.doc().unwrap().selection.objects.first().unwrap();
+    let shape = shape_of(&s, id).unwrap();
+    assert_eq!((shape.kind.id(), shape.count, shape.height, shape.rotation), ("star", 6, 120.0, 0.0));
+    // Its size handle (lower right of its box) drags into one more step.
+    let corner = shape.frame() * Point::new(shape.width / 2.0, shape.height / 2.0);
+    for (k, x) in [(PointerKind::Down, corner.x), (PointerKind::Drag, corner.x + 30.0), (PointerKind::Up, corner.x + 30.0)] {
+        s.pointer(&PointerEvent::new(k, x, corner.y), view).unwrap();
+    }
+    assert_eq!(steps(&s), n + 2);
+    assert!((shape_of(&s, id).unwrap().width - 180.0).abs() < 1e-9);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(shape_of(&s, id).map(|s| s.width), Some(120.0));
+}
+
+// ---------- Corner Tool ----------
+
+/// A square (100, 100)–(300, 300), plain and selected: anchors from the top left, clockwise.
+fn square(s: &mut Session) -> NodeId {
+    let id = line(s, &[(100.0, 100.0), (300.0, 100.0), (300.0, 300.0), (100.0, 300.0)], true);
+    select(s, &[id]);
+    id
+}
+
+fn live(s: &Session, id: NodeId) -> Option<LiveShape> {
+    s.doc().unwrap().doc.node(id).unwrap().live_shape().cloned()
+}
+
+fn drawn(s: &Session, id: NodeId, corner: usize) -> f64 {
+    LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap().drawn_radius(corner)
+}
+
+#[test]
+fn corner_set_cuts_live_corners_as_one_undo_step() {
+    let mut s = session();
+    let id = square(&mut s);
+    let plain = path(&s, id);
+    let n = steps(&s);
+    // The selected path: all four.
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"radius": 20, "kind": "chamfer"})).unwrap();
+    assert_eq!(r, json!({"ids": [id.0], "corners": 4}));
+    assert_eq!((steps(&s), path(&s, id).anchor_count()), (n + 1, 8));
+    let lc = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).map(|c| (c.drawn_radius(3), c.kind(3))).unwrap();
+    assert_eq!(lc, (20.0, CornerKind::Chamfer));
+    // The same again changes nothing: no step.
+    s.execute("addon.pathtools.cornerSet", &json!({"radius": 20, "kind": "chamfer"})).unwrap();
+    assert_eq!(steps(&s), n + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((path(&s, id), live(&s, id)), (plain, None));
+}
+
+#[test]
+fn corner_set_goes_by_anchors_the_selection_and_items_and_fits() {
+    let mut s = session();
+    let id = square(&mut s);
+    let other = line(&mut s, &[(350.0, 10.0), (390.0, 10.0), (390.0, 50.0)], false);
+    // Named anchors, of each path by `items`, at once; an open end takes none.
+    let items = json!([{"id": id.0, "anchors": [1]}, {"id": other.0, "anchors": [0, 1]}]);
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"items": items, "radius": 5})).unwrap();
+    assert_eq!((r["corners"].clone(), steps(&s)), (json!(2), n + 1));
+    assert_eq!((drawn(&s, id, 1), drawn(&s, id, 0), drawn(&s, other, 1)), (5.0, 0.0, 5.0));
+    // `ids` with `anchors`, keeping the kind each has.
+    s.execute("addon.pathtools.cornerSet", &json!({"ids": [id.0], "anchors": [1], "radius": 9})).unwrap();
+    assert_eq!(drawn(&s, id, 1), 9.0);
+    // Direct-selected anchors: only their corners, which stay selected as they gain anchors.
+    select_anchors(&mut s, id, &[0]);
+    s.execute("addon.pathtools.cornerSet", &json!({"radius": 7})).unwrap();
+    assert_eq!((drawn(&s, id, 0), drawn(&s, id, 2)), (7.0, 0.0));
+    let sel = s.doc().unwrap().selection.anchors[&id].clone();
+    let c = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap();
+    assert_eq!(c.corners_of(&sel), BTreeSet::from([0]));
+    // A radius that doesn't fit is drawn at what does.
+    s.execute("addon.pathtools.cornerSet", &json!({"ids": [id.0], "anchors": [2], "radius": 5000})).unwrap();
+    assert!(drawn(&s, id, 2) <= 200.0 - 7.0 + 1e-9, "{}", drawn(&s, id, 2));
+}
+
+#[test]
+fn corner_remove_makes_corners_sharp_and_a_path_plain_again() {
+    let mut s = session();
+    let id = square(&mut s);
+    let plain = path(&s, id);
+    s.execute("addon.pathtools.cornerSet", &json!({"anchors": [0, 1], "radius": 10, "kind": "invertedRound"})).unwrap();
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.cornerRemove", &json!({"items": [{"id": id.0, "anchors": [0]}]})).unwrap();
+    assert_eq!((r["corners"].clone(), steps(&s), drawn(&s, id, 0), drawn(&s, id, 1)), (json!(1), n + 1, 0.0, 10.0));
+    s.execute("addon.pathtools.cornerRemove", &json!({})).unwrap();
+    assert_eq!((steps(&s), path(&s, id), live(&s, id)), (n + 2, plain, None));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(drawn(&s, id, 1), 10.0);
+}
+
+#[test]
+fn corner_commands_refuse_bad_params() {
+    let mut s = session();
+    let id = square(&mut s);
+    let smooth = circle(&mut s);
+    let i = id.0;
+    refuses(
+        &mut s,
+        "addon.pathtools.cornerSet",
+        &[
+            json!({"ids": [i]}),
+            json!({"ids": [i], "radius": -1}),
+            json!({"ids": [i], "radius": 1e308}),
+            json!({"ids": [i], "radius": "big"}),
+            json!({"ids": [i], "radius": 5, "kind": "spiky"}),
+            json!({"ids": [i], "anchors": "all", "radius": 5}),
+            json!({"ids": [i], "anchors": [-1], "radius": 5}),
+            json!({"ids": [i], "anchors": [9], "radius": 5}),
+            json!({"ids": [u64::MAX], "radius": 5}),
+            json!({"items": 3, "radius": 5}),
+            json!({"items": [{"anchors": [0]}], "radius": 5}),
+            json!({"ids": [smooth.0], "radius": 5}),
+        ],
+    );
+    refuses(&mut s, "addon.pathtools.cornerRemove", &[json!({"anchors": [9], "ids": [i]}), json!({"ids": [smooth.0]})]);
+    // Locked: left alone.
+    s.execute("object.lock", &json!({"ids": [i]})).ok();
+    if !s.doc().unwrap().doc.is_editable(id) {
+        refuses(&mut s, "addon.pathtools.cornerSet", &[json!({"items": [{"id": i}], "radius": 5})]);
+    }
+}
+
+#[test]
+fn the_corner_tool_clicks_drags_and_removes_in_one_step_each() {
+    let mut s = session();
+    let id = square(&mut s);
+    let view = ViewInfo { smart_guides: false, ..ViewInfo::default() };
+    s.select_tool("cornerTool", view).unwrap();
+    s.set_tool_option("radius", &json!(15));
+    let n = steps(&s);
+    let press = |s: &mut Session, k, x, y| s.pointer(&PointerEvent::new(k, x, y), view).unwrap();
+    // A click on the top right anchor.
+    press(&mut s, PointerKind::Down, 300.0, 100.0);
+    press(&mut s, PointerKind::Up, 300.0, 100.0);
+    assert_eq!((steps(&s), drawn(&s, id, 1)), (n + 1, 15.0));
+    // A drag from the bottom right anchor, previewed, one step.
+    press(&mut s, PointerKind::Down, 300.0, 300.0);
+    press(&mut s, PointerKind::Drag, 280.0, 280.0);
+    assert_eq!(drawn(&s, id, 2), 20.0, "the preview shows");
+    press(&mut s, PointerKind::Drag, 270.0, 270.0);
+    press(&mut s, PointerKind::Up, 270.0, 270.0);
+    assert_eq!((steps(&s), drawn(&s, id, 2)), (n + 2, 30.0));
+    // A drag on the marker resizes; a double-click on it removes.
+    press(&mut s, PointerKind::Down, 270.0, 270.0);
+    press(&mut s, PointerKind::Drag, 260.0, 260.0);
+    press(&mut s, PointerKind::Up, 260.0, 260.0);
+    assert_eq!((steps(&s), drawn(&s, id, 2)), (n + 3, 40.0));
+    press(&mut s, PointerKind::DoubleClick, 260.0, 260.0);
+    assert_eq!((steps(&s), drawn(&s, id, 2)), (n + 4, 0.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(drawn(&s, id, 2), 40.0);
+    // A click on a marker selects the corner and loads its values.
+    press(&mut s, PointerKind::Down, 285.0, 115.0);
+    press(&mut s, PointerKind::Up, 285.0, 115.0);
+    assert_eq!(steps(&s), n + 3, "selecting is no edit");
+    assert_eq!(s.doc().unwrap().selection.anchors.get(&id).map(|a| a.len()), Some(2));
+    // The bottom right one, resized by its marker, loads its radius.
+    press(&mut s, PointerKind::Down, 260.0, 260.0);
+    press(&mut s, PointerKind::Up, 260.0, 260.0);
+    assert_eq!(s.tool_options_of("cornerTool")["radius"], json!(40.0));
+    // An Alt-marquee over the left side: both anchors, in one step.
+    let alt = vectorcraft_tools::Mods { alt: true, ..Default::default() };
+    for (k, x, y) in [(PointerKind::Down, 50.0, 50.0), (PointerKind::Drag, 150.0, 350.0), (PointerKind::Up, 150.0, 350.0)] {
+        s.pointer(&PointerEvent::new(k, x, y).with_mods(alt), view).unwrap();
+    }
+    assert_eq!((steps(&s), drawn(&s, id, 0), drawn(&s, id, 3)), (n + 4, 40.0, 40.0));
+}
+
+// ---------- Slide Anchor Along Path ----------
+
+#[test]
+fn slide_anchor_moves_it_along_the_path_as_one_undo_step() {
+    let mut s = session();
+    let e = circle(&mut s);
+    let before = path(&s, e);
+    let area = kurbo::Shape::area(&before.to_bezpath()).abs();
+    let want = before.subpaths[0].segment(3);
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.slideAnchor", &json!({"id": e.0, "anchor": 3, "t": 0.5})).unwrap();
+    assert!(r["strayed"].as_f64().unwrap() < 0.05, "{r}");
+    let after = path(&s, e);
+    assert_eq!((steps(&s), after.anchor_count()), (n + 1, 16));
+    assert!(after.subpaths[0].anchors[3].p.distance(kurbo::ParamCurve::eval(&want, 0.5)) < 1e-9);
+    assert!((kurbo::Shape::area(&after.to_bezpath()).abs() / area - 1.0).abs() < 1e-3);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, e), before);
+    // No move, no step.
+    s.execute("addon.pathtools.slideAnchor", &json!({"id": e.0, "anchor": 3, "t": 0})).unwrap();
+    assert_eq!(steps(&s), n);
+}
+
+#[test]
+fn slide_anchor_refuses_bad_params() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)], false);
+    let i = l.0;
+    refuses(
+        &mut s,
+        "addon.pathtools.slideAnchor",
+        &[
+            json!({"id": i, "anchor": 0, "t": 0.5}),
+            json!({"id": i, "anchor": 2, "t": -0.5}),
+            json!({"id": i, "anchor": 9, "t": 0.5}),
+            json!({"id": i, "anchor": 1, "t": 1.5}),
+            json!({"id": i, "anchor": 1}),
+            json!({"id": i, "t": 0.5}),
+            json!({"id": i, "subpath": 4, "anchor": 1, "t": 0.5}),
+            json!({"id": u64::MAX, "anchor": 1, "t": 0.5}),
+        ],
+    );
+}
+
+#[test]
+fn the_slide_tool_previews_and_commits_one_step() {
+    let mut s = session();
+    let l = line(&mut s, &[(100.0, 100.0), (200.0, 100.0), (300.0, 100.0)], false);
+    let view = ViewInfo { smart_guides: false, ..ViewInfo::default() };
+    s.select_tool("slideAnchor", view).unwrap();
+    let n = steps(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 120.0), view).unwrap();
+    let at = |s: &Session| path(s, l).subpaths[0].anchors[1].p;
+    assert!(at(&s).distance(Point::new(250.0, 100.0)) < 1e-3, "the preview shows");
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 90.0), view).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 90.0), view).unwrap();
+    assert!(steps(&s) == n + 1 && at(&s).distance(Point::new(280.0, 100.0)) < 1e-3);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(at(&s), Point::new(200.0, 100.0));
+}
+
+fn ids(v: &Value) -> Vec<NodeId> {
+    v["ids"].as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect()
+}
+
+#[test]
+fn divide_into_dashes_cuts_a_path_into_open_pieces_keeping_its_look() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (100.0, 0.0)], false);
+    select(&mut s, &[l]);
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "gap": 10})).unwrap();
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    // 30 + 10 + 30 + 10 + 20: the gaps are left empty.
+    let pieces = ids(&r);
+    assert_eq!((pieces.len(), r["dashes"].clone()), (3, json!(3)));
+    let st = s.doc().unwrap();
+    let spans: Vec<(f64, f64)> = pieces.iter().map(|id| path(&s, *id).bounds().map(|b| (b.x0, b.x1)).unwrap()).collect();
+    let want = [(0.0, 30.0), (40.0, 70.0), (80.0, 100.0)];
+    assert!(spans.iter().zip(want).all(|(a, b)| (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6), "{spans:?}");
+    assert!(pieces.iter().all(|id| st.doc.node(*id).unwrap().appearance.stroke_width() == 3.0), "the stroke stays");
+    assert_eq!(st.selection.objects, pieces);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, l).anchor_count(), 2);
+    // Kept gaps; fitted 25s with no gap.
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "gap": 10, "removeGaps": false})).unwrap();
+    assert_eq!((ids(&r).len(), r["dashes"].clone()), (5, json!(3)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "fit": true})).unwrap();
+    let spans: Vec<f64> = ids(&r).iter().map(|id| path(&s, *id).bounds().unwrap().width()).collect();
+    assert_eq!(spans.len(), 3);
+    assert!(spans.iter().all(|w| (w - 100.0 / 3.0).abs() < 1e-6), "{spans:?}");
+}
+
+#[test]
+fn divide_into_dashes_divides_only_the_selected_segments() {
+    let mut s = session();
+    let u = line(&mut s, &[(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)], false);
+    // The middle side, between anchors 1 and 2.
+    select_anchors(&mut s, u, &[1, 2]);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 10})).unwrap();
+    let pieces = ids(&r);
+    assert_eq!((pieces.len(), r["dashes"].clone()), (6, json!(4)), "the first side, four dashes, the last side");
+    assert_eq!(path(&s, pieces[0]).bounds().unwrap().width(), 40.0);
+    let layer: Vec<NodeId> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(layer, pieces, "in the path's place, in order");
+}
+
+#[test]
+fn divide_into_dashes_refuses_bad_params_and_too_many_pieces() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (1e5, 0.0)], false);
+    select(&mut s, &[l]);
+    refuses(
+        &mut s,
+        "addon.pathtools.divideDashes",
+        &[
+            json!({"dash": 0}),
+            json!({"dash": -5}),
+            json!({"dash": 1e308}),
+            json!({"dash": "10"}),
+            json!({"gap": -1}),
+            json!({"gap": 2e6}),
+            json!({"fit": "yes"}),
+            json!({"removeGaps": 1}),
+            json!({"dash": 0.5}),
+        ],
+    );
+    // 200000 pieces refused above; 1000 is fine.
+    assert_eq!(s.execute("addon.pathtools.divideDashes", &json!({"dash": 100})).unwrap()["dashes"], json!(1000));
+    s.execute("select.none", &json!({})).unwrap();
+    refuses(&mut s, "addon.pathtools.divideDashes", &[json!({})]);
+}
+
+/// The dashes made of `r`'s ids: (first x, last x) of each, by its anchors.
+fn dash_spans(s: &Session, r: &Value) -> Vec<(f64, f64)> {
+    ids(r).iter().map(|id| path(s, *id).bounds().map(|b| (b.x0, b.x1)).unwrap()).collect()
+}
+
+fn near(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6)
+}
+
+#[test]
+fn expand_dashes_makes_an_open_path_of_each_dash_keeping_the_stroke() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (100.0, 0.0)], false);
+    select(&mut s, &[l]);
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3, "cap": "round", "dash": [30, 10]})).unwrap();
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    assert!(near(&dash_spans(&s, &r), &[(0.0, 30.0), (40.0, 70.0), (80.0, 100.0)]), "{:?}", dash_spans(&s, &r));
+    assert_eq!(r["dashes"], json!(3));
+    let st = s.doc().unwrap();
+    for id in ids(&r) {
+        let node = st.doc.node(id).unwrap();
+        let stroke = node.appearance.stroke().unwrap();
+        assert_eq!((stroke.width, stroke.cap, stroke.dash.clone()), (3.0, vectorcraft_doc::LineCap::Round, None), "the stroke stays, dashes off");
+        assert!(!path(&s, id).subpaths[0].closed);
+    }
+    assert_eq!(st.selection.objects, ids(&r));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(l).unwrap().appearance.stroke().unwrap().dash.is_some());
+    // The offset shifts the pattern as the stroke draws it: 20 into the first dash.
+    s.execute("stroke.set", &json!({"dashOffset": 20})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({"ids": [l.0]})).unwrap();
+    assert!(near(&dash_spans(&s, &r), &[(0.0, 10.0), (20.0, 50.0), (60.0, 90.0)]), "{:?}", dash_spans(&s, &r));
+}
+
+#[test]
+fn expand_dashes_keeps_the_fill_below_and_follows_aligned_corners() {
+    let mut s = session();
+    let rect = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 60})).unwrap());
+    select(&mut s, &[rect]);
+    s.execute("stroke.set", &json!({"dash": [20, 20]})).unwrap();
+    let had_fill = !s.doc().unwrap().doc.node(rect).unwrap().appearance.fill_paint().is_none();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    // 320 round: eight dashes of 20, a dash bending round each corner it meets.
+    let pieces = ids(&r);
+    assert_eq!(pieces.len(), 8);
+    let st = s.doc().unwrap();
+    let layer: Vec<NodeId> = st.doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    if had_fill {
+        let kept = st.doc.node(rect).unwrap();
+        assert!(kept.appearance.stroke().is_none() && kept.appearance.fill().is_some(), "the fill stays on the rectangle");
+        assert_eq!(layer, [vec![rect], pieces.clone()].concat(), "the fill below its dashes");
+    } else {
+        assert_eq!(layer, pieces);
+    }
+    assert!(pieces.iter().all(|id| st.doc.node(*id).unwrap().appearance.fill().is_none()), "an open dash isn't filled");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Aligned to corners: a dash centred on each corner, the four sides each starting and ending
+    // on half a dash; 12 dashes along the sides.
+    s.execute("stroke.set", &json!({"dash": [10, 10], "alignDashes": true})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    let corners = [Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 60.0), Point::new(0.0, 60.0)];
+    let mut centred = 0;
+    for id in ids(&r) {
+        let sp = path(&s, id).subpaths[0].clone();
+        if let [a, b, c] = sp.anchors.as_slice()
+            && corners.iter().any(|k| b.p.distance(*k) < 1e-6)
+        {
+            assert!((a.p.distance(b.p) - 5.0).abs() < 1e-6 && (c.p.distance(b.p) - 5.0).abs() < 1e-6, "{sp:?}");
+            centred += 1;
+        }
+    }
+    assert_eq!((ids(&r).len(), centred), (16, 4));
+}
+
+#[test]
+fn expand_dashes_turns_dots_into_paths_on_their_point_and_releases_compound_paths() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (100.0, 0.0)], false);
+    select(&mut s, &[l]);
+    s.execute("stroke.set", &json!({"dash": [0, 20], "cap": "round"})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    assert_eq!(ids(&r).len(), 6, "a dot every 20 from 0 to 100");
+    assert!(ids(&r).iter().all(|id| path(&s, *id).bounds().unwrap().width() == 0.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Under a butt cap a dot paints nothing, so there is nothing to expand.
+    s.execute("stroke.set", &json!({"cap": "butt"})).unwrap();
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({})]);
+    // A compound path's dashes are paths of their own with its stroke.
+    let a = line(&mut s, &[(0.0, 100.0), (50.0, 100.0)], false);
+    let b = line(&mut s, &[(0.0, 120.0), (50.0, 120.0)], false);
+    select(&mut s, &[a, b]);
+    let c = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    s.execute("stroke.set", &json!({"weight": 2, "dash": [20, 10], "cap": "butt"})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    // Each 50 line: 20, gap, 20.
+    let st = s.doc().unwrap();
+    assert_eq!(ids(&r).len(), 4);
+    for id in ids(&r) {
+        let n = st.doc.node(id).unwrap();
+        assert!(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. }), "a plain path");
+        assert_eq!(n.appearance.stroke_width(), 2.0);
+        assert!(n.appearance.stroke().unwrap().dash.is_none());
+    }
+    assert!(st.doc.node(c).is_none_or(|n| n.appearance.stroke().is_none()), "the compound path's dashes are gone from it");
+}
+
+#[test]
+fn expand_dashes_refuses_without_dashes_and_past_the_limit() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (1e5, 0.0)], false);
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({})]);
+    select(&mut s, &[l]);
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({}), json!({"ids": "x"}), json!({"zzz": 1})]);
+    // 125000 dashes refused; 1000 are fine.
+    s.execute("stroke.set", &json!({"dash": [0.4, 0.4]})).unwrap();
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({})]);
+    s.execute("stroke.set", &json!({"dash": [50, 50]})).unwrap();
+    assert_eq!(s.execute("addon.pathtools.expandDashes", &json!({})).unwrap()["dashes"], json!(1000));
 }

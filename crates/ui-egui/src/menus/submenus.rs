@@ -139,6 +139,7 @@ pub(super) fn effect_menu() -> Vec<Item> {
         "Crop Marks",
         "Distort & Transform",
         "Path",
+        "Path Effects",
         "Pathfinder",
         "Rasterize…",
         "Stylize",

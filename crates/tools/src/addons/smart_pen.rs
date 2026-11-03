@@ -16,12 +16,14 @@
 //! A selected point's handle drags (Shift: 45°, Alt: keeps its angle); a double-click on it toggles
 //! its point. A segment drags to reshape it (Shift: handles square to its chord, Alt: handles keep
 //! their angles), Alt-click adds a point on it; a click on a path that isn't selected selects it.
+//! With no path being drawn, an Alt-drag away from paths draws a marquee that selects the points
+//! inside it (Shift: toggles them).
 //!
 //! Each gesture is one undo step (`addon.pen.*`, and `path.*` where the standard command does it).
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
-use vectorcraft_geom::{Anchor, BezPath, Point, SubPath, Vec2, constrain_angle_from};
+use vectorcraft_geom::{Anchor, BezPath, Point, Rect, SubPath, Vec2, constrain_angle_from};
 use vectorcraft_pathops::addons::pathtools::SMOOTH_RATIO;
 use vectorcraft_pathops::addons::pen::{leave_handle, straighten_segment};
 
@@ -50,6 +52,8 @@ pub struct SmartPenTool {
     /// The pointer at the last press or drag (Space moves an anchor being placed by its moves).
     last: Point,
     snap: DrawSnap,
+    /// An Alt-drag's marquee: where it started, where it is, and whether it toggles (Shift).
+    marquee: Option<(Point, Point, bool)>,
 }
 
 /// A press: where it went down, what it is on and whether it has become a drag (and started its
@@ -140,6 +144,50 @@ fn selected_alone(cx: &ToolContext, id: NodeId) -> bool {
 }
 
 impl SmartPenTool {
+    /// The marquee's part of a pointer event: an Alt-press away from paths, with no path being
+    /// drawn, starts it; drags move its corner; the release selects the points of the editable
+    /// paths inside it (`select.anchorsMany`; Shift: toggled). `None`: the event isn't its.
+    fn marquee_event(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
+        match (ev.kind, self.marquee) {
+            (PointerKind::Down, None) if ev.mods.alt && self.active(cx).is_none() && self.hit(cx, ev.pos) == Hit::Nothing => {
+                self.marquee = Some((ev.pos, ev.pos, ev.mods.shift));
+                Some(vec![])
+            }
+            (PointerKind::Drag | PointerKind::Move, Some((a, _, toggle))) => {
+                self.marquee = Some((a, ev.pos, toggle));
+                Some(vec![])
+            }
+            (PointerKind::Up, Some((a, _, toggle))) => {
+                self.marquee = None;
+                let r = Rect::from_points(a, ev.pos);
+                // A click, not a drag: nothing to select.
+                if r.width() < cx.tol(DRAG_THRESHOLD) && r.height() < cx.tol(DRAG_THRESHOLD) {
+                    return Some(vec![]);
+                }
+                let editable = cx.doc.editable();
+                let mut items = vec![];
+                crate::draw2::walk_pickable(cx, |n| {
+                    if let NodeKind::Path { path, .. } = &n.kind
+                        && editable(n.id)
+                    {
+                        let inside: Vec<Value> = path.anchors().filter(|(_, _, a)| r.contains(a.p)).map(|(s, i, _)| json!([s, i])).collect();
+                        if !inside.is_empty() {
+                            items.push(json!({"id": n.id.0, "anchors": inside}));
+                        }
+                    }
+                });
+                Some(match (items.is_empty(), toggle) {
+                    (true, true) => vec![],
+                    (true, false) => vec![Action::Exec("select.none".into(), json!({}))],
+                    (false, _) => {
+                        vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": if toggle { "toggle" } else { "set" }}))]
+                    }
+                })
+            }
+            _ => None,
+        }
+    }
+
     /// The open subpath being drawn: (path, subpath, its data), while it is selected and editable.
     fn active<'a>(&self, cx: &'a ToolContext) -> Option<(NodeId, usize, &'a SubPath)> {
         let (id, si) = self.path.filter(|_| self.drawing)?;
@@ -438,7 +486,7 @@ impl Tool for SmartPenTool {
     }
 
     fn busy(&self) -> bool {
-        self.press.is_some()
+        self.press.is_some() || self.marquee.is_some()
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
@@ -453,6 +501,9 @@ impl Tool for SmartPenTool {
             let leave = Leave::segment(cx, a.p, ev.mods.shift);
             if a.has_out() { leave.without_contact() } else { leave }
         });
+        if let Some(acts) = self.marquee_event(cx, ev) {
+            return acts;
+        }
         match ev.kind {
             PointerKind::Move => {
                 self.hover = Some(self.snap.hover(cx, ev.pos, drawn.as_slice(), from.as_ref()));
@@ -483,12 +534,22 @@ impl Tool for SmartPenTool {
         }
     }
 
+    /// A dropped press does not end the path being drawn, as Escape would: the press and its
+    /// marquee are forgotten, so the release does nothing.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.press = None;
+        self.marquee = None;
+        self.snap.clear();
+        vec![]
+    }
+
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Tab && (self.press.is_some() || self.active(cx).is_some())
     }
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.stop();
+        self.marquee = None;
         self.snap.clear();
         match self.press.take() {
             Some(pr) if pr.begun => vec![Action::Commit],
@@ -516,6 +577,9 @@ impl Tool for SmartPenTool {
             }
         }
         o.extend_from_slice(self.snap.guides());
+        if let Some((a, b, _)) = self.marquee {
+            o.push(Overlay::Marquee(Rect::from_points(a, b)));
+        }
         o
     }
 

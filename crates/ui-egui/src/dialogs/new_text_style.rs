@@ -31,14 +31,57 @@ pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value
     let d = &app.session.active().ok_or("no document open")?.doc;
     let name = vectorcraft_engine::cmd::textstyles::new_style_name(d, para);
     let mut target = target;
-    if let Some(attrs) = vectorcraft_engine::cmd::textstyles::target_style_attrs(&app.session, &target, para) {
+    let selected_attrs = vectorcraft_engine::cmd::textstyles::target_style_attrs(&app.session, &target, para);
+    if let Some(attrs) = selected_attrs.or_else(|| (!para).then(|| vectorcraft_engine::cmd::textstyles::default_new_style_attrs(&app.session, false)))
+    {
         target["attrs"] = Value::Object(attrs);
     }
-    app.ui.dialog = Some(Dialog::new(KIND, json!({ "name": name, "__para": para, "__target": target })));
+    let mut fields = Dialog::new(KIND, json!({ "name": name, "__para": para, "__target": target })).fields;
+    if !para {
+        fields.insert("section".into(), json!("general"));
+        fields.insert("__smallCapsSize".into(), json!(d.setup.small_caps_size));
+        fields.insert("__superscript".into(), json!(d.setup.superscript));
+        fields.insert("__subscript".into(), json!(d.setup.subscript));
+        fields.insert("__swatches".into(), super::char_style_options::swatch_choices(d));
+        let attrs = target.get("attrs").and_then(Value::as_object).cloned().unwrap_or_default();
+        fields.extend(super::char_style_options::fields_from_attrs(&attrs));
+        fields.insert("__attrs".into(), Value::Object(attrs));
+    }
+    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     Ok(json!({ "dialog": KIND }))
 }
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    if !para(d) {
+        ui.horizontal(|ui| {
+            super::char_style_options::section_list(ui, d);
+            ui.separator();
+            if d.str("section") == "basic" {
+                super::char_style_options::basic_body(ui, d);
+            } else if d.str("section") == "advanced" {
+                super::char_style_options::advanced_body(ui, d);
+            } else if d.str("section") == "color" {
+                super::char_style_options::color_body(ui, d);
+            } else if d.str("section") == "opentype" {
+                super::char_style_options::opentype_body(ui, d);
+            } else {
+                ui.vertical(|ui| {
+                    grid(ui, |ui| {
+                        label(ui, tl!("Style Name:"));
+                        form::text(ui, d, "name", 190.0);
+                        ui.end_row();
+                    });
+                    if let Ok(attrs) = super::char_style_options::edited_attrs(d) {
+                        for (key, value) in attrs {
+                            ui.label(format!("{}: {}", super::humanize(&key), value));
+                        }
+                    }
+                });
+            }
+        });
+        super::char_style_options::reset_button(ui, d);
+        return false;
+    }
     grid(ui, |ui| {
         label(ui, tl!("Style Name:"));
         form::text(ui, d, "name", 190.0);
@@ -48,13 +91,21 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 /// OK: make the style with the name. A name another style has, or an empty one, keeps the dialog
-/// open.
+/// open. The panel highlights the new style and scrolls it into view when it next draws.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut params = d.fields.get("__target").filter(|t| t.is_object()).cloned().unwrap_or_else(|| json!({}));
     params["name"] = json!(d.str("name"));
+    if !para(d) {
+        params["attrs"] = Value::Object(super::char_style_options::edited_attrs(d)?);
+    }
     let r = app.run(if para(d) { "paraStyle.new" } else { "charStyle.new" }, params);
-    if r.is_ok() {
+    if let Ok(v) = &r {
         app.ui.dialog = None;
+        if let Some((uid, name)) = app.session.active().and_then(|doc| v["name"].as_str().map(|name| (doc.uid, name))) {
+            let para = para(d);
+            app.ui.made_text_style.retain(|(pending_uid, pending_para, _)| *pending_uid != uid || *pending_para != para);
+            app.ui.made_text_style.push((uid, para, name.to_string()));
+        }
     }
     r
 }

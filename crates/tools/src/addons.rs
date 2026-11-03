@@ -1,10 +1,15 @@
 //! The tools of VectorCraft's built-in add-ons. They aren't in the toolbars as they ship: the All
 //! Tools drawer lists them (under their add-on's heading) so they can be added, and each add-on's
-//! submenu selects them. Like every tool they only emit commands (`addon.<name>.*`).
+//! submenu selects them. Tool gestures emit engine commands.
 
 pub mod anchor_eraser;
+pub mod corner_tool;
+pub mod enclosing_lasso;
 pub mod extend_path;
 pub mod measure_inspect;
+pub mod parametric_shape;
+pub mod shared_edge;
+pub mod slide_anchor;
 pub mod smart_pen;
 
 use crate::{Tool, ToolInfo};
@@ -14,17 +19,23 @@ pub const PATH_TOOLS: &[ToolInfo] = &[
     ToolInfo { id: anchor_eraser::ID, label: "Anchor Eraser Brush", shortcut: None, icon: "dc-remove-brush" },
     ToolInfo { id: extend_path::ID, label: "Extend Path Tool", shortcut: None, icon: "dc-arrow-extend" },
     ToolInfo { id: measure_inspect::ID, label: "Measure & Inspect Tool", shortcut: None, icon: "ruler" },
+    ToolInfo { id: parametric_shape::ID, label: "Parametric Shape Tool", shortcut: None, icon: "hexagon" },
+    ToolInfo { id: corner_tool::ID, label: "Corner Tool", shortcut: None, icon: "dc-rounded-rect" },
+    ToolInfo { id: slide_anchor::ID, label: "Slide Anchor Along Path", shortcut: None, icon: "dc-anchor" },
+    ToolInfo { id: shared_edge::ID, label: "Shared Edge Merge Tool", shortcut: None, icon: "dc-join" },
 ];
 
 /// Smart Pen's tool, a flyout group of its own.
 pub const SMART_PEN: &[ToolInfo] = &[ToolInfo { id: smart_pen::ID, label: "Smart Pen Tool", shortcut: None, icon: "spline-pointer" }];
 
+pub const ENCLOSING_LASSO: &[ToolInfo] = &[ToolInfo { id: enclosing_lasso::ID, label: "Enclosing Lasso Tool", shortcut: None, icon: "tool-lasso" }];
+
 /// The add-ons' tool groups, after the toolbar's own ([`crate::TOOL_GROUPS`]), each with the
 /// heading the All Tools drawer lists it under (its add-on's name).
-const HEADED: &[(&[ToolInfo], &str)] = &[(PATH_TOOLS, "Path Precision Tools"), (SMART_PEN, "Smart Pen")];
+const HEADED: &[(&[ToolInfo], &str)] = &[(PATH_TOOLS, "Path Precision Tools"), (SMART_PEN, "Smart Pen"), (ENCLOSING_LASSO, "Enclosing Lasso")];
 
 /// The add-ons' tool groups, after the toolbar's own ([`crate::TOOL_GROUPS`]).
-pub const GROUPS: &[&[ToolInfo]] = &[PATH_TOOLS, SMART_PEN];
+pub const GROUPS: &[&[ToolInfo]] = &[PATH_TOOLS, SMART_PEN, ENCLOSING_LASSO];
 
 /// The heading the All Tools drawer lists tool `id` under: its add-on's name.
 pub fn heading(id: &str) -> Option<&'static str> {
@@ -35,9 +46,14 @@ pub fn heading(id: &str) -> Option<&'static str> {
 pub fn create(id: &str) -> Option<Box<dyn Tool>> {
     Some(match id {
         anchor_eraser::ID => Box::new(anchor_eraser::AnchorEraserTool::default()),
+        corner_tool::ID => Box::new(corner_tool::CornerTool::default()),
         extend_path::ID => Box::new(extend_path::ExtendPathTool::default()),
         measure_inspect::ID => Box::new(measure_inspect::MeasureInspectTool::default()),
+        parametric_shape::ID => Box::new(parametric_shape::ParametricShapeTool::default()),
+        shared_edge::ID => Box::new(shared_edge::SharedEdgeTool::default()),
+        slide_anchor::ID => Box::new(slide_anchor::SlideAnchorTool::default()),
         smart_pen::ID => Box::new(smart_pen::SmartPenTool::default()),
+        enclosing_lasso::ID => Box::new(enclosing_lasso::EnclosingLassoTool::default()),
         _ => return None,
     })
 }
@@ -57,6 +73,7 @@ mod tests {
         }
         assert!(PATH_TOOLS.iter().all(|t| heading(t.id) == Some("Path Precision Tools")));
         assert_eq!(heading(smart_pen::ID), Some("Smart Pen"));
+        assert_eq!(heading(enclosing_lasso::ID), Some("Enclosing Lasso"));
         assert_eq!(GROUPS.len(), HEADED.len());
         assert!(crate::catalog::all_tools().any(|t| t.id == extend_path::ID));
         assert!(create("pen").is_none() && heading("pen").is_none());

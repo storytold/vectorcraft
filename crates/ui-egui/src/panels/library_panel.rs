@@ -381,6 +381,13 @@ fn rename(ui: &mut UiState, from: &str, to: &str) -> Result<(), String> {
     }
     ui.docking = docking;
     ui.docking_hidden = hidden;
+    for group in &mut ui.docking_hidden_groups {
+        for panel in group {
+            if panel == from {
+                *panel = to.to_string();
+            }
+        }
+    }
     if ui.open_panel.as_deref() == Some(from) {
         ui.open_panel = Some(to.into());
     }
@@ -401,6 +408,7 @@ fn key(panel: &str, key: &str) -> String {
 pub(crate) fn submenu(category: &str) -> Option<&'static str> {
     match category {
         "gradients" => Some("Gradients"),
+        "patterns" => Some("Patterns"),
         "user" => Some("User Defined"),
         "loaded" => Some("Other Libraries"),
         _ => None,

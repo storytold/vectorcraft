@@ -63,6 +63,11 @@ impl Harness {
         self.frame(vec![]);
     }
 
+    fn press(&mut self, key: egui::Key, modifiers: egui::Modifiers) {
+        self.frame(vec![Event::ModifiersChanged(modifiers), Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }]);
+        self.frame(vec![Event::Key { key, physical_key: None, pressed: false, repeat: false, modifiers }]);
+    }
+
     /// Press at `from` and move to `to` in steps, holding the button.
     fn press_and_move(&mut self, from: Pos2, to: Pos2) {
         self.frame(vec![Event::PointerMoved(from), button(from, true)]);
@@ -496,4 +501,202 @@ fn window_menu_panels_without_a_place_open_in_their_icon_group_or_float() {
     assert!(floating_window(&h.layout(), "openType").is_some());
     h.frame(vec![]);
     assert!(h.tab("openType").is_some());
+}
+
+#[test]
+fn f7_hides_and_restores_the_expanded_layers_tab() {
+    let mut h = Harness::new();
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(showing(&h.app.ui, "layers"), "the first press activates the tab");
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(!showing(&h.app.ui, "layers"), "a second press hides the active tab");
+    assert!(h.app.ui.docking_hidden.contains_key("layers"));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(showing(&h.app.ui, "layers"), "the next press restores it");
+    assert_eq!(main_panels(&h.layout()), ["properties", "layers", "libraries"]);
+
+    h.app.run("window.panel.collapse", json!({"panel": "layers", "collapsed": true})).unwrap();
+    let layout = h.layout();
+    let group = dock_columns(&layout).iter().flat_map(|c| &c.groups).find(|g| g.panels.contains(&"layers".to_string())).unwrap();
+    assert!(group.minimized);
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    let layout = h.layout();
+    let group = dock_columns(&layout).iter().flat_map(|c| &c.groups).find(|g| g.panels.contains(&"layers".to_string())).unwrap();
+    assert!(!group.minimized, "the first press expands a collapsed group");
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(!showing(&h.app.ui, "layers"), "the following press hides the expanded group");
+}
+
+#[test]
+fn f7_activates_a_background_tab_before_hiding_it() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.move", json!({"panel": "layers", "anchor": "properties"})).unwrap();
+    h.app.run("window.panel.activate", json!({"panel": "properties"})).unwrap();
+    let before = group_of(&h.layout(), &"layers".into());
+    assert!(!showing(&h.app.ui, "layers"));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(showing(&h.app.ui, "layers"));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(["properties", "layers", "libraries"].iter().all(|panel| !h.layout().contains(&panel.to_string())));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(showing(&h.app.ui, "layers"));
+    assert_eq!(group_of(&h.layout(), &"layers".into()), before);
+}
+
+#[test]
+fn f7_hides_and_restores_the_whole_expanded_group() {
+    let mut h = Harness::new();
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(["properties", "layers", "libraries"].iter().all(|panel| !h.layout().contains(&panel.to_string())));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert_eq!(group_of(&h.layout(), &"layers".into()), ["properties", "layers", "libraries"]);
+    assert!(showing(&h.app.ui, "layers"));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    h.app.run("window.panel", json!({"panel": "properties", "toggle": true})).unwrap();
+    assert_eq!(group_of(&h.layout(), &"properties".into()), ["properties", "layers", "libraries"]);
+    assert!(showing(&h.app.ui, "properties"));
+}
+
+#[test]
+fn f7_restores_only_tabs_hidden_with_the_group() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.close", json!({"panel": "libraries"})).unwrap();
+    assert!(h.app.ui.docking_hidden.contains_key("libraries"));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(["properties", "layers"].iter().all(|panel| h.app.ui.docking_hidden.contains_key(*panel)));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert_eq!(group_of(&h.layout(), &"layers".into()), ["properties", "layers"]);
+    assert!(!h.layout().contains(&"libraries".to_string()));
+    assert!(showing(&h.app.ui, "layers"));
+}
+
+#[test]
+fn independently_reopened_tab_is_not_restored_by_the_group_key() {
+    let mut h = Harness::new();
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(showing(&h.app.ui, "layers"));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(["properties", "layers", "libraries"].iter().all(|panel| h.app.ui.docking_hidden.contains_key(*panel)));
+    assert!(["properties", "layers", "libraries"].iter().all(|panel| !h.layout().contains(&panel.to_string())));
+    h.app.run("window.panel.activate", json!({"panel": "libraries"})).unwrap();
+    assert!(h.layout().contains(&"libraries".to_string()));
+    assert!(!h.app.ui.docking_hidden.contains_key("libraries"));
+    assert!(["properties", "layers"].iter().all(|panel| h.app.ui.docking_hidden.contains_key(*panel)));
+    h.app.run("window.panel.close", json!({"panel": "libraries"})).unwrap();
+    assert!(h.app.ui.docking_hidden.contains_key("libraries"));
+    assert!(!h.layout().contains(&"libraries".to_string()));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert_eq!(group_of(&h.layout(), &"layers".into()), ["properties", "layers"]);
+    assert!(!h.layout().contains(&"libraries".to_string()));
+    assert!(showing(&h.app.ui, "layers"));
+}
+
+#[test]
+fn f7_hides_and_restores_a_floating_tab_group() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.float", json!({"panel": "layers", "group": true})).unwrap();
+    h.app.run("window.panel.activate", json!({"panel": "layers"})).unwrap();
+    h.frame(vec![]);
+    let before = h.layout();
+    let window = floating_window(&before, "layers").unwrap();
+    let rect = window.rect;
+    assert_eq!(group_of(&before, &"layers".into()), ["properties", "layers", "libraries"]);
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(floating_window(&h.layout(), "layers").is_none());
+    assert!(["properties", "layers", "libraries"].iter().all(|panel| !h.layout().contains(&panel.to_string())));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert_eq!(floating_window(&h.layout(), "layers").unwrap().rect, rect);
+    assert_eq!(group_of(&h.layout(), &"layers".into()), ["properties", "layers", "libraries"]);
+    assert!(showing(&h.app.ui, "layers"));
+}
+
+#[test]
+fn f7_toggles_a_multi_tab_icon_flyout() {
+    let mut h = Harness::new();
+    h.app.run("window.collapseDock", json!({"collapsed": true})).unwrap();
+    h.frame(vec![]);
+    assert!(in_iconic_column(&h.layout(), "layers"));
+    assert_eq!(group_of(&h.layout(), &"layers".into()), ["properties", "layers", "libraries"]);
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert_eq!(h.app.ui.open_panel, None);
+    assert!(in_iconic_column(&h.layout(), "layers"));
+    assert_eq!(group_of(&h.layout(), &"layers".into()), ["properties", "layers", "libraries"]);
+}
+
+#[test]
+fn panel_function_keys_toggle_icon_flyouts_and_floating_groups() {
+    let mut h = Harness::new();
+    h.press(egui::Key::F5, egui::Modifiers::NONE);
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("brushes"));
+    h.press(egui::Key::F5, egui::Modifiers::NONE);
+    assert_eq!(h.app.ui.open_panel, None);
+    h.press(egui::Key::F5, egui::Modifiers::NONE);
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("brushes"));
+
+    h.app.run("window.panel.float", json!({"panel": "layers"})).unwrap();
+    h.frame(vec![]);
+    let rect = floating_window(&h.layout(), "layers").unwrap().rect;
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(floating_window(&h.layout(), "layers").is_none());
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert_eq!(floating_window(&h.layout(), "layers").unwrap().rect, rect);
+    h.app.run("window.panel.dock", json!({"panel": "layers"})).unwrap();
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(!showing(&h.app.ui, "layers"), "the expanded dock also toggles");
+}
+
+#[test]
+fn other_function_keys_and_keyboard_guards_keep_their_routes() {
+    let mut h = Harness::new();
+    h.app.run("window.panel", json!({"panel": "layers"})).unwrap();
+    let keymap = crate::shortcut_editor::current();
+    for (chord, command) in [("F8", "ui.symbolOptions"), ("F12", "file.revert")] {
+        let bound = crate::keymap::vc_chord(chord).and_then(|c| crate::keymap::lookup(&keymap.keymap, &c)).unwrap();
+        assert_eq!(bound.id, command);
+    }
+    h.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    h.press(egui::Key::F8, egui::Modifiers::NONE);
+    assert_eq!(h.app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("symbolOptions"));
+    crate::dialogs::confirm(&mut h.app).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc.symbols.len(), 1);
+    crate::menus::invoke(&mut h.app, "view.rotate", json!({}));
+    assert!(h.app.ui.dialog.is_some());
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(showing(&h.app.ui, "layers"), "F7 does nothing while a dialog is open");
+    h.app.ui.dialog = None;
+
+    let field = egui::Id::unique("panel-shortcut-text-focus");
+    h.ctx.memory_mut(|m| m.request_focus(field));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(showing(&h.app.ui, "layers"), "F7 does nothing while a text field has focus");
+    h.ctx.memory_mut(|m| m.surrender_focus(field));
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(!showing(&h.app.ui, "layers"), "F7 toggles when the field releases focus");
+
+    let dir = vectorcraft_testkit::temp_dir("panel-shortcut-revert");
+    let path = dir.join(format!("panel-shortcut-revert-{}.vectorcraft", std::process::id()));
+    let services = crate::Services {
+        read: Some(Box::new(|p| std::fs::read(p).map_err(|e| e.to_string()))),
+        write: Some(Box::new(|p, data| std::fs::write(p, data).map_err(|e| e.to_string()))),
+        ..Default::default()
+    };
+    let mut saved = VectorcraftApp::new(Session::new(), services);
+    saved.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    saved.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    saved.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    saved.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap();
+    assert_eq!(saved.session.doc().unwrap().doc.node_count(), 3);
+    let ctx = egui::Context::default();
+    let key = Event::Key { key: egui::Key::F12, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    ctx.run_ui(egui::RawInput { events: vec![key], ..Default::default() }, |ui| crate::shortcuts::handle(&mut saved, ui.ctx()))
+        .textures_delta
+        .clear();
+    assert_eq!(saved.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::confirm::KIND));
+    crate::dialogs::confirm(&mut saved).unwrap();
+    assert_eq!(saved.session.doc().unwrap().doc.node_count(), 2, "F12 reloads the saved document");
+    std::fs::remove_dir_all(dir).unwrap();
 }

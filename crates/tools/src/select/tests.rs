@@ -571,6 +571,28 @@ fn turned_cursors_step_with_the_view() {
     assert_eq!(Cursor::rotate_about_in_view(Point::ORIGIN, Point::ORIGIN, 90.0), Cursor::Rotate, "on the center");
 }
 
+/// #4980: with anchors selected on their own (the end anchor of a path the Pen is drawing, when
+/// Cmd/Ctrl lends the Selection tool) the canvas shows no bounding box, so its handles neither
+/// offer a resize pointer nor scale on a press: the press takes the path, as away from the box.
+#[test]
+fn hidden_box_handles_take_no_press_while_anchors_are_selected() {
+    let (d, id) = doc_with_rect();
+    let p = paint();
+    let top_middle = Point::new(150.0, 100.0);
+    let mut s = Selection::default();
+    s.add(id);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&cx(&d, &s, &p), top_middle, Mods::default()), Cursor::ResizeV, "the shown box's handle");
+    assert_eq!(t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 150.0, 100.0)), vec![Action::Begin("Scale".into())]);
+    s.anchors.entry(id).or_default().insert((0, 1));
+    let c = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, top_middle, Mods::default()), Cursor::Move);
+    let down = t.pointer(&c, &ev(PointerKind::Down, 150.0, 100.0));
+    assert!(!down.contains(&Action::Begin("Scale".into())), "{down:?}");
+    assert!(!crate::select::bbox_handle_at(&c, top_middle));
+}
+
 /// In a rotated view the resize and rotate cursors turn with the view.
 #[test]
 fn box_cursors_turn_with_the_view() {
@@ -982,6 +1004,53 @@ fn shift_click_toggles_an_object_on_release() {
     assert!(t.pointer(&cx2, &shift(PointerKind::Up, 150.0, 150.0)).is_empty());
 }
 
+/// A Shift-drag that starts on a highlighted object of the Global Edit selects that object and
+/// moves it; only a Shift-click leaves it out of the edit.
+#[test]
+fn shift_drag_on_a_global_edit_match_selects_and_moves_it() {
+    let (d, a, b) = two_rects(Rect::new(300.0, 100.0, 400.0, 200.0));
+    let p = paint();
+    let s = Selection::default();
+    let members = [(a, Affine::IDENTITY), (b, Affine::IDENTITY)];
+    let cx = ToolContext { global_edit: &members, ..cx(&d, &s, &p) };
+    let shift = |kind, x, y| ev(kind, x, y).with_mods(Mods { shift: true, ..Mods::default() });
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&cx, &shift(PointerKind::Down, 350.0, 150.0)).is_empty());
+    let mut actions = t.pointer(&cx, &shift(PointerKind::Drag, 390.0, 150.0));
+    assert_eq!(actions[..2], [Action::Exec("select.toggle".into(), json!({"id": b.0})), Action::Begin("Move".into())]);
+    actions.extend(t.pointer(&cx, &shift(PointerKind::Drag, 395.0, 150.0)));
+    actions.extend(t.pointer(&cx, &shift(PointerKind::Up, 395.0, 150.0)));
+    assert!(
+        actions.iter().any(|a| matches!(a, Action::Preview(c, v) if c == "object.transform" && v["matrix"][4].as_f64().is_some_and(|x| x > 39.0))),
+        "moved right: {actions:?}"
+    );
+    assert_eq!(actions.last(), Some(&Action::Commit));
+    assert!(!actions.iter().any(|a| matches!(a, Action::Exec(c, _) if c == "select.globalEditExclude")), "{actions:?}");
+    // A Shift-click on it leaves it out instead.
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&cx, &shift(PointerKind::Down, 350.0, 150.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &shift(PointerKind::Up, 350.0, 150.0)), vec![Action::Exec("select.globalEditExclude".into(), json!({"id": b.0}))]);
+}
+
+/// The first preview of a Shift-drag from a Global Edit match snaps, the match's bounds taken in
+/// with the selection's: with Snap to Grid, a move of 13 right brings the right edge (413) onto
+/// the gridline 414.
+#[test]
+fn shift_drag_on_a_global_edit_match_snaps_from_its_first_event() {
+    let (d, a, b) = two_rects(Rect::new(300.0, 100.0, 400.0, 200.0));
+    let p = paint();
+    let s = Selection::default();
+    let members = [(a, Affine::IDENTITY), (b, Affine::IDENTITY)];
+    let cx = ToolContext { global_edit: &members, snap_to_grid: true, ..cx(&d, &s, &p) };
+    let shift = |kind, x, y| ev(kind, x, y).with_mods(Mods { shift: true, ..Mods::default() });
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&cx, &shift(PointerKind::Down, 350.0, 150.0)).is_empty());
+    let actions = t.pointer(&cx, &shift(PointerKind::Drag, 363.0, 150.0));
+    let Some(Action::Preview(_, v)) = actions.get(2) else { panic!("{actions:?}") };
+    let m = Vec2::new(v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap());
+    assert!(moved_by(m, (14.0, 0.0)), "{m:?}");
+}
+
 /// #541: a click on one object of a selection of several makes it the key object; a click on
 /// the key again lets it go. A drag moves them all, a lone object has no key unless ruler
 /// guides are selected with it.
@@ -1299,6 +1368,57 @@ fn handle_drag_scales() {
     let a = t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 300.0));
     assert!(matches!(&a[0], Action::Preview(_, v) if v["matrix"][0] == 2.0));
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), vec![Action::Commit]);
+}
+
+#[test]
+fn backquote_move_uses_release_state_and_one_commit() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    let drag = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 170.0, 150.0) });
+    assert!(matches!(drag.as_slice(), [Action::Begin(_), Action::Preview(_, v)] if v["objects"] == false && v["patterns"] == true));
+    let up = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Up, 170.0, 150.0) });
+    assert!(matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v["objects"] == false && v["patterns"] == true));
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 170.0, 150.0) });
+    let up = t.pointer(&cx, &ev(PointerKind::Up, 170.0, 150.0));
+    assert!(matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v.get("objects").is_none() && v.get("patterns").is_none()));
+}
+
+#[test]
+fn backquote_box_scale_and_rotate_use_pattern_matrix_at_release() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+    for (from, to) in [((200.0, 200.0), (300.0, 300.0)), ((210.0, 210.0), (150.0, 230.0))] {
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, from.0, from.1));
+        let drag = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, to.0, to.1) });
+        assert!(
+            matches!(drag.as_slice(), [Action::Preview(c, v)] if c == "object.transform" && v["objects"] == false && v["patterns"] == true),
+            "{drag:?}"
+        );
+        let up = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Up, to.0, to.1) });
+        assert!(
+            matches!(up.as_slice(), [Action::Preview(c, v), Action::Commit] if c == "object.transform" && v["objects"] == false && v["patterns"] == true),
+            "{up:?}"
+        );
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, from.0, from.1));
+        t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, to.0, to.1) });
+        let up = t.pointer(&cx, &ev(PointerKind::Up, to.0, to.1));
+        assert!(
+            matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v.get("objects").is_none() && v.get("patterns").is_none()),
+            "{up:?}"
+        );
+    }
 }
 
 /// Escape during a bounding-box scale or rotation cancels it, and the release after it commits
@@ -1751,6 +1871,41 @@ fn escape_drops_the_loaded_text() {
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 30.0, 420.0)), vec![Action::Exec("select.none".into(), json!({}))]);
 }
 
+/// A dropped press with the pointer loaded with text threads nothing, and the text stays loaded:
+/// the next click threads it. A dropped press on the port loads no text.
+#[test]
+fn a_dropped_press_keeps_the_text_loaded() {
+    let (d, id, _, port) = overflowing_area_type();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+    t.drop_press(&cx);
+    t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    assert_ne!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText, "the dropped press loads no text");
+    t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+    t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    // The engine sends the release after the drop.
+    t.pointer(&cx, &ev(PointerKind::Down, 20.0, 20.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 80.0, 90.0));
+    assert!(t.drop_press(&cx).is_empty());
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 80.0, 90.0)).is_empty(), "the release threads nothing");
+    assert!(!t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Marquee(_))), "the new frame's outline is removed");
+    assert_eq!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText);
+    // A press on the port that loaded the text puts it down; dropped, it leaves the text loaded.
+    t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+    assert!(t.drop_press(&cx).is_empty());
+    t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    assert_eq!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText, "a dropped press on the port");
+    t.pointer(&cx, &ev(PointerKind::Down, 30.0, 420.0));
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Up, 30.0, 420.0)),
+        vec![Action::Exec("text.thread.add".into(), json!({"from": id.0, "at": [30.0, 420.0]}))]
+    );
+}
+
 /// [`doc_with_area_type`], its text fitting its frame; where its in and out ports are.
 fn fitting_area_type() -> (vectorcraft_doc::Document, NodeId, Point, Point) {
     let (d, id) = doc_with_area_type();
@@ -1890,4 +2045,38 @@ fn the_preview_memo_measures_once_per_revision_selection_and_preview_bounds() {
     // Without a memo, every call measures.
     let c = cx(&moved, &s, &p);
     assert_eq!(selection_bounds(&c).map(|r| r.x1), Some(250.0));
+}
+
+/// A double-click on a symbol instance edits its symbol in symbol editing mode (`symbol.edit`), and
+/// one outside the symbol's art in that mode leaves it, as it leaves isolation mode. An instance
+/// inside the art of the symbol being edited is not entered.
+#[test]
+fn a_double_click_on_a_symbol_instance_edits_its_symbol() {
+    use vectorcraft_doc::{Appearance, Node, NodeKind, Symbol, SymbolEdit};
+    let (mut d, rect) = doc_with_rect();
+    let art = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)), Appearance::default_art());
+    d.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: std::sync::Arc::new(art) });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let xf = Affine::translate((300.0, 300.0)) * Affine::scale(2.0);
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Dot".into(), xf })).unwrap();
+    let (s, p) = (Selection::default(), paint());
+    let double = |d: &vectorcraft_doc::Document, isolation: Option<NodeId>, x: f64, y: f64| {
+        let c = ToolContext { isolation, ..cx(d, &s, &p) };
+        SelectionTool::default().pointer(&c, &ev(PointerKind::DoubleClick, x, y))
+    };
+    assert_eq!(double(&d, None, 300.0, 300.0), vec![Action::Exec("symbol.edit".into(), json!({"id": id.0}))]);
+    assert_eq!(double(&d, None, 150.0, 150.0), vec![Action::Exec("object.isolate".into(), json!({"id": rect.0}))]);
+    // In symbol editing mode, with the instance on the editing layer.
+    d.symbol_edit = Some(SymbolEdit {
+        symbol: "Other".into(),
+        layer: l,
+        instance: None,
+        xf: Affine::IDENTITY,
+        group: false,
+        changed: false,
+        back_isolation: None,
+        back_layer: None,
+    });
+    assert_eq!(double(&d, Some(l), 300.0, 300.0), vec![]);
+    assert_eq!(double(&d, Some(l), 450.0, 50.0), vec![Action::Exec("object.exitIsolation".into(), json!({}))]);
 }

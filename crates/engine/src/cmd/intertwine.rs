@@ -3,18 +3,19 @@
 //! `object.intertwine.make` puts the selected objects in an Intertwine group
 //! (`NodeKind::Intertwine`), `object.intertwine.release` gives them back as they were. In between,
 //! `object.intertwine.arrange` picks overlap areas, by a click (`at`) or by an enclosed path drawn
-//! around them (`area`), and changes which member is drawn on top there: each member keeps the
-//! area where it is drawn over the others (`NodeExtras::intertwine`, see
-//! `vectorcraft_doc::intertwine`). Object › Expand turns the group into a plain group of what it
-//! draws ([`expand_intertwines`]), which Ungroup takes apart.
+//! around them (`area`), and changes the order the members are drawn in there: each member keeps
+//! the areas where it is drawn over others, by tier (`NodeExtras::intertwine` and
+//! `NodeExtras::intertwine_tiers`, see `vectorcraft_doc::intertwine`). Object › Expand turns the
+//! group into a plain group of what it draws ([`expand_intertwines`]), which Ungroup takes apart.
 //!
 //! An overlap area is a face of the planar arrangement of what the members paint (their fills and
 //! strokes, type outlined; other objects by their bounds): the part where two or more of them
 //! overlap, split wherever a member's edge crosses it.
 //!
 //! Behaviour: <https://helpx.adobe.com/illustrator/using/intertwine-objects.html> (Make,
-//! Release, clicking or drawing around an overlap, Bring to Front and Send to Back where three or
-//! more objects overlap).
+//! Release, clicking or drawing around an overlap, Bring to Front, Bring Forward, Send Backward
+//! and Send to Back where three or more objects overlap:
+//! <https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/create-intertwined-objects.html>).
 
 use std::sync::Arc;
 
@@ -26,7 +27,7 @@ use vectorcraft_tools::intertwine::{Face, drawn_order, face_at, faces, faces_in,
 
 use super::edit::selected_roots;
 use super::pathops::Beside;
-use super::{CommandSpec, EngineError, Result, Session, bad, checked_id, checked_ids_param, cmd, has_selection, point_param, str_param};
+use super::{CommandSpec, EngineError, Result, Session, bad, checked_id, checked_ids_param, cmd, has_doc, has_selection, point_param, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -62,8 +63,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Arrange Intertwine Area",
             [],
             None,
-            "{id?: Intertwine group (default: the selected one), at?: [x,y] (the overlap area under this point, as a click picks it) | area?: [[x,y]…] (a closed polygon drawn around overlap areas: every area whose inside it encloses), order?: toggle|front|back (toggle: the object drawn right below the top comes to the front, so two objects swap), member?: id (front and back: the object to move; default: front brings the object right below the top, back sends the top one)} → {count: areas changed, top: [id of the object now on top in each area]}",
-            has_intertwine,
+            "{id?: Intertwine group (default: the selected one), at?: [x,y] (the overlap area under this point, as a click picks it) | area?: [[x,y]…] (a closed polygon drawn around overlap areas: every area whose inside it encloses), order?: toggle|front|forward|backward|back (toggle: the object drawn right below the top comes to the front, so two objects swap; forward and backward move an object one place up or down among the objects in that area; the others keep their order there), member?: id (front, forward, backward and back: the object to move; default: front and forward move the object right below the top, back and backward the top one)} → {count: areas changed (an area already in that order is not changed, and with none changed there is no undo step), top: [id of the object now on top in each changed area]}",
+            has_doc,
             arrange
         ),
     ]
@@ -173,7 +174,10 @@ fn release(s: &mut Session, _: &Value) -> Result<Value> {
                 .flatten()
                 .map(|c| {
                     let mut c = (**c).clone();
-                    c.extras_mut().intertwine = None;
+                    let mut e = c.extras_mut();
+                    e.intertwine = None;
+                    e.intertwine_tiers = Vec::new();
+                    drop(e);
                     c
                 })
                 .collect();
@@ -228,6 +232,8 @@ pub(crate) fn expand_intertwines(d: &mut Document, roots: &[NodeId]) -> Result<u
 enum Order {
     Toggle,
     Front,
+    Forward,
+    Backward,
     Back,
 }
 
@@ -244,39 +250,86 @@ fn polygon(v: &Value) -> Option<PathData> {
     Some(PathData::single(SubPath::polyline(&pts, true)))
 }
 
-/// `n`'s area with `face` added (`add`) or taken out.
-fn with_area(n: &mut Node, face: &PathData, add: bool) {
-    let old = n.extras().intertwine.as_deref().cloned();
-    let new = match (old, add) {
+/// Area `old` with `face` added (`add`) or taken out.
+fn with_face(old: Option<PathData>, face: &PathData, add: bool) -> Option<PathData> {
+    match (old, add) {
         (None, true) => nonempty(face.clone()),
         (None, false) => None,
         (Some(a), true) => nonempty(po::boolean(&a, FillRule::NonZero, face, FillRule::NonZero, po::BoolOp::Union)),
         (Some(a), false) => nonempty(po::boolean(&a, FillRule::NonZero, face, FillRule::NonZero, po::BoolOp::Difference)),
-    };
-    if new.as_ref() != n.extras().intertwine.as_deref() {
-        n.extras_mut().intertwine = new.map(Box::new);
     }
 }
 
-/// Bring member `x` to the front of `face` (`front`) or send it to the back there; returns the
-/// member now on top there.
-fn arrange_face(children: &mut [Arc<Node>], face: &Face, x: usize, front: bool) -> Option<usize> {
-    let lowest = face.members.iter().min().copied()?;
-    let highest = face.members.iter().max().copied()?;
-    for &i in &face.members {
-        let Some(c) = children.get_mut(i) else { continue };
-        let c = Arc::make_mut(c);
-        if front {
-            // Only `x` is drawn over the others here, unless it is on top in its own order.
-            with_area(c, &face.path, i == x && x != highest);
-        } else if i == x {
-            with_area(c, &face.path, false);
-        } else if x != lowest {
-            // Every other member is drawn over `x`, keeping their own order among them.
-            with_area(c, &face.path, true);
+/// Draw `n` at `tier` in `face` (0: in its own order): `face` joins its area of that tier and
+/// leaves its areas of the other tiers.
+fn set_tier(n: &mut Node, face: &PathData, tier: usize) {
+    let e = n.extras();
+    let mut areas: Vec<Option<PathData>> =
+        std::iter::once(e.intertwine.as_deref().cloned()).chain(e.intertwine_tiers.iter().map(|a| (!a.is_empty()).then(|| a.clone()))).collect();
+    if areas.len() < tier {
+        areas.resize(tier, None);
+    }
+    for (k, a) in areas.iter_mut().enumerate() {
+        *a = with_face(a.take(), face, k + 1 == tier);
+    }
+    while areas.len() > 1 && areas.last().is_some_and(Option::is_none) {
+        areas.pop();
+    }
+    let mut areas = areas.into_iter();
+    let first = areas.next().flatten();
+    let rest: Vec<PathData> = areas.map(Option::unwrap_or_default).collect();
+    if first.as_ref() != n.extras().intertwine.as_deref() || rest != n.extras().intertwine_tiers {
+        let mut e = n.extras_mut();
+        e.intertwine = first.map(Box::new);
+        e.intertwine_tiers = rest;
+    }
+}
+
+/// The tiers that draw members in `order` (bottom first): each member one tier above the member
+/// below it when it comes before that member in the group's order, else at the same tier.
+fn tiers(order: &[usize]) -> Vec<(usize, usize)> {
+    let mut tier = 0;
+    let mut below: Option<usize> = None;
+    order
+        .iter()
+        .map(|&i| {
+            if below.is_some_and(|b| i < b) {
+                tier += 1;
+            }
+            below = Some(i);
+            (i, tier)
+        })
+        .collect()
+}
+
+/// Draw the members of `face` in `order` there (bottom first), leaving the other areas as they
+/// are.
+fn arrange_face(children: &mut [Arc<Node>], face: &Face, order: &[usize]) {
+    for (i, tier) in tiers(order) {
+        if let Some(c) = children.get_mut(i) {
+            set_tier(Arc::make_mut(c), &face.path, tier);
         }
     }
-    drawn_order(children, face).last().copied()
+}
+
+/// `drawn` (the members of an area, bottom first) with member `x` moved as `order` says.
+fn moved(drawn: &[usize], x: usize, order: Order) -> Vec<usize> {
+    let mut out = drawn.to_vec();
+    let Some(at) = out.iter().position(|i| *i == x) else { return out };
+    match order {
+        Order::Toggle | Order::Front => {
+            out.remove(at);
+            out.push(x);
+        }
+        Order::Back => {
+            out.remove(at);
+            out.insert(0, x);
+        }
+        Order::Forward if at + 1 < out.len() => out.swap(at, at + 1),
+        Order::Backward if at > 0 => out.swap(at - 1, at),
+        Order::Forward | Order::Backward => {}
+    }
+    out
 }
 
 fn arrange(s: &mut Session, p: &Value) -> Result<Value> {
@@ -309,15 +362,17 @@ fn arrange(s: &mut Session, p: &Value) -> Result<Value> {
     let order = match str_param(p, "order").unwrap_or("toggle") {
         "toggle" => Order::Toggle,
         "front" => Order::Front,
+        "forward" => Order::Forward,
+        "backward" => Order::Backward,
         "back" => Order::Back,
-        o => return Err(bad(C, format!("unknown order `{o}`: toggle, front or back"))),
+        o => return Err(bad(C, format!("unknown order `{o}`: toggle, front, forward, backward or back"))),
     };
     let member = match p.get("member") {
         Some(v) => Some(checked_id(s, v, C)?),
         None => None,
     };
     if member.is_some() && order == Order::Toggle {
-        return Err(bad(C, "member is for order front or back"));
+        return Err(bad(C, "member is for order front, forward, backward or back"));
     }
     let children: Vec<Arc<Node>> = s.doc()?.doc.node(group).and_then(Node::children).cloned().unwrap_or_default();
     let member = match member {
@@ -345,25 +400,32 @@ fn arrange(s: &mut Session, p: &Value) -> Result<Value> {
     {
         return Err(bad(C, "that object is not in the overlap"));
     }
-    let tops = s.edit("Intertwine", |d, _| {
+    // The new order of each area that changes; areas already in that order are left out.
+    let mut plans: Vec<(&Face, Vec<usize>)> = vec![];
+    for face in found.iter().filter(|f| member.is_none_or(|m| f.members.contains(&m))) {
+        let drawn = drawn_order(&children, face);
+        let x = match (order, member) {
+            (_, Some(m)) => Some(m),
+            (Order::Toggle | Order::Front | Order::Forward, None) => drawn.iter().rev().nth(1).copied(),
+            (Order::Back | Order::Backward, None) => drawn.last().copied(),
+        };
+        let Some(x) = x else { continue };
+        let new = moved(&drawn, x, order);
+        if new != drawn {
+            plans.push((face, new));
+        }
+    }
+    let tops: Vec<u64> = plans.iter().filter_map(|(_, new)| children.get(*new.last()?)).map(|c| c.id.0).collect();
+    if plans.is_empty() {
+        return Ok(json!({ "count": 0, "top": tops }));
+    }
+    s.edit("Intertwine", |d, _| {
         let n = d.node_mut(group).ok_or(EngineError::NoNode(group))?;
         let NodeKind::Intertwine { children } = &mut n.kind else { return Err(EngineError::NoNode(group)) };
-        let mut tops = vec![];
-        for face in found.iter().filter(|f| member.is_none_or(|m| f.members.contains(&m))) {
-            let drawn = drawn_order(children, face);
-            let (x, front) = match (order, member) {
-                (Order::Toggle, _) => (drawn.iter().rev().nth(1).copied(), true),
-                (Order::Front, m) => (m.or(drawn.iter().rev().nth(1).copied()), true),
-                (Order::Back, m) => (m.or(drawn.last().copied()), false),
-            };
-            let Some(x) = x else { continue };
-            if let Some(top) = arrange_face(children, face, x, front)
-                && let Some(c) = children.get(top)
-            {
-                tops.push(c.id.0);
-            }
+        for (face, new) in &plans {
+            arrange_face(children, face, new);
         }
-        Ok(tops)
+        Ok(())
     })?;
-    Ok(json!({ "count": tops.len(), "top": tops }))
+    Ok(json!({ "count": plans.len(), "top": tops }))
 }

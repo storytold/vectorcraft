@@ -308,3 +308,24 @@ fn the_rubber_band_shows_the_next_segment_and_ending_the_path() {
     assert!(t.active(&cx).is_none());
     assert!(t.overlays(&cx).is_empty());
 }
+
+#[test]
+fn an_alt_drag_away_from_paths_selects_the_points_inside_a_marquee() {
+    let (d, id, s) = doc(SubPath::polyline(&[Point::new(100.0, 100.0), Point::new(200.0, 100.0), Point::new(300.0, 100.0)], false));
+    let p = paint();
+    let cx = plain(&d, &s, &p);
+    let mut t = SmartPenTool::default();
+    assert!(t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0, ALT)).is_empty());
+    assert!(t.busy());
+    t.pointer(&cx, &ev(PointerKind::Drag, 250.0, 150.0, ALT));
+    assert_eq!(t.overlays(&cx).last(), Some(&Overlay::Marquee(Rect::from_points(Point::new(50.0, 50.0), Point::new(250.0, 150.0)))));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 250.0, 150.0, ALT));
+    assert_eq!(acts, [Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 0], [0, 1]]}], "mode": "set"}))]);
+    assert!(!t.busy(), "the marquee is over");
+    // A click is no marquee; Shift toggles the points inside it.
+    assert!(click(&mut t, &cx, 50.0, 50.0, ALT).is_empty());
+    t.pointer(&cx, &ev(PointerKind::Down, 280.0, 50.0, Mods { shift: true, ..ALT }));
+    t.pointer(&cx, &ev(PointerKind::Drag, 320.0, 150.0, Mods { shift: true, ..ALT }));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, 320.0, 150.0, Mods { shift: true, ..ALT }));
+    assert_eq!(acts, [Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 2]]}], "mode": "toggle"}))]);
+}

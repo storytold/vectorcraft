@@ -10,7 +10,7 @@ use kurbo::PathEl;
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Dash, Document, ImageObject, Node, NodeKind, StrokeLayer, SymbolBoxes, TextKind, TextObject, Unit};
 use vectorcraft_effects::stroke;
-use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2};
 
 use crate::aci::nearest_aci;
 use crate::writer::{Codes, Drawing, EntityStyle, Handle, ImageDef, Layer, LineType, fixed};
@@ -184,6 +184,46 @@ fn circular_subpath(sub: &Sub) -> Option<CircularSub> {
     Some(CircularSub { centre, radius, samples })
 }
 
+/// A closed subpath that is the four-cubic circle under an affine map: an ellipse, or a circle
+/// scaled out of proportion. `u` and `v` are the conjugate semi-diameters through its first two
+/// anchors.
+struct EllipticalSub {
+    centre: Point,
+    u: Vec2,
+    v: Vec2,
+}
+
+/// Fit a closed subpath of four cubics to one ellipse. Its anchors give the center and two
+/// conjugate semi-diameters; the subpath mapped by their inverse must pass [`circular_subpath`] as
+/// the unit circle, so the same tolerance and turn checks apply.
+fn elliptical_subpath(sub: &Sub) -> Option<EllipticalSub> {
+    if !sub.closed || sub.segs.len() != 4 {
+        return None;
+    }
+    let (a0, a1, a2) = (sub.start, sub.segs.first()?.end(), sub.segs.get(1)?.end());
+    let centre = a0.midpoint(a2);
+    let (u, v) = (a0 - centre, a1 - centre);
+    let det = u.cross(v);
+    let scale2 = u.hypot2().max(v.hypot2());
+    if !det.is_finite() || !scale2.is_finite() || det.abs() <= scale2 * 1e-9 {
+        return None;
+    }
+    let unit = |p: Point| {
+        let d = p - centre;
+        Point::new(d.cross(v) / det, u.cross(d) / det)
+    };
+    let mut segs = Vec::with_capacity(4);
+    for seg in &sub.segs {
+        let Seg::Cubic(a, b, to) = *seg else { return None };
+        segs.push(Seg::Cubic(unit(a), unit(b), unit(to)));
+    }
+    let circle = circular_subpath(&Sub { start: unit(sub.start), segs, closed: true })?;
+    if circle.centre.to_vec2().hypot() > 5e-4 || (circle.radius - 1.0).abs() > 5e-4 {
+        return None;
+    }
+    Some(EllipticalSub { centre, u, v })
+}
+
 fn angle_deg(p: Point, centre: Point) -> f64 {
     (p.y - centre.y).atan2(p.x - centre.x).to_degrees().rem_euclid(360.0)
 }
@@ -231,7 +271,22 @@ const MAX_ENTITIES: u32 = 10_000_000;
 
 /// The largest x or y a path may have to be flattened, and the most points its polygons keep.
 const MAX_COORD: f64 = 1e9;
-const MAX_POINTS: usize = 4_000_000;
+const MAX_POINTS: usize = if cfg!(test) { 100_000 } else { 4_000_000 };
+/// The most segments flattening one path makes, kept or not (repeats of a point are dropped).
+const MAX_FLATTEN_SEGMENTS: usize = 4 * MAX_POINTS;
+
+const SYMBOLS_LEFT_OUT: &str = "symbols placed inside symbols hold too many objects for DXF: the instances past that were left out";
+
+/// Do the dashes of `d` start at the start of their pattern, as a linetype's do? A pattern of
+/// odd length repeats twice in its linetype.
+fn starts_with_pattern(d: &Dash) -> bool {
+    if !d.is_dashed() || !d.offset.is_finite() {
+        return true;
+    }
+    let period = d.pattern.iter().sum::<f64>() * if d.pattern.len() % 2 == 1 { 2.0 } else { 1.0 };
+    let phase = d.offset.rem_euclid(period);
+    phase.min(period - phase) <= period * 1e-9
+}
 
 /// `bp` flattened into polygons (each closing implicitly), consecutive repeats dropped.
 fn polygons(bp: &BezPath) -> Vec<Vec<Point>> {
@@ -245,14 +300,19 @@ fn polygons(bp: &BezPath) -> Vec<Vec<Point>> {
     }
     let mut out: Vec<Vec<Point>> = vec![];
     let mut cur: Vec<Point> = vec![];
-    let mut points = 0usize;
-    let mut push = |p: Point, cur: &mut Vec<Point>| {
-        if points < MAX_POINTS && cur.last().is_none_or(|q| q.distance(p) > 1e-9) {
-            points += 1;
+    // Points kept, and segments made: once either budget is spent, no further curve is flattened.
+    let points = std::cell::Cell::new(0usize);
+    let segments = std::cell::Cell::new(0usize);
+    let push = |p: Point, cur: &mut Vec<Point>| {
+        segments.set(segments.get() + 1);
+        if points.get() < MAX_POINTS && cur.last().is_none_or(|q| q.distance(p) > 1e-9) {
+            points.set(points.get() + 1);
             cur.push(p);
         }
     };
-    kurbo::flatten(bp.iter(), FLATNESS, |el| match el {
+    let elements = bp.iter().take_while(|_| points.get() < MAX_POINTS && segments.get() < MAX_FLATTEN_SEGMENTS);
+    // Each curve is flattened into a bounded number of segments, however large it is.
+    vectorcraft_geom::flatten(elements, FLATNESS, |el| match el {
         PathEl::MoveTo(p) => {
             out.push(std::mem::take(&mut cur));
             push(p, &mut cur);
@@ -361,6 +421,9 @@ pub(crate) struct Scene<'a> {
     opacity: f32,
     /// Symbols and brush art being written inside one another.
     nest: u32,
+    /// Objects the symbol instances written held, together
+    /// ([`vectorcraft_doc::MAX_SYMBOL_NODES`]).
+    symbol_nodes: u64,
 }
 
 impl<'a> Scene<'a> {
@@ -390,6 +453,8 @@ impl<'a> Scene<'a> {
             extents: None,
             opacity: 1.0,
             nest: 0,
+            // Tests spend all but a million of it up front.
+            symbol_nodes: if cfg!(test) { vectorcraft_doc::MAX_SYMBOL_NODES - 1_000_000 } else { 0 },
         }
     }
 
@@ -491,14 +556,36 @@ impl<'a> Scene<'a> {
             NodeKind::Text(t) => self.text(n, t),
             NodeKind::Image(im) => self.image(im),
             NodeKind::SymbolInstance { symbol, xf } => {
-                if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
+                let doc = self.doc;
+                if self.symbol_nodes >= vectorcraft_doc::MAX_SYMBOL_NODES {
+                    // Spent: no more instances are looked at, so what's left costs nothing.
+                    self.warn(SYMBOLS_LEFT_OUT);
+                } else if let Some(sym) = doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
                 {
-                    let mut art = (*sym.art).clone();
-                    art.transform(*xf, false);
-                    self.nest += 1;
-                    self.node(&art, true);
-                    self.nest -= 1;
+                    // Symbols holding instances of symbols are written in full for each instance,
+                    // empty or not: every instance's art counts against one budget for the export.
+                    let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                    let count = art.count_with_masks() as u64;
+                    // Counted as `place_symbol_art_unclipped` places it: no clip groups.
+                    let most = doc.symbol_slice_map(symbol, *xf).map_or(count, |m| m.most_placed_unclipped(&art, doc));
+                    let placed = vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
+                        let placed = doc.place_symbol_art_unclipped(symbol, &art, *xf);
+                        let n = placed.as_ref().map_or(0, |a| a.count_with_masks() as u64);
+                        (placed, n)
+                    });
+                    match placed {
+                        Some(Some(art)) => {
+                            self.nest += 1;
+                            self.node(&art, true);
+                            self.nest -= 1;
+                        }
+                        Some(None) => {}
+                        None => {
+                            self.symbol_nodes = vectorcraft_doc::MAX_SYMBOL_NODES;
+                            self.warn(SYMBOLS_LEFT_OUT);
+                        }
+                    }
                 }
             }
             // Live blends, envelopes, meshes and repeats are written as their evaluated art.
@@ -612,13 +699,27 @@ impl<'a> Scene<'a> {
 
     /// The DXF lineweight nearest to `width` points (scaled with the drawing when asked).
     fn lineweight(&mut self, width: f64) -> i32 {
-        let scale = if self.o.scale_lineweights { self.o.scale } else { 1.0 };
-        let hundredths = width * 2540.0 / 72.0 * scale;
+        let hundredths = self.hundredths(width);
         let max = LINEWEIGHTS[LINEWEIGHTS.len() - 1];
         if hundredths > f64::from(max) + 5.0 {
             self.warn(WIDE_LINES);
         }
         LINEWEIGHTS.into_iter().min_by(|a, b| (f64::from(*a) - hundredths).abs().total_cmp(&(f64::from(*b) - hundredths).abs())).unwrap_or(max)
+    }
+
+    /// `width` points in hundredths of a millimetre, the unit of DXF lineweights (scaled with
+    /// the drawing when asked).
+    fn hundredths(&self, width: f64) -> f64 {
+        let scale = if self.o.scale_lineweights { self.o.scale } else { 1.0 };
+        width * 2540.0 / 72.0 * scale
+    }
+
+    /// Can a CAD line draw a plain stroke `width` points wide in this version? R12 polylines
+    /// carry their width, R13 and R14 have no lineweights, and from 2000 a lineweight holds up
+    /// to 2.11 mm, to the hundredth.
+    fn line_keeps_width(&self, width: f64) -> bool {
+        let v = self.o.version;
+        !v.handles() || (v.r2000() && self.hundredths(width).round() <= f64::from(LINEWEIGHTS[LINEWEIGHTS.len() - 1]))
     }
 
     /// A linetype for dash pattern `d` (one per distinct pattern).
@@ -673,7 +774,11 @@ impl<'a> Scene<'a> {
         }
         let Some(rgb) = self.paint_rgb(&st.paint) else { return };
         let plain = stroke::is_plain(st);
-        if self.o.alter_paths || (appearance && !plain) {
+        // A linetype has no phase: dashes that start part way into their pattern need outlines.
+        let lined = plain && st.dash.as_ref().is_none_or(starts_with_pattern);
+        // Alter Paths for Appearance outlines a stroke only when a line can't draw it.
+        let altered = self.o.alter_paths && !(lined && self.line_keeps_width(st.width));
+        if altered || (appearance && !lined) {
             let region = stroke::outline_region(&PathData::from_bezpath(bp), rule, st);
             let style = self.style(rgb, st.opacity, None, None);
             self.area(&region.to_bezpath(), FillRule::NonZero, &style, true);
@@ -740,9 +845,9 @@ impl<'a> Scene<'a> {
         self.e.int(98, 0);
     }
 
-    /// Path `bp` as lines: polylines for straight subpaths (and for curves in R12, flattened),
-    /// cubic splines for curved ones. `width`: the stroke weight, which DXF before 2000 gives
-    /// polylines as a width.
+    /// Path `bp` as lines: a line for an open subpath of one straight segment, polylines for
+    /// other straight subpaths (and for curves in R12, flattened), cubic splines for curved ones.
+    /// `width`: the stroke weight, which DXF before 2000 gives polylines as a width.
     fn lines(&mut self, bp: &BezPath, style: &EntityStyle, width: f64) {
         let v = self.o.version;
         let width = (!v.r2000() && width > 0.0).then_some(width * self.k);
@@ -755,11 +860,17 @@ impl<'a> Scene<'a> {
                 if sub.closed && pts.len() > 2 && pts.last().is_some_and(|p| p.distance(sub.start) <= 1e-9) {
                     pts.pop();
                 }
-                self.polyline(&pts, sub.closed, style, width);
+                // A LINE has no width, so a stroke before 2000 keeps its polyline width.
+                match (sub.closed, width, pts.as_slice()) {
+                    (false, None, &[a, b]) => self.line(a, b, style),
+                    _ => self.polyline(&pts, sub.closed, style, width),
+                }
             } else if (v.handles() || width.is_none()) && self.circular(&sub, style) {
                 // Native circles/arcs are preferred by CAD/CAM software. In R12, however, a
                 // stroked curve must stay on the flattened POLYLINE path so groups 40/41 retain
                 // its width. Non-circular curves continue through the existing fallback.
+            } else if v.handles() && self.elliptical(&sub, style) {
+                // R13 and later write an ellipse as a native ELLIPSE.
             } else if v.handles() {
                 self.spline(&sub, style);
             } else {
@@ -778,6 +889,16 @@ impl<'a> Scene<'a> {
         }
     }
 
+    /// A line from `a` to `b` (document space).
+    fn line(&mut self, a: Point, b: Point, style: &EntityStyle) {
+        let (a, b) = (self.pt(a), self.pt(b));
+        let layer = self.layer.clone();
+        let h = self.handle();
+        self.e.entity("LINE", h, fixed::MODEL_RECORD, &layer, style, "AcDbLine");
+        self.e.xyz(10, a.x, a.y);
+        self.e.xyz(11, b.x, b.y);
+    }
+
     /// A polyline through `pts` (document space): lightweight from R14, else a polyline with a
     /// vertex entity per point.
     fn polyline(&mut self, pts: &[Point], closed: bool, style: &EntityStyle, width: Option<f64>) {
@@ -787,7 +908,8 @@ impl<'a> Scene<'a> {
         let pts: Vec<Point> = pts.iter().map(|p| self.pt(*p)).collect();
         let layer = self.layer.clone();
         let h = self.handle();
-        let flags = i64::from(closed);
+        // Bit 128: a linetype runs on through the vertices instead of restarting at each one.
+        let flags = i64::from(closed) | if style.linetype.is_some() { 128 } else { 0 };
         if self.o.version.lwpolyline() {
             self.e.entity("LWPOLYLINE", h, fixed::MODEL_RECORD, &layer, style, "AcDbPolyline");
             self.e.int(90, pts.len() as i64);
@@ -887,6 +1009,53 @@ impl<'a> Scene<'a> {
         true
     }
 
+    /// Write a recognized elliptical subpath as a native DXF ELLIPSE (R13 and later): its center,
+    /// the end of its major axis relative to the center, and the minor to major ratio. Returns
+    /// false when the curve is not an ellipse, leaving the caller to write it as a spline.
+    fn elliptical(&mut self, sub: &Sub, style: &EntityStyle) -> bool {
+        let Some(last) = sub.segs.last().map(|s| s.end()) else { return false };
+        if !sub.closed || last.distance(sub.start) > 1e-9 {
+            return false;
+        }
+        let Some(ellipse) = elliptical_subpath(sub) else { return false };
+        let centre = self.to_dxf * ellipse.centre;
+        let u = self.to_dxf * (ellipse.centre + ellipse.u) - centre;
+        let v = self.to_dxf * (ellipse.centre + ellipse.v) - centre;
+        // The semi-axes are the square roots of the eigenvalues of [[a, b], [b, d]] = u u^T + v v^T.
+        let (a, b, d) = (u.x * u.x + v.x * v.x, u.x * u.y + v.x * v.y, u.y * u.y + v.y * v.y);
+        let mean = (a + d) / 2.0;
+        let spread = ((a - d) / 2.0).hypot(b);
+        let (major, minor) = ((mean + spread).sqrt(), (mean - spread).max(0.0).sqrt());
+        let angle = 0.5 * (2.0 * b).atan2(a - d);
+        let axis = Vec2::new(major * angle.cos(), major * angle.sin());
+        let ratio = (minor / major).min(1.0);
+        // A thinner ellipse stays a spline: DXF readers such as ezdxf need a ratio of 1e-6 or more.
+        if !centre.x.is_finite() || !centre.y.is_finite() || !axis.x.is_finite() || !axis.y.is_finite() || !ratio.is_finite() || ratio < 1e-6 {
+            return false;
+        }
+
+        // The drawing extents take the ellipse's bounding box: half-widths hypot(u.x, v.x) and
+        // hypot(u.y, v.y) about the center.
+        let (c, eu, ev) = (ellipse.centre, ellipse.u, ellipse.v);
+        let (hx, hy) = (eu.x.hypot(ev.x), eu.y.hypot(ev.y));
+        for p in [Point::new(c.x - hx, c.y), Point::new(c.x + hx, c.y), Point::new(c.x, c.y - hy), Point::new(c.x, c.y + hy)] {
+            self.pt(p);
+        }
+
+        let layer = self.layer.clone();
+        let h = self.handle();
+        self.e.entity("ELLIPSE", h, fixed::MODEL_RECORD, &layer, style, "AcDbEllipse");
+        self.e.xyz(10, centre.x, centre.y);
+        self.e.xyz(11, axis.x, axis.y);
+        self.e.normal();
+        // The ratio and the end parameter are written in full: rounded to six decimals, a thin
+        // ellipse's minor axis would change size, and a whole turn would read back as an open curve.
+        self.e.raw(40, &ratio.to_string());
+        self.e.num(41, 0.0);
+        self.e.raw(42, &std::f64::consts::TAU.to_string());
+        true
+    }
+
     /// A curved subpath as one cubic B-spline whose clamped knots repeat at every joint, so it
     /// passes through every anchor (straight segments become straight cubics).
     fn spline(&mut self, sub: &Sub, style: &EntityStyle) {
@@ -929,7 +1098,8 @@ impl<'a> Scene<'a> {
     }
 
     /// Type: glyph outlines (Preserve Appearance, Outline Text, type on a path), else one text
-    /// entity per run of each line.
+    /// entity per run of each line, whose height (group 40) is [`CAP_HEIGHT`] times the em size its
+    /// run is drawn at ([`vectorcraft_text::FontDb::font_heights_resolved`]).
     fn text(&mut self, n: &Node, t: &TextObject) {
         let outline = self.o.preserve == Preserve::Appearance || self.o.outline_text || matches!(t.kind, TextKind::OnPath { .. });
         if outline {
@@ -941,6 +1111,8 @@ impl<'a> Scene<'a> {
         if !n.appearance.items.is_empty() {
             self.warn(TYPE_ITEMS);
         }
+        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(t);
+        let t = &*resolved;
         let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
         let plain = t.plain_text();
         let xf = self.to_dxf * t.xf;
@@ -1126,4 +1298,48 @@ fn first_solid(n: &Node) -> Option<vectorcraft_color::Color> {
         _ => None,
     });
     own.or_else(|| n.children().into_iter().flatten().find_map(|c| first_solid(c)))
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+
+    #[test]
+    fn flattening_a_path_of_huge_curves_stops_at_its_budget() {
+        // Each curve, a hundred million points across, flattens to thousands of segments at
+        // FLATNESS; a small square after them is past the budget and left out.
+        let mut bp = BezPath::new();
+        bp.move_to((0.0, 0.0));
+        for i in 0..20_000 {
+            let y = if i % 2 == 0 { 1e8 } else { -1e8 };
+            bp.curve_to((1e8, y), (-1e8, y), (0.0, 0.0));
+        }
+        bp.move_to((10.0, 10.0));
+        bp.line_to((20.0, 10.0));
+        bp.line_to((20.0, 20.0));
+        bp.close_path();
+        let polys = polygons(&bp);
+        let points: usize = polys.iter().map(Vec::len).sum();
+        assert!(points <= MAX_POINTS, "{points} points");
+        assert!(!polys.iter().any(|p| p.contains(&Point::new(20.0, 20.0))), "the square past the budget is left out");
+    }
+
+    #[test]
+    fn flattening_a_path_of_repeated_points_stops_at_its_segment_budget() {
+        // Repeats of a point are dropped, so these keep one point but still count as segments:
+        // the segment budget, not the point budget, leaves out the square after them.
+        let mut bp = BezPath::new();
+        bp.move_to((0.0, 0.0));
+        for _ in 0..MAX_FLATTEN_SEGMENTS {
+            bp.line_to((0.0, 0.0));
+        }
+        bp.move_to((10.0, 10.0));
+        bp.line_to((20.0, 10.0));
+        bp.line_to((20.0, 20.0));
+        bp.close_path();
+        let polys = polygons(&bp);
+        let points: usize = polys.iter().map(Vec::len).sum();
+        assert!(points < MAX_POINTS, "{points} points");
+        assert!(!polys.iter().any(|p| p.contains(&Point::new(20.0, 20.0))), "the square past the budget is left out");
+    }
 }

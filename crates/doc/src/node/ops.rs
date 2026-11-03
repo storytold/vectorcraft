@@ -185,8 +185,13 @@ impl Node {
         match &self.kind {
             NodeKind::Path { path, .. } => Some(path.to_bezpath()),
             NodeKind::Compound { children, .. } => {
-                let mut bp = vectorcraft_geom::BezPath::new();
-                children.iter().filter_map(|c| c.path_data()).for_each(|pd| bp.extend(pd.to_bezpath()));
+                // Sized up front: grown by doubling, the path of a compound path of hundreds of
+                // thousands of anchors is copied into ever larger buffers, up to tens of MB, on
+                // every call.
+                let subpaths = || children.iter().filter_map(|c| c.path_data()).flat_map(|pd| &pd.subpaths);
+                let elements = subpaths().filter(|sp| !sp.anchors.is_empty()).map(|sp| 1 + sp.segment_count() + usize::from(sp.closed)).sum();
+                let mut bp = vectorcraft_geom::BezPath::from_vec(Vec::with_capacity(elements));
+                subpaths().for_each(|sp| sp.to_bezpath_into(&mut bp));
                 Some(bp)
             }
             _ => None,
@@ -198,7 +203,8 @@ impl Node {
     /// ([`Appearance::outset`]) instead of measuring along their shape. An image's box takes in
     /// the shapes its own fills and strokes paint ([`crate::hit::set_image_paint`]). Groups, layers
     /// without a clipping mask and Intertwine groups take in their members' boxes, grown by their
-    /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`].
+    /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`]. A blend's box
+    /// takes in where its spine can put its keys and steps.
     pub fn reach_bounds(&self) -> Option<Rect> {
         self.reach(None)
     }
@@ -234,6 +240,11 @@ impl Node {
                 let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
                 vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
             }),
+            // Keys and steps placed on a spine, turned to it with Align to Path, can reach past the
+            // keys and the spine.
+            NodeKind::Blend { children, spec } => {
+                vectorcraft_geom::union_opt(self.visual(symbols), crate::blend::rail_reach(children, spec, symbols))
+            }
             _ => self.visual(symbols),
         }
     }
@@ -387,6 +398,12 @@ impl Node {
         self.transform_scaled(a, &scaling.into());
     }
 
+    /// The path of the child an Objects on Path group's objects are attached to.
+    fn on_path_data(&self) -> Option<&PathData> {
+        let r = self.extras().objects_on_path.as_deref()?;
+        self.children()?.iter().find(|c| c.id == r.path)?.path_data()
+    }
+
     fn transform_scaled(&mut self, a: Affine, sc: &Scaling) {
         // A dimension's measurement moves with it.
         if let Some(e) = self.extras_if_any()
@@ -394,12 +411,8 @@ impl Node {
         {
             dimension.transform(a);
         }
-        // The frames of the objects attached to a path move with them.
-        if let Some(e) = self.extras_if_any()
-            && let Some(on_path) = &mut e.objects_on_path
-        {
-            on_path.transform(a);
-        }
+        // The path the objects are attached to, before it is transformed.
+        let on_path_before = self.on_path_data().cloned();
         if !self.is_layer() {
             self.bbox_angle = crate::orient::transformed_angle(self.bbox_angle, a);
         }
@@ -490,14 +503,27 @@ impl Node {
             NodeKind::Mesh(m) => m.transform(a),
             NodeKind::Repeat(r) => r.transform(a, *sc),
         }
+        // The frames of the objects attached to a path move with them, and the distances along the
+        // path follow the path as it is now (a live shape's path is regenerated).
+        let on_path_after = on_path_before.as_ref().and_then(|_| self.on_path_data().cloned());
+        if let Some(e) = self.extras_if_any()
+            && let Some(on_path) = &mut e.objects_on_path
+        {
+            on_path.transform(a, on_path_before.as_ref().zip(on_path_after.as_ref()));
+        }
         if let Some(m) = self.extras_if_any().and_then(|e| e.mask.as_mut())
             && m.linked
         {
             Arc::make_mut(&mut m.art).transform_scaled(a, sc);
         }
         // The area where an Intertwine member is drawn over the others moves with it.
-        if let Some(area) = self.extras_if_any().and_then(|e| e.intertwine.as_mut()) {
-            area.transform(a);
+        if let Some(e) = self.extras_if_any() {
+            if let Some(area) = e.intertwine.as_mut() {
+                area.transform(a);
+            }
+            for area in &mut e.intertwine_tiers {
+                area.transform(a);
+            }
         }
     }
 
@@ -683,9 +709,15 @@ impl Node {
 
 impl Node {
     /// Whether this object shows any transparency, itself or anything inside it: object, fill or
-    /// stroke opacity below 100%, a blend mode, an opacity mask, effects or transparent gradient
-    /// stops. Hidden objects show none.
+    /// stroke opacity below 100%, a blend mode, an opacity mask, effects, transparent gradient
+    /// stops or a colorized image. Hidden objects show none.
     pub fn shows_transparency(&self) -> bool {
+        self.shows_transparency_with(&|_| true)
+    }
+
+    /// [`Self::shows_transparency`], counting a colorized image by itself only when `colorize`
+    /// accepts it, for files that write some colorized images in their colorize paint (EPS).
+    pub fn shows_transparency_with(&self, colorize: &dyn Fn(&Node) -> bool) -> bool {
         use vectorcraft_color::Paint;
         let see_through = |p: &Paint| matches!(p, Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity < 1.0));
         let effects = |fx: &[crate::Effect]| fx.iter().any(|e| e.visible);
@@ -693,13 +725,14 @@ impl Node {
             && (self.opacity < 1.0
                 || self.blend != BlendMode::Normal
                 || self.extras().mask.as_ref().is_some_and(|m| !m.disabled)
+                || (matches!(self.kind, NodeKind::Image(_)) && self.extras().colorize.is_some() && colorize(self))
                 || effects(&self.appearance.effects)
                 || self
                     .appearance
                     .items
                     .iter()
                     .any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint()) || effects(i.effects())))
-                || self.children().is_some_and(|ch| ch.iter().any(|c| c.shows_transparency())))
+                || self.children().is_some_and(|ch| ch.iter().any(|c| c.shows_transparency_with(colorize))))
     }
 }
 

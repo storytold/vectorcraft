@@ -476,3 +476,35 @@ fn area_type_options_align_the_lines_vertically() {
     assert_eq!(text(&s, id).cached_bounds, before);
     assert!(cmd::find_command("text.areaOptions").unwrap().params.contains("verticalAlign?: top|center|bottom|justify"));
 }
+
+/// Area Type Options › Text Flow (#4978): `flow` fills the cells by columns (the default) or by
+/// rows, is reported back, refuses other values and undoes.
+#[test]
+fn area_type_options_set_the_text_flow() {
+    use vectorcraft_doc::TextFlow;
+    let mut s = session();
+    let id = area(&mut s, 0.0, 0.0, 420.0, 300.0, &"Words flow from cell to cell in order. ".repeat(40));
+    sel(&mut s, &[id]);
+    let r = s.execute("text.areaOptions", &json!({"rows": 2, "columns": 2, "gutter": 20})).unwrap();
+    assert_eq!(r["flow"], "columns");
+    // Where the second cell sits from the first.
+    let second = |s: &Session| {
+        let f = layout(s, id).frames;
+        (f[1].x0 - f[0].x0, f[1].y0 - f[0].y0)
+    };
+    assert_eq!(second(&s), (0.0, 160.0), "by columns the second cell is below the first");
+    let n = undo_len(&s);
+    assert_eq!(s.execute("text.areaOptions", &json!({"flow": "rows"})).unwrap()["flow"], "rows");
+    assert_eq!(text(&s, id).area.flow, TextFlow::Rows);
+    assert_eq!(second(&s), (220.0, 0.0), "by rows the second cell is beside the first");
+    let l = layout(&s, id);
+    assert!(l.lines.iter().any(|li| li.region == 1 && li.x0 >= l.frames[1].x0 - 1e-6), "text reaches it");
+    assert_eq!((undo_len(&s), last_step(&s).as_str()), (n + 1, "Area Type Options"));
+    for bad in [json!({"flow": "diagonal"}), json!({"flow": "Rows"}), json!({"flow": 1}), json!({"flow": null})] {
+        assert!(s.execute("text.areaOptions", &bad).is_err(), "{bad}");
+    }
+    assert_eq!((undo_len(&s), text(&s, id).area.flow), (n + 1, TextFlow::Rows));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((text(&s, id).area.flow, second(&s)), (TextFlow::Columns, (0.0, 160.0)));
+    assert!(cmd::find_command("text.areaOptions").unwrap().params.contains("flow?: columns|rows"));
+}

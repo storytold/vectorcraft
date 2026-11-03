@@ -5,16 +5,21 @@ use std::process::Command;
 
 use serde_json::Value;
 
-const REV: &str = "92d392cff132eaf53e13afff77f38b5c11b73aa0";
-const PACKAGES: &[(&str, &str)] = &[
-    ("craft-pdf", "0.1.0"),
-    ("krilla", "0.8.2"),
-    ("hayro-syntax", "0.7.2"),
-    ("hayro-interpret", "0.7.0"),
-    ("hayro-jbig2", "0.3.0"),
-    ("hayro-cmap", "0.1.0"),
-    ("hayro-postscript", "0.1.0"),
+const REV: &str = "f8f8829cc7be65d466d687dae381d1ca60e31242";
+const PACKAGES: &[(&str, &str, &str)] = &[
+    ("craft-pdf", "0.1.0", REV),
+    ("krilla", "0.8.2", REV),
+    ("hayro-syntax", "0.7.2", REV),
+    ("hayro-interpret", "0.7.0", REV),
+    ("hayro-jbig2", "0.3.0", REV),
+    ("hayro-cmap", "0.1.0", REV),
+    ("hayro-postscript", "0.1.0", REV),
 ];
+
+/// The resolved source of a craft-libs package at `rev`.
+fn source(rev: &str) -> String {
+    format!("git+https://github.com/storytold/craft-libs?rev={rev}#{rev}")
+}
 
 pub fn run(root: &Path) -> Result<(), String> {
     let output = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
@@ -33,8 +38,8 @@ pub fn run(root: &Path) -> Result<(), String> {
 
 fn validate(metadata: &Value) -> Result<(), String> {
     let packages = metadata.get("packages").and_then(Value::as_array).ok_or("cargo metadata has no packages")?;
-    let source = format!("git+https://github.com/storytold/craft-libs?rev={REV}#{REV}");
-    for &(name, version) in PACKAGES {
+    for &(name, version, rev) in PACKAGES {
+        let source = source(rev);
         let mut found = packages.iter().filter(|p| p.get("name").and_then(Value::as_str) == Some(name));
         let package = found.next().ok_or_else(|| format!("{name}: missing resolved package"))?;
         if found.next().is_some() {
@@ -53,15 +58,7 @@ mod tests {
     use serde_json::json;
 
     fn metadata() -> Value {
-        let packages: Vec<_> = PACKAGES
-            .iter()
-            .map(|(name, version)| {
-                json!({
-                    "name":name, "version":version,
-                    "source":format!("git+https://github.com/storytold/craft-libs?rev={REV}#{REV}")
-                })
-            })
-            .collect();
+        let packages: Vec<_> = PACKAGES.iter().map(|(name, version, rev)| json!({"name":name, "version":version, "source":source(rev)})).collect();
         json!({"packages": packages})
     }
 
@@ -95,6 +92,7 @@ mod tests {
                 ("source", Value::Null),
                 ("source", json!("registry+https://github.com/rust-lang/crates.io-index")),
                 ("source", json!("git+https://github.com/storytold/craft-libs?branch=main#other")),
+                ("source", json!(source("92d392cff132eaf53e13afff77f38b5c11b73aa0"))),
                 ("version", json!("0.99.0")),
             ] {
                 let mut m = metadata();
