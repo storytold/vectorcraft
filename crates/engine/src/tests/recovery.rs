@@ -417,6 +417,21 @@ fn the_folder_store_makes_owner_only_folders() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
+/// An entry that is a link (the copy's metadata names it) is not followed out of the store.
+#[cfg(unix)]
+#[test]
+fn the_folder_store_reads_no_linked_entries() {
+    let base = std::env::temp_dir().join(format!("vc-recovery-links-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let store = FolderStore::new(&base);
+    store.write("1-1/Untitled-1-1.vectorcraft", b"copy").unwrap();
+    std::fs::write(base.join("outside"), b"private").unwrap();
+    std::os::unix::fs::symlink(base.join("outside"), base.join("1-1").join("img")).unwrap();
+    assert_eq!(store.read("1-1/Untitled-1-1.vectorcraft").unwrap(), b"copy");
+    assert!(store.read("1-1/img").is_err());
+    let _ = std::fs::remove_dir_all(&base);
+}
+
 #[test]
 fn saving_reverting_or_closing_removes_the_copy() {
     let dir = std::env::temp_dir().join(format!("vc-recovery-save-{}", std::process::id()));
