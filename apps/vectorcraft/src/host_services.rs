@@ -557,7 +557,11 @@ mod open_with_tests {
             let bin = d.join("bin");
             std::fs::create_dir_all(&bin).unwrap();
             let path_var = std::env::join_paths([&bin]).unwrap();
-            assert!(find_photocraft(None, Some(&path_var)).is_none(), "not installed");
+            // On Windows an installed PhotoCraft (registered, or in a program folder) comes first, so
+            // there only the `PATH` candidate is checked.
+            if !cfg!(windows) {
+                assert!(find_photocraft(None, Some(&path_var)).is_none(), "not installed");
+            }
             let exe = bin.join(if cfg!(windows) { "photocraft.exe" } else { "photocraft" });
             std::fs::write(&exe, "").unwrap();
             #[cfg(unix)]
@@ -565,7 +569,12 @@ mod open_with_tests {
                 use std::os::unix::fs::PermissionsExt as _;
                 std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
             }
-            assert_eq!(find_photocraft(None, Some(&path_var)), Some(exe));
+            if cfg!(windows) {
+                assert_eq!(photocraft_candidates(None, Some(&path_var)).last(), Some(&exe));
+                assert!(check_app(&exe).is_ok());
+            } else {
+                assert_eq!(find_photocraft(None, Some(&path_var)), Some(exe));
+            }
         }
         let _ = std::fs::remove_dir_all(&d);
     }
