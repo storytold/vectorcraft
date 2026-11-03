@@ -175,6 +175,40 @@ fn between(a: &GradientStop, b: &GradientStop, t: f32, mix: &impl Fn(&Color, &Co
     (mix(&a.color, &b.color, v), a.opacity + (b.opacity - a.opacity) * v)
 }
 
+/// For each pair of neighbouring stops (`k`, `k + 1`), the largest offset among stops `1..=k + 1`.
+/// [`Gradient::sample_with`] picks the first pair whose end offset `t` doesn't pass; that is the
+/// first pair whose reach `t` doesn't pass, and the reaches never decrease, so the pair is found by
+/// binary search whether or not the stops are in order.
+struct StopReach(Vec<f32>);
+
+impl StopReach {
+    fn new(stops: &[GradientStop]) -> Self {
+        // `f32::max` skips a NaN offset, which `t <= offset` never chooses either.
+        let reach = stops.iter().skip(1).scan(f32::NEG_INFINITY, |m, s| {
+            *m = m.max(s.offset);
+            Some(*m)
+        });
+        Self(reach.collect())
+    }
+
+    /// What [`Gradient::sample_with`] gives at `t` for `stops`, the stops this was built from.
+    fn sample_with(&self, stops: &[GradientStop], t: f32, mix: &impl Fn(&Color, &Color, f32) -> Color) -> (Color, f32) {
+        let Some(first) = stops.first() else { return (Color::BLACK, 1.0) };
+        if t <= first.offset {
+            return (first.color, first.opacity);
+        }
+        let last = || stops.last().map_or((Color::BLACK, 1.0), |l| (l.color, l.opacity));
+        if t.is_nan() {
+            return last();
+        }
+        let k = self.0.partition_point(|r| *r < t);
+        match (stops.get(k), stops.get(k + 1)) {
+            (Some(a), Some(b)) => between(a, b, t, mix),
+            _ => last(),
+        }
+    }
+}
+
 fn one() -> f32 {
     1.0
 }
@@ -245,9 +279,11 @@ impl Gradient {
     /// the one before it stopped, so the work is the samples plus the stops, not their product.
     pub fn sample_increasing_with(&self, ts: impl IntoIterator<Item = f32>, mix: impl Fn(&Color, &Color, f32) -> Color) -> Vec<(Color, f32)> {
         let stops = &self.stops;
-        // The shared index assumes ordered stops; others (a file's, unsorted) sample one by one.
+        // The shared cursor assumes ordered stops; others (a file's, unsorted) look each sample up
+        // in a [`StopReach`], so they cost a binary search each rather than a scan of the stops.
         if stops.windows(2).any(|w| w[1].offset < w[0].offset) {
-            return ts.into_iter().map(|t| self.sample_with(t, &mix)).collect();
+            let reach = StopReach::new(stops);
+            return ts.into_iter().map(|t| reach.sample_with(stops, t, &mix)).collect();
         }
         let mut j = 0;
         ts.into_iter()
@@ -284,6 +320,9 @@ impl Gradient {
     fn expanded_with_stops(&self) -> impl Iterator<Item = (f32, Color, f32, Option<f32>, Option<usize>)> + '_ {
         // Direct interpolation matches `sample` only for strictly increasing offsets.
         let increasing = self.stops.windows(2).all(|w| w[0].offset < w[1].offset);
+        // Otherwise (repeated or unsorted offsets) each midpoint is looked up as `sample` would
+        // find it, but by binary search: a scan of all the stops per midpoint cost their square.
+        let reach = if increasing || !self.method.is_classic() { None } else { Some(StopReach::new(&self.stops)) };
         self.stops.iter().enumerate().flat_map(move |(i, s)| {
             let next = self.stops.get(i + 1);
             let off_centre = (s.midpoint - 0.5).abs() > 1e-3;
@@ -293,7 +332,10 @@ impl Gradient {
                 // Mixed from the two stops it lies between, as `sample` would: searching all the
                 // stops again for each midpoint made many stops cost their square.
                 let mix = |a: &Color, b: &Color, v| self.method.mix(a, b, v);
-                let (c, o) = if increasing { between(s, n, t, &mix) } else { self.sample_with(t, mix) };
+                let (c, o) = match &reach {
+                    Some(reach) => reach.sample_with(&self.stops, t, &mix),
+                    None => between(s, n, t, &mix),
+                };
                 (t, c, o, Some(s.midpoint), None)
             });
             // Perceptual: stops along the mix (`v`) where a straight line would stray from it, the

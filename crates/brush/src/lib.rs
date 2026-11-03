@@ -884,7 +884,16 @@ fn leave_out_brushed(doc: &Document, nodes: &mut Vec<Node>, known: &mut Known) {
                 walk(doc, Arc::make_mut(c), known);
             }
         }
-        if n.extras().mask.is_some()
+        // A mask's art is drawn too. Its root is filtered like any other node: a symbol instance
+        // there that draws a brushed stroke would run the brush again from inside the mask, so the
+        // mask goes, as such an instance goes from the pieces and their children.
+        let rejected_root = matches!(
+            n.extras().mask.as_ref().map(|m| &m.art.kind),
+            Some(NodeKind::SymbolInstance { symbol, .. }) if draws_brushed(doc, (false, symbol.as_str()), known)
+        );
+        if rejected_root {
+            n.extras_mut().mask = None;
+        } else if n.extras().mask.is_some()
             && let Some(mask) = n.extras_mut().mask.as_mut()
         {
             walk(doc, Arc::make_mut(&mut mask.art), known);

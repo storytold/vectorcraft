@@ -2588,6 +2588,18 @@ fn formatting_the_whole_graphs_text_survives_it_being_drawn_again() {
     assert_eq!(spec(&s, id).label_styles, vectorcraft_doc::LabelStyles::default());
 }
 
+/// A stroke given to all of a graph's text without a weight is kept at 1 pt, as `paint.setStroke` keeps it.
+#[test]
+fn a_stroke_given_to_the_whole_graphs_text_is_kept_at_1_pt() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.setStyle", &json!({"stroke": "#ff0000"})).unwrap();
+    let legend = spec(&s, id).label_styles.legend.unwrap();
+    assert_eq!((legend.stroke.color().map(|c| c.to_hex()), legend.stroke_width), (Some("#ff0000".into()), 1.0));
+}
+
 #[test]
 fn formatting_one_label_keeps_that_kind_of_label() {
     let mut s = Session::new();

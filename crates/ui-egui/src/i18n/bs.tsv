@@ -426,6 +426,7 @@
 	Variable Font	Varijabilni font
 	Text Fill Color	Boja ispune teksta
 	Text Stroke Color	Boja poteza teksta
+	Text Fill & Stroke Color	Boja ispune i poteza teksta
 	All on Same Layers	Sve na istim slojevima
 	Direction Handles	Ručke smjera
 	Brush Strokes	Potezi četkicom
@@ -627,6 +628,7 @@
 	Cascade	Kaskadno
 	Tile	Popločaj
 	Float in Window	Odvoji u prozor
+	Float All in Windows	Odvoji sve u prozore
 	Consolidate All Windows	Objedini sve prozore
 	Workspace	Radni prostor
 	Reset Essentials	Vrati Osnove na početno
@@ -2625,6 +2627,10 @@ digits	Malayalam	Malajalam
 	Current Colors	Trenutne boje
 	Current Colors (0)	Trenutne boje (0)
 	Harmony Rules:	Pravila harmonije:
+	Segmented color wheel	Segmentirani kotač boja
+	Show smooth color wheel	Prikaži glatki kotač boja
+	Show segmented color wheel	Prikaži segmentirani kotač boja
+	Show color bars	Prikaži trake boja
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
 	Limit to Library:	Ograniči na biblioteku:
@@ -3912,6 +3918,8 @@ effect	Regular	Obično
 	In the selected objects	U odabranim objektima
 	Find in Folder…	Pronađi u folderu…
 	Replace With Font	Zamijeni fontom
+	Replace With Font From	Zamijeni fontom iz
+	System	Sistem
 	  — substituted by {style}	  — zamijenjeno stilom {style}
 	  — {n} characters from another font	  — {n} znakova iz drugog fonta
 	All Scripts	Sve skripte
@@ -5639,6 +5647,7 @@ axis	Y Axis	Y osa
 	Create New Set	Napravi novi skup
 	Stop Global Edit	Zaustavi globalno uređivanje
 	Global Edit Options	Opcije globalnog uređivanja
+	Leave Out of Global Edit	Isključi iz globalnog uređivanja
 	Match	Podudaranje
 	On Artboards	Na radnim pločama
 	All Artboards	Sve radne ploče
@@ -5647,6 +5656,8 @@ axis	Y Axis	Y osa
 @msg	select one object	odaberite jedan objekat
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globalno uređivanje radi na putanjama, složenim putanjama, instancama simbola i njihovim grupama
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nisu pronađeni slični objekti (rotirane ili zrcaljene kopije se ne podudaraju); promijenite opcije globalnog uređivanja i pokušajte ponovo
+@msg	Global Edit is off	Globalno uređivanje je isključeno
+@msg	only an object of the Global Edit other than the one it started from can be left out	iz globalnog uređivanja može se isključiti samo objekt koji nije onaj od kojeg je počelo
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ili raspon poput 1, 3-5, a ne {v}
 	Add to Symbols	Dodaj u simbole
 	Basic Shapes	Osnovni oblici

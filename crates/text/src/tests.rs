@@ -15,6 +15,7 @@ mod hang;
 mod inline;
 mod joiners;
 mod justify;
+mod ligature_carets;
 mod path_joins;
 mod ruby;
 mod scripts;

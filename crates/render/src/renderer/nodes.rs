@@ -114,7 +114,16 @@ impl Renderer {
     /// The cached path of path or compound path `n` ([`Self::path_of`]) when the frame is in
     /// Outline view and `n` is `fx_owner`, else `None`.
     fn outline_path(&mut self, f: &Frame, n: &Node) -> Option<Arc<BezPath>> {
-        let owner = self.fx_owner.as_ref().filter(|o| f.opts.outline && std::ptr::eq(&***o, n)).cloned()?;
+        if !f.opts.outline {
+            return None;
+        }
+        self.owner_path(f, n)
+    }
+
+    /// The cached path of path or compound path `n` ([`Self::path_of`]) when `n` is `fx_owner`,
+    /// else `None`.
+    fn owner_path(&mut self, f: &Frame, n: &Node) -> Option<Arc<BezPath>> {
+        let owner = self.fx_owner.as_ref().filter(|o| std::ptr::eq(&***o, n)).cloned()?;
         self.path_of(f.symbols, &owner)
     }
 
@@ -470,17 +479,13 @@ impl Renderer {
                     self.draw_shape(ctx, f, n, &bp, *rule);
                 }
             }
-            NodeKind::Compound { children, rule } => {
-                if let Some(bp) = self.outline_path(f, n) {
-                    return self.draw_shape(ctx, f, n, &bp, *rule);
+            NodeKind::Compound { rule, .. } => {
+                // Its members assembled once and kept with the node in `geom`, as plain paths are
+                // (`path_of`): a compound path of thousands of members is not assembled again in
+                // every frame.
+                if let Some(bp) = self.owner_path(f, n).or_else(|| n.stroke_path().map(Arc::new)) {
+                    self.draw_shape(ctx, f, n, &bp, *rule);
                 }
-                let mut bp = BezPath::new();
-                for c in children {
-                    if let Some(p) = c.path_data() {
-                        bp.extend(p.to_bezpath());
-                    }
-                }
-                self.draw_shape(ctx, f, n, &bp, *rule);
             }
             NodeKind::Text(t) => self.draw_text(ctx, f, n, t),
             NodeKind::Image(im) => self.draw_image_in(ctx, f, im, None, images::image_tint(n, f.ink), n.extras().pixelated),

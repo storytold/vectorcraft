@@ -1177,6 +1177,7 @@ font-technology	Variable	Променливи
 	Flip Row Order	Обръщане реда на редовете
 	Flip Vertical	Вертикално обръщане
 	Float in Window	Плаващ прозорец
+	Float All in Windows	Всички в плаващи прозорци
 	Focal Fill	Фокусно запълване
 	Focal Stroke	Фокусен щрих
 	Folder	Папка
@@ -1340,6 +1341,10 @@ font-technology	Variable	Променливи
 	Hard Light	Твърда светлина
 	Hard Mix	Твърдо смесване
 	Harmony Rules:	Правила за хармония:
+	Segmented color wheel	Сегментирано цветово колело
+	Show smooth color wheel	Показване на плавно цветово колело
+	Show segmented color wheel	Показване на сегментирано цветово колело
+	Show color bars	Показване на цветни ленти
 	Harmony Sets	Набори от хармонии
 	Height	Височина
 	Height:	Височина:
@@ -2635,6 +2640,8 @@ digits	Malayalam	Малаялам
 	Replace Spine	Замяна на оста
 	Replace Symbol	Замяна на символ
 	Replace With Font	Замяна с шрифт
+	Replace With Font From	Замяна с шрифт от
+	System	Система
 	Replaces the saved preset of that name.	Заменя записаната предварителна настройка с това име.
 	Replace…	Замяна…
 	Require a password to open the document	Изискване на парола за отваряне на документа
@@ -3306,6 +3313,7 @@ digits	Malayalam	Малаялам
 	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, показван в клетката:
 	Text Export Options	Опции за експортиране на текст
+	Text Fill & Stroke Color	Цвят на запълване и щрих на текста
 	Text Fill Color	Цвят на запълване на текста
 	Text Import Options	Опции за импортиране на текст
 	Text Stroke Color	Цвят на щриха на текста
@@ -5616,6 +5624,7 @@ axis	Y Axis	Y ос
 	Create New Set	Създаване на нов набор
 	Stop Global Edit	Край на глобалното редактиране
 	Global Edit Options	Опции за глобално редактиране
+	Leave Out of Global Edit	Изключване от глобалното редактиране
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобалното редактиране работи с пътища, съставни пътища, екземпляри на символи и групи от тях
 	Match	Съвпадение
 	On Artboards	В работните области

@@ -1232,6 +1232,7 @@ file-filter	Templates	Шаблони
 	Flip Row Order	Змінити порядок рядків
 	Flip Vertical	Відобразити по вертикалі
 	Float in Window	Відкріпити у вікні
+	Float All in Windows	Відкріпити все у вікна
 	Focal Fill	Фокусна заливка
 	Focal Stroke	Фокусне обведення
 	Folder	Папка
@@ -1395,6 +1396,10 @@ file-filter	Templates	Шаблони
 	Hard Light	Жорстке світло
 	Hard Mix	Жорстке накладання
 	Harmony Rules:	Правила гармонії:
+	Segmented color wheel	Сегментоване колірне коло
+	Show smooth color wheel	Показати плавне колірне коло
+	Show segmented color wheel	Показати сегментоване колірне коло
+	Show color bars	Показати колірні смуги
 	Harmony Sets	Набори гармонії
 	Height	Висота
 	Height:	Висота:
@@ -2730,6 +2735,8 @@ digits	Malayalam	Малаялам
 	Replace Spine	Замінити вісь
 	Replace Symbol	Замінити символ
 	Replace With Font	Замінити шрифтом
+	Replace With Font From	Замінити шрифтом з
+	System	Система
 	Replaces the saved preset of that name.	Замінює збережений набір із таким ім’ям.
 	Replace…	Замінити…
 	Require a password to open the document	Вимагати пароль для відкриття документа
@@ -3419,6 +3426,7 @@ effect	Points	Точки
 	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, що відображається в комірці:
 	Text Export Options	Параметри експорту тексту
+	Text Fill & Stroke Color	Колір заливки та обведення тексту
 	Text Fill Color	Колір заливки тексту
 	Text Import Options	Параметри імпорту тексту
 	Text Stroke Color	Колір обведення тексту
@@ -5327,6 +5335,7 @@ axis	Y Axis	Вісь Y
 	Create New Set	Створити новий набір
 	Stop Global Edit	Завершити глобальне редагування
 	Global Edit Options	Параметри глобального редагування
+	Leave Out of Global Edit	Виключити з глобального редагування
 	Match	Збіг
 	On Artboards	На монтажних областях
 	All Artboards	Усі монтажні області
@@ -5335,6 +5344,8 @@ axis	Y Axis	Вісь Y
 @msg	select one object	виберіть один об’єкт
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальне редагування працює з контурами, складеними контурами, екземплярами символів та їхніми групами
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (повернуті чи віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз
+@msg	Global Edit is off	Глобальне редагування вимкнено
+@msg	only an object of the Global Edit other than the one it started from can be left out	виключити з глобального редагування можна лише об’єкт, відмінний від того, з якого воно почалося
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
 	Add to Symbols	Додати до символів
 	Basic Shapes	Базові фігури
@@ -5593,6 +5604,11 @@ anchor	Points:	Точки:
 	Horizontal Scale	Масштаб по горизонталі
 	Vertical Scale	Масштаб за вертикаллю
 @msg	{label} must be a number from {min} to {max}	{label} має бути числом від {min} до {max}
+	Character Color	Колір символів
+	OpenType Features	Функції OpenType
+	Stylistic Sets	Стилістичні набори
+@msg	features lists at most {max} tags	features містить не більше {max} тегів
+@msg	unknown OpenType feature `{t}`	невідома функція OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} має бути числом більше 0 і не більше {max}
 @msg	no character style `{name}`	Стиль символів `{name}` не знайдено
 

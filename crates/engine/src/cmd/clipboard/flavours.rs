@@ -125,6 +125,8 @@ pub struct Flavour {
 
 /// Longest side (px) of the PNG Copy offers: larger art is scaled down to fit.
 const COPY_PNG_SIDE: f64 = 4096.0;
+/// The smallest scale (pixels a point) the PNG encoder renders at.
+const MIN_COPY_PNG_SCALE: f64 = 0.01;
 /// Most bytes of text `clipboard.importText` takes.
 const MAX_TEXT: usize = 1 << 20;
 /// Most bytes of images the SVG markup may embed and still go out as plain text. A paste reads the
@@ -293,7 +295,8 @@ impl Clipboard {
 
     /// What Copy offers other apps, best first, with Include SVG Code (`svg`) and On Copy: PDF
     /// (`pdf`) as given (see `clipboard.flavours`). A [`Flavour`] that can't be made (art too large
-    /// to render) is left out; the PNG is scaled down to at most [`COPY_PNG_SIDE`] pixels a side.
+    /// to render) is left out; the PNG is scaled down to at most [`COPY_PNG_SIDE`] pixels a side, and
+    /// left out when even [`MIN_COPY_PNG_SCALE`] can't bring it that small.
     pub fn flavours(&self, svg: bool, pdf: bool) -> Vec<Flavour> {
         self.flavours_with_warnings(svg, pdf).0
     }
@@ -320,7 +323,14 @@ impl Clipboard {
                 PDF => self.pdf().inspect_err(|e| log::warn!("clipboard PDF: {e}")).ok().flatten().map(&mut keep),
                 _ => {
                     let side = self.bounds().map_or(1.0, |b| b.width().max(b.height()));
-                    let scale = (COPY_PNG_SIDE / side).clamp(0.01, 1.0);
+                    let scale = (COPY_PNG_SIDE / side).min(1.0);
+                    // The encoder renders at no fewer than MIN_COPY_PNG_SCALE pixels a point: art
+                    // too large to fit COPY_PNG_SIDE at that scale gets no PNG, rather than one
+                    // of up to a gigabyte of pixels.
+                    if scale < MIN_COPY_PNG_SCALE {
+                        log::warn!("clipboard PNG: art {side} pt across is too large to copy as a picture");
+                        continue;
+                    }
                     self.png(scale).inspect_err(|e| log::warn!("clipboard PNG: {e}")).ok().flatten().map(|(png, _, _, notes)| keep((png, notes)))
                 }
             };

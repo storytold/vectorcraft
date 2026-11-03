@@ -407,6 +407,7 @@
 	Variable Font	Variabel lettertype
 	Text Fill Color	Tekstvulkleur
 	Text Stroke Color	Tekstcontourkleur
+	Text Fill & Stroke Color	Tekstvul- en contourkleur
 	All on Same Layers	Alles op dezelfde lagen
 	Direction Handles	Richtingsgrepen
 	Brush Strokes	Penseelstreken
@@ -599,6 +600,7 @@
 	Cascade	Trapsgewijs schikken
 	Tile	Naast elkaar schikken
 	Float in Window	In venster zweven
+	Float All in Windows	Alles in vensters zweven
 	Consolidate All Windows	Alle vensters samenvoegen
 	Workspace	Werkruimte
 	Reset Essentials	Essentials herstellen
@@ -2457,6 +2459,10 @@ digits	Malayalam	Malayalam
 	Current Colors	Huidige kleuren
 	Current Colors (0)	Huidige kleuren (0)
 	Harmony Rules:	Harmonieregels:
+	Segmented color wheel	Gesegmenteerd kleurenwiel
+	Show smooth color wheel	Vloeiend kleurenwiel tonen
+	Show segmented color wheel	Gesegmenteerd kleurenwiel tonen
+	Show color bars	Kleurbalken tonen
 	Harmony Rules	Harmonieregels
 	Keep this row's colors (exclude)	De kleuren van deze rij behouden (uitsluiten)
 	Limit to Library:	Beperken tot bibliotheek:
@@ -3688,6 +3694,8 @@ effect	Regular	Regelmatig
 	In the selected objects	In de geselecteerde objecten
 	Find in Folder…	Zoeken in map…
 	Replace With Font	Vervangen door lettertype
+	Replace With Font From	Vervangen door lettertype uit
+	System	Systeem
 	  — substituted by {style}	  — vervangen door {style}
 	  — {n} characters from another font	  — {n} tekens van een ander lettertype
 	All Scripts	Alle scripts
@@ -5677,6 +5685,7 @@ axis	Y Axis	Y-as
 	Create New Set	Nieuwe set maken
 	Stop Global Edit	Globale bewerking stoppen
 	Global Edit Options	Opties voor globale bewerking
+	Leave Out of Global Edit	Uitsluiten van globale bewerking
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale bewerking werkt op paden, samengestelde paden, symboolinstanties en groepen daarvan
 	Match	Overeenkomst
 	On Artboards	Op tekengebieden

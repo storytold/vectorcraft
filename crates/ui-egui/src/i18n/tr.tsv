@@ -1179,6 +1179,7 @@ font-technology	Variable	Değişken
 	Flip Row Order	Satır Sırasını Çevir
 	Flip Vertical	Dikey Çevir
 	Float in Window	Pencerede Yüzer Yap
+	Float All in Windows	Tümünü Pencerelerde Yüzer Yap
 	Focal Fill	Odak Dolgusu
 	Focal Stroke	Odak Konturu
 	Folder	Klasör
@@ -1311,6 +1312,10 @@ font-technology	Variable	Değişken
 	Handles	Kollar
 	Hard Light	Sert Işık
 	Harmony Rules:	Uyum Kuralları:
+	Segmented color wheel	Bölümlü renk tekerleği
+	Show smooth color wheel	Kesintisiz renk tekerleğini göster
+	Show segmented color wheel	Bölümlü renk tekerleğini göster
+	Show color bars	Renk çubuklarını göster
 	Harmony Sets	Armoni Setleri
 	Height	Yükseklik
 	Height:	Yükseklik:
@@ -2512,6 +2517,8 @@ digits	Malayalam	Malayalam
 	Replace Spine	Omurgayı Değiştir
 	Replace Symbol	Sembolü Değiştir
 	Replace With Font	Yazı Tipiyle Değiştir
+	Replace With Font From	Değiştirilecek Yazı Tipi Kaynağı
+	System	Sistem
 	Replaces the saved preset of that name.	Bu adın kayıtlı ön ayarını değiştirir.
 	Replace…	Değiştir…
 	Require a password to open the document	Belgeyi açmak için parola gerektir
@@ -3205,6 +3212,7 @@ digits	Malayalam	Malayalam
 	Templates…	Şablonlar…
 	Text Displayed in Cell:	Hücrede Görüntülenen Metin:
 	Text Export Options	Metin Dışa Aktarma Seçenekleri
+	Text Fill & Stroke Color	Metin Dolgu ve Kontur Rengi
 	Text Fill Color	Metin Dolgu Rengi
 	Text Import Options	Metin İçe Aktarma Seçenekleri
 	Text Stroke Color	Metin Kontur Rengi
@@ -5688,6 +5696,7 @@ axis	Y Axis	Y ekseni
 	Create New Set	Yeni Set Oluştur
 	Stop Global Edit	Genel Düzenlemeyi Durdur
 	Global Edit Options	Genel Düzenleme Seçenekleri
+	Leave Out of Global Edit	Genel Düzenlemenin Dışında Bırak
 	Match	Eşleştir
 	On Artboards	Çalışma Yüzeylerinde
 	All Artboards	Tüm Çalışma Yüzeyleri
@@ -5696,6 +5705,8 @@ axis	Y Axis	Y ekseni
 @msg	select one object	bir nesne seçin
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Genel düzenleme yollar, bileşik yollar, sembol örnekleri ve bunların grupları üzerinde çalışır
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	benzer nesne bulunamadı (döndürülmüş veya yansıtılmış kopyalar eşleşmez); Genel Düzenleme Seçeneklerini değiştirip yeniden deneyin
+@msg	Global Edit is off	Genel düzenleme kapalı
+@msg	only an object of the Global Edit other than the one it started from can be left out	yalnızca genel düzenlemenin başladığı nesne dışındaki bir nesne düzenlemenin dışında bırakılabilir
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ya da 1, 3-5 gibi bir aralık olmalı, {v} değil
 	Add to Symbols	Sembollere Ekle
 	Basic Shapes	Temel Şekiller
@@ -5951,6 +5962,11 @@ anchor	Points:	Noktalar:
 	Horizontal Scale	Yatay Ölçek
 	Vertical Scale	Dikey Ölçek
 @msg	{label} must be a number from {min} to {max}	{label} {min} ile {max} arasında bir sayı olmalıdır
+	Character Color	Karakter Rengi
+	OpenType Features	OpenType Özellikleri
+	Stylistic Sets	Stilistik Setler
+@msg	features lists at most {max} tags	features en fazla {max} etiket içerebilir
+@msg	unknown OpenType feature `{t}`	bilinmeyen OpenType özelliği `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0'ın üzerinde ve en fazla {max} olan bir sayı olmalıdır
 @msg	no character style `{name}`	`{name}` karakter stili bulunamadı
 

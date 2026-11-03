@@ -577,7 +577,41 @@ fn may_hit(parent: &Node, i: usize, c: &Node, p: Point, opt: HitOptions, symbols
     // (An envelope's content sits where it was, not where the envelope draws it.)
     edits_contents(c)
         || c.extras().shaper.is_some() && source_of(c, opt.scope)
-        || c.reach_bounds_with(symbols).is_none_or(|b| b.inflate(opt.tol, opt.tol).contains(p))
+        || cull_reach(c, symbols).is_none_or(|b| b.inflate(opt.tol, opt.tol).contains(p))
+}
+
+/// A box round everything `c` can paint, for culling clicks: [`Node::reach_bounds_with`], except
+/// that paths and compound paths are measured by their control points ([`PathData::control_bounds`],
+/// which hold the curves) instead of along their curves, which a compound path of thousands of
+/// members takes milliseconds to do on every click and hover. The box only rules points out, and it
+/// is at least as large, so the same objects are hit.
+///
+/// [`PathData::control_bounds`]: vectorcraft_geom::PathData::control_bounds
+fn cull_reach(c: &Node, symbols: &SymbolBoxes) -> Option<Rect> {
+    let control = match &c.kind {
+        NodeKind::Path { path, .. } => path.control_bounds(),
+        NodeKind::Compound { children, .. } if children.iter().all(|m| m.path_data().is_some()) => {
+            children.iter().filter_map(|m| m.path_data().and_then(vectorcraft_geom::PathData::control_bounds)).reduce(|a, b| a.union(b))
+        }
+        _ => return c.reach_bounds_with(symbols),
+    };
+    let o = c.appearance.outset();
+    control.map(|b| b.inflate(o, o))
+}
+
+/// The members of compound path `children` that a click at `p` within `tol` can touch, as one
+/// path: those whose control points' box, grown by `tol`, holds `p` (edges included). A member
+/// outside that box is farther than `tol` from `p` and winds zero times round it, so this path's
+/// outline and fill answer a click as the whole compound path's do, without assembling it.
+fn compound_members_near(children: &[std::sync::Arc<Node>], p: Point, tol: f64) -> vectorcraft_geom::BezPath {
+    let near = |b: Rect| b.x0 - tol <= p.x && p.x <= b.x1 + tol && b.y0 - tol <= p.y && p.y <= b.y1 + tol;
+    let mut bp = vectorcraft_geom::BezPath::new();
+    for pd in children.iter().filter_map(|m| m.path_data()) {
+        if pd.control_bounds().is_some_and(near) {
+            bp.extend(pd.to_bezpath());
+        }
+    }
+    bp
 }
 
 /// Is the first child of `n` the isolated container `scope`?
@@ -710,12 +744,23 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             }
             None
         }
-        NodeKind::Compound { rule, .. } => {
-            let bp = n.stroke_path()?;
-            if let Some(k) = hit_stroke(n, &bp, *rule, p, opt) {
-                return Some(k);
+        NodeKind::Compound { children, rule } => {
+            // Painted strokes follow the whole compound path (alignment, dashes, width profiles):
+            // they are measured along all of it, as before.
+            if !opt.outline && n.appearance.painted_strokes().next().is_some() {
+                let bp = n.stroke_path()?;
+                if n.appearance.stroke_hit(&bp, *rule, p, opt.tol) {
+                    return Some(HitKind::Stroke);
+                }
             }
-            (!opt.outline && !opt.path_only && fill_contains(&bp, *rule, p)).then_some(HitKind::Fill)
+            // The outline and the fill only need the members near `p`. (Measured without
+            // `stroke_contains`'s box check: the box of the members near `p` is smaller than the
+            // whole path's, and its far edges would turn away points exactly `tol` away.)
+            let near = compound_members_near(children, p, opt.tol);
+            if vectorcraft_geom::hit::distance_to_outline(&near, p) <= opt.tol {
+                return Some(HitKind::Outline);
+            }
+            (!opt.outline && !opt.path_only && fill_contains(&near, *rule, p)).then_some(HitKind::Fill)
         }
         // The type path lies within the bounds: they rule out the rest before it is measured.
         NodeKind::Text(t) if opt.type_path_only => {

@@ -801,10 +801,30 @@ fn font_height_reference(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
 }
 
 /// The font family menu and the font style dropdown of style `s` (Character and Properties panels,
-/// Control bar), with their `ids` and `widths`.
+/// Control bar), with their `ids` and `widths`. The mouse wheel over the closed family field steps
+/// the text through the families.
 pub(crate) fn font_pickers(app: &mut VectorcraftApp, ui: &mut Ui, s: &CharStyle, ids: (&str, &str), widths: (f32, f32)) {
+    let wheel_owner = match ids.0 {
+        "ch-font" => Some(crate::font_menu::WheelOwner::Character),
+        "font" => Some(crate::font_menu::WheelOwner::Properties),
+        "cb-font" => Some(crate::font_menu::WheelOwner::Control),
+        _ => None,
+    };
+    font_pickers_owned(app, ui, s, ids, widths, wheel_owner);
+}
+
+fn font_pickers_owned(
+    app: &mut VectorcraftApp,
+    ui: &mut Ui,
+    s: &CharStyle,
+    ids: (&str, &str),
+    widths: (f32, f32),
+    wheel_owner: Option<crate::font_menu::WheelOwner>,
+) {
+    crate::font_menu::sync_wheel_target(app, ui.ctx(), ui.ctx().viewport_id());
     let sample = crate::font_menu::sample_text(app);
-    if let Some(pick) = crate::font_menu::font_menu(ui, ids.0, &s.font_family, widths.0, sample.as_deref(), crate::font_menu::MenuLook::of(app)) {
+    let look = crate::font_menu::MenuLook { wheel: true, wheel_owner, ..crate::font_menu::MenuLook::of(app) };
+    if let Some(pick) = crate::font_menu::font_menu(ui, ids.0, &s.font_family, widths.0, sample.as_deref(), look) {
         crate::font_menu::apply(app, ui.ctx(), pick);
     }
     let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
@@ -892,7 +912,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         .on_hover_text(tl!("Character options"));
     widgets::popover(&link, link.clicked(), |ui| {
         ui.set_width(260.0);
-        show(app, ui);
+        show_owned(app, ui, crate::font_menu::WheelOwner::ControlPopover(link.id));
     });
     font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (150.0, 96.0));
     size_field(app, ui, "cb-font-size", 96.0);
@@ -904,7 +924,11 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 const SNAP_TO_GLYPH_OPTIONS: &str = "ch-snap-to-glyph-options";
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    attributes(app, ui);
+    show_owned(app, ui, crate::font_menu::WheelOwner::Character);
+}
+
+fn show_owned(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::WheelOwner) {
+    attributes(app, ui, owner);
     // Drawing over type needs no type selected, so the options show without one too.
     if pstate::<bool>(ui.ctx(), SNAP_TO_GLYPH_OPTIONS) {
         snap_to_glyph_options(app, ui);
@@ -942,7 +966,7 @@ fn snap_to_glyph_options(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The character attributes of the type selected (an empty state without any).
-fn attributes(app: &mut VectorcraftApp, ui: &mut Ui) {
+fn attributes(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::WheelOwner) {
     let Some((s, _)) = text_style(app) else {
         app.character_focus = None;
         super::empty_state(ui, "type", tl!("No text selected"), tl!("Select a text object to edit its character attributes."));
@@ -954,7 +978,7 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(f) = app.character_focus {
         widgets::arm_field_focus(ui.ctx(), f.salt());
     }
-    font_pickers(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0));
+    font_pickers_owned(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0), Some(owner));
     variable_font(app, ui, &s, w - 4.0);
     ui.add_space(2.0);
     let hidden = pstate::<bool>(ui.ctx(), "ch-hide-options");

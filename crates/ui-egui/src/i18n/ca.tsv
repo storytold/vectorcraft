@@ -1610,6 +1610,7 @@ digits	Malayalam	Malaiàlam
 	Flip Vertical	Inverteix verticalment
 	Flip:	Inverteix:
 	Float in Window	Flota a la finestra
+	Float All in Windows	Flota-ho tot en finestres
 	Float Panel	Flota el panell
 	Float Tool Group	Flota el grup d’eines
 	Focal Fill	Farciment focal
@@ -1697,6 +1698,7 @@ digits	Malayalam	Malaiàlam
 	Global Adjust	Ajust global
 	Global Brush Dimensions	Dimensions globals del pinzell
 	Global Edit Options	Opcions globals d’edició
+	Leave Out of Global Edit	Exclou de l’edició global
 	Global Process Color	Color de procés global
 	Global Process Color, CMYK	Color de procés global, CMYK
 	Glow Amount	Quantitat de resplendor
@@ -1804,6 +1806,10 @@ digits	Malayalam	Malaiàlam
 	Hard Mix	Mescla dura
 	Harmony Rules	Regles d’harmonia
 	Harmony Rules:	Regles d’harmonia:
+	Segmented color wheel	Roda de color segmentada
+	Show smooth color wheel	Mostra la roda de color contínua
+	Show segmented color wheel	Mostra la roda de color segmentada
+	Show color bars	Mostra les barres de color
 	Harmony Sets	Conjunts d’harmonia
 	HDTV 1080p	HDTV 1080p
 	HDTV 720p	HDTV 720p
@@ -3334,6 +3340,8 @@ digits	Malayalam	Malaiàlam
 	Replace Spine	Reemplaça l’espina
 	Replace Symbol	Reemplaça el símbol
 	Replace With Font	Reemplaça per un tipus de lletra
+	Replace With Font From	Reemplaça per un tipus de lletra de
+	System	Sistema
 	Replace “{name}”, the file this document was opened from?	Voleu reemplaçar “{name}”, el fitxer amb què es va obrir aquest document?
 	Replaces the saved preset of that name.	Reemplaça el preajust desat amb aquest nom.
 	Replace…	Reemplaça…
@@ -4225,6 +4233,7 @@ digits	Malayalam	Malaiàlam
 	Text Displayed in Cell	Text mostrat a la cel·la
 	Text Displayed in Cell:	Text mostrat a la cel·la:
 	Text Export Options	Opcions d’exportació de text
+	Text Fill & Stroke Color	Color de farciment i traç del text
 	Text Fill Color	Color de farciment del text
 	Text Import Options	Opcions d’importació de text
 	Text Orientation	Orientació del text
@@ -5235,6 +5244,8 @@ digits	Malayalam	Malaiàlam
 @msg	no selected slice in the image: select slices, or save all of them	no hi ha cap tall seleccionat a la imatge: seleccioneu talls o deseu-los tots
 @msg	no selection bounds	no hi ha límits de selecció
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	no s’ha trobat cap objecte similar (les còpies girades o reflexades no coincideixen); canvieu les opcions d’edició global i torneu-ho a provar
+@msg	Global Edit is off	L’edició global no està activa
+@msg	only an object of the Global Edit other than the one it started from can be left out	només es pot excloure un objecte de l’edició global que no sigui aquell amb què va començar
 @msg	no slice selected	no hi ha cap tall seleccionat
 @msg	no such action	no existeix aquesta acció
 @msg	no such action set	no existeix aquest conjunt d’accions
@@ -5978,6 +5989,11 @@ anchor	Points:	Punts:
 	Horizontal Scale	Escala horitzontal
 	Vertical Scale	Escala vertical
 @msg	{label} must be a number from {min} to {max}	{label} ha de ser un nombre de {min} a {max}
+	Character Color	Color del caràcter
+	OpenType Features	Funcions OpenType
+	Stylistic Sets	Jocs estilístics
+@msg	features lists at most {max} tags	features admet com a màxim {max} etiquetes
+@msg	unknown OpenType feature `{t}`	funció OpenType desconeguda `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} ha de ser un nombre superior a 0 i com a màxim {max}
 @msg	no character style `{name}`	No s'ha trobat l'estil de caràcter `{name}`
 

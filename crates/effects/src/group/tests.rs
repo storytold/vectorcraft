@@ -103,6 +103,23 @@ fn shape_modes_follow_the_pathfinder_panel() {
     assert_eq!(div.len(), 3);
 }
 
+/// Divide and Outline draw no piece of a member without fill or stroke, the same as when such
+/// pieces are left out.
+#[test]
+fn divide_and_outline_draw_nothing_for_unpainted_members() {
+    let unpainted =
+        Arc::new(Node::path(NodeId(2), shapes::rectangle(Rect::new(5.0, 0.0, 15.0, 10.0)), Appearance::basic(Paint::None, Paint::None, 0.0)));
+    for effect in ["pathfinder.divide", "pathfinder.outline"] {
+        let mut g = Node::group(NodeId(10), vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), unpainted.clone()]);
+        g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({}), visible: true });
+        let out = pathfinder_children(&g, None).unwrap();
+        assert!(out.iter().any(|n| n.id == NodeId(1)) && out.iter().any(|n| n.id == NodeId(2)), "{effect}: {out:#?}");
+        for n in out.iter().filter(|n| n.id == NodeId(2)) {
+            assert!(n.appearance.items.iter().all(|i| i.paint().is_none()), "{effect}: {n:#?}");
+        }
+    }
+}
+
 /// Returns an "H" in blue type at 100 pt on a baseline at y = 80, with its stems on either
 /// side of x = 100.
 fn type_h() -> Node {

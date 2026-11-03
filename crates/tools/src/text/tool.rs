@@ -29,6 +29,20 @@ impl Tool for TypeTool {
     fn claims_key(&self, _: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Escape && self.editing.is_some()
     }
+    /// A dropped press drops only the selection drag or the type it was placing: the type being
+    /// edited stays in editing, with the caret and selection it had before the press.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        if let Some((caret, anchor)) = self.before_press.take() {
+            (self.caret, self.anchor) = (caret, anchor);
+        }
+        self.selecting = false;
+        self.clicks = (None, 0);
+        self.press = None;
+        self.held = None;
+        self.drag = None;
+        self.snap.clear();
+        vec![]
+    }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         match ev.kind {
             PointerKind::Down => {
@@ -36,6 +50,7 @@ impl Tool for TypeTool {
                     let same = self.clicks.0.is_some_and(|q| (q - ev.pos).hypot() <= cx.tol(4.0));
                     let n = if same { self.clicks.1 + 1 } else { 1 };
                     self.clicks = (Some(ev.pos), n);
+                    self.before_press = Some((self.caret, self.anchor));
                     let out = self.move_to(byte, ev.mods.shift);
                     self.goal_x = None;
                     if n >= 3 {
@@ -51,6 +66,7 @@ impl Tool for TypeTool {
                 // as it does in the type being edited.
                 if let Some(out) = self.edit_at(cx, ev.pos) {
                     self.selecting = true;
+                    self.before_press = Some((self.caret, self.anchor));
                     return out;
                 }
                 self.press = Some((ev.pos, self.snap.press(cx, ev.pos, self.editing.as_slice(), None)));
@@ -71,6 +87,7 @@ impl Tool for TypeTool {
                 vec![]
             }
             PointerKind::Up => {
+                self.before_press = None;
                 if self.selecting {
                     self.selecting = false;
                     return vec![];

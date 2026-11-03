@@ -548,7 +548,7 @@ Brushes of different types, or a `type` other than theirs, are refused with "bru
 Document colour mode: `file.new {colorMode: "cmyk"}` starts a CMYK document with CMYK default swatches, and RGB
 colors applied to it (`paint.setFill`/`setStroke` colors, gradient stops and freeform points, `paint.editGradient`
 stops, `paint.freeform.addPoint`/`setPoint`, `paint.sampleColor`, `object.mesh.setPointColor`/`addLine`, the
-`text.create` and `text.createInPath` color, the `text.setStyle` fill, `text.setRangeStyle` fills and strokes, a
+`text.create` and `text.createInPath` color, `text.setStyle` and `text.setRangeStyle` fills and strokes, a
 `shapeBuilder.merge` hex fill (its `fill: {color, keepModel: true}` form keeps RGB), the
 `symbol.adjust` stain color, `swatch.new {color}` and `{colors}`, `swatch.newGroup`, `swatch.editGroup` and
 `swatch.edit`) are stored as CMYK, converted through the color settings (`edit.colorSettings`: the CMYK
@@ -1438,6 +1438,13 @@ everything in it, and `select.all`, `select.allOnArtboard` and `select.inverse` 
 among the objects beside it in its group or layer, passing over hidden and locked objects and sublayers. When there
 is no such object, the selection stays as it is.
 
+`select.same.textFillAndStrokeColor` (Select › Same › Text Fill & Stroke Color) selects the type objects that have
+characters whose fill and stroke both match the first character of the first selected type, and returns `{count}`.
+`select.same.textFillColor` and `select.same.textStrokeColor` compare the fill or the stroke alone. In type with
+several runs, one run has to match both: type with the fill in one run and the stroke in another is left out. The fill
+and stroke of other objects are not compared. Without type among the selected objects it returns the error "select a
+text object", and it records no undo step.
+
 ## Shaper Groups
 
 `shaper.releaseSource {source, group?}` takes the original shape `source` out of its Shaper Group: the shape becomes a
@@ -1490,6 +1497,14 @@ other group takes its objects at that level, keeping its own ids in order. Whene
 Redo, a cancelled drag or scrub), the matches it no longer has leave the Global Edit, which ends when fewer than two
 are left. An edit that would take any match past the canvas fails with the coordinates-out-of-range error and changes
 nothing. Nothing of it is saved.
+
+`select.globalEditExclude {id}` leaves the match `id` out of the Global Edit, as a Shift-click on a highlighted match
+(or on an object inside it) with the Selection tool does: it is no longer highlighted, and later edits leave it as it
+is. It returns `{active, count, ids}`, the objects left in the Global Edit; with fewer than two left, the Global Edit
+ends (`{active: false, count: 0, ids: []}`). The object the Global Edit started from can't be left out, and neither
+can an object that is not a match. It is not an undo step. A Shift-drag that starts on a match selects it and moves
+it with the selection, and leaves it in the Global Edit. Source: [Update assets quickly with Global
+Edit](https://helpx.adobe.com/ph_fil/illustrator/how-to/global-editing-sensei.html).
 
 ## Saved selections
 
@@ -1577,7 +1592,8 @@ already walks Image Trace. Short agent entry points:
   `symbol.options {name?, newName?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?}` (`nineSlice` bool turns
   9-slice guides on or off; `nineSliceGuides` is `[left, top, right, bottom]`, fractions 0..1 of the symbol size, a
   quarter each when none are given; rows of `symbol.list` carry `nineSlice`: the guides or `null`; a scaled instance of
-  a symbol with guides keeps its corners at their size, and `symbol.breakLink` gives its art as it draws; `type` is
+  a symbol with guides keeps its corners at their size, and `symbol.breakLink` gives its art as it draws; dragging a
+  guide on the canvas in symbol editing mode sends `nineSliceGuides` in one undo step; `type` is
   Symbol Type, `static` by default for the command and `dynamic` by default in the Symbol Options dialog),
   `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}`, `symbol.replace`,
   `symbol.edit {id?, ids?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary
@@ -1668,10 +1684,13 @@ already walks Image Trace. Short agent entry points:
   renames the row, in the same undo step; Edit Data Set's Name field sends it), `dataset.rename`,
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
   `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object), `dataset.import {path|data|dataBase64|csv}` /
-  `dataset.export {path?}` (CSV: `name`, then one column per variable). `dataset.import` also reads tab-separated
-  files, and files whose first header cell isn't `name`: every header cell is then a variable, and the rows take the
-  first free names `Data Set 1`, `Data Set 2` and so on. An import error about a row's values or name gives the file
-  line the row starts on. A header cell that names no variable defines one, unbound, in the same undo step as the
+  `dataset.export {path?}` (CSV: one column per variable, and no column of data set names). `dataset.import` also
+  reads tab-separated files. Every header cell is a variable, whatever its case (`name` and `Name` included), as the
+  [set-up page](https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/set-up-data-source-files.html)
+  describes the first row: "Specify your data field name in the first row of your spreadsheet." The rows replace every
+  data set of the document and are named `Data Set 1`, `Data Set 2` and so on, in file order; the document's variables
+  and their bindings stay, and the reply's `deletedDataSets` lists the data sets that were replaced. An import error
+  about a row's values gives the file line the row starts on. A header cell that names no variable defines one, unbound, in the same undo step as the
   rows. `#Shown` defines a visibility variable `Shown`, `@Photo` defines an image variable `Photo`, and a cell without
   a prefix defines a text variable. `dataset.export` writes a visibility variable's header as `#Shown` and an image
   variable's as `@Photo`, and a text or graph variable's as its name alone. Its reply's `warning` names the variables
@@ -2342,7 +2361,11 @@ dash options go to every run (the object keeps no stroke of its own); an `item` 
 with `appearance.addStroke`, which takes every stroke option (dashes, profile, opacity, blend) like a path's and paints under or over the
 characters as its place relative to the Characters row says. To stroke
 some characters, use `text.setRangeStyle {id, start, end, strokeOptions: {weight?, cap?, join?, miterLimit?, align?,
-dash?, dashOffset?, alignDashes?}}`. `align: "inside"|"outside"` keeps the characters' stroke on that side of the
+dash?, dashOffset?, alignDashes?}}`. `text.setStyle {ids?, stroke?, strokeWidth?, start?, end?}` sets the stroke color
+and weight of the characters of each object given (without `start` and `end`: all of its text), with its other keys in
+one undo step; `strokeWidth` is in document points, as `stroke.set` gives the weight of scaled type. A `stroke` color
+without `strokeWidth` gives characters that have no stroke weight 1 pt, as `paint.setStroke` does.
+`align: "inside"|"outside"` keeps the characters' stroke on that side of the
 glyph outlines, drawn at twice the weight and clipped, while the type stays editable (beyond Illustrator); SVG export
 writes the text live and that stroke as glyph outlines over it. `inspect_document` reports each object's stroke as `strokeOptions` (type: its first
 run's) in `stroke.set` terms. `stroke.set` on a group leaves the images and symbol instances in it alone.
@@ -3618,11 +3641,30 @@ document. With no document open they fail with "no document open". `document.act
 the current one.
 `window.arrange.tile` (Window › Arrange › Tile) shows every open document in its own pane, edge to edge in the document
 area, in a grid of as many columns as the square root of the number of documents, rounded up, and fits each document to
+its pane; with fewer than two documents open it leaves the view and `tiled` as they are. It returns `{tiled, panes}`.
+The current document's pane is the canvas, and a press in another pane makes its document the current one.
+`window.arrange.consolidateAllWindows` (Window › Arrange › Consolidate All Windows) shows one document under its tab
+again and returns `{tiled: false}`. The arrangement is not saved. `ui.inspect` reports `tiled` and `panes` (each pane's
+`document` index, `rect` and whether it is `active`); canvas coordinates map to the current document's pane
+(`canvasRect`).
 its pane; it returns `{tiled, panes}`. The current document's pane is the canvas, and a press in another pane makes its
-document the current one. `window.arrange.consolidateAllWindows` (Window › Arrange › Consolidate All Windows) shows one
-document under its tab again and returns `{tiled: false}`. The arrangement is not saved. `ui.inspect` reports `tiled`
-and `panes` (each pane's `document` index, `rect` and whether it is `active`); canvas coordinates map to the current
-document's pane (`canvasRect`).
+document the current one. `window.arrange.floatInWindow` (Window › Arrange › Float in Window) moves the current document
+out of the tab strip into a floating window of its own, `window.arrange.floatAllInWindows` (Float All in Windows) does
+so for every tabbed document, and `window.arrange.cascade` (Cascade) floats every document and stacks the windows 30 pt
+apart from the upper left of the document area; each returns `{floating}`, the floating documents' indices. On the
+desktop each window is an OS window; on the web, on Wayland and while the control channel is attached (`--control`),
+it is a window inside the app's window, so `ui.click`, `ui.drag` and `ui.screenshot` reach it. The current
+document's window holds the canvas, and a press in another document's window makes its document the current one.
+`window.arrange.consolidateAllWindows` (Window › Arrange › Consolidate All Windows) shows one document under its tab
+again, floating ones included, and returns `{tiled: false, floating: []}`; Tile brings floating documents back into its
+grid. `window.arrange.floatInWindow {index, at: [x, y]}` floats document `index`, makes it the current one and puts its
+window's top-left corner at `at` in the main window's points, as dragging its tab more than 24 pt above or below the tab
+strip does. `window.arrange.consolidateAllWindows {index}` brings only document `index` back under its tab and makes it
+the current one, as dragging its window by the title bar (an OS window by the tab at its top) onto the tab strip does;
+it returns `{tiled, floating}`. An `index` that names no open document fails with "no such document". The arrangement
+is not saved. `ui.inspect` reports `tiled`, `panes` (each pane's `document` index, `rect` and
+whether it is `active`) and `floating`; canvas coordinates map to the current document's pane or window
+(`canvasRect`), in that window's coordinates while it floats.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}
@@ -5457,19 +5499,39 @@ attribute map in one undo step. `to` is trimmed and must be unique. The command 
 while preserving local overrides; Undo/Redo restores the definition and its users. The `charStyleOptions`
 dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`, `tracking`, `case`,
 `position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `rotation`,
-`language`, `section` (`general`, `basic` or `advanced`), and `preview`. An empty field leaves its
+`language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
+`ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
+`ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
 attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
 Advanced Character Formats holds `h_scale` and `v_scale` (percent, above 0 and at most 4000000),
 `baseline_shift` (points, -4000000 to 4000000), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
 Setup's languages; English: USA stores the explicit default `null`, and a tag not in the list that the style
 already has is kept). Language sets the language the characters are shaped in; it does not change hyphenation
 or spelling.
+Character Color holds `fill` and `stroke` (a paint: `{"type": "none"}` or a solid color; the menu lists None and
+the document's solid swatches, a global swatch or a tint of one as a paint linked to it), `fill_tint` and
+`stroke_tint` (percent, 0 to 100, for a paint linked to a global swatch), `stroke_width` (points, 0 to 4000000)
+and the `overprint_fill` and `overprint_stroke` checkboxes. A gradient or pattern paint the style already has is
+kept until another paint is chosen. A paint linked to a global swatch takes the swatch's color at its tint, and
+editing the swatch later updates the style and its text. `swatch.unused` counts a swatch a character style's fill or
+stroke links to as used, whether or not text uses the style.
+OpenType Features holds `ot_figure` (`default`, `tabularLining`, `proportionalLining`, `proportionalOldstyle` or
+`tabularOldstyle`), `ot_position` (`default`, `superscript`, `subscript`, `numerator` or `denominator`), the on,
+off or unset checkboxes `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn` and `ot_frac`,
+and `ot_sets` (a list of stylistic sets `ss01` to `ss20`, each on, or off with a leading `-`, as in
+`["ss02", "-ss05"]`; a set not listed is unset). They write the style's `features` list: a changed control
+replaces only its own tags, so tags the dialog does not show stay, and Default Figure or Default Position stores
+its features turned off, distinct from unset.
+`charStyle.new`, `charStyle.setAttrs` and `charStyle.edit` reject a tint outside 0 to 1, a link to a swatch that is
+not a global swatch of the document, a stroke weight outside 0 to 4000000, more than 256 feature tags and an
+OpenType feature tag the shaper does not know, unless the style or the text it is made from already has that value.
 The New Character Style dialog accepts the same character fields and starts with the selected text's
 captured attributes. Without selected text, it starts with the character defaults for the interface language
 (including `charAlign: "emBoxCenter"` in Japanese); changing a Basic field keeps other seeded attributes.
 Without selected text, the New Paragraph Style dialog sends no `attrs`, and the engine gives the new style the
 paragraph defaults for the interface language. Reset Panel in Basic Character
-Formats removes those fields from the definition, and Reset Panel in Advanced Character Formats removes its five.
+Formats removes those fields from the definition, Reset Panel in Advanced Character Formats removes its five, Reset
+Panel in Character Color removes its five attributes and Reset Panel in OpenType Features removes `features`.
 `ui.charStyleOptions.resetPanel {}` performs that reset for the section selected in either character-style
 dialog; it is disabled on General.
 
@@ -6000,11 +6062,21 @@ attaches nothing.
 The group stays live: after every edit its objects go back on its path. Editing the path moves them, an object moved
 on its own goes back to its place, an object moved into the group (`layer.move` with `place: "inside"`) joins the end
 of the path, an object moved out of it leaves, and art that replaces an object (`symbol.breakLink`) keeps its place.
-`object.objectsOnPath.options {ids?, pivot?, rotate?}` changes Pivot and Rotate, and
+`object.objectsOnPath.options {ids?, pivot?, rotate?, spacing?, start?}` changes Pivot, Rotate and Space, and
 `object.objectsOnPath.expand {ids?}` makes the groups plain groups. Both act on the groups that `ids` names (Objects
 on Path groups or objects in them), or on the groups of the selection when `ids` is not given. The native file keeps
 the group with an `objects_on_path` record; SVG, PDF and the other exports write the path and the objects as plain
 art.
+
+Space sets the distance along the path between neighboring objects' attachment points. `spacing` takes points, 0 or
+more, or `"auto"`, the default, which spreads the objects evenly with the last one at the end of an open path. `start`
+is the distance in points along the path from its first anchor to the first object's attachment point (default 0). A
+`spacing` larger than the path has room for is drawn smaller: on an open path the last object stops at the end, and on
+a closed path the objects go no more than once around. The value is kept, so lengthening the path again brings the
+objects back to it. On a closed path, `start` counts around from the first anchor. Pivot, Rotate, moving the group and
+saving the file keep the Space. Scaling, rotating or shearing the group keeps the first and last objects where the
+transform takes them on the new path, and sets `spacing` and `start` to match; a value that cannot be kept that way
+scales as much as the path's length.
 
 In the desktop app, double-clicking the Objects on Path tool (`tool.options {tool: "objectsOnPath"}`) opens Objects on
 Path Tool Options (dialog `objectsOnPathOptions`): the nine-point Pivot grid and the Rotate field (°). Save sets the
@@ -6020,10 +6092,20 @@ counter-clockwise on the page: the drag previews `object.objectsOnPath.options {
 group's Rotate plus that angle and keeps it as one undo step on release. Shift turns in steps of 15°, and Escape
 cancels the drag.
 
+With two or more objects in the group, the same tools show the Space widget, a square handle beyond the group's last
+object, ahead along the path and joined by a line to its attachment point. Dragging it moves the last object along the
+path as far as the pointer moves along the path, and previews
+`object.objectsOnPath.options {ids: [group], spacing, start}` and keeps it as one undo step on release. The first
+object stays where it is and the others move toward or away from it; on an open path the last object goes no further
+than the end. With Alt (Option on macOS) held, the objects spread from both ends toward or away from the center of an
+open path, or of the first anchor of a closed path, up to the whole path. With measurement labels on, the distance
+between the objects shows next to the pointer in the document's units. Escape cancels the drag.
+
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"objectsOnPath","values":{"pivot":7,"rotate":30}}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.attach","params":{"path":30,"ids":[12,15,18]}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.options","params":{"pivot":7,"rotate":15}}}
+{"name":"run_command","arguments":{"command":"object.objectsOnPath.options","params":{"spacing":24,"start":0}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.expand","params":{}}}
 ```
 

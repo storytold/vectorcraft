@@ -431,6 +431,7 @@
 	Variable Font	Muuttuva fontti
 	Text Fill Color	Tekstin täyttöväri
 	Text Stroke Color	Tekstin viivan väri
+	Text Fill & Stroke Color	Tekstin täytön ja viivan väri
 	All on Same Layers	Kaikki samoilla tasoilla
 	Direction Handles	Suuntakahvat
 	Brush Strokes	Sivellinviivat
@@ -626,6 +627,7 @@
 	Cascade	Porrasta
 	Tile	Vierekkäin
 	Float in Window	Kelluta ikkunassa
+	Float All in Windows	Kelluta kaikki ikkunoissa
 	Consolidate All Windows	Yhdistä kaikki ikkunat
 	Workspace	Työtila
 	Reset Essentials	Palauta Essentials
@@ -2600,6 +2602,10 @@ digits	Malayalam	Malajalam
 	Current Colors	Nykyiset värit
 	Current Colors (0)	Nykyiset värit (0)
 	Harmony Rules:	Harmoniasäännöt:
+	Segmented color wheel	Segmentoitu väriympyrä
+	Show smooth color wheel	Näytä liukuva väriympyrä
+	Show segmented color wheel	Näytä segmentoitu väriympyrä
+	Show color bars	Näytä väripalkit
 	Harmony Rules	Harmoniasäännöt
 	Keep this row's colors (exclude)	Säilytä tämän rivin värit (jätä pois)
 	Limit to Library:	Rajoita kirjastoon:
@@ -3873,6 +3879,8 @@ effect	Regular	Normaali
 	In the selected objects	Valituissa objekteissa
 	Find in Folder…	Etsi kansiosta…
 	Replace With Font	Korvaa fontilla
+	Replace With Font From	Korvaavan fontin lähde
+	System	Järjestelmä
 	  — substituted by {style}	  — korvattu tyylillä {style}
 	  — {n} characters from another font	  — {n} merkkiä toisesta fontista
 	All Scripts	Kaikki kirjoitusjärjestelmät
@@ -5761,6 +5769,7 @@ axis	Y Axis	Y-akseli
 	Create New Set	Luo uusi sarja
 	Stop Global Edit	Lopeta yleismuokkaus
 	Global Edit Options	Yleismuokkauksen asetukset
+	Leave Out of Global Edit	Jätä pois yleismuokkauksesta
 	Match	Vastaavuus
 	On Artboards	Piirtoalustoilla
 	All Artboards	Kaikki piirtoalustat
@@ -5769,6 +5778,8 @@ axis	Y Axis	Y-akseli
 @msg	select one object	valitse yksi objekti
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Yleismuokkaus toimii poluille, yhdistelmäpoluille, symbolien esiintymille ja niiden ryhmille
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	samankaltaisia objekteja ei löytynyt (kierrettyjä tai peilattuja kopioita ei tunnisteta); muuta yleismuokkauksen asetuksia ja yritä uudelleen
+@msg	Global Edit is off	Yleismuokkaus ei ole käynnissä
+@msg	only an object of the Global Edit other than the one it started from can be left out	yleismuokkauksesta voi jättää pois vain muun objektin kuin sen, josta se alkoi
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all tai alue, kuten 1, 3-5, ei {v}
 	Add to Symbols	Lisää symboleihin
 	Basic Shapes	Perusmuodot
@@ -6024,6 +6035,11 @@ anchor	Points:	Pisteet:
 	Horizontal Scale	Vaakaskaalaus
 	Vertical Scale	Pystyskaalaus
 @msg	{label} must be a number from {min} to {max}	{label} on oltava luku {min} ja {max} väliltä
+	Character Color	Merkin väri
+	OpenType Features	OpenType-ominaisuudet
+	Stylistic Sets	Tyylisarjat
+@msg	features lists at most {max} tags	features sisältää enintään {max} tunnistetta
+@msg	unknown OpenType feature `{t}`	tuntematon OpenType-ominaisuus `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} on oltava luku, joka on yli 0 ja enintään {max}
 @msg	no character style `{name}`	Merkkityyliä `{name}` ei löytynyt
 

@@ -1823,6 +1823,37 @@ fn a_shortcut_on_the_backtick_key_runs_on_every_layout() {
     assert_eq!(count(&app), 1);
 }
 
+/// The ISO key next to left Shift (`<` on Turkish Q and many European layouts, egui's
+/// `IntlBackslash`) records, saves and runs its shortcut, apart from the `\` key (#4559).
+#[test]
+fn a_shortcut_on_the_iso_key_next_to_left_shift_records_and_runs() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let recorded = crate::shortcut_editor::chord_from_event(Key::IntlBackslash, Modifiers::NONE).unwrap();
+    assert_eq!(recorded, "IntlBackslash");
+    crate::shortcut_editor::assign(&mut app.ui.shortcut_overrides, "edit.clear", Some(&recorded), false).unwrap();
+    assert_eq!(crate::shortcut_editor::effective_in(&app.ui.shortcut_overrides, "edit.clear").as_deref(), Some("IntlBackslash"));
+    for text in ["Cmd+IntlBackslash", "Shift+IntlBackslash", "Cmd+Alt+Shift+IntlBackslash"] {
+        assert_eq!(crate::shortcut_editor::normalize(text).as_deref(), Some(text));
+    }
+    let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let backslash =
+        egui::Event::Key { key: Key::Backslash, physical_key: Some(Key::Backslash), pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    frame(&mut app, vec![backslash, egui::Event::Text("\\".into())]);
+    assert_eq!(count(&app), 1, "the `\\` key is another key");
+    let press = egui::Event::Key {
+        key: Key::IntlBackslash,
+        physical_key: Some(Key::IntlBackslash),
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    };
+    frame(&mut app, vec![press, egui::Event::Text("<".into())]);
+    assert_eq!(count(&app), 0, "the key next to left Shift runs Edit › Clear");
+}
+
 /// eframe's web build with no text field focused sends the text before its key: the key after
 /// the `"` it typed is read when no press comes right before it.
 #[test]

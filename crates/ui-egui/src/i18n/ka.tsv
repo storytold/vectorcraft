@@ -350,6 +350,7 @@
 	Font Size	შრიფტის ზომა
 	Text Fill Color	ტექსტის შევსების ფერი
 	Text Stroke Color	ტექსტის კონტურის ფერი
+	Text Fill & Stroke Color	ტექსტის შევსებისა და კონტურის ფერი
 	All on Same Layers	ყველა იმავე შრეებზე
 	Direction Handles	მიმართულების სახელურები
 	Brush Strokes	ფუნჯის შტრიხები
@@ -537,6 +538,7 @@
 	Cascade	კასკადად
 	Tile	ფილებად
 	Float in Window	ცალკე ფანჯარაში გამოტანა
+	Float All in Windows	ყველას ცალკე ფანჯრებში გამოტანა
 	Consolidate All Windows	ყველა ფანჯრის გაერთიანება
 	Workspace	სამუშაო სივრცე
 	Reset Essentials	Essentials-ის ჩამოყრა
@@ -2334,6 +2336,10 @@ digits	Malayalam	მალაიალამური
 	Colors:	ფერები:
 	Current Colors ({total})	მიმდინარე ფერები ({total})
 	Harmony Rules:	ჰარმონიის წესები:
+	Segmented color wheel	სეგმენტირებული ფერთა წრე
+	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
+	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
+	Show color bars	ფერთა ზოლების ჩვენება
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
 	Link harmony colors	ჰარმონიის ფერების დაკავშირება
@@ -3457,6 +3463,8 @@ effect	Regular	ჩვეულებრივი
 	In the selected objects	მონიშნულ ობიექტებში
 	Find in Folder…	საქაღალდეში ძებნა…
 	Replace With Font	ჩანაცვლება შრიფტით
+	Replace With Font From	ჩანაცვლების შრიფტის წყარო
+	System	სისტემა
 	  — substituted by {style}	  — ჩანაცვლებულია: {style}
 	  — {n} characters from another font	  — სხვა შრიფტის სიმბოლოები: {n}
 	All Scripts	ყველა დამწერლობა
@@ -5645,6 +5653,7 @@ axis	Y Axis	Y ღერძი
 	Create New Set	ახალი ნაკრების შექმნა
 	Stop Global Edit	გლობალური რედაქტირების დასრულება
 	Global Edit Options	გლობალური რედაქტირების პარამეტრები
+	Leave Out of Global Edit	გლობალური რედაქტირებიდან გამორიცხვა
 	Match	დამთხვევა
 	On Artboards	სამუშაო დაფებზე
 	All Artboards	ყველა სამუშაო დაფა
@@ -5653,6 +5662,8 @@ axis	Y Axis	Y ღერძი
 @msg	select one object	მონიშნეთ ერთი ობიექტი
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებზე, სიმბოლოს ეგზემპლარებსა და მათ ჯგუფებზე
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	მსგავსი ობიექტები ვერ მოიძებნა (შემობრუნებული ან არეკლილი ასლები არ ემთხვევა); შეცვალეთ გლობალური რედაქტირების პარამეტრები და სცადეთ ხელახლა
+@msg	Global Edit is off	გლობალური რედაქტირება გამორთულია
+@msg	only an object of the Global Edit other than the one it started from can be left out	გლობალური რედაქტირებიდან შეიძლება გამოირიცხოს მხოლოდ ობიექტი, რომლითაც ის არ დაწყებულა
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ან დიაპაზონი, მაგალითად 1, 3-5, და არა {v}
 	Add to Symbols	სიმბოლოებში დამატება
 	Basic Shapes	ძირითადი ფიგურები
@@ -5982,6 +5993,11 @@ anchor	Points:	წერტილები:
 	Horizontal Scale	ჰორიზონტალური მასშტაბი
 	Vertical Scale	ვერტიკალური მასშტაბი
 @msg	{label} must be a number from {min} to {max}	{label} უნდა იყოს რიცხვი {min}-დან {max}-მდე
+	Character Color	სიმბოლოს ფერი
+	OpenType Features	OpenType შესაძლებლობები
+	Stylistic Sets	სტილისტური ნაკრებები
+@msg	features lists at most {max} tags	features შეიძლება შეიცავდეს არაუმეტეს {max} ტეგს
+@msg	unknown OpenType feature `{t}`	უცნობი OpenType შესაძლებლობა `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} უნდა იყოს 0-ზე მეტი და არაუმეტეს {max}-ისა რიცხვი
 @msg	no character style `{name}`	სიმბოლოს სტილი `{name}` ვერ მოიძებნა
 

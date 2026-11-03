@@ -1431,6 +1431,7 @@ file-filter	Templates	Mẫu
 	Flip Vertical	Lật dọc
 	Flip:	Lật:
 	Float in Window	Nổi trong cửa sổ
+	Float All in Windows	Nổi tất cả trong cửa sổ
 	Float Panel	Thả nổi bảng
 	Float Tool Group	Thả nổi nhóm công cụ
 	Focal Fill	Tô tiêu điểm
@@ -1610,6 +1611,10 @@ file-filter	Templates	Mẫu
 	Hard Light	Ánh sáng mạnh
 	Hard Mix	Trộn cứng
 	Harmony Rules:	Quy tắc hài hòa màu:
+	Segmented color wheel	Bánh xe màu phân đoạn
+	Show smooth color wheel	Hiện bánh xe màu liền mạch
+	Show segmented color wheel	Hiện bánh xe màu phân đoạn
+	Show color bars	Hiện các thanh màu
 	Harmony Sets	Bộ hài hòa màu
 	Height	Chiều cao
 	Height:	Chiều cao:
@@ -2999,6 +3004,8 @@ mark-style	Japanese	Kiểu Nhật
 	Replace Spine	Thay thế trục
 	Replace Symbol	Thay thế ký hiệu
 	Replace With Font	Thay thế bằng phông chữ
+	Replace With Font From	Thay thế bằng phông chữ từ
+	System	Hệ thống
 	Replace “{name}”, the file this document was opened from?	Thay thế “{name}”, tệp mà tài liệu này được mở từ đó?
 	Replaces the saved preset of that name.	Thay thế thiết lập sẵn đã lưu có tên đó.
 	Replace…	Thay thế…
@@ -3748,6 +3755,7 @@ mark-style	Japanese	Kiểu Nhật
 	Text	Văn bản
 	Text Displayed in Cell:	Văn bản hiển thị trong ô:
 	Text Export Options	Tùy chọn xuất văn bản
+	Text Fill & Stroke Color	Màu tô & nét văn bản
 	Text Fill Color	Màu tô văn bản
 	Text Import Options	Tùy chọn nhập văn bản
 	Text Stroke Color	Màu nét văn bản
@@ -5328,6 +5336,7 @@ axis	Y Axis	Trục Y
 	Create New Set	Tạo bộ mới
 	Stop Global Edit	Dừng chỉnh sửa toàn cục
 	Global Edit Options	Tùy chọn chỉnh sửa toàn cục
+	Leave Out of Global Edit	Loại khỏi chỉnh sửa toàn cục
 	Match	Khớp
 	On Artboards	Trên các bảng vẽ
 	All Artboards	Tất cả bảng vẽ
@@ -5336,6 +5345,8 @@ axis	Y Axis	Trục Y
 @msg	select one object	hãy chọn một đối tượng
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Chỉnh sửa toàn cục hoạt động trên đường dẫn, đường dẫn phức hợp, phiên bản biểu tượng và nhóm của chúng
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	không tìm thấy đối tượng tương tự (các bản sao đã xoay hoặc lật không được tính); hãy thay đổi tùy chọn chỉnh sửa toàn cục rồi thử lại
+@msg	Global Edit is off	Chỉnh sửa toàn cục đang tắt
+@msg	only an object of the Global Edit other than the one it started from can be left out	chỉ có thể loại khỏi chỉnh sửa toàn cục một đối tượng khác với đối tượng mà nó bắt đầu
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all hoặc một phạm vi như 1, 3-5, không phải {v}
 	Add to Symbols	Thêm vào ký hiệu
 	Basic Shapes	Hình cơ bản
@@ -5594,6 +5605,11 @@ anchor	Points:	Điểm:
 	Horizontal Scale	Tỷ lệ ngang
 	Vertical Scale	Tỷ lệ dọc
 @msg	{label} must be a number from {min} to {max}	{label} phải là một số từ {min} đến {max}
+	Character Color	Màu ký tự
+	OpenType Features	Tính năng OpenType
+	Stylistic Sets	Bộ phong cách
+@msg	features lists at most {max} tags	features chứa tối đa {max} thẻ
+@msg	unknown OpenType feature `{t}`	tính năng OpenType không xác định `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} phải là một số lớn hơn 0 và tối đa {max}
 @msg	no character style `{name}`	Không tìm thấy kiểu ký tự `{name}`
 

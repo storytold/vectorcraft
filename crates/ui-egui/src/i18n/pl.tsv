@@ -394,6 +394,7 @@
 	Variable Font	Czcionka zmienna
 	Text Fill Color	Kolor wypełnienia tekstu
 	Text Stroke Color	Kolor obrysu tekstu
+	Text Fill & Stroke Color	Kolor wypełnienia i obrysu tekstu
 	All on Same Layers	Wszystko na tych samych warstwach
 	Direction Handles	Uchwyty kierunkowe
 	Brush Strokes	Pociągnięcia pędzla
@@ -593,6 +594,7 @@
 	Cascade	Kaskadowo
 	Tile	Sąsiadująco
 	Float in Window	Pływające w oknie
+	Float All in Windows	Wszystkie pływające w oknach
 	Consolidate All Windows	Scal wszystkie okna
 	Workspace	Obszar roboczy
 	Reset Essentials	Resetuj Essentials
@@ -2566,6 +2568,10 @@ digits	Malayalam	Malajalam
 	Colors:	Kolory:
 	Current Colors ({total})	Bieżące kolory ({total})
 	Harmony Rules:	Reguły harmonii:
+	Segmented color wheel	Segmentowe koło kolorów
+	Show smooth color wheel	Pokaż płynne koło kolorów
+	Show segmented color wheel	Pokaż segmentowe koło kolorów
+	Show color bars	Pokaż paski kolorów
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
 	Link harmony colors	Połącz kolory harmonii
@@ -3794,6 +3800,8 @@ effect	Regular	Normalny
 	In the selected objects	W zaznaczonych obiektach
 	Find in Folder…	Znajdź w folderze…
 	Replace With Font	Zastąp czcionką
+	Replace With Font From	Zastąp czcionką z
+	System	System
 	  — substituted by {style}	  — zastąpiona przez {style}
 	  — {n} characters from another font	  — znaki z innej czcionki: {n}
 	All Scripts	Wszystkie skrypty
@@ -5584,6 +5592,7 @@ axis	Y Axis	Oś Y
 	Create New Set	Utwórz nowy zestaw
 	Stop Global Edit	Zakończ edycję globalną
 	Global Edit Options	Opcje edycji globalnej
+	Leave Out of Global Edit	Wyklucz z edycji globalnej
 	Match	Dopasowanie
 	On Artboards	Na obszarach kompozycji
 	All Artboards	Wszystkie obszary kompozycji
@@ -5592,6 +5601,8 @@ axis	Y Axis	Oś Y
 @msg	select one object	zaznacz jeden obiekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edycja globalna działa na ścieżkach, ścieżkach złożonych, wystąpieniach symboli i ich grupach
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nie znaleziono podobnych obiektów (obrócone i odbite kopie nie są dopasowywane); zmień opcje edycji globalnej i spróbuj ponownie
+@msg	Global Edit is off	Edycja globalna jest wyłączona
+@msg	only an object of the Global Edit other than the one it started from can be left out	z edycji globalnej można wykluczyć tylko obiekt inny niż ten, od którego się zaczęła
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all lub zakres, np. 1, 3-5, a nie {v}
 	Add to Symbols	Dodaj do symboli
 	Basic Shapes	Kształty podstawowe
@@ -5848,6 +5859,11 @@ anchor	Points:	Punkty:
 	Horizontal Scale	Skala pozioma
 	Vertical Scale	Skala pionowa
 @msg	{label} must be a number from {min} to {max}	{label} musi być liczbą od {min} do {max}
+	Character Color	Kolor znaków
+	OpenType Features	Funkcje OpenType
+	Stylistic Sets	Zestawy stylistyczne
+@msg	features lists at most {max} tags	features może zawierać najwyżej {max} znaczników
+@msg	unknown OpenType feature `{t}`	nieznana funkcja OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musi być liczbą większą od 0 i nie większą niż {max}
 @msg	no character style `{name}`	Nie znaleziono stylu znakowego `{name}`
 
