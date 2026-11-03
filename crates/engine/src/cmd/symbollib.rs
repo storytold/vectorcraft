@@ -362,7 +362,9 @@ mod tests {
         let mut src = Document::new(100.0, 100.0);
         let n = 4000;
         // Names out of alphabetical order, so the order kept is the panel's.
-        src.symbols = (0..n).map(|i| Symbol { name: format!("s{}", (i * 7919) % n), art: Arc::new(Node::group(NodeId(i as u64 + 1), vec![])), dynamic: false }).collect();
+        src.symbols = (0..n)
+            .map(|i| Symbol { name: format!("s{}", (i * 7919) % n), art: Arc::new(Node::group(NodeId(i as u64 + 1), vec![])), dynamic: false })
+            .collect();
         let lib = SymbolLibrary::from_document(&src, &[], "Many".into()).unwrap();
         let names = |d: &Document| d.symbols.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
         assert_eq!(names(&lib.doc), names(&src));
