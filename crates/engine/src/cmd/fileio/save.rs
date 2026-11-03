@@ -278,7 +278,7 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     if matches!(format.id, "vectorcraft" | "template")
         && format.id == st.format
         && !options.contains_key("pdfCompatible")
-        && let Some(pdf @ Value::Bool(_)) = st.save_options.get("pdfCompatible")
+        && let Some(pdf @ Value::Bool(_)) = st.save_options.get("pdfCompatible").or_else(|| s.prefs.native_save_options.get("pdfCompatible"))
     {
         options.insert("pdfCompatible".into(), pdf.clone());
     }
@@ -930,12 +930,15 @@ fn can_revert(s: &Session) -> std::result::Result<(), String> {
 fn revert(s: &mut Session, _: &Value) -> Result<Value> {
     let index = s.active_index().ok_or(crate::EngineError::NoDocument)?;
     let path = s.doc()?.path.clone().ok_or_else(|| bad("file.revert", "the document has never been saved"))?;
-    let Loaded { mut doc, .. } = load(&path, &read_file(&path)?)?.with_grid_prefs(&s.prefs);
+    let Loaded { mut doc, native_pdf_compatible, .. } = load(&path, &read_file(&path)?)?.with_grid_prefs(&s.prefs);
     doc.template = false;
     // Back to the saved file: its recovery copy has nothing left to recover.
     let uid = s.doc()?.uid;
     crate::cmd::recovery::forget(s, uid);
     s.replace_document(index, doc);
+    if let Some(pdf) = native_pdf_compatible {
+        s.doc_mut()?.save_options.insert("pdfCompatible".into(), json!(pdf));
+    }
     Ok(json!({ "path": path }))
 }
 

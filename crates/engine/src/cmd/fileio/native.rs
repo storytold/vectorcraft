@@ -165,7 +165,9 @@ pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> 
         so.profiles = embedded_profiles(doc);
     }
     so.check().map_err(|e| bad(cmd, e.to_string()))?;
-    Ok((so, Extras { preview: o.preview, pdf: o.pdf_compatible.unwrap_or(true) }))
+    let pdf = o.pdf_compatible.unwrap_or(true);
+    so.pdf_compatible = Some(pdf);
+    Ok((so, Extras { preview: o.preview, pdf }))
 }
 
 /// The `precision` option `v`: a whole number of decimal places, 0 to
