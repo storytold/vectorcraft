@@ -225,6 +225,43 @@ fn expanded_style_rows_do_not_retarget_the_highlight() {
     assert_eq!(remap_highlight(&after, Some(1), &before), None);
 }
 
+/// #5253: each wheel notch over the closed field steps one family, down the menu or up it, and the
+/// steps stop at its first and last family without going round.
+#[test]
+fn the_wheel_steps_one_family_per_notch_and_stops_at_the_ends() {
+    let order: Vec<String> = ["Alpha", "Bravo", "Charlie", "Delta"].map(str::to_string).into();
+    let steps = |current, notches| super::wheel_steps(&order, current, notches);
+    assert_eq!(steps("Bravo", 1), ["Charlie"]);
+    assert_eq!(steps("bravo", -1), ["Alpha"], "any case");
+    assert_eq!(steps("Alpha", 2), ["Bravo", "Charlie"], "a step for each notch");
+    assert_eq!(steps("Bravo", 5), ["Charlie", "Delta"], "stops at the last family");
+    assert_eq!(steps("Charlie", -5), ["Bravo", "Alpha"], "stops at the first family");
+    assert!(steps("Delta", 1).is_empty() && steps("Alpha", -1).is_empty(), "no wrapping");
+    assert!(steps("Missing", 1).is_empty() && steps("Bravo", 0).is_empty());
+}
+
+/// #5253: the wheel follows the open menu's order and filters: the recent families first, then the
+/// others in the database's order, under the favourites (and other) filters.
+#[test]
+fn the_wheel_follows_the_menus_order_and_filters() {
+    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    if names.len() < 3 {
+        return;
+    }
+    let recent = vec![names[2].clone()];
+    let look = super::MenuLook { samples: false, recent: &recent, ..Default::default() };
+    let order = super::wheel_order(&super::MenuState::default(), look);
+    assert_eq!(order.first(), Some(&names[2]), "the recent family first");
+    // Other tests add fonts to the process-wide database meanwhile: compare places, not neighbours.
+    let at = |f: &String| order.iter().position(|x| x == f);
+    assert!(matches!((at(&names[0]), at(&names[1])), (Some(a), Some(b)) if 0 < a && a < b), "then the others in the menu's order");
+    assert_eq!(order.iter().filter(|f| **f == names[2]).count(), 1, "once each");
+    let favorites = vec![names[0].clone(), names[1].clone()];
+    let st = super::MenuState { favorites_only: true, ..Default::default() };
+    let order = super::wheel_order(&st, super::MenuLook { favorites: &favorites, ..look });
+    assert_eq!(order, favorites, "the favourites filter");
+}
+
 /// The Font Technology filter's Variable is the font adjective, not the Variables panel's noun.
 #[test]
 fn the_variable_filter_is_named_as_fonts_are() {

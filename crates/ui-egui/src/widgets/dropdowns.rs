@@ -135,6 +135,18 @@ pub(crate) fn combo_menu<R>(
     width: f32,
     menu: impl FnOnce(craft_ui::combo::Menu<'_>) -> Option<R>,
 ) -> Option<R> {
+    combo_menu_field(ui, id, current, width, menu).1
+}
+
+/// [`combo_menu`], also returning the closed field's response (the font family field reads the
+/// mouse wheel turned over it).
+pub(crate) fn combo_menu_field<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    current: &str,
+    width: f32,
+    menu: impl FnOnce(craft_ui::combo::Menu<'_>) -> Option<R>,
+) -> (Response, Option<R>) {
     let t = Tokens::get(ui.ctx());
     let label = take_previous_label(ui);
     egui::Frame::NONE
@@ -148,7 +160,8 @@ pub(crate) fn combo_menu<R>(
                 egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&resp));
                 ui.memory_mut(|m| m.stop_text_input());
             }
-            menu(craft_ui::combo::Menu::new(ui, &resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside))
+            let shown = menu(craft_ui::combo::Menu::new(ui, &resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside));
+            (resp, shown)
         })
         .inner
 }

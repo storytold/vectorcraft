@@ -9,7 +9,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (Progress log row for the Color Effects add-on's Find Nearest Swatch; headline numbers unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-02 · **Change:** minor (font-family fields accept the mouse wheel, #5253; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -129,6 +129,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 ## Progress log
 
+- 2026-11-02: Mouse wheel over a closed font-family field in Character, Properties or Control changes selected text through the family list using saved font filters (excluding search text), one undo step per notch, stopping at the ends (#5253). Scores and estimates unchanged.
 - 2026-10-31: Pattern libraries: Window › Swatch Libraries › Patterns and the Swatches panel's library menu open Geometric Patterns, a built-in library of eleven pattern swatches (dots, stripes, checks, a grid and shapes); clicking one adds its pattern and swatch to the document, once, and applies it to the active fill or stroke (`swatch.library.add`).
 - 2026-11-01: Find Nearest Swatch joins the Color Effects add-on (Object › Plug-ins › Color Effects): for each colour of the selection, the closest swatches of the document, a built-in library or a library or colour book the user loaded, with their CIEDE2000 difference; Apply gives each colour its nearest swatch as one undo step, linking global and spot swatches and adding a library's to the document first, so a process colour becomes the closest spot colour (`addon.color.nearestSwatch`, `addon.color.applyNearestSwatch`, #4923).
 - 2026-11-01: Expand Dashes into Paths joins the Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): each selected path's dashed stroke becomes separate open paths, one per dash, laid out exactly as the stroke draws them (pattern, offset, Align Dashes to Corners and Path Ends), each keeping the stroke with the dashes off, so the gaps are real gaps for cutters and plotters, as one undo step (`addon.pathtools.expandDashes`, #4922).
@@ -214,6 +215,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Closed font-family fields accept wheel input for selected text in Character, Properties and Control (#5253); scores and estimates unchanged. |
 | 2026-11-01 | minor | Progress log row for the Color Effects add-on's Find Nearest Swatch (#4923); headline numbers unchanged. |
 | 2026-11-01 | minor | Progress log row for the Path Precision Tools add-on's Expand Dashes into Paths (#4922); headline numbers unchanged. |
 | 2026-11-01 | minor | Progress log row for the Arrange Tools add-on's Randomize Opacity (#4925); headline numbers unchanged. |

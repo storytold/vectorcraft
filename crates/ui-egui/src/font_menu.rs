@@ -8,7 +8,9 @@
 //! Technology filter's Variable lists only variable font families. Preferences › Type › Enable
 //! in-menu font previews and Font Preview Size turn the samples off or size the rows. Recently
 //! used families appear first, in the order they were last applied, within the same search and
-//! filters as the remaining families.
+//! filters as the remaining families. In the Character and Properties panels and the Control bar,
+//! the mouse wheel turned over the closed field applies the next family down the menu (or up it) to
+//! the selected text, one undo step per notch, stopping at the menu's first and last family.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -33,9 +35,13 @@ pub enum FontPick {
     EndPreview,
     /// The star of a family was clicked: add it to the favourites, or take it out.
     Favorite(String),
+    /// The mouse wheel turned over the closed field: apply each of these families in turn, one
+    /// undo step each.
+    Wheel(Vec<String>),
 }
 
-/// How the menu looks: from the preferences and the favourites.
+/// How the menu looks (from the preferences and the favourites) and whether its closed field
+/// takes the mouse wheel.
 #[derive(Clone, Copy, Debug)]
 pub struct MenuLook<'a> {
     /// Show each family's sample (Preferences › Type › Enable in-menu font previews).
@@ -48,12 +54,15 @@ pub struct MenuLook<'a> {
     pub favorites: &'a [String],
     /// Recently applied families, newest first, limited by Number of Recent Fonts.
     pub recent: &'a [String],
+    /// The mouse wheel turned over the closed field steps through the families in the menu's
+    /// order ([`FontPick::Wheel`]): the Character and Properties panels and the Control bar.
+    pub wheel: bool,
 }
 
 impl Default for MenuLook<'static> {
-    /// Samples on, English names, medium rows, no favourites.
+    /// Samples on, English names, medium rows, no favourites, no wheel.
     fn default() -> Self {
-        Self { samples: true, english_names: true, row: ROW, favorites: &[], recent: &[] }
+        Self { samples: true, english_names: true, row: ROW, favorites: &[], recent: &[], wheel: false }
     }
 }
 
@@ -70,6 +79,7 @@ impl<'a> MenuLook<'a> {
             row,
             favorites: &app.ui.favorite_fonts,
             recent: app.recent_fonts(),
+            wheel: false,
         }
     }
 }
@@ -235,6 +245,10 @@ struct MenuState {
     rows_key: Option<RowsKey>,
     /// The height of the search field and filters last frame.
     header: f32,
+    /// The families the wheel steps through, listed at its first notch over the closed field and
+    /// kept while the pointer stays on it: each step makes its family a recent one, which would
+    /// otherwise move it in the order.
+    wheel_order: Option<Arc<[String]>>,
 }
 
 /// The font family menu showing `current`, `width` points wide, rows sampling `sample` (the
@@ -254,7 +268,7 @@ pub fn font_menu(
     // The search field and filters stay in place over the rows, which scroll. The rows are all
     // one height (a family's styles too), so only those in view are laid out: there are thousands
     // of families.
-    let shown = widgets::combo_menu(ui, &id, current, width, |menu| {
+    let (field, shown) = widgets::combo_menu_field(ui, &id, current, width, |menu| {
         menu.height(height).show_rows_with_header(
             |ui| header(ui, state_id, state, current, look),
             look.row,
@@ -268,11 +282,113 @@ pub fn font_menu(
         // Closed (Escape, a click outside) with a preview showing.
         out = Some(FontPick::EndPreview);
     }
+    if !look.wheel || drawn || !field.contains_pointer() {
+        st.wheel_order = None;
+        ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
+    } else if out.is_none() {
+        let notches = wheel_notches(ui, &field);
+        if !notches.is_empty() {
+            let mut own = vectorcraft_text::FontDb::global().canonical(current, "").0;
+            if st.wheel_order.is_none() {
+                st.wheel_order = Some(wheel_order(&st, look).into());
+            }
+            let mut steps = Vec::new();
+            if let Some(order) = st.wheel_order.as_deref() {
+                for notch in notches {
+                    let next = wheel_steps(order, &own, notch);
+                    if let Some(last) = next.last() {
+                        own.clone_from(last);
+                    }
+                    steps.extend(next);
+                }
+            }
+            if !steps.is_empty() {
+                out = Some(FontPick::Wheel(steps));
+            }
+        }
+    }
     if matches!(out, Some(FontPick::Chosen(..))) {
         st.previewed = None;
     }
     ui.data_mut(|d| d.insert_temp(state_id, st));
     out
+}
+
+/// Does the menu list family `f` for search `query` (lowercase) under the filters of `st`?
+fn listed(db: &vectorcraft_text::FontDb, f: &str, query: &str, st: &MenuState, look: MenuLook) -> bool {
+    let label = db.family_display_name(f, look.english_names);
+    if !(query.is_empty() || f.to_lowercase().contains(query) || label.to_lowercase().contains(query)) {
+        return false;
+    }
+    if st.favorites_only && !look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f)) {
+        return false;
+    }
+    if st.script == 0 && st.class.is_none() && !st.variable_only {
+        return true;
+    }
+    let traits = db.family_traits(f);
+    script_matches(st.script, traits) && st.class.is_none_or(|c| c == traits.class) && (!st.variable_only || traits.variable)
+}
+
+/// The families the closed field's wheel steps through, in the open menu's order with no search:
+/// the recent families first, then the others, under the menu's filters.
+fn wheel_order(st: &MenuState, look: MenuLook) -> Vec<String> {
+    let db = vectorcraft_text::FontDb::global();
+    let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, "", st, look)).cloned().collect();
+    grouped_rows(&families, look.recent, &[], |_| vec![])
+        .into_iter()
+        .filter_map(|r| match r {
+            Row::Family(f) => Some(f),
+            Row::Heading(_) | Row::Style(..) => None,
+        })
+        .collect()
+}
+
+/// The families `notches` turns of the wheel step to from family `current` in `order`, one per
+/// notch: forward (down the menu) when positive, back when negative. The steps stop at either end
+/// of the order, and there are none when `current` is not in it.
+fn wheel_steps(order: &[String], current: &str, notches: i32) -> Vec<String> {
+    let Some(at) = order.iter().position(|f| f.eq_ignore_ascii_case(current)) else { return vec![] };
+    let last = order.len().saturating_sub(1);
+    let n = notches.unsigned_abs() as usize;
+    let to = if notches >= 0 { at.saturating_add(n).min(last) } else { at.saturating_sub(n) };
+    if to >= at { order.iter().skip(at + 1).take(to - at).cloned().collect() } else { order.iter().take(at).skip(to).rev().cloned().collect() }
+}
+
+/// Whole notches of the mouse wheel turned over closed field `resp` this frame, positive when it
+/// turns down (towards the user). A wheel notch is a line, or `line_scroll_speed` points of a
+/// trackpad or fine wheel; what is left of a notch carries over to the next turn. The wheel over
+/// the field is the field's: the panel under it does not scroll. A turn with a modifier key is
+/// left to the panel and the canvas.
+fn wheel_notches(ui: &Ui, resp: &egui::Response) -> Vec<i32> {
+    let (line, id) = (ui.ctx().options(|o| o.input_options.line_scroll_speed), resp.id.with("wheel"));
+    let mut notches: f32 = ui.data(|d| d.get_temp(id)).unwrap_or(0.0);
+    let mut completed = Vec::new();
+    let mut turned = false;
+    ui.input_mut(|i| {
+        i.events.retain(|e| match e {
+            egui::Event::MouseWheel { unit, delta, modifiers, .. } if modifiers.is_none() => {
+                notches -= match unit {
+                    egui::MouseWheelUnit::Point => delta.y / line.max(1.0),
+                    egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => delta.y,
+                };
+                let whole = notches.trunc();
+                if whole != 0.0 {
+                    completed.push(whole as i32);
+                    notches -= whole;
+                }
+                turned = true;
+                false
+            }
+            _ => true,
+        });
+        if turned || i.modifiers.is_none() {
+            // The rest of a turn egui spreads over the next frames scrolls nothing either.
+            i.smooth_scroll_delta = egui::Vec2::ZERO;
+        }
+    });
+    ui.data_mut(|d| d.insert_temp(id, notches));
+    completed
 }
 
 /// What the menu's header hands its rows.
@@ -372,7 +488,6 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
     // as it was before any preview.
     let current = db.canonical(&st.current, "").0;
     let current = current.as_str();
-    let favorite = |f: &str| look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f));
     // The generation is read first: fonts that load meanwhile make the next frame list them.
     let key: RowsKey = (
         query.clone(),
@@ -387,21 +502,7 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
         db.generation(),
     );
     if st.rows_key.as_ref() != Some(&key) {
-        let wanted = |f: &str| {
-            let label = db.family_display_name(f, look.english_names);
-            if !(query.is_empty() || f.to_lowercase().contains(&query) || label.to_lowercase().contains(&query)) {
-                return false;
-            }
-            if st.favorites_only && !favorite(f) {
-                return false;
-            }
-            if st.script == 0 && st.class.is_none() && !st.variable_only {
-                return true;
-            }
-            let traits = db.family_traits(f);
-            script_matches(st.script, traits) && st.class.is_none_or(|c| c == traits.class) && (!st.variable_only || traits.variable)
-        };
-        let families: Vec<_> = db.menu_family_list().iter().filter(|f| wanted(f)).cloned().collect();
+        let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, &query, st, look)).cloned().collect();
         let rows = grouped_rows(&families, look.recent, &st.expanded, |f| db.styles(f));
         // Filter changes (including un-starring a favourite) may remove rows; expanding
         // another family or a background font scan can insert rows before the highlight.
@@ -823,6 +924,21 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPic
             }
         }
         FontPick::Favorite(f) => toggle_favorite(app, f),
+        FontPick::Wheel(families) => {
+            if previewing {
+                app.session.cancel_interaction().ok();
+                crate::panels::set_pstate(ctx, PREVIEWING, false);
+            }
+            crate::panels::character::end_typing(app);
+            // Each family is its own step, keeping the style when the family has it, else the
+            // closest it has.
+            for f in families {
+                let (cmd, params) = font_command(app, &f, None);
+                if app.run(cmd, params).is_err() {
+                    break;
+                }
+            }
+        }
         FontPick::Chosen(f, style) => {
             if previewing {
                 app.session.cancel_interaction().ok();
@@ -856,7 +972,7 @@ pub(crate) fn picked(app: &mut VectorcraftApp, pick: Option<FontPick>) -> Option
             toggle_favorite(app, f);
             None
         }
-        FontPick::Preview(..) | FontPick::EndPreview => None,
+        FontPick::Preview(..) | FontPick::EndPreview | FontPick::Wheel(_) => None,
     }
 }
 
