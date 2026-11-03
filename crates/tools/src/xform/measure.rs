@@ -28,7 +28,8 @@ pub fn measure(a: Point, b: Point) -> (f64, f64, f64, f64) {
 /// pointer's direction: `p` is projected onto the step, then snapped along it as the Line Segment
 /// tool snaps a Shift-drawn end. With Snap to Point alone, the point `p` snaps to (an anchor, or
 /// in line with a ruler guide) is projected instead. When the snapped point lies nearer another
-/// step (the grid rounds it past the halfway angle), it is turned back onto the pointer's step.
+/// step (the grid rounds it past the halfway angle) or behind the start, it is turned back onto
+/// the pointer's step.
 pub(crate) fn end_point(cx: &ToolContext, a: Point, p: Point, shift: bool) -> Point {
     if !shift {
         return crate::guides::snap_draw(cx, p, &[]).0;
@@ -45,7 +46,7 @@ pub(crate) fn end_point(cx: &ToolContext, a: Point, p: Point, shift: bool) -> Po
     let leave = crate::guides::Leave::segment(cx, a, true);
     let r = crate::guides::PointSnap::new(cx, || crate::guides::Targets::collect(cx.doc, &[], None)).snap_from(cx, q, Some(&leave)).0;
     let v = r - a;
-    if v.cross(u).abs() <= 1e-9 * v.hypot().max(1.0) { r } else { a + u * v.hypot() }
+    if v.cross(u).abs() <= 1e-9 * v.hypot().max(1.0) && v.dot(u) >= 0.0 { r } else { a + u * v.hypot() }
 }
 
 impl Tool for MeasureTool {
@@ -244,6 +245,30 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 5.0, -3.0).with_mods(shift));
         let o = t.options();
         assert!((o["angle"].as_f64().unwrap() - 30.0).abs() < 1e-9, "{o}");
+    }
+
+    /// With Snap to Point alone, an anchor behind the start can pull the projected end behind it;
+    /// the end is turned back onto the pointer's step instead of reading 180°.
+    #[test]
+    fn shift_drag_keeps_its_step_when_an_anchor_lies_behind_the_start() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        cx.snap_tolerance = 4.0;
+        cx.snapping_tolerance = 4.0;
+        assert!(cx.snap_to_point);
+        let shift = Mods { shift: true, ..Mods::default() };
+        let mut t = MeasureTool::default();
+        // From (200.3, 196.005), the pointer at (202.3, 196.805) points 0° and snaps to the anchor
+        // at (200, 200), which projects onto the 0° line at (200, 196.005), behind the start.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.3, 196.005));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 202.3, 196.805).with_mods(shift));
+        let o = t.options();
+        assert!(o["angle"].as_f64().unwrap().abs() < 1e-9, "{o}");
+        assert!((o["dx"].as_f64().unwrap() - 0.3).abs() < 1e-9, "{o}");
+        assert!(o["dy"].as_f64().unwrap().abs() < 1e-9, "{o}");
     }
 
     /// With Snap to Point alone, a Shift-drag's end slides along its 45° step to a ruler guide.
