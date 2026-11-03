@@ -427,6 +427,11 @@ fn edit_original_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, 
     // Other Application with no path typed yet is still System Default: the dialog remembers the
     // choice in a field of its own, which a new dialog and Reset Preferences start without.
     let mut other = !photocraft && (!cur.is_empty() || d.bool(CHOSE_OTHER_APP));
+    // A path (saved or typed) also counts as the choice, so clearing it to type another keeps the
+    // field.
+    if other && !d.bool(CHOSE_OTHER_APP) {
+        d.fields.insert(CHOSE_OTHER_APP.into(), json!(true));
+    }
     let at = if photocraft {
         1
     } else if other {

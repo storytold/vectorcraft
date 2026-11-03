@@ -434,6 +434,11 @@ fn edit_original_with_other_is_the_dialogs_own_choice() {
     a.ui.dialog = None;
     open(&mut a, Some("File Handling"));
     assert!(!shown(&mut a), "opened again: System Default");
+    // A saved path counts as the choice: clearing it to type another keeps the field.
+    a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalApp".into(), json!("/Applications/Old.app"));
+    assert!(shown(&mut a));
+    a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalApp".into(), json!(""));
+    assert!(shown(&mut a), "the path cleared: still Other Application");
     // A path with spaces is kept as typed.
     let path = "/Applications/Visual Studio Code.app";
     a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalApp".into(), json!(path));

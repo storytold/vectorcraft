@@ -357,6 +357,20 @@ fn open_file_with(app: &str, path: &str) -> Result<(), String> {
         c.arg(path);
         c
     };
+    // macOS: `open` returns once Launch Services has the request, so waiting for it is brief and
+    // reports an app it can't open (a folder named `.app` that isn't a bundle). Elsewhere the
+    // editor itself runs: waiting would last until it closes.
+    #[cfg(target_os = "macos")]
+    {
+        let out = c.output().map_err(|e| format!("can't open {path} in {}: {e}", app.display()))?;
+        if out.status.success() {
+            return Ok(());
+        }
+        let why = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        let why = if why.is_empty() { out.status.to_string() } else { why };
+        Err(format!("can't open {path} in {}: {why}", app.display()))
+    }
+    #[cfg(not(target_os = "macos"))]
     c.spawn().map(|_| ()).map_err(|e| format!("can't open {path} in {}: {e}", app.display()))
 }
 
