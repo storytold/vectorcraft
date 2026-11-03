@@ -19,6 +19,49 @@ fn db_with(font: Option<Vec<u8>>) -> FontDb {
     db
 }
 
+/// Put a contour-point caret on the existing test ligature without changing its outline.
+fn contour_caret_font(point_index: u16) -> Vec<u8> {
+    use write_fonts::FontBuilder;
+    use write_fonts::tables::gdef::{CaretValue, Gdef, LigCaretList, LigGlyph};
+    use write_fonts::tables::layout::CoverageFormat1 as WriteCoverage;
+    use write_fonts::types::{GlyphId16, Tag};
+
+    let base = ligature_caret_font(None).expect("test font builds");
+    let font = skrifa::FontRef::new(&base).expect("test font parses");
+    let gid = source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph");
+    let mut builder = FontBuilder::new();
+    let list = LigCaretList::new(WriteCoverage::new(vec![GlyphId16::new(gid)]).into(), vec![LigGlyph::new(vec![CaretValue::format_2(point_index)])]);
+    builder.add_table(&Gdef::new(None, None, Some(list), None)).expect("GDEF builds");
+    for record in font.table_directory.table_records() {
+        let tag = Tag::new(&record.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(record.tag()).expect("base table reads").as_bytes());
+        }
+    }
+    builder.build()
+}
+
+#[test]
+fn a_contour_point_caret_uses_its_unhinted_x_and_y() {
+    use skrifa::raw::TableProvider;
+    use skrifa::raw::tables::glyf::Glyph;
+
+    let base = ligature_caret_font(None).expect("test font builds");
+    let font = skrifa::FontRef::new(&base).expect("test font parses");
+    let gid = u32::from(source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph"));
+    let outline = font.loca(None).expect("loca reads").get(skrifa::GlyphId::new(gid), &font.glyf().expect("glyf reads")).expect("glyph reads");
+    let Glyph::Simple(simple) = outline.into_glyph().expect("glyph has an outline") else { panic!("W is simple") };
+    let (point_index, point) =
+        simple.points().enumerate().find(|(_, p)| p.x > 0 && p.x < 500 && p.y > -500 && p.y < 1000).expect("W has an interior contour point");
+    let db = db_with(Some(contour_caret_font(u16::try_from(point_index).unwrap())));
+    let face = db.face(LIGATURE_CARET_FAMILY, "Regular").unwrap();
+    assert_eq!(face.ligature_carets(gid, 1), Some(vec![f64::from(point.x)]));
+    assert_eq!(face.vertical_ligature_carets(gid, 1, 1000.0, 1500.0), Some(vec![1000.0 - f64::from(point.y)]));
+
+    let bad = db_with(Some(contour_caret_font(u16::MAX)));
+    assert_eq!(bad.face(LIGATURE_CARET_FAMILY, "Regular").unwrap().ligature_carets(gid, 1), None);
+}
+
 fn point(text: &str, family: &str) -> TextObject {
     TextObject::point(Point::ZERO, text, CharStyle { font_family: family.into(), size: 100.0, ..CharStyle::default() })
 }
