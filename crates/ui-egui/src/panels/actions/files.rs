@@ -1,8 +1,10 @@
 //! Action set files: the Actions panel menu's Save Actions… and Load Actions….
 //!
 //! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1, "name",
-//! "actions": [{"name", "steps": [{"command", "params"}]}]}`. Each step is a command id and its
-//! params, as `command.batch` takes them.
+//! "actions": [{"name", "steps": [{"command", "params"}], "key"?, "color"?}]}`. Each step is a
+//! command id and its params, as `command.batch` takes them. `key` is the action's function key
+//! (`{"key": 1 to 15, "cmd", "shift"}`) and `color` its Button Mode color; an action without them,
+//! or with a value that is not one, has none.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -42,6 +44,10 @@ struct SetFile {
 struct FileAction {
     name: String,
     steps: Vec<FileStep>,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::deserialize_key")]
+    key: Option<super::FunctionKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::deserialize_color")]
+    color: Option<String>,
 }
 
 /// A step of an action in an action set file: a command id and its params, as `command.batch`
@@ -61,6 +67,8 @@ pub fn write_set(set: &ActionSet) -> String {
         .map(|a| FileAction {
             name: a.name.clone(),
             steps: a.steps.iter().map(|(command, params)| FileStep { command: command.clone(), params: params.clone() }).collect(),
+            key: a.key,
+            color: a.color.clone(),
         })
         .collect();
     let file = SetFile { format: ACTIONS_EXT.into(), version: 1, name: set.name.clone(), actions };
@@ -85,8 +93,11 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     if f.actions.iter().any(|a| a.steps.len() > MAX_ACTION_STEPS) {
         return Err("an action in the action set file has more than 10,000 steps".into());
     }
-    let actions =
-        f.actions.into_iter().map(|a| Action { name: a.name, steps: a.steps.into_iter().map(|s| (s.command, s.params)).collect() }).collect();
+    let actions = f
+        .actions
+        .into_iter()
+        .map(|a| Action { key: a.key, color: a.color, ..Action::new(a.name, a.steps.into_iter().map(|s| (s.command, s.params)).collect()) })
+        .collect();
     let set_name = if f.name.trim().is_empty() { name.to_string() } else { f.name };
     Ok(ActionSet::new(set_name, actions))
 }
@@ -151,8 +162,9 @@ pub(crate) fn can_load(app: &VectorcraftApp) -> bool {
 
 /// `ui.actionSet.load {path? | data?}`: reads the action set file at `path` (else a picked one), or
 /// the file's text `data`, and adds its set after the others, with its actions. A set with the
-/// same name as one in the panel gets the next free number (`Print 2`). The current set and the
-/// other sets stay as they are → `{set: index, name, actions: n}`.
+/// same name as one in the panel gets the next free number (`Print 2`). Loaded actions keep their
+/// function keys. The current set and the other sets stay as they are →
+/// `{set: index, name, actions: n}`.
 pub fn load_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (text, stem) = match p.get("data") {
         Some(Value::String(data)) => {

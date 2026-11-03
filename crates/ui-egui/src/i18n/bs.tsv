@@ -3560,6 +3560,7 @@ theme	Appearance	Izgled
 	List Preferences	Izlistaj postavke
 	Manually	Ručno
 	Mark Older Files as [Converted] When Opened	Označi starije datoteke kao [Pretvoreno] pri otvaranju
+	Use System Defaults for Edit Original	Koristi sistemske zadane postavke za Uredi original
 	Match User Interface Brightness	Uskladi sa svjetlinom korisničkog interfejsa
 	Light Gray	Svijetlosiva
 	Medium Gray	Srednje siva
@@ -5479,6 +5480,11 @@ mark-style	Japanese	Japanski
 	Export Type:	Vrsta izvoza:
 	Movie Clip	Filmski klip
 @msg	name is empty	naziv je prazan
+@msg	an action is already recording	akcija se već snima
+@msg	no such function key	nema takve funkcijske tipke
+@msg	no such color	nema takve boje
+@msg	{_1} cannot be used on Windows	{_1} se ne može koristiti na Windowsu
+@msg	more than one action is named “{_1}”	više od jedne akcije ima naziv „{_1}”
 @msg	no symbol named `{n}`	nema simbola pod nazivom `{n}`
 	Smudge Stick…	Štapić za razmazivanje…
 	Smudge Stick	Štapić za razmazivanje
@@ -5644,6 +5650,13 @@ axis	Y Axis	Y osa
 	Action Options…	Opcije akcije…
 	Action Options	Opcije akcije
 	Rename Action	Preimenuj akciju
+	New Action…	Nova akcija…
+	New Action	Nova akcija
+	Create New Action	Napravi novu akciju
+	Play Action	Reprodukuj akciju
+	Action Set:	Skup akcija:
+	Function Key:	Funkcijska tipka:
+	Record	Snimi
 	Create New Set	Napravi novi skup
 	Stop Global Edit	Zaustavi globalno uređivanje
 	Global Edit Options	Opcije globalnog uređivanja
@@ -6145,3 +6158,13 @@ shape	Open	Otvoren
 	Create Swatch Legend	Kreiraj legendu uzoraka boja
 	Create Swatch Legend…	Kreiraj legendu uzoraka boja…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Alati za tekst
+	Text Tweaker…	Podešavanje teksta…
+	Text Tweaker	Podešavanje teksta
+	Attribute:	Atribut:
+	From:	Od:
+	To:	Do:
+	Bow	Luk
+	Spike	Šiljak
+	Skip Spaces	Preskoči razmake
