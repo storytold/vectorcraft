@@ -1592,7 +1592,8 @@ already walks Image Trace. Short agent entry points:
   `symbol.options {name?, newName?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?}` (`nineSlice` bool turns
   9-slice guides on or off; `nineSliceGuides` is `[left, top, right, bottom]`, fractions 0..1 of the symbol size, a
   quarter each when none are given; rows of `symbol.list` carry `nineSlice`: the guides or `null`; a scaled instance of
-  a symbol with guides keeps its corners at their size, and `symbol.breakLink` gives its art as it draws; `type` is
+  a symbol with guides keeps its corners at their size, and `symbol.breakLink` gives its art as it draws; dragging a
+  guide on the canvas in symbol editing mode sends `nineSliceGuides` in one undo step; `type` is
   Symbol Type, `static` by default for the command and `dynamic` by default in the Symbol Options dialog),
   `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}`, `symbol.replace`,
   `symbol.edit {id?, ids?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary

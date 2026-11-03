@@ -24,6 +24,7 @@ pub mod intertwine;
 pub mod meshblend;
 pub mod meshedit;
 pub mod mirror;
+pub mod nineslice;
 pub mod objects_on_path;
 pub mod params;
 pub mod pathtype;

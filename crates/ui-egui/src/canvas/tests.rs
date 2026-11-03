@@ -3159,6 +3159,65 @@ fn grid_repeat_handles_set_rows_and_spacing_in_one_undo_step_each() {
     assert_eq!((grid(&app).0, grid(&app).2), (5, 10.0), "the spacing's own undo step");
 }
 
+/// While a symbol with 9-slice guides is edited, the canvas draws its four guides dotted across
+/// its art, with ruler guides hidden too, and none once the mode ends. Dragging the left guide in
+/// a zoomed view moves that guide alone, as one undo step.
+#[test]
+fn the_edited_symbols_nine_slice_guides_are_drawn_and_dragged_on_the_canvas() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("symbol.new", json!({"name": "Box", "nineSlice": true})).unwrap();
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.view_mut().unwrap().zoom = 1.5;
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    // The dots drawn along the guide from document point `a` to `b`.
+    let dots = |app: &mut VectorcraftApp, a: Point, b: Point| {
+        let (a, b) = (xf.to_screen(a), xf.to_screen(b));
+        let on = |q: Pos2| {
+            let (d, len) = (b - a, (b - a).length());
+            let t = (q - a).dot(d) / (len * len);
+            (-0.01..=1.01).contains(&t) && (a + d * t).distance(q) < 0.01
+        };
+        shapes(app, &ctx).into_iter().filter(|s| matches!(s, Shape::LineSegment { points: [p, q], .. } if on(*p) && on(*q))).count()
+    };
+    let guides = [
+        (Point::new(125.0, 100.0), Point::new(125.0, 200.0)),
+        (Point::new(100.0, 125.0), Point::new(200.0, 125.0)),
+        (Point::new(175.0, 100.0), Point::new(175.0, 200.0)),
+        (Point::new(100.0, 175.0), Point::new(200.0, 175.0)),
+    ];
+    assert_eq!(dots(&mut app, guides[0].0, guides[0].1), 0, "not while the instance is only selected");
+    app.run("symbol.edit", json!({})).unwrap();
+    app.ui.view.guides = false;
+    for (a, b) in guides {
+        assert!(dots(&mut app, a, b) > 10, "a dotted guide from {a:?} to {b:?}");
+    }
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let from = xf.to_screen(Point::new(125.0, 150.0));
+    let to = xf.to_screen(Point::new(110.0, 160.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+    for k in 1..=4 {
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + (to - from) * k as f32 / 4.0)]);
+    }
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    let guides_now = |app: &VectorcraftApp| app.session.active().unwrap().doc.symbol_nine_slice("Box").unwrap();
+    let g = guides_now(&app);
+    assert!((g.left - 0.1).abs() < 1e-3 && (g.top, g.right, g.bottom) == (0.25, 0.25, 0.25), "{g:?}");
+    assert!(app.session.active().unwrap().doc.symbol_edit.is_some(), "still editing the symbol");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(guides_now(&app).left, 0.25, "one undo step");
+    app.run("edit.redo", json!({})).unwrap();
+    assert!((guides_now(&app).left - 0.1).abs() < 1e-3);
+    app.run("symbol.exitEditing", json!({})).unwrap();
+    assert_eq!(dots(&mut app, Point::new(110.0, 100.0), Point::new(110.0, 200.0)), 0, "none outside the mode");
+}
+
 #[test]
 fn top_bounding_box_handle_scales_a_default_mirror_repeat() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

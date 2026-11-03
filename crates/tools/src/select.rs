@@ -11,7 +11,8 @@
 //! a guide path to release it ([`release_guide_at`]), drag the brackets of type on a path
 //! ([`crate::pathtype`]), double-click the type widget to convert point type to area type and back
 //! ([`crate::typewidget`]), click a Shaper Group's mode widget to switch between Face Selection and
-//! Construction mode ([`crate::shaperwidget`]).
+//! Construction mode ([`crate::shaperwidget`]), drag the 9-slice guides of the symbol being edited
+//! in symbol editing mode ([`crate::nineslice`]).
 //! The bounding box stands at the selection's own angle after a rotation, so its handles scale
 //! along the objects' axes. A handle drag resizes area type's frame (the type area) instead of
 //! scaling its type: the text reflows at its size.
@@ -112,6 +113,8 @@ enum State {
     GridRepeat(crate::repeat_grid::GridDrag),
     /// Dragging a bracket of type on a path.
     Bracket(BracketDrag),
+    /// Dragging a 9-slice guide of the symbol being edited.
+    NineSlice(crate::nineslice::GuideDrag),
     /// Loaded with the text of area type or type on a path `from` by a click on its out port, or
     /// on its in port (`before`: the frame it goes into comes before `from` in its thread);
     /// `press`: where the next press went down and where the pointer is now.
@@ -646,6 +649,12 @@ impl Tool for SelectionTool {
         {
             return d.cancel();
         }
+        if key == ToolKey::Escape
+            && matches!(self.state, State::NineSlice(_))
+            && let State::NineSlice(d) = std::mem::take(&mut self.state)
+        {
+            return d.cancel();
+        }
         if key == ToolKey::Escape && matches!(self.state, State::Loaded { .. }) {
             self.state = State::Idle;
             return vec![];
@@ -664,7 +673,7 @@ impl Tool for SelectionTool {
         match self.state {
             State::Marquee { .. } => key == ToolKey::Letter('e'),
             State::Corner(_) => matches!(key, ToolKey::Up | ToolKey::Down),
-            State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) => key == ToolKey::Escape,
+            State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) | State::NineSlice(_) => key == ToolKey::Escape,
             _ => false,
         }
     }
@@ -700,6 +709,10 @@ impl Tool for SelectionTool {
         if let State::Loaded { from, before, press } = self.state
             && let Some(out) = self.loaded(cx, ev, from, before, press)
         {
+            return out;
+        }
+        // The edited symbol's 9-slice guides take precedence over every other control and the art.
+        if let Some(out) = self.nine_slice_guides(cx, ev) {
             return out;
         }
         // Mirror and grid repeat controls take precedence over art and ruler guides; the mirror
@@ -925,6 +938,9 @@ impl Tool for SelectionTool {
         }
         if let State::GridRepeat(d) = &self.state {
             return d.cursor(cx);
+        }
+        if matches!(self.state, State::NineSlice(_)) || (matches!(self.state, State::Idle) && crate::nineslice::over_guide(cx, p)) {
+            return Cursor::Move;
         }
         if matches!(self.state, State::Idle)
             && !m.cmd
@@ -1154,6 +1170,40 @@ impl SelectionTool {
             (false, None, Some(id)) if cx.selection.key == Some(id) => vec![Action::Exec("select.key".into(), json!({}))],
             (false, None, Some(id)) if can_be_key(cx, id) => vec![Action::Exec("select.key".into(), json!({ "id": id.0 }))],
             (false, None, _) => vec![],
+        }
+    }
+
+    /// A press on a 9-slice guide of the edited symbol starts dragging it; the drag and the
+    /// release go to it.
+    fn nine_slice_guides(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
+        if let State::NineSlice(mut d) = self.state.clone() {
+            return Some(match ev.kind {
+                PointerKind::Drag => {
+                    let out = d.drag(cx, ev.pos);
+                    self.state = State::NineSlice(d);
+                    out
+                }
+                PointerKind::Up => {
+                    self.state = State::Idle;
+                    d.finish()
+                }
+                _ => vec![],
+            });
+        }
+        if !matches!(self.state, State::Idle) {
+            return None;
+        }
+        match ev.kind {
+            PointerKind::Down => {
+                let d = crate::nineslice::GuideDrag::hit(cx, ev)?;
+                self.state = State::NineSlice(d);
+                self.hover = None;
+                Some(vec![])
+            }
+            // The clicks of a double-click on a guide belong to it: it neither edits the art nor
+            // leaves symbol editing mode.
+            PointerKind::DoubleClick if crate::nineslice::over_guide(cx, ev.pos) => Some(vec![]),
+            _ => None,
         }
     }
 
