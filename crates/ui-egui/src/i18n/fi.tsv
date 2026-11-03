@@ -1242,6 +1242,8 @@ lighting	Light	Valo
 	Hand	Käsi
 	Join Tool	Liitostyökalu
 	Lasso Tool	Lassotyökalu
+	Enclosing Lasso Tool	Sulkeva lassotyökalu
+	Enclosing Lasso	Sulkeva lasso
 	Lasso	Lasso
 	Line Cut Tool	Viivaleikkaustyökalu
 	Line Graph Tool	Viivakaaviotyökalu

@@ -1108,6 +1108,8 @@ lighting	Light	სინათლე
 	Hand Tool	ხელის ხელსაწყო
 	Join Tool	შეერთების ხელსაწყო
 	Lasso Tool	ლასოს ხელსაწყო
+	Enclosing Lasso Tool	შემომსაზღვრელი ლასოს ხელსაწყო
+	Enclosing Lasso	შემომსაზღვრელი ლასო
 	Line Cut Tool	ხაზით ჭრის ხელსაწყო
 	Line Graph Tool	ხაზოვანი დიაგრამის ხელსაწყო
 	Line Segment Tool	ხაზის სეგმენტის ხელსაწყო
