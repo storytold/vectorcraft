@@ -1050,10 +1050,10 @@ impl<'a> Interp<'a> {
                 self.insert(&d, k, Some(v))?;
             }
             Known => {
-                let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
+                let k = self.pop()?;
                 let d = self.pop_dict()?;
-                let known = d.borrow().contains_key(&k);
-                self.push(Obj::Bool(known))?;
+                let found = known(&d, &k)?;
+                self.push(Obj::Bool(found))?;
             }
             Where => {
                 let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
@@ -1415,6 +1415,17 @@ fn index(k: &Obj) -> Res<usize> {
     match *k {
         Obj::Int(i) if i >= 0 => Ok(i as usize),
         _ => ps_err("rangecheck", "an index"),
+    }
+}
+
+/// `known`: a key may be any object but null (PLRM 3rd ed., §3.3.9, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>),
+/// and one that can't be a key here (an array, a dictionary, a real with a fraction) is in no
+/// dictionary, since `put` here refuses it.
+fn known(d: &DictRef, k: &Obj) -> Res<bool> {
+    match k.key() {
+        Some(key) => Ok(d.borrow().contains_key(&key)),
+        None if matches!(k, Obj::Null) => ps_err("typecheck", "known"),
+        None => Ok(false),
     }
 }
 
