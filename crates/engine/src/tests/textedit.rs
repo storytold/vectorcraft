@@ -1257,6 +1257,28 @@ fn type_tool_selection_replace_and_delete() {
     assert_eq!(obj(&s, id).plain_text(), " ");
 }
 
+/// A Type tool click inside a ligature (Source Serif 4's fi) puts the caret between its
+/// characters, and Shift+Right from there selects the i alone.
+#[test]
+fn type_tool_click_reaches_the_inside_of_a_ligature() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "fin", "size": 40, "font": "Source Serif 4"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.select_tool("type", v).unwrap();
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let g = lay.glyphs.iter().find(|g| g.len == 2).expect("f + i is one glyph");
+    let (_, f) = g.carets[0];
+    let p = t.xf * (g.origin + vectorcraft_geom::Vec2::new(g.advance * f + 0.2, -10.0));
+    click(&mut s, p.x, p.y);
+    assert_eq!(s.tool_options()["caret"], json!(1), "between the f and the i");
+    key(&mut s, ToolKey::Right, Mods { shift: true, ..Default::default() });
+    assert_eq!((s.tool_options()["start"].as_u64(), s.tool_options()["end"].as_u64()), (Some(1), Some(2)));
+    s.tool_text("I", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "fIn");
+}
+
 #[test]
 fn character_panel_flow_styles_the_selected_range_while_editing() {
     let mut s = session();
