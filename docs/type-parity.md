@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Character-menu Kashidas switch; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Touch Type moves right-to-left characters along their line; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -49,7 +49,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Spell check (Check Spelling, Auto Spell Check, custom dictionary) | missing | menu stubs; needs an openly licensed dictionary |
 | Smart Punctuation, Change Case, Find & Replace | done | |
 | Caret: the arrows and Delete step over whole clusters (Thai consonant with its marks, combining accents, emoji); Backspace removes one character | done | in text with right-to-left characters the arrows move in visual order and stop on both sides of a character drawn with no width, such as a zero width non-joiner |
-| Touch Type tool | done | moves, scales and rotates one character through its kerning, baseline shift, scales and rotation (`text.touchType`); the first character of a line and right-to-left characters move only up and down |
+| Touch Type tool | done | moves, scales and rotates one character through its kerning, baseline shift, scales and rotation (`text.touchType`); a character with a preceding logical character on the same line can move along the line in either reading direction; the first logical character moves only up and down. Positive `dx` follows reading order. These direction rules are VectorCraft's choices. |
 | Retype (identify fonts in outlines/images) | missing | Illustrator's uses a cloud model |
 | Snap to Glyph | done | View › Snap to Glyph (`view.snapToGlyph`): with Smart Guides on, new point type and drawing tools snap to live-text baselines and glyph bounds (`Targets::for_drawing`, `tools::text_tests::snap_to_glyph_lines_up_new_point_type_with_a_baseline`). Character panel menu › Show Snap to Glyph Options: Baseline, x-height, Glyph Bounds, Proximity Guides, Angular Guides and Anchor Point each turn their guides on or off (`view.snapToGlyph.options`, all on by default; #4232) |
 | Thai, Lao, Khmer, Myanmar: shaping (marks, reordering), lines broken between words, word-by-word caret and double-click | done | words found by ICU4X's line segmenter: dictionaries on the desktop, LSTM models on the web |
@@ -80,6 +80,7 @@ Character Styles menu New/Redefine and footer New capture the first selected cha
 | 2026-11-03 | minor | Character-menu Kashidas controls selected characters separately from the paragraph's Insert Kashidas length. Existing text allows Kashidas by default; scores and estimates unchanged. |
 | 2026-11-03 | minor | Type on a Path Options has a Preview checkbox: the type follows the fields while it is on, Cancel restores it, OK is one undo step (#5360, as public tutorials of the dialog show); scores and estimates unchanged. |
 | 2026-11-02 | minor | The wheel over Character, Properties and Control font-family fields changes selected text, one undo step per notch (#5253); scores and estimates unchanged. |
+| 2026-11-03 | minor | Touch Type moves right-to-left characters along their line and up from it; first logical characters retain the along-line restriction. Scores and estimates unchanged. |
 | 2026-11-01 | minor | The Type and Vertical Type tools make area type in a clicked closed path and type on a path along a clicked open one, with their own pointers; each type tool has its own icon; scores unchanged (estimated) |
 | 2026-10-31 | minor | Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers; scores unchanged |
 | 2026-11-01 | minor | Glyphs panel (#4908): the character selected with the Type tool (a range's first, else the one before the caret) is highlighted in the grid and scrolled into view when the selection moves to another character; Show › Alternates for Current Selection not yet; scores unchanged |
