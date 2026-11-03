@@ -454,7 +454,7 @@ pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
     // a 400th of the height, so 402 lines cover it.
     for i in 0..402u32 {
         let y = start + f64::from(i) * gap;
-        if !(y < y1) {
+        if y.partial_cmp(&y1) != Some(std::cmp::Ordering::Less) {
             break;
         }
         xs.clear();
