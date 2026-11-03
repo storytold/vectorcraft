@@ -1,17 +1,24 @@
 use super::{
-    Color, Color32, Entry, GradientKind, Paint, Rect, Response, Sense, Shape, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, icons, pos2, vec2,
+    Color, Color32, Document, Entry, GradientKind, Paint, Rect, Response, Sense, Shape, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, icons,
+    pos2, vec2,
 };
 
 /// A pattern swatch drawn as a rendered tile (cached by the definition's identity and size).
 pub(super) fn pattern_thumb(app: &VectorcraftApp, ui: &Ui, r: Rect, paint: &Paint) {
+    if let Some(st) = app.session.active() {
+        pattern_thumb_in(&st.doc, ui, r, paint);
+    }
+}
+
+/// A pattern swatch drawn from the pattern of its name in `doc`, as [`pattern_thumb`] does.
+pub(super) fn pattern_thumb_in(doc: &Document, ui: &Ui, r: Rect, paint: &Paint) {
     use std::collections::HashMap;
     type Key = (String, Vec<usize>, String, u32);
     thread_local! {
         static CACHE: crate::graphics::TexCache<HashMap<Key, Option<egui::TextureHandle>>> = crate::graphics::TexCache::default();
     }
     let Paint::Pattern { pattern, .. } = paint else { return };
-    let Some(st) = app.session.active() else { return };
-    let Some(def) = st.doc.pattern(pattern) else { return };
+    let Some(def) = doc.pattern(pattern) else { return };
     let px = (r.width() * ui.ctx().pixels_per_point()).round().max(4.0) as u32;
     let key = (
         pattern.clone(),
@@ -20,7 +27,7 @@ pub(super) fn pattern_thumb(app: &VectorcraftApp, ui: &Ui, r: Rect, paint: &Pain
         px,
     );
     let tex = CACHE.with(|c| c.borrow().get(&key).cloned()).unwrap_or_else(|| {
-        let tex = vectorcraft_render::render_pattern_swatch(&st.doc, pattern, px).map(|img| {
+        let tex = vectorcraft_render::render_pattern_swatch(doc, pattern, px).map(|img| {
             let color = crate::canvas::color_image(&img);
             ui.ctx().load_texture(format!("pattern-swatch-{pattern}-{px}"), color, egui::TextureOptions::LINEAR)
         });

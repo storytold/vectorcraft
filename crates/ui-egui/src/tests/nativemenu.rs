@@ -244,7 +244,7 @@ fn key_equivalents_are_command_and_function_keys_only() {
 }
 
 /// What a key equivalent becomes: the press and release egui's window integration sends, or for
-/// ⌘X, ⌘C and ⌘V its clipboard events (a paste's release comes from the window).
+/// ⌘X, ⌘C and ⌘V its clipboard events and the key's release (the window never sends it, #5159).
 #[test]
 fn key_equivalents_become_the_input_their_keys_make() {
     let cmd = |key| KeyboardShortcut::new(Modifiers::COMMAND, key);
@@ -252,8 +252,12 @@ fn key_equivalents_become_the_input_their_keys_make() {
     assert_eq!(native_menu::key_events(cmd(Key::A), || None), [key(Key::A, true), key(Key::A, false)]);
     assert_eq!(native_menu::key_events(cmd(Key::C), || None), [Event::Copy, key(Key::C, false)]);
     assert_eq!(native_menu::key_events(cmd(Key::X), || None), [Event::Cut, key(Key::X, false)]);
-    assert_eq!(native_menu::key_events(cmd(Key::V), || Some("a\r\nb".into())), [Event::Paste("a\nb".into())]);
-    assert_eq!(native_menu::key_events(cmd(Key::V), || None), [], "a picture: the release tells the paste");
+    assert_eq!(native_menu::key_events(cmd(Key::V), || Some("a\r\nb".into())), [Event::Paste("a\nb".into()), key(Key::V, false)]);
+    assert_eq!(native_menu::key_events(cmd(Key::V), || None), [key(Key::V, false)], "a picture: the release tells the paste");
+    // A text paste's release is taken with its Paste event, so the next picture paste still fires.
+    let mut chord = crate::shortcuts::PasteChord::default();
+    assert_eq!(chord.textless_paste(&native_menu::key_events(cmd(Key::V), || Some("a".into()))), None);
+    assert_eq!(chord.textless_paste(&native_menu::key_events(cmd(Key::V), || None)), Some(Modifiers::COMMAND));
 }
 
 /// The fake backend: the menus the app synced, and events to report.
@@ -681,4 +685,31 @@ fn the_menu_bar_is_inert_while_a_file_dialog_is_open() {
     assert_eq!(m.app.ui.view.rulers, !rulers.0);
     m.key_equivalent("Cmd+A");
     assert_eq!(m.selected(), 2, "⌘A selected every object");
+}
+
+/// #5159: ⌘V chosen by the menu bar's key equivalent pastes a picture another app copied (a
+/// screenshot): AppKit gives the key-down to the menu, so the window never reports the key, and
+/// the release the key equivalent makes is what tells the paste. Each press pastes once.
+#[test]
+fn a_key_equivalent_paste_pastes_a_picture_from_another_app() {
+    use vectorcraft_doc::NodeKind;
+    use vectorcraft_engine::cmd::clipboard::PNG;
+    let (mut app, board) = super::sysclip::app();
+    super::sysclip::copy_elsewhere(&board, vec![(PNG, super::sysclip::blue_png())]);
+    let fake = Fake::default();
+    app.services.native_menu = Some(NativeMenu::new(Box::new(fake.clone())));
+    let mut m = Mac { app, fake, ctx: egui::Context::default(), time: 0.0 };
+    for _ in 0..3 {
+        m.frame(vec![]);
+    }
+    let images = |m: &Mac| {
+        let d = &m.app.session.active().unwrap().doc;
+        d.layers[0].children().unwrap().iter().filter(|n| matches!(n.kind, NodeKind::Image(_))).count()
+    };
+    for n in 1..=2 {
+        m.key_equivalent("Cmd+V");
+        m.frame(vec![]);
+        m.frame(vec![]);
+        assert_eq!(images(&m), n, "press {n} pastes one picture");
+    }
 }

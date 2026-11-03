@@ -11,6 +11,9 @@ pub(super) struct SymbolDef {
     /// The def's id, once written.
     id: Option<String>,
     reuse: Reuse,
+    /// The objects in the placed art of the 9-slice instances in the def (see
+    /// [`Writer::symbol_nodes`]), charged again for each `<use>` of it.
+    nodes: u64,
 }
 
 /// Which instance transforms paint a symbol's art exactly as the def under that transform (the
@@ -71,6 +74,11 @@ impl Reuse {
             | NodeKind::PlacedDocument(_)
             | NodeKind::Intertwine { .. } => (self.turns, self.scales) = (false, false),
             NodeKind::SymbolInstance { symbol, .. } => {
+                // A scale reaching an instance of a symbol with 9-slice guides changes how its
+                // cells are sized.
+                if doc.symbol_nine_slice(symbol).is_some() {
+                    self.scales = false;
+                }
                 if let Some(s) = doc.symbols.iter().find(|s| s.name == *symbol) {
                     self.scan(doc, &s.art, depth + 1);
                 }
@@ -415,16 +423,29 @@ impl Writer<'_> {
             return;
         }
         let Some((first, rest)) = elements.split_first() else { return };
-        for c in rest.iter().rev() {
+        // The elements are written first, in paint order, so that each mask copies an element
+        // with the symbol art count the element itself was written with
+        // (`Self::symbol_nodes`): an instance left out of an element is left out of its mask.
+        let (depth, nest) = (self.depth, rest.len());
+        let first = self.detached(depth + nest, |w| w.node(first));
+        let mut written = Vec::with_capacity(nest);
+        for (i, c) in rest.iter().enumerate() {
+            let before = self.symbol_nodes;
+            written.push((before, self.detached(depth + nest - 1 - i, |w| w.node(c))));
+        }
+        let after = self.symbol_nodes;
+        for (c, (before, _)) in rest.iter().zip(&written).rev() {
+            self.symbol_nodes = *before;
             let mid = self.knockout_mask(c);
             self.line(&format!("<g mask=\"url(#{mid})\">"));
             self.depth += 1;
         }
-        self.node(first);
-        for c in rest {
+        self.symbol_nodes = after;
+        self.body.push_str(&first);
+        for (_, body) in written {
             self.depth -= 1;
             self.line("</g>");
-            self.node(c);
+            self.body.push_str(&body);
         }
     }
 
@@ -600,12 +621,43 @@ impl Writer<'_> {
             }
             NodeKind::SymbolInstance { symbol, xf } => {
                 let doc = self.doc;
+                // The instances nested in an inline graphic's art are ordinary instances again.
+                let inline = std::mem::take(&mut self.inline_graphic);
                 let Some(sym) = doc.symbols.iter().find(|s| s.name == *symbol) else { return };
                 if self.symbol_nest > MAX_SYMBOL_NEST {
                     return;
                 }
                 let id = self.id_attr(n);
                 let a = self.attrs(&css::transparency(n));
+                // A scaled instance of a symbol with 9-slice guides is written as its placed art,
+                // as the canvas draws it, instead of one `<use>` transform. The scale counts the
+                // transforms of the instances it sits in. The placed art of all such instances in
+                // the export holds at most `MAX_SYMBOL_NODES` objects: an instance that would take
+                // it past that is left out, as the canvas leaves it out.
+                if let Some(map) = doc.symbol_slice_map(symbol, self.xf * *xf).filter(|_| !inline) {
+                    let art = vectorcraft_brush::instance_art(&sym.art, n);
+                    let most = map.most_placed(&art, doc);
+                    let Some(art) = vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
+                        let a = map.place(&art, doc);
+                        let c = a.count_with_masks() as u64;
+                        (a, c)
+                    }) else {
+                        return;
+                    };
+                    let saved = (self.xf, self.instance_xf);
+                    (self.xf, self.instance_xf) = (Affine::IDENTITY, Affine::IDENTITY);
+                    self.line(&format!("<g{id}{a}>"));
+                    self.depth += 1;
+                    let knockout = std::mem::take(&mut self.knockout);
+                    self.symbol_nest += 1;
+                    self.node(&art);
+                    self.symbol_nest -= 1;
+                    self.knockout = knockout;
+                    self.depth -= 1;
+                    self.line("</g>");
+                    (self.xf, self.instance_xf) = saved;
+                    return;
+                }
                 if let Some(def) = self.symbol_use(sym, n, *xf) {
                     let m = self.xf * *xf;
                     let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
@@ -658,14 +710,20 @@ impl Writer<'_> {
         }
         if !self.symbols.contains_key(&sym.name) {
             let reuse = Reuse::of(self.doc, &sym.art);
-            self.symbols.insert(sym.name.clone(), SymbolDef { id: None, reuse });
+            self.symbols.insert(sym.name.clone(), SymbolDef { id: None, reuse, nodes: 0 });
         }
         let def = self.symbols.get(&sym.name)?;
         if !def.reuse.allows(xf) {
             return None;
         }
-        if let Some(id) = &def.id {
-            return Some(id.clone());
+        // A `<use>` that would take the placed 9-slice art past `MAX_SYMBOL_NODES` gives way to
+        // the instance's own art, which leaves out the instances that don't fit.
+        if let Some(id) = def.id.clone() {
+            let nodes = def.nodes;
+            if nodes > 0 && vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, nodes, || ((), nodes)).is_none() {
+                return None;
+            }
+            return Some(id);
         }
         // The art in symbol space, as its own picture: no knockout around it, and no object ids
         // (every instance shows it).
@@ -673,7 +731,9 @@ impl Writer<'_> {
         let saved = (self.xf, self.instance_xf, std::mem::take(&mut self.knockout), std::mem::take(&mut self.names), self.anonymous);
         (self.xf, self.instance_xf, self.anonymous) = (Affine::IDENTITY, Affine::IDENTITY, false);
         self.symbol_nest += 1;
+        let before = self.symbol_nodes;
         let art = self.detached(3, |w| w.node(&sym.art));
+        let nodes = self.symbol_nodes.saturating_sub(before);
         self.symbol_nest -= 1;
         (self.xf, self.instance_xf, self.knockout, self.names, self.anonymous) = saved;
         // The symbol's name, when the id had to differ from it, comes back on import.
@@ -689,7 +749,7 @@ impl Writer<'_> {
         self.defs.push_str(&art);
         self.def(1, "</symbol>");
         if let Some(def) = self.symbols.get_mut(&sym.name) {
-            def.id = Some(id.clone());
+            (def.id, def.nodes) = (Some(id.clone()), nodes);
         }
         Some(id)
     }

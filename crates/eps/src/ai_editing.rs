@@ -294,7 +294,7 @@ fn ruler_units(u: Unit) -> u8 {
         Unit::Picas => 3,
         Unit::Centimeters => 4,
         Unit::Pixels => 6,
-        Unit::Points | Unit::FeetInches | Unit::Meters | Unit::Yards | Unit::Feet => 2,
+        Unit::Points | Unit::FeetInches | Unit::Meters | Unit::Yards | Unit::Feet | Unit::Q | Unit::Ha => 2,
     }
 }
 

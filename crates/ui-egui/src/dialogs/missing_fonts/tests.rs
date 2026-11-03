@@ -360,7 +360,7 @@ fn the_web_says_how_many_fonts_are_missing() {
     assert_eq!(app.ui.status, "1 font isn't available here: its text shows in another font");
     assert!(app.ui.pending_fonts.is_empty());
     // The open's notes stay on show.
-    app.ui.status = "Opened with 1 note(s): fonts".into();
+    app.ui.status = "Opened with 1 note: fonts".into();
     after_open_for(&mut app, &json!({"warnings": ["fonts"]}), true);
-    assert_eq!(app.ui.status, "Opened with 1 note(s): fonts");
+    assert_eq!(app.ui.status, "Opened with 1 note: fonts");
 }
