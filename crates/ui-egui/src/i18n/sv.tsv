@@ -6296,3 +6296,7 @@ breakText	Glyphs	Glyfer
 	Create Swatch Legend	Skapa färgrutelegend
 	Create Swatch Legend…	Skapa färgrutelegend…
 	HEX	HEX
+
+# The strings the report listed as missing for sv.
+	Font Size:	Teckenstorlek:
+digits	Hindi	Hindi
