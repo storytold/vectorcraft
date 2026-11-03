@@ -90,7 +90,8 @@ impl WidthProfile {
     /// discontinuous point (two points at `t`, within `1e-7`).
     pub fn around(&self, t: f64) -> ((f64, f64), (f64, f64)) {
         let p = &self.points;
-        let i = p.partition_point(|q| q.0 < t - 1e-7);
+        // The same distance test below, so a point exactly 1e-7 before `t` is never skipped by rounding.
+        let i = p.partition_point(|q| q.0 < t && (q.0 - t).abs() > 1e-7);
         if let Some(first) = p.get(i).filter(|q| (q.0 - t).abs() <= 1e-7) {
             let j = i + p[i..].partition_point(|q| q.0 - first.0 <= 1e-9) - 1;
             if j > i {
@@ -353,5 +354,8 @@ mod tests {
         // Many points at one position are one step, found without a pass over them all.
         let many = WidthProfile { points: (0..1000).map(|i| (0.5, i as f64, i as f64)).collect() };
         assert_eq!(many.around(0.5), ((0.0, 0.0), (999.0, 999.0)));
+        // 0.4999999 == 0.5 - 1e-7, yet its distance from 0.5 rounds above 1e-7: it is not part of the step.
+        let near = WidthProfile { points: vec![(0.4999999, 2.0, 2.0), (0.5, 1.0, 1.0), (0.5, 0.5, 0.25)] };
+        assert_eq!(near.around(0.5), ((1.0, 1.0), (0.5, 0.25)));
     }
 }

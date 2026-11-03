@@ -117,6 +117,19 @@ impl SymbolismTool {
     }
 }
 
+impl SymbolismTool {
+    /// Ends the drag: what is committed is the last preview, so the whole drag is shown first.
+    fn finish(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.active = false;
+        let stale = (self.previewed != self.points.len()).then(|| {
+            let (c, v) = self.command(cx);
+            Action::Preview(c, v)
+        });
+        self.points.clear();
+        stale.into_iter().chain([Action::Commit]).collect()
+    }
+}
+
 impl Tool for SymbolismTool {
     fn id(&self) -> &'static str {
         self.id
@@ -151,16 +164,7 @@ impl Tool for SymbolismTool {
                 let (c, v) = self.command(cx);
                 vec![Action::Preview(c, v)]
             }
-            PointerKind::Up if self.active => {
-                self.active = false;
-                // What is committed is the last preview: show the whole drag first.
-                let stale = (self.previewed != self.points.len()).then(|| {
-                    let (c, v) = self.command(cx);
-                    Action::Preview(c, v)
-                });
-                self.points.clear();
-                stale.into_iter().chain([Action::Commit]).collect()
-            }
+            PointerKind::Up if self.active => self.finish(cx),
             _ => vec![],
         }
     }
@@ -182,11 +186,9 @@ impl Tool for SymbolismTool {
         }
         vec![]
     }
-    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         if self.active {
-            self.active = false;
-            self.points.clear();
-            return vec![Action::Commit];
+            return self.finish(cx);
         }
         vec![]
     }
@@ -333,6 +335,23 @@ mod tests {
         let last = up.iter().rev().nth(1);
         assert!(matches!(last, Some(Action::Preview(_, v)) if v["points"].as_array().unwrap().len() == n), "{up:?}");
         assert_eq!(up.last(), Some(&Action::Commit));
+    }
+
+    #[test]
+    fn switching_tools_mid_drag_previews_the_whole_drag_before_committing() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let mut t = SymbolismTool::new("symbolShifter");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+        let n = 7 * crate::PREVIEW_ALL_UNTIL + 1; // not a point that previews
+        for i in 1..n {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 50.0 * i as f64, 0.0));
+        }
+        let a = t.deactivate(&cx);
+        assert!(matches!(a.first(), Some(Action::Preview(_, v)) if v["points"].as_array().unwrap().len() == n), "{a:?}");
+        assert_eq!(a.last(), Some(&Action::Commit));
+        assert!(!t.busy());
     }
 
     #[test]
