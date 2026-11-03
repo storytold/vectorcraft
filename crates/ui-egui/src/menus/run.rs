@@ -126,7 +126,7 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.cancelExport" => Ok(io::cancel_exports(app)),
         "file.exportInBackground" => Ok(io::hide_exports(app)),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
-            Some(path) => io::open_recent_reporting(app, &path),
+            Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
         },
         "type.findFont" => {
