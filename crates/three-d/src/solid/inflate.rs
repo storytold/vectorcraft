@@ -29,7 +29,7 @@ fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Op
     const CELLS: usize = 48;
     let cell = size / CELLS as f64;
     // A subnormal size gives cells of no size: the grid would be `usize::MAX` cells wide.
-    if !(cell > 0.0) {
+    if cell.is_nan() || cell <= 0.0 {
         return Ok(None);
     }
     let side = |len: f64| ((len / cell).ceil() as usize).clamp(1, CELLS + 1);
