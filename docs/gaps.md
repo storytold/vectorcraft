@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (PDF export: tiling patterns' cells overlap their neighbours so no hairline seams show between tiles, #2823; previously: new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -328,6 +328,13 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   its column by the font's own metrics (`/W2`, else half its `/W` or `/DW`, ISO 32000-1 §9.7.4.3); justified text
   boxes come back as justified area type. Fixtures written from ISO 32000-1 §9 (`tests_text_placement`). A font
   that is neither embedded nor installed still draws in a stand-in with the old fit.
+- **Done (#2823):** PDF export no longer shows a grid of hairlines between the tiles of a pattern fill in viewers that
+  paint each tiling-pattern cell with anti-aliased edges (ISO 32000-1 §8.7.3.1). A cell's `BBox` was exactly its
+  `XStep` × `YStep`, so neighbouring cells only touched and the paper showed through along their edge. The box is now
+  the step grown by about a point on every side (at most a quarter of the smaller step), `XStep` and `YStep` unchanged,
+  and the cell's art is drawn into the overlap, so the repeat is the canvas's and the edge pixels are covered in full.
+  PDF import takes the overlap off a cell written this way. Art that isn't opaque shows a faint doubled line in the
+  overlap. Tests: `tests::tile_seams` in `vectorcraft-pdf`.
 - **Impact:** wrong output in everyday work.
 - **Estimate:** 8–15 h.
 
@@ -732,6 +739,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | G11: PDF export writes tiling-pattern cells that overlap their neighbours (#2823), so viewers no longer show hairline seams between pattern tiles; import takes the overlap off again. Tests in `crates/pdf/src/tests/tile_seams.rs`; no scored gap or estimate reassessed. |
 | 2026-11-02 | minor | G15: the renderer keeps a compound path's assembled path between frames and drops unused geometry entries after a few frames however few there are. Estimate unchanged. |
 | 2026-11-02 | minor | G15: hit testing culls paths and compound paths by their control points' box and tests a compound path's outline and fill against only its members near the click; the same objects are hit. Estimate unchanged. |
 | 2026-11-03 | minor | Symbol editing shows draggable 9-slice guides within the artwork (#5280). Guides outside the artwork remain unsupported. The G5 estimate remains 14–24 h. |

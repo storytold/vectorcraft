@@ -44,6 +44,7 @@ pub(super) mod stroke;
 mod strokeout;
 mod text_placement;
 mod textstroke;
+mod tile_seams;
 mod webview;
 
 fn doc(w: f64, h: f64) -> Document {

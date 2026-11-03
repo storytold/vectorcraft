@@ -543,7 +543,12 @@ impl<'p> Builder<'p> {
     /// Tiling pattern `t` as a pattern swatch's paint (the swatch made the first time).
     fn tiling(&mut self, t: &TilingPattern<'_>, stroke: bool) -> Option<Paint> {
         let key = (t.cache_key(), stroke);
-        let tile = Rect::from_origin_size(t.bbox.origin(), (t.x_step.abs().max(1e-3) as f64, t.y_step.abs().max(1e-3) as f64));
+        let step = (t.x_step.abs().max(1e-3) as f64, t.y_step.abs().max(1e-3) as f64);
+        // A cell the export widened past its step so that cells overlap ([`crate::seams`]) is the
+        // step's box again: the tile starts at the origin and the overlap isn't art.
+        let bbox = [t.bbox.x0, t.bbox.y0, t.bbox.x1, t.bbox.y1];
+        let written = crate::seams::written_overlap(bbox, step, t.matrix.as_coeffs());
+        let tile = Rect::from_origin_size(if written { (0.0, 0.0).into() } else { t.bbox.origin() }, step);
         let xf = t.matrix * Affine::translate(tile.origin().to_vec2());
         // An uncoloured pattern draws in the current colour: read it again unless it always
         // drew the same.
@@ -561,7 +566,10 @@ impl<'p> Builder<'p> {
             let _ = t.interpret(b, Affine::IDENTITY, stroke);
         });
         self.white_images = white;
-        let art = art?;
+        let mut art = art?;
+        if written {
+            art = self.inside(art, tile);
+        }
         let sig = paints(&art);
         let entry = self.pattern_keys.entry(key).or_default();
         entry.0 += 1;
@@ -580,6 +588,25 @@ impl<'p> Builder<'p> {
             }
         };
         Some(Paint::Pattern { pattern: name, xf })
+    }
+
+    /// A pattern cell's `art` cut to the repeat `cell`: art wholly outside it (the neighbours'
+    /// copies in the overlap the export writes) is dropped, and what reaches out of it is clipped.
+    fn inside(&mut self, art: Vec<Arc<Node>>, cell: Rect) -> Vec<Arc<Node>> {
+        const EPS: f64 = 1e-3;
+        let mut art: Vec<Arc<Node>> = art
+            .into_iter()
+            .filter(|n| {
+                n.visual_bounds().is_none_or(|b| b.x1 > cell.x0 + EPS && b.x0 < cell.x1 - EPS && b.y1 > cell.y0 + EPS && b.y0 < cell.y1 - EPS)
+            })
+            .collect();
+        if art.iter().any(|n| n.visual_bounds().is_some_and(|b| !contains(cell.inflate(EPS, EPS), b))) {
+            let clip = self.clip_node(&cell.to_path(0.1), FillRule::NonZero);
+            let mut children = vec![Arc::new(clip)];
+            children.append(&mut art);
+            art = vec![Arc::new(Node::new(self.id(), NodeKind::Group { children, clip: true }))];
+        }
+        art
     }
 
     pub(super) fn add_image(&mut self, key: u128, make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>, xf: Affine) {

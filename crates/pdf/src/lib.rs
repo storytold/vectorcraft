@@ -66,6 +66,7 @@ mod pdfx;
 mod post;
 mod presets;
 mod print;
+mod seams;
 mod settings;
 mod streams;
 mod syntax;

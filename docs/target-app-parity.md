@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (PDF export: tiling patterns' cells overlap their neighbours so no hairline seams show between tiles, #2823; previously: new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
@@ -1565,6 +1565,7 @@ A double-click on a Repeat (Radial, Grid or Mirror) with the Selection tool ente
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | PDF export: pattern tiles overlap their cell edges so no seams show in viewers (#2823); scores and estimates unchanged. |
 | 2026-11-03 | minor | Enclosing Lasso is an add-on with no default shortcut or Basic toolbar slot. Scores and estimates remain unchanged. |
 | 2026-11-02 | minor | Wheel input over closed font-family fields changes selected text (#5253); public documentation and application choices distinguished; scores and estimates unchanged. |
 | 2026-11-03 | minor | Find Font's replacement-source chooser offers Document, Recent and System (#5217); scores and estimates unchanged. |

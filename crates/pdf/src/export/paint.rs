@@ -333,8 +333,12 @@ impl Exporter<'_> {
     /// Pattern swatch `name` placed by `at` (pattern space → the current space) as a PDF tiling
     /// pattern (ISO 32000-1, 8.7.3.1): one period of the tiling ([`vectorcraft_doc::PatternDef::period`],
     /// what the canvas repeats too) with every tile instance reaching into it, in paint order, so
-    /// brick and hex tilings and overlapping tiles repeat as they are; clipped to the period when
-    /// art reaches out of it. `None` for a pattern nested deeper than [`MAX_PATTERN_DEPTH`], a period
+    /// brick and hex tilings and overlapping tiles repeat as they are. The cell's art is drawn a
+    /// little past the period on every side ([`crate::seams::max_overlap`], the neighbours' art
+    /// where they reach in) and clipped there when art reaches out of that: the box the writer
+    /// gives the cell is the period itself, and the written file's box is widened to the overlap
+    /// by [`crate::seams::tile_overlap`], so that the cells overlap and no paper shows between
+    /// them (#2823). `None` for a pattern nested deeper than [`MAX_PATTERN_DEPTH`], a period
     /// or placement beyond [`MAX_COORD`] or a placement that flattens the tiles.
     pub(super) fn tiling(&mut self, s: &mut Surface, name: &str, at: Affine) -> Option<krilla::paint::Paint> {
         let doc = self.doc;
@@ -343,7 +347,8 @@ impl Exporter<'_> {
         if self.pattern_depth >= MAX_PATTERN_DEPTH || !in_range(&[pw, ph]) || !in_range(&at.as_coeffs()) || at.determinant().abs() <= 1e-12 {
             return None;
         }
-        let cell = Rect::new(0.0, 0.0, pw, ph);
+        let margin = crate::seams::max_overlap((pw, ph));
+        let cell = Rect::new(-margin, -margin, pw + margin, ph + margin);
         let tiles = def.instances_in(Affine::IDENTITY, cell);
         let mut sb = s.stream_builder();
         let mut cs = sb.surface();

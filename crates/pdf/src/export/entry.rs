@@ -124,6 +124,8 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let bytes = crate::post::rights(bytes, &doc.metadata)?;
     warnings.extend(more);
     let bytes = crate::post::user_units(bytes, &units)?;
+    // Tiling patterns' cells overlap their neighbours, so that no paper shows between them (#2823).
+    let bytes = crate::seams::tile_overlap(bytes)?;
     let bytes = crate::post::finish(bytes, opts, native.is_some(), &mut warnings)?;
     warnings.dedup();
     Ok(ExportReport { bytes, warnings })
