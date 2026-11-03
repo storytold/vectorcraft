@@ -562,8 +562,12 @@ fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::
 
 /// Selected top-level objects in paint order, dropping any whose ancestor is also selected.
 pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
-    let st = s.doc()?;
-    Ok(roots_of(&st.doc, st.selection.in_paint_order(&st.doc)))
+    Ok(selection_roots(s.doc()?))
+}
+
+/// [`selected_roots`] of one document's selection.
+pub(crate) fn selection_roots(st: &crate::DocState) -> Vec<NodeId> {
+    roots_of(&st.doc, st.selection.in_paint_order(&st.doc))
 }
 
 /// [`selected_roots`] for the commands that move or reshape the art (Move, Transform, Rotate…): a

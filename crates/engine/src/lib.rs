@@ -29,7 +29,7 @@ pub use cmd::clipboard::Clipboard;
 pub use cmd::create::constrain_click;
 pub use cmd::distortcmds::perspective_click;
 pub use cmd::params::{check_keys, check_params};
-pub use cmd::pathops::{auto_simplify_level, has_outlinable_stroke};
+pub use cmd::pathops::{auto_simplify_level, can_outline_stroke};
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
 pub use cmd::{EyedropperOptions, PathfinderOptions};
