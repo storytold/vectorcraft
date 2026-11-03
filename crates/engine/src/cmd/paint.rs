@@ -303,7 +303,7 @@ pub(crate) fn check_keep_model(p: &Value, cmd: &str) -> Result<()> {
 
 /// The model RGB colours given in `p` are stored in: the document's in a CMYK document (`None` in
 /// an RGB one, or with `keepModel`).
-fn new_color_model(s: &Session, p: &Value) -> Option<vectorcraft_color::cms::Model> {
+pub(super) fn new_color_model(s: &Session, p: &Value) -> Option<vectorcraft_color::cms::Model> {
     let mode = s.active()?.doc.color_mode;
     (mode != vectorcraft_doc::ColorMode::Rgb && !bool_or(p, "keepModel", false)).then(|| mode.model())
 }
