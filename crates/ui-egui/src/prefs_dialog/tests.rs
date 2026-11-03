@@ -392,56 +392,17 @@ fn hyphenation_exceptions_dialog_ok_reaches_the_hyphenator() {
     assert_eq!(vectorcraft_text::hyphen::hyphen_points("happen"), vec![3]);
 }
 
-/// #5236: File Handling › Edit Original With offers System Default, PhotoCraft and Other
-/// Application, whose Choose… puts the picked application into the preference.
+/// #5236: File Handling › Use System Defaults for Edit Original is a checkbox, on by default, and
+/// OK saves it off.
 #[test]
-fn edit_original_with_takes_a_chosen_application() {
+fn use_system_defaults_for_edit_original_is_a_checkbox() {
     let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    assert!(a.session.prefs.edit_original_system_defaults, "on by default");
     open(&mut a, Some("File Handling"));
     let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
-    assert!(text.contains("Edit Original With") && text.contains("System Default"), "{text}");
-    let asked: std::rc::Rc<std::cell::RefCell<Vec<crate::FilePick>>> = Default::default();
-    let seen = asked.clone();
-    a.services.pick_open = Some(Box::new(move |p: &crate::FilePick| {
-        seen.borrow_mut().push(p.clone());
-        Some("/Applications/Editor.app".into())
-    }));
-    let mut d = a.ui.dialog.clone().unwrap();
-    choose_app(&mut a, &mut d);
-    assert_eq!(d.str("editOriginalApp"), "/Applications/Editor.app");
-    let pick = asked.borrow()[0].clone();
-    if cfg!(target_os = "macos") {
-        assert_eq!((pick.folder.as_deref(), pick.filters[0].1.clone()), (Some("/Applications"), vec!["app".to_string()]));
-    }
-    // OK saves it; the dialog's own fields (`__…`) are not preferences.
-    a.ui.dialog = Some(d);
+    assert!(text.contains("Use System Defaults for Edit Original"), "{text}");
+    assert!(a.ui.dialog.as_ref().unwrap().bool("editOriginalSystemDefaults"));
+    a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalSystemDefaults".into(), json!(false));
     confirm(&mut a).unwrap();
-    assert_eq!(a.session.prefs.edit_original_app, "/Applications/Editor.app");
-}
-
-/// #5327 review: choosing Other Application before a path is typed is remembered by the dialog
-/// itself, so a dialog opened again (or reset) starts at System Default, and a stored path keeps
-/// its spaces.
-#[test]
-fn edit_original_with_other_is_the_dialogs_own_choice() {
-    let mut a = VectorcraftApp::new(Session::new(), Default::default());
-    open(&mut a, Some("File Handling"));
-    assert!(!a.ui.dialog.as_ref().unwrap().bool(CHOSE_OTHER_APP), "a new dialog starts without the choice");
-    let shown = |a: &mut VectorcraftApp| crate::tests_labels::painted_text(a, |a, ui| show(a, ui.ctx())).contains("Application Path");
-    assert!(!shown(&mut a), "System Default shows no path field");
-    a.ui.dialog.as_mut().unwrap().fields.insert(CHOSE_OTHER_APP.into(), json!(true));
-    assert!(shown(&mut a), "Other Application with no path yet shows the field");
-    a.ui.dialog = None;
-    open(&mut a, Some("File Handling"));
-    assert!(!shown(&mut a), "opened again: System Default");
-    // A saved path counts as the choice: clearing it to type another keeps the field.
-    a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalApp".into(), json!("/Applications/Old.app"));
-    assert!(shown(&mut a));
-    a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalApp".into(), json!(""));
-    assert!(shown(&mut a), "the path cleared: still Other Application");
-    // A path with spaces is kept as typed.
-    let path = "/Applications/Visual Studio Code.app";
-    a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalApp".into(), json!(path));
-    confirm(&mut a).unwrap();
-    assert_eq!(a.session.prefs.edit_original_app, path);
+    assert!(!a.session.prefs.edit_original_system_defaults);
 }

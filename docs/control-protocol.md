@@ -668,10 +668,10 @@ one undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.li
 `links.info`; `links.editOriginal` and `links.reveal` (Edit › Edit Original, Show in Folder) hand the linked file to
 the system and return `{path}`. Edit Original opens only a regular file whose extension is a format `document.open`
 reads, and answers a control request with an error unless the file is a placed document (which opens in a tab).
-The preference `editOriginalApp` (Preferences › File Handling › Edit Original With, #5236) picks the app: `""` (System
-Default, the system's default app for the file), `"photocraft"` (PhotoCraft where it is installed) or an application's
-path. The app must be an application (an `.app` bundle on macOS, an `.exe` on Windows, an executable file elsewhere),
-and gets the file's path as its only argument.
+The preference `editOriginalSystemDefaults` (Preferences › File Handling › Use System Defaults for Edit Original, on
+by default, #5236) opens the file in the system's default app for it; off, in the app that made it: a raster image in
+PhotoCraft, looked for only where it installs (the Applications folders on macOS, the `PATH` elsewhere), and any other
+file, or a raster image without PhotoCraft installed, in the system's default app.
 
 Package: File → Package… (`ui.packageDialog`) opens the `package` dialog for a saved document (a document never saved
 gets a `confirm` dialog whose OK runs `file.saveAs`). Fields: `folder` (the location), `name` (the package folder),

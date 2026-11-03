@@ -372,8 +372,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("newArtBasic", "General", "Appearance Panel", "New Art Has Basic Appearance", bool),
     // File Handling (continued)
     p!("templatesFolder", "File Handling", "Files", "Templates Folder", text),
-    // "" (the system's default app), `photocraft` or an application's path (#5236).
-    p!("editOriginalApp", "File Handling", "Files", "Edit Original With", text),
+    // Off: raster images open in PhotoCraft where it is installed (#5236).
+    p!("editOriginalSystemDefaults", "File Handling", "Files", "Use System Defaults for Edit Original", bool),
     p!("appendConverted", "File Handling", "Files", "Mark Older Files as [Converted] When Opened", bool),
     // Native saves (`document.save {compress}`)
     p!("useCompression", "File Handling", "Files", "Use Compression", bool),

@@ -176,7 +176,6 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     let t = Tokens::get(ctx);
     let (mut ok, mut cancel, mut reset) = (false, false, false);
-    d.fields.insert(CAN_PICK_APP.into(), json!(crate::picks::can(app, &crate::picks::PickRequest::Open(app_pick()))));
     let cat = d.str("__category");
     let cat = PREF_CATEGORIES.iter().find(|c| **c == cat).copied().unwrap_or(PREF_CATEGORIES[0]);
     crate::dialogs::modal::show(ctx, tl!("Preferences"), egui::Id::unique("dialog-preferences"), -20.0, 20, |ui| {
@@ -242,10 +241,6 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         for (k, v) in Prefs::default().to_json().as_object().cloned().unwrap_or_default() {
             d.fields.insert(k, v);
         }
-        d.fields.remove(CHOSE_OTHER_APP);
-    }
-    if d.fields.remove(CHOOSE_APP).is_some() {
-        choose_app(app, &mut d);
     }
     app.ui.dialog = Some(d);
     if cancel {
@@ -385,7 +380,6 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                     }
                 });
             }
-            PrefKind::Text if sp.key == "editOriginalApp" => edit_original_row(ui, d, sp.key, sp.label, &v),
             PrefKind::Text => {
                 labeled(ui, sp.label, |ui| {
                     let mut s = v.as_str().unwrap_or("").to_string();
@@ -414,94 +408,6 @@ fn choice_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, opts: &
             d.fields.insert(key.into(), json!(o.0));
         }
     });
-}
-
-/// File Handling › Edit Original With (#5236): System Default (""), PhotoCraft (`photocraft`) or
-/// Other Application, which shows a field for the application's path.
-fn edit_original_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, v: &Value) {
-    const OPTIONS: [&str; 3] = ["System Default", "PhotoCraft", "Other Application"];
-    // The field shows the value as stored, spaces included (the host trims it when it opens).
-    let raw = v.as_str().unwrap_or("").to_string();
-    let cur = raw.trim().to_string();
-    let photocraft = cur.eq_ignore_ascii_case("photocraft");
-    // Other Application with no path typed yet is still System Default: the dialog remembers the
-    // choice in a field of its own, which a new dialog and Reset Preferences start without.
-    let mut other = !photocraft && (!cur.is_empty() || d.bool(CHOSE_OTHER_APP));
-    // A path (saved or typed) also counts as the choice, so clearing it to type another keeps the
-    // field.
-    if other && !d.bool(CHOSE_OTHER_APP) {
-        d.fields.insert(CHOSE_OTHER_APP.into(), json!(true));
-    }
-    let at = if photocraft {
-        1
-    } else if other {
-        2
-    } else {
-        0
-    };
-    labeled(ui, label, |ui| {
-        if let Some(i) = widgets::dropdown(ui, key, OPTIONS[at], &OPTIONS, 260.0) {
-            other = i == 2;
-            d.fields.insert(CHOSE_OTHER_APP.into(), json!(other));
-            let new = match i {
-                0 => String::new(),
-                1 => "photocraft".to_string(),
-                _ if photocraft => String::new(),
-                _ => raw.clone(),
-            };
-            d.fields.insert(key.into(), json!(new));
-        }
-    });
-    if other {
-        let can_pick = d.bool(CAN_PICK_APP);
-        labeled(ui, "Application Path", |ui| {
-            let mut s = if photocraft { String::new() } else { raw.clone() };
-            let width = if can_pick { 186.0 } else { 260.0 };
-            let field = egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(width);
-            let hint = if cfg!(target_os = "macos") { "/Applications/Example.app" } else { "" };
-            if ui.add(field.hint_text(hint)).changed() {
-                d.fields.insert(key.into(), json!(s));
-            }
-            // The open dialog runs from `show`, which has the app ([`choose_app`]).
-            if can_pick && widgets::flat_button(ui, tl!("Choose…"), 68.0).clicked() {
-                d.fields.insert(CHOOSE_APP.into(), json!(true));
-            }
-        });
-    }
-}
-
-/// UI-only dialog fields for Edit Original With's Choose… button: whether the host shows an open
-/// dialog, and that the button was clicked this frame.
-const CAN_PICK_APP: &str = "__canPickApp";
-const CHOOSE_APP: &str = "__chooseApp";
-/// UI-only dialog field: Other Application was chosen, though no path is typed yet.
-const CHOSE_OTHER_APP: &str = "__choseOtherApp";
-
-/// The open dialog Edit Original With's Choose… shows: applications (`.app` bundles in
-/// Applications on macOS, `.exe` files on Windows, any file elsewhere).
-fn app_pick() -> crate::FilePick {
-    let filters: Vec<crate::FileFilter> = if cfg!(target_os = "macos") {
-        vec![("Applications".into(), vec!["app".into()])]
-    } else if cfg!(windows) {
-        vec![("Programs".into(), vec!["exe".into()])]
-    } else {
-        vec![]
-    };
-    let folder = cfg!(target_os = "macos").then(|| "/Applications".to_string());
-    crate::FilePick { name: String::new(), folder, filters }
-}
-
-/// Edit Original With › Choose…: the picked application into the dialog's `editOriginalApp`. Shown
-/// off the UI thread, the answer fills the dialog as it is then ([`crate::picks::in_dialog`]).
-fn choose_app(app: &mut VectorcraftApp, d: &mut Dialog) {
-    let r = crate::picks::in_dialog(app, d, |app, d| {
-        if let Some(path) = crate::picks::open(app, &app_pick()) {
-            d.fields.insert("editOriginalApp".into(), json!(path));
-        }
-        Ok(())
-    });
-    // Picking a file doesn't fail.
-    let _ = r;
 }
 
 fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {

@@ -300,8 +300,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         reveal: Some(Box::new(reveal)),
         // Links panel: Edit Original; Package: Show Package. Relink to Folder and Package pick folders.
         open_file: Some(Box::new(open_file)),
-        // Edit Original with Preferences › File Handling › Edit Original With set (#5236).
-        open_file_with: Some(Box::new(open_file_with)),
+        // Edit Original of a raster image with Use System Defaults for Edit Original off (#5236).
+        open_in_photocraft: Some(Box::new(open_in_photocraft)),
         pick_folder: Some(Box::new(move || pick_now(PickRequest::Folder, &p4).into_iter().next())),
         // Sample Color from Screen: the system's color sampler.
         #[cfg(target_os = "macos")]
@@ -337,14 +337,14 @@ fn open_file(path: &str) -> Result<(), String> {
     c.spawn().map(|_| ()).map_err(|e| format!("can't open {path}: {e}"))
 }
 
-/// Edit Original with Preferences › File Handling › Edit Original With set (#5236): open `path` in
-/// `app` (`photocraft`, or an application's path). The app must be an application ([`check_app`]);
-/// it gets the path as its only argument and is never started through a shell.
-fn open_file_with(app: &str, path: &str) -> Result<(), String> {
+/// Edit Original with Preferences › File Handling › Use System Defaults for Edit Original off
+/// (#5236): open the raster image `path` in PhotoCraft, found only where it installs
+/// ([`find_photocraft`]); `Ok(false)` when it isn't installed. PhotoCraft gets the path as its only
+/// argument and is never started through a shell.
+fn open_in_photocraft(path: &str) -> Result<bool, String> {
     explorer_safe(path)?;
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(std::path::PathBuf::from);
-    let app = resolve_app(app, home.as_deref(), std::env::var_os("PATH").as_deref())?;
-    check_app(&app)?;
+    let Some(app) = find_photocraft(home.as_deref(), std::env::var_os("PATH").as_deref()) else { return Ok(false) };
     #[cfg(target_os = "macos")]
     let mut c = {
         let mut c = std::process::Command::new("open");
@@ -369,7 +369,7 @@ fn open_file_with(app: &str, path: &str) -> Result<(), String> {
         let started = std::time::Instant::now();
         loop {
             match child.try_wait() {
-                Ok(Some(status)) if status.success() => return Ok(()),
+                Ok(Some(status)) if status.success() => return Ok(true),
                 Ok(Some(status)) => {
                     let mut why = String::new();
                     if let Some(mut err) = child.stderr.take() {
@@ -385,26 +385,19 @@ fn open_file_with(app: &str, path: &str) -> Result<(), String> {
                     std::thread::spawn(move || {
                         let _ = child.wait();
                     });
-                    return Ok(());
+                    return Ok(true);
                 }
                 Err(e) => return Err(fail(e.to_string())),
             }
         }
     }
     #[cfg(not(target_os = "macos"))]
-    c.spawn().map(|_| ()).map_err(|e| format!("can't open {path} in {}: {e}", app.display()))
+    c.spawn().map(|_| true).map_err(|e| format!("can't open {path} in {}: {e}", app.display()))
 }
 
-/// The application Edit Original With names: PhotoCraft where it is installed for `photocraft`
-/// ([`photocraft_candidates`]), else the path as given.
-pub(crate) fn resolve_app(app: &str, home: Option<&std::path::Path>, path_var: Option<&std::ffi::OsStr>) -> Result<std::path::PathBuf, String> {
-    if app.trim().eq_ignore_ascii_case("photocraft") {
-        return photocraft_candidates(home, path_var)
-            .into_iter()
-            .find(|p| check_app(p).is_ok())
-            .ok_or_else(|| "PhotoCraft isn't installed: choose another app in Preferences › File Handling › Edit Original With".to_string());
-    }
-    Ok(std::path::PathBuf::from(app.trim()))
+/// PhotoCraft where it is installed: the first of [`photocraft_candidates`] that is an application.
+pub(crate) fn find_photocraft(home: Option<&std::path::Path>, path_var: Option<&std::ffi::OsStr>) -> Option<std::path::PathBuf> {
+    photocraft_candidates(home, path_var).into_iter().find(|p| check_app(p).is_ok())
 }
 
 /// Where PhotoCraft may be installed: the Applications folders on macOS, else a `photocraft`
@@ -421,7 +414,7 @@ pub(crate) fn photocraft_candidates(home: Option<&std::path::Path>, path_var: Op
 
 /// Is `app` an application Edit Original may start: an `.app` bundle on macOS, an `.exe` on
 /// Windows, an executable file elsewhere? Anything else (a document, a folder, a script on
-/// Windows) is refused, so the preference can only ever open an installed app.
+/// Windows) found where PhotoCraft installs is not taken for it.
 pub(crate) fn check_app(app: &std::path::Path) -> Result<(), String> {
     let ext = app.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     let ok = if cfg!(target_os = "macos") {
@@ -447,7 +440,7 @@ fn executable_file(p: &std::path::Path) -> bool {
 
 #[cfg(test)]
 mod open_with_tests {
-    use super::{check_app, photocraft_candidates, resolve_app};
+    use super::{check_app, find_photocraft, photocraft_candidates};
 
     /// A fresh, empty folder under the system's temporary folder.
     fn scratch(name: &str) -> std::path::PathBuf {
@@ -457,8 +450,8 @@ mod open_with_tests {
         d
     }
 
-    /// #5236: Edit Original With only ever starts an application, never a document, a folder or a
-    /// missing path.
+    /// #5236: only an application counts as PhotoCraft, never a document, a folder or a missing
+    /// path.
     #[test]
     fn only_applications_are_started() {
         let d = scratch("check");
@@ -484,22 +477,21 @@ mod open_with_tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
-    /// `photocraft` is looked for where PhotoCraft installs; any other value is taken as a path.
+    /// PhotoCraft is looked for only where it installs.
     #[test]
     fn photocraft_is_found_where_it_installs() {
         let d = scratch("find");
-        assert_eq!(resolve_app("/Apps/Other.app", None, None).unwrap(), std::path::PathBuf::from("/Apps/Other.app"));
         if cfg!(target_os = "macos") {
             let candidates = photocraft_candidates(Some(&d), None);
             assert_eq!(candidates.first().map(|p| p.to_string_lossy().into_owned()).as_deref(), Some("/Applications/PhotoCraft.app"));
             assert!(candidates.contains(&d.join("Applications/PhotoCraft.app")), "{candidates:?}");
             std::fs::create_dir_all(d.join("Applications/PhotoCraft.app")).unwrap();
-            assert!(resolve_app("PhotoCraft", Some(&d), None).unwrap().ends_with("PhotoCraft.app"));
+            assert!(find_photocraft(Some(&d), None).unwrap().ends_with("PhotoCraft.app"));
         } else {
             let bin = d.join("bin");
             std::fs::create_dir_all(&bin).unwrap();
             let path_var = std::env::join_paths([&bin]).unwrap();
-            assert!(resolve_app("photocraft", None, Some(&path_var)).is_err(), "not installed");
+            assert!(find_photocraft(None, Some(&path_var)).is_none(), "not installed");
             let exe = bin.join(if cfg!(windows) { "photocraft.exe" } else { "photocraft" });
             std::fs::write(&exe, "").unwrap();
             #[cfg(unix)]
@@ -507,7 +499,7 @@ mod open_with_tests {
                 use std::os::unix::fs::PermissionsExt as _;
                 std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
             }
-            assert_eq!(resolve_app("photocraft", None, Some(&path_var)).unwrap(), exe);
+            assert_eq!(find_photocraft(None, Some(&path_var)), Some(exe));
         }
         let _ = std::fs::remove_dir_all(&d);
     }
