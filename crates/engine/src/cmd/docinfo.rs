@@ -254,6 +254,27 @@ pub fn report(s: &mut Session, selection_only: bool) -> Result<String> {
     Ok(v["text"].as_str().unwrap_or_default().to_string())
 }
 
+/// The type object `n` holds and the runs its layout draws, when it uses a pattern: the runs with a
+/// glyph outline (list markers and ruby included) or an underline or strikethrough bar. Spaces and
+/// line breaks draw no outline. A type object's characters carry their own fill and stroke, and the
+/// type object's own fills and strokes paint on its characters, so only those runs paint.
+fn painted_runs(n: &Node) -> Option<(&vectorcraft_doc::TextObject, BTreeSet<usize>)> {
+    let NodeKind::Text(t) = &n.kind else { return None };
+    let is_pattern = |p: &Paint| matches!(p, Paint::Pattern { .. });
+    let own = n.appearance.items.iter().any(|i| match i {
+        vectorcraft_doc::AppearanceItem::Fill(f) => is_pattern(&f.paint),
+        vectorcraft_doc::AppearanceItem::Stroke(s) => is_pattern(&s.paint),
+    });
+    if !own && !t.runs.iter().any(|r| is_pattern(&r.style.fill) || is_pattern(&r.style.stroke)) {
+        return None;
+    }
+    let db = vectorcraft_text::FontDb::global();
+    let lay = vectorcraft_text::layout(db, t);
+    let mut painted: BTreeSet<usize> = lay.glyphs.iter().chain(&lay.ruby).filter(|g| !g.outline.elements().is_empty()).map(|g| g.run).collect();
+    painted.extend(vectorcraft_text::decorations(&lay, db, t).into_iter().map(|(run, _)| run));
+    Some((t, painted))
+}
+
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.info";
     let category = str_param(p, "category");
@@ -344,6 +365,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             let mut kinds = BTreeSet::new();
             // The patterns this object's fills and strokes use, each once.
             let mut used_patterns: Vec<&str> = vec![];
+            let painted_runs = painted_runs(n);
             for item in &n.appearance.items {
                 let paint = match item {
                     vectorcraft_doc::AppearanceItem::Fill(f) => &f.paint,
@@ -353,11 +375,13 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Paint::Gradient(_) = paint {
                     kinds.insert("gradients");
                 }
-                // A hidden fill or stroke, a stroke with no width, or any paint on a guide (which
-                // draws in the guide color and does not print) paints nothing.
+                // A hidden fill or stroke, a stroke with no width, any paint on a guide (which draws
+                // in the guide color and does not print) and any paint on type that draws nothing
+                // paints nothing.
                 let paints = item.visible()
                     && !matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0)
-                    && !matches!(n.kind, NodeKind::Path { guide: true, .. });
+                    && !matches!(n.kind, NodeKind::Path { guide: true, .. })
+                    && painted_runs.as_ref().is_none_or(|(_, runs)| !runs.is_empty());
                 if paints && let Paint::Pattern { pattern, .. } = paint {
                     patterns.insert(pattern.clone());
                     if !used_patterns.contains(&pattern.as_str()) {
@@ -370,19 +394,10 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     spot.insert(name.clone());
                 }
             }
-            // A type object's characters carry their own fill and stroke, and only the characters its
-            // layout draws paint: the runs with a glyph outline (list markers and ruby included) or
-            // an underline or strikethrough bar. Spaces and line breaks draw no outline, an inline
-            // graphic does not take its run's paint, and a stroke with no width paints nothing.
-            if let NodeKind::Text(t) = &n.kind
-                && t.runs.iter().any(|r| matches!(r.style.fill, Paint::Pattern { .. }) || matches!(r.style.stroke, Paint::Pattern { .. }))
-            {
-                let db = vectorcraft_text::FontDb::global();
-                let lay = vectorcraft_text::layout(db, t);
-                let mut painted: BTreeSet<usize> =
-                    lay.glyphs.iter().chain(&lay.ruby).filter(|g| !g.outline.elements().is_empty()).map(|g| g.run).collect();
-                painted.extend(vectorcraft_text::decorations(&lay, db, t).into_iter().map(|(run, _)| run));
-                for run in painted.into_iter().filter_map(|i| t.runs.get(i)).filter(|r| r.inline.is_none()) {
+            // The characters' own paints: an inline graphic does not take its run's paint, and a
+            // stroke with no width paints nothing.
+            if let Some((t, painted)) = &painted_runs {
+                for run in painted.iter().filter_map(|i| t.runs.get(*i)).filter(|r| r.inline.is_none()) {
                     let stroke = (run.style.stroke_width > 0.0).then_some(&run.style.stroke);
                     for paint in std::iter::once(&run.style.fill).chain(stroke) {
                         if let Paint::Pattern { pattern, .. } = paint {
@@ -710,6 +725,8 @@ mod tests {
         // A type object with no characters paints nothing either.
         let empty = s.execute("text.create", &json!({"x": 0, "y": 300, "text": ""})).unwrap()["id"].clone();
         s.execute("paint.setFill", &json!({"ids": [empty], "swatch": "Dots"})).unwrap();
+        // Its own fill (a copy of its characters' pattern fill) paints on its characters, so it paints nothing.
+        s.execute("appearance.addFill", &json!({"ids": [empty]})).unwrap();
         // Nor does type of only spaces and a line break, or a guide made from a patterned path.
         let blank = s.execute("text.create", &json!({"x": 0, "y": 320, "text": " \n"})).unwrap()["id"].clone();
         s.execute("paint.setFill", &json!({"ids": [blank], "swatch": "Dots"})).unwrap();
@@ -736,7 +753,7 @@ mod tests {
         assert_eq!(i["patternNames"], json!(["Dots"]));
         // Objects counts the objects that Pattern Objects lists.
         assert_eq!(i["objects"]["patterns"].as_u64(), Some(4), "{}", i["objects"]);
-        s.execute("select.set", &json!({"ids": [d, e, blank, guide]})).unwrap();
+        s.execute("select.set", &json!({"ids": [d, e, empty, blank, guide]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
         assert!(i["objects"]["patterns"].is_null() && i["patternObjects"] == json!([]), "{}", i["objects"]);
         let i = s.execute("document.info", &json!({"category": "patterns"})).unwrap();
