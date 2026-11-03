@@ -6265,6 +6265,11 @@ breakText	Glyphs	Merkit
 	Malayalam	Malajalam
 	Odia	Orija
 	Urdu	Urdu
+	Sanskrit	Sanskrit
+	Nepali	Nepali
+	Assamese	Assami
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} ja uudemmat (versio {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Vie kaikki avoimet asiakirjat PDF-muodossa

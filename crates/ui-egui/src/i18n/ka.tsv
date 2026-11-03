@@ -6223,6 +6223,11 @@ breakText	Glyphs	გლიფები
 	Malayalam	მალაიალამური
 	Odia	ორია
 	Urdu	ურდუ
+	Sanskrit	სანსკრიტი
+	Nepali	ნეპალური
+	Assamese	ასამური
+	Konkani	კონკანი
+	Sindhi	სინდჰური
 	VectorCraft {release} and later (version {n})	VectorCraft {release} და უფრო ახალი (ვერსია {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	ყველა ღია დოკუმენტის ექსპორტი PDF-ად

@@ -5816,6 +5816,11 @@ breakText	Glyphs	글리프
 	Malayalam	말라얄람어
 	Odia	오리야어
 	Urdu	우르두어
+	Sanskrit	산스크리트어
+	Nepali	네팔어
+	Assamese	아삼어
+	Konkani	코카니어
+	Sindhi	신디어
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 이상 (버전 {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	열린 모든 문서를 PDF로 내보내기

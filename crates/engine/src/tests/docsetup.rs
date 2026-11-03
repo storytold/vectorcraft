@@ -162,6 +162,27 @@ fn language_picks_its_quotes_unless_quotes_are_given() {
     assert_eq!((setup(&s).quotes.double, setup(&s).quotes.single), (['“', '”'], ['‹', '›']));
 }
 
+/// Sanskrit, Nepali, Assamese, Konkani and Sindhi (#4943): each is a document language, new type
+/// takes its tag, and each can be set on a text by name or tag.
+#[test]
+fn the_further_indian_languages_are_document_and_text_languages() {
+    let mut s = session();
+    let id = create_text(&mut s, "a");
+    for (name, tag) in [("Sanskrit", "sa"), ("Nepali", "ne"), ("Assamese", "as"), ("Konkani", "kok"), ("Sindhi", "sd")] {
+        s.execute("document.setup", &json!({"language": name.to_lowercase()})).unwrap();
+        assert_eq!((setup(&s).language.as_str(), setup(&s).quotes.double), (name, ['“', '”']));
+        let new = create_text(&mut s, "b");
+        assert_eq!(text(&s, new).runs[0].style.language.as_deref(), Some(tag), "new type in {name}");
+        s.execute("document.setup", &json!({"language": "English: USA"})).unwrap();
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("text.setFormat", &json!({"language": name})).unwrap();
+        assert_eq!(text(&s, id).runs[0].style.language.as_deref(), Some(tag), "{name} by name");
+        s.execute("text.setFormat", &json!({"language": "English: USA"})).unwrap();
+        s.execute("text.setFormat", &json!({"language": tag.to_uppercase()})).unwrap();
+        assert_eq!(text(&s, id).runs[0].style.language.as_deref(), Some(tag), "{name} by tag");
+    }
+}
+
 #[test]
 fn typographers_quotes_setting_changes_typed_quotes() {
     let mut s = session();
