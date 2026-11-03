@@ -416,13 +416,16 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   the other Units preferences. The model stays in points; any length field reads `13q` or `13h` (`Ha`, `H`) with or
   without a space. Not done: no field shows in it (it waits for a source). Tests `east_asian_*` and `q_and_ha_*` in
   `crates/doc` and `crates/engine`. Estimate unchanged.
-- **Audited (2026-10-30, #394):** every Preferences dialog option but the four below is read by shipped code,
+- **Audited (2026-10-30, #394):** every Preferences dialog option but four is read by shipped code,
   by its field or its key; Highlight Alternate Glyphs (the canvas's render options), Real-time Drawing and Editing
   (tool previews wait for the commit), Show Tool Tips, Anti-aliased Artwork, Use Precise Cursors and Devices ›
-  Enable Touch Workspace and Touch Gestures included.
-- **Missing:** 4 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
-  User Interface › Open Documents As Tabs (off would open documents in floating windows; one window per
-  document is G7), Hyphenation › Default Language (hyphenation is English-only, with no per-language
+  Enable Touch Workspace and Touch Gestures included. One of the four, Open Documents As Tabs, acts now (below);
+  the other three are listed under Missing.
+- **Done:** User Interface › Open Documents As Tabs: with the box cleared, each document opened or created
+  afterwards opens in a floating window of its own (G7's Float in Window); documents already open stay where they
+  are. Estimate unchanged.
+- **Missing:** 3 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
+  Hyphenation › Default Language (hyphenation is English-only, with no per-language
   dictionaries), Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to
   disk), and Clipboard Handling › Legacy vector clipboard with its Preserve Paths / Preserve Appearance and
   Overprints choice (Illustrator's own clipboard flavour, which has no public specification). Also Properties
