@@ -283,7 +283,8 @@ mod tests {
     #[test]
     fn a_tall_column_groups_by_its_neighbours() {
         let n = 200_000;
-        let bounds: Vec<Option<Rect>> = (0..n).map(|i| Some(Rect::new(0.0, 3.0 * f64::from(i), 100.0, 3.0 * f64::from(i) + if i % 2 == 0 { 3.0 } else { 1.0 }))).collect();
+        let bounds: Vec<Option<Rect>> =
+            (0..n).map(|i| Some(Rect::new(0.0, 3.0 * f64::from(i), 100.0, 3.0 * f64::from(i) + if i % 2 == 0 { 3.0 } else { 1.0 }))).collect();
         let groups = overlapping(&bounds).unwrap();
         assert_eq!(groups.len(), n as usize / 2);
         assert!(groups.iter().enumerate().all(|(g, ids)| ids == &[2 * g, 2 * g + 1]));
