@@ -721,6 +721,32 @@ fn inline_graphics_in_type_are_written_as_their_art() {
     assert!(at(&blue) < at(&red), "the stroke above the characters is over the inline graphic");
 }
 
+/// A scaled instance of a symbol with 9-slice guides is written as the canvas draws it: the corner
+/// keeps its size while the rest stretches.
+#[test]
+fn a_scaled_nine_slice_symbol_instance_keeps_its_corner_size() {
+    let mut doc = Document::new(400.0, 400.0);
+    let layer = doc.layers[0].id;
+    let square = |doc: &mut Document, r: Rect| {
+        Node::path(doc.alloc_id(), shapes::rectangle(r), Appearance::basic(solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0))
+    };
+    let frame = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0)));
+    let corner = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0)));
+    let art = Node::group(doc.alloc_id(), vec![frame, corner]);
+    doc.symbols.push(Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
+    doc.set_symbol_nine_slice("S", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let xf = Affine::scale_non_uniform(2.0, 1.5);
+    let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf });
+    doc.insert(Some(layer), usize::MAX, instance).unwrap();
+    let back = read_back(&doc);
+    let mut all = vec![];
+    paths(back.layers[0].children().unwrap(), &mut all);
+    let sizes: Vec<(i64, i64)> =
+        all.iter().filter_map(|p| p.geometric_bounds()).map(|b| (b.width().round() as i64, b.height().round() as i64)).collect();
+    assert!(sizes.contains(&(10, 10)), "the corner keeps its size: {sizes:?}");
+    assert!(sizes.contains(&(200, 150)), "the frame is scaled: {sizes:?}");
+}
+
 /// Nested symbols whose instances multiply stop at [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects of
 /// symbol art in all, with a warning.
 #[test]

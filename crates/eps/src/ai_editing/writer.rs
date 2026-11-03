@@ -254,14 +254,16 @@ impl<'a> Writer<'a> {
                     && self.take_symbol(&sym.art)
                 {
                     // Stained by the instance's fill, as the canvas draws it.
-                    let mut art = vectorcraft_brush::instance_art(&sym.art, n);
-                    art.transform(*xf, false);
-                    art.visible = true;
-                    art.locked = false;
-                    art.name = None;
-                    self.nest += 1;
-                    self.node(&art);
-                    self.nest -= 1;
+                    let stained = vectorcraft_brush::instance_art(&sym.art, n);
+                    // Through the symbol's 9-slice guides when it has them, as the canvas draws it.
+                    if let Some(mut art) = self.doc.place_symbol_art(symbol, &stained, *xf) {
+                        art.visible = true;
+                        art.locked = false;
+                        art.name = None;
+                        self.nest += 1;
+                        self.node(&art);
+                        self.nest -= 1;
+                    }
                 }
                 self.line("U");
             }
