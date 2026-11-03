@@ -123,6 +123,26 @@ fn a_missing_link_warns_and_keeps_a_placeholder_in_its_box() {
 }
 
 #[test]
+fn hrefs_spelling_one_missing_file_differently_each_warn_and_keep_their_own_link() {
+    let dir = folder("missing_twice");
+    let reads = std::sync::atomic::AtomicUsize::new(0);
+    let counting = |path: &str| {
+        reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        read(path)
+    };
+    let folder = dir.to_string_lossy();
+    let body = r#"<image href="img/gone.png" width="4" height="4"/><image href="./img/gone.png" width="4" height="4"/>"#;
+    let (d, w) = import_with(&svg(body), &ImportOptions { folder: Some(&folder), read: Some(&counting) }).unwrap();
+    assert_eq!(w.iter().filter(|w| w.contains("gone.png") && w.contains("not found")).count(), 2, "{w:?}");
+    assert_eq!(reads.into_inner(), 1, "the failed read is cached");
+    let found = images(&d);
+    assert_eq!(found.len(), 2);
+    for (_, im) in found {
+        assert_eq!(Path::new(&im.link.as_ref().unwrap().path), dir.join("img").join("gone.png"));
+    }
+}
+
+#[test]
 fn svg_images_import_as_vector_art() {
     let dir = folder("svgimage");
     let inner =

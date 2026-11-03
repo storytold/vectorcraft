@@ -151,22 +151,27 @@ impl Files {
         let mut placeholder = None;
         // What each file read gave, by the file: hrefs spelled differently (`a.png`, `./a.png`,
         // `%61.png`) share one read and one copy of its bytes.
-        let mut by_file: HashMap<String, Source> = HashMap::new();
+        let mut by_file: HashMap<String, Result<Source, &str>> = HashMap::new();
         for n in xml.descendants().filter(|n| n.is_element() && n.tag_name().name() == "image") {
             let Some(h) = href(n).filter(|h| !h.trim_start().starts_with("data:")) else { continue };
             if !files.sources.contains_key(h) {
                 let (path, file) = target(h, opts.folder);
-                if let Some(read) = file.as_ref().and_then(|f| by_file.get(f)) {
-                    files.sources.insert(h.to_string(), read.clone());
-                    if files.placeholder(h) {
-                        edits.set(svg, n, "preserveAspectRatio", "none");
+                // A failed read is cached too, but each href gets its own placeholder: its own link
+                // path (an Arc shared between hrefs would share the first href's link) and warning.
+                let cached = file.as_ref().and_then(|f| by_file.get(f)).cloned();
+                let source = match cached {
+                    Some(source) => source,
+                    None => {
+                        let read = file.clone().and_then(|file| opts.read.and_then(|read| read(&file)));
+                        let source = match read {
+                            Some((bytes, link)) => files.source(bytes, link).ok_or("is not an image VectorCraft reads"),
+                            None => Err("not found"),
+                        };
+                        if let Some(file) = file {
+                            by_file.insert(file, source.clone());
+                        }
+                        source
                     }
-                    continue;
-                }
-                let read = file.clone().and_then(|file| opts.read.and_then(|read| read(&file)));
-                let source = match read {
-                    Some((bytes, link)) => files.source(bytes, link).ok_or("is not an image VectorCraft reads"),
-                    None => Err("not found"),
                 };
                 let source = source.or_else(|why| {
                     warnings.push(format!("linked image '{h}' {why}: a placeholder keeps its place until it is relinked"));
@@ -175,9 +180,6 @@ impl Files {
                     Ok::<_, &str>(Source::Raster(ImageKind::PNG, bytes))
                 });
                 let Ok(source) = source else { continue };
-                if let Some(file) = file {
-                    by_file.insert(file, source.clone());
-                }
                 files.sources.insert(h.to_string(), source);
             }
             if files.placeholder(h) {
