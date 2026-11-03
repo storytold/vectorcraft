@@ -428,7 +428,7 @@ pub struct UiState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
     /// The Tools panel floats with its top-left corner here (dragged out by its title bar); `None`:
-    /// docked at the window's left edge.
+    /// docked beside the canvas's left edge, inside any left-side panel dock.
     #[serde(default)]
     pub toolbar_pos: Option<[f32; 2]>,
     pub status_bar: bool,

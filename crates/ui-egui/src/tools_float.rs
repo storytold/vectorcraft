@@ -1,7 +1,8 @@
-//! The Tools panel floats by its title bar and docks again on the window's left edge
+//! The Tools panel floats by its title bar and docks beside the canvas's left edge
 //! ([`crate::toolbar`]). It stays outside the docking layout: dragging its title bar out of the
 //! docked panel floats it under the pointer, a floating panel's title bar moves it, and a release
-//! over the strip along the window's left edge (lit up) docks it there. Escape or losing the
+//! over the canvas's left edge or the window's left edge (lit up) docks it beside the canvas.
+//! Escape or losing the
 //! window's focus puts it back where the drag began.
 //!
 //! `window.panel.float {panel: "tools"}` / `window.panel.dock {panel: "tools"}` do the same for
@@ -41,9 +42,22 @@ pub(crate) fn escape_cancelled_move(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<u64>(escape_cancel_id())) == Some(ctx.cumulative_frame_nr_for(ctx.viewport_id()))
 }
 
-/// The strip along the window's left edge where the Tools panel docks, as last laid out.
+/// The strip along the canvas's left edge where the Tools panel docks, as last laid out.
 pub(crate) fn tools_zone_id() -> Id {
     Id::unique("tools-float-zone")
+}
+
+fn window_zone_id() -> Id {
+    Id::unique("tools-float-window-zone")
+}
+
+/// Keep the window-edge gesture while also accepting a drop next to panels docked left.
+pub(crate) fn set_dock_zones(ctx: &egui::Context, canvas: Rect, width: f32) {
+    let window = pos2(ctx.content_rect().left(), canvas.top());
+    ctx.data_mut(|d| {
+        d.insert_temp(tools_zone_id(), Rect::from_min_size(canvas.min, vec2(width, canvas.height())));
+        d.insert_temp(window_zone_id(), Rect::from_min_size(window, vec2(width, canvas.height())));
+    });
 }
 
 /// `pos` moved so a panel of `size` stays inside `screen` (a position saved on a bigger window).
@@ -92,7 +106,7 @@ pub(crate) fn drag_tools(app: &mut VectorcraftApp, ctx: &egui::Context, title: &
 
 /// The docking strip under `at`, if any.
 fn drop_zone(ctx: &egui::Context, at: Pos2) -> Option<Rect> {
-    ctx.data(|d| d.get_temp::<Rect>(tools_zone_id())).filter(|r| r.contains(at))
+    ctx.data(|d| [d.get_temp::<Rect>(tools_zone_id()), d.get_temp::<Rect>(window_zone_id())].into_iter().flatten().find(|r| r.contains(at)))
 }
 
 fn highlight(ctx: &egui::Context, zone: Rect) {

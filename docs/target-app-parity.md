@@ -1,6 +1,8 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Tools stays beside the canvas with left-side panels; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+
+Docked Tools stays beside the canvas, inside any left-side panels. Both the canvas edge and the window edge accept floating Tools. Existing saved workspace fields are reused. This is a requested layout choice; [toolbar documentation](https://helpx.adobe.com/illustrator/using/tools.html) and [workspace documentation](https://helpx.adobe.com/illustrator/using/customizing-workspace.html) describe movability and docking, without establishing this exact relative placement. Sidebar resizing (#5348) remains separate. Scores and estimates are unchanged.
 
 ## Feature submission evidence
 
@@ -21,6 +23,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Docked Tools stays between left-side panels and the canvas; redocking accepts canvas and window edges. Requested layout choice; scores and estimates unchanged. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-11-03 | minor | Type Tools add-on: Text Tweaker (a VectorCraft addition, #4924): evidence added; scores unchanged. |
 | 2026-11-03 | minor | Transform previews valid typed values while numeric fields remain focused. Effect dialogs use the object, group, or layer targeted in Appearance. |
@@ -311,7 +314,7 @@ what keeps it from beta, not from alpha.
 | Dimension | % | One agent (h) | Kind | Doc |
 |---|---:|---:|---|---|
 | Features (depth, weighted) | 75% | 220–360 | estimated | this file |
-| UI/UX fidelity (look ~80%, interaction ~45%) | 55% | 70–110 | estimated | [ui-parity.md](ui-parity.md) |
+| UI/UX fidelity (look ~80%, interaction ~45%) | 55% | 70–110 | estimated | [ui-parity.md](ui-parity.md); Tools sits inside left-side panels beside the canvas (layout choice; no rescoring) |
 | File formats | 75% | 15–30 | estimated | [file-format-parity.md](file-format-parity.md) |
 | Hardware (GPU, pen, touch, displays) | 35% | 25–45 | estimated | [hardware-parity.md](hardware-parity.md) |
 | Localization (the 12 key languages, equally weighted) | 74% | 50–85 | measured from catalogs | [localization-parity.md](localization-parity.md) |

@@ -11,7 +11,9 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Tools stays beside the canvas with left-side panels; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+
+Docked Tools stays beside the canvas, inside any left-side panels. Both the canvas edge and the window edge accept floating Tools. Existing saved workspace fields are reused. This is a requested layout choice; [toolbar documentation](https://helpx.adobe.com/illustrator/using/tools.html) and [workspace documentation](https://helpx.adobe.com/illustrator/using/customizing-workspace.html) describe movability and docking, without establishing this exact relative placement. Sidebar resizing (#5348) remains separate. Scores and estimates are unchanged.
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -31,6 +33,7 @@ blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
 | | Value | Kind |
 |---|---|---|
+| 2026-11-03 | minor | Docked Tools stays between left-side panels and the canvas; redocking accepts canvas and window edges. Requested layout choice; scores and estimates unchanged. |
 | **Feature breadth** (Illustrator's menu items, tools, effects, formats exist) | **~88%** | measured in part: menu items 348/375 wired (92.8%), tools 89/92, Illustrator effects 46/50, Photoshop effects 57/57, 3D 4/4 (initial types, no materials) |
 | **Feature depth** (weighted by use, scored by behaviour) | **~75%** | estimated |
 | **To beta** | **~170–270 h** one agent · ~50–80 h with 4–6 agents | estimated |

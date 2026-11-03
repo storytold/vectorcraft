@@ -95,16 +95,33 @@ pub fn remember(app: &mut VectorcraftApp, id: &str) {
     crate::custom_toolbars::remember(&mut app.ui, id);
 }
 
+fn panel_width(ui: &crate::state::UiState) -> f32 {
+    if ui.toolbar_double { 80.0 } else { WIDTH }
+}
+
+/// Space reserved inside the protected canvas panel for a visible docked Tools panel.
+pub(crate) fn docked_width(ui: &crate::state::UiState) -> f32 {
+    if ui.toolbar && ui.screen_mode < 3 && ui.toolbar_pos.is_none() { panel_width(ui) + 6.0 } else { 0.0 }
+}
+
+/// Register redocking targets even while Tools floats; a docked panel follows the canvas's
+/// left edge as dock columns resize, collapse or hide.
+pub(crate) fn show_beside_canvas(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if app.ui.toolbar && app.ui.screen_mode < 3 {
+        crate::tools_float::set_dock_zones(ui.ctx(), ui.available_rect_before_wrap(), WIDTH);
+        if app.ui.toolbar_pos.is_none() {
+            show(app, ui);
+        }
+    }
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // The user's choice alone: a window too short for the tools scrolls them.
     let cols = if app.ui.toolbar_double { 2 } else { 1 };
     // Two 36 pt buttons with 2 pt either side inside the border and separator line (at 76 they
     // overran the right border).
-    let w = if cols == 2 { 80.0 } else { WIDTH };
-    // Where the panel docks: along the window's left edge, under the bars.
-    let edge = ui.available_rect_before_wrap();
-    ui.ctx().data_mut(|d| d.insert_temp(crate::tools_float::tools_zone_id(), egui::Rect::from_min_size(edge.min, vec2(WIDTH, edge.height()))));
+    let w = panel_width(&app.ui);
     match app.ui.toolbar_pos {
         None => {
             let margin = egui::Margin { left: 6, right: 0, top: 6, bottom: 6 };
