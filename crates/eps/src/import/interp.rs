@@ -1418,8 +1418,9 @@ fn index(k: &Obj) -> Res<usize> {
     }
 }
 
-/// `known`: a key may be any object but null (PLRM 3rd ed.), and one that can't be a key here (an
-/// array, a dictionary, a real with a fraction) is in no dictionary, since `put` refuses it.
+/// `known`: a key may be any object but null (PLRM 3rd ed., §3.3.9, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>),
+/// and one that can't be a key here (an array, a dictionary, a real with a fraction) is in no
+/// dictionary, since `put` here refuses it.
 fn known(d: &DictRef, k: &Obj) -> Res<bool> {
     match k.key() {
         Some(key) => Ok(d.borrow().contains_key(&key)),

@@ -996,7 +996,8 @@ fn the_standard_dictionaries_are_dictionaries_in_systemdict() {
     check("SharedFontDirectory type /dicttype eq");
 }
 
-/// A key may be any object but null (PLRM 3rd ed.), so `known` answers for every other key.
+/// A key may be any object but null (PLRM 3rd ed., §3.3.9, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>),
+/// so `known` answers for every other key.
 /// Ghostscript's `eps2write` looks an inline image's filter up in a dictionary of abbreviations,
 /// and the filter may be an array of them.
 #[test]
