@@ -271,7 +271,11 @@ const MAX_ENTITIES: u32 = 10_000_000;
 
 /// The largest x or y a path may have to be flattened, and the most points its polygons keep.
 const MAX_COORD: f64 = 1e9;
-const MAX_POINTS: usize = 4_000_000;
+const MAX_POINTS: usize = if cfg!(test) { 100_000 } else { 4_000_000 };
+/// The most segments flattening one path makes, kept or not (repeats of a point are dropped).
+const MAX_FLATTEN_SEGMENTS: usize = 4 * MAX_POINTS;
+
+const SYMBOLS_LEFT_OUT: &str = "symbols placed inside symbols hold too many objects for DXF: the instances past that were left out";
 
 /// Do the dashes of `d` start at the start of their pattern, as a linetype's do? A pattern of
 /// odd length repeats twice in its linetype.
@@ -296,14 +300,19 @@ fn polygons(bp: &BezPath) -> Vec<Vec<Point>> {
     }
     let mut out: Vec<Vec<Point>> = vec![];
     let mut cur: Vec<Point> = vec![];
-    let mut points = 0usize;
-    let mut push = |p: Point, cur: &mut Vec<Point>| {
-        if points < MAX_POINTS && cur.last().is_none_or(|q| q.distance(p) > 1e-9) {
-            points += 1;
+    // Points kept, and segments made: once either budget is spent, no further curve is flattened.
+    let points = std::cell::Cell::new(0usize);
+    let segments = std::cell::Cell::new(0usize);
+    let push = |p: Point, cur: &mut Vec<Point>| {
+        segments.set(segments.get() + 1);
+        if points.get() < MAX_POINTS && cur.last().is_none_or(|q| q.distance(p) > 1e-9) {
+            points.set(points.get() + 1);
             cur.push(p);
         }
     };
-    kurbo::flatten(bp.iter(), FLATNESS, |el| match el {
+    let elements = bp.iter().take_while(|_| points.get() < MAX_POINTS && segments.get() < MAX_FLATTEN_SEGMENTS);
+    // Each curve is flattened into a bounded number of segments, however large it is.
+    vectorcraft_geom::flatten(elements, FLATNESS, |el| match el {
         PathEl::MoveTo(p) => {
             out.push(std::mem::take(&mut cur));
             push(p, &mut cur);
@@ -412,6 +421,9 @@ pub(crate) struct Scene<'a> {
     opacity: f32,
     /// Symbols and brush art being written inside one another.
     nest: u32,
+    /// Objects the symbol instances written held, together
+    /// ([`vectorcraft_doc::MAX_SYMBOL_NODES`]).
+    symbol_nodes: u64,
 }
 
 impl<'a> Scene<'a> {
@@ -441,6 +453,8 @@ impl<'a> Scene<'a> {
             extents: None,
             opacity: 1.0,
             nest: 0,
+            // Tests spend all but a million of it up front.
+            symbol_nodes: if cfg!(test) { vectorcraft_doc::MAX_SYMBOL_NODES - 1_000_000 } else { 0 },
         }
     }
 
@@ -542,13 +556,36 @@ impl<'a> Scene<'a> {
             NodeKind::Text(t) => self.text(n, t),
             NodeKind::Image(im) => self.image(im),
             NodeKind::SymbolInstance { symbol, xf } => {
-                if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
+                let doc = self.doc;
+                if self.symbol_nodes >= vectorcraft_doc::MAX_SYMBOL_NODES {
+                    // Spent: no more instances are looked at, so what's left costs nothing.
+                    self.warn(SYMBOLS_LEFT_OUT);
+                } else if let Some(sym) = doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let Some(art) = self.doc.place_symbol_art_unclipped(symbol, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n), *xf)
                 {
-                    self.nest += 1;
-                    self.node(&art, true);
-                    self.nest -= 1;
+                    // Symbols holding instances of symbols are written in full for each instance,
+                    // empty or not: every instance's art counts against one budget for the export.
+                    let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                    let count = art.count_with_masks() as u64;
+                    // Counted as `place_symbol_art_unclipped` places it: no clip groups.
+                    let most = doc.symbol_slice_map(symbol, *xf).map_or(count, |m| m.most_placed_unclipped(&art, doc));
+                    let placed = vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
+                        let placed = doc.place_symbol_art_unclipped(symbol, &art, *xf);
+                        let n = placed.as_ref().map_or(0, |a| a.count_with_masks() as u64);
+                        (placed, n)
+                    });
+                    match placed {
+                        Some(Some(art)) => {
+                            self.nest += 1;
+                            self.node(&art, true);
+                            self.nest -= 1;
+                        }
+                        Some(None) => {}
+                        None => {
+                            self.symbol_nodes = vectorcraft_doc::MAX_SYMBOL_NODES;
+                            self.warn(SYMBOLS_LEFT_OUT);
+                        }
+                    }
                 }
             }
             // Live blends, envelopes, meshes and repeats are written as their evaluated art.
@@ -1261,4 +1298,48 @@ fn first_solid(n: &Node) -> Option<vectorcraft_color::Color> {
         _ => None,
     });
     own.or_else(|| n.children().into_iter().flatten().find_map(|c| first_solid(c)))
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+
+    #[test]
+    fn flattening_a_path_of_huge_curves_stops_at_its_budget() {
+        // Each curve, a hundred million points across, flattens to thousands of segments at
+        // FLATNESS; a small square after them is past the budget and left out.
+        let mut bp = BezPath::new();
+        bp.move_to((0.0, 0.0));
+        for i in 0..20_000 {
+            let y = if i % 2 == 0 { 1e8 } else { -1e8 };
+            bp.curve_to((1e8, y), (-1e8, y), (0.0, 0.0));
+        }
+        bp.move_to((10.0, 10.0));
+        bp.line_to((20.0, 10.0));
+        bp.line_to((20.0, 20.0));
+        bp.close_path();
+        let polys = polygons(&bp);
+        let points: usize = polys.iter().map(Vec::len).sum();
+        assert!(points <= MAX_POINTS, "{points} points");
+        assert!(!polys.iter().any(|p| p.contains(&Point::new(20.0, 20.0))), "the square past the budget is left out");
+    }
+
+    #[test]
+    fn flattening_a_path_of_repeated_points_stops_at_its_segment_budget() {
+        // Repeats of a point are dropped, so these keep one point but still count as segments:
+        // the segment budget, not the point budget, leaves out the square after them.
+        let mut bp = BezPath::new();
+        bp.move_to((0.0, 0.0));
+        for _ in 0..MAX_FLATTEN_SEGMENTS {
+            bp.line_to((0.0, 0.0));
+        }
+        bp.move_to((10.0, 10.0));
+        bp.line_to((20.0, 10.0));
+        bp.line_to((20.0, 20.0));
+        bp.close_path();
+        let polys = polygons(&bp);
+        let points: usize = polys.iter().map(Vec::len).sum();
+        assert!(points < MAX_POINTS, "{points} points");
+        assert!(!polys.iter().any(|p| p.contains(&Point::new(20.0, 20.0))), "the square past the budget is left out");
+    }
 }

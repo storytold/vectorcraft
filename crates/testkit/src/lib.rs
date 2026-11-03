@@ -40,8 +40,9 @@ pub use vectorcraft_engine::{Session, doc::NodeId};
 pub use {vectorcraft_doc as doc, vectorcraft_format as format, vectorcraft_render as render, vectorcraft_svg as svg};
 
 /// A per-process temporary directory for test output (created on first use). It is made with
-/// `create_dir` (owner-only on Unix), and a directory that already exists is reused only when it is a
-/// real directory, not a link, with no access for others and writable by this user: one pre-made in a shared temp folder is refused.
+/// `create_dir` (owner-only on Unix), and a directory that already exists is reused only when it is
+/// a real directory, not a link, with no access for others and owned by this user: one pre-made in
+/// a shared temp folder is refused.
 /// The first call for a `tag` in a process empties a directory left by an earlier process of the
 /// same id (Windows reuses ids soon); later calls share it.
 pub fn temp_dir(tag: &str) -> std::path::PathBuf {
@@ -60,12 +61,19 @@ pub fn temp_dir(tag: &str) -> std::path::PathBuf {
         assert!(e.kind() == std::io::ErrorKind::AlreadyExists && m.is_dir(), "create temp dir: {e}");
         #[cfg(unix)]
         assert!(std::os::unix::fs::PermissionsExt::mode(&m.permissions()) & 0o077 == 0, "{}: not private", dir.display());
-        // A private directory made by another user passes the mode check but is closed to this one:
-        // writing a probe file tells it apart from ours without needing the user ids.
+        // A directory made by another user may pass the mode check now and be opened up later: a
+        // probe file made new (never through a link left in its place) is this user's, and the
+        // directory must belong to the same user.
         // Named for this call: tests running alongside probe the same directory.
         static PROBES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let probe = dir.join(format!(".probe-{}", PROBES.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
-        assert!(std::fs::write(&probe, b"").and_then(|()| std::fs::remove_file(&probe)).is_ok(), "{}: not owned by this user", dir.display());
+        let made = std::fs::OpenOptions::new().write(true).create_new(true).open(&probe).and_then(|f| f.metadata());
+        let _ = std::fs::remove_file(&probe);
+        let made = made.unwrap_or_else(|e| panic!("{}: not owned by this user ({e})", dir.display()));
+        #[cfg(unix)]
+        assert_eq!(std::os::unix::fs::MetadataExt::uid(&made), std::os::unix::fs::MetadataExt::uid(&m), "{}: not owned by this user", dir.display());
+        #[cfg(not(unix))]
+        let _ = made;
         if first {
             for entry in std::fs::read_dir(&dir).expect("temp dir").flatten() {
                 let path = entry.path();

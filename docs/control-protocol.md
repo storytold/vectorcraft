@@ -264,7 +264,10 @@ same sliders under the wheel, and its mode menu also has Global Adjust (`sliderM
 Brightness, Temperature and Luminosity sliders that set `globalAdjust` (`{saturation, brightness, temperature,
 luminosity}`, percent from -100 to 100, 0 by default). The dialog sends a non-zero `globalAdjust` as `recolor.apply`'s
 `globalAdjust` in every slider mode, so one slider changes every recolored color at once and the rows keep their new
-colors; colors opened alone are saved as a group with the change. Setting
+colors; colors opened alone are saved as a group with the change. `display` sets how the Edit tab shows the new
+colors: `smooth` (the smooth wheel, also when unset; each opening starts there), `segmented` (a wheel of solid patches,
+24 hues by 5 saturations, whose markers move as freely) or `bars` (a solid bar per recolored color in row order; a click
+selects its row for the sliders and a drag moves the row without changing a color). Setting
 `colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`). The dialog previews
 `recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
@@ -665,6 +668,11 @@ one undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.li
 `links.info`; `links.editOriginal` and `links.reveal` (Edit › Edit Original, Show in Folder) hand the linked file to
 the system and return `{path}`. Edit Original opens only a regular file whose extension is a format `document.open`
 reads, and answers a control request with an error unless the file is a placed document (which opens in a tab).
+The preference `editOriginalSystemDefaults` (Preferences › File Handling › Use System Defaults for Edit Original, on
+by default, #5236) opens the file in the system's default app for it; off, in the app that made it: a raster image in
+PhotoCraft, looked for only where it installs (the Applications folders on macOS; on Windows the path its installer
+registers under App Paths, then `ArtCraft\PhotoCraft` in the per-user and per-machine program folders, then the `PATH`;
+the `PATH` elsewhere), and any other file, or a raster image without PhotoCraft installed, in the system's default app.
 
 Package: File → Package… (`ui.packageDialog`) opens the `package` dialog for a saved document (a document never saved
 gets a `confirm` dialog whose OK runs `file.saveAs`). Fields: `folder` (the location), `name` (the package folder),

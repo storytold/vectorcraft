@@ -229,7 +229,11 @@ pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, in
     let keep = Recoded { image: None, warning: None };
     let Ok(reader) = ImageReader::new(Cursor::new(bytes)).with_guessed_format() else { return keep };
     let jpeg = reader.format() == Some(ImageFormat::Jpeg);
-    let Ok(decoder) = reader.into_decoder() else { return keep };
+    let Ok(mut decoder) = reader.into_decoder() else { return keep };
+    // What the header declares is decoded within the image allowance, not whatever it asks for.
+    if decoder.set_limits(limits()).is_err() {
+        return keep;
+    }
     let dims = decoder.dimensions();
     use ExtendedColorType as T;
     let grey = matches!(decoder.original_color_type(), T::L1 | T::La1 | T::L2 | T::La2 | T::L4 | T::La4 | T::L8 | T::La8 | T::L16 | T::La16);
@@ -249,7 +253,7 @@ pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, in
     if kept(&rule, dims, size, jpeg) && convert.is_none() {
         return Recoded { image: None, warning: rule.instead };
     }
-    let Some(img) = pixels.or_else(|| image::load_from_memory(bytes).ok()) else { return keep };
+    let Some(img) = pixels.or_else(|| decoded(bytes)) else { return keep };
     let mut rgba = resample(img, &rule, sized(&rule, dims, size)).into_rgba8();
     if kind == Kind::Mono {
         // Resampling greys the edges: back to black and white.
@@ -345,6 +349,23 @@ pub(crate) fn recode_cmyk(
     Recoded { image, warning: rule.instead }
 }
 
+/// The most one image read here may allocate (bytes), as the image reader allows by default.
+const MAX_DECODE: u64 = 512 << 20;
+
+/// The decoder limits of an image read here: [`MAX_DECODE`] bytes.
+fn limits() -> image::Limits {
+    let mut l = image::Limits::default();
+    l.max_alloc = Some(MAX_DECODE);
+    l
+}
+
+/// `bytes` decoded within [`limits`]: an image whose header asks for more is not decoded.
+fn decoded(bytes: &[u8]) -> Option<DynamicImage> {
+    let mut r = ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
+    r.limits(limits());
+    r.decode().ok()
+}
+
 /// The alpha an opacity mask whose art is greyscale image `blob` alone gives the image of
 /// `width` × `height` pixels it covers pixel for pixel: the mask's luminance, over black where the
 /// mask image is transparent when it clips (`clip`), else over white. `None` when `blob` isn't
@@ -353,7 +374,13 @@ pub(crate) fn mask_alpha(blob: &ImageBlob, width: u32, height: u32, clip: bool) 
     if blob.is_cmyk() {
         return None;
     }
-    let img = image::load_from_memory(&blob.bytes).ok()?.into_rgba8();
+    // The size from the header first: a mask of another size, or too large to hold as RGBA, is
+    // not decoded at all.
+    let reader = ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?;
+    if reader.into_dimensions().ok()? != (width, height) || u64::from(width) * u64::from(height) * 4 > MAX_DECODE {
+        return None;
+    }
+    let img = decoded(&blob.bytes)?.into_rgba8();
     if img.dimensions() != (width, height) || !neutral(img.as_raw()) {
         return None;
     }

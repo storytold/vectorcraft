@@ -82,6 +82,14 @@ impl<'a> Reader<'a> {
             // highlight `-- -- angle length Bh`): a NaN keeps the other operands where they are.
             "--" => return self.push(V::Num(f64::NAN)),
             "[" => {
+                // Drop marks that operators have taken off, so `marks` is the open nesting.
+                while self.marks.last().is_some_and(|&m| !matches!(self.stack.get(m), Some(V::Mark))) {
+                    self.marks.pop();
+                }
+                // Arrays nest as deep as their `[`s; dropping a deeper one would overflow the stack.
+                if self.marks.len() >= MAX_DEPTH {
+                    return Err("its objects are nested too deeply".into());
+                }
                 self.marks.push(self.stack.len());
                 return self.push(V::Mark);
             }
@@ -402,7 +410,8 @@ impl<'a> Reader<'a> {
 
     /// `(name) x y scaleX scaleY angle reflect axis shear shearAxis [matrix] p` (`P`: the stroke's):
     /// the pattern swatch `name`, its space taken to art space by the matrix. A pattern this hasn't
-    /// read can't be drawn.
+    /// read can't be drawn. For a pattern defined in the version 7 form, the other operands are
+    /// applied in order before the initial matrix ([`pattern_controls`]).
     fn pattern_paint(&mut self, w: &str, vals: &[V]) {
         // In the setup it paints nothing (and the art's space isn't fixed yet).
         if self.frames.is_empty() {
@@ -413,7 +422,16 @@ impl<'a> Reader<'a> {
             self.unread_pattern(w);
             return;
         };
-        let matrix = vals.iter().rev().find_map(|v| if let V::Arr(a) = v { paint::affine(&Self::nums(a)) } else { None });
+        let mut matrix = vals.iter().rev().find_map(|v| if let V::Arr(a) = v { paint::affine(&Self::nums(a)) } else { None });
+        if name.as_ref().is_some_and(|n| self.v7_patterns.contains(n)) {
+            let controls: Vec<f64> =
+                vals.iter().skip_while(|v| !matches!(v, V::Str(_))).skip(1).take_while(|v| !matches!(v, V::Arr(_))).filter_map(V::num).collect();
+            let Some(controls) = pattern_controls(&controls) else {
+                self.unread_pattern(w);
+                return;
+            };
+            matrix = Some(matrix.unwrap_or(Affine::IDENTITY) * controls);
+        }
         let Some(xf) = pattern_xf(self.space(), matrix, tile) else {
             self.unread_pattern(w);
             return;
@@ -596,11 +614,14 @@ impl<'a> Reader<'a> {
             return;
         }
         // A style read here: the object, painted as it says.
-        if let Some(mut appearance) = self
-            .styles
-            .get(&style)
-            .and_then(|st| styled(object, look, st, &StylePaints { gradients: &self.gradients, patterns: &self.pattern_tiles, space }))
-        {
+        if let Some(mut appearance) = self.styles.get(&style).and_then(|st| {
+            styled(
+                object,
+                look,
+                st,
+                &StylePaints { gradients: &self.gradients, patterns: &self.pattern_tiles, v7_patterns: &self.v7_patterns, space },
+            )
+        }) {
             // Strokes and effects at the document's scale, as the art (a Large Canvas copy's is scaled up).
             let k = space.determinant().abs().sqrt();
             if k.is_finite() && k > 0.0 && (k - 1.0).abs() > 1e-9 {
@@ -694,10 +715,33 @@ fn pattern_xf(space: Affine, matrix: Option<Affine>, tile: Rect) -> Option<Affin
     (xf.determinant().abs() >= 1e-12 && xf.as_coeffs().iter().all(|v| v.is_finite())).then_some(xf)
 }
 
-/// What a style's fills paint with: the file's gradients and pattern tiles, and art space → the document.
+/// A pattern fill's `x y scaleX scaleY angle reflect axis shear shearAxis` as one transform of the
+/// pattern's space, applied before its initial matrix: the shear (by `shear` degrees along the line
+/// at `shearAxis` degrees), the reflection about the line at `axis` degrees when `reflect` isn't
+/// 0, the counterclockwise rotation by `angle` degrees, the scale, then the move to `x y`. `None`
+/// unless there are nine finite numbers.
+fn pattern_controls(n: &[f64]) -> Option<Affine> {
+    let &[x, y, sx, sy, angle, reflect, axis, shear, shear_axis] = n else { return None };
+    if !n.iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let turn = |deg: f64| Affine::rotate(deg.to_radians());
+    let reflection = if reflect != 0.0 { turn(axis) * Affine::scale_non_uniform(1.0, -1.0) * turn(-axis) } else { Affine::IDENTITY };
+    let shearing = if shear != 0.0 {
+        turn(shear_axis) * Affine::new([1.0, 0.0, shear.to_radians().tan(), 1.0, 0.0, 0.0]) * turn(-shear_axis)
+    } else {
+        Affine::IDENTITY
+    };
+    let xf = Affine::translate((x, y)) * Affine::scale_non_uniform(sx, sy) * turn(angle) * reflection * shearing;
+    xf.as_coeffs().iter().all(|v| v.is_finite()).then_some(xf)
+}
+
+/// What a style's fills paint with: the file's gradients and pattern tiles, the patterns defined in
+/// the version 7 form, and art space → the document.
 struct StylePaints<'a> {
     gradients: &'a HashMap<String, Gradient>,
     patterns: &'a HashMap<String, Rect>,
+    v7_patterns: &'a HashSet<String>,
     space: Affine,
 }
 
@@ -740,7 +784,8 @@ fn placed_paints(look: &Node, out: &mut HashMap<String, Paint>, depth: usize) {
 const PATTERN_KEY: &str = "\u{1}pattern ";
 
 /// `object`'s appearance with style `st`, its drawn look `look`: `None` when the style isn't one
-/// this reads, or asks a group for fills or strokes.
+/// this reads, asks a group for fills or strokes, or has Pathfinder effects on anything but a group
+/// with no fills or strokes.
 fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, paints: &StylePaints) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
     // A text object's slot (an empty group standing for it) takes the style as the type will.
@@ -748,6 +793,8 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     if !st.plain
         || (!slot && !st.simple)
         || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
+        || (st.pathfinder
+            && (slot || !st.items.is_empty() || object.is_compound_shape() || !matches!(object.kind, NodeKind::Group { clip: false, .. })))
     {
         return None;
     }
@@ -778,11 +825,15 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                 };
                 AppearanceItem::Fill(FillLayer::new(paint))
             }
-            StyleItem::Pattern { name, matrix } => match placed.get(&format!("{PATTERN_KEY}{name}")) {
+            StyleItem::Pattern { name, matrix, controls } => match placed.get(&format!("{PATTERN_KEY}{name}")) {
                 Some(p) => AppearanceItem::Fill(FillLayer::new(p.clone())),
                 None => {
                     let tile = paints.patterns.get(name).copied()?;
-                    let xf = pattern_xf(paints.space, matrix.and_then(|m| paint::affine(&m)), tile)?;
+                    let mut matrix = matrix.and_then(|m| paint::affine(&m));
+                    if paints.v7_patterns.contains(name) {
+                        matrix = Some(matrix.unwrap_or(Affine::IDENTITY) * pattern_controls(controls)?);
+                    }
+                    let xf = pattern_xf(paints.space, matrix, tile)?;
                     AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: name.clone(), xf }))
                 }
             },

@@ -1658,6 +1658,30 @@ fn real_time_drawing_off_still_shows_a_dragged_guide() {
     assert_eq!((s.doc().unwrap().doc.guides[0].pos, s.doc().unwrap().history.undo.last().map(|e| e.label.as_str())), (150.0, Some("Move Guide")));
 }
 
+/// With Real-time Drawing off, a 9-slice guide of the edited symbol moved with the Selection tool
+/// still moves while it is dragged, and the release leaves one Symbol Options undo step.
+#[test]
+fn real_time_drawing_off_still_shows_a_dragged_nine_slice_guide() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Box", "nineSlice": true})).unwrap();
+    s.execute("symbol.edit", &json!({})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let left = |s: &Session| s.doc().unwrap().doc.symbol_nine_slice("Box").unwrap().left;
+    assert_eq!(left(&s), 0.25);
+    let steps = s.doc().unwrap().history.undo.len();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 150.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 110.0, 150.0), v).unwrap();
+    assert!((left(&s) - 0.1).abs() < 1e-9, "the guide moves while dragged: {}", left(&s));
+    s.pointer(&PointerEvent::new(PointerKind::Up, 110.0, 150.0), v).unwrap();
+    let d = s.doc().unwrap();
+    assert!((left(&s) - 0.1).abs() < 1e-9);
+    assert_eq!((d.history.undo.len(), d.history.undo.last().map(|e| e.label.as_str())), (steps + 1, Some("Symbol Options")));
+}
+
 /// Real-time Drawing turned on mid-drag still applies the deferred preview on commit.
 #[test]
 fn real_time_drawing_turned_on_mid_drag_still_commits_deferred_preview() {

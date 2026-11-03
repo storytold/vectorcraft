@@ -1528,6 +1528,7 @@ file-filter	Templates	Sablonok
 	Flip Vertical	Függőleges tükrözés
 	Flip:	Tükrözés:
 	Float in Window	Lebegtetés ablakban
+	Float All in Windows	Összes lebegtetése ablakokban
 	Float Panel	Panel lebegtetése
 	Float Tool Group	Eszközcsoport lebegtetése
 	Focal Fill	Aktív kitöltés
@@ -1771,6 +1772,10 @@ file-filter	Templates	Sablonok
 	Hard Mix	Kemény keverés
 	Harmony Rules	Harmóniaszabályok
 	Harmony Rules:	Harmóniaszabályok:
+	Segmented color wheel	Szegmentált színkör
+	Show smooth color wheel	Folytonos színkör megjelenítése
+	Show segmented color wheel	Szegmentált színkör megjelenítése
+	Show color bars	Színsávok megjelenítése
 	Harmony Sets	Harmóniakészletek
 	HDTV 1080p	HDTV 1080p
 	HDTV 720p	HDTV 720p
@@ -2151,6 +2156,8 @@ file-filter	Templates	Sablonok
 	Largest:	Legnagyobb:
 	Lasso	Lasszó
 	Lasso Tool	Lasszó
+	Enclosing Lasso Tool	Körülzáró lasszó
+	Enclosing Lasso	Körülzáró lasszó
 	Last	Utolsó
 	Last commit	Utolsó commit
 	Last Effect: {name}	Legutóbbi effektus: {name}
@@ -2346,6 +2353,7 @@ file-filter	Templates	Sablonok
 	Manually	Kézzel
 	Mark as trapped	Megjelölés csapdázottként
 	Mark Older Files as [Converted] When Opened	Régebbi fájlok megjelölése [Átalakítva] címkével megnyitáskor
+	Use System Defaults for Edit Original	Rendszer alapértelmezéseinek használata az Eredeti szerkesztéséhez
 	Marker…	Jelölő…
 	Marks	Jelek
 	Marks and Bleed	Jelek és kifutó
@@ -2432,6 +2440,7 @@ file-filter	Templates	Sablonok
 	Modify	Módosítás
 	Mojikumi	Mojikumi
 	Insert Kashidas	Kasidák beszúrása
+	Kashidas	Kasidák
 	Long	Hosszú
 	Stylistic	Stilisztikai
 	Mojikumi Set	Mojikumi-készlet
@@ -3231,6 +3240,8 @@ mark-style	Japanese	Japán
 	Replace Spine	Gerinc cseréje
 	Replace Symbol	Szimbólum cseréje
 	Replace With Font	Helyettesítő betűtípus
+	Replace With Font From	Helyettesítő betűtípus forrása
+	System	Rendszer
 	Replace “{name}”, the file this document was opened from?	Felülírod ezt a fájlt, amelyből a dokumentumot megnyitottad: „{name}”?
 	Replaces the saved preset of that name.	Felülírja az azonos nevű mentett előbeállítást.
 	Replace…	Csere…
@@ -4043,6 +4054,7 @@ mark-style	Japanese	Japán
 	Text Displayed in Cell	A cellában megjelenő szöveg
 	Text Displayed in Cell:	A cellában megjelenő szöveg:
 	Text Export Options	Szövegexportálási beállítások
+	Text Fill & Stroke Color	Szöveg kitöltő- és körvonalszíne
 	Text Fill Color	Szöveg kitöltőszíne
 	Text Import Options	Szövegimportálási beállítások
 	Text Stroke Color	Szöveg körvonalszíne
@@ -5541,6 +5553,11 @@ imageTrace	Outline	Körvonal
 	Export Type:	Exportálás típusa:
 	Movie Clip	Mozgóklip
 @msg	name is empty	a név üres
+@msg	an action is already recording	már folyik egy művelet felvétele
+@msg	no such function key	nincs ilyen funkcióbillentyű
+@msg	no such color	nincs ilyen szín
+@msg	{_1} cannot be used on Windows	A(z) {_1} nem használható Windows rendszeren
+@msg	more than one action is named “{_1}”	több művelet neve is „{_1}”
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
 	Smudge Stick…	Elmosó rúd…
 	Smudge Stick	Elmosó rúd
@@ -5711,9 +5728,17 @@ axis	Y Axis	Y tengely
 	Action Options…	Művelet beállításai…
 	Action Options	Művelet beállításai
 	Rename Action	Művelet átnevezése
+	New Action…	Új művelet…
+	New Action	Új művelet
+	Create New Action	Új művelet létrehozása
+	Play Action	Művelet lejátszása
+	Action Set:	Műveletkészlet:
+	Function Key:	Funkcióbillentyű:
+	Record	Felvétel
 	Create New Set	Új készlet létrehozása
 	Stop Global Edit	Globális szerkesztés befejezése
 	Global Edit Options	Globális szerkesztés beállításai
+	Leave Out of Global Edit	Kizárás a globális szerkesztésből
 	Match	Egyezés
 	On Artboards	Rajztáblákon
 	All Artboards	Minden rajztábla
@@ -5722,6 +5747,8 @@ axis	Y Axis	Y tengely
 @msg	select one object	jelöljön ki egy objektumot
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A globális szerkesztés útvonalakon, összetett útvonalakon, szimbólumpéldányokon és ezek csoportjain működik
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nem található hasonló objektum (az elforgatott vagy tükrözött másolatok nem számítanak egyezésnek); módosítsa a globális szerkesztés beállításait, és próbálja újra
+@msg	Global Edit is off	A globális szerkesztés nincs bekapcsolva
+@msg	only an object of the Global Edit other than the one it started from can be left out	a globális szerkesztésből csak a kiindulási objektumtól eltérő objektum zárható ki
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all vagy egy tartomány, például 1, 3-5, nem {v}
 	Add to Symbols	Hozzáadás a szimbólumokhoz
 	Basic Shapes	Alapalakzatok
@@ -5978,6 +6005,11 @@ anchor	Points:	Pontok:
 	Horizontal Scale	Vízszintes méretezés
 	Vertical Scale	Függőleges méretezés
 @msg	{label} must be a number from {min} to {max}	{label} {min} és {max} közötti szám kell legyen
+	Character Color	Karakterszín
+	OpenType Features	OpenType-funkciók
+	Stylistic Sets	Stíluskészletek
+@msg	features lists at most {max} tags	a features legfeljebb {max} címkét tartalmazhat
+@msg	unknown OpenType feature `{t}`	ismeretlen OpenType-funkció: `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0-nál nagyobb és legfeljebb {max} értékű szám kell legyen
 @msg	no character style `{name}`	A(z) `{name}` karakterstílus nem található
 
@@ -6227,3 +6259,14 @@ breakText	Glyphs	Glifák
 	Create Swatch Legend	Színmintajelmagyarázat létrehozása
 	Create Swatch Legend…	Színmintajelmagyarázat létrehozása…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Szövegeszközök
+	Text Tweaker…	Szöveghangoló…
+	Text Tweaker	Szöveghangoló
+	Attribute:	Jellemző:
+	From:	Ettől:
+	To:	Eddig:
+	Bow	Ív
+	Spike	Csúcs
+	Skip Spaces	Szóközök kihagyása
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	A grafika túl nagy ahhoz, hogy képként másolható legyen: más alkalmazások nem kapnak róla PNG-t

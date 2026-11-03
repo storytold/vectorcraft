@@ -42,6 +42,7 @@ pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value
         fields.insert("__smallCapsSize".into(), json!(d.setup.small_caps_size));
         fields.insert("__superscript".into(), json!(d.setup.superscript));
         fields.insert("__subscript".into(), json!(d.setup.subscript));
+        fields.insert("__swatches".into(), super::char_style_options::swatch_choices(d));
         let attrs = target.get("attrs").and_then(Value::as_object).cloned().unwrap_or_default();
         fields.extend(super::char_style_options::fields_from_attrs(&attrs));
         fields.insert("__attrs".into(), Value::Object(attrs));
@@ -59,6 +60,10 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 super::char_style_options::basic_body(ui, d);
             } else if d.str("section") == "advanced" {
                 super::char_style_options::advanced_body(ui, d);
+            } else if d.str("section") == "color" {
+                super::char_style_options::color_body(ui, d);
+            } else if d.str("section") == "opentype" {
+                super::char_style_options::opentype_body(ui, d);
             } else {
                 ui.vertical(|ui| {
                     grid(ui, |ui| {

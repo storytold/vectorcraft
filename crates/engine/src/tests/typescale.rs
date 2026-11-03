@@ -271,6 +271,30 @@ fn a_file_with_type_sizes_out_of_range_opens_with_them_in_range() {
     assert!(b.width().is_finite() && b.height().is_finite(), "{b:?}");
 }
 
+/// A file whose character styles hold a Tate-chu-yoko Up/Down or Left/Right offset past
+/// `MAX_COORD` either way opens with the nearer end, and text that takes the style gets it. An
+/// offset within range stays as saved.
+#[test]
+fn a_file_with_tate_chu_yoko_offsets_out_of_range_in_a_character_style_opens_with_them_in_range() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 40, "y": 60, "size": 20, "text": "12"})).unwrap()["id"].as_u64().unwrap());
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let attrs = json!({"tateChuYoko": true, "tcyUpDown": 1e12, "tcyLeftRight": -1e12});
+    d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Far".into(), attrs: attrs.as_object().unwrap().clone() });
+    let attrs = json!({"tcyUpDown": 5000, "tcyLeftRight": -3.5});
+    d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Near".into(), attrs: attrs.as_object().unwrap().clone() });
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d));
+    s.execute("document.open", &json!({"name": "tcy.vectorcraft", "dataBase64": data})).unwrap();
+    let max = vectorcraft_doc::MAX_COORD;
+    let doc = &s.doc().unwrap().doc;
+    let fixed = json!({"tateChuYoko": true, "tcyUpDown": max, "tcyLeftRight": -max});
+    assert_eq!(doc.char_styles[0].attrs, *fixed.as_object().unwrap());
+    assert_eq!(doc.char_styles[1].attrs, *json!({"tcyUpDown": 5000, "tcyLeftRight": -3.5}).as_object().unwrap());
+    s.execute("charStyle.apply", &json!({"name": "Far", "id": id.0})).unwrap();
+    let t = text(&s, id);
+    assert_eq!(t.runs.iter().map(|r| (r.style.tcy_up_down, r.style.tcy_left_right)).collect::<Vec<_>>(), [(max, -max)]);
+}
+
 /// SVG import keeps type sizes outside the Character panel's 0.1 to 1296 pt, and it gives a line
 /// aligned differently from the one before it an indent, here past the Paragraph panel's 1296 pt.
 /// A native file of the result opens with the same type.

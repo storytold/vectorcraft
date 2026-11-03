@@ -286,6 +286,11 @@ impl Obj {
             Self::GState(_) => "gstatetype",
         }
     }
+
+    /// A composite object, whose value lives in VM; the others are simple (PLRM 3rd ed., §3.3.1).
+    pub fn is_composite(&self) -> bool {
+        matches!(self, Self::Str(_) | Self::ExecStr(_) | Self::Array { .. } | Self::Dict(_) | Self::File { .. } | Self::Save(_) | Self::GState(_))
+    }
 }
 
 /// The values of a string or an array: a run of storage that other strings or arrays may share

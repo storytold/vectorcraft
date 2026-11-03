@@ -179,3 +179,15 @@ fn a_pixelated_colorized_image_asks_viewers_not_to_smooth_it() {
         assert_eq!(String::from_utf8_lossy(&out).contains("/Interpolate"), !pixelated, "pixelated: {pixelated}");
     }
 }
+
+/// Ink options naming no ink give one warning, its lists cut short, however many there are.
+#[test]
+fn ink_options_naming_no_ink_give_one_short_warning() {
+    let d = doc(ColorMode::Cmyk, None);
+    let inks: Vec<serde_json::Value> = (0..10_000).map(|i| serde_json::json!({"name": format!("Missing {i}")})).collect();
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations", "inks": inks}})).unwrap();
+    let (list, warnings) = print_inks(&d, &settings);
+    assert!(list.iter().any(|i| i.name == "Cyan"));
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].contains("`Missing 0`") && warnings[0].contains("and 9990 more") && warnings[0].len() < 500, "{}", warnings[0]);
+}

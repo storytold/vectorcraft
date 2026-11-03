@@ -521,6 +521,11 @@ struct Output {
     folders: std::collections::HashMap<String, String>,
     /// Sub-folders already made, by their [`fold`]ed names.
     made: HashSet<String>,
+    /// For each [`fold`]ed name asked for, the number to try next: many files given one name
+    /// would otherwise try `-2`, `-3`… from the start each time.
+    next: std::collections::HashMap<String, u64>,
+    /// Each [`fold`]ed name asked for with the file (`key`) that got a name from it.
+    claimed: HashSet<(String, String)>,
     /// `(relative name, bytes)` kept to return or zip (empty when written to a folder).
     kept: Vec<(String, Vec<u8>)>,
     /// The paths written.
@@ -540,8 +545,14 @@ impl Output {
             }
             None => name.to_string(),
         };
+        let asked = (fold(&name), key.to_string());
+        // The same file under the same name again: it has its name already.
+        if self.claimed.contains(&asked) {
+            return None;
+        }
         let (base, ext) = name.rsplit_once('.').map_or((name.as_str(), ""), |(b, e)| (b, e));
-        for n in 1.. {
+        let start = self.next.get(&asked.0).copied().unwrap_or(1);
+        for n in start.. {
             let candidate = if n == 1 {
                 name.to_string()
             } else if ext.is_empty() {
@@ -554,6 +565,8 @@ impl Output {
                 Some(_) => continue,
                 None => {
                     self.taken.insert(fold(&candidate), key.to_string());
+                    self.next.insert(asked.0.clone(), n + 1);
+                    self.claimed.insert(asked);
                     return Some(candidate);
                 }
             }
@@ -685,6 +698,8 @@ fn preset_settings(s: &Session, cmd: &str, given: &Map<String, Value>) -> Result
     // Refuse what an export would refuse, now rather than when the preset is used.
     check_settings(s, &Value::Object(settings.clone())).map_err(|e| bad(cmd, e.to_string()))?;
     Folders::of(&ScreenParams::of(&Value::Object(settings.clone()))?).map_err(|e| bad(cmd, e.to_string()))?;
+    let mut settings = settings;
+    remove_passwords(&mut settings);
     Ok(settings)
 }
 
@@ -912,6 +927,7 @@ pub(crate) fn with_export_preset(s: &Session, cmd: &str, settings: &mut Map<Stri
 /// so do different files that would share a name, with or without the `name` pattern. The reply's
 /// `warnings` lists every warning the encoders give for the files, each once.
 pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
+    check_passwords(p)?;
     let o = ScreenParams::of(p)?;
     let rows = rows_of(s, p, o.preset.as_deref())?;
     o.one_source()?;
@@ -1262,9 +1278,61 @@ fn remember(s: &mut Session, p: &Value) {
     let _ = store_settings(s, settings);
 }
 
+/// The PDF passwords an export may be given (`security` of a PDF row or of `settings.pdf`).
+const PASSWORD_KEYS: [&str; 2] = ["openPassword", "permissionsPassword"];
+
+/// Left where [`remove_passwords`] took a password out: an export of these settings is refused
+/// until a password is given again ([`check_passwords`]), rather than written unprotected.
+const PASSWORD_REQUIRED: &str = "passwordRequired";
+
+/// `settings` without the PDF passwords anywhere in them: settings kept in the document (which
+/// native saves write) or in the preferences hold the export's choices, never its secrets, as
+/// the PDF settings themselves are saved without them. Where one was given, [`PASSWORD_REQUIRED`]
+/// says so.
+fn remove_passwords(settings: &mut Map<String, Value>) {
+    let mut removed = false;
+    for key in PASSWORD_KEYS {
+        removed |= settings.remove(key).is_some_and(|v| v.as_str().is_none_or(|p| !p.is_empty()));
+    }
+    if removed {
+        settings.insert(PASSWORD_REQUIRED.into(), Value::Bool(true));
+    }
+    for v in settings.values_mut() {
+        remove_passwords_in(v);
+    }
+}
+
+/// Refuse export params `v` that hold settings whose PDF passwords were left out
+/// ([`PASSWORD_REQUIRED`]) without a password given again.
+fn check_passwords(v: &Value) -> Result<()> {
+    match v {
+        Value::Object(m) => {
+            let given = PASSWORD_KEYS.iter().any(|k| m.get(*k).and_then(Value::as_str).is_some_and(|p| !p.is_empty()));
+            if m.get(PASSWORD_REQUIRED) == Some(&Value::Bool(true)) && !given {
+                return Err(bad(
+                    C,
+                    "the PDF security settings were saved without their passwords: give openPassword or permissionsPassword again, or security without passwordRequired to export unprotected",
+                ));
+            }
+            m.values().try_for_each(check_passwords)
+        }
+        Value::Array(items) => items.iter().try_for_each(check_passwords),
+        _ => Ok(()),
+    }
+}
+
+fn remove_passwords_in(v: &mut Value) {
+    match v {
+        Value::Object(m) => remove_passwords(m),
+        Value::Array(items) => items.iter_mut().for_each(remove_passwords_in),
+        _ => {}
+    }
+}
+
 /// Make `settings` the document's export settings. Not an undo step (like the settings of any
 /// export); the document has changed only if they differ.
-pub(crate) fn store_settings(s: &mut Session, settings: Map<String, Value>) -> Result<()> {
+pub(crate) fn store_settings(s: &mut Session, mut settings: Map<String, Value>) -> Result<()> {
+    remove_passwords(&mut settings);
     let st = s.doc_mut()?;
     if st.doc.export_settings != settings {
         Arc::make_mut(&mut st.doc).export_settings = settings;
@@ -1280,7 +1348,26 @@ pub(super) fn export_settings(s: &mut Session, _: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ScreenSize, safe_file_name};
+    use super::{Output, ScreenSize, safe_file_name};
+
+    /// Files given one name are numbered in turn, each numbering going on from the last one (so
+    /// thousands of them don't each try every number used before), and a file asking again for
+    /// the name it got is told it has it.
+    #[test]
+    fn taken_names_are_numbered_from_the_last_number() {
+        let mut out = Output::default();
+        assert_eq!(out.claim("a.png", "1").as_deref(), Some("a.png"));
+        assert_eq!(out.claim("A.png", "2").as_deref(), Some("A-2.png"));
+        assert_eq!(out.claim("a-3.png", "x").as_deref(), Some("a-3.png"));
+        assert_eq!(out.claim("a.png", "3").as_deref(), Some("a-4.png"));
+        assert_eq!(out.claim("a.png", "2"), None);
+        assert_eq!(out.claim("a.png", "1"), None);
+        assert_eq!(out.claim("sub/a.png", "1").as_deref(), Some("sub/a.png"));
+        for k in 0..20_000 {
+            assert!(out.claim("same.png", &k.to_string()).is_some());
+        }
+        assert_eq!(out.claim("same.png", "last").as_deref(), Some("same-20001.png"));
+    }
 
     #[test]
     fn size_parse_refuses_signs_and_exponents() {
@@ -1301,5 +1388,23 @@ mod tests {
         assert_eq!(safe_file_name("COM1 .png"), "COM1-.png");
         assert_eq!(safe_file_name("lpt9  .png"), "lpt9-.png");
         assert_eq!(safe_file_name("My CON .png"), "My CON .png");
+    }
+
+    /// The settings an export leaves in the document keep its PDF security choices but not its
+    /// passwords, in a row or in `settings.pdf`.
+    #[test]
+    fn stored_settings_leave_out_pdf_passwords() {
+        let mut s = crate::Session::new();
+        s.execute("file.new", &serde_json::json!({"width": 100, "height": 100})).unwrap();
+        let given = serde_json::json!({
+            "formats": [{"format": "pdf", "security": {"openPassword": "open sesame", "permissionsPassword": "owner", "printing": "low"}}],
+            "settings": {"pdf": {"security": {"openPassword": "open sesame", "copy": false}}},
+        });
+        super::store_settings(&mut s, given.as_object().unwrap().clone()).unwrap();
+        let kept = serde_json::Value::Object(s.doc().unwrap().doc.export_settings.clone());
+        assert!(!kept.to_string().contains("Password"), "{kept}");
+        assert_eq!(kept["formats"][0]["security"]["printing"], "low");
+        assert_eq!(kept["settings"]["pdf"]["security"]["copy"], false);
+        assert_eq!(kept["formats"][0]["security"]["passwordRequired"], true);
     }
 }

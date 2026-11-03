@@ -62,7 +62,12 @@ pub(crate) fn keep_prefs_copy(path: &std::path::Path, bytes: &[u8], stem: &str) 
     use std::io::Write as _;
     for n in 1..100u32 {
         let name = if n == 1 { format!("{stem}.json") } else { format!("{stem}-{n}.json") };
-        match std::fs::OpenOptions::new().write(true).create_new(true).open(path.with_file_name(name)) {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        // The preferences hold recent document paths: the copy is owner-only, whatever the umask.
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        match options.open(path.with_file_name(name)) {
             Ok(mut file) => {
                 if file.write_all(bytes).is_ok() {
                     return;
@@ -312,6 +317,8 @@ pub(crate) fn prefs_bytes(app: &VectorcraftApp) -> serde_json::Result<Vec<u8>> {
 /// [`prefs_bytes`] as JSON.
 fn prefs_value(app: &VectorcraftApp) -> serde_json::Result<serde_json::Value> {
     let mut ui = app.ui.clone();
+    // An open dialog is never restored, and its fields can hold passwords (PDF import and save).
+    ui.dialog = None;
     ui.engine_prefs = app.session.prefs.to_json();
     serde_json::to_value(&ui)
 }
@@ -324,6 +331,19 @@ mod tests {
 
     /// Two windows open at once (#4625): the one that saves last keeps the other's changes and
     /// adds its own, instead of putting back the preferences it started from.
+    #[cfg(unix)]
+    #[test]
+    fn a_kept_preferences_copy_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = std::env::temp_dir().join(format!("vc-prefs-copy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        super::keep_prefs_copy(&dir.join("ui.json"), b"{}", "ui.unreadable");
+        let mode = std::fs::metadata(dir.join("ui.unreadable.json")).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_window_saves_only_what_it_changed_over_another_windows_save() {
         let base = json!({"workspace": "Essentials", "toolbar": true, "engine_prefs": {"uiAccent": "blue", "uiScaling": 1.0}});
