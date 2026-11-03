@@ -521,6 +521,11 @@ struct Output {
     folders: std::collections::HashMap<String, String>,
     /// Sub-folders already made, by their [`fold`]ed names.
     made: HashSet<String>,
+    /// For each [`fold`]ed name asked for, the number to try next: many files given one name
+    /// would otherwise try `-2`, `-3`… from the start each time.
+    next: std::collections::HashMap<String, u64>,
+    /// Each [`fold`]ed name asked for with the file (`key`) that got a name from it.
+    claimed: HashSet<(String, String)>,
     /// `(relative name, bytes)` kept to return or zip (empty when written to a folder).
     kept: Vec<(String, Vec<u8>)>,
     /// The paths written.
@@ -540,8 +545,14 @@ impl Output {
             }
             None => name.to_string(),
         };
+        let asked = (fold(&name), key.to_string());
+        // The same file under the same name again: it has its name already.
+        if self.claimed.contains(&asked) {
+            return None;
+        }
         let (base, ext) = name.rsplit_once('.').map_or((name.as_str(), ""), |(b, e)| (b, e));
-        for n in 1.. {
+        let start = self.next.get(&asked.0).copied().unwrap_or(1);
+        for n in start.. {
             let candidate = if n == 1 {
                 name.to_string()
             } else if ext.is_empty() {
@@ -554,6 +565,8 @@ impl Output {
                 Some(_) => continue,
                 None => {
                     self.taken.insert(fold(&candidate), key.to_string());
+                    self.next.insert(asked.0.clone(), n + 1);
+                    self.claimed.insert(asked);
                     return Some(candidate);
                 }
             }
@@ -1280,7 +1293,26 @@ pub(super) fn export_settings(s: &mut Session, _: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ScreenSize, safe_file_name};
+    use super::{Output, ScreenSize, safe_file_name};
+
+    /// Files given one name are numbered in turn, each numbering going on from the last one (so
+    /// thousands of them don't each try every number used before), and a file asking again for
+    /// the name it got is told it has it.
+    #[test]
+    fn taken_names_are_numbered_from_the_last_number() {
+        let mut out = Output::default();
+        assert_eq!(out.claim("a.png", "1").as_deref(), Some("a.png"));
+        assert_eq!(out.claim("A.png", "2").as_deref(), Some("A-2.png"));
+        assert_eq!(out.claim("a-3.png", "x").as_deref(), Some("a-3.png"));
+        assert_eq!(out.claim("a.png", "3").as_deref(), Some("a-4.png"));
+        assert_eq!(out.claim("a.png", "2"), None);
+        assert_eq!(out.claim("a.png", "1"), None);
+        assert_eq!(out.claim("sub/a.png", "1").as_deref(), Some("sub/a.png"));
+        for k in 0..20_000 {
+            assert!(out.claim("same.png", &k.to_string()).is_some());
+        }
+        assert_eq!(out.claim("same.png", "last").as_deref(), Some("same-20001.png"));
+    }
 
     #[test]
     fn size_parse_refuses_signs_and_exponents() {
