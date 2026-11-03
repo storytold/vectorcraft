@@ -1739,6 +1739,8 @@ file-filter	Templates	Шаблоны
 	Large Thumbnail View	Крупные миниатюры
 	Large Thumbnails	Крупные миниатюры
 	Lasso Tool	Инструмент «Лассо»
+	Enclosing Lasso Tool	Инструмент «Охватывающее лассо»
+	Enclosing Lasso	Охватывающее лассо
 	Last Effect: {name}	Последний эффект: {name}
 	Last Effect: {}	Последний эффект: {}
 	Last Effect…	Последний эффект…
@@ -1953,6 +1955,7 @@ file-filter	Templates	Шаблоны
 	Modify	Изменить
 	Mojikumi	Mojikumi
 	Insert Kashidas	Вставлять кашиды
+	Kashidas	Кашиды
 	Long	Длинные
 	Stylistic	Стилистические
 	Mojikumi Set	Набор mojikumi
@@ -6374,3 +6377,4 @@ shape	Open	Открытый
 	Bow	Дуга
 	Spike	Пик
 	Skip Spaces	Пропускать пробелы
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Графика слишком велика для копирования в виде изображения: другие приложения не получат её PNG

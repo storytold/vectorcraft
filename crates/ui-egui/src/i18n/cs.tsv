@@ -1266,6 +1266,8 @@ lighting	Light	Světlo
 	Hand	Ručička
 	Join Tool	Nástroj Spojení
 	Lasso Tool	Nástroj Laso
+	Enclosing Lasso Tool	Nástroj obklopující laso
+	Enclosing Lasso	Obklopující laso
 	Lasso	Laso
 	Line Cut Tool	Nástroj Řez čarou
 	Line Graph Tool	Nástroj Spojnicový graf
@@ -1855,6 +1857,7 @@ digits	Malayalam	Malajálamské
 	Left-to-Right Paragraph Direction	Směr odstavce zleva doprava
 	Line-end Punctuation Half Width	Interpunkce na konci řádku poloviční šířky
 	Insert Kashidas	Vložit kašídy
+	Kashidas	Kašídy
 	Long	Dlouhý
 	Stylistic	Stylistický
 	Mojikumi Set	Sada Mojikumi
@@ -6285,3 +6288,4 @@ breakText	Glyphs	Glyfy
 	Bow	Oblouk
 	Spike	Špička
 	Skip Spaces	Přeskočit mezery
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Kresba je příliš velká na zkopírování jako obrázek: ostatní aplikace z ní nedostanou PNG

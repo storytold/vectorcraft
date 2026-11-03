@@ -1742,6 +1742,8 @@ file-filter	Templates	Modelli
 	Large Thumbnail View	Vista miniature grandi
 	Large Thumbnails	Miniature grandi
 	Lasso Tool	Strumento Lazo
+	Enclosing Lasso Tool	Strumento Lazo di inclusione
+	Enclosing Lasso	Lazo di inclusione
 	Last Effect: {name}	Ultimo effetto: {name}
 	Last Effect: {}	Ultimo effetto: {}
 	Last Effect…	Ultimo effetto…
@@ -1956,6 +1958,7 @@ file-filter	Templates	Modelli
 	Modify	Modifica
 	Mojikumi	Mojikumi
 	Insert Kashidas	Inserisci kashida
+	Kashidas	Kashida
 	Long	Lunga
 	Stylistic	Stilistica
 	Mojikumi Set	Set mojikumi
@@ -5905,3 +5908,4 @@ breakText	Glyphs	Glifi
 	Bow	Arco
 	Spike	Picco
 	Skip Spaces	Salta gli spazi
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	La grafica è troppo grande per essere copiata come immagine: le altre app non ne ricevono un PNG

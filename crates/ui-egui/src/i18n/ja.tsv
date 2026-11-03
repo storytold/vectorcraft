@@ -71,6 +71,7 @@ digits	Malayalam	マラヤーラム数字
 	Join Our Discord	Discord に参加
 	Line-end Punctuation Half Width	行末約物半角
 	Insert Kashidas	カシーダを挿入
+	Kashidas	カシーダ
 	Long	長い
 	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
@@ -1991,6 +1992,8 @@ digits	Malayalam	マラヤーラム数字
 	Large	大
 	Large Tabs	大きいタブ
 	Lasso Tool	なげなわツール
+	Enclosing Lasso Tool	囲みなげなわツール
+	Enclosing Lasso	囲みなげなわ
 	Last Effect: {name}	最後の効果：{name}
 	Last Page	最後のページ
 	Layer Options…	レイヤーオプション…
@@ -5970,3 +5973,4 @@ breakText	Glyphs	字形
 	Bow	弓形
 	Spike	山形
 	Skip Spaces	スペースをスキップ
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	アートワークが大きすぎるため画像としてコピーできません：他のアプリには PNG が渡されません

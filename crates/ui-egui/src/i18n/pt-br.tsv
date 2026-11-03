@@ -1460,6 +1460,8 @@
 	Large	Grande
 	Large Tabs	Guias Grandes
 	Lasso Tool	Ferramenta Laço
+	Enclosing Lasso Tool	Ferramenta Laço envolvente
+	Enclosing Lasso	Laço envolvente
 	Last Effect: {name}	Último Efeito: {name}
 	Last Effect…	Último Efeito…
 	Last Page	Última Página
@@ -3326,6 +3328,7 @@ font-technology	Variable	Variáveis
 	Merge Selected	Mesclar selecionados
 	Model	Modelo
 	Insert Kashidas	Inserir Kashidas
+	Kashidas	Kashidas
 	Long	Longo
 	Stylistic	Estilístico
 	Mojikumi Set	Conjunto Mojikumi
@@ -6358,3 +6361,4 @@ swatch	Yellow Green	Verde-amarelado
 	Bow	Arco
 	Spike	Pico
 	Skip Spaces	Ignorar espaços
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	A arte é grande demais para ser copiada como imagem: outros aplicativos não recebem um PNG dela

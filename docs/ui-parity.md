@@ -1,12 +1,21 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (font-family fields accept the mouse wheel, #5253; Transform previews typed values and reads the Appearance target; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Type on a Path Options has a Preview checkbox, #5360; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
 Creating a gradient from solid or empty paint uses the document's color model for its default stops, including drawing its vector with the Gradient tool. Explicit `keepModel: true` retains RGB defaults, and existing gradients keep their own colors. Scores and estimates are unchanged.
 
 **Feature evidence last updated:** 2026-11-03.
+
+Enclosing Lasso is an add-on under Object › Plug-ins with its own heading in All Tools. It has
+no default shortcut or Basic toolbar slot. It selects whole objects only
+when their geometry is fully enclosed by the freehand loop. Shift adds, Alt subtracts, and
+Escape cancels. Ordinary group members can be selected separately; compound paths stay whole.
+Path checks follow curves, excluding stroke width and effects; other objects use their geometric
+box. The loop closes on release, uses even-odd regions when it crosses itself, and includes
+objects touching its boundary. Existing Lasso anchor selection and its Q shortcut are unchanged.
+Scores and estimates are unchanged.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
@@ -21,6 +30,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Enclosing Lasso provides whole-object enclosure selection as an add-on with no default shortcut or Basic toolbar slot. Scores and estimates remain unchanged. |
 | 2026-11-03 | minor | Transform previews valid typed values while numeric fields remain focused. Effect dialogs use the object, group, or layer targeted in Appearance. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-10-26 | minor | Pencil Fidelity goes down to 0.01 pt (dialog, tool and engine; Smooth keeps 0.05) on a logarithmic slider across the Tool Options row, with hundredths in the field and key steps that fit the range (#3328); scores and estimates unchanged (estimated) |
@@ -287,6 +297,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | Pathfinder panel: a group selected alone counts its nested shapes, so an expanded stroked object keeps the Shape Modes enabled | done | #1642 (#1635) |
 | Selected Grid Repeat shows row, column and corner handles and spacing sliders; bounding-box handles take priority where they meet | done | #2691, `tools/src/repeat_grid.rs`; [public behavior reference](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-grid-repeat-options.html); drags preview and commit `object.repeat.options` as one undo step, Escape cancels; Radial Repeat has no handles yet |
 | Grid Repeat Options (Object › Repeat › Options…) has a Preview checkbox: the repeat on the canvas follows the fields while the dialog is open, Cancel puts the original back without a history step, OK keeps the previewed values as one undo step | done | #2651; [public behavior reference](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-grid-repeat-options.html) lists the Preview option for the grid options only, so Radial and Mirror Repeat Options have none; `dialogs/command.rs` tests |
+| Type on a Path Options (Type › Type on a Path › Type on a Path Options…, or a double-click on the Type on a Path tools) has a Preview checkbox, off when it opens: the selected type on a path follows Effect, Flip, Align to Path and Spacing while the dialog is open, Cancel puts it back without a history step, OK keeps the previewed values as one undo step | done | #5360; the [public page](https://helpx.adobe.com/illustrator/using/creating-type-path.html) lists the dialog's options, and public tutorials of the dialog show its Preview checkbox; `tests/pathtype.rs` |
 | Selected Mirror Repeat shows a prominent axis with move and rotation handles; bounding-box handles take priority over the axis line | done | #2877, `tools/src/mirror.rs`; [public behavior reference](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-mirror-repeat-options.html) |
 | Object › Expand on radial, grid and mirror repeats makes groups of their instances | done | #1765 (#1756) |
 | Object › Expand… is dimmed while the selection has appearance attributes (effects, several fills or strokes, a fill or stroke with its own transparency or effects, a brush); its tooltip and the status bar say to use Object › Expand Appearance first, which leaves a stroked line with Zig Zag a stroked zig-zag line that Expand then outlines | done | #3089; [public behavior reference](https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/expand-objects.html); `dialogs/expand.rs` tests, engine `tests_objexpand`. `object.expand` (agents, scripts) still bakes effects in one step |
@@ -407,6 +418,8 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Enclosing Lasso selects fully enclosed objects with a freehand loop under Object › Plug-ins; scores and estimates unchanged. |
+| 2026-11-03 | minor | Type on a Path Options has a Preview checkbox (#5360, as public tutorials of the dialog show); scores and estimates unchanged |
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control accept the wheel without opening the menu (#5253); scores and estimates unchanged. |
 | 2026-11-03 | minor | Symbol editing draws and drags 9-slice guides on the canvas (#5280). Guides outside the artwork remain unsupported. Scores and hours remain unchanged. |
 | 2026-11-01 | minor | A double-click on a Repeat with the Selection tool enters isolation mode on it, where its source art (type included: a double-click there edits the text) is edited and every copy follows (#5054); scores and estimates unchanged |

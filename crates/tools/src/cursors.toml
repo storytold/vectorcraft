@@ -672,7 +672,7 @@ hotspot = "The tip."
 [[cursor]]
 id = "Lasso"
 group = "Drawing and editing tools"
-shown_when = ["The Lasso tool: drag a loop round anchor points and segments to select them; Shift adds to the selection, Alt takes from it."]
+shown_when = ["The Lasso tool: drag a loop round anchor points and segments to select them; Shift adds to the selection, Alt takes from it.", "The Enclosing Lasso tool: draw a loop to select fully enclosed objects; Shift adds, Alt subtracts."]
 hotspot = "Where the loop is drawn from."
 
 [[cursor]]

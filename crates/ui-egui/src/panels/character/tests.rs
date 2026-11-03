@@ -1028,6 +1028,45 @@ fn no_break_menu_item_toggles_the_selected_characters() {
     assert!(!on(&app));
 }
 
+/// Kashidas appears with Middle Eastern options, starts checked, and a mixed selection is
+/// unchecked until the user enables all of its characters.
+#[test]
+fn kashidas_menu_item_handles_default_and_mixed_ranges() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.show_indic_options = true;
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "AB"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let row = |app: &mut VectorcraftApp| {
+        super::super::tests_appearance::frame_events(&ctx, app, vec![], menu)
+            .into_iter()
+            .find(|(text, _)| text.trim_start_matches(['✓', ' ']) == "Kashidas")
+            .expect("Kashidas menu item")
+    };
+    assert!(row(&mut app).0.starts_with('✓'));
+    app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 1, "kashidas": false})).unwrap();
+    assert!(!row(&mut app).0.starts_with('✓'));
+    let at = row(&mut app).1.center();
+    super::super::tests_appearance::click(&ctx, &mut app, at, menu);
+    assert!(row(&mut app).0.starts_with('✓'));
+    let states = match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(states.iter().all(|v| *v));
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
+    let at = row(&mut app).1.center();
+    super::super::tests_appearance::click(&ctx, &mut app, at, menu);
+    let after = match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(after.iter().all(|v| *v), "an empty caret leaves all characters unchanged");
+}
+
 /// Reset Panel sets every character attribute the panel shows, except the font family, style
 /// and size, back to its default (Small Caps, the position, Character Alignment, Proportional
 /// Metrics, Tate-chu-yoko and its settings, No Break, Character Direction, Digits and the font height reference

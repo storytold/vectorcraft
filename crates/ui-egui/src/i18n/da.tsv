@@ -1179,6 +1179,8 @@ lighting	Light	Lys
 	Hand	Hånd
 	Join Tool	Sammenføjningsværktøj
 	Lasso Tool	Lassoværktøj
+	Enclosing Lasso Tool	Omsluttende lassoværktøj
+	Enclosing Lasso	Omsluttende lasso
 	Lasso	Lasso
 	Line Cut Tool	Linjeskæringsværktøj
 	Line Graph Tool	Linjediagramværktøj
@@ -1660,6 +1662,7 @@ digits	Malayalam	Malayalam
 	Left-to-Right Paragraph Direction	Afsnitsretning fra venstre mod højre
 	Line-end Punctuation Half Width	Skilletegn i halv bredde ved linjeslut
 	Insert Kashidas	Indsæt kashidaer
+	Kashidas	Kashidaer
 	Long	Lang
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
@@ -6153,3 +6156,4 @@ breakText	Glyphs	Glyffer
 	Bow	Bue
 	Spike	Spids
 	Skip Spaces	Spring mellemrum over
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafikken er for stor til at blive kopieret som et billede: andre programmer får ingen PNG af den

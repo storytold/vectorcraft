@@ -1245,6 +1245,8 @@ lighting	Light	Svjetlo
 	Hand	Ruka
 	Join Tool	Alat za spajanje
 	Lasso Tool	Alat laso
+	Enclosing Lasso Tool	Alat laso za obuhvatanje
+	Enclosing Lasso	Laso za obuhvatanje
 	Lasso	Laso
 	Line Cut Tool	Alat za rez linijom
 	Line Graph Tool	Alat za linijski grafikon
@@ -1828,6 +1830,7 @@ digits	Malayalam	Malajalam
 	Left-to-Right Paragraph Direction	Smjer pasusa s lijeva nadesno
 	Line-end Punctuation Half Width	Interpunkcija na kraju reda u pola širine
 	Insert Kashidas	Umetni kašide
+	Kashidas	Kašide
 	Long	Dugo
 	Stylistic	Stilsko
 	Mojikumi Set	Mojikumi skup
@@ -6168,3 +6171,4 @@ shape	Open	Otvoren
 	Bow	Luk
 	Spike	Šiljak
 	Skip Spaces	Preskoči razmake
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika je prevelika da bi se kopirala kao slika: druge aplikacije ne dobijaju njen PNG

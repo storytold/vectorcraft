@@ -310,3 +310,41 @@ fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A file opened under automation roots is installed under them too: the open keeps the scope it
+/// started in, not the desktop's access of the frame it finishes in.
+#[test]
+fn a_file_opened_under_automation_roots_finishes_under_them() {
+    use vectorcraft_engine::file_access;
+    let dir = scope_dir();
+    let roots = file_access::AutomationRoots::new(&[dir.as_path()], &[]).unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    file_access::confine(roots.as_ref(), || {
+        start(&mut app, "/art/Scoped.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(10.0, 10.0), false))
+    })
+    .unwrap();
+    let scope = app.opening.pending[0].scope.clone();
+    assert!(scope.run(file_access::current).is_some(), "the roots go with the open");
+}
+
+fn scope_dir() -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("vectorcraft-opening-scope-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// A file asked for again while it is still being read is not read a second time (#3455).
+#[test]
+fn a_file_asked_for_again_while_it_is_read_opens_once() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let bytes = vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false);
+    start(&mut app, "/art/Poster.vectorcraft", bytes).unwrap();
+    assert_eq!(crate::io::open_file(&mut app, "/art/Poster.vectorcraft", true).unwrap(), Value::Null);
+    assert_eq!(app.opening.pending.len(), 1);
+    let t0 = std::time::Instant::now();
+    while !app.opening.pending.is_empty() && t0.elapsed().as_secs() < 30 {
+        poll(&mut app);
+        std::thread::yield_now();
+    }
+    assert_eq!(app.session.documents().len(), 1);
+}

@@ -1662,6 +1662,8 @@ font-technology	Variable	Променливи
 	Large Thumbnail View	Изглед с големи миниатюри
 	Large Thumbnails	Големи миниатюри
 	Lasso Tool	Инструмент „Ласо“
+	Enclosing Lasso Tool	Инструмент „Обхващащо ласо“
+	Enclosing Lasso	Обхващащо ласо
 	Last Effect: {name}	Посл. ефект: {name}
 	Last Effect: {}	Посл. ефект: {}
 	Last Effect…	Посл. ефект…
@@ -1862,6 +1864,7 @@ font-technology	Variable	Променливи
 	Modify	Модифициране
 	Mojikumi	Моджикуми
 	Insert Kashidas	Вмъкване на кашиди
+	Kashidas	Кашиди
 	Long	Дълго
 	Stylistic	Стилистично
 	Mojikumi Set	Набор Mojikumi
@@ -6137,3 +6140,4 @@ breakText	Glyphs	Глифи
 	Bow	Дъга
 	Spike	Връх
 	Skip Spaces	Пропускане на интервалите
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Графиката е твърде голяма, за да се копира като изображение: другите приложения не получават PNG от нея

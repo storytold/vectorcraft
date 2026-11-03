@@ -1620,6 +1620,8 @@ font-technology	Variable	Μεταβλητές
 	Large Thumbnail View	Προβολή μεγάλων μικρογραφιών
 	Large Thumbnails	Μεγάλες μικρογραφίες
 	Lasso Tool	Λάσο (Lasso Tool)
+	Enclosing Lasso Tool	Εργαλείο περικλείοντος λάσου
+	Enclosing Lasso	Περικλείον λάσο
 	Last Effect: {name}	Τελευταίο εφέ: {name}
 	Last Effect: {}	Τελευταίο εφέ: {}
 	Last Effect…	Τελευταίο εφέ…
@@ -2698,6 +2700,7 @@ theme	Appearance	Εμφάνιση
 	Modified:	Τροποποιήθηκε:
 	Mojikumi	Mojikumi
 	Insert Kashidas	Εισαγωγή κασίντα
+	Kashidas	Κασίντα
 	Long	Μακρύ
 	Stylistic	Στιλιστικό
 	Mojikumi Set	Σύνολο Mojikumi
@@ -6237,3 +6240,4 @@ breakText	Glyphs	Γλύφοι
 	Bow	Τόξο
 	Spike	Αιχμή
 	Skip Spaces	Παράλειψη κενών
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Το γραφικό είναι πολύ μεγάλο για αντιγραφή ως εικόνα: οι άλλες εφαρμογές δεν λαμβάνουν PNG του

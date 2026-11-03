@@ -1550,6 +1550,8 @@ font-technology	Variable	Değişken
 	Large Thumbnail View	Büyük Küçük Resim Görünümü
 	Large Thumbnails	Büyük Küçük Resimler
 	Lasso Tool	Kement Aracı
+	Enclosing Lasso Tool	Çevreleyen Kement Aracı
+	Enclosing Lasso	Çevreleyen Kement
 	Last Effect: {name}	Son Etki: {name}
 	Last Effect: {}	Son Etki: {}
 	Last Effect…	Son Etki…
@@ -5523,6 +5525,7 @@ theme	Appearance	Görünüm
 	Highlight:	Vurgu:
 	In Merge Mode, Clicking Stroke Splits the Path	Birleştirme modunda kontura tıklamak yolu böler
 	Insert Kashidas	Keşide Ekle
+	Kashidas	Keşide
 	Load Variable Library…	Değişken Kitaplığı Yükle…
 	Save Variable Library…	Değişken Kitaplığını Kaydet…
 @msg	a variable library holds text variables, and the document has none	değişken kitaplığı metin değişkenleri içerir ve belgede hiç metin değişkeni yok
@@ -6242,3 +6245,4 @@ breakText	Glyphs	Glifler
 	Bow	Yay
 	Spike	Sivri Uç
 	Skip Spaces	Boşlukları Atla
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Çizim, resim olarak kopyalanamayacak kadar büyük: diğer uygulamalar bunun PNG'sini almaz

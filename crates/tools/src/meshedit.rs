@@ -257,6 +257,27 @@ impl MeshEdit {
         meshes.into_iter().map(|id| (id, self.picked.range((id, 0)..=(id, usize::MAX)).next().is_some())).collect()
     }
 
+    /// A Lasso's picks: the points `inside` it are picked alone, or added to the picked points
+    /// (`add`), or taken away from them (`sub`). Returns each mesh with points inside and whether
+    /// any of its points are picked now.
+    pub fn lasso(&mut self, inside: &[(NodeId, usize)], add: bool, sub: bool) -> Vec<(NodeId, bool)> {
+        if !add && !sub {
+            return self.marquee(inside, false);
+        }
+        for k in inside {
+            if sub {
+                self.picked.remove(k);
+            } else {
+                self.picked.insert(*k);
+            }
+        }
+        self.click = None;
+        self.focus = self.focus.filter(|f| self.picked.contains(f));
+        let mut meshes: Vec<NodeId> = inside.iter().map(|(id, _)| *id).collect();
+        meshes.dedup();
+        meshes.into_iter().map(|id| (id, self.picked.range((id, 0)..=(id, usize::MAX)).next().is_some())).collect()
+    }
+
     /// An arrow key's nudge of the picked points of the meshes `shown` accepts
     /// (`object.mesh.movePoints`); `None` during a drag, for other keys or without picked points.
     pub fn nudge(&self, cx: &ToolContext, key: ToolKey, mods: Mods, shown: &dyn Fn(NodeId) -> bool) -> Option<Vec<Action>> {

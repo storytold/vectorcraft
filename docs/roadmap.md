@@ -8,6 +8,11 @@ Creating a gradient from solid or empty paint uses the document's color model fo
 
 **Feature evidence last updated:** 2026-11-03.
 
+M1 selection: Enclosing Lasso selects whole objects enclosed by a freehand loop. It is an add-on
+under Object › Plug-ins and has its own heading in All Tools. It has no default shortcut or Basic
+toolbar slot. Shift adds and Alt subtracts enclosed objects; Escape cancels the loop.
+This is a VectorCraft addition; milestone estimates and parity scores are unchanged.
+
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
 - Current-main conflict reconciliation retains upstream and feature behavior; scores and estimates unchanged
@@ -19,13 +24,17 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 ### Feature revisions
 
+M7 type: Touch Type moves a right-to-left character along its line and up from it while keeping the text editable. A preceding logical character on the same line is required for along-line movement. Direction rules are VectorCraft's choices; estimates are unchanged.
+
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | M1: Enclosing Lasso provides whole-object enclosure selection as an add-on with no default shortcut or Basic toolbar slot; estimates unchanged. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: File formats: `.ai`/EPS editing-data fidelity from an audit of a user's files: All Caps and Small Caps (#4708); placed files at their box's corner, kept where they draw closer to the page (#4664, #4723, #4742); pages cropped to the art, with `UserUnit` (#4658, #4727); gradient mesh corners with handle weights of 0 and the state written after a mesh (#4738, #4744, #4748); type on a path spaced as the file lays it out (#4743); synthetic regressions in `crates/eps`; scores and estimates unchanged. |
 | 2026-11-03 | minor | M7: Find Font replacement sources Document, Recent and System are shipped (#5217); estimates unchanged. |
 | 2026-10-30 | minor | Raster effects: bounded length fields in effect dialogs clamp on commit and reject invalid inputs visibly (#4638); estimates unchanged. |
+| 2026-11-03 | minor | M7: composition spacing remains along the line when characters rotate; estimates unchanged. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-3; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-2; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
 | 2026-10-22 | minor | Reconcile subsequent upstream progress updates without changing the runtime or repeating completed evidence; retain every dated upstream and feature revision. |
@@ -149,10 +158,13 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | M1: Enclosing Lasso adds freehand whole-object selection under Object › Plug-ins; estimates unchanged. |
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control step selected text with the wheel (#5253), with one undo step per notch; scores and estimates unchanged. |
 | 2026-11-03 | minor | M7 records Find Font's shipped replacement-source chooser (#5217); estimates unchanged. |
 | 2026-11-03 | minor | Symbol editing shows draggable 9-slice guides (#5280). Guides outside the artwork remain unsupported. Scores and hours remain unchanged. |
+| 2026-11-03 | minor | M7: Touch Type moves right-to-left characters along their line while keeping text editable; first-logical-character restriction retained. Estimates unchanged. |
 | 2026-10-30 | patch | M5: opaque solid-fill knockout paths avoid redundant erase/add layers in hard-edge frames and supersampled raster export; exact-pixel regression coverage retains analytical-AA rounding and translucent knockout behavior; scores and estimates unchanged |
+| 2026-11-03 | minor | M7: retain composition trimming in rotated character placement and rotation metadata; estimates unchanged. |
 | 2026-10-30 | minor | M4: G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: File formats: `.ai`/EPS editing-data fidelity from an audit of a user's files: All Caps and Small Caps (#4708); placed files at their box's corner, kept where they draw closer to the page (#4664, #4723, #4742); pages cropped to the art, with `UserUnit` (#4658, #4727); gradient mesh corners with handle weights of 0 and the state written after a mesh (#4738, #4744, #4748); type on a path spaced as the file lays it out (#4743); synthetic regressions in `crates/eps`; scores and estimates unchanged. |
 | 2026-10-29 | minor | M6: Pathfinder: live compound shapes (#4522): the panel menu's Make, Release and Expand Compound Shape, Alt-clicking a Shape Mode, a selected member's Shape Mode and the Expand button act; scores unchanged |

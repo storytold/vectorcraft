@@ -1707,6 +1707,8 @@ font-technology	Variable	Variables
 	Large Thumbnail View	Grandes vignettes
 	Large Thumbnails	Grandes vignettes
 	Lasso Tool	Outil Lasso
+	Enclosing Lasso Tool	Outil Lasso englobant
+	Enclosing Lasso	Lasso englobant
 	Last Effect: {name}	Dernier effet : {name}
 	Last Effect: {}	Dernier effet : {}
 	Last Effect…	Dernier effet…
@@ -1921,6 +1923,7 @@ font-technology	Variable	Variables
 	Modify	Modifier
 	Mojikumi	Mojikumi
 	Insert Kashidas	Insérer des kashidas
+	Kashidas	Kashidas
 	Long	Longue
 	Stylistic	Stylistique
 	Mojikumi Set	Jeu de mojikumi
@@ -6280,3 +6283,4 @@ breakText	Glyphs	Glyphes
 	Bow	Arc
 	Spike	Pointe
 	Skip Spaces	Ignorer les espaces
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	L’illustration est trop grande pour être copiée en tant qu’image : les autres applications n’en reçoivent pas de PNG

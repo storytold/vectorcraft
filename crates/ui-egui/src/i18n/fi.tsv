@@ -1242,6 +1242,8 @@ lighting	Light	Valo
 	Hand	Käsi
 	Join Tool	Liitostyökalu
 	Lasso Tool	Lassotyökalu
+	Enclosing Lasso Tool	Sulkeva lassotyökalu
+	Enclosing Lasso	Sulkeva lasso
 	Lasso	Lasso
 	Line Cut Tool	Viivaleikkaustyökalu
 	Line Graph Tool	Viivakaaviotyökalu
@@ -1816,6 +1818,7 @@ digits	Malayalam	Malajalam
 	Left-to-Right Paragraph Direction	Kappaleen suunta vasemmalta oikealle
 	Line-end Punctuation Half Width	Rivinlopun välimerkit puolileveinä
 	Insert Kashidas	Lisää kashidat
+	Kashidas	Kashidat
 	Long	Pitkä
 	Stylistic	Tyylitelty
 	Mojikumi Set	Mojikumi-joukko
@@ -6315,3 +6318,4 @@ breakText	Glyphs	Merkit
 	Bow	Kaari
 	Spike	Piikki
 	Skip Spaces	Ohita välilyönnit
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafiikka on liian suuri kopioitavaksi kuvana: muut sovellukset eivät saa siitä PNG-kuvaa

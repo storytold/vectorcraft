@@ -713,6 +713,13 @@ fn hatch_stays_inside_region() {
     assert!(h.elements().len() > 10);
 }
 
+#[test]
+fn hatch_far_from_the_origin_ends() {
+    // At 1e17 a 4-point gap is below the coordinates' precision: adding it doesn't move the line.
+    let bp = shapes::rectangle(Rect::new(0.0, 1e17, 64.0, 1e17 + 64.0)).to_bezpath();
+    assert!(hatch(&bp, 4.0).elements().len() <= 2 * 402);
+}
+
 /// An empty hidden sources group for a Live Paint group made in a test.
 fn empty_sources(d: &mut Document) -> Arc<Node> {
     let mut g = Node::group(d.alloc_id(), vec![]);

@@ -2156,6 +2156,8 @@ file-filter	Templates	Sablonok
 	Largest:	Legnagyobb:
 	Lasso	Lasszó
 	Lasso Tool	Lasszó
+	Enclosing Lasso Tool	Körülzáró lasszó
+	Enclosing Lasso	Körülzáró lasszó
 	Last	Utolsó
 	Last commit	Utolsó commit
 	Last Effect: {name}	Legutóbbi effektus: {name}
@@ -2438,6 +2440,7 @@ file-filter	Templates	Sablonok
 	Modify	Módosítás
 	Mojikumi	Mojikumi
 	Insert Kashidas	Kasidák beszúrása
+	Kashidas	Kasidák
 	Long	Hosszú
 	Stylistic	Stilisztikai
 	Mojikumi Set	Mojikumi-készlet
@@ -6269,3 +6272,4 @@ breakText	Glyphs	Glifák
 	Bow	Ív
 	Spike	Csúcs
 	Skip Spaces	Szóközök kihagyása
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	A grafika túl nagy ahhoz, hogy képként másolható legyen: más alkalmazások nem kapnak róla PNG-t

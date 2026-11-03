@@ -1108,6 +1108,8 @@ lighting	Light	სინათლე
 	Hand Tool	ხელის ხელსაწყო
 	Join Tool	შეერთების ხელსაწყო
 	Lasso Tool	ლასოს ხელსაწყო
+	Enclosing Lasso Tool	შემომსაზღვრელი ლასოს ხელსაწყო
+	Enclosing Lasso	შემომსაზღვრელი ლასო
 	Line Cut Tool	ხაზით ჭრის ხელსაწყო
 	Line Graph Tool	ხაზოვანი დიაგრამის ხელსაწყო
 	Line Segment Tool	ხაზის სეგმენტის ხელსაწყო
@@ -1562,6 +1564,7 @@ digits	Malayalam	მალაიალამური
 	Left-to-Right Paragraph Direction	აბზაცის მიმართულება მარცხნიდან მარჯვნივ
 	Line-end Punctuation Half Width	სტრიქონის ბოლოს პუნქტუაცია ნახევარი სიგანით
 	Insert Kashidas	ქაშიდების ჩასმა
+	Kashidas	ქაშიდები
 	Long	გრძელი
 	Stylistic	სტილისტური
 	Mojikumi Set	Mojikumi-ის ნაკრები
@@ -6273,3 +6276,4 @@ breakText	Glyphs	გლიფები
 	Bow	რკალი
 	Spike	პიკი
 	Skip Spaces	ჰარების გამოტოვება
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	ნახატი ზედმეტად დიდია სურათად დასაკოპირებლად: სხვა აპები მის PNG-ს ვერ მიიღებენ

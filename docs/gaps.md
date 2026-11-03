@@ -387,7 +387,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   own pixels until a document takes them in; estimate unchanged.
 - **Missing:** CJK vertical
   composition (mojikumi sets and dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
-  features beyond bidi and digit types (Character Direction, kashidas, composers), spell check with an open dictionary,
+  features beyond bidi, digit types, Character Direction and Kashidas (Middle Eastern composers, a split caret), spell check with an open dictionary,
   Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
   Itemized in [type-parity.md](type-parity.md).
 - **Impact:** professional typography and Japanese/Chinese publishing.

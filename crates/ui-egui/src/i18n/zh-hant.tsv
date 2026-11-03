@@ -2576,6 +2576,8 @@ file-filter	Templates	範本
 	Large Thumbnail View	大縮圖檢視
 	Large Thumbnails	大縮圖
 	Lasso Tool	套索工具
+	Enclosing Lasso Tool	包圍套索工具
+	Enclosing Lasso	包圍套索
 	Last Effect: {name}	最後一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	最後一次效果…
@@ -2790,6 +2792,7 @@ file-filter	Templates	範本
 	Modified:	修改時間：
 	Modify	修改
 	Insert Kashidas	插入卡希達
+	Kashidas	卡希達
 	Long	長
 	Stylistic	風格化
 	Mojikumi Set	標點間距
@@ -5923,3 +5926,4 @@ breakText	Glyphs	字符
 	Bow	弓形
 	Spike	尖峰
 	Skip Spaces	略過空格
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	圖稿太大，無法作為圖片複製：其他應用程式不會取得它的 PNG
