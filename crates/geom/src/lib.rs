@@ -65,7 +65,14 @@ pub fn flatten(path: impl IntoIterator<Item = PathEl>, tolerance: f64, mut callb
         };
         last = Some(to);
         let (Some(from), Some(length)) = (from, length) else { continue };
-        if length.is_nan() || length > MAX_FLATTEN_LENGTH {
+        // A short polygon far from the origin still overflows kurbo's `p * (mt * 2.0)` products.
+        let far = |p: Point| !(p.x.abs() <= MAX_FLATTEN_LENGTH && p.y.abs() <= MAX_FLATTEN_LENGTH);
+        let controls_far = match el {
+            PathEl::QuadTo(a, _) => far(a),
+            PathEl::CurveTo(a, b, _) => far(a) || far(b),
+            _ => false,
+        };
+        if length.is_nan() || length > MAX_FLATTEN_LENGTH || far(from) || far(to) || controls_far {
             callback(PathEl::LineTo(to));
             continue;
         }
@@ -206,6 +213,13 @@ mod tests {
         // Finite coordinates whose squares overflow are a line to the end too.
         let huge = [PathEl::MoveTo(Point::ZERO), PathEl::CurveTo(Point::new(1e200, 0.0), Point::new(-1e200, 1e200), Point::new(1.0, 0.0))];
         assert_eq!(count(&huge, 0.25), 2);
+        // A short polygon out near f64::MAX: a line, and every point it emits is finite.
+        let m = f64::MAX / 2.0;
+        let far = [PathEl::MoveTo(Point::new(m, m)), PathEl::CurveTo(Point::new(m, m), Point::new(m, m), Point::new(m, m))];
+        let mut points = vec![];
+        flatten(far.iter().copied(), 0.25, |e| points.push(e));
+        assert_eq!(points.len(), 2);
+        assert!(points.iter().all(|e| matches!(e, PathEl::MoveTo(p) | PathEl::LineTo(p) if p.is_finite())), "{points:?}");
     }
 
     #[test]
