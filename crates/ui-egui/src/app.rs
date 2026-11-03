@@ -542,6 +542,9 @@ impl VectorcraftApp {
             // Control bar docked at the bottom has set it to the bar's top.
             widgets::set_menu_floor(&ctx, ctx.content_rect().bottom());
         }
+        if self.ui.toolbar && self.ui.screen_mode < 3 {
+            tools_float::set_window_dock_zone(&ctx, ui.available_rect_before_wrap());
+        }
         if self.ui.toolbar && self.ui.screen_mode < 3 && self.ui.toolbar_pos.is_some() {
             toolbar::show(self, ui);
         } else if !self.ui.toolbar && self.ui.screen_mode < 3 && self.ui.tab_hid.is_none() {

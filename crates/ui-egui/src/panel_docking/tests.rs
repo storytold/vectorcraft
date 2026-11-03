@@ -345,6 +345,38 @@ fn tools_follow_left_panels_when_resized_hidden_and_restored() {
 }
 
 #[test]
+fn tools_redock_at_window_edge_above_and_below_canvas() {
+    for above in [true, false] {
+        let mut h = Harness::new();
+        let tabs = |panel: &str| Box::new(Node::Tabs { panels: vec![panel.to_string()], active: 0 });
+        h.app.ui.docking = Some(Layout {
+            root: Some(Node::Split {
+                axis: craft_ui::layout::SplitAxis::Vertical,
+                size: craft_ui::layout::SplitSize::FixedFirst(180.0),
+                first: tabs("layers"),
+                second: Box::new(Node::Split {
+                    axis: craft_ui::layout::SplitAxis::Vertical,
+                    size: craft_ui::layout::SplitSize::FixedSecond(180.0),
+                    first: tabs(CANVAS),
+                    second: tabs("properties"),
+                }),
+            }),
+            floating: vec![],
+        });
+        assert!(valid(&h.layout()));
+        h.app.run("window.panel.float", json!({"panel": "tools", "x": 600, "y": 300})).unwrap();
+        for _ in 0..3 {
+            h.frame(vec![]);
+        }
+        let panel = h.tab(if above { "layers" } else { "properties" }).unwrap();
+        let canvas = h.app.canvas_rect.unwrap();
+        assert!(panel.center().y < canvas.top() || panel.center().y > canvas.bottom());
+        h.drag(pos2(620.0, 307.0), pos2(12.0, panel.center().y));
+        assert_eq!(h.app.ui.toolbar_pos, None, "window-edge drop above canvas: {above}");
+    }
+}
+
+#[test]
 #[ignore = "manual visual check; set LEFT_TOOLS_SCREENSHOTS to an existing harness directory"]
 fn capture_tools_beside_left_panels() {
     let dir = std::path::PathBuf::from(std::env::var_os("LEFT_TOOLS_SCREENSHOTS").unwrap());
