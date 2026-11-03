@@ -70,9 +70,11 @@ pub fn render(template: &str, p: &NameParts<'_>) -> String {
     let mut out = String::with_capacity(t.len() + 16);
     let mut rest = t;
     while let Some(c) = rest.chars().next() {
-        // Bracketed tokens; an unknown one stays as written, with `-` for its brackets.
+        // Bracketed tokens; an unknown one stays as written, with `-` for its brackets. A token's
+        // name has no `<`, so the search for its `>` stops at the next `<`: each part of the
+        // pattern is searched once, not once for every `<` before it.
         if c == '<'
-            && let Some(end) = rest.find('>')
+            && let Some(end) = rest.get(1..).and_then(|r| r.find(['<', '>'])).map(|i| i + 1).filter(|&i| rest.as_bytes().get(i) == Some(&b'>'))
             && let Some(value) = rest.get(1..end).and_then(|name| token(name, p))
         {
             out.push_str(&value);
@@ -153,6 +155,16 @@ mod tests {
         // A long counter is padded, a short run is not cut.
         assert_eq!(render("########", &NameParts { counter: 123, ..parts() }), "00000123");
         assert_eq!(render("#", &NameParts { counter: 12345, ..parts() }), "12345");
+    }
+
+    /// Many `<` without a `>`, or before one far away, are each looked at once.
+    #[test]
+    fn unmatched_brackets_are_read_in_one_pass() {
+        let p = parts();
+        let n = 200_000;
+        assert_eq!(render(&"<".repeat(n), &p), "-".repeat(n));
+        assert_eq!(render(&format!("{}<name>", "<".repeat(n)), &p), format!("{}Dark", "-".repeat(n)));
+        assert_eq!(render("<a<name>>", &p), "-aDark-");
     }
 
     #[test]
