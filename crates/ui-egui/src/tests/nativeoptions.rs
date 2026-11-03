@@ -32,7 +32,7 @@ fn save_as_native_asks_for_its_options_and_writes_every_artboard() {
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!(
         (d.str("format").as_str(), d.bool("separateArtboards"), d.bool("embedProfiles"), d.bool("pdfCompatible")),
-        ("vectorcraft", false, true, false)
+        ("vectorcraft", false, true, true)
     );
     assert!(written.borrow().is_empty(), "nothing is written before OK");
     frame(&mut app);

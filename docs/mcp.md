@@ -4438,6 +4438,7 @@ or in `options` (`file.formatOptions {format}` lists them with their values):
 - `pdfCompatible`: native files (default true) also carry a PDF of every artboard (`pdf` in the file). This makes saves
   larger and adds PDF rendering work. Set it to false to leave the PDF out; Save remembers that choice. `.ai` files
   (default true) with false write blank pages around the native document (smaller; other apps show empty pages).
+  Native files without artboards and Data Recovery copies omit the PDF.
 - `.ai` only: `compress` (default true) is the PDF option `compression.compressText`.
 
 File → Save As asks for these in the save options dialog (VectorCraft Options) after the save panel, and Save a Copy

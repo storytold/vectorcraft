@@ -60,6 +60,16 @@ fn restored(r: serde_json::Value) -> usize {
 }
 
 #[test]
+fn native_recovery_copies_leave_out_the_pdf() {
+    let (mut s, store) = session();
+    let r = s.execute("file.recovery.save", &json!({})).unwrap();
+    let file = format!("{}.vectorcraft", r["saved"][0]["file"].as_str().unwrap());
+    let bytes = store.read(&file).unwrap();
+    assert!(vectorcraft_format::pdf_content(&bytes).is_none());
+    assert_eq!(vectorcraft_format::load(&bytes).unwrap().node_count(), s.doc().unwrap().doc.node_count());
+}
+
+#[test]
 fn recovery_save_writes_modified_documents_once() {
     let (mut s, store) = session();
     // A clean second document gets no copy.

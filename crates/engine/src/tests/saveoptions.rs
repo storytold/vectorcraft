@@ -179,10 +179,22 @@ fn native_saves_carry_all_artboards_as_pdf_by_default() {
     let path = dir.file("compact.vectorcraft");
     s.execute("file.saveAs", &json!({"path": path, "pdfCompatible": false})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 60, "y": 10, "width": 10, "height": 10})).unwrap();
-    s.execute("file.save", &json!({})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
     assert!(vectorcraft_format::pdf_content(&std::fs::read(path).unwrap()).is_none());
     let options = s.execute("file.formatOptions", &json!({"format":"vectorcraft"})).unwrap();
     assert_eq!(options["options"]["pdfCompatible"]["value"], false);
+}
+
+#[test]
+fn native_saves_without_artboards_keep_the_editable_document() {
+    let mut s = three_boards();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).artboards.clear();
+    let result = s.execute("file.saveCopy", &json!({})).unwrap();
+    let file = bytes_of(&result["dataBase64"]);
+    let restored = vectorcraft_format::load(&file).unwrap();
+    assert!(restored.artboards.is_empty());
+    assert_eq!(restored.node_count(), s.doc().unwrap().doc.node_count());
+    assert!(vectorcraft_format::pdf_content(&file).is_none());
 }
 
 #[test]

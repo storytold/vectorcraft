@@ -207,7 +207,7 @@ pub(super) fn encode_to(cmd: &str, f: &Format, doc: &Document, p: &Value, w: imp
     if extras.preview {
         so.preview = preview_png(&drawn)?;
     }
-    if extras.pdf {
+    if extras.pdf && !drawn.artboards.is_empty() {
         // Every artboard as PDF pages (no editing data: the file is the native document).
         so.pdf = Some(super::pdf::encode(cmd, &drawn, &json!({ "range": "all", "preserveEditing": false }))?.0);
     }

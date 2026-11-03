@@ -812,7 +812,7 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             mode: SaveMode::Copy,
             path: st.path.clone(),
             format: native,
-            options: Default::default(),
+            options: serde_json::Map::from_iter([("pdfCompatible".into(), json!(false))]),
             name: format!("{file}{DOC_EXT}"),
             folder: None,
             modified: None,
