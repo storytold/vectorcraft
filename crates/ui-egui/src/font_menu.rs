@@ -57,6 +57,7 @@ impl WheelOwner {
             return false;
         }
         let panel = match self {
+            Self::Control | Self::ControlPopover(_) | Self::Properties if app.session.tool_id() == "artboard" => return false,
             Self::Control => return app.ui.control_bar && app.ui.screen_mode < 2,
             Self::ControlPopover(anchor) => {
                 return app.ui.control_bar && app.ui.screen_mode < 2 && widgets::popover_is_open(ctx, anchor);

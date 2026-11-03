@@ -23,6 +23,23 @@ fn deselecting_type_leaves_the_missing_control_fields_wheel_available() {
 }
 
 #[test]
+fn artboard_controls_leave_replaced_font_fields_wheel_available() {
+    let (ctx, mut app) = selected_type_with_control();
+    let mut texts = Vec::new();
+    for _ in 0..8 {
+        texts = frame(&mut app, &ctx, vec![]);
+    }
+    let fields: Vec<_> = texts.iter().filter(|(t, _)| t == "Inter").map(|(_, point)| *point).collect();
+    assert_eq!(fields.len(), 2, "Control and Properties each show a font field");
+    app.select_tool("artboard");
+    for point in fields {
+        let mut raw = wheel_input(point);
+        app.raw_input_hook(&ctx, &mut raw);
+        assert!(raw.events.iter().any(|e| matches!(e, Event::MouseWheel { .. })), "the Artboard tool replaces this font field");
+    }
+}
+
+#[test]
 fn the_control_character_popover_keeps_its_visible_font_wheel() {
     let (ctx, mut app) = selected_type_with_control();
     app.run("window.panel.close", json!({"panel": "character"})).unwrap();
