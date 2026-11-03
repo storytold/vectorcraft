@@ -161,7 +161,7 @@ fn an_exported_pdf_opens_with_its_file_info() {
     assert_eq!(back["description"], "A poster\nfor the fair");
     assert_eq!(back["keywords"], json!(["fair", "Poster", "print"]));
     assert!(back["created"].as_str().is_some_and(|c| c.ends_with('Z')), "the file's creation date: {}", back["created"]);
-    assert_eq!(back["title"], "poster.pdf", "the title stays the file name");
+    assert_eq!(back["title"], "Poster", "the title is the one the PDF carries, not its file name");
     assert_eq!(back["copyrightStatus"], "copyrighted");
     assert_eq!(back["copyrightNotice"], "(c) 2026 Ada");
     assert_eq!(back["copyrightUrl"], "https://example.com/rights");
@@ -275,6 +275,77 @@ fn a_pdf_compatible_ai_opens_with_the_file_info_of_its_xmp_packet() {
     assert_eq!((m.copyright_status, m.copyright_notice.as_str()), (CopyrightStatus::PublicDomain, "No rights reserved"));
     // A URL with a space is one `file.info` refuses: it is left out.
     assert_eq!(m.copyright_url, "");
+}
+
+/// A one-page PDF whose trailer names an information dictionary with the entries `info`, and whose
+/// catalog has a metadata stream holding an XMP `dc:title` of `xmp_title`.
+fn pdf_titled(info: Option<&str>, xmp_title: Option<&str>) -> Vec<u8> {
+    use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with_catalog};
+    let first = first_extra(1);
+    let mut objects = vec![];
+    let mut catalog = String::new();
+    if let Some(t) = xmp_title {
+        let xmp = format!(
+            "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\
+             <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\
+             <dc:title><rdf:Alt><rdf:li xml:lang=\"de\">Zugangswege</rdf:li><rdf:li xml:lang=\"x-default\">{t}</rdf:li></rdf:Alt></dc:title>\
+             </rdf:Description></rdf:RDF></x:xmpmeta>"
+        );
+        objects.push(format!("<< /Type /Metadata /Subtype /XML /Length {} >>\nstream\n{xmp}\nendstream", xmp.len()));
+        catalog = format!("/Metadata {first} 0 R ");
+    }
+    let info_at = first + objects.len();
+    if let Some(i) = info {
+        objects.push(format!("<< {i} >>"));
+    }
+    let refs: Vec<&str> = objects.iter().map(String::as_str).collect();
+    let bytes = pdf_with_catalog(&[PdfPage::new(100.0, 100.0, "0 0 1 rg 10 10 50 50 re f")], &refs, &catalog, None);
+    if info.is_none() {
+        return bytes;
+    }
+    // The trailer follows the cross-reference table, so a longer trailer moves no object.
+    String::from_utf8(bytes).unwrap().replacen("/Root 1 0 R", &format!("/Root 1 0 R /Info {info_at} 0 R"), 1).into_bytes()
+}
+
+/// The title `document.open` gives a file called `name` with content `bytes`.
+fn opened_title(name: &str, bytes: &[u8]) -> String {
+    let mut s = Session::new();
+    let r = s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)})).unwrap();
+    assert_eq!(r["fileInfoTitle"], s.doc().unwrap().doc.title.as_str());
+    s.doc().unwrap().doc.title.clone()
+}
+
+#[test]
+fn import_uses_the_files_own_title() {
+    // SVG: the root's `<title>`, its white space made single spaces; not a shape's tooltip.
+    let svg = |inner: &str| {
+        format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\">{inner}<rect width=\"5\" height=\"5\"><title>Tooltip</title></rect></svg>"
+        )
+    };
+    assert_eq!(opened_title("box.svg", svg("<title>\n  Access\n  paths </title>").as_bytes()), "Access paths");
+    assert_eq!(
+        opened_title("box.svg", svg("<title>Zugangswege Rechenzentrum – Prüfdiagramm</title>").as_bytes()),
+        "Zugangswege Rechenzentrum – Prüfdiagramm"
+    );
+    // PDF: the XMP `dc:title` (its `x-default` item) beats the Info `Title`; the Info `Title` stands alone.
+    assert_eq!(opened_title("plan.pdf", &pdf_titled(Some("/Title (Info title)"), Some("XMP title"))), "XMP title");
+    assert_eq!(opened_title("plan.pdf", &pdf_titled(None, Some("XMP title"))), "XMP title");
+    assert_eq!(opened_title("plan.pdf", &pdf_titled(Some("/Title (Info title)"), None)), "Info title");
+    assert_eq!(opened_title("plan.ai", &pdf_titled(Some("/Title (Info title)"), None)), "Info title");
+    // A file that gives none (or a blank one): its name without the extension, in a folder too.
+    assert_eq!(opened_title("box.svg", svg("").as_bytes()), "box");
+    assert_eq!(opened_title("/work/box.svg", svg("<title>  </title>").as_bytes()), "box");
+    assert_eq!(opened_title("plan.pdf", &pdf_titled(None, None)), "plan");
+    assert_eq!(opened_title("plan.pdf", &pdf_titled(Some("/Author (Ada)"), None)), "plan");
+    // The Untitled-N name New gives is no title (a document that never had one writes it).
+    assert_eq!(opened_title("plan.pdf", &pdf_titled(Some("/Title (Untitled-2)"), None)), "plan");
+    // A native file keeps the title it has.
+    let mut s = session();
+    let native = vectorcraft_format::base64_encode(&b64(&s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap()));
+    let mut t = Session::new();
+    t.execute("document.open", &json!({"name": "other.vectorcraft", "dataBase64": native})).unwrap();
+    assert_eq!(t.doc().unwrap().doc.title, "Poster");
 }
 
 #[test]

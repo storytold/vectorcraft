@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (an imported document takes the title its file carries; previously: new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -732,6 +732,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | An imported document takes the title its file carries (an SVG's root `<title>`, a PDF's XMP `dc:title` else its Info `Title`), else its file name without the extension, instead of the file name with it (#3626); no scored gap or estimate reassessed. |
 | 2026-11-02 | minor | G15: the renderer keeps a compound path's assembled path between frames and drops unused geometry entries after a few frames however few there are. Estimate unchanged. |
 | 2026-11-02 | minor | G15: hit testing culls paths and compound paths by their control points' box and tests a compound path's outline and fill against only its members near the click; the same objects are hit. Estimate unchanged. |
 | 2026-11-03 | minor | Symbol editing shows draggable 9-slice guides within the artwork (#5280). Guides outside the artwork remain unsupported. The G5 estimate remains 14–24 h. |

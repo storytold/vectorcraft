@@ -64,7 +64,7 @@ fn other_eps_files_are_read_by_the_postscript_interpreter() {
     // The page is the bounding box: the art's bounds.
     assert_eq!(d.artboards[0].rect.size(), vectorcraft_geom::Size::new(101.0, 51.0), "the stroke's half width rounds up to whole points");
     assert_eq!(objects(&s), 1);
-    assert_eq!(s.doc().unwrap().title(), "plain.eps");
+    assert_eq!(s.doc().unwrap().title(), "plain");
 }
 
 /// A CMYK image the PostScript interpreter reads keeps its ink amounts when the EPS opens and when

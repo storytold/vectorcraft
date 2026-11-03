@@ -7,9 +7,10 @@ use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
 use vectorcraft_render::effects::pixel::LoadedTexture;
 
+use super::super::fileinfo::imported_title;
 use super::super::{Result, Session, bad, bool_or, clipboard, parse_range, str_param};
 use super::pdfimport::LoadOptions;
-use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, psdread, read_file, readable_format_for_name};
+use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, file_stem, format, psdread, read_file, readable_format_for_name};
 use crate::cmd::links::Resolved;
 use crate::{EngineError, Prefs};
 
@@ -392,10 +393,12 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     };
     // A PDF, `.ai` or `.ait` read from its pages or its editing copy, not restored from the document
     // it carries, opens with the File Info it gives (a PostScript `.ai` gives none).
+    let mut pdf_title = None;
     if matches!(format.id, "pdf" | "ai" | "ait")
         && !restored
         && let Some(info) = vectorcraft_pdf::file_info(bytes, opts.password.as_deref())
     {
+        pdf_title = info.title.clone();
         super::super::fileinfo::read_pdf(&mut doc.metadata, info);
     }
     // Threaded type read from a file flows through its frames (the threaded type of a restored
@@ -412,11 +415,18 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
-    // Imports are named after the file; a native document keeps its own title (the tab shows the
-    // file name once it has a path).
-    if !matches!(format.id, "vectorcraft" | "template") || doc.title.is_empty() {
-        doc.title = title;
-    }
+    // The document is titled as the file titles it: a native document keeps its own title, one
+    // restored from the editing data a file carries and an SVG keep the title they hold (the SVG's
+    // `<title>`), a PDF, `.ai` or `.ait` takes its XMP `dc:title` or Info `Title`. Without one the
+    // document takes the file name without its extension, as an export does (#3626). The tab shows
+    // the file name once the document has a path.
+    let own = match format.id {
+        "vectorcraft" | "template" => Some(doc.title.clone()).filter(|t| !t.is_empty()),
+        _ if restored || format.id == "svg" => imported_title(&doc.title),
+        "pdf" | "ai" | "ait" => pdf_title.as_deref().and_then(imported_title),
+        _ => None,
+    };
+    doc.title = own.unwrap_or_else(|| file_stem(&title));
     warnings.extend(doc.images.values().filter_map(|b| size_note(&b.bytes)));
     Ok(Loaded { doc, format, warnings, restored, converted, preview_only, editing_data })
 }

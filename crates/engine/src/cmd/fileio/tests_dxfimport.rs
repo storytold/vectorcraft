@@ -120,7 +120,11 @@ const MM: f64 = 72.0 / 25.4;
 fn document_open_reads_a_dxf_drawing() {
     let mut s = Session::new();
     let r = open(&mut s, &plan(), json!({})).unwrap();
-    assert_eq!((r["format"].as_str(), r["title"].as_str()), (Some("dxf"), Some("plan.dxf")));
+    assert_eq!(
+        (r["format"].as_str(), r["title"].as_str()),
+        (Some("dxf"), Some("plan")),
+        "a file that carries no title opens as its name without the extension"
+    );
     assert_eq!(layer_names(&s), ["Walls", "Notes"]);
     let st = s.doc().unwrap();
     // Millimetres at 1:1, the artboard the art's size.

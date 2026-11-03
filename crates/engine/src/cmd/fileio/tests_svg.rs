@@ -138,7 +138,7 @@ fn preserve_editing_reopens_the_native_document() {
     let doc = &s.doc().unwrap().doc;
     assert_eq!(doc.artboards.len(), 2, "both artboards came back");
     assert_eq!(doc.artboards[1].name, "Back");
-    assert_eq!(doc.title, "both.svg");
+    assert_eq!(doc.title, "both");
     // Without it the SVG is imported (one artboard).
     let text = svg(&mut s, json!({}));
     s.execute("document.open", &json!({"name": "plain.svg", "dataBase64": vectorcraft_format::base64_encode(text.as_bytes())})).unwrap();

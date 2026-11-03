@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (native format: dynamic symbols, #4938) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (an imported document takes the title its file carries; previously: native format: dynamic symbols, #4938) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/formats.rs`). Illustrator's list comes from its public
@@ -161,6 +161,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | An imported document takes the title its file carries: an SVG's root `<title>`, a PDF's, `.ai`'s or `.ait`'s XMP `dc:title` else its Info `Title`; a file that gives none opens with its file name without the extension (#3626). |
 | 2026-11-01 | minor | Native format: a symbol's Symbol Type (`dynamic`) and a dynamic symbol instance's appearance changes to objects of its art (`symbol_overrides`) round-trip; both are left out when unset, so other documents save unchanged (#4938). `.ai` reading and writing of dynamic symbols remains. |
 | 2026-11-01 | minor | Exports draw each artboard's background color behind its art (#4937): PNG, JPEG, GIF, TIFF, WebP, BMP, Targa and PSD (a layer of its own; on a transparent background too), PDF, SVG and EPS pages, a `.ai` file's PDF pages and PostScript and PDF print; `includeArtboardFill: false` leaves it out. Files with editing data (Preserve Editing, `.ai`, EPS, native) keep it as the artboard's color and reopen without extra art. Not read from the reference app's own `.ai` data, nor written to it. DXF, EMF and WMF leave it out |
 | 2026-10-31 | minor | PDF import finds an installed font whose PDF name holds hyphens (`Noto-Sans-Bold` is Noto Sans, Bold: the longest part before a hyphen that names an installed family) and a composite font by its CIDFont's name rather than its base name, which ends in the CMap's (`Name-Identity-H`, [ISO 32000-1 §9.7.6.1](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf)); a missing font is split only before a style part (`Helvetica-BoldOblique`), so it is reported as `MS PGothic`, not `MS`; scores unchanged (estimated) |

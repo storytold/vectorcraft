@@ -141,6 +141,18 @@ fn text(k: &str, v: &Value, multiline: bool) -> Result<String> {
     Ok(s.to_string())
 }
 
+/// The title `raw`, read from a file, makes a document: runs of white space (line breaks too)
+/// become single spaces, other control characters are dropped, at most [`MAX_TEXT`] characters
+/// are kept, as `file.info` takes a title. `None` when nothing is left, or when it is the
+/// Untitled-N name New gives (what a document that never had a title writes to its files).
+pub(crate) fn imported_title(raw: &str) -> Option<String> {
+    let words: Vec<String> =
+        raw.split_whitespace().map(|w| w.chars().filter(|c| !c.is_control()).collect::<String>()).filter(|w| !w.is_empty()).collect();
+    let title: String = words.join(" ").chars().take(MAX_TEXT).collect();
+    let title = title.trim_end();
+    super::fileio::is_own_title(title).then(|| title.to_string())
+}
+
 /// Keywords from a list or a comma- or semicolon-separated string: trimmed, each once (ignoring
 /// case), empty ones dropped.
 fn keywords(v: &Value) -> Result<Vec<String>> {
