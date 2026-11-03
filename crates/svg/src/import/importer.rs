@@ -1,4 +1,4 @@
-use super::convert::{aff, bezpath, blend, clip_shapes, gradient_stops, is_plain, made_up, rule, uncut, unique_name, without_ids};
+use super::convert::{aff, bezpath, blend, clip_shapes, drawn_ellipse, gradient_stops, is_plain, made_up, rule, uncut, unique_name, without_ids};
 use super::layers::filter_names;
 use super::prepass::link;
 use super::{
@@ -601,7 +601,8 @@ impl Importer {
         if !p.is_visible() {
             return None;
         }
-        let path = PathData::from_bezpath(&bezpath(p.data(), acc));
+        let ellipse = if self.ellipses.contains(p.id()) { drawn_ellipse(p.data()) } else { None };
+        let path = ellipse.map_or_else(|| PathData::from_bezpath(&bezpath(p.data(), acc)), |e| e.transformed(acc));
         if path.is_empty() {
             return None;
         }
@@ -683,9 +684,10 @@ impl Importer {
             std::mem::take(&mut self.non_scaling),
             std::mem::take(&mut self.data),
             std::mem::take(&mut self.events),
+            std::mem::take(&mut self.ellipses),
         );
         let art = self.group_node(tree.root(), acc);
-        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events) = outer;
+        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events, self.ellipses) = outer;
         art
     }
 }
@@ -720,6 +722,7 @@ mod tests {
             foreign: HashMap::new(),
             sublayers: HashSet::new(),
             sublayer_groups: HashSet::new(),
+            ellipses: HashSet::new(),
             screen: 1.0,
             converted_nodes: 0,
             max_nodes: 1000,

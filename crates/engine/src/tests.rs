@@ -158,6 +158,7 @@ mod styles;
 mod swatchcmds;
 mod swatches;
 mod swatchlib;
+mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
 mod symbollib;

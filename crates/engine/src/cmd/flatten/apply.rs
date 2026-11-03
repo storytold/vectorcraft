@@ -26,6 +26,40 @@ pub(super) struct Flat {
     /// Where its image goes, and the image (once rendered).
     pub(super) area: Option<Area>,
     raster: Option<Raster>,
+    /// When the group is one block of type over several lines: its lines, to group the regions by.
+    lines: Option<Lines>,
+}
+
+/// The lines of a block of type: document space → its line space, where each line spans a band
+/// across the lines (its ascent above the baseline to its descent below).
+struct Lines {
+    to_lines: Affine,
+    bands: Vec<(f64, f64)>,
+}
+
+impl Lines {
+    /// The lines of `n` when it is type laid out in two lines or more (not on a path).
+    fn of(n: &Node) -> Option<Lines> {
+        let NodeKind::Text(t) = &n.kind else { return None };
+        if t.xf.determinant().abs() < 1e-12 {
+            return None;
+        }
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        if layout.on_path {
+            return None;
+        }
+        let bands: Vec<(f64, f64)> = layout.lines.iter().filter(|l| l.x1 > l.x0).map(|l| (l.baseline - l.ascent, l.baseline + l.descent)).collect();
+        let to_lines = if layout.vertical { layout.line_xf.inverse() * t.xf.inverse() } else { t.xf.inverse() };
+        (bands.len() > 1).then_some(Lines { to_lines, bands })
+    }
+
+    /// The line nearest to the middle of `path`.
+    fn line_of(&self, path: &PathData) -> usize {
+        let Some(b) = path.bounds() else { return 0 };
+        let y = (self.to_lines * b.center()).y;
+        let away = |&(lo, hi): &(f64, f64)| if y < lo { lo - y } else { (y - hi).max(0.0) };
+        self.bands.iter().enumerate().min_by(|a, b| away(a.1).total_cmp(&away(b.1))).map_or(0, |(i, _)| i)
+    }
 }
 
 /// Where a group's image goes.
@@ -79,7 +113,7 @@ pub(super) fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render:
     let mut out = Plan { flat: vec![], kept: vec![], transparent: roots.iter().zip(&see_through).filter(|(_, t)| **t).map(|(id, _)| *id).collect() };
     // Baking above stopped early when cancelled; each group is a place to stop (a plan changes nothing).
     vectorcraft_doc::cancel::check()?;
-    for g in overlapping(&reaches) {
+    for g in overlapping(&reaches)? {
         vectorcraft_doc::cancel::check()?;
         let ids: Vec<NodeId> = g.iter().map(|&i| roots[i]).collect();
         let group = g.iter().any(|&i| see_through[i]).then(|| {
@@ -97,7 +131,11 @@ pub(super) fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render:
             }
             None => None,
         };
-        out.flat.push(Flat { roots: ids, regions, area, raster });
+        let lines = match g.as_slice() {
+            [i] => Lines::of(&art[*i]),
+            _ => None,
+        };
+        out.flat.push(Flat { roots: ids, regions, area, raster, lines });
     }
     Ok(out)
 }
@@ -366,7 +404,10 @@ pub(super) fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan
             children.push(Arc::new(raster_node(d, r)));
             rasterized += 1;
         }
+        // Type over several lines gives a group per line.
+        let mut by_line: Vec<Vec<Arc<Node>>> = f.lines.as_ref().map_or(vec![], |l| vec![vec![]; l.bands.len()]);
         for (path, fill) in f.regions {
+            let line = f.lines.as_ref().map(|l| l.line_of(&path));
             let mut n = shape_node(d, path, None);
             n.appearance = Appearance {
                 items: vec![AppearanceItem::Fill(FillLayer { overprint: fill.overprint, ..FillLayer::new(fill.paint) })],
@@ -374,8 +415,19 @@ pub(super) fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan
             }
             .into();
             n.opacity = fill.alpha.min(1.0);
-            children.push(Arc::new(n));
+            match line.and_then(|i| by_line.get_mut(i)) {
+                Some(l) => l.push(Arc::new(n)),
+                None => children.push(Arc::new(n)),
+            }
             vector += 1;
+        }
+        by_line.retain(|l| !l.is_empty());
+        if by_line.len() > 1 {
+            for l in by_line {
+                children.push(Arc::new(Node::group(d.alloc_id(), l)));
+            }
+        } else {
+            children.extend(by_line.into_iter().flatten());
         }
         let g = Node::group(d.alloc_id(), children);
         ids.push(g.id);

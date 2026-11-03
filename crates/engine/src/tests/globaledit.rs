@@ -391,6 +391,138 @@ fn undo_and_redo_drop_the_members_the_document_lacks() {
     assert_eq!(members(&s), None);
 }
 
+#[test]
+fn an_object_left_out_keeps_its_own_shape_while_the_others_follow() {
+    let mut s = session();
+    let [a, b, c, ..] = squares(&mut s);
+    assert_eq!(start(&mut s, a, json!({})), [a, b, c]);
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = s.execute("select.globalEditExclude", &json!({"id": b.0})).unwrap();
+    assert_eq!(r, json!({"active": true, "count": 2, "ids": [a.0, c.0]}));
+    assert_eq!(members(&s), Some(vec![a, c]));
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 1, "the copy is no longer highlighted");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "not an undo step");
+    assert_eq!(s.doc().unwrap().selection.objects, [a], "the selection stays");
+    let b_was = node(&s, b);
+    s.execute("object.setBounds", &json!({"height": 50, "reference": 0})).unwrap();
+    assert!(close(bounds(&s, c), Rect::new(500.0, 0.0, 520.0, 10.0)), "{:?}", bounds(&s, c));
+    assert_eq!(node(&s, b), b_was, "the copy left out keeps its shape");
+}
+
+/// A Shift-drag with the Selection tool from `from` to `to`.
+fn shift_drag(s: &mut Session, from: (f64, f64), to: (f64, f64)) {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let steps = if from == to {
+        vec![(PointerKind::Down, from), (PointerKind::Up, to)]
+    } else {
+        vec![(PointerKind::Down, from), (PointerKind::Drag, to), (PointerKind::Up, to)]
+    };
+    for (kind, (x, y)) in steps {
+        s.pointer(&PointerEvent::new(kind, x, y).with_mods(Mods { shift: true, ..Mods::default() }), v).unwrap();
+    }
+}
+
+/// A Shift-click with the Selection tool at (`x`, `y`).
+fn shift_click(s: &mut Session, x: f64, y: f64) {
+    shift_drag(s, (x, y), (x, y));
+}
+
+#[test]
+fn a_shift_click_on_a_highlighted_object_leaves_it_out() {
+    let mut s = session();
+    let [a, b, c, ..] = squares(&mut s);
+    start(&mut s, a, json!({}));
+    // A Shift-drag that starts on the copy selects it and moves it with the selection, and leaves
+    // the copy in.
+    shift_drag(&mut s, (350.0, 50.0), (390.0, 50.0));
+    assert_eq!(members(&s), Some(vec![a, b, c]), "a drag leaves nothing out");
+    assert_eq!(s.doc().unwrap().selection.objects, [a, b]);
+    assert!(bounds(&s, a).x0 > 0.0, "the selection moved: {:?}", bounds(&s, a));
+    assert!(bounds(&s, b).x0 > 300.0, "the copy moved with it: {:?}", bounds(&s, b));
+    s.execute("edit.undo", &json!({})).unwrap();
+    sel(&mut s, &[a]);
+    shift_click(&mut s, 350.0, 50.0);
+    assert_eq!(members(&s), Some(vec![a, c]), "the copy is left out");
+    assert_eq!(s.doc().unwrap().selection.objects, [a], "and not selected");
+    // A Shift-click on the object the edit started from deselects it, as before.
+    shift_click(&mut s, 50.0, 50.0);
+    assert_eq!(members(&s), Some(vec![a, c]));
+    assert!(s.doc().unwrap().selection.objects.is_empty());
+    shift_click(&mut s, 510.0, 10.0);
+    assert_eq!(members(&s), None, "one object left: Global Edit ends");
+    assert!(s.doc().unwrap().selection.objects.is_empty());
+    // With Global Edit off, a Shift-click selects, as before.
+    shift_click(&mut s, 350.0, 50.0);
+    assert_eq!(s.doc().unwrap().selection.objects, [b]);
+}
+
+#[test]
+fn a_shift_click_inside_a_matched_group_leaves_the_whole_group_out() {
+    let mut s = session();
+    let (g, _) = card(&mut s, 0.0, 1.0);
+    let (copy, _) = card(&mut s, 300.0, 1.0);
+    let (small, _) = card(&mut s, 500.0, 0.5);
+    assert_eq!(start(&mut s, g, json!({})), [g, copy, small]);
+    // On the circle in the copy.
+    shift_click(&mut s, 370.0, 20.0);
+    assert_eq!(members(&s), Some(vec![g, small]));
+    assert_eq!(s.doc().unwrap().selection.objects, [g]);
+    // An object inside a member that is selected: a Shift-click deselects it, as before.
+    let inner = kids(&s, small)[0];
+    sel(&mut s, &[inner]);
+    shift_click(&mut s, 505.0, 5.0);
+    assert_eq!(members(&s), Some(vec![g, small]));
+}
+
+#[test]
+fn a_shift_click_on_a_member_inside_a_selected_group_deselects_the_group() {
+    let mut s = session();
+    let [a, b, c, wide, _] = squares(&mut s);
+    let pair = group_of(&mut s, &[b, wide]);
+    let all = start(&mut s, a, json!({}));
+    assert_eq!(all, [a, c, b], "the copy in the group comes after the small square");
+    sel(&mut s, &[pair]);
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2, "the copy inside the selected group is not highlighted");
+    shift_click(&mut s, 350.0, 50.0);
+    assert_eq!(members(&s), Some(all), "nothing is left out");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the group is deselected");
+}
+
+#[test]
+fn leaving_out_all_but_one_ends_global_edit_and_the_first_object_stays() {
+    let mut s = session();
+    let [a, b, c, wide, _] = squares(&mut s);
+    let e = s.execute("select.globalEditExclude", &json!({"id": b.0})).unwrap_err().to_string();
+    assert!(e.contains("Global Edit is off"), "{e}");
+    start(&mut s, a, json!({}));
+    for id in [a, wide] {
+        let e = s.execute("select.globalEditExclude", &json!({"id": id.0})).unwrap_err().to_string();
+        assert!(e.contains("other than the one it started from"), "{id}: {e}");
+    }
+    assert_eq!(members(&s), Some(vec![a, b, c]), "nothing left out");
+    s.execute("select.globalEditExclude", &json!({"id": c.0})).unwrap();
+    let r = s.execute("select.globalEditExclude", &json!({"id": b.0})).unwrap();
+    assert_eq!(r, json!({"active": false, "count": 0, "ids": []}));
+    assert_eq!(members(&s), None, "one object left: Global Edit ends");
+    assert!(crate::cmd::globaledit::highlights(&s).is_empty());
+}
+
+#[test]
+fn a_group_left_out_keeps_its_objects_while_the_others_follow() {
+    let mut s = session();
+    let (g, [_, dot, _]) = card(&mut s, 0.0, 1.0);
+    let (copy, [_, cdot, _]) = card(&mut s, 300.0, 1.0);
+    let (small, [_, sdot, _]) = card(&mut s, 500.0, 0.5);
+    assert_eq!(start(&mut s, g, json!({})), [g, copy, small]);
+    s.execute("select.globalEditExclude", &json!({"id": copy.0})).unwrap();
+    let was = fill(&s, cdot);
+    sel(&mut s, &[dot]);
+    s.execute("paint.setFill", &json!({"color": "#12ab34"})).unwrap();
+    assert_eq!((fill(&s, sdot), fill(&s, cdot)), ("#12ab34".to_string(), was));
+}
+
 /// Two 100 pt squares and a 20 pt one made after `begin`, all three in a Global Edit; `put_back`
 /// takes the document back to before the small one. The small square leaves the Global Edit, and
 /// a square made under its freed id is not edited with the others.

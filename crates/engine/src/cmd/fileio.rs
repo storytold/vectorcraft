@@ -44,6 +44,7 @@ pub mod pngtext;
 pub mod ppi;
 pub mod progress;
 pub mod psdread;
+mod pxrread;
 mod save;
 mod screens;
 mod svg;
@@ -205,6 +206,8 @@ mod tests_psdread;
 mod tests_jp2read;
 #[cfg(test)]
 mod tests_pcxread;
+#[cfg(test)]
+mod tests_pxrread;
 
 #[cfg(test)]
 mod tests_epsimport;
