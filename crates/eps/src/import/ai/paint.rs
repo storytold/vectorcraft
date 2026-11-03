@@ -26,6 +26,7 @@ use std::collections::HashMap;
 use kurbo::{Affine, Point, Vec2};
 use vectorcraft_color::gradient::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::blend::lerp_color;
 
 use super::obj::V;
 
@@ -176,7 +177,77 @@ impl GradientDef {
             self.gradient.stops.reverse();
         }
         self.gradient.stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
+        self.gradient.stops = curve_stops(&self.gradient.stops);
         Some((self.name, self.gradient))
+    }
+}
+
+/// `stops` with each moved midpoint drawn as stops along the curve the file's PDF part writes for
+/// it, placed so the straight lines between them stay within 1/255. The PDF part writes every part
+/// of a ramp as an exponential interpolation function (ISO 32000-1 §7.10.3, Type 2) with `N ≥ 1`:
+/// `u^N` with `N = ln ½ / ln mid` for a midpoint past halfway, and for one before it the same curve
+/// run from the other end through its Type 3 function's `Encode [1 0]`, `1 − (1 − u)^N` with
+/// `N = ln ½ / ln (1 − mid)`, never `u^N` with `N < 1`.
+/// <https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf>
+fn curve_stops(stops: &[GradientStop]) -> Vec<GradientStop> {
+    let mut out: Vec<GradientStop> = Vec::with_capacity(stops.len());
+    for (i, from) in stops.iter().enumerate() {
+        out.push(from.clone());
+        let Some(to) = stops.get(i + 1) else { continue };
+        let mid = f64::from(from.midpoint);
+        if (mid - 0.5).abs() < 1e-6 || to.offset <= from.offset {
+            continue;
+        }
+        let curve = |u: f64| {
+            if mid > 0.5 { u.powf(0.5f64.ln() / mid.ln()) } else { 1.0 - (1.0 - u).powf(0.5f64.ln() / (1.0 - mid).ln()) }
+        };
+        // The ramp's largest change in the model the stops are mixed in (`lerp_color`), with its
+        // opacity: display RGB can stay equal across a CMYK, Gray or Lab ramp that still changes.
+        let span = color_span(&from.color, &to.color).max((to.opacity - from.opacity).abs());
+        let tolerance = 1.0 / 255.0 / f64::from(span.max(1e-6));
+        let at = |step: usize| step as f64 / 256.0;
+        let mut kept = 0;
+        let mut inner = vec![];
+        for end in 2..=256 {
+            let (u0, u1) = (at(kept), at(end));
+            let (v0, v1) = (curve(u0), curve(u1));
+            if (kept + 1..end).any(|step| (v0 + (v1 - v0) * (at(step) - u0) / (u1 - u0) - curve(at(step))).abs() > tolerance) {
+                kept = end - 1;
+                inner.push(at(kept));
+            }
+        }
+        if out.len() + inner.len() + stops.len() - i - 1 > MAX_STOPS {
+            continue;
+        }
+        if let Some(last) = out.last_mut() {
+            last.midpoint = 0.5;
+        }
+        let link = from.swatch.clone().filter(|_| from.swatch == to.swatch);
+        for u in inner {
+            let v = curve(u) as f32;
+            let mut stop = GradientStop::new(from.offset + (to.offset - from.offset) * u as f32, lerp_color(&from.color, &to.color, v));
+            stop.opacity = from.opacity + (to.opacity - from.opacity) * v;
+            if let Some(name) = &link {
+                stop.swatch = Some(name.clone());
+                stop.tint = from.tint + (to.tint - from.tint) * v;
+            }
+            out.push(stop);
+        }
+    }
+    out
+}
+
+/// The largest change of a component from `from` to `to` in the model they share and are mixed in
+/// (`lerp_color`), on a 0..1 scale; in display RGB when the models differ.
+fn color_span(from: &Color, to: &Color) -> f32 {
+    let widest = |x: &[f32], y: &[f32]| x.iter().zip(y).map(|(p, q)| (q - p).abs()).fold(0.0, f32::max);
+    match (*from, *to) {
+        (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) => widest(&[c, m, y, k], &[c2, m2, y2, k2]),
+        (Color::Gray { k }, Color::Gray { k: k2 }) => (k2 - k).abs(),
+        (Color::Lab { l, a, b }, Color::Lab { l: l2, a: a2, b: b2 }) => {
+            widest(&[l / 100.0, a / 255.0, b / 255.0], &[l2 / 100.0, a2 / 255.0, b2 / 255.0])
+        }
+        _ => widest(&from.to_rgb(), &to.to_rgb()),
     }
 }
 
