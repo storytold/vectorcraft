@@ -364,6 +364,11 @@ impl NineSliceMap {
         self.most_at(art, &boxes, 0)
     }
 
+    /// [`Self::most_placed`] for [`Self::place_unclipped`]: the most objects it makes of `art`.
+    pub fn most_placed_unclipped(&self, art: &Node, doc: &Document) -> u64 {
+        Self { clips: false, ..*self }.most_placed(art, doc)
+    }
+
     /// [`Self::most_placed`] for `n` at nesting depth `depth`, following [`Self::place_at`].
     fn most_at(&self, n: &Node, boxes: &SymbolBoxes, depth: u32) -> u64 {
         let whole = n.count_with_masks() as u64;
@@ -642,10 +647,7 @@ impl Document {
     /// ([`NineSliceMap::place_unclipped`]).
     pub fn place_symbol_art_unclipped(&self, name: &str, art: &Node, xf: Affine) -> Option<Node> {
         match self.symbol_slice_map(name, xf) {
-            Some(m) => {
-                let m = NineSliceMap { clips: false, ..m };
-                (m.most_placed(art, self) <= MAX_SYMBOL_NODES).then(|| m.place(art, self))
-            }
+            Some(m) => (m.most_placed_unclipped(art, self) <= MAX_SYMBOL_NODES).then(|| m.place_unclipped(art, self)),
             None => Some(transformed(art, xf)),
         }
     }
@@ -1072,6 +1074,9 @@ mod tests {
         let bar = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 40.0, 100.0, 60.0)), Appearance::basic(gradient, Paint::None, 0.0));
         assert_eq!(m.most_placed(&bar, &d), 10);
         assert_eq!(m.place(&bar, &d).count(), 10);
+        // Unclipped, as DXF writes it, the bar is cut at the guides and stays one path.
+        assert_eq!(m.most_placed_unclipped(&bar, &d), 1);
+        assert_eq!(m.place_unclipped(&bar, &d).count(), 1);
         // Art nested past the depth limit, clipped in all nine cells.
         let mut deep = square(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), 0.0);
         for _ in 0..=MAX_SLICE_DEPTH {

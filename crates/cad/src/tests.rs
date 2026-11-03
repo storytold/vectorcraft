@@ -1017,7 +1017,8 @@ fn symbols_fanning_out_into_empty_symbols_stop_at_the_symbol_budget() {
     d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "L0".into(), art: Arc::new(empty) });
     for level in 1..=5 {
         let below = format!("L{}", level - 1);
-        let children = (0..100).map(|_| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: below.clone(), xf: Affine::IDENTITY }))).collect();
+        let children =
+            (0..100).map(|_| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: below.clone(), xf: Affine::IDENTITY }))).collect();
         let art = Node::group(d.alloc_id(), children);
         d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("L{level}"), art: Arc::new(art) });
     }

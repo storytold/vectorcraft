@@ -567,7 +567,8 @@ impl<'a> Scene<'a> {
                     // empty or not: every instance's art counts against one budget for the export.
                     let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
                     let count = art.count_with_masks() as u64;
-                    let most = doc.symbol_slice_map(symbol, *xf).map_or(count, |m| m.most_placed(&art, doc));
+                    // Counted as `place_symbol_art_unclipped` places it: no clip groups.
+                    let most = doc.symbol_slice_map(symbol, *xf).map_or(count, |m| m.most_placed_unclipped(&art, doc));
                     let placed = vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
                         let placed = doc.place_symbol_art_unclipped(symbol, &art, *xf);
                         let n = placed.as_ref().map_or(0, |a| a.count_with_masks() as u64);
@@ -1320,6 +1321,25 @@ mod budget_tests {
         let polys = polygons(&bp);
         let points: usize = polys.iter().map(Vec::len).sum();
         assert!(points <= MAX_POINTS, "{points} points");
+        assert!(!polys.iter().any(|p| p.contains(&Point::new(20.0, 20.0))), "the square past the budget is left out");
+    }
+
+    #[test]
+    fn flattening_a_path_of_repeated_points_stops_at_its_segment_budget() {
+        // Repeats of a point are dropped, so these keep one point but still count as segments:
+        // the segment budget, not the point budget, leaves out the square after them.
+        let mut bp = BezPath::new();
+        bp.move_to((0.0, 0.0));
+        for _ in 0..MAX_FLATTEN_SEGMENTS {
+            bp.line_to((0.0, 0.0));
+        }
+        bp.move_to((10.0, 10.0));
+        bp.line_to((20.0, 10.0));
+        bp.line_to((20.0, 20.0));
+        bp.close_path();
+        let polys = polygons(&bp);
+        let points: usize = polys.iter().map(Vec::len).sum();
+        assert!(points < MAX_POINTS, "{points} points");
         assert!(!polys.iter().any(|p| p.contains(&Point::new(20.0, 20.0))), "the square past the budget is left out");
     }
 }
