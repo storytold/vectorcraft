@@ -23,6 +23,21 @@ fn increasing_samples_match_single_samples() {
     assert_eq!(g.sample_increasing_with(ts, Color::lerp_keep_model), one_by_one);
 }
 
+/// The prepared sampler gives what sampling each position alone does, out-of-order stops included.
+#[test]
+fn the_sampler_matches_single_samples() {
+    let stop = |offset: f32, hex: &str| GradientStop::new(offset, Color::from_hex(hex).unwrap());
+    let g = Gradient::new(
+        GradientKind::Linear,
+        vec![stop(0.1, "#ff0000"), stop(0.4, "#00ff00"), stop(0.4, "#0000ff"), stop(0.2, "#ffff00"), stop(0.9, "#000000")],
+    );
+    let sample = g.sampler();
+    for k in (0..=40).rev() {
+        let t = k as f32 / 40.0;
+        assert_eq!(sample(t), g.sample(t), "{t}");
+    }
+}
+
 /// Looking stops up by their reach finds what scanning them does, for any order of offsets,
 /// repeated, out-of-order and NaN ones included, and for positions outside and between them.
 #[test]

@@ -245,6 +245,12 @@ impl Gradient {
     pub fn sample(&self, t: f32) -> (Color, f32) {
         self.sample_with(t, |a, b, v| self.method.mix(a, b, v))
     }
+    /// [`Self::sample`] for many points in no order (a gradient drawn pixel by pixel): the stops
+    /// are prepared once, so each sample costs a binary search rather than a scan of the stops.
+    pub fn sampler(&self) -> impl Fn(f32) -> (Color, f32) + '_ {
+        let reach = StopReach::new(&self.stops);
+        move |t| reach.sample_with(&self.stops, t, &|a, b, v| self.method.mix(a, b, v))
+    }
     /// [`Self::sample`], a Classic gradient's neighbouring stop colours of one model mixed in it
     /// (CMYK stays CMYK; [`Color::lerp_keep_model`]) rather than in display RGB, a Perceptual
     /// gradient's as [`Self::sample`] mixes them.

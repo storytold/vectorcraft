@@ -332,7 +332,7 @@ fn pixels(img: &mut Image, o: &Overlay) -> bool {
     };
     let to_unit = match o.source {
         Source::Gradient(g) => match invert(g.transform) {
-            Some(m) => Some((img.transform.then(m), g)),
+            Some(m) => Some((img.transform.then(m), g, stop_reach(g))),
             None => return false,
         },
         Source::Solid(_) => None,
@@ -343,9 +343,9 @@ fn pixels(img: &mut Image, o: &Overlay) -> bool {
         }
         let (s, sa) = match (solid, &to_unit) {
             (Some(s), _) => s,
-            (None, Some((m, g))) => {
+            (None, Some((m, g, reach))) => {
                 let q = m.apply(Point { x: (i % width) as f64 + 0.5, y: (i / width) as f64 + 0.5 });
-                let c = sample(g, q);
+                let c = sample(g, reach, q);
                 (rgb(c), c.alpha())
             }
             (None, None) => continue,
@@ -376,8 +376,22 @@ fn decode(bytes: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
     Some(reader.decode().ok()?.into_rgba8().into_raw())
 }
 
-/// The gradient's colour at unit-space point `q`.
-fn sample(g: &Gradient, q: Point) -> Color {
+/// For each pair of neighbouring stops (`k`, `k + 1`), the largest offset of stops `1..=k + 1`:
+/// the first pair whose end offset a `t` doesn't pass is the first whose reach it doesn't pass, and
+/// reaches never decrease, so [`sample`] finds it by binary search, sorted stops or not.
+fn stop_reach(g: &Gradient) -> Vec<f64> {
+    g.stops
+        .iter()
+        .skip(1)
+        .scan(f64::NEG_INFINITY, |m, s| {
+            *m = m.max(s.offset);
+            Some(*m)
+        })
+        .collect()
+}
+
+/// The gradient's colour at unit-space point `q` (`reach`: [`stop_reach`] of `g`).
+fn sample(g: &Gradient, reach: &[f64], q: Point) -> Color {
     let t = match g.kind {
         GradientKind::Linear => q.x,
         GradientKind::Radial => q.x.hypot(q.y),
@@ -388,18 +402,16 @@ fn sample(g: &Gradient, q: Point) -> Color {
     if t <= first.offset {
         return first.color;
     }
-    for w in g.stops.windows(2) {
-        let [a, b] = [&w[0], &w[1]];
-        if t <= b.offset {
-            let span = b.offset - a.offset;
-            let u = if span > 1e-9 { (t - a.offset) / span } else { 1.0 };
-            // Affinity's midpoint bias (see `Stop::half_point`).
-            let k = 1.0 + 8.0 * (a.bias - 0.5).abs();
-            let u = if a.bias >= 0.5 { u.powf(k) } else { 1.0 - (1.0 - u).powf(k) };
-            let (x, y) = (rgb(a.color), rgb(b.color));
-            let [r, g, bl] = [0, 1, 2].map(|i| x[i] + (y[i] - x[i]) * u);
-            return Color::Rgb { r, g, b: bl, a: a.color.alpha() + (b.color.alpha() - a.color.alpha()) * u };
-        }
+    let k = reach.partition_point(|r| *r < t);
+    if let (Some(a), Some(b)) = (g.stops.get(k), g.stops.get(k + 1)) {
+        let span = b.offset - a.offset;
+        let u = if span > 1e-9 { (t - a.offset) / span } else { 1.0 };
+        // Affinity's midpoint bias (see `Stop::half_point`).
+        let k = 1.0 + 8.0 * (a.bias - 0.5).abs();
+        let u = if a.bias >= 0.5 { u.powf(k) } else { 1.0 - (1.0 - u).powf(k) };
+        let (x, y) = (rgb(a.color), rgb(b.color));
+        let [r, g, bl] = [0, 1, 2].map(|i| x[i] + (y[i] - x[i]) * u);
+        return Color::Rgb { r, g, b: bl, a: a.color.alpha() + (b.color.alpha() - a.color.alpha()) * u };
     }
     last.color
 }
