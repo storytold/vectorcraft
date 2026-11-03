@@ -818,7 +818,7 @@ fn swatch_unused(s: &mut Session, _: &Value) -> Result<Value> {
         Some(l) if d.swatch(l).is_some() => links.push((l.clone(), tint)),
         _ => colors.push(*c),
     };
-    d.visit_paints(&mut |p| match p {
+    let mut paint = |p: &Paint| match p {
         Paint::Solid { color: c, swatch, tint } => color(c, swatch.as_ref(), *tint),
         Paint::Gradient(g) => {
             g.gradient.stops.iter().for_each(|s| color(&s.color, s.swatch.as_ref(), s.tint));
@@ -827,7 +827,16 @@ fn swatch_unused(s: &mut Session, _: &Value) -> Result<Value> {
         }
         Paint::Pattern { pattern, .. } => patterns.push(pattern.clone()),
         Paint::None => {}
-    });
+    };
+    d.visit_paints(&mut paint);
+    // A character style's fill and stroke use their swatches even while no text uses the style.
+    for attrs in d.char_styles.iter().map(|def| &def.attrs) {
+        for key in ["fill", "stroke"] {
+            if let Some(p) = attrs.get(key).and_then(|v| serde_json::from_value::<Paint>(v.clone()).ok()) {
+                paint(&p);
+            }
+        }
+    }
     let used = |w: &Swatch| {
         gradient_links.contains(&w.name)
             || links.iter().any(|(l, t)| match w.tint_of() {

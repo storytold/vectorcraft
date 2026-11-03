@@ -5990,6 +5990,11 @@ anchor	Points:	წერტილები:
 	Horizontal Scale	ჰორიზონტალური მასშტაბი
 	Vertical Scale	ვერტიკალური მასშტაბი
 @msg	{label} must be a number from {min} to {max}	{label} უნდა იყოს რიცხვი {min}-დან {max}-მდე
+	Character Color	სიმბოლოს ფერი
+	OpenType Features	OpenType შესაძლებლობები
+	Stylistic Sets	სტილისტური ნაკრებები
+@msg	features lists at most {max} tags	features შეიძლება შეიცავდეს არაუმეტეს {max} ტეგს
+@msg	unknown OpenType feature `{t}`	უცნობი OpenType შესაძლებლობა `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} უნდა იყოს 0-ზე მეტი და არაუმეტეს {max}-ისა რიცხვი
 @msg	no character style `{name}`	სიმბოლოს სტილი `{name}` ვერ მოიძებნა
 

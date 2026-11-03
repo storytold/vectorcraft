@@ -5856,6 +5856,11 @@ anchor	Points:	Punkty:
 	Horizontal Scale	Skala pozioma
 	Vertical Scale	Skala pionowa
 @msg	{label} must be a number from {min} to {max}	{label} musi być liczbą od {min} do {max}
+	Character Color	Kolor znaków
+	OpenType Features	Funkcje OpenType
+	Stylistic Sets	Zestawy stylistyczne
+@msg	features lists at most {max} tags	features może zawierać najwyżej {max} znaczników
+@msg	unknown OpenType feature `{t}`	nieznana funkcja OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musi być liczbą większą od 0 i nie większą niż {max}
 @msg	no character style `{name}`	Nie znaleziono stylu znakowego `{name}`
 

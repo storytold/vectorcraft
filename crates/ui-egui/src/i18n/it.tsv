@@ -5621,6 +5621,11 @@ anchor	Points:	Punti:
 	Horizontal Scale	Scala orizzontale
 	Vertical Scale	Scala verticale
 @msg	{label} must be a number from {min} to {max}	{label} deve essere un numero da {min} a {max}
+	Character Color	Colore carattere
+	OpenType Features	Funzioni OpenType
+	Stylistic Sets	Set stilistici
+@msg	features lists at most {max} tags	features contiene al massimo {max} tag
+@msg	unknown OpenType feature `{t}`	funzione OpenType sconosciuta `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve essere un numero maggiore di 0 e al massimo {max}
 @msg	no character style `{name}`	Stile di carattere `{name}` non trovato
 
