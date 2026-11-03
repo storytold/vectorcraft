@@ -11,7 +11,7 @@
 //! filters as the remaining families. In the Character and Properties panels and the Control bar,
 //! the mouse wheel turned over the closed field applies the next family (or previous one) to the
 //! selected text, one undo step per notch. The menu's order at the first turn stays fixed until the
-//! pointer leaves the field; steps stop at its first and last family.
+//! pointer leaves the field or the text selection changes; steps stop at its first and last family.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -287,7 +287,7 @@ struct MenuState {
     /// The height of the search field and filters last frame.
     header: f32,
     /// The families the wheel steps through, listed at its first notch over the closed field and
-    /// kept while the pointer stays on it: each step makes its family a recent one, which would
+    /// kept for that text selection while the pointer stays on it: each step makes its family a recent one, which would
     /// otherwise move it in the order.
     wheel_order: Option<Arc<[String]>>,
     wheel_target: Option<WheelTarget>,
@@ -451,15 +451,22 @@ fn wheel_fields_id(viewport: egui::ViewportId) -> egui::Id {
     egui::Id::unique("font-wheel-fields").with(viewport)
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 struct WheelTarget {
     input: crate::state::InputGeneration,
     workspace: u64,
+    selection: Vec<vectorcraft_doc::NodeId>,
+    range: Option<(vectorcraft_doc::NodeId, usize, usize)>,
 }
 
 /// Pending turns and field rectangles belong to their input target and visible workspace.
 pub(crate) fn sync_wheel_target(app: &VectorcraftApp, ctx: &egui::Context, viewport: egui::ViewportId) {
-    let target = WheelTarget { input: app.input_generation(), workspace: app.ui.docking_generation };
+    let target = WheelTarget {
+        input: app.input_generation(),
+        workspace: app.ui.docking_generation,
+        selection: app.session.active().map_or_else(Vec::new, |document| document.selection.objects.clone()),
+        range: crate::panels::character::text_editing(app),
+    };
     let key = wheel_fields_id(viewport);
     let (previous, mut fields) = ctx.data(|d| (d.get_temp::<WheelTarget>(key.with("target")), d.get_temp::<WheelFields>(key)));
     if previous.is_some_and(|old| old != target) {

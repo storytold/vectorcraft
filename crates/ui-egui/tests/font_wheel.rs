@@ -23,6 +23,44 @@ fn deselecting_type_leaves_the_missing_control_fields_wheel_available() {
 }
 
 #[test]
+fn a_queued_font_wheel_does_not_restyle_a_new_object_selection() {
+    assert_queued_wheel_discarded_after_target_change(false);
+}
+
+#[test]
+fn a_queued_font_wheel_does_not_restyle_a_new_character_range() {
+    assert_queued_wheel_discarded_after_target_change(true);
+}
+
+fn assert_queued_wheel_discarded_after_target_change(range: bool) {
+    let (ctx, mut app) = selected_type_with_control();
+    let first = app.session.active().unwrap().selection.objects.first().unwrap().0;
+    let second = app.run("text.create", json!({"x": 30, "y": 120, "text": "Other text", "font": "Inter"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [first]})).unwrap();
+    if range {
+        app.select_tool("type");
+        app.session.set_tool_option("textSelection", &json!({"editing": first, "anchor": 0, "caret": 2}));
+    }
+    let mut texts = Vec::new();
+    for _ in 0..8 {
+        texts = frame(&mut app, &ctx, vec![]);
+    }
+    let point = texts.iter().find(|(t, p)| t == "Inter" && p.y < 150.0).unwrap().1;
+    let mut raw = wheel_input(point);
+    app.raw_input_hook(&ctx, &mut raw);
+    assert!(!raw.events.iter().any(|e| matches!(e, Event::MouseWheel { .. })), "the original field captured its turn");
+    if range {
+        app.session.set_tool_option("textSelection", &json!({"editing": first, "anchor": 2, "caret": 4}));
+    } else {
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+    }
+    let before = app.session.active().unwrap().history.undo.len();
+    let mut out = ctx.run_ui(raw, |ui| app.ui(ui));
+    out.textures_delta.clear();
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before, "the captured turn cannot restyle the new target");
+}
+
+#[test]
 fn artboard_controls_leave_replaced_font_fields_wheel_available() {
     let (ctx, mut app) = selected_type_with_control();
     let mut texts = Vec::new();
