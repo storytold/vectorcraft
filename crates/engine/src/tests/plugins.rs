@@ -436,6 +436,18 @@ fn plugin_management_commands() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
+#[test]
+fn removing_an_active_tool_plugin_selects_the_selection_tool() {
+    let mut s = session();
+    let id = "test.engine.toolremove";
+    let manifest = r#"{"id":"test.engine.toolremove","name":"Tangent Circle","version":"1","kind":"tool","toolGroup":"ellipse"}"#;
+    install_wat(&mut s, &tpl::returning(manifest, "{}"));
+    s.select_tool(&format!("plugin.{id}"), ViewInfo::default()).unwrap();
+    assert_eq!(s.tool_id(), format!("plugin.{id}"));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert_eq!(s.tool_id(), "selection");
+}
+
 /// #2541: a plug-in installed in a session with a plug-in store is installed again in the next
 /// session that attaches the store, and Remove Plug-in takes it out of the store.
 #[test]

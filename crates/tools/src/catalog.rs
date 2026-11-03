@@ -1,6 +1,10 @@
 //! The tool catalogue: ids, labels, shortcuts and toolbar groups (Illustrator's Advanced toolbar order).
 
+use std::collections::HashMap;
+use std::sync::{OnceLock, RwLock};
+
 use serde::Serialize;
+use vectorcraft_plugins::{Kind, PREFIX, registry};
 
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct ToolInfo {
@@ -143,7 +147,41 @@ pub fn all_tools() -> impl Iterator<Item = &'static ToolInfo> {
 }
 
 pub fn tool_info(id: &str) -> Option<&'static ToolInfo> {
-    all_tools().find(|t| t.id == id)
+    all_tools().find(|t| t.id == id).or_else(|| plugin_tool_info(id))
+}
+
+/// Installed tool plug-ins, sorted by manifest id as the registry lists them.
+pub fn plugin_tools() -> Vec<&'static ToolInfo> {
+    registry::list().iter().filter(|p| p.manifest().kind == Kind::Tool).filter_map(|p| plugin_tool_info(&format!("{PREFIX}{}", p.id()))).collect()
+}
+
+/// The toolbar group a tool plug-in declares, when `id` still names an installed tool plug-in.
+pub fn plugin_group(id: &str) -> Option<&'static str> {
+    let plugin = registry::get(id.strip_prefix(PREFIX)?)?;
+    (plugin.manifest().kind == Kind::Tool).then(|| registry::intern(plugin.manifest().tool_group.as_deref().unwrap_or("ellipse")))
+}
+
+fn plugin_tool_info(id: &str) -> Option<&'static ToolInfo> {
+    static CACHE: OnceLock<RwLock<HashMap<String, (u64, &'static ToolInfo)>>> = OnceLock::new();
+    let plugin = registry::get(id.strip_prefix(PREFIX)?)?;
+    let m = plugin.manifest();
+    if m.kind != Kind::Tool {
+        return None;
+    }
+    let cache = CACHE.get_or_init(|| RwLock::new(HashMap::new()));
+    if let Some((serial, info)) = cache.read().unwrap_or_else(|e| e.into_inner()).get(id)
+        && *serial == plugin.serial()
+    {
+        return Some(info);
+    }
+    let info: &'static ToolInfo = Box::leak(Box::new(ToolInfo {
+        id: registry::intern(id),
+        label: registry::intern(&m.name),
+        shortcut: None,
+        icon: registry::intern(m.icon.as_deref().unwrap_or("tool-ellipse")),
+    }));
+    cache.write().unwrap_or_else(|e| e.into_inner()).insert(id.to_string(), (plugin.serial(), info));
+    Some(info)
 }
 
 /// Tool for a single-key shortcut such as "V" or "Shift+M".
@@ -193,5 +231,24 @@ mod tests {
         assert_eq!(group_of("star"), group_of("rectangle"));
         assert!(is_selection_tool("groupSelection") && !is_selection_tool("pen"));
         assert!(edits_anchors("pen") && !edits_anchors("rectangle"));
+    }
+
+    #[test]
+    fn tool_plugins_enter_and_leave_the_catalogue() {
+        use vectorcraft_plugins::{Limits, Plugin, registry, wat as tpl};
+        let manifest = r#"{"id":"test.tangent.every","name":"Tangent Circle","version":"1","kind":"tool","toolGroup":"ellipse"}"#;
+        let src = tpl::returning(manifest, "{}");
+        let bytes = wat::parse_str(src).unwrap();
+        registry::install(Plugin::load(&bytes, Limits::default()).unwrap());
+        let id = "plugin.test.tangent.every";
+        let listed = plugin_tools();
+        let tangent = listed.iter().find(|t| t.id == id).unwrap();
+        assert_eq!((tangent.label, tangent.icon), ("Tangent Circle", "tool-ellipse"));
+        assert_eq!(tool_info(id).map(|t| t.label), Some("Tangent Circle"));
+        assert_eq!(plugin_group(id), Some("ellipse"));
+        registry::remove("test.tangent.every");
+        assert!(!plugin_tools().iter().any(|t| t.id == id));
+        assert!(tool_info(id).is_none());
+        assert_eq!(plugin_group(id), None);
     }
 }

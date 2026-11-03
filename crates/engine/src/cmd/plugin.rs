@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
-use vectorcraft_plugins::{Budget, Kind, Plugin, effect, export, objects, registry};
+use vectorcraft_plugins::{Budget, Kind, PREFIX, Plugin, effect, export, objects, registry};
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param};
 
@@ -45,6 +45,11 @@ pub fn describe(p: &Plugin) -> Value {
             v["extensions"] = json!(m.extensions);
         }
         Kind::Filter => {}
+        Kind::Tool => {
+            v["tool"] = json!(format!("plugin.{}", m.id));
+            v["toolGroup"] = json!(m.tool_group);
+            v["icon"] = json!(m.icon);
+        }
     }
     if m.budget == Budget::Heavy {
         v["budget"] = json!("heavy");
@@ -119,6 +124,7 @@ impl FilterRun {
                     format!("`{}` is an exporter: export with document.export {{\"format\": \"{}\"}}", m.id, export::format_id(&m.id)),
                 ));
             }
+            Kind::Tool => return Err(bad(C, format!("`{}` is a tool: choose it in the toolbar", m.id))),
         }
         // Bad parameters fail before anything runs.
         let mut params = Value::Object(m.resolve_params(&plugin_params(p)).map_err(|e| bad(C, e.to_string()))?);
@@ -402,7 +408,14 @@ fn info(_: &mut Session, p: &Value) -> Result<Value> {
 fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let id = str_param(p, "id").ok_or_else(|| bad("plugin.remove", "missing `id`"))?;
     s.unstore_plugin(id);
-    if registry::remove(id) { Ok(json!({"removed": id})) } else { Err(err(vectorcraft_plugins::Error::NotFound(id.into()))) }
+    if !registry::remove(id) {
+        return Err(err(vectorcraft_plugins::Error::NotFound(id.into())));
+    }
+    let tool = format!("{PREFIX}{id}");
+    if s.tool_id() == tool {
+        s.switch_tool("selection", s.last_view)?;
+    }
+    Ok(json!({"removed": id}))
 }
 
 /// This module's commands: `plugin.list`, `.info`, `.run`, `.install`, `.inspect`, `.remove` and

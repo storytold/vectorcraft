@@ -76,13 +76,27 @@ pub(crate) fn tip(t: &ToolInfo) -> String {
 /// Slots of the current layout, as Edit Toolbar left it: (category label for the first slot of a
 /// category, tool ids).
 pub(crate) fn slots(app: &VectorcraftApp) -> Vec<(Option<&'static str>, Vec<&'static str>)> {
-    if let Some(edited) = crate::edit_toolbar::edited_slots(app) {
+    let mut all = if let Some(edited) = crate::edit_toolbar::edited_slots(app) {
         edited
     } else if app.ui.toolbar_advanced {
         TOOL_GROUPS.iter().map(|g| (None, g.iter().map(|t| t.id).collect())).collect()
     } else {
         BASIC.iter().flat_map(|(cat, ss)| ss.iter().enumerate().map(move |(i, s)| (if i == 0 { Some(*cat) } else { None }, s.to_vec()))).collect()
+    };
+    let plugins: Vec<&'static str> =
+        vectorcraft_tools::catalog::plugin_tools().into_iter().filter(|t| vectorcraft_tools::catalog::plugin_group(t.id) == Some("ellipse")).map(|t| t.id).collect();
+    if !plugins.is_empty() {
+        if let Some((_, tools)) = all.iter_mut().find(|(_, tools)| tools.contains(&"ellipse")) {
+            for id in plugins {
+                if !tools.contains(&id) {
+                    tools.push(id);
+                }
+            }
+        } else {
+            all.push((None, plugins));
+        }
     }
+    all
 }
 
 /// Remember the tool shown in the slot that contains `id`.
