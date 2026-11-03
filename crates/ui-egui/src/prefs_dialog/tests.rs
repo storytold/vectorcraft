@@ -391,3 +391,30 @@ fn hyphenation_exceptions_dialog_ok_reaches_the_hyphenator() {
     assert!(vectorcraft_text::hyphen::hyphen_points("typography").is_empty());
     assert_eq!(vectorcraft_text::hyphen::hyphen_points("happen"), vec![3]);
 }
+
+/// #5236: File Handling › Edit Original With offers System Default, PhotoCraft and Other
+/// Application, whose Choose… puts the picked application into the preference.
+#[test]
+fn edit_original_with_takes_a_chosen_application() {
+    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    open(&mut a, Some("File Handling"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Edit Original With") && text.contains("System Default"), "{text}");
+    let asked: std::rc::Rc<std::cell::RefCell<Vec<crate::FilePick>>> = Default::default();
+    let seen = asked.clone();
+    a.services.pick_open = Some(Box::new(move |p: &crate::FilePick| {
+        seen.borrow_mut().push(p.clone());
+        Some("/Applications/Editor.app".into())
+    }));
+    let mut d = a.ui.dialog.clone().unwrap();
+    choose_app(&mut a, &mut d);
+    assert_eq!(d.str("editOriginalApp"), "/Applications/Editor.app");
+    let pick = asked.borrow()[0].clone();
+    if cfg!(target_os = "macos") {
+        assert_eq!((pick.folder.as_deref(), pick.filters[0].1.clone()), (Some("/Applications"), vec!["app".to_string()]));
+    }
+    // OK saves it; the dialog's own fields (`__…`) are not preferences.
+    a.ui.dialog = Some(d);
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.edit_original_app, "/Applications/Editor.app");
+}

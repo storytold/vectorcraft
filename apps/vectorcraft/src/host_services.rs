@@ -300,6 +300,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         reveal: Some(Box::new(reveal)),
         // Links panel: Edit Original; Package: Show Package. Relink to Folder and Package pick folders.
         open_file: Some(Box::new(open_file)),
+        // Edit Original with Preferences › File Handling › Edit Original With set (#5236).
+        open_file_with: Some(Box::new(open_file_with)),
         pick_folder: Some(Box::new(move || pick_now(PickRequest::Folder, &p4).into_iter().next())),
         // Sample Color from Screen: the system's color sampler.
         #[cfg(target_os = "macos")]
@@ -333,4 +335,145 @@ fn open_file(path: &str) -> Result<(), String> {
     #[cfg(not(windows))]
     c.arg(path);
     c.spawn().map(|_| ()).map_err(|e| format!("can't open {path}: {e}"))
+}
+
+/// Edit Original with Preferences › File Handling › Edit Original With set (#5236): open `path` in
+/// `app` (`photocraft`, or an application's path). The app must be an application ([`check_app`]);
+/// it gets the path as its only argument and is never started through a shell.
+fn open_file_with(app: &str, path: &str) -> Result<(), String> {
+    explorer_safe(path)?;
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(std::path::PathBuf::from);
+    let app = resolve_app(app, home.as_deref(), std::env::var_os("PATH").as_deref())?;
+    check_app(&app)?;
+    #[cfg(target_os = "macos")]
+    let mut c = {
+        let mut c = std::process::Command::new("open");
+        c.arg("-a").arg(&app).arg(path);
+        c
+    };
+    #[cfg(not(target_os = "macos"))]
+    let mut c = {
+        let mut c = std::process::Command::new(&app);
+        c.arg(path);
+        c
+    };
+    c.spawn().map(|_| ()).map_err(|e| format!("can't open {path} in {}: {e}", app.display()))
+}
+
+/// The application Edit Original With names: PhotoCraft where it is installed for `photocraft`
+/// ([`photocraft_candidates`]), else the path as given.
+pub(crate) fn resolve_app(app: &str, home: Option<&std::path::Path>, path_var: Option<&std::ffi::OsStr>) -> Result<std::path::PathBuf, String> {
+    if app.trim().eq_ignore_ascii_case("photocraft") {
+        return photocraft_candidates(home, path_var)
+            .into_iter()
+            .find(|p| check_app(p).is_ok())
+            .ok_or_else(|| "PhotoCraft isn't installed: choose another app in Preferences › File Handling › Edit Original With".to_string());
+    }
+    Ok(std::path::PathBuf::from(app.trim()))
+}
+
+/// Where PhotoCraft may be installed: the Applications folders on macOS, else a `photocraft`
+/// program on the `PATH`.
+pub(crate) fn photocraft_candidates(home: Option<&std::path::Path>, path_var: Option<&std::ffi::OsStr>) -> Vec<std::path::PathBuf> {
+    if cfg!(target_os = "macos") {
+        let mut v = vec![std::path::PathBuf::from("/Applications/PhotoCraft.app")];
+        v.extend(home.map(|h| h.join("Applications/PhotoCraft.app")));
+        return v;
+    }
+    let name = if cfg!(windows) { "photocraft.exe" } else { "photocraft" };
+    path_var.map(|p| std::env::split_paths(p).map(|dir| dir.join(name)).collect()).unwrap_or_default()
+}
+
+/// Is `app` an application Edit Original may start: an `.app` bundle on macOS, an `.exe` on
+/// Windows, an executable file elsewhere? Anything else (a document, a folder, a script on
+/// Windows) is refused, so the preference can only ever open an installed app.
+pub(crate) fn check_app(app: &std::path::Path) -> Result<(), String> {
+    let ext = app.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let ok = if cfg!(target_os = "macos") {
+        ext == "app" && app.is_dir()
+    } else if cfg!(windows) {
+        ext == "exe" && app.is_file()
+    } else {
+        executable_file(app)
+    };
+    if ok { Ok(()) } else { Err(format!("{} isn't an application Edit Original can open files in", app.display())) }
+}
+
+#[cfg(unix)]
+fn executable_file(p: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn executable_file(p: &std::path::Path) -> bool {
+    p.is_file()
+}
+
+#[cfg(test)]
+mod open_with_tests {
+    use super::{check_app, photocraft_candidates, resolve_app};
+
+    /// A fresh, empty folder under the system's temporary folder.
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("vc-open-with-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// #5236: Edit Original With only ever starts an application, never a document, a folder or a
+    /// missing path.
+    #[test]
+    fn only_applications_are_started() {
+        let d = scratch("check");
+        let doc = d.join("notes.txt");
+        std::fs::write(&doc, "hi").unwrap();
+        assert!(check_app(&doc).is_err(), "a document");
+        assert!(check_app(&d).is_err(), "a folder");
+        assert!(check_app(&d.join("Missing.app")).is_err(), "a missing path");
+        if cfg!(target_os = "macos") {
+            let app = d.join("Editor.app");
+            std::fs::create_dir_all(&app).unwrap();
+            assert!(check_app(&app).is_ok(), "an .app bundle");
+        }
+        #[cfg(all(unix, not(target_os = "macos")))]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let tool = d.join("editor");
+            std::fs::write(&tool, "#!/bin/sh\n").unwrap();
+            assert!(check_app(&tool).is_err(), "not executable yet");
+            std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+            assert!(check_app(&tool).is_ok(), "an executable file");
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// `photocraft` is looked for where PhotoCraft installs; any other value is taken as a path.
+    #[test]
+    fn photocraft_is_found_where_it_installs() {
+        let d = scratch("find");
+        assert_eq!(resolve_app("/Apps/Other.app", None, None).unwrap(), std::path::PathBuf::from("/Apps/Other.app"));
+        if cfg!(target_os = "macos") {
+            let candidates = photocraft_candidates(Some(&d), None);
+            assert_eq!(candidates.first().map(|p| p.to_string_lossy().into_owned()).as_deref(), Some("/Applications/PhotoCraft.app"));
+            assert!(candidates.contains(&d.join("Applications/PhotoCraft.app")), "{candidates:?}");
+            std::fs::create_dir_all(d.join("Applications/PhotoCraft.app")).unwrap();
+            assert!(resolve_app("PhotoCraft", Some(&d), None).unwrap().ends_with("PhotoCraft.app"));
+        } else {
+            let bin = d.join("bin");
+            std::fs::create_dir_all(&bin).unwrap();
+            let path_var = std::env::join_paths([&bin]).unwrap();
+            assert!(resolve_app("photocraft", None, Some(&path_var)).is_err(), "not installed");
+            let exe = bin.join(if cfg!(windows) { "photocraft.exe" } else { "photocraft" });
+            std::fs::write(&exe, "").unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt as _;
+                std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+            assert_eq!(resolve_app("photocraft", None, Some(&path_var)).unwrap(), exe);
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }

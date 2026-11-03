@@ -168,6 +168,48 @@ fn edit_original_and_show_in_folder_hand_the_file_to_the_system() {
     assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
 }
 
+/// #5236: Preferences › File Handling › Edit Original With picks the app Edit Original opens the
+/// file in: System Default ("") hands it to the system's default app as before, PhotoCraft or an
+/// application's path to that app.
+#[test]
+fn edit_original_opens_the_file_in_the_chosen_app() {
+    /// What each open asked for: (the app, `None` for the system's default, and the path).
+    type Opened = Rc<RefCell<Vec<(Option<String>, String)>>>;
+    let dir = Folder::new("with");
+    let (mut app, linked, _) = app(&dir);
+    let opened: Opened = Rc::default();
+    let (o, w) = (opened.clone(), opened.clone());
+    app.services.open_file = Some(Box::new(move |p: &str| {
+        o.borrow_mut().push((None, p.to_string()));
+        Ok(())
+    }));
+    app.services.open_file_with = Some(Box::new(move |with: &str, p: &str| {
+        w.borrow_mut().push((Some(with.to_string()), p.to_string()));
+        Ok(())
+    }));
+    let path = app.run("links.editOriginal", json!({"id": linked})).unwrap()["path"].as_str().unwrap().to_string();
+    for value in ["photocraft", "/Applications/Example.app"] {
+        app.run("prefs.set", json!({"key": "editOriginalApp", "value": value})).unwrap();
+        app.run("links.editOriginal", json!({"id": linked})).unwrap();
+    }
+    app.run("prefs.set", json!({"key": "editOriginalApp", "value": ""})).unwrap();
+    app.run("links.editOriginal", json!({"id": linked})).unwrap();
+    assert_eq!(
+        *opened.borrow(),
+        [
+            (None, path.clone()),
+            (Some("photocraft".into()), path.clone()),
+            (Some("/Applications/Example.app".into()), path.clone()),
+            (None, path.clone()),
+        ]
+    );
+    // An app the host can't open in (the web) is an error, not the default app instead.
+    app.run("prefs.set", json!({"key": "editOriginalApp", "value": "photocraft"})).unwrap();
+    app.services.open_file_with = None;
+    assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
+    assert_eq!(opened.borrow().len(), 4);
+}
+
 /// Edit Original hands only regular image and document files to the system's default app.
 #[test]
 fn edit_original_opens_image_and_document_files_only() {

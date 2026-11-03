@@ -227,7 +227,7 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, p: &Value, reveal: bool) -> Re
     } else {
         app.refuse_automation("links.editOriginal")?;
         openable_original(&path)?;
-        crate::io::open_in_app(app, &path)?;
+        crate::io::open_original(app, &path)?;
     }
     Ok(json!({ "path": path }))
 }

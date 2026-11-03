@@ -217,6 +217,16 @@ pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), St
     app.services.open_file.as_mut().ok_or("no app to open files here")?(path)
 }
 
+/// Edit Original: open `path` in the app Preferences › File Handling › Edit Original With names
+/// (#5236), or in the system's default app for it when that is System Default ("").
+pub(crate) fn open_original(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
+    let with = app.session.prefs.edit_original_app.trim().to_string();
+    if with.is_empty() {
+        return open_in_app(app, path);
+    }
+    app.services.open_file_with.as_mut().ok_or("no app to open files in here")?(&with, path)
+}
+
 /// File → Export for Screens with `document.exportForScreens` params: the files go into `folder`;
 /// without one the web downloads them (the ZIP, or each file) and the other frontends get them
 /// back as base64. With `openLocation`, the file manager shows the first file written. When an
