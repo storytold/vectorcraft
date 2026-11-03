@@ -51,13 +51,17 @@ fn window_zone_id() -> Id {
     Id::unique("tools-float-window-zone")
 }
 
-/// Keep the window-edge gesture while also accepting a drop next to panels docked left.
+/// Accept a drop next to panels docked left, independently of the window-edge gesture.
 pub(crate) fn set_dock_zones(ctx: &egui::Context, canvas: Rect, width: f32) {
-    let window = pos2(ctx.content_rect().left(), canvas.top());
     ctx.data_mut(|d| {
         d.insert_temp(tools_zone_id(), Rect::from_min_size(canvas.min, vec2(width, canvas.height())));
-        d.insert_temp(window_zone_id(), Rect::from_min_size(window, vec2(width, canvas.height())));
     });
+}
+
+/// The legacy 48-point window-edge target spans the full layout below the bars, including
+/// panels above and below the canvas. Its width does not follow the toolbar's column count.
+pub(crate) fn set_window_dock_zone(ctx: &egui::Context, window: Rect) {
+    ctx.data_mut(|d| d.insert_temp(window_zone_id(), Rect::from_min_size(window.min, vec2(48.0, window.height()))));
 }
 
 /// `pos` moved so a panel of `size` stays inside `screen` (a position saved on a bigger window).
