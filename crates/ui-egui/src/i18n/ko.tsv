@@ -5841,3 +5841,13 @@ breakText	Glyphs	글리프
 	Create Swatch Legend	견본 범례 만들기
 	Create Swatch Legend…	견본 범례 만들기…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	텍스트 도구
+	Text Tweaker…	텍스트 조정…
+	Text Tweaker	텍스트 조정
+	Attribute:	속성:
+	From:	시작:
+	To:	끝:
+	Bow	활 모양
+	Spike	뾰족한 모양
+	Skip Spaces	공백 건너뛰기

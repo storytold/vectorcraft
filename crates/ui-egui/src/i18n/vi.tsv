@@ -5861,3 +5861,13 @@ breakText	Glyphs	Glyph
 	Create Swatch Legend	Tạo chú giải mẫu màu
 	Create Swatch Legend…	Tạo chú giải mẫu màu…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Công cụ văn bản
+	Text Tweaker…	Tinh chỉnh văn bản…
+	Text Tweaker	Tinh chỉnh văn bản
+	Attribute:	Thuộc tính:
+	From:	Từ:
+	To:	Đến:
+	Bow	Cung
+	Spike	Đỉnh nhọn
+	Skip Spaces	Bỏ qua khoảng trắng

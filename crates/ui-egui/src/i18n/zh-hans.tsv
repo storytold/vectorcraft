@@ -6101,3 +6101,13 @@ breakText	Glyphs	字形
 	Create Swatch Legend	创建色板图例
 	Create Swatch Legend…	创建色板图例…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	文字工具
+	Text Tweaker…	文字微调…
+	Text Tweaker	文字微调
+	Attribute:	属性：
+	From:	起始：
+	To:	结束：
+	Bow	弓形
+	Spike	尖峰
+	Skip Spaces	跳过空格

@@ -6777,3 +6777,30 @@ there is no step. → `{symbols: [name…], ids: [instance id…], skipped: [{la
 ```json
 {"name":"run_command","arguments":{"command":"addon.document.symbolsFromLayers","params":{"replace":true}}}
 ```
+
+## Type Tools add-on
+
+Type Tools is a built-in add-on for type: its command is `addon.type.textTweaker`, and in the desktop app it lives in
+Object › Plug-ins › Type Tools (#4924). Text Tweaker gives one character attribute to the characters letter by letter,
+from a start value to an end value along a shape, as one undo step; the text stays live and editable. Each value is set
+as `text.setRangeStyle` sets it (the Character panel), in its units and ranges, so on scaled type it is the size shown.
+It changes the range of `id` (`start`/`end` bytes), else all the text of the type objects in `ids`, else the text the
+Type tool has selected (at a caret: all of that object's text), else all the text of every selected type object; each
+object gets its own ramp, and at most 100000 characters change in one run. A run that changes nothing makes no step.
+
+| Parameter | Values (default) |
+|---|---|
+| `attribute` | `size` (pt 0.1…1296), `baselineShift` (pt −1296…1296), `rotation` (° −360…360), `hScale`, `vScale` (% 1…10000), `tracking` (1/1000 em −1000…10000), `leading` (pt 0.1…5000), `strokeWidth` (pt 0…1000; shows only on characters with a stroke) (`size`) |
+| `from`, `to` | the first and last character's values, in the attribute's units and range (size 12 → 36, baselineShift 0 → 12, rotation 0 → 30, hScale and vScale 100 → 150, tracking 0 → 200, leading 12 → 36, strokeWidth 0 → 2) |
+| `shape` | `straight` (an even ramp), `ease` (slow at both ends), `bow` (`from` at both ends, rising smoothly to `to` in the middle), `spike` (the same, in straight lines), `random` (each character anywhere from `from` to `to`) (`straight`) |
+| `seed` | whole number (0): `random` with the same seed and text gives the same values |
+| `skipSpaces` | true: spaces and line breaks keep their values and don't count |
+
+→ `{count (characters changed), ids}`. Text Tweaker… opens a dialog (`ui.menuDialog {command}`, dialog kind
+`textTweaker`) whose fields are the command's parameters, with Preview; another attribute starts from its own
+default values, and the seed starts new whenever the document has changed.
+
+```json
+{"name":"run_command","arguments":{"command":"addon.type.textTweaker","params":{"attribute":"baselineShift","from":0,"to":18,"shape":"bow"}}}
+{"name":"run_command","arguments":{"command":"addon.type.textTweaker","params":{"attribute":"rotation","from":-15,"to":15,"shape":"random","seed":4}}}
+```

@@ -6290,3 +6290,13 @@ breakText	Glyphs	Merkit
 	Create Swatch Legend	Luo värimallien selite
 	Create Swatch Legend…	Luo värimallien selite…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Tekstityökalut
+	Text Tweaker…	Tekstin säätö…
+	Text Tweaker	Tekstin säätö
+	Attribute:	Määrite:
+	From:	Alku:
+	To:	Loppu:
+	Bow	Kaari
+	Spike	Piikki
+	Skip Spaces	Ohita välilyönnit

@@ -7,6 +7,7 @@ pub mod color;
 pub mod document;
 pub mod pathtools;
 pub mod pen;
+pub mod typetools;
 
 use crate::menus::Item;
 
@@ -19,6 +20,7 @@ pub fn plugin_menu() -> Vec<Item> {
         Item::Sub("Document Tools", document::menu()),
         Item::Sub("Path Precision Tools", pathtools::menu()),
         Item::Sub("Smart Pen", pen::menu()),
+        Item::Sub("Type Tools", typetools::menu()),
         Item::Sep,
     ]
 }
