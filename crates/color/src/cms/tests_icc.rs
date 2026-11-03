@@ -181,6 +181,32 @@ fn aliased_localized_names_are_refused() {
     assert!(!super::icc::localized_text_fits(&profile(4096, 64 << 10)));
 }
 
+/// A tag table that lists one tag many times, every entry pointing at the same long text, is
+/// refused before moxcms decodes the text once per entry; distinct tags pass.
+#[test]
+fn repeated_tags_are_refused() {
+    let profile = |sigs: &[&[u8; 4]], text: usize| {
+        let mut b = vec![0u8; 128];
+        b.extend((sigs.len() as u32).to_be_bytes());
+        let tag_at = 128 + 4 + 12 * sigs.len();
+        let size = 8 + text;
+        for sig in sigs {
+            b.extend(*sig);
+            b.extend((tag_at as u32).to_be_bytes());
+            b.extend((size as u32).to_be_bytes());
+        }
+        b.extend(b"text");
+        b.extend([0; 4]);
+        b.extend(vec![b'a'; text]);
+        b
+    };
+    assert_eq!(super::icc::repeated_tag(&profile(&[b"desc", b"cprt", b"dmdd"], 64)), None);
+    let many: Vec<&[u8; 4]> = std::iter::repeat_n(b"desc", 4096).collect();
+    let bytes = profile(&many, 256 << 10);
+    assert_eq!(super::icc::repeated_tag(&bytes), Some(u32::from_be_bytes(*b"desc")));
+    assert!(matches!(super::icc::IccProfile::from_bytes(None, &bytes), Err(super::CmsError::BadProfile(_))));
+}
+
 /// Reloading an RGB profile under the name it had (a new file for "My RGB") changes what CMYK
 /// converts to in it: the direct CMYK → RGB transform isn't kept from the old file.
 #[test]
