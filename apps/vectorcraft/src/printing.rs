@@ -3,6 +3,8 @@
 use std::process::Command;
 use vectorcraft_ui_egui::print::{PrintJob, PrintService, Printer};
 
+mod direct_pdf;
+
 pub struct SystemPrint;
 impl PrintService for SystemPrint {
     fn printers(&mut self) -> Vec<Printer> {
@@ -35,6 +37,9 @@ mod system {
         craft_print::printers().into_iter().map(|p| Printer { name: p.name, default: p.default }).collect()
     }
     pub fn print(job: &PrintJob) -> Result<String, String> {
+        if job.direct_pdf {
+            return super::direct_pdf::print(job);
+        }
         // Copies, layout, marks and colour management are already in the PDF. Preserve its
         // physical sheet size and the queue's duplex default without printing copies twice.
         let settings = craft_print::Job { printer: job.printer.map(str::to_string), title: job.title.into(), ..Default::default() };

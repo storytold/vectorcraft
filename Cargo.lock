@@ -6110,6 +6110,7 @@ dependencies = [
  "webbrowser",
  "windows",
  "winit",
+ "winreg",
  "winresource",
  "winsafe",
  "x11rb",

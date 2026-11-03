@@ -40,6 +40,9 @@ craft-print = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 craft-update = { workspace = true }
 clipboard-win = { workspace = true }
+# Reads a print queue's Standard TCP/IP RAW port for the direct-PDF transport (src/direct_pdf.rs).
+# MIT, already in the build through the update client.
+winreg = "0.55"
 # Which GPU drives which display (EnumDisplayDevices, src/gpu.rs), so the window is drawn on the
 # GPU that shows it: drawing on a GPU without a monitor reset the display driver. Safe wrappers over
 # Win32 (MIT); the `user` feature is User32.dll only. Only the wgpu renderer chooses an adapter.

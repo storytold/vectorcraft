@@ -334,6 +334,10 @@ pub struct UiState {
     #[serde(rename = "language", skip_serializing)]
     pub legacy_language: Option<String>,
     pub brightness: Brightness,
+    /// The Print dialog's opt-in direct-PDF transport. UI-only and not serialized: the control
+    /// channel cannot enable a print that bypasses the printer driver.
+    #[serde(skip)]
+    pub print_direct_pdf: bool,
     pub dock_tab: DockTab,
     /// Tab order in the dock's tabbed group when it differs from [`DockTab::ALL`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -909,6 +913,7 @@ impl Default for UiState {
         Self {
             legacy_language: None,
             brightness: Brightness::MediumDark,
+            print_direct_pdf: false,
             dock_tab: DockTab::Properties,
             dock_tab_order: Vec::new(),
             dock_collapsed: false,

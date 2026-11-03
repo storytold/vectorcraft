@@ -26,6 +26,9 @@ pub struct PrintJob<'a> {
     /// The job's name in the print queue.
     pub title: &'a str,
     pub pdf: &'a [u8],
+    /// Send the PDF to the printer's own PDF interpreter over its RAW TCP port instead of
+    /// spooling it through the platform driver (Windows).
+    pub direct_pdf: bool,
 }
 
 /// Submission callable from the desktop background worker.
@@ -105,6 +108,7 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let pdf = data.as_ref().and_then(Value::as_str).and_then(vectorcraft_format::base64_decode).ok_or("the print job has no data")?;
     let title = app.session.active().map(|d| d.title()).unwrap_or_default();
     let printer = s("printer").filter(|n| !n.is_empty());
+    let direct_pdf = p.get("directPdf").and_then(Value::as_bool).unwrap_or(false);
     let service = app.services.print.as_mut().ok_or("no print service")?;
     if let Some(submit) = service.shared_print() {
         let pending_printer = printer.clone();
@@ -114,7 +118,8 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             format!("Printing {title}"),
             None,
             move |_| {
-                submit(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf }).map(|note| json!({ "note": note, "printer": printer }))
+                submit(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf, direct_pdf })
+                    .map(|note| json!({ "note": note, "printer": printer }))
             },
             move |app, result| {
                 let receipt = result?;
@@ -135,7 +140,7 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
         return Ok(v);
     }
-    let done = service.print(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf })?;
+    let done = service.print(&PrintJob { printer: printer.as_deref(), title: &title, pdf: &pdf, direct_pdf })?;
     app.status(done);
     v["printer"] = json!(printer);
     v["printed"] = json!(true);

@@ -49,6 +49,15 @@ pages before sending it to a printer. When printing that PDF, keep its page size
 than applying another fit-to-page reduction. For a sewing pattern, measure a known length on a
 printed sheet before printing the full job.
 
+## Direct PDF on PCL-only printers
+
+Some Windows PCL drivers rewrite a custom page to a different physical size; the HP DesignJet
+Z5200ps V4, for example, turns a 1067 x 480 mm page into a square PCL page. In **Print**, under
+**Printer**, turn on **Send PDF directly (bypass driver)**. VectorCraft then writes the print-ready
+PDF to the selected printer's Standard TCP/IP RAW port, so the printer's own PDF interpreter prints
+the PDF's page size. It needs a printer with PDF support and a RAW TCP/IP port; it bypasses the
+Windows driver's paper, colour and finishing settings. Leave it off for ordinary driver printing.
+
 ## Choose a tiling mode
 
 | Scaling | How it divides the drawing | When to use it |
