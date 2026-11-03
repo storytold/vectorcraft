@@ -1,10 +1,10 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (Color Effects add-on: Find Nearest Swatch, #4923) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Symbol editing shows draggable 9-slice guides; Color Effects add-on: Find Nearest Swatch, #4923) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
-**Feature evidence last updated:** 2026-10-22.
+**Feature evidence last updated:** 2026-11-03.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
@@ -400,6 +400,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Symbol editing draws and drags 9-slice guides on the canvas (#5280). Guides outside the artwork remain unsupported. Scores and hours remain unchanged. |
 | 2026-11-01 | minor | A double-click on a Repeat with the Selection tool enters isolation mode on it, where its source art (type included: a double-click there edits the text) is edited and every copy follows (#5054); scores and estimates unchanged |
 | 2026-11-01 | minor | Live Corners: while a corner widget is pressed or dragged with the Selection or Direct Selection tool, the Up and Down arrows step the corners' kind (round, inverted round, chamfer) with the radius, as one undo step (#2898); scores and estimates unchanged |
 | 2026-11-01 | minor | Keyboard Shortcuts: every Effect menu item (Distort & Transform › Transform…, Stylize › Drop Shadow…, …) is listed under its menu path and takes a shortcut of its own, which the menu shows and which opens that effect's dialog (or applies an effect without options) (#3296); scores and estimates unchanged |
