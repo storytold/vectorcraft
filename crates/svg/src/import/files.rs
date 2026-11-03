@@ -48,11 +48,12 @@ pub(in crate::import) struct Files {
 /// How usvg holds the bytes of a raster of one format (`ImageKind::PNG`…).
 type RasterKind = fn(Arc<Vec<u8>>) -> ImageKind;
 
+#[derive(Clone)]
 enum Source {
     /// A raster file of the kind usvg reads it as.
     Raster(RasterKind, Arc<Vec<u8>>),
     /// An SVG file's text (unpacked when it is SVGZ), parsed by usvg as an image.
-    Svg(String),
+    Svg(Arc<str>),
 }
 
 /// A linked raster image (or the placeholder of a missing one).
@@ -148,11 +149,21 @@ impl Files {
     pub(in crate::import) fn read(svg: &str, xml: &roxmltree::Document, opts: &ImportOptions, edits: &mut Edits, warnings: &mut Vec<String>) -> Self {
         let mut files = Files::default();
         let mut placeholder = None;
+        // What each file read gave, by the file: hrefs spelled differently (`a.png`, `./a.png`,
+        // `%61.png`) share one read and one copy of its bytes.
+        let mut by_file: HashMap<String, Source> = HashMap::new();
         for n in xml.descendants().filter(|n| n.is_element() && n.tag_name().name() == "image") {
             let Some(h) = href(n).filter(|h| !h.trim_start().starts_with("data:")) else { continue };
             if !files.sources.contains_key(h) {
                 let (path, file) = target(h, opts.folder);
-                let read = file.and_then(|file| opts.read.and_then(|read| read(&file)));
+                if let Some(read) = file.as_ref().and_then(|f| by_file.get(f)) {
+                    files.sources.insert(h.to_string(), read.clone());
+                    if files.placeholder(h) {
+                        edits.set(svg, n, "preserveAspectRatio", "none");
+                    }
+                    continue;
+                }
+                let read = file.clone().and_then(|file| opts.read.and_then(|read| read(&file)));
                 let source = match read {
                     Some((bytes, link)) => files.source(bytes, link).ok_or("is not an image VectorCraft reads"),
                     None => Err("not found"),
@@ -164,6 +175,9 @@ impl Files {
                     Ok::<_, &str>(Source::Raster(ImageKind::PNG, bytes))
                 });
                 let Ok(source) = source else { continue };
+                if let Some(file) = file {
+                    by_file.insert(file, source.clone());
+                }
                 files.sources.insert(h.to_string(), source);
             }
             if files.placeholder(h) {
@@ -179,7 +193,7 @@ impl Files {
         let Ok(format) = image::guess_format(&bytes) else {
             // Unpacked once, here, within what the SVGZ images may unpack to.
             let text = crate::text_within(&bytes, &self.unpacked).ok()?;
-            return text.contains("<svg").then(|| Source::Svg(text.into_owned()));
+            return text.contains("<svg").then(|| Source::Svg(Arc::from(text.as_ref())));
         };
         let Some(kind) = raster(format) else {
             let img = image::load_from_memory_with_format(&bytes, format).ok()?;
