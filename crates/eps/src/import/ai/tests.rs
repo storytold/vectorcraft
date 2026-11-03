@@ -54,6 +54,14 @@ fn ruler_units_from_the_header_set_the_documents_units() {
     assert_eq!(read(with_px.as_bytes()).unwrap().doc.units, Unit::Pixels);
 }
 
+#[test]
+fn arrays_nested_past_the_depth_limit_are_refused() {
+    let deep = |n: usize| layer(&format!("{}{} pop", "[".repeat(n), "]".repeat(n)));
+    let nested = |n: usize| read(stream(&deep(n)).as_bytes()).err().is_some_and(|e| e.contains("nested too deeply"));
+    assert!(!nested(200));
+    assert!(nested(100_000));
+}
+
 /// The children of the first layer.
 fn art(doc: &Document) -> Vec<Arc<Node>> {
     doc.layers.first().and_then(|l| l.children()).cloned().unwrap_or_default()
