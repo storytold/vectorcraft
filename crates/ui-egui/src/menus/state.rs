@@ -1,6 +1,6 @@
 use super::run::normalize_panel;
 use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
-use super::*;
+use super::{Brightness, Value, VectorcraftApp};
 
 /// Checked state for toggle items.
 pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
@@ -38,10 +38,10 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
     };
     Some(match id {
         "type.orientation.vertical" | "type.orientation.horizontal" => {
-            selected_text(false).is_some_and(|t| t.vertical == (id == "type.orientation.vertical"))
+            crate::panels::character::shared_text_flag(app, |t| t.vertical) == Some(id == "type.orientation.vertical")
         }
         "type.opticalMarginAlignment" => crate::panels::character::shared_text_flag(app, |t| t.optical_margin) == Some(true),
-        "view.outline" => v.outline,
+        "view.outline" => app.outline_view(),
         "view.pixelPreview" => v.pixel_preview,
         "view.trimView" => v.trim_view,
         "view.snapToPixel" => v.snap_to_pixel,
@@ -61,11 +61,22 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.control" => app.ui.control_bar,
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
-        "window.toolbarColumns" => app.ui.toolbar_double,
-        "window.editToolbar" => app.ui.tools_drawer,
+        "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
+            None => app.ui.toolbar_double,
+            Some(name) => crate::custom_toolbars::find(&app.ui, name).is_some_and(|b| b.double),
+        },
+        "window.editToolbar" => {
+            app.ui.tools_drawer
+                && crate::custom_toolbars::drawer_target(&app.ui).map(crate::custom_toolbars::key)
+                    == p.get("toolbar").and_then(Value::as_str).map(crate::custom_toolbars::key)
+        }
+        "window.toolbar.custom" => {
+            p.get("name").and_then(Value::as_str).and_then(|name| crate::custom_toolbars::find(&app.ui, name)).is_some_and(|b| b.shown)
+        }
         "window.floatTools" => {
             let tool = p.get("tool").and_then(Value::as_str).unwrap_or("");
-            app.ui.floating_flyouts.iter().any(|f| f.tools.iter().any(|id| id == tool))
+            let toolbar = p.get("toolbar").and_then(Value::as_str);
+            crate::toolbar::strips(&app.ui, toolbar).iter().any(|f| f.tools.iter().any(|id| id == tool))
         }
         "window.taskBar" => app.ui.task_bar,
         "window.taskBar.pin" => app.ui.task_bar_place.pinned,
@@ -156,8 +167,9 @@ pub(crate) fn waits_for_ime(app: &VectorcraftApp, id: &str) -> bool {
 }
 
 /// Engine commands that take `ids` and otherwise act on the Appearance panel's subject (the
-/// targeted layer, group or object, else the selection). Without `ids` and without a subject they
-/// are off, as the panel's buttons are: in menus, in the command palette and on their keys.
+/// targeted layer, group or object, else the selection). Without `ids` (or with an empty list) and
+/// without a subject they are off, as the panel's buttons are: in menus, in the command palette and
+/// on their keys.
 pub(super) const SUBJECT_COMMANDS: [&str; 2] = ["appearance.addFill", "appearance.addStroke"];
 
 /// Is there an Appearance panel subject: a targeted layer, group or object, or a selected one?
@@ -181,7 +193,9 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
-        "type.bold" | "type.italic" => crate::panels::character::text_style(app).is_some(),
+        "type.bold" | "type.italic" | "type.underline" | "type.lineComposer" | "type.hyphenate" => {
+            crate::panels::character::text_style(app).is_some()
+        }
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
         id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command()),
@@ -189,6 +203,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
+        "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
+        "imageTrace.hideRuns" => crate::trace_runs::any_shown(app),
         "file.place"
         | "file.export.svg"
         | "file.export.png"
@@ -200,8 +216,9 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         | "view.fitArtboard"
         | "view.fitAll"
         | "view.actualSize"
+        | "view.outline"
         | "view.rotate" => app.session.active().is_some(),
-        "view.rotateToSelection" => app.session.active().is_some_and(|d| !d.selection.objects.is_empty()),
+        "view.rotateToSelection" | crate::addons::arrange::ZOOM => app.session.active().is_some_and(|d| !d.selection.objects.is_empty()),
         id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),
         "file.clearRecent" => !app.ui.recent_files.is_empty(),
         id if id.starts_with("type.recentFont") => {
@@ -212,16 +229,24 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "effect.dialog" | "ui.recolorDialog" | "ui.effectGalleryDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.cropImage" => selected_image(app, |_| true),
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        "pathfinder.repeat" => app.last_pathfinder.as_ref().is_some_and(|op| {
+            let min = crate::panels::pathfinder::minimum_operands(op);
+            crate::panels::pathfinder::operands(app) >= min
+        }),
         "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" => app.session.active().is_some(),
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
-        "ui.graphicStyleOptions" => app.session.active().is_some(),
+        "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => app.session.active().is_some(),
+        "ui.charStyleOptions.resetPanel" => app.ui.dialog.as_ref().is_some_and(|d| {
+            (d.kind == crate::dialogs::char_style_options::KIND || (d.kind == crate::dialogs::new_text_style::KIND && !d.bool("__para")))
+                && crate::dialogs::char_style_options::can_reset(d)
+        }),
         "ui.newArtboard" => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
-        "ui.hyphenation" | "ui.justification" => crate::panels::character::text_style(app).is_some(),
+        "ui.hyphenation" | "ui.justification" | "ui.tateChuYokoSettings" => crate::panels::character::text_style(app).is_some(),
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.saveSwatchLibrary" => app.session.active().is_some(),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => crate::panels::swatches::user_library(app, id).is_some(),
@@ -232,10 +257,15 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         id if id.starts_with(crate::panels::symbols::USER_SLOT) => crate::panels::symbols::user_library(app, id).is_some(),
         "ui.saveBrushLibrary" => crate::panels::brushes::has_brushes(app),
         id if id.starts_with(crate::panels::brushes::USER_SLOT) => crate::panels::brushes::user_library(app, id).is_some(),
-        "ui.expandDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        // Dimmed for appearance attributes, which Expand Appearance expands first (#3089).
+        "ui.expandDialog" => {
+            app.session.active().is_some_and(|d| !d.selection.is_empty()) && !vectorcraft_engine::cmd::expand::has_appearance(&app.session)
+        }
         "ui.spotColors" => app.session.active().is_some(),
         "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.simplifyAuto" | "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::showing(app),
+        "ui.smoothAuto" => crate::dialogs::smooth_slider::showing(app),
+        "ui.dialogReset" => crate::dialogs::can_reset(app),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
@@ -253,8 +283,12 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
         }
         "ui.perspectivePlane" => app.session.active().is_some(),
-        // Only one window per document so far: greyed out, as Window › Arrange's items are (#3724).
+        // Only one window per document so far: greyed out, as Cascade and Float in Window are (#3724).
         "window.newWindow" => false,
+        // Tile with two documents or more; Consolidate All Windows while they are tiled.
+        "window.arrange.tile" => app.session.documents().len() > 1,
+        "window.arrange.consolidateAllWindows" => app.ui.tiled && !app.session.documents().is_empty(),
+        "window.nextDocument" | "window.previousDocument" => !app.session.documents().is_empty(),
         _ => true,
     }
 }

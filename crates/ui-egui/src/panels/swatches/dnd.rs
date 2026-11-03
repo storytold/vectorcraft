@@ -1,5 +1,8 @@
 use super::tiles::{describe, draw_registration, pattern_thumb};
-use super::*;
+use super::{
+    Document, Entry, Paint, PanelDrag, REGISTRATION, Rect, Response, Sense, Stroke, StrokeKind, SwatchRows, Tokens, Ui, Value, VectorcraftApp, json,
+    pos2, pstate, set_pstate, swatch_params, swatch_tile, vec2,
+};
 
 /// The swatches and colour groups selected in the panel, in click order, without names that no
 /// longer exist (deleted, renamed or undone).

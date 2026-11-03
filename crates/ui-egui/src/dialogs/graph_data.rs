@@ -379,7 +379,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let mut text = d.str("entry");
         // The entry box has the keys when the window opens, so Enter moves down instead of applying.
         widgets::take_dialog_focus(ui, entry_id, &text);
-        let r = ui.add(egui::TextEdit::singleline(&mut text).id(entry_id).desired_width(260.0));
+        let r = ui.add(egui::TextEdit::singleline(&mut text).id(entry_id).align(egui::Align2::LEFT_CENTER).desired_width(260.0));
         if r.changed() {
             d.fields.insert("entry".into(), json!(clean(&text)));
         }

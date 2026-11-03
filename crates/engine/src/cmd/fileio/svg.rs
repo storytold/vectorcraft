@@ -169,12 +169,14 @@ pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Enco
     // Draw linked files as vectors when available, or their previews with a warning. Keep
     // that preparation out of the native attachment so missing links remain relinkable.
     let (full, warnings) = crate::cmd::place::document::full_documents(doc);
-    let doc = &*full;
+    // The artboards' background colors, behind the art (the editing data keeps them as colors).
+    let filled = super::export::with_artboard_fills(&full, p, boards.iter().flatten().copied())?;
+    let doc = &*filled;
     // A chosen artboard's file holds the art over it; otherwise the file holds all of it.
     let regions: Option<Vec<vectorcraft_geom::Rect>> =
         chosen.then(|| boards.iter().flatten().filter_map(|b| doc.artboards.get(*b)).map(|a| a.rect).collect());
     let overflow = crate::cmd::fonts::export_overflow_warning(doc, &doc.layers, regions.as_deref());
-    // SVG has no filters for the Photoshop-style effects: their objects go in as images.
+    // Render effects SVG cannot represent faithfully, including source-model Darkness shadows.
     let flat = crate::cmd::rasterfx::flatten_pixel_effects(doc);
     let doc = flat.as_ref().unwrap_or(doc);
     let mut enc = Encoded { warnings, ..Encoded::default() };

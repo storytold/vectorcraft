@@ -1,7 +1,11 @@
 use super::layout::png;
 use super::nodes::affine;
 use super::text::Placement;
-use super::*;
+use super::{
+    AfKind, Affine, Appearance, AppearanceItem, Arc, BezPath, Builder, Cap, Color, Dash, Effect, FillLayer, Gradient, GradientGeom, GradientKind,
+    GradientPaint, GradientStop, ImageObject, Join, LineCap, LineJoin, NodeKind, Paint, PathData, Pixels, Point, StrokeAlign, StrokeLayer,
+    TextObject, Vec2, WidthProfile, af, ap, json,
+};
 
 impl Builder {
     /// Drop shadows, inner shadows and outer glows as VectorCraft's Stylize effects. Affinity's
@@ -228,6 +232,7 @@ impl Builder {
             offset: phase * self.k,
             align_corners: false,
         });
+        l.profile = s.profile.as_ref().map(|p| WidthProfile { points: p.iter().map(|&(t, w)| (t, w, w)).collect() });
         Some(l)
     }
 

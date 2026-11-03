@@ -193,6 +193,34 @@ fn a_linked_targa_file_places_updates_and_relinks() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
 }
 
+/// A BMP file named `.dib` placed linked shows its pixels, is listed as BMP and updates when it
+/// changes; relinked to a PNG named `.pns`, it is listed as PNG.
+#[test]
+fn linked_dib_and_pns_files_place_update_and_relink() {
+    let bmp = |w: u32, h: u32, rgb: [u8; 3]| {
+        let mut out = vec![];
+        let [r, g, b] = rgb;
+        image::RgbImage::from_pixel(w, h, image::Rgb([r, g, b])).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Bmp).unwrap();
+        out
+    };
+    let dir = Folder::new("dib");
+    let pic = dir.file("art/scan.DIB");
+    write(&pic, &bmp(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    assert_eq!(s.execute("links.info", &json!({"id": id.0})).unwrap()["format"], "BMP");
+    write(&pic, &bmp(400, 400, BLUE));
+    assert_eq!(s.execute("links.update", &json!({})).unwrap(), json!({"updated": [id.0], "missing": []}));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    let other = dir.file("other/red.pns");
+    write(&other, &png(300, 100, RED));
+    assert_eq!(s.execute("links.relink", &json!({"ids": [id.0], "path": other})).unwrap(), json!({"relinked": [id.0], "notFound": []}));
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height, im.link.unwrap().path), (300, 100, other));
+    assert_eq!(s.execute("links.info", &json!({"id": id.0})).unwrap()["format"], "PNG");
+}
+
 #[test]
 fn the_relative_path_finds_the_file_after_the_folder_moves() {
     let a = Folder::new("move-a");
@@ -253,6 +281,45 @@ fn a_missing_link_renders_its_preview_and_relinks() {
     assert_eq!(r, json!({"relinked": [id.0], "notFound": []}), "nothing selected: every missing link");
     assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
     assert!(s.execute("links.relink", &json!({"ids": [id.0]})).is_err(), "path or folder");
+}
+
+/// A `w`×`h` PNG of noise cut to half its length: its header reads, its pixels don't.
+pub(crate) fn cut_png(w: u32, h: u32) -> Vec<u8> {
+    let img = image::RgbImage::from_fn(w, h, |x, y| {
+        let v = x.wrapping_mul(2_654_435_761) ^ y.wrapping_mul(40_503).rotate_left(13);
+        image::Rgb([v as u8, (v >> 8) as u8, (v >> 16) as u8])
+    });
+    let mut out = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out.truncate(out.len() / 2);
+    out
+}
+
+/// A linked file whose pixels can't be read (cut short) isn't shown: Relink is an error, and
+/// Update Links and Open (Update Links: Automatically) count it as missing. The image keeps what
+/// it showed.
+#[test]
+fn a_linked_file_whose_pixels_cant_be_read_is_not_shown() {
+    let dir = Folder::new("cut");
+    let pic = dir.file("photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    let shown = image(&s, id);
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    let cut = dir.file("cut.png");
+    write(&cut, &cut_png(300, 100));
+    let e = s.execute("links.relink", &json!({"ids": [id.0], "path": cut})).unwrap_err();
+    assert!(e.to_string().ends_with("the image's pixels can't be read"), "{e}");
+    write(&pic, &cut_png(300, 100));
+    assert_eq!(s.execute("links.update", &json!({})).unwrap(), json!({"updated": [], "missing": [id.0]}));
+    assert_eq!(image(&s, id), shown);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    s.execute("prefs.set", &json!({"key": "updateLinks", "value": "automatically"})).unwrap();
+    let r = open(&mut s, &doc_path);
+    assert_eq!((r["missingLinks"][0]["ids"].clone(), r["updatedLinks"].clone()), (json!([id.0]), json!([])), "{r}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED), "the image still shows its preview");
 }
 
 #[test]
@@ -545,4 +612,45 @@ fn links_of_an_imported_file_are_read_where_they_are_found() {
     s.execute("file.place", &json!({"path": alone, "link": false})).unwrap();
     let (_, im) = placed(&s);
     assert!((im.width, im.height) == (600, 300) && !s.doc().unwrap().doc.images[&im.key].is_proxy(), "{im:?}");
+}
+
+/// A placed file of a `.ai` file whose folder moved with the document is found by the folder the
+/// file keeps relative to the document's (`src/`), and its link takes the size, modification time
+/// and hash of the file found there. Not found, the link keeps no such details.
+#[test]
+fn links_of_an_imported_file_are_found_by_their_relative_folder() {
+    use vectorcraft_testkit::ai;
+    let dir = Folder::new("imported-relative");
+    std::fs::create_dir_all(dir.0.join("src")).unwrap();
+    let pic = dir.file("src/photo.png").replace('\\', "/");
+    let place = "%AI5_BeginPlace\n%%FileType: 1\n[0.1 0 0 -0.1 20 80] 0 0 600 300 4 4 0\n(/no/such/folder/src/photo.png)`\n\
+         %%IncludeFile:/no/such/folder/src/photo.png\n%AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n(src/)\n\
+         %AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n%AI26_BeginPlacedObjectPreview\n\
+         2 1 8 32 17 \x7f\x10\x10\x60\x7f\x10\x10\x60\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n";
+    let doc_path = dir.file("poster.ai");
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", place));
+    write(&doc_path, &ai::ai(data.as_bytes(), "0.56 0.56 0.87 rg 20 50 60 30 re f"));
+    let link = |s: &Session| {
+        let mut found = vec![];
+        s.doc().unwrap().doc.visit_images(|_, im| found.push(im.clone()));
+        let [im] = &found[..] else { panic!("one image: {found:?}") };
+        (im.link.clone().unwrap(), s.doc().unwrap().doc.images[&im.key].is_proxy())
+    };
+    let mut s = session();
+
+    let r = open(&mut s, &doc_path);
+    assert_eq!(r["missingLinks"][0]["name"].as_str(), Some("photo.png"), "{r}");
+    let (l, proxy) = link(&s);
+    assert_eq!((l.path.as_str(), l.relative.as_deref()), ("/no/such/folder/src/photo.png", Some("src/photo.png")));
+    assert!(proxy && l.size.is_none() && l.modified.is_none() && l.hash.is_none(), "{l:?}");
+
+    let bytes = png(600, 300, RED);
+    write(&pic, &bytes);
+    let r = open(&mut s, &doc_path);
+    assert_eq!(&r["missingLinks"], &json!([]), "{r}");
+    let (l, proxy) = link(&s);
+    assert!(!proxy, "the file's pixels, not the preview");
+    assert_eq!(l.path.replace('\\', "/"), pic);
+    assert_eq!((l.size, l.hash.clone()), (Some(bytes.len() as u64), Some(vectorcraft_doc::links::hash_bytes(&bytes))));
+    assert!(l.modified.is_some(), "{l:?}");
 }

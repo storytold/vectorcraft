@@ -14,7 +14,10 @@ use vectorcraft_tools::distort::perspective::{self as persp, PerspectiveGrid, Pl
 use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, project_node, stroke_owner, warp_from_rest, warp_node_with};
 
 use super::edit::{duplicate_in, outermost, selected_roots};
-use super::*;
+use super::{
+    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, id_param,
+    matrix_param, named_id, named_ids, number_or, ok, point_indices, point_param, str_param, switch_or, targets,
+};
 use crate::EngineError;
 
 mod perspective;
@@ -141,7 +144,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move in Perspective",
             [],
             None,
-            "{ids?|id?, from: [x,y], to: [x,y], plane?, copy?: bool (move copies, as Alt-dragging does), perpendicular?: bool (move along the plane's normal instead, as pressing 5 while dragging does), snap?: bool (default: View › Perspective Grid › Snap to Grid)} slide objects within their plane (unattached objects attach to `plane`/the active plane first); snapping lands the nearer edge of the objects' joint bounds on a gridline within a quarter cell; Transform Again repeats it",
+            "{ids?|id?, from: [x,y], to: [x,y], plane?, copy?: bool (move copies, as Alt-dragging does), perpendicular?: bool (move along the plane's normal instead, as pressing 5 while dragging does), snap?: bool (default: View › Perspective Grid › Snap to Grid), constrain?: bool (default false; constrain each in-plane move to its plane's nearest axis or 45° diagonal)} slide objects within their own planes (unattached objects attach to `plane`/the active plane first); snapping pulls the nearer edge of the first plane's joint bounds toward a gridline within a quarter cell while preserving the constrained direction; Transform Again repeats it",
             has_doc,
             persp_move
         ),
@@ -195,8 +198,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Text",
             [],
             None,
-            "{id? (default: the selected type)} Object › Perspective › Edit Text: show type in perspective flat where it is drawn, in isolation mode, to edit it (text.* commands, the Type tool); exiting isolation (object.exitIsolation, Esc) projects it again → {id}",
-            has_doc,
+            "{id? (default: the selected type)} Object › Perspective › Edit Text: show type in perspective flat where it is drawn, in isolation mode, to edit it (text.* commands, the Type tool); exiting isolation (object.exitIsolation, Esc) projects it again; refused while an opacity mask is edited → {id}",
+            super::maskedit::outside_mask_editing,
             edit_text
         ),
     ]
@@ -655,7 +658,7 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
     if pts.iter().any(|(q, f)| !q.x.is_finite() || !q.y.is_finite() || !f.is_finite()) {
         return Err(bad(C, "points must be finite"));
     }
-    let roots = match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    let roots = match named_ids(p)? {
         Some(v) => v,
         None => s.doc()?.selection.objects.clone(),
     };
@@ -705,7 +708,7 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The objects a Puppet Warp command works on: `id`/`ids`, else `default`.
 fn puppet_ids(p: &Value, default: impl FnOnce() -> Result<Vec<NodeId>>) -> Result<Vec<NodeId>> {
-    let ids = match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    let ids = match named_ids(p)? {
         Some(v) => v,
         None => default()?,
     };

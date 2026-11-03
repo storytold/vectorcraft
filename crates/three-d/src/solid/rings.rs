@@ -1,4 +1,4 @@
-use super::*;
+use super::{FillRule, ParamCurve, PathData, Point, Rect};
 
 /// Outline points Extrude & Bevel and Inflate sample at most: every point costs walls, bevel
 /// bands and distance tests.

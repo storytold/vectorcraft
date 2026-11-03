@@ -118,7 +118,7 @@ fn the_transparency_test_is_kept_while_the_art_stays_the_same() {
     // A symbol whose art shows transparency, placed nowhere, makes the page draw by ink planes again.
     let mut art = rect(&mut e, Rect::new(0.0, 0.0, 5.0, 5.0), CYAN);
     art.opacity = 0.5;
-    e.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: Arc::new(art) });
+    e.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });
     assert!(frame(&mut r, &e) == frame(&mut Renderer::new(), &e));
     assert_eq!(kept(&r).map(|(_, shows)| shows), Some(true));
 }

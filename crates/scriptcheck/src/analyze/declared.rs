@@ -1,6 +1,8 @@
 //! The names declared, read before the analysis.
 
-use super::*;
+use std::collections::HashSet;
+
+use super::{Acc, Brackets, Lexer, LineBreaks, Read, Sig, T, for_in, goes_on_after, goes_on_with, is, member_mark, word};
 
 /// The names a file's function bodies and its global code declare, read before the analysis. A
 /// function's `var` statements and the function declarations directly in its body make the names

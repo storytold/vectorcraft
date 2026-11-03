@@ -7,7 +7,7 @@ use vectorcraft_doc::{ColorMode, Document};
 use vectorcraft_pdf::{Choice, CropTo, ImportOptions, PdfError, TextAs};
 
 use super::super::colormgmt::Grays;
-use super::super::*;
+use super::super::{Result, Session, bad, f64_or, parse_range, str_param};
 use super::{err, source};
 
 /// The `document.open` options besides the file. The PDF ones (pages, box, password, text,

@@ -300,7 +300,7 @@ fn symbol_doc(effects: Vec<Effect>) -> Document {
         shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
         Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
     );
-    d.symbols.push(Symbol { name: "Square".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Square".into(), art: Arc::new(art) });
     let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Square".into(), xf: Affine::translate((50.0, 50.0)) });
     n.appearance.effects = effects;
     doc_with(d, n)
@@ -469,7 +469,7 @@ fn a_transform_effect_on_a_group_symbol_or_envelope_moves_and_scales_the_gradien
     t.id = NodeId(500);
     // The type in a group, as the art of a symbol, and in an envelope that leaves it as it is.
     let mut symbols = Document::new(100.0, 100.0);
-    symbols.symbols.push(Symbol { name: "Type".into(), art: Arc::new(t.clone()) });
+    symbols.symbols.push(Symbol { dynamic: false, name: "Type".into(), art: Arc::new(t.clone()) });
     let holders = [
         doc_with(Document::new(100.0, 100.0), Node::group(NodeId(0), vec![Arc::new(t.clone())])),
         doc_with(symbols, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Type".into(), xf: Affine::IDENTITY })),
@@ -775,6 +775,112 @@ fn a_path_with_its_own_transform_paints_each_copy_with_its_own_gradient() {
         for (left, right) in [(1, 18), (41, 58)] {
             assert!(at(left).0 > 200 && at(left).1 < 60, "{:?} at {left}", at(left));
             assert!(at(right).1 > 200 && at(right).0 < 60, "{:?} at {right}", at(right));
+        }
+    }
+}
+
+#[test]
+fn darkness_subtracts_from_rgb_before_shadow_opacity() {
+    for opacity in [50.0, 100.0] {
+        let mut n = Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.8, 0.4, 0.2)), Paint::None, 0.0),
+        );
+        n.appearance
+            .effects
+            .push(fx("stylize.dropShadow", json!({"shade":"darkness", "darkness":25, "x":40, "y":0, "blur":0, "opacity":opacity, "mode":"normal"})));
+        let d = doc_with(Document::new(100.0, 100.0), n);
+        for threads in [0, 2] {
+            let p = render_threads(&d, threads).pixel(60, 20);
+            let expected = if opacity == 100.0 { [140u8, 38, 0, 255] } else { [198, 147, 127, 255] };
+            assert!(p.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 2), "{p:?}, expected {expected:?}");
+        }
+    }
+}
+
+#[test]
+fn darkness_adds_black_without_changing_cmy_inks() {
+    let mut n = Node::path(
+        NodeId(0),
+        shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+        Appearance::basic(Paint::solid(Color::cmyk(0.15, 0.3, 0.4, 0.2)), Paint::None, 0.0),
+    );
+    n.appearance
+        .effects
+        .push(fx("stylize.dropShadow", json!({"shade":"darkness", "darkness":25, "x":40, "y":0, "blur":0, "opacity":100, "mode":"normal"})));
+    let mut d = Document::new(100.0, 100.0);
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let d = doc_with(d, n);
+    let want = Color::cmyk(0.15, 0.3, 0.4, 0.45).to_rgba8(1.0);
+    for threads in [0, 2] {
+        let got = render_threads(&d, threads).pixel(60, 20);
+        assert!(got.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 3), "{got:?}, expected {want:?}");
+    }
+}
+
+#[test]
+fn darkness_uses_the_source_color_model_before_document_conversion() {
+    for (mode, source, dark) in [
+        (vectorcraft_doc::ColorMode::Rgb, Color::cmyk(0.15, 0.3, 0.4, 0.2), Color::cmyk(0.15, 0.3, 0.4, 0.45)),
+        (vectorcraft_doc::ColorMode::Cmyk, Color::rgb(0.8, 0.4, 0.2), Color::rgb(0.55, 0.15, 0.0)),
+    ] {
+        let mut d = Document::new(100.0, 100.0);
+        d.color_mode = mode;
+        let mut n =
+            Node::path(NodeId(0), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), Appearance::basic(Paint::solid(source), Paint::None, 0.0));
+        n.appearance
+            .effects
+            .push(fx("stylize.dropShadow", json!({"shade":"darkness","darkness":25,"x":40,"y":0,"blur":0,"opacity":100,"mode":"normal"})));
+        let actual = doc_with(d.clone(), n);
+        let mut control =
+            Node::path(NodeId(0), shapes::rectangle(Rect::new(50.0, 10.0, 70.0, 30.0)), Appearance::basic(Paint::solid(dark), Paint::None, 0.0));
+        // The neutral effect selects the same CMYK compositing pipeline without changing paint.
+        control.appearance.effects.push(fx("blur.gaussian", json!({"radius":0})));
+        let expected = doc_with(d, control);
+        for threads in [0, 2] {
+            let got = render_threads(&actual, threads).pixel(60, 20);
+            let want = render_threads(&expected, threads).pixel(60, 20);
+            assert!(got.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 3), "{mode:?}, {source:?}: {got:?} vs {want:?}");
+        }
+    }
+}
+
+#[test]
+fn darkness_adjusts_gradient_stop_colors_before_interpolation() {
+    use vectorcraft_color::GradientMethod;
+    for method in [GradientMethod::Classic, GradientMethod::Perceptual] {
+        for dither in [false, true] {
+            let ramp = |end: Color| {
+                let mut g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, end)]);
+                g.method = method;
+                g.dither = dither;
+                Paint::Gradient(Box::new(GradientPaint::new(g)))
+            };
+            let mut n = Node::path(
+                NodeId(0),
+                shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+                Appearance::basic(ramp(Color::rgb(0.8, 0.4, 0.2)), Paint::None, 0.0),
+            );
+            n.appearance
+                .effects
+                .push(fx("stylize.dropShadow", json!({"shade":"darkness","darkness":25,"x":40,"y":0,"blur":0,"opacity":100,"mode":"normal"})));
+            let actual = doc_with(Document::new(100.0, 100.0), n);
+            let control = Node::path(
+                NodeId(0),
+                shapes::rectangle(Rect::new(50.0, 10.0, 70.0, 30.0)),
+                Appearance::basic(ramp(Color::rgb(0.55, 0.15, 0.0)), Paint::None, 0.0),
+            );
+            let expected = doc_with(Document::new(100.0, 100.0), control);
+            let (got, want) = (render(&actual), render(&expected));
+            for x in 52..68 {
+                assert!(
+                    got.pixel(x, 20).iter().zip(want.pixel(x, 20)).all(|(a, b)| a.abs_diff(b) <= if dither { 8 } else { 3 }),
+                    "{method:?} dither={dither} x={x}: {:?} vs {:?}",
+                    got.pixel(x, 20),
+                    want.pixel(x, 20)
+                );
+            }
         }
     }
 }

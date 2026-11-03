@@ -2,7 +2,7 @@ use super::names::norm;
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{file_face_names_within, is_font_file};
 use super::traits::FaceStyle;
-use super::*;
+use super::{HashMap, Path};
 
 /// A font a document names that isn't available, to look for in font files ([`WantedFonts`]).
 #[derive(Clone, Debug, PartialEq, Eq)]

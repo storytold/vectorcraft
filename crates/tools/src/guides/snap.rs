@@ -1,5 +1,8 @@
 use super::targets::{Targets, span};
-use super::*;
+use super::{
+    Affine, GlyphSnap, GuideStyle, Handle, HitOptions, Line, NodeId, OrientedBox, Overlay, ParamCurve, ParamCurveDeriv, ParamCurveNearest, PathSeg,
+    Point, Rect, ScreenFrame, ToolContext, Vec2, constrain_angle_from, hit_test,
+};
 
 /// Where curves `a` and `b` cross near `p`: a point projected from one onto the other and back
 /// settles where they meet (none when they don't nearby).
@@ -227,6 +230,14 @@ impl Leave {
         self
     }
 
+    /// The straight segment from the anchor `at` to a point being dragged (an open path's end
+    /// moved with Direct Selection): the point may land square to a segment or grazing a curve,
+    /// but is not held to Shift's angles or the construction guides, which a moved anchor
+    /// does not follow.
+    pub fn contact(at: Point) -> Self {
+        Self { at, shift: None, angles: &[], contact: true }
+    }
+
     /// A box dragged from its corner or centre `at` (Rectangle, Ellipse, Arc, the grids, and
     /// Artboard, which passes no Shift): Shift keeps the dragged corner on a diagonal, the box a
     /// square.
@@ -292,7 +303,8 @@ struct SnapKey {
     exclude: Vec<NodeId>,
     screen: Option<ScreenFrame>,
     view: [bool; 7],
-    snap_to_glyph: bool,
+    /// The Snap to Glyph options while it gives guides.
+    snap_to_glyph: Option<GlyphSnap>,
     style: GuideStyle,
     tolerances: [f64; 2],
 }
@@ -304,7 +316,7 @@ impl SnapKey {
             exclude: exclude.to_vec(),
             screen: cx.screen,
             view: [cx.smart_guides, cx.snap_to_point, cx.snap_to_pixel, cx.snap_to_grid, cx.guides, cx.snap_tangent, cx.snap_perpendicular],
-            snap_to_glyph: cx.snap_to_glyph && cx.alignment_guides,
+            snap_to_glyph: (cx.snap_to_glyph && cx.smart_guides && cx.alignment_guides).then_some(cx.glyph_snap),
             style: GuideStyle::of(cx),
             tolerances: [cx.snapping_tolerance, cx.snap_tolerance],
         }
@@ -334,6 +346,14 @@ impl DrawSnap {
     pub fn press(&mut self, cx: &ToolContext, p: Point, exclude: &[NodeId], from: Option<&Leave>) -> Point {
         self.gather(cx, SnapKey::of(cx, exclude));
         self.snap(cx, p, from)
+    }
+
+    /// Snap the point pressed at `p` onto the art's anchors and paths alone, within the Smart
+    /// Guides snapping tolerance (the Knife's straight cut). The targets serve this press only.
+    pub fn press_on_paths(&mut self, cx: &ToolContext, p: Point) -> Point {
+        let targets = Targets::for_drawing(cx.doc, &[], visible(cx), None).styled(cx).anchors_and_paths();
+        self.targets = Some((None, PointSnap { targets: Some((targets, cx.snapping_tolerance)) }));
+        self.snap(cx, p, None)
     }
 
     /// Gather `targets` other than the art for the drag a press starts (a point being dragged

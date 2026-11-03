@@ -150,6 +150,67 @@ fn import_image_then_paste_gives_an_image() {
     assert!(s.execute("clipboard.importImage", &json!({"dataBase64": "!!"})).is_err());
 }
 
+/// An image read apart from the session (off the UI thread in the desktop app) loads as
+/// `clipboard.importImage` loads its bytes: the same reply and clipboard, and the same errors.
+#[test]
+fn an_image_read_apart_loads_as_import_image_loads_it() {
+    let mut bmp = vec![];
+    image::RgbImage::from_pixel(30, 20, image::Rgb([200, 40, 40])).write_to(&mut std::io::Cursor::new(&mut bmp), image::ImageFormat::Bmp).unwrap();
+    let (mut at_once, mut apart) = (session(), session());
+    let p = json!({"mime": "image/bmp", "center": [100, 80]});
+    let mut with_data = p.clone();
+    with_data["dataBase64"] = json!(vectorcraft_format::base64_encode(&bmp));
+    let r = run(&mut at_once, "clipboard.importImage", with_data);
+    let read = crate::cmd::clipboard::read_image(&bmp).unwrap();
+    assert_eq!(apart.import_image_read(read, &p).unwrap(), r);
+    assert_eq!(apart.clipboard, at_once.clipboard);
+    assert!(apart.image_hand_off.is_none());
+    // Errors: bytes that aren't a picture, and a type that isn't a bitmap.
+    let not_a_picture = at_once.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(b"hello")})).unwrap_err();
+    assert_eq!(crate::cmd::clipboard::read_image(b"hello").err().map(|e| e.to_string()), Some(not_a_picture.to_string()));
+    let read = crate::cmd::clipboard::read_image(&bmp).unwrap();
+    let svg = apart.import_image_read(read, &json!({"mime": SVG})).unwrap_err();
+    assert!(svg.to_string().contains("isn't a bitmap"), "{svg}");
+    assert!(apart.image_hand_off.is_none() && apart.clipboard == at_once.clipboard, "nothing loaded");
+}
+
+/// A pasted PNG cut to half its length (a copied file still downloading) has a header but not
+/// all its pixels: importing it is an error, and the clipboard keeps what it held.
+#[test]
+fn a_bitmap_whose_pixels_cant_be_read_is_not_pasted() {
+    let mut s = session();
+    copy_red_square(&mut s);
+    let held = s.clipboard.clone();
+    let cut = crate::tests_links::cut_png(600, 300);
+    let e = s.execute("clipboard.importImage", &json!({"dataBase64": vectorcraft_format::base64_encode(&cut), "mime": "image/png"})).unwrap_err();
+    assert!(e.to_string().ends_with("the image's pixels can't be read"), "{e}");
+    assert_eq!(crate::cmd::clipboard::read_image(&cut).err().map(|e| e.to_string()), Some(e.to_string()));
+    assert_eq!(s.clipboard.nodes, held.nodes);
+}
+
+/// The pixels `clipboard.importImage` decodes to check a pasted bitmap are kept in the renderers'
+/// image store, so the first render of the pasted image draws them without decoding it again.
+#[test]
+fn a_pasted_bitmap_is_drawn_without_decoding_it_again() {
+    // The image has pixels no other test uses, since every test shares the image store.
+    let img = image::RgbImage::from_fn(300, 200, |x, y| image::Rgb([(x % 253) as u8, (y % 233) as u8, 17]));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = session();
+    run(&mut s, "clipboard.importImage", json!({"dataBase64": vectorcraft_format::base64_encode(&png), "mime": "image/png"}));
+    run(&mut s, "edit.paste", json!({}));
+    let n = &pasted(&s)[0];
+    let NodeKind::Image(im) = &n.kind else { panic!("not an image: {:?}", n.kind) };
+    let d = s.doc().unwrap().doc.clone();
+    assert!(vectorcraft_render::image_cached(&d.images[&im.key]), "kept before it is drawn");
+    let decodes = vectorcraft_render::image_decodes();
+    let r = vectorcraft_render::Renderer::new().render(&d, 400, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default());
+    assert_eq!(vectorcraft_render::image_decodes(), decodes, "drawn without a decode");
+    let at = im.xf * Point::new(150.0, 100.0);
+    let px = r.pixel(at.x as u32, at.y as u32);
+    assert!(px[3] > 0 && px[2] < 100, "the image is drawn at its middle: {px:?}");
+}
+
 #[test]
 fn copied_svgz_files_paste_as_svg() {
     let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\"><rect width=\"40\" height=\"40\" fill=\"#ff0000\"/></svg>";

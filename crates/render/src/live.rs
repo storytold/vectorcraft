@@ -477,7 +477,8 @@ impl Renderer {
         {
             self.live.evaluated += 1;
         }
-        let v: Expanded = match crate::effects::pathfinder_children(a, crate::effects::text_outliner()) {
+        let hook = |c: &Node| crate::effects::outline_object(Some(doc), c);
+        let v: Expanded = match crate::effects::pathfinder_children(a, Some(&hook)) {
             Some(children) => Arc::new(children),
             None => Arc::new(crate::effects::expand_live(Some(doc), a).into_iter().map(Arc::new).collect()),
         };
@@ -771,7 +772,7 @@ mod tests {
                 true => Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: format!("S{}", k + 1), xf: Affine::IDENTITY }),
                 false => square(&mut d),
             };
-            d.symbols.push(Symbol { name: format!("S{k}"), art: Arc::new(art) });
+            d.symbols.push(Symbol { dynamic: false, name: format!("S{k}"), art: Arc::new(art) });
         }
         let first = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S0".into(), xf: Affine::IDENTITY });
         let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
@@ -805,7 +806,7 @@ mod tests {
         };
         let (x, y) = (square(&mut d, 0.0), square(&mut d, 20.0));
         for (name, art) in [("A", &x), ("B", &y), ("C", &x)] {
-            d.symbols.push(Symbol { name: name.into(), art: art.clone() });
+            d.symbols.push(Symbol { dynamic: false, name: name.into(), art: art.clone() });
         }
         let content = ["A", "B", "C"].map(|s| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: s.into(), xf: Affine::IDENTITY })));
         let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };

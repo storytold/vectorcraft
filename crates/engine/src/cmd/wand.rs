@@ -8,7 +8,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::select::selectable_ids;
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, has_doc, id_param, str_param};
 
 /// Magic Wand panel settings. Tolerances: colours as 0–255 RGB distance, stroke weight in
 /// points, opacity in percent.

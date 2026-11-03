@@ -13,9 +13,13 @@ Click once to select the group; click again to select its visible fill and chang
 
 While the group or one of its faces is selected (Face Selection mode) and the Shaper or Selection tool is active, an arrow widget sits beside the middle of the right side of the original shapes’ bounds. Click it to enter Construction mode: the original shapes are isolated and nothing is selected, and a click with Shaper selects the group’s original shape under the pointer. Click the widget again to leave Construction mode with the group selected. The arrow points right in Face Selection mode and left in Construction mode.
 
+To take a shape out of a Shaper Group, drag it with the Selection tool in Construction mode and drop it wholly outside the bounds of the group's original shapes. The shape becomes a path just above the group, keeps its fill and stroke and stays selected, and Construction mode ends. The group is computed again from the shapes left, and a group left with no shapes is removed. The move and the removal are one undo step, Remove from Shaper Group. A shape dropped across the bounds only moves.
+
 Smart Guides and Snap to Point do not snap to the original shapes. The reference point of the transform tools snaps to an original shape only when that shape is selected, or under the pointer in Construction mode. Outside Construction mode the Lasso does not pick the anchor points of the original shapes, and the Add Anchor Point, Delete Anchor Point, Anchor Point and Scissors tools do not pick the anchor points or segments of an original shape that is not selected.
 
 Object › Shaper › Release restores the original paths. Expand keeps the visible result as ordinary paths. Each scribble and source edit records one undo step. Sources in a composition must share a parent layer/group; Shaper limits a composition to 64 source paths and 4,096 segments.
+
+While an opacity mask or a pattern is edited, its editing layer stays isolated and the arrow widget does not show. A double-click with Shaper on a Shaper Group in the mask or pattern art selects the original shape under the pointer without isolating the group's original shapes, the Selection tool moves that selected shape, and a scribble, Release and Expand leave the editing layer isolated.
 
 Finer gesture heuristics remain to be implemented.
 

@@ -77,6 +77,148 @@ fn half_clipped(d: &mut Document) -> (Node, Node) {
     (mask, art)
 }
 
+/// The art a mask hides counts only for a selected object: there a click hits nothing, and the
+/// selection tools grab the selection by that art. Not where the art shows (the click hits it),
+/// beyond the art, for the clip group selected as a whole, nor for art a click can't hit (locked,
+/// hidden, outside the isolated container). A layer's clipping mask hides art as a clip group's
+/// does.
+#[test]
+fn a_selected_objects_art_hidden_by_a_mask_is_found_under_the_pointer() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let (g, art_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    let (hidden, shown, beyond) = (Point::new(150.0, 50.0), Point::new(50.0, 50.0), Point::new(250.0, 50.0));
+    let opt = HitOptions::default();
+    assert!(hit_test(&d, hidden, opt).is_none());
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[art_id]), Some(art_id));
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[]), None);
+    assert_eq!(selected_hidden_at(&d, shown, opt, &[art_id]), None);
+    assert_eq!(selected_hidden_at(&d, beyond, opt, &[art_id]), None);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None);
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(g), ..opt }, &[art_id]), Some(art_id));
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(art_id), ..opt }, &[art_id]), Some(art_id));
+    let other = d.add_layer(Some("Other"));
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(other), ..opt }, &[art_id]), None);
+    for change in [|n: &mut Node| n.locked = true, |n: &mut Node| n.visible = false] {
+        let mut d = d.clone();
+        change(d.node_mut(art_id).unwrap());
+        assert_eq!(selected_hidden_at(&d, hidden, opt, &[art_id]), None);
+    }
+    // A layer's clipping mask.
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let art_id = art.id;
+    d.insert(Some(l), 0, mask).unwrap();
+    d.insert(Some(l), 1, art).unwrap();
+    d.node_mut(l).unwrap().set_clips(true);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[art_id]), Some(art_id));
+}
+
+/// A selected group's own art is what a click would hit in it: not a hidden or locked child, nor
+/// art its own clipping mask hides, all under the pointer where an outer mask hides them.
+#[test]
+fn a_selected_groups_hidden_art_counts_only_where_a_click_would_hit_it() {
+    // An outer clip group masking to the left half (0..100); the selected group inside it holds
+    // `child` (100..200 × 0..100, under the pointer at (150, 50)) and `shown` (inside the mask).
+    let build = |change: &dyn Fn(&mut Node, &mut Node)| {
+        let mut d = Document::new(300.0, 200.0);
+        let l = d.layers[0].id;
+        let outer_mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+        let mut child = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 0.0, 200.0, 100.0)), Appearance::default_art());
+        let shown = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), Appearance::default_art());
+        let (gid, cid) = (d.alloc_id(), d.alloc_id());
+        let mut group = Node::group(gid, vec![Arc::new(shown)]);
+        change(&mut group, &mut child);
+        if let NodeKind::Group { children, .. } = &mut group.kind {
+            children.push(Arc::new(child));
+        }
+        let mut clip = Node::group(cid, vec![Arc::new(outer_mask), Arc::new(group)]);
+        clip.set_clips(true);
+        d.insert(Some(l), 0, clip).unwrap();
+        (d, gid)
+    };
+    let (hidden, opt) = (Point::new(150.0, 50.0), HitOptions::default());
+    let (d, g) = build(&|_, _| {});
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), Some(g));
+    let (d, g) = build(&|_, child| child.visible = false);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None, "a hidden child");
+    let (d, g) = build(&|_, child| child.locked = true);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None, "a locked child");
+    // The selected group is a clip group too, whose own mask (its first child, 10..40) leaves
+    // `child` out.
+    let (d, g) = build(&|group, _| group.set_clips(true));
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None, "its own mask");
+}
+
+/// A selected guide path where a mask hides it counts only while guides can be clicked: not
+/// while they are locked or hidden (`skip_guides`), as a click on it then hits nothing.
+#[test]
+fn a_selected_guide_hidden_by_a_mask_counts_only_while_guides_can_be_clicked() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, mut art) = half_clipped(&mut d);
+    if let NodeKind::Path { guide, .. } = &mut art.kind {
+        *guide = true;
+    }
+    let (g, guide_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    let (hidden, opt) = (Point::new(150.0, 50.0), HitOptions::default());
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[guide_id]), Some(guide_id));
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { skip_guides: true, ..opt }, &[guide_id]), None);
+}
+
+/// A selected path in a Shaper group's original shapes, where an outer mask hides it, counts only
+/// while those shapes can be clicked (Construction mode, with them isolated), however deep it
+/// lies in them.
+#[test]
+fn a_selected_path_in_a_shaper_groups_hidden_shapes_counts_only_in_construction_mode() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    // The outer clip group masks to 0..100; the path, 100..200, lies in the Shaper group's
+    // original shapes (its first child), under (150, 50).
+    let mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+    let path = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 0.0, 200.0, 100.0)), Appearance::default_art());
+    let path_id = path.id;
+    let mut sources = Node::group(d.alloc_id(), vec![Arc::new(path)]);
+    sources.name = Some(crate::shaper::SOURCES.into());
+    let sources_id = sources.id;
+    let face = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), Appearance::default_art());
+    let mut shaper = Node::group(d.alloc_id(), vec![Arc::new(sources), Arc::new(face)]);
+    shaper.extras_mut().shaper = Some(Box::default());
+    let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), Arc::new(shaper)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    let (hidden, opt) = (Point::new(150.0, 50.0), HitOptions::default());
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[path_id]), None);
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(sources_id), ..opt }, &[path_id]), Some(path_id));
+}
+
+/// On a layer whose Preview is off, a click hits art in outline: a selected object's hidden art
+/// counts on its outline, not inside its fill.
+#[test]
+fn a_selected_objects_hidden_art_on_a_preview_off_layer_counts_on_its_outline() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let (g, art_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    if let NodeKind::Layer { preview, .. } = &mut d.node_mut(l).unwrap().kind {
+        *preview = false;
+    }
+    let opt = HitOptions::default();
+    assert_eq!(selected_hidden_at(&d, Point::new(150.0, 50.0), opt, &[art_id]), None, "inside the fill");
+    assert_eq!(selected_hidden_at(&d, Point::new(200.0, 50.0), opt, &[art_id]), Some(art_id), "on the outline");
+}
+
 /// #2345: a marquee touches a clip group only where its art shows. Over the clipped-away
 /// half alone it selects nothing, and around a rectangle drawn beside the group's mask it
 /// takes that rectangle alone; reaching into the mask takes the group. The same holds for
@@ -285,6 +427,151 @@ fn a_marquee_meets_blends_and_envelopes_by_their_box() {
         assert_eq!(marquee(&d, r, None, false), vec![id]);
         assert_eq!(marquee(&d, r, None, true), vec![id]);
     }
+}
+
+/// A click just outside a blend's bounds, in the reach of its keys' strokes, tests only the steps
+/// whose own reach holds the point, not every step of the evaluated blend.
+#[test]
+fn a_click_in_a_blends_stroke_band_tests_only_the_steps_that_reach_it() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    // 10 pt circles with 4 pt strokes, y 295 to 305, from x 10 to x 890: 200 steps about 4.3 pt apart.
+    let stroked = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0);
+    let circle = |id, x: f64| Arc::new(Node::path(id, shapes::ellipse(Rect::new(x, 295.0, x + 10.0, 305.0)), stroked.clone()));
+    let blend = d.alloc_id();
+    let keys = vec![circle(d.alloc_id(), 10.0), circle(d.alloc_id(), 880.0)];
+    let spec = crate::live::BlendSpec { spacing: crate::live::BlendSpacing::Steps(200), ..Default::default() };
+    d.insert(Some(l), 0, Node::new(blend, NodeKind::Blend { children: keys, spec: Box::new(spec) })).unwrap();
+    let count = |p: Point| {
+        LEAVES_TESTED.with(|c| c.set(0));
+        let h = hit_test(&d, p, HitOptions::default()).map(|h| h.leaf);
+        (h, LEAVES_TESTED.with(std::cell::Cell::get))
+    };
+    // On the steps' strokes halfway between the keys, 4 pt above the bounds: a few steps reach it.
+    let (h, tested) = count(Point::new(450.0, 291.0));
+    assert_eq!(h, Some(blend));
+    assert!(tested < 20, "{tested} objects tested");
+    // In the corner of the reach, outside every stroke: nothing hits.
+    let (h, tested) = count(Point::new(6.0, 291.0));
+    assert_eq!(h, None);
+    assert!(tested < 20, "{tested} objects tested");
+}
+
+/// An intertwine group in a live object's evaluated art (a blend key a spine moves) hits by its
+/// members.
+#[test]
+fn evaluated_art_hits_an_intertwine_group_by_its_members() {
+    let d = Document::new(200.0, 200.0);
+    let square = Arc::new(Node::path(NodeId(7), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default_art()));
+    let group = Node::new(NodeId(8), NodeKind::Intertwine { children: vec![square] });
+    let symbols = d.symbol_boxes();
+    assert_eq!(hit_any(&group, Point::new(10.0, 10.0), HitOptions::default(), &symbols), Some(HitKind::Fill));
+    assert_eq!(hit_any(&group, Point::new(50.0, 50.0), HitOptions::default(), &symbols), None);
+}
+
+/// The pointer moving in a blend's stroke band evaluates the blend once, and again after the blend
+/// or a symbol of the document changes.
+#[test]
+fn clicks_in_a_blends_stroke_band_evaluate_it_once_until_it_changes() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let stroked = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0);
+    let circle = |id, x: f64| Arc::new(Node::path(id, shapes::ellipse(Rect::new(x, 295.0, x + 10.0, 305.0)), stroked.clone()));
+    let blend = d.alloc_id();
+    let keys = vec![circle(d.alloc_id(), 10.0), circle(d.alloc_id(), 880.0)];
+    let spec = crate::live::BlendSpec { spacing: crate::live::BlendSpacing::Steps(200), ..Default::default() };
+    d.insert(Some(l), 0, Node::new(blend, NodeKind::Blend { children: keys, spec: Box::new(spec) })).unwrap();
+    let evaluated = || LIVE_EVALUATED.with(std::cell::Cell::get);
+    let before = evaluated();
+    for x in [448.0, 450.0, 452.0] {
+        assert_eq!(hit_test(&d, Point::new(x, 291.0), HitOptions::default()).map(|h| h.leaf), Some(blend));
+    }
+    assert_eq!(evaluated(), before + 1);
+    // 100 steps 8.7 pt apart: a step still reaches (450, 291).
+    if let Some(NodeKind::Blend { spec, .. }) = d.node_mut(blend).map(|n| &mut n.kind) {
+        spec.spacing = crate::live::BlendSpacing::Steps(100);
+    }
+    assert_eq!(hit_test(&d, Point::new(450.0, 291.0), HitOptions::default()).map(|h| h.leaf), Some(blend));
+    assert_eq!(evaluated(), before + 2);
+    let art = circle(d.alloc_id(), 0.0);
+    d.symbols.push(crate::Symbol { dynamic: false, name: "dot".into(), art });
+    hit_test(&d, Point::new(450.0, 291.0), HitOptions::default());
+    assert_eq!(evaluated(), before + 3);
+    hit_test(&d, Point::new(450.0, 291.0), HitOptions::default());
+    assert_eq!(evaluated(), before + 3);
+}
+
+/// Evaluated art larger than [`LIVE_KEPT_SIZE`] is not kept: each click in the blend's stroke band
+/// evaluates it again.
+#[test]
+fn evaluated_art_past_the_kept_size_is_not_kept() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let stroked = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0);
+    // A 10 pt circle drawn with 2,000 anchors: 202 objects of 2,000 anchors each with 200 steps.
+    let circle = |id, x: f64| {
+        let points: Vec<Point> = (0..2000)
+            .map(|i| {
+                let a = f64::from(i) * std::f64::consts::TAU / 2000.0;
+                Point::new(x + 5.0 + 5.0 * a.cos(), 300.0 + 5.0 * a.sin())
+            })
+            .collect();
+        let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
+        Arc::new(Node::path(id, path, stroked.clone()))
+    };
+    let blend = d.alloc_id();
+    let keys = vec![circle(d.alloc_id(), 10.0), circle(d.alloc_id(), 880.0)];
+    let spec = crate::live::BlendSpec { spacing: crate::live::BlendSpacing::Steps(200), ..Default::default() };
+    d.insert(Some(l), 0, Node::new(blend, NodeKind::Blend { children: keys, spec: Box::new(spec) })).unwrap();
+    let evaluated = || LIVE_EVALUATED.with(std::cell::Cell::get);
+    let before = evaluated();
+    for x in [448.0, 450.0] {
+        assert_eq!(hit_test(&d, Point::new(x, 291.0), HitOptions::default()).map(|h| h.leaf), Some(blend));
+    }
+    assert_eq!(evaluated(), before + 2);
+}
+
+/// While the document's symbols hold a placed document, whose art changes when its file is read,
+/// each click in a blend's stroke band evaluates the blend again.
+#[test]
+fn evaluated_art_is_not_kept_while_a_placed_document_may_show_in_it() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let stroked = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0);
+    let circle = |id, x: f64| Arc::new(Node::path(id, shapes::ellipse(Rect::new(x, 295.0, x + 10.0, 305.0)), stroked.clone()));
+    let blend = d.alloc_id();
+    let keys = vec![circle(d.alloc_id(), 10.0), circle(d.alloc_id(), 880.0)];
+    let spec = crate::live::BlendSpec { spacing: crate::live::BlendSpacing::Steps(200), ..Default::default() };
+    d.insert(Some(l), 0, Node::new(blend, NodeKind::Blend { children: keys, spec: Box::new(spec) })).unwrap();
+    let placed = crate::PlacedDocument {
+        link: crate::LinkInfo::new("/art/logo.vectorcraft"),
+        key: "logo".into(),
+        bounding: false,
+        page_box: crate::PageBox::Crop,
+        width: 80.0,
+        height: 40.0,
+        xf: vectorcraft_geom::Affine::IDENTITY,
+        placement: Default::default(),
+    };
+    let art = Arc::new(Node::new(d.alloc_id(), NodeKind::PlacedDocument(Box::new(placed))));
+    d.symbols.push(crate::Symbol { dynamic: false, name: "logo".into(), art });
+    let evaluated = || LIVE_EVALUATED.with(std::cell::Cell::get);
+    let before = evaluated();
+    for x in [448.0, 450.0] {
+        assert_eq!(hit_test(&d, Point::new(x, 291.0), HitOptions::default()).map(|h| h.leaf), Some(blend));
+    }
+    assert_eq!(evaluated(), before + 2);
+}
+
+/// A kept evaluation is the evaluation of the object only while the fonts and plug-ins
+/// ([`LiveInputs`]) are as they were.
+#[test]
+fn a_kept_evaluation_is_stale_after_the_live_inputs_change() {
+    let d = Document::new(100.0, 100.0);
+    let n = Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    let e = EvaluatedLive { node: n.clone(), symbols: vec![], patterns: vec![], inputs: 7, art: std::rc::Rc::new(vec![]), size: 0 };
+    assert!(e.is_of(&d, &n, 7));
+    assert!(!e.is_of(&d, &n, 8));
 }
 
 /// A rectangle (40, 40)–(140, 140) clipping a filled 200 × 200 square drawn over its edges, in a
@@ -699,7 +986,7 @@ fn objects_at_matches_repeated_hits_on_random_documents() {
 fn objects_at_finds_symbol_instances_by_their_art() {
     let mut d = Document::new(200.0, 200.0);
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 60.0, 140.0, 80.0)), Appearance::default_art());
-    d.symbols.push(crate::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let (layer, top, inner, group) = (d.layers[0].id, d.alloc_id(), d.alloc_id(), d.alloc_id());
     let instance = |id, dy: f64| Node::new(id, NodeKind::SymbolInstance { symbol: "Far".into(), xf: vectorcraft_geom::Affine::translate((0.0, dy)) });
     d.insert(Some(layer), 0, instance(top, 0.0)).unwrap();

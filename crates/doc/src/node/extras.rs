@@ -2,7 +2,7 @@ use super::attributes::ObjectAttributes;
 use super::kind::NodeKind;
 use super::live_shape::LiveShape;
 use super::opacity::OpacityMask;
-use super::*;
+use super::{Node, PathData};
 
 /// The parts of a [`Node`] that few objects have: kept out of line, so that the nodes without
 /// them stay small ([`Node::extras`]).
@@ -23,6 +23,9 @@ pub struct NodeExtras {
     /// The group holds the glyph outlines of type. Geometry effects that reshape it move and scale
     /// the placed gradients in it with the outlines.
     pub type_outlines: bool,
+    /// An image drawn without smoothing: each pixel of the picture takes the color of the image
+    /// pixel nearest to it (an envelope's distorted image with Envelope Options › Anti-Alias off).
+    pub pixelated: bool,
     /// Editable Shaper composition; the original art is retained in its source child.
     pub shaper: Option<Box<crate::shaper::ShaperSpec>>,
     /// The [`crate::GraphicStyle::id`] last applied to this object. It stays linked while it keeps
@@ -41,11 +44,28 @@ pub struct NodeExtras {
     /// Object › Intertwine: as a member of an Intertwine group, the area (document coordinates,
     /// filled non-zero) where this object is drawn over the group's other members.
     pub intertwine: Option<Box<PathData>>,
+    /// Object › Intertwine: as a member of an Intertwine group, the areas (document coordinates,
+    /// filled non-zero) where this object is drawn over members that are themselves drawn over
+    /// others there. Item `k` is the area of tier `k + 2`; [`NodeExtras::intertwine`] is tier 1
+    /// (see [`crate::intertwine`]).
+    pub intertwine_tiers: Vec<PathData>,
     /// Live Paint group: its Gap Options (Object › Live Paint › Gap Options; `None`: the defaults).
     pub live_paint_gaps: Option<Box<crate::live_paint::GapOptions>>,
     /// Object › Objects on Path: the group's path and the objects attached to it (see
     /// [`crate::objects_on_path`]).
     pub objects_on_path: Option<Box<crate::objects_on_path::ObjectsOnPath>>,
+    /// A grayscale or 1-bit image's fill color (`paint.setFill` on the image): a solid paint that
+    /// colorizes it. Each pixel is drawn in this color, as opaque as the pixel is dark, so white
+    /// pixels are transparent. `None`: the image shows its own pixels.
+    pub colorize: Option<Box<vectorcraft_color::Paint>>,
+    /// Pathfinder panel › Make Compound Shape: this group is a compound shape
+    /// ([`Node::is_compound_shape`], [`crate::compound_shape`]).
+    pub compound_shape: bool,
+    /// As a member of a compound shape, how this object combines with the members below it.
+    pub shape_mode: crate::ShapeMode,
+    /// As an instance of a dynamic symbol, its own appearance changes to objects of the symbol's
+    /// art (see [`crate::symbol_overrides`]); empty for none.
+    pub symbol_overrides: Vec<crate::SymbolOverride>,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -56,6 +76,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     graph: None,
     series_index: None,
     type_outlines: false,
+    pixelated: false,
     shaper: None,
     graphic_style: None,
     attrs: None,
@@ -63,8 +84,13 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     perspective: None,
     dimension: None,
     intertwine: None,
+    intertwine_tiers: Vec::new(),
     live_paint_gaps: None,
     objects_on_path: None,
+    colorize: None,
+    compound_shape: false,
+    shape_mode: crate::ShapeMode::Add,
+    symbol_overrides: Vec::new(),
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal

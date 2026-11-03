@@ -51,7 +51,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             buf = name.clone();
         }
         let kept = widgets::own_field_shift_enter(ui, id, &mut buf, &name);
-        let r = ui.add(egui::TextEdit::singleline(&mut buf).id(id).desired_width(150.0));
+        let r = ui.add(egui::TextEdit::singleline(&mut buf).id(id).align(egui::Align2::LEFT_CENTER).desired_width(150.0));
         ui.data_mut(|d| d.insert_temp(id, buf.clone()));
         if (r.lost_focus() || kept) && !buf.trim().is_empty() && buf != name {
             set(app, &name, json!({"newName": buf.trim()}));

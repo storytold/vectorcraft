@@ -189,6 +189,13 @@ pub(crate) fn read_line_capped(reader: &mut impl BufRead, buf: &mut Vec<u8>, max
             upto.min(max.saturating_add(1).saturating_sub(buf.len()))
         };
         if take == 0 {
+            // Exactly `max` content bytes plus the `\r` of a CRLF ending fill the bound; the line
+            // is still within the limit when the `\n` follows.
+            if buf.last() == Some(&b'\r') && reader.fill_buf()?.first() == Some(&b'\n') {
+                reader.consume(1);
+                buf.pop();
+                return Ok(true);
+            }
             // Already past the bound: the caller sees `buf.len() > max`.
             return Ok(true);
         }
@@ -457,5 +464,31 @@ impl Server {
             }
             other => Err((METHOD_NOT_FOUND, format!("method not found: {other}"))),
         }
+    }
+}
+
+#[cfg(test)]
+mod line_reader_tests {
+    use super::read_line_capped;
+    use std::io::Cursor;
+
+    #[test]
+    fn crlf_line_of_exactly_max_bytes_is_within_the_limit() {
+        for ending in ["\n", "\r\n"] {
+            let mut input = Cursor::new(format!("{}{ending}next\n", "a".repeat(10)).into_bytes());
+            let mut buf = Vec::new();
+            assert!(read_line_capped(&mut input, &mut buf, 10).unwrap());
+            assert_eq!(buf, b"aaaaaaaaaa", "ending {ending:?}");
+            assert!(read_line_capped(&mut input, &mut buf, 10).unwrap());
+            assert_eq!(buf, b"next");
+        }
+    }
+
+    #[test]
+    fn crlf_line_over_max_is_still_overlong() {
+        let mut input = Cursor::new(format!("{}\r\n", "a".repeat(11)).into_bytes());
+        let mut buf = Vec::new();
+        assert!(read_line_capped(&mut input, &mut buf, 10).unwrap());
+        assert!(buf.len() > 10);
     }
 }

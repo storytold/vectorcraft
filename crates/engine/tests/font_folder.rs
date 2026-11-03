@@ -10,9 +10,14 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::findfiles::{Rules, plain};
 
-/// `text.findFontFiles {}` once the search ended (10 seconds at most).
+/// How long the test waits for a search to end. The wait only ends the test if the search never
+/// ends. A machine busy with other builds can hold a walker for seconds. It is shorter than a search's
+/// default `maxSeconds` of 60, which would end a search that does not end by itself.
+const WAIT: Duration = Duration::from_secs(30);
+
+/// `text.findFontFiles {}` once the search ended ([`WAIT`] at most).
 fn finished(s: &mut Session) -> Value {
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     loop {
         let r = s.execute("text.findFontFiles", &json!({})).unwrap();
         if r["state"] != "searching" || Instant::now() > until {

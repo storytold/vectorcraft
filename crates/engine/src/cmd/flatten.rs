@@ -38,7 +38,7 @@ use vectorcraft_render::effects;
 use super::edit::roots_of;
 use super::menucmds::{MAX_PIXELS, isolated_doc, unique_key};
 use super::pathops::{node_path, outline_strokes, outline_strokes_under, separate, shape_node};
-use super::*;
+use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, has_doc, str_param, targets, unique_name};
 
 mod analysis;
 mod apply;
@@ -48,8 +48,8 @@ mod options;
 mod presets;
 mod report;
 
-pub(crate) use analysis::see_through_images;
-pub(crate) use apply::flatten_document;
+pub(crate) use analysis::{outlined_text, see_through_images};
+pub(crate) use apply::{expand_transparent_tile_images, flatten_document, flatten_expanded, has_transparent_tile_images};
 pub use commands::specs;
 pub use options::FlattenOptions;
 pub use presets::{FlattenerPreset, PRESET_EXTS, PRESET_FORMAT};

@@ -46,9 +46,13 @@ mod perf;
 #[path = "../../vectorcraft/src/prefs_dir.rs"]
 mod prefs_dir;
 /// The desktop app's DirectWrite font lister, shared: exports and MCP find the same fonts.
-#[cfg(all(windows, not(target_vendor = "win7")))]
+#[cfg(windows)]
 #[path = "../../vectorcraft/src/system_fonts.rs"]
 mod system_fonts;
+/// The desktop app's affinity-mask reader, shared: renders start workers only for usable cores.
+#[cfg(windows)]
+#[path = "../../vectorcraft/src/windows_cores.rs"]
+mod windows_cores;
 
 use serde_json::{Value, json};
 use vectorcraft_engine::file_access::{self, AutomationRoots};
@@ -161,8 +165,11 @@ fn help() -> Result<(), String> {
 }
 
 fn main() -> ExitCode {
+    // Before the first render: the cores the process may run on.
+    #[cfg(windows)]
+    windows_cores::install();
     // Before any font lookup: the fonts font services load (#579).
-    #[cfg(all(windows, not(target_vendor = "win7")))]
+    #[cfg(windows)]
     system_fonts::install();
     #[cfg(target_os = "macos")]
     mac_fonts::install();

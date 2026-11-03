@@ -260,16 +260,20 @@ pub fn is_function_key(key: Key) -> bool {
 
 /// The input egui's window integration would have made of a press of `sc` (key and modifiers
 /// held): the key press and its release, but for ⌘X, ⌘C and ⌘V the Cut, Copy and Paste events
-/// (Paste with the clipboard's text, from `paste_text`). A paste's release is left to the window's
-/// own key-up: one without a press or a Paste event is how a paste of a picture or a PDF is told
-/// apart ([`crate::shortcuts`]).
+/// (Paste with the clipboard's text, from `paste_text`), each followed by the key's release. The
+/// window never reports that release itself: AppKit gave the key-down to the menu, and egui's
+/// window integration only releases a key whose press it saw. A paste's release without a press or
+/// a Paste event is how a paste of a picture or a PDF is told apart ([`crate::shortcuts`], #5159).
 pub fn key_events(sc: KeyboardShortcut, paste_text: impl FnOnce() -> Option<String>) -> Vec<egui::Event> {
     let key = |pressed| egui::Event::Key { key: sc.logical_key, physical_key: None, pressed, repeat: false, modifiers: sc.modifiers };
     if sc.modifiers.command {
         match sc.logical_key {
             Key::X => return vec![egui::Event::Cut, key(false)],
             Key::C => return vec![egui::Event::Copy, key(false)],
-            Key::V => return paste_text().map(|t| t.replace("\r\n", "\n")).filter(|t| !t.is_empty()).map(egui::Event::Paste).into_iter().collect(),
+            Key::V => {
+                let text = paste_text().map(|t| t.replace("\r\n", "\n")).filter(|t| !t.is_empty());
+                return text.map(egui::Event::Paste).into_iter().chain([key(false)]).collect();
+            }
             _ => {}
         }
     }

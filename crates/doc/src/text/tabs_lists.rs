@@ -1,5 +1,5 @@
 use super::char_style::{CharPosition, CharStyle};
-use super::*;
+use super::{Deserialize, Serialize};
 
 /// Tab stop alignment (Tabs panel).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -223,6 +223,7 @@ impl ParaList {
             position: CharPosition::Normal,
             tracking: 0.0,
             kerning: None,
+            optical_kerning: first.optical_kerning,
             tate_chu_yoko: false,
             underline: false,
             strikethrough: false,

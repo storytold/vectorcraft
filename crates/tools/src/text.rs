@@ -1,11 +1,21 @@
 //! The Type tools: Type (T), Area Type and Type on a Path.
 //!
 //! Type: click places point type, drag draws an area-type frame, clicking into existing text
-//! places the caret. Area Type / Type on a Path: click a path to turn it into a text frame or a
-//! baseline (`text.createInPath`). While type is being edited, a click that lands on no type only
+//! places the caret, and a click on a path's outline makes type in or along it: area type inside a
+//! closed path and type on a path along an open one, as the reference app's Type tool does ("Select
+//! the Type tool […] and click anywhere on the object's path", [Create text](https://web.archive.org/web/20220127090642/https://helpx.adobe.com/illustrator/using/creating-text.html);
+//! "To create horizontal text along a path, select the Type tool or the Type On A Path tool […] If
+//! the path is closed, rather than open, you must use the Type On A Path tool", [Create type on a
+//! path](https://web.archive.org/web/20220127090635/https://helpx.adobe.com/illustrator/using/creating-type-path.html)),
+//! Alt or not: type along a closed path stays with Type on a Path.
+//! Area Type / Type on a Path: click a path to turn it into a text frame or a baseline
+//! (`text.createInPath`). While type is being edited, a click that lands on no type only
 //! ends the editing, and the next click makes new type. Point type placed by a click and left
 //! empty is discarded when editing ends (`text.discardEmpty`); frames keep their shape. Where new
 //! type goes (the click, the frame's corners) snaps to Smart Guides ([`DrawSnap`]), hovering too.
+//! While no type is being edited, a press with Shift held makes the new type with the tool's
+//! horizontal or vertical counterpart, and a press with Alt (Option) held makes it with Type on a
+//! Path in place of Area Type or the reverse ([`TypeTool::acting`]); the pointer shows that tool.
 //!
 //! While editing: caret movement by character / word (Cmd or Alt) / line (Up/Down) / line ends
 //! (Home/End; Cmd = whole text), Shift extends the selection, drag selects, double-click selects a
@@ -84,6 +94,43 @@ struct TypedList {
     list: vectorcraft_doc::text::ParaList,
 }
 
+/// An undo step that changed the text of the type object the tool edits, in the order the history
+/// holds them. The plain text before and after it is kept as a hash. For a step the tool made (a
+/// typing session or a typed list), `ends` holds the byte where the changed span ends before and
+/// after it, so that Undo and Redo of the step put the caret there even where the change repeats
+/// the characters next to it; a step a command from outside the tool made has none.
+#[derive(Clone)]
+struct OwnEdit {
+    id: NodeId,
+    before: u64,
+    after: u64,
+    ends: Option<(usize, usize)>,
+    /// False once Undo took the step back, until Redo makes it again.
+    done: bool,
+}
+
+/// What Undo and Redo change in the tool, kept when a `command.batch` begins so that a batch that
+/// fails and is rolled back puts it back ([`TypeTool::batch_notice`]).
+struct HistoryState {
+    editing: Option<NodeId>,
+    caret: usize,
+    anchor: usize,
+    goal_x: Option<f64>,
+    known: Option<(NodeId, String)>,
+    edits: Vec<OwnEdit>,
+    stepped: bool,
+}
+
+/// How many undo steps [`TypeTool::edits`] keeps.
+const OWN_EDITS_MAX: usize = 256;
+
+fn text_hash(s: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut h);
+    h.finish()
+}
+
 /// The edited text's layout, keyed by the font database's generation and the text.
 type CachedLayout = ((u64, TextObject), Arc<TextLayout>);
 
@@ -136,6 +183,8 @@ pub struct TypeTool {
     press: Option<(Point, Point)>,
     /// The other corner of an area dragged out (snapped).
     drag: Option<Point>,
+    /// The Type tool the press acts as, with the keys held at the press ([`Self::acting`]).
+    held: Option<(Mode, bool)>,
     /// Smart Guides for where new type goes.
     snap: DrawSnap,
     /// The press landed in the edited text: dragging selects.
@@ -147,10 +196,30 @@ pub struct TypeTool {
     /// The list typed characters last started (`text.startList`), so that after Undo puts them back
     /// the caret goes on after them, and after Redo it goes back.
     listed: Option<TypedList>,
+    /// The edited object's plain text as the tool last left or saw it, so that after Undo or Redo
+    /// the caret goes to the end of the span the step changed.
+    known: Option<(NodeId, String)>,
+    /// The tool's own last undo steps, oldest first.
+    edits: Vec<OwnEdit>,
+    /// The command that ran was Undo or Redo ([`TypeTool::after_history_step`]).
+    stepped: bool,
+    /// The state at the start of each `command.batch` still running, innermost last.
+    batches: Vec<HistoryState>,
     cache: Mutex<Option<CachedLayout>>,
 }
 
 impl TypeTool {
+    pub(super) fn step_attribute(&mut self, key: ToolKey, mods: Mods, a: usize, b: usize, vertical: bool) -> Option<Vec<Action>> {
+        if !mods.alt {
+            return None;
+        }
+        let id = self.editing?;
+        let (attribute, by) = plain::step_key(key, mods.shift, a == b, vertical)?;
+        let mut out = self.commit();
+        let by = if mods.cmd { by * 5.0 } else { by };
+        out.push(Action::Exec("type.step".into(), json!({"id": id.0, "start": a, "end": b, "attribute": attribute, "by": by})));
+        Some(out)
+    }
     pub fn new(id: &str) -> Self {
         let mode = match id {
             "areaType" | "verticalAreaType" => Mode::Area,
@@ -158,6 +227,22 @@ impl TypeTool {
             _ => Mode::Type,
         };
         Self { mode, vertical: id.starts_with("vertical"), ..Default::default() }
+    }
+
+    /// The Type tool (which tool, and whether vertical) that a press with `mods` held acts as.
+    /// While no type is being edited, Shift switches between the horizontal and the vertical tool,
+    /// and Alt switches between Area Type and Type on a Path (the Type tool has no counterpart for
+    /// Alt); both together do both. While type is being edited, it is the tool chosen.
+    fn acting(&self, mods: Mods) -> (Mode, bool) {
+        if self.editing.is_some() {
+            return (self.mode, self.vertical);
+        }
+        let mode = match self.mode {
+            Mode::Area if mods.alt => Mode::OnPath,
+            Mode::OnPath if mods.alt => Mode::Area,
+            mode => mode,
+        };
+        (mode, self.vertical != mods.shift)
     }
 
     fn text<'a>(cx: &'a ToolContext, id: NodeId) -> Option<&'a TextObject> {
@@ -300,7 +385,8 @@ impl TypeTool {
             self.typing = None;
             self.preedit = None;
         }
-        if self.typing.is_none() {
+        let fresh = self.typing.is_none();
+        if fresh {
             out.push(Action::Begin("Typing".into()));
             self.typing_ended = false;
         }
@@ -322,6 +408,7 @@ impl TypeTool {
         let runs = edit::slice_runs(&ty.cur, p, cur.len() - s);
         let runs = if runs.is_empty() { json!([]) } else { serde_json::to_value(&runs).unwrap_or(json!([])) };
         out.push(Action::Preview("text.editRange".into(), json!({"id": id.0, "start": p, "end": base.len() - s, "runs": runs})));
+        self.note_edit(fresh, id, (&base, base.len() - s), (&cur, cur.len() - s));
         out
     }
 
@@ -343,6 +430,7 @@ impl TypeTool {
         self.editing = Some(id);
         self.fresh = None;
         self.listed = None;
+        self.known = None;
         self.caret = caret;
         self.anchor = caret;
         self.goal_x = None;
@@ -366,8 +454,127 @@ impl TypeTool {
         out.push(Action::Exec("text.startList".into(), json!({"id": id.0, "at": at})));
         self.caret = start;
         self.anchor = start;
-        self.listed = Some(TypedList { id, start, end: at, text: t.plain_text(), list });
+        let text = t.plain_text();
+        if let Some(listed) = text.get(..start).zip(text.get(at..)).map(|(a, b)| format!("{a}{b}")) {
+            self.note_edit(true, id, (&text, at), (&listed, start));
+        }
+        self.listed = Some(TypedList { id, start, end: at, text, list });
         out
+    }
+
+    /// Note the edited object's text as it is in the document now.
+    fn remember(&mut self, cx: &ToolContext) {
+        self.known = self.editing.and_then(|id| Some((id, Self::text(cx, id)?.plain_text())));
+    }
+
+    /// After a command from outside the tool: unless it was Undo or Redo, a command that changed
+    /// the edited text recorded a step, which drops the steps Undo took back from Redo, so the tool
+    /// drops them too and notes the step. A command that leaves the text as it was (a query) keeps
+    /// them.
+    fn after_outside_command(&mut self, cx: &ToolContext) {
+        let stepped = std::mem::take(&mut self.stepped);
+        let known = self.known.take();
+        self.remember(cx);
+        if stepped || known == self.known {
+            return;
+        }
+        self.edits.retain(|e| e.done);
+        if let (Some((was, old)), Some((id, new))) = (&known, &self.known)
+            && was == id
+        {
+            let e = OwnEdit { id: *id, before: text_hash(old), after: text_hash(new), ends: None, done: true };
+            self.push_edit(e);
+        }
+    }
+
+    /// Note an undo step of the tool's own in `id`: the text before it and after it, each with the
+    /// byte where the changed span ends. `fresh` starts a new step; otherwise the step the tool
+    /// noted last grows (the typing session goes on). A new step drops the steps Undo took back,
+    /// as the history drops them from Redo.
+    fn note_edit(&mut self, fresh: bool, id: NodeId, before: (&str, usize), after: (&str, usize)) {
+        let e = OwnEdit { id, before: text_hash(before.0), after: text_hash(after.0), ends: Some((before.1, after.1)), done: true };
+        self.edits.retain(|e| e.done);
+        match self.edits.last_mut() {
+            Some(last) if !fresh && last.id == id && last.ends.is_some() => *last = e,
+            _ => self.push_edit(e),
+        }
+        self.known = Some((id, after.0.to_string()));
+    }
+
+    fn push_edit(&mut self, e: OwnEdit) {
+        if self.edits.len() >= OWN_EDITS_MAX {
+            self.edits.remove(0);
+        }
+        self.edits.push(e);
+    }
+
+    /// After Undo or Redo, the caret goes to the end of the span the step changed in the edited
+    /// text, with nothing selected. A step that leaves the text as it was (a formatting change)
+    /// leaves the caret and the selection where they are, within the text.
+    fn after_history_step(&mut self, cx: &ToolContext, undo: bool) {
+        self.stepped = true;
+        let Some(id) = self.editing else { return };
+        let Some(text) = Self::text(cx, id).map(TextObject::plain_text) else { return };
+        match self.known.take() {
+            Some((known, old)) if known == id && old != text => {
+                let (old_hash, new_hash) = (text_hash(&old), text_hash(&text));
+                // Undo takes back the object's last step still made that changed its text, and Redo
+                // makes again the one Undo took back last, when its texts match (a step that left
+                // the text as it was does not come here). A step the tool made knows where its
+                // span ends. Otherwise the text after the changed span is the common suffix (a
+                // removal's span is empty).
+                let changed = |e: &&mut OwnEdit| e.id == id && e.before != e.after;
+                let step = if undo {
+                    self.edits.iter_mut().rev().filter(|e| e.done).find(changed).filter(|e| (e.after, e.before) == (old_hash, new_hash))
+                } else {
+                    self.edits.iter_mut().filter(|e| !e.done).find(changed).filter(|e| (e.before, e.after) == (old_hash, new_hash))
+                };
+                let own = step.and_then(|e| {
+                    e.done = !undo;
+                    e.ends.map(|(before, after)| if undo { before } else { after })
+                });
+                self.caret = match own {
+                    Some(end) => edit::floor_char(&text, end),
+                    None => text.len() - common_affixes(&old, &text, usize::MAX).1,
+                };
+                self.anchor = self.caret;
+                self.goal_x = None;
+            }
+            _ => {
+                self.caret = edit::floor_char(&text, self.caret);
+                self.anchor = edit::floor_char(&text, self.anchor);
+            }
+        }
+        self.known = Some((id, text));
+    }
+
+    /// A `command.batch` began (`batch.begin`), ended (`batch.end`), or failed and was rolled back
+    /// (`batch.rollBack`). After a rollback, what the batch's Undo and Redo steps changed in the tool
+    /// is as it was at the batch's start, when the tool still edits the same object.
+    fn batch_notice(&mut self, what: &str) {
+        match what {
+            "batch.begin" => self.batches.push(HistoryState {
+                editing: self.editing,
+                caret: self.caret,
+                anchor: self.anchor,
+                goal_x: self.goal_x,
+                known: self.known.clone(),
+                edits: self.edits.clone(),
+                stepped: self.stepped,
+            }),
+            "batch.end" => {
+                self.batches.pop();
+            }
+            "batch.rollBack" => {
+                if let Some(s) = self.batches.pop()
+                    && s.editing == self.editing
+                {
+                    (self.caret, self.anchor, self.goal_x) = (s.caret, s.anchor, s.goal_x);
+                    (self.known, self.edits, self.stepped) = (s.known, s.edits, s.stepped);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// After Undo of a list that typed characters started (and of what was typed after it), the
@@ -409,12 +616,26 @@ impl TypeTool {
         self.caret = r.end;
     }
 
-    /// Path under `p` for the Area Type / Type on a Path tools.
-    fn path_at(cx: &ToolContext, p: Point, closed: bool) -> Option<NodeId> {
-        let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { tol: cx.tol(4.0), outline: true, ..Default::default() })?;
+    /// The path whose outline is under `p`, and whether it is closed: within the isolated group
+    /// being edited, and no guide while guides are hidden or locked ([`ToolContext::hit_options`]).
+    fn path_at(cx: &ToolContext, p: Point) -> Option<(NodeId, bool)> {
+        let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { tol: cx.tol(4.0), outline: true, ..cx.hit_options() })?;
         match &cx.doc.node(h.leaf)?.kind {
-            NodeKind::Path { path, .. } if !closed || path.is_closed() => Some(h.leaf),
+            NodeKind::Path { path, .. } => Some((h.leaf, path.is_closed())),
             _ => None,
+        }
+    }
+
+    /// What a click at `p` with the tool acting as `mode` makes of the path there: the path, and
+    /// whether the type goes along it (else inside it); None when it makes no type in a path. The
+    /// Type tools set type inside a closed path and along an open one; Area Type needs a closed
+    /// path and Type on a Path takes either.
+    fn in_path(cx: &ToolContext, p: Point, mode: Mode) -> Option<(NodeId, bool)> {
+        let (id, closed) = Self::path_at(cx, p)?;
+        match mode {
+            Mode::Type => Some((id, !closed)),
+            Mode::Area => closed.then_some((id, false)),
+            Mode::OnPath => Some((id, true)),
         }
     }
 
@@ -428,6 +649,7 @@ impl TypeTool {
         let byte = vectorcraft_text::hit_byte(&lay, t.xf.inverse() * p);
         let mut out = self.finish(cx);
         self.start_editing(h.leaf, byte);
+        self.remember(cx);
         self.clicks = (Some(p), 1);
         out.push(Action::Exec("select.set".into(), json!({"ids": [h.leaf.0]})));
         Some(out)
@@ -437,6 +659,7 @@ impl TypeTool {
     /// edited, a click that lands on no type only ends the editing; the next click makes new type
     /// (#2871). A drag that draws an area-type frame makes it either way.
     fn on_up(&mut self, cx: &ToolContext, start: Point, at: Point) -> Vec<Action> {
+        let (mode, vertical) = self.held.take().unwrap_or((self.mode, self.vertical));
         // Click into existing text: place the caret.
         if let Some(out) = self.edit_at(cx, start) {
             return out;
@@ -458,18 +681,17 @@ impl TypeTool {
         if was_editing && area.is_none() {
             return out;
         }
-        // Area Type / Type on a Path: click a path.
-        if self.mode != Mode::Type && drag.is_none() {
-            let on_path = self.mode == Mode::OnPath;
-            if let Some(pid) = Self::path_at(cx, start, !on_path) {
-                let mode = if on_path { "onPath" } else { "area" };
-                out.push(Action::Exec(
-                    "text.createInPath".into(),
-                    json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": self.vertical, "placeholder": cx.placeholder_text}),
-                ));
-                out.push(Action::Notify("text.editNew".into()));
-                return out;
-            }
+        // A click on a path: type in it or along it.
+        if drag.is_none()
+            && let Some((pid, on_path)) = Self::in_path(cx, start, mode)
+        {
+            let mode = if on_path { "onPath" } else { "area" };
+            out.push(Action::Exec(
+                "text.createInPath".into(),
+                json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": vertical, "placeholder": cx.placeholder_text}),
+            ));
+            out.push(Action::Notify("text.editNew".into()));
+            return out;
         }
         let mut params = match area {
             Some(r) => {
@@ -481,7 +703,7 @@ impl TypeTool {
         if let Some(rotation) = vectorcraft_geom::constrain_rotation(cx.constrain_angle) {
             params["rotation"] = json!(rotation);
         }
-        params["vertical"] = json!(self.vertical);
+        params["vertical"] = json!(vertical);
         params["placeholder"] = json!(cx.placeholder_text);
         out.push(Action::Exec("text.create".into(), params));
         out.push(Action::Notify("text.editNew".into()));
@@ -505,7 +727,8 @@ impl TypeTool {
             // new document text by a stale range.
             self.preedit = None;
         }
-        if self.typing.is_none() {
+        let fresh = self.typing.is_none();
+        if fresh {
             out.push(Action::Begin("Typing".into()));
             self.typing_ended = false;
         }
@@ -547,6 +770,7 @@ impl TypeTool {
         let runs = edit::slice_runs(&ty.cur, p, cur.len() - s);
         let runs = if runs.is_empty() { json!([]) } else { serde_json::to_value(&runs).unwrap_or(json!([])) };
         out.push(Action::Preview("text.editRange".into(), json!({"id": id.0, "start": p, "end": base.len() - s, "runs": runs})));
+        self.note_edit(fresh, id, (&base, base.len() - s), (&cur, cur.len() - s));
         out
     }
 }

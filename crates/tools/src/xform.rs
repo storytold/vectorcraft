@@ -5,7 +5,7 @@
 //! on the interaction snapshot, the utility tools execute selection / paint / artboard commands.
 
 mod artboard;
-mod eyedropper;
+pub(crate) mod eyedropper;
 mod free;
 mod freeform;
 mod gradient;

@@ -300,20 +300,18 @@ struct Entropy {
 }
 
 impl Entropy {
-    /// Seeded with the process's random hash keys (none on the web), the time and `material`.
-    fn new(material: &[&[u8]]) -> Self {
-        use std::hash::BuildHasher;
-        let state = std::hash::RandomState::new();
+    /// Seeded from the OS random source, with the time and `material` mixed in.
+    fn new(material: &[&[u8]]) -> Result<Self, PdfError> {
+        let mut os = [0u8; 32];
+        getrandom::fill(&mut os).map_err(|e| failed(&format!("no random numbers ({e})")))?;
         let mut h = Sha256::new();
-        for i in 0u8..4 {
-            h.update(state.hash_one(i).to_le_bytes());
-        }
+        h.update(os);
         h.update(vectorcraft_doc::metadata::now_unix().unwrap_or_default().to_le_bytes());
         for m in material {
             h.update((m.len() as u64).to_le_bytes());
             h.update(m);
         }
-        Self { seed: h.finalize().into(), counter: 0 }
+        Ok(Self { seed: h.finalize().into(), counter: 0 })
     }
 
     fn bytes<const N: usize>(&mut self) -> [u8; N] {
@@ -598,7 +596,7 @@ pub(crate) fn protect_keeping(pdf: Vec<u8>, set: &PdfSettings) -> Result<(Vec<u8
         Some(Obj::Ref(n, _)) => Some(*n),
         _ => None,
     };
-    let mut rng = Entropy::new(&[sec.open_password.as_bytes(), sec.permissions_password.as_bytes(), &pdf]);
+    let mut rng = Entropy::new(&[sec.open_password.as_bytes(), sec.permissions_password.as_bytes(), &pdf])?;
     let (id, new_id) = match trailer.first_string(b"ID") {
         Some(id) => (id.to_vec(), None),
         None => {

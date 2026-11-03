@@ -1,7 +1,9 @@
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
 use super::layers::{Layers, parallel_map_at_most};
 use super::params::{Method, Mode, TraceParams};
 use super::raster::{Raster, TraceError};
-use super::*;
+use super::{AtomicUsize, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, gradient, group, logo, quantize, smooth};
 
 /// One traced shape: an outer contour plus its holes, filled with `color`, or (with `stroke`)
 /// lines stroked with it.
@@ -68,11 +70,24 @@ pub fn trace(img: &Raster, params: &TraceParams) -> TraceResult {
 /// than `max_anchors` anchor points (a photo traced at high fidelity can make millions). The
 /// colour layers are traced in parallel where threads are available.
 pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result<TraceResult, TraceError> {
+    trace_watched(img, params, max_anchors, &|_, _| true)
+}
+
+/// [`trace_within`], telling `steps` how far it has got: `steps(done, total)` after each stage
+/// that prepares the colour layers (`total` 0 while they aren't known yet) and after each colour
+/// layer, from whichever thread traced it. Once `steps` answers `false` the trace stops at the
+/// next stage or layer with [`TraceError::Cancelled`].
+pub fn trace_watched(
+    img: &Raster,
+    params: &TraceParams,
+    max_anchors: usize,
+    steps: &(dyn Fn(u64, u64) -> bool + Sync),
+) -> Result<TraceResult, TraceError> {
     let (w, h) = (img.width as usize, img.height as usize);
     if w == 0 || h == 0 || w.checked_mul(h).and_then(|n| n.checked_mul(4)) != Some(img.rgba.len()) {
         return Ok(TraceResult::default());
     }
-    let mut out = trace_paths(img, params, max_anchors)?;
+    let mut out = trace_paths(img, params, max_anchors, steps)?;
     if params.auto_grouping {
         // Abutting areas cannot overlap; stacked layers, Logo's shapes and stroked lines can.
         let stacked = params.method == Method::Overlapping || params.mode == Mode::Logo || params.strokes;
@@ -81,9 +96,12 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
     Ok(out)
 }
 
-fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result<TraceResult, TraceError> {
+fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<TraceResult, TraceError> {
     let (w, h) = (img.width as usize, img.height as usize);
+    // After each stage before the colour layers, whose number isn't known yet.
+    let go_on = || if steps(0, 0) { Ok(()) } else { Err(TraceError::Cancelled) };
     if params.mode == Mode::Logo {
+        go_on()?;
         return logo::trace_logo(img, params, max_anchors);
     }
     // The colour Ignore Color leaves out, if not white.
@@ -94,6 +112,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     // A photo is traced from a copy with its noise smoothed away (see `smooth`).
     let smoothed = (params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img)).then(|| smooth::smoothed(img));
     let img = smoothed.as_ref().unwrap_or(img);
+    go_on()?;
     // Gradients are found first and kept out of the palette: no colour is spent on bands of them.
     // Grayscale finds them in the image's grays (as its flat colours are), so their stops are gray.
     let grays = (params.gradients && params.mode == Mode::Grayscale).then(|| {
@@ -106,6 +125,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     });
     let traced_as = grays.as_ref().unwrap_or(img);
     let found = (params.gradients && params.mode != Mode::BlackAndWhite).then(|| gradient::detect(traced_as)).filter(|f| !f.1.is_empty());
+    go_on()?;
     let without = found.as_ref().map(|(of, _)| {
         let mut rest = img.clone();
         for (p, &g) in rest.rgba.as_chunks_mut::<4>().0.iter_mut().zip(of) {
@@ -116,6 +136,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
         rest
     });
     let (mut q, rare) = quantize::quantize_keeping(without.as_ref().unwrap_or(img), params);
+    go_on()?;
     // The semi-transparent edge of a cut-out image traces as the color beside it.
     if matches!(params.mode, Mode::Color | Mode::Grayscale) {
         quantize::settle_cut_edges(&mut q, img, params.mode == Mode::Grayscale);
@@ -138,6 +159,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     // Noise clears specks, not the regions of a rare colour Automatic kept on purpose.
     let keep: Vec<bool> = q.palette.iter().map(|c| rare.contains(c)).collect();
     quantize::denoise_keeping(&mut q.labels, w, h, params.noise as usize, &keep);
+    go_on()?;
     // Pixel count per palette entry, and the box its pixels lie in.
     let mut counts = vec![0usize; q.palette.len()];
     let mut boxes: Vec<Option<(usize, usize, usize, usize)>> = vec![None; q.palette.len()];
@@ -194,7 +216,26 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     // freed before the trace starts.)
     let largest = job.boxes.iter().flatten().map(|b| (b.2 - b.0) * (b.3 - b.1)).max().unwrap_or(1).max(1);
     let at_a_time = ((512 << 20) / (largest * 10)).max(1);
-    for (paths, &(_, ci)) in parallel_map_at_most(at_a_time, &layers, |&(r, ci)| job.layer(r, ci)).into_iter().zip(&layers) {
+    let total = layers.len() as u64;
+    if !steps(0, total) {
+        return Err(TraceError::Cancelled);
+    }
+    // Once stopped, the layers not started yet are skipped.
+    let (done, stopped) = (AtomicU64::new(0), AtomicBool::new(false));
+    let traced = parallel_map_at_most(at_a_time, &layers, |&(r, ci)| {
+        if stopped.load(Ordering::Relaxed) {
+            return None;
+        }
+        let paths = job.layer(r, ci);
+        if !steps(done.fetch_add(1, Ordering::Relaxed) + 1, total) {
+            stopped.store(true, Ordering::Relaxed);
+        }
+        paths
+    });
+    if stopped.load(Ordering::Relaxed) {
+        return Err(TraceError::Cancelled);
+    }
+    for (paths, &(_, ci)) in traced.into_iter().zip(&layers) {
         let paths = paths.ok_or(TraceError::TooComplex { max: max_anchors })?;
         // A layer with no paths adds no color to the palette.
         if paths.is_empty() {

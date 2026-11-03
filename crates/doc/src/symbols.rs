@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use vectorcraft_geom::{Affine, Rect};
 
-use crate::{AppearanceItem, Document, Node, NodeKind, SYMBOL_HALF};
+use crate::{AppearanceItem, Document, MAX_SYMBOL_NODES, Node, NodeKind, SYMBOL_HALF};
 
 /// The box a symbol instance is measured by when its symbol's art has no box
 /// ([`SymbolBoxes::art`]), and in [`Node::geometric_bounds`]: the 20 × 20 square around the origin
@@ -71,6 +71,8 @@ pub struct SymbolBoxes<'a> {
     /// The effect reach of each symbol's art with no transform, measured past [`MAX_REACHES`]
     /// ([`Self::unplaced_reach`]).
     unplaced: RefCell<HashMap<String, f64>>,
+    /// How many times [`Self::measure_art`] has run a measure on symbol art ([`Self::art_measured`]).
+    runs: Cell<usize>,
 }
 
 impl Document {
@@ -87,6 +89,7 @@ impl Document {
             holders: Cell::new(0),
             farthest: RefCell::default(),
             unplaced: RefCell::default(),
+            runs: Cell::new(0),
         }
     }
 }
@@ -146,7 +149,14 @@ impl<'a> SymbolBoxes<'a> {
     pub fn measure_art<R>(&self, name: &str, measure: impl FnOnce(&Arc<Node>) -> R) -> Option<R> {
         self.depth(name)?;
         let sym = self.doc.symbols.iter().find(|s| s.name == name)?;
+        self.runs.set(self.runs.get() + 1);
         Some(measure(&sym.art))
+    }
+
+    /// How many times [`Self::measure_art`] has run a measure on symbol art for these boxes, the
+    /// measures behind the cached art boxes and placed visual boxes included.
+    pub fn art_measured(&self) -> usize {
+        self.runs.get()
     }
 
     /// The geometric box of the art of the symbol named `name` in symbol space, with the instances
@@ -293,17 +303,28 @@ impl<'a> SymbolBoxes<'a> {
         }
     }
 
-    /// The visual bounds of symbol `name`'s art drawn as an instance with transform `xf` draws it,
-    /// its strokes at their own weight, the instances in it measured by their art boxes. `None`
-    /// when [`Self::depth`] is `None`, in boxes made by [`Self::quick`], and while symbol art or a
-    /// click's box is measured.
+    /// The visual bounds of symbol `name`'s art drawn as an instance with transform `xf` draws it
+    /// (through its 9-slice guides when it has them, [`Document::place_symbol_art`]), its strokes
+    /// at their own weight, the instances in it measured by their art boxes. `None`
+    /// when [`Self::depth`] is `None`, in boxes made by [`Self::quick`], while symbol art or a
+    /// click's box is measured, and when placing the art through its guides could make more than
+    /// [`MAX_SYMBOL_NODES`] objects ([`crate::NineSliceMap::most_placed`]).
     pub(crate) fn placed_visual(&self, name: &str, xf: Affine) -> Option<Rect> {
+        self.placed_visual_within(name, xf, MAX_SYMBOL_NODES)
+    }
+
+    /// [`Self::placed_visual`], `None` when placing the art through its guides could make more
+    /// than `most` objects.
+    pub(crate) fn placed_visual_within(&self, name: &str, xf: Affine, most: u64) -> Option<Rect> {
         if self.quick.get() {
             return None;
         }
         self.measure_art(name, |art| {
-            let mut art = (**art).clone();
-            art.transform(xf, false);
+            let art = match self.doc.symbol_slice_map(name, xf) {
+                Some(m) if m.most_placed(art, self.doc) > most => return None,
+                Some(m) => m.place(art, self.doc),
+                None => self.doc.place_symbol_art(name, art, xf)?,
+            };
             self.in_art(|| art.visual(Some(self)))
         })
         .flatten()
@@ -400,7 +421,7 @@ mod tests {
     /// Symbol `name` holding `art` in a group.
     fn symbol(d: &mut Document, name: &str, art: Vec<Node>) {
         let group = Node::group(d.alloc_id(), art.into_iter().map(Arc::new).collect());
-        d.symbols.push(Symbol { name: name.into(), art: Arc::new(group) });
+        d.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(group) });
     }
 
     #[test]
@@ -458,6 +479,26 @@ mod tests {
         symbol(&mut d, "Pair", vec![right, below]);
         let pair = instance(&mut d, "Pair", Affine::translate((100.0, 100.0)));
         assert_eq!(pair.geometric_bounds_with(&d.symbol_boxes()), Some(Rect::new(100.0, 100.0, 154.0, 154.0)));
+    }
+
+    #[test]
+    fn each_symbols_art_box_is_measured_once() {
+        // `Pair` holds two instances of `Dot`; three instances of `Pair` are measured twice each.
+        let mut d = Document::new(200.0, 200.0);
+        let dot = rect(&mut d, Rect::new(0.0, 0.0, 4.0, 4.0), 0.0);
+        symbol(&mut d, "Dot", vec![dot]);
+        let right = instance(&mut d, "Dot", Affine::translate((50.0, 0.0)));
+        let below = instance(&mut d, "Dot", Affine::translate((0.0, 50.0)));
+        symbol(&mut d, "Pair", vec![right, below]);
+        let pairs: Vec<Node> = (0..3).map(|i| instance(&mut d, "Pair", Affine::translate((f64::from(i) * 10.0, 0.0)))).collect();
+        let s = d.symbol_boxes().quick();
+        assert_eq!(s.art_measured(), 0);
+        for _ in 0..2 {
+            for p in &pairs {
+                p.geometric_bounds_with(&s);
+            }
+        }
+        assert_eq!(s.art_measured(), 2, "the art of Pair and of Dot");
     }
 
     #[test]

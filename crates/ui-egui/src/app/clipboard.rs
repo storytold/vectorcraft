@@ -1,4 +1,4 @@
-use super::*;
+use super::VectorcraftApp;
 
 impl VectorcraftApp {
     /// Hand a queued text copy to egui. Called after `tick`, after the UI phase's input and at the

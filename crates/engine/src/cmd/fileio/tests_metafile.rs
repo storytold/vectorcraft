@@ -140,7 +140,7 @@ fn metafiles_open_and_place() {
     let placed = st.doc.layers[0].children().unwrap().last().unwrap().clone();
     assert_eq!(placed.name.as_deref(), Some("pic.emf"));
     assert!(matches!(placed.kind, NodeKind::Group { clip: true, .. }));
-    let ext = fileio::PLACE_EXTS;
+    let ext = crate::cmd::fileio::PLACE_EXTS;
     assert!(ext.contains(&"emf") && ext.contains(&"wmf") && OPEN_EXTS.contains(&"emf") && OPEN_EXTS.contains(&"wmf"));
 }
 

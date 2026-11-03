@@ -1,34 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  VectorCraft MSI (WiX Toolset v5: `dotnet tool install -g wix`, plus the UI and Util extensions:
-  `wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2`). Built by package.ps1:
-
-    wix build vectorcraft.wxs -arch x64 -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext
-      -culture en-US -loc vectorcraft.en-us.wxl -d Version=1.2.3 -d DisplayVersion=1.2.3-rc.1
-      -d BinDir=... -d IconPath=... -d BannerBmp=... -d DialogBmp=... -o out.msi
-
-  Per-machine install with a setup wizard that names the version: Welcome, install folder (Program Files\VectorCraft by
-  default, remembered for upgrades), Ready, a progress page, and a Finish page with a ticked
-  "Launch VectorCraft" box. Installs a Start Menu shortcut and an App Paths entry (so `vectorcraft`
-  starts from the Run dialog), plus vectorcraft-cli. A Shortcuts page after the install folder offers
-  a desktop shortcut (ticked). `msiexec /qn` still installs silently, with the desktop shortcut
-  unless INSTALLDESKTOPSHORTCUT="" is passed.
--->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
-  <Package
-      Name="VectorCraft"
-      Manufacturer="Learning Machines LLC"
-      Version="$(var.Version)"
-      UpgradeCode="601C6437-08AE-4645-ADCC-27F036C2EA2F"
-      Scope="perMachine"
-      Compressed="yes"
-      Language="1033">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="VectorCraft" Manufacturer="Learning Machines LLC" Version="$(var.Version)" UpgradeCode="601C6437-08AE-4645-ADCC-27F036C2EA2F" Scope="perUserOrMachine" Compressed="yes" Language="1033">
     <SummaryInformation Description="VectorCraft vector illustration app" Manufacturer="Learning Machines LLC" />
+    <?include $(sys.SOURCEFILEDIR)install-policy.wxi?>
     <!-- Same-version upgrades let successive pre-releases of one X.Y.Z replace each other
          (MSI versions are numeric, so 1.2.3-rc.1 and 1.2.3-rc.2 are both 1.2.3). -->
-    <MajorUpgrade AllowSameVersionUpgrades="yes"
-        DowngradeErrorMessage="A newer version of VectorCraft is already installed." />
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of VectorCraft is already installed." />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
     <Icon Id="VectorcraftIcon.ico" SourceFile="$(var.IconPath)" />
@@ -38,15 +15,14 @@
     <Property Id="ARPHELPLINK" Value="https://discord.gg/artcraft" />
 
     <StandardDirectory Id="ProgramFiles6432Folder">
-      <Directory Id="INSTALLFOLDER" Name="VectorCraft" />
+      <Directory Id="CraftSuiteFolder" Name="ArtCraft">
+        <Directory Id="INSTALLFOLDER" Name="VectorCraft" />
+      </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
     <StandardDirectory Id="DesktopFolder" />
 
     <!-- An upgrade installs where the user put the previous version (written by VectorcraftApp). -->
-    <Property Id="INSTALLFOLDER">
-      <RegistrySearch Id="PreviousInstallFolder" Root="HKLM" Key="Software\VectorCraft" Name="InstallDir" Type="raw" />
-    </Property>
 
     <Feature Id="Main" Title="VectorCraft" Level="1">
       <ComponentGroupRef Id="VectorcraftFiles" />
@@ -65,8 +41,7 @@
       <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="2" Condition="NOT Installed" />
       <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2" />
       <!-- The Shortcuts page sits between the install folder and Ready (once the folder is valid). -->
-      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="ShortcutsDlg" Order="5"
-          Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="ShortcutsDlg" Order="5" Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
       <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ShortcutsDlg" Order="5" Condition="NOT Installed" />
 
       <Dialog Id="ShortcutsDlg" Width="370" Height="270" Title="!(loc.InstallDirDlg_Title)">
@@ -84,12 +59,10 @@
         <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
         <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.ShortcutsDlgTitle)" />
         <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.ShortcutsDlgDescription)" />
-        <Control Id="DesktopShortcutCheckBox" Type="CheckBox" X="20" Y="60" Width="330" Height="18"
-            Property="INSTALLDESKTOPSHORTCUT" CheckBoxValue="1" Text="!(loc.ShortcutsDlgDesktop)" />
+        <Control Id="DesktopShortcutCheckBox" Type="CheckBox" X="20" Y="60" Width="330" Height="18" Property="INSTALLDESKTOPSHORTCUT" CheckBoxValue="1" Text="!(loc.ShortcutsDlgDesktop)" />
         <Control Id="StartMenuNote" Type="Text" X="20" Y="84" Width="330" Height="30" NoPrefix="yes" Text="!(loc.ShortcutsDlgStartMenu)" />
       </Dialog>
-      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchVectorcraft"
-          Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchVectorcraft" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
     </UI>
     <!-- Our own art, generated by package.ps1 from the app icon (not WiX's stock bitmaps). -->
     <WixVariable Id="WixUIBannerBmp" Value="$(var.BannerBmp)" />
@@ -115,13 +88,11 @@
     <ComponentGroup Id="VectorcraftFiles" Directory="INSTALLFOLDER">
       <Component Id="VectorcraftApp" Guid="0E8C6C5E-DE4A-4E1D-9DB0-44E8E38C2103">
         <File Id="VectorcraftExe" Source="$(var.BinDir)\vectorcraft.exe" KeyPath="yes">
-          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="VectorCraft"
-              Description="VectorCraft vector illustration app" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
-              Icon="VectorcraftIcon.ico" IconIndex="0" />
+          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="VectorCraft" Description="VectorCraft vector illustration app" WorkingDirectory="INSTALLFOLDER" Advertise="yes" Icon="VectorcraftIcon.ico" IconIndex="0" />
         </File>
 
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\vectorcraft.exe" Value="[#VectorcraftExe]" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\VectorCraft" Name="InstallDir" Value="[INSTALLFOLDER]" Type="string" />
+        <RegistryValue Root="HKMU" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\vectorcraft.exe" Value="[#VectorcraftExe]" Type="string" />
+        <RegistryValue Root="HKMU" Key="Software\VectorCraft" Name="InstallDir" Value="[INSTALLFOLDER]" Type="string" />
       </Component>
 
       <Component Id="VectorcraftCli">
@@ -133,9 +104,8 @@
          app. A per-machine install puts it on the common desktop. `wix msi validate` reports ICE38,
          ICE43 and ICE57 for it: they take a desktop shortcut for per-user data, which it isn't here. -->
     <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="498F2D4C-E655-47F6-B406-2D4C449B8D26" Condition="INSTALLDESKTOPSHORTCUT">
-      <Shortcut Id="DesktopShortcut" Name="VectorCraft" Description="VectorCraft vector illustration app"
-          Target="[#VectorcraftExe]" WorkingDirectory="INSTALLFOLDER" Icon="VectorcraftIcon.ico" IconIndex="0" />
-      <RegistryValue Root="HKLM" Key="Software\VectorCraft" Name="DesktopShortcut" Value="1" Type="integer" KeyPath="yes" />
+      <Shortcut Id="DesktopShortcut" Name="VectorCraft" Description="VectorCraft vector illustration app" Target="[#VectorcraftExe]" WorkingDirectory="INSTALLFOLDER" Icon="VectorcraftIcon.ico" IconIndex="0" />
+      <RegistryValue Root="HKMU" Key="Software\VectorCraft" Name="DesktopShortcut" Value="1" Type="integer" KeyPath="yes" />
     </Component>
   </Fragment>
 </Wix>

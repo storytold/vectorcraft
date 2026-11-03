@@ -265,7 +265,7 @@ fn a_symbol_instance_prints_by_its_art() {
     let mut d = doc(100.0, 100.0, &[]);
     let red = Appearance::basic(rgb(1.0, 0.0, 0.0), Paint::None, 0.0);
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 100.0, 140.0, 140.0)), red);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let (layer, id) = (d.default_layer().unwrap(), d.alloc_id());
     let xf = vectorcraft_geom::Affine::translate((-50.0, -50.0));
     d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Far".into(), xf })).unwrap();
@@ -293,7 +293,7 @@ fn a_symbol_instances_brush_art_keeps_its_artboard_printed() {
     let mut stroke = Appearance::basic(Paint::None, rgb(1.0, 0.0, 0.0), 1.0);
     stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
     let art = Node::path(d.alloc_id(), shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), stroke);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: Arc::new(art) });
     let (layer, id) = (d.default_layer().unwrap(), d.alloc_id());
     let xf = vectorcraft_geom::Affine::translate((-5.0, 0.0));
     d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Nib".into(), xf })).unwrap();

@@ -8,7 +8,7 @@ use super::*;
 /// wherever they meet another path, keyed by the input they came from (the front-most where
 /// inputs share one). Empty when the paths can't be swept (non-finite or too degenerate).
 pub fn live_paint(shapes: &[Shape]) -> (Vec<Region>, Vec<Shape>) {
-    build(shapes, DEFAULT_PRECISION).unwrap_or_default()
+    build(shapes, DEFAULT_PRECISION).map(|(faces, edges, _)| (faces, edges)).unwrap_or_default()
 }
 
 /// [`live_paint`] with Gap Detection: the faces are those of `shapes` with a line across each gap

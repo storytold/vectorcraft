@@ -319,16 +319,14 @@ mod tests {
     #[test]
     fn ok_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
         const WARNING: &str = "an image couldn't be decoded and is missing from the picture";
-        // A PNG whose header reads (so it places at its size) but whose pixel data is cut short.
+        // A PNG whose header reads but whose pixel data is cut short.
         let mut png = Vec::new();
         image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
             .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
             .unwrap();
-        let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
-        png.truncate(idat + 8);
         for preview in [true, false] {
             let mut app = scene();
-            let placed = app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+            let placed = vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
             // The image is half transparent itself, so Flatten Transparency flattens it wherever it was placed.
             app.run("transparency.set", json!({"ids": placed["ids"], "opacity": 50})).unwrap();
             app.run("select.all", json!({})).unwrap();

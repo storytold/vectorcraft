@@ -3,7 +3,7 @@ use super::data::set_data;
 use super::designs::design;
 use super::edit::{create, set_type};
 use super::markers::set_marker;
-use super::*;
+use super::{CommandSpec, cmd, has_doc, has_selection};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

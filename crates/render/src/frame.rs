@@ -1,6 +1,6 @@
 use super::options::{AntiAlias, RenderOptions};
 use super::threads::single_threaded_context;
-use super::*;
+use super::{Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Rect, RenderContext, SymbolBoxes, TextObject, live};
 
 /// Hasher for pointer-keyed caches: a multiply-xorshift (SipHash showed up in frame profiles).
 #[derive(Default, Clone, Copy)]
@@ -69,11 +69,12 @@ pub(crate) type ClipPaintEntry = (Arc<Node>, Option<Arc<Node>>, Option<Arc<Node>
 /// ([`live::Found`]).
 pub(crate) type FxArtEntry = (Arc<Node>, Arc<Node>, Option<live::Found>);
 
-/// What symbol art placed by [`Renderer::placed_art`] is kept under: the art's address, the bits
-/// of the transform's coefficients, whether strokes scale with it, and the stain ([`stain_bits`]).
+/// What symbol art placed by [`Renderer::placed_art`] or [`Renderer::sliced_art`] is kept under:
+/// the art's address, the bits of the transform's coefficients, whether strokes scale with it, and
+/// the stain ([`stain_bits`]).
 pub(crate) type PlacedKey = (usize, [u64; 6], bool, [u32; 6]);
 
-/// Symbol art placed by [`Renderer::placed_art`].
+/// Symbol art placed by [`Renderer::placed_art`] or [`Renderer::sliced_art`].
 pub(crate) struct PlacedEntry {
     /// The symbol's art, held weakly: the reference keeps the art's allocation, so no other art can
     /// get its address while the entry exists, and does not keep the art's content.
@@ -83,6 +84,10 @@ pub(crate) struct PlacedEntry {
     /// The font generation ([`vectorcraft_text::FontDb::generation`]) the art was placed in, when
     /// it holds type: the art is placed again when the fonts change.
     pub(crate) fonts: Option<u64>,
+    /// The 9-slice map the art was placed through ([`Renderer::sliced_art`]), or `None` for art
+    /// placed by the transform alone ([`Renderer::placed_art`]). An entry is used only by the
+    /// function that made it, with the same map.
+    pub(crate) slice: Option<vectorcraft_doc::NineSliceMap>,
 }
 
 /// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.
@@ -95,6 +100,10 @@ pub(crate) static MISSING_INLINE_LOGGED: std::sync::atomic::AtomicBool = std::sy
 pub struct FrameStats {
     pub drawn: usize,
     pub culled: usize,
+    /// How many times the frame's symbol boxes measured symbol art ([`SymbolBoxes::art_measured`]):
+    /// the art boxes of symbols and how far the effects in their art paint past it. Pattern tiles
+    /// and placed documents measure with symbol boxes of their own, which are not counted.
+    pub symbol_art: usize,
     /// The drop shadows, outer glows and filtered contents the frame drew from rasters made before
     /// their object moved, or made over such rasters ([`RenderOptions::interacting`]), and those it
     /// drew at a drag's lower resolution ([`Self::previewed`]).
@@ -123,6 +132,8 @@ pub(crate) struct Frame<'a> {
     pub(crate) opts: &'a RenderOptions,
     /// What colours paint as: screen colours, or one ink plane of a CMYK document (see [`ink`]).
     pub(crate) ink: Ink,
+    /// With Separations Preview, the tables placed images show the visible plates through.
+    pub(crate) plates: Option<&'a crate::proof::PlateLut>,
 }
 
 impl Frame<'_> {

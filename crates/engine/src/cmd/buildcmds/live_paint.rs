@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    Appearance, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId, Paint, PathData, Point,
+    Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, id_param, ids_json,
+    is_live_paint, json, number_or, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
+};
 
 /// `options` as stored on a Live Paint group: none for the defaults.
 fn stored_gap_options(options: GapOptions) -> Option<Box<GapOptions>> {

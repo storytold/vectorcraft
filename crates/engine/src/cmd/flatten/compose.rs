@@ -1,5 +1,5 @@
 use super::analysis::{has_effects, masked, reach};
-use super::*;
+use super::{BlendMode, Color, FillRule, Knockout, Node, NodeKind, Paint, PathData, Rect, cmyk_planes, composite, effects, node_path, po, shapes};
 
 // ---------- the compositor ----------
 

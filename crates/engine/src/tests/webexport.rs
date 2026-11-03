@@ -308,17 +308,6 @@ fn files_are_written_beside_the_path() {
     assert_eq!(r["bytes"].as_u64().unwrap(), std::fs::metadata(&page).unwrap().len() + std::fs::metadata(dir.join("images/page.png")).unwrap().len());
 }
 
-/// A 64×32 PNG whose header reads (so it places at its size) but whose pixel data is cut short.
-fn cut_png() -> Vec<u8> {
-    let mut png = Vec::new();
-    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
-    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
-    png.truncate(idat + 8);
-    png
-}
-
 #[test]
 fn an_export_says_when_an_image_could_not_be_decoded() {
     let undecoded =
@@ -328,7 +317,7 @@ fn an_export_says_when_an_image_could_not_be_decoded() {
     assert_eq!(r["warnings"], json!([]), "{r}");
     assert_eq!(run(&mut s, "document.exportForWeb.preview", json!({}))["warnings"], json!([]));
     // The renderer can't decode the placed image and draws nothing in its place.
-    run(&mut s, "file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&cut_png())}));
+    crate::tests_menucmds::place_undecodable_png(&mut s);
     for format in ["gif", "jpg", "png8", "png24"] {
         let r = run(&mut s, "document.exportForWeb", json!({"format": format}));
         assert!(undecoded(&r), "{format}: {}", r["warnings"]);

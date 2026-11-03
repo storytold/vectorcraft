@@ -151,7 +151,8 @@ fn libraries_presets_and_plugins_open_wherever_they_are_dropped() {
     let rect = laid_out(&mut app, &ctx);
     let on_canvas = rect.center() + vec2(60.0, -40.0);
     let libraries = ["a.vcswatches", "a.gpl", "a.ase", "a.acb", "a.vcstyles", "a.vclibrary"];
-    let presets_and_plugins = ["a.vcflattener", "a.vcpdfpresets", "a.vcprintpresets", "a.vcperspective", "a.wasm", "a.jsx", "a.jsxinc", "a.jsxbin"];
+    let presets_and_plugins =
+        ["a.vcflattener", "a.vcpdfpresets", "a.vcprintpresets", "a.vcperspective", "a.vcexportpresets", "a.wasm", "a.jsx", "a.jsxinc", "a.jsxbin"];
     for name in libraries.into_iter().chain(presets_and_plugins) {
         assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name}");
         assert_eq!(app.drop_target(name, Some(on_canvas), true), DropTarget::Open, "{name} on the canvas");
@@ -722,12 +723,9 @@ fn crop_image_shows_a_box_that_apply_crops_to() {
 #[test]
 fn crop_and_rasterize_say_in_the_status_bar_when_an_image_could_not_be_decoded() {
     const WARNING: &str = "an image couldn't be decoded and is missing from the picture";
-    // A PNG whose header reads (so it places at its size) but whose pixel data is cut short.
-    let mut cut = png(100, 50, 72.0);
-    let idat = cut.windows(4).position(|w| w == b"IDAT").unwrap();
-    cut.truncate(idat + 8);
+    // A PNG whose header reads but whose pixel data is cut short.
     let mut app = app();
-    app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&cut)})).unwrap();
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png(100, 50, 72.0), json!({}));
     let whole = selected_image(&app).geometric_bounds().unwrap();
     app.run("ui.cropImage", json!({})).unwrap();
     app.run("tool.setOption", json!({"key": "rect", "value": [whole.x0, whole.y0, whole.width() / 2.0, whole.height()]})).unwrap();

@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 
 use super::findfiles::{self, Limits, Visitor};
-use super::*;
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, bool_or, checked_ids_param, cmd};
 
 /// The most linked files one search looks for.
 const MAX_LINKS: usize = 1_000;

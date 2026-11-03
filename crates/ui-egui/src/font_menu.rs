@@ -82,6 +82,8 @@ const STAR: f32 = 18.0;
 const NAME_SHARE: f32 = 0.5;
 /// Width of the disclosure triangle of a family with several styles.
 const DISCLOSURE: f32 = 14.0;
+/// The list's greatest height, under the search field and filters.
+const LIST_HEIGHT: f32 = 600.0;
 /// Samples rendered (or asked for) per frame, across every menu, so a long list doesn't stall the UI.
 const SAMPLES_PER_FRAME: usize = 4;
 /// Samples rendering at once (native).
@@ -231,8 +233,8 @@ struct MenuState {
     /// The rows listed, and what for: built again only when that changes, not every frame.
     rows: Arc<[Row]>,
     rows_key: Option<RowsKey>,
-    /// The list's scroll offset last frame.
-    scrolled: f32,
+    /// The height of the search field and filters last frame.
+    header: f32,
 }
 
 /// The font family menu showing `current`, `width` points wide, rows sampling `sample` (the
@@ -247,12 +249,21 @@ pub fn font_menu(
 ) -> Option<FontPick> {
     let state_id = ui.scope_id().with(&id).with("font-menu");
     let mut st: MenuState = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
-    let mut drawn = false;
-    let picked = widgets::combo(ui, &id, current, width, true, |ui| {
-        drawn = true;
-        list(ui, state_id, &mut st, current, sample, look)
+    let height = st.header + LIST_HEIGHT;
+    let state = &mut st;
+    // The search field and filters stay in place over the rows, which scroll. The rows are all
+    // one height (a family's styles too), so only those in view are laid out: there are thousands
+    // of families.
+    let shown = widgets::combo_menu(ui, &id, current, width, |menu| {
+        menu.height(height).show_rows_with_header(
+            |ui| header(ui, state_id, state, current, look),
+            look.row,
+            |h| h.rows.len(),
+            |ui, range, h| rows(ui, range, h, sample, look),
+        )
     });
-    let mut out = picked;
+    let drawn = shown.is_some();
+    let mut out = shown.flatten();
     if !drawn && out.is_none() && st.previewed.take().is_some() {
         // Closed (Escape, a click outside) with a preview showing.
         out = Some(FontPick::EndPreview);
@@ -264,10 +275,33 @@ pub fn font_menu(
     out
 }
 
-/// The list inside the open menu.
+/// What the menu's header hands its rows.
+struct Listed<'s> {
+    st: &'s mut MenuState,
+    /// The rows listed.
+    rows: Arc<[Row]>,
+    /// The current family by its own name.
+    current: String,
+    /// Enter was pressed; ↑/↓/←/→ moved the highlight; the menu is opening.
+    enter: bool,
+    keyed: bool,
+    opening: bool,
+}
+
+/// The menu's contents outside a menu, for the unit tests: the header over its rows, as
+/// [`craft_ui::combo::Menu::show_rows_with_header`] lays them out.
+#[cfg(test)]
 fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, sample: Option<&str>, look: MenuLook) -> Option<FontPick> {
-    let row_h = look.row;
+    let h = header(ui, state_id, st, current, look);
+    let total = h.rows.len();
+    egui::ScrollArea::vertical().max_height(ui.available_height()).show_rows(ui, look.row, total, |ui, range| rows(ui, range, h, sample, look)).inner
+}
+
+/// The top of the open menu, which stays in place: the search field, the filters, and the rows
+/// they list.
+fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &str, look: MenuLook) -> Listed<'s> {
     let t = Tokens::get(ui.ctx());
+    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
     // Each time the menu opens: no query, the current family highlighted and in view (the
     // filters stay as they were).
     let pass = ui.ctx().cumulative_pass_nr();
@@ -407,122 +441,138 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
         }
         keyed = true;
     }
+    st.header = ui.min_rect().height();
     if rows.is_empty() {
         widgets::dim_label(ui, tl!("No matching fonts"));
+    }
+    ui.spacing_mut().item_spacing.y = 0.0;
+    // The scroll bar beside the rows, not over them: a floating one covered the stars at their
+    // right ends, so a favourite was hard to click (#2277).
+    ui.spacing_mut().scroll = widgets::list_scroll_style();
+    Listed { st, rows, current: current.to_string(), enter, keyed, opening }
+}
+
+/// The disclosure triangle of a family with several styles; whether the pointer is on it.
+fn disclosure(p: &egui::Painter, resp: &egui::Response, tri: egui::Rect, open: bool, t: &Tokens) -> bool {
+    p.text(tri.center(), egui::Align2::CENTER_CENTER, if open { "▾" } else { "▸" }, egui::FontId::proportional(11.0), t.text_dim);
+    resp.interact_pointer_pos().is_some_and(|pos| tri.contains(pos))
+}
+
+/// The star at the end of a family's row, shown when it is a favourite, hovered or highlighted; whether the pointer is
+/// on it.
+fn star_cell(p: &egui::Painter, resp: &egui::Response, star: egui::Rect, (on, highlighted): (bool, bool), t: &Tokens) -> bool {
+    let hot = resp.hover_pos().is_some_and(|pos| star.contains(pos));
+    if on || hot || highlighted {
+        let color = if on { t.accent } else { t.text_dim };
+        p.text(star.center(), egui::Align2::CENTER_CENTER, if on { "★" } else { "☆" }, egui::FontId::proportional(12.0), color);
+    }
+    resp.interact_pointer_pos().is_some_and(|pos| star.contains(pos))
+}
+
+/// A heading row (Recent Fonts, Fonts), which cannot preview or apply a font.
+fn heading_row(ui: &mut Ui, row_h: f32, label: &str, t: &Tokens) {
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::hover());
+    // Existing translated menu labels; the heading cannot preview or apply a font.
+    let label = match label {
+        "Recent Fonts" => tl!("Recent Fonts"),
+        _ => tl!("Fonts"),
+    };
+    ui.painter_at(rect).text(rect.left_center() + vec2(4.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(11.0), t.text_dim);
+}
+
+/// The rows of the open menu in `range`, the ones in view: the menu's one scrolling part, under
+/// the search field and filters (#555).
+fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Option<&str>, look: MenuLook) -> Option<FontPick> {
+    let Listed { st, rows, current, enter, keyed, opening } = h;
+    let current = current.as_str();
+    let row_h = look.row;
+    let t = Tokens::get(ui.ctx());
+    let db = vectorcraft_text::FontDb::global();
+    let favorite = |f: &str| look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f));
+    if rows.is_empty() {
         // A filter or a font rescan can remove the row whose font was previewed.
         // Do not leave that font applied while the list has no candidate to highlight.
         return st.previewed.take().map(|_| FontPick::EndPreview);
     }
-    // The rows: only those in view are laid out (there are thousands of families). The list is
-    // the menu's one scrolling part, under the search field and filters (#555): it fills the
-    // menu's room (its max rect) below them.
-    let room = (ui.max_rect().bottom() - ui.next_widget_position().y).clamp(120.0, 600.0);
-    let mut area = egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room.min(row_h * rows.len() as f32));
+    // Scrolls the list to row `i`'s place, laid out or not: the rows in view start at
+    // `range.start`.
+    let (left, width) = (ui.max_rect().left(), ui.max_rect().width());
+    let top = ui.max_rect().top() - range.start as f32 * row_h;
+    let scroll_to = |ui: &Ui, i: usize, align| {
+        let place = egui::Rect::from_min_size(egui::pos2(left, top + i as f32 * row_h), vec2(width, row_h));
+        ui.scroll_to_rect_animation(place, align, egui::style::ScrollAnimation::none());
+    };
     // Open at the recent section even when the current family is farther down the list.
     // Otherwise centre the current font; subsequent key presses keep the highlight in view.
     if opening && matches!(rows.first(), Some(Row::Heading("Recent Fonts"))) {
-        area = area.vertical_scroll_offset(0.0);
-    } else if let Some(top) = st.highlight.map(|i| i as f32 * row_h) {
-        let target = if opening {
-            Some(top - (room - row_h) * 0.5)
-        } else if keyed && top < st.scrolled {
-            Some(top)
-        } else if keyed && top + row_h > st.scrolled + room {
-            Some(top + row_h - room)
-        } else {
-            None
-        };
-        if let Some(y) = target {
-            area = area.vertical_scroll_offset(y.max(0.0));
-        }
+        scroll_to(ui, 0, Some(egui::Align::TOP));
+    } else if let Some(i) = st.highlight
+        && (opening || keyed)
+    {
+        scroll_to(ui, i, opening.then_some(egui::Align::Center));
     }
     let mut chosen: Option<(String, Option<String>)> = None;
     let mut hovered: Option<usize> = None;
     let mut toggled: Option<String> = None;
     let mut starred: Option<String> = None;
-    ui.spacing_mut().item_spacing.y = 0.0;
-    // The scroll bar beside the rows, not over them: a floating one covered the stars at their
-    // right ends, so a favourite was hard to click (#2277).
-    ui.spacing_mut().scroll = widgets::list_scroll_style();
-    let shown = area.show_rows(ui, row_h, rows.len(), |ui, range| {
-        for i in range {
-            let Some(row) = rows.get(i) else { continue };
-            if let Row::Heading(label) = row {
-                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::hover());
-                // Existing translated menu labels; the heading cannot preview or apply a font.
-                let label = match *label {
-                    "Recent Fonts" => tl!("Recent Fonts"),
-                    _ => tl!("Fonts"),
-                };
-                ui.painter_at(rect).text(
-                    rect.left_center() + vec2(4.0, 0.0),
-                    egui::Align2::LEFT_CENTER,
-                    label,
-                    egui::FontId::proportional(11.0),
-                    t.text_dim,
-                );
-                continue;
-            }
-            let Some(family) = row.family() else { continue };
-            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
-            if resp.hovered() && ui.input(|inp| inp.pointer.delta() != egui::Vec2::ZERO || inp.smooth_scroll_delta != egui::Vec2::ZERO) {
-                hovered = Some(i);
-            }
-            let p = ui.painter_at(rect);
-            if st.highlight == Some(i) {
-                p.rect_filled(rect, 2.0, t.selection);
-            } else if matches!(row, Row::Family(f) if f.eq_ignore_ascii_case(current)) {
-                p.rect_filled(rect, 2.0, t.hover);
-            }
-            // The disclosure triangle of a family with several styles.
-            let tri = egui::Rect::from_min_size(rect.min, vec2(DISCLOSURE, row_h));
-            let mut on_triangle = false;
-            if let Row::Family(f) = row
-                && db.styles(f).len() > 1
-            {
-                let open = st.expanded.iter().any(|e| e.eq_ignore_ascii_case(f));
-                p.text(tri.center(), egui::Align2::CENTER_CENTER, if open { "▾" } else { "▸" }, egui::FontId::proportional(11.0), t.text_dim);
-                on_triangle = resp.interact_pointer_pos().is_some_and(|pos| tri.contains(pos));
-                if resp.clicked() && on_triangle {
-                    toggled = Some(f.to_lowercase());
-                }
-            }
-            // The star at the end of a family's row.
-            let star = egui::Rect::from_min_max(egui::pos2(rect.max.x - STAR, rect.min.y), rect.max);
-            let mut on_star = false;
-            if let Row::Family(f) = row {
-                let on = favorite(f);
-                let hot = resp.hover_pos().is_some_and(|pos| star.contains(pos));
-                if on || hot || st.highlight == Some(i) {
-                    let color = if on { t.accent } else { t.text_dim };
-                    p.text(star.center(), egui::Align2::CENTER_CENTER, if on { "★" } else { "☆" }, egui::FontId::proportional(12.0), color);
-                }
-                on_star = resp.interact_pointer_pos().is_some_and(|pos| star.contains(pos));
-                if resp.clicked() && on_star {
-                    starred = Some(f.clone());
-                }
-            }
-            let indent = if row.style().is_some() { DISCLOSURE + 12.0 } else { DISCLOSURE };
-            let name_w = rect.width() * NAME_SHARE;
-            let name_rect = egui::Rect::from_min_max(rect.min + vec2(indent, 0.0), egui::pos2(rect.min.x + name_w - 4.0, rect.max.y));
-            // Family rows follow Show Font Names in English; style rows keep the style name (#394).
-            let name = match row {
-                Row::Style(_, style) => style.clone(),
-                Row::Family(f) => db.family_display_name(f, look.english_names),
-                Row::Heading(_) => continue,
-            };
-            ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), t.text);
-            let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 2.0), rect.max - vec2(STAR + 2.0, 2.0));
-            if !look.samples {
-            } else if let Some(tex) = sample_texture(ui.ctx(), family, row.style(), sample, sample_rect.height()) {
-                paint_sample(ui, sample_rect, &tex, t.text);
-            }
-            if resp.clicked() && !on_triangle && !on_star {
-                chosen = row.pick();
+    for i in range {
+        let Some(row) = rows.get(i) else { continue };
+        if let Row::Heading(label) = row {
+            heading_row(ui, row_h, label, &t);
+            continue;
+        }
+        let Some(family) = row.family() else { continue };
+        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
+        if resp.hovered() && ui.input(|inp| inp.pointer.delta() != egui::Vec2::ZERO || inp.smooth_scroll_delta != egui::Vec2::ZERO) {
+            hovered = Some(i);
+        }
+        let p = ui.painter_at(rect);
+        if st.highlight == Some(i) {
+            p.rect_filled(rect, 2.0, t.selection);
+        } else if matches!(row, Row::Family(f) if f.eq_ignore_ascii_case(current)) {
+            p.rect_filled(rect, 2.0, t.hover);
+        }
+        // The disclosure triangle of a family with several styles.
+        let tri = egui::Rect::from_min_size(rect.min, vec2(DISCLOSURE, row_h));
+        let mut on_triangle = false;
+        if let Row::Family(f) = row
+            && db.styles(f).len() > 1
+        {
+            let open = st.expanded.iter().any(|e| e.eq_ignore_ascii_case(f));
+            on_triangle = disclosure(&p, &resp, tri, open, &t);
+            if resp.clicked() && on_triangle {
+                toggled = Some(f.to_lowercase());
             }
         }
-    });
-    st.scrolled = shown.state.clamped_offset().y;
+        // The star at the end of a family's row.
+        let star = egui::Rect::from_min_max(egui::pos2(rect.max.x - STAR, rect.min.y), rect.max);
+        let mut on_star = false;
+        if let Row::Family(f) = row {
+            let on = favorite(f);
+            on_star = star_cell(&p, &resp, star, (on, st.highlight == Some(i)), &t);
+            if resp.clicked() && on_star {
+                starred = Some(f.clone());
+            }
+        }
+        let indent = if row.style().is_some() { DISCLOSURE + 12.0 } else { DISCLOSURE };
+        let name_w = rect.width() * NAME_SHARE;
+        let name_rect = egui::Rect::from_min_max(rect.min + vec2(indent, 0.0), egui::pos2(rect.min.x + name_w - 4.0, rect.max.y));
+        // Family rows follow Show Font Names in English; style rows keep the style name (#394).
+        let name = match row {
+            Row::Style(_, style) => style.clone(),
+            Row::Family(f) => db.family_display_name(f, look.english_names),
+            Row::Heading(_) => continue,
+        };
+        ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), t.text);
+        let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 2.0), rect.max - vec2(STAR + 2.0, 2.0));
+        if !look.samples {
+        } else if let Some(tex) = sample_texture(ui.ctx(), family, row.style(), sample, sample_rect.height()) {
+            paint_sample(ui, sample_rect, &tex, t.text);
+        }
+        if resp.clicked() && !on_triangle && !on_star {
+            chosen = row.pick();
+        }
+    }
     if let Some(f) = toggled {
         if st.expanded.contains(&f) {
             st.expanded.retain(|e| *e != f);

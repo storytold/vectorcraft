@@ -1,7 +1,7 @@
 use super::artboards::names_an_artboard;
 use super::input::marquee_through;
 use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors, walk_drawn};
-use super::*;
+use super::{Color32, CornerRadius, NodeKind, Overlay, Point, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
 
 pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(h) = app.hover_doc else { return };
@@ -21,6 +21,27 @@ pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) 
     if let Some(n) = st.doc.node(id).filter(|n| !too_many_anchors([*n])) {
         let color = c32(st.doc.layer_color(id));
         stroke_path(p, &node_outline(n, &st.doc.symbol_boxes()), xf, Stroke::new(1.5, color));
+    }
+}
+
+/// Draw Inside (Shift+D): while the mode lasts, a dotted open rectangle round the corners of the
+/// object drawn into, selected or not (#4319).
+pub(super) fn draw_inside_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    if app.session.draw_mode != vectorcraft_engine::DrawMode::Inside {
+        return;
+    }
+    let (Some(id), Some(st)) = (app.session.draw_inside, app.session.active()) else { return };
+    let Some(bounds) = st.doc.node(id).and_then(|n| n.visual_bounds()) else { return };
+    // A few pixels outside the object, clear of its stroke.
+    let pad = 4.0 / xf.zoom;
+    let [a, b, c, d] = xf.quad(bounds.inflate(pad, pad))[..] else { return };
+    let stroke = Stroke::new(1.0, c32(st.doc.layer_color(id)));
+    for (corner, sides) in [(a, [b, d]), (b, [c, a]), (c, [d, b]), (d, [a, c])] {
+        for next in sides {
+            // Each arm runs a third of its side at most, so the rectangle stays open.
+            let arm = ((next - corner).length() / 3.0).min(16.0);
+            p.extend(Shape::dashed_line(&[corner, corner + (next - corner).normalized() * arm], stroke, 3.0, 2.0));
+        }
     }
 }
 
@@ -71,11 +92,18 @@ fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f
 pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
     // The Selection tool's bounding box (rotated with the objects after a rotation). It hides while
     // a drag moves or resizes the selection, so only the art is seen going with the pointer (#712).
+    // With Real-time Drawing off the art waits for the release of a move drag, and the box moves
+    // with the pointer instead.
+    let moved = app.session.deferred_move();
     let show_box = app.session.tool_id() == "selection"
-        && !app.session.tool_transforming()
+        && (!app.session.tool_transforming() || moved.is_some())
         && app.ui.view.bounding_box
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
     let bbox = if show_box { app.selection_box() } else { None };
+    let bbox = bbox.map(|b| match moved {
+        Some(d) => vectorcraft_doc::OrientedBox { rect: b.rect + b.to_local(d.to_point()).to_vec2(), ..b },
+        None => b,
+    });
     let st = app.session.active();
     let big = st.is_some_and(|st| too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
     let big_bounds = if big { app.selection_bounds() } else { None };
@@ -267,6 +295,21 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             p.circle_stroke(c, r, Stroke::new(1.0, color));
         }
     }
+    rotate_all_widget(p, xf, tool, &st.doc, &st.selection);
+}
+
+/// The Rotate All widget (Selection and Objects on Path tools, one Objects on Path group
+/// selected): joined by a line to the first object's attachment point. It stays while dragged.
+fn rotate_all_widget(p: &egui::Painter, xf: &Xf, tool: &str, doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection) {
+    use vectorcraft_tools::objects_on_path::{ROTATE_ALL_RADIUS_PX, RotateAllWidget};
+    if !matches!(tool, "selection" | "objectsOnPath") {
+        return;
+    }
+    let Some(w) = RotateAllWidget::of(doc, selection, xf.zoom) else { return };
+    let (on, c, color) = (xf.to_screen(w.pivot), xf.to_screen(w.at), c32(doc.layer_color(w.group)));
+    p.line_segment([on, c], Stroke::new(1.0, color));
+    p.circle_filled(c, ROTATE_ALL_RADIUS_PX, Color32::WHITE);
+    p.circle_stroke(c, ROTATE_ALL_RADIUS_PX, Stroke::new(1.0, color));
 }
 
 /// Record where the Type tool's IME candidate window goes this pass, if it has an editor.

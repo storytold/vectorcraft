@@ -167,11 +167,6 @@ Root workspace (`Cargo.toml`):
   `6d518fc7…`, `winit` to `storytold/winit` rev `a517b384…`, and `hayro-*`/`krilla` to craft-libs rev
   `a0916808…`. The hayro/krilla patches are unrelated to egui and must remain unless a separate comparison proves
   replacement.
-- `vendor/windows-link` is the only vendored package. `vendor/windows-link/VECTORCRAFT-PATCH.md` records the
-  provenance (Microsoft windows-link 0.2.1, crates.io, MIT OR Apache-2.0), the sole change (`CoTaskMemFree` from
-  `ole32.dll` on the Windows 7 target), and the removal condition. It is applied only by
-  `packaging/windows/windows7.ps1` through `--config "patch.crates-io.windows-link.path='vendor/windows-link'"`.
-  **Keep it.** Do not add a root path patch for it, and re-run the Windows 7 packaging check after the egui bump.
 - Nested workspaces: `crates/affinity/fuzz` (libfuzzer only; no egui) and `crates/plugins/example` (wasm plug-in
   example; no egui). `crates/plugins/example/Cargo.lock` is separate and must not acquire egui.
 - `crates/affinity/fuzz` has no lockfile in the checkout. Do not create one merely for this migration.
@@ -181,7 +176,7 @@ Manifests that participate in the egui graph (the table records the plan-time de
 | Manifest | Plan-time UI declaration | Required change |
 |---|---|---|
 | `crates/ui-egui/Cargo.toml` | `egui` workspace + `bytemuck`; `egui_extras`; dev `egui_kittest` `wgpu`,`snapshot` | `egui` must also enable `default_fonts` for library tests/embedders and for downstream kittest tests, which do not inherit kittest's own dev-dependency fonts; `egui_extras`/`egui_kittest` to 0.37; no feature rename assumed |
-| `apps/vectorcraft/Cargo.toml` | `eframe` features `default_fonts`, `wayland`, `x11`; default features `wgpu`, `accessibility`; `windows7 = ["eframe/glow"]`; direct `winit 0.30` | add **`eframe/clipboard`**; keep `links` off (existing native `open_url` service); keep `system_fonts` off; retain winit feature set |
+| `apps/vectorcraft/Cargo.toml` | `eframe` features `default_fonts`, `wayland`, `x11`; default features `wgpu`, `accessibility`; direct `winit 0.30` | add **`eframe/clipboard`**; keep `links` off (existing native `open_url` service); keep `system_fonts` off; retain winit feature set |
 | `apps/vectorcraft-web/Cargo.toml` | wasm `eframe` features `default_fonts`, `wgpu`, `accesskit` | keep; add `clipboard` only if the chosen eframe 0.37 web path needs the feature (the web clipboard code is not gated by it, but test it); web `open_url` is handled by the web runner |
 | `craft-ui` / `craft-window` pins | 0.36-era craft-libs revisions | final L2 craft-libs revision on `3832c47…` with workspace `egui = "0.37"` and the CL-2F capture helper |
 | `Cargo.lock` | one coherent 0.36 graph | one coherent 0.37 graph; no second `egui`, `eframe`, `egui-winit`, `egui-wgpu`, `epaint`/`emath`/`ecolor`, or `winit`; external `kittest`/`accesskit*` are separate audited registry identities |
@@ -196,7 +191,7 @@ never against a candidate, an intermediate fork stage or a provisional craft-lib
 
 | Target | Path | Current role |
 |---|---|---|
-| `vectorcraft` binary | `apps/vectorcraft/src/main.rs` | Native eframe/wgpu app, control server, macOS menu, Linux stylus/XWayland, Windows stylus, printing, Windows 7 glow fallback |
+| `vectorcraft` binary | `apps/vectorcraft/src/main.rs` | Native eframe/wgpu app, control server, macOS menu, Linux stylus/XWayland, Windows stylus, printing |
 | `vectorcraft-web` binary | `apps/vectorcraft-web/src/main.rs`, `web.rs` | wasm eframe web runner, WebGPU/WebGL2, DOM paste/drop, `window.vectorcraft` control API |
 | `vectorcraft-cli` binary | `apps/vectorcraft-cli/src/main.rs`, `perf.rs` | Headless run/convert/bench/perf and MCP stdio |
 | `vectorcraft-ui-egui` library | `crates/ui-egui/src/lib.rs` | All frontend state, panels, dialogs, canvas, control methods, i18n, clipboard, fonts, workers |
@@ -424,8 +419,7 @@ Required design (shared weak completion slot, per the suite capture contract):
 
 Required design:
 
-- Add `eframe/clipboard` to the native eframe features (unconditionally, so `--no-default-features --features
-  windows7` keeps it). Keep the app's `SystemClipboard` as the multi-format owner for Copy/Cut (SVG/PDF/PNG/text)
+- Add `eframe/clipboard` to the native eframe features (unconditionally). Keep the app's `SystemClipboard` as the multi-format owner for Copy/Cut (SVG/PDF/PNG/text)
   and for image/PDF/EPS/SVG paste.
 - Consume `Event::PasteImage` in `shortcuts::handle` rather than letting it reach a `TextEdit` or the Type tool:
   - with a `system_clipboard`, treat it as the textless paste signal and let `adopt_system_clipboard` read the
@@ -639,7 +633,6 @@ Source-grounded from the 0.37 changelog and code, with tests rather than assumpt
 - default style tweaks (roomier buttons, larger corners); app sets most tokens but screenshots will move.
 - text tessellation (#8731) and DX12 FXC shader compile (#8736) are upstream reports, not reproduced here. Measure
   our own fixtures before changing anything; preserve Repeat/MirroredRepeat semantics and color emoji.
-- `eframe` now falls back to a compatibility-profile OpenGL context; Windows 7/glow path must be re-tested.
 - #8748 (hidden-parent deferred children) concerns child/deferred viewports. P7c owns the hidden-parent/child fix
   and its regression. VectorCraft has no child viewport, so it verifies only the root window's
   occluded/minimized logic-only path and that any `Area`/`Window` owned by the root does not assume a parent
@@ -674,8 +667,7 @@ One coherent 0.37 family:
 ```
 eframe 0.37 ─┬─ egui 0.37 ── epaint/emath/ecolor/epaint_default_fonts 0.37
              ├─ egui-winit 0.37 ── winit 0.30.13 (approved storytold fork)
-             ├─ egui-wgpu 0.37 ── wgpu 30.0.x
-             └─ egui_glow 0.37 (windows7)
+             └─ egui-wgpu 0.37 ── wgpu 30.0.x
 egui_extras 0.37
 egui_kittest 0.37 ── kittest 0.5.0 (registry)
 craft-ui (final craft-libs rev) ── egui 0.37
@@ -683,7 +675,7 @@ craft-window (final craft-libs rev) ── egui 0.37
 ```
 
 - **Required-used fork-source IDs** (each must appear once from the D1b revision): `egui`, `eframe`, `egui-winit`,
-  `egui-wgpu`, `egui_glow` (`windows7` target only), `egui_extras`, `epaint`, `emath`, `ecolor`,
+  `egui-wgpu`, `egui_extras`, `epaint`, `emath`, `ecolor`,
   `epaint_default_fonts`, `egui_kittest`.
 - **Optional or forbidden-if-present IDs:** `egui_demo_lib`, `egui_inspection`, `egui_system_font_provider` (only
   with the disabled `system_fonts` feature) and `egui_demo_app` (workspace-only binary). Absence is a pass; if one
@@ -704,8 +696,7 @@ craft-window (final craft-libs rev) ── egui 0.37
   dependencies from `craft-ui`/`craft-window` resolve to the same source. A dependency's `[patch]` section is
   ignored by the consumer.
 - Do not use a branch or a machine-local path in publication. The winit fork's own patch is not inherited.
-- Keep `vendor/windows-link` and its separate Windows 7 packaging check, and keep the existing hayro/krilla root
-  patches and PDF fixes. These are unrelated to the egui graph and must not be removed, folded into the fork pin, or
+- Keep the existing hayro/krilla root patches and PDF fixes. These are unrelated to the egui graph and must not be removed, folded into the fork pin, or
   blanket-deleted with PdfCraft's vendors. Do not add `vendor` copies of egui/winit for VectorCraft.
 - Add `cargo xtask ui-deps` (modelled on `xtask/src/pdf_deps.rs`) that runs `cargo metadata --locked` and checks a
   canonical ledger of every package ID and source: required-used fork IDs, optional IDs with an `absent` or
@@ -1105,8 +1096,6 @@ Add accessibility tests in the existing `role_and_state` style and via kittest:
   pass. The existing unsafe `mac_window::center_buttons` may be replaceable by 0.37's
   `Frame::set_traffic_lights_position`, but do not adopt that without macOS evidence; keep the existing code and
   test it on real hardware later.
-- **Windows 7:** compile/package only under `packaging/windows/windows7.ps1 -Test`; no support claim without a real
-  Windows 7 run. The `vendor/windows-link` patch remains.
 - **Windows ARM64 and FreeBSD:** keep the existing `.github/workflows/windows-arm64.yml` and `freebsd.yml` checks:
   compile/package and the smoke they actually run. Do not treat a cross/QEMU build as GUI, IME, clipboard or GPU
   evidence; record those rows as unavailable unless a real machine is used.
@@ -1342,22 +1331,19 @@ These are not “future work”; they block calling the migration done:
    and isolate it from performance comparisons (§6.2). Recheck if main advanced further.
 9. **macOS evidence.** No macOS host/display is available here. Keyboard layouts, IME (including press-and-hold),
    Metal/GL, native pickers, termination and traffic-light positioning remain an explicit release gate.
-10. **Windows 7.** 0.37 + glow + clipboard + the separate `vendor/windows-link` packaging patch must
-    compile/package and be smoke-tested; no support claim from a modern runner alone. Keep the hayro/krilla PDF
-    patches independent.
-11. **Performance.** Paired control at `4a7cba0…` and candidate with the same engine delta, plus a stock-0.37.0
+10. **Performance.** Paired control at `4a7cba0…` and candidate with the same engine delta, plus a stock-0.37.0
     arm in the first report and every investigated regression, using the shared sample floors and the 5%
     median / 10% p95 / 5% RSS gates. Upstream #8731, #8736 and #8512 are reports, not results; do not claim a
     regression or a fix without ours.
-12. **Dependency identities.** Enumerate every fork-family package at one storytold source; audit external
+11. **Dependency identities.** Enumerate every fork-family package at one storytold source; audit external
     `kittest`/`accesskit*` as compatible registry identities, not egui-git crates. Skrifa/harfrust/glifo duplicates
     are expected; measure binary size and confirm no public type crossing. A new `egui`/winit duplicate is a hard
     failure.
-13. **Role semantics.** Review the `SelectableLabel → Button`, `Checkbox → CheckBox`, `CollapsingHeader →
+12. **Role semantics.** Review the `SelectableLabel → Button`, `Checkbox → CheckBox`, `CollapsingHeader →
     DisclosureTriangle` and `Other → Unknown` mappings against actual screen-reader semantics, not just compile.
-14. **Wayland/X11/GPU backend.** The host has an i915 render device but no inherited display session; a managed
+13. **Wayland/X11/GPU backend.** The host has an i915 render device but no inherited display session; a managed
     Linux job must qualify the actual compositor/backend/DPI. Availability is not a qualified result.
-15. **Web.** A wasm `check` is not a browser workflow; headless Chrome WebGPU/WebGL2, paste/drop, save/download and
+14. **Web.** A wasm `check` is not a browser workflow; headless Chrome WebGPU/WebGL2, paste/drop, save/download and
     screenshots are required.
 
 **Done means:** one coherent 0.37 graph; `cargo xtask ci` and `ui-deps` pass from a clean checkout; lifecycle
@@ -1391,7 +1377,7 @@ Every finding in `plan-reviews/vectorcraft-v2.md` is closed below by source-grou
 
 | # | Finding | Disposition |
 |---|---|---|
-| 1 | No stock-0.37.0 control arm | **Accepted and fixed.** Stock 0.37.0 (`841a328b`) is a measured arm in the first baseline report and every investigated regression, with the same environment and a pinned minimal adapter where fork-only code cannot compile; retained even when app acceptance pairs 0.36 with the candidate. §5.3, §6.2, §7.1 V1, §8.11. |
+| 1 | No stock-0.37.0 control arm | **Accepted and fixed.** Stock 0.37.0 (`841a328b`) is a measured arm in the first baseline report and every investigated regression, with the same environment and a pinned minimal adapter where fork-only code cannot compile; retained even when app acceptance pairs 0.36 with the candidate. §5.3, §6.2, §7.1 V1, §8.10. |
 | 2 | Capture admission and geometry under-specified; 64 MiB too small | **Accepted and fixed.** Adopted the shared 4 requests / 128 MiB per image / 256 MiB aggregate defaults (stricter only if the documented intended surface fits), checked bytes reserved before issue, no eviction; records logical/screen bounds, viewport, DPI/zoom and surface epoch at issuance and rejects/retries any change before save, including change-back, then verifies scale/aspect. §3.5, §4.4, §5.2, §8.5. |
 | 3 | W27 old-epoch invalidation missing | **Accepted and fixed.** Old-epoch `done` is rejected and invalidates that epoch, never edits the new owner; current-epoch mismatch applies incoming once and defers outgoing. §3.9, §4.6, §5.6, §5.7. |
 | 4 | P7c ownership of #8763/#8748 absent | **Accepted and fixed.** P7c owns both fixes and their pointer/keyboard and hidden-parent regressions; D1b includes P7c, V2 depends on it, and an app workaround needs equivalent tests plus a removal condition. §3.11, §7.1, §8.1. |

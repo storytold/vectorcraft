@@ -69,7 +69,7 @@ fn a_clipping_paths_fill_and_stroke_show_in_render_svg_and_pdf() {
     assert_eq!(rgb(&doc, 120), [255, 255, 255]);
     assert_eq!(rgb(&doc, 45), [255, 255, 255]);
     let svg = vectorcraft_svg::export(&doc, &Default::default());
-    assert_eq!(svg.matches("<path").count(), 2, "the clip region and the red art: {svg}");
+    assert_eq!(vectorcraft_testkit::svg_shapes(&svg), 2, "the clip region and the red art: {svg}");
 }
 
 #[test]

@@ -1,5 +1,9 @@
 use super::state::{GState, Space, process, tiling_hash};
-use super::*;
+use super::{
+    Affine, Arc, Color, DictRef, FUNCTION_OPS, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, HashSet, Interp, Key, LIMIT,
+    MAX_APART, MAX_FUNCTION_VISITS, MAX_HIVAL, MAX_INKS, MAX_STITCH_STOPS, NESTED_PATTERNS, Node, NodeId, NodeKind, Obj, Paint, PatternDef, Point,
+    PsError, REGISTRATION, Rc, Rect, Res, SHADING_SAMPLES, Shared, UNKNOWN_FUNCTIONS, UNKNOWN_SHADINGS, Vec2, clamp_between, ps_err,
+};
 
 impl Interp<'_> {
     // ---------- colour ----------

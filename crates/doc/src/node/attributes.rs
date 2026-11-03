@@ -1,6 +1,6 @@
 use super::kind::NodeKind;
 use super::live_shape::LiveShape;
-use super::*;
+use super::{Deserialize, Node, Serialize};
 
 /// Window → Attributes: an object's settings that don't change how it prints.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

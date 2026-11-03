@@ -1050,6 +1050,34 @@ fn drawings_the_export_writes_read_back() {
 }
 
 #[test]
+fn a_lone_segment_reads_back_from_the_line_the_export_writes() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut b = kurbo::BezPath::new();
+    b.move_to((20.0, 30.0));
+    b.line_to((120.0, 70.0));
+    let id = doc.alloc_id();
+    let black = Appearance::basic(Paint::None, Paint::solid(Color::rgb8(0, 0, 0)), 1.0);
+    doc.insert(Some(layer), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&b), black)).unwrap();
+    for version in crate::DxfVersion::ALL.into_iter().filter(|v| v.r2000()) {
+        let opts = crate::DxfOptions { version, unit: Unit::Points, region: doc.artboards[0].rect, ..crate::DxfOptions::default() };
+        let out = crate::export(&doc, &opts).unwrap();
+        assert!(std::str::from_utf8(&out.bytes).unwrap().contains("\nLINE\n"), "{version:?}");
+        let back = open(&out.bytes, &points());
+        let art = leaves(&back.document);
+        assert_eq!(art.len(), 1, "{version:?}");
+        let path = art[0].path_data().unwrap();
+        assert_eq!(path.subpaths.len(), 1, "{version:?}");
+        assert!(!path.subpaths[0].closed, "{version:?}");
+        let shift = Affine::translate((0.0, 100.0 - height(&back.document)));
+        let points = path_points(&art[0]);
+        assert_eq!(points.len(), 17, "{version:?}: one segment");
+        let ends = [shift * points[0], shift * points[16]];
+        assert!(ends[0].distance(Point::new(20.0, 30.0)) < 1e-6 && ends[1].distance(Point::new(120.0, 70.0)) < 1e-6, "{version:?}: {ends:?}");
+    }
+}
+
+#[test]
 fn closed_control_point_splines_stay_closed_through_export_and_import() {
     // (explicitly closed, ends where it starts): coincident endpoints alone do not close a path.
     let cases = [(true, true), (true, false), (false, true), (false, false)];

@@ -122,7 +122,7 @@ const CHIP: egui::Vec2 = egui::vec2(16.0, 10.0);
 fn color_dropdown(ui: &mut egui::Ui, shown: &str) -> Option<usize> {
     let border = crate::theme::Tokens::get(ui.ctx()).input_border;
     let rows = LAYER_COLORS.iter().map(|(n, c)| (*n, Some(*c))).chain([("Custom", None)]);
-    widgets::combo(ui, "layer-color", tl!(shown), 140.0, false, |ui| {
+    widgets::combo(ui, "layer-color", tl!(shown), 140.0, |ui| {
         let mut chosen = None;
         for (i, (name, rgb)) in rows.enumerate() {
             let chip = egui::IdSalt::new(("layer-color-chip", i));

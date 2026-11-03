@@ -587,6 +587,15 @@ pub fn apply(ctx: &egui::Context, b: Brightness) {
 pub fn apply_with(ctx: &egui::Context, b: Brightness, accent: Accent, scheme: Scheme) {
     let t = Tokens::for_scheme(scheme, b, accent);
     ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
+    // egui keeps a style for each system theme and by default follows the system's setting. The
+    // chosen brightness sets egui's theme, so these colors stay in force when the system's setting
+    // differs or changes. A change of theme starts from the current style, which keeps settings
+    // such as the tool tip delay.
+    let theme = if t.dark { egui::Theme::Dark } else { egui::Theme::Light };
+    if ctx.theme() != theme {
+        ctx.set_style_of(theme, ctx.global_style());
+    }
+    ctx.set_theme(theme);
     let mut v = if t.dark { Visuals::dark() } else { Visuals::light() };
     v.panel_fill = t.panel;
     v.window_fill = t.panel;
@@ -668,5 +677,87 @@ mod tests {
             assert_eq!(classic.accent, Color32::from_rgb(0x37, 0x8e, 0xf0));
             assert_eq!(Scheme::parse(Scheme::Classic.id()), Some(Scheme::Classic));
         }
+    }
+
+    /// #3818: the brightness chosen in Preferences stays in force when the system's light or dark
+    /// setting differs from it or changes while the app runs. Tool tips keep the theme's panel fill
+    /// and text color instead of egui's own white box and gray text.
+    #[test]
+    fn the_theme_holds_whatever_the_system_theme() {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 400.0));
+        for b in Brightness::ALL {
+            for scheme in Scheme::ALL {
+                for (first, then) in [(egui::Theme::Dark, egui::Theme::Light), (egui::Theme::Light, egui::Theme::Dark)] {
+                    let t = Tokens::for_scheme(scheme, b, Accent::default());
+                    let ctx = egui::Context::default();
+                    let mut time = 0.0;
+                    let mut tip = None;
+                    for i in 0..5 {
+                        time += 0.5;
+                        let system_theme = Some(if i == 0 { first } else { then });
+                        let events = if i == 1 { vec![egui::Event::PointerMoved(egui::pos2(30.0, 15.0))] } else { vec![] };
+                        let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), events, system_theme, ..Default::default() };
+                        let mut out = ctx.run_ui(input, |ui| {
+                            if i == 0 {
+                                apply_with(ui.ctx(), b, Accent::default(), scheme);
+                                ui.ctx().global_style_mut(|s| s.interaction.tooltip_delay = 0.0);
+                            }
+                            ui.button("Hover me").on_hover_text("Tip text");
+                        });
+                        out.textures_delta.clear();
+                        // The tool tip's text color, and the fill of the box drawn behind it.
+                        let mut shapes: Vec<&egui::Shape> = Vec::new();
+                        let mut open: Vec<&egui::Shape> = out.shapes.iter().rev().map(|c| &c.shape).collect();
+                        while let Some(shape) = open.pop() {
+                            match shape {
+                                egui::Shape::Vec(inner) => open.extend(inner.iter().rev()),
+                                shape => shapes.push(shape),
+                            }
+                        }
+                        tip = shapes.iter().enumerate().find_map(|(n, shape)| match shape {
+                            egui::Shape::Text(s) if s.galley.text() == "Tip text" => {
+                                let fill = shapes[..n].iter().rev().find_map(|behind| match behind {
+                                    egui::Shape::Rect(r) if r.rect.contains(s.pos) && r.fill.a() > 0 => Some(r.fill),
+                                    _ => None,
+                                });
+                                Some((s.fallback_color, fill))
+                            }
+                            _ => None,
+                        });
+                    }
+                    let v = ctx.global_style().visuals.clone();
+                    let what = format!("{scheme:?} {b:?}, system {first:?} then {then:?}");
+                    assert_eq!((v.window_fill, v.override_text_color), (t.panel, Some(t.text)), "{what}");
+                    assert_eq!(tip, Some((t.text, Some(t.panel))), "{what}: the tool tip's text and box");
+                    assert!(contrast(t.text, t.panel) >= 4.5, "{what}: the tool tip's text against its box, {}", contrast(t.text, t.panel));
+                }
+            }
+        }
+    }
+
+    /// The contrast ratio of two opaque colors, from 1 (the same) to 21 (black on white), as WCAG 2
+    /// defines it.
+    fn contrast(a: egui::Color32, b: egui::Color32) -> f32 {
+        let luminance = |c: egui::Color32| {
+            let channel = |v: u8| {
+                let v = f32::from(v) / 255.0;
+                if v <= 0.040_45 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+            };
+            0.2126 * channel(c.r()) + 0.7152 * channel(c.g()) + 0.0722 * channel(c.b())
+        };
+        let (a, b) = (luminance(a), luminance(b));
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+
+    /// Changing brightness keeps the interface settings made after the theme was applied, such as
+    /// General › Show Tool Tips' delay.
+    #[test]
+    fn changing_brightness_keeps_other_interface_settings() {
+        let ctx = egui::Context::default();
+        apply(&ctx, Brightness::Dark);
+        ctx.global_style_mut(|s| s.interaction.tooltip_delay = f32::INFINITY);
+        apply(&ctx, Brightness::Light);
+        assert_eq!(ctx.global_style().interaction.tooltip_delay, f32::INFINITY);
+        assert_eq!(ctx.global_style().visuals.window_fill, Tokens::for_brightness(Brightness::Light).panel);
     }
 }
