@@ -630,6 +630,11 @@ font-technology	Variable	Biến thiên
 	Color Table ({n} colors)	Bảng màu ({n} màu)
 	Color Theme	Bộ màu
 	Color Themes	Bộ màu
+	Color Wheel	Bánh xe màu
+	Hue ring	Vòng sắc độ
+	Saturation and brightness	Độ bão hòa và độ sáng
+	Color field	Vùng chọn màu
+	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Color Type:	Loại màu:
 	Color:	Màu:
 	Colorization	Tô màu
