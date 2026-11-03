@@ -133,10 +133,12 @@ pub(super) enum StyleItem {
         name: Option<String>,
         angle: f64,
     },
-    /// A fill with pattern swatch `name`, its space taken to art space by `matrix`.
+    /// A fill with pattern swatch `name`, its space taken to art space by `matrix`; `controls`, the
+    /// numbers before the matrix, apply first when the pattern was defined in the version 7 form.
     Pattern {
         name: String,
         matrix: Option<[f64; 6]>,
+        controls: Vec<f64>,
     },
     Stroke {
         paint: Paint,
@@ -199,8 +201,8 @@ struct Filter {
     gradient: bool,
     /// The gradient's swatch and angle (`Bg`).
     gradient_of: Option<(Option<String>, f64)>,
-    /// `(name) … [matrix] p`.
-    pattern: Option<(String, Option<[f64; 6]>)>,
+    /// `(name) … [matrix] p`, and the numbers between the name and the matrix.
+    pattern: Option<(String, Option<[f64; 6]>, Vec<f64>)>,
     /// `mode opacity … Xy`.
     xy: Option<(usize, f32)>,
     /// `… isolate knockout … Xy`.
@@ -518,8 +520,10 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
                 }
                 _ => None,
             });
+            let controls: Vec<f64> =
+                vals.iter().skip_while(|v| !matches!(v, V::Str(_))).skip(1).take_while(|v| !matches!(v, V::Arr(_))).filter_map(V::num).collect();
             if let Some(name) = name {
-                f.pattern = Some((name, matrix));
+                f.pattern = Some((name, matrix, controls));
             }
         }
         _ => {}
@@ -998,7 +1002,7 @@ fn paint_item(f: &Filter) -> Result<Option<StyleItem>, ()> {
     match f.name.as_str() {
         FILL if !f.paints.1 => Ok(None),
         FILL => match (&f.pattern, &f.gradient_of, &f.fill) {
-            (Some((name, matrix)), ..) => Ok(Some(StyleItem::Pattern { name: name.clone(), matrix: *matrix })),
+            (Some((name, matrix, controls)), ..) => Ok(Some(StyleItem::Pattern { name: name.clone(), matrix: *matrix, controls: controls.clone() })),
             (None, Some((name, angle)), _) => Ok(Some(StyleItem::Gradient { name: name.clone(), angle: *angle })),
             (None, None, _) if f.gradient => Ok(Some(StyleItem::Gradient { name: None, angle: 0.0 })),
             (None, None, Some(p)) => Ok(Some(StyleItem::Fill(p.clone()))),
