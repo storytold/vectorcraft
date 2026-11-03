@@ -373,6 +373,30 @@ fn native_included_links_keep_missing_placed_documents_editable() {
     }
 }
 
+/// Output prepared by a caller that may not read the placed file shows its preview, not the full
+/// art an earlier caller that could read it left cached.
+#[test]
+fn a_confined_export_does_not_reuse_full_art_read_for_another_caller() {
+    let dir = Folder::new("placed-confined");
+    let other = Folder::new("placed-confined-other");
+    let src = dir.file("src.vectorcraft");
+    source(&src, 100.0, 50.0, BLUE, 0);
+    let mut s = session();
+    place(&mut s, &src);
+    // As a document saved with previews opens: each placed file's blob holds only its preview.
+    for b in std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).images.values_mut() {
+        if let Some(p) = b.proxy.clone() {
+            b.bytes = p;
+        }
+    }
+    let d = s.doc().unwrap().doc.clone();
+    let preview = |d: &Document| d.images.keys().any(|k| k.starts_with(vectorcraft_doc::placed_document::RESOURCE_PREFIX) && k.ends_with("/preview"));
+    assert!(!preview(&d.with_placed_art()), "the file is read in full");
+    let roots = crate::file_access::AutomationRoots::new(&[&other.0], &[]).unwrap().unwrap();
+    let confined = crate::file_access::confine(Some(&roots), || d.with_placed_art().into_owned());
+    assert!(preview(&confined), "only the preview shows");
+}
+
 #[test]
 fn a_document_saved_with_previews_outputs_its_files_art() {
     let dir = Folder::new("placed-preview-output");
@@ -715,6 +739,53 @@ fn a_placed_documents_resources_stay_its_own() {
     let old = vectorcraft_format::load(&decode(&s.execute("document.serialize", &json!({"format": "vectorcraft", "version": 2})).unwrap())).unwrap();
     assert!(!old.has_placed());
     assert!(near(centre_colour(&old), BLUE));
+}
+
+#[test]
+fn saved_for_older_apps_with_a_precision_the_placed_art_is_rounded_too() {
+    let dir = Folder::new("placed-precision");
+    let src = dir.file("triangle.vectorcraft");
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let points = [(3.4876474632797176, 1.0), (90.0, 2.123456789), (40.0, 80.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+    let path = vectorcraft_geom::PathData::single(vectorcraft_geom::path::SubPath::polyline(&points, true));
+    d.insert(Some(layer), 0, Node::path(id, path, look(BLUE))).unwrap();
+    write(&src, &vectorcraft_format::save_file(&d));
+    let mut s = session();
+    place(&mut s, &src);
+    // The coordinates of every anchor and handle in a file's layers.
+    fn coords(v: &Value, out: &mut Vec<f64>) {
+        match v {
+            Value::Object(o) => {
+                for a in o.get("anchors").and_then(Value::as_array).into_iter().flatten() {
+                    out.extend(["p", "in", "out"].iter().filter_map(|k| a[*k].as_array()).flatten().filter_map(Value::as_f64));
+                }
+                o.values().for_each(|c| coords(c, out));
+            }
+            Value::Array(a) => a.iter().for_each(|c| coords(c, out)),
+            _ => {}
+        }
+    }
+    let mut saved = |p: Value| {
+        let file: Value = serde_json::from_slice(&decode(&s.execute("document.serialize", &p).unwrap())).unwrap();
+        assert!(!file.to_string().contains("placeddocument"), "{file}");
+        let mut out = vec![];
+        coords(&file["document"]["layers"], &mut out);
+        out
+    };
+    let at4 = |x: f64| (x * 1e4).round() / 1e4 == x;
+    let exact = saved(json!({"format": "vectorcraft", "version": 3}));
+    assert!(exact.len() >= 6 && !exact.iter().all(|x| at4(*x)), "{exact:?}");
+    let rounded = saved(json!({"format": "vectorcraft", "version": 3, "precision": 4}));
+    assert_eq!(rounded.len(), exact.len());
+    assert!(rounded.iter().all(|x| at4(*x)), "{rounded:?}");
+    // The preview shows the rounded art the older app opens, not the placed file's exact art.
+    let file = decode(&s.execute("file.saveCopy", &json!({"version": 3, "precision": 0, "preview": true})).unwrap());
+    let preview = vectorcraft_format::preview(&file);
+    assert!(preview.is_some());
+    assert_eq!(preview, crate::cmd::fileio::preview_png(&vectorcraft_format::load(&file).unwrap()).unwrap());
+    assert_ne!(preview, crate::cmd::fileio::preview_png(&s.doc().unwrap().doc).unwrap());
 }
 
 #[test]

@@ -23,6 +23,64 @@ fn increasing_samples_match_single_samples() {
     assert_eq!(g.sample_increasing_with(ts, Color::lerp_keep_model), one_by_one);
 }
 
+/// The prepared sampler gives what sampling each position alone does, out-of-order stops included.
+#[test]
+fn the_sampler_matches_single_samples() {
+    let stop = |offset: f32, hex: &str| GradientStop::new(offset, Color::from_hex(hex).unwrap());
+    let g = Gradient::new(
+        GradientKind::Linear,
+        vec![stop(0.1, "#ff0000"), stop(0.4, "#00ff00"), stop(0.4, "#0000ff"), stop(0.2, "#ffff00"), stop(0.9, "#000000")],
+    );
+    let sample = g.sampler();
+    for k in (0..=40).rev() {
+        let t = k as f32 / 40.0;
+        assert_eq!(sample(t), g.sample(t), "{t}");
+    }
+}
+
+/// Looking stops up by their reach finds what scanning them does, for any order of offsets,
+/// repeated, out-of-order and NaN ones included, and for positions outside and between them.
+#[test]
+fn stop_reach_matches_scanning_the_stops() {
+    let colors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#00ffff", "#000000"];
+    let offsets: [&[f32]; 5] = [
+        &[0.1, 0.4, 0.4, 0.2, 0.9, 0.5],
+        &[0.5, 0.5, 0.5, 0.5],
+        &[0.9, 0.1, 0.8, 0.2, 0.7, 0.3],
+        &[0.2, f32::NAN, 0.6, 0.1, f32::NAN, 1.0],
+        &[f32::NAN, 0.3, 0.3, 0.8],
+    ];
+    for offsets in offsets {
+        let stops: Vec<GradientStop> = offsets
+            .iter()
+            .zip(colors.iter().cycle())
+            .map(|(&o, hex)| GradientStop { midpoint: 0.3, ..GradientStop::new(o, Color::from_hex(hex).unwrap()) })
+            .collect();
+        let g = Gradient::new(GradientKind::Linear, stops);
+        let reach = StopReach::new(&g.stops);
+        for t in (-4..=44).map(|k| k as f32 / 40.0).chain([f32::NAN, f32::INFINITY, f32::NEG_INFINITY]) {
+            // Compared as printed: a NaN offset mixes NaN colours, which are equal only so.
+            let (got, want) = (reach.sample_with(&g.stops, t, &Color::lerp_keep_model), g.sample_with(t, Color::lerp_keep_model));
+            assert_eq!(format!("{got:?}"), format!("{want:?}"), "{offsets:?} at {t}");
+        }
+    }
+}
+
+/// Repeated offsets turn off the direct midpoint mix, and the midpoints still come out as
+/// `sample` gives them, with work that stays near linear in the stops (thousands of stops at one
+/// offset used to scan them all for each midpoint).
+#[test]
+fn expanded_with_repeated_offsets_samples_midpoints() {
+    let stop = |offset: f32, hex: &str| GradientStop { midpoint: 0.25, ..GradientStop::new(offset, Color::from_hex(hex).unwrap()) };
+    let g = Gradient::new(GradientKind::Linear, vec![stop(0.0, "#ff0000"), stop(0.5, "#00ff00"), stop(0.5, "#0000ff"), stop(1.0, "#000000")]);
+    for (t, c, o, mid) in g.expanded().filter(|e| e.3.is_some()) {
+        assert_eq!(mid, Some(0.25));
+        assert_eq!((c, o), g.sample(t), "midpoint at {t}");
+    }
+    let many = Gradient::new(GradientKind::Linear, (0..200_000).map(|i| stop(if i == 0 { 0.0 } else { 0.5 }, "#808080")).collect());
+    assert_eq!(many.expanded().count(), 2 * 200_000 - 1);
+}
+
 #[test]
 fn midpoint_shifts() {
     let mut g = Gradient::default();

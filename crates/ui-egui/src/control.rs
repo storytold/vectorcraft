@@ -200,6 +200,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
             "rect": [c.left(), c.top(), c.width(), c.height()],
             "active": app.session.active_index() == Some(*i),
         })).collect::<Vec<_>>(),
+        // Window › Arrange › Float in Window: the documents in floating windows, by index. While
+        // the current one floats, `canvasRect` is in its window's coordinates.
+        "floating": (0..app.session.documents().len()).filter(|i| crate::doc_windows::is_floating(app, *i)).collect::<Vec<_>>(),
         "window": [r.width(), r.height()],
         "documents": app.session.documents().iter().map(|d| json!({"title": d.title(), "dirty": d.is_dirty()})).collect::<Vec<_>>(),
         "activeDocument": app.session.active_index(),
@@ -267,7 +270,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),
         "ui.contextMenu.list" => ok(serde_json::to_value(crate::menus::context_entries(app)).unwrap_or_default()),
         "ui.tool.select" => wrap(app.run("tool.select", json!({"tool": s("tool").unwrap_or("")}))),
-        "ui.tool.list" => ok(serde_json::to_value(vectorcraft_tools::TOOL_GROUPS).unwrap_or_default()),
+        "ui.tool.list" => {
+            let groups: Vec<_> = vectorcraft_tools::TOOL_GROUPS.iter().chain(vectorcraft_tools::addons::GROUPS).copied().collect();
+            ok(serde_json::to_value(groups).unwrap_or_default())
+        }
         "ui.pointer" => pointer_events(app, ctx, req),
         "ui.key" => {
             let Some(k) = s("key").and_then(key_from) else { return err("unknown or missing `key`") };

@@ -253,6 +253,10 @@ pub struct Prefs {
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/VectorCraft Templates`).
     pub templates_folder: String,
+    /// File Handling → Use System Defaults for Edit Original (#5236): Links panel › Edit Original
+    /// opens a linked file in the system's default app for it; off, in the app that made it
+    /// (PhotoCraft for a raster image, where it is installed; the system's app otherwise).
+    pub edit_original_system_defaults: bool,
     /// Open older native files as "<name> [Converted]" so Save asks for a new name.
     pub append_converted: bool,
     /// File Handling → Use Compression: native saves are gzip-compressed (`document.save
@@ -464,6 +468,7 @@ impl Default for Prefs {
             pdf_presets: vec![],
             screen_export_presets: vec![],
             templates_folder: String::new(),
+            edit_original_system_defaults: true,
             append_converted: true,
             use_compression: false,
             web_export_presets: vec![],

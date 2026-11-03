@@ -394,6 +394,7 @@
 	Variable Font	Czcionka zmienna
 	Text Fill Color	Kolor wypełnienia tekstu
 	Text Stroke Color	Kolor obrysu tekstu
+	Text Fill & Stroke Color	Kolor wypełnienia i obrysu tekstu
 	All on Same Layers	Wszystko na tych samych warstwach
 	Direction Handles	Uchwyty kierunkowe
 	Brush Strokes	Pociągnięcia pędzla
@@ -593,6 +594,7 @@
 	Cascade	Kaskadowo
 	Tile	Sąsiadująco
 	Float in Window	Pływające w oknie
+	Float All in Windows	Wszystkie pływające w oknach
 	Consolidate All Windows	Scal wszystkie okna
 	Workspace	Obszar roboczy
 	Reset Essentials	Resetuj Essentials
@@ -1188,6 +1190,8 @@ lighting	Light	Światło
 	Hand Tool	Narzędzie Rączka
 	Join Tool	Narzędzie Łączenie
 	Lasso Tool	Narzędzie Lasso
+	Enclosing Lasso Tool	Narzędzie lassa obejmującego
+	Enclosing Lasso	Lasso obejmujące
 	Line Cut Tool	Narzędzie Cięcie linią
 	Line Graph Tool	Narzędzie Wykres liniowy
 	Line Segment Tool	Narzędzie Odcinek
@@ -1772,6 +1776,7 @@ digits	Malayalam	Malajalam
 	Left-to-Right Paragraph Direction	Kierunek akapitu od lewej do prawej
 	Line-end Punctuation Half Width	Interpunkcja na końcu wiersza o połowie szerokości
 	Insert Kashidas	Wstaw kaszidy
+	Kashidas	Kaszidy
 	Long	Długi
 	Stylistic	Stylistyczny
 	Mojikumi Set	Zestaw mojikumi
@@ -2566,6 +2571,10 @@ digits	Malayalam	Malajalam
 	Colors:	Kolory:
 	Current Colors ({total})	Bieżące kolory ({total})
 	Harmony Rules:	Reguły harmonii:
+	Segmented color wheel	Segmentowe koło kolorów
+	Show smooth color wheel	Pokaż płynne koło kolorów
+	Show segmented color wheel	Pokaż segmentowe koło kolorów
+	Show color bars	Pokaż paski kolorów
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
 	Link harmony colors	Połącz kolory harmonii
@@ -3458,6 +3467,7 @@ theme	Appearance	Wygląd
 	List Preferences	Wyświetl preferencje
 	Manually	Ręcznie
 	Mark Older Files as [Converted] When Opened	Oznaczaj starsze pliki jako [Przekonwertowane] przy otwieraniu
+	Use System Defaults for Edit Original	Używaj ustawień domyślnych systemu dla polecenia Edytuj oryginał
 	Match User Interface Brightness	Dopasuj do jasności interfejsu
 	Light Gray	Jasnoszary
 	Medium Gray	Średnio szary
@@ -3795,6 +3805,8 @@ effect	Regular	Normalny
 	In the selected objects	W zaznaczonych obiektach
 	Find in Folder…	Znajdź w folderze…
 	Replace With Font	Zastąp czcionką
+	Replace With Font From	Zastąp czcionką z
+	System	System
 	  — substituted by {style}	  — zastąpiona przez {style}
 	  — {n} characters from another font	  — znaki z innej czcionki: {n}
 	All Scripts	Wszystkie skrypty
@@ -5412,6 +5424,11 @@ mark-style	Japanese	Japońskie
 	Export Type:	Typ eksportu:
 	Movie Clip	Klip filmowy
 @msg	name is empty	nazwa jest pusta
+@msg	an action is already recording	operacja jest już nagrywana
+@msg	no such function key	brak takiego klawisza funkcyjnego
+@msg	no such color	brak takiego koloru
+@msg	{_1} cannot be used on Windows	Skrótu {_1} nie można używać w systemie Windows
+@msg	more than one action is named “{_1}”	więcej niż jedna operacja nazywa się „{_1}”
 @msg	no symbol named `{n}`	brak symbolu o nazwie `{n}`
 	Smudge Stick…	Rozmazywacz…
 	Smudge Stick	Rozmazywacz
@@ -5582,9 +5599,17 @@ axis	Y Axis	Oś Y
 	Action Options…	Opcje operacji…
 	Action Options	Opcje operacji
 	Rename Action	Zmień nazwę operacji
+	New Action…	Nowa operacja…
+	New Action	Nowa operacja
+	Create New Action	Utwórz nową operację
+	Play Action	Odtwórz operację
+	Action Set:	Zestaw operacji:
+	Function Key:	Klawisz funkcyjny:
+	Record	Nagraj
 	Create New Set	Utwórz nowy zestaw
 	Stop Global Edit	Zakończ edycję globalną
 	Global Edit Options	Opcje edycji globalnej
+	Leave Out of Global Edit	Wyklucz z edycji globalnej
 	Match	Dopasowanie
 	On Artboards	Na obszarach kompozycji
 	All Artboards	Wszystkie obszary kompozycji
@@ -5593,6 +5618,8 @@ axis	Y Axis	Oś Y
 @msg	select one object	zaznacz jeden obiekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edycja globalna działa na ścieżkach, ścieżkach złożonych, wystąpieniach symboli i ich grupach
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nie znaleziono podobnych obiektów (obrócone i odbite kopie nie są dopasowywane); zmień opcje edycji globalnej i spróbuj ponownie
+@msg	Global Edit is off	Edycja globalna jest wyłączona
+@msg	only an object of the Global Edit other than the one it started from can be left out	z edycji globalnej można wykluczyć tylko obiekt inny niż ten, od którego się zaczęła
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all lub zakres, np. 1, 3-5, a nie {v}
 	Add to Symbols	Dodaj do symboli
 	Basic Shapes	Kształty podstawowe
@@ -5849,6 +5876,11 @@ anchor	Points:	Punkty:
 	Horizontal Scale	Skala pozioma
 	Vertical Scale	Skala pionowa
 @msg	{label} must be a number from {min} to {max}	{label} musi być liczbą od {min} do {max}
+	Character Color	Kolor znaków
+	OpenType Features	Funkcje OpenType
+	Stylistic Sets	Zestawy stylistyczne
+@msg	features lists at most {max} tags	features może zawierać najwyżej {max} znaczników
+@msg	unknown OpenType feature `{t}`	nieznana funkcja OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musi być liczbą większą od 0 i nie większą niż {max}
 @msg	no character style `{name}`	Nie znaleziono stylu znakowego `{name}`
 
@@ -6099,3 +6131,14 @@ breakText	Glyphs	Glify
 	Create Swatch Legend	Utwórz legendę próbek
 	Create Swatch Legend…	Utwórz legendę próbek…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Narzędzia tekstu
+	Text Tweaker…	Strojenie tekstu…
+	Text Tweaker	Strojenie tekstu
+	Attribute:	Atrybut:
+	From:	Od:
+	To:	Do:
+	Bow	Łuk
+	Spike	Szpic
+	Skip Spaces	Pomiń spacje
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika jest zbyt duża, aby skopiować ją jako obraz: inne aplikacje nie otrzymają jej w formacie PNG

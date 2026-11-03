@@ -582,16 +582,34 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.workspace.list", "List Workspaces", "", "{}"),
     ("window.newWindow", "New Window", "", "{}"),
     (
+        "window.arrange.cascade",
+        "Cascade",
+        "",
+        "{} put every open document in a floating window of its own and stack the windows from the upper left of the document area to its lower right, 30 pt apart, in tab order, each fitted to its window, the current document's in front; on the desktop each is an OS window, on the web and Wayland a window inside the app's window; returns {floating} (document indices)",
+    ),
+    (
         "window.arrange.tile",
         "Tile",
         "",
-        "{} show every open document at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of documents, rounded up), each fitted to its pane; the current document's pane takes the tools, a click in another pane makes its document the current one; the tabs stay; returns {tiled: true, panes}",
+        "{} show every open document at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of documents, rounded up), each fitted to its pane; the current document's pane takes the tools, a click in another pane makes its document the current one; the tabs stay; documents in floating windows come back under the tabs first; with fewer than two documents open the view stays as it is; returns {tiled, panes}",
+    ),
+    (
+        "window.arrange.floatInWindow",
+        "Float in Window",
+        "",
+        "{index?, at?: [x, y]} move the current document, or document `index` (which becomes the current one), out of the tab strip into a floating window of its own, fitted to it, with the window's top-left corner at `at` (main window points) or else at the next place of a cascade; dragging a document tab more than 24 pt above or below the tab strip does this at the pointer; the window holding the current document takes the tools, a click in another document's window makes its document the current one; a document already floating stays where it is; returns {floating} (document indices)",
+    ),
+    (
+        "window.arrange.floatAllInWindows",
+        "Float All in Windows",
+        "",
+        "{} move every document under the tab strip into a floating window of its own, at the next places of a cascade; returns {floating} (document indices)",
     ),
     (
         "window.arrange.consolidateAllWindows",
         "Consolidate All Windows",
         "",
-        "{} show one document at a time again, under its tab, after Tile; returns {tiled: false}",
+        "{index?} show one document at a time again, under its tab, after Tile, Float in Window, Float All in Windows or Cascade; returns {tiled: false, floating: []}; with `index`, only document `index` goes back under its tab and becomes the current one, the other windows and Tile staying as they are, as when a document window is dragged by its title bar (an OS window by the tab at its top) onto the tab strip; returns {tiled, floating} (document indices)",
     ),
     (
         "window.nextDocument",
@@ -706,7 +724,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.charStyleOptions.resetPanel",
         "Reset Panel",
         "",
-        "{} clear the settings of the section shown, Basic Character Formats or Advanced Character Formats, in the open Character Style Options or New Character Style dialog; available only on those sections",
+        "{} clear the settings of the section shown, Basic Character Formats, Advanced Character Formats, Character Color or OpenType Features, in the open Character Style Options or New Character Style dialog; available only on those sections",
     ),
     (
         "ui.newCharStyle",
@@ -1162,7 +1180,31 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::RENAME_ACTION,
         "Rename Action",
         "",
-        "{set: index, action: index, name} rename the Actions panel's action at action in set (0 is the top set) to name, with spaces trimmed from both ends; its steps stay. The panel menu's Action Options… (dialog `actionSetOptions` with set, action and name) runs this for the selected action. An index past the last set or action, or an empty name, is an error and renames nothing → {name}",
+        "{set: index, action: index, name} rename the Actions panel's action at action in set (0 is the top set) to name, with spaces trimmed from both ends; its steps, function key and color stay. An index past the last set or action, or an empty name, is an error and renames nothing → {name}",
+    ),
+    (
+        crate::panels::actions::NEW_ACTION,
+        "New Action",
+        "",
+        "{set: index, name, key?: 0-15, cmd?, shift?, color?: red|yellow|green|blue|violet} add an action named name (spaces trimmed from both ends) after the last action of the Actions panel's set at set (0 is the top set) and start recording into it; Stop Playing/Recording (ui.action.stop) ends the recording. key 1 to 15 is the function key F1 to F15 that plays the action (0 or null: none), with cmd (Ctrl, Command on macOS) and shift; color is its Button Mode color (null or \"\": none), which the panel does not show. Action function keys take priority over command shortcuts and preserve the command's binding. On Windows F1, Ctrl+F4 and Ctrl+F6 cannot be used. The set becomes current and the new action is selected. The panel's Create New Action button and menu's New Action… (dialog `actionNew` with set, name, key, cmd, shift and color) run this on Record. While an action is recording, and for an index past the last set, an empty name, or a key or color that is not one of these, it is an error and nothing is added → {set, action}",
+    ),
+    (
+        crate::panels::actions::ACTION_OPTIONS,
+        "Action Options",
+        "",
+        "{set: index, action: index, name?, key?: 0-15, cmd?, shift?, color?: red|yellow|green|blue|violet} change the Actions panel's action at action in set (0 is the top set); its steps stay. name renames it (spaces trimmed from both ends), key 1 to 15 with cmd (Ctrl, Command on macOS) and shift sets the function key F1 to F15 that plays it (0 or null: none), and color sets its Button Mode color (null or \"\": none); a param left out keeps what the action has, and cmd or shift alone changes that modifier of its key. Action function keys take priority over command shortcuts and preserve the command's binding. The panel menu's Action Options… (dialog `actionSetOptions` with set, action, name, key, cmd, shift and color) runs this for the selected action. An index past the last set or action, an empty name, or a key or color that is not one of these is an error and changes nothing → {name, key, color}",
+    ),
+    (
+        crate::panels::actions::PLAY_ACTION,
+        "Play Action",
+        "",
+        "{action: name, set?: name} play the Actions panel's action named action as one undoable batch; set names the set to look in (default: every set). A name no action has, or one that more than one action in the sets looked in has, is an error and nothing plays → what command.batch returns",
+    ),
+    (
+        crate::panels::actions::STOP_RECORDING,
+        "Stop Playing/Recording",
+        "",
+        "{} end the Actions panel's recording and keep its steps, in the action ui.action.new made for it, else in a new action after the last action of its set, as the panel's Stop Playing/Recording button does. With nothing recording it changes nothing → {stopped}",
     ),
     (
         "ui.batchDialog",

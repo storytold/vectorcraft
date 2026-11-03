@@ -283,11 +283,18 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
         }
         "ui.perspectivePlane" => app.session.active().is_some(),
-        // Only one window per document so far: greyed out, as Cascade and Float in Window are (#3724).
+        // Only one window per document so far: grayed out (#3724).
         "window.newWindow" => false,
-        // Tile with two documents or more; Consolidate All Windows while they are tiled.
-        "window.arrange.tile" => app.session.documents().len() > 1,
-        "window.arrange.consolidateAllWindows" => app.ui.tiled && !app.session.documents().is_empty(),
+        // Tile and Cascade with two documents or more; Float in Window for a current document under
+        // the tabs; Float All in Windows while a document is under the tabs; Consolidate All
+        // Windows while documents are tiled or floating.
+        "window.arrange.tile" | "window.arrange.cascade" => app.session.documents().len() > 1,
+        "window.arrange.floatInWindow" => app.session.active_index().is_some_and(|i| !crate::doc_windows::is_floating(app, i)),
+        "window.arrange.floatAllInWindows" => !crate::doc_windows::docked(app).is_empty(),
+        "window.arrange.consolidateAllWindows" => {
+            let n = app.session.documents().len();
+            n > 0 && (app.ui.tiled || crate::doc_windows::docked(app).len() < n)
+        }
         "window.nextDocument" | "window.previousDocument" => !app.session.documents().is_empty(),
         _ => true,
     }

@@ -20,6 +20,7 @@ use std::rc::Rc;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use serde_json::Value;
+use vectorcraft_engine::file_access::ScopeHandle;
 
 use crate::state::Dialog;
 use crate::{FilePick, VectorcraftApp};
@@ -91,6 +92,9 @@ struct Waiting {
     entry: Entry,
     /// The active document when it was asked for ([`vectorcraft_engine::DocState::uid`]).
     doc: Option<u64>,
+    /// The automation roots in force when it was asked for: the entry runs again under them, not
+    /// with the desktop's access of the frame the answer comes in.
+    scope: ScopeHandle,
 }
 
 /// The app's file dialogs ([`VectorcraftApp`]'s `picks`).
@@ -286,7 +290,7 @@ fn ask(app: &mut VectorcraftApp, request: PickRequest) -> Option<PickAnswer> {
         (Some(entry), Some(start)) => {
             if let Some(answer) = start(request.clone()) {
                 let doc = entry.document(app);
-                app.picks.waiting = Some(Waiting { request, answer, entry, doc });
+                app.picks.waiting = Some(Waiting { request, answer, entry, doc, scope: ScopeHandle::capture() });
                 return None;
             }
         }
@@ -333,20 +337,22 @@ pub(crate) fn poll(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // The dialog's thread is gone: as cancelled.
         Err(TryRecvError::Disconnected) => vec![],
     };
-    let Some(Waiting { request, entry, doc, .. }) = app.picks.waiting.take() else { return };
+    let Some(Waiting { request, entry, doc, scope, .. }) = app.picks.waiting.take() else { return };
     app.picks.refused = false;
     // Once more: what waited for the dialog (files from the Finder, the menu bar) goes on.
     ctx.request_repaint();
     if answer.is_empty() {
         return;
     }
-    if !on_document(app, doc) {
-        return;
-    }
-    app.picks.answer = Some((request, answer));
-    rerun(app, entry);
-    // An entry that took another way this time leaves the answer unused.
-    app.picks.answer = None;
+    scope.run(|| {
+        if !on_document(app, doc) {
+            return;
+        }
+        app.picks.answer = Some((request, answer));
+        rerun(app, entry);
+        // An entry that took another way this time leaves the answer unused.
+        app.picks.answer = None;
+    });
 }
 
 /// Make the document an entry asked for (`doc`, by its uid) active again before it runs again:

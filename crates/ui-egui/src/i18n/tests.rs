@@ -1792,8 +1792,8 @@ fn dataset_import_repeated_column_error_is_translated() {
     use vectorcraft_engine::{EngineError, Session};
     let mut s = Session::new();
     s.execute("file.new", &json!({})).unwrap();
-    let e = s.execute("dataset.import", &json!({"csv": "name,City,City\nR,Paris,Rome"})).unwrap_err();
-    let want = "columns 2 and 3 both name the variable `City`";
+    let e = s.execute("dataset.import", &json!({"csv": "City,City\nParis,Rome"})).unwrap_err();
+    let want = "columns 1 and 2 both name the variable `City`";
     assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
     let e = e.to_string();
     for code in COMPLETE_MESSAGES {
@@ -1842,8 +1842,8 @@ fn dataset_export_limit_errors_are_translated() {
     use vectorcraft_engine::{EngineError, Session};
     let mut s = Session::new();
     s.execute("file.new", &json!({})).unwrap();
-    let rows: String = (1..=1000).map(|i| format!("Set {i},x\n")).collect();
-    s.execute("dataset.import", &json!({"csv": format!("name,V1\n{rows}")})).unwrap();
+    let rows = "x\n".repeat(1000);
+    s.execute("dataset.import", &json!({"csv": format!("V1\n{rows}")})).unwrap();
     s.execute("dataset.new", &json!({"name": "Set 1001"})).unwrap();
     let mut errors = vec![];
     let e = s.execute("dataset.export", &json!({})).unwrap_err();
@@ -1906,8 +1906,8 @@ fn dataset_import_cell_errors_are_translated() {
     s.execute("variable.define", &json!({"name": "Sales", "kind": "graph"})).unwrap();
     let mut errors = vec![];
     for (csv, want) in [
-        ("name,Show\nX,maybe".to_string(), "line 2: value for `Show` must be true or false"),
-        (format!("name,Sales\nX,\"{}\"", "1,".repeat(140_000)), "line 2: value for `Sales` is longer than 262144 bytes"),
+        ("Show\nmaybe".to_string(), "line 2: value for `Show` must be true or false"),
+        (format!("Sales\n\"{}\"", "1,".repeat(140_000)), "line 2: value for `Sales` is longer than 262144 bytes"),
     ] {
         let e = s.execute("dataset.import", &json!({"csv": csv})).unwrap_err();
         assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");

@@ -64,6 +64,7 @@ digits	Malayalam	말라얄람어
 	Join Our Discord	Discord 참여하기
 	Line-end Punctuation Half Width	줄 끝 문장 부호 반각
 	Insert Kashidas	카시다 삽입
+	Kashidas	카시다
 	Long	길게
 	Stylistic	스타일
 	Mojikumi Set	모지쿠미 세트
@@ -456,6 +457,7 @@ digits	Malayalam	말라얄람어
 	Variable Font	가변 글꼴
 	Text Fill Color	문자 칠 색상
 	Text Stroke Color	문자 선 색상
+	Text Fill & Stroke Color	문자 칠 및 선 색상
 	All on Same Layers	같은 레이어의 모두
 	Direction Handles	방향 핸들
 	Brush Strokes	브러시 선
@@ -640,6 +642,7 @@ digits	Malayalam	말라얄람어
 	Cascade	계단식 배열
 	Tile	바둑판식 배열
 	Float in Window	창에 플로팅
+	Float All in Windows	모두 창에 플로팅
 	Consolidate All Windows	모든 창 통합
 	Workspace	작업 영역
 	Reset Essentials	Essentials 재설정
@@ -1715,6 +1718,10 @@ digits	Malayalam	말라얄람어
 	Hard Light	하드 라이트
 	Hard Mix	하드 믹스
 	Harmony Rules:	하모니 규칙:
+	Segmented color wheel	분할 색상환
+	Show smooth color wheel	부드러운 색상환 표시
+	Show segmented color wheel	분할 색상환 표시
+	Show color bars	색상 막대 표시
 	Height	높이
 	Height:	높이:
 	Help › Search Commands…	도움말 › 명령 검색…
@@ -1975,6 +1982,8 @@ digits	Malayalam	말라얄람어
 	Large	크게
 	Large Tabs	큰 탭
 	Lasso Tool	올가미 도구
+	Enclosing Lasso Tool	둘러싸기 올가미 도구
+	Enclosing Lasso	둘러싸기 올가미
 	Last Effect: {name}	마지막 효과: {name}
 	Last Page	마지막 페이지
 	Layer Options…	레이어 옵션…
@@ -2078,6 +2087,7 @@ digits	Malayalam	말라얄람어
 	Manage Workspaces	작업 영역 관리
 	Manually	수동
 	Mark Older Files as [Converted] When Opened	열 때 이전 파일을 [Converted]로 표시
+	Use System Defaults for Edit Original	원본 편집에 시스템 기본값 사용
 	Mark as trapped	트래핑됨으로 표시
 	Marks	표시
 	Match User Interface Brightness	사용자 인터페이스 밝기에 맞춤
@@ -2711,6 +2721,8 @@ mark-style	Japanese	일본식
 	Replace Font	글꼴 바꾸기
 	Replace Symbol	심볼 바꾸기
 	Replace With Font	바꿀 글꼴
+	Replace With Font From	바꿀 글꼴 목록
+	System	시스템
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	다른 파일로 바꾸거나 무시하세요. 무시하면 해당 이미지는 문서에 저장된 미리 보기로 계속 표시됩니다.
 	Replaces the saved preset of that name.	같은 이름으로 저장된 사전 설정을 대체합니다.
 	Replace…	바꾸기…
@@ -5133,6 +5145,11 @@ lighting	Light	광원
 	Export Type:	내보내기 유형:
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
+@msg	an action is already recording	이미 액션을 기록하고 있습니다
+@msg	no such function key	해당 기능 키가 없습니다
+@msg	no such color	해당 색상이 없습니다
+@msg	{_1} cannot be used on Windows	{_1}은(는) Windows에서 사용할 수 없습니다
+@msg	more than one action is named “{_1}”	“{_1}”(이)라는 이름의 액션이 둘 이상 있습니다
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
 	Smudge Stick…	문지르기 막대…
 	Smudge Stick	문지르기 막대
@@ -5306,9 +5323,17 @@ axis	Y Axis	Y축
 	Action Options…	액션 옵션…
 	Action Options	액션 옵션
 	Rename Action	액션 이름 바꾸기
+	New Action…	새 액션…
+	New Action	새 액션
+	Create New Action	새 액션 만들기
+	Play Action	액션 재생
+	Action Set:	액션 세트:
+	Function Key:	기능 키:
+	Record	기록
 	Create New Set	새 세트 만들기
 	Stop Global Edit	전체 편집 중지
 	Global Edit Options	전체 편집 옵션
+	Leave Out of Global Edit	전체 편집에서 제외
 	Match	일치
 	On Artboards	아트보드에서
 	All Artboards	모든 아트보드
@@ -5317,6 +5342,8 @@ axis	Y Axis	Y축
 @msg	select one object	개체 하나를 선택하십시오
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	전체 편집은 패스, 컴파운드 패스, 심볼 인스턴스 및 이들의 그룹에서 작동합니다
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	유사한 개체를 찾을 수 없습니다(회전하거나 반사한 복사본은 일치하지 않습니다). 전체 편집 옵션을 변경한 후 다시 시도하십시오
+@msg	Global Edit is off	전체 편집이 꺼져 있습니다
+@msg	only an object of the Global Edit other than the one it started from can be left out	전체 편집을 시작한 개체가 아닌 전체 편집의 개체만 제외할 수 있습니다
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all 또는 1, 3-5 같은 범위여야 합니다({v}이(가) 아님)
 	Add to Symbols	심볼에 추가
 	Basic Shapes	기본 모양
@@ -5575,6 +5602,11 @@ anchor	Points:	포인트:
 	Horizontal Scale	가로 비율
 	Vertical Scale	세로 비율
 @msg	{label} must be a number from {min} to {max}	{label}은(는) {min}에서 {max} 사이의 숫자여야 합니다
+	Character Color	문자 색상
+	OpenType Features	OpenType 기능
+	Stylistic Sets	스타일 세트
+@msg	features lists at most {max} tags	features에는 태그를 최대 {max}개까지 지정할 수 있습니다
+@msg	unknown OpenType feature `{t}`	알 수 없는 OpenType 기능 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label}은(는) 0 초과 {max} 이하의 숫자여야 합니다
 @msg	no character style `{name}`	문자 스타일 `{name}`을 찾을 수 없습니다
 
@@ -5825,3 +5857,14 @@ breakText	Glyphs	글리프
 	Create Swatch Legend	견본 범례 만들기
 	Create Swatch Legend…	견본 범례 만들기…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	텍스트 도구
+	Text Tweaker…	텍스트 조정…
+	Text Tweaker	텍스트 조정
+	Attribute:	속성:
+	From:	시작:
+	To:	끝:
+	Bow	활 모양
+	Spike	뾰족한 모양
+	Skip Spaces	공백 건너뛰기
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	아트워크가 너무 커서 이미지로 복사할 수 없습니다: 다른 앱에는 PNG가 전달되지 않습니다

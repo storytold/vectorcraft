@@ -433,10 +433,11 @@ pub fn cluster(colors: &[Color], weights: &[f32], n: usize) -> Vec<Vec<usize>> {
         .collect();
     let w = |i: usize| weights.get(i).copied().unwrap_or(1.0).max(1e-6);
     let d2 = |a: &[f32; 3], b: &[f32; 3]| (a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2);
-    let n = n.max(1);
     if pts.is_empty() {
         return vec![];
     }
+    // No more rows than colours: each colour seeds one at most.
+    let n = n.clamp(1, pts.len());
     // Seeds: the heaviest colour, then each time the one farthest from every seed so far.
     let first = (0..pts.len()).fold(0, |best, i| if w(i) > w(best) { i } else { best });
     let mut centres = vec![pts[first]];
@@ -447,6 +448,8 @@ pub fn cluster(colors: &[Color], weights: &[f32], n: usize) -> Vec<Vec<usize>> {
             break;
         }
         centres.push(pts[i]);
+        // Picked: a colour whose distances aren't finite (an infinite coordinate) stays farthest.
+        near[i] = 0.0;
         for (j, p) in pts.iter().enumerate() {
             near[j] = near[j].min(d2(p, &pts[i]));
         }
@@ -668,6 +671,12 @@ mod tests {
             assert!(lab.iter().all(|c| matches!(m.map(*c), Color::Lab { .. })), "{}", method.label());
         }
         assert!(matches!(shaded(lab[0], 0.5), Color::Lab { .. }));
+    }
+
+    #[test]
+    fn clustering_seeds_each_colour_once_even_unbounded() {
+        let colors = [Color::lab(f32::INFINITY, 0.0, 0.0), Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0)];
+        assert!(cluster(&colors, &[], usize::MAX).len() <= colors.len());
     }
 
     #[test]

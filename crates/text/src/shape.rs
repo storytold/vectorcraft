@@ -375,7 +375,13 @@ pub(crate) fn shape_range(
         art: Option<&'a InlineArt>,
     }
     let mut spans: Vec<ShapeSpan<'_>> = Vec::new();
-    for (ri, (rr, st)) in runs.iter().enumerate() {
+    // The runs are in order: start at the first that ends inside the range and stop past it, so
+    // that each paragraph looks only at its own runs.
+    let first = runs.partition_point(|(rr, _)| rr.end <= range.start);
+    for (ri, (rr, st)) in runs.iter().enumerate().skip(first) {
+        if rr.start >= range.end {
+            break;
+        }
         let a = rr.start.max(range.start);
         let b = rr.end.min(range.end);
         if a >= b || text.get(a..b).is_none() {
@@ -401,7 +407,7 @@ pub(crate) fn shape_range(
         let b = bytes.end;
         if let Some(art) = art {
             if let Some(face) = db.style_face(st).or_else(|| db.face_covering('a')) {
-                out.push(inline_glyph(&face, st, art, source_runs.start, a..b, text, level_at(a)));
+                out.push(inline_glyph(&face, st, art, source_runs.start, a..b, text, level_at(a), feats.vertical));
             }
             continue;
         }
@@ -688,7 +694,7 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
 /// They do when they differ only in paint and stroke, underline and strikethrough, overprint, the
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
-/// Direction (text is shaped apart where its bidi level changes), the kerning (each glyph takes its
+/// Direction (text is shaped apart where its bidi level changes), Kashidas, the kerning (each glyph takes its
 /// run's, see [`shape_segment`]) and the tracking, as long as the tracking keeps or drops standard
 /// ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
@@ -726,6 +732,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         small_caps,
         char_align: _,
         char_direction: _,
+        kashidas: _,
         proportional_metrics,
         tate_chu_yoko,
         tcy_up_down: _,
@@ -795,10 +802,21 @@ fn shaping_script(c: char) -> Script {
 ///
 /// The art is scaled uniformly to `scale` x the font size tall, its left edge on the pen and its
 /// vertical centre on the middle of the cap height raised by the inline's shift (see
-/// [`InlineArt`]). Its advance is the scaled art width plus tracking; the glyph's ascent and
-/// descent grow to the art's extent so a tall graphic opens up its line. A missing symbol takes a
-/// square of the same height and draws nothing.
-fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usize, range: Range<usize>, text: &str, level: Level) -> SGlyph {
+/// [`InlineArt`]). Its advance is the scaled art width plus tracking and its character's manual
+/// kerning, which right to left in horizontal type also moves the art right by the value, as it
+/// moves a letter's glyph. The glyph's ascent and descent grow to the art's extent so a tall
+/// graphic opens up its line. A missing symbol takes a square of the same height and draws nothing.
+#[allow(clippy::too_many_arguments)]
+fn inline_glyph(
+    face: &Arc<FontFace>,
+    st: &CharStyle,
+    art: &InlineArt,
+    run: usize,
+    range: Range<usize>,
+    text: &str,
+    level: Level,
+    vertical: bool,
+) -> SGlyph {
     let size = if st.size.is_finite() { st.size.max(0.0) } else { 0.0 };
     let vs = if st.v_scale.is_finite() { st.v_scale / 100.0 } else { 1.0 };
     let km = size / face.upem;
@@ -815,7 +833,8 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         _ => (kurbo::Affine::IDENTITY, h, None),
     };
     let tracking = st.tracking / 1000.0 * size;
-    let adv = width + if tracking.is_finite() { tracking } else { 0.0 };
+    let manual_kern = st.kerning.map(|v| v / 1000.0 * size).filter(|k| k.is_finite()).unwrap_or(0.0);
+    let adv = width + if tracking.is_finite() { tracking } else { 0.0 } + manual_kern;
     SGlyph {
         face: face.clone(),
         gid: 0,
@@ -825,7 +844,7 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         adv: if adv.is_finite() { adv } else { 0.0 },
         dx: 0.0,
         dy: 0.0,
-        kern_shift: 0.0,
+        kern_shift: if level.is_rtl() && !vertical { manual_kern } else { 0.0 },
         // Not used to draw (the art has its own transform), but they make the glyph's em box
         // its run's em: Character Alignment and Top-to-Top leading treat an inline graphic as a
         // character of its run's size, whatever its scale (see `layout::glyph_em`).

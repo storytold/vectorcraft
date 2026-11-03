@@ -348,8 +348,13 @@ fn from_guides(s: &mut Session, _: &Value) -> Result<Value> {
         v
     };
     let (xs, ys) = (cuts(true, region.x0, region.x1), cuts(false, region.y0, region.y1));
-    let rects: Vec<Rect> =
-        ys.windows(2).flat_map(|y| xs.windows(2).map(move |x| Rect::new(x[0], y[0], x[1], y[1]))).filter(|r| valid_rect(*r)).collect();
+    // One past the limit tells too many, without making every piece of a huge grid first.
+    let rects: Vec<Rect> = ys
+        .windows(2)
+        .flat_map(|y| xs.windows(2).map(move |x| Rect::new(x[0], y[0], x[1], y[1])))
+        .filter(|r| valid_rect(*r))
+        .take(MAX_PIECES + 1)
+        .collect();
     if rects.len() > MAX_PIECES {
         return Err(EngineError::Other(format!("Create from Guides: the guides make more than {MAX_PIECES} slices")));
     }

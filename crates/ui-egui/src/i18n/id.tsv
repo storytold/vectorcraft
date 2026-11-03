@@ -393,6 +393,7 @@
 	Variable Font	Font variabel
 	Text Fill Color	Warna isian teks
 	Text Stroke Color	Warna stroke teks
+	Text Fill & Stroke Color	Warna isian & stroke teks
 	All on Same Layers	Semua di lapisan yang sama
 	Direction Handles	Gagang arah
 	Brush Strokes	Sapuan kuas
@@ -585,6 +586,7 @@
 	Cascade	Bertingkat
 	Tile	Ubin
 	Float in Window	Mengambang di jendela
+	Float All in Windows	Mengambangkan semua di jendela
 	Consolidate All Windows	Konsolidasikan semua jendela
 	Workspace	Ruang kerja
 	Reset Essentials	Atur ulang Essentials
@@ -1177,6 +1179,8 @@ lighting	Light	Cahaya
 	Hand	Tangan
 	Join Tool	Alat sambung
 	Lasso Tool	Alat lasso
+	Enclosing Lasso Tool	Alat laso pengeliling
+	Enclosing Lasso	Laso pengeliling
 	Lasso	Lasso
 	Line Cut Tool	Alat potong garis
 	Line Graph Tool	Alat grafik garis
@@ -1658,6 +1662,7 @@ digits	Malayalam	Malayalam
 	Left-to-Right Paragraph Direction	Arah paragraf kiri ke kanan
 	Line-end Punctuation Half Width	Tanda baca akhir baris lebar setengah
 	Insert Kashidas	Sisipkan kashida
+	Kashidas	Kashida
 	Long	Panjang
 	Stylistic	Stilistik
 	Mojikumi Set	Set Mojikumi
@@ -2443,6 +2448,10 @@ digits	Malayalam	Malayalam
 	Current Colors	Warna saat ini
 	Current Colors (0)	Warna saat ini (0)
 	Harmony Rules:	Aturan harmoni:
+	Segmented color wheel	Roda warna bersegmen
+	Show smooth color wheel	Tampilkan roda warna halus
+	Show segmented color wheel	Tampilkan roda warna bersegmen
+	Show color bars	Tampilkan bilah warna
 	Harmony Rules	Aturan harmoni
 	Keep this row's colors (exclude)	Pertahankan warna baris ini (kecualikan)
 	Limit to Library:	Batasi ke pustaka:
@@ -3322,6 +3331,7 @@ theme	Appearance	Tampilan
 	List Preferences	Daftarkan preferensi
 	Manually	Secara manual
 	Mark Older Files as [Converted] When Opened	Tandai file lama sebagai [Converted] saat dibuka
+	Use System Defaults for Edit Original	Gunakan default sistem untuk Edit asli
 	Match User Interface Brightness	Sesuaikan dengan kecerahan antarmuka pengguna
 	Light Gray	Abu-abu terang
 	Medium Gray	Abu-abu sedang
@@ -3675,6 +3685,8 @@ effect	Regular	Reguler
 	In the selected objects	Di objek yang dipilih
 	Find in Folder…	Temukan di folder…
 	Replace With Font	Ganti dengan font
+	Replace With Font From	Ganti dengan font dari
+	System	Sistem
 	  — substituted by {style}	  — digantikan oleh {style}
 	  — {n} characters from another font	  — {n} karakter dari font lain
 	All Scripts	Semua skrip
@@ -5352,6 +5364,11 @@ swatch	Bright Violet	Violet cerah
 	Export Type:	Jenis ekspor:
 	Movie Clip	Klip film
 @msg	name is empty	nama kosong
+@msg	an action is already recording	sebuah tindakan sedang direkam
+@msg	no such function key	tidak ada tombol fungsi seperti itu
+@msg	no such color	tidak ada warna seperti itu
+@msg	{_1} cannot be used on Windows	{_1} tidak dapat digunakan di Windows
+@msg	more than one action is named “{_1}”	lebih dari satu tindakan bernama “{_1}”
 @msg	no symbol named `{n}`	tidak ada simbol bernama `{n}`
 	Remove Color Profile…	Hapus profil warna…
 	Color wheel	Roda warna
@@ -5631,9 +5648,17 @@ axis	Y Axis	Sumbu Y
 	Action Options…	Opsi tindakan…
 	Action Options	Opsi tindakan
 	Rename Action	Ganti nama tindakan
+	New Action…	Tindakan baru…
+	New Action	Tindakan baru
+	Create New Action	Buat tindakan baru
+	Play Action	Putar tindakan
+	Action Set:	Set tindakan:
+	Function Key:	Tombol fungsi:
+	Record	Rekam
 	Create New Set	Buat set baru
 	Stop Global Edit	Hentikan edit global
 	Global Edit Options	Opsi edit global
+	Leave Out of Global Edit	Keluarkan dari edit global
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edit global berfungsi pada jalur, jalur gabungan, instans simbol, dan grupnya
 	Match	Cocokkan
 	On Artboards	Di artboard
@@ -6119,3 +6144,14 @@ breakText	Glyphs	Glif
 	Create Swatch Legend	Buat Legenda Swatch
 	Create Swatch Legend…	Buat Legenda Swatch…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Alat Teks
+	Text Tweaker…	Penyetel Teks…
+	Text Tweaker	Penyetel Teks
+	Attribute:	Atribut:
+	From:	Dari:
+	To:	Ke:
+	Bow	Busur
+	Spike	Puncak
+	Skip Spaces	Lewati Spasi
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Gambar terlalu besar untuk disalin sebagai gambar: aplikasi lain tidak mendapatkan PNG darinya
