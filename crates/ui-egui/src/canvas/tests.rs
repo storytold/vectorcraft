@@ -6171,6 +6171,24 @@ fn shift_enter_types_a_soft_return_in_order_with_plain_enter() {
     assert_eq!(plain(&app, id), "a\u{2028}b\nc");
 }
 
+/// Within one frame, Home between two texts, Tab inside a line, and Backspace after a paste each
+/// act on the text as the events before them left it.
+#[test]
+fn home_tab_and_backspace_act_on_the_text_before_them_in_the_frame() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let text = |t: &str| egui::Event::Text(t.into());
+    typing_frame(&mut app, &ctx, vec![text("abc")]);
+    typing_frame(&mut app, &ctx, [vec![text("d")], tap(egui::Key::Home).to_vec(), vec![text("0")]].concat());
+    assert_eq!(plain(&app, id), "0abcd");
+    typing_frame(&mut app, &ctx, [tap(egui::Key::ArrowRight).to_vec(), tap(egui::Key::Tab).to_vec(), vec![text("t")]].concat());
+    assert_eq!(plain(&app, id), "0a\ttbcd");
+    typing_frame(&mut app, &ctx, [tap(egui::Key::End).to_vec(), vec![egui::Event::Paste("pq".into())], tap(egui::Key::Backspace).to_vec()].concat());
+    assert_eq!(plain(&app, id), "0a\ttbcdp");
+}
+
 /// In a frame that began composing, an editing key after the IME's commit applies before the text
 /// that follows it; a key before the commit and an Enter after it stay the IME's.
 #[test]

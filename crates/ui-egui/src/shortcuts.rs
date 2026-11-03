@@ -235,12 +235,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Tool keys first (Enter/Escape end paths; arrows change polygon sides while dragging).
     let busy = app.session.tool_busy();
     // Enter in the Type tool types a line break, so it goes to the tool with the frame's text,
-    // below.
+    // below: the loop then skips Enter, the first key.
     let enter_types = app.session.tool_wants_text();
-    for (k, tk) in [(Key::Enter, ToolKey::Enter), (Key::Escape, ToolKey::Escape)] {
-        if k == Key::Enter && enter_types {
-            continue;
-        }
+    for (k, tk) in [(Key::Enter, ToolKey::Enter), (Key::Escape, ToolKey::Escape)].into_iter().skip(usize::from(enter_types)) {
         if !typing && !composing && ctx.input(|i| i.key_pressed(k)) {
             // A chord a command is bound to (Cmd+Enter) runs only that command, in the shortcuts
             // below, also when the tool claims the key. While the Type tool edits text only Cmd
