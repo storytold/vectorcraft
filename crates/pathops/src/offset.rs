@@ -214,16 +214,19 @@ fn boxed_segments(bp: &BezPath) -> Vec<(kurbo::Rect, kurbo::PathSeg)> {
     bp.segments().map(|s| (s.bounding_box(), s)).collect()
 }
 
-/// Whether some segment lies closer than `r` to `p`. A segment whose box is more than `r` away
-/// (with a little slack for rounding) can't, so it is skipped without the costly nearest-point
-/// search, and the search stops at the first segment that does.
+/// Whether a segment with bounding box `b` could lie within `r` of `p`: the box is inflated by `r`
+/// and by slack for rounding in the box and in the curve evaluation, which grows with the coordinates.
+fn box_may_reach(b: &kurbo::Rect, p: kurbo::Point, r: f64) -> bool {
+    let reach = r + 1e-6 + 1e-9 * p.x.abs().max(p.y.abs());
+    p.x >= b.x0 - reach && p.x <= b.x1 + reach && p.y >= b.y0 - reach && p.y <= b.y1 + reach
+}
+
+/// Whether some segment lies closer than `r` to `p`. A segment whose box is too far away can't, so
+/// it is skipped without the costly nearest-point search, and the search stops at the first
+/// segment that does.
 fn any_within(segs: &[(kurbo::Rect, kurbo::PathSeg)], p: kurbo::Point, r: f64) -> bool {
     use kurbo::ParamCurveNearest;
-    let reach = r + 1e-6;
-    r > 0.0
-        && segs.iter().any(|(b, s)| {
-            p.x >= b.x0 - reach && p.x <= b.x1 + reach && p.y >= b.y0 - reach && p.y <= b.y1 + reach && s.nearest(p, 1e-6).distance_sq.sqrt() < r
-        })
+    r > 0.0 && segs.iter().any(|(b, s)| box_may_reach(b, p, r) && s.nearest(p, 1e-6).distance_sq.sqrt() < r)
 }
 
 #[cfg(test)]
@@ -253,7 +256,7 @@ mod tests {
     #[test]
     fn nearby_segment_check_agrees_with_the_full_scan() {
         let mut rng = Lcg(7);
-        let mut hits = 0;
+        let (mut hits, mut skipped) = (0, 0);
         for case in 0..400 {
             let n = [3.0, 6.0, 20.0][case % 3];
             let mut bp = BezPath::new();
@@ -276,6 +279,9 @@ mod tests {
                     bp.close_path();
                 }
             }
+            // The same geometry far from the origin too, where the rounding slack matters.
+            let shift = [0.0, 1e6, 1e9][case % 3];
+            let bp = kurbo::Affine::translate((shift, -shift)) * bp;
             let segs = boxed_segments(&bp);
             for _ in 0..40 {
                 // On the grid (on segments and their ends) and off it.
@@ -284,15 +290,39 @@ mod tests {
                 } else {
                     kurbo::Point::new(rng.next() * (n + 2.0) - 1.0, rng.next() * (n + 2.0) - 1.0)
                 };
+                let p = kurbo::Point::new(p.x + shift, p.y - shift);
                 let nearest = dist_to(&bp, p);
-                // Radii around the true distance (where a wrong skip would show), and the usual kind.
-                for r in [nearest, nearest * (1.0 - 1e-9), nearest * (1.0 + 1e-9), nearest + 1e-6, 0.0, -1.0, 1e-7, rng.next() * 3.0, 1e6] {
+                // Radii around the true distance (where a wrong skip would show), just outside a
+                // segment's box, and the usual kind.
+                let box_gap =
+                    segs.iter().map(|(b, _)| (b.x0 - p.x).max(p.x - b.x1).max(b.y0 - p.y).max(p.y - b.y1).max(0.0)).fold(f64::INFINITY, f64::min);
+                for r in [
+                    nearest,
+                    nearest * (1.0 - 1e-9),
+                    nearest * (1.0 + 1e-9),
+                    nearest + 1e-6,
+                    box_gap + 5e-7,
+                    box_gap + 2e-6,
+                    0.0,
+                    -1.0,
+                    1e-7,
+                    rng.next() * 3.0,
+                    1e6,
+                ] {
                     assert_eq!(any_within(&segs, p, r), nearest < r, "case {case} p {p:?} r {r} nearest {nearest}");
                     hits += usize::from(nearest < r);
+                    // Every segment the box test skips is really out of reach.
+                    for (b, s) in &segs {
+                        if r > 0.0 && !box_may_reach(b, p, r) {
+                            skipped += 1;
+                            use kurbo::ParamCurveNearest;
+                            assert!(s.nearest(p, 1e-6).distance_sq.sqrt() >= r, "case {case} skipped a segment within {r} of {p:?}");
+                        }
+                    }
                 }
             }
         }
-        assert!(hits > 1000, "{hits}");
+        assert!(hits > 1000 && skipped > 10_000, "{hits} {skipped}");
         assert!(!any_within(&[], kurbo::Point::ZERO, 1.0));
     }
 
@@ -311,6 +341,17 @@ mod tests {
         let out = offset_path(&PathData::from_bezpath(&plate), 1.0, Join::Round, 4.0);
         // The outer contour and the 50 wide holes; the 50 narrow ones are gone.
         assert_eq!(out.subpaths.len(), 1 + 50);
+        // The holes left are the wide ones, shrunk to radius 3 and still centred on their grid point.
+        let mut holes = 0;
+        for sp in out.subpaths.iter().skip(1) {
+            let b = PathData::single(sp.clone()).to_bezpath().bounding_box();
+            let (cx, cy) = ((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0);
+            assert!((b.width() - 6.0).abs() < 0.05 && (b.height() - 6.0).abs() < 0.05, "{b:?}");
+            let (i, j) = (((cx - 10.0) / 20.0).round(), ((cy - 10.0) / 20.0).round());
+            assert!((cx - 10.0 - 20.0 * i).abs() < 0.05 && (cy - 10.0 - 20.0 * j).abs() < 0.05 && (i + j) % 2.0 != 0.0, "{b:?}");
+            holes += 1;
+        }
+        assert_eq!(holes, 50);
     }
 
     #[test]
