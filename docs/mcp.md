@@ -3638,6 +3638,12 @@ document. With no document open they fail with "no document open". `document.act
 the current one.
 `window.arrange.tile` (Window › Arrange › Tile) shows every open document in its own pane, edge to edge in the document
 area, in a grid of as many columns as the square root of the number of documents, rounded up, and fits each document to
+its pane; with fewer than two documents open it leaves the view and `tiled` as they are. It returns `{tiled, panes}`.
+The current document's pane is the canvas, and a press in another pane makes its document the current one.
+`window.arrange.consolidateAllWindows` (Window › Arrange › Consolidate All Windows) shows one document under its tab
+again and returns `{tiled: false}`. The arrangement is not saved. `ui.inspect` reports `tiled` and `panes` (each pane's
+`document` index, `rect` and whether it is `active`); canvas coordinates map to the current document's pane
+(`canvasRect`).
 its pane; it returns `{tiled, panes}`. The current document's pane is the canvas, and a press in another pane makes its
 document the current one. `window.arrange.floatInWindow` (Window › Arrange › Float in Window) moves the current document
 out of the tab strip into a floating window of its own, `window.arrange.floatAllInWindows` (Float All in Windows) does

@@ -180,6 +180,18 @@ fn arrange_items_follow_the_open_documents() {
 }
 
 #[test]
+fn tile_with_one_document_leaves_the_next_one_under_its_tab() {
+    let mut app = app_with(1);
+    let ctx = egui::Context::default();
+    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": false, "panes": 1}));
+    assert!(!app.ui.tiled);
+    assert!(!enabled(&app, "window.arrange.consolidateAllWindows"));
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert!(panes(&app).0.is_empty(), "the second document opens under its tab");
+}
+
+#[test]
 fn closing_a_document_while_tiled_tiles_the_others() {
     let mut app = app_with(3);
     let ctx = egui::Context::default();

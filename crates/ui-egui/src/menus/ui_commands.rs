@@ -591,7 +591,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.arrange.tile",
         "Tile",
         "",
-        "{} show every open document at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of documents, rounded up), each fitted to its pane; the current document's pane takes the tools, a click in another pane makes its document the current one; the tabs stay; documents in floating windows come back under the tabs first; returns {tiled: true, panes}",
+        "{} show every open document at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of documents, rounded up), each fitted to its pane; the current document's pane takes the tools, a click in another pane makes its document the current one; the tabs stay; documents in floating windows come back under the tabs first; with fewer than two documents open the view stays as it is; returns {tiled, panes}",
     ),
     (
         "window.arrange.floatInWindow",

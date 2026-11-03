@@ -140,16 +140,18 @@ pub(crate) fn cells(n: usize, area: egui::Rect) -> Vec<egui::Rect> {
     (0..n).map(|i| egui::Rect::from_min_max(pos2(x(i % cols), y(i / cols)), pos2(x(i % cols + 1), y(i / cols + 1)))).collect()
 }
 
-/// `window.arrange.tile`: every open document in a pane of its own, each fitted to its pane. The
-/// documents in floating windows come back under the tabs for it.
+/// `window.arrange.tile`: every open document in a pane of its own, each fitted to its pane. With
+/// fewer than two documents open (when the menu item is grayed out) it leaves the view and `tiled` as
+/// they are. The documents in floating windows come back under the tabs for it.
 pub(crate) fn tile(app: &mut VectorcraftApp) -> Result<serde_json::Value, String> {
+    let n = app.session.documents().len();
+    if n < 2 {
+        return Ok(json!({"tiled": app.ui.tiled, "panes": n}));
+    }
     app.sync_views();
     crate::doc_windows::dock_all(app);
-    let n = app.session.documents().len();
-    app.ui.tiled = n > 0;
-    if n > 0 {
-        app.ui.home = None;
-    }
+    app.ui.tiled = true;
+    app.ui.home = None;
     for v in &mut app.views {
         v.fitted = false;
     }
