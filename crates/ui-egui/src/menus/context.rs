@@ -99,6 +99,10 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         if paths {
             v.extend([c("Join", "path.join"), c("Average…", "path.average")]);
         }
+        // Outline Stroke turns strokes into filled art: offered when some object has a stroke to outline.
+        if roots.iter().any(|n| vectorcraft_engine::has_outlinable_stroke(n)) {
+            v.push(c("Outline Stroke", "object.path.outlineStroke"));
+        }
         if !st.selection.anchors.is_empty() {
             v.extend([c("Remove Anchor Points", "path.removeAnchors"), c("Cut Path at Selected Anchor Points", "path.cutAtAnchors")]);
         }

@@ -811,6 +811,16 @@ fn outlinable(st: &StrokeLayer) -> bool {
     st.visible && !st.paint.is_none() && st.width > 0.0
 }
 
+/// Does Outline Stroke have a stroke to turn into art somewhere under `n`: a visible stroke of
+/// some paint and weight on a path or compound path (type is not outlined by it)?
+pub fn has_outlinable_stroke(n: &Node) -> bool {
+    let mut found = false;
+    each_leaf(n, &mut |l| {
+        found |= !matches!(l.kind, NodeKind::Text(_)) && l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st)));
+    });
+    found
+}
+
 /// `n` with `opacity` and `blend` applied: set on it when it has none of its own, else on a
 /// group around it.
 pub(crate) fn with_transparency(d: &mut Document, mut n: Node, opacity: f32, blend: BlendMode) -> Node {

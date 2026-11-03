@@ -381,3 +381,36 @@ fn every_context_label_is_a_menu_string() {
         assert!(shown.contains(label), "`{label}` is listed but the context menu never shows it");
     }
 }
+
+/// #5267: a right-click on a stroked object offers Outline Stroke, which runs
+/// `object.path.outlineStroke` (the Object › Path item) and leaves filled art; an object with no
+/// stroke to outline has no such item.
+#[test]
+fn the_canvas_context_menu_offers_outline_stroke_for_a_stroked_selection() {
+    use vectorcraft_doc::AppearanceItem;
+    let mut app = app();
+    let id = rect(&mut app, 50.0, 50.0);
+    // Stroked: a visible stroke of some weight.
+    app.run("stroke.set", json!({"weight": 6})).unwrap();
+    let strokes = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let n = st.doc.node(st.selection.objects[0]).unwrap();
+        n.appearance.items.iter().filter(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0)).count()
+    };
+    assert!(strokes(&app) > 0, "the rectangle starts with a stroke");
+    let ctx = egui::Context::default();
+    app.run("select.none", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let p = screen(&app, 100.0, 100.0);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Outline Stroke"), "Outline Stroke in {texts:?}");
+    click(&mut app, &ctx, at(&texts, "Outline Stroke"), PointerButton::Primary);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.node(id).is_none(), "the stroked rectangle was replaced by its outline");
+    assert_eq!(strokes(&app), 0, "the outline is filled art with no stroke left");
+
+    // The outline has no stroke any more: nothing to outline, so no item.
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Arrange"), "the menu opened: {texts:?}");
+    assert!(!has(&texts, "Outline Stroke"), "no stroke, no Outline Stroke in {texts:?}");
+}

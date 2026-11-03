@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Type on a Path Options has a Preview checkbox, #5360; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (the canvas context menu offers Outline Stroke for a stroked selection, #5267; scores and estimates unchanged; previously: Type on a Path Options has a Preview checkbox, #5360; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -339,7 +339,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | Pathfinder panel › Pathfinder Options…: Precision, Remove Redundant Points, Divide and Outline Will Remove Unpainted Artwork | done | #3426; `object.pathfinder.options`, kept in the preferences; defaults (0.01 pt, both off) keep the earlier results; [spec](https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/pathfinder-panel-overview.html) |
 | Cmd/Ctrl+4 repeats the last successful Shape Mode or Pathfinder operation on the selection | done | Panel operations, direct `object.pathfinder.*` commands and `command.batch` steps (Actions playback) set history; `action.batch`, Trap, compound-shape edits and live effects do not. Repeat uses current Pathfinder Options; [key spec](https://web.archive.org/web/20260726060015/https://helpx.adobe.com/illustrator/using/default-keyboard-shortcuts.html), [menu spec](https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/pathfinder-panel-overview.html) |
 | Pathfinder panel: compound shapes (Make, Release and Expand Compound Shape in the panel menu, Alt-click a Shape Mode, a Shape Mode for selected members, the Expand button) | partial | #4522; `object.compoundShape.make`/`setMode`/`release`/`expand`; members stay editable, the area draws, exports and saves; the button of the members' shared mode is lit; blends, envelopes and warped objects are members as they draw; [spec](https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/create-compound-shapes-with-pathfinder.html); missing: question marks for mixed modes, hit-testing by the area |
-| Canvas context menu | done | Layers rows, panels and type have none (gap) |
+| Canvas context menu | done | Layers rows, panels and type have none (gap). A selection with a visible stroke to outline (a path, compound path or group holding one; not type) adds Outline Stroke (`object.path.outlineStroke`, the Object › Path item, no shortcut), after Join and Average (#5267) |
 | SVG Interactivity panel: JavaScript for each object's events and the document's linked JavaScript files, written to SVG and read back as text | done | `svgInteractivity.*`, `ui.javascriptFilesDialog` |
 | Retype, Comments, Version History panels | missing | the last two are cloud features (out of scope) |
 | Blend panel (30.7) | partial | Window › Blend provides Type (Ease In, Ease Out, Ease In Out, Ease Out In), Ramp 0–100% and independent color Shift, alongside the existing blend controls. Easing is disabled without a spine. Original polynomial distributions approximate the publicly documented behavior; on-canvas easing handles remain missing. [Public source](https://helpx.adobe.com/illustrator/desktop/manage-colors/apply-transparency-and-blending/blend-panel-overview.html) |
@@ -418,6 +418,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | The canvas context menu offers Outline Stroke when the selection has a stroke to outline (#5267); scores and estimates unchanged. |
 | 2026-11-03 | minor | Enclosing Lasso selects fully enclosed objects with a freehand loop under Object › Plug-ins; scores and estimates unchanged. |
 | 2026-11-03 | minor | Type on a Path Options has a Preview checkbox (#5360, as public tutorials of the dialog show); scores and estimates unchanged |
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control accept the wheel without opening the menu (#5253); scores and estimates unchanged. |
