@@ -4,7 +4,7 @@
 //! here, colours are `#rrggbb` (or `rgba()` where CSS has no separate opacity), gradients take the
 //! stops SVG export writes, and numbers go through [`fmt_num`].
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use vectorcraft_color::{BlendMode, Color, GradientKind, GradientPaint, Paint};
@@ -308,7 +308,7 @@ impl CssSheet {
 /// paragraph's alignment; shadows and glows give `box-shadow` (`text-shadow`), a Gaussian blur
 /// `filter: blur()`. Other art is described as its box (see [`CssOptions::rasterize`]).
 pub fn css_rules(doc: &Document, ids: &[NodeId], opts: &CssOptions) -> CssSheet {
-    let mut w = Rules { doc, opts, sheet: CssSheet::default(), seen: HashSet::new(), names: HashSet::new() };
+    let mut w = Rules { doc, opts, sheet: CssSheet::default(), seen: HashSet::new(), names: HashSet::new(), next_suffix: HashMap::new() };
     for n in ids.iter().filter_map(|id| doc.node(*id)) {
         w.object(n);
     }
@@ -323,6 +323,8 @@ struct Rules<'a> {
     seen: HashSet<NodeId>,
     /// Class names given, lower case.
     names: HashSet<String>,
+    /// The next suffix to try for each base class name, lower case.
+    next_suffix: HashMap<String, usize>,
 }
 
 /// The CSS of one object's art, and why it is approximate.
@@ -367,14 +369,18 @@ impl Rules<'_> {
     /// A class name for `name` (an object's, or its kind's), unique in the sheet.
     fn class_name(&mut self, name: &str) -> String {
         let base = sanitize_id(name).replace('.', "_");
-        let mut cand = base.clone();
-        for i in 2.. {
-            if self.names.insert(cand.to_lowercase()) {
-                break;
-            }
-            cand = format!("{base}-{i}");
+        if self.names.insert(base.to_lowercase()) {
+            return base;
         }
-        cand
+        // Each base goes on from the suffix it last gave: objects sharing a name take linear work.
+        let next = self.next_suffix.entry(base.to_lowercase()).or_insert(2);
+        loop {
+            let cand = format!("{base}-{next}");
+            *next += 1;
+            if self.names.insert(cand.to_lowercase()) {
+                return cand;
+            }
+        }
     }
 
     fn rule(&mut self, n: &Node) {
@@ -728,5 +734,21 @@ mod tests {
         assert!(family("a\"b").starts_with("'a\"b'"));
         assert!(family("a(b").starts_with("'a(b'"));
         assert!(family("Arial").starts_with("Arial,"));
+    }
+
+    #[test]
+    fn class_names_sharing_a_base_take_the_next_free_suffix() {
+        let doc = Document::new(10.0, 10.0);
+        let opts = CssOptions::default();
+        let mut w =
+            Rules { doc: &doc, opts: &opts, sheet: CssSheet::default(), seen: HashSet::new(), names: HashSet::new(), next_suffix: HashMap::new() };
+        assert_eq!(w.class_name("a-3"), "a-3");
+        let names: Vec<String> = (0..4).map(|_| w.class_name("A")).collect();
+        assert_eq!(names, ["A", "A-2", "A-4", "A-5"]);
+        // Many objects of one name: each suffix is tried once.
+        for _ in 0..20_000 {
+            w.class_name("b");
+        }
+        assert_eq!(w.next_suffix["b"], 20_001);
     }
 }
