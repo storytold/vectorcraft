@@ -173,3 +173,26 @@ fn a_font_that_is_installed_keeps_drawing_its_type() {
     assert!(!installed.document.images.values().any(|b| b.mime == FILE_FONT_MIME));
     assert!(texts(&installed.document).iter().all(|t| t.file_fonts.is_none()));
 }
+
+/// `ImportOptions::embedded_fonts` on (the default): type in an embedded font the machine lacks
+/// carries the file's glyphs (a font blob kept with the document) and the text keeps naming the
+/// file's font.
+#[test]
+fn embedded_fonts_on_keeps_the_files_glyphs() {
+    let r = import_with_report(&page_pdf(uninstalled_serif()), &ImportOptions { embedded_fonts: true, ..Default::default() }).unwrap();
+    assert!(r.document.images.values().any(|b| b.mime == FILE_FONT_MIME), "a font kept with the document");
+    assert!(texts(&r.document).iter().any(|t| t.file_fonts.is_some()), "its type draws in the file's font");
+}
+
+/// Off (Preferences › File Handling › Use fonts embedded in imported PDFs): import behaves as it
+/// did without the feature: no font is kept, the type is set in the fallback font and the missing
+/// font is warned about.
+#[test]
+fn embedded_fonts_off_sets_type_in_the_fallback_font_with_the_warning() {
+    let r = import_with_report(&page_pdf(uninstalled_serif()), &ImportOptions { embedded_fonts: false, ..Default::default() }).unwrap();
+    assert!(!r.document.images.values().any(|b| b.mime == FILE_FONT_MIME), "no font kept");
+    assert!(texts(&r.document).iter().all(|t| t.file_fonts.is_none()), "no type draws in a file font");
+    assert!(r.warnings.iter().any(|w| w.contains("Source Serif 9")), "the missing font is named: {:?}", r.warnings);
+    let st = texts(&r.document)[0].first_style().clone();
+    assert_eq!(st.font_family, "Source Serif 9", "the text still names the file's font");
+}

@@ -25,6 +25,7 @@ impl<'p> Builder<'p> {
             glyphs: None,
             text: None,
             text_as,
+            embedded_fonts: true,
             images: HashMap::new(),
             image_keys: HashMap::new(),
             cmyk_keys: HashSet::new(),
@@ -901,7 +902,7 @@ impl<'p> Builder<'p> {
             return *f;
         }
         // Not the interpreter's stand-in for a font the file doesn't carry.
-        let carried = self.fonts.get(&key).is_some_and(|f| f.embedded) && o.font_data().is_none_or(|d| d.embedded);
+        let carried = self.embedded_fonts && self.fonts.get(&key).is_some_and(|f| f.embedded) && o.font_data().is_none_or(|d| d.embedded);
         let installed = self.font_names.get(&key).is_some_and(|i| i.face.is_some());
         let available =
             || vectorcraft_text::FontDb::global().resolve(&look.family, &look.style).is_some_and(|(_, m)| m == vectorcraft_text::FontMatch::Exact);

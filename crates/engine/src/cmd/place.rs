@@ -572,7 +572,7 @@ fn prepare(s: &Session, p: &Value) -> Result<PlaceJob> {
         (true, _) => return Err(bad(PLACE, "replace: select the one object to replace")),
     };
     let replaced = old.and_then(|id| st.doc.node(id)).cloned();
-    Ok(PlaceJob { params: p.clone(), old, replaced, target: board_at(&st.doc, at) })
+    Ok(PlaceJob { params: s.prefs.with_pdf_font_choice(p), old, replaced, target: board_at(&st.doc, at) })
 }
 
 /// Place the file `read` holds in the active document.

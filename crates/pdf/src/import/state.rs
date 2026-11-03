@@ -83,6 +83,8 @@ pub(super) struct Builder<'p> {
     pub(super) glyphs: Option<GlyphRun>,
     pub(super) text: Option<TextLine>,
     pub(super) text_as: TextAs,
+    /// Fonts the file embeds are kept (ImportOptions::embedded_fonts).
+    pub(super) embedded_fonts: bool,
     pub(super) images: HashMap<String, ImageBlob>,
     pub(super) image_keys: HashMap<u128, (String, u32, u32)>,
     /// The images kept with their CMYK samples ([`crate::import_image`]).
