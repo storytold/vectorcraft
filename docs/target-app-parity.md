@@ -1,8 +1,10 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Type Tools add-on: Text Tweaker, #4924; font-family fields accept the mouse wheel, #5253; Units › East Asian Type acts, with Q and Ha units; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
+
+Creating a gradient from solid or empty paint uses the document's color model for its default stops, including drawing its vector with the Gradient tool. Explicit `keepModel: true` retains RGB defaults, and existing gradients keep their own colors. Scores and estimates are unchanged.
 
 **Feature evidence last updated:** 2026-11-03.
 
@@ -19,6 +21,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-11-03 | minor | Type Tools add-on: Text Tweaker (a VectorCraft addition, #4924): evidence added; scores unchanged. |
 | 2026-11-02 | minor | Legacy `.ai` saves (version 7) write type with rotated characters as outlines that keep each character's rotation, with a warning unless `outlineText` is on (#5186); scores unchanged. |
 | 2026-10-31 | minor | Object › Path › Smooth smooths a path along its length before refitting it, so Auto-Smooth takes a shaky line to one smooth curve instead of leaving its jags, and with anchor points direct-selected it smooths only that section; scores unchanged. |
