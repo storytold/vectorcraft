@@ -52,9 +52,13 @@
 //!   lines and `1 (style) XW`: the drawn look is kept, named after the object.
 //! - Patterns: `%AI3_BeginPattern: (name)`, `(name) llx lly urx ury` (the tile, in the pattern's
 //!   space, y up), the tile's art (on `%_` lines in newer files), `E`, `%AI3_EndPattern`; each is
-//!   read by a reader of its own and becomes a pattern swatch. A fill or stroke with one:
+//!   read by a reader of its own and becomes a pattern swatch. In the version 7 form (§3.4) a list
+//!   of layers follows the tile, `[ (colors) @ (tile) & … ] E`, each layer's tile read from its
+//!   string with the colors' state (`_ &`: the tile's box filled). A fill or stroke with one:
 //!   `(name) x y scaleX scaleY angle reflect axis shear shearAxis [matrix] p` (`P`), the matrix
-//!   taking the pattern's space to art space (the other operands are what it is made of).
+//!   taking the pattern's space to art space (the other operands are what it is made of). With a
+//!   pattern defined in the version 7 form, the other operands are applied in order (§5.4.1) before
+//!   the initial matrix.
 //!
 //! - Type in the legacy format (version 7 specification §15): `type To` … `TO`, read by
 //!   [`legacy_text`].
@@ -327,6 +331,9 @@ struct Reader<'a> {
     pattern: Option<PatternHead>,
     /// The tile (y down) of each pattern read, by name.
     pattern_tiles: HashMap<String, Rect>,
+    /// The patterns read from a definition in the version 7 form, whose fills apply their other
+    /// operands before the matrix (see [`Reader::pattern_paint`]).
+    v7_patterns: HashSet<String>,
     /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
     text: Option<legacy_text::LegacyText>,
     type_state: legacy_text::TypeState,
@@ -431,6 +438,7 @@ impl<'a> Reader<'a> {
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),
+            v7_patterns: HashSet::new(),
             text: None,
             type_state: legacy_text::TypeState::default(),
             graph: None,
