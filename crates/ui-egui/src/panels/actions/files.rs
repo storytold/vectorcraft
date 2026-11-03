@@ -162,9 +162,8 @@ pub(crate) fn can_load(app: &VectorcraftApp) -> bool {
 
 /// `ui.actionSet.load {path? | data?}`: reads the action set file at `path` (else a picked one), or
 /// the file's text `data`, and adds its set after the others, with its actions. A set with the
-/// same name as one in the panel gets the next free number (`Print 2`). A loaded action whose
-/// function key an action in the panel or a command, tool or panel already has, or that cannot be
-/// used on this platform, gets no key. The current set and the other sets stay as they are →
+/// same name as one in the panel gets the next free number (`Print 2`). Loaded actions keep their
+/// function keys. The current set and the other sets stay as they are →
 /// `{set: index, name, actions: n}`.
 pub fn load_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (text, stem) = match p.get("data") {
