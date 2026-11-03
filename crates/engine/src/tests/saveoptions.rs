@@ -157,7 +157,32 @@ fn pdf_compatible_files_carry_a_pdf() {
     assert!(pdf.starts_with(b"%PDF"));
     let info = s.execute("document.pdfInfo", &json!({"dataBase64": vectorcraft_format::base64_encode(&pdf)})).unwrap();
     assert_eq!(info["pages"], 3);
-    assert!(vectorcraft_format::pdf_content(&bytes_of(&s.execute("file.saveCopy", &json!({})).unwrap()["dataBase64"])).is_none());
+    assert!(
+        vectorcraft_format::pdf_content(&bytes_of(&s.execute("file.saveCopy", &json!({"pdfCompatible": false})).unwrap()["dataBase64"])).is_none()
+    );
+}
+
+/// A native save is portable to the other apps by default. The option is still an explicit
+/// opt-out, and a remembered opt-out survives later saves of the document.
+#[test]
+fn native_saves_carry_all_artboards_as_pdf_by_default() {
+    let mut s = three_boards();
+    for compress in [false, true] {
+        let result = s.execute("file.saveCopy", &json!({"compress": compress})).unwrap();
+        let file = bytes_of(&result["dataBase64"]);
+        let pdf = vectorcraft_format::pdf_content(&file).expect("the default native save carries a PDF");
+        let info = s.execute("document.pdfInfo", &json!({"dataBase64": vectorcraft_format::base64_encode(&pdf)})).unwrap();
+        assert_eq!(info["pages"], 3);
+        assert_eq!(vectorcraft_format::load(&file).unwrap().artboards.len(), 3);
+    }
+    let dir = Folder::new("pdf-opt-out");
+    let path = dir.file("compact.vectorcraft");
+    s.execute("file.saveAs", &json!({"path": path, "pdfCompatible": false})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 60, "y": 10, "width": 10, "height": 10})).unwrap();
+    s.execute("file.save", &json!({})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&std::fs::read(path).unwrap()).is_none());
+    let options = s.execute("file.formatOptions", &json!({"format":"vectorcraft"})).unwrap();
+    assert_eq!(options["options"]["pdfCompatible"]["value"], false);
 }
 
 #[test]
@@ -345,7 +370,7 @@ fn format_options_list_the_save_options() {
         assert_eq!(v["options"][k]["value"], value, "{k}");
     }
     let v = s.execute("file.formatOptions", &json!({"format": "vectorcraft"})).unwrap();
-    assert_eq!((v["options"]["pdfCompatible"]["value"].as_bool(), v["options"]["range"]["value"].is_null()), (Some(false), true));
+    assert_eq!((v["options"]["pdfCompatible"]["value"].as_bool(), v["options"]["range"]["value"].is_null()), (Some(true), true));
     // Saved with them, a document remembers them for Save.
     let dir = Folder::new("remember");
     let path = dir.file("r.vectorcraft");

@@ -221,6 +221,7 @@ fn save_a_copy_and_template_suggest_their_names() {
     assert_eq!(picks.borrow()[0].name, "Untitled-1 copy.vectorcraft");
     assert!(app.ui.dialog.is_none(), "the native format has no options");
     assert!(vectorcraft_format::sniff(&written.borrow()[0].1));
+    assert!(vectorcraft_format::pdf_content(&written.borrow()[0].1).is_some());
     assert!(app.session.active().unwrap().path.is_none() && app.session.active().unwrap().is_dirty());
     app.run("file.saveAsTemplate", json!({})).unwrap();
     let pick = &picks.borrow()[1];

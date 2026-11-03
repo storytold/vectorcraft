@@ -48,7 +48,7 @@ pub const OPTIONS: &[FormatOption] = &[
     FormatOption {
         name: "pdfCompatible",
         ty: "boolean",
-        default: "false",
+        default: "true",
         description: "also carry a PDF of every artboard, for apps that read PDF (a larger file)",
     },
 ];
@@ -140,7 +140,7 @@ struct NativeOptions {
     precision: Option<Value>,
     include_linked: bool,
     embed_profiles: Option<bool>,
-    pdf_compatible: bool,
+    pdf_compatible: Option<bool>,
 }
 
 /// What [`save_options`] leaves to [`encode`] (rendering and encoding take time).
@@ -165,7 +165,7 @@ pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> 
         so.profiles = embedded_profiles(doc);
     }
     so.check().map_err(|e| bad(cmd, e.to_string()))?;
-    Ok((so, Extras { preview: o.preview, pdf: o.pdf_compatible }))
+    Ok((so, Extras { preview: o.preview, pdf: o.pdf_compatible.unwrap_or(true) }))
 }
 
 /// The `precision` option `v`: a whole number of decimal places, 0 to
