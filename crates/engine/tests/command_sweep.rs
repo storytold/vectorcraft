@@ -653,6 +653,12 @@ fn structured_junk() {
         ("addon.pen.reshape", json!({"id": 2, "segment": 0, "t": "x", "dx": 1, "dy": 1, "mode": "symmetric"})),
         ("addon.pen.nextSegment", json!({"curved": "yes"})),
         ("addon.pen.closeJoin", json!({"ids": [u64::MAX]})),
+        // Type Tools add-on.
+        ("addon.type.textTweaker", json!({"attribute": "size", "from": 1296, "to": 0.1, "shape": "random", "seed": u64::MAX})),
+        ("addon.type.textTweaker", json!({"attribute": "tracking", "from": f64::MAX, "to": -1e308, "shape": "spike"})),
+        ("addon.type.textTweaker", json!({"attribute": "rotation", "from": -360, "to": 360, "shape": "bow", "skipSpaces": false, "ids": [u64::MAX]})),
+        ("addon.type.textTweaker", json!({"attribute": "hScale", "id": 2, "start": u64::MAX, "end": 0, "shape": "ease"})),
+        ("addon.type.textTweaker", json!({"attribute": ["size"], "from": "x", "seed": 1e308, "skipSpaces": "no", "ids": "all"})),
         ("addon.cleanup.breakText", json!({"by": "glyphs", "ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, u64::MAX]})),
         ("addon.cleanup.breakText", json!({"by": ["lines"]})),
         ("addon.cleanup.breakText", json!({"by": "paragraphs"})),

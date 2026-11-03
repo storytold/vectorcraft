@@ -1858,6 +1858,7 @@ font-technology	Variable	Variables
 	Manually	Manuellement
 	Mark as trapped	Marquer comme grossi-maigri
 	Mark Older Files as [Converted] When Opened	Marquer les anciens fichiers comme [Converti] à l’ouverture
+	Use System Defaults for Edit Original	Utiliser les applications par défaut du système pour Modifier l’original
 	Marker…	Marqueur…
 	Marks	Repères
 	Marks and Bleed	Repères et fond perdu
@@ -5561,6 +5562,11 @@ theme	Appearance	Apparence
 	Export Type:	Type d'exportation :
 	Movie Clip	Clip
 @msg	name is empty	le nom est vide
+@msg	an action is already recording	un script est déjà en cours d’enregistrement
+@msg	no such function key	touche de fonction inexistante
+@msg	no such color	couleur inexistante
+@msg	{_1} cannot be used on Windows	{_1} ne peut pas être utilisé sous Windows
+@msg	more than one action is named “{_1}”	plusieurs scripts s’appellent « {_1} »
 @msg	no symbol named `{n}`	aucun symbole nommé `{n}`
 	Smudge Stick…	Estompe…
 	Smudge Stick	Estompe
@@ -5731,6 +5737,13 @@ axis	Y Axis	Axe Y
 	Action Options…	Options de script…
 	Action Options	Options de script
 	Rename Action	Renommer le script
+	New Action…	Nouveau script…
+	New Action	Nouveau script
+	Create New Action	Créer un script
+	Play Action	Exécuter le script
+	Action Set:	Jeu de scripts :
+	Function Key:	Touche de fonction :
+	Record	Enregistrer
 	Create New Set	Créer un jeu
 	Stop Global Edit	Arrêter la modification globale
 	Global Edit Options	Options de modification globale
@@ -6254,3 +6267,13 @@ breakText	Glyphs	Glyphes
 	Create Swatch Legend	Créer une légende des nuances
 	Create Swatch Legend…	Créer une légende des nuances…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Outils de texte
+	Text Tweaker…	Ajusteur de texte…
+	Text Tweaker	Ajusteur de texte
+	Attribute:	Attribut :
+	From:	De :
+	To:	À :
+	Bow	Arc
+	Spike	Pointe
+	Skip Spaces	Ignorer les espaces

@@ -522,9 +522,7 @@ mod tests {
     fn actions_panel_play_records_pathfinder_step() {
         let mut app = two_squares();
         click_button(&mut app, "Intersect");
-        app.ui.action_sets[0]
-            .actions
-            .push(crate::panels::actions::Action { name: "Unite".into(), steps: vec![("object.pathfinder.unite".into(), json!({}))] });
+        app.ui.action_sets[0].actions.push(crate::panels::actions::Action::new("Unite", vec![("object.pathfinder.unite".into(), json!({}))]));
         let idx = app.ui.action_sets[0].actions.len() - 1;
         select_two_squares(&mut app, 110.0);
         crate::panels::actions::play(&mut app, 0, idx).unwrap();

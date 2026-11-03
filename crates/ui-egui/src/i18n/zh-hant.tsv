@@ -2728,6 +2728,7 @@ file-filter	Templates	範本
 	Manually	手動
 	Mark as trapped	標示為已陷印
 	Mark Older Files as [Converted] When Opened	開啟舊檔時標示為 [已轉換]
+	Use System Defaults for Edit Original	「編輯原稿」使用系統預設值
 	Marker…	標記…
 	Marks	標記
 	Marks and Bleed	標記與出血
@@ -5216,6 +5217,11 @@ lighting	Light	光源
 	Export Type:	轉存類型:
 	Movie Clip	影片片段
 @msg	name is empty	名稱為空
+@msg	an action is already recording	已在錄製動作
+@msg	no such function key	沒有這個功能鍵
+@msg	no such color	沒有這個顏色
+@msg	{_1} cannot be used on Windows	{_1} 無法在 Windows 上使用
+@msg	more than one action is named “{_1}”	有多個動作名為「{_1}」
 @msg	no symbol named `{n}`	沒有名為 `{n}` 的符號
 	Smudge Stick…	塗抹棒…
 	Smudge Stick	塗抹棒
@@ -5370,6 +5376,13 @@ axis	Y Axis	Y 軸
 	Action Options…	動作選項…
 	Action Options	動作選項
 	Rename Action	重新命名動作
+	New Action…	新增動作…
+	New Action	新增動作
+	Create New Action	建立新動作
+	Play Action	播放動作
+	Action Set:	動作組：
+	Function Key:	功能鍵：
+	Record	錄製
 	Create New Set	建立新組
 	Stop Global Edit	停止整體編輯
 	Global Edit Options	整體編輯選項
@@ -5897,3 +5910,13 @@ breakText	Glyphs	字符
 	Create Swatch Legend	建立色票圖例
 	Create Swatch Legend…	建立色票圖例…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	文字工具
+	Text Tweaker…	文字微調…
+	Text Tweaker	文字微調
+	Attribute:	屬性：
+	From:	起始：
+	To:	結束：
+	Bow	弓形
+	Spike	尖峰
+	Skip Spaces	略過空格

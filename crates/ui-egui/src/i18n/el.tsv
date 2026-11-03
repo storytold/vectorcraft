@@ -2651,6 +2651,7 @@ theme	Appearance	Εμφάνιση
 	Manually	Χειροκίνητα
 	Mark as trapped	Σήμανση ως επικαλυπτόμενου
 	Mark Older Files as [Converted] When Opened	Σήμανση παλαιότερων αρχείων ως [Μετατράπηκε] κατά το άνοιγμα
+	Use System Defaults for Edit Original	Χρήση προεπιλογών συστήματος για την Επεξεργασία πρωτοτύπου
 	Marker…	Δείκτης…
 	Marks	Σημάδια
 	Marks and Bleed	Σημάδια και ξάκρισμα
@@ -5517,6 +5518,11 @@ effect	Points	Σημεία
 	Export Type:	Τύπος εξαγωγής:
 	Movie Clip	Κλιπ ταινίας
 @msg	name is empty	το όνομα είναι κενό
+@msg	an action is already recording	μια ενέργεια καταγράφεται ήδη
+@msg	no such function key	δεν υπάρχει τέτοιο πλήκτρο λειτουργίας
+@msg	no such color	δεν υπάρχει τέτοιο χρώμα
+@msg	{_1} cannot be used on Windows	Το {_1} δεν μπορεί να χρησιμοποιηθεί στα Windows
+@msg	more than one action is named “{_1}”	περισσότερες από μία ενέργειες ονομάζονται «{_1}»
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
 	Smudge Stick…	Μουτζούρα…
 	Smudge Stick	Μουτζούρα
@@ -5687,6 +5693,13 @@ axis	Y Axis	Άξονας Y
 	Action Options…	Επιλογές ενέργειας…
 	Action Options	Επιλογές ενέργειας
 	Rename Action	Μετονομασία ενέργειας
+	New Action…	Νέα ενέργεια…
+	New Action	Νέα ενέργεια
+	Create New Action	Δημιουργία νέας ενέργειας
+	Play Action	Αναπαραγωγή ενέργειας
+	Action Set:	Σύνολο ενεργειών:
+	Function Key:	Πλήκτρο λειτουργίας:
+	Record	Καταγραφή
 	Create New Set	Δημιουργία νέου συνόλου
 	Stop Global Edit	Τερματισμός καθολικής επεξεργασίας
 	Global Edit Options	Επιλογές καθολικής επεξεργασίας
@@ -6211,3 +6224,13 @@ breakText	Glyphs	Γλύφοι
 	Create Swatch Legend	Δημιουργία υπομνήματος δειγμάτων χρωμάτων
 	Create Swatch Legend…	Δημιουργία υπομνήματος δειγμάτων χρωμάτων…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Εργαλεία κειμένου
+	Text Tweaker…	Ρύθμιση κειμένου…
+	Text Tweaker	Ρύθμιση κειμένου
+	Attribute:	Ιδιότητα:
+	From:	Από:
+	To:	Έως:
+	Bow	Τόξο
+	Spike	Αιχμή
+	Skip Spaces	Παράλειψη κενών

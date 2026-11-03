@@ -2094,6 +2094,7 @@ digits	Malayalam	マラヤーラム数字
 	Manage Workspaces	ワークスペースを管理
 	Manually	手動
 	Mark Older Files as [Converted] When Opened	古いファイルを開くときに[変換]と表示
+	Use System Defaults for Edit Original	「オリジナルを編集」にシステムのデフォルトを使用
 	Mark as trapped	トラップ済みとしてマーク
 	Marks	トンボ
 	Match User Interface Brightness	ユーザーインターフェイスの明るさに合わせる
@@ -5222,6 +5223,11 @@ lighting	Light	ライト
 	Export Type:	書き出しタイプ:
 	Movie Clip	ムービークリップ
 @msg	name is empty	名前が空です
+@msg	an action is already recording	すでにアクションを記録中です
+@msg	no such function key	指定されたファンクションキーが見つかりません
+@msg	no such color	指定されたカラーが見つかりません
+@msg	{_1} cannot be used on Windows	{_1} は Windows では使用できません
+@msg	more than one action is named “{_1}”	「{_1}」という名前のアクションが複数あります
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
 	Smudge Stick…	スマッジスティック…
 	Smudge Stick	スマッジスティック
@@ -5417,6 +5423,13 @@ axis	Y Axis	Y 軸
 	Action Options…	アクションオプション…
 	Action Options	アクションオプション
 	Rename Action	アクション名を変更
+	New Action…	新規アクション…
+	New Action	新規アクション
+	Create New Action	新規アクションを作成
+	Play Action	アクションを再生
+	Action Set:	アクションセット:
+	Function Key:	ファンクションキー:
+	Record	記録
 	Create New Set	新規セットを作成
 	Stop Global Edit	グローバル編集を終了
 	Global Edit Options	グローバル編集オプション
@@ -5944,3 +5957,13 @@ breakText	Glyphs	字形
 	Create Swatch Legend	スウォッチの凡例を作成
 	Create Swatch Legend…	スウォッチの凡例を作成…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	テキストツール
+	Text Tweaker…	テキストの調整…
+	Text Tweaker	テキストの調整
+	Attribute:	属性:
+	From:	開始:
+	To:	終了:
+	Bow	弓形
+	Spike	山形
+	Skip Spaces	スペースをスキップ

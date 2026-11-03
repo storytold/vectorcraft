@@ -391,3 +391,18 @@ fn hyphenation_exceptions_dialog_ok_reaches_the_hyphenator() {
     assert!(vectorcraft_text::hyphen::hyphen_points("typography").is_empty());
     assert_eq!(vectorcraft_text::hyphen::hyphen_points("happen"), vec![3]);
 }
+
+/// #5236: File Handling › Use System Defaults for Edit Original is a checkbox, on by default, and
+/// OK saves it off.
+#[test]
+fn use_system_defaults_for_edit_original_is_a_checkbox() {
+    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    assert!(a.session.prefs.edit_original_system_defaults, "on by default");
+    open(&mut a, Some("File Handling"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Use System Defaults for Edit Original"), "{text}");
+    assert!(a.ui.dialog.as_ref().unwrap().bool("editOriginalSystemDefaults"));
+    a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalSystemDefaults".into(), json!(false));
+    confirm(&mut a).unwrap();
+    assert!(!a.session.prefs.edit_original_system_defaults);
+}
