@@ -16,7 +16,10 @@ use crate::xform::{BLUE, polygon};
 
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
 
-pub const ID: &str = "superLasso";
+pub const ID: &str = "enclosingLasso";
+/// The most points a loop keeps (one per screen pixel dragged): room for a loop around a 4K screen
+/// many times over.
+pub(crate) const MAX_POINTS: usize = 65_536;
 
 #[derive(Default)]
 pub struct EnclosingLassoTool {
@@ -114,7 +117,7 @@ impl Tool for EnclosingLassoTool {
             PointerKind::Drag if self.active => {
                 if self.points.last().is_none_or(|p| p.distance(ev.pos) >= cx.tol(1.0)) {
                     // Cancel rather than testing a truncated loop that could select other art.
-                    if self.points.len() >= 4096 {
+                    if self.points.len() >= MAX_POINTS {
                         self.active = false;
                         self.points.clear();
                         return vec![];

@@ -98,8 +98,6 @@ fn the_tool_buttons_are_centred_in_the_panel() {
     }
 }
 
-/// Screen readers name each tool button by its tool tip and say which tool is active, and name
-/// the title bar's column toggle and grip and the paint buttons under the tools.
 #[test]
 fn saved_flyout_choices_must_still_belong_to_the_slot() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -111,6 +109,8 @@ fn saved_flyout_choices_must_still_belong_to_the_slot() {
     }
 }
 
+/// Screen readers name each tool button by its tool tip and say which tool is active, and name
+/// the title bar's column toggle and grip and the paint buttons under the tools.
 #[test]
 fn screen_readers_name_the_tool_buttons_and_the_active_tool() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

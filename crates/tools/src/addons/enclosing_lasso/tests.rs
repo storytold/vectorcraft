@@ -256,8 +256,8 @@ fn enclosing_lasso_cancels_an_overlong_gesture_instead_of_silently_truncating_it
     let cx = cx(&d, &s, &p);
     let mut tool = EnclosingLassoTool::default();
     tool.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
-    for i in 1..=4096 {
-        assert!(tool.pointer(&cx, &PointerEvent::new(PointerKind::Drag, f64::from(i), 100.0)).is_empty());
+    for i in 1..=MAX_POINTS {
+        assert!(tool.pointer(&cx, &PointerEvent::new(PointerKind::Drag, i as f64, 100.0)).is_empty());
     }
     assert!(!tool.busy());
     assert!(tool.overlays(&cx).is_empty());
