@@ -63,14 +63,19 @@ pub(super) fn rings(path: &PathData, rule: FillRule, size: f64, limit: usize) ->
         }
     }
     // Which rings hold which: each ring against the others, its edges walked only where its
-    // bounds hold the point, and within [`MAX_CONTAINMENT_EDGES`] edges in all.
+    // bounds hold the point, and within [`MAX_CONTAINMENT_EDGES`] edges and pairs in all (a pair
+    // whose bounds miss the point costs a step too: many small rings are a square of pairs).
     let too_complex = || String::from("The shape is too complex for a 3D effect");
     let mut work = 0usize;
     let mut within = |out: &[Vec<Point>], bounds: &[Rect], i: usize| -> Result<Vec<usize>, String> {
         let p = out.get(i).and_then(|r| r.first()).copied().unwrap_or_default();
         let mut held_by = vec![];
         for (j, (o, b)) in out.iter().zip(bounds).enumerate() {
+            work = work.saturating_add(1);
             if j == i || !(b.x0 <= p.x && p.x <= b.x1 && b.y0 <= p.y && p.y <= b.y1) {
+                if work > MAX_CONTAINMENT_EDGES {
+                    return Err(too_complex());
+                }
                 continue;
             }
             work = work.saturating_add(o.len());
