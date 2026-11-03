@@ -497,6 +497,9 @@ pub(super) fn plane_match(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "plane": plane.id(), "offset": depth }))
 }
 
+/// `perspective.nudge`, the arrow keys with the Perspective Selection tool: the selection moves
+/// within its plane by [`nudge_step`](crate::cmd::object::nudge_step), measured on the page at the
+/// centre of its perspective box, without Snap to Grid.
 pub(super) fn persp_nudge(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "perspective.nudge";
     let (dx, dy) = (number_or(p, "dx", 0.0, C)?, number_or(p, "dy", 0.0, C)?);
@@ -512,7 +515,12 @@ pub(super) fn persp_nudge(s: &mut Session, p: &Value) -> Result<Value> {
     let (plane, depth, rect) = g.plane_bounds(&st.doc, &ids).ok_or_else(|| EngineError::Other("the selection isn't in perspective".into()))?;
     let from = g.homography_at(plane, depth).and_then(|h| h.apply(rect.center())).ok_or_else(beyond_horizon)?;
     let to = from + vectorcraft_geom::Vec2::new(dx.clamp(-1.0, 1.0), dy.clamp(-1.0, 1.0)) * k;
-    persp_move(s, &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "from": [from.x, from.y], "to": [to.x, to.y], "copy": copy}))
+    // The arrow keys move by the step: Snap to Grid would pull an edge on a gridline back onto it,
+    // so a nudge smaller than a quarter cell would move nothing.
+    persp_move(
+        s,
+        &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "from": [from.x, from.y], "to": [to.x, to.y], "copy": copy, "snap": false}),
+    )
 }
 
 pub(super) fn persp_draw(s: &mut Session, p: &Value) -> Result<Value> {

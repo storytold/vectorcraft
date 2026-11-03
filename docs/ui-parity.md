@@ -418,7 +418,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-02 | minor | Arrow keys: Ctrl/Cmd+arrow nudges art, direct-selected anchors, ruler guides and a selection in perspective by a tenth of the Keyboard Increment, and Shift+Ctrl/Cmd+arrow by one increment; `object.nudge` and `perspective.nudge` take `fine` (#5258); scores and estimates unchanged |
+| 2026-11-02 | minor | Arrow keys: Ctrl/Cmd+arrow nudges art, direct-selected anchors, ruler guides and a selection in perspective by a tenth of the Keyboard Increment, and Shift+Ctrl/Cmd+arrow by one increment; `object.nudge` and `perspective.nudge` take `fine`; Snap to Grid no longer pulls a nudge in perspective back onto the gridlines, which left grid-aligned art unmoved (#5258); scores and estimates unchanged |
 | 2026-11-03 | minor | Enclosing Lasso selects fully enclosed objects with a freehand loop under Object › Plug-ins; scores and estimates unchanged. |
 | 2026-11-03 | minor | Type on a Path Options has a Preview checkbox (#5360, as public tutorials of the dialog show); scores and estimates unchanged |
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control accept the wheel without opening the menu (#5253); scores and estimates unchanged. |

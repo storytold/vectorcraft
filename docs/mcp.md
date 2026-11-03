@@ -1142,7 +1142,7 @@ The transform, Align, Object Properties and Live Shape Properties commands refus
 that is not true or false with `` `strokes` must be true or false ``, naming the key, and leave the document and its
 undo history as they were: the options `copy`, `strokes`, `corners`, `patterns`, `objects` and `typeAreas` in
 `object.transform`, `object.move`, `object.nudge`, `object.rotate`, `object.scale`, `object.reflect`, `object.shear`,
-`object.transformAgain` and `object.setBounds`; `anchors` and `releaseOutside` in `object.transform`; `big` in `object.nudge`;
+`object.transformAgain` and `object.setBounds`; `anchors` and `releaseOutside` in `object.transform`; `big` and `fine` in `object.nudge`;
 `absolute` in `object.rotate`; `proportional` in `object.setBounds`; `patterns` in `object.align`, `object.distribute`
 and `object.distributeSpacing`; `visible`, `locked`, `isolate` and `knockoutShape` in `object.setProps`; and
 `invertPie`, `makeSidesEqual` and `relativeRadii` in `object.setLiveShape`. A null is read as a key left out.
@@ -5971,8 +5971,8 @@ back). Holding Shift during an in-plane move constrains each object's displaceme
 own plane. `perspective.move` accepts `constrain: true` (default false) and adjusts Snap to Grid along the constrained
 direction on the first object's plane and depth.
 `press_key` Escape during a move, a resize or a plane widget drag cancels it and puts the objects and the
-grid back. The arrow keys nudge a selection in perspective by the keyboard increment (`perspective.nudge`; Shift ×10, Alt
-copies). Object › Transform › Transform Again repeats the last perspective move or scale in plane space.
+grid back. The arrow keys nudge a selection in perspective by the keyboard increment (`perspective.nudge`; Shift ×10,
+Ctrl/Cmd ÷10 (`fine`), Shift+Ctrl/Cmd one increment, Alt copies); Snap to Grid doesn't pull a nudge onto the gridlines. Object › Transform › Transform Again repeats the last perspective move or scale in plane space.
 
 ```json
 {"name":"pointer_gesture","arguments":{"tool":"perspectiveSelection","events":[{"kind":"down","x":480,"y":410},{"kind":"drag","x":470,"y":405}]}}
@@ -5984,8 +5984,8 @@ copies). Object › Transform › Transform Again repeats the last perspective m
 
 The perspective, width point, Liquify and Puppet Warp commands refuse a string, a number or another value that is not
 true or false with `` `copy` must be true or false ``, naming the key, and leave the document and its undo history as
-they were: `copy`, `perpendicular` and `snap` in `perspective.move`; `copy` in `perspective.transform`; `big` and
-`copy` in `perspective.nudge`; `snap` in `perspective.draw`; `reproject` in `perspective.grid.set`; `visible` in
+they were: `copy`, `perpendicular` and `snap` in `perspective.move`; `copy` in `perspective.transform`; `big`, `fine`
+and `copy` in `perspective.nudge`; `snap` in `perspective.draw`; `reproject` in `perspective.grid.set`; `visible` in
 `perspective.grid.show`; `adjustAdjoining` in `stroke.widthPoint.set`; `usePressure`, `simplifyOn`, `affectAnchors`,
 `affectIn` and `affectOut` in `object.liquify`, with any `tool`; and `rest` in `object.puppetWarp`. A null is read as
 a key left out.

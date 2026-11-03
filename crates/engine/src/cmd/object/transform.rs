@@ -302,6 +302,9 @@ pub(crate) fn nudge_step(increment: f64, big: bool, fine: bool) -> f64 {
     }
 }
 
+/// `object.nudge`, the arrow keys: the selected anchors, else the selected objects (and the guides
+/// that move with them), else the selected ruler guides move by [`nudge_step`] in the arrow's
+/// direction, in one undo step.
 pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["dx", "dy"], "object.nudge")?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.nudge")?;
