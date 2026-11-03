@@ -61,7 +61,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 
 /// Does this dialog show a Preview checkbox? Grid Repeat Options does: the public page for the
 /// grid options lists one, and the radial and mirror pages do not. Type on a Path Options does
-/// too (#5360), our choice: its public pages list none. (Cancel rolls a preview back whichever
+/// too (#5360), as public tutorials of the dialog show. (Cancel rolls a preview back whichever
 /// dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
