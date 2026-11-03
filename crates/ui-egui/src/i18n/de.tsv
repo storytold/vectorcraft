@@ -5145,6 +5145,11 @@ effect	Soft	Weich
 	Export Type:	Exporttyp:
 	Movie Clip	Movieclip
 @msg	name is empty	Name ist leer
+@msg	an action is already recording	eine Aktion wird bereits aufgezeichnet
+@msg	no such function key	keine solche Funktionstaste
+@msg	no such color	keine solche Farbe
+@msg	{_1} cannot be used on Windows	{_1} kann unter Windows nicht verwendet werden
+@msg	more than one action is named “{_1}”	mehr als eine Aktion heißt „{_1}“
 @msg	no symbol named `{n}`	kein Symbol namens `{n}`
 	Smudge Stick…	Wischstift…
 	Smudge Stick	Wischstift
@@ -5319,6 +5324,13 @@ axis	Y Axis	Y-Achse
 	Action Options…	Aktionsoptionen…
 	Action Options	Aktionsoptionen
 	Rename Action	Aktion umbenennen
+	New Action…	Neue Aktion…
+	New Action	Neue Aktion
+	Create New Action	Neue Aktion erstellen
+	Play Action	Aktion abspielen
+	Action Set:	Aktionssatz:
+	Function Key:	Funktionstaste:
+	Record	Aufzeichnen
 	Create New Set	Neuen Satz erstellen
 	Stop Global Edit	Globale Bearbeitung beenden
 	Global Edit Options	Optionen für globale Bearbeitung

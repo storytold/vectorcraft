@@ -5160,6 +5160,11 @@ lighting	Light	Світло
 	Export Type:	Тип експорту:
 	Movie Clip	Кліп
 @msg	name is empty	ім’я порожнє
+@msg	an action is already recording	дія вже записується
+@msg	no such function key	такої функціональної клавіші немає
+@msg	no such color	такого кольору немає
+@msg	{_1} cannot be used on Windows	Сполучення {_1} не можна використовувати у Windows
+@msg	more than one action is named “{_1}”	кілька дій мають назву «{_1}»
 @msg	no symbol named `{n}`	немає символу з назвою `{n}`
 	Smudge Stick…	Розтушовування…
 	Smudge Stick	Розтушовування
@@ -5333,6 +5338,13 @@ axis	Y Axis	Вісь Y
 	Action Options…	Параметри дії…
 	Action Options	Параметри дії
 	Rename Action	Перейменувати дію
+	New Action…	Нова дія…
+	New Action	Нова дія
+	Create New Action	Створити нову дію
+	Play Action	Відтворити дію
+	Action Set:	Набір дій:
+	Function Key:	Функціональна клавіша:
+	Record	Записати
 	Create New Set	Створити новий набір
 	Stop Global Edit	Завершити глобальне редагування
 	Global Edit Options	Параметри глобального редагування

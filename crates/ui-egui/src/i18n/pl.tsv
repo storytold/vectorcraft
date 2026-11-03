@@ -5420,6 +5420,11 @@ mark-style	Japanese	Japońskie
 	Export Type:	Typ eksportu:
 	Movie Clip	Klip filmowy
 @msg	name is empty	nazwa jest pusta
+@msg	an action is already recording	operacja jest już nagrywana
+@msg	no such function key	brak takiego klawisza funkcyjnego
+@msg	no such color	brak takiego koloru
+@msg	{_1} cannot be used on Windows	Skrótu {_1} nie można używać w systemie Windows
+@msg	more than one action is named “{_1}”	więcej niż jedna operacja nazywa się „{_1}”
 @msg	no symbol named `{n}`	brak symbolu o nazwie `{n}`
 	Smudge Stick…	Rozmazywacz…
 	Smudge Stick	Rozmazywacz
@@ -5590,6 +5595,13 @@ axis	Y Axis	Oś Y
 	Action Options…	Opcje operacji…
 	Action Options	Opcje operacji
 	Rename Action	Zmień nazwę operacji
+	New Action…	Nowa operacja…
+	New Action	Nowa operacja
+	Create New Action	Utwórz nową operację
+	Play Action	Odtwórz operację
+	Action Set:	Zestaw operacji:
+	Function Key:	Klawisz funkcyjny:
+	Record	Nagraj
 	Create New Set	Utwórz nowy zestaw
 	Stop Global Edit	Zakończ edycję globalną
 	Global Edit Options	Opcje edycji globalnej

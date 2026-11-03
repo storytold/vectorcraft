@@ -154,14 +154,18 @@ fn runs_a_command(i: &egui::InputState, key: Key, cmd_only: bool) -> bool {
 /// `key` and `code` are the browser's names for the character typed and the key's position, which
 /// egui reads with [`Key::from_name`]; `modifiers` as egui reports them. The press is matched as
 /// the dispatcher matches it ([`dispatch`]) on a layout about which nothing is known: what typing
-/// has shown of the layout is left out, and so are double presses.
+/// has shown of the layout is left out, and so are double presses. An action's function key runs
+/// a shortcut too.
 pub fn runs_a_shortcut(key: &str, code: &str, modifiers: Modifiers) -> bool {
     let physical_key = Key::from_name(code);
     let Some(key) = Key::from_name(key).or(physical_key) else { return false };
     let press = egui::Event::Key { key, physical_key, pressed: true, repeat: false, modifiers };
     let Some(input) = craft_keymap::KeyInput::from_egui(&press, crate::keymap::platform()) else { return false };
     let mirror = crate::shortcut_editor::current();
-    craft_keymap::Layout::default().candidates(&input).iter().any(|c| mirror.keymap.lookup(c, false, &Active::NONE) != craft_keymap::Lookup::None)
+    craft_keymap::Layout::default()
+        .candidates(&input)
+        .iter()
+        .any(|c| mirror.keymap.lookup(c, false, &Active::NONE) != craft_keymap::Lookup::None || crate::panels::actions::plays_an_action(c))
 }
 
 /// Process one frame's events against the keymap at most once per context, viewport and frame, so
@@ -338,6 +342,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if claimed_tool_keys(app, ctx, view, rows_keys) {
         return;
     }
+    // An action's function key plays the action, also when a command has the same shortcut.
+    crate::panels::actions::play_function_key(app, ctx);
     // Command, panel and tool shortcuts. A bound shifted punctuation chord uses its key press;
     // other text keys use the typed character below.
     let row_key = |chord: &craft_keymap::Chord| {
@@ -487,6 +493,7 @@ fn type_tool_input(app: &mut VectorcraftApp, ctx: &egui::Context, composing: boo
             })
         });
     }
+    crate::panels::actions::play_function_key(app, ctx);
     // Editing keys with modifiers and the clipboard (Cmd+A is Select All's, below: the text).
     crate::panels::character::route_type_input(app, ctx);
     // Enter was already delivered above as ToolKey::Enter (newline). Only chords with the
