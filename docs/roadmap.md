@@ -1,5 +1,7 @@
 # Roadmap: milestones and what's next
 
+> **QoL update (2026-11-02):** Selection-tool marquees offer Touching (default), Fully Enclosed and Drag Direction in Preferences › Selection & Anchor Display. Drag Direction uses screen left/right, including rotated views, retaining its last rule within three horizontal screen pixels of the press. E reverses the rule for the current drag. A solid enclosed outline or dashed touching outline and a translated label show the active rule. The selection region remains aligned to the document axes. This is a VectorCraft addition; scores and estimates are unchanged.
+
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (M5: supersampled exports avoid redundant opaque knockout layers; File formats: `.ai`/EPS import fidelity from a user's file audit; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
