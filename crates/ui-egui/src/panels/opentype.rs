@@ -202,7 +202,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The font, not the text, decides which numbered sets can be offered. Each set is an
     // independent feature, so the menu permits several at once. A font's own label wins over
     // the numbered fallback. See the public Stylistic Sets help page.
-    let sets = FontDb::global().face(&st.font_family, &st.font_style).map(|face| face.stylistic_sets()).unwrap_or_default();
+    let sets = FontDb::global().style_face(&st).map(|face| face.stylistic_sets()).unwrap_or_default();
     ui.add_enabled_ui(!sets.is_empty(), |ui| {
         ui.menu_button(tl!("Stylistic Sets"), |ui| {
             for set in &sets {
