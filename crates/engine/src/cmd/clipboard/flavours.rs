@@ -327,7 +327,7 @@ impl Clipboard {
                     // The encoder renders at no fewer than MIN_COPY_PNG_SCALE pixels a point: art
                     // too large to fit COPY_PNG_SIDE at that scale gets no PNG, rather than one
                     // of up to a gigabyte of pixels.
-                    if !(scale >= MIN_COPY_PNG_SCALE) {
+                    if scale < MIN_COPY_PNG_SCALE {
                         log::warn!("clipboard PNG: art {side} pt across is too large to copy as a picture");
                         continue;
                     }
