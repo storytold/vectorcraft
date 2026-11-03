@@ -70,6 +70,26 @@ fn native_recovery_copies_leave_out_the_pdf() {
 }
 
 #[test]
+fn restored_recovery_copies_keep_the_original_pdf_preference() {
+    let dir = crate::tests_links::Folder::new("recovered-pdf-preference");
+    for pdf in [false, true] {
+        let (mut s, store) = session();
+        s.execute("file.saveAs", &json!({"path": dir.file(&format!("original-{pdf}.vectorcraft")), "pdfCompatible": pdf})).unwrap();
+        s.execute("shape.ellipse", &json!({"x": 80, "y": 20, "width": 20, "height": 20})).unwrap();
+        let copied = s.execute("file.recovery.save", &json!({})).unwrap();
+        let file = format!("{}.vectorcraft", copied["saved"][0]["file"].as_str().unwrap());
+        assert!(vectorcraft_format::pdf_content(&store.read(&file).unwrap()).is_none());
+        drop(s);
+        let mut s = relaunch(&store);
+        assert_eq!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()), 1);
+        assert_eq!(s.doc().unwrap().save_options.get("pdfCompatible"), Some(&json!(pdf)));
+        let saved = s.execute("document.save", &json!({})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+        assert_eq!(vectorcraft_format::pdf_content(&bytes).is_some(), pdf);
+    }
+}
+
+#[test]
 fn recovery_save_writes_modified_documents_once() {
     let (mut s, store) = session();
     // A clean second document gets no copy.

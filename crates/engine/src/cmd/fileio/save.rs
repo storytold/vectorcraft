@@ -276,11 +276,10 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     let mut options = if given.is_empty() && format.id == st.format { remembered_save_options(st) } else { given };
     // Native PDF compatibility stays as last saved unless this save gives it explicitly.
     if matches!(format.id, "vectorcraft" | "template")
-        && format.id == st.format
         && !options.contains_key("pdfCompatible")
-        && let Some(pdf @ Value::Bool(_)) = st.save_options.get("pdfCompatible").or_else(|| s.prefs.native_save_options.get("pdfCompatible"))
+        && let Some(pdf) = native_pdf_preference(s, Some(st))
     {
-        options.insert("pdfCompatible".into(), pdf.clone());
+        options.insert("pdfCompatible".into(), json!(pdf));
     }
     // Save writes the document's own file; the other modes only where they are told to.
     let path =
@@ -337,6 +336,15 @@ fn same_value(a: &Value, b: &Value) -> bool {
         (Value::Number(x), Value::Number(y)) => x == y || ((x.is_f64() || y.is_f64()) && x.as_f64() == y.as_f64()),
         _ => a == b,
     }
+}
+
+/// Native documents and templates share only their PDF choice. Other source formats use the
+/// application's last native choice, keeping an AI file's separate PDF option out of it.
+fn native_pdf_preference(s: &Session, st: Option<&DocState>) -> Option<bool> {
+    st.filter(|d| matches!(d.format, "vectorcraft" | "template"))
+        .and_then(|d| d.save_options.get("pdfCompatible"))
+        .and_then(Value::as_bool)
+        .or_else(|| s.prefs.native_save_options.get("pdfCompatible").and_then(Value::as_bool))
 }
 
 /// The options `st` was last saved with, their artboards (`artboard`, `artboards` and `range`)
@@ -958,11 +966,17 @@ fn format_options(s: &mut Session, p: &Value) -> Result<Value> {
         .or_else(|| (f.id == "vectorcraft" && !s.prefs.native_save_options.is_empty()).then(|| s.prefs.native_save_options.clone()));
     // A native save compresses as Use Compression says, unless told otherwise.
     let prefs = with_compression_pref(&s.prefs, &json!({}));
+    let native_pdf = matches!(f.id, "vectorcraft" | "template").then(|| native_pdf_preference(s, st)).flatten();
     let mut v = f.to_json();
     if let Some(options) = v["options"].as_object_mut() {
         for (name, o) in options.iter_mut() {
             let default = prefs.get(name).filter(|_| matches!(f.id, "vectorcraft" | "template")).unwrap_or(&o["default"]);
             o["value"] = saved.as_ref().and_then(|m| m.get(name)).unwrap_or(default).clone();
+            if name == "pdfCompatible"
+                && let Some(pdf) = native_pdf
+            {
+                o["value"] = json!(pdf);
+            }
         }
     }
     v["saveFormats"] =

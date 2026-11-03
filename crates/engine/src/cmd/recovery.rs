@@ -557,6 +557,10 @@ struct Meta {
     path: Option<String>,
     /// The format Save writes for it ([`SAVE_FORMATS`]).
     format: String,
+    /// The native PDF preference before the recovery copy deliberately omits its PDF.
+    /// Older copies did not record this preference.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    native_pdf_compatible: Option<bool>,
     /// When the copy was written (Unix seconds; none without a clock).
     saved: Option<i64>,
     /// The file it was read from when that import left things out of the document, and what
@@ -823,6 +827,13 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             title: title.clone(),
             path: st.path.clone(),
             format: st.format.to_string(),
+            native_pdf_compatible: matches!(st.format, "vectorcraft" | "template").then(|| {
+                st.save_options
+                    .get("pdfCompatible")
+                    .and_then(Value::as_bool)
+                    .or_else(|| s.prefs.native_save_options.get("pdfCompatible").and_then(Value::as_bool))
+                    .unwrap_or(true)
+            }),
             saved,
             imported_from: st.imported_from.clone(),
             import_losses: st.import_losses.clone(),
@@ -1046,6 +1057,9 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     st.imported_from = meta.imported_from.clone();
     st.import_losses = meta.import_losses.clone();
     st.format = SAVE_FORMATS.iter().copied().find(|f| *f == meta.format).unwrap_or("vectorcraft");
+    if let Some(pdf) = meta.native_pdf_compatible {
+        st.save_options.insert("pdfCompatible".into(), json!(pdf));
+    }
     st.mark_unsaved();
     // The copy stays until the document is saved or closed.
     st.recovery = Some(RecoveryCopy { file: mine.clone(), doc: st.doc.clone() });

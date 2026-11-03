@@ -213,6 +213,25 @@ fn native_saves_without_artboards_keep_the_editable_document() {
 }
 
 #[test]
+fn native_template_saves_keep_the_document_pdf_preference() {
+    let mut s = three_boards();
+    let dir = Folder::new("template-pdf-preference");
+    s.execute("file.saveAs", &json!({"path": dir.file("compact.vectorcraft"), "pdfCompatible": false, "version": 3})).unwrap();
+    let options = s.execute("file.formatOptions", &json!({"format": "template"})).unwrap();
+    assert_eq!(options["options"]["pdfCompatible"]["value"], false, "the save dialog must offer the same retained choice");
+    let r = s.execute("file.saveAsTemplate", &json!({"format": "template"})).unwrap();
+    let bytes = bytes_of(&r["dataBase64"]);
+    assert!(vectorcraft_format::pdf_content(&bytes).is_none());
+    assert_eq!(
+        vectorcraft_format::load_file(&bytes).unwrap().info.version,
+        vectorcraft_format::VERSION,
+        "unrelated format options are not carried over"
+    );
+    let r = s.execute("file.saveAsTemplate", &json!({"format": "template", "pdfCompatible": true})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&bytes_of(&r["dataBase64"])).is_some());
+}
+
+#[test]
 fn reopening_native_files_keeps_each_files_pdf_compatibility() {
     let dir = Folder::new("pdf-reopened-options");
     let mut s = three_boards();
