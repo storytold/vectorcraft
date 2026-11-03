@@ -643,6 +643,31 @@ fn images_are_kept_apart_and_written_again_only_when_they_change() {
     assert!(store.images().is_empty(), "{:?}", store.list());
 }
 
+/// Image keys sharing their bytes share one entry: it is written once when saved, and read and
+/// written once when restored.
+#[test]
+fn images_sharing_an_entry_are_written_once() {
+    let store = Arc::new(Counting::default());
+    let mut s = Session::new();
+    s.recovery.set_store(store.clone());
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    place_png(&mut s, "red.png", crate::tests_links::RED);
+    let doc = Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let blob = doc.images.values().next().unwrap().clone();
+    for i in 0..50 {
+        doc.images.insert(format!("copy-{i}"), blob.clone());
+    }
+    s.execute("file.recovery.save", &json!({})).unwrap();
+    assert_eq!(store.images_written().len(), 1);
+    let images = images_of(&s);
+    drop(s);
+    let mut s = Session::new();
+    s.recovery.set_store(store.clone());
+    assert_eq!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()), 1);
+    assert_eq!(images_of(&s), images);
+    assert_eq!(store.images_written().len(), 1, "restored into this session's area once");
+}
+
 #[test]
 fn copies_from_before_images_were_kept_apart_still_restore() {
     let store = Arc::new(MemoryStore::default());
