@@ -156,6 +156,13 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("holdToolKeys", "General", "Options", "Hold a Tool Shortcut to Use the Tool Temporarily", bool),
     // Selection & Anchor Display
     p!("selectionTolerance", "Selection & Anchor Display", "Selection", "Tolerance", num(1.0, 8.0, "px")),
+    p!(
+        "marqueeSelection",
+        "Selection & Anchor Display",
+        "Selection",
+        "Marquee Selection",
+        choice(&[("touching", "Touching"), ("enclosed", "Fully Enclosed"), ("directional", "Drag Direction")])
+    ),
     p!("objectSelectionByPathOnly", "Selection & Anchor Display", "Selection", "Object Selection by Path Only", bool),
     p!("snapToPointTolerance", "Selection & Anchor Display", "Selection", "Snap to Point", num(1.0, 8.0, "px")),
     p!("ctrlClickSelectsBehind", "Selection & Anchor Display", "Selection", "Command Click to Select Objects Behind", bool),

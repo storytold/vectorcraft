@@ -1,5 +1,7 @@
 # VectorCraft MCP server
 
+Selection-tool marquees: `prefs.set {key: "marqueeSelection", value: "touching" | "enclosed" | "directional"}` chooses touched objects (default), fully enclosed objects, or screen-right enclosed / screen-left touched objects. Direction follows the screen when the view is rotated; within three horizontal screen pixels of the press, the last rule remains (initially touching). Without a screen frame, direction uses document x at the current zoom. E reverses the rule for the current drag; Shift toggles the reached objects and Escape cancels. The outline and label show the effective rule. Ruler guides use that rule too; Direct Selection and the document-aligned selection region are unchanged.
+
 `vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
 (newline-delimited JSON-RPC 2.0; see [Protocol](#protocol) for version negotiation). Agents use it to
 draw, inspect and look at VectorCraft documents.

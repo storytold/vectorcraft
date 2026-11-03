@@ -1935,6 +1935,11 @@ font-technology	Variable	Μεταβλητές
 	Select All	Επιλογή όλων
 	Select:	Επιλογή:
 	Selection	Επιλογή
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Ορθογώνια επιλογή
+	Touching	Αντικείμενα που τέμνονται
+	Fully Enclosed	Πλήρως εντός
+	Drag Direction	Κατεύθυνση σύρσης
 	Selection Tool	Επιλογή (Selection Tool)
 	Send Backward	Μεταφορά ένα βήμα πίσω
 	Send to Back	Μεταφορά στο παρασκήνιο

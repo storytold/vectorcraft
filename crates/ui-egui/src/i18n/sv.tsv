@@ -2986,6 +2986,11 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Markerade färgrutor
 	Selected Swatches Only	Endast markerade färgrutor
 	Selection	Markering
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Rektangelmarkering
+	Touching	Berörda objekt
+	Fully Enclosed	Helt omslutna
+	Drag Direction	Dragriktning
 	Selection & Anchor Display	Visning av markering och ankarpunkter
 	Selection Only	Endast markering
 	Selection Tool	Markeringsverktyg

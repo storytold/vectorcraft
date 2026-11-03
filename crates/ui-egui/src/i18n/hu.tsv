@@ -3667,6 +3667,11 @@ mark-style	Japanese	Japán
 	Selected Swatches Only	Csak a kijelölt színminták
 	Selected Swatches Only (0)	Csak a kijelölt színminták (0)
 	Selection	Kijelölés
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Téglalapos kijelölés
+	Touching	Érintett objektumok
+	Fully Enclosed	Teljesen befoglalt
+	Drag Direction	Húzás iránya
 	Selection & Anchor Display	Kijelölés és horgonypontok megjelenítése
 	Selection Only	Csak a kijelölés
 	Selection Tool	Kijelölés

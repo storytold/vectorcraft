@@ -179,6 +179,11 @@
 	Ungroup	Razgrupiši
 	Lock	Zaključaj
 	Selection	Odabir
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Pravougaoni odabir
+	Touching	Dodirnuti objekti
+	Fully Enclosed	Potpuno obuhvaćeni
+	Drag Direction	Smjer povlačenja
 	All Artwork Above	Sav crtež iznad
 	Other Layers	Ostali slojevi
 	Unlock All	Otključaj sve

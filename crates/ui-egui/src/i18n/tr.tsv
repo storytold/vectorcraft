@@ -2890,6 +2890,11 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Seçilen Renk Örnekleri
 	Selected Swatches Only	Yalnızca Seçilen Renk Örnekleri
 	Selection	Seçim
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Dikdörtgen seçim
+	Touching	Dokunulanlar
+	Fully Enclosed	Tamamen içeride
+	Drag Direction	Sürükleme yönü
 	Selection & Anchor Display	Seçim ve Bağlantı Ekranı
 	Selection Only	Yalnızca Seçim
 	Selection Tool	Seçim Aracı

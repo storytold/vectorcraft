@@ -1,5 +1,7 @@
 # VectorCraft Roadmap
 
+> **QoL update (2026-11-02):** Selection-tool marquees offer Touching (default), Fully Enclosed and Drag Direction in Preferences › Selection & Anchor Display. Drag Direction uses screen left/right, including rotated views, retaining its last rule within three horizontal screen pixels of the press. E reverses the rule for the current drag. A solid enclosed outline or dashed touching outline and a translated label show the active rule. The selection region remains aligned to the document axes. This is a VectorCraft addition; scores and estimates are unchanged.
+
 - Contour add-on (beyond Illustrator): drag a selected shape's edge outward or inward for a live, editable offset copy, with a floating bar for distance and Sharp, Round or Square corners; Bake turns it into paths. Scores and estimates unchanged.
 - Compound Shapes add-on (beyond Illustrator): a menu for Make, Release and Expand Compound Shape and a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons create compound shapes on a click. Scores and estimates unchanged.
 

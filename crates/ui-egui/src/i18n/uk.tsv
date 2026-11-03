@@ -3090,6 +3090,11 @@ digits	Malayalam	Малаялам
 	Selected Swatches	Вибрані зразки
 	Selected Swatches Only	Тільки вибрані зразки
 	Selection	Виділення
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Виділення рамкою
+	Touching	Перетнуті
+	Fully Enclosed	Повністю всередині
+	Drag Direction	Напрямок перетягування
 	Selection & Anchor Display	Відображення виділення та опорних точок
 	Selection Only	Тільки виділення
 	Selection Tool	Інструмент «Виділення»
