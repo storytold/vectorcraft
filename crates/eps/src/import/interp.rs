@@ -105,13 +105,18 @@ impl<'a> Interp<'a> {
     pub fn new(src: &'a [u8], g: GState, out: Out) -> Self {
         let made = super::obj::track();
         let system = new_dict();
+        // The standard encodings are also instances of the Encoding category, the same arrays
+        // (PLRM 3rd ed., `findencoding` and §3.9.2).
+        let encodings = new_dict();
         {
             let mut d = system.borrow_mut();
             for (op, name) in Op::ALL {
                 d.insert(Key::name(name), Obj::Op(*op));
             }
             for name in ["StandardEncoding", "ISOLatin1Encoding"] {
-                d.insert(Key::name(name), encoding());
+                let e = encoding();
+                d.insert(Key::name(name), e.clone());
+                encodings.borrow_mut().insert(Key::name(name), e);
             }
             // An integer, as interpreters have it (`systemdict /languagelevel get 2 ge`): run, the
             // name pushes it all the same.
@@ -122,6 +127,7 @@ impl<'a> Interp<'a> {
             CATEGORIES.split_whitespace().map(|c| (Key::name(c), Obj::dict(Dict::from([(Key::name("Category"), Obj::name(c))])))).collect();
         let resources = new_dict();
         resources.borrow_mut().insert(Key::name("Category"), Obj::dict(categories));
+        resources.borrow_mut().insert(Key::name("Encoding"), Obj::Dict(encodings));
         let fonts = new_dict();
         system.borrow_mut().insert(Key::name("FontDirectory"), Obj::Dict(fonts.clone()));
         for name in ["GlobalFontDirectory", "SharedFontDirectory"] {
