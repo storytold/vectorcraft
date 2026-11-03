@@ -6217,3 +6217,13 @@ breakText	Glyphs	Glifler
 	Create Swatch Legend	Renk Örneği Açıklaması Oluştur
 	Create Swatch Legend…	Renk Örneği Açıklaması Oluştur…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Metin Araçları
+	Text Tweaker…	Metin Ayarlayıcı…
+	Text Tweaker	Metin Ayarlayıcı
+	Attribute:	Öznitelik:
+	From:	Başlangıç:
+	To:	Bitiş:
+	Bow	Yay
+	Spike	Sivri Uç
+	Skip Spaces	Boşlukları Atla

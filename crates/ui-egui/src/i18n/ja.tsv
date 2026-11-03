@@ -5945,3 +5945,13 @@ breakText	Glyphs	字形
 	Create Swatch Legend	スウォッチの凡例を作成
 	Create Swatch Legend…	スウォッチの凡例を作成…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	テキストツール
+	Text Tweaker…	テキストの調整…
+	Text Tweaker	テキストの調整
+	Attribute:	属性:
+	From:	開始:
+	To:	終了:
+	Bow	弓形
+	Spike	山形
+	Skip Spaces	スペースをスキップ

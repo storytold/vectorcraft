@@ -154,14 +154,14 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-fn text_mut(d: &mut vectorcraft_doc::Document, id: NodeId) -> Option<&mut TextObject> {
+pub(crate) fn text_mut(d: &mut vectorcraft_doc::Document, id: NodeId) -> Option<&mut TextObject> {
     match d.node_mut(id).map(|n| &mut n.kind) {
         Some(NodeKind::Text(t)) => Some(t),
         _ => None,
     }
 }
 
-fn text_ref(s: &Session, id: NodeId) -> Result<TextObject> {
+pub(crate) fn text_ref(s: &Session, id: NodeId) -> Result<TextObject> {
     match s.doc()?.doc.node(id).map(|n| &n.kind) {
         Some(NodeKind::Text(t)) => Ok((**t).clone()),
         Some(_) => Err(EngineError::Other(format!("node {} is not text", id.0))),
@@ -708,7 +708,7 @@ impl CharChange {
             && self.font_height_reference.is_none()
     }
 
-    fn localize(&mut self, t: &TextObject, cmd: &str) -> Result<()> {
+    pub(crate) fn localize(&mut self, t: &TextObject, cmd: &str) -> Result<()> {
         use super::typecmd::local_type_value;
         self.size = self.size.map(|v| local_type_value(t, v, (0.1, 1296.0), false, cmd)).transpose()?;
         self.leading = self.leading.map(|v| v.map(|v| local_type_value(t, v, (0.1, 5000.0), false, cmd)).transpose()).transpose()?;
@@ -1255,7 +1255,7 @@ pub(crate) fn editing_range(s: &mut Session) -> Result<Option<(NodeId, usize, us
 /// objects in `ids`, else the text the Type tool has selected, else all the text of every selected
 /// type object. At a caret, `at_caret` gives the range from the plain text and the caret's byte
 /// (None: nothing changes there). Each range comes with whether it came from a caret.
-fn type_ranges(
+pub(crate) fn type_ranges(
     s: &mut Session,
     p: &Value,
     c: &str,

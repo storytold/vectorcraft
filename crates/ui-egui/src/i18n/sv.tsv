@@ -6316,3 +6316,13 @@ breakText	Glyphs	Glyfer
 # The strings the report listed as missing for sv.
 	Font Size:	Teckenstorlek:
 digits	Hindi	Hindi
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Textverktyg
+	Text Tweaker…	Textjustering…
+	Text Tweaker	Textjustering
+	Attribute:	Attribut:
+	From:	Från:
+	To:	Till:
+	Bow	Båge
+	Spike	Spets
+	Skip Spaces	Hoppa över mellanslag

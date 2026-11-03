@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (font-family fields accept the mouse wheel, #5253; Units › East Asian Type acts, with Q and Ha units; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Type Tools add-on: Text Tweaker, #4924; font-family fields accept the mouse wheel, #5253; Units › East Asian Type acts, with Q and Ha units; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
@@ -19,6 +19,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Type Tools add-on: Text Tweaker (a VectorCraft addition, #4924): evidence added; scores unchanged. |
 | 2026-11-02 | minor | Legacy `.ai` saves (version 7) write type with rotated characters as outlines that keep each character's rotation, with a warning unless `outlineText` is on (#5186); scores unchanged. |
 | 2026-10-31 | minor | Object › Path › Smooth smooths a path along its length before refitting it, so Auto-Smooth takes a shaky line to one smooth curve instead of leaving its jags, and with anchor points direct-selected it smooths only that section; scores unchanged. |
 | 2026-10-31 | minor | New Document: More Settings has the Save Preset button beside the name too, saving its settings (artboard layout included) as a preset (#4893); scores unchanged. |
@@ -1499,6 +1500,10 @@ A VectorCraft addition, not a feature of the reference app, so no area score mov
 ## Arrange Tools add-on: Sort Objects (2026-11-01)
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Arrange Tools › Sort Objects… sorts the top-level selected objects (or `ids`, at most 20000) by one attribute (width, height, area, x or y position, opacity or stacking order; small to large, large to small, or a random order from a seed) and gives them another in that order, the first the smallest value: the objects trade the values they have, or with Distribute Evenly the values step evenly from the smallest to the largest. Lining objects up left to right by size, restacking them so the largest is at the back, or giving them heights that step with their x position are each one run. Sizes and places are measured and set as `object.setBounds` measures them (Use Preview Bounds); a width, height or area changes about each object's centre (an area in proportion), and stacking order trades places only among objects of the same layer or group. One undo step; no step when nothing changes. Tests: `sort_*` in `cmd::addons::arrange::tests` in `vectorcraft-engine` (each attribute sorted by and applied, both directions, distribute, layers kept apart, the seeded random order, `ids`, no step when in order, bad params), `sort_objects_opens_its_dialog_and_runs_on_ok` in `vectorcraft-ui-egui` and `command_sweep`. Commands: `docs/mcp.md` › Arrange Tools add-on.
+
+## Type Tools add-on: Text Tweaker (2026-11-03)
+
+A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Type Tools › Text Tweaker… gives one character attribute (size, baseline shift, character rotation, horizontal or vertical scale, tracking, leading or stroke weight) to the selected characters letter by letter, from a start value to an end value along a straight ramp, an ease in and out, a bow, a spike or at random with a seed, while the text stays live and editable (#4924). Values are set as the Character panel sets them, in its units and ranges, so scaled type takes the sizes shown; spaces and line breaks are skipped unless asked for, each type object gets its own ramp, the range is the Type tool's selection or all the text of the selected type objects, and the run is one undo step from a dialog with Preview. Tests: `cmd::addons::typetools::tests` in `vectorcraft-engine` (each shape, each attribute, skipped spaces, ranges, one ramp per object, seeded random values, scaled type, one undo step, bad params refused), `addons::typetools::tests` in `vectorcraft-ui-egui` (the submenu, the dialog, Preview and Cancel, OK) and `command_sweep`. Commands: `docs/mcp.md` › Type Tools add-on.
 
 ## Path Precision Tools add-on: Divide into Dashes (2026-11-01)
 
