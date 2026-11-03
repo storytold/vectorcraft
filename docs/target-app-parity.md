@@ -32,6 +32,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Docked Tools stays between left-side panels and the canvas; redocking accepts canvas and window edges. Requested layout choice; scores and estimates unchanged. |
 | 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-11-07 | minor | The canvas keeps selection outlines, anchors and handles between frames, so an idle frame with a large selection redraws them as one mesh; scores and estimates unchanged |
 | 2026-11-07 | minor | Indian-language hyphenation (#4947): eleven MIT-licensed pattern sets, with grapheme and shaping-cluster protection in both composers and existing paragraph limits. Assamese and Sanskrit are selectable; Sanskrit automatic patterns remain pending an allowlisted source. Scores and estimates unchanged. |
@@ -366,7 +367,7 @@ what keeps it from beta, not from alpha.
 | Dimension | % | One agent (h) | Kind | Doc |
 |---|---:|---:|---|---|
 | Features (depth, weighted) | 75% | 220–360 | estimated | this file |
-| UI/UX fidelity (look ~80%, interaction ~45%) | 55% | 70–110 | estimated | [ui-parity.md](ui-parity.md) |
+| UI/UX fidelity (look ~80%, interaction ~45%) | 55% | 70–110 | estimated | [ui-parity.md](ui-parity.md); Tools sits inside left-side panels beside the canvas (layout choice; no rescoring) |
 | File formats | 75% | 15–30 | estimated | [file-format-parity.md](file-format-parity.md) |
 | Hardware (GPU, pen, touch, displays) | 35% | 25–45 | estimated | [hardware-parity.md](hardware-parity.md) |
 | Localization (the 12 key languages, equally weighted) | 74% | 50–85 | measured from catalogs | [localization-parity.md](localization-parity.md) |

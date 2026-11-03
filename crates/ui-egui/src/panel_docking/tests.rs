@@ -284,6 +284,85 @@ fn the_tools_panel_floats_by_its_title_bar_and_docks_on_the_left_edge() {
     assert_eq!(h.app.ui.toolbar_pos, None, "dropped on the left edge, it docks");
 }
 
+/// A left-side panel dock leaves the Tools panel between that dock and the document.
+#[test]
+fn docked_tools_stay_beside_the_canvas_with_left_side_panels() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let tools = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).unwrap();
+    let layers = h.tab("layers").unwrap();
+    let canvas = h.app.canvas_rect.unwrap();
+    assert!(layers.right() <= tools.left(), "the left dock precedes Tools: {layers:?}, {tools:?}");
+    assert!(tools.right() <= canvas.left() && canvas.left() - tools.right() < 40.0, "Tools stays beside the canvas: {tools:?}, {canvas:?}");
+}
+
+#[test]
+fn tools_redock_beside_left_panels_from_either_drop_target() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
+    for at_window_edge in [false, true] {
+        h.app.run("window.panel.float", json!({"panel": "tools", "x": 600, "y": 300})).unwrap();
+        for _ in 0..3 {
+            h.frame(vec![]);
+        }
+        let zone = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).unwrap();
+        let target = if at_window_edge { pos2(12.0, zone.center().y) } else { zone.center() };
+        h.drag(pos2(620.0, 307.0), target);
+        assert_eq!(h.app.ui.toolbar_pos, None, "redock at window edge: {at_window_edge}");
+        let tools = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).unwrap();
+        assert!(h.tab("layers").unwrap().right() <= tools.left());
+        assert!(tools.right() <= h.app.canvas_rect.unwrap().left());
+    }
+}
+
+#[test]
+fn tools_follow_left_panels_when_resized_hidden_and_restored() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
+    gesture(&mut h.app, Action::ResizeColumn { panel: "layers".into(), width: 430.0 }).unwrap();
+    h.app.ui.toolbar_double = true;
+    for hidden in [false, true, false] {
+        if hidden == h.app.ui.dock {
+            h.app.run("window.panels", json!({})).unwrap();
+        }
+        for _ in 0..3 {
+            h.frame(vec![]);
+        }
+        let tools = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).unwrap();
+        if hidden {
+            assert!(h.tab("layers").is_none());
+            assert!(tools.left() < 10.0);
+        } else {
+            assert!(h.tab("layers").unwrap().right() <= tools.left());
+        }
+        let canvas = h.app.canvas_rect.unwrap();
+        assert!(canvas.left() - tools.left() >= 80.0, "double-width Tools has its own room");
+        assert!(canvas.width() > 200.0);
+    }
+}
+
+#[test]
+#[ignore = "manual visual check; set LEFT_TOOLS_SCREENSHOTS to an existing harness directory"]
+fn capture_tools_beside_left_panels() {
+    let dir = std::path::PathBuf::from(std::env::var_os("LEFT_TOOLS_SCREENSHOTS").unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(vec2(1200.0, 800.0))
+        .with_accessibility_check(false)
+        .wgpu()
+        .build_ui_state(|ui, app: &mut VectorcraftApp| app.ui(ui), app);
+    h.run_steps(6);
+    h.render().unwrap().save(dir.join("tools-inside-left-dock.png")).unwrap();
+    h.state_mut().ui.toolbar_double = true;
+    h.run_steps(3);
+    h.render().unwrap().save(dir.join("tools-inside-left-dock-double.png")).unwrap();
+}
+
 #[test]
 fn a_library_panel_opens_renames_and_closes() {
     let mut h = Harness::new();
