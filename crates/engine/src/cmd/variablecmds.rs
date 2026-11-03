@@ -4,11 +4,11 @@
 //! variable, anything to a `visibility` variable, a linked image to an `image`
 //! variable, or a graph root to a `graph` variable (CSV data), put a row of values in
 //! each dataset, and `dataset.select` swaps the whole document to that row in one undo
-//! step. `dataset.import` / `dataset.export` move those rows as CSV (header: `name`
-//! then variable names, which export writes with `#` before a visibility variable and `@`
-//! before an image variable); import also reads tab-separated files, files without the
-//! `name` column, and header cells that define new variables (`#` for visibility, `@` for
-//! image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
+//! step. `dataset.import` / `dataset.export` move those rows as CSV (header: one
+//! variable name per column, which export writes with `#` before a visibility variable and `@`
+//! before an image variable); import replaces the datasets, names the rows Data Set 1, 2…,
+//! also reads tab-separated files, and reads header cells that define new variables (`#` for
+//! visibility, `@` for image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
 //! text variables and data sets of a variable library, the XML file of the reference app's Save
 //! Variable Library, and `variable.saveLibrary` writes the text variables and data sets as one.
 //! Agents reach every command through `run_command`, like all engine commands.
@@ -838,7 +838,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path? | data? | dataBase64? | csv?} load datasets from CSV, comma- or tab-separated, in UTF-16 with a byte-order mark, UTF-8 or else Windows-1252 (header: name, then variable names; one row per dataset; without the name column every header is a variable and the rows take the first free names Data Set 1, 2…). A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. Rows whose name already exists are replaced → {imported, updated, names, defined}",
+            "{path? | data? | dataBase64? | csv?} replace every dataset with the rows of a CSV, comma- or tab-separated, in UTF-16 with a byte-order mark, UTF-8 or else Windows-1252 (header: one variable name per column, whatever its case; one row per dataset, named Data Set 1, 2… in file order). The document's variables and their bindings stay. A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. An import that leaves the variables and data sets as they were adds no undo step → {imported, names, defined, deletedDataSets}",
             has_doc,
             dataset_import
         ),
@@ -847,7 +847,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path?} write every dataset as CSV (header: name, then one column per variable: `#Name` for a visibility variable, `@Name` for an image variable, and the name alone for a text or graph variable, as dataset.import reads them). Refused when the document has more than 1000 data sets or 256 variables, the most dataset.import reads, or when a variable's header is another variable's name (a visibility variable `Show` next to a text variable `#Show`) → {path, datasets, warning?}; without path → {csv, datasets, warning?}. `warning` names the variables whose header or values make a document without them refuse the file (a % header, a # header whose values aren't true or false); otherwise it names the variables such a document doesn't read back with their kind (text variables whose names start with # or @, graph variables)",
+            "{path?} write every dataset as CSV (header: one column per variable and no dataset names: `#Name` for a visibility variable, `@Name` for an image variable, and the name alone for a text or graph variable, as dataset.import reads them). Refused when the document has more than 1000 data sets or 256 variables, the most dataset.import reads, or when a variable's header is another variable's name (a visibility variable `Show` next to a text variable `#Show`) → {path, datasets, warning?}; without path → {csv, datasets, warning?}. `warning` names the variables whose header or values make a document without them refuse the file (a % header, a # header whose values aren't true or false); otherwise it names the variables such a document doesn't read back with their kind (text variables whose names start with # or @, graph variables)",
             has_doc,
             dataset_export
         ),
