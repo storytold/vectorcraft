@@ -91,7 +91,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     fields.insert("printer".into(), json!(default));
     fields.insert("toFile".into(), json!(!printers["service"].as_bool().unwrap_or(false)));
     fields.insert("__printers".into(), printers);
-    fields.insert("__directPdf".into(), json!(false));
+    app.ui.print_direct_pdf = false;
     fields.insert("__section".into(), json!(SECTIONS[0]));
     fields.insert("__sheet".into(), json!(0));
     // The saved preset these settings are, if any (else [Default], shown as [Custom] if they differ).
@@ -206,13 +206,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         app.ui.dialog = None;
         return Ok(json!({ "settings": settings }));
     }
+    let direct_pdf = app.ui.print_direct_pdf;
     let r = crate::print::run(
         app,
         &json!({
             "settings": settings,
             "printer": d.str("printer"),
             "toFile": d.bool("toFile"),
-            "directPdf": d.bool("__directPdf"),
+            "directPdf": direct_pdf,
         }),
     )?;
     app.ui.dialog = None;
@@ -369,7 +370,7 @@ fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     if service && cfg!(windows) {
         let to_file = d.bool("toFile");
-        flag(ui, d, "__directPdf", "Send PDF directly (bypass driver)", !to_file);
+        ui.add_enabled(!to_file, egui::Checkbox::new(&mut app.ui.print_direct_pdf, "Send PDF directly (bypass driver)"));
         note(ui, "Writes the print-ready PDF to the printer's TCP/IP RAW port, for PCL-only drivers that change the custom page size.");
     }
 }
