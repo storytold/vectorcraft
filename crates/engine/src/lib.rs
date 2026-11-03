@@ -163,6 +163,11 @@ pub struct Session {
     /// While [`Session::place_queue_read`] runs `file.place.queue`: the files read for it, which
     /// the command loads the place cursor with instead of reading them; `None` otherwise.
     pub(crate) queue_hand_off: Option<cmd::place::QueueRead>,
+    /// The automation roots in force when the place cursor was last loaded (`None`: none were).
+    /// The cursor places its files later, on a click that may come from the person at the
+    /// keyboard: those files, and the files they link to, are read under these roots, so a queue
+    /// an agent loaded never reads beyond what it was given.
+    pub(crate) place_queue_roots: Option<std::sync::Arc<file_access::AutomationRoots>>,
     /// While [`Session::import_image_read`] runs `clipboard.importImage`: the image read for it,
     /// which the command loads instead of reading `dataBase64`; `None` otherwise.
     pub(crate) image_hand_off: Option<cmd::clipboard::ImageRead>,

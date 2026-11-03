@@ -658,9 +658,25 @@ impl Session {
         self.tool.options()
     }
     pub fn set_tool_option(&mut self, key: &str, v: &Value) {
+        if key == "queue" && self.tool.id() == "place" {
+            self.note_place_queue_roots();
+        }
         self.tool.set_option(key, v);
         self.tool_set_since_reset = true;
         self.keep_tool_settings();
+    }
+
+    /// Keep the automation roots in force now as those the place cursor's queue, being loaded,
+    /// is placed under ([`Session::place_queue_roots`]).
+    fn note_place_queue_roots(&mut self) {
+        self.place_queue_roots = crate::file_access::current();
+    }
+
+    /// The automation roots the place cursor's files are placed under: those in force when it
+    /// was loaded. A frontend that places them itself ([`UiRequest::Place`]) reads them within
+    /// these roots ([`crate::file_access::confine`]).
+    pub fn place_queue_roots(&self) -> Option<std::sync::Arc<crate::file_access::AutomationRoots>> {
+        self.place_queue_roots.clone()
     }
 
     /// The options of tool `id`: the active tool's, or those it would have if chosen now.
@@ -673,6 +689,9 @@ impl Session {
     /// Liquify tools' Global Brush Dimensions, the Smooth tool's Fidelity for Pencil, Paintbrush
     /// and Blob Brush Alt smoothing). Returns the tool's options.
     pub fn set_tool_options(&mut self, id: Option<&str>, values: &Map<String, Value>) -> Value {
+        if values.contains_key("queue") && id.unwrap_or(self.tool.id()) == "place" {
+            self.note_place_queue_roots();
+        }
         let active = id.is_none_or(|id| id == self.tool.id());
         self.tool_set_since_reset |= active;
         let mut other = (!active).then(|| self.make_tool(id.unwrap_or_default()));
@@ -842,6 +861,13 @@ impl Session {
                 }
                 // The place cursor's file, placed by the frontend that asked for it.
                 Action::Exec(cmd, p) if cmd == "file.place" && self.place_cursor_requests => ui.push(UiRequest::Place(p)),
+                // The place cursor's file, read within the roots of whoever loaded the cursor.
+                Action::Exec(cmd, p) if cmd == "file.place" => {
+                    let roots = self.place_queue_roots.clone();
+                    if let Some(w) = crate::file_access::confine(roots.as_ref(), || self.execute(&cmd, &p))?.get("warning").and_then(Value::as_str) {
+                        ui.push(UiRequest::Status(w.to_string()));
+                    }
+                }
                 Action::Exec(cmd, p) => {
                     // A command's warning (Crop Image's when the image couldn't be decoded) goes to the
                     // status bar too.
