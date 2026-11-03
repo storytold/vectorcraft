@@ -407,7 +407,7 @@ impl Printed<'_> {
 
 /// The runs of `t` that print, and whether its text doesn't fit: all of them, or of area type and
 /// type on a path that don't fit, the runs that their layout draws glyphs or inline graphics of.
-pub(super) fn drawn_runs(t: &vectorcraft_doc::TextObject) -> (Vec<&TextRun>, bool) {
+fn drawn_runs(t: &vectorcraft_doc::TextObject) -> (Vec<&TextRun>, bool) {
     let drawn: Option<BTreeSet<usize>> = (!matches!(t.kind, TextKind::Point))
         .then(|| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t))
         .filter(|lay| lay.overflow)

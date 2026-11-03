@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes and strokes with no width left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, strokes with no width, guides and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
             has_doc,
             info
         ),
@@ -353,8 +353,11 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Paint::Gradient(_) = paint {
                     kinds.insert("gradients");
                 }
-                // A hidden fill or stroke, or a stroke with no width, paints nothing.
-                let paints = item.visible() && !matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0);
+                // A hidden fill or stroke, a stroke with no width, or any paint on a guide (which
+                // draws in the guide color and does not print) paints nothing.
+                let paints = item.visible()
+                    && !matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0)
+                    && !matches!(n.kind, NodeKind::Path { guide: true, .. });
                 if paints && let Paint::Pattern { pattern, .. } = paint {
                     patterns.insert(pattern.clone());
                     if !used_patterns.contains(&pattern.as_str()) {
@@ -368,12 +371,18 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             // A type object's characters carry their own fill and stroke, and only the characters its
-            // layout draws paint. An inline graphic does not take its run's paint, and a stroke with
-            // no width paints nothing.
+            // layout draws paint: the runs with a glyph outline (list markers and ruby included) or
+            // an underline or strikethrough bar. Spaces and line breaks draw no outline, an inline
+            // graphic does not take its run's paint, and a stroke with no width paints nothing.
             if let NodeKind::Text(t) = &n.kind
                 && t.runs.iter().any(|r| matches!(r.style.fill, Paint::Pattern { .. }) || matches!(r.style.stroke, Paint::Pattern { .. }))
             {
-                for run in super::fonts::drawn_runs(t).0.into_iter().filter(|r| r.inline.is_none() && !r.text.is_empty()) {
+                let db = vectorcraft_text::FontDb::global();
+                let lay = vectorcraft_text::layout(db, t);
+                let mut painted: BTreeSet<usize> =
+                    lay.glyphs.iter().chain(&lay.ruby).filter(|g| !g.outline.elements().is_empty()).map(|g| g.run).collect();
+                painted.extend(vectorcraft_text::decorations(&lay, db, t).into_iter().map(|(run, _)| run));
+                for run in painted.into_iter().filter_map(|i| t.runs.get(i)).filter(|r| r.inline.is_none()) {
                     let stroke = (run.style.stroke_width > 0.0).then_some(&run.style.stroke);
                     for paint in std::iter::once(&run.style.fill).chain(stroke) {
                         if let Paint::Pattern { pattern, .. } = paint {
@@ -701,6 +710,19 @@ mod tests {
         // A type object with no characters paints nothing either.
         let empty = s.execute("text.create", &json!({"x": 0, "y": 300, "text": ""})).unwrap()["id"].clone();
         s.execute("paint.setFill", &json!({"ids": [empty], "swatch": "Dots"})).unwrap();
+        // Nor does type of only spaces and a line break, or a guide made from a patterned path.
+        let blank = s.execute("text.create", &json!({"x": 0, "y": 320, "text": " \n"})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [blank], "swatch": "Dots"})).unwrap();
+        let guide = square(&mut s, 300.0);
+        s.execute("paint.setFill", &json!({"ids": [guide], "swatch": "Dots"})).unwrap();
+        s.execute("select.set", &json!({"ids": [guide]})).unwrap();
+        s.execute("view.guides.make", &json!({})).unwrap();
+        // Underlined spaces draw a bar in the pattern, so that type object is listed.
+        let bar = s.execute("text.create", &json!({"x": 0, "y": 340, "text": "  "})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [bar], "swatch": "Dots"})).unwrap();
+        s.execute("select.set", &json!({"ids": [bar]})).unwrap();
+        s.execute("text.setFormat", &json!({"underline": true})).unwrap();
+        s.execute("layer.setProps", &json!({"id": bar, "name": "Bar"})).unwrap();
         let i = s.execute("document.info", &json!({})).unwrap();
         assert_eq!(
             i["patternObjects"],
@@ -708,17 +730,18 @@ mod tests {
                 {"id": a, "name": "Both", "patterns": ["Dots"]},
                 {"id": b, "name": "<Rectangle>", "patterns": ["Dots"]},
                 {"id": t, "name": "Type", "patterns": ["Dots"]},
+                {"id": bar, "name": "Bar", "patterns": ["Dots"]},
             ])
         );
         assert_eq!(i["patternNames"], json!(["Dots"]));
         // Objects counts the objects that Pattern Objects lists.
-        assert_eq!(i["objects"]["patterns"].as_u64(), Some(3), "{}", i["objects"]);
-        s.execute("select.set", &json!({"ids": [d, e]})).unwrap();
+        assert_eq!(i["objects"]["patterns"].as_u64(), Some(4), "{}", i["objects"]);
+        s.execute("select.set", &json!({"ids": [d, e, blank, guide]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
         assert!(i["objects"]["patterns"].is_null() && i["patternObjects"] == json!([]), "{}", i["objects"]);
         let i = s.execute("document.info", &json!({"category": "patterns"})).unwrap();
         assert_eq!((i["sections"][0]["id"].as_str(), i["sections"][0]["title"].as_str()), (Some("patterns"), Some("Pattern Objects")));
-        assert_eq!(i["sections"][0]["rows"], json!([["Both", "Dots"], ["<Rectangle>", "Dots"], ["Type", "Dots"]]));
+        assert_eq!(i["sections"][0]["rows"], json!([["Both", "Dots"], ["<Rectangle>", "Dots"], ["Type", "Dots"], ["Bar", "Dots"]]));
         s.execute("select.set", &json!({"ids": [b]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
         assert_eq!(i["sections"][0]["rows"], json!([["<Rectangle>", "Dots"]]));
@@ -726,7 +749,7 @@ mod tests {
         let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
         assert_eq!((i["sections"][0]["rows"].clone(), i["patternNames"].clone()), (json!([["Type", "Dots"]]), json!(["Dots"])));
         let text = s.execute("document.info", &json!({"category": "patterns", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
-        assert!(text.contains("\nPATTERN OBJECTS\nBoth: Dots\n<Rectangle>: Dots\nType: Dots\n"), "{text}");
+        assert!(text.contains("\nPATTERN OBJECTS\nBoth: Dots\n<Rectangle>: Dots\nType: Dots\nBar: Dots\n"), "{text}");
         assert!(!text.contains("Unused"), "{text}");
     }
 
