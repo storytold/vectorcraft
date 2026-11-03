@@ -349,3 +349,63 @@ fn reopening_an_open_file_focuses_its_tab() {
     assert_eq!(focused(&app, "drop"), uid);
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// An app with `doc.vectorcraft` saved in a fresh folder `name`, open in the first tab, and an
+/// untitled document active in the second → (app, folder, document path).
+fn saved_and_another(name: &str) -> (VectorcraftApp, std::path::PathBuf, String) {
+    let services = crate::Services {
+        read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
+        write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), services);
+    let d = std::env::temp_dir().join(format!("vc-reopen-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("doc.vectorcraft").to_string_lossy().to_string();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    app.run("file.new", json!({})).unwrap();
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(1)));
+    (app, d, path)
+}
+
+/// Home shown over the document asked for gives way to it, as it does to any other tab (#5369).
+#[test]
+fn reopening_the_active_document_closes_home() {
+    let (mut app, d, path) = saved_and_another("home");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("app.home", json!({})).unwrap();
+    assert!(crate::menus::home_showing(&app));
+    assert_eq!(crate::io::open_reporting(&mut app, &path).unwrap()["activated"], true);
+    assert!(!crate::menus::home_showing(&app));
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// Automation confined to a folder can't reach an open document saved outside it (#5369).
+#[test]
+fn a_confined_open_does_not_reach_an_open_document_outside_its_roots() {
+    use vectorcraft_engine::file_access;
+    let (mut app, d, path) = saved_and_another("roots");
+    let inside = d.join("inside");
+    std::fs::create_dir_all(&inside).unwrap();
+    let roots = file_access::AutomationRoots::new(&[inside.as_path()], &[]).unwrap();
+    assert!(file_access::confine(roots.as_ref(), || app.run("file.open", json!({"path": path}))).is_err());
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(1)));
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// While a dialog acts on the active document, an open document asked for again comes to the
+/// front only once the dialog closes, so the dialog's OK acts on its own document (#5369).
+#[test]
+fn reopening_while_a_dialog_is_open_waits_for_it_to_close() {
+    let (mut app, d, path) = saved_and_another("dialog");
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    assert_eq!(crate::io::open_reporting(&mut app, &path).unwrap(), serde_json::Value::Null);
+    crate::opening::poll(&mut app);
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(1)), "still the dialog's document");
+    app.ui.dialog = None;
+    crate::opening::poll(&mut app);
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(0)));
+    let _ = std::fs::remove_dir_all(d);
+}

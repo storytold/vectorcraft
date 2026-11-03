@@ -247,6 +247,8 @@ fn try_activate_open_document(app: &mut VectorcraftApp, path: &str) -> Result<Op
     });
     app.run("document.activate", json!({ "index": index }))?;
     app.sync_views();
+    // Home, shown over the document that was already active, gives way to it too.
+    app.ui.home = None;
     Ok(Some(r))
 }
 
@@ -273,8 +275,18 @@ pub fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<Value, String> 
 /// [`open_path`]; with `background`, a document (not a file that installs, imports or asks
 /// first) is decoded off the UI thread ([`crate::opening::start`]).
 pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) -> Result<Value, String> {
+    // Automation confined to some folders reaches no file outside them, open in a tab or not.
+    vectorcraft_engine::file_access::check_read(path)?;
     // File › Open, Open Recent, the Home screen, a drop and the Finder all focus a document that
-    // is already open, or still being read, instead of opening a second copy.
+    // is already open, or still being read, instead of opening a second copy. While a dialog or
+    // a drag acts on the active document, its tab comes to the front once that ends
+    // ([`crate::opening::poll`]), as a file that finishes opening then does.
+    if document_index_for_path(app, path).is_some() && !crate::opening::may_switch(app) {
+        if !app.opening.activate.iter().any(|p| same_open_path(p, path)) {
+            app.opening.activate.push(path.to_string());
+        }
+        return Ok(Value::Null);
+    }
     if let Some(r) = try_activate_open_document(app, path)? {
         return Ok(r);
     }

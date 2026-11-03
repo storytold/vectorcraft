@@ -29,6 +29,9 @@ pub struct Pending {
 #[derive(Default)]
 pub struct Opening {
     pub pending: Vec<Pending>,
+    /// Open documents asked for again while the active one couldn't change: their tabs come to
+    /// the front once it can ([`may_switch`]).
+    pub activate: Vec<String>,
 }
 
 /// Is a long operation running that should show the busy cursor and status spinner (background
@@ -84,6 +87,12 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
     Ok(json!({ "background": true, "status": status }))
 }
 
+/// May the active document change now ([`poll`])?
+pub(crate) fn may_switch(app: &VectorcraftApp) -> bool {
+    let s = &app.session;
+    !(app.ui.dialog.is_some() || s.in_interaction() || (s.tool_busy() && s.pointer_held()))
+}
+
 /// Open the files that are ready (each frame). Not while a dialog is open: a document that opens
 /// becomes the active one, and the dialog's OK acts on the active document (#1694: Save As
 /// options confirmed after another file had finished opening saved that file's art under the
@@ -94,9 +103,12 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
 /// waiting between its clicks (the Dimension tool after its first point): the file opens, and the
 /// tool starts afresh, as when the user switches documents.
 pub fn poll(app: &mut VectorcraftApp) {
-    let s = &app.session;
-    if app.ui.dialog.is_some() || s.in_interaction() || (s.tool_busy() && s.pointer_held()) {
+    if !may_switch(app) {
         return;
+    }
+    for path in std::mem::take(&mut app.opening.activate) {
+        // Closed meanwhile, it opens again; a failure is reported to the user there.
+        let _ = crate::io::open_reporting(app, &path);
     }
     let mut i = 0;
     while let Some(p) = app.opening.pending.get(i) {
