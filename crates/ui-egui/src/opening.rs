@@ -103,10 +103,16 @@ pub(crate) fn may_switch(app: &VectorcraftApp) -> bool {
 /// waiting between its clicks (the Dimension tool after its first point): the file opens, and the
 /// tool starts afresh, as when the user switches documents.
 pub fn poll(app: &mut VectorcraftApp) {
-    if !may_switch(app) {
-        return;
-    }
-    for (path, scope) in std::mem::take(&mut app.opening.activate) {
+    // One at a time: a document that opens again (closed meanwhile) may ask about its links or
+    // fonts, and the rest wait for that dialog too.
+    loop {
+        if !may_switch(app) {
+            return;
+        }
+        if app.opening.activate.is_empty() {
+            break;
+        }
+        let (path, scope) = app.opening.activate.remove(0);
         // Closed meanwhile, it opens again; a failure is reported to the user there.
         let _ = scope.run(|| crate::io::open_reporting(app, &path));
     }

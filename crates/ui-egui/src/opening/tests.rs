@@ -348,3 +348,38 @@ fn a_file_asked_for_again_while_it_is_read_opens_once() {
     }
     assert_eq!(app.session.documents().len(), 1);
 }
+
+/// A document asked for again while a dialog was open, closed meanwhile, opens again once the
+/// dialog closes and asks about its fonts; a file read meanwhile waits for that question too, so
+/// the dialog acts on its own document (#5369).
+#[test]
+fn a_queued_reopen_that_asks_holds_back_files_ready_to_open() {
+    let dir = std::env::temp_dir().join(format!("vectorcraft-opening-queued-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+    let doc = dir.join("doc.vectorcraft").to_string_lossy().into_owned();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 40, "text": "Type", "font": "No Such Font Family"})).unwrap();
+    app.run("document.save", json!({"path": doc})).unwrap();
+    app.run("file.new", json!({})).unwrap();
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    crate::io::open_reporting(&mut app, &doc).unwrap();
+    assert_eq!(app.opening.activate.len(), 1);
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    start(&mut app, "/art/Other.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false)).unwrap();
+    // Time for the other file to be read; it waits for the dialog meanwhile.
+    let t0 = std::time::Instant::now();
+    while t0.elapsed().as_millis() < 500 {
+        poll(&mut app);
+        std::thread::yield_now();
+    }
+    assert_eq!(app.opening.pending.len(), 1);
+    app.ui.dialog = None;
+    poll(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::missing_fonts::KIND));
+    assert_eq!(app.session.doc().unwrap().path.as_deref(), Some(&*doc), "the dialog's document stays active");
+    assert_eq!(app.opening.pending.len(), 1, "the other file waits");
+    let _ = std::fs::remove_dir_all(dir);
+}
