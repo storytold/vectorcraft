@@ -81,6 +81,7 @@ mod ui_fonts;
 pub mod unsaved;
 pub mod updates_ui;
 pub mod widgets;
+pub mod workspace;
 pub mod workspaces;
 
 mod document_drag;

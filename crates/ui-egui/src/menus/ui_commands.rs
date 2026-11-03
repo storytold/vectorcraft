@@ -580,6 +580,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.workspace.delete", "Delete Workspace", "", "{name}"),
     ("window.workspace.rename", "Rename Workspace", "", "{name, to}"),
     ("window.workspace.list", "List Workspaces", "", "{}"),
+    ("window.workspace.switchProfile", "Switch Workflow Profile", "", "{profile: VectorCraftDefault|CorelDrawClassic|PrintProduction}"),
     ("window.newWindow", "New Window", "", "{}"),
     (
         "window.arrange.tile",
