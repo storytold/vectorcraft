@@ -5329,6 +5329,7 @@ axis	Y Axis	Trục Y
 	Create New Set	Tạo bộ mới
 	Stop Global Edit	Dừng chỉnh sửa toàn cục
 	Global Edit Options	Tùy chọn chỉnh sửa toàn cục
+	Leave Out of Global Edit	Loại khỏi chỉnh sửa toàn cục
 	Match	Khớp
 	On Artboards	Trên các bảng vẽ
 	All Artboards	Tất cả bảng vẽ
@@ -5337,6 +5338,8 @@ axis	Y Axis	Trục Y
 @msg	select one object	hãy chọn một đối tượng
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Chỉnh sửa toàn cục hoạt động trên đường dẫn, đường dẫn phức hợp, phiên bản biểu tượng và nhóm của chúng
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	không tìm thấy đối tượng tương tự (các bản sao đã xoay hoặc lật không được tính); hãy thay đổi tùy chọn chỉnh sửa toàn cục rồi thử lại
+@msg	Global Edit is off	Chỉnh sửa toàn cục đang tắt
+@msg	only an object of the Global Edit other than the one it started from can be left out	chỉ có thể loại khỏi chỉnh sửa toàn cục một đối tượng khác với đối tượng mà nó bắt đầu
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all hoặc một phạm vi như 1, 3-5, không phải {v}
 	Add to Symbols	Thêm vào ký hiệu
 	Basic Shapes	Hình cơ bản

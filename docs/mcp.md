@@ -1498,6 +1498,14 @@ Redo, a cancelled drag or scrub), the matches it no longer has leave the Global 
 are left. An edit that would take any match past the canvas fails with the coordinates-out-of-range error and changes
 nothing. Nothing of it is saved.
 
+`select.globalEditExclude {id}` leaves the match `id` out of the Global Edit, as a Shift-click on a highlighted match
+(or on an object inside it) with the Selection tool does: it is no longer highlighted, and later edits leave it as it
+is. It returns `{active, count, ids}`, the objects left in the Global Edit; with fewer than two left, the Global Edit
+ends (`{active: false, count: 0, ids: []}`). The object the Global Edit started from can't be left out, and neither
+can an object that is not a match. It is not an undo step. A Shift-drag that starts on a match selects it and moves
+it with the selection, and leaves it in the Global Edit. Source: [Update assets quickly with Global
+Edit](https://helpx.adobe.com/ph_fil/illustrator/how-to/global-editing-sensei.html).
+
 ## Saved selections
 
 Select → Save Selection… keeps the selected objects under a name, in the document: `select.save {name?}` (default

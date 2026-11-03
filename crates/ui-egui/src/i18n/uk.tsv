@@ -5328,6 +5328,7 @@ axis	Y Axis	Вісь Y
 	Create New Set	Створити новий набір
 	Stop Global Edit	Завершити глобальне редагування
 	Global Edit Options	Параметри глобального редагування
+	Leave Out of Global Edit	Виключити з глобального редагування
 	Match	Збіг
 	On Artboards	На монтажних областях
 	All Artboards	Усі монтажні області
@@ -5336,6 +5337,8 @@ axis	Y Axis	Вісь Y
 @msg	select one object	виберіть один об’єкт
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальне редагування працює з контурами, складеними контурами, екземплярами символів та їхніми групами
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (повернуті чи віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз
+@msg	Global Edit is off	Глобальне редагування вимкнено
+@msg	only an object of the Global Edit other than the one it started from can be left out	виключити з глобального редагування можна лише об’єкт, відмінний від того, з якого воно почалося
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
 	Add to Symbols	Додати до символів
 	Basic Shapes	Базові фігури

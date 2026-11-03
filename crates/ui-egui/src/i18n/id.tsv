@@ -5634,6 +5634,7 @@ axis	Y Axis	Sumbu Y
 	Create New Set	Buat set baru
 	Stop Global Edit	Hentikan edit global
 	Global Edit Options	Opsi edit global
+	Leave Out of Global Edit	Keluarkan dari edit global
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edit global berfungsi pada jalur, jalur gabungan, instans simbol, dan grupnya
 	Match	Cocokkan
 	On Artboards	Di artboard

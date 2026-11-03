@@ -1697,6 +1697,7 @@ digits	Malayalam	Malaiàlam
 	Global Adjust	Ajust global
 	Global Brush Dimensions	Dimensions globals del pinzell
 	Global Edit Options	Opcions globals d’edició
+	Leave Out of Global Edit	Exclou de l’edició global
 	Global Process Color	Color de procés global
 	Global Process Color, CMYK	Color de procés global, CMYK
 	Glow Amount	Quantitat de resplendor
@@ -5236,6 +5237,8 @@ digits	Malayalam	Malaiàlam
 @msg	no selected slice in the image: select slices, or save all of them	no hi ha cap tall seleccionat a la imatge: seleccioneu talls o deseu-los tots
 @msg	no selection bounds	no hi ha límits de selecció
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	no s’ha trobat cap objecte similar (les còpies girades o reflexades no coincideixen); canvieu les opcions d’edició global i torneu-ho a provar
+@msg	Global Edit is off	L’edició global no està activa
+@msg	only an object of the Global Edit other than the one it started from can be left out	només es pot excloure un objecte de l’edició global que no sigui aquell amb què va començar
 @msg	no slice selected	no hi ha cap tall seleccionat
 @msg	no such action	no existeix aquesta acció
 @msg	no such action set	no existeix aquest conjunt d’accions
