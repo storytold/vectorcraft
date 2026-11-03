@@ -146,7 +146,7 @@ fn raw_pdf_bytes(objects: impl IntoIterator<Item = Vec<u8>>) -> Vec<u8> {
     }
     let xref = out.len();
     out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
-    for at in offsets {
+    for at in &offsets {
         out.extend_from_slice(format!("{at:010} 00000 n \n").as_bytes());
     }
     out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", offsets.len() + 1).as_bytes());
