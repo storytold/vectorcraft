@@ -41,7 +41,9 @@ fn stop_reach_matches_scanning_the_stops() {
         let g = Gradient::new(GradientKind::Linear, stops);
         let reach = StopReach::new(&g.stops);
         for t in (-4..=44).map(|k| k as f32 / 40.0).chain([f32::NAN, f32::INFINITY, f32::NEG_INFINITY]) {
-            assert_eq!(reach.sample_with(&g.stops, t, &Color::lerp_keep_model), g.sample_with(t, Color::lerp_keep_model), "{offsets:?} at {t}");
+            // Compared as printed: a NaN offset mixes NaN colours, which are equal only so.
+            let (got, want) = (reach.sample_with(&g.stops, t, &Color::lerp_keep_model), g.sample_with(t, Color::lerp_keep_model));
+            assert_eq!(format!("{got:?}"), format!("{want:?}"), "{offsets:?} at {t}");
         }
     }
 }
