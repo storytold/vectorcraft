@@ -24,6 +24,8 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 ### Feature revisions
 
+M7 type: Touch Type moves a right-to-left character along its line and up from it while keeping the text editable. A preceding logical character on the same line is required for along-line movement. Direction rules are VectorCraft's choices; estimates are unchanged.
+
 | Date | Change | Summary |
 |---|---|---|
 | 2026-11-03 | minor | M1: Enclosing Lasso provides whole-object enclosure selection as an add-on with no default shortcut or Basic toolbar slot; estimates unchanged. |
@@ -160,6 +162,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control step selected text with the wheel (#5253), with one undo step per notch; scores and estimates unchanged. |
 | 2026-11-03 | minor | M7 records Find Font's shipped replacement-source chooser (#5217); estimates unchanged. |
 | 2026-11-03 | minor | Symbol editing shows draggable 9-slice guides (#5280). Guides outside the artwork remain unsupported. Scores and hours remain unchanged. |
+| 2026-11-03 | minor | M7: Touch Type moves right-to-left characters along their line while keeping text editable; first-logical-character restriction retained. Estimates unchanged. |
 | 2026-10-30 | patch | M5: opaque solid-fill knockout paths avoid redundant erase/add layers in hard-edge frames and supersampled raster export; exact-pixel regression coverage retains analytical-AA rounding and translucent knockout behavior; scores and estimates unchanged |
 | 2026-11-03 | minor | M7: retain composition trimming in rotated character placement and rotation metadata; estimates unchanged. |
 | 2026-10-30 | minor | M4: G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |

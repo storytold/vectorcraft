@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Touch Type",
             [],
             None,
-            "{id, start: byte (a character of it), dx?: pt, dy?: pt, hScale?: %, vScale?: %, rotation?: deg} change one character (a ligature, one glyph for several characters, as a whole) as a Touch Type tool drag does, as one undo step: dx moves it along its line in reading order by changing the kerning of the character before it on the line and its own kerning, and the characters after it stay where they are (an error for the first character of a line and for a right-to-left character; limited to what kerning from -1000 to 10000 can give); dy raises it (baseline shift, up from its line whatever its rotation, also for the first character of a line and a right-to-left character); dx and dy are document points; hScale (including the object transform), vScale and rotation set its scales and rotation as text.setRangeStyle does. The kerning of the two characters also keeps the character and the ones after it where they were along the line when the font kerned them with their neighbors; a wider or narrower character moves the ones after it by the change in its width → {id, start, end} (the character's bytes)",
+            "{id, start: byte (a character of it), dx?: pt, dy?: pt, hScale?: %, vScale?: %, rotation?: deg} change one character (a ligature, one glyph for several characters, as a whole) as a Touch Type tool drag does, as one undo step: dx moves it along its line in reading order by changing the kerning of the character before it on the line and its own kerning, and the characters after it stay where they are (an error for the first logical character of a line; supported in either reading direction; limited to what kerning from -1000 to 10000 can give); dy raises it (baseline shift, up from its line whatever its rotation, also for the first character of a line and a right-to-left character); dx and dy are document points; hScale (including the object transform), vScale and rotation set its scales and rotation as text.setRangeStyle does. The kerning of the two characters also keeps the character and the ones after it where they were along the line when the font kerned them with their neighbors; a wider or narrower character moves the ones after it by the change in its width → {id, start, end} (the character's bytes)",
             has_doc,
             touch_type
         ),
@@ -1017,9 +1017,6 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     // Document points per text-space point along `v`.
     let doc_len = |v: Vec2| linear(t.xf, v).hypot() / v.hypot();
     let limit = 1296.0 / points;
-    if dx != 0.0 && g.rtl {
-        return Err(bad(C, "a right-to-left character moves only up and down (dy)"));
-    }
     // A list marker's glyphs (length 0) stand for no character.
     let prev = lay.glyphs.iter().find(|h| h.line == g.line && h.len > 0 && h.byte + h.len == a);
     let pr = prev.map(|h| (h.byte, h.byte + h.len));
@@ -1065,8 +1062,10 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     // to Fit and a path effect such as Skew scale: two layouts with the call's other changes and shifts one step apart, both within the range,
     // measure that length. Neither shift is one that a run already has, so the character's run
     // splits off alike in both.
-    let raise = if dy == 0.0 {
-        0.0
+    let drawn_move = g.rtl && moved != 0.0;
+    let up = Vec2::new(d.y, -d.x);
+    let (mut raise, baseline_step) = if dy == 0.0 && !drawn_move {
+        (0.0, 0.0)
     } else {
         let shift = edit::slice_runs(&t.runs, a, b).first().map_or(0.0, |r| r.style.baseline_shift);
         let from = shift.clamp(-limit, limit);
@@ -1078,21 +1077,44 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
         // The character's pen with its baseline shift set to `to`.
         let pen_at = |to: f64| {
             let mut trial = t.clone();
-            touch(&mut trial, None, None, to - shift);
+            // Hold kerning fixed: Optical spacing can change along the line as the baseline
+            // rises, which would make its horizontal drift count as baseline movement.
+            touch(&mut trial, pr.map(|_| 0.0), Some(0.0), to - shift);
             let l = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &trial);
             l.glyphs.iter().find(|h| h.byte == a && h.len > 0).map(|h| h.xf * Point::ZERO)
         };
-        let per_step = match (pen_at(from + step), pen_at(from + 2.0 * step)) {
-            (Some(p), Some(q)) => linear(t.xf, q - p).hypot() / step.abs(),
-            _ => 0.0,
+        let (per_step, across) = match (pen_at(from + step), pen_at(from + 2.0 * step)) {
+            (Some(p), Some(q)) => (linear(t.xf, q - p).hypot() / step.abs(), (q - p).dot(up) / step),
+            _ => (0.0, 0.0),
         };
-        dy / per_step
+        (dy / per_step, across)
     };
     if !raise.is_finite() {
         return Err(bad(C, "the character's size can't be measured"));
     }
-    // Where a glyph starts along the line.
-    let pen = |h: &vectorcraft_text::PositionedGlyph| h.origin.to_vec2().dot(along);
+    // Along-line RTL movement must measure the drawn glyph: turning off automatic kerning can
+    // also remove font placement, and Character Rotation turns that placement across the line.
+    let pen = |h: &vectorcraft_text::PositionedGlyph| {
+        let at = if drawn_move {
+            h.xf * Point::ZERO
+        } else if h.rtl {
+            h.origin + Vec2::new(h.angle.cos(), h.angle.sin()) * h.width_start
+        } else {
+            h.origin
+        };
+        at.to_vec2().dot(along)
+    };
+    // Scaling or rotation in the same call may intentionally turn the glyph's font placement
+    // about its pen. Keep that change while compensating placement lost to manual kerning.
+    let intrinsic_delta = if drawn_move && ["hScale", "vScale", "rotation"].iter().any(|key| p.get(*key).is_some_and(|v| !v.is_null())) {
+        let mut trial = t.clone();
+        touch(&mut trial, None, None, 0.0);
+        let l = vectorcraft_text::layout(db, &trial);
+        let intrinsic = |h: &vectorcraft_text::PositionedGlyph| h.xf * Point::ZERO - h.xf * h.pivot;
+        l.glyphs.iter().find(|h| h.byte == a && h.len > 0).map_or(Vec2::ZERO, |h| intrinsic(h) - intrinsic(g))
+    } else {
+        Vec2::ZERO
+    };
     // How much further the character's new scales advance it along the line: the character laid
     // out alone, in point type of the same orientation, before and after the change.
     let grown = {
@@ -1106,10 +1128,27 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // The character lands `moved` further on, and the character after it on its line keeps its
     // distance from it, wider or narrower only by the character's new scales.
-    let goal = pen(g) + moved;
+    let goal = pen(g) + moved + intrinsic_delta.dot(along);
     let next_goal = lay.glyphs.iter().find(|h| h.byte == b && h.len > 0 && h.line == g.line).map(|h| pen(h) + grown);
-    // How far the character and the character after it on its line miss their places, along the
-    // line, with the kerning `k` (before, own) added.
+    let prev_goal = prev.map(pen);
+    let mut k = if moved != 0.0 { (em_prev.map(|ep| moved / ep * 1000.0), Some(-moved / em * 1000.0)) } else { (None, None) };
+    if drawn_move {
+        if !baseline_step.is_finite() || baseline_step.abs() <= 1e-12 {
+            return Err(bad(C, "the character's size can't be measured"));
+        }
+        let mut trial = t.clone();
+        touch(&mut trial, k.0, k.1, raise);
+        let l = vectorcraft_text::layout(db, &trial);
+        let h = l.glyphs.iter().find(|h| h.byte == a && h.len > 0).ok_or_else(|| bad(C, "the character's size can't be measured"))?;
+        let across_goal = (g.xf * Point::ZERO).to_vec2().dot(up) + dy / doc_len(up) + intrinsic_delta.dot(up);
+        raise += (across_goal - (h.xf * Point::ZERO).to_vec2().dot(up)) / baseline_step;
+        if !raise.is_finite() {
+            return Err(bad(C, "the character's size can't be measured"));
+        }
+    }
+    // Keep both neighbors: alignment can pin either end of an RTL line, making one neighbor
+    // insensitive to kerning even though the other one moves. The two spacing values must place
+    // the selected character and keep every available neighbor in place.
     let miss = |k: (Option<f64>, Option<f64>)| {
         let mut trial = t.clone();
         touch(&mut trial, k.0, k.1, raise);
@@ -1119,30 +1158,40 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
             (Some(n), Some(at)) => pen(n) - at,
             _ => 0.0,
         };
-        Some((pen(h) - goal, next))
+        let previous = match (pr.and_then(|(byte, _)| l.glyphs.iter().find(|n| n.byte == byte && n.len > 0 && n.line == h.line)), prev_goal) {
+            (Some(n), Some(at)) => pen(n) - at,
+            _ => 0.0,
+        };
+        Some([pen(h) - goal, next, previous])
     };
-    let placed = |m: (f64, f64)| m.0.abs() <= 1e-9 && m.1.abs() <= 1e-9;
-    let mut k = if moved != 0.0 { (em_prev.map(|ep| moved / ep * 1000.0), Some(-moved / em * 1000.0)) } else { (None, None) };
+    let placed = |m: [f64; 3]| m.iter().all(|v| v.abs() <= 1e-9);
     // A manual kerning value turns off the font's kerning for its character, each style run is
     // shaped apart, and centered, right-aligned and justified lines move as their width changes, so
     // the first values can miss. Layouts then measure what each kerning value does to the two
-    // characters, and the values are solved for from that (at most six layouts).
-    if !g.rtl && miss(k).is_some_and(|m| !placed(m)) {
+    // characters, and the values are solved for with a bounded set of layouts.
+    if miss(k).is_some_and(|m| !placed(m)) {
         k = (pr.map(|_| k.0.unwrap_or(0.0)), Some(k.1.unwrap_or(0.0)));
         if let Some(mut m) = miss(k) {
             const STEP: f64 = 10.0;
-            let column = |dk: (f64, f64)| miss((k.0.map(|v| v + dk.0), k.1.map(|v| v + dk.1))).map(|n| ((n.0 - m.0) / STEP, (n.1 - m.1) / STEP));
+            let column = |dk: (f64, f64)| miss((k.0.map(|v| v + dk.0), k.1.map(|v| v + dk.1))).map(|n| std::array::from_fn(|i| (n[i] - m[i]) / STEP));
             let by_before = if k.0.is_some() { column((STEP, 0.0)) } else { None };
             let by_own = column((0.0, STEP));
             // The kerning changes that cancel the misses `m`.
-            let solve = |m: (f64, f64)| match (by_before, by_own) {
-                (Some(p), Some(q)) if (p.0 * q.1 - q.0 * p.1).abs() > 1e-12 => {
-                    let det = p.0 * q.1 - q.0 * p.1;
-                    ((q.0 * m.1 - m.0 * q.1) / det, (m.0 * p.1 - p.0 * m.1) / det)
+            let solve = |m: [f64; 3]| {
+                let dot = |a: [f64; 3], b: [f64; 3]| a.into_iter().zip(b).map(|(a, b)| a * b).sum::<f64>();
+                let (p, q) = (by_before.unwrap_or([0.0; 3]), by_own.unwrap_or([0.0; 3]));
+                let (pp, pq, qq) = (dot(p, p), dot(p, q), dot(q, q));
+                let (pm, qm) = (dot(p, m), dot(q, m));
+                let det = pp * qq - pq * pq;
+                if det > 1e-12 * pp * qq {
+                    ((pq * qm - qq * pm) / det, (pq * pm - pp * qm) / det)
+                } else if pp >= qq && pp > 1e-24 {
+                    (-pm / pp, 0.0)
+                } else if qq > 1e-24 {
+                    (0.0, -qm / qq)
+                } else {
+                    (0.0, 0.0)
                 }
-                (Some(p), _) if p.0.abs() > 1e-12 => (-m.0 / p.0, 0.0),
-                (_, Some(q)) if q.1.abs() > 1e-12 => (0.0, -m.1 / q.1),
-                _ => (0.0, 0.0),
             };
             for _ in 0..2 {
                 if placed(m) {

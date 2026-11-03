@@ -384,3 +384,36 @@ fn the_tool_is_made_by_its_id() {
     t.pointer(&cx, &PointerEvent::new(PointerKind::Up, at.x, at.y));
     assert_eq!(t.options(), json!({"id": id.0, "start": 0}));
 }
+
+#[test]
+fn touch_type_rtl_middle_character_can_drag_and_nudge_along_its_line() {
+    use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
+
+    // The process-wide database deduplicates the same synthetic face across tests.
+    FontDb::global().add_font(right_to_left_optical_font().unwrap());
+    let mut d = Document::new(500.0, 500.0);
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let style = CharStyle { font_family: RIGHT_TO_LEFT_OPTICAL_FAMILY.into(), size: 100.0, ..Default::default() };
+    let text = TextObject::point(Point::new(300.0, 250.0), "אבא", style);
+    let lay = vectorcraft_text::layout(FontDb::global(), &text);
+    assert_eq!(lay.glyphs.len(), 3);
+    assert!(lay.glyphs.iter().all(|g| g.rtl));
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut tool = TouchTypeTool { target: Some((id, 2)), ..Default::default() };
+    let q = quad(&tool, &cx);
+    let acts = drag(&mut tool, &cx, q[3], q[3] + Vec2::new(-5.0, -3.0));
+    let params = preview(&acts[1]);
+    assert!(close(params["dx"].as_f64().unwrap(), 5.0) && close(params["dy"].as_f64().unwrap(), 3.0), "{params}");
+    let acts = tool.key(&cx, ToolKey::Left, Mods::default());
+    assert_eq!(acts.len(), 1);
+    let Action::Exec(command, params) = &acts[0] else { panic!("{acts:?}") };
+    assert_eq!(command, "text.touchType");
+    assert!(close(params["dx"].as_f64().unwrap(), 1.0), "left is forward in reading order: {params}");
+    tool.target = Some((id, 0));
+    assert!(tool.key(&cx, ToolKey::Left, Mods::default()).is_empty(), "the first logical character has no preceding character to kern");
+}

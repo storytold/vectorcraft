@@ -746,15 +746,15 @@ fn touch_type_raises_a_rotated_character_on_a_skewed_path() {
     assert!(((x * x + y * y).sqrt() - 10.0).abs() < 1e-6, "({x}, {y})");
 }
 
-/// A right-to-left character moves only up and down.
+/// A right-to-left character can move along its line and up from it.
 #[test]
-fn touch_type_moves_a_right_to_left_character_only_up_and_down() {
+fn touch_type_moves_a_right_to_left_character_along_its_line_and_up() {
     let mut s = session();
     let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "אבג", "size": 40})).unwrap()["id"].as_u64().unwrap());
-    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 2, "dx": 5})).is_err());
     let before = glyph_pens(&s, id);
-    s.execute("text.touchType", &json!({"id": id.0, "start": 2, "dy": 3})).unwrap();
-    let (_, up) = moved_by(&before, &glyph_pens(&s, id), 2);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 2, "dx": 5, "dy": 3})).unwrap();
+    let (along, up) = moved_by(&before, &glyph_pens(&s, id), 2);
+    assert!((along + 5.0).abs() < 1e-9, "{along}");
     assert!((up + 3.0).abs() < 1e-9, "{up}");
 }
 
@@ -1566,6 +1566,141 @@ fn rtl_edit_commands_and_undo_preserve_logical_source_and_style_ranges() {
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(obj(&s, id).plain_text(), "שלום Rust 123");
+}
+
+#[test]
+fn touch_type_rtl_move_keeps_neighbors_and_undo_restores_the_original() {
+    use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
+
+    // Repeated registration of this synthetic face is harmless in the shared database.
+    vectorcraft_text::FontDb::global().add_font(right_to_left_optical_font().unwrap());
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 300, "y": 250, "text": "אבא", "size": 100, "font": RIGHT_TO_LEFT_OPTICAL_FAMILY})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let original = obj(&s, id);
+    let before = glyph_pens(&s, id);
+    assert_eq!(before.len(), 3);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 2, "dx": 5, "dy": 3})).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 2), (-5.0, -3.0)), "{:?}", moved_by(&before, &after, 2));
+    for byte in [0, 4] {
+        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+    }
+    assert_eq!(obj(&s, id).plain_text(), original.plain_text());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id), original);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(near(moved_by(&before, &glyph_pens(&s, id), 2), (-5.0, -3.0)));
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dx": 5})).is_err());
+}
+
+#[test]
+fn touch_type_rtl_move_keeps_rotated_font_placement() {
+    use vectorcraft_text::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
+    vectorcraft_text::FontDb::global().add_font(pair_kerning_font().unwrap());
+    let mut s = session();
+    // An explicit RTL override gives the existing synthetic S/S positioning pair RTL order.
+    let id =
+        NodeId(
+            s.execute("text.create", &json!({"x": 300, "y": 250, "text": "\u{202e}SSS\u{202c}", "size": 100, "font": PAIR_KERNING_FAMILY})).unwrap()
+                ["id"]
+                .as_u64()
+                .unwrap(),
+        );
+    s.execute("text.touchType", &json!({"id": id.0, "start": 4, "rotation": 90})).unwrap();
+    let original = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &original);
+    let glyph = lay.glyphs.iter().find(|g| g.byte == 4).unwrap();
+    assert!(glyph.rtl && glyph.width_start.abs() > 0.1, "fixture needs RTL font x-placement");
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 4, "dx": 5, "dy": 3})).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 4), (-5.0, -3.0)), "{:?}", moved_by(&before, &after, 4));
+    for byte in [3, 5] {
+        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id), original);
+}
+
+#[test]
+fn touch_type_rtl_moves_rotated_characters_in_aligned_and_transformed_text() {
+    use vectorcraft_geom::{Affine, Vec2};
+    use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
+
+    vectorcraft_text::FontDb::global().add_font(right_to_left_optical_font().unwrap());
+    let matrices =
+        [Affine::IDENTITY, Affine::scale_non_uniform(2.0, 0.5), Affine::new([1.0, 0.25, 0.4, 1.2, 0.0, 0.0]), Affine::scale_non_uniform(-1.0, 1.0)];
+    for justify in ["auto", "left", "center", "right"] {
+        for rotation in [0.0, 90.0, -90.0] {
+            for matrix in matrices {
+                for (kerning, start) in [("auto", 2), ("optical", 2), ("auto", 4), ("optical", 4)] {
+                    let case = format!("{justify}, {rotation} degrees, {matrix:?}, {kerning}, byte {start}");
+                    let mut s = session();
+                    let r = s
+                        .execute(
+                            "text.create",
+                            &json!({"x": 300, "y": 250, "text": "אבא", "size": 100, "font": RIGHT_TO_LEFT_OPTICAL_FAMILY, "justify": justify}),
+                        )
+                        .unwrap();
+                    let id = NodeId(r["id"].as_u64().unwrap());
+                    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": kerning})).unwrap();
+                    s.execute("object.transform", &json!({"ids": [id.0], "matrix": matrix.as_coeffs()})).unwrap();
+                    s.execute("text.touchType", &json!({"id": id.0, "start": start, "rotation": rotation})).unwrap();
+                    let original = obj(&s, id);
+                    let before = glyph_pens(&s, id);
+                    let linear = |v: Vec2| original.xf * (Point::ZERO + v) - original.xf * Point::ZERO;
+                    let expected = linear(Vec2::new(-1.0, 0.0)).normalize() * 5.0 + linear(Vec2::new(0.0, -1.0)).normalize() * 3.0;
+                    s.execute("text.touchType", &json!({"id": id.0, "start": start, "dx": 5, "dy": 3})).unwrap();
+                    let after = glyph_pens(&s, id);
+                    assert!(
+                        near(moved_by(&before, &after, start), (expected.x, expected.y)),
+                        "{case}: {:?}, expected {expected:?}",
+                        moved_by(&before, &after, start)
+                    );
+                    for byte in [0, 2, 4].into_iter().filter(|byte| *byte != start) {
+                        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "{case}, neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+                    }
+                    let changed = obj(&s, id);
+                    let reopened: TextObject = serde_json::from_value(serde_json::to_value(&changed).unwrap()).unwrap();
+                    assert_eq!(
+                        serde_json::to_value(&changed).unwrap(),
+                        serde_json::to_value(&reopened).unwrap(),
+                        "{case}: stored attributes round trip"
+                    );
+                    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &reopened);
+                    for g in &layout.glyphs {
+                        let expected = after.iter().find(|(byte, _)| *byte == g.byte).unwrap().1;
+                        assert!(
+                            (reopened.xf * (g.xf * Point::ZERO) - expected).hypot() < 1e-6,
+                            "{case}: reopened character {} keeps its place",
+                            g.byte
+                        );
+                    }
+                    s.execute("edit.undo", &json!({})).unwrap();
+                    assert_eq!(obj(&s, id), original, "{case}: Undo restores every attribute");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn touch_type_optical_spacing_does_not_shorten_a_baseline_nudge() {
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 300, "y": 250, "text": "AVA", "size": 100, "font": "Source Sans 3"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": 3})).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 1), (0.0, -3.0)), "{:?}", moved_by(&before, &after, 1));
+    for byte in [0, 2] {
+        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+    }
 }
 
 #[test]
