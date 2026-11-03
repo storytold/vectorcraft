@@ -151,6 +151,22 @@ fn reveal_command(path: &str) -> std::process::Command {
     c
 }
 
+/// Read a whole file. A device or pipe may never end: only a regular file is read.
+fn read_file(path: &str) -> Result<Vec<u8>, String> {
+    if !std::fs::metadata(path).map_err(|e| e.to_string())?.is_file() {
+        return Err(format!("{path}: not a file"));
+    }
+    std::fs::read(path).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+#[test]
+fn read_file_refuses_what_is_not_a_regular_file() {
+    assert!(read_file(&std::env::temp_dir().to_string_lossy()).is_err());
+    #[cfg(unix)]
+    assert!(read_file("/dev/zero").is_err());
+}
+
 /// Write a file the safe way: a failed write keeps the old file ([`fileio::write_atomic`]).
 fn write_file(path: &str, bytes: &[u8]) -> Result<(), String> {
     fileio::write_atomic(std::path::Path::new(path), bytes).map_err(|e| e.to_string())
@@ -277,7 +293,7 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         // Windows reads it from the pen's pointer messages (`windows_stylus`).
         #[cfg(windows)]
         stylus: Some(windows_stylus::start()),
-        read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
+        read: Some(Box::new(read_file)),
         write: Some(Box::new(write_file)),
         exists: Some(Box::new(|p: &str| std::path::Path::new(p).exists())),
         // Background Save and Export write from a worker thread.

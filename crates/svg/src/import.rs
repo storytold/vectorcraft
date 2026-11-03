@@ -113,7 +113,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     let Some(height) = depth::height(&xml, depth::MAX_ELEMENT_DEPTH) else {
         return Err(too_deep());
     };
-    let (svg, found) = prepass(svg, &scan.markers, &xml, opts);
+    let (svg, found) = prepass(svg, &scan.markers, &xml, opts)?;
     // The prepass's edits are in the text: the XML is read again only when it made any.
     let xml = match &svg {
         Cow::Borrowed(_) => xml,
@@ -126,7 +126,8 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     let units = RootUnits::of(xml.root_element());
     let root_name = root_layer_name(xml.root_element());
     let mut warnings = found.warnings;
-    let (src, slots) = text::prepare(svg, &xml, units.dpi, &mut warnings);
+    let text_xml = found.text_source.as_deref().map(parse).transpose()?;
+    let (src, slots) = text::prepare(svg, &xml, text_xml.as_ref(), units.dpi, &mut warnings);
     let files = found.files;
     let tree = {
         let opt = usvg::Options {

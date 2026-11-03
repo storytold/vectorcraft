@@ -59,14 +59,20 @@ pub fn num_field_within(
     bounds: RangeInclusive<f64>,
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], Tokens::get(ui.ctx()).cr())
+    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], Tokens::get(ui.ctx()).cr(), false)
 }
 
 /// [`num_field`] for a row whose visible label is not an adjacent label widget (a grid cell with
 /// its label painted separately): screen readers name the field `name` (already translated).
 pub fn num_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, name, value, unit, width, false, ANY, &[], Tokens::get(ui.ctx()).cr())
+    unit_field(ui, id, label, name, value, unit, width, false, ANY, &[], Tokens::get(ui.ctx()).cr(), false)
+}
+
+/// The field returns valid typed distances immediately and preserves the text being edited.
+pub fn num_field_live(ui: &mut Ui, id: impl std::hash::Hash, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
+    let label = take_previous_label(ui);
+    unit_field(ui, id, label, None, value, unit, width, false, ANY, &[], Tokens::get(ui.ctx()).cr(), true)
 }
 
 /// Any number: the bounds of a field that has none.
@@ -94,6 +100,7 @@ fn unit_field(
     bounds: RangeInclusive<f64>,
     stops: &[f64],
     corners: CornerRadius,
+    live: bool,
 ) -> Option<f64> {
     let id = id_with(ui.scope_id(), id);
     let shown = value.map(|v| unit.format(v)).unwrap_or_default();
@@ -130,7 +137,18 @@ fn unit_field(
         }
     } else {
         ui.data_mut(|d| d.insert_temp(id, buf.clone()));
-        stepped.or(scrubbed).map(|v| unit.to_pt(v))
+        if let Some(v) = stepped.or(scrubbed) {
+            return Some(unit.to_pt(v));
+        }
+        if live
+            && resp.changed()
+            && let Some(v) = read(&buf).filter(|v| v.is_finite()).map(|v| within(v, &bounds)).filter(|v| Some(*v) != value)
+        {
+            ui.data_mut(|d| d.insert_temp(id.with("shown"), unit.format(v)));
+            ui.ctx().request_repaint();
+            return Some(v);
+        }
+        None
     }
 }
 
@@ -313,7 +331,7 @@ pub fn size_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str
             }
         });
     }
-    unit_field(ui, id, label, name, value, unit, width, true, ANY, &[], Tokens::get(ui.ctx()).cr())
+    unit_field(ui, id, label, name, value, unit, width, true, ANY, &[], Tokens::get(ui.ctx()).cr(), false)
 }
 
 /// [`plain_field`] for a number kept within `range` (the values of dialogs, preferences and panels
@@ -347,7 +365,7 @@ pub fn range_field_named(
     let places = decimals.min(6) as i32;
     let value = value.into().map(|v| within(v, &range));
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, name, value, suffix, decimals, width, &range, None, Tokens::get(ui.ctx()).cr(), false)
+    bounded_field(ui, id, label, name, value, suffix, decimals, width, &range, None, Tokens::get(ui.ctx()).cr(), false, false)
         .map(|v| within(round_to(v, places), &range))
 }
 
@@ -366,7 +384,35 @@ pub fn range_field_with(
     let places = decimals.min(6) as i32;
     let value = value.into().map(|v| within(v, &range));
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, None, corners, false).map(|v| within(round_to(v, places), &range))
+    bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, None, corners, false, false)
+        .map(|v| within(round_to(v, places), &range))
+}
+
+/// The field returns valid typed values immediately within `range` and preserves incomplete input.
+pub fn range_field_live(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    value: impl Into<Option<f64>>,
+    range: RangeInclusive<f64>,
+    suffix: &str,
+    decimals: usize,
+    width: f32,
+) -> Option<f64> {
+    let value = value.into().map(|v| within(v, &range));
+    let label = take_previous_label(ui);
+    let field = id_with(ui.scope_id(), &id);
+    let result = bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, None, Tokens::get(ui.ctx()).cr(), false, true)
+        .map(|v| within(round_to(v, decimals.min(6) as i32), &range));
+    if let Some(value) = result {
+        ui.data_mut(|d| d.insert_temp(field.with("shown"), field_text(value, suffix, decimals)));
+    }
+    result
+}
+
+/// The field returns valid typed numbers immediately and preserves the text being edited.
+pub fn plain_field_live(ui: &mut Ui, id: impl std::hash::Hash, value: f64, suffix: &str, decimals: usize, width: f32) -> Option<f64> {
+    let label = take_previous_label(ui);
+    bounded_field(ui, id, label, None, Some(value), suffix, decimals, width, &ANY, None, Tokens::get(ui.ctx()).cr(), false, true)
 }
 
 /// [`range_field`] whose ↑/↓ and wheel take `step`'s steps instead of whole numbers (see
@@ -386,7 +432,7 @@ pub fn range_field_stepped(
     let places = decimals.min(6) as i32;
     let value = value.into().map(|v| within(v, &range));
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, Some(step), Tokens::get(ui.ctx()).cr(), false)
+    bounded_field(ui, id, label, None, value, suffix, decimals, width, &range, Some(step), Tokens::get(ui.ctx()).cr(), false, false)
         .map(|v| within(round_to(v, places), &range))
 }
 
@@ -406,7 +452,7 @@ pub fn mixed_field_named(
     width: f32,
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    bounded_field(ui, id, label, name, value, suffix, decimals, width, &ANY, None, Tokens::get(ui.ctx()).cr(), false)
+    bounded_field(ui, id, label, name, value, suffix, decimals, width, &ANY, None, Tokens::get(ui.ctx()).cr(), false, false)
 }
 
 /// [`mixed_field`] whose ↑/↓, wheel and scrub stop at `bounds`; ↑/↓ and the wheel take `step`'s steps
@@ -426,6 +472,7 @@ fn bounded_field(
     step: Option<fn(f64, f64) -> f64>,
     corners: CornerRadius,
     parentheses: bool,
+    live: bool,
 ) -> Option<f64> {
     let armed = take_armed_focus(ui, &id);
     let id = id_with(ui.scope_id(), id);
@@ -453,7 +500,18 @@ fn bounded_field(
     let decimals = decimals.min(6) as i32;
     let stepped = step_value(ui, &resp, &mut buf, bounds, (read, show), step, &[]).map(|v| round_to(v, decimals));
     let scrubbed = scrub::field(ui, id, rect, &buf, value, decimals, bounds);
-    if commit && buf != shown { read(&buf) } else { stepped.or(scrubbed).filter(|&v| Some(v) != value) }
+    if commit && buf != shown {
+        read(&buf)
+    } else if let Some(v) = stepped.or(scrubbed).filter(|&v| Some(v) != value) {
+        Some(v)
+    } else if live && resp.changed() {
+        read(&buf).filter(|v| v.is_finite()).map(|v| within(v, bounds)).filter(|v| Some(*v) != value).inspect(|&v| {
+            ui.data_mut(|d| d.insert_temp(id.with("shown"), show(v)));
+            ui.ctx().request_repaint();
+        })
+    } else {
+        None
+    }
 }
 
 /// The text [`plain_field`] shows for `value`: at most `decimals` places, without trailing zeros,
@@ -532,7 +590,7 @@ pub fn spin_field_stops_named(
 ) -> Option<f64> {
     let label = take_previous_label(ui);
     spin_generic(ui, label, value, None, None, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, corners, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets, corners)
+        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets, corners, false)
     })
     .and_then(SpinPick::value)
 }
@@ -589,7 +647,7 @@ pub fn spin_field_auto_named(
 ) -> Option<SpinPick> {
     let label = take_previous_label(ui);
     spin_generic(ui, label, value, auto, None, None, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, corners, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[], corners)
+        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[], corners, false)
     })
 }
 
@@ -628,7 +686,7 @@ pub fn spin_plain_named(
     let value = value.into();
     let fmt = |v: f64| format!("{v}{suffix}");
     spin_generic(ui, label, value, None, None, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, corners, label| {
-        bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None, corners, false)
+        bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None, corners, false, false)
     })
     .and_then(SpinPick::value)
 }
@@ -660,7 +718,9 @@ pub fn spin_kerning(
         presets,
         &[],
         &|v| format!("{v}"),
-        &mut |ui, fw, corners, label| bounded_field(ui, id, label, None, value, "", 0, fw, &(-1000.0..=f64::INFINITY), None, corners, parentheses),
+        &mut |ui, fw, corners, label| {
+            bounded_field(ui, id, label, None, value, "", 0, fw, &(-1000.0..=f64::INFINITY), None, corners, parentheses, false)
+        },
     )
 }
 

@@ -661,11 +661,15 @@ impl<'a> Reader<'a> {
         // of a default swatch of that name when the file has no palette of its own (a reserved name
         // in brackets, such as `[None]`, keeps its swatch).
         let mut defined = std::collections::HashSet::new();
+        // The swatch names there are, looked up rather than scanned for each name a file defines
+        // (`Document::swatch` also knows the registration colour).
+        let mut have: std::collections::HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).collect();
+        have.insert(vectorcraft_color::swatch::REGISTRATION.to_string());
         let colors = self.spots.iter().chain(&self.stop_spots).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
         for (n, spot) in colors {
             let first = defined.insert(n.name.clone());
             let swatch = Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot };
-            if doc.swatch(&n.name).is_none() {
+            if have.insert(n.name.clone()) {
                 doc.swatches.push(swatch);
             } else if first
                 && !own_palette
@@ -679,7 +683,7 @@ impl<'a> Reader<'a> {
             doc.metadata.author = author;
         }
         for name in doc.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>() {
-            if doc.swatch(&name).is_none() {
+            if have.insert(name.clone()) {
                 doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
             }
         }

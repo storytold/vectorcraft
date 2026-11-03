@@ -5967,3 +5967,4 @@ breakText	Glyphs	字形
 	Bow	弓形
 	Spike	山形
 	Skip Spaces	スペースをスキップ
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	アートワークが大きすぎるため画像としてコピーできません：他のアプリには PNG が渡されません
