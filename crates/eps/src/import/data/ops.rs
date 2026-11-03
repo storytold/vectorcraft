@@ -435,10 +435,11 @@ impl Interp<'_> {
         Ok(out)
     }
 
-    /// `eexec`: an encrypted font program follows. It is skipped (type is drawn in the app's
-    /// fonts, by name): the font dictionary it would complete is defined as it is.
+    /// `file eexec`: an encrypted font program follows in `file`. It is skipped there, up to the
+    /// `cleartomark` that ends it (type is drawn in the app's fonts, by name): the font
+    /// dictionary it would complete is defined as it is.
     fn eexec(&mut self) -> Res {
-        self.pop()?;
+        let src = self.pop()?;
         if let Some(Obj::Dict(d)) = self.stack.last().cloned() {
             let name = d.borrow().get(&Key::name("FontName")).cloned();
             if let Some(k) = name.and_then(|n| n.key()) {
@@ -446,9 +447,24 @@ impl Interp<'_> {
                 self.fonts.borrow_mut().insert(k, Obj::Dict(d));
             }
         }
-        let rest = self.lex.data();
-        let at = find(rest, b"cleartomark").ok_or(PsError::Ps("ioerror", "eexec".into()))?;
-        self.lex.advance(at);
+        // `currentfile eexec`: the program's own file or the file being run. A string operand
+        // skips in the file being read.
+        let f = match src {
+            Obj::File { stream, .. } => stream,
+            _ => self.running.last().cloned().unwrap_or_else(|| Rc::new(RefCell::new(Stream::Current))),
+        };
+        self.materialize(&f)?;
+        let missing = || PsError::Ps("ioerror", "eexec".into());
+        match &mut *f.borrow_mut() {
+            Stream::Buf { data, pos, .. } => {
+                let at = find(data.get(*pos..).unwrap_or_default(), b"cleartomark").ok_or_else(missing)?;
+                *pos += at;
+            }
+            _ => {
+                let at = find(self.lex.data(), b"cleartomark").ok_or_else(missing)?;
+                self.lex.advance(at);
+            }
+        }
         self.push(Obj::Mark)
     }
 
