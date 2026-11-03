@@ -182,7 +182,7 @@ fn apply_one(doc: &mut Document, found: &OnPath, at: &HashMap<NodeId, Vec<usize>
         let center = doc.node_at(place)?.geometric_bounds()?.center();
         members.push(Member { id, frame: Affine::rotate_about(angle, center), angle });
     }
-    let on_path = ObjectsOnPath { path, members, pivot: r.pivot, rotate: r.rotate };
+    let on_path = ObjectsOnPath { path, members, pivot: r.pivot, rotate: r.rotate, spacing: None, start: 0.0 };
     doc.node_mut_at(group_at)?.extras_mut().objects_on_path = Some(Box::new(on_path));
     Some(())
 }
