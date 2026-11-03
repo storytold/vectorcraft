@@ -6838,7 +6838,8 @@ there is no step. → `{symbols: [name…], ids: [instance id…], skipped: [{la
 Type Tools is a built-in add-on for type: its command is `addon.type.textTweaker`, and in the desktop app it lives in
 Object › Plug-ins › Type Tools (#4924). Text Tweaker gives one character attribute to the characters letter by letter,
 from a start value to an end value along a shape, as one undo step; the text stays live and editable. Each value is set
-as `text.setRangeStyle` sets it (the Character panel), in its units and ranges, so on scaled type it is the size shown.
+as `text.setRangeStyle` sets it (the Character panel), in its units and ranges ([formatting type](https://helpx.adobe.com/illustrator/using/formatting-type.html)), so on scaled
+type it is the size shown.
 It changes the range of `id` (`start`/`end` bytes), else all the text of the type objects in `ids`, else the text the
 Type tool has selected (at a caret: all of that object's text), else all the text of every selected type object; each
 object gets its own ramp, and at most 100000 characters change in one run. A run that changes nothing makes no step.
