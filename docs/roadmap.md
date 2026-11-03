@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Symbol editing shows draggable 9-slice guides; M5: supersampled exports avoid redundant opaque knockout layers; File formats: `.ai`/EPS import fidelity from a user's file audit; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (font-family fields accept the mouse wheel, #5253; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -145,6 +145,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Font-family fields in Character, Properties and Control step selected text with the wheel (#5253), with one undo step per notch; scores and estimates unchanged. |
 | 2026-11-03 | minor | Symbol editing shows draggable 9-slice guides (#5280). Guides outside the artwork remain unsupported. Scores and hours remain unchanged. |
 | 2026-10-30 | patch | M5: opaque solid-fill knockout paths avoid redundant erase/add layers in hard-edge frames and supersampled raster export; exact-pixel regression coverage retains analytical-AA rounding and translucent knockout behavior; scores and estimates unchanged |
 | 2026-10-30 | minor | M4: G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |

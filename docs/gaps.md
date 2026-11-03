@@ -1,9 +1,16 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Symbol editing shows draggable 9-slice guides; G5: dynamic symbols, #4938; estimate 15–26 → 14–24 h) · **Target:** Adobe Illustrator 2026 (30.x; G12: Units › East Asian Type acts, with Q and Ha units; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (font-family fields accept the mouse wheel, #5253; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; G12: Units › East Asian Type acts, with Q and Ha units; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
+The closed font-family fields in Character, Properties and Control now accept the
+mouse wheel for selected text (#5253). Each effective notch applies one family and
+adds one undo step; the list follows saved font filters, ignores search text, and
+stops at its ends. These interaction details
+are VectorCraft's choices. Scores and estimates are unchanged.
+
+**Feature evidence last updated:** 2026-11-02.
 **Feature evidence last updated:** 2026-11-03.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
@@ -19,6 +26,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Font-family fields step selected text with the mouse wheel (#5253); no scored gap or estimate reassessed. |
 | 2026-10-24 | minor | G12: General › Corner Radius is the Rounded Rectangle tool's radius, a change while the tool is active reaches it, and the radius ↑/↓ set while drawing (or a Tool Options value) becomes the preference, within 0–1296 pt (#394, `crates/engine/src/tests/constrain_tools.rs`); no entry closed, estimate unchanged. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-3; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-2; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
