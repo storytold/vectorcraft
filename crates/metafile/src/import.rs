@@ -429,6 +429,9 @@ impl Player {
         let start = self.free_hint.min(self.objects.len());
         let i = self.objects.iter().skip(start).position(Option::is_none).map_or(self.objects.len(), |p| p + start);
         if i > u16::MAX as usize {
+            // The table is full past the hint: the next creation looks from the end, not again
+            // through every slot.
+            self.free_hint = i;
             return;
         }
         if i == self.objects.len() {
@@ -895,5 +898,27 @@ pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
         Some(Kind::Emf) => emf::play(bytes),
         Some(Kind::Wmf) => wmf::play(bytes),
         None => Err("not an EMF or WMF file".into()),
+    }
+}
+
+#[cfg(test)]
+mod table_tests {
+    use super::*;
+
+    /// Once the WMF table is full, a rejected creation leaves the hint at its end, so the next
+    /// ones don't scan every slot again; a freed slot is still found.
+    #[test]
+    fn a_full_object_table_is_not_rescanned() {
+        let mut p = Player::new(Kind::Wmf, Affine::IDENTITY, 1.0, Rect::new(0.0, 0.0, 10.0, 10.0));
+        for _ in 0..=u16::MAX as usize + 1 {
+            p.create(Obj::Other);
+        }
+        p.delete(5);
+        p.create(Obj::Other);
+        p.create(Obj::Other);
+        assert!(p.free_hint > u16::MAX as usize);
+        p.delete(7);
+        p.create(Obj::Other);
+        assert!(p.objects[7].is_some());
     }
 }
