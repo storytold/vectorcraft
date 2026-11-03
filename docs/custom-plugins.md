@@ -7,7 +7,7 @@ kind needed to place the plug-in beside Ellipse.
 ## Current install
 
 - Custom host: `dist/VectorCraft.app`
-- Installable plug-in: `../../outputs/TangentCircle.wasm`
+- Installable plug-in: `../../../outputs/TangentCircle.wasm`
 - Feature branch: `feature/tangent-circle-snap`
 
 The plug-in is kept in VectorCraft's normal Plug-ins folder after installation, so restarting the

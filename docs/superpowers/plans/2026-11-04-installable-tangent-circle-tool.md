@@ -221,7 +221,7 @@ are 30, radius stays 10, Undo/Redo work, and remove hides the tool.
 
 - [ ] **Step 2: Run and confirm failure**
 
-Run: `cargo test -p vectorcraft-engine tangent_circle_plugin_ --test it`
+Run: `cargo test -p vectorcraft-engine tangent_circle_plugin_ --lib`
 Expected: FAIL because the plug-in module and tool behavior are absent.
 
 - [ ] **Step 3: Implement the plug-in state machine**
