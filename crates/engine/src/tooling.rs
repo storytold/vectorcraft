@@ -465,6 +465,14 @@ impl Session {
         Ok(())
     }
 
+    /// The artboard a guide made from a ruler belongs to: with the Artboard tool, its active
+    /// artboard (an artboard guide); with any other tool, none (a canvas guide).
+    pub fn ruler_guide_artboard(&self) -> Option<usize> {
+        let boards = self.active().map_or(0, |d| d.doc.artboards.len());
+        let active = (self.tool.id() == "artboard").then(|| self.tool.options()["active"].as_u64()).flatten();
+        active.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < boards)
+    }
+
     /// A guide dragged out of a ruler, whatever the tool: a vertical one out of the left ruler, a
     /// horizontal one out of the top ruler. `ev` is the pointer in document space (a drag, then the
     /// release), over the canvas or not (`on_canvas`). The guide shows where the pointer is over
@@ -475,9 +483,7 @@ impl Session {
         let g = match self.ruler_guide.take() {
             Some(g) => Some(g),
             None => {
-                let boards = self.active().map_or(0, |d| d.doc.artboards.len());
-                let active = (self.tool.id() == "artboard").then(|| self.tool.options()["active"].as_u64()).flatten();
-                let artboard = active.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < boards);
+                let artboard = self.ruler_guide_artboard();
                 self.with_tool_cx(view, |_, cx| Some(vectorcraft_tools::rulerguide::NewGuide::new(cx, vertical, artboard)))
             }
         };

@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Type on a Path Options has a Preview checkbox, #5360; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (a double-click on a ruler adds a guide there, #5239; scores and estimates unchanged; previously: Type on a Path Options has a Preview checkbox, #5360) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -30,6 +30,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | A double-click on a ruler adds a guide at the pointer (#5239): a vertical one on the top ruler, a horizontal one on the left ruler; scores and estimates unchanged. |
 | 2026-11-03 | minor | Enclosing Lasso provides whole-object enclosure selection as an add-on with no default shortcut or Basic toolbar slot. Scores and estimates remain unchanged. |
 | 2026-11-03 | minor | Transform previews valid typed values while numeric fields remain focused. Effect dialogs use the object, group, or layer targeted in Appearance. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
@@ -174,6 +175,7 @@ tools, never checked side by side) isn't captured row by row.
 | Snapping panel/popover consolidating the snap options (30.0) | partial | Control bar › Snapping provides quick access through existing view commands and prefs.set; no View › Snapping submenu. Floating-panel parity remains unverified. |
 | Customisable rotation snap angle (#973) | missing | Illustrator: Constrain Angle and construction angles only |
 | Ruler guides: drag out, select, move, delete, lock, Make/Release Guides | done | #414, #451; marquee selects unlocked ruler guides |
+| A double-click on a ruler adds a guide at the pointer: a vertical one on the top ruler, a horizontal one on the left ruler, exactly where the pointer is (no snapping), shown even with guides hidden, one undo step (`guide.add`); the first click of the pair adds nothing. The [public page on rulers](https://helpx.adobe.com/illustrator/desktop/measure-and-align/grids-and-guides/use-rulers.html) doesn't describe this gesture, so it follows the request in #5239 | done | #5239; an artboard guide with the Artboard tool, as a drag from a ruler makes one; `canvas/tests.rs` `double_clicking_a_ruler_adds_a_guide_at_that_position` |
 | Escape cancels an existing ruler-guide press, move or copy | done | Selection and Direct/Group Selection; app-input regressions cover preselected guides, document/interaction-start selection, Undo/Redo and saved state, later on-canvas motion/release and temporary borrowing from idle Pen. All eight checks and the Direct Selection Escape control passed in current full CI. [Validation evidence](target-app-parity.md#evidence-what-ships-today-by-area) |
 | Ruler origin: corner drag with preview, double-click reset to the active artboard, relative X/Y fields, native save/reopen | done | #1212; `document.setRulerOrigin`, `document.resetRulerOrigin`; geometry and command coordinates stay absolute |
 | Ruler guides as Layers rows: shown, hidden, locked and deleted with their layer; rows dragged to another layer | done | `guide.setLayer`; guides from older files go on a layer |
@@ -418,6 +420,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | A double-click on a ruler adds a guide at the pointer (#5239): a vertical one on the top ruler, a horizontal one on the left ruler; scores and estimates unchanged. |
 | 2026-11-03 | minor | Enclosing Lasso selects fully enclosed objects with a freehand loop under Object › Plug-ins; scores and estimates unchanged. |
 | 2026-11-03 | minor | Type on a Path Options has a Preview checkbox (#5360, as public tutorials of the dialog show); scores and estimates unchanged |
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control accept the wheel without opening the menu (#5253); scores and estimates unchanged. |
