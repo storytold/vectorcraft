@@ -157,6 +157,10 @@ fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
             None if vectorcraft_engine::file_access::current().is_none() => {}
             None => return None,
         }
+        // A device or pipe may never end: only a regular file is read whole.
+        if !std::fs::metadata(&path).ok()?.is_file() {
+            return None;
+        }
         let mut head = Vec::with_capacity(FILE_HEAD);
         std::fs::File::open(&path).ok()?.take(FILE_HEAD as u64).read_to_end(&mut head).ok()?;
         let mime = file_flavour(&path.to_string_lossy(), &head, mimes)?;
