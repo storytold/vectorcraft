@@ -1438,6 +1438,13 @@ everything in it, and `select.all`, `select.allOnArtboard` and `select.inverse` 
 among the objects beside it in its group or layer, passing over hidden and locked objects and sublayers. When there
 is no such object, the selection stays as it is.
 
+`select.same.textFillAndStrokeColor` (Select › Same › Text Fill & Stroke Color) selects the type objects that have
+characters whose fill and stroke both match the first character of the first selected type, and returns `{count}`.
+`select.same.textFillColor` and `select.same.textStrokeColor` compare the fill or the stroke alone. In type with
+several runs, one run has to match both: type with the fill in one run and the stroke in another is left out. The fill
+and stroke of other objects are not compared. Without type among the selected objects it returns the error "select a
+text object", and it records no undo step.
+
 ## Shaper Groups
 
 `shaper.releaseSource {source, group?}` takes the original shape `source` out of its Shaper Group: the shape becomes a

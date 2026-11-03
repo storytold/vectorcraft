@@ -67,6 +67,15 @@ pub fn specs() -> Vec<CommandSpec> {
             |a, b| a.stroke == b.stroke
         )),
         cmd!(
+            "select.same.textFillAndStrokeColor",
+            "Text Fill & Stroke Color",
+            ["Select", "Same"],
+            None,
+            "{} select the type objects with characters whose fill and stroke both match the first character of the first selected type → {count}",
+            has_selection,
+            |s, _| same_text(s, "select.same.textFillAndStrokeColor", |a, b| a.fill == b.fill && a.stroke == b.stroke)
+        ),
+        cmd!(
             "select.object.directionHandles",
             "Direction Handles",
             ["Select", "Object"],
