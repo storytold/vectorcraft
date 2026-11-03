@@ -1673,7 +1673,9 @@ already walks Image Trace. Short agent entry points:
   destination, `a.svg` is saved as `a.svg`, so the Export for Screens folder of `a.svg.svg` is `a.svg-2`. When
   `destinationFolder` holds source files, only a file's own output takes its name, and no export folder takes the
   name of a subfolder that holds source files: with `a..svg` and `a.svg` saved in place, `a..svg` is saved as
-  `a-2.svg` and `a.svg` over itself.
+  `a-2.svg` and `a.svg` over itself. A file's artboard files count as its files, as for data sets: with
+  `a.vectorcraft` and `a-Artboard-1.vectorcraft` saved in place with `separateArtboards`, `a.vectorcraft` is saved
+  as `a-2`.
 - Action sets: `ui.actionSet.delete {sets?: [index], ids?: [id]}` deletes the Actions panel's sets at these indexes
   (0 is the top set) with their actions, by default the current set, and returns `{deleted}`. An index past the last
   set is an error, and then no set is deleted. `ids` holds the panel's own set ids, which its question passes: the

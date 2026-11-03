@@ -117,27 +117,26 @@ fn batch_folder(s: &mut Session, cmd: &str, p: &Value, override_open: bool, run:
     // Each file's name without its extension, through [`source_stem`] (`a..svg` gives `a`, the
     // folder Windows makes for `a.`, and `a\b.svg` keeps `a\b` where `\` is not a separator), with
     // `-2`, `-3`… after a name an earlier file used (`a.svg` and `sub/a.svg`, or `a.svg` and `a.ai`) or after a name whose files or folder an earlier file
-    // wrote ([`distinct_stems`]), as data set names are numbered. No output takes the name of a
+    // wrote ([`StemPicker`]), as data set names are numbered. A file's stem is picked once it is
+    // open, so its artboard files count ([`dataset_output_paths`]). No output takes the name of a
     // source file in the destination folder, other than that file's own output, or of a subfolder
     // of the destination folder that holds source files.
     let steps = filter_steps(run.steps, override_open, false);
     let run = Run { steps: &steps, ..*run };
     let in_dest: Vec<Option<(String, bool)>> = files.iter().map(|path| name_in_folder(path, run.dest_folder)).collect();
-    let reserved = in_dest.iter().flatten().map(|(name, _)| name.clone()).collect();
-    let stems = distinct_stems(
-        files.iter().zip(&in_dest).map(|(path, place)| {
-            let stem = source_stem(std::path::Path::new(path).file_stem().and_then(|s| s.to_str()).unwrap_or(""));
-            let (exts, makes_folder) = outputs(&run, &super::extension(path));
-            let own = place.as_ref().filter(|(_, own)| *own).map(|(name, _)| name.clone());
-            (stem, exts, makes_folder, own)
-        }),
-        reserved,
-    );
+    let mut picker =
+        StemPicker { stems: std::collections::HashSet::new(), written: in_dest.iter().flatten().map(|(name, _)| name.clone()).collect() };
     let mut processed = Vec::new();
     let mut failed = 0usize;
-    for (path, stem) in files.iter().zip(&stems) {
+    for (path, place) in files.iter().zip(&in_dest) {
         let ext = super::extension(path);
-        match process_one_file(s, &run, path, stem, &ext) {
+        let base = source_stem(std::path::Path::new(path).file_stem().and_then(|s| s.to_str()).unwrap_or(""));
+        let own = place.as_ref().filter(|(_, own)| *own).map(|(name, _)| name.clone());
+        let pick = |doc: &vectorcraft_doc::Document| {
+            let outputs = dataset_output_extensions(&run, doc, &ext);
+            picker.pick(&base, |stem| output_names(run.dest_folder, stem, &outputs, doc), own.as_deref())
+        };
+        match process_one_file(s, &run, path, &ext, pick) {
             Ok(row) => processed.push(row),
             Err(e) => {
                 failed += 1;
@@ -192,31 +191,14 @@ fn source_stem(stem: &str) -> String {
     if stem.is_empty() { "file".to_string() } else { stem }
 }
 
-/// What one source writes into the destination folder: the extension of each file a Save or
-/// Export step or the Folder destination writes there as `{stem}.{ext}`, and whether an Export for
-/// Screens or Export Assets step makes the folder `{stem}` there. Follows [`rewrite_paths`] and
-/// [`finish_destination`].
+/// The names in lower case of the files and folders that a source with the stem `stem` writes
+/// into the destination folder ([`dataset_output_paths`]), artboard files included.
 #[cfg(not(target_arch = "wasm32"))]
-fn outputs(run: &Run<'_>, default_ext: &str) -> (Vec<String>, bool) {
-    let mut exts = Vec::new();
-    let mut folder = false;
-    if run.dest_folder.is_some() {
-        for c in run.steps {
-            let id = c.get("command").and_then(Value::as_str).unwrap_or("");
-            if run.override_export && matches!(id, "document.exportForScreens" | "assets.export") {
-                folder = true;
-            } else if (run.override_save && matches!(id, "document.save" | "file.save" | "file.saveAs"))
-                || (run.override_export && matches!(id, "document.export" | "document.exportSelection"))
-            {
-                let format = c.get("params").and_then(|p| p.get("format")).and_then(Value::as_str).filter(|f| !f.is_empty());
-                exts.push(format.map_or_else(|| default_ext.to_string(), format_extension));
-            }
-        }
-    }
-    if run.destination == "folder" {
-        exts.push(if default_ext.is_empty() { "vectorcraft".to_string() } else { default_ext.to_string() });
-    }
-    (exts, folder)
+fn output_names(folder: Option<&str>, stem: &str, outputs: &[DatasetOutput], doc: &vectorcraft_doc::Document) -> Vec<String> {
+    dataset_output_paths(folder, stem, outputs, doc)
+        .iter()
+        .filter_map(|path| path.file_name().and_then(|name| name.to_str()).map(str::to_lowercase))
+        .collect()
 }
 
 /// When the file at `path` is inside `folder`: the name in lower case of the file, when it is
@@ -230,36 +212,35 @@ fn name_in_folder(path: &str, folder: Option<&str>) -> Option<(String, bool)> {
     Some((first, parts.next().is_none()))
 }
 
-/// The stem of each source, given as (name, extensions, folder, own file) with [`outputs`]: the
-/// name, with `-2`, `-3`… after it when an earlier source used it or when one of the files or the
-/// folder it writes has the name of a file or folder an earlier source wrote (`a.svg` writes the
-/// file `a.svg`, so the Export for Screens folder of `a.svg.svg` is `a.svg-2`) or a name in
-/// `reserved` other than its own file's. Names are compared without case.
+/// Picks the stem of each folder source in turn: its name, with `-2`, `-3`… after it when an
+/// earlier source used it or when one of the files or the folder it writes has the name of a file
+/// or folder an earlier source wrote (`a.svg` writes the file `a.svg`, so the Export for Screens
+/// folder of `a.svg.svg` is `a.svg-2`) or a name in `written` from the start (the source files and
+/// subfolders in the destination folder) other than its own file's. Names are compared without case.
 #[cfg(not(target_arch = "wasm32"))]
-fn distinct_stems(
-    sources: impl IntoIterator<Item = (String, Vec<String>, bool, Option<String>)>,
-    reserved: std::collections::HashSet<String>,
-) -> Vec<String> {
-    let mut stems = std::collections::HashSet::new();
-    let mut written = reserved;
-    sources
-        .into_iter()
-        .map(|(base, exts, folder, own)| {
-            let mut name = base.clone();
-            let mut n = 1usize;
-            loop {
-                let lower = name.to_lowercase();
-                let names: Vec<String> = exts.iter().map(|e| format!("{lower}.{}", e.to_lowercase())).chain(folder.then(|| lower.clone())).collect();
-                if !stems.contains(&lower) && names.iter().all(|f| !written.contains(f) || own.as_ref() == Some(f)) {
-                    stems.insert(lower);
-                    written.extend(names);
-                    return name;
-                }
-                n += 1;
-                name = format!("{base}-{n}");
+struct StemPicker {
+    stems: std::collections::HashSet<String>,
+    written: std::collections::HashSet<String>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl StemPicker {
+    /// `names` gives the names in lower case of what a stem writes; `own` is the source's own name.
+    fn pick(&mut self, base: &str, names: impl Fn(&str) -> Vec<String>, own: Option<&str>) -> String {
+        let mut name = base.to_string();
+        let mut n = 1usize;
+        loop {
+            let lower = name.to_lowercase();
+            let outputs = names(&name);
+            if !self.stems.contains(&lower) && outputs.iter().all(|f| !self.written.contains(f) || own == Some(f.as_str())) {
+                self.stems.insert(lower);
+                self.written.extend(outputs);
+                return name;
             }
-        })
-        .collect()
+            n += 1;
+            name = format!("{base}-{n}");
+        }
+    }
 }
 
 /// Drop Open (and optionally Close) steps when the batch supplies the file itself.
@@ -281,12 +262,19 @@ fn filter_steps(cmds: &[Value], drop_open: bool, drop_close: bool) -> Vec<Value>
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn process_one_file(s: &mut Session, run: &Run<'_>, path: &str, stem: &str, ext: &str) -> Result<Value> {
+fn process_one_file(
+    s: &mut Session,
+    run: &Run<'_>,
+    path: &str,
+    ext: &str,
+    stem_for: impl FnOnce(&vectorcraft_doc::Document) -> String,
+) -> Result<Value> {
     s.execute("document.open", &json!({"path": path}))?;
-    let rewritten = rewrite_paths(run.steps, run.override_save, run.override_export, run.dest_folder, stem, ext);
+    let stem = stem_for(&s.doc()?.doc);
+    let rewritten = rewrite_paths(run.steps, run.override_save, run.override_export, run.dest_folder, &stem, ext);
     let batch = s.execute("command.batch", &json!({"label": run.label, "commands": rewritten}))?;
     // Folder sources open a file per pass: close after Save and Close / Folder.
-    finish_destination(s, run, stem, ext, path, true)?;
+    finish_destination(s, run, &stem, ext, path, true)?;
     Ok(json!({"path": path, "result": batch}))
 }
 
@@ -356,7 +344,7 @@ fn dataset_stems(names: &[String], doc_stem: &str, naming: &str, run: &Run<'_>, 
             _ => safe_file_name(&format!("{doc_stem}_{safe}")),
         }
     });
-    let outputs = dataset_output_extensions(run, doc);
+    let outputs = dataset_output_extensions(run, doc, "vectorcraft");
     let mut taken = std::collections::HashSet::new();
     let mut reserved = std::collections::HashSet::new();
     let mut stems = Vec::with_capacity(bases.len());
@@ -395,12 +383,14 @@ struct DatasetOutput {
 /// Lists step output extensions and reserves artboard file names for saves with any artboard or
 /// exports with multiple artboards. Per-artboard names count for vectorcraft, template, AI and AIT
 /// saves and SVG, SVGZ, EPS, raster, DXF, EMF, WMF and AI exports. An Export for Screens or Export
-/// Assets step reserves the folder `{stem}` ([`rewrite_paths`]).
+/// Assets step reserves the folder `{stem}` ([`rewrite_paths`]). A step without a format and the
+/// Folder destination write `default_ext` (`vectorcraft` when it is empty).
 #[cfg(not(target_arch = "wasm32"))]
-fn dataset_output_extensions(run: &Run<'_>, doc: &vectorcraft_doc::Document) -> Vec<DatasetOutput> {
+fn dataset_output_extensions(run: &Run<'_>, doc: &vectorcraft_doc::Document, default_ext: &str) -> Vec<DatasetOutput> {
+    let default_ext = if default_ext.is_empty() { "vectorcraft" } else { default_ext };
     let mut outputs = Vec::new();
     if run.destination == "folder" {
-        outputs.push(DatasetOutput { ext: "vectorcraft".into(), artboards: false, joiner: "-", folder: false });
+        outputs.push(DatasetOutput { ext: default_ext.into(), artboards: false, joiner: "-", folder: false });
     }
     for step in run.steps {
         let id = step.get("command").and_then(Value::as_str).unwrap_or("");
@@ -415,10 +405,10 @@ fn dataset_output_extensions(run: &Run<'_>, doc: &vectorcraft_doc::Document) -> 
             let ext = match format {
                 Some(format) if super::format(format).is_some() => format_extension(format),
                 Some(_) => continue,
-                None => "vectorcraft".to_string(),
+                None => default_ext.to_string(),
             };
             if safe_extension(&ext) {
-                let format_id = format.and_then(super::format).map(|f| f.id).unwrap_or("vectorcraft");
+                let format_id = super::format(format.unwrap_or(default_ext)).map(|f| f.id).unwrap_or("vectorcraft");
                 let is_save = matches!(id, "document.save" | "file.save" | "file.saveAs");
                 let artboards = if is_save {
                     !doc.artboards.is_empty() && matches!(format_id, "vectorcraft" | "template" | "ai" | "ait")
@@ -1043,6 +1033,37 @@ mod tests {
         assert!(source.contains("fill=\"#0f0\""), "{r}: {source}");
         let export = std::fs::read_to_string(src.join("a-2").join("Artboard-1.svg")).unwrap();
         assert!(export.contains("#ff0000"), "{r}: {export}");
+    }
+
+    /// With the destination folder the same as the source folder, a save's artboard files do not
+    /// replace another source file: `a.vectorcraft` would also write `a-Artboard-1.vectorcraft`, so
+    /// it is saved as `a-2`.
+    #[test]
+    fn batch_does_not_save_artboard_files_over_another_source_file() {
+        let src = tmp("in-place-artboards");
+        let mut s = Session::new();
+        for (name, width) in [("a.vectorcraft", 20), ("a-Artboard-1.vectorcraft", 30)] {
+            s.execute("file.new", &json!({"width": width, "height": 20, "artboards": 1})).unwrap();
+            s.execute("document.save", &json!({"path": src.join(name).to_string_lossy()})).unwrap();
+        }
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({
+                    "folder": src.to_string_lossy(),
+                    "destinationFolder": src.to_string_lossy(),
+                    "commands": [{"command": "document.save", "params": {"separateArtboards": true}}]
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_eq!(
+            file_names(&src),
+            ["a-2-Artboard-1.vectorcraft", "a-2.vectorcraft", "a-Artboard-1-Artboard-1.vectorcraft", "a-Artboard-1.vectorcraft", "a.vectorcraft"],
+            "{r}"
+        );
+        s.execute("document.open", &json!({"path": src.join("a-Artboard-1.vectorcraft").to_string_lossy()})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.artboards[0].rect.width(), 30.0, "{r}");
     }
 
     /// Data sets whose names differ only by a trailing period (`a` and `a.`) get Export Assets
