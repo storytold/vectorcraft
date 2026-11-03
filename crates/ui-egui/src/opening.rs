@@ -30,8 +30,8 @@ pub struct Pending {
 pub struct Opening {
     pub pending: Vec<Pending>,
     /// Open documents asked for again while the active one couldn't change: their tabs come to
-    /// the front once it can ([`may_switch`]).
-    pub activate: Vec<String>,
+    /// the front once it can ([`may_switch`]), each in the file access scope it was asked in.
+    pub activate: Vec<(String, ScopeHandle)>,
 }
 
 /// Is a long operation running that should show the busy cursor and status spinner (background
@@ -106,9 +106,9 @@ pub fn poll(app: &mut VectorcraftApp) {
     if !may_switch(app) {
         return;
     }
-    for path in std::mem::take(&mut app.opening.activate) {
+    for (path, scope) in std::mem::take(&mut app.opening.activate) {
         // Closed meanwhile, it opens again; a failure is reported to the user there.
-        let _ = crate::io::open_reporting(app, &path);
+        let _ = scope.run(|| crate::io::open_reporting(app, &path));
     }
     let mut i = 0;
     while let Some(p) = app.opening.pending.get(i) {

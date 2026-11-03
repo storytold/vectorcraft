@@ -282,8 +282,9 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) 
     // a drag acts on the active document, its tab comes to the front once that ends
     // ([`crate::opening::poll`]), as a file that finishes opening then does.
     if document_index_for_path(app, path).is_some() && !crate::opening::may_switch(app) {
-        if !app.opening.activate.iter().any(|p| same_open_path(p, path)) {
-            app.opening.activate.push(path.to_string());
+        if !app.opening.activate.iter().any(|(p, _)| same_open_path(p, path)) {
+            let scope = vectorcraft_engine::file_access::ScopeHandle::capture();
+            app.opening.activate.push((path.to_string(), scope));
         }
         return Ok(Value::Null);
     }
