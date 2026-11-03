@@ -149,6 +149,15 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
     }
 }
 
+/// Make folder `dir`, owner-only on Unix.
+fn private_dir(dir: &Path) -> std::io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    builder.create(dir)
+}
+
 fn copy_dir_into(from: &Path, to: &Path, skip: &mut impl FnMut(String)) {
     let entries = match std::fs::read_dir(from) {
         Ok(entries) => entries,
@@ -165,7 +174,12 @@ fn copy_dir_into(from: &Path, to: &Path, skip: &mut impl FnMut(String)) {
         let (src, dst) = (entry.path(), to.join(entry.file_name()));
         // A symbolic link is copied as what it points to, or skipped when that is a folder.
         let copied = match entry.file_type() {
-            Ok(kind) if kind.is_dir() => std::fs::create_dir_all(&dst).map(|()| copy_dir_into(&src, &dst, skip)),
+            // The copy keeps the folder's permissions (a private recovery folder stays private):
+            // owner-only while it fills, then the source's.
+            Ok(kind) if kind.is_dir() => private_dir(&dst).and_then(|()| {
+                copy_dir_into(&src, &dst, skip);
+                std::fs::set_permissions(&dst, std::fs::metadata(&src)?.permissions())
+            }),
             Ok(_) => std::fs::copy(&src, &dst).map(|_| ()),
             Err(e) => Err(e),
         };
@@ -384,6 +398,21 @@ mod tests {
         assert!(error.starts_with("1 skipped"), "{error}");
         assert!(error.contains("blocked"), "{error}");
         assert_eq!(std::fs::read(to.join("kept.txt")).unwrap(), b"kept");
+        let _ = std::fs::remove_dir_all(&from);
+        let _ = std::fs::remove_dir_all(&to);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_copied_folder_keeps_its_permissions() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let from = temp("copy-mode-from");
+        let to = temp("copy-mode-to");
+        std::fs::create_dir_all(from.join("recovery")).unwrap();
+        std::fs::write(from.join("recovery/copy.vectorcraft"), b"unsaved").unwrap();
+        std::fs::set_permissions(from.join("recovery"), std::fs::Permissions::from_mode(0o700)).unwrap();
+        copy_dir(&from, &to).unwrap();
+        assert_eq!(std::fs::metadata(to.join("recovery")).unwrap().permissions().mode() & 0o777, 0o700);
         let _ = std::fs::remove_dir_all(&from);
         let _ = std::fs::remove_dir_all(&to);
     }
