@@ -226,8 +226,9 @@ impl Ctx<'_> {
         let upright = self.vertical && !self.on_path && g.tcy.is_none() && stands_upright(g);
         let lead = if upright { 0.0 } else { g.lead };
         let local = match &g.inline {
-            // Inline graphics: art space to glyph space (no font outline).
-            Some(ib) => Affine::translate((-lead, -g.bshift)) * ib.xf,
+            // Inline graphics: art space to glyph space (no font outline), moved along the line by
+            // right-to-left manual kerning as a glyph is.
+            Some(ib) => Affine::translate((g.kern_shift - lead, -g.bshift)) * ib.xf,
             // Baseline shift moves the glyph across its line, and Character Rotation then turns it
             // about its shifted pen position, so the shift is across the line at any rotation.
             // Right-to-left manual kerning moves that pen position along the line.
