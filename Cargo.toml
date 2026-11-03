@@ -12,7 +12,8 @@ repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0", default-features = false, features = ["interpret", "write"] }
-craft-print = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
+# Windows custom media sizes (storytold/vectorcraft#4004), pending storytold/craft-libs#281.
+craft-print = { git = "https://github.com/darrenstarr/craft-libs", rev = "44196d66312898cdb0990f7146db4b15924d5db1" }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0", features = ["serde"] }
 craft-keymap = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0" }

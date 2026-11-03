@@ -19,6 +19,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-24 | minor | Print: Windows exact custom media sizes now go through craft-print's in-process PrintTicket (`psk:CustomMediaSize`) instead of a synthetic GDI form; a 1067 x 480 mm sheet was validated against the HP DesignJet Z5200ps V4 driver (#4004, storytold/craft-libs#281). No ranked entry closed; scores and estimates unchanged. |
 | 2026-10-24 | minor | G12: General › Corner Radius is the Rounded Rectangle tool's radius, a change while the tool is active reaches it, and the radius ↑/↓ set while drawing (or a Tool Options value) becomes the preference, within 0–1296 pt (#394, `crates/engine/src/tests/constrain_tools.rs`); no entry closed, estimate unchanged. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-3; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-2; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
