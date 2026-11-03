@@ -597,7 +597,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.arrange.floatInWindow",
         "Float in Window",
         "",
-        "{} move the current document out of the tab strip into a floating window of its own, fitted to it; the window holding the current document takes the tools, a click in another document's window makes its document the current one; a document already floating stays where it is; returns {floating} (document indices)",
+        "{index?, at?: [x, y]} move the current document, or document `index` (which becomes the current one), out of the tab strip into a floating window of its own, fitted to it, with the window's top-left corner at `at` (main window points) or else at the next place of a cascade; dragging a document tab more than 24 pt above or below the tab strip does this at the pointer; the window holding the current document takes the tools, a click in another document's window makes its document the current one; a document already floating stays where it is; returns {floating} (document indices)",
     ),
     (
         "window.arrange.floatAllInWindows",
@@ -609,7 +609,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.arrange.consolidateAllWindows",
         "Consolidate All Windows",
         "",
-        "{} show one document at a time again, under its tab, after Tile, Float in Window, Float All in Windows or Cascade; returns {tiled: false, floating: []}",
+        "{index?} show one document at a time again, under its tab, after Tile, Float in Window, Float All in Windows or Cascade; returns {tiled: false, floating: []}; with `index`, only document `index` goes back under its tab and becomes the current one, the other windows and Tile staying as they are, as when a document window is dragged by its title bar (an OS window by the tab at its top) onto the tab strip; returns {tiled, floating} (document indices)",
     ),
     (
         "window.nextDocument",
