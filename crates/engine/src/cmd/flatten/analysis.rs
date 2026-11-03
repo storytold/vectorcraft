@@ -243,8 +243,8 @@ mod tests {
         }
         let mut out: Vec<Vec<usize>> = vec![];
         let mut seen = std::collections::HashMap::new();
-        for i in 0..n {
-            let g = *seen.entry(group[i]).or_insert_with(|| {
+        for (i, &root) in group.iter().enumerate() {
+            let g = *seen.entry(root).or_insert_with(|| {
                 out.push(vec![]);
                 out.len() - 1
             });
