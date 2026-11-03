@@ -1340,7 +1340,6 @@ mod tests {
         assert_eq!(out.claim("same.png", "last").as_deref(), Some("same-20001.png"));
     }
 
-
     #[test]
     fn size_parse_refuses_signs_and_exponents() {
         for s in ["+2x", "+2", "+100w", "+100h", "+72ppi", "-2x", "1e2", "2e0w"] {
