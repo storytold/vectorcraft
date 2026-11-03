@@ -454,3 +454,21 @@ fn collecting_explicit_assets_rejects_invalid_ids_without_adding_anything() {
     assert_eq!(run(&mut s, "assets.add", json!({"ids": [b, a]}))["added"], 2);
     assert_eq!(assets(&mut s).len(), 2);
 }
+
+/// Settings saved without the PDF passwords they were given export only once a password is given
+/// again, never as an unprotected PDF; security given without `passwordRequired` exports as given.
+#[test]
+fn settings_saved_without_their_pdf_passwords_refuse_to_export_until_given_again() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    run(&mut s, "assets.add", json!({"ids": [a]}));
+    let row = |security: Value| json!({"formats": [{"format": "pdf", "security": security}]});
+    run(&mut s, "assets.settings.set", row(json!({"openPassword": "open sesame"})));
+    let err = s.execute("assets.export", &json!({})).unwrap_err().to_string();
+    assert!(err.contains("without their passwords"), "{err}");
+    let encrypted = |r: &Value| files(r)[0].1.windows(8).any(|w| w == b"/Encrypt");
+    let r = run(&mut s, "assets.export", row(json!({"openPassword": "open sesame", "passwordRequired": true})));
+    assert!(encrypted(&r), "given again: protected");
+    let r = run(&mut s, "assets.export", row(json!({})));
+    assert!(!encrypted(&r), "left out on purpose: unprotected");
+}
