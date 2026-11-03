@@ -893,8 +893,8 @@ fn the_generic_category_defines_new_categories() {
 }
 
 /// The standard encodings are instances of the Encoding category, the same arrays as the names in
-/// `systemdict` (PLRM 3rd ed., `findencoding` and §3.9.2). Ghostscript's `eps2write` finds
-/// `StandardEncoding` that way for the fonts it embeds.
+/// `systemdict` (PLRM 3rd ed., §3.9.2 and `findencoding`, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>).
+/// Ghostscript's `eps2write` finds `StandardEncoding` that way for the fonts it embeds.
 #[test]
 fn the_standard_encodings_are_encoding_resources() {
     check("/StandardEncoding /Encoding findresource StandardEncoding eq");

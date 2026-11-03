@@ -106,7 +106,7 @@ impl<'a> Interp<'a> {
         let made = super::obj::track();
         let system = new_dict();
         // The standard encodings are also instances of the Encoding category, the same arrays
-        // (PLRM 3rd ed., `findencoding` and §3.9.2).
+        // (PLRM 3rd ed., §3.9.2 and `findencoding`, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>).
         let encodings = new_dict();
         {
             let mut d = system.borrow_mut();
