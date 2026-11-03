@@ -1340,6 +1340,10 @@ font-technology	Variable	Променливи
 	Hard Light	Твърда светлина
 	Hard Mix	Твърдо смесване
 	Harmony Rules:	Правила за хармония:
+	Segmented color wheel	Сегментирано цветово колело
+	Show smooth color wheel	Показване на плавно цветово колело
+	Show segmented color wheel	Показване на сегментирано цветово колело
+	Show color bars	Показване на цветни ленти
 	Harmony Sets	Набори от хармонии
 	Height	Височина
 	Height:	Височина:
@@ -3306,6 +3310,7 @@ digits	Malayalam	Малаялам
 	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, показван в клетката:
 	Text Export Options	Опции за експортиране на текст
+	Text Fill & Stroke Color	Цвят на запълване и щрих на текста
 	Text Fill Color	Цвят на запълване на текста
 	Text Import Options	Опции за импортиране на текст
 	Text Stroke Color	Цвят на щриха на текста
@@ -5529,7 +5534,9 @@ theme	Appearance	Външен вид
 	Effect Gallery	Галерия с ефекти
 	Filters	Филтри
 	Select artwork to apply effects	Изберете графика, за да приложите ефекти
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	променливите и наборите от данни на файла не бяха прочетени (променливи: {variables}, набори от данни: {data_sets}): панелът „Променливи“ не ги показва
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	библиотеката с променливи на файла беше прочетена частично (пропуснати записи: {_1}): панелът „Променливи“ показва останалите
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	библиотеката с променливи на файла не можа да бъде прочетена: панелът „Променливи“ не я показва
+@msg	a variable of unknown kind can't be bound to objects	променлива от неизвестен вид не може да бъде свързана с обекти
 # Select by Color (select.color)
 	Select by Color	Избиране по цвят
 	Move Anchor Point	Преместване на опорна точка
@@ -5614,6 +5621,7 @@ axis	Y Axis	Y ос
 	Create New Set	Създаване на нов набор
 	Stop Global Edit	Край на глобалното редактиране
 	Global Edit Options	Опции за глобално редактиране
+	Leave Out of Global Edit	Изключване от глобалното редактиране
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобалното редактиране работи с пътища, съставни пътища, екземпляри на символи и групи от тях
 	Match	Съвпадение
 	On Artboards	В работните области

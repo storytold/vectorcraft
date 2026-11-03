@@ -1366,6 +1366,10 @@ file-filter	Templates	範本
 	Hard Light	實光
 	Hard Mix	實色混合
 	Harmony Rules:	色彩調和規則：
+	Segmented color wheel	分段色輪
+	Show smooth color wheel	顯示平滑色輪
+	Show segmented color wheel	顯示分段色輪
+	Show color bars	顯示顏色條
 	Harmony Sets	色彩調和組
 	Height	高度
 	Height:	高度：
@@ -2041,7 +2045,9 @@ file-filter	Templates	範本
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	其上的圖稿與頁面的圖稿有 {_1}% 不同：仍從其編輯資料匯入
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	未讀取檔案的圖層 ({_1})：檔案以其頁面匯入，位於單一圖層中
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	未從檔案的編輯資料讀取圖層 ({_1})：圖層來自其 PDF 部分
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	未讀取檔案的變數與資料集 (變數：{variables}，資料集：{data_sets})：「變數」面板不會列出它們
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	只讀取了檔案的部分變數資料庫 (略過的項目：{_1})：「變數」面板會列出其餘部分
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	無法讀取檔案的變數資料庫：「變數」面板不會列出它
+@msg	a variable of unknown kind can't be bound to objects	種類不明的變數無法繫結至物件
 @msg	its Windows metafile preview was opened instead, which may simplify the art	已改為開啟其 Windows 中繼檔預覽，圖稿可能因此簡化
 @msg	its preview was placed instead, at screen resolution	已改為以螢幕解析度置入其預覽
 @msg	shadings of more than 4096 patches or triangles were left out	已略過超過 4096 個面片或三角形的著色
@@ -2408,6 +2414,9 @@ file-filter	Templates	範本
 @msg	the PCX file is cut short	PCX 檔案不完整
 @msg	the PCX file's header is damaged	PCX 檔案標頭已損毀
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	無法讀取 {planes} 個平面中含 {bits} 位元像素的 PCX 檔案
+@msg	the Pixar file is cut short	Pixar 檔案不完整
+@msg	the Pixar file's header is damaged	Pixar 檔案標頭已損毀
+@msg	the Pixar file's image data is damaged	Pixar 檔案的影像資料已損毀
 @msg	the JPEG 2000 file can't be read	無法讀取 JPEG 2000 檔案
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 檔案包含不支援的色彩空間或 JPX 內容
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 影像過大，無法讀取 ({_1} × {_2} 像素)
@@ -4271,6 +4280,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Templates…	範本…
 	Text Displayed in Cell:	儲存格中顯示的文字：
 	Text Export Options	文字匯出選項
+	Text Fill & Stroke Color	文字填色與筆畫顏色
 	Text Fill Color	文字填色
 	Text Import Options	文字匯入選項
 	Text Stroke Color	文字筆畫顏色
@@ -5360,6 +5370,7 @@ axis	Y Axis	Y 軸
 	Create New Set	建立新組
 	Stop Global Edit	停止整體編輯
 	Global Edit Options	整體編輯選項
+	Leave Out of Global Edit	從整體編輯中排除
 	Match	符合
 	On Artboards	在工作區域上
 	All Artboards	所有工作區域
@@ -5368,6 +5379,8 @@ axis	Y Axis	Y 軸
 @msg	select one object	請選取一個物件
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	整體編輯適用於路徑、複合路徑、符號實體及其群組
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	找不到相似的物件（旋轉或鏡像的副本不會相符）；請變更整體編輯選項後再試一次
+@msg	Global Edit is off	整體編輯未開啟
+@msg	only an object of the Global Edit other than the one it started from can be left out	只能從整體編輯中排除起始物件以外的物件
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：應為 all 或 1, 3-5 這類範圍，而不是 {v}
 	Add to Symbols	新增至符號
 	Basic Shapes	基本形狀

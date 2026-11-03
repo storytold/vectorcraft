@@ -1382,6 +1382,10 @@ font-technology	Variable	Variables
 	Handles	Poignées
 	Hard Light	Lumière crue
 	Hard Mix	Mélange maximal
+	Segmented color wheel	Roue chromatique segmentée
+	Show smooth color wheel	Afficher la roue chromatique continue
+	Show segmented color wheel	Afficher la roue chromatique segmentée
+	Show color bars	Afficher les barres de couleur
 	Harmony Rules:	Règles d’harmonie :
 	Harmony Sets	Ensembles d’harmonies
 	Height	Hauteur
@@ -3382,6 +3386,7 @@ digits	Malayalam	Malayalam
 	Templates…	Modèles…
 	Text Displayed in Cell:	Texte affiché dans la cellule :
 	Text Export Options	Options d’exportation du texte
+	Text Fill & Stroke Color	Couleur de fond et de contour du texte
 	Text Fill Color	Couleur de fond du texte
 	Text Import Options	Options d’importation du texte
 	Text Stroke Color	Couleur de contour du texte
@@ -4717,6 +4722,9 @@ axis	Both	Les deux
 @msg	the PCX file is cut short	le fichier PCX est tronqué
 @msg	the PCX file's header is damaged	l'en-tête du fichier PCX est endommagé
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	les fichiers PCX à pixels de {bits} bits sur {planes} plans ne peuvent pas être lus
+@msg	the Pixar file is cut short	le fichier Pixar est tronqué
+@msg	the Pixar file's header is damaged	l'en-tête du fichier Pixar est endommagé
+@msg	the Pixar file's image data is damaged	les données d'image du fichier Pixar sont endommagées
 @msg	the JPEG 2000 file can't be read	le fichier JPEG 2000 ne peut pas être lu
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	le fichier JPEG 2000 contient un espace colorimétrique ou un contenu JPX non pris en charge
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	l'image PSD est trop grande pour être lue ({_1} × {_2} pixels)
@@ -5631,7 +5639,9 @@ theme	Appearance	Apparence
 	Effect Gallery	Galerie d'effets
 	Filters	Filtres
 	Select artwork to apply effects	Sélectionnez des éléments graphiques pour appliquer des effets
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	les variables et jeux de données du fichier n’ont pas été lus (variables : {variables}, jeux de données : {data_sets}) : le panneau Variables ne les affiche pas
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	la bibliothèque de variables du fichier n’a été lue qu’en partie (entrées ignorées : {_1}) : le panneau Variables affiche le reste
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	la bibliothèque de variables du fichier n’a pas pu être lue : le panneau Variables ne l’affiche pas
+@msg	a variable of unknown kind can't be bound to objects	une variable de type inconnu ne peut pas être liée à des objets
 # Select by Color (select.color)
 	Select by Color	Sélectionner par couleur
 	Move Anchor Point	Déplacer le point d’ancrage
@@ -5721,6 +5731,7 @@ axis	Y Axis	Axe Y
 	Create New Set	Créer un jeu
 	Stop Global Edit	Arrêter la modification globale
 	Global Edit Options	Options de modification globale
+	Leave Out of Global Edit	Exclure de la modification globale
 	Match	Correspondance
 	On Artboards	Sur les plans de travail
 	All Artboards	Tous les plans de travail
@@ -5729,6 +5740,8 @@ axis	Y Axis	Axe Y
 @msg	select one object	sélectionnez un seul objet
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La modification globale s’applique aux tracés, aux tracés transparents, aux occurrences de symboles et aux groupes de ces objets
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	aucun objet similaire trouvé (les copies pivotées ou symétriques ne sont pas reconnues) ; modifiez les options de modification globale et réessayez
+@msg	Global Edit is off	La modification globale n’est pas active
+@msg	only an object of the Global Edit other than the one it started from can be left out	seul un objet de la modification globale autre que celui à partir duquel elle a commencé peut être exclu
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards` : all ou une plage telle que 1, 3-5, et non {v}
 	Add to Symbols	Ajouter aux symboles
 	Basic Shapes	Formes de base

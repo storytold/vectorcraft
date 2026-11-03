@@ -24,6 +24,7 @@ pub mod intertwine;
 pub mod meshblend;
 pub mod meshedit;
 pub mod mirror;
+pub mod nineslice;
 pub mod objects_on_path;
 pub mod params;
 pub mod pathtype;
@@ -508,6 +509,7 @@ pub(crate) mod testutil {
             screen: None,
             plane_widget: Some(Default::default()),
             precise_cursors: false,
+            global_edit: &[],
         }
     }
 }

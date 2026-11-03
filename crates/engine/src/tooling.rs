@@ -65,6 +65,13 @@ fn rgb(hex: &str, fallback: [u8; 3]) -> [u8; 3] {
     })
 }
 
+/// Whether a tool preview of `cmd` with params `p` sets only a symbol's 9-slice guides: a
+/// `symbol.options` whose params hold `nineSliceGuides` and nothing besides `name`.
+fn nine_slice_guide_preview(cmd: &str, p: &Value) -> bool {
+    cmd == "symbol.options"
+        && p.as_object().is_some_and(|m| m.contains_key("nineSliceGuides") && m.keys().all(|k| k == "name" || k == "nineSliceGuides"))
+}
+
 /// Requests from tools that only the frontend can fulfil.
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiRequest {
@@ -328,6 +335,7 @@ impl Session {
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
             precise_cursors: self.precise_cursors(),
+            global_edit: st.global_edit.as_ref().map_or(&[], |g| g.members.as_slice()),
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
@@ -784,8 +792,9 @@ impl Session {
                 Action::Preview(cmd, p) => {
                     // Performance › Real-time Drawing and Editing (#394): off, remember the latest
                     // params and apply them once on Commit instead of every move. A ruler guide
-                    // being dragged still shows: the guide is all there is to see (#4646).
-                    if !self.prefs.real_time_drawing && !matches!(cmd.as_str(), "guide.add" | "guide.move") {
+                    // being dragged still shows: the guide is all there is to see (#4646). So does a
+                    // symbol's 9-slice guide being dragged.
+                    if !self.prefs.real_time_drawing && !matches!(cmd.as_str(), "guide.add" | "guide.move") && !nine_slice_guide_preview(&cmd, &p) {
                         self.clear_deferred_overlay_cache();
                         let st = self.doc_mut()?;
                         if let Some(it) = &mut st.interaction {

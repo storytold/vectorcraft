@@ -350,6 +350,7 @@
 	Font Size	შრიფტის ზომა
 	Text Fill Color	ტექსტის შევსების ფერი
 	Text Stroke Color	ტექსტის კონტურის ფერი
+	Text Fill & Stroke Color	ტექსტის შევსებისა და კონტურის ფერი
 	All on Same Layers	ყველა იმავე შრეებზე
 	Direction Handles	მიმართულების სახელურები
 	Brush Strokes	ფუნჯის შტრიხები
@@ -2334,6 +2335,10 @@ digits	Malayalam	მალაიალამური
 	Colors:	ფერები:
 	Current Colors ({total})	მიმდინარე ფერები ({total})
 	Harmony Rules:	ჰარმონიის წესები:
+	Segmented color wheel	სეგმენტირებული ფერთა წრე
+	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
+	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
+	Show color bars	ფერთა ზოლების ჩვენება
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
 	Link harmony colors	ჰარმონიის ფერების დაკავშირება
@@ -4408,6 +4413,9 @@ font-technology	Variable	ცვლადი
 @msg	the PCX file is cut short	PCX ფაილი შეკვეცილია
 @msg	the PCX file's header is damaged	PCX ფაილის სათაური დაზიანებულია
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} სიბრტყეში {bits}-ბიტიანი პიქსელების მქონე PCX ფაილების წაკითხვა ვერ ხერხდება
+@msg	the Pixar file is cut short	Pixar ფაილი შეკვეცილია
+@msg	the Pixar file's header is damaged	Pixar ფაილის სათაური დაზიანებულია
+@msg	the Pixar file's image data is damaged	Pixar ფაილის გამოსახულების მონაცემები დაზიანებულია
 @msg	the JPEG 2000 file can't be read	JPEG 2000 ფაილის წაკითხვა შეუძლებელია
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 ფაილს აქვს მხარდაუჭერელი ფერთა სივრცე ან JPX შიგთავსი
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)
@@ -5502,7 +5510,9 @@ imageTrace	Outline	კონტური
 @msg	no history to clear	გასასუფთავებელი ისტორია არ არის
 @msg	{_1} files are written by file.saveAsTemplate	{_1} ფაილებს წერს file.saveAsTemplate
 @msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 წერს ძველი ფორმატის .ai ფაილებს; .ait შაბლონი ყოველთვის PDF-თან თავსებადია
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	ფაილის ცვლადებისა და მონაცემთა ნაკრებების წაკითხვა ვერ მოხერხდა (ცვლადები: {variables}, მონაცემთა ნაკრებები: {data_sets}): პანელი „ცვლადები“ მათ არ აჩვენებს
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ფაილის ცვლადების ბიბლიოთეკა მხოლოდ ნაწილობრივ იქნა წაკითხული (გამოტოვებული ჩანაწერები: {_1}): პანელი „ცვლადები“ დანარჩენს აჩვენებს
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ფაილის ცვლადების ბიბლიოთეკის წაკითხვა ვერ მოხერხდა: პანელი „ცვლადები“ მას არ აჩვენებს
+@msg	a variable of unknown kind can't be bound to objects	უცნობი სახის ცვლადის ობიექტებთან დაკავშირება შეუძლებელია
 @msg	its zlib compression is damaged	მისი zlib შეკუმშვა დაზიანებულია
 @msg	its Zstandard compression is damaged	მისი Zstandard შეკუმშვა დაზიანებულია
 @msg	it decompresses to more than {_1} MB	გაშლისას {_1} MB-ს აღემატება
@@ -5640,6 +5650,7 @@ axis	Y Axis	Y ღერძი
 	Create New Set	ახალი ნაკრების შექმნა
 	Stop Global Edit	გლობალური რედაქტირების დასრულება
 	Global Edit Options	გლობალური რედაქტირების პარამეტრები
+	Leave Out of Global Edit	გლობალური რედაქტირებიდან გამორიცხვა
 	Match	დამთხვევა
 	On Artboards	სამუშაო დაფებზე
 	All Artboards	ყველა სამუშაო დაფა
@@ -5648,6 +5659,8 @@ axis	Y Axis	Y ღერძი
 @msg	select one object	მონიშნეთ ერთი ობიექტი
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებზე, სიმბოლოს ეგზემპლარებსა და მათ ჯგუფებზე
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	მსგავსი ობიექტები ვერ მოიძებნა (შემობრუნებული ან არეკლილი ასლები არ ემთხვევა); შეცვალეთ გლობალური რედაქტირების პარამეტრები და სცადეთ ხელახლა
+@msg	Global Edit is off	გლობალური რედაქტირება გამორთულია
+@msg	only an object of the Global Edit other than the one it started from can be left out	გლობალური რედაქტირებიდან შეიძლება გამოირიცხოს მხოლოდ ობიექტი, რომლითაც ის არ დაწყებულა
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ან დიაპაზონი, მაგალითად 1, 3-5, და არა {v}
 	Add to Symbols	სიმბოლოებში დამატება
 	Basic Shapes	ძირითადი ფიგურები

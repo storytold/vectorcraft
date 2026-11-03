@@ -407,6 +407,7 @@
 	Variable Font	Variabel lettertype
 	Text Fill Color	Tekstvulkleur
 	Text Stroke Color	Tekstcontourkleur
+	Text Fill & Stroke Color	Tekstvul- en contourkleur
 	All on Same Layers	Alles op dezelfde lagen
 	Direction Handles	Richtingsgrepen
 	Brush Strokes	Penseelstreken
@@ -2457,6 +2458,10 @@ digits	Malayalam	Malayalam
 	Current Colors	Huidige kleuren
 	Current Colors (0)	Huidige kleuren (0)
 	Harmony Rules:	Harmonieregels:
+	Segmented color wheel	Gesegmenteerd kleurenwiel
+	Show smooth color wheel	Vloeiend kleurenwiel tonen
+	Show segmented color wheel	Gesegmenteerd kleurenwiel tonen
+	Show color bars	Kleurbalken tonen
 	Harmony Rules	Harmonieregels
 	Keep this row's colors (exclude)	De kleuren van deze rij behouden (uitsluiten)
 	Limit to Library:	Beperken tot bibliotheek:
@@ -5224,6 +5229,9 @@ mark-style	Japanese	Japans
 	Path Length	Padlengte
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	de lagen van het bestand zijn niet ingelezen ({_1}): het komt binnen als zijn pagina, in één laag
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	de lagen van het bestand zijn niet ingelezen uit de bewerkingsgegevens ({_1}): ze komen uit het PDF-gedeelte
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	de variabelenbibliotheek van het bestand is slechts gedeeltelijk ingelezen (overgeslagen items: {_1}): het Variabelen-paneel toont de rest
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	de variabelenbibliotheek van het bestand kan niet worden ingelezen: het Variabelen-paneel toont die niet
+@msg	a variable of unknown kind can't be bound to objects	een variabele van onbekend type kan niet aan objecten worden gekoppeld
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` moet grayscale, rgb, hsb, cmyk of websafe zijn
 @msg	the Color Picker is not open	de kleurenkiezer is niet open
 @msg	the screen color sampler is already open	de schermkleurkiezer is al open
@@ -5674,6 +5682,7 @@ axis	Y Axis	Y-as
 	Create New Set	Nieuwe set maken
 	Stop Global Edit	Globale bewerking stoppen
 	Global Edit Options	Opties voor globale bewerking
+	Leave Out of Global Edit	Uitsluiten van globale bewerking
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale bewerking werkt op paden, samengestelde paden, symboolinstanties en groepen daarvan
 	Match	Overeenkomst
 	On Artboards	Op tekengebieden

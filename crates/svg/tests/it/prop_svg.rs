@@ -93,6 +93,34 @@ proptest! {
 }
 
 #[test]
+fn filled_ellipse_on_the_artboard_edge_survives_visually() {
+    use vectorcraft_geom::Point;
+    use vectorcraft_geom::path::{Anchor, AnchorKind, SubPath};
+    let a = |p: (f64, f64), i: (f64, f64), o: (f64, f64)| Anchor {
+        p: Point::new(p.0, p.1),
+        h_in: Point::new(i.0, i.1),
+        h_out: Point::new(o.0, o.1),
+        kind: AnchorKind::Smooth,
+    };
+    let path = PathData::new(vec![SubPath::new(
+        vec![
+            a((0.0, 154.1183786634012), (0.0, 157.11240210742653), (0.0, 151.12435521937584)),
+            a((36.254761132097215, 148.69721965992943), (16.231809450081727, 148.69721965992943), (56.277712814112704, 148.69721965992943)),
+            a((72.50952226419443, 154.1183786634012), (72.50952226419443, 151.12435521937584), (72.50952226419443, 157.11240210742653)),
+            a((36.254761132097215, 159.53953766687295), (56.277712814112704, 159.53953766687295), (16.231809450081727, 159.53953766687295)),
+        ],
+        true,
+    )]);
+    let mut b = DocBuilder::new(200.0, 200.0);
+    b.path(path, Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::None, 0.0), |n| n.opacity = 0.983_042_96);
+    let d = b.build();
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains("<ellipse "), "{svg}");
+    let back = import(&svg).unwrap();
+    assert_similar(&render_artboard(&d), &render_artboard(&back), 6.0, 0.002);
+}
+
+#[test]
 fn rich_fixture_exports_with_all_options() {
     let s = fixtures::rich_session();
     let d = s.doc().unwrap().doc.clone();

@@ -1389,6 +1389,10 @@ font-technology	Variable	Variables
 	Hard Light	Luz fuerte
 	Hard Mix	Mezcla definida
 	Harmony Rules:	Reglas de armonía:
+	Segmented color wheel	Rueda de color segmentada
+	Show smooth color wheel	Mostrar rueda de color continua
+	Show segmented color wheel	Mostrar rueda de color segmentada
+	Show color bars	Mostrar barras de color
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
 	Height:	Altura:
@@ -3390,6 +3394,7 @@ digits	Malayalam	Malayálam
 	Templates…	Plantillas…
 	Text Displayed in Cell:	Texto mostrado en la celda:
 	Text Export Options	Opciones de exportación de texto
+	Text Fill & Stroke Color	Color de relleno y trazo del texto
 	Text Fill Color	Color de relleno del texto
 	Text Import Options	Opciones de importación de texto
 	Text Stroke Color	Color de trazo del texto
@@ -4709,6 +4714,9 @@ axis	Both	Ambos
 @msg	the PCX file is cut short	el archivo PCX está incompleto
 @msg	the PCX file's header is damaged	el encabezado del archivo PCX está dañado
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	los archivos PCX con píxeles de {bits} bits en {planes} planos no se pueden leer
+@msg	the Pixar file is cut short	el archivo Pixar está incompleto
+@msg	the Pixar file's header is damaged	el encabezado del archivo Pixar está dañado
+@msg	the Pixar file's image data is damaged	los datos de imagen del archivo Pixar están dañados
 @msg	the JPEG 2000 file can't be read	no se puede leer el archivo JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	el archivo JPEG 2000 tiene un espacio de color o contenido JPX no compatible
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	la imagen PSD es demasiado grande para leerla ({_1} × {_2} píxeles)
@@ -5577,7 +5585,9 @@ mark-style	Japanese	Japonesas
 	Effect Gallery	Galería de efectos
 	Filters	Filtros
 	Select artwork to apply effects	Seleccione gráficos para aplicar efectos
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	no se leyeron las variables ni los conjuntos de datos del archivo (variables: {variables}, conjuntos de datos: {data_sets}): el panel Variables no los muestra
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	la biblioteca de variables del archivo se leyó solo en parte (entradas omitidas: {_1}): el panel Variables muestra el resto
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	no se pudo leer la biblioteca de variables del archivo: el panel Variables no la muestra
+@msg	a variable of unknown kind can't be bound to objects	una variable de tipo desconocido no se puede vincular a objetos
 # Select by Color (select.color)
 	Select by Color	Seleccionar por color
 	Move Anchor Point	Mover punto de ancla
@@ -5667,6 +5677,7 @@ axis	Y Axis	Eje Y
 	Create New Set	Crear nuevo conjunto
 	Stop Global Edit	Detener edición global
 	Global Edit Options	Opciones de edición global
+	Leave Out of Global Edit	Excluir de la edición global
 	Match	Coincidir
 	On Artboards	En mesas de trabajo
 	All Artboards	Todas las mesas de trabajo
@@ -5675,6 +5686,8 @@ axis	Y Axis	Eje Y
 @msg	select one object	seleccione un objeto
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La edición global funciona con trazados, trazados compuestos, instancias de símbolos y grupos de ellos
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	no se encontraron objetos similares (las copias giradas o reflejadas no coinciden); cambie las opciones de edición global e inténtelo de nuevo
+@msg	Global Edit is off	La edición global no está activa
+@msg	only an object of the Global Edit other than the one it started from can be left out	solo se puede excluir un objeto de la edición global distinto de aquel con el que empezó
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un intervalo como 1, 3-5, no {v}
 	Add to Symbols	Agregar a símbolos
 	Basic Shapes	Formas básicas

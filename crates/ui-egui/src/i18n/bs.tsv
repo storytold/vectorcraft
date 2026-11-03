@@ -426,6 +426,7 @@
 	Variable Font	Varijabilni font
 	Text Fill Color	Boja ispune teksta
 	Text Stroke Color	Boja poteza teksta
+	Text Fill & Stroke Color	Boja ispune i poteza teksta
 	All on Same Layers	Sve na istim slojevima
 	Direction Handles	Ručke smjera
 	Brush Strokes	Potezi četkicom
@@ -2625,6 +2626,10 @@ digits	Malayalam	Malajalam
 	Current Colors	Trenutne boje
 	Current Colors (0)	Trenutne boje (0)
 	Harmony Rules:	Pravila harmonije:
+	Segmented color wheel	Segmentirani kotač boja
+	Show smooth color wheel	Prikaži glatki kotač boja
+	Show segmented color wheel	Prikaži segmentirani kotač boja
+	Show color bars	Prikaži trake boja
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
 	Limit to Library:	Ograniči na biblioteku:
@@ -4932,6 +4937,9 @@ imageTrace	Outline	Obris
 @msg	the PCX file is cut short	PCX datoteka je skraćena
 @msg	the PCX file's header is damaged	zaglavlje PCX datoteke je oštećeno
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX datoteke s {bits}-bitnim pikselima u {planes} ravni nije moguće pročitati
+@msg	the Pixar file is cut short	Pixar datoteka je skraćena
+@msg	the Pixar file's header is damaged	zaglavlje Pixar datoteke je oštećeno
+@msg	the Pixar file's image data is damaged	slikovni podaci Pixar datoteke su oštećeni
 @msg	the JPEG 2000 file can't be read	datoteku JPEG 2000 nije moguće pročitati
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	datoteka JPEG 2000 ima nepodržan prostor boja ili JPX sadržaj
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD slika je prevelika za čitanje ({_1} × {_2} piksela)
@@ -5547,7 +5555,9 @@ mark-style	Japanese	Japanski
 	Effect Gallery	Galerija efekata
 	Filters	Filteri
 	Select artwork to apply effects	Odaberite crtež za primjenu efekata
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	varijable i skupovi podataka datoteke nisu pročitani (varijable: {variables}, skupovi podataka: {data_sets}): panel Varijable ih ne navodi
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	biblioteka varijabli datoteke je djelimično pročitana (preskočeni unosi: {_1}): panel Varijable navodi ostalo
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	biblioteku varijabli datoteke nije bilo moguće pročitati: panel Varijable je ne navodi
+@msg	a variable of unknown kind can't be bound to objects	varijabla nepoznate vrste ne može se povezati s objektima
 	Select by Color	Odaberi po boji
 	Move Anchor Point	Pomjeri sidrenu tačku
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} zadržava 1 od {n} radnih ploča dokumenta: datoteka se ponovo otvara s jednom. Uključite Očuvaj mogućnosti uređivanja da ih zadržite sve.
@@ -5634,6 +5644,7 @@ axis	Y Axis	Y osa
 	Create New Set	Napravi novi skup
 	Stop Global Edit	Zaustavi globalno uređivanje
 	Global Edit Options	Opcije globalnog uređivanja
+	Leave Out of Global Edit	Isključi iz globalnog uređivanja
 	Match	Podudaranje
 	On Artboards	Na radnim pločama
 	All Artboards	Sve radne ploče
@@ -5642,6 +5653,8 @@ axis	Y Axis	Y osa
 @msg	select one object	odaberite jedan objekat
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globalno uređivanje radi na putanjama, složenim putanjama, instancama simbola i njihovim grupama
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nisu pronađeni slični objekti (rotirane ili zrcaljene kopije se ne podudaraju); promijenite opcije globalnog uređivanja i pokušajte ponovo
+@msg	Global Edit is off	Globalno uređivanje je isključeno
+@msg	only an object of the Global Edit other than the one it started from can be left out	iz globalnog uređivanja može se isključiti samo objekt koji nije onaj od kojeg je počelo
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ili raspon poput 1, 3-5, a ne {v}
 	Add to Symbols	Dodaj u simbole
 	Basic Shapes	Osnovni oblici

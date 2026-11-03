@@ -529,7 +529,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   Export Type (Graphic or Movie Clip; default Movie Clip; `symbol.new` / `symbol.options` / Symbols panel;
   canvas placement unchanged; Animate / Flash handoff metadata); Symbol Options › Enable Guides for 9-Slice
   Scaling (four guides as fractions of the symbol size, `nineSlice` / `nineSliceGuides` on `symbol.new` /
-  `symbol.options`, stored per symbol; handoff metadata, not drawn on the canvas, #2342); Brush Options › Key
+  `symbol.options`, stored per symbol; handoff metadata, #2342; drawn dotted over the art in symbol editing
+  mode, where the Selection tool drags them); Brush Options › Key
   Color eyedropper for scatter, art and pattern brushes (Hue Shift colorization; samples canvas art); Select ›
   Start Global Edit (#3521) on paths, compound paths and symbol instances: the objects of the same shape at
   any place and size, narrowed by Appearance, Size and the artboards to search, take an edit of any one of
@@ -565,7 +566,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   dynamic instance, with the Fill/Stroke controls and Appearance panel then setting its change) and their `.ai`
   read and write; Global Edit of groups holding type or
   images, rotated copies as matches, Shift-click to leave a match out and highlighting matches before the start;
-  drawing the 9-slice guides on the canvas in symbol edit mode.
+  9-slice guides outside the symbol's art (a dragged guide stops at the art's edge).
 - **Estimate:** 14–24 h.
 
 ## G3 3D and Materials

@@ -463,6 +463,7 @@ digits	Malayalam	マラヤーラム数字
 	Variable Font	バリアブルフォント
 	Text Fill Color	テキストカラー (塗り)
 	Text Stroke Color	テキストカラー (線)
+	Text Fill & Stroke Color	テキストカラー (塗りと線)
 	All on Same Layers	同じレイヤー上のすべて
 	Direction Handles	方向線ハンドル
 	Brush Strokes	ブラシストローク
@@ -1725,6 +1726,10 @@ digits	Malayalam	マラヤーラム数字
 	Hard Light	ハードライト
 	Hard Mix	ハードミックス
 	Harmony Rules:	ハーモニールール:
+	Segmented color wheel	分割カラーホイール
+	Show smooth color wheel	滑らかなカラーホイールを表示
+	Show segmented color wheel	分割カラーホイールを表示
+	Show color bars	カラーバーを表示
 	Height	高さ
 	Height:	高さ:
 	Help › Search Commands…	ヘルプ › コマンドを検索…
@@ -4792,6 +4797,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the PCX file is cut short	PCX ファイルが途中で切れています
 @msg	the PCX file's header is damaged	PCX ファイルのヘッダーが壊れています
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} プレーンに {bits} bit のピクセルを持つ PCX ファイルは読み込めません
+@msg	the Pixar file is cut short	Pixar ファイルが途中で切れています
+@msg	the Pixar file's header is damaged	Pixar ファイルのヘッダーが壊れています
+@msg	the Pixar file's image data is damaged	Pixar ファイルの画像データが壊れています
 @msg	the JPEG 2000 file can't be read	JPEG 2000 ファイルを読み込めません
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 ファイルには未対応の色空間または JPX コンテンツがあります
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 画像が大きすぎて読み込めません（{_1} × {_2} ピクセル）
@@ -5293,7 +5301,9 @@ lighting	Light	ライト
 	Effect Gallery	効果ギャラリー
 	Filters	フィルター
 	Select artwork to apply effects	効果を適用するグラフィックを選択してください
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	ファイルの変数とデータセットは読み込まれませんでした (変数: {variables}、データセット: {data_sets})。変数パネルには表示されません
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ファイルの変数ライブラリは一部だけ読み込まれました (スキップした項目: {_1})。残りは変数パネルに表示されます
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ファイルの変数ライブラリを読み込めませんでした。変数パネルには表示されません
+@msg	a variable of unknown kind can't be bound to objects	種類が不明な変数はオブジェクトにバインドできません
 # Select by Color (select.color)
 	Select by Color	カラーで選択
 	Move Anchor Point	アンカーポイントを移動
@@ -5407,6 +5417,7 @@ axis	Y Axis	Y 軸
 	Create New Set	新規セットを作成
 	Stop Global Edit	グローバル編集を終了
 	Global Edit Options	グローバル編集オプション
+	Leave Out of Global Edit	グローバル編集から除外
 	Match	一致
 	On Artboards	アートボード上
 	All Artboards	すべてのアートボード
@@ -5415,6 +5426,8 @@ axis	Y Axis	Y 軸
 @msg	select one object	オブジェクトを 1 つ選択してください
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	グローバル編集はパス、複合パス、シンボルインスタンスとそれらのグループに使用できます
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	類似するオブジェクトが見つかりません（回転または反転したコピーは一致しません）。グローバル編集オプションを変更してもう一度試してください
+@msg	Global Edit is off	グローバル編集はオフです
+@msg	only an object of the Global Edit other than the one it started from can be left out	除外できるのは、グローバル編集を開始したオブジェクト以外のオブジェクトだけです
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all または 1, 3-5 のような範囲を指定してください ({v} ではなく)
 	Add to Symbols	シンボルに追加
 	Basic Shapes	基本シェイプ
