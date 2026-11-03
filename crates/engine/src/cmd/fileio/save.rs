@@ -134,8 +134,9 @@ pub fn templates_folder(prefs: &Prefs) -> Option<String> {
 pub fn templates_dialog_folder(prefs: &Prefs) -> Option<String> {
     let folder = std::path::PathBuf::from(templates_folder(prefs)?);
     if !folder.is_dir() {
-        // Best effort: a folder that can't be made leaves the nearest one that exists.
-        let _ = std::fs::create_dir_all(&folder);
+        // Best effort: a folder that can't be made (or automation may not write) leaves the
+        // nearest one that exists.
+        let _ = super::create_dir(&folder.to_string_lossy());
     }
     folder.ancestors().find(|a| a.is_dir()).map(|a| a.to_string_lossy().into_owned()).or_else(home_folder)
 }
@@ -1074,6 +1075,13 @@ mod tests_folders {
         std::fs::write(base.join("blocked"), b"x").unwrap();
         prefs.templates_folder = base.join("blocked").join("Templates").to_string_lossy().into_owned();
         assert_eq!(super::templates_dialog_folder(&prefs).map(PathBuf::from), Some(base.clone()));
+        // Automation that may not write there makes no folder.
+        let outside = base.join("Outside").join("Templates");
+        prefs.templates_folder = outside.to_string_lossy().into_owned();
+        std::fs::create_dir_all(base.join("Allowed")).unwrap();
+        let roots = crate::file_access::AutomationRoots::new(&[&base], &[&base.join("Allowed")]).unwrap().unwrap();
+        crate::file_access::confine(Some(&roots), || super::templates_dialog_folder(&prefs));
+        assert!(!outside.exists(), "not made");
         let _ = std::fs::remove_dir_all(&base);
     }
 }
