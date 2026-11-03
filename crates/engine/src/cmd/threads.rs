@@ -97,15 +97,25 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
     // copy its text into the story each time, and write the grown story back for the next thread
     // to copy again. Only its first place counts.
     let mut seen = std::collections::HashSet::new();
-    let threads: Vec<Vec<NodeId>> =
-        std::mem::take(&mut doc.text_threads).into_iter().map(|t| t.into_iter().filter(|id| seen.insert(*id)).collect()).collect();
+    // A thread that lost a frame that way is flowed again: its frames' layout was made for the
+    // thread as listed (a frame left alone must lose its threaded continuation).
+    let threads: Vec<(Vec<NodeId>, bool)> = std::mem::take(&mut doc.text_threads)
+        .into_iter()
+        .map(|t| {
+            let listed = t.len();
+            let t: Vec<NodeId> = t.into_iter().filter(|id| seen.insert(*id)).collect();
+            let lost = t.len() != listed;
+            (t, lost)
+        })
+        .collect();
     let mut kept = vec![];
-    for thread in threads {
-        let changed = thread.iter().any(|id| match (before.node(*id), doc.node(*id)) {
-            (Some(a), Some(b)) => !std::ptr::eq(a, b),
-            (None, None) => false,
-            _ => true,
-        });
+    for (thread, lost) in threads {
+        let changed = lost
+            || thread.iter().any(|id| match (before.node(*id), doc.node(*id)) {
+                (Some(a), Some(b)) => !std::ptr::eq(a, b),
+                (None, None) => false,
+                _ => true,
+            });
         // When no frame changed, the thread keeps its area-type frames and their text is not copied.
         if !changed {
             let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
