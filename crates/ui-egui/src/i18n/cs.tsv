@@ -1266,6 +1266,8 @@ lighting	Light	Světlo
 	Hand	Ručička
 	Join Tool	Nástroj Spojení
 	Lasso Tool	Nástroj Laso
+	Enclosing Lasso Tool	Nástroj obklopující laso
+	Enclosing Lasso	Obklopující laso
 	Lasso	Laso
 	Line Cut Tool	Nástroj Řez čarou
 	Line Graph Tool	Nástroj Spojnicový graf

@@ -98,6 +98,17 @@ fn the_tool_buttons_are_centred_in_the_panel() {
     }
 }
 
+#[test]
+fn saved_flyout_choices_must_still_belong_to_the_slot() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    for (saved, shown) in [(vectorcraft_tools::addons::enclosing_lasso::ID, "lasso"), ("magicWand", "magicWand")] {
+        app.ui.slot_tool.insert("lasso".into(), saved.into());
+        let tree = tree(|ui| show(&mut app, ui));
+        assert_eq!(role_and_state(&tree, &tip(tool_info(shown).unwrap())), (Role::Button, Some(Toggled::False)));
+    }
+}
+
 /// Screen readers name each tool button by its tool tip and say which tool is active, and name
 /// the title bar's column toggle and grip and the paint buttons under the tools.
 #[test]

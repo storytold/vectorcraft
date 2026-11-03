@@ -538,6 +538,7 @@ mod cursor_tests {
         let away = Point::new(400.0, 400.0);
         for (id, c) in [
             ("lasso", Cursor::Lasso),
+            (addons::enclosing_lasso::ID, Cursor::Lasso),
             ("magicWand", Cursor::MagicWand),
             ("paintbrush", Cursor::Paintbrush),
             ("blobBrush", Cursor::BlobBrush),

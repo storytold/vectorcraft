@@ -8,6 +8,15 @@ Creating a gradient from solid or empty paint uses the document's color model fo
 
 **Feature evidence last updated:** 2026-11-03.
 
+Enclosing Lasso is an add-on under Object › Plug-ins with its own heading in All Tools. It has
+no default shortcut or Basic toolbar slot. It selects whole objects only
+when their geometry is fully enclosed by the freehand loop. Shift adds, Alt subtracts, and
+Escape cancels. Ordinary group members can be selected separately; compound paths stay whole.
+Path checks follow curves, excluding stroke width and effects; other objects use their geometric
+box. The loop closes on release, uses even-odd regions when it crosses itself, and includes
+objects touching its boundary. Existing Lasso anchor selection and its Q shortcut are unchanged.
+Scores and estimates are unchanged.
+
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
 - Current-main conflict reconciliation retains upstream and feature behavior; scores and estimates unchanged
@@ -21,6 +30,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Enclosing Lasso provides whole-object enclosure selection as an add-on with no default shortcut or Basic toolbar slot. Scores and estimates remain unchanged. |
 | 2026-11-03 | minor | Transform previews valid typed values while numeric fields remain focused. Effect dialogs use the object, group, or layer targeted in Appearance. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-10-26 | minor | Pencil Fidelity goes down to 0.01 pt (dialog, tool and engine; Smooth keeps 0.05) on a logarithmic slider across the Tool Options row, with hundredths in the field and key steps that fit the range (#3328); scores and estimates unchanged (estimated) |
@@ -408,6 +418,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Enclosing Lasso selects fully enclosed objects with a freehand loop under Object › Plug-ins; scores and estimates unchanged. |
 | 2026-11-03 | minor | Type on a Path Options has a Preview checkbox (#5360, as public tutorials of the dialog show); scores and estimates unchanged |
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control accept the wheel without opening the menu (#5253); scores and estimates unchanged. |
 | 2026-11-03 | minor | Symbol editing draws and drags 9-slice guides on the canvas (#5280). Guides outside the artwork remain unsupported. Scores and hours remain unchanged. |

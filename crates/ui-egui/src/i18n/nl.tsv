@@ -1193,6 +1193,8 @@ lighting	Light	Licht
 	Hand	Hand
 	Join Tool	Samenvoegen-gereedschap
 	Lasso Tool	Lasso-gereedschap
+	Enclosing Lasso Tool	Omsluitend lassogereedschap
+	Enclosing Lasso	Omsluitende lasso
 	Lasso	Lasso
 	Line Cut Tool	Lijnknip-gereedschap
 	Line Graph Tool	Lijndiagram-gereedschap

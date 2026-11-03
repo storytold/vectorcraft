@@ -2156,6 +2156,8 @@ file-filter	Templates	Sablonok
 	Largest:	Legnagyobb:
 	Lasso	Lasszó
 	Lasso Tool	Lasszó
+	Enclosing Lasso Tool	Körülzáró lasszó
+	Enclosing Lasso	Körülzáró lasszó
 	Last	Utolsó
 	Last commit	Utolsó commit
 	Last Effect: {name}	Legutóbbi effektus: {name}
