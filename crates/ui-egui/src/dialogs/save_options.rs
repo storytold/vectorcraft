@@ -76,15 +76,16 @@ fn separates(f: &Format) -> bool {
     f.options.iter().any(|o| o.name == "separateArtboards")
 }
 
-/// The options the dialog shows: arrays and objects are for agents, and a page range replaces the
-/// single artboard choice; none for a format with its own dialog. A `.ait` template has no
-/// Version: Save as Template writes it PDF-compatible only.
+/// The options the dialog shows: arrays and objects are for agents, as is a native file's
+/// `precision`, and a page range replaces the single artboard choice; none for a format with its
+/// own dialog. A `.ait` template has no Version: Save as Template writes it PDF-compatible only.
 fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
     let range = f.options.iter().any(|o| o.name == "range");
     let separate = separates(f);
     let options = if own_dialog(f) { &[][..] } else { f.options };
     options.iter().filter(move |o| {
         !(matches!(o.ty, "array" | "object")
+            || o.name == "precision"
             || (range && o.name == "artboard")
             || (separate && o.name == "range")
             || (matches!(f.id, "ai" | "ait") && o.name == "useArtboards")

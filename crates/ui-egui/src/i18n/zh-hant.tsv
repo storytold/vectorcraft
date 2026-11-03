@@ -1202,6 +1202,7 @@ file-filter	Templates	範本
 	Flip Row Order	反轉列順序
 	Flip Vertical	垂直翻轉
 	Float in Window	在視窗中浮動
+	Float All in Windows	全部在視窗中浮動
 	Focal Fill	焦點填色
 	Focal Stroke	焦點筆畫
 	Folder	資料夾
@@ -1366,6 +1367,10 @@ file-filter	Templates	範本
 	Hard Light	實光
 	Hard Mix	實色混合
 	Harmony Rules:	色彩調和規則：
+	Segmented color wheel	分段色輪
+	Show smooth color wheel	顯示平滑色輪
+	Show segmented color wheel	顯示分段色輪
+	Show color bars	顯示顏色條
 	Harmony Sets	色彩調和組
 	Height	高度
 	Height:	高度：
@@ -1938,6 +1943,7 @@ file-filter	Templates	範本
 @msg	a graphic style named `{to}` already exists	名為 `{to}` 的繪圖樣式已存在
 @msg	no graphic style `{name}`	沒有繪圖樣式 `{name}`
 @msg	node {_1} is not text	節點 {_1} 不是文字
+@msg	node {_1} is on a locked artboard	節點 {_1} 位於已鎖定的工作區域上
 @msg	Text Wrap: select a wrap object	文字繞圖：請選取繞圖物件
 @msg	layers can't be wrap objects	圖層不能作為繞圖物件
 @msg	line {line}: value for `{var}` must be true or false	第 {line} 行：`{var}` 的值必須是 true 或 false
@@ -2040,7 +2046,9 @@ file-filter	Templates	範本
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	其上的圖稿與頁面的圖稿有 {_1}% 不同：仍從其編輯資料匯入
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	未讀取檔案的圖層 ({_1})：檔案以其頁面匯入，位於單一圖層中
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	未從檔案的編輯資料讀取圖層 ({_1})：圖層來自其 PDF 部分
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	未讀取檔案的變數與資料集 (變數：{variables}，資料集：{data_sets})：「變數」面板不會列出它們
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	只讀取了檔案的部分變數資料庫 (略過的項目：{_1})：「變數」面板會列出其餘部分
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	無法讀取檔案的變數資料庫：「變數」面板不會列出它
+@msg	a variable of unknown kind can't be bound to objects	種類不明的變數無法繫結至物件
 @msg	its Windows metafile preview was opened instead, which may simplify the art	已改為開啟其 Windows 中繼檔預覽，圖稿可能因此簡化
 @msg	its preview was placed instead, at screen resolution	已改為以螢幕解析度置入其預覽
 @msg	shadings of more than 4096 patches or triangles were left out	已略過超過 4096 個面片或三角形的著色
@@ -2407,6 +2415,9 @@ file-filter	Templates	範本
 @msg	the PCX file is cut short	PCX 檔案不完整
 @msg	the PCX file's header is damaged	PCX 檔案標頭已損毀
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	無法讀取 {planes} 個平面中含 {bits} 位元像素的 PCX 檔案
+@msg	the Pixar file is cut short	Pixar 檔案不完整
+@msg	the Pixar file's header is damaged	Pixar 檔案標頭已損毀
+@msg	the Pixar file's image data is damaged	Pixar 檔案的影像資料已損毀
 @msg	the JPEG 2000 file can't be read	無法讀取 JPEG 2000 檔案
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 檔案包含不支援的色彩空間或 JPX 內容
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 影像過大，無法讀取 ({_1} × {_2} 像素)
@@ -2565,6 +2576,8 @@ file-filter	Templates	範本
 	Large Thumbnail View	大縮圖檢視
 	Large Thumbnails	大縮圖
 	Lasso Tool	套索工具
+	Enclosing Lasso Tool	包圍套索工具
+	Enclosing Lasso	包圍套索
 	Last Effect: {name}	最後一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	最後一次效果…
@@ -2717,6 +2730,7 @@ file-filter	Templates	範本
 	Manually	手動
 	Mark as trapped	標示為已陷印
 	Mark Older Files as [Converted] When Opened	開啟舊檔時標示為 [已轉換]
+	Use System Defaults for Edit Original	「編輯原稿」使用系統預設值
 	Marker…	標記…
 	Marks	標記
 	Marks and Bleed	標記與出血
@@ -2778,6 +2792,7 @@ file-filter	Templates	範本
 	Modified:	修改時間：
 	Modify	修改
 	Insert Kashidas	插入卡希達
+	Kashidas	卡希達
 	Long	長
 	Stylistic	風格化
 	Mojikumi Set	標點間距
@@ -3584,6 +3599,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Replace Spine	取代脊線
 	Replace Symbol	取代符號
 	Replace With Font	取代為字體
+	Replace With Font From	取代字體來源
+	System	系統
 	Replaces the saved preset of that name.	取代同名的已儲存預設集。
 	Replace…	取代…
 	Require a password to open the document	開啟文件時需要密碼
@@ -4234,6 +4251,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Graphic	圖形
 	Show all open documents	顯示所有開啟的文件
 	Symbol Instance	符號範例
+	Link Block Series	連結區塊系列
 	Symbol Libraries	符號資料庫
 	Symbol Screener Tool	符號濾色器工具
 	Symbol Scruncher Tool	符號緊縮器工具
@@ -4269,6 +4287,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Templates…	範本…
 	Text Displayed in Cell:	儲存格中顯示的文字：
 	Text Export Options	文字匯出選項
+	Text Fill & Stroke Color	文字填色與筆畫顏色
 	Text Fill Color	文字填色
 	Text Import Options	文字匯入選項
 	Text Stroke Color	文字筆畫顏色
@@ -5201,6 +5220,11 @@ lighting	Light	光源
 	Export Type:	轉存類型:
 	Movie Clip	影片片段
 @msg	name is empty	名稱為空
+@msg	an action is already recording	已在錄製動作
+@msg	no such function key	沒有這個功能鍵
+@msg	no such color	沒有這個顏色
+@msg	{_1} cannot be used on Windows	{_1} 無法在 Windows 上使用
+@msg	more than one action is named “{_1}”	有多個動作名為「{_1}」
 @msg	no symbol named `{n}`	沒有名為 `{n}` 的符號
 	Smudge Stick…	塗抹棒…
 	Smudge Stick	塗抹棒
@@ -5355,9 +5379,17 @@ axis	Y Axis	Y 軸
 	Action Options…	動作選項…
 	Action Options	動作選項
 	Rename Action	重新命名動作
+	New Action…	新增動作…
+	New Action	新增動作
+	Create New Action	建立新動作
+	Play Action	播放動作
+	Action Set:	動作組：
+	Function Key:	功能鍵：
+	Record	錄製
 	Create New Set	建立新組
 	Stop Global Edit	停止整體編輯
 	Global Edit Options	整體編輯選項
+	Leave Out of Global Edit	從整體編輯中排除
 	Match	符合
 	On Artboards	在工作區域上
 	All Artboards	所有工作區域
@@ -5366,6 +5398,8 @@ axis	Y Axis	Y 軸
 @msg	select one object	請選取一個物件
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	整體編輯適用於路徑、複合路徑、符號實體及其群組
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	找不到相似的物件（旋轉或鏡像的副本不會相符）；請變更整體編輯選項後再試一次
+@msg	Global Edit is off	整體編輯未開啟
+@msg	only an object of the Global Edit other than the one it started from can be left out	只能從整體編輯中排除起始物件以外的物件
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：應為 all 或 1, 3-5 這類範圍，而不是 {v}
 	Add to Symbols	新增至符號
 	Basic Shapes	基本形狀
@@ -5624,6 +5658,11 @@ anchor	Points:	點：
 	Horizontal Scale	水平縮放
 	Vertical Scale	垂直縮放
 @msg	{label} must be a number from {min} to {max}	{label} 必須是 {min} 到 {max} 之間的數字
+	Character Color	字元顏色
+	OpenType Features	OpenType 功能
+	Stylistic Sets	風格集
+@msg	features lists at most {max} tags	features 最多包含 {max} 個標籤
+@msg	unknown OpenType feature `{t}`	未知的 OpenType 功能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必須是大於 0 且不超過 {max} 的數字
 @msg	no character style `{name}`	找不到字元樣式 `{name}`
 
@@ -5874,3 +5913,14 @@ breakText	Glyphs	字符
 	Create Swatch Legend	建立色票圖例
 	Create Swatch Legend…	建立色票圖例…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	文字工具
+	Text Tweaker…	文字微調…
+	Text Tweaker	文字微調
+	Attribute:	屬性：
+	From:	起始：
+	To:	結束：
+	Bow	弓形
+	Spike	尖峰
+	Skip Spaces	略過空格
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	圖稿太大，無法作為圖片複製：其他應用程式不會取得它的 PNG

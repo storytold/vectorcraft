@@ -1232,6 +1232,7 @@ file-filter	Templates	Шаблони
 	Flip Row Order	Змінити порядок рядків
 	Flip Vertical	Відобразити по вертикалі
 	Float in Window	Відкріпити у вікні
+	Float All in Windows	Відкріпити все у вікна
 	Focal Fill	Фокусна заливка
 	Focal Stroke	Фокусне обведення
 	Folder	Папка
@@ -1395,6 +1396,10 @@ file-filter	Templates	Шаблони
 	Hard Light	Жорстке світло
 	Hard Mix	Жорстке накладання
 	Harmony Rules:	Правила гармонії:
+	Segmented color wheel	Сегментоване колірне коло
+	Show smooth color wheel	Показати плавне колірне коло
+	Show segmented color wheel	Показати сегментоване колірне коло
+	Show color bars	Показати колірні смуги
 	Harmony Sets	Набори гармонії
 	Height	Висота
 	Height:	Висота:
@@ -1731,6 +1736,8 @@ file-filter	Templates	Шаблони
 	Large Thumbnail View	Великі мініатюри
 	Large Thumbnails	Великі мініатюри
 	Lasso Tool	Інструмент «Ласо»
+	Enclosing Lasso Tool	Інструмент «Охоплювальне ласо»
+	Enclosing Lasso	Охоплювальне ласо
 	Last Effect: {name}	Останній ефект: {name}
 	Last Effect: {}	Останній ефект: {}
 	Last Effect…	Останній ефект…
@@ -1882,6 +1889,7 @@ file-filter	Templates	Шаблони
 	Manually	Вручну
 	Mark as trapped	Позначити як трепінг
 	Mark Older Files as [Converted] When Opened	Помічати старі файли як [Перетворені] при відкритті
+	Use System Defaults for Edit Original	Використовувати системні типові програми для «Редагувати оригінал»
 	Marker…	Маркер…
 	Marks	Мітки
 	Marks and Bleed	Мітки та виліт
@@ -1944,6 +1952,7 @@ file-filter	Templates	Шаблони
 	Modify	Змінити
 	Mojikumi	Mojikumi
 	Insert Kashidas	Вставляти кашиди
+	Kashidas	Кашиди
 	Long	Довгі
 	Stylistic	Стилістичні
 	Mojikumi Set	Набір mojikumi
@@ -2730,6 +2739,8 @@ digits	Malayalam	Малаялам
 	Replace Spine	Замінити вісь
 	Replace Symbol	Замінити символ
 	Replace With Font	Замінити шрифтом
+	Replace With Font From	Замінити шрифтом з
+	System	Система
 	Replaces the saved preset of that name.	Замінює збережений набір із таким ім’ям.
 	Replace…	Замінити…
 	Require a password to open the document	Вимагати пароль для відкриття документа
@@ -3383,6 +3394,7 @@ effect	Points	Точки
 	Graphic	Графіка
 	Show all open documents	Показати всі відкриті документи
 	Symbol Instance	Екземпляр символу
+	Link Block Series	Серія пов’язаних блоків
 	Symbol Libraries	Бібліотеки символів
 	Symbol Screener Tool	Інструмент «Прозорість символів»
 	Symbol Scruncher Tool	Інструмент «Стиск символів»
@@ -3418,6 +3430,7 @@ effect	Points	Точки
 	Templates…	Шаблони…
 	Text Displayed in Cell:	Текст, що відображається в комірці:
 	Text Export Options	Параметри експорту тексту
+	Text Fill & Stroke Color	Колір заливки та обведення тексту
 	Text Fill Color	Колір заливки тексту
 	Text Import Options	Параметри імпорту тексту
 	Text Stroke Color	Колір обведення тексту
@@ -4327,6 +4340,7 @@ axis	Both	Обидві
 @msg	no user library folder here	тут немає папки користувацьких бібліотек
 @msg	no user workspace `{from}`	немає користувача робочого середовища `{from}`
 @msg	node {_1} is not text	вузол {_1} не є текстом
+@msg	node {_1} is on a locked artboard	вузол {_1} розташований на заблокованій монтажній області
 @msg	not a DXF drawing	не є кресленням DXF
 @msg	not a VectorCraft file: {0}	не є файлом VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	не є набором поєднань клавіш VectorCraft (відсутнє `overrides`)
@@ -4733,6 +4747,9 @@ axis	Both	Обидві
 @msg	the PCX file is cut short	файл PCX обрізаний
 @msg	the PCX file's header is damaged	заголовок файлу PCX пошкоджений
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	файли PCX з {bits}-бітними пікселями в {planes} площинах не читаються
+@msg	the Pixar file is cut short	файл Pixar обрізаний
+@msg	the Pixar file's header is damaged	заголовок файлу Pixar пошкоджений
+@msg	the Pixar file's image data is damaged	дані зображення у файлі Pixar пошкоджені
 @msg	the JPEG 2000 file can't be read	не вдається прочитати файл JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	файл JPEG 2000 містить непідтримуваний колірний простір або вміст JPX
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	зображення PSD завелике для читання ({_1} × {_2} пікс.)
@@ -5146,6 +5163,11 @@ lighting	Light	Світло
 	Export Type:	Тип експорту:
 	Movie Clip	Кліп
 @msg	name is empty	ім’я порожнє
+@msg	an action is already recording	дія вже записується
+@msg	no such function key	такої функціональної клавіші немає
+@msg	no such color	такого кольору немає
+@msg	{_1} cannot be used on Windows	Сполучення {_1} не можна використовувати у Windows
+@msg	more than one action is named “{_1}”	кілька дій мають назву «{_1}»
 @msg	no symbol named `{n}`	немає символу з назвою `{n}`
 	Smudge Stick…	Розтушовування…
 	Smudge Stick	Розтушовування
@@ -5228,7 +5250,9 @@ lighting	Light	Світло
 	Effect Gallery	Галерея ефектів
 	Filters	Фільтри
 	Select artwork to apply effects	Виберіть графіку, щоб застосувати ефекти
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	змінні та набори даних файлу не прочитано (змінних: {variables}, наборів даних: {data_sets}): панель «Змінні» їх не показує
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	бібліотеку змінних файлу прочитано лише частково (пропущено записів: {_1}): панель «Змінні» показує решту
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	не вдалося прочитати бібліотеку змінних файлу: панель «Змінні» її не показує
+@msg	a variable of unknown kind can't be bound to objects	змінну невідомого виду не можна прив’язати до об’єктів
 # Select by Color (select.color)
 	Select by Color	Виділити за кольором
 	Move Anchor Point	Перемістити опорну точку
@@ -5317,9 +5341,17 @@ axis	Y Axis	Вісь Y
 	Action Options…	Параметри дії…
 	Action Options	Параметри дії
 	Rename Action	Перейменувати дію
+	New Action…	Нова дія…
+	New Action	Нова дія
+	Create New Action	Створити нову дію
+	Play Action	Відтворити дію
+	Action Set:	Набір дій:
+	Function Key:	Функціональна клавіша:
+	Record	Записати
 	Create New Set	Створити новий набір
 	Stop Global Edit	Завершити глобальне редагування
 	Global Edit Options	Параметри глобального редагування
+	Leave Out of Global Edit	Виключити з глобального редагування
 	Match	Збіг
 	On Artboards	На монтажних областях
 	All Artboards	Усі монтажні області
@@ -5328,6 +5360,8 @@ axis	Y Axis	Вісь Y
 @msg	select one object	виберіть один об’єкт
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальне редагування працює з контурами, складеними контурами, екземплярами символів та їхніми групами
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (повернуті чи віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз
+@msg	Global Edit is off	Глобальне редагування вимкнено
+@msg	only an object of the Global Edit other than the one it started from can be left out	виключити з глобального редагування можна лише об’єкт, відмінний від того, з якого воно почалося
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
 	Add to Symbols	Додати до символів
 	Basic Shapes	Базові фігури
@@ -5586,6 +5620,11 @@ anchor	Points:	Точки:
 	Horizontal Scale	Масштаб по горизонталі
 	Vertical Scale	Масштаб за вертикаллю
 @msg	{label} must be a number from {min} to {max}	{label} має бути числом від {min} до {max}
+	Character Color	Колір символів
+	OpenType Features	Функції OpenType
+	Stylistic Sets	Стилістичні набори
+@msg	features lists at most {max} tags	features містить не більше {max} тегів
+@msg	unknown OpenType feature `{t}`	невідома функція OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} має бути числом більше 0 і не більше {max}
 @msg	no character style `{name}`	Стиль символів `{name}` не знайдено
 
@@ -5836,3 +5875,14 @@ breakText	Glyphs	Гліфи
 	Create Swatch Legend	Створити легенду зразків
 	Create Swatch Legend…	Створити легенду зразків…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Інструменти тексту
+	Text Tweaker…	Налаштування тексту…
+	Text Tweaker	Налаштування тексту
+	Attribute:	Атрибут:
+	From:	Від:
+	To:	До:
+	Bow	Дуга
+	Spike	Пік
+	Skip Spaces	Пропускати пробіли
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Графіка завелика, щоб скопіювати її як зображення: інші програми не отримають її PNG

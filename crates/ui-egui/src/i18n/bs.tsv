@@ -418,6 +418,7 @@
 	Stroke Weight	Debljina poteza
 	Graphic Style	Grafički stil
 	Symbol Instance	Instanca simbola
+	Link Block Series	Niz povezanih blokova
 	Font Family	Porodica fonta
 	Font Family & Style	Porodica i stil fonta
 	Font Family, Style & Size	Porodica, stil i veličina fonta
@@ -425,6 +426,7 @@
 	Variable Font	Varijabilni font
 	Text Fill Color	Boja ispune teksta
 	Text Stroke Color	Boja poteza teksta
+	Text Fill & Stroke Color	Boja ispune i poteza teksta
 	All on Same Layers	Sve na istim slojevima
 	Direction Handles	Ručke smjera
 	Brush Strokes	Potezi četkicom
@@ -626,6 +628,7 @@
 	Cascade	Kaskadno
 	Tile	Popločaj
 	Float in Window	Odvoji u prozor
+	Float All in Windows	Odvoji sve u prozore
 	Consolidate All Windows	Objedini sve prozore
 	Workspace	Radni prostor
 	Reset Essentials	Vrati Osnove na početno
@@ -1242,6 +1245,8 @@ lighting	Light	Svjetlo
 	Hand	Ruka
 	Join Tool	Alat za spajanje
 	Lasso Tool	Alat laso
+	Enclosing Lasso Tool	Alat laso za obuhvatanje
+	Enclosing Lasso	Laso za obuhvatanje
 	Lasso	Laso
 	Line Cut Tool	Alat za rez linijom
 	Line Graph Tool	Alat za linijski grafikon
@@ -1825,6 +1830,7 @@ digits	Malayalam	Malajalam
 	Left-to-Right Paragraph Direction	Smjer pasusa s lijeva nadesno
 	Line-end Punctuation Half Width	Interpunkcija na kraju reda u pola širine
 	Insert Kashidas	Umetni kašide
+	Kashidas	Kašide
 	Long	Dugo
 	Stylistic	Stilsko
 	Mojikumi Set	Mojikumi skup
@@ -2624,6 +2630,10 @@ digits	Malayalam	Malajalam
 	Current Colors	Trenutne boje
 	Current Colors (0)	Trenutne boje (0)
 	Harmony Rules:	Pravila harmonije:
+	Segmented color wheel	Segmentirani kotač boja
+	Show smooth color wheel	Prikaži glatki kotač boja
+	Show segmented color wheel	Prikaži segmentirani kotač boja
+	Show color bars	Prikaži trake boja
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
 	Limit to Library:	Ograniči na biblioteku:
@@ -3553,6 +3563,7 @@ theme	Appearance	Izgled
 	List Preferences	Izlistaj postavke
 	Manually	Ručno
 	Mark Older Files as [Converted] When Opened	Označi starije datoteke kao [Pretvoreno] pri otvaranju
+	Use System Defaults for Edit Original	Koristi sistemske zadane postavke za Uredi original
 	Match User Interface Brightness	Uskladi sa svjetlinom korisničkog interfejsa
 	Light Gray	Svijetlosiva
 	Medium Gray	Srednje siva
@@ -3911,6 +3922,8 @@ effect	Regular	Obično
 	In the selected objects	U odabranim objektima
 	Find in Folder…	Pronađi u folderu…
 	Replace With Font	Zamijeni fontom
+	Replace With Font From	Zamijeni fontom iz
+	System	Sistem
 	  — substituted by {style}	  — zamijenjeno stilom {style}
 	  — {n} characters from another font	  — {n} znakova iz drugog fonta
 	All Scripts	Sve skripte
@@ -4931,6 +4944,9 @@ imageTrace	Outline	Obris
 @msg	the PCX file is cut short	PCX datoteka je skraćena
 @msg	the PCX file's header is damaged	zaglavlje PCX datoteke je oštećeno
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX datoteke s {bits}-bitnim pikselima u {planes} ravni nije moguće pročitati
+@msg	the Pixar file is cut short	Pixar datoteka je skraćena
+@msg	the Pixar file's header is damaged	zaglavlje Pixar datoteke je oštećeno
+@msg	the Pixar file's image data is damaged	slikovni podaci Pixar datoteke su oštećeni
 @msg	the JPEG 2000 file can't be read	datoteku JPEG 2000 nije moguće pročitati
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	datoteka JPEG 2000 ima nepodržan prostor boja ili JPX sadržaj
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD slika je prevelika za čitanje ({_1} × {_2} piksela)
@@ -5467,6 +5483,11 @@ mark-style	Japanese	Japanski
 	Export Type:	Vrsta izvoza:
 	Movie Clip	Filmski klip
 @msg	name is empty	naziv je prazan
+@msg	an action is already recording	akcija se već snima
+@msg	no such function key	nema takve funkcijske tipke
+@msg	no such color	nema takve boje
+@msg	{_1} cannot be used on Windows	{_1} se ne može koristiti na Windowsu
+@msg	more than one action is named “{_1}”	više od jedne akcije ima naziv „{_1}”
 @msg	no symbol named `{n}`	nema simbola pod nazivom `{n}`
 	Smudge Stick…	Štapić za razmazivanje…
 	Smudge Stick	Štapić za razmazivanje
@@ -5546,7 +5567,9 @@ mark-style	Japanese	Japanski
 	Effect Gallery	Galerija efekata
 	Filters	Filteri
 	Select artwork to apply effects	Odaberite crtež za primjenu efekata
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	varijable i skupovi podataka datoteke nisu pročitani (varijable: {variables}, skupovi podataka: {data_sets}): panel Varijable ih ne navodi
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	biblioteka varijabli datoteke je djelimično pročitana (preskočeni unosi: {_1}): panel Varijable navodi ostalo
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	biblioteku varijabli datoteke nije bilo moguće pročitati: panel Varijable je ne navodi
+@msg	a variable of unknown kind can't be bound to objects	varijabla nepoznate vrste ne može se povezati s objektima
 	Select by Color	Odaberi po boji
 	Move Anchor Point	Pomjeri sidrenu tačku
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} zadržava 1 od {n} radnih ploča dokumenta: datoteka se ponovo otvara s jednom. Uključite Očuvaj mogućnosti uređivanja da ih zadržite sve.
@@ -5630,9 +5653,17 @@ axis	Y Axis	Y osa
 	Action Options…	Opcije akcije…
 	Action Options	Opcije akcije
 	Rename Action	Preimenuj akciju
+	New Action…	Nova akcija…
+	New Action	Nova akcija
+	Create New Action	Napravi novu akciju
+	Play Action	Reprodukuj akciju
+	Action Set:	Skup akcija:
+	Function Key:	Funkcijska tipka:
+	Record	Snimi
 	Create New Set	Napravi novi skup
 	Stop Global Edit	Zaustavi globalno uređivanje
 	Global Edit Options	Opcije globalnog uređivanja
+	Leave Out of Global Edit	Isključi iz globalnog uređivanja
 	Match	Podudaranje
 	On Artboards	Na radnim pločama
 	All Artboards	Sve radne ploče
@@ -5641,6 +5672,8 @@ axis	Y Axis	Y osa
 @msg	select one object	odaberite jedan objekat
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globalno uređivanje radi na putanjama, složenim putanjama, instancama simbola i njihovim grupama
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nisu pronađeni slični objekti (rotirane ili zrcaljene kopije se ne podudaraju); promijenite opcije globalnog uređivanja i pokušajte ponovo
+@msg	Global Edit is off	Globalno uređivanje je isključeno
+@msg	only an object of the Global Edit other than the one it started from can be left out	iz globalnog uređivanja može se isključiti samo objekt koji nije onaj od kojeg je počelo
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ili raspon poput 1, 3-5, a ne {v}
 	Add to Symbols	Dodaj u simbole
 	Basic Shapes	Osnovni oblici
@@ -6128,3 +6161,14 @@ shape	Open	Otvoren
 	Create Swatch Legend	Kreiraj legendu uzoraka boja
 	Create Swatch Legend…	Kreiraj legendu uzoraka boja…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Alati za tekst
+	Text Tweaker…	Podešavanje teksta…
+	Text Tweaker	Podešavanje teksta
+	Attribute:	Atribut:
+	From:	Od:
+	To:	Do:
+	Bow	Luk
+	Spike	Šiljak
+	Skip Spaces	Preskoči razmake
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika je prevelika da bi se kopirala kao slika: druge aplikacije ne dobijaju njen PNG

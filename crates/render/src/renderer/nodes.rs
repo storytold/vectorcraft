@@ -114,7 +114,16 @@ impl Renderer {
     /// The cached path of path or compound path `n` ([`Self::path_of`]) when the frame is in
     /// Outline view and `n` is `fx_owner`, else `None`.
     fn outline_path(&mut self, f: &Frame, n: &Node) -> Option<Arc<BezPath>> {
-        let owner = self.fx_owner.as_ref().filter(|o| f.opts.outline && std::ptr::eq(&***o, n)).cloned()?;
+        if !f.opts.outline {
+            return None;
+        }
+        self.owner_path(f, n)
+    }
+
+    /// The cached path of path or compound path `n` ([`Self::path_of`]) when `n` is `fx_owner`,
+    /// else `None`.
+    fn owner_path(&mut self, f: &Frame, n: &Node) -> Option<Arc<BezPath>> {
+        let owner = self.fx_owner.as_ref().filter(|o| std::ptr::eq(&***o, n)).cloned()?;
         self.path_of(f.symbols, &owner)
     }
 
@@ -470,26 +479,32 @@ impl Renderer {
                     self.draw_shape(ctx, f, n, &bp, *rule);
                 }
             }
-            NodeKind::Compound { children, rule } => {
-                if let Some(bp) = self.outline_path(f, n) {
-                    return self.draw_shape(ctx, f, n, &bp, *rule);
+            NodeKind::Compound { rule, .. } => {
+                // Its members assembled once and kept with the node in `geom`, as plain paths are
+                // (`path_of`): a compound path of thousands of members is not assembled again in
+                // every frame.
+                if let Some(bp) = self.owner_path(f, n).or_else(|| n.stroke_path().map(Arc::new)) {
+                    self.draw_shape(ctx, f, n, &bp, *rule);
                 }
-                let mut bp = BezPath::new();
-                for c in children {
-                    if let Some(p) = c.path_data() {
-                        bp.extend(p.to_bezpath());
-                    }
-                }
-                self.draw_shape(ctx, f, n, &bp, *rule);
             }
             NodeKind::Text(t) => self.draw_text(ctx, f, n, t),
             NodeKind::Image(im) => self.draw_image_in(ctx, f, im, None, images::image_tint(n, f.ink), n.extras().pixelated),
             NodeKind::SymbolInstance { symbol, xf } => {
-                if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol)
-                    && self.charge_symbol(&sym.art)
-                {
-                    let (art, kept) = self.placed_art(&sym.art, *xf, false, Some(n));
-                    self.draw_placed_art(ctx, f, &art, kept);
+                if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol) {
+                    // The instance draws when the frame has room for its art's objects; a symbol
+                    // with 9-slice guides is placed cell by cell (`Self::sliced_art`).
+                    let mut used = self.symbol_nodes;
+                    let placed = match f.doc.symbol_slice_map(symbol, *xf) {
+                        Some(m) => self.sliced_art(f.doc, &sym.art, &m, *xf, n, &mut used),
+                        None => {
+                            let count = sym.art.count() as u64;
+                            vectorcraft_doc::charge_symbol_art(&mut used, count, || (self.placed_art(&sym.art, *xf, false, Some(n)), count))
+                        }
+                    };
+                    self.symbol_nodes = used;
+                    if let Some((art, kept)) = placed {
+                        self.draw_placed_art(ctx, f, &art, kept);
+                    }
                 }
             }
             NodeKind::Blend { .. }
@@ -502,13 +517,6 @@ impl Renderer {
                 None => self.draw_live_node(ctx, f, n),
             },
         }
-    }
-
-    /// Count symbol art `art`'s objects against the frame's [`vectorcraft_doc::MAX_SYMBOL_NODES`]: `false` (the
-    /// instance isn't drawn) once they would pass it.
-    fn charge_symbol(&mut self, art: &Node) -> bool {
-        let total = self.symbol_nodes.saturating_add(art.count() as u64);
-        (total <= vectorcraft_doc::MAX_SYMBOL_NODES).then(|| self.symbol_nodes = total).is_some()
     }
 
     /// Draw symbol art `art` as [`Self::placed_art`] placed it for an instance or an inline graphic

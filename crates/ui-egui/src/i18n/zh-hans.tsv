@@ -1176,6 +1176,7 @@ file-filter	Templates	模板
 	Flip Row Order	反转行顺序
 	Flip Vertical	垂直翻转
 	Float in Window	在窗口中浮动
+	Float All in Windows	全部在窗口中浮动
 	Focal Fill	焦点填色
 	Focal Stroke	焦点描边
 	Folder	文件夹
@@ -1338,6 +1339,10 @@ file-filter	Templates	模板
 	Hard Light	强光
 	Hard Mix	实色混合
 	Harmony Rules:	协调规则：
+	Segmented color wheel	分段色轮
+	Show smooth color wheel	显示平滑色轮
+	Show segmented color wheel	显示分段色轮
+	Show color bars	显示颜色条
 	Harmony Sets	色彩调和组
 	Height	高度
 	Height:	高度：
@@ -1624,6 +1629,8 @@ file-filter	Templates	模板
 	Large Thumbnail View	大缩略图视图
 	Large Thumbnails	大缩略图
 	Lasso Tool	套索工具
+	Enclosing Lasso Tool	包围套索工具
+	Enclosing Lasso	包围套索
 	Last Effect: {name}	最后一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	上次效果…
@@ -1739,7 +1746,7 @@ file-filter	Templates	模板
 	Lossy:	有损：
 	Low	低
 	lowercase	小写
-	Luminosity	亮度
+	Luminosity	明度
 	LZW Compression	LZW 压缩
 	Mac	Mac
 	Magenta	洋红
@@ -1769,6 +1776,7 @@ file-filter	Templates	模板
 	Manually	手动
 	Mark as trapped	标示为已陷印
 	Mark Older Files as [Converted] When Opened	打开旧文件时标记为 [已转换]
+	Use System Defaults for Edit Original	“编辑原稿”使用系统默认设置
 	Marker…	标记…
 	Marks	标记
 	Marks and Bleed	标记和出血
@@ -2608,6 +2616,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Replace Spine	替换脊线
 	Replace Symbol	替换符号
 	Replace With Font	替换为字体
+	Replace With Font From	替换字体来源
+	System	系统
 	Replaces the saved preset of that name.	替换同名已存预设。
 	Replace…	替换…
 	Require a password to open the document	打开文档时需要密码
@@ -3222,6 +3232,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Graphic	图形
 	Show all open documents	显示所有打开的文档
 	Symbol Instance	符号实例
+	Link Block Series	链接块系列
 	Symbol Libraries	符号库
 	Symbol Screener Tool	符号透明度工具
 	Symbol Scruncher Tool	符号紧缩工具
@@ -3257,6 +3268,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Templates…	模板…
 	Text Displayed in Cell:	单元格中显示的文字：
 	Text Export Options	文本导出选项
+	Text Fill & Stroke Color	文字填色和描边颜色
 	Text Fill Color	文字填色
 	Text Import Options	文本导入选项
 	Text Stroke Color	文字描边颜色
@@ -4030,6 +4042,7 @@ imageTrace	Outline	轮廓
 @msg	a graphic style named `{to}` already exists	名为 `{to}` 的图形样式已存在
 @msg	no graphic style `{name}`	没有图形样式 `{name}`
 @msg	node {_1} is not text	节点 {_1} 不是文字
+@msg	node {_1} is on a locked artboard	节点 {_1} 位于已锁定的画板上
 @msg	Text Wrap: select a wrap object	文本绕排：请选择一个绕排对象
 @msg	layers can't be wrap objects	图层不能作为绕排对象
 @msg	line {line}: value for `{var}` must be true or false	第 {line} 行：`{var}` 的值必须是 true 或 false
@@ -4504,6 +4517,9 @@ imageTrace	Outline	轮廓
 @msg	the PCX file is cut short	PCX 文件不完整
 @msg	the PCX file's header is damaged	PCX 文件头已损坏
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	无法读取 {planes} 个平面中含 {bits} 位像素的 PCX 文件
+@msg	the Pixar file is cut short	Pixar 文件不完整
+@msg	the Pixar file's header is damaged	Pixar 文件头已损坏
+@msg	the Pixar file's image data is damaged	Pixar 文件的图像数据已损坏
 @msg	the JPEG 2000 file can't be read	无法读取 JPEG 2000 文件
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 文件包含不受支持的色彩空间或 JPX 内容
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 图像过大，无法读取 ({_1} × {_2} 像素)
@@ -4891,6 +4907,7 @@ font-technology	Variable	可变
 	Right-to-Left Paragraph Direction	从右到左段落方向
 	Line-end Punctuation Half Width	行尾标点半角
 	Insert Kashidas	插入卡希达
+	Kashidas	卡希达
 	Long	长
 	Stylistic	风格化
 	Mojikumi Set	标点挤压集
@@ -5386,6 +5403,11 @@ lighting	Light	光源
 	Export Type:	导出类型:
 	Movie Clip	影片剪辑
 @msg	name is empty	名称为空
+@msg	an action is already recording	已在记录动作
+@msg	no such function key	没有此功能键
+@msg	no such color	没有此颜色
+@msg	{_1} cannot be used on Windows	{_1} 在 Windows 上不能使用
+@msg	more than one action is named “{_1}”	有多个动作名为“{_1}”
 @msg	no symbol named `{n}`	没有名为 `{n}` 的符号
 	Smudge Stick…	涂抹棒…
 	Smudge Stick	涂抹棒
@@ -5471,7 +5493,9 @@ lighting	Light	光源
 	Effect Gallery	效果库
 	Filters	滤镜
 	Select artwork to apply effects	选择要应用效果的图稿
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	文件的变量和数据集未被读取（变量：{variables}，数据集：{data_sets}）：“变量”面板不会列出它们
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	文件的变量库只读取了一部分（跳过的条目：{_1}）：“变量”面板列出其余部分
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	无法读取文件的变量库：“变量”面板不会列出它
+@msg	a variable of unknown kind can't be bound to objects	类型未知的变量不能绑定到对象
 # Select by Color (select.color)
 	Select by Color	按颜色选择
 	Move Anchor Point	移动锚点
@@ -5559,9 +5583,17 @@ axis	Y Axis	Y 轴
 	Action Options…	动作选项…
 	Action Options	动作选项
 	Rename Action	重命名动作
+	New Action…	新建动作…
+	New Action	新建动作
+	Create New Action	创建新动作
+	Play Action	播放动作
+	Action Set:	动作组：
+	Function Key:	功能键：
+	Record	记录
 	Create New Set	创建新组
 	Stop Global Edit	停止全局编辑
 	Global Edit Options	全局编辑选项
+	Leave Out of Global Edit	从全局编辑中排除
 	Match	匹配
 	On Artboards	在画板上
 	All Artboards	所有画板
@@ -5570,6 +5602,8 @@ axis	Y Axis	Y 轴
 @msg	select one object	请选择一个对象
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	全局编辑适用于路径、复合路径、符号实例及其编组
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	未找到相似对象（旋转或镜像的副本不会匹配）；请更改全局编辑选项后重试
+@msg	Global Edit is off	全局编辑未开启
+@msg	only an object of the Global Edit other than the one it started from can be left out	只能从全局编辑中排除起始对象以外的对象
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：应为 all 或 1, 3-5 这样的范围，而不是 {v}
 	Add to Symbols	添加到符号
 	Basic Shapes	基本形状
@@ -5828,6 +5862,11 @@ anchor	Points:	点：
 	Horizontal Scale	水平缩放
 	Vertical Scale	垂直缩放
 @msg	{label} must be a number from {min} to {max}	{label} 必须是 {min} 到 {max} 之间的数字
+	Character Color	字符颜色
+	OpenType Features	OpenType 特性
+	Stylistic Sets	风格集
+@msg	features lists at most {max} tags	features 最多包含 {max} 个标签
+@msg	unknown OpenType feature `{t}`	未知的 OpenType 特性 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必须是大于 0 且不超过 {max} 的数字
 @msg	no character style `{name}`	找不到字符样式 `{name}`
 
@@ -6077,3 +6116,14 @@ breakText	Glyphs	字形
 	Create Swatch Legend	创建色板图例
 	Create Swatch Legend…	创建色板图例…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	文字工具
+	Text Tweaker…	文字微调…
+	Text Tweaker	文字微调
+	Attribute:	属性：
+	From:	起始：
+	To:	结束：
+	Bow	弓形
+	Spike	尖峰
+	Skip Spaces	跳过空格
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	图稿太大，无法作为图片复制：其他应用不会获得它的 PNG

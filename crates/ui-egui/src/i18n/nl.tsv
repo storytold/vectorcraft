@@ -399,6 +399,7 @@
 	Stroke Weight	Contourdikte
 	Graphic Style	Grafische stijl
 	Symbol Instance	Symboolinstantie
+	Link Block Series	Reeks gekoppelde blokken
 	Font Family	Lettertypefamilie
 	Font Family & Style	Lettertypefamilie en -stijl
 	Font Family, Style & Size	Lettertypefamilie, -stijl en -grootte
@@ -406,6 +407,7 @@
 	Variable Font	Variabel lettertype
 	Text Fill Color	Tekstvulkleur
 	Text Stroke Color	Tekstcontourkleur
+	Text Fill & Stroke Color	Tekstvul- en contourkleur
 	All on Same Layers	Alles op dezelfde lagen
 	Direction Handles	Richtingsgrepen
 	Brush Strokes	Penseelstreken
@@ -598,6 +600,7 @@
 	Cascade	Trapsgewijs schikken
 	Tile	Naast elkaar schikken
 	Float in Window	In venster zweven
+	Float All in Windows	Alles in vensters zweven
 	Consolidate All Windows	Alle vensters samenvoegen
 	Workspace	Werkruimte
 	Reset Essentials	Essentials herstellen
@@ -1190,6 +1193,8 @@ lighting	Light	Licht
 	Hand	Hand
 	Join Tool	Samenvoegen-gereedschap
 	Lasso Tool	Lasso-gereedschap
+	Enclosing Lasso Tool	Omsluitend lassogereedschap
+	Enclosing Lasso	Omsluitende lasso
 	Lasso	Lasso
 	Line Cut Tool	Lijnknip-gereedschap
 	Line Graph Tool	Lijndiagram-gereedschap
@@ -1671,6 +1676,7 @@ digits	Malayalam	Malayalam
 	Left-to-Right Paragraph Direction	Alinearichting van links naar rechts
 	Line-end Punctuation Half Width	Leestekens op regeleinde op halve breedte
 	Insert Kashidas	Kashida's invoegen
+	Kashidas	Kashida's
 	Long	Lang
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-set
@@ -2456,6 +2462,10 @@ digits	Malayalam	Malayalam
 	Current Colors	Huidige kleuren
 	Current Colors (0)	Huidige kleuren (0)
 	Harmony Rules:	Harmonieregels:
+	Segmented color wheel	Gesegmenteerd kleurenwiel
+	Show smooth color wheel	Vloeiend kleurenwiel tonen
+	Show segmented color wheel	Gesegmenteerd kleurenwiel tonen
+	Show color bars	Kleurbalken tonen
 	Harmony Rules	Harmonieregels
 	Keep this row's colors (exclude)	De kleuren van deze rij behouden (uitsluiten)
 	Limit to Library:	Beperken tot bibliotheek:
@@ -3335,6 +3345,7 @@ theme	Appearance	Vormgeving
 	List Preferences	Voorkeuren weergeven
 	Manually	Handmatig
 	Mark Older Files as [Converted] When Opened	Oudere bestanden bij het openen markeren als [geconverteerd]
+	Use System Defaults for Edit Original	Systeemstandaarden gebruiken voor Origineel bewerken
 	Match User Interface Brightness	Aanpassen aan helderheid van gebruikersinterface
 	Light Gray	Lichtgrijs
 	Medium Gray	Middelgrijs
@@ -3687,6 +3698,8 @@ effect	Regular	Regelmatig
 	In the selected objects	In de geselecteerde objecten
 	Find in Folder…	Zoeken in map…
 	Replace With Font	Vervangen door lettertype
+	Replace With Font From	Vervangen door lettertype uit
+	System	Systeem
 	  — substituted by {style}	  — vervangen door {style}
 	  — {n} characters from another font	  — {n} tekens van een ander lettertype
 	All Scripts	Alle scripts
@@ -5223,6 +5236,9 @@ mark-style	Japanese	Japans
 	Path Length	Padlengte
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	de lagen van het bestand zijn niet ingelezen ({_1}): het komt binnen als zijn pagina, in één laag
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	de lagen van het bestand zijn niet ingelezen uit de bewerkingsgegevens ({_1}): ze komen uit het PDF-gedeelte
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	de variabelenbibliotheek van het bestand is slechts gedeeltelijk ingelezen (overgeslagen items: {_1}): het Variabelen-paneel toont de rest
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	de variabelenbibliotheek van het bestand kan niet worden ingelezen: het Variabelen-paneel toont die niet
+@msg	a variable of unknown kind can't be bound to objects	een variabele van onbekend type kan niet aan objecten worden gekoppeld
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` moet grayscale, rgb, hsb, cmyk of websafe zijn
 @msg	the Color Picker is not open	de kleurenkiezer is niet open
 @msg	the screen color sampler is already open	de schermkleurkiezer is al open
@@ -5355,6 +5371,11 @@ swatch	Bright Violet	Felviolet
 	Export Type:	Exporttype:
 	Movie Clip	Filmclip
 @msg	name is empty	naam is leeg
+@msg	an action is already recording	er wordt al een actie opgenomen
+@msg	no such function key	functietoets bestaat niet
+@msg	no such color	kleur bestaat niet
+@msg	{_1} cannot be used on Windows	{_1} kan niet worden gebruikt in Windows
+@msg	more than one action is named “{_1}”	meer dan één actie heet „{_1}”
 @msg	no symbol named `{n}`	geen symbool met de naam `{n}`
 	Remove Color Profile…	Kleurprofiel verwijderen…
 	Color wheel	Kleurenwiel
@@ -5670,9 +5691,17 @@ axis	Y Axis	Y-as
 	Action Options…	Actieopties…
 	Action Options	Actieopties
 	Rename Action	Actie hernoemen
+	New Action…	Nieuwe actie…
+	New Action	Nieuwe actie
+	Create New Action	Nieuwe actie maken
+	Play Action	Actie afspelen
+	Action Set:	Actieset:
+	Function Key:	Functietoets:
+	Record	Opnemen
 	Create New Set	Nieuwe set maken
 	Stop Global Edit	Globale bewerking stoppen
 	Global Edit Options	Opties voor globale bewerking
+	Leave Out of Global Edit	Uitsluiten van globale bewerking
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale bewerking werkt op paden, samengestelde paden, symboolinstanties en groepen daarvan
 	Match	Overeenkomst
 	On Artboards	Op tekengebieden
@@ -6158,3 +6187,14 @@ breakText	Glyphs	Glyphs
 	Create Swatch Legend	Stalenlegenda maken
 	Create Swatch Legend…	Stalenlegenda maken…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Teksthulpmiddelen
+	Text Tweaker…	Tekst bijstellen…
+	Text Tweaker	Tekst bijstellen
+	Attribute:	Kenmerk:
+	From:	Van:
+	To:	Tot:
+	Bow	Boog
+	Spike	Piek
+	Skip Spaces	Spaties overslaan
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Het illustratiewerk is te groot om als afbeelding te kopiëren: andere apps krijgen er geen PNG van

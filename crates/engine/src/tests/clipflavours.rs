@@ -350,6 +350,27 @@ fn type_only_copies_offer_their_text() {
     assert!(run(&mut s, "clipboard.exportText", json!({}))["text"].is_null());
 }
 
+/// Art too large to fit the clipboard's PNG side at the encoder's smallest scale gets no PNG,
+/// instead of a picture hundreds of megabytes large.
+#[test]
+fn copy_leaves_out_the_png_of_art_too_large_to_scale_down() {
+    let mut s = session();
+    let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 1_000_000, "height": 1_000_000}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [id]}));
+    run(&mut s, "edit.copy", json!({}));
+    assert!(!s.clipboard.flavour_types(false, false).contains(&PNG), "not offered either");
+    let (flavours, notes) = s.clipboard.flavours_with_warnings(false, false);
+    assert!(flavours.iter().all(|f| f.mime != PNG));
+    assert!(notes.iter().any(|n| n.contains("too large to copy as a picture")), "{notes:?}");
+    // Art that fits at that scale still gets its PNG, at most 4096 pixels a side.
+    let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 200_000, "height": 100}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [id]}));
+    run(&mut s, "edit.copy", json!({}));
+    let png = s.clipboard.flavours(false, false).into_iter().find(|f| f.mime == PNG).expect("a PNG");
+    let img = image::load_from_memory(&png.data).unwrap();
+    assert!(img.width() <= 4096 && img.height() <= 4096, "{}x{}", img.width(), img.height());
+}
+
 #[test]
 fn copy_offers_flavours_by_the_preferences() {
     let mut s = session();

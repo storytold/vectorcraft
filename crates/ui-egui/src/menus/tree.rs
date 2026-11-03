@@ -462,6 +462,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Graphic Style", "select.same.graphicStyle"),
                         c("Shape", "select.same.shapeType"),
                         c("Symbol Instance", "select.same.symbolInstance"),
+                        c("Link Block Series", "select.same.linkBlockSeries"),
                         Sep,
                         c("Font Family", "select.same.fontFamily"),
                         c("Font Family & Style", "select.same.fontFamilyStyle"),
@@ -469,6 +470,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Font Size", "select.same.fontSize"),
                         c("Text Fill Color", "select.same.textFillColor"),
                         c("Text Stroke Color", "select.same.textStrokeColor"),
+                        c("Text Fill & Stroke Color", "select.same.textFillAndStrokeColor"),
                     ],
                 ),
                 sub(
@@ -610,9 +612,10 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 sub(
                     "Arrange",
                     vec![
-                        todo("Cascade"),
+                        c("Cascade", "window.arrange.cascade"),
                         c("Tile", "window.arrange.tile"),
-                        todo("Float in Window"),
+                        c("Float in Window", "window.arrange.floatInWindow"),
+                        c("Float All in Windows", "window.arrange.floatAllInWindows"),
                         c("Consolidate All Windows", "window.arrange.consolidateAllWindows"),
                     ],
                 ),

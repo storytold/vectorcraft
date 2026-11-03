@@ -1185,6 +1185,7 @@ font-technology	Variable	Variabla
 	Flip Row Order	Vänd radordning
 	Flip Vertical	Vänd lodrätt
 	Float in Window	Gör flytande i fönster
+	Float All in Windows	Gör alla flytande i fönster
 	Focal Fill	Fokal fyllning
 	Focal Stroke	Fokal kontur
 	Folder	Mapp
@@ -1348,6 +1349,10 @@ font-technology	Variable	Variabla
 	Hard Light	Hårt ljus
 	Hard Mix	Hård blandning
 	Harmony Rules:	Harmoniregler:
+	Segmented color wheel	Segmenterat färghjul
+	Show smooth color wheel	Visa steglöst färghjul
+	Show segmented color wheel	Visa segmenterat färghjul
+	Show color bars	Visa färgstaplar
 	Harmony Sets	Harmoniuppsättningar
 	Height	Höjd
 	Height:	Höjd:
@@ -1663,6 +1668,8 @@ font-technology	Variable	Variabla
 	Large Thumbnail View	Stor miniatyrvy
 	Large Thumbnails	Stora miniatyrer
 	Lasso Tool	Lassoverktyg
+	Enclosing Lasso Tool	Omslutande lassoverktyg
+	Enclosing Lasso	Omslutande lasso
 	Last Effect: {name}	Senaste effekten: {name}
 	Last Effect: {}	Senaste effekten: {}
 	Last Effect…	Senaste effekten…
@@ -1800,6 +1807,7 @@ font-technology	Variable	Variabla
 	Manually	Manuellt
 	Mark as trapped	Märk som överfyllt
 	Mark Older Files as [Converted] When Opened	Märk äldre filer som [Konverterad] när de öppnas
+	Use System Defaults for Edit Original	Använd systemets standardinställningar för Redigera original
 	Marker…	Markör…
 	Marks	Märken
 	Marks and Bleed	Märken och utfall
@@ -1862,6 +1870,7 @@ font-technology	Variable	Variabla
 	Modify	Ändra
 	Mojikumi	Mojikumi
 	Insert Kashidas	Infoga kashidor
+	Kashidas	Kashidor
 	Long	Lång
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-uppsättning
@@ -2641,6 +2650,8 @@ digits	Malayalam	Malayalam
 	Replace Spine	Ersätt ryggrad
 	Replace Symbol	Ersätt symbol
 	Replace With Font	Ersätt med typsnitt
+	Replace With Font From	Ersätt med typsnitt från
+	System	System
 	Replaces the saved preset of that name.	Ersätter den sparade förinställningen med samma namn.
 	Replace…	Ersätt…
 	Require a password to open the document	Kräv lösenord för att öppna dokumentet
@@ -3276,6 +3287,7 @@ digits	Malayalam	Malayalam
 	Graphic	Grafik
 	Show all open documents	Visa alla öppna dokument
 	Symbol Instance	Symbolinstans
+	Link Block Series	Serie av länkade block
 	Symbol Libraries	Symbolbibliotek
 	Symbol Screener Tool	Verktyg för symbolopacitet
 	Symbol Scruncher Tool	Verktyg för att dra ihop symboler
@@ -3311,6 +3323,7 @@ digits	Malayalam	Malayalam
 	Templates…	Mallar…
 	Text Displayed in Cell:	Text som visas i cellen:
 	Text Export Options	Alternativ för textexport
+	Text Fill & Stroke Color	Textens fyllnads- och konturfärg
 	Text Fill Color	Textens fyllnadsfärg
 	Text Import Options	Alternativ för textimport
 	Text Stroke Color	Textens konturfärg
@@ -4206,6 +4219,7 @@ axis	Both	Båda
 @msg	no user library folder here	ingen mapp för användarbibliotek här
 @msg	no user workspace `{from}`	ingen användararbetslayout `{from}`
 @msg	node {_1} is not text	nod {_1} är inte text
+@msg	node {_1} is on a locked artboard	nod {_1} ligger på en låst rityta
 @msg	not a DXF drawing	inte en DXF-ritning
 @msg	not a VectorCraft file: {0}	inte en VectorCraft-fil: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	inte en kortkommandouppsättning för VectorCraft (`overrides` saknas)
@@ -4624,6 +4638,9 @@ axis	Both	Båda
 @msg	the PCX file is cut short	PCX-filen är avkortad
 @msg	the PCX file's header is damaged	PCX-filens huvud är skadat
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-filer med {bits}-bitars pixlar i {planes} plan kan inte läsas
+@msg	the Pixar file is cut short	Pixar-filen är avkortad
+@msg	the Pixar file's header is damaged	Pixar-filens huvud är skadat
+@msg	the Pixar file's image data is damaged	Pixar-filens bilddata är skadade
 @msg	the JPEG 2000 file can't be read	JPEG 2000-filen kan inte läsas
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000-filen har en färgrymd eller ett JPX-innehåll som inte stöds
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
@@ -5508,6 +5525,11 @@ theme	Appearance	Utseende
 	Export Type:	Exporttyp:
 	Movie Clip	Filmklipp
 @msg	name is empty	namnet är tomt
+@msg	an action is already recording	en åtgärd spelas redan in
+@msg	no such function key	funktionstangenten finns inte
+@msg	no such color	färgen finns inte
+@msg	{_1} cannot be used on Windows	{_1} kan inte användas i Windows
+@msg	more than one action is named “{_1}”	fler än en åtgärd heter ”{_1}”
 @msg	no symbol named `{n}`	ingen symbol med namnet `{n}`
 	Angular	Vinkelmått
 	Away from the Line	Bort från linjen
@@ -5656,7 +5678,9 @@ swatch	Yellow Green	Gulgrön
 	Effect Gallery	Effektgalleri
 	Filters	Filter
 	Select artwork to apply effects	Välj grafik för att tillämpa effekter
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	filens variabler och datauppsättningar lästes inte (variabler: {variables}, datauppsättningar: {data_sets}): panelen Variabler visar dem inte
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	filens variabelbibliotek lästes bara delvis (överhoppade poster: {_1}): panelen Variabler visar resten
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunde inte läsas: panelen Variabler visar det inte
+@msg	a variable of unknown kind can't be bound to objects	en variabel av okänd typ kan inte kopplas till objekt
 # Select by Color (select.color)
 	Select by Color	Markera efter färg
 	Move Anchor Point	Flytta ankarpunkt
@@ -5744,9 +5768,17 @@ axis	Y Axis	Y-axel
 	Action Options…	Alternativ för åtgärd…
 	Action Options	Alternativ för åtgärd
 	Rename Action	Byt namn på åtgärd
+	New Action…	Ny åtgärd…
+	New Action	Ny åtgärd
+	Create New Action	Skapa ny åtgärd
+	Play Action	Spela upp åtgärd
+	Action Set:	Åtgärdsuppsättning:
+	Function Key:	Funktionstangent:
+	Record	Spela in
 	Create New Set	Skapa ny uppsättning
 	Stop Global Edit	Avsluta global redigering
 	Global Edit Options	Alternativ för global redigering
+	Leave Out of Global Edit	Uteslut från global redigering
 	Match	Matcha
 	On Artboards	På ritytor
 	All Artboards	Alla ritytor
@@ -5755,6 +5787,8 @@ axis	Y Axis	Y-axel
 @msg	select one object	markera ett objekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering fungerar på banor, sammansatta banor, symbolinstanser och grupper av dem
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	inga liknande objekt hittades (roterade eller speglade kopior matchas inte); ändra alternativen för global redigering och försök igen
+@msg	Global Edit is off	Global redigering är inte aktiv
+@msg	only an object of the Global Edit other than the one it started from can be left out	bara ett annat objekt än det som den globala redigeringen började med kan uteslutas
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all eller ett intervall som 1, 3-5, inte {v}
 	Add to Symbols	Lägg till i symboler
 	Basic Shapes	Grundformer
@@ -6039,6 +6073,11 @@ shape	Open	Öppen
 	Horizontal Scale	Horisontell skala
 	Vertical Scale	Vertikal skala
 @msg	{label} must be a number from {min} to {max}	{label} måste vara ett tal från {min} till {max}
+	Character Color	Teckenfärg
+	OpenType Features	OpenType-funktioner
+	Stylistic Sets	Stilistiska uppsättningar
+@msg	features lists at most {max} tags	features får innehålla högst {max} taggar
+@msg	unknown OpenType feature `{t}`	okänd OpenType-funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} måste vara ett tal över 0 och högst {max}
 @msg	no character style `{name}`	Teckenformatet `{name}` hittades inte
 
@@ -6288,3 +6327,18 @@ breakText	Glyphs	Glyfer
 	Create Swatch Legend	Skapa färgrutelegend
 	Create Swatch Legend…	Skapa färgrutelegend…
 	HEX	HEX
+
+# The strings the report listed as missing for sv.
+	Font Size:	Teckenstorlek:
+digits	Hindi	Hindi
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Textverktyg
+	Text Tweaker…	Textjustering…
+	Text Tweaker	Textjustering
+	Attribute:	Attribut:
+	From:	Från:
+	To:	Till:
+	Bow	Båge
+	Spike	Spets
+	Skip Spaces	Hoppa över mellanslag
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Teckningen är för stor för att kopieras som en bild: andra appar får ingen PNG av den

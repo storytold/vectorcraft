@@ -1,7 +1,7 @@
 //! Document Info panel data, its categories and the text report (Document Info › Save…, File →
 //! Package), and Object → Make Pixel Perfect.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
@@ -298,8 +298,14 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // `pattern_objects` and `pattern_rows` hold the `patternObjects` entries and the rows of the objects filled or stroked with a pattern, in walk order.
     let mut pattern_objects: Vec<Value> = vec![];
     let mut pattern_rows: Vec<(String, String)> = vec![];
+    // The objects the walk has visited: a selection can hold a group and objects inside it, and each object counts once.
+    // The set holds each object's address, so two objects that share an id (as a damaged file can hold) count as two.
+    let mut seen: HashSet<*const Node> = HashSet::new();
     for r in roots {
         r.walk(&mut |n| {
+            if !seen.insert(std::ptr::from_ref(n)) {
+                return;
+            }
             let k = match &n.kind {
                 NodeKind::Layer { .. } => None,
                 NodeKind::Group { clip: true, .. } => Some("clipGroups"),
@@ -342,6 +348,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(k) = k {
                 *counts.entry(k).or_default() += 1;
             }
+            // The paint kinds this object's fills and strokes use, each once.
+            let mut kinds = BTreeSet::new();
             // The patterns this object's fills and strokes use, each once.
             let mut used_patterns: Vec<&str> = vec![];
             for item in &n.appearance.items {
@@ -350,7 +358,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     vectorcraft_doc::AppearanceItem::Stroke(s) => &s.paint,
                 };
                 if let Some(k) = paint_kind(paint) {
-                    *counts.entry(k).or_default() += 1;
+                    kinds.insert(k);
                 }
                 // A hidden fill or stroke, or a stroke with no width, paints nothing.
                 let paints = item.visible() && !matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0);
@@ -388,6 +396,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 let name = n.display_name();
                 pattern_objects.push(json!({ "id": n.id.0, "name": name, "patterns": used_patterns }));
                 pattern_rows.push((name, used_patterns.join(", ")));
+            }
+            for k in kinds {
+                *counts.entry(k).or_default() += 1;
             }
             if n.extras().mask.is_some() {
                 *counts.entry("opacityMasks").or_default() += 1;
@@ -588,7 +599,7 @@ mod tests {
     /// Document Info › Repeat Objects lists each Repeat object by name with its kind and the number
     /// of instances it makes (for a grid, its rows and columns, followed by the number it draws when
     /// that is fewer), one in a group included. With Selection Only it lists the Repeat objects in
-    /// the selection.
+    /// the selection, each once when the selection holds a group and a Repeat object inside it.
     #[test]
     fn info_lists_the_repeat_objects() {
         let mut s = Session::new();
@@ -626,6 +637,11 @@ mod tests {
         };
         s.execute("select.set", &json!({"ids": [grid, group]})).unwrap();
         assert_eq!(names(&mut s), ["Tiles", "<Mirror Repeat>"]);
+        // A selection that holds the group and the Repeat object inside it lists that object once.
+        for ids in [json!([group, mirror]), json!([mirror, group])] {
+            s.execute("select.set", &json!({"ids": ids})).unwrap();
+            assert_eq!(names(&mut s), ["<Mirror Repeat>"], "{ids}");
+        }
         s.execute("select.set", &json!({"ids": [radial]})).unwrap();
         assert_eq!(names(&mut s), ["<Radial Repeat>"]);
         s.execute("select.set", &json!({"ids": [d]})).unwrap();
@@ -713,6 +729,64 @@ mod tests {
         let text = s.execute("document.info", &json!({"category": "patterns", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
         assert!(text.contains("\nPATTERN OBJECTS\nBoth: Dots\n<Rectangle>: Dots\nType: Dots\n"), "{text}");
         assert!(!text.contains("Unused"), "{text}");
+    }
+
+    /// Document Info › Objects counts an object with a gradient or a pattern on both its fill and
+    /// its stroke once, and with Selection Only a selection that holds a group and an object inside
+    /// it counts that object once.
+    #[test]
+    fn info_counts_each_object_once() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let square =
+            |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let tile = square(&mut s, 0.0);
+        s.execute("object.pattern.make", &json!({"ids": [tile], "name": "Dots", "edit": false})).unwrap();
+        let (g, p) = (square(&mut s, 100.0), square(&mut s, 200.0));
+        let gradient = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        s.execute("paint.setFill", &json!({"ids": [g], "gradient": gradient})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [g], "gradient": gradient})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [p], "swatch": "Dots"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [p], "swatch": "Dots"})).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!((i["objects"]["gradients"].as_u64(), i["objects"]["patterns"].as_u64()), (Some(1), Some(1)), "{}", i["objects"]);
+        // A group of the two squares, selected together with one of them.
+        s.execute("select.set", &json!({"ids": [g, p]})).unwrap();
+        let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+        for ids in [json!([group, p]), json!([p, group])] {
+            s.execute("select.set", &json!({"ids": ids})).unwrap();
+            let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
+            let o = &i["objects"];
+            assert_eq!(
+                (o["paths"].as_u64(), o["groups"].as_u64(), o["gradients"].as_u64(), o["patterns"].as_u64()),
+                (Some(2), Some(1), Some(1), Some(1)),
+                "{ids}: {o}"
+            );
+            assert!((i["pathLength"].as_f64().unwrap() - 80.0).abs() < 1e-6, "{ids}: {}", i["pathLength"]);
+        }
+    }
+
+    /// Document Info › Objects counts two objects that share an id (as a damaged file can hold) as
+    /// two, in the whole document and in a selected group that holds both.
+    #[test]
+    fn info_counts_objects_that_share_an_id() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let square = |s: &mut Session, x: f64| {
+            s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap()
+        };
+        let (a, b) = (square(&mut s, 0.0), square(&mut s, 100.0));
+        s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [group]})).unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        d.node_mut(NodeId(b)).unwrap().id = NodeId(a);
+        for p in [json!({}), json!({"selectionOnly": true})] {
+            let i = s.execute("document.info", &p).unwrap();
+            let o = &i["objects"];
+            assert_eq!((o["paths"].as_u64(), o["groups"].as_u64()), (Some(2), Some(1)), "{p}: {o}");
+            assert!((i["pathLength"].as_f64().unwrap() - 80.0).abs() < 1e-6, "{p}: {}", i["pathLength"]);
+        }
     }
 
     #[test]

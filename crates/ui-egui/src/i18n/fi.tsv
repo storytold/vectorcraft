@@ -423,6 +423,7 @@
 	Stroke Weight	Viivan paksuus
 	Graphic Style	Grafiikkatyyli
 	Symbol Instance	Symbolin ilmentymä
+	Link Block Series	Linkitettyjen lohkojen sarja
 	Font Family	Fonttiperhe
 	Font Family & Style	Fonttiperhe ja tyyli
 	Font Family, Style & Size	Fonttiperhe, tyyli ja koko
@@ -430,6 +431,7 @@
 	Variable Font	Muuttuva fontti
 	Text Fill Color	Tekstin täyttöväri
 	Text Stroke Color	Tekstin viivan väri
+	Text Fill & Stroke Color	Tekstin täytön ja viivan väri
 	All on Same Layers	Kaikki samoilla tasoilla
 	Direction Handles	Suuntakahvat
 	Brush Strokes	Sivellinviivat
@@ -625,6 +627,7 @@
 	Cascade	Porrasta
 	Tile	Vierekkäin
 	Float in Window	Kelluta ikkunassa
+	Float All in Windows	Kelluta kaikki ikkunoissa
 	Consolidate All Windows	Yhdistä kaikki ikkunat
 	Workspace	Työtila
 	Reset Essentials	Palauta Essentials
@@ -1239,6 +1242,8 @@ lighting	Light	Valo
 	Hand	Käsi
 	Join Tool	Liitostyökalu
 	Lasso Tool	Lassotyökalu
+	Enclosing Lasso Tool	Sulkeva lassotyökalu
+	Enclosing Lasso	Sulkeva lasso
 	Lasso	Lasso
 	Line Cut Tool	Viivaleikkaustyökalu
 	Line Graph Tool	Viivakaaviotyökalu
@@ -1813,6 +1818,7 @@ digits	Malayalam	Malajalam
 	Left-to-Right Paragraph Direction	Kappaleen suunta vasemmalta oikealle
 	Line-end Punctuation Half Width	Rivinlopun välimerkit puolileveinä
 	Insert Kashidas	Lisää kashidat
+	Kashidas	Kashidat
 	Long	Pitkä
 	Stylistic	Tyylitelty
 	Mojikumi Set	Mojikumi-joukko
@@ -2599,6 +2605,10 @@ digits	Malayalam	Malajalam
 	Current Colors	Nykyiset värit
 	Current Colors (0)	Nykyiset värit (0)
 	Harmony Rules:	Harmoniasäännöt:
+	Segmented color wheel	Segmentoitu väriympyrä
+	Show smooth color wheel	Näytä liukuva väriympyrä
+	Show segmented color wheel	Näytä segmentoitu väriympyrä
+	Show color bars	Näytä väripalkit
 	Harmony Rules	Harmoniasäännöt
 	Keep this row's colors (exclude)	Säilytä tämän rivin värit (jätä pois)
 	Limit to Library:	Rajoita kirjastoon:
@@ -3518,6 +3528,7 @@ theme	Appearance	Ulkoasu
 	List Preferences	Luettele asetukset
 	Manually	Manuaalisesti
 	Mark Older Files as [Converted] When Opened	Merkitse vanhemmat tiedostot [Muunnettu] avattaessa
+	Use System Defaults for Edit Original	Käytä järjestelmän oletuksia toiminnossa Muokkaa alkuperäistä
 	Match User Interface Brightness	Sovita käyttöliittymän kirkkauteen
 	Light Gray	Vaaleanharmaa
 	Medium Gray	Keskiharmaa
@@ -3872,6 +3883,8 @@ effect	Regular	Normaali
 	In the selected objects	Valituissa objekteissa
 	Find in Folder…	Etsi kansiosta…
 	Replace With Font	Korvaa fontilla
+	Replace With Font From	Korvaavan fontin lähde
+	System	Järjestelmä
 	  — substituted by {style}	  — korvattu tyylillä {style}
 	  — {n} characters from another font	  — {n} merkkiä toisesta fontista
 	All Scripts	Kaikki kirjoitusjärjestelmät
@@ -4516,6 +4529,7 @@ imageTrace	Outline	Ääriviiva
 @msg	no user library folder here	täällä ei ole käyttäjäkirjastokansiota
 @msg	no user workspace `{from}`	ei käyttäjän työtilaa `{from}`
 @msg	node {_1} is not text	solmu {_1} ei ole tekstiä
+@msg	node {_1} is on a locked artboard	solmu {_1} on lukitulla piirtoalustalla
 @msg	not a DXF drawing	ei DXF-piirustus
 @msg	not a VectorCraft file: {0}	ei VectorCraft-tiedosto: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	ei VectorCraftin pikanäppäinjoukko (`overrides` puuttuu)
@@ -4889,6 +4903,9 @@ imageTrace	Outline	Ääriviiva
 @msg	the PCX file is cut short	tämä PCX-tiedosto on katkennut
 @msg	the PCX file's header is damaged	PCX-tiedoston otsake on vahingoittunut
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-tiedostoja, joissa on {bits}-bittisiä pikseleitä {planes} tasossa, ei voi lukea
+@msg	the Pixar file is cut short	tämä Pixar-tiedosto on katkennut
+@msg	the Pixar file's header is damaged	Pixar-tiedoston otsake on vahingoittunut
+@msg	the Pixar file's image data is damaged	Pixar-tiedoston kuvadata on vahingoittunut
 @msg	the JPEG 2000 file can't be read	tätä JPEG 2000 -tiedostoa ei voi lukea
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	tässä JPEG 2000 -tiedostossa on tukematon väriavaruus tai JPX-sisältö
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	tämä PSD-kuva on liian suuri luettavaksi ({_1} × {_2} pikseliä)
@@ -5516,6 +5533,11 @@ mark-style	Japanese	Japanilainen
 	Export Type:	Vientityyppi:
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
+@msg	an action is already recording	toimintoa nauhoitetaan jo
+@msg	no such function key	toimintonäppäintä ei ole
+@msg	no such color	väriä ei ole
+@msg	{_1} cannot be used on Windows	{_1} ei ole käytettävissä Windowsissa
+@msg	more than one action is named “{_1}”	useamman kuin yhden toiminnon nimi on ”{_1}”
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
 	Smudge Stick…	Sumennuskynä…
 	Smudge Stick	Sumennuskynä
@@ -5597,7 +5619,9 @@ mark-style	Japanese	Japanilainen
 	Effect Gallery	Tehostegalleria
 	Filters	Suodattimet
 	Select artwork to apply effects	Valitse kuvitus, johon tehosteet lisätään
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	tiedoston muuttujia ja tietojoukkoja ei luettu (muuttujia: {variables}, tietojoukkoja: {data_sets}): Muuttujat-paneeli ei näytä niitä
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	tiedoston muuttujakirjasto luettiin vain osittain (ohitettuja kohtia: {_1}): Muuttujat-paneeli näyttää loput
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	tiedoston muuttujakirjastoa ei voitu lukea: Muuttujat-paneeli ei näytä sitä
+@msg	a variable of unknown kind can't be bound to objects	tuntemattoman tyyppistä muuttujaa ei voi sitoa objekteihin
 # Select by Color (select.color)
 	Select by Color	Valitse värin mukaan
 	Angular	Kulma
@@ -5751,9 +5775,17 @@ axis	Y Axis	Y-akseli
 	Action Options…	Toiminnon asetukset…
 	Action Options	Toiminnon asetukset
 	Rename Action	Nimeä toiminto uudelleen
+	New Action…	Uusi toiminto…
+	New Action	Uusi toiminto
+	Create New Action	Luo uusi toiminto
+	Play Action	Toista toiminto
+	Action Set:	Toimintosarja:
+	Function Key:	Toimintonäppäin:
+	Record	Nauhoita
 	Create New Set	Luo uusi sarja
 	Stop Global Edit	Lopeta yleismuokkaus
 	Global Edit Options	Yleismuokkauksen asetukset
+	Leave Out of Global Edit	Jätä pois yleismuokkauksesta
 	Match	Vastaavuus
 	On Artboards	Piirtoalustoilla
 	All Artboards	Kaikki piirtoalustat
@@ -5762,6 +5794,8 @@ axis	Y Axis	Y-akseli
 @msg	select one object	valitse yksi objekti
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Yleismuokkaus toimii poluille, yhdistelmäpoluille, symbolien esiintymille ja niiden ryhmille
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	samankaltaisia objekteja ei löytynyt (kierrettyjä tai peilattuja kopioita ei tunnisteta); muuta yleismuokkauksen asetuksia ja yritä uudelleen
+@msg	Global Edit is off	Yleismuokkaus ei ole käynnissä
+@msg	only an object of the Global Edit other than the one it started from can be left out	yleismuokkauksesta voi jättää pois vain muun objektin kuin sen, josta se alkoi
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all tai alue, kuten 1, 3-5, ei {v}
 	Add to Symbols	Lisää symboleihin
 	Basic Shapes	Perusmuodot
@@ -6017,6 +6051,11 @@ anchor	Points:	Pisteet:
 	Horizontal Scale	Vaakaskaalaus
 	Vertical Scale	Pystyskaalaus
 @msg	{label} must be a number from {min} to {max}	{label} on oltava luku {min} ja {max} väliltä
+	Character Color	Merkin väri
+	OpenType Features	OpenType-ominaisuudet
+	Stylistic Sets	Tyylisarjat
+@msg	features lists at most {max} tags	features sisältää enintään {max} tunnistetta
+@msg	unknown OpenType feature `{t}`	tuntematon OpenType-ominaisuus `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} on oltava luku, joka on yli 0 ja enintään {max}
 @msg	no character style `{name}`	Merkkityyliä `{name}` ei löytynyt
 
@@ -6266,3 +6305,14 @@ breakText	Glyphs	Merkit
 	Create Swatch Legend	Luo värimallien selite
 	Create Swatch Legend…	Luo värimallien selite…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Tekstityökalut
+	Text Tweaker…	Tekstin säätö…
+	Text Tweaker	Tekstin säätö
+	Attribute:	Määrite:
+	From:	Alku:
+	To:	Loppu:
+	Bow	Kaari
+	Spike	Piikki
+	Skip Spaces	Ohita välilyönnit
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafiikka on liian suuri kopioitavaksi kuvana: muut sovellukset eivät saa siitä PNG-kuvaa

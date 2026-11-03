@@ -1226,6 +1226,7 @@ font-technology	Variable	Variables
 	Flip Row Order	Invertir orden de filas
 	Flip Vertical	Voltear verticalmente
 	Float in Window	Flotar en ventana
+	Float All in Windows	Flotar todo en ventanas
 	Focal Fill	Relleno focal
 	Focal Stroke	Trazo focal
 	Folder	Carpeta
@@ -1389,6 +1390,10 @@ font-technology	Variable	Variables
 	Hard Light	Luz fuerte
 	Hard Mix	Mezcla definida
 	Harmony Rules:	Reglas de armonía:
+	Segmented color wheel	Rueda de color segmentada
+	Show smooth color wheel	Mostrar rueda de color continua
+	Show segmented color wheel	Mostrar rueda de color segmentada
+	Show color bars	Mostrar barras de color
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
 	Height:	Altura:
@@ -1708,6 +1713,8 @@ font-technology	Variable	Variables
 	Large Thumbnail View	Vista de miniaturas grandes
 	Large Thumbnails	Miniaturas grandes
 	Lasso Tool	Herramienta Lazo
+	Enclosing Lasso Tool	Herramienta Lazo envolvente
+	Enclosing Lasso	Lazo envolvente
 	Last Effect: {name}	Último efecto: {name}
 	Last Effect: {}	Último efecto: {}
 	Last Effect…	Último efecto…
@@ -1859,6 +1866,7 @@ font-technology	Variable	Variables
 	Manually	Manualmente
 	Mark as trapped	Marcar como reventado
 	Mark Older Files as [Converted] When Opened	Marcar archivos antiguos como [Convertido] al abrirlos
+	Use System Defaults for Edit Original	Usar valores predeterminados del sistema para Editar original
 	Marker…	Marcador…
 	Marks	Marcas
 	Marks and Bleed	Marcas y sangrado
@@ -1921,6 +1929,7 @@ font-technology	Variable	Variables
 	Modify	Modificar
 	Mojikumi	Mojikumi
 	Insert Kashidas	Insertar kashidas
+	Kashidas	Kashidas
 	Long	Larga
 	Stylistic	Estilística
 	Mojikumi Set	Conjunto de mojikumi
@@ -2705,6 +2714,8 @@ digits	Malayalam	Malayálam
 	Replace Spine	Reemplazar eje
 	Replace Symbol	Reemplazar símbolo
 	Replace With Font	Reemplazar con fuente
+	Replace With Font From	Reemplazar con fuente de
+	System	Sistema
 	Replaces the saved preset of that name.	Reemplaza el preajuste guardado con ese nombre.
 	Replace…	Reemplazar…
 	Require a password to open the document	Solicitar una contraseña para abrir el documento
@@ -3354,6 +3365,7 @@ digits	Malayalam	Malayálam
 	Graphic	Gráfico
 	Show all open documents	Mostrar todos los documentos abiertos
 	Symbol Instance	Instancia de símbolo
+	Link Block Series	Serie de bloques enlazados
 	Symbol Libraries	Bibliotecas de símbolos
 	Symbol Screener Tool	Herramienta Transparencia de símbolos
 	Symbol Scruncher Tool	Herramienta Concentración de símbolos
@@ -3389,6 +3401,7 @@ digits	Malayalam	Malayálam
 	Templates…	Plantillas…
 	Text Displayed in Cell:	Texto mostrado en la celda:
 	Text Export Options	Opciones de exportación de texto
+	Text Fill & Stroke Color	Color de relleno y trazo del texto
 	Text Fill Color	Color de relleno del texto
 	Text Import Options	Opciones de importación de texto
 	Text Stroke Color	Color de trazo del texto
@@ -4301,6 +4314,7 @@ axis	Both	Ambos
 @msg	no user library folder here	aquí no hay ninguna carpeta de bibliotecas de usuario
 @msg	no user workspace `{from}`	no existe el espacio de trabajo de usuario `{from}`
 @msg	node {_1} is not text	el nodo {_1} no es texto
+@msg	node {_1} is on a locked artboard	el nodo {_1} está en una mesa de trabajo bloqueada
 @msg	not a DXF drawing	no es un dibujo DXF
 @msg	not a VectorCraft file: {0}	no es un archivo de VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no es un conjunto de atajos de VectorCraft (falta `overrides`)
@@ -4707,6 +4721,9 @@ axis	Both	Ambos
 @msg	the PCX file is cut short	el archivo PCX está incompleto
 @msg	the PCX file's header is damaged	el encabezado del archivo PCX está dañado
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	los archivos PCX con píxeles de {bits} bits en {planes} planos no se pueden leer
+@msg	the Pixar file is cut short	el archivo Pixar está incompleto
+@msg	the Pixar file's header is damaged	el encabezado del archivo Pixar está dañado
+@msg	the Pixar file's image data is damaged	los datos de imagen del archivo Pixar están dañados
 @msg	the JPEG 2000 file can't be read	no se puede leer el archivo JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	el archivo JPEG 2000 tiene un espacio de color o contenido JPX no compatible
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	la imagen PSD es demasiado grande para leerla ({_1} × {_2} píxeles)
@@ -5494,6 +5511,11 @@ mark-style	Japanese	Japonesas
 	Export Type:	Tipo de exportación:
 	Movie Clip	Clip de película
 @msg	name is empty	el nombre está vacío
+@msg	an action is already recording	ya se está grabando una acción
+@msg	no such function key	no existe esa tecla de función
+@msg	no such color	no existe ese color
+@msg	{_1} cannot be used on Windows	{_1} no se puede usar en Windows
+@msg	more than one action is named “{_1}”	más de una acción se llama “{_1}”
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
 	Smudge Stick…	Difuminar con barra…
 	Smudge Stick	Difuminar con barra
@@ -5575,7 +5597,9 @@ mark-style	Japanese	Japonesas
 	Effect Gallery	Galería de efectos
 	Filters	Filtros
 	Select artwork to apply effects	Seleccione gráficos para aplicar efectos
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	no se leyeron las variables ni los conjuntos de datos del archivo (variables: {variables}, conjuntos de datos: {data_sets}): el panel Variables no los muestra
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	la biblioteca de variables del archivo se leyó solo en parte (entradas omitidas: {_1}): el panel Variables muestra el resto
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	no se pudo leer la biblioteca de variables del archivo: el panel Variables no la muestra
+@msg	a variable of unknown kind can't be bound to objects	una variable de tipo desconocido no se puede vincular a objetos
 # Select by Color (select.color)
 	Select by Color	Seleccionar por color
 	Move Anchor Point	Mover punto de ancla
@@ -5662,9 +5686,17 @@ axis	Y Axis	Eje Y
 	Action Options…	Opciones de acción…
 	Action Options	Opciones de acción
 	Rename Action	Cambiar nombre de acción
+	New Action…	Nueva acción…
+	New Action	Nueva acción
+	Create New Action	Crear nueva acción
+	Play Action	Reproducir acción
+	Action Set:	Conjunto de acciones:
+	Function Key:	Tecla de función:
+	Record	Grabar
 	Create New Set	Crear nuevo conjunto
 	Stop Global Edit	Detener edición global
 	Global Edit Options	Opciones de edición global
+	Leave Out of Global Edit	Excluir de la edición global
 	Match	Coincidir
 	On Artboards	En mesas de trabajo
 	All Artboards	Todas las mesas de trabajo
@@ -5673,6 +5705,8 @@ axis	Y Axis	Eje Y
 @msg	select one object	seleccione un objeto
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La edición global funciona con trazados, trazados compuestos, instancias de símbolos y grupos de ellos
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	no se encontraron objetos similares (las copias giradas o reflejadas no coinciden); cambie las opciones de edición global e inténtelo de nuevo
+@msg	Global Edit is off	La edición global no está activa
+@msg	only an object of the Global Edit other than the one it started from can be left out	solo se puede excluir un objeto de la edición global distinto de aquel con el que empezó
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un intervalo como 1, 3-5, no {v}
 	Add to Symbols	Agregar a símbolos
 	Basic Shapes	Formas básicas
@@ -5929,6 +5963,11 @@ anchor	Points:	Puntos:
 	Horizontal Scale	Escala horizontal
 	Vertical Scale	Escala vertical
 @msg	{label} must be a number from {min} to {max}	{label} debe ser un número de {min} a {max}
+	Character Color	Color de los caracteres
+	OpenType Features	Funciones OpenType
+	Stylistic Sets	Conjuntos estilísticos
+@msg	features lists at most {max} tags	features admite como máximo {max} etiquetas
+@msg	unknown OpenType feature `{t}`	función OpenType desconocida `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} debe ser un número mayor que 0 y como máximo {max}
 @msg	no character style `{name}`	No existe el estilo de carácter `{name}`
 
@@ -6178,3 +6217,14 @@ breakText	Glyphs	Glifos
 	Create Swatch Legend	Crear leyenda de muestras
 	Create Swatch Legend…	Crear leyenda de muestras…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Herramientas de texto
+	Text Tweaker…	Ajustador de texto…
+	Text Tweaker	Ajustador de texto
+	Attribute:	Atributo:
+	From:	Desde:
+	To:	Hasta:
+	Bow	Arco
+	Spike	Pico
+	Skip Spaces	Omitir espacios
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	La ilustración es demasiado grande para copiarla como imagen: las demás aplicaciones no reciben un PNG de ella

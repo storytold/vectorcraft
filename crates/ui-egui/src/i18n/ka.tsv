@@ -343,12 +343,14 @@
 	Stroke Weight	კონტურის სისქე
 	Graphic Style	გრაფიკული სტილი
 	Symbol Instance	სიმბოლოს ეგზემპლარი
+	Link Block Series	დაკავშირებული ბლოკების სერია
 	Font Family	შრიფტის ოჯახი
 	Font Family & Style	შრიფტის ოჯახი და სტილი
 	Font Family, Style & Size	შრიფტის ოჯახი, სტილი და ზომა
 	Font Size	შრიფტის ზომა
 	Text Fill Color	ტექსტის შევსების ფერი
 	Text Stroke Color	ტექსტის კონტურის ფერი
+	Text Fill & Stroke Color	ტექსტის შევსებისა და კონტურის ფერი
 	All on Same Layers	ყველა იმავე შრეებზე
 	Direction Handles	მიმართულების სახელურები
 	Brush Strokes	ფუნჯის შტრიხები
@@ -536,6 +538,7 @@
 	Cascade	კასკადად
 	Tile	ფილებად
 	Float in Window	ცალკე ფანჯარაში გამოტანა
+	Float All in Windows	ყველას ცალკე ფანჯრებში გამოტანა
 	Consolidate All Windows	ყველა ფანჯრის გაერთიანება
 	Workspace	სამუშაო სივრცე
 	Reset Essentials	Essentials-ის ჩამოყრა
@@ -1105,6 +1108,8 @@ lighting	Light	სინათლე
 	Hand Tool	ხელის ხელსაწყო
 	Join Tool	შეერთების ხელსაწყო
 	Lasso Tool	ლასოს ხელსაწყო
+	Enclosing Lasso Tool	შემომსაზღვრელი ლასოს ხელსაწყო
+	Enclosing Lasso	შემომსაზღვრელი ლასო
 	Line Cut Tool	ხაზით ჭრის ხელსაწყო
 	Line Graph Tool	ხაზოვანი დიაგრამის ხელსაწყო
 	Line Segment Tool	ხაზის სეგმენტის ხელსაწყო
@@ -1559,6 +1564,7 @@ digits	Malayalam	მალაიალამური
 	Left-to-Right Paragraph Direction	აბზაცის მიმართულება მარცხნიდან მარჯვნივ
 	Line-end Punctuation Half Width	სტრიქონის ბოლოს პუნქტუაცია ნახევარი სიგანით
 	Insert Kashidas	ქაშიდების ჩასმა
+	Kashidas	ქაშიდები
 	Long	გრძელი
 	Stylistic	სტილისტური
 	Mojikumi Set	Mojikumi-ის ნაკრები
@@ -2333,6 +2339,10 @@ digits	Malayalam	მალაიალამური
 	Colors:	ფერები:
 	Current Colors ({total})	მიმდინარე ფერები ({total})
 	Harmony Rules:	ჰარმონიის წესები:
+	Segmented color wheel	სეგმენტირებული ფერთა წრე
+	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
+	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
+	Show color bars	ფერთა ზოლების ჩვენება
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
 	Link harmony colors	ჰარმონიის ფერების დაკავშირება
@@ -3131,6 +3141,7 @@ theme	Appearance	იერსახე
 	List Preferences	პარამეტრების სია
 	Manually	ხელით
 	Mark Older Files as [Converted] When Opened	ძველი ფაილების მარკირება როგორც [გარდაქმნილი] გახსნისას
+	Use System Defaults for Edit Original	სისტემის ნაგულისხმევის გამოყენება ორიგინალის რედაქტირებისთვის
 	Match User Interface Brightness	ინტერფეისის სიკაშკაშესთან შესაბამისობა
 	Light Gray	ღია ნაცრისფერი
 	Medium Gray	საშუალო ნაცრისფერი
@@ -3456,6 +3467,8 @@ effect	Regular	ჩვეულებრივი
 	In the selected objects	მონიშნულ ობიექტებში
 	Find in Folder…	საქაღალდეში ძებნა…
 	Replace With Font	ჩანაცვლება შრიფტით
+	Replace With Font From	ჩანაცვლების შრიფტის წყარო
+	System	სისტემა
 	  — substituted by {style}	  — ჩანაცვლებულია: {style}
 	  — {n} characters from another font	  — სხვა შრიფტის სიმბოლოები: {n}
 	All Scripts	ყველა დამწერლობა
@@ -4058,6 +4071,7 @@ font-technology	Variable	ცვლადი
 @msg	no user library folder here	აქ მომხმარებლის ბიბლიოთეკის საქაღალდე არ არის
 @msg	no user workspace `{from}`	მომხმარებლის სამუშაო სივრცე `{from}` არ არის
 @msg	node {_1} is not text	კვანძი {_1} ტექსტი არ არის
+@msg	node {_1} is on a locked artboard	კვანძი {_1} ჩაკეტილ სამუშაო დაფაზეა
 @msg	not a DXF drawing	ეს არ არის DXF ნახაზი
 @msg	not a VectorCraft file: {0}	ეს არ არის VectorCraft-ის ფაილი: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	ეს არ არის VectorCraft-ის მალსახმობების ნაკრები (აკლია `overrides`)
@@ -4406,6 +4420,9 @@ font-technology	Variable	ცვლადი
 @msg	the PCX file is cut short	PCX ფაილი შეკვეცილია
 @msg	the PCX file's header is damaged	PCX ფაილის სათაური დაზიანებულია
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes} სიბრტყეში {bits}-ბიტიანი პიქსელების მქონე PCX ფაილების წაკითხვა ვერ ხერხდება
+@msg	the Pixar file is cut short	Pixar ფაილი შეკვეცილია
+@msg	the Pixar file's header is damaged	Pixar ფაილის სათაური დაზიანებულია
+@msg	the Pixar file's image data is damaged	Pixar ფაილის გამოსახულების მონაცემები დაზიანებულია
 @msg	the JPEG 2000 file can't be read	JPEG 2000 ფაილის წაკითხვა შეუძლებელია
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 ფაილს აქვს მხარდაუჭერელი ფერთა სივრცე ან JPX შიგთავსი
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)
@@ -5253,6 +5270,11 @@ imageTrace	Outline	კონტური
 	Export Type:	ექსპორტის ტიპი:
 	Movie Clip	ანიმაციური კლიპი
 @msg	name is empty	სახელი ცარიელია
+@msg	an action is already recording	მოქმედება უკვე იწერება
+@msg	no such function key	ასეთი ფუნქციური კლავიში არ არის
+@msg	no such color	ასეთი ფერი არ არის
+@msg	{_1} cannot be used on Windows	{_1} ვერ გამოიყენება Windows-ში
+@msg	more than one action is named “{_1}”	„{_1}“ ერთზე მეტი მოქმედების სახელია
 @msg	no symbol named `{n}`	სიმბოლო სახელით `{n}` არ არის
 @msg	no saved selection recalled	შენახული მონიშვნა გამოძახებული არ არის
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraft-ის ბოლო გაშვება ფანჯრის გამოჩენამდე შეწყდა (გრაფიკული პროცესორი: {name}), ამიტომ VectorCraft გაეშვა: {summary}. ამ გრაფიკული პროცესორის ხელახლა საცდელად შეცვალეთ პარამეტრები › წარმადობა › გრაფიკული პროცესორი ან გაუშვით WGPU_BACKEND ცვლადის მითითებით
@@ -5500,7 +5522,9 @@ imageTrace	Outline	კონტური
 @msg	no history to clear	გასასუფთავებელი ისტორია არ არის
 @msg	{_1} files are written by file.saveAsTemplate	{_1} ფაილებს წერს file.saveAsTemplate
 @msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 წერს ძველი ფორმატის .ai ფაილებს; .ait შაბლონი ყოველთვის PDF-თან თავსებადია
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	ფაილის ცვლადებისა და მონაცემთა ნაკრებების წაკითხვა ვერ მოხერხდა (ცვლადები: {variables}, მონაცემთა ნაკრებები: {data_sets}): პანელი „ცვლადები“ მათ არ აჩვენებს
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ფაილის ცვლადების ბიბლიოთეკა მხოლოდ ნაწილობრივ იქნა წაკითხული (გამოტოვებული ჩანაწერები: {_1}): პანელი „ცვლადები“ დანარჩენს აჩვენებს
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ფაილის ცვლადების ბიბლიოთეკის წაკითხვა ვერ მოხერხდა: პანელი „ცვლადები“ მას არ აჩვენებს
+@msg	a variable of unknown kind can't be bound to objects	უცნობი სახის ცვლადის ობიექტებთან დაკავშირება შეუძლებელია
 @msg	its zlib compression is damaged	მისი zlib შეკუმშვა დაზიანებულია
 @msg	its Zstandard compression is damaged	მისი Zstandard შეკუმშვა დაზიანებულია
 @msg	it decompresses to more than {_1} MB	გაშლისას {_1} MB-ს აღემატება
@@ -5635,9 +5659,17 @@ axis	Y Axis	Y ღერძი
 	Action Options…	მოქმედების პარამეტრები…
 	Action Options	მოქმედების პარამეტრები
 	Rename Action	მოქმედების სახელის შეცვლა
+	New Action…	ახალი მოქმედება…
+	New Action	ახალი მოქმედება
+	Create New Action	ახალი მოქმედების შექმნა
+	Play Action	მოქმედების შესრულება
+	Action Set:	მოქმედებების ნაკრები:
+	Function Key:	ფუნქციური კლავიში:
+	Record	ჩაწერა
 	Create New Set	ახალი ნაკრების შექმნა
 	Stop Global Edit	გლობალური რედაქტირების დასრულება
 	Global Edit Options	გლობალური რედაქტირების პარამეტრები
+	Leave Out of Global Edit	გლობალური რედაქტირებიდან გამორიცხვა
 	Match	დამთხვევა
 	On Artboards	სამუშაო დაფებზე
 	All Artboards	ყველა სამუშაო დაფა
@@ -5646,6 +5678,8 @@ axis	Y Axis	Y ღერძი
 @msg	select one object	მონიშნეთ ერთი ობიექტი
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებზე, სიმბოლოს ეგზემპლარებსა და მათ ჯგუფებზე
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	მსგავსი ობიექტები ვერ მოიძებნა (შემობრუნებული ან არეკლილი ასლები არ ემთხვევა); შეცვალეთ გლობალური რედაქტირების პარამეტრები და სცადეთ ხელახლა
+@msg	Global Edit is off	გლობალური რედაქტირება გამორთულია
+@msg	only an object of the Global Edit other than the one it started from can be left out	გლობალური რედაქტირებიდან შეიძლება გამოირიცხოს მხოლოდ ობიექტი, რომლითაც ის არ დაწყებულა
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ან დიაპაზონი, მაგალითად 1, 3-5, და არა {v}
 	Add to Symbols	სიმბოლოებში დამატება
 	Basic Shapes	ძირითადი ფიგურები
@@ -5975,6 +6009,11 @@ anchor	Points:	წერტილები:
 	Horizontal Scale	ჰორიზონტალური მასშტაბი
 	Vertical Scale	ვერტიკალური მასშტაბი
 @msg	{label} must be a number from {min} to {max}	{label} უნდა იყოს რიცხვი {min}-დან {max}-მდე
+	Character Color	სიმბოლოს ფერი
+	OpenType Features	OpenType შესაძლებლობები
+	Stylistic Sets	სტილისტური ნაკრებები
+@msg	features lists at most {max} tags	features შეიძლება შეიცავდეს არაუმეტეს {max} ტეგს
+@msg	unknown OpenType feature `{t}`	უცნობი OpenType შესაძლებლობა `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} უნდა იყოს 0-ზე მეტი და არაუმეტეს {max}-ისა რიცხვი
 @msg	no character style `{name}`	სიმბოლოს სტილი `{name}` ვერ მოიძებნა
 
@@ -6224,3 +6263,14 @@ breakText	Glyphs	გლიფები
 	Create Swatch Legend	ფერის ნიმუშების ლეგენდის შექმნა
 	Create Swatch Legend…	ფერის ნიმუშების ლეგენდის შექმნა…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	ტექსტის ხელსაწყოები
+	Text Tweaker…	ტექსტის მორგება…
+	Text Tweaker	ტექსტის მორგება
+	Attribute:	ატრიბუტი:
+	From:	საწყისი:
+	To:	საბოლოო:
+	Bow	რკალი
+	Spike	პიკი
+	Skip Spaces	ჰარების გამოტოვება
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	ნახატი ზედმეტად დიდია სურათად დასაკოპირებლად: სხვა აპები მის PNG-ს ვერ მიიღებენ

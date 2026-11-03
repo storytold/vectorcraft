@@ -1091,6 +1091,7 @@
 	Flip Row Order	Inverter Ordem das Linhas
 	Flip Vertical	Espelhar Verticalmente
 	Float in Window	Flutuar na Janela
+	Float All in Windows	Flutuar Tudo em Janelas
 	Folder	Pasta
 	Folder Name:	Nome da Pasta:
 	Font	Fonte
@@ -1215,6 +1216,10 @@
 	Hard Light	Luz Forte
 	Hard Mix	Mistura definida
 	Harmony Rules:	Regras de Harmonia:
+	Segmented color wheel	Roda de cores segmentada
+	Show smooth color wheel	Mostrar roda de cores contínua
+	Show segmented color wheel	Mostrar roda de cores segmentada
+	Show color bars	Mostrar barras de cores
 	Harmony Sets	Conjuntos de Harmonia
 	Height	Altura
 	Height:	Altura:
@@ -1455,6 +1460,8 @@
 	Large	Grande
 	Large Tabs	Guias Grandes
 	Lasso Tool	Ferramenta Laço
+	Enclosing Lasso Tool	Ferramenta Laço envolvente
+	Enclosing Lasso	Laço envolvente
 	Last Effect: {name}	Último Efeito: {name}
 	Last Effect…	Último Efeito…
 	Last Page	Última Página
@@ -1580,6 +1587,7 @@
 	Manage Workspaces…	Gerenciar Espaços de Trabalho…
 	Manually	Manualmente
 	Mark Older Files as [Converted] When Opened	Marcar Arquivos Antigos como [Convertido] Ao Abrir
+	Use System Defaults for Edit Original	Usar Padrões do Sistema para Editar Original
 	Mark as trapped	Marcar como sobreimpresso
 	Marker…	Marcador…
 	Marks	Marcas
@@ -2253,6 +2261,8 @@ digits	Malayalam	Malaiala
 	Replace Spine	Substituir Coluna
 	Replace Symbol	Substituir Símbolo
 	Replace With Font	Substituir Com Fonte
+	Replace With Font From	Substituir Com Fonte De
+	System	Sistema
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Substitua por outro arquivo, ou ignore-o: suas imagens continuam mostrando a pré-visualização salva com o documento.
 	Replaces the saved preset of that name.	Substitui o predefinido salvo com esse nome.
 	Replace…	Substituir…
@@ -2757,6 +2767,7 @@ digits	Malayalam	Malaiala
 	Switch Units	Trocar Unidades
 	Switch workspace	Trocar espaço de trabalho
 	Symbol Instance	Instância de Símbolo
+	Link Block Series	Série de Blocos Vinculados
 	Symbol Libraries	Bibliotecas de Símbolos
 	Symbol Screener Tool	Ferramenta Peneira de Símbolos
 	Symbol Scruncher Tool	Ferramenta Amontoar Símbolos
@@ -2780,6 +2791,7 @@ digits	Malayalam	Malaiala
 	Templates…	Modelos…
 	Text Displayed in Cell:	Texto Exibido na Célula:
 	Text Export Options	Opções de Exportação de Texto
+	Text Fill & Stroke Color	Cor de Preenchimento e Traçado do Texto
 	Text Fill Color	Cor de Preenchimento do Texto
 	Text Import Options	Opções de Importação de Texto
 	Text Stroke Color	Cor do Traçado do Texto
@@ -3316,6 +3328,7 @@ font-technology	Variable	Variáveis
 	Merge Selected	Mesclar selecionados
 	Model	Modelo
 	Insert Kashidas	Inserir Kashidas
+	Kashidas	Kashidas
 	Long	Longo
 	Stylistic	Estilístico
 	Mojikumi Set	Conjunto Mojikumi
@@ -3886,6 +3899,7 @@ axis	Both	Ambos
 @msg	no user library folder here	nenhuma pasta de biblioteca do usuário aqui
 @msg	no user workspace `{from}`	nenhum espaço de trabalho do usuário `{from}`
 @msg	node {_1} is not text	o nó {_1} não é texto
+@msg	node {_1} is on a locked artboard	o nó {_1} está em uma prancheta bloqueada
 @msg	not a DXF drawing	não é um desenho DXF
 @msg	not a VectorCraft file: {0}	não é um arquivo do VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	não é um conjunto de atalhos do VectorCraft (falta `overrides`)
@@ -4260,6 +4274,9 @@ axis	Both	Ambos
 @msg	the PCX file is cut short	o arquivo PCX está incompleto
 @msg	the PCX file's header is damaged	o cabeçalho do arquivo PCX está danificado
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	arquivos PCX com pixels de {bits} bits em {planes} planos não podem ser lidos
+@msg	the Pixar file is cut short	o arquivo Pixar está incompleto
+@msg	the Pixar file's header is damaged	o cabeçalho do arquivo Pixar está danificado
+@msg	the Pixar file's image data is damaged	os dados de imagem do arquivo Pixar estão danificados
 @msg	the JPEG 2000 file can't be read	não é possível ler o arquivo JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	o arquivo JPEG 2000 contém um espaço de cores ou conteúdo JPX sem suporte
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a imagem PSD é grande demais para ser lida ({_1} × {_2} pixels)
@@ -5468,6 +5485,11 @@ mark-style	Japanese	Japonesas
 
 # Symbol Options › Export Type
 @msg	name is empty	o nome está vazio
+@msg	an action is already recording	uma ação já está sendo gravada
+@msg	no such function key	tecla de função inexistente
+@msg	no such color	cor inexistente
+@msg	{_1} cannot be used on Windows	{_1} não pode ser usado no Windows
+@msg	more than one action is named “{_1}”	mais de uma ação se chama “{_1}”
 @msg	no symbol named `{n}`	nenhum símbolo chamado `{n}`
 	Smudge Stick…	Esfuminho…
 	Smudge Stick	Esfuminho
@@ -5549,7 +5571,9 @@ mark-style	Japanese	Japonesas
 	Effect Gallery	Galeria de Efeitos
 	Filters	Filtros
 	Select artwork to apply effects	Selecione a arte para aplicar efeitos
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	as variáveis e os conjuntos de dados do arquivo não foram lidos (variáveis: {variables}, conjuntos de dados: {data_sets}): o painel Variáveis não os lista
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	a biblioteca de variáveis do arquivo foi lida só em parte (entradas ignoradas: {_1}): o painel Variáveis lista o restante
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	não foi possível ler a biblioteca de variáveis do arquivo: o painel Variáveis não a lista
+@msg	a variable of unknown kind can't be bound to objects	uma variável de tipo desconhecido não pode ser vinculada a objetos
 # Select by Color (select.color)
 	Select by Color	Selecionar por Cor
 	Move Anchor Point	Mover Ponto de Ancoragem
@@ -5636,9 +5660,17 @@ axis	Y Axis	Eixo Y
 	Action Options…	Opções da Ação…
 	Action Options	Opções da Ação
 	Rename Action	Renomear Ação
+	New Action…	Nova Ação…
+	New Action	Nova Ação
+	Create New Action	Criar Nova Ação
+	Play Action	Reproduzir Ação
+	Action Set:	Conjunto de Ações:
+	Function Key:	Tecla de Função:
+	Record	Gravar
 	Create New Set	Criar Novo Conjunto
 	Stop Global Edit	Parar Edição Global
 	Global Edit Options	Opções de Edição Global
+	Leave Out of Global Edit	Deixar Fora da Edição Global
 	Match	Corresponder
 	On Artboards	Nas Mesas de Trabalho
 	All Artboards	Todas as Mesas de Trabalho
@@ -5647,6 +5679,8 @@ axis	Y Axis	Eixo Y
 @msg	select one object	selecione um objeto
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A edição global funciona com demarcadores, demarcadores compostos, instâncias de símbolos e grupos deles
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nenhum objeto semelhante encontrado (cópias giradas ou refletidas não são correspondidas); altere as opções de edição global e tente novamente
+@msg	Global Edit is off	A edição global está desativada
+@msg	only an object of the Global Edit other than the one it started from can be left out	só é possível deixar fora da edição global um objeto diferente daquele com que ela começou
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ou um intervalo como 1, 3-5, não {v}
 	Add to Symbols	Adicionar aos Símbolos
 	Basic Shapes	Formas Básicas
@@ -5903,6 +5937,11 @@ anchor	Points:	Pontos:
 	Horizontal Scale	Escala Horizontal
 	Vertical Scale	Escala Vertical
 @msg	{label} must be a number from {min} to {max}	{label} deve ser um número de {min} a {max}
+	Character Color	Cor do Caractere
+	OpenType Features	Recursos OpenType
+	Stylistic Sets	Conjuntos Estilísticos
+@msg	features lists at most {max} tags	features aceita no máximo {max} marcas
+@msg	unknown OpenType feature `{t}`	recurso OpenType desconhecido `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve ser um número maior que 0 e no máximo {max}
 @msg	no character style `{name}`	Estilo de caractere `{name}` não encontrado
 
@@ -6309,3 +6348,14 @@ swatch	Yellow Green	Verde-amarelado
 	Create Swatch Legend	Criar Legenda de Amostras
 	Create Swatch Legend…	Criar Legenda de Amostras…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Ferramentas de texto
+	Text Tweaker…	Ajustador de texto…
+	Text Tweaker	Ajustador de texto
+	Attribute:	Atributo:
+	From:	De:
+	To:	Até:
+	Bow	Arco
+	Spike	Pico
+	Skip Spaces	Ignorar espaços
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	A arte é grande demais para ser copiada como imagem: outros aplicativos não recebem um PNG dela

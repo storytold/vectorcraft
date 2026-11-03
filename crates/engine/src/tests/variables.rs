@@ -245,25 +245,26 @@ fn mismatched_and_missing_bindings_are_skipped_and_counted() {
 fn a_row_with_no_value_for_a_bound_variable_warns_that_nothing_was_applied() {
     let mut s = session();
     let t = text(&mut s, "x");
-    s.execute("dataset.import", &json!({"csv": "name,Name,Title\nA,Ann,Boss\nB,Bob,Chief\n"})).unwrap();
+    s.execute("dataset.import", &json!({"csv": "Name,Title\nAnn,Boss\nBob,Chief\n"})).unwrap();
+    let (a, b) = ("Data Set 1", "Data Set 2");
     let warning = |row: &str| format!("nothing in data set {row} was applied: no object is bound to a variable it has a value for");
-    let v = s.execute("dataset.select", &json!({"name": "A"})).unwrap();
-    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64(), &v["warning"]), (Some(0), Some(0), &json!(warning("A"))), "{v}");
+    let v = s.execute("dataset.select", &json!({"name": a})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64(), &v["warning"]), (Some(0), Some(0), &json!(warning(a))), "{v}");
     let v = s.execute("dataset.next", &json!({})).unwrap();
-    assert_eq!(v["warning"], json!(warning("B")), "{v}");
+    assert_eq!(v["warning"], json!(warning(b)), "{v}");
     let v = s.execute("dataset.prev", &json!({})).unwrap();
-    assert_eq!(v["warning"], json!(warning("A")), "{v}");
+    assert_eq!(v["warning"], json!(warning(a)), "{v}");
     assert_eq!(plain(&s, t), "x");
 
     // A bound variable that the row has no value for still applies nothing.
     s.execute("variable.define", &json!({"name": "Other", "kind": "text"})).unwrap();
     s.execute("variable.bind", &json!({"variable": "Other", "ids": [t.0]})).unwrap();
-    let v = s.execute("dataset.select", &json!({"name": "B"})).unwrap();
-    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64(), &v["warning"]), (Some(0), Some(1), &json!(warning("B"))), "{v}");
+    let v = s.execute("dataset.select", &json!({"name": b})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64(), &v["warning"]), (Some(0), Some(1), &json!(warning(b))), "{v}");
 
     // Bound to a variable with a value, the row applies it and gives no warning.
     s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
-    let v = s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": a})).unwrap();
     assert_eq!(v["applied"].as_u64(), Some(1), "{v}");
     assert!(v.get("warning").is_none(), "{v}");
     assert_eq!(plain(&s, t), "Boss");
@@ -271,7 +272,7 @@ fn a_row_with_no_value_for_a_bound_variable_warns_that_nothing_was_applied() {
     // Locked art is skipped, and its binding still counts as bound.
     s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
     s.execute("object.lock", &json!({})).unwrap();
-    let v = s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": b})).unwrap();
     assert_eq!(v["applied"].as_u64(), Some(0), "{v}");
     assert!(v.get("warning").is_none(), "{v}");
 }
@@ -438,6 +439,68 @@ fn locked_art_is_neither_bound_nor_rewritten() {
     assert!(!s.doc().unwrap().doc.node(r).unwrap().visible, "the unlocked rectangle still applied");
 }
 
+/// The art on a locked artboard acts as locked art: a data set skips it, Update Data Set reads
+/// nothing from it, and it takes no new binding. Unlocking the artboard lets the data set rewrite it.
+#[test]
+fn art_on_a_locked_artboard_is_neither_bound_nor_rewritten() {
+    let mut s = session();
+    let t = NodeId(s.execute("text.create", &json!({"x": 2050, "y": 50, "text": "cat"})).unwrap()["id"].as_u64().unwrap());
+    let fresh = NodeId(s.execute("text.create", &json!({"x": 2100, "y": 100, "text": "new"})).unwrap()["id"].as_u64().unwrap());
+    let r = rect(&mut s);
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Box", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Box", "ids": [r.0]})).unwrap();
+    s.execute("dataset.capture", &json!({"name": "A"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Name": "Bob", "Show": false, "Box": false}})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+
+    let e = s.execute("variable.bind", &json!({"variable": "Name", "ids": [fresh.0]})).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} is on a locked artboard", fresh.0)), "{e}");
+    let v = s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(1), Some(2)), "{v}");
+    assert_eq!(plain(&s, t), "cat", "the text on the locked artboard was left alone");
+    assert!(s.doc().unwrap().doc.node(t).unwrap().visible, "and still shows");
+    assert!(!s.doc().unwrap().doc.node(r).unwrap().visible, "the rectangle off it applied");
+    // Update Data Set keeps the row's values for the art it can't read.
+    let v = s.execute("dataset.update", &json!({})).unwrap();
+    assert_eq!(v["values"], 1, "{v}");
+    let row = s.doc().unwrap().doc.variables.dataset("B").unwrap().values.clone();
+    assert_eq!(row.get("Name"), Some(&vectorcraft_doc::DataValue::Text("Bob".into())));
+    assert_eq!(row.get("Show"), Some(&vectorcraft_doc::DataValue::Visible(false)));
+
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": false})).unwrap();
+    let v = s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(3), Some(0)), "{v}");
+    assert_eq!(plain(&s, t), "Bob");
+}
+
+/// A locked artboard elsewhere in the document does not stop threaded type on an unlocked artboard
+/// from having its whole story rewritten, and type on the locked artboard is still left alone.
+#[test]
+fn threaded_type_on_an_unlocked_artboard_is_rewritten_beside_a_locked_artboard() {
+    let (mut s, a, b, story) = threaded(200);
+    let far = NodeId(s.execute("text.create", &json!({"x": 2050, "y": 50, "text": "cat"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Tail", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [a.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Tail", "ids": [far.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Name": "Bob", "Tail": "dog"}})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+
+    let v = s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(1), Some(1)), "{v}");
+    assert_eq!((plain(&s, a), plain(&s, b)), ("Bob".to_string(), String::new()), "the whole story was rewritten");
+    assert_eq!(plain(&s, far), "cat", "the text on the locked artboard was left alone");
+    assert!(!story.is_empty());
+}
+
 /// Binding fails for locked art and for art in a hidden or locked group or layer, and the
 /// error names which of the three applies.
 #[test]
@@ -551,8 +614,8 @@ fn locked_variables_refuse_new_deleted_and_renamed_variables() {
     s.execute("variable.unbind", &json!({"ids": [r.0], "variable": "Show"})).unwrap();
     s.execute("dataset.capture", &json!({})).unwrap();
     s.execute("dataset.new", &json!({"name": "Bob", "values": {"Name": "Bob"}})).unwrap();
-    s.execute("dataset.import", &json!({"csv": "name,Name\nCarol,Carol\n"})).unwrap();
-    s.execute("dataset.select", &json!({"name": "Carol"})).unwrap();
+    s.execute("dataset.import", &json!({"csv": "Name\nCarol\n"})).unwrap();
+    s.execute("dataset.select", &json!({"name": "Data Set 1"})).unwrap();
     assert_eq!(plain(&s, t), "Carol");
 
     // Unlocking lets a variable be defined again; `locked` sets the state rather than toggling.
@@ -1333,12 +1396,11 @@ fn datasets_csv_keeps_line_breaks_in_quoted_cells() {
     let value = "Line one, \"quoted\"\nLine two";
     s.execute("dataset.new", &json!({"name": "A", "values": {"Name": value}})).unwrap();
     let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
-    s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
     s.execute("dataset.import", &json!({"csv": csv})).unwrap();
     let sets = &s.doc().unwrap().doc.variables.datasets;
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].values.get("Name"), Some(&vectorcraft_doc::DataValue::Text(value.into())));
-    assert!(s.execute("dataset.import", &json!({"csv": "name,Name\nX,\"open"})).is_err(), "unclosed quote");
+    assert!(s.execute("dataset.import", &json!({"csv": "Name\n\"open"})).is_err(), "unclosed quote");
 }
 
 /// An empty text value is not a missing value: it comes back from the exported CSV as an empty
@@ -1351,23 +1413,45 @@ fn datasets_csv_keeps_an_empty_text_value() {
     s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
     s.execute("dataset.new", &json!({"name": "A", "values": {"Name": ""}})).unwrap();
     let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
-    s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
     s.execute("dataset.import", &json!({"csv": csv})).unwrap();
-    let value = s.doc().unwrap().doc.variables.dataset("A").and_then(|d| d.values.get("Name")).cloned();
-    assert_eq!(value, Some(vectorcraft_doc::DataValue::Text(String::new())));
-    s.execute("dataset.import", &json!({"csv": "name,Name\nB,\nC,\"\"\n"})).unwrap();
-    let value = |name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("Name")).cloned();
-    assert_eq!(value("C"), Some(vectorcraft_doc::DataValue::Text(String::new())));
+    let value = |s: &Session, name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("Name")).cloned();
+    assert_eq!(value(&s, "Data Set 1"), Some(vectorcraft_doc::DataValue::Text(String::new())));
+    s.execute("variable.define", &json!({"name": "Other", "kind": "text"})).unwrap();
+    s.execute("dataset.import", &json!({"csv": "Name,Other\n,x\n\"\",y\n"})).unwrap();
+    assert_eq!(value(&s, "Data Set 2"), Some(vectorcraft_doc::DataValue::Text(String::new())));
     // Compatibility rule for files written before empty text was quoted: a bare empty cell stays "no value".
-    assert_eq!(value("B"), None);
+    assert_eq!(value(&s, "Data Set 1"), None);
     // A data set with no value for the variable exports a bare cell and stays without a value.
-    s.execute("dataset.new", &json!({"name": "D", "values": {}})).unwrap();
     let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
-    assert!(csv.contains("\nD,\n"), "{csv:?}");
-    s.execute("dataset.delete", &json!({"names": ["D"]})).unwrap();
+    assert_eq!(csv, "Name,Other\n,x\n\"\",y\n");
     s.execute("dataset.import", &json!({"csv": csv})).unwrap();
-    let value = |name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("Name")).cloned();
-    assert_eq!(value("D"), None);
+    assert_eq!(value(&s, "Data Set 1"), None);
+}
+
+/// A data set with no value for any variable exports as a row that imports back: a quoted empty
+/// cell in the first column that isn't a text variable reads back as no value, and with only text
+/// variables the first column reads back as an empty text.
+#[test]
+fn datasets_csv_keeps_a_data_set_without_values() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Title": "x"}})).unwrap();
+    let export = |s: &mut Session| s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    let csv = export(&mut s);
+    assert_eq!(csv, "Title\n\"\"\nx\n");
+    let imp = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    assert_eq!(imp["names"], json!(["Data Set 1", "Data Set 2"]));
+    let values = |s: &Session, name: &str| s.doc().unwrap().doc.variables.dataset(name).map(|d| d.values.clone()).unwrap();
+    assert_eq!(values(&s, "Data Set 1").get("Title"), Some(&vectorcraft_doc::DataValue::Text(String::new())));
+
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "C", "values": {}})).unwrap();
+    let csv = export(&mut s);
+    assert!(csv.ends_with("\n,\"\"\n"), "{csv:?}");
+    s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.variables.datasets.len(), 3);
+    assert!(values(&s, "Data Set 3").is_empty());
 }
 
 /// A quoted text cell keeps its leading and trailing spaces, so a padded value comes back from
@@ -1380,25 +1464,28 @@ fn datasets_csv_keeps_spaces_in_quoted_cells() {
     s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
     s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "  padded "}})).unwrap();
     let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
-    s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
     s.execute("dataset.import", &json!({"csv": csv})).unwrap();
-    s.execute("dataset.import", &json!({"csv": "name,Name\nB,  typed  \nC,\" quoted \"  \n"})).unwrap();
-    let value = |name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("Name")).cloned();
+    let value = |s: &Session, name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("Name")).cloned();
     let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
-    assert_eq!(value("A"), text_value("  padded "));
-    assert_eq!(value("B"), text_value("typed"));
-    assert_eq!(value("C"), text_value(" quoted "));
+    assert_eq!(value(&s, "Data Set 1"), text_value("  padded "));
+    s.execute("dataset.import", &json!({"csv": "Name\n  typed  \n\" quoted \"  \n"})).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("typed"));
+    assert_eq!(value(&s, "Data Set 2"), text_value(" quoted "));
 }
 
 /// Export refuses a document with more data sets or variables than `dataset.import` reads, so
 /// every file it writes imports back: 1,000 data sets and 256 variables export and import, and
-/// one more of either is refused.
+/// one more of either is refused. The import refuses a line of 257 columns, the last one included.
 #[test]
 fn datasets_export_refuses_more_than_import_reads() {
     let mut s = session();
     let header: Vec<String> = (1..=256).map(|i| format!("V{i}")).collect();
+    for wide in [format!("{},V257\nx\n", header.join(",")), format!("{}\nx{}\n", header.join(","), ",".repeat(256))] {
+        let err = s.execute("dataset.import", &json!({"csv": wide})).unwrap_err().to_string();
+        assert!(err.contains("more than 256 columns"), "{err}");
+    }
     let rows: String = (1..=1000).map(|i| format!("Set {i},x\n")).collect();
-    s.execute("dataset.import", &json!({"csv": format!("name,{}\n{rows}", header.join(","))})).unwrap();
+    s.execute("dataset.import", &json!({"csv": format!("{}\n{rows}", header.join(","))})).unwrap();
     let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
     s.execute("dataset.import", &json!({"csv": csv})).unwrap();
 
@@ -1426,59 +1513,102 @@ fn datasets_csv_reads_tab_separated_files() {
     s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
     s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
     s.execute("variable.define", &json!({"name": "Last, First", "kind": "text"})).unwrap();
-    let tsv = "name\tTitle\tShow\r\nA\tTwo words\ttrue\r\nB\t\"a, b\tc\"\tfalse\r\n";
+    let tsv = "Title\tShow\r\nTwo words\ttrue\r\n\"a, b\tc\"\tfalse\r\n";
     let imp = s.execute("dataset.import", &json!({"csv": tsv})).unwrap();
-    assert_eq!(imp["names"], json!(["A", "B"]));
-    s.execute("dataset.import", &json!({"csv": "name,Title\nC,one\ttwo"})).unwrap();
-    s.execute("dataset.import", &json!({"csv": "name\t\"Last, First\"\nD\tSmith, Jo"})).unwrap();
-    let value = |name: &str, var: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get(var)).cloned();
+    assert_eq!(imp["names"], json!(["Data Set 1", "Data Set 2"]));
+    let value = |s: &Session, name: &str, var: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get(var)).cloned();
     let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
-    assert_eq!(value("A", "Title"), text_value("Two words"));
-    assert_eq!(value("A", "Show"), Some(vectorcraft_doc::DataValue::Visible(true)));
-    assert_eq!(value("B", "Title"), text_value("a, b\tc"));
-    assert_eq!(value("B", "Show"), Some(vectorcraft_doc::DataValue::Visible(false)));
-    assert_eq!(value("C", "Title"), text_value("one\ttwo"));
-    assert_eq!(value("D", "Last, First"), text_value("Smith, Jo"));
-    let unclosed = s.execute("dataset.import", &json!({"csv": "name\tTitle\t\"Show\nA\tx\ttrue"})).unwrap_err().to_string();
+    assert_eq!(value(&s, "Data Set 1", "Title"), text_value("Two words"));
+    assert_eq!(value(&s, "Data Set 1", "Show"), Some(vectorcraft_doc::DataValue::Visible(true)));
+    assert_eq!(value(&s, "Data Set 2", "Title"), text_value("a, b\tc"));
+    assert_eq!(value(&s, "Data Set 2", "Show"), Some(vectorcraft_doc::DataValue::Visible(false)));
+    s.execute("dataset.import", &json!({"csv": "Title,Show\none\ttwo,true"})).unwrap();
+    assert_eq!(value(&s, "Data Set 1", "Title"), text_value("one\ttwo"));
+    s.execute("dataset.import", &json!({"csv": "\"Last, First\"\tShow\nSmith, Jo\ttrue"})).unwrap();
+    assert_eq!(value(&s, "Data Set 1", "Last, First"), text_value("Smith, Jo"));
+    // A file of one variable whose name holds a tab is exported with the name quoted, and reads back as one column.
+    let mut one = session();
+    one.execute("variable.define", &json!({"name": "Tab\tName", "kind": "text"})).unwrap();
+    one.execute("dataset.new", &json!({"name": "A", "values": {"Tab\tName": "v"}})).unwrap();
+    let csv = one.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    assert_eq!(csv, "\"Tab\tName\"\nv\n");
+    let imp = one.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    assert_eq!(imp["defined"], json!([]), "{imp}");
+    assert_eq!(value(&one, "Data Set 1", "Tab\tName"), text_value("v"));
+    let unclosed = s.execute("dataset.import", &json!({"csv": "Title\t\"Show\nx\ttrue"})).unwrap_err().to_string();
     assert!(unclosed.contains("unclosed quote"), "{unclosed}");
 }
 
-/// Without a `name` column every header cell is a variable, and the rows take the first free
-/// names Data Set 1, 2 and so on. A first header cell `name`, in any case, still holds the names.
+/// Every header cell is a variable, whatever its case: a file laid out as the set-up page shows
+/// (`Name,Age`) defines and fills `Name`, and `name` and `NAME` are variables too. The rows are
+/// named Data Set 1, 2 and so on, in file order.
 #[test]
-fn datasets_csv_without_a_name_column_numbers_the_rows() {
+fn datasets_csv_reads_every_header_cell_as_a_variable() {
     let mut s = session();
-    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
-    s.execute("dataset.new", &json!({"name": "Data Set 2", "values": {"Title": "kept"}})).unwrap();
-    let imp = s.execute("dataset.import", &json!({"csv": "Title\nx\ny\n"})).unwrap();
-    assert_eq!((imp["imported"].as_u64(), imp["updated"].as_u64()), (Some(2), Some(0)));
-    assert_eq!(imp["names"], json!(["Data Set 1", "Data Set 3"]));
-    let value = |s: &Session, name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("Title")).cloned();
-    let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
-    assert_eq!(value(&s, "Data Set 1"), text_value("x"));
-    assert_eq!(value(&s, "Data Set 2"), text_value("kept"));
-    assert_eq!(value(&s, "Data Set 3"), text_value("y"));
-    let named = s.execute("dataset.import", &json!({"csv": "NAME,Title\nData Set 1,z"})).unwrap();
-    assert_eq!((named["imported"].as_u64(), named["updated"].as_u64()), (Some(0), Some(1)));
-    assert_eq!(value(&s, "Data Set 1"), text_value("z"));
+    let t = text(&mut s, "x");
+    let imp = s.execute("dataset.import", &json!({"csv": "Name,Age\nBill Tucker,36\nJo Lee,41\n"})).unwrap();
+    assert_eq!((imp["imported"].as_u64(), &imp["defined"]), (Some(2), &json!(["Name", "Age"])), "{imp}");
+    assert_eq!(imp["names"], json!(["Data Set 1", "Data Set 2"]));
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("dataset.select", &json!({"name": "Data Set 2"})).unwrap();
+    assert_eq!(plain(&s, t), "Jo Lee");
+    for header in ["name", "NAME"] {
+        let imp = s.execute("dataset.import", &json!({"csv": format!("{header},Age\nx,1\n")})).unwrap();
+        assert_eq!((&imp["defined"], &imp["names"]), (&json!([header]), &json!(["Data Set 1"])), "{header}: {imp}");
+    }
+    let value = |s: &Session, var: &str| s.doc().unwrap().doc.variables.dataset("Data Set 1").and_then(|d| d.values.get(var)).cloned();
+    assert_eq!(value(&s, "NAME"), Some(vectorcraft_doc::DataValue::Text("x".into())));
 }
 
-/// An error about a row's values or name gives the file line the row starts on, counting blank
-/// lines and line breaks inside quoted cells.
+/// An import replaces every data set of the document, as Load Variable Library does, and clears
+/// the active data set. The document's variables stay with their bindings, including those the
+/// file has no column for, which then have no value in any data set. Undo brings the data sets back.
+#[test]
+fn datasets_csv_import_replaces_the_data_sets() {
+    let mut s = session();
+    let t = text(&mut s, "x");
+    let r = rect(&mut s);
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [r.0]})).unwrap();
+    for (name, title) in [("First", "a"), ("Data Set 2", "b"), ("Data Set 3", "c")] {
+        s.execute("dataset.new", &json!({"name": name, "values": {"Title": title, "Show": true}})).unwrap();
+    }
+    s.execute("dataset.select", &json!({"name": "First"})).unwrap();
+    let imp = s.execute("dataset.import", &json!({"csv": "Title\ny\nz\n"})).unwrap();
+    assert_eq!(imp["names"], json!(["Data Set 1", "Data Set 2"]));
+    assert_eq!(imp["deletedDataSets"], json!(["First", "Data Set 2", "Data Set 3"]));
+    let vars = &s.doc().unwrap().doc.variables;
+    let sets: Vec<_> = vars.datasets.iter().map(|d| (d.name.as_str(), d.values.get("Title").cloned(), d.values.get("Show").cloned())).collect();
+    let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
+    assert_eq!(sets, [("Data Set 1", text_value("y"), None), ("Data Set 2", text_value("z"), None)]);
+    assert_eq!(vars.active_dataset, None);
+    let listed = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(listed["variables"], json!([{"name": "Title", "kind": "text", "bindings": 1}, {"name": "Show", "kind": "visibility", "bindings": 1}]));
+    s.execute("dataset.select", &json!({"name": "Data Set 2"})).unwrap();
+    assert_eq!(plain(&s, t), "z");
+
+    // The first undo takes back the selection, the second the import.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let vars = &s.doc().unwrap().doc.variables;
+    let names: Vec<&str> = vars.datasets.iter().map(|d| d.name.as_str()).collect();
+    assert_eq!((names, vars.active_dataset.as_deref()), (vec!["First", "Data Set 2", "Data Set 3"], Some("First")));
+}
+
+/// An error about a row's values gives the file line the row starts on, counting blank lines and
+/// line breaks inside quoted cells.
 #[test]
 fn datasets_csv_row_errors_name_the_file_line() {
     let mut s = session();
     s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
     s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
     let error = |s: &mut Session, csv: &str| s.execute("dataset.import", &json!({"csv": csv})).unwrap_err().to_string();
-    let blank_line = error(&mut s, "name,Show\n\nX,maybe");
+    let blank_line = error(&mut s, "Show\n\nmaybe");
     assert!(blank_line.contains("line 3:"), "{blank_line}");
-    let line_break = error(&mut s, "name,Title,Show\nA,\"one\ntwo\",true\nB,x,maybe");
+    let line_break = error(&mut s, "Title,Show\n\"one\ntwo\",true\nx,maybe");
     assert!(line_break.contains("line 4:"), "{line_break}");
-    let twice = error(&mut s, "name,Title\nA,x\n\nA,y");
-    assert!(twice.contains("line 4:"), "{twice}");
-    let long = error(&mut s, &format!("name,Title\n\n{},x", "n".repeat(256)));
-    assert!(long.contains("line 3:") && long.contains("longer than 255"), "{long}");
 }
 
 /// A refused cell's error gives its line and why the value was refused: a visibility value that
@@ -1489,10 +1619,10 @@ fn datasets_csv_cell_errors_say_why() {
     s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
     s.execute("variable.define", &json!({"name": "Sales", "kind": "graph"})).unwrap();
     let error = |s: &mut Session, csv: &str| s.execute("dataset.import", &json!({"csv": csv})).unwrap_err();
-    let maybe = error(&mut s, "name,Show\nX,maybe");
+    let maybe = error(&mut s, "Show\nmaybe");
     let want = "line 2: value for `Show` must be true or false";
     assert!(matches!(&maybe, EngineError::BadParams { msg, .. } if msg == want), "{maybe}");
-    let long = error(&mut s, &format!("name,Sales\nX,\"{}\"", "1,".repeat(140_000)));
+    let long = error(&mut s, &format!("Sales\n\"{}\"", "1,".repeat(140_000)));
     let want = "line 2: value for `Sales` is longer than 262144 bytes";
     assert!(matches!(&long, EngineError::BadParams { msg, .. } if msg == want), "{long}");
     assert!(s.doc().unwrap().doc.variables.datasets.is_empty());
@@ -1505,10 +1635,10 @@ fn datasets_csv_cell_errors_say_why() {
 #[test]
 fn datasets_csv_header_prefixes_define_variables() {
     let mut s = session();
-    let csv = "name,#Shown,@Photo,Title\nA,true,a.png,x";
+    let csv = "#Shown,@Photo,Title\ntrue,a.png,x";
     let imp = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
     assert_eq!(imp["defined"], json!(["Shown", "Photo", "Title"]));
-    assert_eq!((imp["imported"].as_u64(), imp["names"].clone()), (Some(1), json!(["A"])));
+    assert_eq!((imp["imported"].as_u64(), imp["names"].clone()), (Some(1), json!(["Data Set 1"])));
     let listed = s.execute("variable.list", &json!({})).unwrap();
     assert_eq!(
         listed["variables"],
@@ -1518,23 +1648,23 @@ fn datasets_csv_header_prefixes_define_variables() {
             {"name": "Title", "kind": "text", "bindings": 0},
         ])
     );
-    let value = |s: &Session, var: &str| s.doc().unwrap().doc.variables.dataset("A").and_then(|d| d.values.get(var)).cloned();
+    let value = |s: &Session, var: &str| s.doc().unwrap().doc.variables.dataset("Data Set 1").and_then(|d| d.values.get(var)).cloned();
     assert_eq!(value(&s, "Shown"), Some(vectorcraft_doc::DataValue::Visible(true)));
     assert_eq!(value(&s, "Photo"), Some(vectorcraft_doc::DataValue::Image("a.png".into())));
     assert_eq!(value(&s, "Title"), Some(vectorcraft_doc::DataValue::Text("x".into())));
 
-    let again = s.execute("dataset.import", &json!({"csv": "name\t#Shown\t@Photo\tTitle\nA\tfalse\tb.png\ty"})).unwrap();
-    assert_eq!((again["updated"].as_u64(), again["defined"].clone()), (Some(1), json!([])));
+    let again = s.execute("dataset.import", &json!({"csv": "#Shown\t@Photo\tTitle\nfalse\tb.png\ty"})).unwrap();
+    assert_eq!((again["imported"].as_u64(), again["defined"].clone()), (Some(1), json!([])));
     assert_eq!(value(&s, "Shown"), Some(vectorcraft_doc::DataValue::Visible(false)));
 
     let error = |s: &mut Session, csv: &str| s.execute("dataset.import", &json!({"csv": csv})).unwrap_err().to_string();
-    let other_kind = error(&mut s, "name,New,#Title\nB,n,true");
+    let other_kind = error(&mut s, "Shown,New,#Title\ntrue,n,true");
     assert!(other_kind.contains("column 3:") && other_kind.contains("text variable"), "{other_kind}");
     let twice = error(&mut s, "Fresh,@Fresh\nn,f.png");
     assert!(twice.contains("column 2:") && twice.contains("text variable"), "{twice}");
-    let bare = error(&mut s, "name,#\nB,true");
+    let bare = error(&mut s, "Title,#\nx,true");
     assert!(bare.contains("column 2:") && bare.contains("names no variable"), "{bare}");
-    let long = error(&mut s, &format!("name,@{}\nB,b.png", "n".repeat(256)));
+    let long = error(&mut s, &format!("Title,@{}\nx,b.png", "n".repeat(256)));
     assert!(long.contains("column 2:") && long.contains("longer than 255"), "{long}");
     assert_eq!(s.doc().unwrap().doc.variables.variables.len(), 3, "a failed import defines nothing");
 
@@ -1558,11 +1688,10 @@ fn datasets_csv_exact_names_win_over_prefixes() {
     let values = json!({"#Shown": "hello", "@Photo": true, "%Chart": ",Q\nX,3", "Shown": "s.png"});
     s.execute("dataset.new", &json!({"name": "A", "values": values})).unwrap();
     let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
-    assert!(csv.starts_with("name,#Shown,#@Photo,%Chart,@Shown\n"), "{csv}");
-    s.execute("dataset.delete", &json!({"names": ["A"]})).unwrap();
+    assert!(csv.starts_with("#Shown,#@Photo,%Chart,@Shown\n"), "{csv}");
     let imp = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
     assert_eq!((imp["imported"].as_u64(), imp["defined"].clone()), (Some(1), json!([])));
-    let value = |var: &str| s.doc().unwrap().doc.variables.dataset("A").and_then(|d| d.values.get(var)).cloned();
+    let value = |var: &str| s.doc().unwrap().doc.variables.dataset("Data Set 1").and_then(|d| d.values.get(var)).cloned();
     assert_eq!(value("#Shown"), Some(vectorcraft_doc::DataValue::Text("hello".into())));
     assert_eq!(value("@Photo"), Some(vectorcraft_doc::DataValue::Visible(true)));
     assert_eq!(value("%Chart"), Some(vectorcraft_doc::DataValue::Graph(",Q\nX,3".into())));
@@ -1582,7 +1711,7 @@ fn datasets_csv_export_marks_visibility_and_image_columns() {
     }
     s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "Ann", "Show": false, "Photo": "a.png"}})).unwrap();
     let out = s.execute("dataset.export", &json!({})).unwrap();
-    assert_eq!(out["csv"], "name,Name,#Show,@Photo\nA,Ann,false,a.png\n");
+    assert_eq!(out["csv"], "Name,#Show,@Photo\nAnn,false,a.png\n");
     assert!(out.get("warning").is_none(), "{out}");
 
     let mut fresh = session();
@@ -1591,7 +1720,8 @@ fn datasets_csv_export_marks_visibility_and_image_columns() {
     let listed = fresh.execute("variable.list", &json!({})).unwrap();
     let kinds: Vec<_> = listed["variables"].as_array().unwrap().iter().map(|v| v["kind"].clone()).collect();
     assert_eq!(kinds, [json!("text"), json!("visibility"), json!("image")]);
-    let value = |var: &str| fresh.doc().unwrap().doc.variables.dataset("A").and_then(|d| d.values.get(var)).cloned();
+    let value = |var: &str| fresh.doc().unwrap().doc.variables.dataset("Data Set 1").and_then(|d| d.values.get(var)).cloned();
+    assert_eq!(value("Name"), Some(vectorcraft_doc::DataValue::Text("Ann".into())));
     assert_eq!(value("Show"), Some(vectorcraft_doc::DataValue::Visible(false)));
     assert_eq!(value("Photo"), Some(vectorcraft_doc::DataValue::Image("a.png".into())));
 
@@ -1600,7 +1730,48 @@ fn datasets_csv_export_marks_visibility_and_image_columns() {
     }
     let out = s.execute("dataset.export", &json!({})).unwrap();
     assert_eq!(out["warning"], "a new document won't read these variables back with their kind: `#Tag`, `Chart`, `@Note`");
-    assert!(out["csv"].as_str().unwrap().starts_with("name,Name,#Show,@Photo,#Tag,Chart,@Note\n"), "{out}");
+    assert!(out["csv"].as_str().unwrap().starts_with("Name,#Show,@Photo,#Tag,Chart,@Note\n"), "{out}");
+}
+
+/// A file `dataset.export` writes has no column of data set names, and `dataset.import` reads
+/// every column as a variable, so the file imports back to the same data sets: the same variables
+/// with their kinds, and each data set's values in order, a data set without values included, named
+/// Data Set 1, 2 and so on. In a document whose data sets already have those names and values, the
+/// import changes nothing.
+#[test]
+fn datasets_csv_export_imports_back_to_the_same_data_sets() {
+    let mut s = session();
+    for (name, kind) in [("Name", "text"), ("Show", "visibility"), ("Photo", "image")] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+    }
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "Ann, Jr.", "Show": true, "Photo": "a.png"}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Show": false}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "C", "values": {}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "D", "values": {"Name": "", "Photo": "d.png"}})).unwrap();
+    let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    assert!(csv.starts_with("Name,#Show,@Photo\n"), "{csv}");
+    let before = s.doc().unwrap().doc.variables.clone();
+
+    let mut fresh = session();
+    fresh.execute("dataset.import", &json!({"csv": csv})).unwrap();
+    let vars = fresh.doc().unwrap().doc.variables.clone();
+    assert_eq!(vars.variables, before.variables, "the same variables, with their kinds");
+    let values = |v: &vectorcraft_doc::Variables| v.datasets.iter().map(|d| d.values.clone()).collect::<Vec<_>>();
+    assert_eq!(values(&vars), values(&before), "the same values in every data set");
+    let names: Vec<&str> = vars.datasets.iter().map(|d| d.name.as_str()).collect();
+    assert_eq!(names, ["Data Set 1", "Data Set 2", "Data Set 3", "Data Set 4"]);
+
+    // Exporting the imported data sets writes the same file, and importing it changes nothing: no
+    // undo step, and the active data set stays.
+    let again = fresh.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    assert_eq!(again, csv);
+    fresh.execute("dataset.select", &json!({"name": "Data Set 1"})).unwrap();
+    let vars = fresh.doc().unwrap().doc.variables.clone();
+    assert!(vars.active_dataset.is_some());
+    let undo = fresh.doc().unwrap().history.undo.len();
+    fresh.execute("dataset.import", &json!({"csv": again})).unwrap();
+    assert_eq!(fresh.doc().unwrap().history.undo.len(), undo, "no undo step");
+    assert_eq!(fresh.doc().unwrap().doc.variables, vars);
 }
 
 /// The export's `warning` names the variables whose column a document without the variables
@@ -1657,7 +1828,7 @@ fn datasets_csv_export_refuses_a_header_that_names_another_variable() {
 fn datasets_csv_refuses_graph_data_file_columns() {
     let mut s = session();
     let error = |s: &mut Session, csv: &str| s.execute("dataset.import", &json!({"csv": csv})).unwrap_err().to_string();
-    let named = error(&mut s, "name,Title,%Sales\nA,x,sales.txt");
+    let named = error(&mut s, "Name,Title,%Sales\nA,x,sales.txt");
     assert!(named.contains("column 3:") && named.contains("`%Sales`"), "{named}");
     let unnamed = error(&mut s, "%Sales\tTitle\nsales.txt\tx");
     assert!(unnamed.contains("column 1:") && unnamed.contains("`%Sales`"), "{unnamed}");
@@ -1673,10 +1844,10 @@ fn datasets_csv_refuses_two_columns_for_one_variable() {
     s.execute("variable.define", &json!({"name": "Shown", "kind": "visibility"})).unwrap();
     let error = |s: &mut Session, csv: &str| s.execute("dataset.import", &json!({"csv": csv})).unwrap_err().to_string();
     for (csv, first, second, var) in [
-        ("name,City,City\nR,Paris,Rome", 2, 3, "City"),
-        ("name,City,City\nR,Paris,", 2, 3, "City"),
+        ("Title,City,City\nR,Paris,Rome", 2, 3, "City"),
+        ("Title,City,City\nR,Paris,", 2, 3, "City"),
         ("City,Title,City\nParis,x,Rome", 1, 3, "City"),
-        ("name,Shown,#Shown\nR,true,false", 2, 3, "Shown"),
+        ("Title,Shown,#Shown\nR,true,false", 2, 3, "Shown"),
         ("Title\t@Photo\t@ Photo\nx\ta.png\tb.png", 2, 3, "Photo"),
     ] {
         let err = error(&mut s, csv);
@@ -1695,21 +1866,22 @@ fn locked_variables_refuse_header_cells_that_define_variables() {
     s.execute("variable.define", &json!({"name": "Shown", "kind": "visibility"})).unwrap();
     s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
     s.execute("variable.lock", &json!({"locked": true})).unwrap();
-    for csv in ["name,#Shown,Title,New\nA,true,x,n", "@Photo\nb.png", "name,#Fresh\nA,true"] {
+    for csv in ["#Shown,Title,New\ntrue,x,n", "@Photo\nb.png", "Title,#Fresh\nx,true"] {
         let e = s.execute("dataset.import", &json!({"csv": csv})).unwrap_err();
         assert!(matches!(&e, EngineError::Disabled(cmd, why) if cmd == "dataset.import" && why == "variables are locked"), "{csv}: {e}");
     }
     let vars = &s.doc().unwrap().doc.variables;
     assert!(vars.variables.len() == 2 && vars.datasets.is_empty(), "a refused import defines and imports nothing");
 
-    let imp = s.execute("dataset.import", &json!({"csv": "name,#Shown,Title\nA,true,x"})).unwrap();
+    let imp = s.execute("dataset.import", &json!({"csv": "#Shown,Title\ntrue,x"})).unwrap();
     assert_eq!((imp["imported"].as_u64(), imp["defined"].clone()), (Some(1), json!([])));
     s.execute("variable.lock", &json!({"locked": false})).unwrap();
-    let imp = s.execute("dataset.import", &json!({"csv": "name,New\nB,n"})).unwrap();
+    let imp = s.execute("dataset.import", &json!({"csv": "New\nn"})).unwrap();
     assert_eq!(imp["defined"], json!(["New"]));
 }
 
-/// Import / export datasets as CSV: header `name` then variables; round-trip keeps values.
+/// Import / export datasets as CSV: one column per variable and no dataset names; round-trip keeps
+/// the values in order, and the rows come back as Data Set 1, 2.
 #[test]
 fn datasets_csv_round_trips_and_rejects_bad_input() {
     let dir = Folder::new("vars-csv");
@@ -1733,28 +1905,27 @@ fn datasets_csv_round_trips_and_rejects_bad_input() {
 
     let exported = s.execute("dataset.export", &json!({})).unwrap();
     let csv = exported["csv"].as_str().unwrap().to_string();
-    assert!(csv.starts_with("name,Name,#Show,@Photo\n"), "{csv}");
+    assert!(csv.starts_with("Name,#Show,@Photo\n"), "{csv}");
     assert!(csv.contains("Alice") && csv.contains("Bob") && csv.contains("false"), "{csv}");
 
-    // Clear rows, import again, apply B.
-    s.execute("dataset.delete", &json!({"names": ["A", "B"]})).unwrap();
+    // Import again, which replaces A and B, and apply the second row.
     let imp = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
-    assert_eq!((imp["imported"].as_u64(), imp["updated"].as_u64()), (Some(2), Some(0)));
-    s.execute("dataset.select", &json!({"name": "B"})).unwrap();
+    assert_eq!((imp["imported"].as_u64(), &imp["deletedDataSets"]), (Some(2), &json!(["A", "B"])));
+    s.execute("dataset.select", &json!({"name": "Data Set 2"})).unwrap();
     assert_eq!(plain(&s, t), "Bob");
     assert!(!s.doc().unwrap().doc.node(r).unwrap().visible);
     assert_eq!(image(&s, img).link.as_ref().map(|l| l.path.as_str()), Some(blue_path.as_str()));
 
-    // Re-import updates in place and defines nothing; a bad visibility value is an error.
+    // Re-import replaces the rows and defines nothing; a bad visibility value is an error.
     let again = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
-    assert_eq!((again["imported"].as_u64(), again["updated"].as_u64()), (Some(0), Some(2)));
+    assert_eq!((again["imported"].as_u64(), &again["deletedDataSets"]), (Some(2), &json!(["Data Set 1", "Data Set 2"])));
     assert_eq!(again["defined"], json!([]));
-    assert!(s.execute("dataset.import", &json!({"csv": "name,Show\nX,maybe"})).is_err());
+    assert!(s.execute("dataset.import", &json!({"csv": "Show\nmaybe"})).is_err());
 
     let out = dir.file("sets.csv");
     s.execute("dataset.export", &json!({"path": out})).unwrap();
     let from_file = s.execute("dataset.import", &json!({"path": out})).unwrap();
-    assert_eq!(from_file["updated"].as_u64(), Some(2));
+    assert_eq!(from_file["names"], json!(["Data Set 1", "Data Set 2"]));
 
     // One undo undoes the last import's replacements.
     s.execute("edit.undo", &json!({})).unwrap();
@@ -1769,17 +1940,17 @@ fn datasets_csv_reads_windows_1252_files() {
     let import = |s: &mut Session, bytes: &[u8]| s.execute("dataset.import", &json!({"dataBase64": vectorcraft_format::base64_encode(bytes)}));
     let value = |s: &Session, name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("City")).cloned();
     let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
-    let imp = import(&mut s, b"name,City\r\nA,Jos\xe9\r\nB,\x80 5 \x96 \x93Caf\xe9\x94\r\n").unwrap();
-    assert_eq!(imp["names"], json!(["A", "B"]));
-    assert_eq!(value(&s, "A"), text_value("José"));
-    assert_eq!(value(&s, "B"), text_value("€ 5 – “Café”"));
-    import(&mut s, "name,City\nC,José\n".as_bytes()).unwrap();
-    assert_eq!(value(&s, "C"), text_value("José"));
-    import(&mut s, "\u{feff}name,City\nD,Zoë\n".as_bytes()).unwrap();
-    assert_eq!(value(&s, "D"), text_value("Zoë"));
-    let e = import(&mut s, b"\xef\xbb\xbfname,City\nE,Jos\xe9\n").unwrap_err().to_string();
+    let imp = import(&mut s, b"City\r\nJos\xe9\r\n\x80 5 \x96 \x93Caf\xe9\x94\r\n").unwrap();
+    assert_eq!(imp["names"], json!(["Data Set 1", "Data Set 2"]));
+    assert_eq!(value(&s, "Data Set 1"), text_value("José"));
+    assert_eq!(value(&s, "Data Set 2"), text_value("€ 5 – “Café”"));
+    import(&mut s, "City\nJosé\n".as_bytes()).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("José"));
+    import(&mut s, "\u{feff}City\nZoë\n".as_bytes()).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("Zoë"));
+    let e = import(&mut s, b"\xef\xbb\xbfCity\nJos\xe9\n").unwrap_err().to_string();
     assert!(e.contains("CSV is not UTF-8"), "{e}");
-    assert_eq!(value(&s, "E"), None);
+    assert_eq!(value(&s, "Data Set 1"), text_value("Zoë"));
 }
 
 /// A CSV that starts with a UTF-16 byte-order mark is read as UTF-16, and
@@ -1796,24 +1967,24 @@ fn datasets_csv_reads_utf16_files() {
         let units = text.encode_utf16().flat_map(|u| if le { u.to_le_bytes() } else { u.to_be_bytes() });
         bom.iter().copied().chain(units).collect()
     };
-    import(&mut s, &utf16(b"\xff\xfe", "name\tCity\r\nA\tZoë 😀\r\n", true)).unwrap();
-    assert_eq!(value(&s, "A"), text_value("Zoë 😀"));
-    import(&mut s, &utf16(b"\xfe\xff", "name,City\nB,José\n", false)).unwrap();
-    assert_eq!(value(&s, "B"), text_value("José"));
-    let mut odd = utf16(b"\xff\xfe", "name,City\nC,x\n", true);
+    import(&mut s, &utf16(b"\xff\xfe", "City\r\nZoë 😀\r\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("Zoë 😀"));
+    import(&mut s, &utf16(b"\xfe\xff", "City\nJosé\n", false)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("José"));
+    let mut odd = utf16(b"\xff\xfe", "City\nx\n", true);
     odd.push(b'y');
     let e = import(&mut s, &odd).unwrap_err().to_string();
     assert!(e.contains("CSV is not UTF-16"), "{e}");
-    let e = import(&mut s, &[b"\xff\xfe".as_slice(), "name,City\nD,".as_bytes(), b"\x00\xd8"].concat()).unwrap_err().to_string();
+    let e = import(&mut s, &[b"\xff\xfe".as_slice(), "City\nAB,".as_bytes(), b"\x00\xd8"].concat()).unwrap_err().to_string();
     assert!(e.contains("CSV is not UTF-16"), "{e}");
-    let e = import(&mut s, &utf16(b"", "name,City\nE,x\n", true)).unwrap_err().to_string();
+    let e = import(&mut s, &utf16(b"", "City\nx\n", true)).unwrap_err().to_string();
     assert!(e.contains("CSV holds NUL bytes"), "{e}");
-    assert_eq!((value(&s, "C"), value(&s, "D"), value(&s, "E")), (None, None, None));
-    s.execute("dataset.new", &json!({"name": "F", "values": {"City": "a\u{0}b"}})).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("José"), "a refused file changes nothing");
+    s.execute("dataset.set", &json!({"name": "Data Set 1", "values": {"City": "a\u{0}b"}})).unwrap();
     let csv = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
-    s.execute("dataset.delete", &json!({"names": ["F"]})).unwrap();
+    s.execute("dataset.delete", &json!({"names": ["Data Set 1"]})).unwrap();
     s.execute("dataset.import", &json!({"csv": csv})).unwrap();
-    assert_eq!(value(&s, "F"), text_value("a\u{0}b"));
+    assert_eq!(value(&s, "Data Set 1"), text_value("a\u{0}b"));
 }
 
 /// A data set of [`library`]: its name, and each variable's name with its paragraphs.
@@ -1931,31 +2102,30 @@ fn a_variable_library_replaces_every_variable_and_data_set() {
 }
 
 /// An import or a library load that leaves the variables and data sets as they were (the same CSV
-/// imported again, a row rewritten with its own values, the same library loaded again) records no
-/// undo step: the step to redo stays, and the document stays unmodified. An import or load that
-/// changes something is still one undo step.
+/// imported again, the same rows tab-separated, the file Export Data Sets writes, the same library
+/// loaded again) records no undo step: the step to redo stays, and the document stays unmodified.
+/// An import or load that changes something is still one undo step.
 #[test]
 fn an_import_or_library_load_that_changes_nothing_records_no_undo_step() {
     let mut s = session();
     let t = text(&mut s, "Alice");
-    let csv = "name,Name,#Shown\nA,Ann,true\nB,Bob,false\n";
+    let csv = "Name,#Shown\nAnn,true\nBob,false\n";
     s.execute("dataset.import", &json!({"csv": csv})).unwrap();
-    for csv in [csv, "name\tName\t#Shown\nB\tBob\tfalse\n", "Name,#Shown\nAnn,true\n"] {
+    let exported = s.execute("dataset.export", &json!({})).unwrap()["csv"].as_str().unwrap().to_string();
+    for csv in [csv, "Name\t#Shown\nAnn\ttrue\nBob\tfalse\n", exported.as_str()] {
         super::select_with_a_step_to_redo(&mut s, &[t]);
         let before = super::history(&s);
         assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
         let r = s.execute("dataset.import", &json!({"csv": csv})).unwrap();
-        if csv.starts_with("name") {
-            assert_eq!((super::history(&s), r["imported"].clone()), (before, json!(0)), "{csv}");
-        } else {
-            // Without a name column the row is a new data set, which is a change.
-            assert_eq!((super::history(&s), r["imported"].clone()), ((before.0 + 1, 0, true), json!(1)), "{csv}");
-        }
+        assert_eq!((super::history(&s), r["imported"].clone()), (before, json!(2)), "{csv}");
     }
-    super::select_with_a_step_to_redo(&mut s, &[t]);
-    let undo = super::history(&s).0;
-    s.execute("dataset.import", &json!({"csv": "name,Name\nB,Cy\n"})).unwrap();
-    assert_eq!(super::history(&s), (undo + 1, 0, true));
+    // A file with one of the two rows replaces both data sets with one, which is a change.
+    for csv in ["Name,#Shown\nAnn,true\n", "Name\nCy\n"] {
+        super::select_with_a_step_to_redo(&mut s, &[t]);
+        let undo = super::history(&s).0;
+        s.execute("dataset.import", &json!({"csv": csv})).unwrap();
+        assert_eq!(super::history(&s), (undo + 1, 0, true), "{csv}");
+    }
 
     let xml = library(&[("Name", "textcontent")], &[("A", &[("Name", &["Ann"])]), ("B", &[("Name", &["Bob"])])]);
     s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();

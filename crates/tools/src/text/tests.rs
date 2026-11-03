@@ -604,6 +604,41 @@ fn a_drag_across_type_not_being_edited_selects_its_text() {
 }
 
 #[test]
+fn a_dropped_press_keeps_the_type_in_editing() {
+    let (d, id, mut tool) = editing("Hello world");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let t = TypeTool::text(&c, id).unwrap().clone();
+    let lay = vectorcraft_text::layout(FontDb::global(), &t);
+    let pt = |i: usize| {
+        let (a, b) = vectorcraft_text::caret_position(&lay, i);
+        t.xf * a.midpoint(b)
+    };
+    let (at, to) = (pt(3), pt(7));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x + 0.1, to.y));
+    assert!(tool.busy());
+    assert_eq!(tool.sel(), (3, 7));
+    // The press is dropped: the caret and selection are as they were before it.
+    let out = tool.drop_press(&c);
+    assert!(!out.iter().any(|a| matches!(a, Action::SwitchTool(_))));
+    assert!(!tool.busy());
+    assert_eq!((tool.editing, tool.sel()), (Some(id), (0, 0)));
+    // The dropped press does not count toward a double or triple click.
+    assert_eq!(tool.clicks, (None, 0));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Up, at.x + 0.1, at.y));
+    assert_eq!((tool.editing, tool.sel()), (Some(id), (0, 0)));
+    // A Shift-press that extends the selection, dropped, leaves the caret where a click put it.
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Up, at.x + 0.1, at.y));
+    assert_eq!(tool.sel(), (3, 3));
+    tool.pointer(&c, &PointerEvent { mods: SHIFT, ..PointerEvent::new(PointerKind::Down, to.x + 0.1, to.y) });
+    assert_eq!(tool.sel(), (3, 7));
+    tool.drop_press(&c);
+    assert_eq!((tool.editing, tool.sel()), (Some(id), (3, 3)));
+}
+
+#[test]
 fn select_all_and_styled_paste() {
     let (d, _, mut tool) = editing("abc");
     tool.set_option("selectAll", &json!(true));

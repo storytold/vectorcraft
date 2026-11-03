@@ -4,11 +4,11 @@
 //! variable, anything to a `visibility` variable, a linked image to an `image`
 //! variable, or a graph root to a `graph` variable (CSV data), put a row of values in
 //! each dataset, and `dataset.select` swaps the whole document to that row in one undo
-//! step. `dataset.import` / `dataset.export` move those rows as CSV (header: `name`
-//! then variable names, which export writes with `#` before a visibility variable and `@`
-//! before an image variable); import also reads tab-separated files, files without the
-//! `name` column, and header cells that define new variables (`#` for visibility, `@` for
-//! image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
+//! step. `dataset.import` / `dataset.export` move those rows as CSV (header: one
+//! variable name per column, which export writes with `#` before a visibility variable and `@`
+//! before an image variable); import replaces the datasets, names the rows Data Set 1, 2…,
+//! also reads tab-separated files, and reads header cells that define new variables (`#` for
+//! visibility, `@` for image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
 //! text variables and data sets of a variable library, the XML file of the reference app's Save
 //! Variable Library, and `variable.saveLibrary` writes the text variables and data sets as one.
 //! Agents reach every command through `run_command`, like all engine commands.
@@ -138,13 +138,18 @@ fn names_param(p: &Value, cmd: &str, fallback: Option<String>, nothing: &str) ->
     }
 }
 
-/// Refuse what a variable of `kind` can't be bound to: art that is locked or on a hidden or locked
-/// layer; a text variable only drives type; an image variable only drives an image object.
+/// Refuse what a variable of `kind` can't be bound to: art that is locked, on a hidden or locked
+/// layer, or on a locked artboard; a text variable only drives type; an image variable only drives
+/// an image object; a variable of unknown kind drives nothing.
 fn check_bindable(doc: &vectorcraft_doc::Document, ids: &[NodeId], kind: VariableKind, cmd: &str) -> Result<()> {
+    if kind == VariableKind::Unknown {
+        return Err(bad(cmd, "a variable of unknown kind can't be bound to objects"));
+    }
+    let locks = doc.locked_artboards();
     for id in ids {
         match doc.node(*id) {
             None => return Err(EngineError::NoNode(*id)),
-            Some(_) if !doc.variable_target(*id) => return Err(bad(cmd, not_a_target(doc, *id))),
+            Some(_) if !doc.variable_target_with(&locks, *id) => return Err(bad(cmd, not_a_target(doc, *id))),
             Some(n) if kind == VariableKind::Text && !matches!(n.kind, NodeKind::Text(_)) => {
                 return Err(bad(cmd, format!("node {} is not type", id.0)));
             }
@@ -161,7 +166,7 @@ fn check_bindable(doc: &vectorcraft_doc::Document, ids: &[NodeId], kind: Variabl
 }
 
 /// Why `variable_target` refuses `id`: the object is locked, a group or layer that holds it is
-/// locked, or one that holds it is hidden, checked in that order.
+/// locked, one that holds it is hidden, or it is on a locked artboard, checked in that order.
 fn not_a_target(doc: &vectorcraft_doc::Document, id: NodeId) -> String {
     let holders: Vec<&vectorcraft_doc::Node> =
         doc.ancestry(id).unwrap_or_default().into_iter().filter(|i| *i != id).filter_map(|i| doc.node(i)).collect();
@@ -169,8 +174,10 @@ fn not_a_target(doc: &vectorcraft_doc::Document, id: NodeId) -> String {
         format!("node {} is locked", id.0)
     } else if holders.iter().any(|n| n.locked) {
         format!("node {} is in a locked group or layer", id.0)
-    } else {
+    } else if holders.iter().any(|n| !n.visible) {
         format!("node {} is in a hidden group or layer", id.0)
+    } else {
+        format!("node {} is on a locked artboard", id.0)
     }
 }
 
@@ -185,6 +192,7 @@ fn dataset_value(cmd: &str, var: &str, kind: VariableKind, v: &Value) -> Result<
             .map(str::trim)
             .filter(|t| !t.is_empty())
             .and_then(|t| if t.len() > MAX_GRAPH_CSV { None } else { Some(DataValue::Graph(t.to_string())) }),
+        VariableKind::Unknown => None,
     }
     .ok_or_else(|| bad(cmd, format!("value for `{var}` must match its variable kind")))
 }
@@ -483,7 +491,7 @@ fn dataset_capture(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Update Data Set: write what the bound objects hold now into the row that is active, for each
 /// variable the row holds. A variable whose objects report no value (locked, inside a locked
-/// layer or group, or gone) keeps the row's value. With `all`, every other variable the
+/// layer or group, on a locked artboard, or gone) keeps the row's value. With `all`, every other variable the
 /// objects report a value for is added to the row. Without an active row there is nothing to
 /// update, so say so rather than picking one. With every bound object locked, no value is
 /// written; an update that writes no value adds no undo step.
@@ -557,6 +565,20 @@ fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
         for v in &d.variables.variables {
             pairs.extend(d.variables.objects_of(&v.name).into_iter().map(|id| (id, v.name.clone())));
         }
+        // Which bound objects the row may rewrite, measured once before any of them changes, so
+        // text that grows onto a locked artboard part way through is still rewritten. Each id is
+        // keyed by whether a text value is meant for it, which checks every frame of its story.
+        let targets: BTreeSet<(NodeId, bool)> = {
+            let locks = d.locked_artboards();
+            let mut out = BTreeSet::new();
+            for (id, var) in &pairs {
+                let text = d.variables.variable(var).is_some_and(|v| v.kind == VariableKind::Text);
+                if if text { d.story_target_with(&locks, *id) } else { d.dataset_target_with(&locks, *id) } {
+                    out.insert((*id, text));
+                }
+            }
+            out
+        };
         // Whether an object is bound to a variable that this row has a value for (the reply's `warning`).
         let bound = pairs.iter().any(|(_, var)| ds.values.contains_key(var));
         let mut applied = 0usize;
@@ -574,12 +596,12 @@ fn apply_dataset(s: &mut Session, name: &str) -> Result<Value> {
                     continue;
                 }
             };
-            // Locked art, art in a locked layer or group, and text whose object is gone, can't be
-            // rewritten: skipped and counted, like the rest. Hidden art is rewritten, in a hidden
-            // layer or group too, and stays hidden unless a visibility value shows it. A text value
-            // rewrites the whole story of threaded text, so it skips when any frame of it is locked.
-            let target = if kind == VariableKind::Text { d.story_target(id) } else { d.dataset_target(id) };
-            if !target {
+            // Locked art, art in a locked layer or group or on a locked artboard, and text whose
+            // object is gone, can't be rewritten: skipped and counted, like the rest. Hidden art
+            // is rewritten, in a hidden layer or group too, and stays hidden unless a visibility
+            // value shows it. A text value rewrites the whole story of threaded text, so it skips
+            // when any frame of it is locked or on a locked artboard.
+            if !targets.contains(&(id, kind == VariableKind::Text)) {
                 skipped += 1;
                 continue;
             }
@@ -772,7 +794,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Data Set",
             ["Window", "Variables"],
             None,
-            "{all?: bool} write what the bound objects hold now into the active dataset, for each variable the dataset holds; a variable whose objects report no value (locked, inside a locked layer or group, or gone) keeps the dataset's value. `all: true` also adds every other variable the objects report a value for; `left` names the variables it didn't write → {values, left}",
+            "{all?: bool} write what the bound objects hold now into the active dataset, for each variable the dataset holds; a variable whose objects report no value (locked, inside a locked layer or group, on a locked artboard, or gone) keeps the dataset's value. `all: true` also adds every other variable the objects report a value for; `left` names the variables it didn't write → {values, left}",
             has_doc,
             dataset_update
         ),
@@ -816,7 +838,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path? | data? | dataBase64? | csv?} load datasets from CSV, comma- or tab-separated, in UTF-16 with a byte-order mark, UTF-8 or else Windows-1252 (header: name, then variable names; one row per dataset; without the name column every header is a variable and the rows take the first free names Data Set 1, 2…). A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. Rows whose name already exists are replaced → {imported, updated, names, defined}",
+            "{path? | data? | dataBase64? | csv?} replace every dataset with the rows of a CSV, comma- or tab-separated, in UTF-16 with a byte-order mark, UTF-8 or else Windows-1252 (header: one variable name per column, whatever its case; one row per dataset, named Data Set 1, 2… in file order). The document's variables and their bindings stay. A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. An import that leaves the variables and data sets as they were adds no undo step → {imported, names, defined, deletedDataSets}",
             has_doc,
             dataset_import
         ),
@@ -825,7 +847,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path?} write every dataset as CSV (header: name, then one column per variable: `#Name` for a visibility variable, `@Name` for an image variable, and the name alone for a text or graph variable, as dataset.import reads them). Refused when the document has more than 1000 data sets or 256 variables, the most dataset.import reads, or when a variable's header is another variable's name (a visibility variable `Show` next to a text variable `#Show`) → {path, datasets, warning?}; without path → {csv, datasets, warning?}. `warning` names the variables whose header or values make a document without them refuse the file (a % header, a # header whose values aren't true or false); otherwise it names the variables such a document doesn't read back with their kind (text variables whose names start with # or @, graph variables)",
+            "{path?} write every dataset as CSV (header: one column per variable and no dataset names: `#Name` for a visibility variable, `@Name` for an image variable, and the name alone for a text or graph variable, as dataset.import reads them). Refused when the document has more than 1000 data sets or 256 variables, the most dataset.import reads, or when a variable's header is another variable's name (a visibility variable `Show` next to a text variable `#Show`) → {path, datasets, warning?}; without path → {csv, datasets, warning?}. `warning` names the variables whose header or values make a document without them refuse the file (a % header, a # header whose values aren't true or false); otherwise it names the variables such a document doesn't read back with their kind (text variables whose names start with # or @, graph variables)",
             has_doc,
             dataset_export
         ),

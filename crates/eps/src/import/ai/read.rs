@@ -26,8 +26,9 @@
 //! - Document settings: Document Raster Effects Settings from the `/Document` dictionary's
 //!   `AI Auto Rasterize`; the author from the header's `%%For`; swatches for the custom colors of
 //!   `%%CMYKCustomColor` and `%%RGBCustomColor` that the document has none of.
-//! - Variables: the variable library, XML nodes of the `/Document` dictionary, isn't read; a note
-//!   gives how many variables and data sets it has ([`VariableLibrary`]).
+//! - Variables: the variable library, XML nodes of the `/Document` dictionary: its variables, data
+//!   sets, active data set and lock, without bindings; a note gives how many entries were left out
+//!   ([`VariableRead`]).
 //! - Objects on Path: a group whose objects' dictionaries carry ids, and a record of the
 //!   `/Document` dictionary naming them, read by [`on_path`].
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
@@ -51,9 +52,13 @@
 //!   lines and `1 (style) XW`: the drawn look is kept, named after the object.
 //! - Patterns: `%AI3_BeginPattern: (name)`, `(name) llx lly urx ury` (the tile, in the pattern's
 //!   space, y up), the tile's art (on `%_` lines in newer files), `E`, `%AI3_EndPattern`; each is
-//!   read by a reader of its own and becomes a pattern swatch. A fill or stroke with one:
+//!   read by a reader of its own and becomes a pattern swatch. In the version 7 form (§3.4) a list
+//!   of layers follows the tile, `[ (colors) @ (tile) & … ] E`, each layer's tile read from its
+//!   string with the colors' state (`_ &`: the tile's box filled). A fill or stroke with one:
 //!   `(name) x y scaleX scaleY angle reflect axis shear shearAxis [matrix] p` (`P`), the matrix
-//!   taking the pattern's space to art space (the other operands are what it is made of).
+//!   taking the pattern's space to art space (the other operands are what it is made of). With a
+//!   pattern defined in the version 7 form, the other operands are applied in order (§5.4.1) before
+//!   the initial matrix.
 //!
 //! - Type in the legacy format (version 7 specification §15): `type To` … `TO`, read by
 //!   [`legacy_text`].
@@ -109,7 +114,7 @@ mod types;
 
 pub(crate) use art::join_and;
 use art::preview_png;
-pub use document::{PaletteSwatches, VariableLibrary, artboards, palette, variables};
+pub use document::{PaletteSwatches, VariableRead, artboards, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
 use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster};
@@ -204,8 +209,8 @@ struct Reader<'a> {
     custom_more: Option<bool>,
     /// The header ended (`%%EndComments`).
     header_done: bool,
-    /// The variables and data sets of the `/Document` dictionary's variable library.
-    variables: VariableLibrary,
+    /// The `/Document` dictionary's variable library.
+    variables: VariableRead,
     /// The Objects on Path records of the `/Document` dictionary and the ids of the objects.
     on_path: on_path::OnPath,
     gradients: HashMap<String, Gradient>,
@@ -326,6 +331,9 @@ struct Reader<'a> {
     pattern: Option<PatternHead>,
     /// The tile (y down) of each pattern read, by name.
     pattern_tiles: HashMap<String, Rect>,
+    /// The patterns read from a definition in the version 7 form, whose fills apply their other
+    /// operands before the matrix (see [`Reader::pattern_paint`]).
+    v7_patterns: HashSet<String>,
     /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
     text: Option<legacy_text::LegacyText>,
     type_state: legacy_text::TypeState,
@@ -364,7 +372,7 @@ impl<'a> Reader<'a> {
             custom_colors: Vec::new(),
             custom_more: None,
             header_done: false,
-            variables: VariableLibrary::default(),
+            variables: VariableRead::default(),
             on_path: on_path::OnPath::default(),
             gradients: HashMap::new(),
             gradient_def: None,
@@ -430,6 +438,7 @@ impl<'a> Reader<'a> {
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),
+            v7_patterns: HashSet::new(),
             text: None,
             type_state: legacy_text::TypeState::default(),
             graph: None,

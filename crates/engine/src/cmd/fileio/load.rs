@@ -9,7 +9,7 @@ use vectorcraft_render::effects::pixel::LoadedTexture;
 
 use super::super::{Result, Session, bad, bool_or, clipboard, parse_range, str_param};
 use super::pdfimport::LoadOptions;
-use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, psdread, read_file};
+use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, psdread, read_file, readable_format_for_name};
 use crate::cmd::links::Resolved;
 use crate::{EngineError, Prefs};
 
@@ -67,7 +67,7 @@ pub fn file_name(name: &str) -> String {
 /// The readable format of a file: from its content (magic bytes) when that tells, else from the
 /// extension of `name`.
 pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
-    let by_name = format_for_name(name).filter(|f| f.read);
+    let by_name = readable_format_for_name(name);
     if vectorcraft_affinity::is_affinity(bytes) {
         return format("affinity");
     }
@@ -96,6 +96,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     }
     if psdread::is_psd(bytes) {
         return format(if psdread::is_psb(bytes) { "psb" } else { "psd" });
+    }
+    if super::pxrread::is_pxr(bytes) {
+        return format("pxr");
     }
     if super::jp2read::is_jpeg2000(bytes) {
         return format("jpeg2000");
@@ -642,6 +645,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// either, become RGBA too, whether they store their channels together or one plane per channel.
 /// A PCX file is recognized by its header ([`super::pcxread::is_pcx`]) and read by
 /// [`super::pcxread::decode`], which refuses an image past [`MAX_RASTER_ALLOC`] before decoding.
+/// A Pixar picture file is recognized by its magic number ([`super::pxrread::is_pxr`]) and read by
+/// [`super::pxrread::decode`], which does the same.
 /// A Targa file, which starts with no signature, is recognized by its header
 /// ([`super::tgaread::is_targa`]) and becomes RGBA with the transparency it stores
 /// ([`super::tgaread::fix_alpha`]). An image stored as PNG whose decoded samples, or whose pixels
@@ -659,6 +664,9 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     }
     if super::jp2read::is_jpeg2000(bytes) {
         return as_png(super::jp2read::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+    }
+    if super::pxrread::is_pxr(bytes) {
+        return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
     }
     let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
     if reader.format().is_none() && super::tgaread::is_targa(bytes) {

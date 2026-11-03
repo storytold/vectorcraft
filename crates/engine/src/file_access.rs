@@ -99,9 +99,14 @@ impl AutomationRoots {
                 Access::Write => Err(format!("automation filesystem access is not granted: write authority is absent: {path}")),
             };
         }
-        let resolved = resolve(path)?;
-        if roots.iter().any(|r| inside(&resolved, &r.resolved)) {
-            return Ok(());
+        // Resolving a path on another computer connects to it: unless a root is on a network
+        // share, such a path is refused by its name before anything is looked up.
+        let remote = cfg!(windows) && network_path(path) && !roots.iter().any(|r| network_path(&r.resolved.to_string_lossy()));
+        if !remote {
+            let resolved = resolve(path)?;
+            if roots.iter().any(|r| inside(&resolved, &r.resolved)) {
+                return Ok(());
+            }
         }
         let shown: Vec<String> = roots.iter().map(|r| r.shown.display().to_string()).collect();
         match (shown.as_slice(), access) {
@@ -282,6 +287,14 @@ pub(crate) fn is_device_name(component: &str) -> bool {
     matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$" | "CONIN$" | "CONOUT$") || numbered("COM") || numbered("LPT")
 }
 
+/// Is `path` a Windows name of a file on another computer (`\\server\share\…`, `\\?\UNC\…`)?
+/// (Judged by name alone, so it can be tested on any platform; `check` applies it on Windows only.)
+fn network_path(path: &str) -> bool {
+    let p = path.replace('/', "\\");
+    let upper = p.to_ascii_uppercase();
+    upper.starts_with(r"\\?\UNC\") || upper.starts_with(r"\\.\UNC\") || (p.starts_with(r"\\") && !p.starts_with(r"\\?\") && !p.starts_with(r"\\.\"))
+}
+
 /// Why Windows would not take `path` as an ordinary file name, for the first of its components
 /// that is a device name, or holds a `:` (a drive letter's own colon belongs to the prefix, not to
 /// a name, so only a stream such as `x.svg:evil` has one). (Judged by name alone, so it can be
@@ -313,6 +326,16 @@ mod tests {
 
     fn s(p: PathBuf) -> String {
         p.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn network_paths_are_told_by_name() {
+        for p in [r"\\server\share\x.svg", "//server/share/x.svg", r"\\?\UNC\server\share\x.svg", r"\\?\unc\server\share"] {
+            assert!(network_path(p), "{p}");
+        }
+        for p in [r"C:\art\x.svg", r"\\?\C:\art\x.svg", r"\\.\C:\x", "/home/me/x.svg", "x.svg"] {
+            assert!(!network_path(p), "{p}");
+        }
     }
 
     #[test]
