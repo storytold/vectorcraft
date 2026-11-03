@@ -59,11 +59,16 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ..DialogSpec::FORM
 };
 
-/// Does this dialog show a Preview checkbox? Only Grid Repeat Options does: the public page for
-/// the grid options lists one, and the radial and mirror pages do not. (Cancel rolls a preview
-/// back whichever dialog started it.)
+/// Does this dialog show a Preview checkbox? Grid Repeat Options does: the public page for the
+/// grid options lists one, and the radial and mirror pages do not. Type on a Path Options does
+/// too (#5360), our choice: its public pages list none. (Cancel rolls a preview back whichever
+/// dialog started it.)
 fn previews(d: &Dialog) -> bool {
-    d.str("__command") == "object.repeat.options" && d.fields.contains_key("gridType")
+    match d.str("__command").as_str() {
+        "object.repeat.options" => d.fields.contains_key("gridType"),
+        "type.pathOptions" => true,
+        _ => false,
+    }
 }
 
 /// The command the dialog runs and its parameters: the fields shown and the fixed ones.
