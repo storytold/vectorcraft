@@ -108,8 +108,6 @@ pub(super) fn warp_style(n: i64) -> Option<&'static str> {
 /// the kind and the one value read: `Command` 0 is Add, and the rest are its Pathfinder Options,
 /// Soft Mix and Trap settings
 /// (https://community.adobe.com/questions-652/liveeffect-xml-effect-is-added-under-the-object-795137).
-/// `Precision` is in microns, as the SDK's `AIOptions` gives it
-/// (https://ai-sdk-2020.84.nz/html/struct_a_i_options.html).
 const PATHFINDER_ADD: [(&str, Kind, f64); 13] = [
     ("Command", Kind::Int, 0.0),
     ("ConvertCustom", Kind::Bool, 1.0),
