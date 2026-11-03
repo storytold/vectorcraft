@@ -1284,3 +1284,42 @@ fn a_file_read_between_a_tools_clicks_is_placed() {
         assert_eq!(app.session.tool_busy(), !other_document, "other document: {other_document}");
     }
 }
+
+/// A DXF placed within automation roots is read again within them when it is placed against an
+/// artboard that changed meanwhile: a path redirected outside the roots after the read is refused.
+#[cfg(unix)]
+#[test]
+fn a_file_read_again_when_placed_stays_within_the_roots_it_was_read_in() {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
+    let v = src.execute("document.serialize", &json!({"format": "dxf"})).unwrap();
+    let dxf = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
+    let base = std::env::temp_dir().join(format!("vc-placing-reread-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    for d in ["in", "out"] {
+        std::fs::create_dir_all(base.join(d)).unwrap();
+        std::fs::write(base.join(d).join("real.dxf"), &dxf).unwrap();
+    }
+    let link = base.join("in").join("plan.dxf");
+    std::os::unix::fs::symlink(base.join("in").join("real.dxf"), &link).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap().unwrap();
+    let mut app = app(true);
+    let p = json!({"path": link.to_string_lossy(), "dxf": {"fit": true}, "at": [100, 150]});
+    vectorcraft_engine::file_access::confine(Some(&roots), || start(&mut app, &p, false)).unwrap();
+    let t0 = std::time::Instant::now();
+    while !(app.placing.reading[1].load(std::sync::atomic::Ordering::SeqCst) == 1
+        && app.placing.reading[0].load(std::sync::atomic::Ordering::SeqCst) == 0)
+    {
+        assert!(t0.elapsed().as_secs() < 60, "read within 60 s");
+        std::thread::yield_now();
+    }
+    // Read; now the path leads outside the roots and the artboard under `at` changes.
+    std::fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink(base.join("out").join("real.dxf"), &link).unwrap();
+    app.run("artboard.setProps", json!({"index": 0, "width": 200})).unwrap();
+    placed(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc.layers.iter().flat_map(|l| l.children().into_iter().flatten()).count(), 0, "nothing placed");
+    assert!(app.ui.status.contains("outside the read root"), "{}", app.ui.status);
+    let _ = std::fs::remove_dir_all(base);
+}
