@@ -61,7 +61,7 @@ use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 use overlays::selected_anchor;
 use overlays::{HandleLook, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
 pub use panes::Panes;
-pub(crate) use panes::{consolidate, tile, tiled_area};
+pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 use raster::{changed_pixels, pixel_region, upload};
 pub(crate) use raster::{color_image, color_image_owned};
 use task_bar::task_bar;
@@ -70,8 +70,8 @@ pub use tool_overlays::HiddenChars;
 #[cfg(test)]
 use tool_overlays::{DIAL_RADIUS, HiddenMarks};
 use tool_overlays::{
-    grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, original_path_overlay, print_tiling_overlay,
-    rotate_view_dial, shaper_widget_overlay, slice_overlay, thread_overlays,
+    grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, nine_slice_overlay, original_path_overlay,
+    print_tiling_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, thread_overlays,
 };
 pub(crate) use view::animated_zoom;
 pub use view::fit;
@@ -325,6 +325,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if app.ui.view.guides {
             guide_lines(app, &painter, &xf, rect, &t);
         }
+        nine_slice_overlay(app, &painter, &xf);
 
         if !app.session.slices_hidden() {
             slice_overlay(app, &painter, &xf);
@@ -653,7 +654,15 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             app.canvas.shown = Some((doc.clone(), opts.clone()));
             app.perf.render_ms = now_ms() - t0;
         }
-        (Some(worker), true, None) => worker.submit(crate::render_worker::Job { key: key.clone(), doc: doc.clone(), w, h, view, opts }),
+        (Some(worker), true, None) => worker.submit(crate::render_worker::Job {
+            key: key.clone(),
+            doc: doc.clone(),
+            w,
+            h,
+            view,
+            opts,
+            scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+        }),
         _ => {
             let t0 = now_ms();
             let img = app.canvas.renderer.render(doc, w, h, view, &opts);

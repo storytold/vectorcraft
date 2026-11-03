@@ -3159,6 +3159,65 @@ fn grid_repeat_handles_set_rows_and_spacing_in_one_undo_step_each() {
     assert_eq!((grid(&app).0, grid(&app).2), (5, 10.0), "the spacing's own undo step");
 }
 
+/// While a symbol with 9-slice guides is edited, the canvas draws its four guides dotted across
+/// its art, with ruler guides hidden too, and none once the mode ends. Dragging the left guide in
+/// a zoomed view moves that guide alone, as one undo step.
+#[test]
+fn the_edited_symbols_nine_slice_guides_are_drawn_and_dragged_on_the_canvas() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("symbol.new", json!({"name": "Box", "nineSlice": true})).unwrap();
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.view_mut().unwrap().zoom = 1.5;
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    // The dots drawn along the guide from document point `a` to `b`.
+    let dots = |app: &mut VectorcraftApp, a: Point, b: Point| {
+        let (a, b) = (xf.to_screen(a), xf.to_screen(b));
+        let on = |q: Pos2| {
+            let (d, len) = (b - a, (b - a).length());
+            let t = (q - a).dot(d) / (len * len);
+            (-0.01..=1.01).contains(&t) && (a + d * t).distance(q) < 0.01
+        };
+        shapes(app, &ctx).into_iter().filter(|s| matches!(s, Shape::LineSegment { points: [p, q], .. } if on(*p) && on(*q))).count()
+    };
+    let guides = [
+        (Point::new(125.0, 100.0), Point::new(125.0, 200.0)),
+        (Point::new(100.0, 125.0), Point::new(200.0, 125.0)),
+        (Point::new(175.0, 100.0), Point::new(175.0, 200.0)),
+        (Point::new(100.0, 175.0), Point::new(200.0, 175.0)),
+    ];
+    assert_eq!(dots(&mut app, guides[0].0, guides[0].1), 0, "not while the instance is only selected");
+    app.run("symbol.edit", json!({})).unwrap();
+    app.ui.view.guides = false;
+    for (a, b) in guides {
+        assert!(dots(&mut app, a, b) > 10, "a dotted guide from {a:?} to {b:?}");
+    }
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let from = xf.to_screen(Point::new(125.0, 150.0));
+    let to = xf.to_screen(Point::new(110.0, 160.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+    for k in 1..=4 {
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + (to - from) * k as f32 / 4.0)]);
+    }
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    let guides_now = |app: &VectorcraftApp| app.session.active().unwrap().doc.symbol_nine_slice("Box").unwrap();
+    let g = guides_now(&app);
+    assert!((g.left - 0.1).abs() < 1e-3 && (g.top, g.right, g.bottom) == (0.25, 0.25, 0.25), "{g:?}");
+    assert!(app.session.active().unwrap().doc.symbol_edit.is_some(), "still editing the symbol");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(guides_now(&app).left, 0.25, "one undo step");
+    app.run("edit.redo", json!({})).unwrap();
+    assert!((guides_now(&app).left - 0.1).abs() < 1e-3);
+    app.run("symbol.exitEditing", json!({})).unwrap();
+    assert_eq!(dots(&mut app, Point::new(110.0, 100.0), Point::new(110.0, 200.0)), 0, "none outside the mode");
+}
+
 #[test]
 fn top_bounding_box_handle_scales_a_default_mirror_repeat() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -3963,6 +4022,41 @@ fn a_selected_objects_on_path_group_shows_its_rotate_all_widget() {
     app.select_tool("selection");
     app.run("select.set", json!({"ids": [a]})).unwrap();
     assert_eq!(widgets(&mut app), 0, "an object in the group, not the group");
+}
+
+/// A selected Objects on Path group of two or more objects shows its Space widget, a white square
+/// beyond its last object, with the Selection and Objects on Path tools.
+#[test]
+fn a_selected_objects_on_path_group_shows_its_space_widget() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let line = id(app.session.execute("shape.line", &json!({"x1": 20, "y1": 200, "x2": 380, "y2": 200})).unwrap());
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 80, "y": 40, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g = id(app.session.execute("object.objectsOnPath.attach", &json!({"path": line})).unwrap());
+    let ctx = egui::Context::default();
+    let widgets = |app: &mut VectorcraftApp| {
+        let side = 2.0 * vectorcraft_tools::objects_on_path::SPACE_HALF_PX;
+        shapes(app, &ctx)
+            .iter()
+            .filter(|s| matches!(s, Shape::Rect(r) if r.rect.width() == side && r.rect.height() == side && r.fill == Color32::WHITE))
+            .count()
+    };
+    app.select_tool("selection");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("objectsOnPath");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app), 0);
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "an object in the group, not the group");
+    // With one object on the path there is no space to set.
+    app.run("edit.clear", json!({"ids": [b]})).unwrap();
+    app.run("select.set", json!({"ids": [g]})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "one object");
 }
 
 /// The shapes Type → Show Hidden Characters draws in one frame, seen through `xf`.
@@ -6519,6 +6613,85 @@ fn a_drag_ends_where_the_button_went_up_in_its_frame() {
     assert!(app.session.active().unwrap().interaction.is_none(), "committed");
 }
 
+/// The moves that come after the button-up in the release's frame are hover: a stroke built from
+/// the drag's samples does not take them.
+#[test]
+fn moves_after_the_button_up_do_not_join_the_stroke() {
+    use egui::{Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    let center = app.canvas_rect.unwrap().center();
+    app.select_tool("pencil");
+    let a = center - vec2(100.0, 0.0);
+    let end = a + vec2(120.0, 0.0);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a)]);
+    frame(&mut app, &ctx, vec![button(a, true)]);
+    for x in [20.0, 40.0, 60.0] {
+        frame(&mut app, &ctx, vec![Event::PointerMoved(a + vec2(x, 0.0))]);
+    }
+    let hover = [end + vec2(30.0, 100.0), end + vec2(60.0, 120.0), end + vec2(90.0, 140.0)];
+    let mut events = vec![Event::PointerMoved(a + vec2(90.0, 0.0)), Event::PointerMoved(end), button(end, false)];
+    events.extend(hover.map(Event::PointerMoved));
+    frame(&mut app, &ctx, events);
+    let st = app.session.active().unwrap();
+    let r = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
+    let (left, right) = (xf.to_doc(a), xf.to_doc(end));
+    assert!((r.x0 - left.x).abs() < 1.0 && (r.x1 - right.x).abs() < 1.0 && r.height() < 1.0, "the stroke stops at the release: {r:?}");
+}
+
+/// [`frame_moves`] with a release keeps the moves before the button-up, and the pose the feed kept
+/// for the last of them.
+#[test]
+fn frame_moves_stop_at_the_button_up() {
+    let ctx = egui::Context::default();
+    let (a, b, c, d) = (pos2(10.0, 20.0), pos2(20.0, 30.0), pos2(30.0, 40.0), pos2(40.0, 50.0));
+    let up = egui::Event::PointerButton { pos: b, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), up, egui::Event::PointerMoved(c), egui::Event::PointerMoved(d)];
+    let feed = StylusFeed::default();
+    let at_b = PenPose { tilt: Some([20.0, 0.0]), rotation: None };
+    let after = PenPose { tilt: Some([50.0, 0.0]), rotation: None };
+    for (p, pose) in [(0.4, PenPose::default()), (0.6, at_b), (0.7, after), (0.8, after)] {
+        feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
+    }
+    let (mut moves, mut last) = (vec![], None);
+    let release = Some(egui::PointerButton::Primary);
+    let mut out =
+        ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| (moves, last) = frame_moves(ui, Some(&feed), release));
+    out.textures_delta.clear();
+    assert_eq!(moves, [(a, Some(0.4), Some(PenPose::default()))], "the moves after the button-up are left out");
+    assert_eq!(last, Some(at_b), "the pose is the last move's before the button-up");
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| moves = frame_moves(ui, None, None).0);
+    out.textures_delta.clear();
+    assert_eq!(moves, [(a, None, None), (b, None, None), (c, None, None)], "without a release every move counts");
+}
+
+/// A button-up away from the last move before it keeps that move: the release takes only its own
+/// position, and the pose is still the last move's.
+#[test]
+fn frame_moves_keep_the_last_move_when_the_button_went_up_elsewhere() {
+    let ctx = egui::Context::default();
+    let (a, b, up_at, c) = (pos2(10.0, 20.0), pos2(20.0, 30.0), pos2(25.0, 35.0), pos2(30.0, 40.0));
+    let up = egui::Event::PointerButton { pos: up_at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+    let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), up, egui::Event::PointerMoved(c)];
+    let feed = StylusFeed::default();
+    let at_b = PenPose { tilt: Some([20.0, 0.0]), rotation: None };
+    for (p, pose) in [(0.4, PenPose::default()), (0.6, at_b), (0.7, PenPose::default())] {
+        feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
+    }
+    let (mut moves, mut last) = (vec![], None);
+    let release = Some(egui::PointerButton::Primary);
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| (moves, last) = frame_moves(ui, Some(&feed), release));
+    out.textures_delta.clear();
+    assert_eq!(moves, [(a, Some(0.4), Some(PenPose::default())), (b, Some(0.6), Some(at_b))], "the move before the button-up is kept");
+    assert_eq!(last, Some(at_b), "the pose is the last move's before the button-up");
+}
+
 #[test]
 fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     let ctx = egui::Context::default();
@@ -6527,7 +6700,7 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     let c = pos2(30.0, 40.0);
     let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), egui::Event::PointerMoved(c)];
     let mut mouse = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None).0);
+    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| mouse = frame_moves(ui, None, None).0);
     out.textures_delta.clear();
     // A mouse keeps its moves too, without a pressure or a pose.
     assert_eq!(mouse, [(a, None, None), (b, None, None)], "the last move follows the normal pointer path");
@@ -6538,7 +6711,8 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
         feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
     let (mut samples, mut last) = (vec![], None);
-    let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed)));
+    let mut out =
+        ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed), None));
     out.textures_delta.clear();
     assert_eq!(
         samples,
@@ -6546,17 +6720,17 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
         "paired from the end, each with its own pose; a lift's 0 is no pressure"
     );
     assert_eq!(last, Some(leaning), "the last move's pose comes with the moves");
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed)));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| (samples, last) = frame_moves(ui, Some(&feed), None));
     out.textures_delta.clear();
     assert_eq!(samples, [(a, None, None), (b, None, None)], "the moves were taken: a mouse's moves again");
     assert_eq!(last, None);
     let events = [pen(egui::TouchPhase::Move, a, 0.2), pen(egui::TouchPhase::Move, b, 0.8), pen(egui::TouchPhase::Move, c, 0.6)].concat();
     let mut samples = vec![];
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None).0);
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None, None).0);
     out.textures_delta.clear();
     assert_eq!(samples, [(a, Some(0.2), None), (b, Some(0.8), None)], "the last sample follows the normal pointer path");
     let events = (0..200).flat_map(|n| pen(egui::TouchPhase::Move, pos2(n as f32, 0.0), 0.5)).collect();
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None).0);
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| samples = frame_moves(ui, None, None).0);
     out.textures_delta.clear();
     assert!(samples.len() <= 64, "a stalled frame stays bounded");
 }
@@ -6584,8 +6758,39 @@ fn long_touch_drops_a_tool_press_without_committing_art() {
     tick(&mut app, 1.5, vec![]);
     assert!(matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Gesture)), "long touch drops the tool drag");
     assert!(app.session.active().unwrap().interaction.is_none());
+    assert!(app.ui.dialog.is_none(), "the dropped press is not a click that opens the size dialog");
     tick(&mut app, 1.6, pen(egui::TouchPhase::End, pos, 0.5));
     assert!(app.session.active().unwrap().doc.art_bounds().is_none(), "releasing cannot commit the cancelled press");
+}
+
+/// A canceled touch drops the tool's drag: the options the drag changed (the Polygon tool's
+/// sides) are put back and not stored, and nothing is drawn.
+#[test]
+fn a_canceled_touch_drops_the_drag_without_keeping_its_options() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.touch_gestures = true;
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    app.select_tool("polygon");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let start = xf.to_screen(Point::new(200.0, 200.0));
+    frame(&mut app, &ctx, pen(egui::TouchPhase::Start, start, 0.5));
+    frame(&mut app, &ctx, pen(egui::TouchPhase::Move, start + vec2(60.0, 40.0), 0.5));
+    assert!(matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Tool)));
+    assert!(app.session.active().unwrap().interaction.is_some(), "the drag previews the polygon");
+    let view = app.view_info();
+    assert_eq!(app.session.tool_options()["sides"], json!(6));
+    app.session.tool_key(vectorcraft_tools::ToolKey::Up, Mods::default(), view).unwrap();
+    assert_eq!(app.session.tool_options()["sides"], json!(7));
+    frame(&mut app, &ctx, pen(egui::TouchPhase::Cancel, start + vec2(60.0, 40.0), 0.5));
+    assert!(!app.session.tool_busy(), "the tool is at rest");
+    let st = app.session.active().unwrap();
+    assert!(st.interaction.is_none() && st.doc.art_bounds().is_none(), "nothing is drawn");
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_options()["sides"], json!(6), "the tool has its sides from before the press");
+    let stored = app.session.prefs.tool_settings.get("polygon").and_then(|o| o.get("sides"));
+    assert_eq!(stored, None, "the dropped drag's sides are not stored");
 }
 
 /// #2826: a second finger drops a move waiting over a panel, so its interaction doesn't
@@ -7141,7 +7346,7 @@ fn only_the_freehand_tools_get_every_move_of_a_frame() {
     {
         app.select_tool(tool);
         let mut moves = vec![];
-        let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app).0);
+        let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app, false).0);
         out.textures_delta.clear();
         assert_eq!(moves.len(), if every { 19 } else { 0 }, "{tool}");
     }

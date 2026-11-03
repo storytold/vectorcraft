@@ -2,10 +2,12 @@
 //! the name of a new action set, of the current one, or of the selected action.
 //!
 //! Fields: `set` (the index of the set renamed, or of the action's set; none for a new set),
-//! `action` (the index of the action renamed, in `set`; none for a set) and `name`. OK adds the set
-//! and makes it the current one, renames the set, or renames the action (`ui.action.rename`). A
-//! `set` or `action` field that is not the index of a set or action is an error, OK then changes
-//! no set or action, and the dialog stays open.
+//! `action` (the index of the action renamed, in `set`; none for a set) and `name`. Action Options
+//! also holds the action's function key and color, as New Action does (`key`, `cmd`, `shift`,
+//! `color`, see [`super::action_new`]). OK adds the set and makes it the current
+//! one, renames the set, or changes the action's name, function key and color
+//! (`ui.action.options`). An invalid `set`, `action` or function key is an error. OK then changes no set or
+//! action, and the dialog stays open.
 
 use serde_json::{Value, json};
 
@@ -43,17 +45,26 @@ pub fn open(app: &mut VectorcraftApp, set: usize) {
     }
 }
 
-/// Open Action Options for the action at `action` in set `set`, if there is one.
+/// Open Action Options for the action at `action` in set `set`, if there is one, with its name,
+/// function key and color.
 pub fn open_action(app: &mut VectorcraftApp, set: usize, action: usize) {
     if let Some(a) = app.ui.action_sets.get(set).and_then(|s| s.actions.get(action)) {
-        app.ui.dialog = Some(Dialog::new(KIND, json!({"set": set, "action": action, "name": a.name})));
+        let (key, cmd, shift) = a.key.map_or((0, false, false), |k| (k.key, k.cmd, k.shift));
+        let color = a.color.clone().unwrap_or_default();
+        let fields = json!({"set": set, "action": action, "name": a.name, "key": key, "cmd": cmd, "shift": shift, "color": color});
+        app.ui.dialog = Some(Dialog::new(KIND, fields));
     }
 }
 
-fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    widgets::label_row(ui, "Name:", 50.0, |ui| {
+fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    // Action Options lines its rows up with the Function Key and Color rows.
+    let action = d.fields.contains_key("action") && d.fields.contains_key("key");
+    widgets::label_row(ui, "Name:", if action { 90.0 } else { 50.0 }, |ui| {
         super::form::text(ui, d, "name", 200.0);
     });
+    if action {
+        super::action_new::key_and_color(ui, d);
+    }
     false
 }
 
@@ -65,7 +76,12 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     // The fields the dialog holds choose what OK does, as they choose its heading.
     if d.fields.contains_key("action") {
-        app.run(crate::panels::actions::RENAME_ACTION, json!({"set": d.fields.get("set"), "action": d.fields.get("action"), "name": name}))?;
+        // A dialog without the key fields (made by `ui.dialog.set`) keeps the key and color.
+        let mut p = if d.fields.contains_key("key") { super::action_new::key_and_color_params(d) } else { json!({}) };
+        p["set"] = d.fields.get("set").cloned().unwrap_or(Value::Null);
+        p["action"] = d.fields.get("action").cloned().unwrap_or(Value::Null);
+        p["name"] = json!(name);
+        app.run(crate::panels::actions::ACTION_OPTIONS, p)?;
     } else if let Some(set) = d.fields.get("set") {
         let s = set.as_u64().and_then(|i| usize::try_from(i).ok()).and_then(|i| app.ui.action_sets.get_mut(i)).ok_or("no such action set")?;
         s.name = name;

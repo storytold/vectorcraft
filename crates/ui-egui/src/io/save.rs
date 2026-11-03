@@ -370,7 +370,8 @@ pub fn save_pdf(app: &mut VectorcraftApp, mode: SaveMode, mut params: Value) -> 
 
 /// Open a written file in the system viewer (not on the web, which downloads it).
 pub(super) fn view_file(app: &mut VectorcraftApp, path: &str) {
-    if !is_web(app) {
+    // The viewer is another app: an export automation asked for is written but not opened.
+    if !is_web(app) && app.refuse_automation("viewAfterSaving").is_ok() {
         app.open_url(&file_url(path));
     }
 }

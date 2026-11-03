@@ -1322,6 +1322,20 @@ fn a_kept_decoded_image_is_drawn_without_decoding_it() {
     assert!(!image_cached(&cmyk));
 }
 
+/// A CMYK image's inks and the pixels shown from them are admitted against the decode allowance
+/// before either is made: past it, the image is read as other images are (reduced), not whole.
+#[test]
+fn cmyk_images_past_the_allowance_are_not_decoded_whole() {
+    use vectorcraft_doc::ImageBlob;
+    use vectorcraft_doc::cmyk::Inks;
+    let cmyk = ImageBlob::cmyk_tiff(&Inks::new(64, 48, [11, 22, 33, 44].repeat(64 * 48)).unwrap()).unwrap();
+    let whole = with_allowance(1 << 20, || crate::blobs::blob_pixmap(&cmyk, false)).map(|(_, pm)| (pm.width(), pm.height()));
+    assert_eq!(whole, Some((64, 48)), "within the allowance, whole");
+    let other = ImageBlob::cmyk_tiff(&Inks::new(64, 48, [12, 22, 33, 44].repeat(64 * 48)).unwrap()).unwrap();
+    let small = with_allowance(64 * 48 * 4 - 1, || crate::blobs::blob_pixmap(&other, false)).map(|(_, pm)| (pm.width(), pm.height()));
+    assert_ne!(small, Some((64, 48)), "past it, not decoded whole");
+}
+
 /// An image drawn larger than its pixels samples smoothly, or with `smooth_images` off each screen
 /// pixel takes its nearest image pixel (Pixel Preview with File Handling › Display Bitmaps as
 /// Anti-aliased Images off, #394).

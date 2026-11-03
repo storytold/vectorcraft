@@ -393,6 +393,7 @@
 	Variable Font	Variabel skrifttype
 	Text Fill Color	Tekstfyldfarve
 	Text Stroke Color	Tekststregfarve
+	Text Fill & Stroke Color	Tekstfyld- og stregfarve
 	All on Same Layers	Alt på samme lag
 	Direction Handles	Retningshåndtag
 	Brush Strokes	Penselstrøg
@@ -585,6 +586,7 @@
 	Cascade	Kaskade
 	Tile	Fliselæg
 	Float in Window	Flyd i vindue
+	Float All in Windows	Flyd alle i vinduer
 	Consolidate All Windows	Saml alle vinduer
 	Workspace	Arbejdsområde
 	Reset Essentials	Nulstil Essentials
@@ -1177,6 +1179,8 @@ lighting	Light	Lys
 	Hand	Hånd
 	Join Tool	Sammenføjningsværktøj
 	Lasso Tool	Lassoværktøj
+	Enclosing Lasso Tool	Omsluttende lassoværktøj
+	Enclosing Lasso	Omsluttende lasso
 	Lasso	Lasso
 	Line Cut Tool	Linjeskæringsværktøj
 	Line Graph Tool	Linjediagramværktøj
@@ -1658,6 +1662,7 @@ digits	Malayalam	Malayalam
 	Left-to-Right Paragraph Direction	Afsnitsretning fra venstre mod højre
 	Line-end Punctuation Half Width	Skilletegn i halv bredde ved linjeslut
 	Insert Kashidas	Indsæt kashidaer
+	Kashidas	Kashidaer
 	Long	Lang
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
@@ -2443,6 +2448,10 @@ digits	Malayalam	Malayalam
 	Current Colors	Aktuelle farver
 	Current Colors (0)	Aktuelle farver (0)
 	Harmony Rules:	Harmoniregler:
+	Segmented color wheel	Segmenteret farvehjul
+	Show smooth color wheel	Vis glat farvehjul
+	Show segmented color wheel	Vis segmenteret farvehjul
+	Show color bars	Vis farvebjælker
 	Harmony Rules	Harmoniregler
 	Keep this row's colors (exclude)	Behold farverne i denne række (ekskludér)
 	Limit to Library:	Begræns til bibliotek:
@@ -3322,6 +3331,7 @@ theme	Appearance	Udseende
 	List Preferences	Oplist indstillinger
 	Manually	Manuelt
 	Mark Older Files as [Converted] When Opened	Markér ældre filer som [konverteret] ved åbning
+	Use System Defaults for Edit Original	Anvend systemets standarder til Redigér original
 	Match User Interface Brightness	Match lysstyrken i brugergrænsefladen
 	Light Gray	Lysegrå
 	Medium Gray	Mellemgrå
@@ -3674,6 +3684,8 @@ effect	Regular	Regular
 	In the selected objects	I de markerede objekter
 	Find in Folder…	Find i mappe…
 	Replace With Font	Erstat med skrifttype
+	Replace With Font From	Erstat med skrifttype fra
+	System	System
 	  — substituted by {style}	  — erstattet af {style}
 	  — {n} characters from another font	  — {n} tegn fra en anden skrifttype
 	All Scripts	Alle scripts
@@ -5351,6 +5363,11 @@ swatch	Bright Violet	Kraftig violet
 	Export Type:	Eksporttype:
 	Movie Clip	Filmklip
 @msg	name is empty	navnet er tomt
+@msg	an action is already recording	en handling optages allerede
+@msg	no such function key	ingen sådan funktionstast
+@msg	no such color	ingen sådan farve
+@msg	{_1} cannot be used on Windows	{_1} kan ikke bruges i Windows
+@msg	more than one action is named “{_1}”	mere end én handling hedder »{_1}«
 @msg	no symbol named `{n}`	intet symbol med navnet `{n}`
 	Remove Color Profile…	Fjern farveprofil…
 	Color wheel	Farvehjul
@@ -5630,9 +5647,17 @@ axis	Y Axis	Y-akse
 	Action Options…	Indstillinger for handling…
 	Action Options	Indstillinger for handling
 	Rename Action	Omdøb handling
+	New Action…	Ny handling…
+	New Action	Ny handling
+	Create New Action	Opret ny handling
+	Play Action	Afspil handling
+	Action Set:	Handlingssæt:
+	Function Key:	Funktionstast:
+	Record	Optag
 	Create New Set	Opret nyt sæt
 	Stop Global Edit	Stop global redigering
 	Global Edit Options	Indstillinger for global redigering
+	Leave Out of Global Edit	Udelad fra global redigering
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering virker på stier, sammensatte stier, symbolforekomster og grupper af dem
 	Match	Match
 	On Artboards	På tegneflader
@@ -6118,3 +6143,14 @@ breakText	Glyphs	Glyffer
 	Create Swatch Legend	Opret farveprøveforklaring
 	Create Swatch Legend…	Opret farveprøveforklaring…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Tekstværktøjer
+	Text Tweaker…	Tekstjustering…
+	Text Tweaker	Tekstjustering
+	Attribute:	Attribut:
+	From:	Fra:
+	To:	Til:
+	Bow	Bue
+	Spike	Spids
+	Skip Spaces	Spring mellemrum over
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafikken er for stor til at blive kopieret som et billede: andre programmer får ingen PNG af den

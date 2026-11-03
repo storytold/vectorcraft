@@ -1238,6 +1238,7 @@ file-filter	Templates	Modelli
 	Flip Row Order	Inverti ordine delle righe
 	Flip Vertical	Capovolgi verticalmente
 	Float in Window	Rendi mobile nella finestra
+	Float All in Windows	Rendi tutto mobile nelle finestre
 	Focal Fill	Riempimento attivo
 	Focal Stroke	Traccia attiva
 	Folder	Cartella
@@ -1401,6 +1402,10 @@ file-filter	Templates	Modelli
 	Hard Light	Luce intensa
 	Hard Mix	Miscela intensa
 	Harmony Rules:	Regole di armonia:
+	Segmented color wheel	Ruota dei colori segmentata
+	Show smooth color wheel	Mostra ruota dei colori continua
+	Show segmented color wheel	Mostra ruota dei colori segmentata
+	Show color bars	Mostra barre di colore
 	Harmony Sets	Gruppi di armonia
 	Height	Altezza
 	Height:	Altezza:
@@ -1737,6 +1742,8 @@ file-filter	Templates	Modelli
 	Large Thumbnail View	Vista miniature grandi
 	Large Thumbnails	Miniature grandi
 	Lasso Tool	Strumento Lazo
+	Enclosing Lasso Tool	Strumento Lazo di inclusione
+	Enclosing Lasso	Lazo di inclusione
 	Last Effect: {name}	Ultimo effetto: {name}
 	Last Effect: {}	Ultimo effetto: {}
 	Last Effect…	Ultimo effetto…
@@ -1888,6 +1895,7 @@ file-filter	Templates	Modelli
 	Manually	Manualmente
 	Mark as trapped	Contrassegna come sottoposto a trapping
 	Mark Older Files as [Converted] When Opened	Contrassegna i file meno recenti come [Convertito] all'apertura
+	Use System Defaults for Edit Original	Usa le impostazioni predefinite di sistema per Modifica originale
 	Marker…	Indicatore…
 	Marks	Segni
 	Marks and Bleed	Segni e abbondanza
@@ -1950,6 +1958,7 @@ file-filter	Templates	Modelli
 	Modify	Modifica
 	Mojikumi	Mojikumi
 	Insert Kashidas	Inserisci kashida
+	Kashidas	Kashida
 	Long	Lunga
 	Stylistic	Stilistica
 	Mojikumi Set	Set mojikumi
@@ -2738,6 +2747,8 @@ digits	Malayalam	Malayalam
 	Replace Spine	Sostituisci dorsale
 	Replace Symbol	Sostituisci simbolo
 	Replace With Font	Sostituisci con font
+	Replace With Font From	Sostituisci con font da
+	System	Sistema
 	Replaces the saved preset of that name.	Sostituisce il preset salvato con quel nome.
 	Replace…	Sostituisci…
 	Require a password to open the document	Richiedi una password per aprire il documento
@@ -3426,6 +3437,7 @@ digits	Malayalam	Malayalam
 	Templates…	Modelli…
 	Text Displayed in Cell:	Testo visualizzato nella cella:
 	Text Export Options	Opzioni di esportazione testo
+	Text Fill & Stroke Color	Colore riempimento e traccia testo
 	Text Fill Color	Colore riempimento testo
 	Text Import Options	Opzioni di importazione testo
 	Text Stroke Color	Colore traccia testo
@@ -5171,6 +5183,11 @@ lighting	Light	Luce
 	Export Type:	Tipo di esportazione:
 	Movie Clip	Clip filmato
 @msg	name is empty	il nome è vuoto
+@msg	an action is already recording	è già in corso la registrazione di un’azione
+@msg	no such function key	tasto funzione inesistente
+@msg	no such color	colore inesistente
+@msg	{_1} cannot be used on Windows	{_1} non può essere usato su Windows
+@msg	more than one action is named “{_1}”	più di un’azione si chiama “{_1}”
 @msg	no symbol named `{n}`	nessun simbolo denominato `{n}`
 	Smudge Stick…	Sfumino…
 	Smudge Stick	Sfumino
@@ -5344,9 +5361,17 @@ axis	Y Axis	Asse Y
 	Action Options…	Opzioni azione…
 	Action Options	Opzioni azione
 	Rename Action	Rinomina azione
+	New Action…	Nuova azione…
+	New Action	Nuova azione
+	Create New Action	Crea nuova azione
+	Play Action	Esegui azione
+	Action Set:	Set di azioni:
+	Function Key:	Tasto funzione:
+	Record	Registra
 	Create New Set	Crea nuovo set
 	Stop Global Edit	Interrompi modifica globale
 	Global Edit Options	Opzioni modifica globale
+	Leave Out of Global Edit	Escludi dalla modifica globale
 	Match	Corrispondenza
 	On Artboards	Sulle tavole da disegno
 	All Artboards	Tutte le tavole da disegno
@@ -5355,6 +5380,8 @@ axis	Y Axis	Asse Y
 @msg	select one object	selezionate un oggetto
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La modifica globale funziona su tracciati, tracciati composti, istanze di simboli e gruppi di essi
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nessun oggetto simile trovato (le copie ruotate o riflesse non vengono riconosciute); cambiate le opzioni di modifica globale e riprovate
+@msg	Global Edit is off	La modifica globale non è attiva
+@msg	only an object of the Global Edit other than the one it started from can be left out	si può escludere solo un oggetto della modifica globale diverso da quello da cui è partita
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un intervallo come 1, 3-5, non {v}
 	Add to Symbols	Aggiungi ai simboli
 	Basic Shapes	Forme di base
@@ -5613,6 +5640,11 @@ anchor	Points:	Punti:
 	Horizontal Scale	Scala orizzontale
 	Vertical Scale	Scala verticale
 @msg	{label} must be a number from {min} to {max}	{label} deve essere un numero da {min} a {max}
+	Character Color	Colore carattere
+	OpenType Features	Funzioni OpenType
+	Stylistic Sets	Set stilistici
+@msg	features lists at most {max} tags	features contiene al massimo {max} tag
+@msg	unknown OpenType feature `{t}`	funzione OpenType sconosciuta `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve essere un numero maggiore di 0 e al massimo {max}
 @msg	no character style `{name}`	Stile di carattere `{name}` non trovato
 
@@ -5863,3 +5895,14 @@ breakText	Glyphs	Glifi
 	Create Swatch Legend	Crea legenda campioni
 	Create Swatch Legend…	Crea legenda campioni…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Strumenti testo
+	Text Tweaker…	Regolatore testo…
+	Text Tweaker	Regolatore testo
+	Attribute:	Attributo:
+	From:	Da:
+	To:	A:
+	Bow	Arco
+	Spike	Picco
+	Skip Spaces	Salta gli spazi
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	La grafica è troppo grande per essere copiata come immagine: le altre app non ne ricevono un PNG

@@ -140,79 +140,98 @@ pub(crate) fn cells(n: usize, area: egui::Rect) -> Vec<egui::Rect> {
     (0..n).map(|i| egui::Rect::from_min_max(pos2(x(i % cols), y(i / cols)), pos2(x(i % cols + 1), y(i / cols + 1)))).collect()
 }
 
-/// `window.arrange.tile`: every open document in a pane of its own, each fitted to its pane.
+/// `window.arrange.tile`: every open document in a pane of its own, each fitted to its pane. With
+/// fewer than two documents open (when the menu item is grayed out) it leaves the view and `tiled` as
+/// they are. The documents in floating windows come back under the tabs for it.
 pub(crate) fn tile(app: &mut VectorcraftApp) -> Result<serde_json::Value, String> {
-    app.sync_views();
     let n = app.session.documents().len();
-    app.ui.tiled = n > 0;
-    if n > 0 {
-        app.ui.home = None;
+    if n < 2 {
+        return Ok(json!({"tiled": app.ui.tiled, "panes": n}));
     }
+    app.sync_views();
+    crate::doc_windows::dock_all(app);
+    app.ui.tiled = true;
+    app.ui.home = None;
     for v in &mut app.views {
         v.fitted = false;
     }
     Ok(json!({"tiled": app.ui.tiled, "panes": n}))
 }
 
-/// `window.arrange.consolidateAllWindows`: one document at a time again, under its tab.
+/// `window.arrange.consolidateAllWindows`: one document at a time again, under its tab, the
+/// documents in floating windows included.
 pub(crate) fn consolidate(app: &mut VectorcraftApp) -> Result<serde_json::Value, String> {
     app.ui.tiled = false;
+    crate::doc_windows::dock_all(app);
     app.canvas.panes.clear();
-    Ok(json!({"tiled": false}))
+    Ok(json!({"tiled": false, "floating": []}))
 }
 
-/// Draw the document area as panes while Tile is on and more than one document is open, outside
-/// the Home screen and Presentation Mode. False when it did not: the caller draws the canvas.
+/// Draw the document area as panes while Tile is on and more than one document is under the tabs,
+/// outside the Home screen and Presentation Mode. False when it did not: the caller draws the
+/// canvas. The documents in floating windows have no pane.
 pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
-    let n = app.session.documents().len();
-    if n == 0 {
+    if app.session.documents().is_empty() {
         app.ui.tiled = false;
     }
+    let docked = crate::doc_windows::docked(app);
+    let n = docked.len();
     let tiling = app.ui.tiled && n > 1 && app.ui.screen_mode < 3 && !crate::menus::home_showing(app);
-    let Some(active) = app.session.active_index().filter(|_| tiling) else {
-        if !app.canvas.panes.shown.is_empty() || !app.canvas.panes.last.is_empty() {
+    if !tiling {
+        // The floating windows draw their panes from the same renders.
+        if app.ui.floating.is_empty() && (!app.canvas.panes.shown.is_empty() || !app.canvas.panes.last.is_empty()) {
             app.canvas.panes.clear();
         }
+        app.canvas.panes.last.clear();
         return false;
-    };
+    }
+    // The current document's pane is the canvas, unless it is in a floating window.
+    let active = app.session.active_index().filter(|a| docked.contains(a));
     app.sync_views();
     let live: Vec<usize> = app.session.documents().iter().map(|d| d.uid as usize).collect();
     app.canvas.panes.shown.retain(|uid, _| live.contains(uid));
     app.canvas.panes.pending.retain(|uid, _| live.contains(uid));
     app.canvas.panes.fits.retain(|uid, _| live.contains(uid));
-    // A document opened or closed changes the grid, and so does coming back to the panes from one
-    // document: each document fits its new pane.
-    if app.canvas.panes.last.len() != n {
-        for v in &mut app.views {
-            v.fitted = false;
+    // A document opened, closed, floated or docked changes the grid, and so does coming back to the
+    // panes from one document: each document fits its new pane.
+    if app.canvas.panes.last.iter().map(|(i, _)| *i).ne(docked.iter().copied()) {
+        for i in &docked {
+            if let Some(v) = app.views.get_mut(*i) {
+                v.fitted = false;
+            }
         }
     }
     let t = Tokens::get(ui.ctx());
     let ppp = ui.ctx().pixels_per_point();
-    let cells = cells(n, ui.available_rect_before_wrap());
-    let areas: Vec<egui::Rect> = cells.iter().map(|c| view_rects(app, *c, ppp).1).collect();
+    let cells: Vec<(usize, egui::Rect)> = docked.iter().copied().zip(cells(n, ui.available_rect_before_wrap())).collect();
+    let mut areas: Vec<Option<egui::Rect>> = vec![None; app.session.documents().len()];
+    for (i, cell) in &cells {
+        if let Some(a) = areas.get_mut(*i) {
+            *a = Some(view_rects(app, *cell, ppp).1);
+        }
+    }
     let unfitted = refit_resized(app, &areas);
     let mut activate = None;
     // The other panes first, so that what the canvas draws past its pane (the Contextual Task Bar)
     // stays over them.
-    for (i, cell) in cells.iter().copied().enumerate().filter(|(i, _)| *i != active) {
+    for (i, cell) in cells.iter().copied().filter(|(i, _)| Some(*i) != active) {
         if pane(app, ui, i, cell) {
             activate = Some(i);
         }
         ui.painter().rect_stroke(cell, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
     }
-    if let Some(cell) = cells.get(active).copied() {
+    if let Some((_, cell)) = cells.iter().copied().find(|(i, _)| Some(*i) == active) {
         let mut canvas = ui.new_child(egui::UiBuilder::new().max_rect(cell));
         super::show(app, &mut canvas);
         ui.painter().rect_stroke(cell, 0.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
     }
     // Note the fits this frame made, for `refit_resized`.
     for ((i, area), was_unfitted) in areas.iter().enumerate().zip(unfitted) {
-        if let (true, Some(v), Some(d)) = (was_unfitted, app.views.get(i).filter(|v| v.fitted), app.session.documents().get(i)) {
+        if let (Some(area), true, Some(v), Some(d)) = (area, was_unfitted, app.views.get(i).filter(|v| v.fitted), app.session.documents().get(i)) {
             app.canvas.panes.fits.insert(d.uid as usize, (area.size(), v.zoom, v.center));
         }
     }
-    app.canvas.panes.last = cells.into_iter().enumerate().collect();
+    app.canvas.panes.last = cells;
     if let Some(i) = activate {
         crate::chrome::show_document(app, i);
     }
@@ -220,14 +239,15 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
 }
 
 /// Unfit each document whose view is still where a pane fit left it when its view's area (in
-/// `areas`, by document index) has changed size, as when the window or a panel is resized: it
-/// fits its pane again. A view zoomed or scrolled since keeps its place. → which views are
-/// unfitted now.
-fn refit_resized(app: &mut VectorcraftApp, areas: &[egui::Rect]) -> Vec<bool> {
+/// `areas`, by document index; None for a document without a pane) has changed size, as when the
+/// window or a panel is resized: it fits its pane again. A view zoomed or scrolled since keeps its
+/// place. → which views are unfitted now.
+fn refit_resized(app: &mut VectorcraftApp, areas: &[Option<egui::Rect>]) -> Vec<bool> {
     let fits = &app.canvas.panes.fits;
     let docs = app.session.documents();
     for ((v, d), area) in app.views.iter_mut().zip(docs).zip(areas) {
-        if let Some((size, zoom, center)) = fits.get(&(d.uid as usize))
+        if let Some(area) = area
+            && let Some((size, zoom, center)) = fits.get(&(d.uid as usize))
             && *size != area.size()
             && *zoom == v.zoom
             && *center == v.center
@@ -251,8 +271,9 @@ fn fit_pane(v: &mut View, doc: &vectorcraft_doc::Document, rect: egui::Rect) {
 /// The pane of document `i`, not the current one, in `cell`: its paper, art, grid, artboards,
 /// guides and selected objects, and its rulers and the room of the canvas's scroll bars, so the
 /// document stays where it is when the pane becomes the canvas. True when a press in the pane asks
-/// for its document to become the current one.
-fn pane(app: &mut VectorcraftApp, ui: &Ui, i: usize, cell: egui::Rect) -> bool {
+/// for its document to become the current one. A floating document's window draws its document
+/// with this too ([`crate::doc_windows`]).
+pub(crate) fn pane(app: &mut VectorcraftApp, ui: &Ui, i: usize, cell: egui::Rect) -> bool {
     let t = Tokens::get(ui.ctx());
     let ppp = ui.ctx().pixels_per_point();
     let (full, rect) = view_rects(app, cell, ppp);

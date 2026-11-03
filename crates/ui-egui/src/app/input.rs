@@ -175,6 +175,12 @@ impl VectorcraftApp {
     /// injected until the batch was actually applied, so a burst of hidden ticks cannot queue
     /// several steps of a drag or replay them together later.
     pub fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        self.fill_raw_input(ctx, raw);
+        crate::font_menu::sync_wheel_target(self, ctx, raw.viewport_id);
+        crate::font_menu::take_raw_wheel(ctx, raw);
+    }
+
+    fn fill_raw_input(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         // Both hosts call this hook once per host iteration, before deciding whether a UI pass
         // follows; it is the iteration boundary, not a UI-phase marker.
         self.begin_host_iteration();

@@ -93,6 +93,10 @@ pub struct CharStyle {
     /// them.
     #[serde(default, rename = "charDirection", skip_serializing_if = "Option::is_none")]
     pub char_direction: Option<ParaDirection>,
+    /// Character panel menu › Kashidas: whether these characters may receive a kashida when
+    /// their paragraph is justified with Insert Kashidas. On by default, including old documents.
+    #[serde(default = "crate::yes", skip_serializing_if = "crate::skip::is_true")]
+    pub kashidas: bool,
     /// Proportional Metrics (Character panel menu, East Asian options): full-width glyphs take the
     /// font's own proportional widths, OpenType `palt` (#966); in vertical type upright glyphs take
     /// its proportional heights, `vpal`.
@@ -405,6 +409,7 @@ impl Default for CharStyle {
             position: CharPosition::Normal,
             char_align: CharAlign::RomanBaseline,
             char_direction: None,
+            kashidas: true,
             proportional_metrics: false,
             tate_chu_yoko: false,
             tcy_up_down: 0.0,

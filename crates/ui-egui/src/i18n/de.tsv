@@ -1208,6 +1208,7 @@ file-filter	Templates	Vorlagen
 	Flip Row Order	Zeilenreihenfolge umkehren
 	Flip Vertical	Vertikal spiegeln
 	Float in Window	In eigenem Fenster anzeigen
+	Float All in Windows	Alle in eigenen Fenstern anzeigen
 	Focal Fill	Fläche im Fokus
 	Focal Stroke	Kontur im Fokus
 	Folder	Ordner
@@ -1371,6 +1372,10 @@ file-filter	Templates	Vorlagen
 	Hard Light	Hartes Licht
 	Hard Mix	Hart mischen
 	Harmony Rules:	Harmonieregeln:
+	Segmented color wheel	Segmentierter Farbkreis
+	Show smooth color wheel	Stufenlosen Farbkreis anzeigen
+	Show segmented color wheel	Segmentierten Farbkreis anzeigen
+	Show color bars	Farbbalken anzeigen
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
 	Height:	Höhe:
@@ -1705,6 +1710,8 @@ file-filter	Templates	Vorlagen
 	Large Thumbnail View	Große Miniaturansicht
 	Large Thumbnails	Große Miniaturen
 	Lasso Tool	Lasso-Werkzeug
+	Enclosing Lasso Tool	Umschließendes Lasso-Werkzeug
+	Enclosing Lasso	Umschließendes Lasso
 	Last Effect: {name}	Letzter Effekt: {name}
 	Last Effect: {}	Letzter Effekt: {}
 	Last Effect…	Letzter Effekt…
@@ -1856,6 +1863,7 @@ file-filter	Templates	Vorlagen
 	Manually	Manuell
 	Mark as trapped	Als überfüllt kennzeichnen
 	Mark Older Files as [Converted] When Opened	Ältere Dateien beim Öffnen als [Konvertiert] kennzeichnen
+	Use System Defaults for Edit Original	Systemstandards für „Original bearbeiten“ verwenden
 	Marker…	Markierung…
 	Marks	Marken
 	Marks and Bleed	Marken und Anschnitt
@@ -1918,6 +1926,7 @@ file-filter	Templates	Vorlagen
 	Modify	Ändern
 	Mojikumi	Mojikumi
 	Insert Kashidas	Kashidas einfügen
+	Kashidas	Kashidas
 	Long	Lang
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-Satz
@@ -2662,6 +2671,8 @@ digits	Malayalam	Malayalam
 	Replace Spine	Achse ersetzen
 	Replace Symbol	Symbol ersetzen
 	Replace With Font	Durch Schrift ersetzen
+	Replace With Font From	Ersetzende Schrift aus
+	System	System
 	Replaces the saved preset of that name.	Ersetzt die gespeicherte Vorgabe dieses Namens.
 	Replace…	Ersetzen…
 	Require a password to open the document	Kennwort zum Öffnen des Dokuments verlangen
@@ -3334,6 +3345,7 @@ effect	Points	Punkte
 	Templates…	Vorlagen…
 	Text Displayed in Cell:	In der Zelle angezeigter Text:
 	Text Export Options	Textexportoptionen
+	Text Fill & Stroke Color	Flächen- und Konturfarbe des Texts
 	Text Fill Color	Flächenfarbe des Texts
 	Text Import Options	Textimportoptionen
 	Text Stroke Color	Konturfarbe des Texts
@@ -5136,6 +5148,11 @@ effect	Soft	Weich
 	Export Type:	Exporttyp:
 	Movie Clip	Movieclip
 @msg	name is empty	Name ist leer
+@msg	an action is already recording	eine Aktion wird bereits aufgezeichnet
+@msg	no such function key	keine solche Funktionstaste
+@msg	no such color	keine solche Farbe
+@msg	{_1} cannot be used on Windows	{_1} kann unter Windows nicht verwendet werden
+@msg	more than one action is named “{_1}”	mehr als eine Aktion heißt „{_1}“
 @msg	no symbol named `{n}`	kein Symbol namens `{n}`
 	Smudge Stick…	Wischstift…
 	Smudge Stick	Wischstift
@@ -5310,9 +5327,17 @@ axis	Y Axis	Y-Achse
 	Action Options…	Aktionsoptionen…
 	Action Options	Aktionsoptionen
 	Rename Action	Aktion umbenennen
+	New Action…	Neue Aktion…
+	New Action	Neue Aktion
+	Create New Action	Neue Aktion erstellen
+	Play Action	Aktion abspielen
+	Action Set:	Aktionssatz:
+	Function Key:	Funktionstaste:
+	Record	Aufzeichnen
 	Create New Set	Neuen Satz erstellen
 	Stop Global Edit	Globale Bearbeitung beenden
 	Global Edit Options	Optionen für globale Bearbeitung
+	Leave Out of Global Edit	Von globaler Bearbeitung ausschließen
 	Match	Übereinstimmung
 	On Artboards	Auf Zeichenflächen
 	All Artboards	Alle Zeichenflächen
@@ -5321,6 +5346,8 @@ axis	Y Axis	Y-Achse
 @msg	select one object	wählen Sie ein Objekt aus
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale Bearbeitung funktioniert mit Pfaden, zusammengesetzten Pfaden, Symbolinstanzen und Gruppen daraus
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	keine ähnlichen Objekte gefunden (gedrehte oder gespiegelte Kopien werden nicht erkannt); ändern Sie die Optionen für globale Bearbeitung und versuchen Sie es erneut
+@msg	Global Edit is off	Globale Bearbeitung ist nicht aktiv
+@msg	only an object of the Global Edit other than the one it started from can be left out	nur ein Objekt der globalen Bearbeitung außer dem, mit dem sie begonnen hat, kann ausgeschlossen werden
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all oder ein Bereich wie 1, 3-5, nicht {v}
 	Add to Symbols	Zu Symbolen hinzufügen
 	Basic Shapes	Grundformen
@@ -5579,6 +5606,11 @@ anchor	Points:	Punkte:
 	Horizontal Scale	Horizontale Skalierung
 	Vertical Scale	Vertikale Skalierung
 @msg	{label} must be a number from {min} to {max}	{label} muss eine Zahl von {min} bis {max} sein
+	Character Color	Zeichenfarbe
+	OpenType Features	OpenType-Funktionen
+	Stylistic Sets	Stilsätze
+@msg	features lists at most {max} tags	features enthält höchstens {max} Tags
+@msg	unknown OpenType feature `{t}`	unbekannte OpenType-Funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} muss eine Zahl über 0 und höchstens {max} sein
 @msg	no character style `{name}`	Zeichenformat `{name}` nicht gefunden
 
@@ -5829,3 +5861,14 @@ breakText	Glyphs	Glyphen
 	Create Swatch Legend	Farbfeldlegende erstellen
 	Create Swatch Legend…	Farbfeldlegende erstellen…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Textwerkzeuge
+	Text Tweaker…	Text-Tweaker…
+	Text Tweaker	Text-Tweaker
+	Attribute:	Attribut:
+	From:	Von:
+	To:	Bis:
+	Bow	Bogen
+	Spike	Spitze
+	Skip Spaces	Leerzeichen überspringen
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Das Bildmaterial ist zu groß, um es als Bild zu kopieren: Andere Apps erhalten kein PNG davon

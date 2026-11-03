@@ -8,7 +8,10 @@
 //! Technology filter's Variable lists only variable font families. Preferences › Type › Enable
 //! in-menu font previews and Font Preview Size turn the samples off or size the rows. Recently
 //! used families appear first, in the order they were last applied, within the same search and
-//! filters as the remaining families.
+//! filters as the remaining families. In the Character and Properties panels and the Control bar,
+//! the mouse wheel turned over the closed field applies the next family (or previous one) to the
+//! selected text, one undo step per notch. The menu's order at the first turn stays fixed until the
+//! pointer leaves the field or the text selection changes; steps stop at its first and last family.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -33,9 +36,50 @@ pub enum FontPick {
     EndPreview,
     /// The star of a family was clicked: add it to the favourites, or take it out.
     Favorite(String),
+    /// The mouse wheel turned over the closed field: apply each of these families in turn, one
+    /// undo step each.
+    Wheel(Vec<String>),
 }
 
-/// How the menu looks: from the preferences and the favourites.
+/// The UI that contains a font family field.
+#[derive(Clone, Copy, Debug)]
+pub enum WheelOwner {
+    Character,
+    Properties,
+    Control,
+    /// The Character popover attached to this Control bar link.
+    ControlPopover(egui::Id),
+}
+
+impl WheelOwner {
+    fn visible(self, app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+        if crate::panels::character::text_style(app).is_none() {
+            return false;
+        }
+        let panel = match self {
+            Self::Control | Self::ControlPopover(_) | Self::Properties if app.session.tool_id() == "artboard" => return false,
+            Self::Control => return app.ui.control_bar && app.ui.screen_mode < 2,
+            Self::ControlPopover(anchor) => {
+                return app.ui.control_bar && app.ui.screen_mode < 2 && widgets::popover_is_open(ctx, anchor);
+            }
+            Self::Character => "character",
+            Self::Properties => {
+                let selected = app.session.active().and_then(|document| document.selection.objects.first().and_then(|id| document.doc.node(*id)));
+                if !selected.is_some_and(|n| matches!(&n.kind, vectorcraft_doc::NodeKind::Text(_))) {
+                    return false;
+                }
+                "properties"
+            }
+        };
+        app.ui.dock
+            && app.ui.screen_mode < 3
+            && (crate::panel_docking::showing(&app.ui, panel)
+                || (app.ui.transient_panel.as_deref() == Some(panel) && crate::panel_docking::showing(&app.ui, "appearance")))
+    }
+}
+
+/// How the menu looks (from the preferences and the favourites) and whether its closed field
+/// takes the mouse wheel.
 #[derive(Clone, Copy, Debug)]
 pub struct MenuLook<'a> {
     /// Show each family's sample (Preferences › Type › Enable in-menu font previews).
@@ -48,12 +92,17 @@ pub struct MenuLook<'a> {
     pub favorites: &'a [String],
     /// Recently applied families, newest first, limited by Number of Recent Fonts.
     pub recent: &'a [String],
+    /// The mouse wheel turned over the closed field steps through the families in the menu's
+    /// order ([`FontPick::Wheel`]): the Character and Properties panels and the Control bar.
+    pub wheel: bool,
+    /// Its owner, so a field hidden before the next layout cannot capture wheel input.
+    pub wheel_owner: Option<WheelOwner>,
 }
 
 impl Default for MenuLook<'static> {
-    /// Samples on, English names, medium rows, no favourites.
+    /// Samples on, English names, medium rows, no favourites, no wheel.
     fn default() -> Self {
-        Self { samples: true, english_names: true, row: ROW, favorites: &[], recent: &[] }
+        Self { samples: true, english_names: true, row: ROW, favorites: &[], recent: &[], wheel: false, wheel_owner: None }
     }
 }
 
@@ -70,6 +119,8 @@ impl<'a> MenuLook<'a> {
             row,
             favorites: &app.ui.favorite_fonts,
             recent: app.recent_fonts(),
+            wheel: false,
+            wheel_owner: None,
         }
     }
 }
@@ -235,6 +286,11 @@ struct MenuState {
     rows_key: Option<RowsKey>,
     /// The height of the search field and filters last frame.
     header: f32,
+    /// The families the wheel steps through, listed at its first notch over the closed field and
+    /// kept for that text selection while the pointer stays on it: each step makes its family a recent one, which would
+    /// otherwise move it in the order.
+    wheel_order: Option<Arc<[String]>>,
+    wheel_target: Option<WheelTarget>,
 }
 
 /// The font family menu showing `current`, `width` points wide, rows sampling `sample` (the
@@ -249,12 +305,18 @@ pub fn font_menu(
 ) -> Option<FontPick> {
     let state_id = ui.scope_id().with(&id).with("font-menu");
     let mut st: MenuState = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
+    let target = ui.data(|d| d.get_temp(wheel_fields_id(ui.ctx().viewport_id()).with("target")));
+    let target_changed = st.wheel_target != target;
+    if target_changed {
+        st.wheel_order = None;
+        st.wheel_target = target;
+    }
     let height = st.header + LIST_HEIGHT;
     let state = &mut st;
     // The search field and filters stay in place over the rows, which scroll. The rows are all
     // one height (a family's styles too), so only those in view are laid out: there are thousands
     // of families.
-    let shown = widgets::combo_menu(ui, &id, current, width, |menu| {
+    let (field, shown) = widgets::combo_menu_field(ui, &id, current, width, |menu| {
         menu.height(height).show_rows_with_header(
             |ui| header(ui, state_id, state, current, look),
             look.row,
@@ -263,16 +325,301 @@ pub fn font_menu(
         )
     });
     let drawn = shown.is_some();
+    if target_changed {
+        ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
+    }
     let mut out = shown.flatten();
     if !drawn && out.is_none() && st.previewed.take().is_some() {
         // Closed (Escape, a click outside) with a preview showing.
         out = Some(FontPick::EndPreview);
+    }
+    let turns = remember_owned_wheel_field(ui, &field, look.wheel && !drawn && field.enabled(), state_id, look.wheel_owner);
+    if !look.wheel || !field.enabled() {
+        st.wheel_order = None;
+        ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
+    } else if out.is_none() || drawn {
+        if !turns.is_empty() {
+            let mut own = vectorcraft_text::FontDb::global().canonical(current, "").0;
+            let mut steps = Vec::new();
+            for turn in turns {
+                match turn {
+                    WheelInput::Leave => st.wheel_order = None,
+                    WheelInput::Notches(notches) => {
+                        if st.wheel_order.is_none() {
+                            st.wheel_order = Some(wheel_order(&st, look).into());
+                        }
+                        if let Some(order) = st.wheel_order.as_deref() {
+                            let next = wheel_steps(order, &own, notches);
+                            if let Some(last) = next.last() {
+                                own.clone_from(last);
+                            }
+                            steps.extend(next);
+                        }
+                    }
+                }
+            }
+            if !steps.is_empty() {
+                if drawn {
+                    // These turns preceded the opener. The popup cancels back to the newly
+                    // applied family, and any preview drawn this pass has not been applied.
+                    st.current.clone_from(&own);
+                    st.previewed = None;
+                }
+                out = Some(FontPick::Wheel(steps));
+            }
+        }
+        if drawn || !field.contains_pointer() {
+            st.wheel_order = None;
+            ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
+        }
     }
     if matches!(out, Some(FontPick::Chosen(..))) {
         st.previewed = None;
     }
     ui.data_mut(|d| d.insert_temp(state_id, st));
     out
+}
+
+/// Does the menu list family `f` for search `query` (lowercase) under the filters of `st`?
+fn listed(db: &vectorcraft_text::FontDb, f: &str, query: &str, st: &MenuState, look: MenuLook) -> bool {
+    let label = db.family_display_name(f, look.english_names);
+    if !(query.is_empty() || f.to_lowercase().contains(query) || label.to_lowercase().contains(query)) {
+        return false;
+    }
+    if st.favorites_only && !look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f)) {
+        return false;
+    }
+    if st.script == 0 && st.class.is_none() && !st.variable_only {
+        return true;
+    }
+    let traits = db.family_traits(f);
+    script_matches(st.script, traits) && st.class.is_none_or(|c| c == traits.class) && (!st.variable_only || traits.variable)
+}
+
+/// The families the closed field's wheel steps through, in the open menu's order with no search:
+/// the recent families first, then the others, under the menu's filters.
+fn wheel_order(st: &MenuState, look: MenuLook) -> Vec<String> {
+    let db = vectorcraft_text::FontDb::global();
+    let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, "", st, look)).cloned().collect();
+    grouped_rows(&families, look.recent, &[], |_| vec![])
+        .into_iter()
+        .filter_map(|r| match r {
+            Row::Family(f) => Some(f),
+            Row::Heading(_) | Row::Style(..) => None,
+        })
+        .collect()
+}
+
+/// The families `notches` turns of the wheel step to from family `current` in `order`, one per
+/// notch: forward (down the menu) when positive, back when negative. The steps stop at either end
+/// of the order, and there are none when `current` is not in it.
+fn wheel_steps(order: &[String], current: &str, notches: i32) -> Vec<String> {
+    let Some(at) = order.iter().position(|f| f.eq_ignore_ascii_case(current)) else { return vec![] };
+    let last = order.len().saturating_sub(1);
+    let n = notches.unsigned_abs() as usize;
+    let to = if notches >= 0 { at.saturating_add(n).min(last) } else { at.saturating_sub(n) };
+    if to >= at { order.iter().skip(at + 1).take(to - at).cloned().collect() } else { order.iter().take(at).skip(to).rev().cloned().collect() }
+}
+
+#[derive(Clone)]
+enum WheelInput {
+    Leave,
+    Notches(i32),
+}
+
+#[derive(Clone, Copy)]
+struct WheelField {
+    id: egui::Id,
+    menu: egui::Id,
+    owner: Option<WheelOwner>,
+    rect: egui::Rect,
+    layer: egui::LayerId,
+}
+
+#[derive(Clone, Default)]
+struct WheelFields {
+    pass: u64,
+    pending_frame: u64,
+    activation_pass: u64,
+    activating: Vec<egui::Id>,
+    pointer: Option<egui::Pos2>,
+    fields: Vec<WheelField>,
+    pending: HashMap<egui::Id, Vec<WheelInput>>,
+}
+
+fn wheel_fields_id(viewport: egui::ViewportId) -> egui::Id {
+    egui::Id::unique("font-wheel-fields").with(viewport)
+}
+
+#[derive(Clone, PartialEq)]
+struct WheelTarget {
+    input: crate::state::InputGeneration,
+    workspace: u64,
+    selection: Vec<vectorcraft_doc::NodeId>,
+    range: Option<(vectorcraft_doc::NodeId, usize, usize)>,
+}
+
+/// Pending turns and field rectangles belong to their input target and visible workspace.
+pub(crate) fn sync_wheel_target(app: &VectorcraftApp, ctx: &egui::Context, viewport: egui::ViewportId) {
+    let target = WheelTarget {
+        input: app.input_generation(),
+        workspace: app.ui.docking_generation,
+        selection: app.session.active().map_or_else(Vec::new, |document| document.selection.objects.clone()),
+        range: crate::panels::character::text_editing(app),
+    };
+    let key = wheel_fields_id(viewport);
+    let (previous, mut fields) = ctx.data(|d| (d.get_temp::<WheelTarget>(key.with("target")), d.get_temp::<WheelFields>(key)));
+    if previous.is_some_and(|old| old != target) {
+        fields = None;
+    }
+    let mut hidden = Vec::new();
+    if let Some(fields) = &mut fields {
+        fields.fields.retain(|field| {
+            if field.owner.is_none_or(|owner| owner.visible(app, ctx)) {
+                true
+            } else {
+                hidden.push(*field);
+                false
+            }
+        });
+        for field in &hidden {
+            fields.pending.remove(&field.id);
+        }
+    }
+    ctx.data_mut(|d| {
+        if let Some(fields) = fields {
+            d.insert_temp(key, fields);
+        } else {
+            d.remove::<WheelFields>(key);
+        }
+        for field in hidden {
+            d.remove::<f32>(field.id.with("wheel"));
+            if let Some(mut state) = d.get_temp::<MenuState>(field.menu) {
+                state.wheel_order = None;
+                d.insert_temp(field.menu, state);
+            }
+        }
+        d.insert_temp(key.with("target"), target);
+    });
+}
+
+/// Remember the visible closed fields for the next input batch and take this field's turns.
+#[cfg(test)]
+fn remember_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool) -> Vec<WheelInput> {
+    remember_owned_wheel_field(ui, resp, enabled, resp.id, None)
+}
+
+fn remember_owned_wheel_field(ui: &Ui, resp: &egui::Response, enabled: bool, menu: egui::Id, owner: Option<WheelOwner>) -> Vec<WheelInput> {
+    let key = wheel_fields_id(ui.ctx().viewport_id());
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.data_mut(|d| {
+        let mut fields: WheelFields = d.get_temp(key).unwrap_or_default();
+        if fields.pass != pass {
+            fields.pass = pass;
+            fields.fields.clear();
+        }
+        fields.fields.retain(|f| f.id != resp.id);
+        if enabled {
+            fields.fields.push(WheelField { id: resp.id, menu, owner, rect: resp.interact_rect, layer: resp.layer_id });
+        }
+        let turns = fields.pending.remove(&resp.id).unwrap_or_default();
+        d.insert_temp(key, fields);
+        turns
+    })
+}
+
+/// Take the closed font fields' wheel events before egui smooths and combines them. Other
+/// events stay in the input, so scrolling elsewhere keeps its own delta and event order.
+pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
+    let key = wheel_fields_id(raw.viewport_id);
+    let Some(mut fields) = ctx.data(|d| d.get_temp::<WheelFields>(key)) else { return };
+    if !ctx.input(|i| i.raw.viewports.contains_key(&raw.viewport_id)) {
+        ctx.data_mut(|d| d.remove::<WheelFields>(key));
+        return;
+    }
+    let frame = ctx.cumulative_frame_nr_for(raw.viewport_id);
+    let pass = ctx.cumulative_pass_nr_for(raw.viewport_id);
+    if pass < fields.pass || pass.saturating_sub(fields.pass) > 1 {
+        fields.fields.clear();
+        fields.pointer = None;
+    }
+    if fields.pending_frame != frame {
+        fields.pending_frame = frame;
+        fields.pending.clear();
+    }
+    let line = ctx.options(|o| o.input_options.line_scroll_speed).max(1.0);
+    let mut pointer = fields.pointer.or_else(|| ctx.input(|i| i.pointer.latest_pos()));
+    let over =
+        |field: &WheelField, point: Option<egui::Pos2>| point.is_some_and(|p| field.rect.contains(p) && ctx.layer_id_at(p) == Some(field.layer));
+    // An activation batch belongs to the popup, including a release after a prior press.
+    if fields.activation_pass != pass {
+        fields.activation_pass = pass;
+        fields.activating.clear();
+        let pressed = ctx.input(|i| if i.pointer.button_down(egui::PointerButton::Primary) { i.pointer.press_origin() } else { None });
+        if let Some(field) = fields.fields.iter().find(|f| over(f, pressed)) {
+            fields.activating.push(field.id);
+        }
+    }
+    let focused = ctx.memory(|m| m.focused());
+    let mut captured = false;
+    raw.events.retain(|event| {
+        let opening = match event {
+            egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, .. } => {
+                fields.fields.iter().rev().find(|f| over(f, Some(*pos))).map(|f| f.id)
+            }
+            egui::Event::Key { key: egui::Key::Enter | egui::Key::Space, pressed: true, .. } if raw.focused => {
+                focused.filter(|id| fields.fields.iter().any(|f| f.id == *id))
+            }
+            _ => None,
+        };
+        if let Some(id) = opening
+            && !fields.activating.contains(&id)
+        {
+            fields.activating.push(id);
+        }
+        match event {
+            egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } => {
+                for field in &fields.fields {
+                    if over(field, pointer) && !over(field, Some(*p)) {
+                        ctx.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
+                        fields.pending.entry(field.id).or_default().push(WheelInput::Leave);
+                    }
+                }
+                pointer = Some(*p);
+            }
+            egui::Event::PointerGone => {
+                pointer = None;
+                for field in &fields.fields {
+                    ctx.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
+                    fields.pending.entry(field.id).or_default().push(WheelInput::Leave);
+                }
+            }
+            egui::Event::MouseWheel { unit, delta, modifiers, .. } if modifiers.is_none() && delta.y != 0.0 => {
+                if let Some(field) = fields.fields.iter().rev().find(|f| !fields.activating.contains(&f.id) && over(f, pointer)).copied() {
+                    let id = field.id.with("wheel");
+                    let mut notches: f32 = ctx.data(|d| d.get_temp(id)).unwrap_or(0.0);
+                    notches -= match unit {
+                        egui::MouseWheelUnit::Point => delta.y / line,
+                        egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => delta.y,
+                    };
+                    let whole = notches.trunc();
+                    ctx.data_mut(|d| d.insert_temp(id, notches - whole));
+                    if whole != 0.0 {
+                        fields.pending.entry(field.id).or_default().push(WheelInput::Notches(whole as i32));
+                    }
+                    captured = true;
+                    return false;
+                }
+            }
+            _ => {}
+        }
+        true
+    });
+    fields.pointer = pointer;
+    ctx.data_mut(|d| d.insert_temp(key, fields));
+    if captured {
+        ctx.request_repaint();
+    }
 }
 
 /// What the menu's header hands its rows.
@@ -372,7 +719,6 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
     // as it was before any preview.
     let current = db.canonical(&st.current, "").0;
     let current = current.as_str();
-    let favorite = |f: &str| look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f));
     // The generation is read first: fonts that load meanwhile make the next frame list them.
     let key: RowsKey = (
         query.clone(),
@@ -387,21 +733,7 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
         db.generation(),
     );
     if st.rows_key.as_ref() != Some(&key) {
-        let wanted = |f: &str| {
-            let label = db.family_display_name(f, look.english_names);
-            if !(query.is_empty() || f.to_lowercase().contains(&query) || label.to_lowercase().contains(&query)) {
-                return false;
-            }
-            if st.favorites_only && !favorite(f) {
-                return false;
-            }
-            if st.script == 0 && st.class.is_none() && !st.variable_only {
-                return true;
-            }
-            let traits = db.family_traits(f);
-            script_matches(st.script, traits) && st.class.is_none_or(|c| c == traits.class) && (!st.variable_only || traits.variable)
-        };
-        let families: Vec<_> = db.menu_family_list().iter().filter(|f| wanted(f)).cloned().collect();
+        let families: Vec<_> = db.menu_family_list().iter().filter(|f| listed(db, f, &query, st, look)).cloned().collect();
         let rows = grouped_rows(&families, look.recent, &st.expanded, |f| db.styles(f));
         // Filter changes (including un-starring a favourite) may remove rows; expanding
         // another family or a background font scan can insert rows before the highlight.
@@ -823,6 +1155,21 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPic
             }
         }
         FontPick::Favorite(f) => toggle_favorite(app, f),
+        FontPick::Wheel(families) => {
+            if previewing {
+                app.session.cancel_interaction().ok();
+                crate::panels::set_pstate(ctx, PREVIEWING, false);
+            }
+            crate::panels::character::end_typing(app);
+            // Each family is its own step, keeping the style when the family has it, else the
+            // closest it has.
+            for f in families {
+                let (cmd, params) = font_command(app, &f, None);
+                if app.run(cmd, params).is_err() {
+                    break;
+                }
+            }
+        }
         FontPick::Chosen(f, style) => {
             if previewing {
                 app.session.cancel_interaction().ok();
@@ -856,7 +1203,7 @@ pub(crate) fn picked(app: &mut VectorcraftApp, pick: Option<FontPick>) -> Option
             toggle_favorite(app, f);
             None
         }
-        FontPick::Preview(..) | FontPick::EndPreview => None,
+        FontPick::Preview(..) | FontPick::EndPreview | FontPick::Wheel(_) => None,
     }
 }
 

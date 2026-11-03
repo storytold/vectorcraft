@@ -835,6 +835,316 @@ fn an_effects_name_edits_it_and_its_empty_space_highlights_it() {
     assert!(app.ui.dialog.is_some(), "a double-click on the empty space opens the dialog");
 }
 
+#[test]
+fn transform_effect_name_edits_the_displayed_appearance_target() {
+    for target_kind in ["object", "group", "layer"] {
+        let mut app = app_with_rect();
+        app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        if target_kind == "group" {
+            let group = app.run("object.group", json!({})).unwrap()["id"].clone();
+            app.run("layer.target", json!({"id": group})).unwrap();
+        } else if target_kind == "layer" {
+            let layer = app.session.doc().unwrap().doc.layers[0].id;
+            app.run("layer.target", json!({"id": layer.0})).unwrap();
+        }
+        let target = app.session.doc().unwrap().selection.subjects()[0];
+        app.run("effect.apply", json!({"effect": "distort.transform", "item": null, "params": {"moveH": 12}})).unwrap();
+        let ctx = drop_ctx();
+        let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+        click_mod(&ctx, &mut app, text_rect(&texts, "Transform").center(), egui::Modifiers::NONE);
+        let dialog = app.ui.dialog.as_mut().unwrap_or_else(|| panic!("Transform did not open for {target_kind}"));
+        assert_eq!(dialog.f64("moveH", 0.0), 12.0);
+        dialog.fields.insert("moveH".into(), json!(35));
+        let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        assert!(text.lines().any(|s| s == "Transform"), "{text}");
+        assert!(app.session.in_interaction());
+        let rendered = vectorcraft_testkit::raster::render_artboard(&app.session.doc().unwrap().doc);
+        assert_eq!(rendered.over_white(30, 50), [255, 255, 255], "{target_kind}: original position");
+        assert_eq!(rendered.over_white(130, 50), [255, 0, 0], "{target_kind}: transformed position");
+        crate::dialogs::confirm(&mut app).unwrap();
+        let node = app.session.doc().unwrap().doc.node(target).unwrap();
+        assert_eq!(node.appearance.effects.len(), 1);
+        assert_eq!(node.appearance.effects[0].params["moveH"].as_f64(), Some(35.0));
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.node(target).unwrap().appearance.effects[0].params["moveH"].as_f64(), Some(12.0));
+    }
+}
+
+#[test]
+fn transform_effect_typed_scale_changes_the_painted_object() {
+    for layer_target in [false, true] {
+        let mut app = app_with_rect();
+        app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        if layer_target {
+            app.run("effect.apply", json!({"effect": "distort.transform", "item": null, "params": {"objects": false}})).unwrap();
+            let layer = app.session.doc().unwrap().doc.layers[0].id;
+            app.run("layer.target", json!({"id": layer.0})).unwrap();
+        }
+        app.run("effect.apply", json!({"effect": "distort.transform", "item": null})).unwrap();
+        let target = app.session.doc().unwrap().selection.subjects()[0];
+        let ctx = drop_ctx();
+        crate::theme::install_fonts(&ctx);
+        let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+        click_mod(&ctx, &mut app, text_rect(&texts, "Transform").center(), egui::Modifiers::NONE);
+        for _ in 0..2 {
+            frame_events(&ctx, &mut app, vec![], |app, ui| crate::dialogs::show(app, ui.ctx()));
+        }
+        frame_events(&ctx, &mut app, vec![egui::Event::Text("50".into())], |app, ui| crate::dialogs::show(app, ui.ctx()));
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        frame_events(&ctx, &mut app, vec![enter], |app, ui| crate::dialogs::show(app, ui.ctx()));
+        assert!(app.ui.dialog.is_none());
+        let doc = &app.session.doc().unwrap().doc;
+        assert_eq!(doc.node(target).unwrap().appearance.effects[0].params["scaleH"].as_f64(), Some(50.0));
+        let rendered = vectorcraft_testkit::raster::render_artboard(doc);
+        assert_eq!(rendered.over_white(20, 50), [255, 255, 255], "layer target: {layer_target}");
+        assert_eq!(rendered.over_white(50, 50), [255, 0, 0], "layer target: {layer_target}");
+    }
+}
+
+#[test]
+fn transform_effect_preview_commit_cancel_and_undo_cover_artwork_targets() {
+    use vectorcraft_testkit::raster::{Image, render_artboard};
+    let rightmost =
+        |image: &Image| (0..image.width).rev().find(|&x| (0..image.height).any(|y| image.over_white(x, y).iter().any(|&c| c < 245))).unwrap();
+    for kind in ["object", "fill", "stroke", "group", "layer", "text", "image"] {
+        for preview in [true, false] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+            match kind {
+                "text" => {
+                    app.run("text.create", json!({"x": 20, "y": 80, "size": 20, "text": "HI"})).unwrap();
+                }
+                "image" => {
+                    let mut png = Vec::new();
+                    image::RgbaImage::from_pixel(20, 20, image::Rgba([255, 0, 0, 255]))
+                        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+                        .unwrap();
+                    app.run(
+                        "file.place",
+                        json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "link": false, "at": [30, 70]}),
+                    )
+                    .unwrap();
+                }
+                _ => {
+                    app.run("shape.rectangle", json!({"x": 20, "y": 60, "width": 20, "height": 20})).unwrap();
+                }
+            }
+            if kind != "image" {
+                app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+            }
+            if kind == "stroke" {
+                app.run("paint.setFill", json!({"none": true})).unwrap();
+                app.run("stroke.set", json!({"weight": 4})).unwrap();
+            }
+            if kind == "group" {
+                app.run("object.group", json!({})).unwrap();
+            } else if kind == "layer" {
+                let layer = app.session.doc().unwrap().doc.layers[0].id;
+                app.run("layer.target", json!({"id": layer.0})).unwrap();
+            }
+            let item = match kind {
+                "fill" => Some(0),
+                "stroke" => Some(1),
+                _ => None,
+            };
+            app.run("effect.apply", json!({"effect": "distort.transform", "item": item})).unwrap();
+            let baseline = render_artboard(&app.session.doc().unwrap().doc);
+            let ctx = drop_ctx();
+            crate::theme::install_fonts(&ctx);
+            let mut texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+            if let Some(i) = item {
+                let label = text_rect(&texts, if i == 0 { "Fill:" } else { "Stroke:" });
+                click_mod(&ctx, &mut app, egui::pos2(label.left() - 12.0, label.center().y), egui::Modifiers::NONE);
+                texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+            }
+            click_mod(&ctx, &mut app, text_rect(&texts, "Transform").center(), egui::Modifiers::NONE);
+            let d = app.ui.dialog.as_mut().unwrap_or_else(|| panic!("{kind}: dialog did not open"));
+            d.fields.insert("moveH".into(), json!(40));
+            d.fields.insert("copies".into(), json!(2));
+            d.fields.insert("preview".into(), json!(preview));
+            crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+            let painted = render_artboard(&app.session.doc().unwrap().doc);
+            if preview {
+                assert!(rightmost(&painted) >= rightmost(&baseline) + 75, "{kind}: preview must draw both copies");
+            } else {
+                assert_eq!(painted.rgba, baseline.rgba, "{kind}: Preview off");
+            }
+            crate::dialogs::confirm(&mut app).unwrap();
+            let committed = render_artboard(&app.session.doc().unwrap().doc);
+            assert!(rightmost(&committed) >= rightmost(&baseline) + 75, "{kind}: OK must draw both copies");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(render_artboard(&app.session.doc().unwrap().doc).rgba, baseline.rgba, "{kind}: undo");
+            let undo = app.session.active().unwrap().history.undo.len();
+            app.run("effect.dialog", json!({"effect": "distort.transform", "item": item, "index": 0})).unwrap();
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("moveH".into(), json!(40));
+            d.fields.insert("copies".into(), json!(2));
+            crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+            crate::dialogs::cancel(&mut app);
+            assert_eq!(render_artboard(&app.session.doc().unwrap().doc).rgba, baseline.rgba, "{kind}: Cancel");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "{kind}: Cancel must preserve undo history");
+        }
+    }
+}
+
+#[test]
+fn transform_effect_copies_preview_while_the_field_is_still_focused() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.units_general = "cm".into();
+    app.run("file.new", json!({"width": 400, "height": 1200})).unwrap();
+    assert_eq!(app.session.general_unit(), Unit::named("cm").unwrap());
+    app.run("shape.rectangle", json!({"x": 20, "y": 60, "width": 20, "height": 20})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    app.run("appearance.addFill", json!({})).unwrap();
+    app.run("paint.setFill", json!({"item": 0, "color": "#000000"})).unwrap();
+    app.run("appearance.addFill", json!({})).unwrap();
+    app.run("paint.setFill", json!({"item": 1, "color": "#ffffff"})).unwrap();
+    app.run("effect.apply", json!({"effect": "path.offsetPath", "item": 0, "params": {"offset": 10}})).unwrap();
+    app.run("effect.apply", json!({"effect": "distort.transform", "item": 0, "params": {"scaleH": 99.5, "moveV": 72.0 / 2.54}})).unwrap();
+    let target = app.session.doc().unwrap().selection.subjects()[0];
+    let ctx = drop_ctx();
+    crate::theme::install_fonts(&ctx);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    let fill = texts.iter().filter(|(s, _)| s == "Fill:").max_by(|(_, a), (_, b)| a.top().total_cmp(&b.top())).unwrap().1;
+    click_mod(&ctx, &mut app, egui::pos2(fill.left() - 12.0, fill.center().y), egui::Modifiers::NONE);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    click_mod(&ctx, &mut app, text_rect(&texts, "Transform").center(), egui::Modifiers::NONE);
+    for _ in 0..2 {
+        frame_events(&ctx, &mut app, vec![], |app, ui| crate::dialogs::show(app, ui.ctx()));
+    }
+    let texts = frame_events(&ctx, &mut app, vec![], |app, ui| crate::dialogs::show(app, ui.ctx()));
+    let copies = text_rect(&texts, "0").center();
+    click(&ctx, &mut app, copies, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    frame_events(&ctx, &mut app, vec![egui::Event::Text("30".into())], |app, ui| crate::dialogs::show(app, ui.ctx()));
+    assert!(app.ui.dialog.is_some());
+    assert!(ctx.memory(|m| m.focused().is_some()));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("copies", 0.0), 30.0);
+    let effect = &app.session.doc().unwrap().doc.node(target).unwrap().appearance.items[0].effects()[1];
+    assert_eq!(effect.params["copies"].as_f64(), Some(30.0));
+    let rendered = vectorcraft_testkit::raster::render_artboard(&app.session.doc().unwrap().doc);
+    assert!(rendered.over_white(30, 600).iter().any(|&c| c < 245), "the focused field must update the visible copy stack");
+    crate::dialogs::cancel(&mut app);
+    let restored = vectorcraft_testkit::raster::render_artboard(&app.session.doc().unwrap().doc);
+    assert_eq!(restored.over_white(30, 600), [255, 255, 255]);
+}
+
+#[test]
+fn transform_effect_live_fields_keep_partial_text_and_honor_preview() {
+    let cm = 72.0 / 2.54;
+    let cases: [(&str, &str, usize, &[&str], f64); 6] = [
+        ("scaleH", "100%", 0, &["5", "0", ".", "1", "2", "5", "6"], 50.13),
+        ("scaleV", "100%", 1, &["7", "5"], 75.0),
+        ("moveH", "0cm", 0, &["1", ".", "5"], 1.5 * cm),
+        ("moveV", "0cm", 1, &["-", "1", ",", "5"], -1.5 * cm),
+        ("rotate", "0°", 0, &["4", "5", ".", "1", "2", "3"], 45.123),
+        ("copies", "0", 0, &["2", ".", "5", "6"], 3.0),
+    ];
+    for (key, shown, index, chunks, expected) in cases {
+        for preview in [true, false] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.session.prefs.units_general = "cm".into();
+            app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+            app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 30})).unwrap();
+            app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+            let params = if key == "copies" { json!({"moveH": 20}) } else { json!({}) };
+            app.run("effect.apply", json!({"effect": "distort.transform", "item": null, "params": params})).unwrap();
+            let target = app.session.doc().unwrap().selection.subjects()[0];
+            let baseline = vectorcraft_testkit::raster::render_artboard(&app.session.doc().unwrap().doc);
+            app.run("effect.dialog", json!({"effect": "distort.transform", "item": null, "index": 0})).unwrap();
+            app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(preview));
+            let ctx = drop_ctx();
+            crate::theme::install_fonts(&ctx);
+            for _ in 0..2 {
+                frame_events(&ctx, &mut app, vec![], |app, ui| crate::dialogs::show(app, ui.ctx()));
+            }
+            let texts = frame_events(&ctx, &mut app, vec![], |app, ui| crate::dialogs::show(app, ui.ctx()));
+            let at = texts
+                .iter()
+                .filter(|(s, _)| s.replace(' ', "") == shown)
+                .nth(index)
+                .unwrap_or_else(|| panic!("{key}: missing field {shown}: {texts:?}"))
+                .1
+                .center();
+            click(&ctx, &mut app, at, |app, ui| crate::dialogs::show(app, ui.ctx()));
+            let select_all =
+                egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND };
+            frame_events(&ctx, &mut app, vec![select_all], |app, ui| crate::dialogs::show(app, ui.ctx()));
+            for chunk in chunks {
+                frame_events(&ctx, &mut app, vec![egui::Event::Text((*chunk).into())], |app, ui| crate::dialogs::show(app, ui.ctx()));
+            }
+            let held = app.ui.dialog.as_ref().unwrap().f64(key, f64::NAN);
+            assert!((held - expected).abs() < 1e-8, "{key}, Preview {preview}: {held} != {expected}");
+            let rendered = vectorcraft_testkit::raster::render_artboard(&app.session.doc().unwrap().doc);
+            if preview {
+                let applied = app.session.doc().unwrap().doc.node(target).unwrap().appearance.effects[0].params[key].as_f64().unwrap();
+                assert!((applied - expected).abs() < 1e-8, "{key}: preview parameters");
+                assert_ne!(rendered.rgba, baseline.rgba, "{key}: visible preview");
+            } else {
+                assert_eq!(rendered.rgba, baseline.rgba, "{key}: Preview off");
+            }
+            let texts = frame_events(&ctx, &mut app, vec![], |app, ui| crate::dialogs::show(app, ui.ctx()));
+            click(&ctx, &mut app, text_rect(&texts, "OK").center(), |app, ui| crate::dialogs::show(app, ui.ctx()));
+            assert!(app.ui.dialog.is_none());
+            let applied = app.session.doc().unwrap().doc.node(target).unwrap().appearance.effects[0].params[key].as_f64().unwrap();
+            assert!((applied - expected).abs() < 1e-8, "{key}: confirmed parameters");
+            if preview {
+                assert_eq!(
+                    vectorcraft_testkit::raster::render_artboard(&app.session.doc().unwrap().doc).rgba,
+                    rendered.rgba,
+                    "{key}: OK matches preview"
+                );
+            }
+            assert_ne!(vectorcraft_testkit::raster::render_artboard(&app.session.doc().unwrap().doc).rgba, baseline.rgba, "{key}: OK");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(vectorcraft_testkit::raster::render_artboard(&app.session.doc().unwrap().doc).rgba, baseline.rgba, "{key}: undo");
+        }
+    }
+}
+
+#[test]
+fn transform_effect_sliders_update_the_painted_preview_and_cancel() {
+    for (key, label, index, fraction, expected, tolerance) in [
+        ("scaleH", "Horizontal:", 0, 0.25, 50.0, 4.0),
+        ("scaleV", "Vertical:", 0, 0.25, 50.0, 4.0),
+        ("moveH", "Horizontal:", 1, 0.55, 100.0, 20.0),
+        ("moveV", "Vertical:", 1, 0.55, 100.0, 20.0),
+    ] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 30})).unwrap();
+        app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        app.run("effect.apply", json!({"effect": "distort.transform", "item": null})).unwrap();
+        let baseline = vectorcraft_testkit::raster::render_artboard(&app.session.doc().unwrap().doc);
+        app.run("effect.dialog", json!({"effect": "distort.transform", "item": null, "index": 0})).unwrap();
+        let ctx = drop_ctx();
+        crate::theme::install_fonts(&ctx);
+        for _ in 0..2 {
+            frame_events(&ctx, &mut app, vec![], |app, ui| crate::dialogs::show(app, ui.ctx()));
+        }
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        output.textures_delta.clear();
+        let mut rails: Vec<_> = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.role() == egui::accesskit::Role::Slider && n.label() == Some(label))
+            .filter_map(|(_, n)| n.bounds())
+            .collect();
+        rails.sort_by(|a, b| a.y0.total_cmp(&b.y0));
+        let bounds = rails.get(index).unwrap_or_else(|| panic!("{key}: slider not found"));
+        let at = egui::pos2((bounds.x0 + (bounds.x1 - bounds.x0) * fraction) as f32, ((bounds.y0 + bounds.y1) / 2.0) as f32);
+        click(&ctx, &mut app, at, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        let value = app.ui.dialog.as_ref().unwrap().f64(key, f64::NAN);
+        assert!((value - expected).abs() <= tolerance, "{key}: {value}");
+        assert_ne!(vectorcraft_testkit::raster::render_artboard(&app.session.doc().unwrap().doc).rgba, baseline.rgba, "{key}: slider preview");
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(vectorcraft_testkit::raster::render_artboard(&app.session.doc().unwrap().doc).rgba, baseline.rgba, "{key}: Cancel");
+    }
+}
+
 /// A fill or stroke row's label ("Fill:", "Stroke:") is a link: a click opens the Color or Stroke
 /// panel with or without modifiers, with the tooltip "Click to edit". Its empty space only takes the
 /// click rules: no tooltip, and neither a Ctrl-click nor a double-click there opens a panel.

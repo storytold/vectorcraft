@@ -78,7 +78,7 @@ const MAX_SCALE: f64 = 100_000.0;
 /// `scaleH` and `scaleV` (rails 0–200 %) and for `moveH` and `moveV` (rails ±1000 pt, fields in
 /// `units`), and an angle dial for `rotate` (counter-clockwise). The fields take values past the
 /// rails.
-pub(super) fn sections(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc::Unit) {
+pub(super) fn sections(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc::Unit, live: bool) {
     let rail = Tokens::get(ui.ctx()).input_border;
     let track = move |_| rail;
     let axes = |h, v| [(h, tl!("Horizontal:")), (v, tl!("Vertical:"))];
@@ -87,7 +87,12 @@ pub(super) fn sections(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc
         widgets::label_row(ui, label, LABEL_W, |ui| {
             let shown = widgets::SliderValue::field(d.f64(key, 100.0).clamp(-MAX_SCALE, MAX_SCALE), 0.0..=200.0, "%", 2);
             form::slider_rail_valued(ui, d, key, label, 0.0..=200.0, Some(shown), &track);
-            if let Some(n) = widgets::range_field(ui, ("te", key), d.f64(key, 100.0), -MAX_SCALE..=MAX_SCALE, "%", 2, FIELD_W) {
+            let value = if live {
+                widgets::range_field_live(ui, ("te", key), d.f64(key, 100.0), -MAX_SCALE..=MAX_SCALE, "%", 2, FIELD_W)
+            } else {
+                widgets::range_field(ui, ("te", key), d.f64(key, 100.0), -MAX_SCALE..=MAX_SCALE, "%", 2, FIELD_W)
+            };
+            if let Some(n) = value {
                 d.fields.insert(key.into(), json!(n));
             }
         });
@@ -97,14 +102,25 @@ pub(super) fn sections(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc
         widgets::label_row(ui, label, LABEL_W, |ui| {
             let shown = form::length_value(d, key, units, -1000.0..=1000.0);
             form::slider_rail_valued(ui, d, key, label, -1000.0..=1000.0, shown, &track);
-            form::length(ui, d, key, units, FIELD_W);
+            if live {
+                if let Some(n) = widgets::num_field_live(ui, ("dlg-len", key), Some(d.f64(key, 0.0)), units, FIELD_W) {
+                    d.fields.insert(key.into(), json!(n));
+                }
+            } else {
+                form::length(ui, d, key, units, FIELD_W);
+            }
         });
     }
     widgets::subheader(ui, tl!("Rotate"));
     widgets::label_row(ui, tl!("Angle:"), LABEL_W, |ui| {
         let angle = d.f64("rotate", 0.0);
         let dialed = widgets::angle_dial(ui, "te-dial", angle, 28.0);
-        if let Some(a) = widgets::plain_field(ui, ("te", "rotate"), angle, "°", 2, FIELD_W).or(dialed) {
+        let typed = if live {
+            widgets::plain_field_live(ui, ("te", "rotate"), angle, "°", 2, FIELD_W)
+        } else {
+            widgets::plain_field(ui, ("te", "rotate"), angle, "°", 2, FIELD_W)
+        };
+        if let Some(a) = typed.or(dialed) {
             d.fields.insert("rotate".into(), json!(a));
         }
     });
@@ -128,7 +144,7 @@ pub(super) fn reflect_options(ui: &mut egui::Ui, d: &mut Dialog) {
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let units = app.session.general_unit();
     ui.horizontal_top(|ui| {
-        ui.vertical(|ui| sections(ui, d, units));
+        ui.vertical(|ui| sections(ui, d, units, false));
         ui.add_space(16.0);
         ui.vertical(|ui| {
             widgets::subheader(ui, tl!("Options"));

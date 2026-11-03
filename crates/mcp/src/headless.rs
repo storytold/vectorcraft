@@ -352,7 +352,10 @@ impl Headless {
             "document.node" => self.exec("document.node", p),
             "document.json" => self.exec("document.json", &json!({})),
             "ui.tool.select" => self.select_tool(p),
-            "ui.tool.list" => Ok(serde_json::to_value(TOOL_GROUPS).unwrap_or_default()),
+            "ui.tool.list" => {
+                let groups: Vec<_> = TOOL_GROUPS.iter().chain(vectorcraft_tools::addons::GROUPS).copied().collect();
+                Ok(serde_json::to_value(groups).unwrap_or_default())
+            }
             "ui.pointer" => self.pointer(p),
             "ui.key" => self.key(p),
             "ui.render" | "ui.screenshot" => self.render(p),
