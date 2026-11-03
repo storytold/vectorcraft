@@ -47,10 +47,8 @@ pub(super) fn copy_cost(n: &af::Node, depth: usize) -> CopyCost {
         _ => CopyCost { work: 1, pixels: 0 },
     };
     // A vector mask is a path of its own, and a pixel mask an image of its own, in every copy.
-    let mask = CopyCost {
-        work: n.mask.as_ref().map_or(0, segments) + u64::from(n.pixel_mask.is_some()),
-        pixels: n.pixel_mask.as_ref().map_or(0, pixels),
-    };
+    let mask =
+        CopyCost { work: n.mask.as_ref().map_or(0, segments) + u64::from(n.pixel_mask.is_some()), pixels: n.pixel_mask.as_ref().map_or(0, pixels) };
     n.children.iter().fold(own.plus(mask), |c, ch| c.plus(copy_cost(ch, depth + 1)))
 }
 
