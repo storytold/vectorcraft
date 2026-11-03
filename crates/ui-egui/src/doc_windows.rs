@@ -9,6 +9,9 @@
 //! A document tab dragged off the tab strip floats its document in a window under the pointer,
 //! and a document window dragged onto the tab strip by its title bar (an OS window by the tab at
 //! its top) goes back under the tabs.
+//!
+//! With Preferences › User Interface › Open Documents As Tabs cleared, each document opened or
+//! created afterwards opens in a floating window ([`opened`]).
 
 use serde_json::{Value, json};
 
@@ -77,6 +80,16 @@ pub struct Windows {
     pub(crate) strip: Option<egui::Rect>,
     /// Counts the windows opened ([`DocWindow::number`]).
     opened: u32,
+    /// The open documents (their uids) when [`opened`] last ran, or when the app started.
+    known: Vec<u64>,
+}
+
+impl Windows {
+    /// No windows yet, with `known` (uids) the documents open when the app starts: they keep their
+    /// tabs, whatever Open Documents As Tabs says.
+    pub(crate) fn new(known: Vec<u64>) -> Self {
+        Self { known, ..Default::default() }
+    }
 }
 
 /// Whether a document tab dragged from `strip` to `p` has left it far enough to float.
@@ -142,6 +155,28 @@ fn area(app: &VectorcraftApp) -> egui::Rect {
 /// open. Each fits its window.
 fn float(app: &mut VectorcraftApp, docs: &[usize]) {
     app.sync_views();
+    place(app, docs);
+}
+
+/// The documents opened or created since the last call: each one opened while Preferences › User
+/// Interface › Open Documents As Tabs was cleared ([`vectorcraft_engine::DocState::opened_as_tab`])
+/// opens in a floating window of its own, at the next cascade place. Documents already open stay
+/// where they are. Called by [`VectorcraftApp::sync_views`].
+pub(crate) fn opened(app: &mut VectorcraftApp) {
+    let docs = app.session.documents();
+    let known = &app.canvas.windows.known;
+    if known.len() == docs.len() && known.iter().zip(docs).all(|(u, d)| *u == d.uid) {
+        return;
+    }
+    let new: Vec<usize> = docs.iter().enumerate().filter(|(_, d)| !d.opened_as_tab && !known.contains(&d.uid)).map(|(i, _)| i).collect();
+    app.canvas.windows.known = docs.iter().map(|d| d.uid).collect();
+    if !new.is_empty() {
+        place(app, &new);
+    }
+}
+
+/// [`float`] for documents whose views exist.
+fn place(app: &mut VectorcraftApp, docs: &[usize]) {
     let first = app.ui.floating.len();
     let places = cascade_places(area(app), first + docs.len());
     for (k, i) in docs.iter().enumerate() {

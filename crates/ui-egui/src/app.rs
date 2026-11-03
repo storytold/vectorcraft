@@ -54,6 +54,7 @@ impl VectorcraftApp {
         // ([`place::place_from_cursor`]).
         session.place_cursor_requests = true;
         let views = session.documents().iter().map(View::of).collect();
+        let known = session.documents().iter().map(|d| d.uid).collect();
         Self {
             session,
             ui: UiState::default(),
@@ -85,7 +86,7 @@ impl VectorcraftApp {
                 hover_cursor: None,
                 presented: None,
                 panes: Default::default(),
-                windows: Default::default(),
+                windows: crate::doc_windows::Windows::new(known),
             },
             perf: Perf::default(),
             dock_rt: Default::default(),

@@ -595,6 +595,74 @@ fn float_in_window_and_consolidate_take_a_document() {
 }
 
 #[test]
+fn with_open_documents_as_tabs_cleared_new_documents_open_in_floating_windows() {
+    let mut app = app_with(1);
+    let ctx = egui::Context::default();
+    app.run("prefs.set", json!({"key": "openDocumentsAsTabs", "value": false})).unwrap();
+    assert_eq!(docked(&app), [0], "a document already open stays under its tab");
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    assert_eq!(docked(&app), [0]);
+    assert_eq!(floating_indices(&app), [1, 2], "each new document opens in a window of its own");
+    assert_eq!(app.session.active_index(), Some(2), "the newest document is the current one");
+    assert_ne!(app.ui.floating[0].place.min, app.ui.floating[1].place.min, "the windows open at cascade places");
+    frame(&mut app, &ctx, vec![]);
+    let shapes = frame(&mut app, &ctx, vec![]);
+    assert!(!tab_drawn(&shapes, &app.session.documents()[2].title()), "a document in a window has no tab");
+    assert!(tab_drawn(&shapes, &app.session.documents()[0].title()));
+    assert!(body_of(&app, 2).contains_rect(app.canvas_rect.unwrap()), "the new document's window holds the canvas");
+}
+
+#[test]
+fn documents_open_when_the_app_starts_keep_their_tabs() {
+    let mut session = Session::new();
+    session.prefs.open_documents_as_tabs = false;
+    session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let mut app = VectorcraftApp::new(session, Default::default());
+    app.sync_views();
+    assert_eq!(docked(&app), [0]);
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    assert_eq!(floating_indices(&app), [1]);
+}
+
+#[test]
+fn a_document_created_in_a_batch_that_closes_another_still_floats() {
+    let mut app = app_with(2);
+    app.run("prefs.set", json!({"key": "openDocumentsAsTabs", "value": false})).unwrap();
+    let steps = json!([
+        {"command": "file.close", "params": {}},
+        {"command": "file.new", "params": {"width": 400, "height": 300}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!(app.session.documents().len(), 2, "one document closed and one opened");
+    assert_eq!(docked(&app), [0]);
+    assert_eq!(floating_indices(&app), [1], "the new document opens in a window of its own");
+}
+
+#[test]
+fn each_document_in_a_batch_follows_the_preference_when_it_opened() {
+    let mut app = app_with(1);
+    let new = json!({"command": "file.new", "params": {"width": 400, "height": 300}});
+    let tabs = |on: bool| json!({"command": "prefs.set", "params": {"key": "openDocumentsAsTabs", "value": on}});
+    let steps = json!([tabs(false), new, tabs(true), new, tabs(false)]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!(floating_indices(&app), [1], "opened with the box cleared");
+    assert_eq!(docked(&app), [0, 2], "opened with the box checked");
+}
+
+#[test]
+fn checking_open_documents_as_tabs_again_leaves_floating_documents_where_they_are() {
+    let mut app = app_with(0);
+    app.run("prefs.set", json!({"key": "openDocumentsAsTabs", "value": false})).unwrap();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("prefs.set", json!({"key": "openDocumentsAsTabs", "value": true})).unwrap();
+    assert_eq!(floating_indices(&app), [0], "the floating document stays in its window");
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    assert_eq!(docked(&app), [1], "a new document opens under a tab");
+    assert_eq!(floating_indices(&app), [0]);
+}
+
+#[test]
 fn an_os_window_moves_by_its_tab_and_docks_on_the_strip() {
     let host = native_host();
     let ctx = egui::Context::default();
