@@ -382,7 +382,7 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
             // or the web, a finger) and a macOS pen's moves carry their own pressure; a
             // mouse's, a pen's on X11 among them, take the host's latest. Other tools get
             // the last position only, so a costly drag preview runs once a frame.
-            let (moves, last_pose) = tool_frame_moves(ui, app);
+            let (moves, last_pose) = tool_frame_moves(ui, app, false);
             // A frame whose pointer ends where the last one did still moved in between.
             let backquote = ui.input(|i| i.key_down(egui::Key::Backtick));
             let mods_changed = tool_drag_mods_changed(ui, mods(m, space), backquote);
@@ -467,8 +467,9 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
             // tools commit the last preview, which should be where the pointer let go
             // (#834). Only once the press has dragged, so a click's jitter stays a click
             // (the Pen's corner anchor, no nudge with Direct Selection). A tool that builds a
-            // stroke from the drag's samples gets the frame's other moves before it.
-            let (moves, last_pose) = tool_frame_moves(ui, app);
+            // stroke from the drag's samples gets the frame's other moves before it, up to the
+            // button-up: the moves after it are hover.
+            let (moves, last_pose) = tool_frame_moves(ui, app, true);
             let pen = move_pose(app, &xf, last_pose);
             if let Some(last) = last_drag {
                 let backquote = ui.input(|i| i.key_down(egui::Key::Backtick));

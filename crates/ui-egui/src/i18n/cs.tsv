@@ -636,6 +636,7 @@
 	Cascade	Do kaskády
 	Tile	Vedle sebe
 	Float in Window	Uvolnit do samostatného okna
+	Float All in Windows	Uvolnit vše do samostatných oken
 	Consolidate All Windows	Sloučit všechna okna
 	Workspace	Pracovní prostor
 	Reset Essentials	Obnovit Essentials
@@ -3959,6 +3960,8 @@ effect	Regular	Pravidelný
 	In the selected objects	Ve vybraných objektech
 	Find in Folder…	Najít ve složce…
 	Replace With Font	Nahradit písmem
+	Replace With Font From	Nahradit písmem z
+	System	Systém
 	  — substituted by {style}	  — nahrazeno řezem {style}
 	  — {n} characters from another font	  — znaky z jiného písma: {n}
 	All Scripts	Všechny systémy písma
@@ -6002,6 +6005,11 @@ anchor	Points:	Body:
 	Horizontal Scale	Vodorovná změna velikosti
 	Vertical Scale	Svislá změna velikosti
 @msg	{label} must be a number from {min} to {max}	{label} musí být číslo od {min} do {max}
+	Character Color	Barva znaků
+	OpenType Features	Funkce OpenType
+	Stylistic Sets	Stylistické sady
+@msg	features lists at most {max} tags	features obsahuje nejvýše {max} značek
+@msg	unknown OpenType feature `{t}`	neznámá funkce OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musí být číslo větší než 0 a nejvýše {max}
 @msg	no character style `{name}`	styl znaků `{name}` neexistuje
 

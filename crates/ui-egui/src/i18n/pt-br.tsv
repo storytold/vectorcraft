@@ -1091,6 +1091,7 @@
 	Flip Row Order	Inverter Ordem das Linhas
 	Flip Vertical	Espelhar Verticalmente
 	Float in Window	Flutuar na Janela
+	Float All in Windows	Flutuar Tudo em Janelas
 	Folder	Pasta
 	Folder Name:	Nome da Pasta:
 	Font	Fonte
@@ -2257,6 +2258,8 @@ digits	Malayalam	Malaiala
 	Replace Spine	Substituir Coluna
 	Replace Symbol	Substituir Símbolo
 	Replace With Font	Substituir Com Fonte
+	Replace With Font From	Substituir Com Fonte De
+	System	Sistema
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Substitua por outro arquivo, ou ignore-o: suas imagens continuam mostrando a pré-visualização salva com o documento.
 	Replaces the saved preset of that name.	Substitui o predefinido salvo com esse nome.
 	Replace…	Substituir…
@@ -5918,6 +5921,11 @@ anchor	Points:	Pontos:
 	Horizontal Scale	Escala Horizontal
 	Vertical Scale	Escala Vertical
 @msg	{label} must be a number from {min} to {max}	{label} deve ser um número de {min} a {max}
+	Character Color	Cor do Caractere
+	OpenType Features	Recursos OpenType
+	Stylistic Sets	Conjuntos Estilísticos
+@msg	features lists at most {max} tags	features aceita no máximo {max} marcas
+@msg	unknown OpenType feature `{t}`	recurso OpenType desconhecido `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve ser um número maior que 0 e no máximo {max}
 @msg	no character style `{name}`	Estilo de caractere `{name}` não encontrado
 

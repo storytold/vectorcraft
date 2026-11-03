@@ -648,6 +648,7 @@ digits	Malayalam	マラヤーラム数字
 	Cascade	重ねて表示
 	Tile	並べて表示
 	Float in Window	ウィンドウを分離
+	Float All in Windows	すべてをウィンドウに分離
 	Consolidate All Windows	すべてのウィンドウを統合
 	Workspace	ワークスペース
 	Reset Essentials	初期設定をリセット
@@ -2727,6 +2728,8 @@ mark-style	Japanese	日本式
 	Replace Font	フォントを置換
 	Replace Symbol	シンボルを置き換え
 	Replace With Font	置換するフォント
+	Replace With Font From	置換するフォントの一覧
+	System	システム
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	別のファイルに置き換えるか、無視してください。無視した場合、画像にはドキュメントに保存されたプレビューが表示され続けます。
 	Replaces the saved preset of that name.	同じ名前の保存済みプリセットを置き換えます。
 	Replace…	置換…
@@ -5686,6 +5689,11 @@ anchor	Points:	ポイント:
 	Horizontal Scale	水平比率
 	Vertical Scale	垂直比率
 @msg	{label} must be a number from {min} to {max}	{label} には {min} から {max} までの数値を指定してください
+	Character Color	文字カラー
+	OpenType Features	OpenType 機能
+	Stylistic Sets	スタイルセット
+@msg	features lists at most {max} tags	features に指定できるタグは {max} 個までです
+@msg	unknown OpenType feature `{t}`	不明な OpenType 機能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} には 0 より大きく {max} 以下の数値を指定してください
 @msg	no character style `{name}`	文字スタイル `{name}` が見つかりません
 

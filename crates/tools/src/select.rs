@@ -47,7 +47,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{PointSnap, Targets, distance_guides, hold_on_path};
-use crate::objects_on_path::{RotateAllDrag, over_rotate_all};
+use crate::objects_on_path::{RotateAllDrag, SpaceDrag, over_rotate_all, over_space};
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::pie::{self, PieDrag};
 use crate::rulerguide::GuideEdit;
@@ -107,6 +107,8 @@ enum State {
     Pie(PieDrag),
     /// Dragging an Objects on Path group's Rotate All widget.
     RotateAll(RotateAllDrag),
+    /// Dragging an Objects on Path group's Space widget.
+    Space(SpaceDrag),
     /// Move or rotate a live mirror axis.
     Mirror(crate::mirror::MirrorDrag),
     /// Drag a grid repeat's row, column or corner handle or a spacing slider.
@@ -150,6 +152,11 @@ pub struct SelectionTool {
     /// The last hover had Alt held: what it measures depends on what lies under the pointer
     /// ([`Tool::wants_rehover`]).
     alt_hover: bool,
+    /// The text the pointer was loaded with when the button went down: a dropped press loads it
+    /// again.
+    loaded_at_press: Option<(NodeId, bool)>,
+    /// Where the pointer last hovered: the type on a path bracket under it draws thicker.
+    bracket_hover: Option<Point>,
 }
 
 /// What Distance Guides measure the selection to.
@@ -556,6 +563,21 @@ impl SelectionTool {
         })
     }
 
+    /// On a press, notes the text the pointer is loaded with ([`Self::loaded_at_press`]); a
+    /// release clears it.
+    fn note_loaded_at_press(&mut self, kind: PointerKind) {
+        match kind {
+            PointerKind::Down => {
+                self.loaded_at_press = match self.state {
+                    State::Loaded { from, before, .. } => Some((from, before)),
+                    _ => None,
+                }
+            }
+            PointerKind::Up => self.loaded_at_press = None,
+            _ => {}
+        }
+    }
+
     /// The pointer loaded with the text of area type or type on a path `from` ([`State::Loaded`]):
     /// a press starts placing it, and its release threads it (`text.thread.add`), into a frame put
     /// `before` `from` or after it. None when `from` can no longer thread: the press is an
@@ -622,7 +644,7 @@ impl Tool for SelectionTool {
 
     /// E during a marquee drag switches the marquee between the objects it touches and only the
     /// objects inside it. Escape during a drag (a move or an Alt-drag copy, a bounding-box scale or
-    /// rotation, a marquee, a corner widget, a pie widget, the Rotate All widget, the brackets of type on a path, a mirror
+    /// rotation, a marquee, a corner widget, a pie widget, the Rotate All or Space widget, the brackets of type on a path, a mirror
     /// axis, a grid repeat's handles, a ruler guide) cancels it: what it changed goes back, no copy
     /// is left, and the tool waits for the next press. With the pointer loaded with text, Escape
     /// drops the text.
@@ -669,6 +691,18 @@ impl Tool for SelectionTool {
         if key == ToolKey::Escape { self.guide.cancel() } else { vec![] }
     }
 
+    /// A dropped press is canceled as by Escape, so a dropped press on a port loads no text. With
+    /// the pointer loaded with text, the press threads nothing and the text stays loaded for the
+    /// next click, a press on the port that loaded it included.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let loaded = self.loaded_at_press.take();
+        let out = if matches!(self.state, State::Loaded { press: Some(_), .. }) { vec![] } else { self.key(cx, ToolKey::Escape, Mods::default()) };
+        if let Some((from, before)) = loaded {
+            self.state = State::Loaded { from, before, press: None };
+        }
+        out
+    }
+
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
         match self.state {
             State::Marquee { .. } => key == ToolKey::Letter('e'),
@@ -683,6 +717,7 @@ impl Tool for SelectionTool {
         self.hover = None;
         self.distance = None;
         self.alt_hover = false;
+        self.bracket_hover = None;
     }
 
     fn wants_rehover(&self) -> bool {
@@ -695,6 +730,7 @@ impl Tool for SelectionTool {
             State::Corner(c) => c.adjusting(),
             State::Pie(d) => d.adjusting(),
             State::RotateAll(d) => d.adjusting(),
+            State::Space(d) => d.adjusting(),
             State::Bracket(b) => b.adjusting(),
             State::Mirror(d) => d.adjusting(),
             State::GridRepeat(d) => d.adjusting(),
@@ -703,7 +739,9 @@ impl Tool for SelectionTool {
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
+        self.note_loaded_at_press(ev.kind);
         let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
+        self.bracket_hover = hovering.then_some(ev.pos);
         self.alt_hover = hovering && ev.mods.alt;
         self.distance = hovering.then(|| distance_target(cx, ev.pos, ev.mods)).flatten();
         if let State::Loaded { from, before, press } = self.state
@@ -856,6 +894,15 @@ impl Tool for SelectionTool {
                 self.state = State::Idle;
                 d.finish()
             }
+            (PointerKind::Drag, State::Space(mut d)) => {
+                let out = d.drag(cx, p, m.alt);
+                self.state = State::Space(d);
+                out
+            }
+            (PointerKind::Up, State::Space(d)) => {
+                self.state = State::Idle;
+                d.finish()
+            }
             (PointerKind::Drag, State::Bracket(mut b)) => {
                 let out = b.drag(cx, p, m.cmd);
                 self.state = State::Bracket(b);
@@ -899,7 +946,9 @@ impl Tool for SelectionTool {
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        let mut o = pathtype::overlays(cx);
+        // Highlighted only where a press would take the bracket, not a nearer port.
+        let drag = if let State::Bracket(b) = &self.state { Some(b) } else { None };
+        let mut o = pathtype::overlays(cx, self.bracket_hover.filter(|p| over_bracket(cx, *p)), drag);
         if let Some(source) = cx.isolation.and_then(|id| cx.doc.node(id)).filter(|n| n.name.as_deref() == Some(vectorcraft_doc::shaper::SOURCES)) {
             for n in source.children().into_iter().flatten() {
                 if let Some(path) = n.path_data() {
@@ -912,6 +961,7 @@ impl Tool for SelectionTool {
             State::Corner(c) => o.extend(c.overlays(cx)),
             State::Pie(d) => o.extend(d.overlays(cx)),
             State::RotateAll(d) => o.extend(d.overlays(cx)),
+            State::Space(d) => o.extend(d.overlays(cx)),
             State::Loaded { press: Some((start, cur)), .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
             _ => {}
         }
@@ -960,6 +1010,7 @@ impl Tool for SelectionTool {
             State::Corner(_) => return Cursor::CornerRadius,
             State::Pie(_) => return Cursor::ArrowHollow,
             State::RotateAll(_) => return Cursor::Rotate,
+            State::Space(_) => return Cursor::ArrowHollow,
             State::Bracket(_) => return Cursor::PathBracket,
             State::Loaded { .. } => return Cursor::LoadedText,
             _ => {}
@@ -975,6 +1026,9 @@ impl Tool for SelectionTool {
         }
         if over_rotate_all(cx, p) {
             return Cursor::Rotate;
+        }
+        if over_space(cx, p) {
+            return Cursor::ArrowHollow;
         }
         if over_bracket(cx, p) {
             return Cursor::PathBracket;
@@ -1314,11 +1368,11 @@ impl SelectionTool {
     fn press_widgets(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point) -> Option<Vec<Action>> {
         // 0. A port of selected area type or type on a path: the pointer takes its text,
         // to thread on from the out port or back from the in port.
-        if let Some((from, port)) = crate::text::port_at(cx, p) {
+        if let Some((from, port)) = crate::text::port_at(cx, p).filter(|_| !over_bracket(cx, p)) {
             self.state = State::Loaded { from, before: port == crate::text::Port::In, press: None };
             return Some(vec![]);
         }
-        // 1. Live Corners widgets, pie widgets, the Rotate All widget and type on a path's brackets, then the
+        // 1. Live Corners widgets, pie widgets, the Rotate All and Space widgets and type on a path's brackets, then the
         // bounding-box handles of the current selection.
         if let Some(c) = CornerDrag::hit(cx, ev, false) {
             self.state = State::Corner(c);
@@ -1330,6 +1384,10 @@ impl SelectionTool {
         }
         if let Some(d) = RotateAllDrag::hit(cx, ev) {
             self.state = State::RotateAll(d);
+            return Some(vec![]);
+        }
+        if let Some(d) = SpaceDrag::hit(cx, ev) {
+            self.state = State::Space(d);
             return Some(vec![]);
         }
         if let Some(b) = BracketDrag::hit(cx, ev) {

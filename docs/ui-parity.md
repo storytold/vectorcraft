@@ -1,10 +1,10 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (Color Effects add-on: Find Nearest Swatch, #4923) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (font-family fields accept the mouse wheel, #5253; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
-**Feature evidence last updated:** 2026-10-22.
+**Feature evidence last updated:** 2026-11-03.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
@@ -194,6 +194,7 @@ tools, never checked side by side) isn't captured row by row.
 
 | Behaviour | Status | Notes |
 |---|---|---|
+| Wheel over a closed font-family field in Character, Properties or Control | done | #5253: applies the next or previous family to selected text, one undo step per notch; uses saved font filters, ignores search text and stops at the list's ends. Escape and pointer departure keep the change. Other font-picking menus and modifier-wheel input keep their existing behavior. |
 | Arrow keys nudge by Keyboard Increment (0.001–1296 pt); Shift ×10; Alt copies | done | |
 | Fields commit what was typed on a click away or a move to another field, as Enter does; Escape discards it | done | #1787 |
 | Number fields: Up/Down step, Shift ×10, Cmd/Ctrl ÷10, wheel over a focused field; steps, the wheel and label scrubs stop at the field's bounds (a stroke weight at 0, a miter limit at 1) | done | Shift+arrow in the Stroke weight field doesn't step by 10 (#991); bounds #3370 |
@@ -334,7 +335,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | Swatch, graphic style and symbol library panels: each library opens in a panel of its own, several at once, that floats, groups, docks and closes like any panel; opening an open library brings its panel forward; Previous / Next Library change the library in place; the panel menu's Persistent reopens the panel at startup with its view and find field (a library loaded from a file is read again; when its file is missing the panel reopens showing the file's path with Locate Library…, and the status bar names the file) | done | #2603; panel ids `library:<kind>:<id>`, `ui.libraryPanel {panel, library?, view?, showFind?, persistent?}`, `ui.libraryPanel.locate {panel, path?}`; the library panels have no sort option, as before |
 | DXF export/import preserves intended curve closure | done | #1299; R13–2018 closed SPLINE bit set/read; an open curve ending at its start stays open; knots and control points unchanged; native CIRCLE/ARC export and CNC preset remain pending |
 | macOS save sheet: choose the format from a menu | done | #866; the save panel is VectorCraft's own `NSSavePanel` with its Format menu set before the sheet opens (`apps/vectorcraft/src/mac_save_format.rs`); #1855 had withdrawn the menu that was added after the sheet began, which made Save As, Save a Copy and the first Save show no sheet |
-| Preferences: every option acts | partial | 4 stored but unused (#394, audited 2026-10-30): Open Documents As Tabs, Hyphenation › Default Language, Scratch Disks, Legacy vector clipboard; the rest act (Units › East Asian Type since 2026-10-31). General › Corner Radius drives the Rounded Rectangle tool and follows its ↑/↓ (2026-10-24) |
+| Preferences: every option acts | partial | 3 stored but unused (#394, audited 2026-10-30): Hyphenation › Default Language, Scratch Disks, Legacy vector clipboard; the rest act (Units › East Asian Type since 2026-10-31; Open Documents As Tabs: cleared, new documents open in floating windows). General › Corner Radius drives the Rounded Rectangle tool and follows its ↑/↓ (2026-10-24) |
 | Preferences › General › Constrain Angle | done | arrow keys and Shift drags along the turned axes; the Rectangle, Rounded Rectangle, Ellipse and grid tools, point and area type and the shape size dialogs draw along them with the bounding box turned; Shift-drawn polygons and stars keep the turned base orientation; the Line Segment tool's Shift steps count from it (#394, <https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/rotate-objects-by-specific-angles.html>); arcs, spirals, flares and Pen paths are not turned |
 | Tabs panel: a stop drags from where the press landed, a stop just added included | done | #1458 |
 | Outline view keeps template layers in Preview, dimmed | done | #1486; a picture placed to be traced stays visible under the outlines |
@@ -400,6 +401,8 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | Font-family fields in Character, Properties and Control accept the wheel without opening the menu (#5253); scores and estimates unchanged. |
+| 2026-11-03 | minor | Symbol editing draws and drags 9-slice guides on the canvas (#5280). Guides outside the artwork remain unsupported. Scores and hours remain unchanged. |
 | 2026-11-01 | minor | A double-click on a Repeat with the Selection tool enters isolation mode on it, where its source art (type included: a double-click there edits the text) is edited and every copy follows (#5054); scores and estimates unchanged |
 | 2026-11-01 | minor | Live Corners: while a corner widget is pressed or dragged with the Selection or Direct Selection tool, the Up and Down arrows step the corners' kind (round, inverted round, chamfer) with the radius, as one undo step (#2898); scores and estimates unchanged |
 | 2026-11-01 | minor | Keyboard Shortcuts: every Effect menu item (Distort & Transform › Transform…, Stylize › Drop Shadow…, …) is listed under its menu path and takes a shortcut of its own, which the menu shows and which opens that effect's dialog (or applies an effect without options) (#3296); scores and estimates unchanged |

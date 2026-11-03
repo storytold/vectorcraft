@@ -1177,6 +1177,7 @@ font-technology	Variable	Променливи
 	Flip Row Order	Обръщане реда на редовете
 	Flip Vertical	Вертикално обръщане
 	Float in Window	Плаващ прозорец
+	Float All in Windows	Всички в плаващи прозорци
 	Focal Fill	Фокусно запълване
 	Focal Stroke	Фокусен щрих
 	Folder	Папка
@@ -2639,6 +2640,8 @@ digits	Malayalam	Малаялам
 	Replace Spine	Замяна на оста
 	Replace Symbol	Замяна на символ
 	Replace With Font	Замяна с шрифт
+	Replace With Font From	Замяна с шрифт от
+	System	Система
 	Replaces the saved preset of that name.	Заменя записаната предварителна настройка с това име.
 	Replace…	Замяна…
 	Require a password to open the document	Изискване на парола за отваряне на документа

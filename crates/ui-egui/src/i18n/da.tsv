@@ -586,6 +586,7 @@
 	Cascade	Kaskade
 	Tile	Fliselæg
 	Float in Window	Flyd i vindue
+	Float All in Windows	Flyd alle i vinduer
 	Consolidate All Windows	Saml alle vinduer
 	Workspace	Arbejdsområde
 	Reset Essentials	Nulstil Essentials
@@ -3679,6 +3680,8 @@ effect	Regular	Regular
 	In the selected objects	I de markerede objekter
 	Find in Folder…	Find i mappe…
 	Replace With Font	Erstat med skrifttype
+	Replace With Font From	Erstat med skrifttype fra
+	System	System
 	  — substituted by {style}	  — erstattet af {style}
 	  — {n} characters from another font	  — {n} tegn fra en anden skrifttype
 	All Scripts	Alle scripts

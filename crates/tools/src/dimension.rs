@@ -390,6 +390,15 @@ impl Tool for DimensionTool {
         }
         vec![]
     }
+    /// A dropped drag is canceled as by Escape. A dropped click picks nothing, and the points or
+    /// lines earlier clicks picked stay.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if self.dragging {
+            return self.key(cx, ToolKey::Escape, Mods::default());
+        }
+        self.press = None;
+        vec![]
+    }
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.key(cx, ToolKey::Escape, Mods::default())
     }
@@ -463,5 +472,39 @@ impl Tool for DimensionTool {
             out.extend(self.snap.guides().iter().cloned());
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil::*;
+    use vectorcraft_doc::Selection;
+
+    /// A dropped click picks nothing and keeps the point an earlier click picked. A dropped drag
+    /// out from a segment is canceled as by Escape.
+    #[test]
+    fn a_dropped_press_keeps_the_earlier_picks() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 400.0, 400.0));
+        t.pointer(&c, &ev(PointerKind::Up, 400.0, 400.0));
+        assert_eq!(t.points.len(), 1);
+        // The engine sends the release after the drop.
+        t.pointer(&c, &ev(PointerKind::Down, 450.0, 420.0));
+        assert!(t.drop_press(&c).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 450.0, 420.0)).is_empty());
+        assert_eq!(t.points.len(), 1, "the earlier pick stays and the dropped click picks nothing");
+        assert!(t.pending.is_none() && t.busy());
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 100.0));
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 150.0, 60.0));
+        assert!(matches!(acts.first(), Some(Action::Begin(_))), "{acts:?}");
+        assert_eq!(t.drop_press(&c), vec![Action::Cancel]);
+        assert!(!t.busy());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 150.0, 60.0)).is_empty(), "the release places nothing");
     }
 }

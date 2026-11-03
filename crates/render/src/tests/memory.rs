@@ -2378,3 +2378,47 @@ fn text_runs_draw_their_own_glyphs_from_the_shared_outlines() {
     }
     assert!(g.run(7).elements().is_empty());
 }
+
+/// A compound path is drawn from the path the renderer keeps for it, as a plain path is: the next
+/// frame draws the same path, and draws what a new renderer draws.
+/// Once the compound path changes (each frame of a drag makes a new one), the entries of the old
+/// one, which keep it alive, go after a few frames, however few entries the renderer holds.
+#[test]
+fn compound_paths_draw_from_kept_paths_and_let_old_ones_go() {
+    let _fonts = fonts_steady();
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    let members: Vec<Arc<Node>> = (0..30)
+        .map(|i| {
+            let x = f64::from(i % 6) * 15.0;
+            let y = f64::from(i / 6) * 15.0;
+            let p = vectorcraft_geom::shapes::ellipse(Rect::new(x, y, x + 10.0, y + 10.0));
+            Arc::new(Node::path(d.alloc_id(), p, vectorcraft_doc::Appearance::default()))
+        })
+        .collect();
+    let id = d.alloc_id();
+    let mut compound = Node::new(id, NodeKind::Compound { children: members, rule: vectorcraft_geom::FillRule::EvenOdd });
+    compound.appearance = vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).into();
+    d.insert(Some(layer), 0, compound).unwrap();
+    let opts = RenderOptions::default();
+    let kept = |r: &Renderer, d: &Document| {
+        let n = d.layers[0].children().unwrap()[0].clone();
+        r.geom.get(&(Arc::as_ptr(&n) as usize)).and_then(|e| e.path.clone())
+    };
+    let mut r = Renderer::new();
+    let first = r.render(&d, 100, 100, Affine::IDENTITY, &opts).pixels;
+    let path = kept(&r, &d).expect("the compound path's path is kept");
+    assert!(r.render(&d, 100, 100, Affine::IDENTITY, &opts).pixels == first);
+    assert!(kept(&r, &d).is_some_and(|p| Arc::ptr_eq(&p, &path)), "the second frame draws the kept path");
+    assert!(first == Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixels);
+    // Moved: a new compound path (and layer) in each frame.
+    let old = d.layers[0].children().unwrap()[0].clone();
+    let mut moved = d.clone();
+    for _ in 0..5 {
+        moved.node_mut(id).unwrap().transform(Affine::translate((1.0, 0.0)), false);
+        r.render(&moved, 100, 100, Affine::IDENTITY, &opts);
+    }
+    drop(d);
+    assert!(r.geom.len() < 1024);
+    assert_eq!(Arc::strong_count(&old), 1, "the renderer no longer keeps the compound path drawn before the move");
+}

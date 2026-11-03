@@ -1431,6 +1431,7 @@ file-filter	Templates	Mẫu
 	Flip Vertical	Lật dọc
 	Flip:	Lật:
 	Float in Window	Nổi trong cửa sổ
+	Float All in Windows	Nổi tất cả trong cửa sổ
 	Float Panel	Thả nổi bảng
 	Float Tool Group	Thả nổi nhóm công cụ
 	Focal Fill	Tô tiêu điểm
@@ -3003,6 +3004,8 @@ mark-style	Japanese	Kiểu Nhật
 	Replace Spine	Thay thế trục
 	Replace Symbol	Thay thế ký hiệu
 	Replace With Font	Thay thế bằng phông chữ
+	Replace With Font From	Thay thế bằng phông chữ từ
+	System	Hệ thống
 	Replace “{name}”, the file this document was opened from?	Thay thế “{name}”, tệp mà tài liệu này được mở từ đó?
 	Replaces the saved preset of that name.	Thay thế thiết lập sẵn đã lưu có tên đó.
 	Replace…	Thay thế…
@@ -5602,6 +5605,11 @@ anchor	Points:	Điểm:
 	Horizontal Scale	Tỷ lệ ngang
 	Vertical Scale	Tỷ lệ dọc
 @msg	{label} must be a number from {min} to {max}	{label} phải là một số từ {min} đến {max}
+	Character Color	Màu ký tự
+	OpenType Features	Tính năng OpenType
+	Stylistic Sets	Bộ phong cách
+@msg	features lists at most {max} tags	features chứa tối đa {max} thẻ
+@msg	unknown OpenType feature `{t}`	tính năng OpenType không xác định `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} phải là một số lớn hơn 0 và tối đa {max}
 @msg	no character style `{name}`	Không tìm thấy kiểu ký tự `{name}`
 

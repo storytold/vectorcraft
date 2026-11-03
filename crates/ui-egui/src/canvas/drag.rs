@@ -149,10 +149,22 @@ pub(super) type FrameMove = (Pos2, Option<f32>, Option<PenPose>);
 /// move (empty when the pen read neither), if any. The last move is the pointer's position; the
 /// tilt and rotation the feed kept for it come second, if any. A mouse's moves count too, with no
 /// pressure: a fast mouse stroke otherwise keeps one position a frame, a sample every few pixels,
-/// too few for a low Fidelity to follow the hand (#3328).
-pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> (Vec<FrameMove>, Option<PenPose>) {
+/// too few for a low Fidelity to follow the hand (#3328). With `release`, the moves stop at that
+/// button's button-up in this frame, if it came: the moves after it are hover, and the button-up's
+/// position is the pointer's. The last move before it is left out only when it is at that
+/// position; its tilt and rotation come second either way.
+pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<egui::PointerButton>) -> (Vec<FrameMove>, Option<PenPose>) {
     let samples = stylus.map(StylusFeed::take_moves).unwrap_or_default();
     ui.input(|i| {
+        // How many of the frame's moves came before the button-up, and where it came, if it came.
+        let before_up = release.and_then(|b| {
+            i.events.iter().enumerate().find_map(|(k, e)| match e {
+                egui::Event::PointerButton { pos, button, pressed: false, .. } if *button == b => {
+                    Some((i.events.iter().take(k).filter(|e| matches!(e, egui::Event::PointerMoved(_))).count(), *pos))
+                }
+                _ => None,
+            })
+        });
         let mut moves = vec![];
         if i.events.iter().any(|e| matches!(e, egui::Event::Touch { .. })) {
             let mut force = None;
@@ -173,7 +185,20 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> (Vec<FrameMov
         } else {
             moves = i.events.iter().filter_map(|e| if let egui::Event::PointerMoved(p) = e { Some((*p, None, None)) } else { None }).collect();
         }
-        let last_pose = moves.pop().and_then(|(_, _, q)| q);
+        // Cut after pairing: the feed's samples pair with every move of the frame.
+        // The pointer's position is the button-up's: a last move before it that is elsewhere
+        // stays a move. Its tilt and rotation are still the pose.
+        let last_pose = match before_up {
+            Some((n, up_at)) => {
+                moves.truncate(n);
+                let pose = moves.last().and_then(|&(_, _, q)| q);
+                if moves.last().is_some_and(|&(p, _, _)| p == up_at) {
+                    moves.pop();
+                }
+                pose
+            }
+            None => moves.pop().and_then(|(_, _, q)| q),
+        };
         // A burst of events (a stalled frame) is thinned to a bounded count.
         const MAX: usize = 64;
         if moves.len() > MAX {
@@ -188,9 +213,11 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>) -> (Vec<FrameMov
 /// all of them for a tool that builds a stroke from them ([`vectorcraft_engine::Session::tool_wants_samples`]), none
 /// for the others, which get one drag a frame. The moves are read either way, so the host's feed
 /// pairs the next frame's with its own. The tilt and rotation the feed kept for the pointer's
-/// position come second, for every tool.
-pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp) -> (Vec<FrameMove>, Option<PenPose>) {
-    let (moves, last_pose) = frame_moves(ui, app.services.stylus.as_ref());
+/// position come second, for every tool. With `released`, only the moves before the primary
+/// button-up count.
+pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp, released: bool) -> (Vec<FrameMove>, Option<PenPose>) {
+    let release = released.then_some(egui::PointerButton::Primary);
+    let (moves, last_pose) = frame_moves(ui, app.services.stylus.as_ref(), release);
     (if app.session.tool_wants_samples() { moves } else { vec![] }, last_pose)
 }
 
@@ -203,15 +230,11 @@ pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
 pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {
     match ui.data(|d| d.get_temp::<Drag>(drag_id())) {
         Some(Drag::Tool | Drag::Art) => {
-            // The tool's mouse-up returns it to rest. A move waiting over a panel is still live
-            // and would otherwise outlive the drag that owns it (#2826).
-            // Nothing to roll back without a document; the tool still gets its mouse-up.
-            let _ = app.session.cancel_interaction();
-            dispatch(
-                app,
-                &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), backquote: false, pressure: 1.0, pen: None },
-                view,
-            );
+            // The tool drops the press, and a mouse-up returns it to rest with the options it had
+            // when the press began. A move waiting over a panel is still live and would otherwise outlive the drag that
+            // owns it (#2826).
+            let r = app.session.drop_tool_press(view);
+            apply_requests(app, r.map(|()| vec![]));
             egui::DragAndDrop::clear_payload(ui.ctx());
         }
         Some(_) => {}

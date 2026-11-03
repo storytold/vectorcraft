@@ -511,6 +511,17 @@ impl Tool for GradientTool {
             && cx.gradient_stop.is_some_and(|i| Annotator::of(cx).is_some_and(|a| i < a.gradient.stops.len()))
     }
 
+    /// A dropped drag is canceled as by Escape. A dropped click does nothing, and the line Lines
+    /// mode is drawing stays open.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if self.busy() {
+            return self.key(cx, ToolKey::Escape, Mods::default());
+        }
+        (self.gesture, self.free) = (None, None);
+        self.guides.clear();
+        vec![]
+    }
+
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape && self.busy() {
             self.gesture = None;

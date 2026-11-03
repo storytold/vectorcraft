@@ -1150,6 +1150,7 @@ font-technology	Variable	Μεταβλητές
 	Flip Row Order	Αντιστροφή σειράς γραμμών
 	Flip Vertical	Κατακόρυφη αναστροφή
 	Float in Window	Μετατροπή σε ανεξάρτητο παράθυρο
+	Float All in Windows	Μετατροπή όλων σε ανεξάρτητα παράθυρα
 	Focal Fill	Εστιακό γέμισμα
 	Focal Stroke	Εστιακό περίγραμμα
 	Folder	Φάκελος
@@ -3262,6 +3263,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Replace Spine	Αντικατάσταση κεντρικής καμπύλης
 	Replace Symbol	Αντικατάσταση συμβόλου
 	Replace With Font	Αντικατάσταση με γραμματοσειρά
+	Replace With Font From	Αντικατάσταση με γραμματοσειρά από
+	System	Σύστημα
 	Replaces the saved preset of that name.	Αντικαθιστά την αποθηκευμένη προεπιλογή με αυτό το όνομα.
 	Require a password to open the document	Απαίτηση κωδικού για το άνοιγμα εγγράφου
 	Reset Bounding Box	Επαναφορά πλαισίου οριοθέτησης
@@ -5953,6 +5956,11 @@ anchor	Points:	Σημεία:
 	Horizontal Scale	Οριζόντια κλίμακα
 	Vertical Scale	Κατακόρυφη κλίμακα
 @msg	{label} must be a number from {min} to {max}	Το {label} πρέπει να είναι αριθμός από {min} έως {max}
+	Character Color	Χρώμα χαρακτήρων
+	OpenType Features	Χαρακτηριστικά OpenType
+	Stylistic Sets	Στιλιστικά σύνολα
+@msg	features lists at most {max} tags	Το features περιέχει έως {max} ετικέτες
+@msg	unknown OpenType feature `{t}`	άγνωστο χαρακτηριστικό OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	Το {label} πρέπει να είναι αριθμός μεγαλύτερος από 0 και έως {max}
 @msg	no character style `{name}`	Δεν βρέθηκε το στυλ χαρακτήρων `{name}`
 

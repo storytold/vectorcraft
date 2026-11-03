@@ -61,7 +61,7 @@ use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 use overlays::selected_anchor;
 use overlays::{HandleLook, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
 pub use panes::Panes;
-pub(crate) use panes::{consolidate, tile, tiled_area};
+pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 use raster::{changed_pixels, pixel_region, upload};
 pub(crate) use raster::{color_image, color_image_owned};
 use task_bar::task_bar;

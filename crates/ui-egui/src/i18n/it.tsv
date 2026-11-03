@@ -1238,6 +1238,7 @@ file-filter	Templates	Modelli
 	Flip Row Order	Inverti ordine delle righe
 	Flip Vertical	Capovolgi verticalmente
 	Float in Window	Rendi mobile nella finestra
+	Float All in Windows	Rendi tutto mobile nelle finestre
 	Focal Fill	Riempimento attivo
 	Focal Stroke	Traccia attiva
 	Folder	Cartella
@@ -2742,6 +2743,8 @@ digits	Malayalam	Malayalam
 	Replace Spine	Sostituisci dorsale
 	Replace Symbol	Sostituisci simbolo
 	Replace With Font	Sostituisci con font
+	Replace With Font From	Sostituisci con font da
+	System	Sistema
 	Replaces the saved preset of that name.	Sostituisce il preset salvato con quel nome.
 	Replace…	Sostituisci…
 	Require a password to open the document	Richiedi una password per aprire il documento
@@ -5621,6 +5624,11 @@ anchor	Points:	Punti:
 	Horizontal Scale	Scala orizzontale
 	Vertical Scale	Scala verticale
 @msg	{label} must be a number from {min} to {max}	{label} deve essere un numero da {min} a {max}
+	Character Color	Colore carattere
+	OpenType Features	Funzioni OpenType
+	Stylistic Sets	Set stilistici
+@msg	features lists at most {max} tags	features contiene al massimo {max} tag
+@msg	unknown OpenType feature `{t}`	funzione OpenType sconosciuta `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve essere un numero maggiore di 0 e al massimo {max}
 @msg	no character style `{name}`	Stile di carattere `{name}` non trovato
 

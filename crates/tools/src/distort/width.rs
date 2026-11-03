@@ -105,6 +105,8 @@ pub struct WidthTool {
     drag: Option<Drag>,
     /// Selected width points: the stroke's owner and their positions t.
     selected: Option<(NodeId, Vec<f64>)>,
+    /// The selected width points when the button went down: a dropped press puts them back.
+    before_press: Option<(NodeId, Vec<f64>)>,
 }
 
 /// The object whose stroke path `id` draws with: its compound path, if it is a member of one.
@@ -308,6 +310,7 @@ impl Tool for WidthTool {
                 vec![Action::Dialog("widthPoint".into(), json!({"id": spot.owner.0, "index": w.index, "adjustAdjoining": ev.mods.shift}))]
             }
             PointerKind::Down => {
+                self.before_press = self.selected.clone();
                 let Some(spot) = Self::spot_at(cx, p) else {
                     if !ev.mods.shift {
                         self.selected = None;
@@ -400,6 +403,13 @@ impl Tool for WidthTool {
         matches!(key, ToolKey::Delete | ToolKey::Backspace | ToolKey::Escape)
             && self.drag.is_none()
             && self.selected.as_ref().is_some_and(|(id, _)| !self.selected_indices(cx, *id).is_empty())
+    }
+    /// A dropped press ends the drag, and the width points selected when the button went down are
+    /// selected again.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.drag = None;
+        self.selected = self.before_press.take();
+        vec![]
     }
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape && self.drag.is_none() {
@@ -689,6 +699,38 @@ mod tests {
         assert!(!t.claims_key(&c, ToolKey::Escape));
         t.key(&c, ToolKey::Escape, none);
         assert!(t.selected.is_some());
+    }
+
+    /// A dropped press keeps the width points earlier clicks selected: a press away from the
+    /// path, dropped, deselects nothing, and a dropped drag of another point ends with the points
+    /// selected before it, and its release commits nothing.
+    #[test]
+    fn a_dropped_press_keeps_the_selected_width_points() {
+        let (d, id) = doc_three_points();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = WidthTool::default();
+        let (none, shift) = (Mods::default(), Mods { shift: true, ..Default::default() });
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Up, 150.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Down, 250.0, 200.0, shift));
+        t.pointer(&c, &ev(PointerKind::Up, 250.0, 200.0, shift));
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3]);
+        // The engine sends the release after the drop.
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 450.0, shift)).is_empty());
+        assert!(t.drop_press(&c).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 450.0, shift)).is_empty());
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3]);
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 450.0, none)).is_empty());
+        assert!(t.drop_press(&c).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 450.0, none)).is_empty());
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3]);
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0, none)), vec![Action::Begin("Width Point".into())]);
+        t.pointer(&c, &ev(PointerKind::Drag, 220.0, 200.0, none));
+        assert!(t.drop_press(&c).is_empty());
+        assert!(!t.busy());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 220.0, 200.0, none)).is_empty(), "the release commits nothing");
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3]);
     }
 
     #[test]

@@ -463,6 +463,15 @@ pub struct UiState {
     /// Consolidate All Windows. Not saved: the reference app does not save windows with a document.
     #[serde(skip)]
     pub tiled: bool,
+    /// Window › Arrange › Float in Window, Float All in Windows and Cascade: the documents in
+    /// floating windows of their own, out of the tab strip, until Consolidate All Windows. Not
+    /// saved, as `tiled` is not.
+    #[serde(skip)]
+    pub floating: Vec<crate::doc_windows::DocWindow>,
+    /// The document (its uid) the tab strip shows while the current document is in a floating
+    /// window: the tabbed document that was current last.
+    #[serde(skip)]
+    pub tab_document: Option<u64>,
     /// Draw Normal / Behind / Inside.
     pub draw_mode: u8,
     pub about: bool,
@@ -944,6 +953,8 @@ impl Default for UiState {
             palette_query: String::new(),
             screen_mode: 0,
             tiled: false,
+            floating: Vec::new(),
+            tab_document: None,
             draw_mode: 0,
             about: false,
             action_sets: crate::panels::actions::default_sets(),

@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (the Type tools make area type or type on a path from a clicked path; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-02 · **Change:** minor (font-family fields accept the mouse wheel, #5253; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -18,6 +18,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 
 | Feature | Status | Notes |
 |---|---|---|
+| Mouse wheel over the closed font-family field | done | #5253: Character, Properties and Control step selected text through the family list using saved font filters (excluding search text), one undo step per notch; the style is matched and the list stops at either end. Escape and leaving the field keep the change. Order, bounds and Undo grouping are VectorCraft's choices; scores unchanged. |
 | Soft return (forced line break, Shift+Enter) | done | Shift+Enter inserts a soft return (U+2028), breaking the line without starting a new paragraph; paragraph spacing (space before/after) and first-line indents apply only at paragraph ends; continuation lines in lists do not repeat the marker; soft return lines in justified text do not spread (#2754) |
 | Native font-family labels | partial | With Show Font Names in English off, localized legacy names are used when typographic names contain no native label (#2208); loaded-font and catalog-only regressions. Choosing among multiple native languages is unchanged. |
 | Point, area and type-on-a-path type; vertical variants | done / partial | vertical point, area and path type have initial support; fullwidth `！` / `？` keep the nominal glyph upright when no vertical alternate exists (Unicode Tu); in a non-rectangular area a word too wide for the top lines moves down to the first line that holds it (#1615); Escape while typing ends the edit, keeps the type selected and switches to the Selection tool (#1802); `text.create` and `text.createInPath` take `justify` (#1752); MCP `add_text` forwards `vertical` to both commands; the Type and Vertical Type tools make area type when a closed path's outline is clicked and type on a path when an open one is, with pointers that say which, as the public help describes ([Create text](https://web.archive.org/web/20220127090642/https://helpx.adobe.com/illustrator/using/creating-text.html), [Create type on a path](https://web.archive.org/web/20220127090635/https://helpx.adobe.com/illustrator/using/creating-type-path.html)) |
@@ -75,6 +76,7 @@ Character Styles menu New/Redefine and footer New capture the first selected cha
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | The wheel over Character, Properties and Control font-family fields changes selected text, one undo step per notch (#5253); scores and estimates unchanged. |
 | 2026-11-01 | minor | The Type and Vertical Type tools make area type in a clicked closed path and type on a path along a clicked open one, with their own pointers; each type tool has its own icon; scores unchanged (estimated) |
 | 2026-10-31 | minor | Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers; scores unchanged |
 | 2026-11-01 | minor | Glyphs panel (#4908): the character selected with the Type tool (a range's first, else the one before the caret) is highlighted in the grid and scrolled into view when the selection moves to another character; Show › Alternates for Current Selection not yet; scores unchanged |

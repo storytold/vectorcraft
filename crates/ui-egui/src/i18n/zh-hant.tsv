@@ -1202,6 +1202,7 @@ file-filter	Templates	範本
 	Flip Row Order	反轉列順序
 	Flip Vertical	垂直翻轉
 	Float in Window	在視窗中浮動
+	Float All in Windows	全部在視窗中浮動
 	Focal Fill	焦點填色
 	Focal Stroke	焦點筆畫
 	Folder	資料夾
@@ -3594,6 +3595,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Replace Spine	取代脊線
 	Replace Symbol	取代符號
 	Replace With Font	取代為字體
+	Replace With Font From	取代字體來源
+	System	系統
 	Replaces the saved preset of that name.	取代同名的已儲存預設集。
 	Replace…	取代…
 	Require a password to open the document	開啟文件時需要密碼
@@ -5639,6 +5642,11 @@ anchor	Points:	點：
 	Horizontal Scale	水平縮放
 	Vertical Scale	垂直縮放
 @msg	{label} must be a number from {min} to {max}	{label} 必須是 {min} 到 {max} 之間的數字
+	Character Color	字元顏色
+	OpenType Features	OpenType 功能
+	Stylistic Sets	風格集
+@msg	features lists at most {max} tags	features 最多包含 {max} 個標籤
+@msg	unknown OpenType feature `{t}`	未知的 OpenType 功能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必須是大於 0 且不超過 {max} 的數字
 @msg	no character style `{name}`	找不到字元樣式 `{name}`
 

@@ -1235,6 +1235,7 @@ file-filter	Templates	Шаблоны
 	Flip Row Order	Изменить порядок строк
 	Flip Vertical	Отразить по вертикали
 	Float in Window	Плавать в окне
+	Float All in Windows	Все плавающие в окнах
 	Focal Fill	Фокусная заливка
 	Focal Stroke	Фокусная обводка
 	Folder	Папка
@@ -2737,6 +2738,8 @@ digits	Malayalam	Малаялам
 	Replace Spine	Заменить остов
 	Replace Symbol	Заменить символ
 	Replace With Font	Заменить шрифтом
+	Replace With Font From	Заменить шрифтом из
+	System	Система
 	Replaces the saved preset of that name.	Заменяет сохранённый набор с таким именем.
 	Replace…	Заменить…
 	Require a password to open the document	Требовать пароль для открытия документа
@@ -5979,6 +5982,11 @@ anchor	Points:	Точки:
 	Horizontal Scale	Масштаб по горизонтали
 	Vertical Scale	Масштаб по вертикали
 @msg	{label} must be a number from {min} to {max}	{label} должно быть числом от {min} до {max}
+	Character Color	Цвет символов
+	OpenType Features	Функции OpenType
+	Stylistic Sets	Стилистические наборы
+@msg	features lists at most {max} tags	features содержит не более {max} тегов
+@msg	unknown OpenType feature `{t}`	неизвестная функция OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} должно быть числом больше 0 и не более {max}
 @msg	no character style `{name}`	Стиль символов `{name}` не найден
 

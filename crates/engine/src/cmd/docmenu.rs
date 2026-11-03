@@ -325,7 +325,7 @@ fn first_text_style(s: &Session) -> Option<CharStyle> {
 fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool) -> Result<Value> {
     let r = first_text_style(s).ok_or_else(|| bad(cmd, "select a text object"))?;
     let ids = candidates(s, |n| match &n.kind {
-        NodeKind::Text(t) => t.runs.iter().any(|run| eq(&run.style, &r)),
+        NodeKind::Text(t) => t.runs.iter().any(|run| !run.text.is_empty() && eq(&run.style, &r)),
         _ => false,
     })?;
     finish_same(s, cmd, ids)

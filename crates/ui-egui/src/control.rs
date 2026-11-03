@@ -200,6 +200,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
             "rect": [c.left(), c.top(), c.width(), c.height()],
             "active": app.session.active_index() == Some(*i),
         })).collect::<Vec<_>>(),
+        // Window › Arrange › Float in Window: the documents in floating windows, by index. While
+        // the current one floats, `canvasRect` is in its window's coordinates.
+        "floating": (0..app.session.documents().len()).filter(|i| crate::doc_windows::is_floating(app, *i)).collect::<Vec<_>>(),
         "window": [r.width(), r.height()],
         "documents": app.session.documents().iter().map(|d| json!({"title": d.title(), "dirty": d.is_dirty()})).collect::<Vec<_>>(),
         "activeDocument": app.session.active_index(),

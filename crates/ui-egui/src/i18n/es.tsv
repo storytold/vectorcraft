@@ -1226,6 +1226,7 @@ font-technology	Variable	Variables
 	Flip Row Order	Invertir orden de filas
 	Flip Vertical	Voltear verticalmente
 	Float in Window	Flotar en ventana
+	Float All in Windows	Flotar todo en ventanas
 	Focal Fill	Relleno focal
 	Focal Stroke	Trazo focal
 	Folder	Carpeta
@@ -2709,6 +2710,8 @@ digits	Malayalam	Malayálam
 	Replace Spine	Reemplazar eje
 	Replace Symbol	Reemplazar símbolo
 	Replace With Font	Reemplazar con fuente
+	Replace With Font From	Reemplazar con fuente de
+	System	Sistema
 	Replaces the saved preset of that name.	Reemplaza el preajuste guardado con ese nombre.
 	Replace…	Reemplazar…
 	Require a password to open the document	Solicitar una contraseña para abrir el documento
@@ -5944,6 +5947,11 @@ anchor	Points:	Puntos:
 	Horizontal Scale	Escala horizontal
 	Vertical Scale	Escala vertical
 @msg	{label} must be a number from {min} to {max}	{label} debe ser un número de {min} a {max}
+	Character Color	Color de los caracteres
+	OpenType Features	Funciones OpenType
+	Stylistic Sets	Conjuntos estilísticos
+@msg	features lists at most {max} tags	features admite como máximo {max} etiquetas
+@msg	unknown OpenType feature `{t}`	función OpenType desconocida `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} debe ser un número mayor que 0 y como máximo {max}
 @msg	no character style `{name}`	No existe el estilo de carácter `{name}`
 
