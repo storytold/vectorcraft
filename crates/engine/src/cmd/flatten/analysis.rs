@@ -176,7 +176,7 @@ pub(super) fn overlapping(bounds: &[Option<Rect>]) -> Result<Vec<Vec<usize>>, ve
         stack.push((1, 0, size));
         while let Some((node, lo, hi)) = stack.pop() {
             work += 1;
-            if work % 4096 == 0 {
+            if work.is_multiple_of(4096) {
                 vectorcraft_doc::cancel::check()?;
             }
             if lo >= below || low[node] < b.y0 {
