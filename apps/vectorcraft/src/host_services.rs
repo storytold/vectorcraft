@@ -400,8 +400,8 @@ pub(crate) fn find_photocraft(home: Option<&std::path::Path>, path_var: Option<&
     photocraft_candidates(home, path_var).into_iter().find(|p| check_app(p).is_ok())
 }
 
-/// Where PhotoCraft may be installed: the Applications folders on macOS, else a `photocraft`
-/// program on the `PATH`.
+/// Where PhotoCraft may be installed: the Applications folders on macOS; on Windows where its
+/// installer puts it ([`windows_candidates`]); else a `photocraft` program on the `PATH`.
 pub(crate) fn photocraft_candidates(home: Option<&std::path::Path>, path_var: Option<&std::ffi::OsStr>) -> Vec<std::path::PathBuf> {
     if cfg!(target_os = "macos") {
         let mut v = vec![std::path::PathBuf::from("/Applications/PhotoCraft.app")];
@@ -409,7 +409,73 @@ pub(crate) fn photocraft_candidates(home: Option<&std::path::Path>, path_var: Op
         return v;
     }
     let name = if cfg!(windows) { "photocraft.exe" } else { "photocraft" };
-    path_var.map(|p| std::env::split_paths(p).map(|dir| dir.join(name)).collect()).unwrap_or_default()
+    let on_path = path_var.map(|p| std::env::split_paths(p).map(|dir| dir.join(name)).collect()).unwrap_or_default();
+    if cfg!(windows) {
+        let folders: Vec<std::path::PathBuf> = [
+            std::env::var_os("LOCALAPPDATA").map(|d| std::path::PathBuf::from(d).join("Programs")),
+            std::env::var_os("ProgramW6432").map(std::path::PathBuf::from),
+            std::env::var_os("ProgramFiles").map(std::path::PathBuf::from),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        return windows_candidates(registered_photocraft(), &folders, on_path);
+    }
+    on_path
+}
+
+/// Windows: PhotoCraft's installer puts it in `ArtCraft\PhotoCraft` under a folder of
+/// `program_folders` (for the current user `%LOCALAPPDATA%\Programs`, for everyone Program Files)
+/// and registers its path under App Paths, which also covers a folder chosen in setup. So: the
+/// `registered` paths first, then those folders, then `on_path`.
+pub(crate) fn windows_candidates(
+    registered: Vec<std::path::PathBuf>,
+    program_folders: &[std::path::PathBuf],
+    on_path: Vec<std::path::PathBuf>,
+) -> Vec<std::path::PathBuf> {
+    let mut v = registered;
+    for f in program_folders {
+        let p = f.join("ArtCraft").join("PhotoCraft").join("photocraft.exe");
+        if !v.contains(&p) {
+            v.push(p);
+        }
+    }
+    v.extend(on_path);
+    v
+}
+
+/// The paths PhotoCraft's installer registers under App Paths, for the current user and then for
+/// everyone (`reg query`, so no extra dependency; a hidden console window).
+#[cfg(windows)]
+fn registered_photocraft() -> Vec<std::path::PathBuf> {
+    use std::os::windows::process::CommandExt as _;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    // reg.exe by its full path, so nothing named `reg` in the app's folder or on PATH runs instead.
+    let root = std::env::var_os("SystemRoot").map(std::path::PathBuf::from).unwrap_or_else(|| r"C:\Windows".into());
+    ["HKCU", "HKLM"]
+        .into_iter()
+        .filter_map(|hive| {
+            let key = format!(r"{hive}\Software\Microsoft\Windows\CurrentVersion\App Paths\photocraft.exe");
+            let out = std::process::Command::new(root.join("System32").join("reg.exe"))
+                .args(["query", &key, "/ve"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+                .ok()?;
+            registered_path(&String::from_utf8_lossy(&out.stdout))
+        })
+        .collect()
+}
+
+#[cfg(not(windows))]
+fn registered_photocraft() -> Vec<std::path::PathBuf> {
+    Vec::new()
+}
+
+/// The path in `reg query … /ve` output like
+/// `    (Default)    REG_SZ    C:\Program Files\ArtCraft\PhotoCraft\photocraft.exe`.
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+pub(crate) fn registered_path(text: &str) -> Option<std::path::PathBuf> {
+    text.lines().find_map(|l| l.split_once("REG_SZ")).map(|(_, v)| v.trim().trim_matches('"')).filter(|v| !v.is_empty()).map(std::path::PathBuf::from)
 }
 
 /// Is `app` an application Edit Original may start: an `.app` bundle on macOS, an `.exe` on
@@ -440,7 +506,7 @@ fn executable_file(p: &std::path::Path) -> bool {
 
 #[cfg(test)]
 mod open_with_tests {
-    use super::{check_app, find_photocraft, photocraft_candidates};
+    use super::{check_app, find_photocraft, photocraft_candidates, registered_path, windows_candidates};
 
     /// A fresh, empty folder under the system's temporary folder.
     fn scratch(name: &str) -> std::path::PathBuf {
@@ -502,5 +568,40 @@ mod open_with_tests {
             assert_eq!(find_photocraft(None, Some(&path_var)), Some(exe));
         }
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// #5327 review: on Windows PhotoCraft is looked for where its installer puts it: the path it
+    /// registers, then `ArtCraft\PhotoCraft` in the per-user and per-machine program folders, then
+    /// the `PATH`.
+    #[test]
+    fn windows_looks_where_the_photocraft_installer_puts_it() {
+        use std::path::PathBuf;
+        let registered = vec![PathBuf::from("D:/Tools/PhotoCraft/photocraft.exe")];
+        let folders = [PathBuf::from("C:/Users/me/AppData/Local/Programs"), PathBuf::from("C:/Program Files"), PathBuf::from("C:/Program Files")];
+        let on_path = vec![PathBuf::from("C:/bin/photocraft.exe")];
+        let exe = |f: &str| PathBuf::from(f).join("ArtCraft").join("PhotoCraft").join("photocraft.exe");
+        assert_eq!(
+            windows_candidates(registered, &folders, on_path),
+            [
+                PathBuf::from("D:/Tools/PhotoCraft/photocraft.exe"),
+                exe("C:/Users/me/AppData/Local/Programs"),
+                exe("C:/Program Files"),
+                PathBuf::from("C:/bin/photocraft.exe"),
+            ]
+        );
+    }
+
+    /// The registered path is read from `reg query … /ve` output, spaces and quotes included;
+    /// no value, no path.
+    #[test]
+    fn the_registered_path_is_read_from_reg_query() {
+        let out = "\r\nHKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\photocraft.exe\r\n    (Default)    REG_SZ    C:\\Program Files\\ArtCraft\\PhotoCraft\\photocraft.exe\r\n";
+        assert_eq!(registered_path(out), Some(std::path::PathBuf::from(r"C:\Program Files\ArtCraft\PhotoCraft\photocraft.exe")));
+        assert_eq!(
+            registered_path("    (Standard)    REG_SZ    \"C:\\A B\\photocraft.exe\""),
+            Some(std::path::PathBuf::from(r"C:\A B\photocraft.exe"))
+        );
+        assert_eq!(registered_path("ERROR: The system was unable to find the specified registry key or value."), None);
+        assert_eq!(registered_path("    (Default)    REG_SZ    "), None);
     }
 }
