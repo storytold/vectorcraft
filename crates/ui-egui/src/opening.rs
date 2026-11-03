@@ -132,6 +132,10 @@ pub fn poll(app: &mut VectorcraftApp) {
             app.ui.status.clear();
         }
         p.scope.run(|| finish(app, &p.path, r));
+        // A file that opened and asks about its links or fonts holds back the others too.
+        if !may_switch(app) {
+            return;
+        }
     }
 }
 
