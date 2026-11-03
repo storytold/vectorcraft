@@ -1382,6 +1382,10 @@ font-technology	Variable	Variables
 	Handles	Poignées
 	Hard Light	Lumière crue
 	Hard Mix	Mélange maximal
+	Segmented color wheel	Roue chromatique segmentée
+	Show smooth color wheel	Afficher la roue chromatique continue
+	Show segmented color wheel	Afficher la roue chromatique segmentée
+	Show color bars	Afficher les barres de couleur
 	Harmony Rules:	Règles d’harmonie :
 	Harmony Sets	Ensembles d’harmonies
 	Height	Hauteur

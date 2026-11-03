@@ -2335,6 +2335,10 @@ digits	Malayalam	მალაიალამური
 	Colors:	ფერები:
 	Current Colors ({total})	მიმდინარე ფერები ({total})
 	Harmony Rules:	ჰარმონიის წესები:
+	Segmented color wheel	სეგმენტირებული ფერთა წრე
+	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
+	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
+	Show color bars	ფერთა ზოლების ჩვენება
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
 	Link harmony colors	ჰარმონიის ფერების დაკავშირება
