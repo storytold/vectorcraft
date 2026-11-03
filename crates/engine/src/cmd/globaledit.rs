@@ -39,8 +39,8 @@
 //! - of its fills and strokes, each setting that changed (paint, weight, opacity, blending,
 //!   effects, caps, dashes, arrowheads …), as it is: it goes to the member's fill or stroke of the
 //!   same rank (the second fill from the bottom to the second fill), and a member without one is
-//!   left without it. A weight set to 4 pt is 4 pt on a smaller member too. The pen pressure a
-//!   stroke was drawn with stays each member's own;
+//!   left without it. A weight set to 4 pt is 4 pt on a smaller member too. The pen pressure,
+//!   tilt, bearing and rotation a stroke was drawn with stay each member's own;
 //! - a fill or stroke added or removed: a member whose fills and strokes lie in the model's
 //!   former order gains the same item at the same place (or loses the one at that place). A
 //!   member with another order, and any other change to the list (items moved, or several added
@@ -59,8 +59,15 @@
 //! opacity, blending, fills and effects). When the model group gains or loses objects, or one of
 //! them becomes another kind of object, each member takes the model's objects at that level
 //! whole, keeping its own ids in order. At most [`MAX_MEMBERS`] objects are taken, so that a huge
-//! document can't stall the start or every edit. Rotated copies and excluding a member with a
-//! Shift-click are not covered.
+//! document can't stall the start or every edit.
+//!
+//! In the how-to above, a Shift-click on one of the found objects takes it out of the edit. Here a
+//! Shift-click (not a Shift-drag) with the Selection tool on a highlighted member, or on an object
+//! inside it, leaves that member out (`select.globalEditExclude`): it is no longer highlighted,
+//! and later edits leave it as it is.
+//! The object the edit started from can't be left out (a Shift-click on it selects it or
+//! deselects it as before), Global Edit ends when fewer than two members are left, and leaving
+//! one out is not an undo step. Rotated copies are not covered.
 
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -68,10 +75,11 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, Nod
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect, Shape};
 
 use super::wand::{fill_of, stroke_of};
-use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc};
+use super::{CommandSpec, Result, Session, bad, bool_or, checked_id, cmd, has_doc};
 
 const C: &str = "select.globalEdit";
 const OPTIONS: &str = "select.globalEditOptions";
+const EXCLUDE: &str = "select.globalEditExclude";
 /// The most objects a Global Edit takes, the selected one included.
 pub const MAX_MEMBERS: usize = 10_000;
 const UNSUPPORTED: &str = "Global Edit works on paths, compound paths, symbol instances and groups of them";
@@ -95,6 +103,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{appearance?: bool, size?: bool, artboards?: \"all\" | range such as \"1, 3-5\", includeCanvas?: bool} set the options Start Global Edit matches with (defaults: shape only, all artboards, objects on the canvas included) → {appearance, size, artboards, includeCanvas, count: the objects Start Global Edit would take now (0 unless one supported object is selected)}",
             has_doc,
             set_options
+        ),
+        cmd!(
+            "select.globalEditExclude",
+            "Leave Out of Global Edit",
+            [],
+            None,
+            "{id} while Global Edit is on: leave the object `id` of the Global Edit (not the one it started from) out of it, as a Shift-click on it with the Selection tool does: it is no longer highlighted and later edits leave it as it is; with fewer than two objects left, Global Edit ends; not an undo step → {active, count, ids} (the objects left in it; none once it has ended)",
+            is_on,
+            exclude
         ),
     ]
 }
@@ -385,13 +402,42 @@ fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "active": true, "count": ids.len(), "ids": ids }))
 }
 
+fn is_on(s: &Session) -> std::result::Result<(), String> {
+    match s.active() {
+        None => Err("no document open".into()),
+        Some(st) if st.global_edit.is_none() => Err("Global Edit is off".into()),
+        Some(_) => Ok(()),
+    }
+}
+
+/// Leave one object out of the Global Edit (a Shift-click on it): not the object it started from.
+fn exclude(s: &mut Session, p: &Value) -> Result<Value> {
+    let id = checked_id(s, p.get("id").ok_or_else(|| bad(EXCLUDE, "missing id"))?, EXCLUDE)?;
+    let st = s.doc_mut()?;
+    let Some(ge) = &mut st.global_edit else { return Err(bad(EXCLUDE, "Global Edit is off")) };
+    match ge.members.iter().position(|(m, _)| *m == id) {
+        Some(i) if i > 0 => {
+            ge.members.remove(i);
+        }
+        _ => return Err(bad(EXCLUDE, "only an object of the Global Edit other than the one it started from can be left out")),
+    }
+    let ids: Vec<u64> = if ge.members.len() < 2 {
+        st.global_edit = None;
+        vec![]
+    } else {
+        ge.members.iter().map(|(id, _)| id.0).collect()
+    };
+    st.revision += 1;
+    Ok(json!({ "active": !ids.is_empty(), "count": ids.len(), "ids": ids }))
+}
+
 fn set_options(s: &mut Session, p: &Value) -> Result<Value> {
     let o = s.global_edit_options.with(p, &s.doc()?.doc, OPTIONS)?;
     s.global_edit_options = o.clone();
     Ok(o.json(match_count(s)))
 }
 
-/// How many objects Start Global Edit would take now with the session's options (the Result(s)
+/// How many objects Start Global Edit would take now with the session's options (the Results
 /// line of the options): 0 unless one supported object is selected.
 pub fn match_count(s: &Session) -> usize {
     match s.active() {
@@ -559,7 +605,8 @@ fn give_appearance(a: &Appearance, b: &Appearance, m: &Appearance, n: &mut Share
 }
 
 /// Give the member's fill or stroke `n` the settings of the model's that changed from `a` to `b`,
-/// with the values of `m` (`b` placed on the member). A stroke's pen pressure stays its own.
+/// with the values of `m` (`b` placed on the member). A stroke's pen pressure, tilt, bearing and
+/// rotation stay its own.
 fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut AppearanceItem) {
     use AppearanceItem::{Fill, Stroke};
     match (a, b, m, n) {
@@ -589,6 +636,9 @@ fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut
                 overprint,
                 gradient_mode,
                 pressure: _,
+                tilt: _,
+                bearing: _,
+                rotation: _,
             } = m;
             give_fields!(a, b, n: paint, width, cap, join, miter_limit, align, dash, start_arrow, end_arrow, arrow_scale, profile, brush, opacity, blend, visible, effects, arrow_align, overprint, gradient_mode);
         }
@@ -670,8 +720,9 @@ pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, se
     edited
 }
 
-/// The outlines of the members of the active document's Global Edit that are not selected, in
-/// their layer's colour: the canvas highlights them while Global Edit is on.
+/// The outlines of the members of the active document's Global Edit that are not selected, hold
+/// no selected object and sit inside no selected object, in their layer's colour: the canvas
+/// highlights them while Global Edit is on.
 pub fn highlights(s: &Session) -> Outlines {
     let Some(st) = s.active() else { return vec![] };
     let Some(ge) = &st.global_edit else { return vec![] };
@@ -686,6 +737,9 @@ pub fn highlights(s: &Session) -> Outlines {
         .iter()
         .filter_map(|(id, _)| {
             let n = st.doc.node(*id).filter(|n| !holds(n, &st.selection.objects))?;
+            if st.doc.ancestry(*id).is_some_and(|a| a.iter().any(|p| st.selection.objects.contains(p))) {
+                return None;
+            }
             let path = match n.stroke_path() {
                 Some(p) => p,
                 None => n.geometric_bounds_with(&symbols)?.to_path(0.1),

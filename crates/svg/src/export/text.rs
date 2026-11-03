@@ -1,4 +1,4 @@
-use super::output::xml_text;
+use super::output::{xml_attr_valid, xml_text};
 use super::{
     Affine, AppearanceItem, Arc, BTreeSet, BezPath, BlendMode, CharStyle, FillRule, FontDb, FontFace, GradientKind, HashMap, Justify, Node, NodeId,
     NodeKind, Paint, PathData, Props, Rect, StrokeAlign, Styling, TextKind, TextObject, Writer, base64_encode, css, css_string, fmt_num,
@@ -128,7 +128,9 @@ impl Writer<'_> {
                 NodeId(u64::MAX),
                 NodeKind::SymbolInstance { symbol: art.symbol.clone(), xf: t.xf * ig.xf * doc.symbol_natural_xf(&art.symbol) },
             );
+            let inline = std::mem::replace(&mut self.inline_graphic, true);
             self.node(&inst);
+            self.inline_graphic = inline;
         }
         glyphs(self, above);
         self.anonymous = anonymous;
@@ -161,7 +163,7 @@ impl Writer<'_> {
         // Glyphs bent along a path (joined scripts on a curve) can only be outlines: the group
         // names its text for screen readers and search.
         let label = if lay.glyphs.iter().any(|g| g.bend.is_some()) {
-            format!(" role=\"img\" aria-label=\"{}\"", xml_escape(&t.plain_text()))
+            format!(" role=\"img\" aria-label=\"{}\"", xml_attr_valid(&t.plain_text()))
         } else {
             String::new()
         };

@@ -1004,6 +1004,53 @@ fn shift_click_toggles_an_object_on_release() {
     assert!(t.pointer(&cx2, &shift(PointerKind::Up, 150.0, 150.0)).is_empty());
 }
 
+/// A Shift-drag that starts on a highlighted object of the Global Edit selects that object and
+/// moves it; only a Shift-click leaves it out of the edit.
+#[test]
+fn shift_drag_on_a_global_edit_match_selects_and_moves_it() {
+    let (d, a, b) = two_rects(Rect::new(300.0, 100.0, 400.0, 200.0));
+    let p = paint();
+    let s = Selection::default();
+    let members = [(a, Affine::IDENTITY), (b, Affine::IDENTITY)];
+    let cx = ToolContext { global_edit: &members, ..cx(&d, &s, &p) };
+    let shift = |kind, x, y| ev(kind, x, y).with_mods(Mods { shift: true, ..Mods::default() });
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&cx, &shift(PointerKind::Down, 350.0, 150.0)).is_empty());
+    let mut actions = t.pointer(&cx, &shift(PointerKind::Drag, 390.0, 150.0));
+    assert_eq!(actions[..2], [Action::Exec("select.toggle".into(), json!({"id": b.0})), Action::Begin("Move".into())]);
+    actions.extend(t.pointer(&cx, &shift(PointerKind::Drag, 395.0, 150.0)));
+    actions.extend(t.pointer(&cx, &shift(PointerKind::Up, 395.0, 150.0)));
+    assert!(
+        actions.iter().any(|a| matches!(a, Action::Preview(c, v) if c == "object.transform" && v["matrix"][4].as_f64().is_some_and(|x| x > 39.0))),
+        "moved right: {actions:?}"
+    );
+    assert_eq!(actions.last(), Some(&Action::Commit));
+    assert!(!actions.iter().any(|a| matches!(a, Action::Exec(c, _) if c == "select.globalEditExclude")), "{actions:?}");
+    // A Shift-click on it leaves it out instead.
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&cx, &shift(PointerKind::Down, 350.0, 150.0)).is_empty());
+    assert_eq!(t.pointer(&cx, &shift(PointerKind::Up, 350.0, 150.0)), vec![Action::Exec("select.globalEditExclude".into(), json!({"id": b.0}))]);
+}
+
+/// The first preview of a Shift-drag from a Global Edit match snaps, the match's bounds taken in
+/// with the selection's: with Snap to Grid, a move of 13 right brings the right edge (413) onto
+/// the gridline 414.
+#[test]
+fn shift_drag_on_a_global_edit_match_snaps_from_its_first_event() {
+    let (d, a, b) = two_rects(Rect::new(300.0, 100.0, 400.0, 200.0));
+    let p = paint();
+    let s = Selection::default();
+    let members = [(a, Affine::IDENTITY), (b, Affine::IDENTITY)];
+    let cx = ToolContext { global_edit: &members, snap_to_grid: true, ..cx(&d, &s, &p) };
+    let shift = |kind, x, y| ev(kind, x, y).with_mods(Mods { shift: true, ..Mods::default() });
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&cx, &shift(PointerKind::Down, 350.0, 150.0)).is_empty());
+    let actions = t.pointer(&cx, &shift(PointerKind::Drag, 363.0, 150.0));
+    let Some(Action::Preview(_, v)) = actions.get(2) else { panic!("{actions:?}") };
+    let m = Vec2::new(v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap());
+    assert!(moved_by(m, (14.0, 0.0)), "{m:?}");
+}
+
 /// #541: a click on one object of a selection of several makes it the key object; a click on
 /// the key again lets it go. A drag moves them all, a lone object has no key unless ruler
 /// guides are selected with it.

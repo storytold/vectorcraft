@@ -486,6 +486,48 @@ fn wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
     egui::Shape::mesh(mesh)
 }
 
+/// Hue sectors and saturation rings of the [`segmented_wheel`]: patches 15° of hue by 20%
+/// saturation wide, the sectors centered on red at 0°.
+const WHEEL_SECTORS: u32 = 24;
+const WHEEL_RINGS: u32 = 5;
+
+/// The color of the [`segmented_wheel`] patch that holds hue `h` (degrees) and saturation `s` (0 to
+/// 1), at brightness `v`: the hue and saturation at the patch's center.
+pub fn segment_color(h: f32, s: f32, v: f32) -> Color {
+    let step = 360.0 / WHEEL_SECTORS as f32;
+    let sector = (h.rem_euclid(360.0) / step).round() % WHEEL_SECTORS as f32;
+    let ring = (s.clamp(0.0, 1.0) * WHEEL_RINGS as f32).floor().min((WHEEL_RINGS - 1) as f32);
+    Color::from_hsb(sector * step, (ring + 0.5) / WHEEL_RINGS as f32, v)
+}
+
+/// The segmented hue and saturation wheel at brightness `v`: a solid patch per hue sector and
+/// saturation ring, in its [`segment_color`].
+fn segmented_wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
+    // Points along each patch's arcs.
+    const ARC: u32 = 4;
+    let step = 360.0 / WHEEL_SECTORS as f32;
+    let mut mesh = egui::Mesh::default();
+    for ring in 0..WHEEL_RINGS {
+        let (s0, s1) = (ring as f32 / WHEEL_RINGS as f32, (ring + 1) as f32 / WHEEL_RINGS as f32);
+        for k in 0..WHEEL_SECTORS {
+            let h = k as f32 * step;
+            let col = crate::panels::c32(&segment_color(h, (s0 + s1) / 2.0, v));
+            let first = mesh.vertices.len() as u32;
+            for j in 0..=ARC {
+                let a = h - step / 2.0 + step * j as f32 / ARC as f32;
+                mesh.colored_vertex(wheel_pos(c, r, a, s0), col);
+                mesh.colored_vertex(wheel_pos(c, r, a, s1), col);
+            }
+            for j in 0..ARC {
+                let at = first + 2 * j;
+                mesh.add_triangle(at, at + 1, at + 3);
+                mesh.add_triangle(at, at + 3, at + 2);
+            }
+        }
+    }
+    egui::Shape::mesh(mesh)
+}
+
 /// What a [`harmony_wheel`] did this frame.
 #[derive(Default)]
 pub struct WheelResponse {
@@ -501,6 +543,18 @@ pub struct WheelResponse {
 /// marker per colour joined to the centre (the selected colour, `base`, larger) and a Brightness
 /// slider for the selected colour below it.
 pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
+    wheel(ui, id, size, colors, base, false)
+}
+
+/// [`harmony_wheel`] drawn as solid patches (24 hues by 5 saturations, each in its
+/// [`segment_color`]). The markers sit at their colors' own hue and
+/// saturation, and a drag moves them as freely as on the smooth wheel.
+pub fn segmented_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
+    wheel(ui, id, size, colors, base, true)
+}
+
+/// [`harmony_wheel`], or with `segmented` [`segmented_wheel`].
+fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>, segmented: bool) -> WheelResponse {
     let t = Tokens::get(ui.ctx());
     let mut out = WheelResponse::default();
     let base_hsb = base.and_then(|b| colors.get(b)).map(Color::to_hsb);
@@ -510,7 +564,7 @@ pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: O
         let (rect, resp) = ui.allocate_exact_size(vec2(size, size), Sense::click_and_drag());
         let (c, r) = (rect.center(), size / 2.0 - 10.0);
         let painter = ui.painter_at(rect);
-        painter.add(wheel_shape(c, r, v.max(0.15)));
+        painter.add(if segmented { segmented_wheel_shape(c, r, v.max(0.15)) } else { wheel_shape(c, r, v.max(0.15)) });
         painter.circle_stroke(c, r, Stroke::new(1.0, t.border));
         let at = |col: &Color| {
             let [h, s, _] = col.to_hsb();
@@ -539,7 +593,8 @@ pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: O
             let h = (-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0);
             out.moved = Some((i, [Some(h), Some((dv.length() / r).clamp(0.0, 1.0)), None]));
         }
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, ui.is_enabled(), tl!("Color wheel")));
+        let name = if segmented { tl!("Segmented color wheel") } else { tl!("Color wheel") };
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, ui.is_enabled(), name));
     });
     ui.add_space(6.0);
     ui.horizontal(|ui| {

@@ -522,7 +522,28 @@ pub struct RepeatSpec {
 /// many as one 500 × 500 grid, the budget [`PatternDef::offsets_covering`] also keeps.
 const MAX_REPEAT_INSTANCES: usize = 250_000;
 
-/// Counts the instances Repeats make in all, following symbol instances into their symbol's art
+/// Most nodes and anchors a Repeat copies in all, those of the Repeats nested in its source and
+/// of the opacity masks in it included: each instance copies the whole source, so a large source
+/// keeps fewer instances than [`MAX_REPEAT_INSTANCES`] allows (a 500 × 500 grid of a shape of up
+/// to 39 anchors keeps them all).
+const MAX_REPEAT_COPIES: usize = 10_000_000;
+
+/// What the Repeats in some art make in all ([`NestedCount::nodes`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Cost {
+    /// Instances the Repeats make (0 when there are none).
+    instances: usize,
+    /// Nodes and path anchors drawn, each Repeat's source counted once per instance it keeps.
+    copies: usize,
+}
+
+impl Cost {
+    fn plus(self, o: Cost) -> Cost {
+        Cost { instances: self.instances.saturating_add(o.instances), copies: self.copies.saturating_add(o.copies) }
+    }
+}
+
+/// Counts the instances Repeats make, and the nodes they copy, in all, following symbol instances into their symbol's art
 /// in `doc`: each symbol's art is counted once, and a missing symbol, or an instance of a symbol
 /// inside its own art, counts as none.
 ///
@@ -549,21 +570,27 @@ impl<'a> NestedCount<'a> {
         }
         let Some(sym) = self.doc.and_then(|d| d.symbols.iter().find(|s| s.name == name)) else { return 0 };
         self.symbols.borrow_mut().insert(name.to_owned(), None);
-        let n = self.nodes(std::slice::from_ref(&sym.art));
+        let n = self.nodes(std::slice::from_ref(&sym.art)).instances;
         self.symbols.borrow_mut().insert(name.to_owned(), Some(n));
         n
     }
 
-    /// Instances the Repeats in `nodes` make in all (0 when there are none).
-    fn nodes(&self, nodes: &[Arc<Node>]) -> usize {
-        let mut sum = 0usize;
+    /// What the Repeats in `nodes` make in all, in the art of their enabled opacity masks too
+    /// (drawn again with each copy of the object they mask).
+    fn nodes(&self, nodes: &[Arc<Node>]) -> Cost {
+        let mut sum = Cost::default();
         for n in nodes {
-            sum = sum.saturating_add(match (&n.kind, n.children()) {
-                (NodeKind::Repeat(r), _) => r.instances_in_all(self),
-                (NodeKind::SymbolInstance { symbol, .. }, _) => self.symbol(symbol),
-                (_, Some(c)) => self.nodes(c),
-                _ => 0,
-            });
+            let own = match (&n.kind, n.children()) {
+                (NodeKind::Repeat(r), _) => r.in_all(self),
+                (NodeKind::SymbolInstance { symbol, .. }, _) => Cost { instances: self.symbol(symbol), copies: 1 },
+                (NodeKind::Path { path, .. }, _) => Cost { instances: 0, copies: path.anchor_count().saturating_add(1) },
+                (_, Some(c)) => self.nodes(c).plus(Cost { instances: 0, copies: 1 }),
+                _ => Cost { instances: 0, copies: 1 },
+            };
+            sum = sum.plus(own);
+            if let Some(m) = n.extras().mask.as_ref().filter(|m| !m.disabled) {
+                sum = sum.plus(self.nodes(std::slice::from_ref(&m.art)));
+            }
         }
         sum
     }
@@ -643,21 +670,22 @@ impl RepeatSpec {
         v.truncate(self.kept(NestedCount::new(doc).nodes(&self.source)));
         v
     }
-    /// How many of its instances this Repeat keeps when each makes `nested` instances of the
-    /// Repeats in its source: as many as fit in [`MAX_REPEAT_INSTANCES`], at least one.
-    fn kept(&self, nested: usize) -> usize {
-        self.kind.count().min(MAX_REPEAT_INSTANCES / nested.max(1)).max(1)
+    /// How many of its instances this Repeat keeps when its source costs `nested`: as many as fit
+    /// in [`MAX_REPEAT_INSTANCES`] and [`MAX_REPEAT_COPIES`], at least one.
+    fn kept(&self, nested: Cost) -> usize {
+        self.kind.count().min(MAX_REPEAT_INSTANCES / nested.instances.max(1)).min(MAX_REPEAT_COPIES / nested.copies.max(1)).max(1)
     }
     /// How many instances this Repeat draws ([`Self::transforms`] for `doc`): as many as its
     /// options make, fewer when the Repeats in its source would take it past
-    /// [`MAX_REPEAT_INSTANCES`].
+    /// [`MAX_REPEAT_INSTANCES`], or the copies of its source past [`MAX_REPEAT_COPIES`].
     pub fn instances(&self, doc: Option<&Document>) -> usize {
         self.kept(NestedCount::new(doc).nodes(&self.source))
     }
-    /// Instances made in all, those of the Repeats nested in the source included.
-    fn instances_in_all(&self, count: &NestedCount) -> usize {
+    /// Instances made and nodes copied in all, those of the Repeats nested in the source included.
+    fn in_all(&self, count: &NestedCount) -> Cost {
         let nested = count.nodes(&self.source);
-        self.kept(nested).saturating_mul(nested.max(1))
+        let kept = self.kept(nested);
+        Cost { instances: kept.saturating_mul(nested.instances.max(1)), copies: kept.saturating_mul(nested.copies).saturating_add(1) }
     }
     /// Evaluated instances: one group of the (transformed) source per instance (ids 0), as many
     /// as [`Self::transforms`] keeps for `doc`.
@@ -1003,6 +1031,42 @@ mod tests {
         // Small nests are left as they are.
         let small = RepeatSpec::mirror(vec![repeat(RepeatSpec::grid(vec![sq(0.0, 0.0, 10.0)], 1.0, 1.0))], 90.0, 5.0);
         assert_eq!(made(&small), 18);
+    }
+
+    #[test]
+    fn repeats_in_opacity_masks_share_the_instance_budget() {
+        let grid = |source: Arc<Node>| {
+            let mut g = RepeatSpec::grid(vec![source], 0.0, 0.0);
+            if let RepeatKind::Grid { rows, cols, .. } = &mut g.kind {
+                *rows = 500;
+                *cols = 500;
+            }
+            g
+        };
+        // A shape masked by a 500 × 500 grid draws the grid again for each copy.
+        let inner = Node::new(NodeId(3), NodeKind::Repeat(grid(sq(0.0, 0.0, 1.0))));
+        let mut masked = (*sq(0.0, 0.0, 1.0)).clone();
+        masked.extras_mut().mask = Some(Box::new(crate::node::OpacityMask::new(inner, true)));
+        let outer = grid(Arc::new(masked.clone()));
+        assert_eq!(outer.transforms(None).len(), 1);
+        // A disabled mask is not drawn, so it costs nothing.
+        if let Some(m) = &mut masked.extras_mut().mask {
+            m.disabled = true;
+        }
+        assert_eq!(grid(Arc::new(masked)).transforms(None).len(), 250_000);
+    }
+
+    #[test]
+    fn a_large_source_keeps_fewer_copies() {
+        let mut g = RepeatSpec::grid((0..1000).map(|i| sq(i as f64, 0.0, 1.0)).collect(), 0.0, 0.0);
+        if let RepeatKind::Grid { rows, cols, .. } = &mut g.kind {
+            *rows = 500;
+            *cols = 500;
+        }
+        // Each copy is 1000 paths of 4 anchors: far fewer than 250 000 of them fit.
+        let kept = g.transforms(None).len();
+        assert!(kept.saturating_mul(5000) <= MAX_REPEAT_COPIES, "{kept} copies kept");
+        assert!(kept > 1);
     }
 
     #[test]

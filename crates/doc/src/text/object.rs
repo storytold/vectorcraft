@@ -32,8 +32,13 @@ impl TextObject {
         style.size *= scale.points;
         style.leading = style.leading.map(|v| v * scale.points);
         style.baseline_shift *= scale.points;
+        style.tcy_up_down *= scale.points;
+        style.tcy_left_right *= scale.points;
         style.h_scale *= scale.horizontal;
-        if ![style.size, style.leading.unwrap_or(0.0), style.baseline_shift, style.h_scale].iter().all(|v| v.is_finite()) {
+        if ![style.size, style.leading.unwrap_or(0.0), style.baseline_shift, style.tcy_up_down, style.tcy_left_right, style.h_scale]
+            .iter()
+            .all(|v| v.is_finite())
+        {
             return None;
         }
         Some(style)
@@ -430,12 +435,16 @@ impl crate::Document {
             st.h_scale = num("h_scale").unwrap_or(st.h_scale);
             st.v_scale = num("v_scale").unwrap_or(st.v_scale);
             st.baseline_shift = num("baseline_shift").unwrap_or(st.baseline_shift);
+            st.tcy_up_down = num("tcyUpDown").unwrap_or(st.tcy_up_down);
+            st.tcy_left_right = num("tcyLeftRight").unwrap_or(st.tcy_left_right);
             st.keep_dimensions_in_range();
             let kept = [
                 ("size", Some(st.size)),
                 ("h_scale", Some(st.h_scale)),
                 ("v_scale", Some(st.v_scale)),
                 ("baseline_shift", Some(st.baseline_shift)),
+                ("tcyUpDown", Some(st.tcy_up_down)),
+                ("tcyLeftRight", Some(st.tcy_left_right)),
                 ("leading", st.leading),
             ];
             for (k, v) in kept {

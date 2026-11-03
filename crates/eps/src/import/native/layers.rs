@@ -1,4 +1,4 @@
-use super::build::{Page, build, build_from};
+use super::build::{PAGE_MOVE, Page, build, build_from, build_on_page};
 use super::slots::LAYERS_UNREAD;
 use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect, Vec2, ai};
 
@@ -7,32 +7,38 @@ use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect
 /// hidden ones too), groups, compound paths, clipping groups and artboards, with the text and the
 /// strokes around it of the page. When the file has no editing copy, `visible` as it was; when it
 /// has one that can't be used, `visible` with a warning that says why, with the swatches of the
-/// editing copy's palette ([`use_palette`]) when it could be read, and with its layer tree, empty,
-/// below the page's layer when that could be read (#2033).
-pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Imported {
-    let Some(data) = editing_copy(ps) else { return visible };
+/// editing copy's palette ([`use_palette`]) and its variable library ([`use_variables`]) when it
+/// could be read, and with its layer tree, empty,
+/// below the page's layer when that could be read (#2033). A program in the legacy format without
+/// layers (`illustrator`, see [`program_alone`]) is read with its art on one layer; when that
+/// can't be used, the file is `visible` as it was.
+pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illustrator: bool) -> Imported {
+    let Some(data) = editing_copy(ps) else {
+        let read = illustrator.then(|| one_layer(ps)).flatten().and_then(|p| build(&p, Some(&visible.document), Page::Art, false, trust, 1.0).ok());
+        return match read {
+            Some((document, warnings)) => with_page_notes(document, warnings, &visible),
+            None => visible,
+        };
+    };
     // The layer tree is kept from the structure read, for the page to come in on when the layers
     // can't be used.
+    // Private data kept apart from the program: the program's own header gives the author and
+    // custom colors the private data's header may lack.
+    let read = |d: &[u8]| if matches!(data, Ok(Cow::Owned(_))) { ai::read_beside(d, true, ps) } else { ai::read(d, true) };
     let (tree, result) = match data.as_deref() {
-        Ok(d) => match ai::read(d, true) {
+        Ok(d) => match read(d) {
             Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), Page::Art, false, trust, 1.0)),
             Err(why) => (vec![], Err(why)),
         },
         Err(why) => (vec![], Err(why.clone())),
     };
     match result {
-        Ok((document, mut warnings)) => {
-            for w in &visible.warnings {
-                if !warnings.contains(w) {
-                    warnings.push(w.clone());
-                }
-            }
-            Imported { document, warnings, preview: false }
-        }
+        Ok((document, warnings)) => with_page_notes(document, warnings, &visible),
         Err(why) => {
             let mut v = visible;
             if let Ok(data) = &data {
                 use_palette(data, &mut v.document);
+                use_variables(data, &mut v.document, &mut v.warnings);
             }
             if tree.is_empty() {
                 v.warnings.push(format!("{LAYERS_UNREAD} ({why}): it comes in as its page, in one layer"));
@@ -58,6 +64,17 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool) -> Im
     }
 }
 
+/// `document`, read from the editing copy with the notes `warnings`, followed by the notes of
+/// reading `visible` that it doesn't already have.
+fn with_page_notes(document: Document, mut warnings: Vec<String>, visible: &Imported) -> Imported {
+    for w in &visible.warnings {
+        if !warnings.contains(w) {
+            warnings.push(w.clone());
+        }
+    }
+    Imported { document, warnings, preview: false }
+}
+
 /// The layers in `nodes` with only their sublayers in them: names, order and options without the art.
 fn layer_tree(nodes: &[Arc<Node>]) -> Vec<Arc<Node>> {
     let layers = nodes.iter().filter(|n| matches!(n.kind, NodeKind::Layer { .. }));
@@ -80,8 +97,9 @@ fn layer_tree(nodes: &[Arc<Node>]) -> Vec<Arc<Node>> {
 /// notes, or a note saying why the layers weren't read when the editing data can't be decompressed
 /// or its layers can't be read. The flag returned is `true` when the document is the one read from
 /// the layers; else the document is `visible`, its pages moved by `place_pages` when the editing
-/// data was decompressed but its layers can't be read, and its swatches those of the editing data's
-/// palette ([`use_palette`]) when it was decompressed. `outlined`: the PDF part's type was read as
+/// data was decompressed but its layers can't be read, and its swatches and variables those of the
+/// editing data's palette ([`use_palette`]) and variable library ([`use_variables`]) when it was
+/// decompressed. `outlined`: the PDF part's type was read as
 /// outlines (a file whose type shows then comes in as its PDF part).
 /// `trust`: layers that draw differently from the PDF part are used all the same, with a warning.
 /// `unit`: the size in points of a unit of the PDF part's user space, its first page's `UserUnit`,
@@ -98,8 +116,9 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
         Err(why) => return (visible, unread(warnings, &why), false),
     };
     if !has_layers(&data) {
-        let mut visible = visible;
+        let (mut visible, mut warnings) = (visible, warnings);
         use_palette(&data, &mut visible);
+        use_variables(&data, &mut visible, &mut warnings);
         return (visible, warnings, false);
     }
     // The PDF part, its pages placed and named as the editing data's artboards are, when the
@@ -108,7 +127,7 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
         place_pages(&ai::artboards(&data), &mut visible, unit);
         use_palette(&data, &mut visible);
         let mut all = unread(warnings, why);
-        all.extend(ai::variables(&data).note());
+        use_variables(&data, &mut visible, &mut all);
         (visible, all, false)
     };
     match build(&data, Some(&visible), Page::Artboard, outlined, trust, unit) {
@@ -124,6 +143,18 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
             (done, all, true)
         }
         Err(why) => from_pdf_part(visible, warnings, &why),
+    }
+}
+
+/// `doc` (a file read as its page or PDF part, in place of its layers) with the variables, data
+/// sets, active data set and lock of the variable library of its editing data `data`, as [`build`]
+/// gives a document read from the layers, and the note about what of the library wasn't read
+/// added to `warnings`. Left as it is when the editing data has no library.
+fn use_variables(data: &[u8], doc: &mut Document, warnings: &mut Vec<String>) {
+    let read = ai::variables(data);
+    warnings.extend(read.note());
+    if read.present {
+        doc.variables = read.variables.into();
     }
 }
 
@@ -204,7 +235,7 @@ fn place_art(layer: &mut Node, pages: &[Rect], moves: &[Vec2]) {
         let fit = |p: &Rect| (p.intersect(r).area().max(0.0), -(p.center() - r.center()).hypot());
         let Some((i, _)) = pages.iter().map(fit).enumerate().max_by(|(_, a), (_, b)| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1))) else { continue };
         if let Some(v) = moves.get(i).filter(|v| **v != Vec2::ZERO) {
-            Arc::make_mut(child).transform(Affine::translate(*v), false);
+            Arc::make_mut(child).transform(Affine::translate(*v), PAGE_MOVE);
         }
     }
 }
@@ -214,6 +245,16 @@ fn place_art(layer: &mut Node, pages: &[Rect], moves: &[Vec2]) {
 pub fn ai_alone(private: &[u8]) -> Result<(Document, Vec<String>), String> {
     let data = ai::decode_private(private)?;
     build(&data, None, Page::Artboard, false, false, 1.0)
+}
+
+/// [`ai_alone`] for a `.ai` whose PDF part can't be read, its first page `page` (width and height)
+/// points large in units of `unit` points (its `UserUnit`): editing data whose first artboard, or
+/// whose art's box, has the page's size in those units, and not in points, comes in `unit` times as
+/// large, as [`layered_ai`] reads it. A page turned a quarter (`/Rotate 90`) is measured either
+/// way round.
+pub fn ai_alone_on_page(private: &[u8], page: (f64, f64), unit: f64) -> Result<(Document, Vec<String>), String> {
+    let data = ai::decode_private(private)?;
+    build_on_page(&data, page, unit)
 }
 
 /// Does the editing data (or a program in the legacy format) have layers?
@@ -243,7 +284,7 @@ pub(in super::super) fn program_alone(ps: &[u8], illustrator: bool) -> Option<Re
     if has_layers(ps) {
         return Some(build(ps, None, Page::Art, false, false, 1.0));
     }
-    let program = one_layer(ps).filter(|_| illustrator)?;
+    let program = illustrator.then(|| one_layer(ps)).flatten()?;
     Some(build(&program, None, Page::Art, false, false, 1.0))
 }
 

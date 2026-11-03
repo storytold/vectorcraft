@@ -255,6 +255,43 @@ fn optical_margin_alignment_menu_unchecked_when_shared_flag_none() {
     assert_eq!(checked(&app, id, &Value::Null), Some(true));
 }
 
+/// Type › Orientation menu checks use `shared_text_flag`; mixed values leave both unchecked.
+#[test]
+fn type_orientation_menu_unchecked_when_shared_vertical_none() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let h = app.run("text.create", json!({"x": 10, "y": 40, "text": "H"})).unwrap()["id"].clone();
+    let v = app.run("text.create", json!({"x": 10, "y": 80, "text": "V", "vertical": true})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [h, v]})).unwrap();
+    assert_eq!(crate::panels::character::shared_text_flag(&app, |t| t.vertical), None);
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    app.run("select.set", json!({"ids": [v]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(true));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+}
+
+#[test]
+fn type_orientation_menu_unchecked_for_three_object_mixed_selections() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let v0 = app.run("text.create", json!({"x": 10, "y": 40, "text": "v0", "vertical": true})).unwrap()["id"].clone();
+    let h1 = app.run("text.create", json!({"x": 10, "y": 80, "text": "h1"})).unwrap()["id"].clone();
+    let h2 = app.run("text.create", json!({"x": 10, "y": 120, "text": "h2"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [v0.clone(), h1.clone(), h2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    let h0 = app.run("text.create", json!({"x": 10, "y": 160, "text": "h0"})).unwrap()["id"].clone();
+    let v1 = app.run("text.create", json!({"x": 10, "y": 200, "text": "v1", "vertical": true})).unwrap()["id"].clone();
+    let v2 = app.run("text.create", json!({"x": 10, "y": 240, "text": "v2", "vertical": true})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [h0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(false));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+    app.run("select.set", json!({"ids": [v0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(checked(&app, "type.orientation.vertical", &Value::Null), Some(true));
+    assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
+}
+
 #[test]
 fn panel_ids_are_case_insensitive_and_labels_work() {
     assert_eq!(normalize_panel("layers"), Some("layers"));
@@ -468,6 +505,48 @@ fn update_selection_follows_save_selection_and_needs_a_recall() {
     invoke(&mut app, "select.update", json!({}));
     app.run("select.none", json!({})).unwrap();
     assert_eq!(app.run("select.recall1", json!({})).unwrap()["count"], 2);
+}
+
+#[test]
+fn select_same_link_block_series_selects_a_thread_from_the_menu() {
+    let mut app = app_with_a_rectangle();
+    let entry = menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("select.same.linkBlockSeries")).expect("menu entry");
+    assert_eq!((entry.path, entry.label.as_str()), (vec!["Select".to_string(), "Same".to_string()], "Link Block Series"));
+    // A rectangle selected: no type, so the item is off.
+    assert!(!enabled(&app, "select.same.linkBlockSeries"));
+    let frame = |app: &mut VectorcraftApp, x: i32| {
+        app.run("text.create", json!({"x": x, "y": 40, "text": "words ".repeat(40), "area": {"width": 60, "height": 30}})).unwrap()["id"].clone()
+    };
+    let (a, b) = (frame(&mut app, 0), frame(&mut app, 100));
+    app.run("select.set", json!({"ids": [a.clone(), b.clone()]})).unwrap();
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [b.clone()]})).unwrap();
+    assert!(enabled(&app, "select.same.linkBlockSeries"));
+    invoke(&mut app, "select.same.linkBlockSeries", json!({}));
+    let ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+    assert_eq!(json!(ids), json!([a, b]));
+}
+
+#[test]
+fn select_same_text_fill_and_stroke_color_follows_text_stroke_color_in_the_menu() {
+    let mut app = app_with_a_rectangle();
+    let entries = menu_entries(&app);
+    let at = |id: &str| entries.iter().position(|e| e.command.as_deref() == Some(id));
+    let entry = at("select.same.textFillAndStrokeColor").map(|i| &entries[i]).expect("menu entry");
+    assert_eq!((entry.path.clone(), entry.label.as_str()), (vec!["Select".to_string(), "Same".to_string()], "Text Fill & Stroke Color"));
+    assert_eq!(at("select.same.textStrokeColor").map(|i| i + 1), at("select.same.textFillAndStrokeColor"));
+    let text = |app: &mut VectorcraftApp, y: i32, fill: &str, stroke: &str| {
+        let id = app.run("text.create", json!({"x": 0, "y": y, "text": "type"})).unwrap()["id"].clone();
+        app.run("text.setRangeStyle", json!({"id": id.clone(), "start": 0, "end": 4, "fill": fill, "stroke": stroke})).unwrap();
+        id
+    };
+    let a = text(&mut app, 40, "#ff0000", "#0000ff");
+    let b = text(&mut app, 80, "#ff0000", "#0000ff");
+    let _ = text(&mut app, 120, "#ff0000", "#00ff00");
+    app.run("select.set", json!({"ids": [a.clone()]})).unwrap();
+    invoke(&mut app, "select.same.textFillAndStrokeColor", json!({}));
+    let ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+    assert_eq!(json!(ids), json!([a, b]));
 }
 
 #[test]

@@ -1,16 +1,16 @@
 use super::mesh::whole;
 use super::{
     Arc, BlendEase, BlendEaseType, BlendOrientation, BlendSpacing, Document, EngineError, Node, NodeId, NodeKind, Result, Selection, Session, Value,
-    bad, check_numbers, has_selection, ids_param, json, selected_roots, str_param, switch_or,
+    bad, check_numbers, has_selection, json, named_ids, selected_roots, str_param, switch_or,
 };
 
 pub(super) fn ids_json(ids: &[NodeId]) -> Value {
     json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
 }
 
-/// Explicit `ids` (in paint order) or the selected roots.
+/// Explicit `ids`, or `id` as `ids` of one (in paint order), or the selected roots.
 pub(super) fn roots_param(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    if let Some(ids) = ids_param(p, "ids") {
+    if let Some(ids) = named_ids(p)? {
         let st = s.doc()?;
         for id in &ids {
             if st.doc.node(*id).is_none() {
@@ -192,7 +192,7 @@ pub(super) fn starts_param(p: &Value, roots: &[NodeId]) -> Result<Vec<(NodeId, u
     const C: &str = "object.blend.make";
     let Some(v) = p.get("starts").filter(|v| !v.is_null()) else { return Ok(vec![]) };
     let list = v.as_array().ok_or_else(|| bad(C, "`starts` must be an array of anchor indices (or nulls)"))?;
-    let owners = ids_param(p, "ids").unwrap_or_else(|| roots.to_vec());
+    let owners = named_ids(p)?.unwrap_or_else(|| roots.to_vec());
     let mut out = vec![];
     for (id, a) in owners.iter().zip(list) {
         if a.is_null() {

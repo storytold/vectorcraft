@@ -65,6 +65,13 @@ fn rgb(hex: &str, fallback: [u8; 3]) -> [u8; 3] {
     })
 }
 
+/// Whether a tool preview of `cmd` with params `p` sets only a symbol's 9-slice guides: a
+/// `symbol.options` whose params hold `nineSliceGuides` and nothing besides `name`.
+fn nine_slice_guide_preview(cmd: &str, p: &Value) -> bool {
+    cmd == "symbol.options"
+        && p.as_object().is_some_and(|m| m.contains_key("nineSliceGuides") && m.keys().all(|k| k == "name" || k == "nineSliceGuides"))
+}
+
 /// Requests from tools that only the frontend can fulfil.
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiRequest {
@@ -328,6 +335,7 @@ impl Session {
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
             precise_cursors: self.precise_cursors(),
+            global_edit: st.global_edit.as_ref().map_or(&[], |g| g.members.as_slice()),
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
@@ -572,6 +580,24 @@ impl Session {
         self.tool.transforming()
     }
 
+    /// With Real-time Drawing off, how far a Selection-tool move drag has carried the selection
+    /// so far: the document moves on release, and the bounding box shows at this offset meanwhile.
+    pub fn deferred_move(&self) -> Option<vectorcraft_geom::Vec2> {
+        if self.tool.id() != "selection" || !self.tool.transforming() {
+            return None;
+        }
+        let it = self.active()?.interaction.as_ref()?;
+        if !matches!(it.label.as_str(), "Move" | "Copy") {
+            return None;
+        }
+        let (cmd, p) = self.unapplied_interaction_preview()?;
+        if cmd != "object.transform" || p.get("objects").and_then(Value::as_bool) == Some(false) {
+            return None;
+        }
+        let [a, b, c, d, e, f] = crate::cmd::matrix_param(&p, "matrix")?.as_coeffs();
+        (a == 1.0 && b == 0.0 && c == 0.0 && d == 1.0).then(|| vectorcraft_geom::Vec2::new(e, f))
+    }
+
     /// Does the active tool take `key` ahead of the shortcuts bound to it (see `Tool::claims_key`)?
     pub fn tool_claims_key(&mut self, key: ToolKey, view: ViewInfo) -> bool {
         self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
@@ -766,8 +792,9 @@ impl Session {
                 Action::Preview(cmd, p) => {
                     // Performance › Real-time Drawing and Editing (#394): off, remember the latest
                     // params and apply them once on Commit instead of every move. A ruler guide
-                    // being dragged still shows: the guide is all there is to see (#4646).
-                    if !self.prefs.real_time_drawing && !matches!(cmd.as_str(), "guide.add" | "guide.move") {
+                    // being dragged still shows: the guide is all there is to see (#4646). So does a
+                    // symbol's 9-slice guide being dragged.
+                    if !self.prefs.real_time_drawing && !matches!(cmd.as_str(), "guide.add" | "guide.move") && !nine_slice_guide_preview(&cmd, &p) {
                         self.clear_deferred_overlay_cache();
                         let st = self.doc_mut()?;
                         if let Some(it) = &mut st.interaction {
@@ -869,13 +896,28 @@ impl Session {
     }
 }
 
+/// The most points the outlines of [`outlines_for_selection`] are drawn for, the same number as the
+/// canvas's limit on the anchor points it outlines (`OVERLAY_MAX_ANCHORS` in
+/// `crates/ui-egui/src/canvas/outline.rs`). Past it the selection's bounds are drawn instead.
+const FEEDBACK_MAX_POINTS: usize = 100_000;
+
+/// The outline of every selected object, or the selection's bounds when the outlines have more than
+/// [`FEEDBACK_MAX_POINTS`] points.
 fn outlines_for_selection(doc: &vectorcraft_doc::Document, selection: &Selection) -> Vec<Overlay> {
-    selection
-        .objects
-        .iter()
-        .filter_map(|&id| {
-            let n = doc.node(id)?;
-            vectorcraft_render::drawn_outline(doc, n).map(|(path, _)| Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false })
-        })
-        .collect()
+    let mut left = FEEDBACK_MAX_POINTS;
+    let mut outlines = vec![];
+    for &id in &selection.objects {
+        let Some((path, _)) = doc.node(id).and_then(|n| vectorcraft_render::drawn_outline(doc, n)) else { continue };
+        let points = path.elements().iter().filter(|el| !matches!(el, kurbo::PathEl::ClosePath)).count();
+        let Some(l) = left.checked_sub(points) else {
+            return doc
+                .bounds_of(&selection.objects, true)
+                .map(|b| Overlay::Path { path: vectorcraft_geom::shapes::rectangle(b).to_bezpath(), color: FEEDBACK, width: 1.0, dashed: false })
+                .into_iter()
+                .collect();
+        };
+        left = l;
+        outlines.push(Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false });
+    }
+    outlines
 }

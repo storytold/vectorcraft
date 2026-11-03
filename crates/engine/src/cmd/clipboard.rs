@@ -22,6 +22,7 @@ use vectorcraft_doc::{Document, GraphicStyle, ImageBlob, Node, NodeId, PatternDe
 use vectorcraft_geom::Rect;
 
 pub use flavours::{AI, BITMAP, EMF, EPS, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture};
+pub use flavours::{ImageRead, read_image};
 pub(crate) use resources::SwatchChoices;
 pub use resources::{ArtResources, art_resources};
 
@@ -160,10 +161,19 @@ impl Clipboard {
         d.para_styles = self.para_styles.clone().into();
         if !self.brushes.is_empty() {
             let mut lib = vectorcraft_brush::library(&d);
+            // Each brush's place in the library by name: finding it by scanning the growing list
+            // made a library of N brushes cost N² comparisons.
+            let mut at: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+            for (i, b) in lib.iter().enumerate() {
+                at.entry(b.name.clone()).or_insert(i);
+            }
             for b in &self.brushes {
-                match lib.iter_mut().find(|x| x.name == b.name) {
+                match at.get(&b.name).and_then(|&i| lib.get_mut(i)) {
                     Some(x) => *x = b.clone(),
-                    None => lib.push(b.clone()),
+                    None => {
+                        at.insert(b.name.clone(), lib.len());
+                        lib.push(b.clone());
+                    }
                 }
             }
             vectorcraft_brush::store(&mut d, &lib);

@@ -1,7 +1,7 @@
 //! Symbol editing mode (`symbol.edit`, `symbol.exitEditing`).
 
 use serde_json::{Value, json};
-use vectorcraft_doc::NodeKind;
+use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::Rect;
 
 use crate::*;
@@ -372,6 +372,41 @@ fn other_editing_modes_and_symbol_editing_do_not_overlap() {
     assert_eq!(s.doc().unwrap().doc.layers.iter().filter(|l| l.name.as_deref() == Some("Box")).count(), 1);
 }
 
+/// Editing another symbol at a place off the canvas fails and keeps the current edit open.
+#[test]
+fn a_switch_to_another_symbol_that_fails_keeps_the_current_edit() {
+    let (mut s, first, _) = two_instances();
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 200, "width": 20, "height": 20}));
+    run(&mut s, "symbol.new", json!({"name": "Dot"}));
+    let layer = NodeId(run(&mut s, "symbol.edit", json!({"id": first.0}))["layer"].as_u64().unwrap());
+    let e = s.execute("symbol.edit", &json!({"name": "Dot", "x": 1e300})).unwrap_err().to_string();
+    assert!(e.contains("exceed the canvas"), "{e}");
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.symbol_edit.as_ref().map(|e| (e.symbol.as_str(), e.layer)), Some(("Box", layer)));
+    assert_eq!((st.isolation, st.active_layer), (Some(layer), Some(layer)));
+    assert!(st.doc.node(layer).is_some());
+}
+
+/// While a symbol is edited, art outside the editing layer is not isolated, so leaving isolation
+/// mode leaves symbol editing mode.
+#[test]
+fn art_outside_the_editing_layer_is_not_isolated_while_a_symbol_is_edited() {
+    let (mut s, first, _) = two_instances();
+    let other = id(&run(&mut s, "shape.rectangle", json!({"x": 10, "y": 200, "width": 20, "height": 20})));
+    run(&mut s, "select.set", json!({"ids": [first.0]}));
+    let layer = NodeId(run(&mut s, "symbol.edit", json!({"id": first.0}))["layer"].as_u64().unwrap());
+    let e = s.execute("object.isolate", &json!({"id": other.0})).unwrap_err().to_string();
+    assert!(e.contains("outside the isolated group"), "{e}");
+    assert_eq!(s.doc().unwrap().isolation, Some(layer));
+    // Isolation that names art outside the layer (a stale state) still leaves the mode.
+    s.doc_mut().unwrap().isolation = Some(other);
+    run(&mut s, "object.exitIsolation", json!({}));
+    let st = s.doc().unwrap();
+    assert!(st.doc.symbol_edit.is_none() && st.doc.node(layer).is_none());
+    assert_eq!(st.isolation, None);
+    assert_eq!(st.selection.objects, vec![first]);
+}
+
 #[test]
 fn renaming_deleting_and_saving_while_a_symbol_is_edited() {
     let (mut s, first, _) = two_instances();
@@ -439,6 +474,158 @@ fn editing_a_dynamic_symbol_keeps_the_instances_changes_to_the_objects_still_the
     assert!(s.doc().unwrap().doc.node(inst).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })));
 }
 
+/// An instance of the edited dynamic symbol inside another symbol's art keeps its appearance
+/// changes on the same objects when the edit reorders them, and drops the change to an object the
+/// edit deleted.
+#[test]
+fn an_instance_inside_another_symbols_art_follows_an_edit_of_its_dynamic_symbol() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    let a = id(&run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})));
+    let b = id(&run(&mut s, "shape.rectangle", json!({"x": 60, "y": 10, "width": 40, "height": 40})));
+    let inst = id(&run(&mut s, "symbol.new", json!({"name": "Pair", "ids": [a.0, b.0], "type": "dynamic"})));
+    run(&mut s, "symbol.instance.setAppearance", json!({"id": inst.0, "path": [0], "fill": "#00ff00"}));
+    run(&mut s, "symbol.instance.setAppearance", json!({"id": inst.0, "path": [1], "fill": "#ff0000"}));
+    run(&mut s, "symbol.new", json!({"name": "Outer", "ids": [inst.0]}));
+    // The changes of the instance of "Pair" in the art of "Outer", by path and color.
+    let nested = |s: &Session| -> Vec<(Vec<u32>, String)> {
+        let d = &s.doc().unwrap().doc;
+        let outer = d.symbols.iter().find(|x| x.name == "Outer").expect("Outer");
+        let mut out = vec![];
+        outer.art.walk(&mut |n| {
+            if matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Pair") {
+                out.extend(n.extras().symbol_overrides.iter().map(|o| (o.path.clone(), o.fill.as_ref().and_then(|p| p.color()).unwrap().to_hex())));
+            }
+        });
+        out
+    };
+    let start = vec![(vec![0], "#00ff00".to_string()), (vec![1], "#ff0000".to_string())];
+    assert_eq!(nested(&s), start);
+    let other = id(&run(&mut s, "symbol.place", json!({"name": "Pair", "x": 200, "y": 200})));
+    run(&mut s, "symbol.edit", json!({"id": other.0}));
+    let art = layer_art(&s);
+    assert_eq!(art.len(), 2);
+    // Sending the second object to the back: each change follows its object.
+    run(&mut s, "select.set", json!({"ids": [art[1].0]}));
+    run(&mut s, "object.arrange.sendToBack", json!({}));
+    assert_eq!(layer_art(&s), vec![art[1], art[0]]);
+    assert_eq!(nested(&s), vec![(vec![1], "#00ff00".to_string()), (vec![0], "#ff0000".to_string())]);
+    // Deleting the first object: the change to it goes.
+    run(&mut s, "select.set", json!({"ids": [art[0].0]}));
+    run(&mut s, "edit.clear", json!({}));
+    assert_eq!(nested(&s), vec![(vec![0], "#ff0000".to_string())]);
+    run(&mut s, "symbol.exitEditing", json!({}));
+    assert_eq!(nested(&s), vec![(vec![0], "#ff0000".to_string())]);
+}
+
+/// Instances of the edited dynamic symbol in a pattern tile, a graph design and an art brush keep
+/// their appearance changes on the same objects when the edit reorders them, and drop the change
+/// to an object the edit deleted.
+#[test]
+fn instances_in_pattern_tiles_graph_designs_and_brushes_follow_an_edit_of_their_dynamic_symbol() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    let a = id(&run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})));
+    let b = id(&run(&mut s, "shape.rectangle", json!({"x": 60, "y": 10, "width": 40, "height": 40})));
+    let inst = id(&run(&mut s, "symbol.new", json!({"name": "Pair", "ids": [a.0, b.0], "type": "dynamic"})));
+    run(&mut s, "symbol.instance.setAppearance", json!({"id": inst.0, "path": [0], "fill": "#00ff00"}));
+    run(&mut s, "symbol.instance.setAppearance", json!({"id": inst.0, "path": [1], "fill": "#ff0000"}));
+    run(&mut s, "object.pattern.make", json!({"ids": [inst.0], "name": "Tile", "edit": false}));
+    run(&mut s, "select.set", json!({"ids": [inst.0]}));
+    run(&mut s, "graph.design", json!({"new": "Pairs"}));
+    run(&mut s, "brush.new", json!({"type": "art", "name": "Pair Band", "ids": [inst.0]}));
+    // A stored entry that does not parse, and a field the brush definition does not read, are kept.
+    let junk = json!({"name": "Unreadable", "kind": 7});
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let Some(Value::Array(entries)) = doc.unknown.get_mut(vectorcraft_brush::DOC_KEY) else { panic!("no stored brushes") };
+    entries.iter_mut().filter(|e| e["name"] == "Pair Band").for_each(|e| e["note"] = json!("kept"));
+    entries.push(junk.clone());
+    // The changes of each instance of "Pair" in `n`, by path and color.
+    fn changes(n: &Node, out: &mut Vec<(Vec<u32>, String)>) {
+        n.walk(&mut |n| {
+            if matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Pair") {
+                out.extend(n.extras().symbol_overrides.iter().map(|o| (o.path.clone(), o.fill.as_ref().and_then(|p| p.color()).unwrap().to_hex())));
+            }
+        });
+    }
+    // The changes in the tile, the graph design and the brush.
+    let held = |s: &Session| -> [Vec<(Vec<u32>, String)>; 3] {
+        let d = &s.doc().unwrap().doc;
+        let mut out: [Vec<(Vec<u32>, String)>; 3] = Default::default();
+        d.patterns.iter().filter(|p| p.name == "Tile").flat_map(|p| &p.art).for_each(|n| changes(n, &mut out[0]));
+        d.graph_designs.iter().for_each(|g| changes(&g.art, &mut out[1]));
+        let brush = vectorcraft_brush::find(d, "Pair Band").expect("the brush");
+        brush.art().into_iter().for_each(|n| changes(n, &mut out[2]));
+        out
+    };
+    let start = vec![(vec![0], "#00ff00".to_string()), (vec![1], "#ff0000".to_string())];
+    assert_eq!(held(&s), [start.clone(), start.clone(), start]);
+    let other = id(&run(&mut s, "symbol.place", json!({"name": "Pair", "x": 200, "y": 200})));
+    run(&mut s, "symbol.edit", json!({"id": other.0}));
+    let art = layer_art(&s);
+    assert_eq!(art.len(), 2);
+    // Sending the second object to the back: each change follows its object.
+    run(&mut s, "select.set", json!({"ids": [art[1].0]}));
+    run(&mut s, "object.arrange.sendToBack", json!({}));
+    let swapped = vec![(vec![1], "#00ff00".to_string()), (vec![0], "#ff0000".to_string())];
+    assert_eq!(held(&s), [swapped.clone(), swapped.clone(), swapped]);
+    // Deleting the first object: the change to it goes.
+    run(&mut s, "select.set", json!({"ids": [art[0].0]}));
+    run(&mut s, "edit.clear", json!({}));
+    let left = vec![(vec![0], "#ff0000".to_string())];
+    assert_eq!(held(&s), [left.clone(), left.clone(), left.clone()]);
+    run(&mut s, "symbol.exitEditing", json!({}));
+    assert_eq!(held(&s), [left.clone(), left.clone(), left]);
+    let stored = &s.doc().unwrap().doc.unknown[vectorcraft_brush::DOC_KEY];
+    assert!(stored.as_array().is_some_and(|a| a.contains(&junk)), "{stored}");
+    assert!(stored.as_array().is_some_and(|a| a.iter().any(|e| e["name"] == "Pair Band" && e["note"] == "kept")), "{stored}");
+}
+
+/// An instance of a dynamic symbol that is the opacity mask of an object on a layer keeps its
+/// appearance changes on the same objects when the edit reorders them, and drops the change to an
+/// object the edit deleted.
+#[test]
+fn an_instance_in_an_opacity_mask_follows_an_edit_of_its_dynamic_symbol() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+    let a = id(&run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})));
+    let b = id(&run(&mut s, "shape.rectangle", json!({"x": 60, "y": 10, "width": 40, "height": 40})));
+    let inst = id(&run(&mut s, "symbol.new", json!({"name": "Pair", "ids": [a.0, b.0], "type": "dynamic"})));
+    run(&mut s, "symbol.instance.setAppearance", json!({"id": inst.0, "path": [0], "fill": "#00ff00"}));
+    run(&mut s, "symbol.instance.setAppearance", json!({"id": inst.0, "path": [1], "fill": "#ff0000"}));
+    let masked = id(&run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 120, "height": 60})));
+    run(&mut s, "select.set", json!({"ids": [inst.0]}));
+    run(&mut s, "object.arrange.bringToFront", json!({}));
+    run(&mut s, "transparency.makeOpacityMask", json!({"ids": [masked.0, inst.0]}));
+    // The changes of the instance of "Pair" in the masked object's mask, by path and color.
+    let held = |s: &Session| -> Vec<(Vec<u32>, String)> {
+        let d = &s.doc().unwrap().doc;
+        let mask = d.node(masked).and_then(|n| n.extras().mask.clone()).expect("the opacity mask");
+        let mut out = vec![];
+        vectorcraft_doc::swatches::walk_with_masks(&mask.art, &mut |n| {
+            if matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Pair") {
+                out.extend(n.extras().symbol_overrides.iter().map(|o| (o.path.clone(), o.fill.as_ref().and_then(|p| p.color()).unwrap().to_hex())));
+            }
+        });
+        out
+    };
+    assert_eq!(held(&s), vec![(vec![0], "#00ff00".to_string()), (vec![1], "#ff0000".to_string())]);
+    let other = id(&run(&mut s, "symbol.place", json!({"name": "Pair", "x": 200, "y": 200})));
+    run(&mut s, "symbol.edit", json!({"id": other.0}));
+    let art = layer_art(&s);
+    assert_eq!(art.len(), 2);
+    // Sending the second object to the back: each change follows its object.
+    run(&mut s, "select.set", json!({"ids": [art[1].0]}));
+    run(&mut s, "object.arrange.sendToBack", json!({}));
+    assert_eq!(held(&s), vec![(vec![1], "#00ff00".to_string()), (vec![0], "#ff0000".to_string())]);
+    // Deleting the first object: the change to it goes.
+    run(&mut s, "select.set", json!({"ids": [art[0].0]}));
+    run(&mut s, "edit.clear", json!({}));
+    assert_eq!(held(&s), vec![(vec![0], "#ff0000".to_string())]);
+    run(&mut s, "symbol.exitEditing", json!({}));
+    assert_eq!(held(&s), vec![(vec![0], "#ff0000".to_string())]);
+}
+
 #[test]
 fn undo_back_into_an_earlier_edit_leaves_it_to_its_own_isolation() {
     let (mut s, first, second) = two_instances();
@@ -488,4 +675,46 @@ fn undoing_entry_with_a_group_isolated_inside_the_art_goes_back_to_before() {
     assert!(st.doc.symbol_edit.is_none() && st.doc.node(layer).is_none());
     assert_eq!(st.isolation, None);
     assert_eq!(st.active_layer, before);
+}
+
+/// The text wrap of the area type in `n`.
+fn wrap_in(n: &Node) -> Vec<vectorcraft_doc::WrapShape> {
+    let mut wrap = None;
+    n.walk(&mut |n| {
+        if let NodeKind::Text(t) = &n.kind {
+            wrap = Some(t.wrap.clone());
+        }
+    });
+    wrap.expect("area type")
+}
+
+#[test]
+fn moving_a_wrap_object_in_the_edit_gives_the_symbol_the_new_text_wrap() {
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 600, "height": 600}));
+    let text = "word ".repeat(200);
+    let t = id(&run(&mut s, "text.create", json!({"x": 0, "y": 0, "text": text, "size": 12, "area": {"width": 400, "height": 400}})));
+    let r = id(&run(&mut s, "shape.rectangle", json!({"x": 0, "y": 50, "width": 200, "height": 100})));
+    run(&mut s, "select.set", json!({"ids": [r.0]}));
+    run(&mut s, "object.textWrap.make", json!({}));
+    run(&mut s, "select.set", json!({"ids": [t.0, r.0]}));
+    let instance = id(&run(&mut s, "symbol.new", json!({"name": "Wrapped"})));
+    let symbol_wrap = |s: &Session| wrap_in(&s.doc().unwrap().doc.symbols.iter().find(|x| x.name == "Wrapped").expect("the symbol").art);
+    let entered = symbol_wrap(&s);
+    assert!(!entered.is_empty());
+    run(&mut s, "symbol.edit", json!({"id": instance.0}));
+    let (layer, rect) = {
+        let st = s.doc().unwrap();
+        let layer = st.doc.symbol_edit.as_ref().unwrap().layer;
+        let rect = layer_art(&s).into_iter().find(|i| st.doc.node(*i).is_some_and(|n| n.extras().wrap.is_some())).expect("the wrap object");
+        (layer, rect)
+    };
+    run(&mut s, "select.set", json!({"ids": [rect.0]}));
+    run(&mut s, "object.move", json!({"dx": 150, "dy": 0}));
+    let on_layer = wrap_in(s.doc().unwrap().doc.node(layer).unwrap());
+    assert_ne!(on_layer, entered, "the editing layer's text wraps around the moved object");
+    assert_eq!(symbol_wrap(&s), on_layer);
+    // Leaving keeps it.
+    run(&mut s, "symbol.exitEditing", json!({}));
+    assert_eq!(symbol_wrap(&s), on_layer);
 }
