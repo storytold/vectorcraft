@@ -216,6 +216,13 @@ the `effect` dialog (`effect.dialog {effect: "plugin.<id>"}`). An exporter plug-
 export's own parameters); `ui.dialog.confirm` writes the file. `ui.installPlugin {path?}` installs a `.wasm` (without
 a path it asks for one); see [plugins.md](plugins.md).
 
+Panel plug-ins: each has a panel `plugin:<id>` that `window.panel` and `window.panel.*` show, hide, move, dock and
+close as any panel; the Window › Plug-ins items are `window.panel {panel: "plugin:<id>", toggle: true}`, and
+`window.pluginPanel {id}` shows one and leaves it be when it shows. `ui.docking` tells where it is. The panel sends its
+plug-in `plugin.panel.event` when it is first drawn after opening and when its fields are used, and draws the answers
+to those: one sent with `engine.execute` changes what the plug-in keeps, not what its panel shows, until the panel's
+next event.
+
 Overprint Black: the Edit → Edit Colors → Overprint Black… menu item opens a `command` parameter dialog for
 `edit.colors.overprintBlack` (fields `remove`, `percentage`, `fill`, `stroke`, `includeCmyBlacks`,
 `includeSpotBlacks`); `ui.dialog.set` then `ui.dialog.confirm` runs it on the selection.
