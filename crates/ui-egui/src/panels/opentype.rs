@@ -4,7 +4,7 @@
 
 use egui::Ui;
 use serde_json::json;
-use vectorcraft_text::{EXTRA_FEATURES, OtFeatures};
+use vectorcraft_text::{EXTRA_FEATURES, FontDb, OtFeatures};
 
 use super::character::{shared, text_editing, text_style};
 use crate::VectorcraftApp;
@@ -199,6 +199,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             change = Some(Change::Toggle(flag, !on));
         }
     }
+    // The font, not the text, decides which numbered sets can be offered. Each set is an
+    // independent feature, so the menu permits several at once. A font's own label wins over
+    // the numbered fallback. See the public Stylistic Sets help page.
+    let sets = FontDb::global().face(&st.font_family, &st.font_style).map(|face| face.stylistic_sets()).unwrap_or_default();
+    ui.add_enabled_ui(!sets.is_empty(), |ui| {
+        ui.menu_button(tl!("Stylistic Sets"), |ui| {
+            for set in &sets {
+                let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
+                let on = flag.get(&next);
+                if widgets::check(ui, &set.name, on, true) {
+                    change = Some(Change::Toggle(flag, !on));
+                }
+            }
+        });
+    });
     if cur.ligatures && vectorcraft_text::ligatures_suppressed_by(st.tracking) && !vectorcraft_text::explicit_ligatures(&st.features) {
         widgets::dim_label(ui, tl!("Ligatures are off while the text is tracked."));
     }
@@ -282,6 +297,18 @@ mod tests {
             set(&mut app, f);
             assert!(text_style(&app).unwrap().0.features.is_empty(), "{label} off");
         }
+    }
+
+    /// Stylistic sets are independent: selecting a second set keeps the first, and clearing one
+    /// keeps the other. The command reaches the selected text's stored OpenType feature tags.
+    #[test]
+    fn multiple_stylistic_sets_stay_independent() {
+        let mut app = selected_text();
+        edit(&mut app, Change::Toggle(Flag::Extra("ss01"), true));
+        edit(&mut app, Change::Toggle(Flag::Extra("ss03"), true));
+        assert_eq!(text_style(&app).unwrap().0.features, ["ss01", "ss03"]);
+        edit(&mut app, Change::Toggle(Flag::Extra("ss01"), false));
+        assert_eq!(text_style(&app).unwrap().0.features, ["ss03"]);
     }
 
     /// The Figure menu lists its five entries in order; Proportional Lining sets `pnum` and

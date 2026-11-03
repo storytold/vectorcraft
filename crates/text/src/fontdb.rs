@@ -26,6 +26,7 @@ mod glyph_pen;
 mod lookup;
 mod names;
 mod scan;
+mod stylistic_sets;
 mod traits;
 mod wanted;
 
@@ -57,6 +58,7 @@ pub(crate) use scan::file_face_names_within;
 #[cfg(test)]
 use scan::{MAX_FACES, enumerate_faces};
 pub use scan::{is_font_file, is_suitcase};
+pub use stylistic_sets::StylisticSet;
 use traits::Alias;
 #[cfg(test)]
 use traits::{FaceKeys, face_names};
