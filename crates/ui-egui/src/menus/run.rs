@@ -544,7 +544,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             }
             None => Err("brightness must be dark|mediumDark|mediumLight|light".into()),
         },
-        "window.newWindow" => Err("New Window isn't available yet: a document opens in one window".into()),
+        "window.newWindow" => crate::doc_windows::new_window(app),
         "window.arrange.cascade" => crate::doc_windows::cascade(app),
         "window.arrange.tile" => crate::canvas::tile(app),
         "window.arrange.floatInWindow" => crate::doc_windows::float_in_window(app, p),
@@ -609,10 +609,15 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         // Closing asks Save / Don't Save / Cancel for modified documents first (`unsaved`).
-        "file.close" => {
-            let i = p.get("index").and_then(Value::as_u64).map(|i| i as usize).or(app.session.active_index())?;
-            crate::unsaved::close(app, i)
-        }
+        // Without an `index`, the current window closes: one of several views of a document closes
+        // without closing the document (Window › New Window).
+        "file.close" => match p.get("index").and_then(Value::as_u64).map(|i| i as usize) {
+            Some(i) => crate::unsaved::close(app, i),
+            None => {
+                app.session.active_index()?;
+                crate::doc_windows::close_current(app)
+            }
+        },
         "file.closeAll" => crate::unsaved::close_all(app, "closeAll"),
         "app.quit" => crate::unsaved::close_all(app, "quit"),
         "ui.swatchOptions" => match s("name") {

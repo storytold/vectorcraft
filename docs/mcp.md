@@ -3692,6 +3692,17 @@ it returns `{tiled, floating}`. An `index` that names no open document fails wit
 is not saved. `ui.inspect` reports `tiled`, `panes` (each pane's `document` index, `rect` and
 whether it is `active`) and `floating`; canvas coordinates map to the current document's pane or window
 (`canvasRect`), in that window's coordinates while it floats.
+`window.newWindow` (Window › New Window) opens another view of the current document, with its own zoom, center,
+rotation, artboard and Outline or Preview, makes it the current window and returns `{index, view}`, the view's number.
+Each view has a tab of its own; while a document has more than one view, its tabs and windows show the view's number
+after the name ("Name:2"). It opens in a floating window when the view it came from is in one. With no document open
+it fails with "no document open". The Arrange commands treat each view as a window: `floatInWindow` and
+`consolidateAllWindows` take `view` beside `index` (the document's current view without it), and Tile and Cascade
+count views. `file.close` without an `index` closes the current view, and the document's last view closes the document;
+with an `index` it closes the document and all its views. `window.nextDocument` and `window.previousDocument` step
+through the views in tab order and add `view` to their reply for a document with more than one view. `ui.inspect`
+reports `windows` (every window as `[document index, view number]`, in tab order), `currentWindow` and each pane's
+`view`. Views are not saved.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}
