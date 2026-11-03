@@ -36,8 +36,11 @@ fn stop_reach_matches_scanning_the_stops() {
         &[f32::NAN, 0.3, 0.3, 0.8],
     ];
     for offsets in offsets {
-        let stops: Vec<GradientStop> =
-            offsets.iter().zip(colors.iter().cycle()).map(|(&o, hex)| GradientStop { midpoint: 0.3, ..GradientStop::new(o, Color::from_hex(hex).unwrap()) }).collect();
+        let stops: Vec<GradientStop> = offsets
+            .iter()
+            .zip(colors.iter().cycle())
+            .map(|(&o, hex)| GradientStop { midpoint: 0.3, ..GradientStop::new(o, Color::from_hex(hex).unwrap()) })
+            .collect();
         let g = Gradient::new(GradientKind::Linear, stops);
         let reach = StopReach::new(&g.stops);
         for t in (-4..=44).map(|k| k as f32 / 40.0).chain([f32::NAN, f32::INFINITY, f32::NEG_INFINITY]) {
