@@ -418,3 +418,25 @@ fn edit_original_with_takes_a_chosen_application() {
     confirm(&mut a).unwrap();
     assert_eq!(a.session.prefs.edit_original_app, "/Applications/Editor.app");
 }
+
+/// #5327 review: choosing Other Application before a path is typed is remembered by the dialog
+/// itself, so a dialog opened again (or reset) starts at System Default, and a stored path keeps
+/// its spaces.
+#[test]
+fn edit_original_with_other_is_the_dialogs_own_choice() {
+    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    open(&mut a, Some("File Handling"));
+    assert!(!a.ui.dialog.as_ref().unwrap().bool(CHOSE_OTHER_APP), "a new dialog starts without the choice");
+    let shown = |a: &mut VectorcraftApp| crate::tests_labels::painted_text(a, |a, ui| show(a, ui.ctx())).contains("Application Path");
+    assert!(!shown(&mut a), "System Default shows no path field");
+    a.ui.dialog.as_mut().unwrap().fields.insert(CHOSE_OTHER_APP.into(), json!(true));
+    assert!(shown(&mut a), "Other Application with no path yet shows the field");
+    a.ui.dialog = None;
+    open(&mut a, Some("File Handling"));
+    assert!(!shown(&mut a), "opened again: System Default");
+    // A path with spaces is kept as typed.
+    let path = "/Applications/Visual Studio Code.app";
+    a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalApp".into(), json!(path));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.edit_original_app, path);
+}

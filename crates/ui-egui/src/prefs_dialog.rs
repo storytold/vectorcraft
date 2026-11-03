@@ -242,6 +242,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         for (k, v) in Prefs::default().to_json().as_object().cloned().unwrap_or_default() {
             d.fields.insert(k, v);
         }
+        d.fields.remove(CHOSE_OTHER_APP);
     }
     if d.fields.remove(CHOOSE_APP).is_some() {
         choose_app(app, &mut d);
@@ -419,11 +420,13 @@ fn choice_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, opts: &
 /// Other Application, which shows a field for the application's path.
 fn edit_original_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, v: &Value) {
     const OPTIONS: [&str; 3] = ["System Default", "PhotoCraft", "Other Application"];
-    let cur = v.as_str().unwrap_or("").trim().to_string();
+    // The field shows the value as stored, spaces included (the host trims it when it opens).
+    let raw = v.as_str().unwrap_or("").to_string();
+    let cur = raw.trim().to_string();
     let photocraft = cur.eq_ignore_ascii_case("photocraft");
-    // Other Application with no path typed yet is still System Default: remember the choice.
-    let chose_other = egui::Id::unique("prefs-edit-original-other");
-    let mut other = !photocraft && (!cur.is_empty() || ui.ctx().data(|m| m.get_temp::<bool>(chose_other)).unwrap_or(false));
+    // Other Application with no path typed yet is still System Default: the dialog remembers the
+    // choice in a field of its own, which a new dialog and Reset Preferences start without.
+    let mut other = !photocraft && (!cur.is_empty() || d.bool(CHOSE_OTHER_APP));
     let at = if photocraft {
         1
     } else if other {
@@ -434,12 +437,12 @@ fn edit_original_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, 
     labeled(ui, label, |ui| {
         if let Some(i) = widgets::dropdown(ui, key, OPTIONS[at], &OPTIONS, 260.0) {
             other = i == 2;
-            ui.ctx().data_mut(|m| m.insert_temp(chose_other, other));
+            d.fields.insert(CHOSE_OTHER_APP.into(), json!(other));
             let new = match i {
                 0 => String::new(),
                 1 => "photocraft".to_string(),
                 _ if photocraft => String::new(),
-                _ => cur.clone(),
+                _ => raw.clone(),
             };
             d.fields.insert(key.into(), json!(new));
         }
@@ -447,7 +450,7 @@ fn edit_original_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, 
     if other {
         let can_pick = d.bool(CAN_PICK_APP);
         labeled(ui, "Application Path", |ui| {
-            let mut s = if photocraft { String::new() } else { cur.clone() };
+            let mut s = if photocraft { String::new() } else { raw.clone() };
             let width = if can_pick { 186.0 } else { 260.0 };
             let field = egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(width);
             let hint = if cfg!(target_os = "macos") { "/Applications/Example.app" } else { "" };
@@ -466,6 +469,8 @@ fn edit_original_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, 
 /// dialog, and that the button was clicked this frame.
 const CAN_PICK_APP: &str = "__canPickApp";
 const CHOOSE_APP: &str = "__chooseApp";
+/// UI-only dialog field: Other Application was chosen, though no path is typed yet.
+const CHOSE_OTHER_APP: &str = "__choseOtherApp";
 
 /// The open dialog Edit Original With's Choose… shows: applications (`.app` bundles in
 /// Applications on macOS, `.exe` files on Windows, any file elsewhere).
