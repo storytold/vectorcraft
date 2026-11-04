@@ -11,7 +11,7 @@ use vectorcraft_geom::Vec2;
 
 use super::edit::selected_roots;
 use super::pathops::Beside;
-use super::select::{is_selectable, selectable_ids, walk_selectable};
+use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
 use super::{
     CommandSpec, EngineError, Point, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ok,
     str_param,
@@ -19,14 +19,18 @@ use super::{
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("select.same.symbolInstance", "Symbol Instance", ["Select", "Same"], None, "{} → {count}", has_selection, |s, _| same(
-            s,
+        cmd!(
             "select.same.symbolInstance",
-            |a, b| match (&a.kind, &b.kind) {
+            "Symbol Instance",
+            ["Select", "Same"],
+            None,
+            "{} select the instances of the symbol of the first selected object that can be selected; objects that are hidden or locked, inside a hidden or locked object or layer, on a template layer, on a locked artboard while nothing is isolated, or outside the isolated group or layer are passed over → {count}",
+            has_selection,
+            |s, _| same(s, "select.same.symbolInstance", |a, b| match (&a.kind, &b.kind) {
                 (NodeKind::SymbolInstance { symbol: x, .. }, NodeKind::SymbolInstance { symbol: y, .. }) => x == y,
                 _ => false,
-            }
-        )),
+            })
+        ),
         cmd!(
             "select.same.linkBlockSeries",
             "Link Block Series",
@@ -297,9 +301,9 @@ fn finish_same(s: &mut Session, cmd: &str, ids: Vec<NodeId>) -> Result<Value> {
     Ok(json!({ "count": st.selection.objects.len() }))
 }
 
+/// The objects `eq` matches with the [`first_selectable`] selected object.
 fn same(s: &mut Session, cmd: &str, eq: fn(&Node, &Node) -> bool) -> Result<Value> {
-    let st = s.doc()?;
-    let r = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().ok_or_else(|| bad(cmd, "nothing selected"))?;
+    let r = first_selectable(s.doc()?).cloned().ok_or_else(|| bad(cmd, "nothing selected"))?;
     let ids = candidates(s, |n| eq(n, &r))?;
     finish_same(s, cmd, ids)
 }
