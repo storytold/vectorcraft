@@ -1897,6 +1897,8 @@ file-filter	Templates	模板
 	Name:	名称：
 	Navigate	导航
 	Navigator	导航器
+	Navigator Panel Options	导航器面板选项
+	Draw Dashed Lines as Solid Lines	将虚线绘制为实线
 	Needs the desktop app	需要桌面应用
 	Neutral Gradients	中性渐变
 	New	新建

@@ -1815,6 +1815,8 @@ font-technology	Variable	Değişken
 	Name:	İsim:
 	Navigate	Gezin
 	Navigator	Gezgin
+	Navigator Panel Options	Gezgin Paneli Seçenekleri
+	Draw Dashed Lines as Solid Lines	Kesikli Çizgileri Düz Çizgi Olarak Çiz
 	Needs the desktop app	Masaüstü uygulaması gerekiyor
 	Neutral Gradients	Nötr Degradeler
 	New	Yeni

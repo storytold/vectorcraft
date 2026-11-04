@@ -1979,6 +1979,8 @@ font-technology	Variable	Variables
 	Name:	Nom :
 	Navigate	Naviguer
 	Navigator	Navigation
+	Navigator Panel Options	Options du panneau Navigation
+	Draw Dashed Lines as Solid Lines	Dessiner les pointillés en traits pleins
 	Needs the desktop app	Nécessite l’application de bureau
 	Neutral Gradients	Dégradés neutres
 	New	Nouveau
