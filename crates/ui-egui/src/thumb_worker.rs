@@ -52,7 +52,7 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
     }
 
     /// Spawn the thread.
-    fn start(ctx: &egui::Context, name: &str) -> Option<Self> {
+    pub(crate) fn start(ctx: &egui::Context, name: &str) -> Option<Self> {
         let (tx, jobs) = channel::<Job<S, K>>();
         let (done_tx, rx) = channel::<Done<K>>();
         let ctx = ctx.clone();
@@ -105,6 +105,12 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
                 Err(TryRecvError::Disconnected) => return None,
             }
         }
+    }
+
+    /// The next finished job, waiting for it; None when the thread is gone.
+    #[cfg(test)]
+    pub(crate) fn wait(&self) -> Option<Done<K>> {
+        self.rx.recv().ok()
     }
 }
 
