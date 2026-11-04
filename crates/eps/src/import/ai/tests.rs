@@ -966,6 +966,30 @@ fn a_layer_keeps_its_own_transparency() {
 }
 
 #[test]
+fn a_layers_state_after_its_last_group_or_compound_path_is_the_layers() {
+    // GUARDS: the layer's `Xy` right after its last group or compound path, before the layer's
+    // `0 0 Xd` and `7 () XW`, went to that group or compound path, and the layer stayed opaque.
+    let a = rect_path(0.0, 0.0, 10.0, 10.0);
+    let b = rect_path(2.0, 2.0, 8.0, 8.0);
+    let layer_block = "1 0.6 1 2 1 Xy\n0 0 Xd\n7 () XW\n";
+    for last in [format!("0 Ae\nu\n{RED}{a}f\nU\n"), format!("0 Ae\n*u\n{RED}{a}f\n{b}f\n*U\n")] {
+        let doc = read_ok(&layer(&format!("{last}{layer_block}"))).doc;
+        let l = &doc.layers[0];
+        assert_eq!(
+            (l.opacity, l.blend, l.isolate, l.knockout, l.knockout_shape),
+            (0.6, BlendMode::Multiply, true, Knockout::Neutral, true),
+            "{last}"
+        );
+        let n = &art(&doc)[0];
+        assert_eq!((n.opacity, n.blend, n.isolate, n.knockout_shape), (1.0, BlendMode::Normal, false, false), "{last}");
+        // The group's own state block (`6 () XW`) keeps it the group's.
+        let doc = read_ok(&layer(&format!("{last}1 0.6 1 2 1 Xy\n0 0 Xd\n6 () XW\n"))).doc;
+        assert_eq!(doc.layers[0].opacity, 1.0, "{last}");
+        assert_eq!((art(&doc)[0].opacity, art(&doc)[0].knockout_shape), (0.6, true), "{last}");
+    }
+}
+
+#[test]
 fn a_layers_state_keeps_through_the_stroke_style_written_in_it() {
     // GUARDS: a layer's state block can have the stroke style between its `Xy` and `Xd`; read as
     // the art moving on, it lost the layer's opacity and the layer drew opaque.
