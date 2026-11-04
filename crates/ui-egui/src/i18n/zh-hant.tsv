@@ -2983,6 +2983,11 @@ file-filter	Templates	範本
 	New Toolbar	新增工具列
 	Show Toolbar	顯示工具列
 	List Toolbars	列出工具列
+	Manage Toolbars…	管理工具列…
+	Manage Toolbars	管理工具列
+	Rename Toolbar	重新命名工具列
+	Duplicate Toolbar	製作工具列複本
+	Delete Toolbar	刪除工具列
 	New {kind} Style…	新增{kind}樣式…
 	New…	新增…
 	Next	下一個

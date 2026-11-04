@@ -2046,6 +2046,11 @@ font-technology	Variable	Variabla
 	New Toolbar	Nytt verktygsfält
 	Show Toolbar	Visa verktygsfält
 	List Toolbars	Lista verktygsfält
+	Manage Toolbars…	Hantera verktygsfält…
+	Manage Toolbars	Hantera verktygsfält
+	Rename Toolbar	Byt namn på verktygsfält
+	Duplicate Toolbar	Duplicera verktygsfält
+	Delete Toolbar	Radera verktygsfält
 	New {kind} Style…	Ny {kind}stil…
 	New…	Ny…
 	Next	Nästa

@@ -2099,6 +2099,11 @@ font-technology	Variable	Variables
 	New Toolbar	Nouvelle barre d’outils
 	Show Toolbar	Afficher la barre d’outils
 	List Toolbars	Liste des barres d’outils
+	Manage Toolbars…	Gérer les barres d’outils…
+	Manage Toolbars	Gérer les barres d’outils
+	Rename Toolbar	Renommer la barre d’outils
+	Duplicate Toolbar	Dupliquer la barre d’outils
+	Delete Toolbar	Supprimer la barre d’outils
 	New {kind} Style…	Nouveau style de {kind}…
 	New…	Nouveau…
 	Next	Suivant

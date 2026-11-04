@@ -2060,6 +2060,11 @@ file-filter	Templates	Vorlagen
 	New Toolbar	Neue Werkzeugleiste
 	Show Toolbar	Werkzeugleiste einblenden
 	List Toolbars	Werkzeugleisten auflisten
+	Manage Toolbars…	Werkzeugleisten verwalten…
+	Manage Toolbars	Werkzeugleisten verwalten
+	Rename Toolbar	Werkzeugleiste umbenennen
+	Duplicate Toolbar	Werkzeugleiste duplizieren
+	Delete Toolbar	Werkzeugleiste löschen
 	New {kind} Style…	Neues {kind}format…
 	New…	Neu…
 	Next	Weiter

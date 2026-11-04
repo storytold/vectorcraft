@@ -2562,6 +2562,11 @@ file-filter	Templates	Sablonok
 	New Toolbar	Új eszköztár
 	Show Toolbar	Eszköztár megjelenítése
 	List Toolbars	Eszköztárak listája
+	Manage Toolbars…	Eszköztárak kezelése…
+	Manage Toolbars	Eszköztárak kezelése
+	Rename Toolbar	Eszköztár átnevezése
+	Duplicate Toolbar	Eszköztár kettőzése
+	Delete Toolbar	Eszköztár törlése
 	New {kind} Style…	Új stílus: {kind}…
 	New…	Új…
 	Next	Következő

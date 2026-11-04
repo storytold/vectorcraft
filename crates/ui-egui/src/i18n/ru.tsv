@@ -2131,6 +2131,11 @@ file-filter	Templates	Шаблоны
 	New Toolbar	Новая панель инструментов
 	Show Toolbar	Показать панель инструментов
 	List Toolbars	Список панелей инструментов
+	Manage Toolbars…	Управление панелями инструментов…
+	Manage Toolbars	Управление панелями инструментов
+	Rename Toolbar	Переименовать панель инструментов
+	Duplicate Toolbar	Дублировать панель инструментов
+	Delete Toolbar	Удалить панель инструментов
 	New {kind} Style…	Новый стиль {kind}…
 	New…	Создать…
 	Next	Далее

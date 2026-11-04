@@ -497,6 +497,30 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{name: string, show?: bool} show (true), hide (false) or toggle (omitted) the toolbar made with New Toolbar called `name`, as its item under Window › Toolbars does (its title bar's × hides it); shown after Tab hid the toolbars, it shows alone and the others are turned off; returns the new state",
     ),
+    (
+        "window.toolbar.manage",
+        "Manage Toolbars…",
+        "",
+        "{} open the Manage Toolbars dialog, which lists the toolbars made with New Toolbar: a name typed for the selected one renames it, + copies it (none selected: makes a blank toolbar) and the trash can deletes it",
+    ),
+    (
+        "window.toolbar.rename",
+        "Rename Toolbar",
+        "",
+        "{name: string, to: string} give the toolbar made with New Toolbar called `name` the name `to` (not empty, at most 200 characters, not another toolbar's whatever the case), as typing a name in Manage Toolbars does; returns {toolbar: name}",
+    ),
+    (
+        "window.toolbar.duplicate",
+        "Duplicate Toolbar",
+        "",
+        "{name?: string} copy the toolbar made with New Toolbar called `name`, with its tools, as \"`name` Copy\" (omitted: make a blank toolbar called \"Toolbar N\"), as Manage Toolbars' + does; the copy shows and is kept with the current workspace; returns {toolbar: name}",
+    ),
+    (
+        "window.toolbar.delete",
+        "Delete Toolbar",
+        "",
+        "{name: string} delete the toolbar made with New Toolbar called `name`, and the groups torn off it, from the current workspace, as Manage Toolbars' trash can does",
+    ),
     ("window.toolbar.list", "List Toolbars", "", "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots}]"),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
