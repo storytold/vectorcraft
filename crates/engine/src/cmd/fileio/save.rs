@@ -608,6 +608,28 @@ fn named_for_save(cmd: &str, e: crate::EngineError) -> crate::EngineError {
     }
 }
 
+/// Refuse the artboards a `.ai` or `.ait` save is given (`artboard`, `artboards`, or a `range`
+/// that isn't empty) when one of them is not in `doc`, with the error an export gives. The save
+/// then writes every artboard, or a legacy `.ai` file's `range`, whatever `artboard` and
+/// `artboards` name. An empty `artboards` list is not refused: the save writes every artboard.
+fn named_artboards_exist(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<()> {
+    let n = doc.artboards.len();
+    // The encoders refuse a document without artboards themselves.
+    if n == 0 {
+        return Ok(());
+    }
+    // The encoders refuse a value of the wrong type themselves, each with its own label.
+    let Ok(mut picked) = super::encode::options::<ArtboardPick>(&written_as(cmd, f, p), p) else {
+        return Ok(());
+    };
+    picked.range = picked.range.filter(|r| !r.trim().is_empty());
+    if picked.range.is_none() && picked.artboards.as_ref().is_some_and(Vec::is_empty) {
+        return Ok(());
+    }
+    picked.resolve(n).map_err(|e| bad(cmd, e))?;
+    Ok(())
+}
+
 /// The `.ai` option `editingData`: whether the file also carries the editing copy of the art that
 /// other apps read (default on).
 #[derive(Default, serde::Deserialize)]
@@ -736,11 +758,16 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
     let boards = separate_boards(cmd, plan.format, &doc, &params)?;
     let mut params = super::pdf::expand_preset(s, cmd, &params)?.into_owned();
     let legacy = super::legacy_ai::wanted(cmd, plan.format, &params)?;
+    if matches!(plan.format.id, "ai" | "ait") {
+        named_artboards_exist(cmd, plan.format, &doc, &params)?;
+    }
     if let (Some(o), "ai" | "ait") = (params.as_object_mut(), plan.format.id) {
         // Save keeps every artboard; exports may choose a subset instead. A legacy .ai file per
         // artboard keeps a range given: the artboards to save.
         let chosen = legacy && plan.format.id == "ai" && o.get("range").and_then(Value::as_str).is_some_and(|r| !r.trim().is_empty());
-        if !chosen {
+        // A `range` that isn't text is left for the encoder to refuse, as an export refuses it.
+        let text = o.get("range").is_none_or(|r| r.is_string() || r.is_null());
+        if !chosen && text {
             o.insert("range".into(), json!("all"));
         }
     }

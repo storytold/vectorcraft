@@ -525,6 +525,42 @@ fn a_range_saves_those_artboards_and_save_writes_them_again() {
     assert_eq!(r["files"].as_array().map(Vec::len), Some(2), "{r}");
 }
 
+/// The message of a refused command's error.
+fn refusal(s: &mut Session, cmd: &str, p: &Value) -> String {
+    match s.execute(cmd, p) {
+        Err(EngineError::BadParams { cmd: c, msg }) if c == cmd => msg,
+        other => panic!("{cmd} {p}: {:?}", other.map(|r| r["files"].as_array().map(Vec::len))),
+    }
+}
+
+#[test]
+fn an_artboard_the_document_does_not_have_is_refused_as_an_export_refuses_it() {
+    let dir = Folder::new("ai7-no-artboard");
+    let mut s = three_boards();
+    let path = dir.file("Poster.ai");
+    for pick in [json!({"artboards": [5]}), json!({"artboards": [0, 3]}), json!({"artboard": 3}), json!({"range": "4"})] {
+        let mut p = json!({"format": "ai", "aiVersion": "7"});
+        p.as_object_mut().unwrap().extend(pick.as_object().unwrap().clone());
+        let export = refusal(&mut s, "document.export", &p);
+        assert!(export.starts_with("no artboard") || export.starts_with("range `4`"), "{p}: {export}");
+        assert_eq!(refusal(&mut s, "file.saveCopy", &p), export, "{p}");
+        p["path"] = json!(path);
+        assert_eq!(refusal(&mut s, "file.saveAs", &p), export, "{p}");
+        assert_eq!(refusal(&mut s, "document.save", &p), export, "{p}");
+    }
+    // A `range` that isn't text is refused as an export refuses it.
+    let p = json!({"format": "ai", "aiVersion": "7", "range": 42});
+    assert_eq!(refusal(&mut s, "file.saveCopy", &p), refusal(&mut s, "document.export", &p));
+    assert_eq!(std::fs::read_dir(&dir.0).unwrap().count(), 0, "nothing is written");
+    // An artboard the document has is saved with the artboards of the range: every one.
+    let r = s.execute("file.saveAs", &json!({"path": path, "format": "ai", "aiVersion": "7", "artboards": [2]})).unwrap();
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(3), "{r}");
+    // Once that artboard is deleted, Save is not refused for it.
+    s.execute("artboard.delete", &json!({"index": 2})).unwrap();
+    let r = s.execute("document.save", &json!({})).unwrap();
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(2), "{r}");
+}
+
 /// A 32×32 PNG checkerboard of 16-pixel squares: `a` top left and bottom right, `b` elsewhere.
 fn checker(a: [u8; 4], b: [u8; 4]) -> Vec<u8> {
     let img = image::RgbaImage::from_fn(32, 32, |x, y| image::Rgba(if (x < 16) == (y < 16) { a } else { b }));
