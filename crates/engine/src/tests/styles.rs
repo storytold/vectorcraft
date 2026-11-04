@@ -286,6 +286,32 @@ fn select_same_style_and_attribute_from_a_compound_path_member() {
     assert!(s.execute("select.same.graphicStyle", &json!({})).is_err());
 }
 
+/// Select > Same > Graphic Style and Appearance Attribute pass over a hidden object selected first
+/// and compare the other objects with the next one.
+#[test]
+fn select_same_style_and_attribute_skip_a_hidden_reference() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    set_fill(&mut s, a, "#ff0000");
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    run(&mut s, "graphicStyle.new", json!({"name": "Rough"}));
+    run(&mut s, "graphicStyle.apply", json!({"name": "Rough"}));
+    let b = rect(&mut s, 100.0);
+    run(&mut s, "graphicStyle.apply", json!({"name": "Rough"}));
+    let hidden = rect(&mut s, 200.0);
+    set_fill(&mut s, hidden, "#0000ff");
+    run(&mut s, "graphicStyle.new", json!({"name": "Blue"}));
+    run(&mut s, "graphicStyle.apply", json!({"name": "Blue"}));
+    rect(&mut s, 300.0);
+    run(&mut s, "graphicStyle.apply", json!({"name": "Blue"}));
+    run(&mut s, "layer.setProps", json!({"id": hidden.0, "visible": false}));
+    for cmd in ["select.same.graphicStyle", "select.same.appearanceAttribute"] {
+        run(&mut s, "select.set", json!({"ids": [hidden.0, a.0]}));
+        run(&mut s, cmd, json!({}));
+        assert_eq!(s.doc().unwrap().selection.objects, vec![a, b], "{cmd}");
+    }
+}
+
 #[test]
 fn document_info_lists_style_names() {
     let mut s = session();
