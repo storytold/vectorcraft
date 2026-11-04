@@ -494,5 +494,7 @@ fn kerning_reads_parentheses_around_its_text_with_a_manual_value_too() {
     for automatic in [false, true] {
         assert_eq!(typed(automatic, "(10+5)"), Some(SpinPick::Value(15.0)), "automatic: {automatic}");
         assert_eq!(typed(automatic, "(10+5)*2"), None, "automatic: {automatic}");
+        assert_eq!(typed(automatic, "(1,000)"), None, "a thousands comma, automatic: {automatic}");
+        assert_eq!(typed(automatic, "(1,5)"), Some(SpinPick::Value(1.5)), "a decimal comma, automatic: {automatic}");
     }
 }
