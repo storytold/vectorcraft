@@ -127,7 +127,7 @@ impl FamilyTool {
     /// with the tool's decay and segments (a logarithm, so that a low decay with many segments does
     /// not round to 0). The decay ratio is clamped to 0.05…0.9999 as `shapes::spiral` clamps it.
     fn spiral_inner_end_ln(&self, r: f64) -> f64 {
-        r.ln() + f64::from(self.segments) * (self.decay / 100.0).clamp(0.05, 0.9999).ln()
+        r.ln() + f64::from(self.segments) / 4.0 * (self.decay / 100.0).clamp(0.05, 0.9999).ln()
     }
 
     /// Alt or Ctrl/Cmd in a spiral drag from `start` to `p`: the inner end keeps the distance from
@@ -150,12 +150,12 @@ impl FamilyTool {
         }
         let Some(end) = self.spiral_end.filter(|e| e.is_finite()) else { return };
         if m.cmd {
-            let ratio = ((end - r.ln()) / f64::from(self.segments)).exp();
+            let ratio = ((end - r.ln()) * 4.0 / f64::from(self.segments)).exp();
             if ratio.is_finite() {
                 self.decay = (ratio * 100.0).clamp(5.0, 99.99);
             }
         } else {
-            let fitted = (r.ln() - end) / -(self.decay / 100.0).clamp(0.05, 0.9999).ln();
+            let fitted = (r.ln() - end) * 4.0 / -(self.decay / 100.0).clamp(0.05, 0.9999).ln();
             if fitted.is_finite() {
                 let base = f64::from(self.spiral_alt_base.unwrap_or(self.segments));
                 self.segments = (base + 4.0 * ((fitted - base) / 4.0).round()).clamp(2.0, 1000.0) as u32;
@@ -631,44 +631,44 @@ mod tests {
         assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0))), (100.0, 80.0, 10));
         // Alt rounds the fitted count to whole winds from the count when Alt goes down.
         assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt))), (100.0, 80.0, 10));
-        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt))), (200.0, 80.0, 14));
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt))), (200.0, 80.0, 22));
         // ↑ with Alt held adds one, and the held inner end moves with it.
-        assert_eq!(spiral(t.key(&cx, ToolKey::Up, alt)).2, 15);
-        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt))).2, 15);
-        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(alt))), (50.0, 80.0, 7));
+        assert_eq!(spiral(t.key(&cx, ToolKey::Up, alt)).2, 23);
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt))).2, 23);
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(alt))), (50.0, 80.0, 2));
         assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 101.0, 100.0).with_mods(alt))).2, 2, "at least two");
-        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(alt))).2, 7);
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(alt))).2, 2);
         // The count stays as the radius follows the pointer again.
-        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0))), (100.0, 80.0, 7));
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0))), (100.0, 80.0, 2));
         // Ctrl/Cmd fits the decay to the held inner end.
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(ctrl));
         let (r, decay, n) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(ctrl)));
-        assert!((r, n) == (50.0, 7) && (decay - 80.0 * 2f64.powf(1.0 / 7.0)).abs() < 1e-9, "{r} {decay} {n}");
+        assert_eq!((r, decay, n), (50.0, 99.99, 2), "{r} {decay} {n}");
         let (_, decay, _) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 400.0, 100.0).with_mods(ctrl)));
-        assert!((decay - 80.0 * (1.0f64 / 3.0).powf(1.0 / 7.0)).abs() < 1e-9, "{decay}");
+        assert!((decay - 80.0 / 9.0).abs() < 1e-9, "{decay}");
         assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.5, 100.0).with_mods(ctrl))).1, 99.99, "at most 99.99 %");
         assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 1e20, 100.0).with_mods(ctrl))).1, 5.0, "at least 5 %");
         let (_, decay, _) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(ctrl)));
-        assert!((decay - 80.0 * 0.5f64.powf(1.0 / 7.0)).abs() < 1e-9, "{decay}");
+        assert!((decay - 20.0).abs() < 1e-9, "{decay}");
         // Let go: the decay stays, and the spiral drawn next keeps both.
-        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 100.0))), (150.0, decay, 7));
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 100.0))), (150.0, decay, 2));
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 100.0)), vec![Action::Commit]);
-        assert_eq!((t.options()["decay"].as_f64(), t.options()["segments"].clone()), (Some(decay), json!(7)));
+        assert_eq!((t.options()["decay"].as_f64(), t.options()["segments"].clone()), (Some(decay), json!(2)));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
         let (_, d2, n2) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 140.0).with_mods(alt)));
-        assert_eq!((d2, n2), (decay, 7), "a new drag holds the end anew");
-        // 5 % and 300 segments: an inner radius of 100 × 0.05^300 is below the smallest f64.
+        assert_eq!((d2, n2), (decay, 2), "a new drag holds the end anew");
+        // Low decay over many winds still fits using logarithms.
         let mut t = FamilyTool::new("spiral");
         t.set_option("decay", &json!(5.0));
         t.set_option("segments", &json!(300));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(ctrl));
         let (_, decay, _) = spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0).with_mods(ctrl)));
-        assert!((decay - 5.0 * 2f64.powf(1.0 / 300.0)).abs() < 1e-9, "{decay}");
+        assert!((decay - 5.0 * 2f64.powf(4.0 / 300.0)).abs() < 1e-9, "{decay}");
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 100.0));
         // Alt: a large radius increase adds a whole wind.
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 100.0).with_mods(alt));
-        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200100.0, 100.0).with_mods(alt))).2, 304);
+        assert_eq!(spiral(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200100.0, 100.0).with_mods(alt))).2, 312);
     }
 
     /// Switching between Alt and Ctrl/Cmd keeps the held inner end and uses the current segment
@@ -687,21 +687,21 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt));
-        assert_eq!(t.segments, 14);
+        assert_eq!(t.segments, 22);
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(both));
-        assert_eq!(t.segments, 14, "Ctrl/Cmd takes precedence");
+        assert_eq!(t.segments, 22, "Ctrl/Cmd takes precedence");
         let decay = t.decay;
         assert!(decay > 80.0);
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(ctrl));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt));
-        assert_eq!(t.segments, 18, "Alt resumes from the current count with the held end");
+        assert_eq!(t.segments, 50, "Alt resumes from the current count with the held end");
         assert_eq!(t.decay, decay);
         t.key(&cx, ToolKey::Escape, alt);
         assert_eq!(t.spiral_end, None);
         assert_eq!(t.spiral_alt_base, None);
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt));
-        assert_eq!(t.segments, 18, "a new drag holds a new inner end");
+        assert_eq!(t.segments, 50, "a new drag holds a new inner end");
     }
 
     /// Alt adjusts the segment count in whole winds while keeping it within 2 to 1000.
@@ -712,7 +712,7 @@ mod tests {
         let start = Point::new(0.0, 0.0);
         t.hold_spiral_end(start, Point::new(100.0, 0.0), alt);
         t.hold_spiral_end(start, Point::new(200.0, 0.0), alt);
-        assert_eq!(t.segments, 14);
+        assert_eq!(t.segments, 22);
         t.hold_spiral_end(start, Point::new(0.01, 0.0), alt);
         assert_eq!(t.segments, 2);
         t.hold_spiral_end(start, Point::new(1e150, 0.0), alt);

@@ -219,17 +219,18 @@ pub fn arc(a: Point, b: Point, slope: f64, closed: bool, _base_along_x: bool) ->
     PathData::single(SubPath::new(anchors, closed))
 }
 
-/// Logarithmic spiral approximating the reference app's Spiral tool (decay-based, `segments` quarter turns).
+/// Logarithmic spiral with decay per full wind (`segments` quarter turns).
 pub fn spiral(center: Point, radius: f64, decay_percent: f64, segments: u32, clockwise: bool) -> PathData {
     let decay = (decay_percent / 100.0).clamp(0.05, 0.9999);
+    let step_decay = decay.powf(0.25);
     let dir = if clockwise { 1.0 } else { -1.0 };
-    // The radius shrinks by `decay` each quarter turn: r(φ) = radius · e^(kφ) after turning φ.
-    let k = decay.ln() / (PI / 2.0);
+    // The radius shrinks by `decay` each full wind: r(φ) = radius · e^(kφ).
+    let k = decay.ln() / TAU;
     // Handle lengths per unit of the derivative below, at a segment's outer and inner end: √r
     // changes evenly with the curve's parameter along each quarter turn. Both are KAPPA when the
     // radius does not shrink, and the curve stays within 0.8% of the spiral's radius at 20% decay.
-    let outer = 2.0 * KAPPA * (decay.sqrt() - 1.0) / decay.ln();
-    let inner = outer / decay.sqrt();
+    let outer = 2.0 * KAPPA * (step_decay.sqrt() - 1.0) / step_decay.ln();
+    let inner = outer / step_decay.sqrt();
     let mut anchors = Vec::new();
     let mut r = radius;
     for i in 0..=segments {
@@ -241,7 +242,7 @@ pub fn spiral(center: Point, radius: f64, decay_percent: f64, segments: u32, clo
         let h_in = p - d * inner;
         let h_out = p + d * outer;
         anchors.push(Anchor { p, h_in: if i == 0 { p } else { h_in }, h_out: if i == segments { p } else { h_out }, kind: AnchorKind::Smooth });
-        r *= decay;
+        r *= step_decay;
     }
     // Illustrator spirals wind inward from the outer point; reverse so the path starts at the centre end.
     let mut sp = SubPath::new(anchors, false);
@@ -475,8 +476,17 @@ mod tests {
         assert!(!p.subpaths[0].closed);
     }
 
+    #[test]
+    fn spiral_decay_is_per_full_wind() {
+        let p = spiral(Point::ZERO, 100.0, 80.0, 8, true);
+        let radii: Vec<_> = p.subpaths[0].anchors.iter().map(|a| (a.p - Point::ZERO).hypot()).collect();
+        assert!((radii[8] - 100.0).abs() < 1e-9);
+        assert!((radii[4] - 80.0).abs() < 1e-9);
+        assert!((radii[0] - 64.0).abs() < 1e-9);
+    }
+
     /// #3437: every segment stays on the spiral through its anchors, whose radius shrinks by
-    /// `decay` each quarter turn, for strong and weak decay and both directions.
+    /// `decay` each full wind, for strong and weak decay and both directions.
     #[test]
     fn spiral_segments_follow_the_spiral() {
         let center = Point::new(40.0, -25.0);
@@ -484,7 +494,7 @@ mod tests {
             for clockwise in [true, false] {
                 let p = spiral(center, 100.0, decay, 8, clockwise);
                 let anchors = &p.subpaths[0].anchors;
-                let k = (decay / 100.0_f64).ln() / (PI / 2.0);
+                let k = (decay / 100.0_f64).ln() / TAU;
                 let mut worst = 0.0_f64;
                 for pair in anchors.windows(2) {
                     let c = kurbo::CubicBez::new(pair[0].p, pair[0].h_out, pair[1].h_in, pair[1].p);
