@@ -2561,6 +2561,96 @@ fn the_default_glyph_chosen_in_overflowing_vertical_type_is_kept() {
     assert_eq!(held, [g('！')], "the default glyph is kept as the choice");
 }
 
+/// A vowel sign drawn before its consonant (Devanagari Ka with the vowel sign I) is in the
+/// consonant's cluster, drawn first: with `salt`, the glyph reported for the consonant is the one
+/// the feature draws, not the vowel sign's, and the default glyph chosen for it is drawn.
+#[test]
+fn the_glyph_of_a_consonant_after_its_vowel_sign_is_reported() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": MATRA_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    let gids = |s: &Session| vectorcraft_text::layout(db, &obj(s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect::<Vec<_>>();
+    assert_eq!(gids(&s), [(g('i'), 0, 6), (g('b'), 0, 6)], "the vowel sign is drawn first, in the cluster of Ka as salt draws it");
+
+    let query = s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(g('b')), "the glyph salt draws for Ka");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": g('a')})).unwrap();
+    assert_eq!(r["gid"], json!(g('a')));
+    assert!(gids(&s).iter().any(|&(gl, byte, _)| (gl, byte) == (g('a'), 0)), "Ka draws its default glyph: {:?}", gids(&s));
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('a')));
+}
+
+/// A character that overflows its area is shaped with its grapheme: the nukta after Ka makes the
+/// font's `nukt` ligature, which `salt` does not change, so `gid: null` reports the ligature as it
+/// does for the laid-out text.
+#[test]
+fn the_glyph_of_an_overflowing_character_is_shaped_with_its_grapheme() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93C}";
+    let point = json!({"x": 100, "y": 100, "text": text, "size": 20, "font": MATRA_FAMILY});
+    let id = NodeId(s.execute("text.create", &point).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('N'), 0, 6)], "Ka and the nukta make the ligature");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('N')));
+
+    let area = json!({"x": 0, "y": 300, "text": text, "size": 20, "font": MATRA_FAMILY, "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('N')), "the overflowing Ka is shaped with its nukta");
+}
+
+/// A grapheme whose characters have different styles is shaped in those styles when it overflows:
+/// a nukta of another size does not make the `nukt` ligature with Ka, so `gid: null` reports the
+/// glyph `salt` draws for Ka, as it does for the laid-out text.
+#[test]
+fn an_overflowing_grapheme_keeps_the_styles_of_its_characters() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93C}";
+    let styled = |s: &mut Session, area: Option<Value>| {
+        let mut spec = json!({"x": 0, "y": 300, "text": text, "size": 20, "font": MATRA_FAMILY});
+        if let Some(area) = area {
+            spec["area"] = area;
+        }
+        let id = NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap());
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 3, "end": text.len(), "size": 30})).unwrap();
+        id
+    };
+    let open = styled(&mut s, None);
+    let lay = vectorcraft_text::layout(db, &obj(&s, open));
+    assert_eq!(lay.glyphs.iter().find(|gl| gl.byte == 0).map(|gl| gl.gid), Some(g('b')), "the nukta of another size makes no ligature");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": open.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')));
+
+    let boxed = styled(&mut s, Some(json!({"width": 200, "height": 4})));
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the overflowing Ka is shaped apart from the nukta of another size");
+}
+
 #[test]
 fn glyph_alternates_query_reports_the_fallback_glyph_that_is_drawn() {
     use vectorcraft_text::test_fonts::{alternates_family, alternates_font};

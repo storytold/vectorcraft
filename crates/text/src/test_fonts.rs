@@ -423,6 +423,57 @@ pub fn half_form_font(half: bool) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`matra_font`].
+pub const MATRA_FAMILY: &str = "Matratest Sans";
+
+/// A test-only cmap over bundled Source Sans 3: Devanagari Ka uses a, the vowel sign I (drawn
+/// before its consonant) uses i and the nukta uses the period. The `GSUB` table's `dev2` script has
+/// a `nukt` ligature of Ka and the nukta into N, and a `salt` single substitution of Ka by b.
+/// Family [`MATRA_FAMILY`]. `None` when it can't be built.
+pub fn matra_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+    use write_fonts::tables::gsub::{
+        Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SingleSubstFormat2, SubstitutionLookup, SubstitutionLookupList,
+    };
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mapping = [('क', 'a'), ('\u{093F}', 'i'), ('\u{093C}', '.')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let family = MATRA_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "Matratest Sans Regular"), (5, "Version 1.000"), (6, "MatratestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let ka = gid('a')?;
+    let ligature = LigatureSet::new(vec![Ligature::new(gid('N')?, vec![gid('.')?])]);
+    let nukt = LigatureSubstFormat1::new(CoverageFormat1::new(vec![ka]).into(), vec![ligature]);
+    let salt = SingleSubstFormat2::new(CoverageFormat1::new(vec![ka]).into(), vec![gid('b')?]);
+    // Features sorted by tag, as OpenType requires: `nukt`, then `salt`.
+    let features = FeatureList::new(vec![
+        FeatureRecord::new(Tag::new(b"nukt"), Feature::new(None, vec![0])),
+        FeatureRecord::new(Tag::new(b"salt"), Feature::new(None, vec![1])),
+    ]);
+    let lookups = SubstitutionLookupList::new(vec![
+        SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![nukt])),
+        SubstitutionLookup::Single(Lookup::new(Default::default(), vec![salt.into()])),
+    ]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"dev2"), Script::new(Some(LangSys::new(vec![0, 1])), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`lam_alef_font`] whose lam-alef ligature is in `feature`.
 pub fn lam_alef_family(feature: &[u8; 4]) -> &'static str {
     match feature {
