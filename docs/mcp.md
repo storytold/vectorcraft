@@ -1209,7 +1209,8 @@ in `shape.flare`; `decay` and `segments` in `shape.spiral`; `rows` and `columns`
 and `radial` in `shape.polarGrid`; `size` and the `width`, `height` and `fitMinPercent` of `area` in `text.create`;
 `size` and `fitMinPercent` in `text.createInPath`; `start`, `end`, `size`, `tracking`,
 `baselineShift`, `hScale`, `vScale`, `rotation` and `strokeWidth` in `text.setRangeStyle`; `start` and `end` in
-`text.editRange` and `text.getRange`; `at` in `text.startList`; `start`, `hScale`, `vScale` and `rotation` in `text.touchType`; `by`, `start` and
+`text.editRange` and `text.getRange`; `at` in `text.startList`; `start`, `hScale`, `vScale` and `rotation` in `text.touchType`; `start` in
+`text.glyphAlternates` and `text.setGlyphAlternate`; `by`, `start` and
 `end` in `type.step`; `by` in `type.size.increase` and `type.size.decrease`; `size` in `type.ruby`; `width`, `height`
 and `fitMinPercent` in `text.areaOptions`; `x` and `y` in `symbol.place`; `radius`, `density` and `scale` in
 `symbol.spray`; `radius` and `intensity` in `symbol.adjust`; `to` in `swatch.move`; `weight` and `opacity` in
@@ -5597,6 +5598,30 @@ it, as with any style change to one character (`text.setRangeStyle`). The type s
 
 ```json
 {"name":"run_command","arguments":{"command":"text.touchType","params":{"id":7,"start":1,"dx":10,"dy":4}}}
+```
+
+## Alternate glyphs
+
+The Glyphs panel's Show › Alternates for Current Selection lists the alternate glyphs of the character selected with
+the Type tool (a range's first character, else the one before the caret), and a double-click on one draws that character
+with it. `text.glyphAlternates {id, start}` lists them for the character at byte `start`: `{char, font, style, default,
+chosen, alternates: [{gid, feature}]}`, where `default` is the glyph the font's character map gives, `chosen` the glyph
+drawn now, and `alternates` the glyphs the font's `GSUB` single and alternate substitutions put in place of the default
+glyph: `aalt` first, then `salt`, `ss01` to `ss20`, `swsh`, `cv01` to `cv99`, `hist`, `jalt`, `nalt`, `ornm` and
+`titl`, in lookup order within each, each glyph once. The default glyph is listed only when `aalt` lists it. Ligatures
+and contextual substitutions are not listed. `text.setGlyphAlternate {id, start, gid}` draws the character with glyph
+`gid`, one of those alternates, as one undo step; the default glyph or `gid: null` puts the default glyph back. The text
+keeps the character and its other attributes, and characters typed next to it take their default glyphs. The choice is
+saved with the character's style as `glyphAlternate: {ch, gid, font, version}`, the face's PostScript name and version
+string: set in another font or version, or with the font missing, the character takes its default glyph. Both commands
+refuse a character whose font is not available, and `text.setGlyphAlternate` refuses a glyph that is not one of the
+character's alternates and a glyph that the character's style does not draw (All Caps, Small Caps or another numeral
+system). Choosing the glyph a character already draws is not an edit. Character styles do not take `glyphAlternate`:
+`charStyle.new`, `charStyle.edit` and `charStyle.setAttrs` refuse it.
+
+```json
+{"name":"run_command","arguments":{"command":"text.glyphAlternates","params":{"id":7,"start":2}}}
+{"name":"run_command","arguments":{"command":"text.setGlyphAlternate","params":{"id":7,"start":2,"gid":1043}}}
 ```
 
 ## New type in a Japanese interface

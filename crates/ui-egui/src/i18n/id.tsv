@@ -1481,6 +1481,11 @@ digits	Malayalam	Malayalam
 	Save Transparency Flattener Preset…	Simpan preset flattener transparansi…
 	Basic Latin	Latin dasar
 	Currency & Symbols	Mata uang & simbol
+	Alternates for Current Selection	Alternatif untuk Pilihan Saat Ini
+	Select a character with the Type tool to see its alternates.	Pilih karakter dengan alat teks untuk melihat alternatifnya.
+	The selected character's font is not available.	Font karakter yang dipilih tidak tersedia.
+	No alternates for the selected character.	Tidak ada alternatif untuk karakter yang dipilih.
+	Double-click to replace	Klik ganda untuk mengganti
 	Double-click to insert	Klik ganda untuk menyisipkan
 	Entire Font	Seluruh font
 	glyph {id}	glif {id}

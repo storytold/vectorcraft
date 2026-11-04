@@ -841,6 +841,11 @@ font-technology	Variable	Променливи
 	Double-click to edit the characters' paint	Двойно щракване за редактиране на оцветяването на знаците
 	Click to edit	Щракнете за редактиране
 	Double-click to edit	Двойно щракване за редактиране
+	Alternates for Current Selection	Алтернативи за текущата селекция
+	Select a character with the Type tool to see its alternates.	Изберете знак с инструмента „Текст“, за да видите алтернативите му.
+	The selected character's font is not available.	Шрифтът на избрания знак не е наличен.
+	No alternates for the selected character.	Няма алтернативи за избрания знак.
+	Double-click to replace	Двойно щракване за замяна
 	Double-click to insert	Двойно щракване за вмъкване
 	Double-click to rename	Двойно щракване за преименуване
 	Double-click to target the contents	Двойно щракване за насочване към съдържанието

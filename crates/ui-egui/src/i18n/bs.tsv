@@ -1547,6 +1547,11 @@ digits	Malayalam	Malajalam
 	Save Transparency Flattener Preset…	Sačuvaj predložak spljoštavanja prozirnosti…
 	Basic Latin	Osnovna latinica
 	Currency & Symbols	Valuta i simboli
+	Alternates for Current Selection	Alternative za trenutni odabir
+	Select a character with the Type tool to see its alternates.	Odaberite znak alatom za tekst da vidite njegove alternative.
+	The selected character's font is not available.	Font odabranog znaka nije dostupan.
+	No alternates for the selected character.	Nema alternativa za odabrani znak.
+	Double-click to replace	Dvostruki klik za zamjenu
 	Double-click to insert	Dvostruki klik za umetanje
 	Entire Font	Cijeli font
 	glyph {id}	glif {id}

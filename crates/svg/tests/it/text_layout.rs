@@ -176,6 +176,24 @@ fn digits_are_written_as_drawn() {
     assert!(!text.contains("page 4") && !text.contains("page ٥"), "{svg}");
 }
 
+/// A character drawn with a chosen glyph is written as outlines: a reader's `<text>` would draw the
+/// default glyph.
+#[test]
+fn a_chosen_glyph_is_written_as_outlines() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).unwrap());
+    let [u1, ..] = unencoded_glyphs().unwrap();
+    let face = db.face(alternates_family(true), "Regular").unwrap();
+    let plain = CharStyle { font_family: alternates_family(true).into(), ..style(12.0) };
+    let chosen = CharStyle { glyph_alternate: Some(face.choice('a', u1)), ..plain.clone() };
+    let svg = export(&area_doc(vec![run("xay", plain.clone())], 280.0, Justify::Left), &ExportOptions::default());
+    assert!(svg.contains("<text"), "without a choice the text stays live: {svg}");
+    let d = area_doc(vec![run("x", plain.clone()), run("a", chosen), run("y", plain)], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(!svg.contains("<text") && svg.contains("<path"), "{svg}");
+}
+
 /// A run whose font size measures the cap height is written at the em size it is drawn at: 14 pt
 /// measuring a 0.7 em cap height is `font-size="20"`, after a 12 pt run measuring the em box,
 /// which takes the `<text>` element's 12.

@@ -112,6 +112,7 @@ pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
 pub use text::FontHeightReference;
+pub use text::GlyphChoice;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
     JustificationOptions, Justify, Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign, RubyPosition,

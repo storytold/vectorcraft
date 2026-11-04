@@ -835,6 +835,11 @@ font-technology	Variable	Değişken
 	Double-click to edit the characters' paint	Karakterlerin boyasını düzenlemek için çift tıklayın
 	Click to edit	Düzenlemek için tıklayın
 	Double-click to edit	Düzenlemek için çift tıklayın
+	Alternates for Current Selection	Geçerli Seçim için Alternatifler
+	Select a character with the Type tool to see its alternates.	Alternatiflerini görmek için Yazım aracıyla bir karakter seçin.
+	The selected character's font is not available.	Seçili karakterin yazı tipi kullanılamıyor.
+	No alternates for the selected character.	Seçili karakter için alternatif yok.
+	Double-click to replace	Değiştirmek için çift tıklayın
 	Double-click to insert	Eklemek için çift tıklayın
 	Double-click to rename	Yeniden adlandırmak için çift tıklayın
 	Double-click to target the contents	İçeriği hedeflemek için çift tıklayın
