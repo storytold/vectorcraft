@@ -189,9 +189,8 @@ pub struct TypeTool {
     snap: DrawSnap,
     /// The press landed in the edited text: dragging selects.
     selecting: bool,
-    /// The caret and anchor from before a press in type, kept until its release; a dropped press
-    /// puts them back.
-    before_press: Option<(usize, usize)>,
+    /// This saves the edit target, caret, and anchor until the press ends.
+    before_press: Option<BeforePress>,
     /// Click counting for double/triple click (position of the last click, count).
     clicks: (Option<Point>, u8),
     /// Styled copy of the last copied range (pasting the same plain text keeps its styles).
@@ -209,6 +208,13 @@ pub struct TypeTool {
     /// The state at the start of each `command.batch` still running, innermost last.
     batches: Vec<HistoryState>,
     cache: Mutex<Option<CachedLayout>>,
+}
+
+struct BeforePress {
+    editing: Option<NodeId>,
+    fresh: Option<NodeId>,
+    caret: usize,
+    anchor: usize,
 }
 
 impl TypeTool {

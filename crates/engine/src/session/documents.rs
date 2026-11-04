@@ -93,6 +93,7 @@ impl Session {
             plane_widget_press: false,
             pointer_held: false,
             press_options: None,
+            press_type_selection: None,
             press_point: None,
             ruler_guide: None,
             port_marks: Default::default(),
@@ -142,6 +143,7 @@ impl Session {
         if self.active.is_none() {
             return;
         }
+        self.press_type_selection = None;
         let view = self.last_view;
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
