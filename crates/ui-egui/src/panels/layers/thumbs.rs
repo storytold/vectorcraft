@@ -1,3 +1,4 @@
+use vectorcraft_doc::{NodeKind, TextKind};
 use vectorcraft_geom::PathData;
 
 use super::{Arc, Color32, Document, HashMap, Node, NodeId, Settle, ThumbWorker, Ui, VectorcraftApp, Weak, vec2};
@@ -90,10 +91,20 @@ pub(crate) fn thumb_options() -> vectorcraft_render::RenderOptions {
 }
 
 /// Has `n` at most `nodes` objects inside it, and at most `anchors` anchors in its paths and the
-/// paths inside it (counting stops at either limit)?
+/// paths inside it, the frames of area type and the paths of type on a path included (counting
+/// stops at either limit)?
 fn small_node(n: &Node, nodes: usize, anchors: usize) -> bool {
+    fn own_anchors(n: &Node) -> usize {
+        match &n.kind {
+            NodeKind::Text(t) => match &t.kind {
+                TextKind::Area { frame: p } | TextKind::OnPath { path: p, .. } => p.anchor_count(),
+                TextKind::Point => 0,
+            },
+            _ => n.path_data().map_or(0, PathData::anchor_count),
+        }
+    }
     fn count(n: &Node, nodes: &mut usize, anchors: &mut usize) -> bool {
-        let Some(left) = anchors.checked_sub(n.path_data().map_or(0, PathData::anchor_count)) else { return false };
+        let Some(left) = anchors.checked_sub(own_anchors(n)) else { return false };
         *anchors = left;
         for c in n.children().into_iter().flatten() {
             if *nodes == 0 {
@@ -274,15 +285,36 @@ pub(super) fn thumb(ui: &Ui, n: &Node, r: egui::Rect) {
 #[cfg(test)]
 mod tests {
     use vectorcraft_color::{Color, Paint};
-    use vectorcraft_doc::{Appearance, LayerColor};
+    use vectorcraft_doc::{Appearance, CharStyle, LayerColor, NodeKind, TextKind, TextObject};
     use vectorcraft_geom::{Point, SubPath};
 
     use super::*;
 
+    /// An open zigzag of `anchors` anchors.
+    fn line(anchors: usize) -> PathData {
+        let pts: Vec<Point> = (0..anchors).map(|i| Point::new(i as f64 * 0.01, (i % 2) as f64 * 50.0)).collect();
+        PathData::single(SubPath::polyline(&pts, false))
+    }
+
     /// An open stroked path `id` of `anchors` anchors.
     fn path(id: u64, anchors: usize) -> Node {
-        let pts: Vec<Point> = (0..anchors).map(|i| Point::new(i as f64 * 0.01, (i % 2) as f64 * 50.0)).collect();
-        Node::path(NodeId(id), PathData::single(SubPath::polyline(&pts, false)), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0))
+        Node::path(NodeId(id), line(anchors), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0))
+    }
+
+    /// Area type `id` whose frame has `anchors` anchors.
+    fn area_type(id: u64, anchors: usize) -> Node {
+        typed(id, TextKind::Area { frame: line(anchors) })
+    }
+
+    /// Type on a path `id` whose path has `anchors` anchors.
+    fn path_type(id: u64, anchors: usize) -> Node {
+        typed(id, TextKind::OnPath { path: line(anchors), start: 0.0, end: None })
+    }
+
+    fn typed(id: u64, kind: TextKind) -> Node {
+        let mut t = TextObject::point(Point::ZERO, "Type", CharStyle::default());
+        t.kind = kind;
+        Node::new(NodeId(id), NodeKind::Text(Box::new(t)))
     }
 
     fn rect(id: u64) -> Node {
@@ -306,6 +338,12 @@ mod tests {
         assert!(!small(&Node::group(NodeId(1), vec![Arc::new(rect(4)), Arc::new(inner)])), "a group holding a long path");
         let halves = Node::group(NodeId(1), vec![Arc::new(path(2, LIGHT_THUMB_ANCHORS / 2)), Arc::new(path(3, LIGHT_THUMB_ANCHORS / 2 + 1))]);
         assert!(!small(&halves), "paths whose anchors together pass the limit");
+        assert!(small(&area_type(1, LIGHT_THUMB_ANCHORS)), "area type whose frame has as many anchors as the limit");
+        assert!(!small(&area_type(1, LIGHT_THUMB_ANCHORS + 1)), "area type with a long frame");
+        assert!(small(&path_type(1, LIGHT_THUMB_ANCHORS)), "type on a path of as many anchors as the limit");
+        assert!(!small(&path_type(1, LIGHT_THUMB_ANCHORS + 1)), "type on a long path");
+        let both = Node::group(NodeId(1), vec![Arc::new(path(2, LIGHT_THUMB_ANCHORS / 2)), Arc::new(area_type(3, LIGHT_THUMB_ANCHORS / 2 + 1))]);
+        assert!(!small(&both), "a path and an area frame whose anchors together pass the limit");
     }
 
     #[test]
@@ -321,6 +359,14 @@ mod tests {
         assert_eq!(painted(&rect(1)), none + 1, "a small path is painted");
         assert_eq!(painted(&path(1, LIGHT_THUMB_ANCHORS)), none + 1, "a path of as many anchors as the limit");
         assert_eq!(painted(&path(1, LIGHT_THUMB_ANCHORS + 1)), none, "a long path is not");
+        // Type is not painted, so each holds a small path beside it: the group is painted only
+        // while the type's frame or path keeps the anchors in all within the limit.
+        let left = LIGHT_THUMB_ANCHORS - rect(2).path_data().map_or(0, PathData::anchor_count);
+        let beside = |typ: Node| Node::group(NodeId(1), vec![Arc::new(rect(2)), Arc::new(typ)]);
+        assert_eq!(painted(&beside(area_type(3, left))), none + 1, "area type whose frame keeps the group at the limit");
+        assert_eq!(painted(&beside(area_type(3, left + 1))), none, "area type with a long frame");
+        assert_eq!(painted(&beside(path_type(3, left))), none + 1, "type on a path that keeps the group at the limit");
+        assert_eq!(painted(&beside(path_type(3, left + 1))), none, "type on a long path");
     }
 
     /// A document with `n` on its layer, and `n` as the layer holds it.
