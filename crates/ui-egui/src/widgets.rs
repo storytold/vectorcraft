@@ -460,7 +460,8 @@ mod decimal_point_tests {
             let got = mm(text).unwrap_or(f64::NAN);
             assert!((got - want).abs() < 1e-9, "{text} is a decimal: {got}");
         }
-        assert_eq!(share_of(&decimal_point("12,5%"), 200.0), Some(25.0));
+        assert_eq!(share_of("12,5%", 200.0), Some(25.0));
+        assert_eq!(share_of("1,000%", 200.0), None, "1,000% reads as thousands: refused, not 1%");
     }
 }
 

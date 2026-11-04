@@ -3771,6 +3771,7 @@ font-technology	Variable	ცვლადი
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	დამხმარე ხაზებიდან შექმნა: დამხმარე ხაზები {MAX_PIECES}-ზე მეტ ნაჭერს ქმნის
 @msg	Create from Selection: the selection has no area	მონიშნულიდან შექმნა: მონიშნულს ფართობი არ აქვს
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	მონაცემთა აღდგენას ასლების შესანახი ადგილი არ აქვს: მიუთითეთ პარამეტრები → ფაილების დამუშავება → მონაცემთა აღდგენა → საქაღალდე (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	მონაცემთა აღდგენა ვერ ინახავს ასლებს აქ: {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	პირდაპირი მონიშვნით მონიშნეთ საყრდენი წერტილები, სადაც გაიჭრება (არა ღია ტრაექტორიების ბოლო წერტილები)
 @msg	Divide Objects Below: select a path	ქვედა ობიექტების დაყოფა: მონიშნეთ ტრაექტორია
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია

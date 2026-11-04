@@ -116,7 +116,7 @@ fn unit_field(
     let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds_unit);
     let commit = commit && buf != shown;
     if commit {
-        match read(&buf).or_else(|| if share_of_value { share_of(&decimal_point(&buf), value?) } else { None }) {
+        match read(&buf).or_else(|| if share_of_value { share_of(&buf, value?) } else { None }) {
             Some(v) => {
                 let clamped = within(v, &bounds);
                 let formatted = unit.format(clamped);
@@ -152,9 +152,11 @@ fn unit_field(
 }
 
 /// A percentage typed alone (`50%`, `150 %`, `100/3%`) as that share of `value`; `None` for any
-/// other text. `Unit::parse` reads a bare percentage as nothing, having no value to take it of.
+/// other text. `Unit::parse` reads a bare percentage as nothing, having no value to take it of. A
+/// decimal comma is read ([`decimal_point`]) after the `%` is dropped, so `12,5%` is 12.5% and
+/// `1,000%` is refused as thousands rather than read as 1%.
 pub(super) fn share_of(text: &str, value: f64) -> Option<f64> {
-    let percent = vectorcraft_doc::parse_number(text.trim().strip_suffix('%')?)?;
+    let percent = vectorcraft_doc::parse_number(&decimal_point(text.trim().strip_suffix('%')?))?;
     Some(value * percent / 100.0)
 }
 

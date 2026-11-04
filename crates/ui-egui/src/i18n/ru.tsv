@@ -4021,6 +4021,7 @@ axis	Both	Оба
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Создание из направляющих: направляющие образуют более {MAX_PIECES} фрагментов
 @msg	Create from Selection: the selection has no area	Создание из выделения: у выделения нет области
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Восстановлению данных негде хранить копии: задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	Восстановление данных не может хранить копии в {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	выделите прямым выделением опорные точки для разреза (не конечные точки открытых контуров)
 @msg	Divide Objects Below: select a path	Разделение объектов ниже: выделите контур
 @msg	Divide Objects Below: select exactly one path	Разделение объектов ниже: выделите ровно один контур
