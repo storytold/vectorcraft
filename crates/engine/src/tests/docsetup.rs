@@ -217,6 +217,16 @@ fn a_typed_closing_double_quote_opens_where_a_quote_opens() {
     // More than one character is pasted text, not a typed quote.
     let id = type_at(&mut s, 50.0, 300.0, &["”a”"]);
     assert_eq!(text(&s, id).plain_text(), "”a”");
+    // An IME commit of a lone `”` that will open is not verbatim (it is rewritten); from the Glyphs
+    // panel it would be inserted as it is.
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 50.0, 312.0), v).unwrap();
+    }
+    assert!(!s.tool_typed_text_is_verbatim("”", v));
+    assert!(s.tool_text_is_verbatim("”", v));
+    s.tool_key(ToolKey::Escape, Default::default(), v).unwrap();
     // A `”` inserted from the Glyphs panel or pasted alone stays as inserted.
     let id = enter_at(&mut s, 50.0, 325.0, &["”", "a"], false);
     assert_eq!(text(&s, id).plain_text(), "”a");

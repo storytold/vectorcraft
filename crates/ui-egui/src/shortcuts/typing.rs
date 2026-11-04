@@ -251,7 +251,7 @@ fn apply_type_event(
             let composing = app.session.tool_composing();
             let verbatim = app.session.tool_ime_session_matches(view)
                 && match app.ime_marked.as_deref() {
-                    Some(m) => app.session.tool_text_is_verbatim(m, view),
+                    Some(m) => app.session.tool_typed_text_is_verbatim(m, view),
                     None => true,
                 };
             keep_marked_text(app);
@@ -274,7 +274,7 @@ fn apply_type_event(
             let before = crate::ime::stamp(&mut app.session, view);
             // A document edit since the composition means this commit starts a fresh typing
             // session: that reset is application-side, so it cannot earn `InputMethod`.
-            let verbatim = app.session.tool_ime_session_matches(view) && app.session.tool_text_is_verbatim(&t, view);
+            let verbatim = app.session.tool_ime_session_matches(view) && app.session.tool_typed_text_is_verbatim(&t, view);
             let r = app.session.tool_typed_text(&t, view);
             if r.is_ok() {
                 if verbatim {

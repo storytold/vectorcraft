@@ -592,6 +592,16 @@ impl Session {
         self.with_tool_cx(view, |t, cx| t.text_input_is_verbatim(cx, text))
     }
 
+    /// [`Session::tool_text_is_verbatim`] for text typed on the keyboard, as
+    /// [`Session::tool_typed_text`] would insert it: a lone typed `”` that Typographer's Quotes
+    /// turns into an opening quote is not verbatim.
+    pub fn tool_typed_text_is_verbatim(&mut self, text: &str, view: ViewInfo) -> bool {
+        self.keyboard_text = true;
+        let v = self.tool_text_is_verbatim(text, view);
+        self.keyboard_text = false;
+        v
+    }
+
     /// Does the active tool's open typing session still match the document? An IME commit after
     /// an external edit starts a fresh session (an application-side reset), so its receipt must
     /// not be accepted as an unchanged IME insertion.
