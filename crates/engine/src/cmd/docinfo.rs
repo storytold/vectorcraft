@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, strokes with no width, guides and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
             has_doc,
             info
         ),
@@ -275,6 +275,46 @@ fn painted_runs(n: &Node) -> Option<(&vectorcraft_doc::TextObject, BTreeSet<usiz
     Some((t, painted))
 }
 
+/// The patterns `n`'s own fills and strokes paint, each once. A hidden fill or stroke and a stroke
+/// with no width paint nothing, and neither does any fill or stroke of a guide (drawn in the guide
+/// color), of a compound path's member (`members`: the compound path's own fills and strokes paint
+/// it) or of type whose layout draws nothing (`painted_runs`). An image's fills and strokes paint
+/// only where an effect gives them a shape.
+fn own_patterns<'a>(
+    n: &'a Node,
+    members: &HashSet<*const Node>,
+    painted_runs: Option<&(&vectorcraft_doc::TextObject, BTreeSet<usize>)>,
+) -> Vec<&'a str> {
+    if matches!(n.kind, NodeKind::Path { guide: true, .. })
+        || members.contains(&std::ptr::from_ref(n))
+        || painted_runs.is_some_and(|(_, r)| r.is_empty())
+    {
+        return vec![];
+    }
+    // The patterns an image's shaped fills and strokes paint (their effects can transform the
+    // pattern, so they are matched by name).
+    let shaped: Option<Vec<String>> = matches!(n.kind, NodeKind::Image(_)).then(|| {
+        vectorcraft_render::effects::image_paint(n)
+            .into_iter()
+            .filter_map(|(_, _, item)| match item.paint() {
+                Paint::Pattern { pattern, .. } => Some(pattern.clone()),
+                _ => None,
+            })
+            .collect()
+    });
+    let mut out: Vec<&str> = vec![];
+    for item in &n.appearance.items {
+        let Paint::Pattern { pattern, .. } = item.paint() else { continue };
+        let paints = item.visible()
+            && !matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0)
+            && shaped.as_ref().is_none_or(|s| s.contains(pattern));
+        if paints && !out.contains(&pattern.as_str()) {
+            out.push(pattern);
+        }
+    }
+    out
+}
+
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.info";
     let category = str_param(p, "category");
@@ -314,6 +354,13 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // The objects the walk has visited: a selection can hold a group and objects inside it, and each object counts once.
     // The set holds each object's address, so two objects that share an id (as a damaged file can hold) count as two.
     let mut seen: HashSet<*const Node> = HashSet::new();
+    // The members of the document's compound paths: the compound path's own fills and strokes paint them.
+    let mut members: HashSet<*const Node> = HashSet::new();
+    d.walk(|n| {
+        if let NodeKind::Compound { children, .. } = &n.kind {
+            members.extend(children.iter().map(|c| std::ptr::from_ref(&**c)));
+        }
+    });
     for r in roots {
         r.walk(&mut |n| {
             if !seen.insert(std::ptr::from_ref(n)) {
@@ -366,27 +413,15 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             // The patterns this object's fills and strokes use, each once.
             let mut used_patterns: Vec<&str> = vec![];
             let painted_runs = painted_runs(n);
+            for pattern in own_patterns(n, &members, painted_runs.as_ref()) {
+                patterns.insert(pattern.to_string());
+                used_patterns.push(pattern);
+            }
             for item in &n.appearance.items {
-                let paint = match item {
-                    vectorcraft_doc::AppearanceItem::Fill(f) => &f.paint,
-                    vectorcraft_doc::AppearanceItem::Stroke(s) => &s.paint,
-                };
+                let paint = item.paint();
                 // Objects counts an object with a pattern when Pattern Objects lists it, below.
                 if let Paint::Gradient(_) = paint {
                     kinds.insert("gradients");
-                }
-                // A hidden fill or stroke, a stroke with no width, any paint on a guide (which draws
-                // in the guide color and does not print) and any paint on type that draws nothing
-                // paints nothing.
-                let paints = item.visible()
-                    && !matches!(item, vectorcraft_doc::AppearanceItem::Stroke(s) if s.width <= 0.0)
-                    && !matches!(n.kind, NodeKind::Path { guide: true, .. })
-                    && painted_runs.as_ref().is_none_or(|(_, runs)| !runs.is_empty());
-                if paints && let Paint::Pattern { pattern, .. } = paint {
-                    patterns.insert(pattern.clone());
-                    if !used_patterns.contains(&pattern.as_str()) {
-                        used_patterns.push(pattern);
-                    }
                 }
                 if let Paint::Solid { swatch: Some(name), .. } = paint
                     && d.swatch(name).is_some_and(|s| s.spot)
@@ -735,6 +770,25 @@ mod tests {
         s.execute("paint.setFill", &json!({"ids": [guide], "swatch": "Dots"})).unwrap();
         s.execute("select.set", &json!({"ids": [guide]})).unwrap();
         s.execute("view.guides.make", &json!({})).unwrap();
+        // Nor does a compound path's member's own pattern fill: the compound path's own fill paints it.
+        let (m1, m2) = (square(&mut s, 320.0), square(&mut s, 340.0));
+        s.execute("select.set", &json!({"ids": [m1, m2]})).unwrap();
+        let compound = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [compound], "color": "#000000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [compound], "none": true})).unwrap();
+        let node = |s: &Session, id: &Value| s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().clone();
+        let (member, paint) = (node(&s, &compound).children().unwrap()[0].id, node(&s, &a).appearance);
+        // Nor does an image's pattern fill without an effect that gives it a shape.
+        let pic = square(&mut s, 360.0);
+        s.execute("select.set", &json!({"ids": [pic]})).unwrap();
+        s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+        let image = s.doc().unwrap().selection.objects[0];
+        s.edit("own paint", |d, _| {
+            d.node_mut(member).unwrap().appearance = paint.clone();
+            d.node_mut(image).unwrap().appearance = paint;
+            Ok(())
+        })
+        .unwrap();
         // Underlined spaces draw a bar in the pattern, so that type object is listed.
         let bar = s.execute("text.create", &json!({"x": 0, "y": 340, "text": "  "})).unwrap()["id"].clone();
         s.execute("paint.setFill", &json!({"ids": [bar], "swatch": "Dots"})).unwrap();
@@ -764,7 +818,7 @@ mod tests {
         assert_eq!(i["patternNames"], json!(["Dots"]));
         // Objects counts the objects that Pattern Objects lists.
         assert_eq!(i["objects"]["patterns"].as_u64(), Some(5), "{}", i["objects"]);
-        s.execute("select.set", &json!({"ids": [d, e, empty, blank, guide]})).unwrap();
+        s.execute("select.set", &json!({"ids": [d, e, empty, blank, guide, compound, image.0]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
         assert!(i["objects"]["patterns"].is_null() && i["patternObjects"] == json!([]), "{}", i["objects"]);
         let i = s.execute("document.info", &json!({"category": "patterns"})).unwrap();
