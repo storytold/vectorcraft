@@ -518,16 +518,23 @@ impl<'a> Reader<'a> {
     }
 
     /// A plug-in object (`section`: what follows `%AI8_BeginPluginObject`): the brush manager's
-    /// order or a brush ([`brush`]); other objects are left alone.
+    /// order or a brush ([`brush`]); other objects are left alone. A brush without a name is counted
+    /// as not read.
     fn plugin_object(&mut self, section: &[u8]) {
         let Some((kind, name, params)) = brush::plugin_strings(section) else { return };
         if kind == brush::MANAGER {
-            self.brush_objects = true;
-            self.brush_order = brush::parse_brush_manager(&params);
+            if name.is_some() {
+                self.brush_objects = true;
+                self.brush_order = brush::parse_brush_manager(&params);
+            }
             return;
         }
         let Some(tool) = brush::tool(&kind) else { return };
         self.brush_objects = true;
+        let Some(name) = name else {
+            self.brushes_unread += 1;
+            return;
+        };
         if self.brush_drafts.len() >= brush::MAX_BRUSHES {
             self.brushes_unread += 1;
             return;
