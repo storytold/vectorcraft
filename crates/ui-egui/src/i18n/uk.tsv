@@ -1668,6 +1668,10 @@ file-filter	Templates	Шаблони
 	Join Tool	Інструмент «З’єднання»
 	Justification…	Вирівнювання за шириною…
 	Justify all lines	Вирівняти всі рядки за шириною
+	Align Top	Вирівняти по верху
+	Align Center	Вирівняти по середині
+	Align Bottom	Вирівняти по низу
+	Justify Vertically	Вирівняти по вертикалі за висотою
 	Justify with last line aligned center	Вирівняти за шириною, останній рядок — по центру
 	Justify with last line aligned left	Вирівняти за шириною, останній рядок — ліворуч
 	Justify with last line aligned right	Вирівняти за шириною, останній рядок — праворуч

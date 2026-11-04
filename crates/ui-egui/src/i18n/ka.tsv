@@ -836,6 +836,10 @@ lighting	Light	სინათლე
 	Home	საწყისი ეკრანი
 	Import Keyboard Shortcuts…	კლავიატურის მალსახმობების იმპორტირება…
 	Justify all lines	ყველა სტრიქონის ორმხრივი სწორება
+	Align Top	ზემოთ სწორება
+	Align Center	შუაში სწორება
+	Align Bottom	ქვემოთ სწორება
+	Justify Vertically	ვერტიკალური ორმხრივი სწორება
 	Justify with last line aligned left	ორმხრივი სწორება, ბოლო სტრიქონი მარცხნივ
 	Keyboard Shortcut Conflicts	კლავიატურის მალსახმობების კონფლიქტები
 	Keyboard Shortcut Set	კლავიატურის მალსახმობების ნაკრები

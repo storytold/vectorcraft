@@ -1603,6 +1603,10 @@ font-technology	Variable	Variabla
 	Join Tool	Sammanfogningsverktyg
 	Justification…	Justering…
 	Justify all lines	Marginaljustera alla rader
+	Align Top	Justera överkant
+	Align Center	Centrera vertikalt
+	Align Bottom	Justera nederkant
+	Justify Vertically	Marginaljustera vertikalt
 	Justify with last line aligned center	Marginaljustera med sista raden centrerad
 	Justify with last line aligned left	Marginaljustera med sista raden vänsterjusterad
 	Justify with last line aligned right	Marginaljustera med sista raden högerjusterad

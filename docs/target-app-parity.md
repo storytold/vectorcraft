@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Object › Expand turns symbol instances into their art; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (area type vertical alignment in the Properties and Control panels, #3759; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
@@ -1589,10 +1589,15 @@ While a corner widget is pressed or dragged with the Selection or Direct Selecti
 
 A double-click on a Repeat (Radial, Grid or Mirror) with the Selection tool enters isolation mode on it ([isolate objects](https://helpx.adobe.com/illustrator/desktop/manage-objects/select-objects/isolate-objects.html): a double-click with the Selection tool isolates an object; [repeat patterns overview](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/repeat-patterns-overview.html): every instance follows edits to the original object); there the source art is selected and edited as usual (a double-click on type in it switches to the Type tool on that text) and every copy follows, with the repeat's settings kept (#5054). Test: `tests::repeat_edit::a_double_click_on_a_repeat_isolates_it_to_edit_its_text`.
 
+## Area type: vertical alignment in the Properties and Control panels (2026-11-04)
+
+With area type selected, the Properties panel's Paragraph section and the Control panel show Align Top, Align Center, Align Bottom and Justify Vertically buttons, as the public documentation places them ([Align text](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/align-text.html)). They set the type's vertical alignment in its frame (`text.areaOptions {verticalAlign}`, as Area Type Options does) on every selected frame in one undo step, each frame keeping its other options; the shared alignment shows selected, none when the frames differ (#3759). As that page limits vertical alignment to area type without rows, columns or threads, the buttons are turned off while a selected frame has rows or columns or is threaded; Area Type Options and `text.areaOptions` still align each row/column cell (a VectorCraft extension, unchanged here). Tests: `panels::properties::tests::vertical_alignment_buttons_align_the_selected_area_type`.
+
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | Area type vertical alignment buttons in the Properties panel's Paragraph section and the Control panel, off for columns, rows and threaded frames (#3759); evidence added; scores unchanged. |
 | 2026-11-03 | minor | Enclosing Lasso is an add-on with no default shortcut or Basic toolbar slot. Scores and estimates remain unchanged. |
 | 2026-11-02 | minor | Wheel input over closed font-family fields changes selected text (#5253); public documentation and application choices distinguished; scores and estimates unchanged. |
 | 2026-11-03 | minor | Find Font's replacement-source chooser offers Document, Recent and System (#5217); scores and estimates unchanged. |

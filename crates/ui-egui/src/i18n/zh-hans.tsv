@@ -1599,6 +1599,10 @@ file-filter	Templates	模板
 	Join Tool	连接工具
 	Justification…	对齐设置…
 	Justify all lines	全部两端对齐
+	Align Top	顶对齐
+	Align Center	垂直居中对齐
+	Align Bottom	底对齐
+	Justify Vertically	垂直两端对齐
 	Justify with last line aligned center	两端对齐，末行居中
 	Justify with last line aligned left	两端对齐，末行左对齐
 	Justify with last line aligned right	两端对齐，末行右对齐

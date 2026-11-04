@@ -1955,6 +1955,10 @@ digits	Hindi	Hindi
 	Joins	Kiểu nối
 	Justification…	Căn đều…
 	Justify all lines	Căn đều tất cả dòng
+	Align Top	Căn trên
+	Align Center	Căn giữa theo chiều dọc
+	Align Bottom	Căn dưới
+	Justify Vertically	Căn đều theo chiều dọc
 	Justify with last line aligned center	Căn đều, dòng cuối giữa
 	Justify with last line aligned left	Căn đều, dòng cuối trái
 	Justify with last line aligned right	Căn đều, dòng cuối phải

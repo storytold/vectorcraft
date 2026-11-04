@@ -950,6 +950,10 @@ lighting	Light	Svjetlo
 	Home	Početna
 	Import Keyboard Shortcuts…	Uvezi prečice na tastaturi…
 	Justify all lines	Obostrano poravnaj sve redove
+	Align Top	Poravnaj gore
+	Align Center	Poravnaj u sredinu
+	Align Bottom	Poravnaj dolje
+	Justify Vertically	Obostrano poravnaj okomito
 	Justify with last line aligned left	Obostrano s posljednjim redom lijevo
 	Keyboard Shortcut Conflicts	Konflikti prečica na tastaturi
 	Keyboard Shortcut Set	Skup prečica na tastaturi

@@ -1597,6 +1597,10 @@ font-technology	Variable	Променливи
 	Join Tool	Инструмент „Свързване“
 	Justification…	Подравняване…
 	Justify all lines	Двустранно подравняване на всички редове
+	Align Top	Подравняване горе
+	Align Center	Подравняване в средата
+	Align Bottom	Подравняване долу
+	Justify Vertically	Двустранно вертикално подравняване
 	Justify with last line aligned center	Двустранно подравняване с центриран последен ред
 	Justify with last line aligned left	Двустранно подравняване с ляво подравнен последен ред
 	Justify with last line aligned right	Двустранно подравняване с дясно подравнен последен ред

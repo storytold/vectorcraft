@@ -3586,6 +3586,10 @@ file-filter	Templates	템플릿
 	Installed plug-in {}	플러그인 {}을(를) 설치했습니다
 	Internal CSS	내부 CSS
 	Justify all lines	모든 줄 양끝 맞춤
+	Align Top	위쪽 정렬
+	Align Center	세로 가운데 정렬
+	Align Bottom	아래쪽 정렬
+	Justify Vertically	세로 양끝 맞춤
 	Justify with last line aligned center	마지막 줄 가운데 정렬 양끝 맞춤
 	Justify with last line aligned left	마지막 줄 왼쪽 정렬 양끝 맞춤
 	Justify with last line aligned right	마지막 줄 오른쪽 정렬 양끝 맞춤

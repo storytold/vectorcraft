@@ -1642,6 +1642,10 @@ file-filter	Templates	Vorlagen
 	Join Tool	Zusammenfügen-Werkzeug
 	Justification…	Abstände…
 	Justify all lines	Blocksatz, alle Zeilen
+	Align Top	Oben ausrichten
+	Align Center	Mittig ausrichten
+	Align Bottom	Unten ausrichten
+	Justify Vertically	Vertikaler Blocksatz
 	Justify with last line aligned center	Blocksatz, letzte Zeile zentriert
 	Justify with last line aligned left	Blocksatz, letzte Zeile linksbündig
 	Justify with last line aligned right	Blocksatz, letzte Zeile rechtsbündig

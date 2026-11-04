@@ -1641,6 +1641,10 @@ font-technology	Variable	Variables
 	Join Tool	Outil Jonction
 	Justification…	Justification…
 	Justify all lines	Justifier toutes les lignes
+	Align Top	Aligner en haut
+	Align Center	Aligner au milieu
+	Align Bottom	Aligner en bas
+	Justify Vertically	Justifier verticalement
 	Justify with last line aligned center	Justifier, dernière ligne centrée
 	Justify with last line aligned left	Justifier, dernière ligne alignée à gauche
 	Justify with last line aligned right	Justifier, dernière ligne alignée à droite

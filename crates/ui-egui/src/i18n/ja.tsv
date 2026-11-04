@@ -3598,6 +3598,10 @@ file-filter	Templates	テンプレート
 	Installed plug-in {}	プラグイン {} をインストールしました
 	Internal CSS	内部 CSS
 	Justify all lines	両端揃え (最終行も均等配置)
+	Align Top	上揃え
+	Align Center	上下中央揃え
+	Align Bottom	下揃え
+	Justify Vertically	縦方向に均等配置
 	Justify with last line aligned center	両端揃え (最終行中央揃え)
 	Justify with last line aligned left	両端揃え (最終行左揃え)
 	Justify with last line aligned right	両端揃え (最終行右揃え)

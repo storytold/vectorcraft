@@ -1674,6 +1674,10 @@ file-filter	Templates	Modelli
 	Join Tool	Strumento Unisci
 	Justification…	Giustificazione…
 	Justify all lines	Giustifica tutte le righe
+	Align Top	Allinea in alto
+	Align Center	Allinea al centro verticalmente
+	Align Bottom	Allinea in basso
+	Justify Vertically	Giustifica verticalmente
 	Justify with last line aligned center	Giustifica con l'ultima riga centrata
 	Justify with last line aligned left	Giustifica con l'ultima riga allineata a sinistra
 	Justify with last line aligned right	Giustifica con l'ultima riga allineata a destra

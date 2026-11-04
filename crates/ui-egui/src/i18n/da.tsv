@@ -886,6 +886,10 @@ lighting	Light	Lys
 	Home	Home
 	Import Keyboard Shortcuts…	Importér tastaturgenveje…
 	Justify all lines	Justér alle linjer
+	Align Top	Justér mod toppen
+	Align Center	Justér lodret mod midten
+	Align Bottom	Justér mod bunden
+	Justify Vertically	Justér lodret
 	Justify with last line aligned left	Justér med sidste linje venstrejusteret
 	Keyboard Shortcut Conflicts	Konflikter mellem tastaturgenveje
 	Keyboard Shortcut Set	Tastaturgenvejssæt

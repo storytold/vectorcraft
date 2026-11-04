@@ -1561,6 +1561,10 @@ font-technology	Variable	Μεταβλητές
 	Join Tool	Ένωση (Join Tool)
 	Justification…	Πλήρης στοίχιση…
 	Justify all lines	Πλήρης στοίχιση όλων των γραμμών
+	Align Top	Στοίχιση επάνω
+	Align Center	Στοίχιση στη μέση
+	Align Bottom	Στοίχιση κάτω
+	Justify Vertically	Κατακόρυφη πλήρης στοίχιση
 	Justify with last line aligned center	Πλήρης στοίχιση με τελευταία γραμμή στο κέντρο
 	Justify with last line aligned left	Πλήρης στοίχιση με τελευταία γραμμή αριστερά
 	Justify with last line aligned right	Πλήρης στοίχιση με τελευταία γραμμή δεξιά

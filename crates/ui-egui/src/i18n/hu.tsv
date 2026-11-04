@@ -2074,6 +2074,10 @@ file-filter	Templates	Sablonok
 	Justification…	Sorkizárás…
 	Justify	Sorkizárt
 	Justify all lines	Sorkizárás minden sorra
+	Align Top	Igazítás felülre
+	Align Center	Igazítás függőlegesen középre
+	Align Bottom	Igazítás alulra
+	Justify Vertically	Függőleges sorkizárás
 	Justify with last line aligned center	Sorkizárás, utolsó sor középre
 	Justify with last line aligned left	Sorkizárás, utolsó sor balra
 	Justify with last line aligned right	Sorkizárás, utolsó sor jobbra

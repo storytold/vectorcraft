@@ -1638,6 +1638,10 @@ file-filter	Templates	範本
 	Join Tool	連接工具
 	Justification…	對齊設定…
 	Justify all lines	兩端對齊所有行
+	Align Top	靠上對齊
+	Align Center	垂直置中對齊
+	Align Bottom	靠下對齊
+	Justify Vertically	垂直齊行
 	Justify with last line aligned center	兩端對齊，最後一行置中
 	Justify with last line aligned left	兩端對齊，最後一行靠左
 	Justify with last line aligned right	兩端對齊，最後一行靠右

@@ -906,6 +906,10 @@ lighting	Light	Światło
 	Home	Strona startowa
 	Import Keyboard Shortcuts…	Importuj skróty klawiaturowe…
 	Justify all lines	Justuj wszystkie wiersze
+	Align Top	Wyrównaj do góry
+	Align Center	Wyrównaj pionowo do środka
+	Align Bottom	Wyrównaj do dołu
+	Justify Vertically	Justuj w pionie
 	Justify with last line aligned left	Justuj z ostatnim wierszem do lewej
 	Keyboard Shortcut Conflicts	Konflikty skrótów klawiaturowych
 	Keyboard Shortcut Set	Zestaw skrótów klawiaturowych
