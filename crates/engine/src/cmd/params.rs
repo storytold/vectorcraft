@@ -439,7 +439,6 @@ pub const UNCHECKED: &[&str] = &[
     "shape.flare",
     "shape.polarGrid",
     "shape.rectangularGrid",
-    "stroke.set",
     "stroke.setAdvanced",
     "swatch.edit",
     "swatch.library.load",

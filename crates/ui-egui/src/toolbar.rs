@@ -235,7 +235,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     let shown_id = if slot.contains(&active) {
                         active.to_string()
                     } else {
-                        app.ui.slot_tool.get(slot[0]).cloned().unwrap_or_else(|| slot[0].to_string())
+                        app.ui.slot_tool.get(slot[0]).filter(|id| slot.contains(&id.as_str())).cloned().unwrap_or_else(|| slot[0].to_string())
                     };
                     let Some(shown) = tool_info(&shown_id).or_else(|| tool_info(slot[0])) else { continue };
                     let is_active = slot.contains(&active);

@@ -38,6 +38,8 @@ pub(crate) use frames::text_frames;
 pub use read::{IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, palette, read, read_beside, variables};
 pub(crate) use read::{join_and, slot_frame, slot_of};
 
+pub(crate) use read::is_look_slot;
+
 #[cfg(test)]
 mod tests;
 

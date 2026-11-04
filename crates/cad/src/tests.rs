@@ -275,6 +275,197 @@ fn circles_and_circular_arcs_are_native_dxf_entities() {
     }
 }
 
+/// A cubic arc about `c` of radius `r` from `deg0` to `deg1` (degrees, y down), from the current
+/// point, which is the arc's start.
+fn arc_cubic(b: &mut vectorcraft_geom::BezPath, c: Point, r: f64, deg0: f64, deg1: f64) {
+    let (a0, a1) = (deg0.to_radians(), deg1.to_radians());
+    let k = 4.0 / 3.0 * ((a1 - a0) / 4.0).tan() * r;
+    let (p0, p3) = (Point::new(c.x + r * a0.cos(), c.y + r * a0.sin()), Point::new(c.x + r * a1.cos(), c.y + r * a1.sin()));
+    b.curve_to(Point::new(p0.x - k * a0.sin(), p0.y + k * a0.cos()), Point::new(p3.x + k * a1.sin(), p3.y - k * a1.cos()), p3);
+}
+
+/// A slot (two lines, two half circles) about y = 50, a D shape (a half circle closed by its
+/// diameter) and a rounded rectangle with 10 pt corners.
+fn lines_and_arcs() -> [PathData; 3] {
+    let mut slot = vectorcraft_geom::BezPath::new();
+    slot.move_to((60.0, 30.0));
+    slot.line_to((140.0, 30.0));
+    arc_cubic(&mut slot, Point::new(140.0, 50.0), 20.0, -90.0, 0.0);
+    arc_cubic(&mut slot, Point::new(140.0, 50.0), 20.0, 0.0, 90.0);
+    slot.line_to((60.0, 70.0));
+    arc_cubic(&mut slot, Point::new(60.0, 50.0), 20.0, 90.0, 180.0);
+    arc_cubic(&mut slot, Point::new(60.0, 50.0), 20.0, 180.0, 270.0);
+    slot.close_path();
+    let mut d = vectorcraft_geom::BezPath::new();
+    d.move_to((150.0, 20.0));
+    arc_cubic(&mut d, Point::new(150.0, 50.0), 30.0, -90.0, 0.0);
+    arc_cubic(&mut d, Point::new(150.0, 50.0), 30.0, 0.0, 90.0);
+    d.close_path();
+    [PathData::from_bezpath(&slot), PathData::from_bezpath(&d), shapes::rounded_rectangle(Rect::new(20.0, 20.0, 100.0, 80.0), 10.0)]
+}
+
+/// A polyline entity's vertices as (x, y, bulge): an LWPOLYLINE's, or those of the VERTEX
+/// entities that follow a POLYLINE at `e[i]`.
+fn vertices(e: &[Pairs], i: usize) -> Vec<(f64, f64, f64)> {
+    let mut out = vec![];
+    let mut read = |o: &Pairs| {
+        for (code, value) in o {
+            let v: f64 = value.trim().parse().unwrap_or(0.0);
+            match code {
+                10 => out.push((v, 0.0, 0.0)),
+                20 => out.last_mut().expect("x before y").1 = v,
+                42 => out.last_mut().expect("a vertex before its bulge").2 = v,
+                _ => {}
+            }
+        }
+    };
+    if kind(&e[i]) == "LWPOLYLINE" {
+        read(&e[i]);
+    } else {
+        e[i + 1..].iter().take_while(|o| kind(o) == "VERTEX").for_each(&mut read);
+    }
+    out
+}
+
+#[test]
+fn paths_of_lines_and_circular_arcs_are_polylines_with_bulges() {
+    let [slot, d_shape, rounded] = lines_and_arcs();
+    let d = doc_with(|d| {
+        let black = || Paint::solid(Color::BLACK);
+        let mut open = vectorcraft_geom::BezPath::new();
+        open.move_to((10.0, 90.0));
+        open.line_to((30.0, 90.0));
+        arc_cubic(&mut open, Point::new(30.0, 80.0), 10.0, 90.0, 0.0);
+        vec![
+            path(d, slot, Paint::None, black(), 1.0),
+            path(d, d_shape, Paint::None, black(), 1.0),
+            path(d, rounded, Paint::None, black(), 1.0),
+            path(d, PathData::from_bezpath(&open), Paint::None, black(), 1.0),
+        ]
+    });
+    let b = (std::f64::consts::PI / 8.0).tan();
+    for version in DxfVersion::ALL {
+        let out = export(&d, &DxfOptions { version, ..opts(&d) }).unwrap();
+        let e = entities(&out);
+        let polys: Vec<usize> = (0..e.len()).filter(|i| matches!(kind(&e[*i]), "LWPOLYLINE" | "POLYLINE")).collect();
+        let k = kinds(&out);
+        assert_eq!(polys.len(), 4, "{version:?}: {k:?}");
+        assert!(!k.iter().any(|k| matches!(k.as_str(), "SPLINE" | "ARC" | "CIRCLE")), "{version:?}: {k:?}");
+        let want = if version.lwpolyline() { "LWPOLYLINE" } else { "POLYLINE" };
+        assert!(polys.iter().all(|i| kind(&e[*i]) == want), "{version:?}: {k:?}");
+        let flags: Vec<i64> = polys.iter().map(|i| get(&e[*i], 70).unwrap().parse::<i64>().unwrap() & 1).collect();
+        assert_eq!(flags, [1, 1, 1, 0], "{version:?}: closed, closed, closed, open");
+        // The slot's half circles turn clockwise with y up: a bulge of -1 after each long side.
+        assert_eq!(vertices(&e, polys[0]), [(60.0, 70.0, 0.0), (140.0, 70.0, -1.0), (140.0, 30.0, 0.0), (60.0, 30.0, -1.0)], "{version:?}");
+        // The D shape: the half circle, then the straight closing edge.
+        assert_eq!(vertices(&e, polys[1]), [(150.0, 80.0, -1.0), (150.0, 20.0, 0.0)], "{version:?}");
+        // The rounded rectangle: eight anchors, a quarter circle (bulge tan 22.5°) at each corner.
+        let r = vertices(&e, polys[2]);
+        assert_eq!(r.len(), 8, "{version:?}: {r:?}");
+        let bulges: Vec<f64> = r.iter().map(|v| v.2).filter(|b| *b != 0.0).collect();
+        assert!(close_to(&bulges, &[-b; 4], 1e-6), "{version:?}: {r:?}");
+        // An open line then a quarter circle turning counterclockwise with y up.
+        let o = vertices(&e, polys[3]);
+        assert!(
+            close_to(&o.iter().flat_map(|v| [v.0, v.1, v.2]).collect::<Vec<_>>(), &[10.0, 10.0, 0.0, 30.0, 10.0, b, 40.0, 20.0, 0.0], 1e-6),
+            "{version:?}: {o:?}"
+        );
+    }
+}
+
+#[test]
+fn polylines_with_bulges_read_back_as_the_same_outline() {
+    for (i, shape) in lines_and_arcs().into_iter().enumerate() {
+        let original = shape.to_bezpath();
+        let d = doc_with(|d| vec![path(d, shape, Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+        let out = export(&d, &opts(&d)).unwrap();
+        assert_eq!(kinds(&out), ["LWPOLYLINE"], "shape {i}");
+        let o = ImportOptions { unit: Some(Unit::Points), scale: Some(1.0), center: false, ..ImportOptions::default() };
+        let back = import(&out.bytes, &o).unwrap().document;
+        let mut paths = vec![];
+        back.walk(|n| {
+            if let NodeKind::Path { path, .. } = &n.kind {
+                paths.push(path.to_bezpath());
+            }
+        });
+        assert_eq!(paths.len(), 1, "shape {i}");
+        assert!(paths[0].elements().last().is_some_and(|el| matches!(el, kurbo::PathEl::ClosePath)), "shape {i} reads back closed");
+        let (a, b) = (original.bounding_box(), paths[0].bounding_box());
+        assert!(close_to(&[a.width(), a.height()], &[b.width(), b.height()], 1e-2), "shape {i}: {a:?} against {b:?}");
+        // Every point read back lies on the original outline, once both are centered.
+        let shift = a.center() - b.center();
+        let outline: Vec<Point> = original.segments().flat_map(|s| (0..=64).map(move |t| s.eval(f64::from(t) / 64.0))).collect();
+        for seg in paths[0].segments() {
+            for t in 0..=16 {
+                let p = seg.eval(f64::from(t) / 16.0) + shift;
+                let near = outline
+                    .windows(2)
+                    .map(|w| {
+                        let (u, v) = (w[1] - w[0], p - w[0]);
+                        let s = if u.hypot2() > 0.0 { (v.dot(u) / u.hypot2()).clamp(0.0, 1.0) } else { 0.0 };
+                        (v - u * s).hypot()
+                    })
+                    .fold(f64::INFINITY, f64::min);
+                assert!(near < 1e-2, "shape {i}: {p:?} is {near} pt off the outline");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_path_with_a_curve_that_is_not_a_circular_arc_stays_a_spline() {
+    // The slot with one end drawn by a longer-handled curve.
+    let mut slot = vectorcraft_geom::BezPath::new();
+    slot.move_to((60.0, 30.0));
+    slot.line_to((140.0, 30.0));
+    slot.curve_to((165.0, 30.0), (165.0, 70.0), (140.0, 70.0));
+    slot.line_to((60.0, 70.0));
+    arc_cubic(&mut slot, Point::new(60.0, 50.0), 20.0, 90.0, 180.0);
+    arc_cubic(&mut slot, Point::new(60.0, 50.0), 20.0, 180.0, 270.0);
+    slot.close_path();
+    let d = doc_with(|d| {
+        vec![
+            path(d, PathData::from_bezpath(&slot), Paint::None, Paint::solid(Color::BLACK), 1.0),
+            path(d, shapes::ellipse(Rect::new(150.0, 20.0, 190.0, 60.0)), Paint::None, Paint::solid(Color::BLACK), 1.0),
+        ]
+    });
+    assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), ["SPLINE", "CIRCLE"]);
+}
+
+#[test]
+fn drawing_extents_reach_the_extreme_points_of_arcs() {
+    // An arc about (100, 50) of radius 40 from -60° to 30° passes x = 140 at 0°, between the points
+    // along it that recognition samples.
+    let arc = |closed: bool| {
+        let mut b = vectorcraft_geom::BezPath::new();
+        let start = Point::new(100.0 + 40.0 * 60f64.to_radians().cos(), 50.0 - 40.0 * 60f64.to_radians().sin());
+        b.move_to(start);
+        arc_cubic(&mut b, Point::new(100.0, 50.0), 40.0, -60.0, 30.0);
+        if closed {
+            b.close_path();
+        }
+        PathData::from_bezpath(&b)
+    };
+    for (closed, entity) in [(false, "ARC"), (true, "LWPOLYLINE")] {
+        let d = doc_with(|d| vec![path(d, arc(closed), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+        let out = export(&d, &opts(&d)).unwrap();
+        assert_eq!(kinds(&out), [entity]);
+        let x: f64 = header(&pairs(&out.bytes), "$EXTMAX").unwrap().trim().parse().unwrap();
+        assert!((x - 140.0).abs() < 1e-6, "{entity}: $EXTMAX x {x}");
+    }
+}
+
+#[test]
+fn a_shallow_curve_that_is_not_circular_is_not_an_arc() {
+    // 100 pt across and 1.5 pt deep: the circle through its ends and middle has a radius of about
+    // 834 pt, and the curve is 0.12 pt off it a quarter of the way along.
+    let mut b = vectorcraft_geom::BezPath::new();
+    b.move_to((0.0, 50.0));
+    b.curve_to((20.0, 48.0), (80.0, 48.0), (100.0, 50.0));
+    let d = doc_with(|d| vec![path(d, PathData::from_bezpath(&b), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+    assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), ["SPLINE"]);
+}
+
 /// The path `p` with `xf` applied.
 fn transformed(p: &PathData, xf: Affine) -> PathData {
     PathData::from_bezpath(&(xf * p.to_bezpath()))
@@ -391,11 +582,12 @@ fn closed_four_cubic_shapes_that_are_not_writable_ellipses_stay_splines() {
         vec![
             path(d, PathData::from_bezpath(&squircle), Paint::None, Paint::solid(Color::BLACK), 1.0),
             path(d, PathData::from_bezpath(&kurbo::BezPath::from_vec(els)), Paint::None, Paint::solid(Color::BLACK), 1.0),
-            // An ellipse thinner than the smallest ratio DXF readers take (5e-7 against 1e-6).
+            // An ellipse thinner than the smallest ratio DXF readers take (5e-7 against 1e-6). Its
+            // quarters fit shallow circular arcs within the tolerance, so it is a polyline with bulges.
             path(d, shapes::ellipse(Rect::new(0.0, 90.0, 200.0, 90.0001)), Paint::None, Paint::solid(Color::BLACK), 1.0),
         ]
     });
-    assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), ["SPLINE", "SPLINE", "SPLINE"]);
+    assert_eq!(kinds(&export(&d, &opts(&d)).unwrap()), ["SPLINE", "SPLINE", "LWPOLYLINE"]);
 }
 
 #[test]
@@ -462,8 +654,12 @@ fn closed_circular_arc_with_a_closing_chord_is_not_a_circle() {
         vec![path(d, PathData::from_bezpath(&arc), Paint::None, Paint::solid(Color::BLACK), 1.0)]
     });
 
+    // The three quarters turn counterclockwise with y up (bulge tan 67.5°), then the chord closes it.
     let modern = export(&d, &opts(&d)).unwrap();
-    assert_eq!(kinds(&modern), ["SPLINE"]);
+    assert_eq!(kinds(&modern), ["LWPOLYLINE"]);
+    let v = vertices(&entities(&modern), 0);
+    let flat: Vec<f64> = v.iter().flat_map(|v| [v.0, v.1, v.2]).collect();
+    assert!(close_to(&flat, &[80.0, 50.0, 67.5f64.to_radians().tan(), 50.0, 20.0, 0.0], 1e-6), "{v:?}");
     let r12 = export(&d, &DxfOptions { version: DxfVersion::R12, ..opts(&d) }).unwrap();
     assert!(kinds(&r12).iter().any(|k| k == "POLYLINE"));
     assert!(!kinds(&r12).iter().any(|k| k == "CIRCLE"));
@@ -497,9 +693,13 @@ fn a_closed_sliver_along_a_circle_is_not_a_circle() {
         vec![path(d, PathData::from_bezpath(&sliver), Paint::None, Paint::solid(Color::BLACK), 1.0)]
     });
 
+    // Two arcs, out along the circle and back: one polyline with a bulge each way.
     let modern = export(&d, &opts(&d)).unwrap();
     assert_ne!(kinds(&modern), ["CIRCLE"]);
-    assert_eq!(kinds(&modern), ["SPLINE"]);
+    assert_eq!(kinds(&modern), ["LWPOLYLINE"]);
+    let bulges: Vec<f64> = vertices(&entities(&modern), 0).iter().map(|v| v.2).collect();
+    let b = 10f64.to_radians().tan();
+    assert!(close_to(&bulges, &[-b, b], 1e-6) || close_to(&bulges, &[b, -b], 1e-6), "{bulges:?}");
 }
 
 #[test]

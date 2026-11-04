@@ -644,6 +644,11 @@
 	New Toolbar	Uusi työkalurivi
 	Show Toolbar	Näytä työkalurivi
 	List Toolbars	Luettele työkalurivit
+	Manage Toolbars…	Hallitse työkalurivejä…
+	Manage Toolbars	Hallitse työkalurivejä
+	Rename Toolbar	Nimeä työkalurivi uudelleen
+	Duplicate Toolbar	Monista työkalurivi
+	Delete Toolbar	Poista työkalurivi
 	Manage Workspaces…	Hallitse työtiloja…
 	Control	Ohjaus
 	Contextual Task Bar	Kontekstuaalinen tehtäväpalkki
@@ -1242,6 +1247,8 @@ lighting	Light	Valo
 	Hand	Käsi
 	Join Tool	Liitostyökalu
 	Lasso Tool	Lassotyökalu
+	Enclosing Lasso Tool	Sulkeva lassotyökalu
+	Enclosing Lasso	Sulkeva lasso
 	Lasso	Lasso
 	Line Cut Tool	Viivaleikkaustyökalu
 	Line Graph Tool	Viivakaaviotyökalu
@@ -1816,6 +1823,7 @@ digits	Malayalam	Malajalam
 	Left-to-Right Paragraph Direction	Kappaleen suunta vasemmalta oikealle
 	Line-end Punctuation Half Width	Rivinlopun välimerkit puolileveinä
 	Insert Kashidas	Lisää kashidat
+	Kashidas	Kashidat
 	Long	Pitkä
 	Stylistic	Tyylitelty
 	Mojikumi Set	Mojikumi-joukko
@@ -3593,6 +3601,7 @@ theme	Appearance	Ulkoasu
 	Type Object Selection by Path Only	Tekstiobjektin valinta vain polusta
 	UI Scaling	Käyttöliittymän skaalaus
 	Use Compression	Käytä pakkausta
+	Include Editing Data for Other Apps	Sisällytä muokkaustiedot muille sovelluksille
 	Use Japanese Crop Marks	Käytä japanilaisia rajausmerkkejä
 	Use Low Resolution Proxy for Linked EPS	Käytä matalan tarkkuuden välityskuvaa linkitetyille EPS-tiedostoille
 	Use Precise Cursors	Käytä tarkkoja kohdistimia
@@ -4215,7 +4224,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Save for Web: the image is empty	Tallenna verkkoon: kuva on tyhjä
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Tallenna kirjoittaa muotoa {_1}, ei {_2}: käytä muille muodoille komentoa document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Tallenna kirjoittaa muotoa {_1}, ei {_2}: kirjoita se komennolla file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 kirjoittaa vanhoja .ai-tiedostoja; .ait-malli on aina PDF-yhteensopiva
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 kirjoittaa vanhoja .ai-tiedostoja, ei .ait-malleja
 @msg	Saved recovery data for {title}	Tallennettiin palautustiedot: {title}
 @msg	Saved to User Defined: {_1}	Tallennettiin kohteeseen Käyttäjän määrittämä: {_1}
 @msg	Saved {path}	Tallennettiin {path}
@@ -6201,6 +6210,7 @@ breakText	Glyphs	Merkit
 	Gap 5	Väli 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ne tuotiin sivun piirroksena
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objektit, jotka piirtyivät eri tavoin kuin tiedoston oma sivu, tuotiin sivun piirroksena: {_1}
 
 @msg	You must choose a side pattern.	Valitse sivukuvio.
 @msg	invalid pattern tile choice	virheellinen kuviolaatan valinta

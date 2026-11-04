@@ -382,6 +382,16 @@ two-column flag, top-left corner, the groups torn off it). They are kept with th
 switching workspaces shows that workspace's toolbars, Reset Workspace keeps them, and New Workspace starts the new
 workspace with a copy of them.
 
+Manage Toolbars: Window › Toolbars › Manage Toolbars… (or Manage Toolbars… in the drawer's ☰ menu,
+`window.toolbar.manage`) lists these toolbars. A new name typed for the selected toolbar renames it at Enter, when
+the text box loses focus, or at OK (`window.toolbar.rename {name, to}`; the name must not be empty, longer than 200
+characters or another toolbar's, whatever the case). The + button copies the selected toolbar with its tools as
+"`name` Copy", shown a little below it and below earlier copies (`window.toolbar.duplicate {name}`), and with none
+selected it makes a blank toolbar called "Toolbar N" (`window.toolbar.duplicate {}`). The trash can deletes the
+selected toolbar and the groups torn off it (`window.toolbar.delete {name}`). Renaming or deleting a toolbar closes
+the drawer and a group's flyout open on it; a new name that changes only the case leaves them open. Each change is
+kept with the current workspace.
+
 The Contextual Task Bar: its handle (the grip at its left end) drags it anywhere on the canvas, which always holds
 it whole, also when the window shrinks. Unpinned, the bar keeps that offset as it follows the selection, until
 another document becomes active. Its More Options (…) menu has Hide Bar (`window.taskBar`); Pin Bar Position
