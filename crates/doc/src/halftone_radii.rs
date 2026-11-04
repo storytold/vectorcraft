@@ -1,4 +1,4 @@
-//! Color Halftone's Max Radius was a distance in points until documents of version 2; since then
+//! Color Halftone's Max Radius was a distance in points until documents of version 3; since then
 //! it is in pixels of the Document Raster Effects resolution, as public documentation gives it
 //! (#3260). [`Document::migrate_halftone_radii`] converts the radii of older documents, and
 //! [`Document::halftone_radii_to_points`] converts them back for a file saved for an older app.
@@ -11,7 +11,7 @@ use crate::limits::FORMAT_VERSION;
 use crate::{Appearance, Document, Effect, Node};
 
 /// The first document version whose Color Halftone radii are in pixels.
-const PIXEL_RADII_SINCE: u32 = 2;
+const PIXEL_RADII_SINCE: u32 = 3;
 const HALFTONE: &str = "pixelate.colorHalftone";
 const RADIUS: &str = "maxRadius";
 /// The radius (points) an older document's halftone without one drew with.
@@ -20,7 +20,7 @@ const OLD_DEFAULT: f64 = 8.0;
 const RANGE: std::ops::RangeInclusive<f64> = 4.0..=127.0;
 
 impl Document {
-    /// Saved before version 2: each Color Halftone's Max Radius in points becomes the pixels of
+    /// Saved before version 3: each Color Halftone's Max Radius in points becomes the pixels of
     /// the document's raster effects resolution that draw the same dots, within the 4 to 127 px
     /// the effect takes (a radius over 127 px, from a large radius at a high resolution, draws
     /// smaller dots than before). In the art, symbols, patterns, graph designs, opacity masks and
@@ -34,10 +34,10 @@ impl Document {
         self.each_halftone(&mut |e| rescale(e, k));
     }
 
-    /// For a file saved for an app before version 2 (every native file version before today's):
+    /// For a file saved for an app before version 3 (every native file version before today's):
     /// each Color Halftone's Max Radius in pixels becomes the points that draw the same dots,
     /// within the 4 to 127 pt that app takes (a radius under 4 pt, from a fine screen at a high
-    /// resolution, draws bigger dots there), and the document becomes version 1, so reopening the
+    /// resolution, draws bigger dots there), and the document becomes version 2, so reopening the
     /// file here converts them back.
     pub fn halftone_radii_to_points(&mut self) {
         if self.version < PIXEL_RADII_SINCE {
@@ -146,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    fn only_documents_before_version_2_are_converted_once() {
+    fn only_documents_before_version_3_are_converted_once() {
         let mut d = Document::new(100.0, 100.0);
         d.raster_effects_ppi = 300.0;
         let mut style = d.graphic_styles.first().cloned().unwrap();
@@ -175,7 +175,7 @@ mod tests {
         d.graphic_styles.push(style);
         let r = |d: &Document, i: usize| d.graphic_styles.last().map(|s| radius(&s.appearance.effects[i])).unwrap();
         d.halftone_radii_to_points();
-        assert_eq!(d.version, 1, "reopened here, it converts back");
+        assert_eq!(d.version, 2, "reopened here, it converts back");
         assert!((r(&d, 0) - 24.0).abs() < 1e-9, "100 px at 300 ppi is 24 pt: {}", r(&d, 0));
         assert_eq!(r(&d, 1), 4.0, "0.96 pt is under the 4 pt the older app takes");
         let points = d.clone();

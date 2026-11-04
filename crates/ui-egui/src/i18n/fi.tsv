@@ -644,6 +644,11 @@
 	New Toolbar	Uusi työkalurivi
 	Show Toolbar	Näytä työkalurivi
 	List Toolbars	Luettele työkalurivit
+	Manage Toolbars…	Hallitse työkalurivejä…
+	Manage Toolbars	Hallitse työkalurivejä
+	Rename Toolbar	Nimeä työkalurivi uudelleen
+	Duplicate Toolbar	Monista työkalurivi
+	Delete Toolbar	Poista työkalurivi
 	Manage Workspaces…	Hallitse työtiloja…
 	Control	Ohjaus
 	Contextual Task Bar	Kontekstuaalinen tehtäväpalkki
@@ -677,6 +682,8 @@
 	Update Changed Links	Päivitä muuttuneet linkit
 	Magic Wand	Taikasauva
 	Navigator	Navigaattori
+	Navigator Panel Options	Navigaattori-paneelin asetukset
+	Draw Dashed Lines as Solid Lines	Piirrä katkoviivat yhtenäisinä viivoina
 	Pattern Options	Kuvion asetukset
 	Properties	Ominaisuudet
 	Separations Preview	Erottelujen esikatselu
@@ -941,6 +948,10 @@ lighting	Light	Valo
 	Home	Aloitus
 	Import Keyboard Shortcuts…	Tuo pikanäppäimet…
 	Justify all lines	Tasaa kaikki rivit
+	Align Top	Tasaa ylös
+	Align Center	Tasaa pystysuunnassa keskelle
+	Align Bottom	Tasaa alas
+	Justify Vertically	Tasaa pystysuunnassa
 	Justify with last line aligned left	Tasaa, viimeinen rivi vasemmalle
 	Keyboard Shortcut Conflicts	Pikanäppäinristiriidat
 	Keyboard Shortcut Set	Pikanäppäinjoukko
@@ -1317,6 +1328,9 @@ lighting	Light	Valo
 	Zoom Tool	Zoomaustyökalu
 	Action {n}	Toiminto {n}
 	Begin Recording	Aloita tallennus
+	Exclude from playback	Jätä pois toistosta
+	Include in playback	Sisällytä toistoon
+	Include Action Steps	Sisällytä toiminnon vaiheet
 	Center on Artboard	Keskitä piirtoalustalle
 	Default Actions	Oletustoiminnot
 	▾ Default Actions	▾ Oletustoiminnot
@@ -1530,6 +1544,11 @@ digits	Malayalam	Malajalam
 	Save Transparency Flattener Preset…	Tallenna läpinäkyvyyden litistyksen esiasetus…
 	Basic Latin	Latinalainen perusmerkistö
 	Currency & Symbols	Valuutat ja symbolit
+	Alternates for Current Selection	Nykyisen valinnan vaihtoehdot
+	Select a character with the Type tool to see its alternates.	Näet merkin vaihtoehdot valitsemalla sen tekstityökalulla.
+	The selected character's font is not available.	Valitun merkin fontti ei ole saatavilla.
+	No alternates for the selected character.	Valitulla merkillä ei ole vaihtoehtoja.
+	Double-click to replace	Korvaa kaksoisnapsauttamalla
 	Double-click to insert	Lisää kaksoisnapsauttamalla
 	Entire Font	Koko fontti
 	glyph {id}	merkki {id}
@@ -2362,6 +2381,7 @@ digits	Malayalam	Malajalam
 	“{file}” is protected by a password.	”{file}” on suojattu salasanalla.
 	Dim Images to:	Himmennä kuvat:
 	Light Blue	Vaaleansininen
+	Light Red	Vaalea punainen
 	Layers Panel Options	Tasot-paneelin asetukset
 	Row Size:	Rivin koko:
 	Show Layers Only	Näytä vain tasot
@@ -2450,6 +2470,12 @@ digits	Malayalam	Malajalam
 	Save the document first?	Tallennetaanko asiakirja ensin?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} tiedosto kansiossa {folder} {note}. Näytetäänkö pakettikansio?|{n} tiedostoa kansiossa {folder} {note}. Näytetäänkö pakettikansio?
 @plural	{n} linked file not found|{n} linked files not found	{n} linkitettyä tiedostoa ei löytynyt|{n} linkitettyä tiedostoa ei löytynyt
+@msgplural	{n} linked file not found|{n} linked files not found	{n} linkitettyä tiedostoa ei löytynyt|{n} linkitettyä tiedostoa ei löytynyt
+@msg	fonts not copied: {fonts}	fontteja ei kopioitu: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} linkitettyä tiedostoa ei löytynyt)|({n} linkitettyä tiedostoa ei löytynyt)
+@msg	(fonts not copied: {fonts})	(fontteja ei kopioitu: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	fontteja ei kopioitu: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Sisäiset esiasetukset ovat vain luku -tilassa: Uusi… luo muokattavan kopion.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} piirtoalustalla vastaa {real} {unit} näkymässä.
@@ -3596,6 +3622,7 @@ theme	Appearance	Ulkoasu
 	Type Object Selection by Path Only	Tekstiobjektin valinta vain polusta
 	UI Scaling	Käyttöliittymän skaalaus
 	Use Compression	Käytä pakkausta
+	Include Editing Data for Other Apps	Sisällytä muokkaustiedot muille sovelluksille
 	Use Japanese Crop Marks	Käytä japanilaisia rajausmerkkejä
 	Use Low Resolution Proxy for Linked EPS	Käytä matalan tarkkuuden välityskuvaa linkitetyille EPS-tiedostoille
 	Use Precise Cursors	Käytä tarkkoja kohdistimia
@@ -4218,7 +4245,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Save for Web: the image is empty	Tallenna verkkoon: kuva on tyhjä
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Tallenna kirjoittaa muotoa {_1}, ei {_2}: käytä muille muodoille komentoa document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Tallenna kirjoittaa muotoa {_1}, ei {_2}: kirjoita se komennolla file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 kirjoittaa vanhoja .ai-tiedostoja; .ait-malli on aina PDF-yhteensopiva
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 kirjoittaa vanhoja .ai-tiedostoja, ei .ait-malleja
 @msg	Saved recovery data for {title}	Tallennettiin palautustiedot: {title}
 @msg	Saved to User Defined: {_1}	Tallennettiin kohteeseen Käyttäjän määrittämä: {_1}
 @msg	Saved {path}	Tallennettiin {path}
@@ -4847,6 +4874,7 @@ imageTrace	Outline	Ääriviiva
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	siinä on {_1}, jota VectorCraft ei vielä lue siitä
 @msg	its objects are nested too deeply	sen objektit ovat liian syvällä sisäkkäin
 @msg	its section ending with `%{end}` doesn't end	sen `%{end}`-merkintään päättyvä osio ei pääty
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	siveltimet, joita VectorCraft ei vielä osaa lukea, jätettiin pois Siveltimet-paneelista ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objektit, joilla on useita täyttöjä tai viivoja, tehosteita tai siveltimiä, tuotiin piirretyn näköisinä ({_1}): niiden ulkoasua ei voi vielä muokata
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	liukuväriä “{name}” ei ole määritetty tiedostossa: sen tilalla on tasaväri
 @msg	an image VectorCraft can't read was left out	kuva, jota VectorCraft ei voi lukea, jätettiin pois
@@ -5502,6 +5530,10 @@ mark-style	Japanese	Japanilainen
 @msg	the Simplify slider is not open	Yksinkertaista-liukusäädin ei ole auki
 @msg	the Smooth slider is not open	Tasoita-liukusäädin ei ole auki
 @msg	the action has no steps	toiminnossa ei ole vaiheita
+@msg	the action has no included steps	toiminnossa ei ole sisällytettyjä vaiheita
+@msg	no such action step	toiminnon vaihetta ei ole
+@msg	included must be true or false	included on oltava true tai false
+@msg	others must be true or false	others on oltava true tai false
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	tiedoston tasoja ei luettu ({_1}): se tuodaan sivunaan yhdelle tasolle
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	tiedoston tasoja ei luettu sen muokkaustiedoista ({_1}): ne tulevat sen PDF-osasta
 @msg	the screen color sampler is already open	värin poiminta näytöltä on jo auki
@@ -5534,6 +5566,10 @@ mark-style	Japanese	Japanilainen
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
 @msg	an action is already recording	toimintoa nauhoitetaan jo
+@msg	an action is already playing	toimintoa toistetaan jo
+@msg	the action stopped playing: its document is no longer active	toiminnon toisto pysähtyi: sen asiakirja ei ole enää aktiivinen
+@msg	speed must be accelerated, step or pause	speed on oltava accelerated, step tai pause
+@msg	seconds must be a whole number from 1 to 60	seconds on oltava kokonaisluku 1:stä 60:een
 @msg	no such function key	toimintonäppäintä ei ole
 @msg	no such color	väriä ei ole
 @msg	{_1} cannot be used on Windows	{_1} ei ole käytettävissä Windowsissa
@@ -5619,6 +5655,7 @@ mark-style	Japanese	Japanilainen
 	Effect Gallery	Tehostegalleria
 	Filters	Suodattimet
 	Select artwork to apply effects	Valitse kuvitus, johon tehosteet lisätään
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	kaikkia tiedoston muuttujasidoksia ei luettu (ohitettuja sidoksia: {_1}): niitä objekteja ei ole sidottu muuttujiinsa
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	tiedoston muuttujakirjasto luettiin vain osittain (ohitettuja kohtia: {_1}): Muuttujat-paneeli näyttää loput
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	tiedoston muuttujakirjastoa ei voitu lukea: Muuttujat-paneeli ei näytä sitä
 @msg	a variable of unknown kind can't be bound to objects	tuntemattoman tyyppistä muuttujaa ei voi sitoa objekteihin
@@ -5774,6 +5811,11 @@ axis	Y Axis	Y-akseli
 	Set Options	Sarjan asetukset
 	Action Options…	Toiminnon asetukset…
 	Action Options	Toiminnon asetukset
+	Playback Options…	Toistoasetukset…
+	Playback Options	Toistoasetukset
+	Accelerated	Nopeutettu
+	Step by Step	Vaihe kerrallaan
+	Pause For	Tauko
 	Rename Action	Nimeä toiminto uudelleen
 	New Action…	Uusi toiminto…
 	New Action	Uusi toiminto
@@ -6054,6 +6096,7 @@ anchor	Points:	Pisteet:
 	Character Color	Merkin väri
 	OpenType Features	OpenType-ominaisuudet
 	Stylistic Sets	Tyylisarjat
+	Set {n}	Sarja {n}
 @msg	features lists at most {max} tags	features sisältää enintään {max} tunnistetta
 @msg	unknown OpenType feature `{t}`	tuntematon OpenType-ominaisuus `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} on oltava luku, joka on yli 0 ja enintään {max}
@@ -6204,6 +6247,7 @@ breakText	Glyphs	Merkit
 	Gap 5	Väli 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ne tuotiin sivun piirroksena
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objektit, jotka piirtyivät eri tavoin kuin tiedoston oma sivu, tuotiin sivun piirroksena: {_1}
 
 @msg	You must choose a side pattern.	Valitse sivukuvio.
 @msg	invalid pattern tile choice	virheellinen kuviolaatan valinta
@@ -6265,6 +6309,11 @@ breakText	Glyphs	Merkit
 	Export All Open Documents as SVG	Vie kaikki avoimet asiakirjat SVG-muodossa
 @msgplural	Exported {n} document|Exported {n} documents	Vietiin {n} asiakirja|Vietiin {n} asiakirjaa
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Vietiin {n} asiakirja; {title} jäi kirjoittamatta: {error}|Vietiin {n} asiakirjaa; {title} jäi kirjoittamatta: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Jäljitä kansio erässä
+@msgplural	Traced {n} image|Traced {n} images	Jäljitettiin {n} kuva|Jäljitettiin {n} kuvaa
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} kuvaa ei voitu jäljittää|{n} kuvaa ei voitu jäljittää
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Jäljitettiin {n} kuva; jäljittämättä: {failed}|Jäljitettiin {n} kuvaa; jäljittämättä: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symbolin tyyppi:
 	Dynamic Symbol	Dynaaminen symboli
@@ -6316,3 +6365,13 @@ breakText	Glyphs	Merkit
 	Spike	Piikki
 	Skip Spaces	Ohita välilyönnit
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafiikka on liian suuri kopioitavaksi kuvana: muut sovellukset eivät saa siitä PNG-kuvaa
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Valitse piirtoalustojen mukaan
+	Select by Artboards…	Valitse piirtoalustojen mukaan…
+	Selection Tools	Valintatyökalut
+	Search artboards	Hae piirtoalustoja
+	Fully Inside	Kokonaan sisällä
+	Fully Outside	Kokonaan ulkona
+	No artboards match.	Mikään piirtoalusta ei vastaa hakua.
+	Chosen: {n} of {total}	Valittu: {n}/{total}

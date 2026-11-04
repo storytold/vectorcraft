@@ -23,6 +23,9 @@ mod nodes;
 mod paint;
 mod text;
 
+#[cfg(test)]
+pub(crate) use paint::{CROP_STROKES, crop_line};
+
 impl Renderer {
     pub fn new() -> Self {
         Self {
@@ -307,15 +310,20 @@ impl Renderer {
 
     /// Render node `n` of `doc` (its resources) into `w`×`h` transparent pixels through `view`.
     pub fn render_node(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine) -> Option<Rendered> {
+        self.render_node_with(doc, n, w, h, view, &RenderOptions::default())
+    }
+
+    /// [`Self::render_node`] with `opts` (e.g. [`RenderOptions::mark_undecoded_images`]).
+    pub fn render_node_with(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine, opts: &RenderOptions) -> Option<Rendered> {
         self.check_plugins();
         self.check_symbols(doc);
         let inv = view.inverse();
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
         let mut ctx = single_threaded_context(w, h);
-        let opts = RenderOptions::default();
+        ctx.set_aliasing_threshold(opts.anti_alias.threshold());
         let symbols = doc.symbol_boxes().quick();
-        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts: &opts, ink: Ink::Display, plates: None };
+        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, plates: None };
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
@@ -354,6 +362,7 @@ impl Renderer {
         let s = (w as f64 - 2.0).max(1.0) / b.width().max(b.height()).max(1e-6);
         let view = Affine::translate((w as f64 / 2.0, w as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
         let mut ctx = single_threaded_context(w, w);
+        ctx.set_aliasing_threshold(opts.anti_alias.threshold());
         if let Some(bg) = background {
             ctx.set_paint(peniko::Color::from_rgba8(bg[0], bg[1], bg[2], bg[3]));
             ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, w as f64));

@@ -99,6 +99,36 @@ fn rtl_manual_kerning_spaces_the_character_from_the_next_in_reading_order() {
 }
 
 #[test]
+fn rtl_manual_kerning_with_whole_point_widths_keeps_the_previous_character_in_place() {
+    // Reading order: alef (bytes 0..2), bet (2..4), gimel (4..6); bet carries the kerning, which
+    // is a fraction of a point.
+    for (system_layout, fractional_widths) in [(true, true), (false, false)] {
+        for value in [3.0, 4.0, 6.0, 7.0] {
+            let kerned = |value: f64| {
+                let mut t = TextObject::point(Point::ZERO, "אבג", CharStyle { size: 100.0, ..CharStyle::default() });
+                t.system_layout = system_layout;
+                t.fractional_widths = fractional_widths;
+                edit::style_range(&mut t.runs, 2, 4, |s| s.kerning = Some(value));
+                layout(db(), &t)
+            };
+            let ink = |lay: &TextLayout, byte: usize| {
+                let g = lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+                assert!(g.rtl && g.gid != 0, "byte {byte} is set right to left with a glyph of its own");
+                (g.xf * Point::ZERO).x
+            };
+            let (plain, spaced) = (kerned(0.0), kerned(value));
+            let gap = |lay: &TextLayout, right: usize, left: usize| ink(lay, right) - ink(lay, left);
+            assert!(
+                (gap(&spaced, 0, 2) - gap(&plain, 0, 2)).abs() < 1e-9,
+                "alef, before bet in reading order, keeps its place (kerning {value}, System Layout {system_layout})"
+            );
+            let wider = gap(&spaced, 2, 4) - gap(&plain, 2, 4);
+            assert!((wider - wider.round()).abs() < 1e-9, "bet moves from gimel by whole points: {wider} (kerning {value})");
+        }
+    }
+}
+
+#[test]
 fn rtl_manual_kerning_on_a_rotated_character_moves_it_along_the_baseline() {
     // Reading order: alef (bytes 0..2), bet (2..4), gimel (4..6); bet is turned 90 degrees and
     // carries the kerning.
@@ -172,6 +202,10 @@ fn optical_pair_after_separate_combining_mark_uses_base_outline() {
 
 #[test]
 fn optical_pair_after_rtl_separate_mark_uses_base_outline() {
+    if db().face("Noto Sans Arabic", "Regular").is_none_or(|f| f.family != "Noto Sans Arabic") {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
     let st = CharStyle { font_family: "Noto Sans Arabic".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
     let shaped = |text: &str, manual: bool| {
         let mut style = st.clone();

@@ -106,6 +106,12 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         description: "compress the PDF's content and the native document it carries (the PDF option compression.compressText)",
     },
     FormatOption {
+        name: "editingData",
+        ty: "boolean",
+        default: "true",
+        description: "also carry an editing copy of the artwork in the form other apps that open .ai files read: layers and sublayers, groups, compound paths, paths, fills and strokes, colors, swatches, artboards, the transparency of objects and layers, objects' opacity masks, and clipping groups and layers clipped by a path, with type, gradients, patterns, images, symbols, other clipping objects and live objects as plain filled and stroked paths (written only with every artboard, as Preserve Editing is)",
+    },
+    FormatOption {
         name: "aiVersion",
         ty: "string",
         default: "\"pdf\"",

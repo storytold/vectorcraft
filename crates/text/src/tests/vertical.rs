@@ -343,6 +343,41 @@ fn tracking_spaces_upright_marks_without_moving_them_off_the_centre_line() {
     assert!((step - 24.0).abs() < 1e-6, "one em plus 200/1000 em of tracking: {step}");
 }
 
+/// Baseline shift moves an upright glyph across the column, as it moves a letter lying on its
+/// side, at any Character Rotation, and leaves its neighbors where they are. The glyph turns about
+/// its shifted pen position (`xf * pivot`), and `xf * unturned` places the shifted glyph without
+/// its rotation.
+#[test]
+fn baseline_shift_moves_an_upright_glyph_across_the_column() {
+    let at = |byte: usize, rotation: f64, shift: f64| {
+        let mut t = vertical("§l§");
+        edit::style_range(&mut t.runs, byte, byte + "§l§"[byte..].chars().next().map_or(1, char::len_utf8), |s| {
+            s.rotation = rotation;
+            s.baseline_shift = shift;
+        });
+        layout(FontDb::global(), &t)
+    };
+    let centre = |l: &TextLayout, byte: usize| l.glyphs.iter().find(|g| g.byte == byte).map(|g| g.outline.bounding_box().center()).unwrap();
+    // The letter lying on its side moves across the column by the shift.
+    let across = centre(&at(2, 0.0, 10.0), 2) - centre(&at(2, 0.0, 0.0), 2);
+    assert!((across.x.abs() - 10.0).abs() < 1e-6 && across.y.abs() < 1e-6, "{across:?}");
+    for rotation in [0.0, 30.0, 90.0, -90.0] {
+        let (plain, shifted) = (at(3, rotation, 0.0), at(3, rotation, 10.0));
+        let moved = centre(&shifted, 3) - centre(&plain, 3);
+        assert!((moved - across).hypot() < 1e-6, "{rotation}°: {moved:?}, across {across:?}");
+        for byte in [0, 2] {
+            assert!((centre(&shifted, byte) - centre(&plain, byte)).hypot() < 1e-6, "{rotation}°: byte {byte} moved");
+        }
+        let (p, s) = (plain.glyphs.iter().find(|g| g.byte == 3).unwrap(), shifted.glyphs.iter().find(|g| g.byte == 3).unwrap());
+        let turn_at = s.xf * s.pivot - p.xf * p.pivot;
+        assert!((turn_at - across).hypot() < 1e-6, "{rotation}°: turns about a point moved by {turn_at:?}");
+        let unrotated = at(3, 0.0, 10.0);
+        let u = unrotated.glyphs.iter().find(|g| g.byte == 3).unwrap();
+        let (a, b) = ((s.xf * s.unturned).as_coeffs(), u.xf.as_coeffs());
+        assert!(a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-6), "{rotation}°: {a:?} vs {b:?}");
+    }
+}
+
 /// Character panel menu › Tate-chu-yoko: a marked run stands across one em of the column, including
 /// a number longer than three digits and Latin letters. Unmarked text keeps the automatic rule
 /// (two or three digits only). Horizontal type stores the mark and does not move the letters.

@@ -79,6 +79,24 @@ fn saved_scheme_accent_and_canvas_color_show_from_the_first_frame() {
     }
 }
 
+/// A Render Threads change made after the preferences were applied, and before the first UI pass
+/// applies them again, still restarts the canvas renderer.
+#[test]
+fn reapply_restarts_the_renderer_after_a_render_threads_change() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    apply_runtime(&mut app, &ctx);
+    app.canvas.worker_started = true;
+    // The automatic count as an explicit value: the process-wide count other tests read stays the same.
+    // `VECTORCRAFT_RENDER_THREADS` can give more than the 64 the preference accepts.
+    let threads = vectorcraft_render::default_threads().min(64);
+    app.run("prefs.set", json!({"key": "renderThreads", "value": threads})).unwrap();
+    reapply(&mut app, &ctx);
+    let restarted = !app.canvas.worker_started;
+    app.run("prefs.set", json!({"key": "renderThreads", "value": -1})).unwrap();
+    assert!(restarted, "the canvas renderer kept its old thread count");
+}
+
 fn app() -> VectorcraftApp {
     VectorcraftApp::new(Session::new(), Services::default())
 }

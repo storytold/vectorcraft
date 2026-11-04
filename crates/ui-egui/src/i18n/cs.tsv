@@ -653,6 +653,11 @@
 	New Toolbar	Nový panel nástrojů
 	Show Toolbar	Zobrazit panel nástrojů
 	List Toolbars	Seznam panelů nástrojů
+	Manage Toolbars…	Spravovat panely nástrojů…
+	Manage Toolbars	Spravovat panely nástrojů
+	Rename Toolbar	Přejmenovat panel nástrojů
+	Duplicate Toolbar	Duplikovat panel nástrojů
+	Delete Toolbar	Odstranit panel nástrojů
 	Manage Workspaces…	Spravovat pracovní prostory…
 	Control	Ovládací panel
 	Contextual Task Bar	Kontextový panel úloh
@@ -686,6 +691,8 @@
 	Update Changed Links	Aktualizovat změněná propojení
 	Magic Wand	Kouzelná hůlka
 	Navigator	Navigátor
+	Navigator Panel Options	Možnosti panelu Navigátor
+	Draw Dashed Lines as Solid Lines	Kreslit čárkované čáry jako plné
 	Pattern Options	Možnosti vzorku
 	Properties	Vlastnosti
 	Separations Preview	Náhled separací
@@ -962,6 +969,10 @@ lighting	Light	Světlo
 	Home	Domů
 	Import Keyboard Shortcuts…	Importovat klávesové zkratky…
 	Justify all lines	Do bloku včetně posledního řádku
+	Align Top	Zarovnat nahoru
+	Align Center	Zarovnat svisle na střed
+	Align Bottom	Zarovnat dolů
+	Justify Vertically	Zarovnat svisle do bloku
 	Justify with last line aligned left	Do bloku, poslední řádek vlevo
 	Keyboard Shortcut Conflicts	Konflikty klávesových zkratek
 	Keyboard Shortcut Set	Sada klávesových zkratek
@@ -1343,6 +1354,9 @@ lighting	Light	Světlo
 # Panels
 	Action {n}	Akce {n}
 	Begin Recording	Zahájit záznam
+	Exclude from playback	Vyloučit z přehrávání
+	Include in playback	Zahrnout do přehrávání
+	Include Action Steps	Zahrnout kroky akce
 	Center on Artboard	Vystředit na pracovní ploše
 	Default Actions	Výchozí akce
 	▾ Default Actions	▾ Výchozí akce
@@ -1557,6 +1571,11 @@ digits	Malayalam	Malajálamské
 	Save Transparency Flattener Preset…	Uložit přednastavení sloučení průhlednosti…
 	Basic Latin	Základní latinka
 	Currency & Symbols	Měny a symboly
+	Alternates for Current Selection	Alternativy pro aktuální výběr
+	Select a character with the Type tool to see its alternates.	Alternativy znaku uvidíte, když ho vyberete nástrojem Text.
+	The selected character's font is not available.	Písmo vybraného znaku není k dispozici.
+	No alternates for the selected character.	Vybraný znak nemá žádné alternativy.
+	Double-click to replace	Dvojklikem nahradíte
 	Double-click to insert	Dvojklikem vložíte
 	Entire Font	Celé písmo
 	glyph {id}	glyf {id}
@@ -2418,6 +2437,7 @@ digits	Malayalam	Malajálamské
 	“{file}” is protected by a password.	Soubor „{file}“ je chráněn heslem.
 	Dim Images to:	Ztlumit obrázky na:
 	Light Blue	Světle modrá
+	Light Red	Světle červená
 	Layers Panel Options	Možnosti panelu Vrstvy
 	Row Size:	Velikost řádků:
 	Show Layers Only	Zobrazit pouze vrstvy
@@ -2507,6 +2527,12 @@ digits	Malayalam	Malajálamské
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} soubor v {folder} {note}. Zobrazit složku balíčku?|{n} soubory v {folder} {note}. Zobrazit složku balíčku?|{n} souborů v {folder} {note}. Zobrazit složku balíčku?
 @plural	{n} linked file not found|{n} linked files not found	Nenalezen {n} propojený soubor|Nenalezeny {n} propojené soubory|Nenalezeno {n} propojených souborů
 	fonts not copied: {fonts}	nezkopírovaná písma: {fonts}
+@msgplural	{n} linked file not found|{n} linked files not found	Nenalezen {n} propojený soubor|Nenalezeny {n} propojené soubory|Nenalezeno {n} propojených souborů
+@msg	fonts not copied: {fonts}	nezkopírovaná písma: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Nenalezen {n} propojený soubor)|(Nenalezeny {n} propojené soubory)|(Nenalezeno {n} propojených souborů)
+@msg	(fonts not copied: {fonts})	(nezkopírovaná písma: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	Built-in presets are read-only: New… starts an editable copy.	Vestavěná přednastavení jsou jen pro čtení: Nový… vytvoří kopii, kterou lze upravit.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na pracovní ploše odpovídá {real} {unit} ve scéně.
 	Grid Color & Opacity	Barva a krytí mřížky
@@ -3672,6 +3698,7 @@ theme	Appearance	Motiv
 	Type Object Selection by Path Only	Výběr textového objektu pouze podle cesty
 	UI Scaling	Měřítko rozhraní
 	Use Compression	Použít kompresi
+	Include Editing Data for Other Apps	Zahrnout data pro úpravy v jiných aplikacích
 	Use Japanese Crop Marks	Použít japonské ořezové značky
 	Use Low Resolution Proxy for Linked EPS	Pro propojené EPS použít zástupce v nízkém rozlišení
 	Use Precise Cursors	Používat přesné kurzory
@@ -4304,7 +4331,7 @@ imageTrace	Outline	Obrys
 @msg	Save for Web: the image is empty	Uložit pro web: obraz je prázdný
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Uložení zapisuje {_1}, ne {_2}: pro jiné formáty použijte document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Uložení zapisuje {_1}, ne {_2}: k jeho zápisu použijte file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 zapisuje starší soubory .ai; šablona .ait je vždy kompatibilní s PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 zapisuje starší soubory .ai, ne šablony .ait
 @msg	Saved recovery data for {title}	Data pro obnovení uložena pro {title}
 @msg	Saved to User Defined: {_1}	Uloženo do uživatelských knihoven: {_1}
 @msg	Saved {path}	Uloženo: {path}
@@ -4945,6 +4972,7 @@ imageTrace	Outline	Obrys
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	obsahuje {_1}, což z něj VectorCraft zatím nečte
 @msg	its objects are nested too deeply	jeho objekty jsou vnořené příliš hluboko
 @msg	its section ending with `%{end}` doesn't end	jeho oddíl končící `%{end}` nemá konec
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	štětce, které VectorCraft zatím neumí načíst, byly vynechány z panelu Štětce ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekty s více výplněmi nebo tahy, efekty či štětci byly načteny jako vykreslený vzhled ({_1}): jejich vzhled zatím nelze upravovat
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	přechod „{name}“ není v souboru definován: zastupuje ho plná barva
 @msg	an image VectorCraft can't read was left out	obrázek, který VectorCraft neumí přečíst, byl vynechán
@@ -5545,6 +5573,10 @@ mark-style	Japanese	Japonské
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ze sady dat {name} se nic nepoužilo: žádný objekt není svázán s proměnnou, pro kterou má hodnotu
 @msg	no bound object reports a value (locked objects and embedded images report none)	žádný svázaný objekt nevrací hodnotu (zamčené objekty a vložené obrazy žádnou nevracejí)
 @msg	the action has no steps	akce nemá žádné kroky
+@msg	the action has no included steps	akce nemá žádné zahrnuté kroky
+@msg	no such action step	takový krok akce neexistuje
+@msg	included must be true or false	included musí být true nebo false
+@msg	others must be true or false	others musí být true nebo false
 
 # User Interface › Accent Color
 	Accent Color	Barva zvýraznění
@@ -5571,6 +5603,10 @@ mark-style	Japanese	Japonské
 	Movie Clip	Filmový klip
 @msg	name is empty	název je prázdný
 @msg	an action is already recording	akce se už zaznamenává
+@msg	an action is already playing	akce se už přehrává
+@msg	the action stopped playing: its document is no longer active	přehrávání akce se zastavilo: její dokument už není aktivní
+@msg	speed must be accelerated, step or pause	speed musí být accelerated, step nebo pause
+@msg	seconds must be a whole number from 1 to 60	seconds musí být celé číslo od 1 do 60
 @msg	no such function key	taková funkční klávesa neexistuje
 @msg	no such color	taková barva neexistuje
 @msg	{_1} cannot be used on Windows	Zkratku {_1} nelze ve Windows použít
@@ -5643,7 +5679,7 @@ mark-style	Japanese	Japonské
 	Word Spacing:	Mezery mezi slovy:
 	Letter Spacing:	Mezery mezi písmeny:
 	Glyph Scaling:	Změna velikosti glyfů:
-	Auto Leading:	Automatické proklady:
+	Auto Leading:	Automatický proklad:
 	Single Word Justification:	Zarovnání jednoho slova:
 	Full Justify	Zarovnat do bloku
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum.
@@ -5656,6 +5692,7 @@ mark-style	Japanese	Japonské
 	Effect Gallery	Galerie efektů
 	Filters	Filtry
 	Select artwork to apply effects	Vyberte grafiku, na kterou chcete použít efekty
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	nebyly načteny všechny vazby proměnných souboru (vynechané vazby: {_1}): tyto objekty nejsou vázány na své proměnné
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	knihovna proměnných souboru byla načtena jen částečně (vynechané položky: {_1}): panel Proměnné zobrazuje zbytek
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	knihovnu proměnných souboru nebylo možné načíst: panel Proměnné ji nezobrazuje
 @msg	a variable of unknown kind can't be bound to objects	proměnnou neznámého druhu nelze svázat s objekty
@@ -5744,6 +5781,11 @@ axis	Y Axis	osa Y
 	Set Options	Možnosti sady
 	Action Options…	Možnosti akce…
 	Action Options	Možnosti akce
+	Playback Options…	Možnosti přehrávání…
+	Playback Options	Možnosti přehrávání
+	Accelerated	Zrychleně
+	Step by Step	Krok za krokem
+	Pause For	Pozastavit na
 	Rename Action	Přejmenovat akci
 	New Action…	Nová akce…
 	New Action	Nová akce
@@ -6024,6 +6066,7 @@ anchor	Points:	Body:
 	Character Color	Barva znaků
 	OpenType Features	Funkce OpenType
 	Stylistic Sets	Stylistické sady
+	Set {n}	Sada {n}
 @msg	features lists at most {max} tags	features obsahuje nejvýše {max} značek
 @msg	unknown OpenType feature `{t}`	neznámá funkce OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musí být číslo větší než 0 a nejvýše {max}
@@ -6174,6 +6217,7 @@ breakText	Glyphs	Glyfy
 	Gap 5	Mezera 5
 
 @msg	{_1}: they came in as the page's art	{_1}: byly načteny jako kresba ze stránky
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekty, které se vykreslily jinak než vlastní stránka souboru, byly načteny jako kresba ze stránky: {_1}
 
 @msg	You must choose a side pattern.	Musíte zvolit boční vzorek.
 @msg	invalid pattern tile choice	neplatná volba dlaždice vzorku
@@ -6235,6 +6279,11 @@ breakText	Glyphs	Glyfy
 	Export All Open Documents as SVG	Exportovat všechny otevřené dokumenty jako SVG
 @msgplural	Exported {n} document|Exported {n} documents	Exportován {n} dokument|Exportovány {n} dokumenty|Exportováno {n} dokumentů
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportován {n} dokument; {title} nebyl zapsán: {error}|Exportovány {n} dokumenty; {title} nebyl zapsán: {error}|Exportováno {n} dokumentů; {title} nebyl zapsán: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Dávková vektorizace složky
+@msgplural	Traced {n} image|Traced {n} images	Vektorizován {n} obraz|Vektorizovány {n} obrazy|Vektorizováno {n} obrazů
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} obraz nebylo možné vektorizovat|{n} obrazy nebylo možné vektorizovat|{n} obrazů nebylo možné vektorizovat
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Vektorizován {n} obraz; nevektorizováno: {failed}|Vektorizovány {n} obrazy; nevektorizováno: {failed}|Vektorizováno {n} obrazů; nevektorizováno: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Typ symbolu:
 	Dynamic Symbol	Dynamický symbol
@@ -6286,3 +6335,13 @@ breakText	Glyphs	Glyfy
 	Spike	Špička
 	Skip Spaces	Přeskočit mezery
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Kresba je příliš velká na zkopírování jako obrázek: ostatní aplikace z ní nedostanou PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Vybrat podle pracovních ploch
+	Select by Artboards…	Vybrat podle pracovních ploch…
+	Selection Tools	Nástroje výběru
+	Search artboards	Hledat pracovní plochy
+	Fully Inside	Zcela uvnitř
+	Fully Outside	Zcela vně
+	No artboards match.	Žádná pracovní plocha neodpovídá.
+	Chosen: {n} of {total}	Zvoleno: {n} z {total}

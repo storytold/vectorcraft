@@ -256,18 +256,13 @@ impl<'a> Reader<'a> {
             "Xd" if group_ended => {
                 let gs = self.gs.clone();
                 if let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::Group { .. })) {
-                    (n.opacity, n.blend, n.isolate, n.knockout) = (gs.opacity, gs.blend, gs.isolate, gs.knockout);
+                    (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) =
+                        (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
                 }
             }
             "Xw" => self.gs.hidden = Self::nums(&vals).last() == Some(&1.0),
             "A" => self.gs.locked = Self::nums(&vals).last() == Some(&1.0),
-            "XW" => {
-                // An object's own state block ends `6 () XW`: an `Xy` after a mesh's end was the mesh's.
-                if Self::nums(&vals).last() == Some(&6.0) && self.mesh_undo.take().is_some() {
-                    self.layer_state = None;
-                }
-                self.style_marker(&vals, hidden)
-            }
+            "XW" => self.state_marker(&vals, hidden),
             // Gradients.
             "Bd" => self.gradient_def = GradientDef::begin(&vals),
             "Bs" | "BD" => {}
@@ -509,7 +504,35 @@ impl<'a> Reader<'a> {
         if !matches!(w, "J" | "j" | "w" | "M" | "d" | "XR") {
             self.layer_state = None;
             self.mesh_undo = None;
+            self.container_undo = None;
         }
+    }
+
+    /// `n (style) XW`: the end of a state block, or a style marker ([`Self::style_marker`]).
+    fn state_marker(&mut self, vals: &[V], hidden: bool) {
+        let code = Self::nums(vals).last().copied();
+        // An object's own state block ends `6 () XW`: an `Xy` after a mesh's end was the mesh's.
+        if code == Some(6.0) && self.mesh_undo.take().is_some() {
+            self.layer_state = None;
+        }
+        match code {
+            Some(6.0) => self.container_undo = None,
+            Some(7.0) => self.layer_state_block(),
+            _ => {}
+        }
+        self.style_marker(vals, hidden)
+    }
+
+    /// `7 () XW` ends a layer's own state block (after its art, before `LB`): an `Xy` that went to
+    /// the layer's last group or compound path, right after its end, was the layer's.
+    fn layer_state_block(&mut self) {
+        let Some(before) = self.container_undo.take() else { return };
+        let gs = &self.gs;
+        let state = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
+        let Some(Frame { kind: Kind::Layer(_), children, .. }) = self.frames.last_mut() else { return };
+        let Some(n) = children.last_mut().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) else { return };
+        (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = before;
+        self.layer_state = Some(state);
     }
 
     /// `mode opacity isolate knockout shape Xy`; after a group's end, the group's too, and right
@@ -537,20 +560,18 @@ impl<'a> Reader<'a> {
             let before = (n.opacity, n.blend, n.isolate, n.knockout);
             (n.opacity, n.blend, n.isolate, n.knockout) = (gs.opacity, gs.blend, gs.isolate, gs.knockout);
             self.mesh_undo = Some(before);
-            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
-        } else if self.last_object().is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
-            if let Some(n) = self.last_object() {
-                n.opacity = gs.opacity;
-                n.blend = gs.blend;
-                n.isolate = gs.isolate;
-                n.knockout = gs.knockout;
-            }
+            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape));
+        } else if let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
+            let before = (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape);
+            (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
+            // The layer's instead when the layer's `7 () XW` follows (`layer_state_block`).
+            self.container_undo = in_layer.then_some(before);
             self.layer_state = None;
         } else {
             // After a layer's art and before its `LB`: the layer's own state (#2003). Kept until
             // an operator that isn't part of the state block (or the `LB` that takes it) says the
             // art moves on, so a path's state before its paint isn't read as its layer's.
-            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
+            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape));
         }
         self.note_state();
     }
@@ -595,6 +616,18 @@ impl<'a> Reader<'a> {
                 .filter(|n| matches!(n.kind, NodeKind::Group { .. }) && !self.compound_groups.contains(&n.id))
         {
             self.looks.insert(look.id);
+        }
+        // The type that a text object's look draws is the object's own, whatever comes of its style.
+        if after
+            && let Some(f) = self.frames.last_mut()
+            && let [.., look, object] = f.children.as_mut_slice()
+            && slot_of(object.name.as_deref()).is_some()
+            && !super::is_look_slot(object.name.as_deref())
+            && self.hidden_ids.contains(&object.id)
+            && self.hidden_ids.contains(&look.id) == hidden
+            && matches!(look.kind, NodeKind::Group { clip: false, .. })
+        {
+            strip_look_type(look);
         }
         if code != 1.0 || style.is_empty() || !after {
             return;
@@ -887,6 +920,16 @@ fn with_look(layer: &mut AppearanceItem, look: &crate::import::ai::style::ItemLo
     match layer {
         AppearanceItem::Fill(f) => (f.visible, f.opacity, f.blend, f.effects) = (look.visible, look.opacity, look.blend, look.effects.clone()),
         AppearanceItem::Stroke(s) => (s.visible, s.opacity, s.blend, s.effects) = (look.visible, look.opacity, look.blend, look.effects.clone()),
+    }
+}
+
+/// Remove from `n` the text slots of the type its look draws ([`super::is_look_slot`]), in its groups too.
+fn strip_look_type(n: &mut Node) {
+    if let Some(children) = n.children_mut() {
+        children.retain(|c| !super::is_look_slot(c.name.as_deref()));
+        for c in children.iter_mut().filter(|c| c.children().is_some_and(|k| !k.is_empty())) {
+            strip_look_type(Arc::make_mut(c));
+        }
     }
 }
 

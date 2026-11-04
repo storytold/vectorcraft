@@ -369,7 +369,12 @@ impl Node {
                         let placed = xf.transform_rect_bbox(art.geometric);
                         match s.placed_visual(symbol, *xf) {
                             Some(v) => v.union(placed),
-                            None => placed.inflate(art.reach, art.reach),
+                            // Art placed through 9-slice guides can draw outside `placed`.
+                            None => s
+                                .document()
+                                .symbol_slice_map_of(symbol, art.geometric, *xf)
+                                .map_or(placed, |m| m.placement_bounds(art.geometric).union(placed))
+                                .inflate(art.reach, art.reach),
                         }
                     }
                     None => xf.transform_rect_bbox(SYMBOL_SQUARE),

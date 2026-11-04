@@ -327,10 +327,14 @@ impl Ctx<'_> {
         } else if self.vertical && stands_upright(g) {
             let next = self.out.glyphs.len();
             let after_base = self.out.glyphs.last().is_some_and(|p| p.byte == g.byte && p.line == line && p.len > 0);
+            // Baseline shift moves it across the column at any Character Rotation: the shift is
+            // taken off before the turn and put back after it.
+            let shift = pre * Point::new(0.0, -g.bshift) - pre * Point::ZERO;
+            let (shift, unshift) = (Affine::translate(shift), Affine::translate(-shift));
             if let Some((_, _, turn, after)) = cluster.filter(|c| c.0 == g.byte && c.1 == next && after_base && g.len > 0) {
                 // A later glyph of an upright glyph's cluster: set after it as the shaper placed
                 // it, and turned with it.
-                m = turn * Affine::translate((after - origin.x, 0.0)) * m;
+                m = shift * turn * Affine::translate((after - origin.x, 0.0)) * unshift * m;
                 self.upright_cluster = Some((g.byte, next + 1, turn, after));
             } else {
                 // Turned about the centre of its cell, which the column's centre line runs through:
@@ -342,7 +346,7 @@ impl Ctx<'_> {
                 // turning point instead would move it across the column too).
                 let turn = Affine::translate((-g.lead, 0.0))
                     * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - upright_centre(g, cell, em)));
-                m = turn * m;
+                m = shift * turn * unshift * m;
                 // Its own advance across, from where the cell centres it: where the shaper set the
                 // next glyph of its cluster.
                 let across = g.face.advance(g.gid) * g.sx;
@@ -381,6 +385,21 @@ impl Ctx<'_> {
             Some((g.kern_shift + g.dx - g.lead) * a.hypot(b)).filter(|s| s.is_finite()).unwrap_or(0.0)
         } else {
             0.0
+        };
+        // On a path, an upright glyph turns about its pen: its cell runs along the path between
+        // where the glyph's transform sets the cell's foot and its top, moved by the shaper's
+        // placement and a baseline shift, and slanted by the path's effect.
+        let (width, width_start) = match (upright && self.on_path, g.sy) {
+            (true, sy) if sy != 0.0 => {
+                // In font units, with the Proportional Metrics change to its length.
+                let (cell, top) = upright_extent(g);
+                let proportional = g.vpal.filter(|_| g.face.vertical_glyph(g.gid).is_some()).map_or(0.0, |a| a.advance) / sy;
+                let tangent = Vec2::new(angle.cos(), angle.sin());
+                let along = |y: f64| (m * Point::new(0.0, y) - origin).dot(tangent);
+                let (start, end) = (along(cell + proportional - top), along(-top));
+                if start.is_finite() && end > start { (end - start, start) } else { (width, width_start) }
+            }
+            _ => (width, width_start),
         };
         if let Some(art) = g.inline.as_ref().and_then(|ib| ib.art) {
             self.out.inlines.push(InlineGlyph { run: g.run, byte: g.byte, glyph: self.out.glyphs.len(), xf: m, bounds: m.transform_rect_bbox(art) });

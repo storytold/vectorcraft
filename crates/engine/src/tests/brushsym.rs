@@ -1242,6 +1242,59 @@ fn break_link_then_update_redefines_all_instances() {
     assert!((bounds(&s, other).center().x - 300.0).abs() < 1e-6);
 }
 
+/// A linked opacity mask of a 10 × 10 square at (100, 50).
+fn square_mask(s: &mut Session) -> Box<vectorcraft_doc::OpacityMask> {
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let art = Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 50.0, 110.0, 60.0)), Default::default());
+    Box::new(vectorcraft_doc::OpacityMask::new(art, true))
+}
+
+/// Break Link to Symbol keeps the instance's opacity mask on the art.
+#[test]
+fn break_link_keeps_the_instances_opacity_mask() {
+    let mut s = session();
+    let (inst, _, _) = make_symbol(&mut s);
+    let m = square_mask(&mut s);
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(inst).unwrap().extras_mut().mask = Some(m.clone());
+    let r = s.execute("symbol.breakLink", &json!({"ids": [inst.0]})).unwrap();
+    let art = node(&s, NodeId(r["ids"][0].as_u64().unwrap()));
+    assert!(matches!(art.kind, NodeKind::Path { .. }), "{}", art.kind_label());
+    assert_eq!(art.extras().mask, Some(m), "the art keeps the mask");
+}
+
+/// When the symbol's art has an opacity mask of its own, Break Link puts the instance's mask on a
+/// group around the art, and the art keeps its own.
+#[test]
+fn break_link_puts_the_instances_mask_on_a_group_around_masked_art() {
+    let mut s = session();
+    let (inst, name, _) = make_symbol(&mut s);
+    let (own, m) = (square_mask(&mut s), square_mask(&mut s));
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let sym = doc.symbols.iter_mut().find(|s| s.name == name).unwrap();
+    std::sync::Arc::make_mut(&mut sym.art).extras_mut().mask = Some(own);
+    doc.node_mut(inst).unwrap().extras_mut().mask = Some(m.clone());
+    let r = s.execute("symbol.breakLink", &json!({"ids": [inst.0]})).unwrap();
+    let art = node(&s, NodeId(r["ids"][0].as_u64().unwrap()));
+    let NodeKind::Group { children, .. } = &art.kind else { panic!("a group around the art: {}", art.kind_label()) };
+    assert_eq!(art.extras().mask, Some(m), "the group holds the instance's mask");
+    assert!(children.len() == 1 && children[0].extras().mask.is_some(), "the art keeps its own mask");
+}
+
+/// The art of the instance's opacity mask counts against Break Link's object limit: an instance
+/// whose mask holds more than a million objects stays an instance.
+#[test]
+fn break_link_counts_the_instances_mask_art() {
+    let mut s = session();
+    let (inst, _, _) = make_symbol(&mut s);
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let square =
+        std::sync::Arc::new(Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 50.0, 110.0, 60.0)), Default::default()));
+    let art = Node::group(doc.alloc_id(), vec![square; 1_000_000]);
+    doc.node_mut(inst).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+    assert!(s.execute("symbol.breakLink", &json!({"ids": [inst.0]})).is_err(), "too many objects");
+    assert!(matches!(node(&s, inst).kind, NodeKind::SymbolInstance { .. }), "it stays an instance");
+}
+
 #[test]
 fn delete_duplicate_and_replace_symbols() {
     let mut s = session();
@@ -1350,6 +1403,26 @@ fn symbolism_adjustments() {
     let far = s.execute("symbol.adjust", &json!({"tool": "size", "points": [[0, 290]], "radius": 5})).unwrap();
     assert_eq!(far["count"], 0);
     assert!(s.execute("symbol.adjust", &json!({"tool": "nope", "points": at})).is_err());
+}
+
+/// The Symbol Stainer's `color` with an alpha part (`#rrggbbaa` or `#rgba`) is refused and changes
+/// nothing, rather than staining with the current fill; `#rrggbb` still stains with it.
+#[test]
+fn a_stain_color_with_an_alpha_part_is_refused() {
+    let mut s = session();
+    let (inst, _, b) = make_symbol(&mut s);
+    let c = b.center();
+    let at = json!([[c.x, c.y]]);
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in ["#ff000080", "ff000080", "#f008"] {
+        assert!(s.execute("symbol.adjust", &json!({"tool": "stain", "points": at, "color": bad, "intensity": 10})).is_err(), "{bad}");
+    }
+    assert_eq!(*s.doc().unwrap().doc, *before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("symbol.adjust", &json!({"tool": "stain", "points": at, "color": "#ff0000", "intensity": 10})).unwrap();
+    let f = node(&s, inst).appearance.fill().cloned().unwrap();
+    assert_eq!(f.paint.color().map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
 }
 
 /// In a CMYK document the Symbol Stainer's RGB `color` separates through the color settings, as

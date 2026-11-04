@@ -102,6 +102,26 @@ fn object_filters_add_replace_and_generate_objects() {
     assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().last().unwrap().id, made);
 }
 
+/// A generator can make guides and lock what it adds, in its one undo step; those objects are left
+/// out of the selection that follows, as Make Guides and Object › Lock leave them.
+#[test]
+fn filters_make_guides_and_locked_objects_left_unselected() {
+    let mut s = session();
+    let out = json!({"objects": [
+        {"path": triangle(), "name": "Guide", "guide": true},
+        {"path": triangle(), "name": "Locked", "locked": true},
+        {"path": triangle(), "name": "Plain"}]});
+    install_wat(&mut s, &tpl::returning(&tpl::manifest("test.engine.guides", "filter", "{}"), &out.to_string()));
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = run(&mut s, "plugin.run", json!({"id": "test.engine.guides"}));
+    let ids: Vec<NodeId> = r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert!(matches!(node(&s, ids[0]).kind, vectorcraft_doc::NodeKind::Path { guide: true, .. }));
+    assert!(node(&s, ids[1]).locked);
+    let st = s.doc().unwrap();
+    assert_eq!(st.selection.objects, [ids[2]]);
+    assert_eq!(st.history.undo.len(), undo + 1);
+}
+
 #[test]
 fn failing_plugins_leave_the_document_and_history_alone() {
     let mut s = session();

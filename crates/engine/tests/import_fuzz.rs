@@ -2733,6 +2733,16 @@ fn editing_text() -> String {
         square(40),
         "50 10 m 60 10 L 60 20 L 50 20 L h W f".into(),
         "Q".into(),
+        // Transparency: a path's, a group's state block, and an object's opacity mask.
+        "0 0 1 0 k\n2 0.5 0 0 1 Xy".into(),
+        square(86),
+        "0 Ae\nu".into(),
+        square(90),
+        "U\n0 0.4 1 1 1 Xy\n0 0 Xd\n6 () XW".into(),
+        square(94),
+        "%_/ArtDictionary :\n%_/Mask :\n%_X=\n%_0 g\n%_94 10 m\n%_98 10 L\n%_98 14 L\n%_f\n%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n\
+         %_0 /Bool (Inverted) ,\n%_0 /Bool (Disabled) ,\n%_1 /Bool (Linked) ,\n%_; (AI9_Mask) ,\n%_;"
+            .into(),
         // Smooth and corner anchors by the case of each segment's operator, back to the start.
         "10 50 m 20 60 30 50 40 50 c 45 50 50 55 v 55 60 60 60 Y 60 50 l 50 40 30 40 10 50 C s".into(),
         "70 50 m 80 50 l 80 60 L 70 60 y h S".into(),
@@ -2761,7 +2771,8 @@ fn editing_text() -> String {
     format!(
         "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n{PATTERN}{PALETTE}{}{}%%Trailer\n",
         layer("One", 1, &format!("{body}\n{}", layer("Sub", 1, &square(70)))),
-        layer("Two", 0, &square(80))
+        // A layer's own state block after its last compound path.
+        layer("Two", 0, &format!("{}\n*u\n{}\n{}\n*U\n1 0.6 1 2 1 Xy\n0 0 Xd\n7 () XW", square(80), square(84), square(88)))
     )
 }
 
@@ -3354,6 +3365,42 @@ proptest! {
         survive("hostile .ai variable library values", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose variable library binds objects by XML ids that repeat, name nothing, are empty
+    /// or are shared by several objects (a group and its path), with traits of every kind, then is
+    /// damaged: every object bound is one of the opened document's.
+    #[test]
+    fn ai_variable_bindings_never_panic(
+        cut in 0usize..20_000,
+        edits in prop::collection::vec((0usize..20_000, prop::sample::select(vec!['0', '1', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', '_', 'Z', 'u', 'U'])), 0..12),
+        refs in prop::collection::vec((0usize..5, 0usize..5), 0..40),
+        art in prop::collection::vec(0usize..5, 0..12),
+    ) {
+        use vectorcraft_testkit::ai::{self, XmlValue};
+        let names = ["a", "b", "a_x5F_1", "", "missing"];
+        let traits = ["textcontent", "visibility", "fileref", "graphdata", "other"];
+        let declared: Vec<String> = refs
+            .iter()
+            .map(|&(t, n)| {
+                let uid = format!("/XMLUIDREF : ({}) ;", names[n]);
+                let attributes = [("trait", XmlValue::Str(traits[t])), ("varName", XmlValue::Unicode(traits[t])), ("docRef", XmlValue::Raw(&uid))];
+                ai::xml_node(1, "variable", XmlValue::Str(""), &attributes, &[])
+            })
+            .collect();
+        let set = ai::xml_element("variableSet", &[], &[ai::xml_element("variables", &[], &declared)]);
+        let library = ai::variable_library_data(&ai::xml_element("variableSets", &[], &[set]));
+        let art: String = art.iter().map(|&n| format!("u\n0 g\n10 10 m\n20 20 L\nS\n{}U\n{}", ai::named(names[n]), ai::named(names[(n + 1) % 5]))).collect();
+        let data = ai::editing_data(100.0, 100.0, &format!("{library}{}", ai::layer("L", &art)));
+        let text = mutate_text(&data, cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        let mut bound = true;
+        survive("hostile .ai variable bindings", || {
+            let d = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0).0;
+            bound = d.variables.bindings.keys().all(|id| d.node(*id).is_some());
+            Some(d)
+        })?;
+        prop_assert!(bound, "a binding names an object the document doesn't have");
+    }
+
     /// A `.ai` whose Objects on Path record and group are damaged or hostile.
     #[test]
     fn ai_objects_on_path_never_panics(cut in 0usize..4_000, edits in prop::collection::vec((0usize..4_000, prop::sample::select(vec!['0', '1', '9', '-', '.', 'e', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', '_', 'u', 'U'])), 0..12)) {
@@ -3426,6 +3473,44 @@ proptest! {
             let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(data)].concat();
             survive("hostile Objects on Path", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
         }
+    }
+
+    /// Brush objects of every kind with any parameters, the brush manager's order with any names,
+    /// and brush art sections nested or cut short: read with the layers, or as a library without
+    /// them, the brushes kept within their ranges.
+    #[test]
+    fn ai_brushes_never_panic(
+        kind in 0usize..7,
+        params in prop::collection::vec(prop_oneof![arb_num(), Just("/".to_string()), Just(" / ".to_string()), Just("nan".to_string()), Just("inf".to_string()), "[A-Za-z ]{0,6}"], 0..40),
+        order in "[ -~]{0,80}",
+        nest in 0usize..6,
+        cut in any::<bool>(),
+        layers in any::<bool>(),
+    ) {
+        use vectorcraft_testkit::ai;
+        let kinds = ["Adobe Calligraphic Brush Tool", "Adobe Scatter Brush Tool", "Adobe ArtOnPath Brush Tool", "Adobe PatternOnPath Brush Tool", "Adobe dBrush Brush Tool", "Adobe Brush Manager Order", "Other"];
+        let object = |k: &str, name: &str, p: &str| {
+            let chars: Vec<char> = p.chars().collect();
+            let lines: String = chars.chunks(12).map(|c| format!("({}) -\n", c.iter().collect::<String>())).collect();
+            format!("%AI8_BeginPluginObject\n({k})\n({name})\n{lines}() .\n%AI8_EndPluginObject\n")
+        };
+        let p = params.join(" ");
+        let mut art = String::new();
+        for _ in 0..nest {
+            art.push_str("%AI8_BeginBrushPattern\n(A)\n");
+        }
+        art.push_str("0 g\n0 0 m\n4 0 L\n4 4 L\nf\n");
+        for _ in 0..nest.saturating_sub(usize::from(cut)) {
+            art.push_str("%AI8_EndBrushPattern\n");
+        }
+        let records = format!("{art}{}{}", object(kinds[kind], "B", &p), object(kinds[5], kinds[5], &order.replace(['(', ')', '\\'], "")));
+        let body = if layers { format!("{records}{}", ai::layer("L", "0 g\n10 10 m\n20 20 L\nS\n")) } else { records };
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&ai::editing_data(100.0, 100.0, &body))].concat();
+        survive("hostile .ai brushes", || {
+            let d = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0;
+            let _ = vectorcraft_brush::library(&d);
+            Some(d)
+        })?;
     }
 }
 
@@ -5715,8 +5800,15 @@ fn a_long_thin_shape_with_a_shadow_renders_and_exports() {
 
 /// A blend in `.ai` editing data, written by hand: two keys (10 pt squares, red on the left, blue on
 /// the right) on a straight spine, `steps` steps drawn between them as the blend lays them out, and
-/// the record (`DCBA`, version 1, two keys `A` and `B`, see `vectorcraft_eps`' AI blend reader).
+/// the record (`DCBA`, Specified Steps, two keys `A` and `B`, see `vectorcraft_eps`' AI blend
+/// reader).
 fn blend_text(steps: usize) -> String {
+    blend_text_spaced(steps, [1, 0, 0])
+}
+
+/// [`blend_text`] with the record's spacing words `spacing`: the spacing (word 1), the bits of the
+/// distance (word 2, a 32-bit float) and word 4.
+fn blend_text_spaced(steps: usize, spacing: [u32; 3]) -> String {
     use std::fmt::Write;
     let square = |x: f64, hidden: bool, t: f64| {
         let p = if hidden { "%_" } else { "" };
@@ -5740,7 +5832,8 @@ fn blend_text(steps: usize) -> String {
         s += &square(t * span, false, t);
     }
     s += "U\n9 () XW\n0 Ae\n";
-    let mut words: Vec<u32> = vec![u32::from_le_bytes(*b"DCBA"), 1, 0, 0, 0, 0, 0, 0, 0, 0, 2];
+    let [kind, distance, count] = spacing;
+    let mut words: Vec<u32> = vec![u32::from_le_bytes(*b"DCBA"), kind, distance, 0, count, 0, 0, 0, 0, 0, 2];
     for id in ['A', 'B'] {
         words.extend([id as u32, 0, 0, 0, 0, 0]);
     }
@@ -5787,6 +5880,14 @@ proptest! {
         let far = ai_private(&blend_text(steps).replace(" 40 m\n", " 1e300 m\n").replace(" 50 L\n", " -1e300 L\n"));
         survive("a .ai blend far out", || Some(vectorcraft_eps::layered_ai(&far, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
         survive("mutated .ai blend", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
+    }
+
+    /// A `.ai` blend whose record holds any spacing, distance bits (zero, negative, tiny, NaN,
+    /// infinite) and step count: read live, as its drawn steps, or not at all, never panicking.
+    #[test]
+    fn ai_blend_spacing_never_panics(steps in 1usize..6, kind in prop_oneof![0u32..4, any::<u32>()], distance in prop_oneof![any::<u32>(), prop::sample::select(vec![0u32, 0x8000_0000, 1, 0x7f80_0000, 0xff80_0000, 0x7fc0_0000, 0x7f7f_ffff, 0x41c8_0000])], count in prop_oneof![0u32..1_100, any::<u32>()]) {
+        let private = ai_private(&blend_text_spaced(steps, [kind, distance, count]));
+        survive("a .ai blend's spacing", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
     }
 }
 

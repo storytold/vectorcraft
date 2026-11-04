@@ -1,3 +1,4 @@
+use super::super::brush;
 use super::art::{element_name, join_and, sane};
 use super::containers::drop_commented_copies;
 use super::ops::appearance_from_art_style;
@@ -121,6 +122,10 @@ pub(crate) fn slot_frame(name: Option<&str>) -> usize {
     name.and_then(|n| n.strip_prefix(TEXT_SLOT)).and_then(|rest| rest.split_once(':')).and_then(|(_, f)| f.parse().ok()).unwrap_or(0)
 }
 
+/// The name of the text slot for type that a look draws (`1 /FreeUndo`): [`TEXT_SLOT`] with no
+/// story, as [`slot_of`] reads it.
+pub(crate) const LOOK_SLOT: &str = "\u{0}text:look";
+
 /// The artboards (names, and rects in art space) of the editing data `data` that [`read`] can't
 /// read as a whole, as far as it gets: where to put the pages of its PDF part instead, and what to
 /// call them (#1068).
@@ -167,29 +172,85 @@ fn artboard_array(data: &[u8]) -> Option<&[u8]> {
 pub struct PaletteSwatches {
     pub swatches: Vec<Swatch>,
     pub groups: Vec<vectorcraft_color::swatch::SwatchGroup>,
-    /// The patterns the editing data defines that the given patterns lack and a swatch paints with.
+    /// The patterns the editing data defines that a swatch paints with, named apart from the given
+    /// patterns ([`beside`]).
     pub patterns: Vec<PatternDef>,
     /// The image blobs the art of `patterns` shows, by key.
     pub images: std::collections::BTreeMap<String, ImageBlob>,
 }
 
+/// The editing data's patterns `defined`, for a document that has the patterns `have` (those of a
+/// file's PDF part or page): each keeps its name, except one whose name a pattern of `have` already
+/// has (the PDF part names its tilings `Pattern 1`, `Pattern 2` and so on), which takes a free
+/// variant (`Pattern 1 2`). The art of each pattern paints with the names they got. Also the names
+/// changed, old to new. The same `defined` and `have` always give the same names.
+fn beside(mut defined: Vec<PatternDef>, have: &[PatternDef]) -> (Vec<PatternDef>, std::collections::BTreeMap<String, String>) {
+    let mut renamed = std::collections::BTreeMap::new();
+    let mut taken: std::collections::BTreeSet<String> = have.iter().chain(&defined).map(|p| p.name.clone()).collect();
+    let tries = taken.len() + 2;
+    for d in &mut defined {
+        if !have.iter().any(|p| p.name == d.name) {
+            continue;
+        }
+        let Some(name) = (2..=tries).map(|i| format!("{} {i}", d.name)).find(|n| !taken.contains(n)) else { continue };
+        taken.insert(name.clone());
+        renamed.insert(std::mem::replace(&mut d.name, name.clone()), name);
+    }
+    if !renamed.is_empty() {
+        for d in &mut defined {
+            for a in &mut d.art {
+                repoint(Arc::make_mut(a), &renamed);
+            }
+        }
+    }
+    (defined, renamed)
+}
+
+/// `n` and what it holds painting with the patterns `renamed` renames (old to new) by their new names.
+fn repoint(n: &mut Node, renamed: &std::collections::BTreeMap<String, String>) {
+    for p in vectorcraft_doc::swatches::node_paints_mut(n) {
+        if let Paint::Pattern { pattern, .. } = p
+            && let Some(new) = renamed.get(pattern)
+        {
+            pattern.clone_from(new);
+        }
+    }
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        repoint(Arc::make_mut(&mut mask.art), renamed);
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children {
+            repoint(Arc::make_mut(c), renamed);
+        }
+    }
+}
+
 /// The swatches and color groups of the palette of the editing data `data`, for a file whose
 /// layers aren't read: the swatches its PDF part has are the defaults (#4036). They come as
 /// [`read`] makes them, with pattern swatches only for the patterns in `patterns` and those the
-/// editing data defines; `None` when the palette is empty or reading stops before it.
+/// editing data defines, which are named apart from `patterns` ([`beside`]); `None` when the
+/// palette is empty or reading stops before it.
 pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> {
     let mut r = Reader::new(data);
     // The palette, the gradients and the patterns it names come before the art, so an error in the
     // art leaves them read.
     let _ = r.run();
+    let (defined, renamed) = beside(std::mem::take(&mut r.doc.patterns), patterns);
     let mut known = patterns.to_vec();
-    let defined = std::mem::take(&mut r.doc.patterns);
-    known.extend(defined.iter().filter(|d| !patterns.iter().any(|p| p.name == d.name)).cloned());
-    let (swatches, groups) = r.palette_swatches(&known)?;
+    known.extend(defined.iter().cloned());
+    let (mut swatches, mut groups) = r.palette_swatches(&known)?;
+    // A swatch of a pattern the editing data defines paints with that pattern, under the name it got.
+    for s in swatches.iter_mut().chain(groups.iter_mut().flat_map(|g| &mut g.swatches)) {
+        if let Paint::Pattern { pattern, .. } = &mut s.paint
+            && let Some(new) = renamed.get(pattern)
+        {
+            pattern.clone_from(new);
+        }
+    }
     let painted = |name: &str| {
         swatches.iter().chain(groups.iter().flat_map(|g| &g.swatches)).any(|s| matches!(&s.paint, Paint::Pattern { pattern, .. } if pattern == name))
     };
-    let added: Vec<PatternDef> = defined.into_iter().filter(|d| !patterns.iter().any(|p| p.name == d.name) && painted(&d.name)).collect();
+    let added: Vec<PatternDef> = defined.into_iter().filter(|d| painted(&d.name)).collect();
     let mut shown = Document::new(1.0, 1.0);
     shown.patterns.clone_from(&added);
     let mut images = std::collections::BTreeMap::new();
@@ -199,6 +260,61 @@ pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> 
         }
     });
     Some(PaletteSwatches { swatches, groups, patterns: added, images })
+}
+
+/// The brushes of a `.ai` file's editing data, as [`brushes`] reads them.
+pub struct Brushes {
+    pub brushes: Vec<vectorcraft_brush::Brush>,
+    /// The patterns the editing data defines that the brushes' art paints with, named apart from
+    /// the given patterns ([`beside`]).
+    pub patterns: Vec<PatternDef>,
+    /// The image blobs the art of `patterns` shows, by key.
+    pub images: std::collections::BTreeMap<String, ImageBlob>,
+    /// The note for the brushes left out.
+    pub note: Option<String>,
+}
+
+/// The brushes of the editing data `data`, for a file whose layers aren't read (a brush library
+/// has none), as [`read`] makes them, with the patterns of the editing data their art paints with,
+/// named apart from `patterns` ([`beside`]) as [`palette`] names them. `None` when the file has no
+/// brush objects or reading stops before them.
+pub fn brushes(data: &[u8], patterns: &[PatternDef]) -> Option<Brushes> {
+    // Brush objects are plug-in objects: data without one isn't read again.
+    memchr::memmem::find(data, b"BeginPluginObject")?;
+    let mut r = Reader::new(data);
+    // The brushes come before the art, so an error in the art leaves them read.
+    let _ = r.run();
+    let (mut lib, unread) = r.brush_library()?;
+    let (defined, renamed) = beside(std::mem::take(&mut r.doc.patterns), patterns);
+    if !renamed.is_empty() {
+        for a in lib.iter_mut().flat_map(|b| b.art_mut()) {
+            repoint(a, &renamed);
+        }
+    }
+    // The patterns the brushes' art paints with, and those their art paints with, and so on.
+    let mut stack: Vec<&vectorcraft_doc::Node> = lib.iter().flat_map(|b| b.art()).collect();
+    let mut used = std::collections::BTreeSet::new();
+    while let Some(n) = stack.pop() {
+        stack.extend(n.children().into_iter().flatten().chain(n.extras().mask.as_ref().map(|m| &m.art)).map(|c| &**c));
+        for p in vectorcraft_doc::swatches::node_paints(n) {
+            if let Paint::Pattern { pattern, .. } = p
+                && used.insert(pattern.clone())
+                && let Some(d) = defined.iter().find(|d| &d.name == pattern)
+            {
+                stack.extend(d.art.iter().map(|a| &**a));
+            }
+        }
+    }
+    let added: Vec<PatternDef> = defined.into_iter().filter(|d| used.contains(&d.name)).collect();
+    let mut shown = Document::new(1.0, 1.0);
+    shown.patterns.clone_from(&added);
+    let mut images = std::collections::BTreeMap::new();
+    shown.visit_images(|_, im| {
+        if let Some(blob) = r.doc.images.get(&im.key) {
+            images.insert(im.key.clone(), blob.clone());
+        }
+    });
+    Some(Brushes { brushes: lib, patterns: added, images, note: (unread > 0).then(|| brush::left_out_note(unread)) })
 }
 
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
@@ -215,15 +331,37 @@ fn artboards_read(data: &[u8]) -> Vec<(String, Rect)> {
     r.artboards.into_iter().map(|b| (b.name, b.rect)).collect()
 }
 
+/// An object bound to a variable of the library: the variable's name, and the XML id of the object
+/// (the `AI10_ArtUID` of its dictionary). The id is `None` when the reference can't be read.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BindingRef {
+    pub variable: String,
+    pub target: Option<String>,
+}
+
 /// The variable library of the editing data, as [`variable_library`] reads it.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VariableRead {
     /// Its variables, data sets, active data set and lock, without bindings.
     pub variables: Variables,
+    /// The objects bound to its variables, in the order the library declares them.
+    pub bindings: Vec<BindingRef>,
+    /// How many objects its declarations bind that aren't in `bindings`: those of a declaration
+    /// left out, and those past [`MAX_LIBRARY_BINDINGS`].
+    pub bindings_skipped: usize,
     /// How many of its declarations, data sets, values and settings were left out.
     pub skipped: usize,
     /// Whether the editing data has a variable library (a `variableSets` element).
     pub present: bool,
+}
+
+/// The import's note about the library's bindings when `skipped` of them weren't made: nothing
+/// when all of them were.
+pub fn bindings_note(skipped: usize) -> Option<String> {
+    // A count after a colon needs no plural, so every language can translate the note whole.
+    (skipped > 0).then(|| {
+        format!("the file's variable bindings weren't all read (bindings skipped: {skipped}): those objects aren't bound to their variables")
+    })
 }
 
 impl VariableRead {
@@ -405,6 +543,12 @@ impl<'a> Reader<'a> {
         {
             n.extras_mut().wrap = Some(wrap);
         }
+        // The object's XML id, which the variable library's bindings name it by.
+        if let Some(uid) = o.obj("AI10_ArtUID").and_then(Obj::content_text).filter(|u| !u.is_empty())
+            && let Some(id) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. })).map(|n| n.id)
+        {
+            super::remember_xml_id(&mut self.xml_ids, &mut self.xml_id_bytes, uid, id);
+        }
         let name = match o.text("AIArtName") {
             Some(name) => name,
             None => match o.obj("AI10_ArtUID").and_then(Obj::content_text) {
@@ -532,6 +676,17 @@ impl<'a> Reader<'a> {
             .map(|(name, s)| vectorcraft_color::swatch::SwatchGroup { name, swatches: s.into_iter().filter_map(swatch).collect() })
             .collect();
         Some((swatches, groups))
+    }
+
+    /// The brushes read ([`brush::finish_brushes`]) and how many weren't; `None` when the file has
+    /// no brush objects (the document keeps the default brushes).
+    fn brush_library(&mut self) -> Option<(Vec<vectorcraft_brush::Brush>, usize)> {
+        if !self.brush_objects {
+            return None;
+        }
+        let drafts = std::mem::take(&mut self.brush_drafts);
+        let (lib, left_out) = brush::finish_brushes(drafts, &self.brush_art, self.brush_order.as_deref());
+        Some((lib, left_out + self.brushes_unread))
     }
 
     /// The graphic styles of the style list, in its order: each listed name the art styles define with
@@ -687,6 +842,7 @@ impl<'a> Reader<'a> {
                 doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
             }
         }
+        let brushes = self.brush_library();
         // The file's graphic styles in place of the defaults, and the objects linked to them.
         let (styles, ids) = self.graphic_styles();
         let styles_read = !styles.is_empty();
@@ -698,6 +854,12 @@ impl<'a> Reader<'a> {
             doc.graphic_styles = styles.into();
         }
         let mut warnings = self.warnings;
+        if let Some((lib, unread)) = brushes {
+            vectorcraft_brush::store(&mut doc, &lib);
+            if unread > 0 {
+                warnings.push(brush::left_out_note(unread));
+            }
+        }
         if self.drawn_looks > 0 {
             warnings.push(format!(
                 "objects with several fills or strokes, effects or brushes came in as their drawn look ({}): their appearance isn't editable yet",
@@ -709,6 +871,7 @@ impl<'a> Reader<'a> {
         if variables.present {
             doc.variables = variables.variables.into();
         }
+        let (bindings, bindings_skipped) = (variables.bindings, variables.bindings_skipped);
         Ok(Structure {
             doc,
             to_doc,
@@ -723,6 +886,10 @@ impl<'a> Reader<'a> {
             placed_elsewhere: self.placed_elsewhere,
             envelopes_drawn: self.envelopes_drawn,
             styles_read,
+            canvas_scale: self.canvas_scale,
+            xml_ids: self.xml_ids,
+            bindings,
+            bindings_skipped,
             warnings,
         })
     }
@@ -824,9 +991,10 @@ pub(super) fn find_entry<'o>(o: &'o Obj, key: &str, depth: usize) -> Option<&'o 
 
 /// Caps on the variable library of the editing data, as Load Variable Library has them: the XML
 /// nodes read, the variables and data sets kept, the characters of a name, and the bytes of the
-/// names and values kept.
+/// names and values kept. Past those, the objects bound to the variables.
 const MAX_LIBRARY_NODES: usize = 2_000_000;
 const MAX_LIBRARY_VARIABLES: usize = 256;
+const MAX_LIBRARY_BINDINGS: usize = 100_000;
 const MAX_LIBRARY_DATASETS: usize = 1_000;
 const MAX_LIBRARY_NAME: usize = 255;
 const MAX_LIBRARY_BYTES: usize = 8 << 20;
@@ -839,11 +1007,13 @@ const MAX_LIBRARY_BYTES: usize = 8 << 20;
 /// are locked), with a `variables` element of `variable` elements (`varName`, and `trait`:
 /// `textcontent`, `visibility`, `fileref` or `graphdata`; another trait or none is a variable of
 /// unknown kind), and a `sampleDataSets` element (`activeDataSet`, the data set shown) of
-/// `sampleDataSet` elements (`dataSetName`). In a data set, the element named after a variable holds
-/// its value: `p` elements of text, one paragraph each; a `/Bool` text, whether its objects show; a
-/// linked file's URL (`file://`) or path. Graph values aren't read. What is malformed, repeated or
-/// past the caps (a declaration, a data set, a value, a setting, a second `variableSet`) is left out
-/// and counted; a library past [`MAX_LIBRARY_NODES`] isn't read. Bindings aren't read.
+/// `sampleDataSet` elements (`dataSetName`). A `variable` bound to an object has a `docRef` attribute
+/// whose value is the object's XML id (`/XMLUIDREF`); a variable bound to several objects is
+/// declared once for each, with the same name and trait. In a data set, the element named after a
+/// variable holds its value: `p` elements of text, one paragraph each; a `/Bool` text, whether its
+/// objects show; a linked file's URL (`file://`) or path. Graph values aren't read. What is
+/// malformed, repeated or past the caps (a declaration, a data set, a value, a setting, a second
+/// `variableSet`) is left out and counted; a library past [`MAX_LIBRARY_NODES`] isn't read.
 fn variable_library(o: &Obj) -> VariableRead {
     find_variable_sets(o, 0).map_or_else(VariableRead::default, read_variable_sets)
 }
@@ -978,11 +1148,23 @@ fn percent_decoded(s: &str) -> String {
     String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }
 
-/// The walk through a variable library: the nodes read, the bytes kept, and what was left out.
+/// The object an element's `docRef` attribute names: `None` without one, `Some(None)` when its
+/// value isn't an XML id (`/XMLUIDREF`) of at most [`MAX_LIBRARY_NAME`] characters.
+fn doc_ref(o: &Obj) -> Option<Option<String>> {
+    let attributes = o.obj("xmlnode-attributes").filter(|a| a.ty == "Dictionary")?;
+    let node = attributes.items().find(|a| is_node(a, 2.0) && node_name(a).is_some_and(|n| n.rsplit(':').next() == Some("docRef")))?;
+    let id = node.obj("xmlnode-nodevalue").filter(|v| v.ty == "XMLUIDREF").and_then(Obj::content_text);
+    Some(id.filter(|id| !id.is_empty() && id.chars().count() <= MAX_LIBRARY_NAME))
+}
+
+/// The walk through a variable library: the nodes read, the bytes kept, the bindings, and what was
+/// left out.
 #[derive(Default)]
 struct LibraryWalk {
     nodes: usize,
     bytes: usize,
+    bindings: Vec<BindingRef>,
+    bindings_skipped: usize,
     skipped: usize,
 }
 
@@ -1032,7 +1214,8 @@ impl LibraryWalk {
         }
     }
 
-    /// The `variable` elements of the `variables` element `list`, into `vars`.
+    /// The `variable` elements of the `variables` element `list`, into `vars`, and the objects they
+    /// bind. A second declaration of a variable binds one more object to it.
     fn declarations(&mut self, list: &Obj, vars: &mut Variables) {
         let Some(children) = self.children(list) else {
             self.skipped += 1;
@@ -1040,10 +1223,6 @@ impl LibraryWalk {
         };
         for v in children.into_iter().filter(|c| !is_node(c, 3.0)) {
             let name = is_element(v, "variable").then(|| library_name(xml_attribute(v, "varName"))).flatten();
-            let Some(name) = name.filter(|n| vars.variable(n).is_none() && vars.variables.len() < MAX_LIBRARY_VARIABLES && self.keep(n.len())) else {
-                self.skipped += 1;
-                continue;
-            };
             let kind = match xml_attribute(v, "trait").as_deref() {
                 Some("textcontent") => VariableKind::Text,
                 Some("visibility") => VariableKind::Visibility,
@@ -1051,7 +1230,41 @@ impl LibraryWalk {
                 Some("graphdata") => VariableKind::Graph,
                 _ => VariableKind::Unknown,
             };
-            vars.variables.push(Variable { name, kind });
+            let target = doc_ref(v);
+            // A declaration left out, and the object it binds.
+            let left_out = |walk: &mut Self| {
+                walk.skipped += 1;
+                walk.bindings_skipped += usize::from(target.is_some());
+            };
+            let Some(name) = name else {
+                left_out(self);
+                continue;
+            };
+            match vars.variable(&name) {
+                // Another object bound to the variable.
+                Some(declared) if declared.kind == kind => {}
+                // A second variable of that name, of another kind.
+                Some(_) => {
+                    left_out(self);
+                    continue;
+                }
+                None if vars.variables.len() < MAX_LIBRARY_VARIABLES && self.keep(name.len()) => {
+                    vars.variables.push(Variable { name: name.clone(), kind });
+                }
+                None => {
+                    left_out(self);
+                    continue;
+                }
+            }
+            if let Some(target) = target {
+                // The binding keeps its own copy of the name, and its target.
+                let len = name.len().saturating_add(target.as_ref().map_or(0, String::len));
+                if self.bindings.len() < MAX_LIBRARY_BINDINGS && self.keep(len) {
+                    self.bindings.push(BindingRef { variable: name, target });
+                } else {
+                    self.bindings_skipped += 1;
+                }
+            }
         }
     }
 
@@ -1181,7 +1394,7 @@ fn read_variable_sets(sets: &Obj) -> VariableRead {
         None => walk.skipped += 1,
     }
     if walk.nodes > MAX_LIBRARY_NODES {
-        return VariableRead { variables: Variables::default(), skipped: 1, present: true };
+        return VariableRead { variables: Variables::default(), bindings: vec![], bindings_skipped: 0, skipped: 1, present: true };
     }
-    VariableRead { variables: vars, skipped: walk.skipped, present: true }
+    VariableRead { variables: vars, bindings: walk.bindings, bindings_skipped: walk.bindings_skipped, skipped: walk.skipped, present: true }
 }

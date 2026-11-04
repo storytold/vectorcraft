@@ -69,6 +69,18 @@ fn apply(s: &mut Session, p: &Value, stops: Vec<TabStop>, label: &str) -> Result
     let ids = text_targets(s, p, "text.tabs.set")?;
     let range = TextRange::parse(p, "text.tabs.set")?;
     let n = stops.len();
+    // Every targeted paragraph already holds these stops: no edit and no undo step.
+    let doc = &s.doc()?.doc;
+    let unchanged = ids.iter().all(|id| match doc.node(*id).map(|node| &node.kind) {
+        Some(NodeKind::Text(t)) => match para_span(range, t) {
+            None => t.para_styles().all(|pa| pa.tabs == stops),
+            Some(mut r) => r.all(|i| t.para_at(i).tabs == stops),
+        },
+        _ => true,
+    });
+    if unchanged {
+        return Ok(json!({ "stops": n }));
+    }
     s.edit(label, |d, _| {
         for id in &ids {
             if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
@@ -112,6 +124,33 @@ mod tests {
         assert!(s.execute("text.tabs.set", &json!({"stops": [{"position": 10, "align": "diagonal"}]})).is_err());
         s.execute("text.tabs.clear", &json!({})).unwrap();
         assert_eq!(s.execute("text.tabs.get", &json!({})).unwrap()["stops"], json!([]));
+    }
+
+    /// Setting the stops every targeted paragraph already holds records no undo step. When one
+    /// targeted paragraph holds other stops, the command still sets them all.
+    #[test]
+    fn setting_the_same_stops_records_no_undo_step() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 20, "text": "a\tb\nc\td"})).unwrap();
+        let stops = json!({"stops": [{"position": 0}, {"position": 20, "leader": "."}]});
+        s.execute("text.tabs.set", &stops).unwrap();
+        let undo = |s: &Session| s.active().unwrap().history.undo.len();
+        let before = undo(&s);
+        s.execute("text.tabs.set", &stops).unwrap();
+        s.execute("text.tabs.set", &json!({"stops": [{"position": 20, "leader": "."}, {"position": 0}]})).unwrap();
+        assert_eq!(undo(&s), before);
+        s.execute("text.tabs.clear", &json!({})).unwrap();
+        s.execute("text.tabs.clear", &json!({})).unwrap();
+        assert_eq!(undo(&s), before + 1);
+        // The second paragraph (bytes 4 on) takes other stops; setting the first paragraph's stops
+        // on both paragraphs changes the second.
+        s.execute("text.tabs.set", &stops).unwrap();
+        s.execute("text.tabs.set", &json!({"stops": [{"position": 50}], "start": 4, "end": 4})).unwrap();
+        let before = undo(&s);
+        s.execute("text.tabs.set", &stops).unwrap();
+        assert_eq!(undo(&s), before + 1);
+        assert_eq!(s.execute("text.tabs.get", &json!({"start": 4})).unwrap()["stops"][1]["position"], json!(20.0));
     }
 
     /// #1877: a leader set the way the Tabs panel sets it fills the tab's gap with its dots.

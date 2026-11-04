@@ -152,6 +152,32 @@ impl FontDb {
         list
     }
 
+    /// Whether the installed fonts are cataloged, so lookups by family name no longer wait for
+    /// the scan. Always true on wasm, which has no installed fonts.
+    pub fn installed_fonts_ready(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.cataloged.get().is_some()
+        }
+        #[cfg(target_arch = "wasm32")]
+        true
+    }
+
+    /// [`FontDb::menu_family_list`] without waiting for the installed fonts' scan: until it ends,
+    /// the families already loaded (the bundled fonts and any loaded meanwhile), sorted, without
+    /// the hidden ones. For what is built every frame, such as the menu bar's Type › Font, so the
+    /// window's first frame doesn't wait for the scan of a large font library (#5483).
+    /// [`FontDb::generation`] changes when the scan ends.
+    pub fn menu_family_list_now(&self) -> Arc<[String]> {
+        if self.installed_fonts_ready() {
+            return self.menu_family_list();
+        }
+        let mut v: Vec<String> = self.read_faces().iter().map(|f| f.family.clone()).filter(|f| !f.starts_with('.')).collect();
+        v.sort_by_key(|a| a.to_lowercase());
+        v.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+        v.into()
+    }
+
     /// How a font menu labels `family`: the English name when `english` is on (Preferences › Type ›
     /// Show Font Names in English, the default), else the font's native-language name when it has
     /// one. The document and commands still use the English family ([`Self::canonical`]).
