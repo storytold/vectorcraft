@@ -101,7 +101,7 @@ fn two_pastes_add_their_own_guides_on_the_current_layer_and_svg_has_none() {
     run(&mut s, "edit.copy", json!({}));
     // Guides alone: no art for the system clipboard's SVG.
     assert!(s.clipboard_svg().is_none(), "guides alone put no SVG on the system clipboard");
-    assert!(s.clipboard.flavour_types(true, true).is_empty(), "nor any other format (it keeps what other apps put there)");
+    assert!(s.clipboard.flavour_types(true, true).is_empty(), "nor any other format (the app empties the system clipboard)");
     let layer = NodeId(run(&mut s, "layer.new", json!({}))["id"].as_u64().unwrap());
     run(&mut s, "edit.paste", json!({}));
     assert_eq!(s.doc().unwrap().selection.guides, [1], "the first paste selects its own guide");

@@ -48,6 +48,7 @@ mod svgsave;
 pub(super) mod synthetic;
 pub(super) mod sysclip;
 mod sysclip_emf;
+mod sysclip_guides;
 mod sysclip_probe;
 mod tab_overflow;
 mod taskbar;

@@ -104,7 +104,7 @@ impl Clipboard {
     }
 
     /// Does it hold art (objects or artboards) for other apps? Ruler guides stay in VectorCraft:
-    /// guides alone put nothing on the system clipboard (#3226).
+    /// a Copy of guides alone empties the system clipboard (#3226).
     pub fn has_art(&self) -> bool {
         !self.nodes.is_empty() || !self.artboards.is_empty()
     }

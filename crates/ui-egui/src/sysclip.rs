@@ -124,9 +124,11 @@ impl VectorcraftApp {
     /// ([`Self::write_formats_before_text_input`]). Once they are written, the status bar shows
     /// the first of the PNG's and PDF's warnings.
     pub(crate) fn publish_clipboard(&mut self) {
-        // Ruler guides copied alone stay in VectorCraft: the system clipboard keeps what other
-        // apps put there (#3226).
+        // Ruler guides copied alone stay in VectorCraft, but the Copy still replaces what the
+        // system clipboard held: it is emptied, so the next Paste takes the guides rather than
+        // what another app copied before, and what another app copies after still wins (#3226).
         if !self.session.clipboard.has_art() {
+            self.clear_system_clipboard();
             return;
         }
         if self.services.system_clipboard.is_none() {
@@ -178,6 +180,28 @@ impl VectorcraftApp {
         // the status.
         if let Err(e) = background::run(self, free, String::new(), None, work, then) {
             self.ui.status = e;
+        }
+    }
+
+    /// A Copy with nothing for other apps (ruler guides alone): the formats of an earlier Copy or
+    /// Cut not written yet are dropped and the system clipboard is emptied. On the web, empty text
+    /// goes through egui when Copy As SVG is on, in place of the SVG objects would put there.
+    fn clear_system_clipboard(&mut self) {
+        let publishing = &mut self.clipboard_publishing;
+        publishing.latest.fetch_add(1, Ordering::SeqCst);
+        publishing.pending = false;
+        match self.services.system_clipboard.as_mut() {
+            Some(cb) => {
+                if let Err(e) = cb.write(&[]) {
+                    self.ui.status = format!("Couldn't copy to the system clipboard: {e}");
+                }
+            }
+            None => {
+                if self.session.prefs.copy_as_svg {
+                    self.clipboard_out = Some(String::new());
+                    self.clipboard_published = None;
+                }
+            }
         }
     }
 

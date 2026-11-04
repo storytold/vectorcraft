@@ -1596,7 +1596,7 @@ With area type selected, the Properties panel's Paragraph section and the Contro
 
 ## Copy and paste ruler guides (2026-11-01)
 
-Edit › Copy and Cut put the selected ruler guides on the clipboard, with the selected objects or on their own, so they paste into another artboard or document (#3226). Pasted guides go on the layer new art goes to and are selected; with objects they move as the objects do, and alone they keep their places, while Paste in Place, in Front and in Back put them on the active artboard as they lay on theirs and Paste on All Artboards on every artboard. Tests: `tests::guide_clipboard`.
+Edit › Copy and Cut put the selected ruler guides on the clipboard, with the selected objects or on their own, so they paste into another artboard or document (#3226). Pasted guides go on the layer new art goes to and are selected; with objects they move as the objects do, and alone they keep their places, while Paste in Place, in Front and in Back put them on the active artboard as they lay on theirs and Paste on All Artboards on every artboard. Guides have no format other apps read, so a Copy of guides alone empties the system clipboard, and the next Paste takes the guides rather than what another app copied before. Tests: `tests::guide_clipboard`, `tests::sysclip_guides` (ui-egui).
 
 ## Revision history
 
