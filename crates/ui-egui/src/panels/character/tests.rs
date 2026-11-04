@@ -278,6 +278,21 @@ fn kerning_menu_lists_auto_and_optical_for_mixed_modes() {
     assert_eq!(kerning_methods(mode), (Some(false), Some(false)), "both entries are listed, neither checked");
 }
 
+/// A number typed into the Kerning field after Optical keeps the Optical flag on the type, and
+/// the manual value sets the spacing; the menu then checks neither Auto nor Optical.
+#[test]
+fn kerning_menu_checks_neither_method_for_a_manual_value_after_optical() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "AV", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("text.setFormat", json!({"kerning": "optical"})).unwrap();
+    app.run("text.setFormat", json!({"kerning": 50})).unwrap();
+    let mode = shared(&app, |s| (s.optical_kerning, s.kerning));
+    assert_eq!(mode, Some((true, Some(50.0))), "the manual value keeps the Optical flag");
+    assert_eq!(kerning_methods(mode), (Some(false), Some(false)), "a manual value checks neither method");
+}
+
 /// Highlight Kerning and Highlight Tracking show the Character panel and give its field the
 /// keyboard focus with the value selected: what is typed replaces it, and Enter applies it.
 /// Highlight Font Name opens the font family menu with its search field focused. Without
