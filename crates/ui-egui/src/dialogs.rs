@@ -452,7 +452,9 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 
 /// Set `field` of `d` to `value` for `ui.dialog.set`, as the dialog's own control for it does: a
 /// Pattern Brush Options corner tile set this way is saved by OK, as one chosen from its menu is,
-/// and an Edit Data Set field set this way is no longer the row's empty text value.
+/// and an Edit Data Set field set this way is no longer the row's empty text value. A DXF Options
+/// preset set this way sets its fields, as one picked from its menu does, and the preset it shows
+/// follows the DXF options set this way.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -460,7 +462,11 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == variables::KIND {
         variables::note_set(d, &field);
     }
+    let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     d.fields.insert(field, value);
+    if let Some(field) = dxf {
+        dxf_options::note_set(d, &field);
+    }
 }
 
 /// The fields `ui.dialog.set` can set on `d`, sorted, without the `__` ones: those it holds,

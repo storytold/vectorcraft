@@ -1,13 +1,15 @@
-//! DXF Options (Export As → DXF): version, scale (1 unit of the art = N drawing units) and
-//! lineweights, number of colours, the format of placed images, Preserve Appearance or Maximize
-//! Editability, and Export Selected Art Only, Alter Paths for Appearance and Outline Text.
+//! DXF Options (Export As → DXF): a preset (Custom, or CNC / CAM, which sets the options below for
+//! cutting software and shows Custom again once one is changed), version, scale (1 unit of the
+//! art = N drawing units) and lineweights, number of colours, the format of placed images,
+//! Preserve Appearance or Maximize Editability, and Export Selected Art Only, Alter Paths for
+//! Appearance and Outline Text.
 //!
 //! Fields: `document.export` params (`format: dxf`, `path?`, the artboard choice) and the DXF
 //! options of `document.exportDxf`. OK remembers the options for next time and writes the file
 //! (asking where when there is no path); bad options keep the dialog open.
 
 use serde_json::{Map, Value, json};
-use vectorcraft_cad::{ColorDepth, DxfVersion, Preserve, RasterFormat};
+use vectorcraft_cad::{ColorDepth, DxfPreset, DxfVersion, Preserve, RasterFormat};
 use vectorcraft_doc::Unit;
 use vectorcraft_engine::cmd::fileio;
 
@@ -32,40 +34,94 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 /// Fields that are not remembered between exports (they belong to one export).
 const PER_EXPORT: [&str; 7] = ["format", "path", "useArtboards", "range", "artboard", "artboards", "selectedOnly"];
 
+/// The preset field (the `dxfPreset` param).
+const PRESET: &str = "dxfPreset";
+/// The preset the fields were last set from or matched (a change of [`PRESET`] sets its fields).
+const SHOWN_PRESET: &str = "__shownPreset";
+
 /// The options a first DXF Options dialog starts from (the export's defaults).
 fn defaults() -> Map<String, Value> {
+    let mut m = preset_fields(DxfPreset::Custom);
+    m.insert(PRESET.into(), json!(DxfPreset::Custom.id()));
+    m.insert("selectedOnly".into(), json!(false));
+    m
+}
+
+/// The fields `preset` sets (Custom: the export's defaults).
+fn preset_fields(preset: DxfPreset) -> Map<String, Value> {
+    let o = preset.options();
     let mut m = Map::new();
     for (k, v) in [
-        ("version", json!(DxfVersion::default().id())),
-        ("unit", json!(Unit::Millimeters.label())),
-        ("scale", json!(1)),
-        ("scaleLineweights", json!(false)),
-        ("colors", json!(ColorDepth::default().id())),
-        ("rasterFormat", json!(RasterFormat::default().id())),
-        ("preserve", json!(Preserve::default().id())),
-        ("alterPaths", json!(false)),
-        ("outlineText", json!(false)),
-        ("selectedOnly", json!(false)),
+        ("version", json!(o.version.id())),
+        ("unit", json!(o.unit.label())),
+        ("scale", json!(o.scale)),
+        ("scaleLineweights", json!(o.scale_lineweights)),
+        ("colors", json!(o.colors.id())),
+        ("rasterFormat", json!(o.raster.id())),
+        ("preserve", json!(o.preserve.id())),
+        ("alterPaths", json!(o.alter_paths)),
+        ("outlineText", json!(o.outline_text)),
     ] {
         m.insert(k.into(), v);
     }
     m
 }
 
+/// Show the preset the fields match: CNC / CAM while every field it sets is as it sets it, else
+/// Custom. An unknown preset stays as it is, for OK to refuse.
+fn show_matching_preset(d: &mut Dialog) {
+    if DxfPreset::from_id(&d.str(PRESET)).is_none() {
+        return;
+    }
+    let preset = fileio::dxf::options(&super::form::params(d)).map_or(DxfPreset::Custom, |o| DxfPreset::of(&o));
+    d.fields.insert(PRESET.into(), json!(preset.id()));
+    d.fields.insert(SHOWN_PRESET.into(), json!(preset.id()));
+}
+
+/// A preset picked since the fields were last matched sets its fields; Custom puts back the
+/// export's defaults.
+fn apply_picked_preset(d: &mut Dialog) {
+    if !d.str(PRESET).eq_ignore_ascii_case(&d.str(SHOWN_PRESET))
+        && let Some(p) = DxfPreset::from_id(&d.str(PRESET))
+    {
+        d.fields.extend(preset_fields(p));
+    }
+}
+
+/// `field` was set (`ui.dialog.set`): a preset sets its fields now, so fields set after it keep
+/// their values, and any other field shows the preset the fields then match, as drawing does.
+pub(super) fn note_set(d: &mut Dialog, field: &str) {
+    if field == PRESET {
+        apply_picked_preset(d);
+    }
+    show_matching_preset(d);
+}
+
 /// Open DXF Options for an export whose params (path, artboard choice, any DXF option) are
-/// `params`, over the options used last.
+/// `params`, over the options used last. A `dxfPreset` in `params` sets its fields under the
+/// options `params` gives.
 pub fn open(app: &mut VectorcraftApp, params: &Value) {
     let mut fields = defaults();
-    for given in [&app.ui.dxf_options, params] {
-        if let Some(o) = given.as_object() {
-            fields.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
+    if let Some(o) = app.ui.dxf_options.as_object() {
+        fields.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
+    }
+    if let Some(o) = params.as_object() {
+        if let Some(p) = o.get(PRESET).and_then(Value::as_str).and_then(DxfPreset::from_id) {
+            fields.extend(preset_fields(p));
         }
+        fields.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
     }
     fields.insert("format".into(), json!("dxf"));
-    app.ui.dialog = Some(Dialog::new(KIND, Value::Object(fields)));
+    let mut d = Dialog::new(KIND, Value::Object(fields));
+    show_matching_preset(&mut d);
+    app.ui.dialog = Some(d);
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    let presets: Vec<(&str, &str)> = DxfPreset::ALL.iter().map(|p| (p.id(), p.label())).collect();
+    choice(ui, d, PRESET, tl!("Preset:"), &presets);
+    apply_picked_preset(d);
+    ui.add_space(4.0);
     let versions: Vec<(&str, &str)> = DxfVersion::ALL.iter().map(|v| (v.id(), v.label())).collect();
     choice(ui, d, "version", tl!("Version:"), &versions);
     ui.add_space(4.0);
@@ -113,6 +169,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             Preserve::Editability => tl!("Type stays text, and every stroke is a line with its lineweight and dashes."),
         },
     );
+    show_matching_preset(d);
     false
 }
 
@@ -146,14 +203,20 @@ fn note(ui: &mut egui::Ui, text: &str) {
 
 /// Check the options, remember them, and write the file(s).
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    // A preset or field set since the dialog last drew (the control channel sets fields without
+    // drawing) counts as drawn.
+    let mut d = d.clone();
+    apply_picked_preset(&mut d);
+    show_matching_preset(&mut d);
+    let d = &d;
     let params = super::form::params(d);
     fileio::dxf::check(&params)?;
     // Nothing selected keeps the dialog open too.
     if let Some(st) = app.session.active() {
         fileio::export_source(st, &params).map_err(|e| e.to_string())?;
     }
-    app.ui.dxf_options =
-        Value::Object(d.fields.iter().filter(|(k, _)| !PER_EXPORT.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect());
+    let remembered = params.as_object().map(|o| o.iter().filter(|(k, _)| !PER_EXPORT.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())));
+    app.ui.dxf_options = Value::Object(remembered.into_iter().flatten().collect());
     app.ui.dialog = None;
     let path = d.fields.get("path").and_then(Value::as_str).map(str::to_string);
     io::export(app, Some("dxf"), path, &params)

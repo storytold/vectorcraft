@@ -1149,7 +1149,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.dxfOptionsDialog",
         "DXF Options Dialog",
         "",
-        "{path?, useArtboards?, range?, …document.exportDxf options} open DXF Options (dialog `dxfOptions`: fields = these options over the ones used last); OK checks them, remembers them and writes path (else asks). Export As… → DXF opens it too",
+        "{path?, useArtboards?, range?, …document.exportDxf options} open DXF Options (dialog `dxfOptions`: fields = these options over the ones used last, a dxfPreset's options under them; the dxfPreset field shows cnc while every field it sets matches, else custom); OK checks them, remembers them and writes path (else asks). Export As… → DXF opens it too",
     ),
     (
         "links.editOriginal",
