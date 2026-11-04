@@ -144,7 +144,7 @@ pub(crate) fn eps_for<'a>(paths: impl IntoIterator<Item = &'a BezPath>) -> Resul
         }
     }
     let eps = (m * f64::EPSILON * 64.0).max(1e-6);
-    // Past this the sweep tolerance is wider than the refit precision: features thinner than it collapse and the call
+    // Past this the sweep tolerance is wider than a document unit: features thinner than it collapse and the call
     // would answer `Ok` with part of the art (or all of it) gone. Refuse instead, so callers keep the original.
     if eps > MAX_SWEEP_EPS {
         return Err(PathOpsError::Degenerate);
@@ -152,8 +152,10 @@ pub(crate) fn eps_for<'a>(paths: impl IntoIterator<Item = &'a BezPath>) -> Resul
     Ok(eps)
 }
 
-/// The widest sweep tolerance [`eps_for`] accepts: [`DEFAULT_PRECISION`], reached by coordinates of about 7e11.
-const MAX_SWEEP_EPS: f64 = DEFAULT_PRECISION;
+/// The widest sweep tolerance [`eps_for`] accepts: one document unit, reached by coordinates of about 7e13. (The engine
+/// refuses coordinates far below that, so this only guards the library's own callers; it does not follow the `precision`
+/// a caller asks for.)
+const MAX_SWEEP_EPS: f64 = 1.0;
 
 fn el_points(el: &kurbo::PathEl) -> impl Iterator<Item = Point> {
     use kurbo::PathEl::*;
@@ -339,7 +341,7 @@ impl Arrangement {
     }
 
     /// [`Self::contours`] with a panic in the sweep's contour pass turned into an error, as `new` does for the
-    /// sweep itself. Used by the calls that can return an error; the rest have none to return and let the engine's
+    /// sweep itself (native builds only: on the web a panic aborts, whatever is caught here). Used by the calls that can return an error; the rest have none to return and let the engine's
     /// guard report it.
     pub(crate) fn try_contours(&self, pred: impl Fn(&[bool]) -> bool) -> Result<Contours, PathOpsError> {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.contours(pred))).map_err(|_| PathOpsError::Degenerate)
@@ -767,8 +769,7 @@ pub fn unite_all_with(paths: &[(&PathData, FillRule)], precision: f64) -> PathDa
 /// [`area`] that reports a refused input instead of an area of zero.
 pub fn try_area(path: &PathData, rule: FillRule) -> Result<f64, PathOpsError> {
     let c = normalize_bez(&fill_bezpath(path), rule)?;
-    let area = c.contours().map(|ct| ct.path.area()).sum::<f64>().abs();
-    if area.is_finite() { Ok(area) } else { Err(PathOpsError::NonFinite) }
+    Ok(c.contours().map(|ct| ct.path.area()).sum::<f64>().abs())
 }
 
 /// Unsigned filled area of a path under a fill rule (normalises first, so it is exact for
@@ -891,6 +892,14 @@ mod tests {
     }
 
     #[test]
+    fn the_coordinate_limit_sits_where_the_tolerance_passes_a_unit() {
+        // 100 unit squares: tolerance 0.7 at 5e13 (kept), 1.4 at 1e14 (refused).
+        assert!(try_area(&square(5e13, 5e13, 100.0), FillRule::NonZero).is_ok());
+        assert_eq!(try_area(&square(1e14, 1e14, 100.0), FillRule::NonZero), Err(PathOpsError::Degenerate));
+    }
+
+    #[test]
+    #[cfg(panic = "unwind")]
     fn a_panic_in_the_contour_pass_becomes_an_error() {
         let arr = Arrangement::new(vec![(fill_bezpath(&square(0.0, 0.0, 10.0)), FillRule::NonZero)]).unwrap();
         assert!(arr.try_contours(|m| m[0]).is_ok());

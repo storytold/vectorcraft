@@ -155,7 +155,7 @@ fn run_cut(s: &mut Session, cmd: &str, label: &str, cut: &dyn Fn(&PathData, Fill
         if pd.subpaths.iter().flat_map(|sp| &sp.anchors).any(|a| !(a.p.x.is_finite() && a.p.y.is_finite())) {
             return Err(bad(cmd, "paths contain invalid coordinates"));
         }
-        let pieces = cut(&pd, rule).map_err(|e| bad(cmd, format!("a shape cannot be cut: {e}")))?;
+        let pieces = cut(&pd, rule).map_err(|e| bad(cmd, format!("the cut cannot be made on this art: {e}")))?;
         if let Some(pieces) = pieces {
             plan.push((id, pieces));
         }
@@ -251,6 +251,10 @@ fn crop(pd: &PathData, rule: FillRule, rect: Rect) -> Cut {
         return Ok(None);
     }
     if pd.is_closed() {
+        // Wholly outside: nothing is left, whatever the booleans would make of the rectangle's coordinates.
+        if rect.intersect(b).is_zero_area() {
+            return Ok(Some(vec![]));
+        }
         let r = intersect(
             pd,
             rule,
@@ -417,15 +421,19 @@ mod tests {
     #[test]
     fn a_shape_the_booleans_refuse_is_an_error_not_no_pieces() {
         let far = polygon(&[
-            Point::new(1e13, 1e13),
-            Point::new(1e13 + 100.0, 1e13),
-            Point::new(1e13 + 100.0, 1e13 + 100.0),
-            Point::new(1e13, 1e13 + 100.0),
+            Point::new(1e15, 1e15),
+            Point::new(1e15 + 100.0, 1e15),
+            Point::new(1e15 + 100.0, 1e15 + 100.0),
+            Point::new(1e15, 1e15 + 100.0),
         ]);
         let axis = Axis { p: Point::ZERO, d: Vec2::new(0.0, 1.0) };
-        assert!(mirror(&far, FillRule::NonZero, &axis, 1.0).is_err());
-        assert!(crop(&far, FillRule::NonZero, Rect::new(0.0, 0.0, 100.0, 100.0)).is_err());
-        assert!(split_by_line(&far, FillRule::NonZero, &axis).is_err());
+        let refused = Some(po::PathOpsError::Degenerate);
+        assert_eq!(mirror(&far, FillRule::NonZero, &axis, 1.0).err(), refused);
+        assert_eq!(split_by_line(&far, FillRule::NonZero, &axis).err(), refused);
+        // A rectangle that far out, against art near the origin, still crops it to nothing.
+        let far_rect = Rect::new(1e15, 1e15, 1e15 + 100.0, 1e15 + 100.0);
+        let near_art = polygon(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)]);
+        assert_eq!(crop(&near_art, FillRule::NonZero, far_rect).unwrap(), Some(vec![]));
         // Near the origin the same cuts work.
         let near = polygon(&[Point::new(-50.0, 0.0), Point::new(50.0, 0.0), Point::new(50.0, 100.0), Point::new(-50.0, 100.0)]);
         assert_eq!(mirror(&near, FillRule::NonZero, &axis, 1.0).unwrap().len(), 1);
