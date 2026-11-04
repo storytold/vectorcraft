@@ -5588,7 +5588,7 @@ theme	Appearance	Apparence
 @msg	name is empty	le nom est vide
 @msg	an action is already recording	un script est déjà en cours d’enregistrement
 @msg	an action is already playing	un script est déjà en cours d’exécution
-@msg	the action stopped playing: its document is no longer active	le script s’est arrêté : son document n’est plus le document actif
+@msg	the action stopped playing: its document is no longer active	le script s’est arrêté : son document n’est plus le document actif
 @msg	speed must be accelerated, step or pause	speed doit valoir accelerated, step ou pause
 @msg	seconds must be a whole number from 1 to 60	seconds doit être un nombre entier de 1 à 60
 @msg	no such function key	touche de fonction inexistante
