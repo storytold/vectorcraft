@@ -1886,3 +1886,51 @@ fn the_control_bar_shows_the_global_edit_options() {
     }
     assert!(seen, "a wide bar has room for it");
 }
+
+/// At any width the Control bar shows the inline X, Y, W and H fields whole inside its right margin,
+/// or leaves all four out and keeps the Transform link; a wider bar never leaves them out once a
+/// narrower one showed them.
+#[test]
+fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    for count in [1, 2] {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let ids: Vec<_> = (0..count)
+            .map(|i| app.run("shape.rectangle", json!({"x": 20 + 100 * i, "y": 20, "width": 40, "height": 30})).unwrap()["id"].clone())
+            .collect();
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        let mut seen = false;
+        for width in (600..=2400).step_by(10) {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
+            let mut nodes = Vec::new();
+            for _ in 0..2 {
+                let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
+                out.textures_delta.clear();
+                nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+            }
+            let spacing = ctx.global_style().spacing.item_spacing.x;
+            // The right edge of the box of the field its label names. The text box sits inside the
+            // field's box with the same inset on both sides, and one item spacing after the label.
+            let right = |name: &str| {
+                let (id, label) = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::Label && n.value() == Some(name))?;
+                let input = nodes.iter().find(|(_, n)| n.labelled_by().contains(id)).and_then(|(_, n)| n.bounds())?;
+                let inset = input.x0 - label.bounds()?.x1 - f64::from(spacing);
+                Some(input.x1 + inset)
+            };
+            let fields = ["X:", "Y:", "W:", "H:"].map(right);
+            assert!(fields.iter().all(Option::is_some) || fields.iter().all(Option::is_none), "{count} objects, {width}: {fields:?}");
+            assert!(nodes.iter().any(|(_, n)| n.label() == Some("Transform")), "{count} objects, {width}: the Transform link shows");
+            // The bar's content ends at its 10-point inner margin.
+            if let Some(h) = fields[3] {
+                assert!(h <= f64::from(width) - 10.0, "{count} objects, {width}: H ends at {h}");
+            }
+            assert!(!seen || fields[3].is_some(), "{count} objects, {width}: left out after a narrower bar showed them");
+            seen |= fields[3].is_some();
+        }
+        assert!(seen, "{count} objects: a wide bar has room for the fields");
+    }
+}
