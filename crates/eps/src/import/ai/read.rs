@@ -159,6 +159,8 @@ pub struct Structure {
     pub envelopes_drawn: Vec<(NodeId, Node)>,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
+    /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
+    pub canvas_scale: f64,
     pub warnings: Vec<String>,
 }
 
@@ -325,6 +327,8 @@ struct Reader<'a> {
     /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one, `None`
     /// when the declared factor is not applied ([`read`]).
     large_canvas: Option<f64>,
+    /// The declared `%AI24_LargeCanvasScale` (1 without one), applied or not.
+    canvas_scale: f64,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
     ruler_units: Option<u8>,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
@@ -435,6 +439,7 @@ impl<'a> Reader<'a> {
             art_size: None,
             template_center: None,
             large_canvas: None,
+            canvas_scale: 1.0,
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),

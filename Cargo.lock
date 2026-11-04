@@ -6284,6 +6284,7 @@ dependencies = [
  "vectorcraft-effects",
  "vectorcraft-geom",
  "vectorcraft-metafile",
+ "vectorcraft-pathops",
  "vectorcraft-pdf",
  "vectorcraft-render",
  "vectorcraft-testkit",

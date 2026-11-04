@@ -1,5 +1,6 @@
 //! What the export does to the file once it is written, in this order: the pages' thumbnails
-//! (General › Embed page thumbnails), the seal of the editing data, fast web view (a linearised
+//! (General › Embed page thumbnails), a `.ai` file's editing copy of the art
+//! ([`crate::PrivateData`]), the seal of the editing data, fast web view (a linearised
 //! file, [`crate::linearize`]) and encryption ([`crate::encrypt`]), which a linearised file goes
 //! through between its two steps so that it stays linearised. Also here: what makes a file say it
 //! is PDF 1.3 ([`declare_pdf13`]), for PDF 1.3 and PDF/X-1a and PDF/X-3 files, the file's
@@ -213,6 +214,13 @@ pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, warnings: &
             pdf
         }
         (false, _) => pdf,
+    };
+    let pdf = match &opts.private_data {
+        Some(p) => {
+            let at = opts.modified.or(opts.created).or_else(vectorcraft_doc::metadata::output_time).unwrap_or(0);
+            crate::piece_info::add(pdf, p, at)?
+        }
+        None => pdf,
     };
     let pdf = if editing { crate::editing::seal(pdf)? } else { pdf };
     if !set.fast_web_view {

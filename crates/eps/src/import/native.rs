@@ -45,6 +45,7 @@ mod layers;
 mod plan;
 mod slots;
 
+pub(crate) use build::scale_document;
 #[cfg(test)]
 use build::{Frame, MADE, prune_unseen};
 #[cfg(test)]
