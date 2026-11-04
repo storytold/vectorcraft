@@ -498,6 +498,8 @@ impl VectorcraftApp {
             return;
         }
         crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
+        // Whether this pass draws the last step of an action playing at Step by Step.
+        let step_held = crate::panels::actions::playback_held(self);
         let t0 = now_ms();
         widgets::set_dialog_open(&ctx, self.ui.dialog.is_some());
         // The canvas records this pass's IME caret geometry; a pass that draws no canvas has none.
@@ -562,6 +564,10 @@ impl VectorcraftApp {
         if !ctx.will_discard() {
             self.perf.frame_ms = now_ms() - t0;
             self.issue_screenshots(&ctx);
+            // A hidden window's pass shows nothing, so the step waits for a pass the user sees.
+            if step_held && !self.viewport_hidden(&ctx) {
+                crate::panels::actions::playback_drawn(self);
+            }
         }
         let _ = json!(null);
     }
