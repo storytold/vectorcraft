@@ -5615,8 +5615,8 @@ dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`
 `ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
 `ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
 attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
-Advanced Character Formats holds `h_scale` and `v_scale` (percent, above 0 and at most 4000000),
-`baseline_shift` (points, -4000000 to 4000000), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
+Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000),
+`baseline_shift` (points, -1296 to 1296), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
 Setup's languages; English: USA stores the explicit default `null`, and a tag not in the list that the style
 already has is kept). Language sets the language the characters are shaped in; it does not change hyphenation
 or spelling.
@@ -5637,6 +5637,9 @@ its features turned off, distinct from unset.
 `charStyle.new`, `charStyle.setAttrs` and `charStyle.edit` reject a tint outside 0 to 1, a link to a swatch that is
 not a global swatch of the document, a stroke weight outside 0 to 4000000, more than 256 feature tags and an
 OpenType feature tag the shaper does not know, unless the style or the text it is made from already has that value.
+They also reject a size outside 0.1 to 1296, explicit leading outside 0.1 to 5000, horizontal or vertical scale
+outside 1 to 10000, and baseline shift or Tate-chu-yoko offsets outside -1296 to 1296. `leading: null` keeps
+Auto leading. An invalid value leaves the style, its text, and Undo history unchanged.
 The New Character Style dialog accepts the same character fields and starts with the selected text's
 captured attributes. Without selected text, it starts with the character defaults for the interface language
 (including `charAlign: "emBoxCenter"` in Japanese); changing a Basic field keeps other seeded attributes.
