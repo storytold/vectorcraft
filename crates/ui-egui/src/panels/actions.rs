@@ -3154,6 +3154,44 @@ mod tests {
     }
 
     #[test]
+    fn closing_the_playing_document_ends_a_paced_playback() {
+        let stopped = "the action stopped playing: its document is no longer active";
+        // File › Close with `p`, answering Don't Save for the modified document.
+        let close = |app: &mut VectorcraftApp, p: Value| {
+            assert_eq!(app.run("file.close", p).unwrap(), json!({"pending": crate::unsaved::KIND}));
+            app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+            crate::unsaved::confirm(app).unwrap();
+        };
+        // Step by Step, the only document closed: no document is active when the next step is due.
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(x(&app), 1.0);
+        close(&mut app, json!({}));
+        assert!(app.session.active().is_none());
+        assert_eq!(frame(&mut app, 0.0), None, "the frame after Play draws");
+        assert_eq!(frame(&mut app, 0.0), None, "the next step is due, and the playback ends");
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(app.ui.status, stopped);
+        // Pause For, another document left active: no later step runs in it.
+        let (mut app, x) = app_with_three_moves();
+        app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
+        let other = app.session.active().unwrap().doc.clone();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(x(&app), 1.0);
+        assert_eq!(tick_playback(&mut app, 0.0), Some(1.0));
+        close(&mut app, json!({"index": 0}));
+        assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &other));
+        assert_eq!(tick_playback(&mut app, 1.0), None, "the playback ends when the next step is due");
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(app.ui.status, stopped);
+        assert_eq!(tick_playback(&mut app, 10.0), None);
+        assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &other), "no step ran in the document left open");
+    }
+
+    #[test]
     fn a_failing_step_ends_a_paced_playback_with_its_error() {
         let (mut app, x) = app_with_three_moves();
         app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
