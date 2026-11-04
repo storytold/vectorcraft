@@ -4838,6 +4838,9 @@ imageTrace	Outline	Kontur
 @msg	the Pixar file's image data is damaged	dane obrazu pliku Pixar są uszkodzone
 @msg	the JPEG 2000 file can't be read	nie można odczytać pliku JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	plik JPEG 2000 zawiera nieobsługiwaną przestrzeń barw lub zawartość JPX
+@msg	the HEIC or HEIF file can't be read	nie można odczytać pliku HEIC lub HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	plik HEIC lub HEIF zawiera rodzaj obrazu, którego nie można odczytać
+@msg	HEIC and HEIF images can't be opened in this build	obrazów HEIC i HEIF nie można otworzyć w tej wersji
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD jest zbyt duży, aby go odczytać ({_1} × {_2} pikseli)
 @msg	zipped 32-bit PSD image data with prediction can't be read	nie można odczytać spakowanych 32-bitowych danych obrazu PSD z predykcją
 @msg	{depth}-bit PSD files in this colour mode can't be read	nie można odczytać {depth}-bitowych plików PSD w tym trybie koloru
