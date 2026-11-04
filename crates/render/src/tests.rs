@@ -886,6 +886,25 @@ fn node_thumbnail_reports_the_size_it_draws() {
     }
 }
 
+/// A node rendered with `AntiAlias::None` has hard edges, as a page render with that option does.
+#[test]
+fn node_renders_follow_the_anti_alias_option() {
+    let mut d = Document::new(100.0, 100.0);
+    let id = d.alloc_id();
+    let n = Node::path(id, shapes::ellipse(Rect::new(10.3, 10.3, 60.6, 60.6)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let node = Arc::new(n.clone());
+    let hard = RenderOptions { anti_alias: AntiAlias::None, ..Default::default() };
+    let partial = |img: &Rendered| img.pixels.chunks(4).any(|p| p[3] != 0 && p[3] != 255);
+    let drawn = |img: &Rendered| img.pixels.chunks(4).any(|p| p[3] == 255);
+    let mut r = Renderer::new();
+    assert!(partial(&r.render_node(&d, &node, 100, 100, Affine::IDENTITY).unwrap()), "art anti-aliasing has partial edge pixels");
+    assert!(partial(&r.render_node_thumbnail(&d, &n, 37, None).unwrap()), "art anti-aliasing has partial edge pixels");
+    let img = r.render_node_with(&d, &node, 100, 100, Affine::IDENTITY, &hard).unwrap();
+    assert!(drawn(&img) && !partial(&img), "render_node_with: every alpha is 0 or 255");
+    let thumb = r.render_node_thumbnail_with(&d, &n, 37, None, &hard).unwrap();
+    assert!(drawn(&thumb) && !partial(&thumb), "render_node_thumbnail_with: every alpha is 0 or 255");
+}
+
 #[test]
 fn opacity_mask_with_undecodable_image_leaves_out_object() {
     use vectorcraft_doc::{Effect, ImageBlob, ImageObject, NodeKind, OpacityMask};
