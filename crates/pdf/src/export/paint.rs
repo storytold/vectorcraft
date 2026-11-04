@@ -431,7 +431,7 @@ impl Exporter<'_> {
     /// in process colors, so the spot inks have no plate of their own.
     fn warn_spot_image(&mut self, g: &vectorcraft_color::GradientPaint) {
         let doc = self.doc;
-        let from_stops = g.gradient.kind != GradientKind::Freeform || g.freeform.is_none();
+        let from_stops = g.gradient.kind != GradientKind::Freeform || !g.has_freeform_points();
         if from_stops && g.gradient.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))) {
             self.warn(
                 "spot colors in gradients exported as images (freeform or dithered gradients, and Perceptual ones with RGB or Lab stops or too many stops) are written in process colors",
