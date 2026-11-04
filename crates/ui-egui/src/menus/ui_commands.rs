@@ -717,7 +717,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorPicker",
         "Color Picker…",
         "",
-        "{stroke?: bool (default: the active proxy), artboard?: index (the picker is for that artboard's background color instead), color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray} (default: the proxy's color, or the artboard's color, white when it has none)} open the Color Picker (fields: hex or color, channel, webOnly, swatches); OK runs paint.setFill / paint.setStroke, or artboard.setProps {index, color} for an artboard",
+        "{stroke?: bool (default: the active proxy), artboard?: index (the picker is for that artboard's background color instead), color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray} (default: the proxy's color, or the artboard's color, white when it has none)} open the Color Picker (fields: hex or color, channel, webOnly, swatches); RGB, HSB and hex values use the working RGB space; OK runs paint.setFill / paint.setStroke, or artboard.setProps {index, color} for an artboard",
     ),
     (
         "ui.sampleScreenColor",
@@ -1092,7 +1092,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorPanel",
         "Color Panel Options",
         "",
-        "{mode?: grayscale|rgb|hsb|cmyk|websafe, options?: bool} pick the Color panel's mode as its panel menu does (the active color converts to the mode's model as one undo step), and Show Options (true) or Hide Options (false); both are kept with the preferences (ui.inspect: ui.color_mode, ui.color_hide_options) → {mode (null: none picked yet), options, shown: the mode the panel shows the color in, or tint for a tint of a global or spot swatch}",
+        "{mode?: grayscale|rgb|hsb|cmyk|websafe, options?: bool} pick the Color panel's mode as its panel menu does (the active color converts to the mode's model as one undo step), and Show Options (true) or Hide Options (false); both are kept with the preferences; RGB, HSB, Web Safe RGB and hex values use the working RGB space (ui.inspect: ui.color_mode, ui.color_hide_options) → {mode (null: none picked yet), options, shown: the mode the panel shows the color in, or tint for a tint of a global or spot swatch}",
     ),
     (
         "ui.savePdfDialog",

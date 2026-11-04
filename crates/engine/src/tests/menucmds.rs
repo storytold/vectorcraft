@@ -1995,6 +1995,36 @@ fn select_same_font_skips_type_that_cannot_be_selected() {
     assert_eq!(selected(&s), vec![g]);
 }
 
+/// A selected layer gives the type on it that can be selected as the reference of the font Same
+/// commands: a hidden or locked layer gives none.
+#[test]
+fn select_same_font_takes_its_reference_from_the_type_on_a_selected_layer() {
+    let mut s = session();
+    let typed =
+        |s: &mut Session, y: f64, font: &str| id_of(&s.execute("text.create", &json!({"x": 0, "y": y, "text": "type", "font": font})).unwrap());
+    let arial = typed(&mut s, 20.0, "Arial");
+    let courier = typed(&mut s, 60.0, "Courier");
+    let l2 = id_of(&s.execute("layer.new", &json!({"top": true})).unwrap());
+    let on_layer = typed(&mut s, 100.0, "Courier");
+    sel(&mut s, &[l2]);
+    assert_eq!(s.execute("select.same.fontFamily", &json!({})).unwrap()["count"], 2);
+    let mut got = selected(&s);
+    got.sort();
+    let mut want = vec![courier, on_layer];
+    want.sort();
+    assert_eq!(got, want);
+    assert!(!selected(&s).contains(&arial));
+    for (off, on) in [
+        (json!({"id": l2.0, "visible": false}), json!({"id": l2.0, "visible": true})),
+        (json!({"id": l2.0, "locked": true}), json!({"id": l2.0, "locked": false})),
+    ] {
+        s.execute("layer.setProps", &off).unwrap();
+        sel(&mut s, &[l2]);
+        assert!(s.execute("select.same.fontFamily", &json!({})).is_err(), "{off}");
+        s.execute("layer.setProps", &on).unwrap();
+    }
+}
+
 /// Select › Same › Text Fill & Stroke Color selects the type with characters whose fill and stroke
 /// both match the first character of the selected type: the same fill with another stroke, or the
 /// same stroke with another fill, is left out, and in type with several runs one run has to match
@@ -2183,6 +2213,58 @@ fn select_same_matches_compound_paths_on_their_own_paint() {
     // Isolated in the compound path, its member paths are the objects to match.
     s.execute("object.isolate", &json!({"id": c.0})).unwrap();
     assert_eq!(same(&mut s, outer, "select.same.shapeType"), vec![outer, inner]);
+}
+
+/// Select > Same compares the other objects with the first selected object that can be selected:
+/// one that is hidden or locked, on a template layer, or outside the isolated group is passed
+/// over. A selection that holds no such object has nothing to compare with.
+#[test]
+fn select_same_skips_a_reference_that_cannot_be_selected() {
+    let mut s = session();
+    let [red, blue, other_blue, other_red, grouped_red] = [0.0, 20.0, 40.0, 60.0, 80.0].map(|x| rect(&mut s, x, 0.0, 10.0, 10.0));
+    for id in [red, other_red, grouped_red] {
+        fill(&mut s, id, "#ff0000");
+    }
+    for id in [blue, other_blue] {
+        fill(&mut s, id, "#0000ff");
+    }
+    let same = |s: &mut Session, from: &[NodeId], cmd: &str| {
+        sel(s, from);
+        assert_eq!(selected(s), from, "select.set keeps {from:?}");
+        s.execute(cmd, &json!({})).unwrap();
+        let mut v = selected(s);
+        v.sort();
+        v
+    };
+    // A hidden or locked red path selected first is not the reference.
+    for (on, off) in [
+        (json!({"id": red.0, "visible": false}), json!({"id": red.0, "visible": true})),
+        (json!({"id": red.0, "locked": true}), json!({"id": red.0, "locked": false})),
+    ] {
+        s.execute("layer.setProps", &on).unwrap();
+        for cmd in ["select.same.fillColor", "select.same.fillAndStroke"] {
+            assert_eq!(same(&mut s, &[red, blue], cmd), vec![blue, other_blue], "{cmd} {on}");
+        }
+        s.execute("layer.setProps", &off).unwrap();
+    }
+    // A red path on a template layer is not the reference.
+    let l2 = id_of(&s.execute("layer.new", &json!({"top": true})).unwrap());
+    let on_template = rect(&mut s, 100.0, 0.0, 10.0, 10.0);
+    fill(&mut s, on_template, "#ff0000");
+    s.execute("layer.setProps", &json!({"id": l2.0, "template": true})).unwrap();
+    assert_eq!(same(&mut s, &[on_template, blue], "select.same.fillColor"), vec![blue, other_blue]);
+    // A red path outside the isolated group is not the reference.
+    sel(&mut s, &[blue, grouped_red]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    assert_eq!(same(&mut s, &[other_red, blue], "select.same.fillColor"), vec![blue]);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    // With no object that can be selected, there is nothing to compare with, and the selection stays.
+    s.execute("layer.setProps", &json!({"id": red.0, "visible": false})).unwrap();
+    sel(&mut s, &[red, on_template]);
+    let r = s.execute("select.same.fillColor", &json!({}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == "nothing selected"), "{r:?}");
+    assert_eq!(selected(&s), vec![red, on_template]);
 }
 
 /// Select > Same > Fill Color and Fill & Stroke from a Live Paint face select the faces of that
