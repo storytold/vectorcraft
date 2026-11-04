@@ -4,7 +4,7 @@
 
 use egui::Ui;
 use serde_json::json;
-use vectorcraft_text::{EXTRA_FEATURES, OtFeatures};
+use vectorcraft_text::{EXTRA_FEATURES, FontDb, OtFeatures, StylisticSet};
 
 use super::character::{shared, text_editing, text_style};
 use crate::VectorcraftApp;
@@ -199,11 +199,46 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             change = Some(Change::Toggle(flag, !on));
         }
     }
+    // The font, not the text, decides which numbered sets can be offered. Each set is an
+    // independent feature, so the menu permits several at once. A font's own label wins over
+    // the numbered fallback. See the public Stylistic Sets help page.
+    let sets = offered_sets(&st);
+    ui.add_enabled_ui(!sets.is_empty(), |ui| {
+        ui.menu_button(tl!("Stylistic Sets"), |ui| {
+            for set in &sets {
+                let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
+                let on = flag.get(&next);
+                if widgets::check_name(ui, &set_label(set), on) {
+                    change = Some(Change::Toggle(flag, !on));
+                }
+            }
+        });
+    });
     if cur.ligatures && vectorcraft_text::ligatures_suppressed_by(st.tracking) && !vectorcraft_text::explicit_ligatures(&st.features) {
         widgets::dim_label(ui, tl!("Ligatures are off while the text is tracked."));
     }
     if let Some(c) = change {
         edit(app, c);
+    }
+}
+
+/// The stylistic sets of the font `st` names. A font that is not available offers none, rather than
+/// the sets of the face drawn in its place.
+fn offered_sets(st: &vectorcraft_doc::CharStyle) -> Vec<StylisticSet> {
+    let db = FontDb::global();
+    let (family, _) = db.canonical(&st.font_family, &st.font_style);
+    if !db.has_family(&family) {
+        return Vec::new();
+    }
+    db.style_face(st).map(|face| face.stylistic_sets()).unwrap_or_default()
+}
+
+/// A Stylistic Sets menu entry: the font's own name for the set, shown as the font gives it, or
+/// `Set 1` through `Set 20` in the UI language.
+fn set_label(set: &StylisticSet) -> String {
+    match &set.name {
+        Some(name) => name.clone(),
+        None => crate::i18n::fmt(tl!("Set {n}"), &[("n", &set.number.to_string())]),
     }
 }
 
@@ -282,6 +317,46 @@ mod tests {
             set(&mut app, f);
             assert!(text_style(&app).unwrap().0.features.is_empty(), "{label} off");
         }
+    }
+
+    /// Stylistic sets are independent: selecting a second set keeps the first, and clearing one
+    /// keeps the other. The command reaches the selected text's stored OpenType feature tags.
+    #[test]
+    fn multiple_stylistic_sets_stay_independent() {
+        let mut app = selected_text();
+        edit(&mut app, Change::Toggle(Flag::Extra("ss01"), true));
+        edit(&mut app, Change::Toggle(Flag::Extra("ss03"), true));
+        assert_eq!(text_style(&app).unwrap().0.features, ["ss01", "ss03"]);
+        edit(&mut app, Change::Toggle(Flag::Extra("ss01"), false));
+        assert_eq!(text_style(&app).unwrap().0.features, ["ss03"]);
+    }
+
+    /// A set the font names keeps the font's name; a set without one gets the numbered label in
+    /// the UI language.
+    #[test]
+    fn stylistic_set_labels_follow_the_ui_language() {
+        let named = StylisticSet { number: 1, name: Some("Curved Capitals".into()) };
+        let numbered = StylisticSet { number: 3, name: None };
+        assert_eq!(set_label(&numbered), "Set 3");
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let (named_de, numbered_de) = (set_label(&named), set_label(&numbered));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(named_de, "Curved Capitals");
+        assert_eq!(numbered_de, "Satz 3");
+    }
+
+    /// A font that is not available offers no sets, even though the face drawn in its place has
+    /// some.
+    #[test]
+    fn a_missing_font_offers_no_stylistic_sets() {
+        let fallback = vectorcraft_doc::CharStyle { font_family: vectorcraft_text::FALLBACK_FAMILY.into(), ..Default::default() };
+        // Builds without the bundled fonts have no fallback face to draw in a missing font's place.
+        if FontDb::global().has_family(vectorcraft_text::FALLBACK_FAMILY) {
+            assert!(!offered_sets(&fallback).is_empty(), "the fallback face lists its sets");
+        }
+        let missing = vectorcraft_doc::CharStyle { font_family: "No Such Family Zq".into(), ..fallback };
+        assert!(offered_sets(&missing).is_empty());
     }
 
     /// The Figure menu lists its five entries in order; Proportional Lining sets `pnum` and

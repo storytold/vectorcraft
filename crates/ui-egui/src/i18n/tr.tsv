@@ -5994,6 +5994,7 @@ anchor	Points:	Noktalar:
 	Character Color	Karakter Rengi
 	OpenType Features	OpenType Özellikleri
 	Stylistic Sets	Stilistik Setler
+	Set {n}	Set {n}
 @msg	features lists at most {max} tags	features en fazla {max} etiket içerebilir
 @msg	unknown OpenType feature `{t}`	bilinmeyen OpenType özelliği `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0'ın üzerinde ve en fazla {max} olan bir sayı olmalıdır

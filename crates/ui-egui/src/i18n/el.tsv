@@ -5988,6 +5988,7 @@ anchor	Points:	Σημεία:
 	Character Color	Χρώμα χαρακτήρων
 	OpenType Features	Χαρακτηριστικά OpenType
 	Stylistic Sets	Στιλιστικά σύνολα
+	Set {n}	Σύνολο {n}
 @msg	features lists at most {max} tags	Το features περιέχει έως {max} ετικέτες
 @msg	unknown OpenType feature `{t}`	άγνωστο χαρακτηριστικό OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	Το {label} πρέπει να είναι αριθμός μεγαλύτερος από 0 και έως {max}

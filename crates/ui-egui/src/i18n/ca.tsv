@@ -6021,6 +6021,7 @@ anchor	Points:	Punts:
 	Character Color	Color del caràcter
 	OpenType Features	Funcions OpenType
 	Stylistic Sets	Jocs estilístics
+	Set {n}	Joc {n}
 @msg	features lists at most {max} tags	features admet com a màxim {max} etiquetes
 @msg	unknown OpenType feature `{t}`	funció OpenType desconeguda `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} ha de ser un nombre superior a 0 i com a màxim {max}

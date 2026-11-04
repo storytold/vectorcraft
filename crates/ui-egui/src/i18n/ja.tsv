@@ -5721,6 +5721,7 @@ anchor	Points:	ポイント:
 	Character Color	文字カラー
 	OpenType Features	OpenType 機能
 	Stylistic Sets	スタイルセット
+	Set {n}	セット {n}
 @msg	features lists at most {max} tags	features に指定できるタグは {max} 個までです
 @msg	unknown OpenType feature `{t}`	不明な OpenType 機能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} には 0 より大きく {max} 以下の数値を指定してください

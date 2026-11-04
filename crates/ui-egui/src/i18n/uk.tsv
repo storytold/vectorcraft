@@ -5636,6 +5636,7 @@ anchor	Points:	Точки:
 	Character Color	Колір символів
 	OpenType Features	Функції OpenType
 	Stylistic Sets	Стилістичні набори
+	Set {n}	Набір {n}
 @msg	features lists at most {max} tags	features містить не більше {max} тегів
 @msg	unknown OpenType feature `{t}`	невідома функція OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} має бути числом більше 0 і не більше {max}

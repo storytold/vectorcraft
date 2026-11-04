@@ -6067,6 +6067,7 @@ anchor	Points:	Pisteet:
 	Character Color	Merkin väri
 	OpenType Features	OpenType-ominaisuudet
 	Stylistic Sets	Tyylisarjat
+	Set {n}	Sarja {n}
 @msg	features lists at most {max} tags	features sisältää enintään {max} tunnistetta
 @msg	unknown OpenType feature `{t}`	tuntematon OpenType-ominaisuus `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} on oltava luku, joka on yli 0 ja enintään {max}

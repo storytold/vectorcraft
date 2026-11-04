@@ -5878,6 +5878,7 @@ anchor	Points:	点：
 	Character Color	字符颜色
 	OpenType Features	OpenType 特性
 	Stylistic Sets	风格集
+	Set {n}	风格集 {n}
 @msg	features lists at most {max} tags	features 最多包含 {max} 个标签
 @msg	unknown OpenType feature `{t}`	未知的 OpenType 特性 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必须是大于 0 且不超过 {max} 的数字

@@ -5656,6 +5656,7 @@ anchor	Points:	Punti:
 	Character Color	Colore carattere
 	OpenType Features	Funzioni OpenType
 	Stylistic Sets	Set stilistici
+	Set {n}	Set {n}
 @msg	features lists at most {max} tags	features contiene al massimo {max} tag
 @msg	unknown OpenType feature `{t}`	funzione OpenType sconosciuta `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve essere un numero maggiore di 0 e al massimo {max}
