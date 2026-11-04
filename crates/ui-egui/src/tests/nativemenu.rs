@@ -15,8 +15,12 @@ use crate::i18n::Lang;
 use crate::native_menu::{self, Backend, MenuBar, MenuRole, NativeMenu, Node, Standard};
 use crate::{VectorcraftApp, menus};
 
+/// A new app, after the installed fonts' scan it starts has ended: until then Type › Font lists
+/// only the loaded fonts (#5483), and a scan that ends part way through a test adds items between
+/// two reads of the menus.
 fn app(doc: bool) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    vectorcraft_text::FontDb::global().family_list();
     if doc {
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 37, "height": 40})).unwrap();
