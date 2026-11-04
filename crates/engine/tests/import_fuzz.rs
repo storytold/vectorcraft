@@ -5715,8 +5715,15 @@ fn a_long_thin_shape_with_a_shadow_renders_and_exports() {
 
 /// A blend in `.ai` editing data, written by hand: two keys (10 pt squares, red on the left, blue on
 /// the right) on a straight spine, `steps` steps drawn between them as the blend lays them out, and
-/// the record (`DCBA`, version 1, two keys `A` and `B`, see `vectorcraft_eps`' AI blend reader).
+/// the record (`DCBA`, Specified Steps, two keys `A` and `B`, see `vectorcraft_eps`' AI blend
+/// reader).
 fn blend_text(steps: usize) -> String {
+    blend_text_spaced(steps, [1, 0, 0])
+}
+
+/// [`blend_text`] with the record's spacing words `spacing`: the spacing (word 1), the bits of the
+/// distance (word 2, a 32-bit float) and word 4.
+fn blend_text_spaced(steps: usize, spacing: [u32; 3]) -> String {
     use std::fmt::Write;
     let square = |x: f64, hidden: bool, t: f64| {
         let p = if hidden { "%_" } else { "" };
@@ -5740,7 +5747,8 @@ fn blend_text(steps: usize) -> String {
         s += &square(t * span, false, t);
     }
     s += "U\n9 () XW\n0 Ae\n";
-    let mut words: Vec<u32> = vec![u32::from_le_bytes(*b"DCBA"), 1, 0, 0, 0, 0, 0, 0, 0, 0, 2];
+    let [kind, distance, count] = spacing;
+    let mut words: Vec<u32> = vec![u32::from_le_bytes(*b"DCBA"), kind, distance, 0, count, 0, 0, 0, 0, 0, 2];
     for id in ['A', 'B'] {
         words.extend([id as u32, 0, 0, 0, 0, 0]);
     }
@@ -5787,6 +5795,14 @@ proptest! {
         let far = ai_private(&blend_text(steps).replace(" 40 m\n", " 1e300 m\n").replace(" 50 L\n", " -1e300 L\n"));
         survive("a .ai blend far out", || Some(vectorcraft_eps::layered_ai(&far, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
         survive("mutated .ai blend", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
+    }
+
+    /// A `.ai` blend whose record holds any spacing, distance bits (zero, negative, tiny, NaN,
+    /// infinite) and step count: read live, as its drawn steps, or not at all, never panicking.
+    #[test]
+    fn ai_blend_spacing_never_panics(steps in 1usize..6, kind in prop_oneof![0u32..4, any::<u32>()], distance in prop_oneof![any::<u32>(), prop::sample::select(vec![0u32, 0x8000_0000, 1, 0x7f80_0000, 0xff80_0000, 0x7fc0_0000, 0x7f7f_ffff, 0x41c8_0000])], count in prop_oneof![0u32..1_100, any::<u32>()]) {
+        let private = ai_private(&blend_text_spaced(steps, [kind, distance, count]));
+        survive("a .ai blend's spacing", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
     }
 }
 

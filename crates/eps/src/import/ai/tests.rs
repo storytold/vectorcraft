@@ -4303,10 +4303,16 @@ fn layer_options_of_nine_to_twelve_operands() {
 }
 
 /// A blend's record as the editing data writes it after `(Adobe Path Blends) 1 0 n XP`: `DCBA`,
-/// version 1, then (as far as the reader reads it) the number of keys at word 10 and a record of
-/// six words per key starting with its id. Hand-written; the other words are zero.
+/// Specified Steps, then (as far as the reader reads it) the number of keys at word 10 and a record
+/// of six words per key starting with its id. Hand-written; the other words are zero.
 fn blend_record(ids: &[char]) -> String {
-    let mut words: Vec<u32> = vec![u32::from_le_bytes(*b"DCBA"), 1, 0, 0, 0, 0, 0, 0, 0, 0, ids.len() as u32];
+    blend_record_spaced(ids, 1, 0.0, 0)
+}
+
+/// [`blend_record`] with the spacing `spacing` at word 1 (0 Smooth Color, 1 Specified Steps, 2
+/// Specified Distance), the distance `distance` at word 2 and `steps` at word 4.
+fn blend_record_spaced(ids: &[char], spacing: u32, distance: f32, steps: u32) -> String {
+    let mut words: Vec<u32> = vec![u32::from_le_bytes(*b"DCBA"), spacing, distance.to_bits(), 0, steps, 0, 0, 0, 0, 0, ids.len() as u32];
     for id in ids {
         words.extend([*id as u32, 0, 0, 0, 0, 0]);
     }
@@ -4332,11 +4338,16 @@ fn blend_part(kind: &str, id: Option<&str>) -> String {
 /// `spine` (path operators, `%_` lines), with its drawn steps (three between the keys) and the
 /// record `record`.
 fn blend_file(spine: &str, ids: [Option<&str>; 2], record: &str) -> String {
-    let (red, blue) = ([1.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
+    blend_file_colored(spine, ids, record, [1.0, 0.0, 0.0], [0.0, 0.0, 1.0])
+}
+
+/// [`blend_file`] with the left key in RGB `from`, the right one in `to`, and the steps drawn
+/// between their colors.
+fn blend_file_colored(spine: &str, ids: [Option<&str>; 2], record: &str, from: [f64; 3], to: [f64; 3]) -> String {
     let mut art = String::from("%_0 Ae\n%_u\n");
-    art += &square(0.0, 40.0, 20.0, red, true);
+    art += &square(0.0, 40.0, 20.0, from, true);
     art += &blend_part("K", ids[0]);
-    art += &square(100.0, 40.0, 20.0, blue, true);
+    art += &square(100.0, 40.0, 20.0, to, true);
     art += &blend_part("K", ids[1]);
     art += spine;
     art += "%_N\n";
@@ -4344,7 +4355,8 @@ fn blend_file(spine: &str, ids: [Option<&str>; 2], record: &str) -> String {
     art += "%_U\n%_9 () XW\nu\n";
     for i in 0..5 {
         let t = i as f64 / 4.0;
-        art += &square(t * 100.0, 40.0, 20.0, [1.0 - t, 0.0, t], false);
+        let rgb = [0, 1, 2].map(|c| from[c] + (to[c] - from[c]) * t);
+        art += &square(t * 100.0, 40.0, 20.0, rgb, false);
     }
     art += "U\n9 () XW\n0 Ae\n";
     art += record;
@@ -4387,6 +4399,106 @@ fn a_blends_spine_written_backwards_keeps_its_keys_order() {
     let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
     assert!(matches!(fill(&children[0]), Paint::Solid { color, .. } if color.to_rgb()[0] > 0.9), "the first key is the red one");
     assert_eq!(spec.key_anchors, vec![1, 0], "the red key on the spine's end, the blue one on its start");
+}
+
+/// A blend's spacing comes from its record: Specified Distance with its distance (25 pt from one
+/// step's edge to the corresponding edge of the next lays three out between keys 100 pt apart),
+/// Smooth Color (keys 5/255 apart in blue take three steps), and Specified Steps with the steps
+/// counted from the drawn ones, whatever its record's word 4 holds. The distance counts along the
+/// spine between the keys, also where the spine runs on past the last key.
+#[test]
+fn a_blend_keeps_its_spacing() {
+    use vectorcraft_doc::live::BlendSpacing;
+    let straight = "%_10 50 m\n%_110 50 L\n";
+    let longer = "%_10 50 m\n%_110 50 L\n%_1010 50 L\n";
+    let (red, nearly_red, blue) = ([1.0, 0.0, 0.0], [1.0, 0.0, 5.0 / 255.0], [0.0, 0.0, 1.0]);
+    for (spine, record, (from, to), spacing) in [
+        (straight, blend_record_spaced(&['A', 'B'], 2, 25.0, 3), (red, blue), BlendSpacing::Distance(25.0)),
+        (longer, blend_record_spaced(&['A', 'B'], 2, 25.0, 3), (red, blue), BlendSpacing::Distance(25.0)),
+        (straight, blend_record_spaced(&['A', 'B'], 0, 4.0, 3), (red, nearly_red), BlendSpacing::SmoothColor),
+        (straight, blend_record_spaced(&['A', 'B'], 1, 25.0, 3), (red, blue), BlendSpacing::Steps(3)),
+        (straight, blend_record_spaced(&['A', 'B'], 1, 12.5, 7), (red, blue), BlendSpacing::Steps(3)),
+    ] {
+        let (blend, warnings) = read_blend(&blend_file_colored(spine, [Some("A"), Some("B")], &record, from, to));
+        let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend for {spacing:?}: {:?} {warnings:?}", blend.kind) };
+        assert_eq!(spec.spacing, spacing);
+        assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), 5, "{spacing:?}");
+        assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{spacing:?}: {warnings:?}");
+    }
+}
+
+/// A blend whose spacing doesn't lay out its drawn steps keeps them: a distance that lays out
+/// nine, and Smooth Color between red and blue (more steps than the three drawn); and so does a
+/// spacing the reader doesn't know or a distance that isn't a positive number.
+#[test]
+fn a_blend_whose_spacing_doesnt_lay_out_its_steps_keeps_them() {
+    let straight = "%_10 50 m\n%_110 50 L\n";
+    for record in [
+        blend_record_spaced(&['A', 'B'], 2, 10.0, 9),
+        blend_record_spaced(&['A', 'B'], 0, 4.0, 254),
+        blend_record_spaced(&['A', 'B'], 3, 25.0, 3),
+        blend_record_spaced(&['A', 'B'], 2, 0.0, 3),
+        blend_record_spaced(&['A', 'B'], 2, f32::NAN, 3),
+        blend_record_spaced(&['A', 'B'], 2, 1e-30, 3),
+    ] {
+        let (blend, warnings) = read_blend(&blend_file(straight, [Some("A"), Some("B")], &record));
+        assert!(!matches!(blend.kind, NodeKind::Blend { .. }), "{record}: {:?}", blend.kind);
+        assert_eq!(blend.children().map(|c| c.len()), Some(5), "the five drawn squares");
+        assert!(warnings.iter().any(|w| w == super::blend::DRAWN), "{warnings:?}");
+    }
+}
+
+/// Three keys with Specified Distance, unevenly spaced on a straight spine (red at x 0, blue at
+/// 100, green at 150, 20 pt squares): 25 pt lays three steps out between the first two keys and
+/// one between the last two, and a blend drawn that way comes in live. The same seven objects
+/// drawn two and two between the keys keep their drawn steps.
+#[test]
+fn a_blend_of_three_keys_keeps_its_distance_between_each_pair() {
+    use vectorcraft_doc::live::BlendSpacing;
+    let (red, blue, green) = ([1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]);
+    let mix = |a: [f64; 3], b: [f64; 3], t: f64| [0, 1, 2].map(|c| a[c] + (b[c] - a[c]) * t);
+    let file = |drawn: &[(f64, [f64; 3])]| {
+        let mut art = String::from("%_0 Ae\n%_u\n");
+        for (x, rgb, id) in [(0.0, red, "A"), (100.0, blue, "B"), (150.0, green, "C")] {
+            art += &square(x, 40.0, 20.0, rgb, true);
+            art += &blend_part("K", Some(id));
+        }
+        art += "%_10 50 m\n%_110 50 L\n%_160 50 L\n%_N\n";
+        art += &blend_part("S", None);
+        art += "%_U\n%_9 () XW\nu\n";
+        for &(x, rgb) in drawn {
+            art += &square(x, 40.0, 20.0, rgb, false);
+        }
+        art += "U\n9 () XW\n0 Ae\n";
+        art += &blend_record_spaced(&['A', 'B', 'C'], 2, 25.0, 0);
+        art
+    };
+    let three_and_one = [
+        (0.0, red),
+        (25.0, mix(red, blue, 0.25)),
+        (50.0, mix(red, blue, 0.5)),
+        (75.0, mix(red, blue, 0.75)),
+        (100.0, blue),
+        (125.0, mix(blue, green, 0.5)),
+        (150.0, green),
+    ];
+    let (blend, warnings) = read_blend(&file(&three_and_one));
+    let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
+    assert_eq!(spec.spacing, BlendSpacing::Distance(25.0));
+    assert_eq!(vectorcraft_doc::blend::blend_steps(children, spec), vec![3, 1]);
+    let two_and_two = [
+        (0.0, red),
+        (100.0 / 3.0, mix(red, blue, 1.0 / 3.0)),
+        (200.0 / 3.0, mix(red, blue, 2.0 / 3.0)),
+        (100.0, blue),
+        (350.0 / 3.0, mix(blue, green, 1.0 / 3.0)),
+        (400.0 / 3.0, mix(blue, green, 2.0 / 3.0)),
+        (150.0, green),
+    ];
+    let (blend, warnings) = read_blend(&file(&two_and_two));
+    assert!(!matches!(blend.kind, NodeKind::Blend { .. }), "{:?}", blend.kind);
+    assert_eq!(blend.children().map(|c| c.len()), Some(7), "the seven drawn squares");
+    assert!(warnings.iter().any(|w| w == super::blend::DRAWN), "{warnings:?}");
 }
 
 /// A curved spine (a line, a curve and a line) is read with its points exactly; a blend whose drawn
