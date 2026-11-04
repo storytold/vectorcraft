@@ -924,9 +924,10 @@ SVG and PDF exports write such a fill as an image at the Document Raster Effects
 Method (the Gradient panel's menu): `classic` (the default) mixes the colours between stops in display RGB,
 `perceptual` mixes a linear or radial gradient's colours in OKLab so the steps look even. SVG exports write a
 Perceptual gradient as an image at the Document Raster Effects resolution (a dithered Perceptual fill with its noise).
-PDF exports write it the same way, except for a gradient with spot color stops whose other stops are all paper white,
-CMYK or gray, that is not a dithered fill and whose curve does not have too many stops. PDF writes tints of one spot
-ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK or gray inks as a DeviceN shading.
+PDF exports write it the same way, except for a linear or radial gradient with spot color stops whose other stops
+are all paper white, CMYK or gray, that is not a dithered fill and whose curve does not have too many stops. PDF
+writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK or gray
+inks as a DeviceN shading.
 `paint.setFill`/`paint.setStroke` take it in `gradient` too:
 
 ```json
@@ -2777,9 +2778,11 @@ Applying a gradient swatch (`paint.setFill {swatch}`) records it as the gradient
 highlights it; new stops drop the link). A gradient stop can link to a global or spot swatch like a solid colour:
 give it `swatch` (and `tint` %, default 100 or a tint swatch's own) instead of `color` in `paint.editGradient
 {stops}` or a `gradient` paint's stops. Editing or deleting the swatch then recolours or unlinks the stop, in art and
-in gradient swatches. A spot stop separates on its plate; a gradient whose stops are all tints of one spot ink (or
-paper white, 0 %) exports to PDF as a Separation shading (the writer has no DeviceN, so a gradient mixing a spot
-ink with other colours is written in process colours, with a warning).
+in gradient swatches. A spot stop separates on its plate. A linear or radial gradient whose stops are all tints of one spot ink (or
+paper white, 0 %) exports to PDF as a Separation shading, and one that mixes spot inks with other spot, CMYK or gray
+inks exports as a DeviceN shading. A gradient that mixes a spot ink with RGB or Lab colours is written in process
+colours, with a warning. Freeform gradients and dithered fills export to PDF as images in process colours, and Method
+above covers Perceptual gradients.
 
 ```json
 {"name":"run_command","arguments":{"command":"paint.editGradient","params":{"stops":[{"offset":0,"swatch":"Ink"},{"offset":1,"swatch":"Ink","tint":20}]}}}
