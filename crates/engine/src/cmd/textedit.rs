@@ -1174,7 +1174,7 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     // The glyph the character is drawn with when it holds no choice, drawn alone in its face: a
     // feature of its style (`salt`, a stylistic set) can draw another glyph than the default one.
     // The default glyph is then kept as a choice, so that it is drawn. A character that is not laid
-    // out (overflowing text) is shaped alone in its style. A character that starts a longer
+    // out (overflowing text) is shaped alone in its style and writing direction. A character that starts a longer
     // grapheme (a letter and its combining marks) is drawn in the grapheme's cluster, and is shaped
     // with the grapheme. Of a cluster of several glyphs (a mark, a vowel sign drawn before the
     // letter), the character's glyph is its default glyph or one of its alternates.
@@ -1205,7 +1205,8 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
             let db = vectorcraft_text::FontDb::global();
             alone_in_face(&vectorcraft_text::layout(db, &probe)).unwrap_or_else(|| {
                 let st = CharStyle { glyph_alternate: None, ..run.style.clone() };
-                let single = TextObject::point(Point::ZERO, &grapheme, st);
+                let mut single = TextObject::point(Point::ZERO, &grapheme, st);
+                single.vertical = t.vertical;
                 own_glyph(&vectorcraft_text::layout(db, &single), 0)
             })
         }
