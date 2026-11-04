@@ -420,6 +420,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Edit › Copy and Cut take the selected ruler guides, with the objects or alone; pasting puts them on the layer new art goes to, moved as the objects are (alone: where they were), Paste in Place onto the active artboard and Paste on All Artboards onto each (#3226); scores and estimates unchanged |
 | 2026-11-04 | minor | Area type: Align Top / Center / Bottom / Justify Vertically buttons in the Properties panel (Paragraph section) and the Control panel set its vertical alignment in the frame, as Area Type Options does; turned off for frames with rows or columns and threaded frames (#3759); scores and estimates unchanged |
 | 2026-11-03 | minor | Enclosing Lasso selects fully enclosed objects with a freehand loop under Object › Plug-ins; scores and estimates unchanged. |
 | 2026-11-03 | minor | Type on a Path Options has a Preview checkbox (#5360, as public tutorials of the dialog show); scores and estimates unchanged |
@@ -429,6 +430,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-11-01 | minor | Live Corners: while a corner widget is pressed or dragged with the Selection or Direct Selection tool, the Up and Down arrows step the corners' kind (round, inverted round, chamfer) with the radius, as one undo step (#2898); scores and estimates unchanged |
 | 2026-11-01 | minor | Keyboard Shortcuts: every Effect menu item (Distort & Transform › Transform…, Stylize › Drop Shadow…, …) is listed under its menu path and takes a shortcut of its own, which the menu shows and which opens that effect's dialog (or applies an effect without options) (#3296); scores and estimates unchanged |
 | 2026-10-31 | minor | Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers; 4 Preferences options remain stored but unused; scores and estimates unchanged |
+| 2026-11-01 | minor | Edit › Copy and Cut take the selected ruler guides, with the objects or alone; pasting puts them on the layer new art goes to, moved as the objects are (alone: where they were), Paste in Place onto the active artboard and Paste on All Artboards onto each; a Copy of guides alone empties the system clipboard, so Paste takes the guides, not what another app copied before (#3226); scores and estimates unchanged |
 | 2026-11-01 | minor | Color Effects add-on (a VectorCraft addition): Find Nearest Swatch (#4923); scores and estimates unchanged |
 | 2026-11-01 | minor | Artboards panel: a row dragged above or below another reorders the artboards (#4687); scores and estimates unchanged |
 | 2026-11-01 | minor | Object › Plug-ins › Color Effects › Create Swatch Legend…: a dialog that draws labelled chips of the colour swatches (all, or the ones selected in the Swatches panel) as one group (#4919); scores and estimates unchanged |
