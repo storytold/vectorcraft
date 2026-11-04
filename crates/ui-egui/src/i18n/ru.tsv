@@ -2131,6 +2131,11 @@ file-filter	Templates	Шаблоны
 	New Toolbar	Новая панель инструментов
 	Show Toolbar	Показать панель инструментов
 	List Toolbars	Список панелей инструментов
+	Manage Toolbars…	Управление панелями инструментов…
+	Manage Toolbars	Управление панелями инструментов
+	Rename Toolbar	Переименовать панель инструментов
+	Duplicate Toolbar	Дублировать панель инструментов
+	Delete Toolbar	Удалить панель инструментов
 	New {kind} Style…	Новый стиль {kind}…
 	New…	Создать…
 	Next	Далее
@@ -3612,6 +3617,7 @@ digits	Malayalam	Малаялам
 	Use Artboards	Использовать монтажные области
 	Use Black Point Compensation	Использовать компенсацию чёрной точки
 	Use Compression	Использовать сжатие
+	Include Editing Data for Other Apps	Включать данные редактирования для других приложений
 	Use document bleed settings	Использовать параметры вылета документа
 	Use Even-Odd Fill Rule	Использовать правило заливки «чёт-нечет»
 	Use Japanese Crop Marks	Использовать японские метки обрезки
@@ -4033,7 +4039,7 @@ axis	Both	Оба
 @msg	Save for Web: the image is empty	Сохранить для web: изображение пусто
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Сохранение записывает {_1}, а не {_2}: используйте document.export для других форматов
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Сохранение записывает {_1}, а не {_2}: чтобы записать его, используйте file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 записывает устаревшие файлы .ai; шаблон .ait всегда совместим с PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 записывает устаревшие файлы .ai, а не шаблоны .ait
 @msg	Saved recovery data for {title}	Сохранены данные восстановления для {title}
 @msg	Saved to User Defined: {_1}	Сохранено в «Пользовательский»: {_1}
 @msg	Saved {path}	Сохранено: {path}
@@ -6151,6 +6157,7 @@ breakText	Glyphs	Глифы
 	Gap 5	Зазор 5
 
 @msg	{_1}: they came in as the page's art	{_1}: импортированы как графика страницы
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	объекты, которые отрисовывались иначе, чем собственная страница файла, импортированы как графика страницы: {_1}
 
 @msg	You must choose a side pattern.	Выберите боковой узор.
 @msg	invalid pattern tile choice	недопустимый выбор плитки узора

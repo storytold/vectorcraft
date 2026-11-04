@@ -497,6 +497,30 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{name: string, show?: bool} show (true), hide (false) or toggle (omitted) the toolbar made with New Toolbar called `name`, as its item under Window › Toolbars does (its title bar's × hides it); shown after Tab hid the toolbars, it shows alone and the others are turned off; returns the new state",
     ),
+    (
+        "window.toolbar.manage",
+        "Manage Toolbars…",
+        "",
+        "{} open the Manage Toolbars dialog, which lists the toolbars made with New Toolbar: a name typed for the selected one renames it, + copies it (none selected: makes a blank toolbar) and the trash can deletes it",
+    ),
+    (
+        "window.toolbar.rename",
+        "Rename Toolbar",
+        "",
+        "{name: string, to: string} give the toolbar made with New Toolbar called `name` the name `to` (not empty, at most 200 characters, not another toolbar's whatever the case), as typing a name in Manage Toolbars does; returns {toolbar: name}",
+    ),
+    (
+        "window.toolbar.duplicate",
+        "Duplicate Toolbar",
+        "",
+        "{name?: string} copy the toolbar made with New Toolbar called `name`, with its tools, as \"`name` Copy\" (omitted: make a blank toolbar called \"Toolbar N\"), as Manage Toolbars' + does; the copy shows and is kept with the current workspace; returns {toolbar: name}",
+    ),
+    (
+        "window.toolbar.delete",
+        "Delete Toolbar",
+        "",
+        "{name: string} delete the toolbar made with New Toolbar called `name`, and the groups torn off it, from the current workspace, as Manage Toolbars' trash can does",
+    ),
     ("window.toolbar.list", "List Toolbars", "", "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots}]"),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
@@ -580,7 +604,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.workspace.delete", "Delete Workspace", "", "{name}"),
     ("window.workspace.rename", "Rename Workspace", "", "{name, to}"),
     ("window.workspace.list", "List Workspaces", "", "{}"),
-    ("window.newWindow", "New Window", "", "{}"),
+    (
+        "window.newWindow",
+        "New Window",
+        "",
+        "{} open another view of the current document, with its own zoom, center, rotation, artboard and Outline or Preview, as a tab of its own (titled with the view's number, \"Name:2\") or, when the current view floats, in a floating window; it becomes the current window; the Arrange commands treat each view as a window; file.close closes the current view and the last view closes the document; returns {index, view}",
+    ),
     (
         "window.arrange.cascade",
         "Cascade",
@@ -591,13 +620,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.arrange.tile",
         "Tile",
         "",
-        "{} show every open document at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of documents, rounded up), each fitted to its pane; the current document's pane takes the tools, a click in another pane makes its document the current one; the tabs stay; documents in floating windows come back under the tabs first; with fewer than two documents open the view stays as it is; returns {tiled, panes}",
+        "{} show every open document and each further view of one (window.newWindow) at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of panes, rounded up), each fitted to its pane; the current window's pane takes the tools, a click in another pane makes its window the current one; the tabs stay; windows floating come back under the tabs first; with fewer than two windows open the view stays as it is; returns {tiled, panes}",
     ),
     (
         "window.arrange.floatInWindow",
         "Float in Window",
         "",
-        "{index?, at?: [x, y]} move the current document, or document `index` (which becomes the current one), out of the tab strip into a floating window of its own, fitted to it, with the window's top-left corner at `at` (main window points) or else at the next place of a cascade; dragging a document tab more than 24 pt above or below the tab strip does this at the pointer; the window holding the current document takes the tools, a click in another document's window makes its document the current one; a document already floating stays where it is; returns {floating} (document indices)",
+        "{index?, view?, at?: [x, y]} move the current window, or document `index`'s view `view` (its current view without one; it becomes the current window), out of the tab strip into a floating window of its own, fitted to it, with the window's top-left corner at `at` (main window points) or else at the next place of a cascade; dragging a document tab more than 24 pt above or below the tab strip does this at the pointer; the window holding the current document takes the tools, a click in another document's window makes its document the current one; a document already floating stays where it is; returns {floating} (document indices)",
     ),
     (
         "window.arrange.floatAllInWindows",
@@ -609,19 +638,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.arrange.consolidateAllWindows",
         "Consolidate All Windows",
         "",
-        "{index?} show one document at a time again, under its tab, after Tile, Float in Window, Float All in Windows or Cascade; returns {tiled: false, floating: []}; with `index`, only document `index` goes back under its tab and becomes the current one, the other windows and Tile staying as they are, as when a document window is dragged by its title bar (an OS window by the tab at its top) onto the tab strip; returns {tiled, floating} (document indices)",
+        "{index?, view?} show one document at a time again, under its tab, after Tile, Float in Window, Float All in Windows or Cascade; returns {tiled: false, floating: []}; with `index`, only document `index` (its view `view`, else its current view) goes back under its tab and becomes the current one, the other windows and Tile staying as they are, as when a document window is dragged by its title bar (an OS window by the tab at its top) onto the tab strip; returns {tiled, floating} (document indices)",
     ),
     (
         "window.nextDocument",
         "Next Document",
         "Cmd+F6",
-        "{} make the open document after the current one in tab order the current one, as a click on its tab does (after the last document it goes to the first, and from the Home screen to the first); returns {index}",
+        "{} make the open document after the current one in tab order the current one, as a click on its tab does (after the last document it goes to the first, and from the Home screen to the first); each view window.newWindow opened is a step of its own; returns {index}, with `view` for a document with more than one view",
     ),
     (
         "window.previousDocument",
         "Previous Document",
         "Cmd+Shift+F6",
-        "{} make the open document before the current one in tab order the current one, as a click on its tab does (before the first document it goes to the last, and from the Home screen to the last); returns {index}",
+        "{} make the open document before the current one in tab order the current one, as a click on its tab does (before the first document it goes to the last, and from the Home screen to the last); each view window.newWindow opened is a step of its own; returns {index}, with `view` for a document with more than one view",
     ),
     ("tool.select", "Select Tool", "", "{tool: id} (see tools)"),
     (
@@ -818,7 +847,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.layerOptions",
         "Options for Selection…",
         "",
-        "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step)",
+        "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step); for several rows it sends only the fields set in the dialog",
     ),
     (
         "ui.newLayer",
@@ -1199,6 +1228,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Play Action",
         "",
         "{action: name, set?: name} play the Actions panel's action named action as one undoable batch; set names the set to look in (default: every set). A name no action has, or one that more than one action in the sets looked in has, is an error and nothing plays → what command.batch returns",
+    ),
+    (
+        crate::panels::actions::START_RECORDING,
+        "Begin Recording",
+        "",
+        "{set?: index} begin recording an automatically named Action N in the Actions panel's set at set (0 is the top set), by default the current set or the first set; with no sets, make Set 1. The set becomes current, and ui.action.stop adds the recorded action after that set's existing actions. An explicit invalid set or an existing recording is an error and changes nothing → {set, name}",
     ),
     (
         crate::panels::actions::STOP_RECORDING,

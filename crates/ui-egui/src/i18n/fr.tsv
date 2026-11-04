@@ -2099,6 +2099,11 @@ font-technology	Variable	Variables
 	New Toolbar	Nouvelle barre d’outils
 	Show Toolbar	Afficher la barre d’outils
 	List Toolbars	Liste des barres d’outils
+	Manage Toolbars…	Gérer les barres d’outils…
+	Manage Toolbars	Gérer les barres d’outils
+	Rename Toolbar	Renommer la barre d’outils
+	Duplicate Toolbar	Dupliquer la barre d’outils
+	Delete Toolbar	Supprimer la barre d’outils
 	New {kind} Style…	Nouveau style de {kind}…
 	New…	Nouveau…
 	Next	Suivant
@@ -3572,6 +3577,7 @@ digits	Malayalam	Malayalam
 	Use Artboards	Utiliser les plans de travail
 	Use Black Point Compensation	Utiliser la compensation du point noir
 	Use Compression	Utiliser la compression
+	Include Editing Data for Other Apps	Inclure les données de modification pour d’autres applications
 	Use document bleed settings	Utiliser les paramètres de fond perdu du document
 	Use Even-Odd Fill Rule	Utiliser la règle de remplissage pair-impair
 	Use Japanese Crop Marks	Utiliser les traits de coupe japonais
@@ -3986,7 +3992,7 @@ axis	Both	Les deux
 @msg	Save for Web: the image is empty	Enregistrer pour le Web : l’image est vide
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Enregistrer écrit du {_1}, pas du {_2} : utilisez document.export pour les autres formats
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Enregistrer écrit du {_1}, pas du {_2} : utilisez file.saveAsTemplate pour l’écrire
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 écrit des fichiers .ai hérités, alors qu’un modèle .ait est toujours compatible PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 écrit des fichiers .ai hérités, pas des modèles .ait
 @msg	Saved recovery data for {title}	Données de récupération enregistrées pour {title}
 @msg	Saved to User Defined: {_1}	Enregistré dans Défini par l’utilisateur : {_1}
 @msg	Saved {path}	{path} enregistré
@@ -6169,6 +6175,7 @@ breakText	Glyphs	Glyphes
 	Gap 5	Écart 5
 
 @msg	{_1}: they came in as the page's art	{_1} : ils ont été importés comme le dessin de la page
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	les objets dessinés différemment de la page du fichier lui-même ont été importés comme le dessin de la page : {_1}
 
 @msg	You must choose a side pattern.	Vous devez choisir un motif latéral.
 @msg	invalid pattern tile choice	choix de tuile de motif non valide

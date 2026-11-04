@@ -208,19 +208,27 @@ impl<'a> Reader<'a> {
             self.template_center = two(v);
             self.template = four(v).or(self.template);
         } else if let Some(v) = line.strip_prefix("AI24_LargeCanvasScale:") {
-            // Illustrator's Large Canvas writes the editing data (art and boxes) at 1/N scale, N
-            // being this; the printed page applies the same factor, so the art reaches the page's
-            // size once it is applied to the art space ([`Self::ensure_space`]). A value outside
-            // the range Illustrator writes is left alone.
-            if let (Some(scale), Ok(n)) = (&mut self.large_canvas, v.trim().parse::<f64>())
-                && (1.0..=100.0).contains(&n)
-            {
-                *scale = n;
-            }
+            self.large_canvas_scale(v);
         } else if let Some(v) = line.strip_prefix("AI9_ColorModel:") {
             self.color_model = Some(v.trim() == "2");
         }
         Ok(())
+    }
+
+    /// `%AI24_LargeCanvasScale:` with its value `v`.
+    fn large_canvas_scale(&mut self, v: &str) {
+        // Illustrator's Large Canvas writes the editing data (art and boxes) at 1/N scale, N
+        // being this; the printed page applies the same factor, so the art reaches the page's
+        // size once it is applied to the art space ([`Self::ensure_space`]). A value outside
+        // the range Illustrator writes is left alone.
+        if let Ok(n) = v.trim().parse::<f64>()
+            && (1.0..=100.0).contains(&n)
+        {
+            self.canvas_scale = n;
+            if let Some(scale) = &mut self.large_canvas {
+                *scale = n;
+            }
+        }
     }
 
     /// `%AI3_Note:` (or `%%Note:`) sets the note of the paths that follow, an empty one clearing it,

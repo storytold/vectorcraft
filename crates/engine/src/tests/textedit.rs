@@ -890,6 +890,137 @@ fn type_tool_typing_is_one_undo_step() {
 }
 
 #[test]
+fn dropped_type_press_restores_the_original_text_and_selection() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 500})).unwrap();
+    let first = text(&mut s, "First text");
+    let second = NodeId(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Second text", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    let at = |s: &Session, id: NodeId| {
+        let target = obj(s, id);
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+        let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+        target.xf * a.midpoint(b)
+    };
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let a = at(&s, first);
+    click(&mut s, a.x + 0.1, a.y);
+    assert!(s.tool_wants_text());
+    s.select(|_, selection| selection.guides.push(0)).unwrap();
+    let before = s.doc().unwrap().selection.clone();
+    let b = at(&s, second);
+    s.pointer(&PointerEvent::new(PointerKind::Down, b.x + 0.1, b.y), v).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![second]);
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection, before);
+    assert!(s.tool_wants_text());
+    s.tool_text("!", v).unwrap();
+    assert!(obj(&s, first).plain_text().contains('!'));
+    assert_eq!(obj(&s, second).plain_text(), "Second text");
+}
+
+#[test]
+fn dropped_type_press_restores_the_active_layer_without_a_prior_selection() {
+    let mut s = session();
+    let original_layer = s.doc().unwrap().doc.layers[0].id;
+    let other_layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let text_id = text(&mut s, "Other layer text");
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.active_mut().unwrap().active_layer = Some(original_layer);
+    let target = obj(&s, text_id);
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+    let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+    let at = target.xf * a.midpoint(b);
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y), v).unwrap();
+    assert_eq!(s.doc().unwrap().active_layer, Some(other_layer));
+    s.drop_tool_press(v).unwrap();
+    assert!(s.doc().unwrap().selection.objects.is_empty());
+    assert_eq!(s.doc().unwrap().active_layer, Some(original_layer));
+}
+
+#[test]
+fn dropped_type_press_after_document_switch_keeps_the_new_document_selection() {
+    let mut s = session();
+    let first = text(&mut s, "First document");
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let second = text(&mut s, "Second document");
+    let selected = s.doc().unwrap().selection.clone();
+    let active_layer = s.doc().unwrap().active_layer;
+    assert_eq!(selected.objects, vec![second]);
+
+    assert!(s.set_active(0));
+    let target = obj(&s, first);
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+    let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+    let at = target.xf * a.midpoint(b);
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y), v).unwrap();
+
+    assert!(s.set_active(1));
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection, selected);
+    assert_eq!(s.doc().unwrap().active_layer, active_layer);
+}
+
+#[test]
+fn dropped_type_press_keeps_new_text_selected_on_a_locked_artboard() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    let second = text(&mut s, "Second text");
+    let first = NodeId(s.execute("text.create", &json!({"x": 1050, "y": 100, "text": "First text", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![first]);
+    assert!(s.doc().unwrap().selection.new_art.contains(&first));
+    let at = |s: &Session, id: NodeId| {
+        let target = obj(s, id);
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+        let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+        target.xf * a.midpoint(b)
+    };
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let a = at(&s, first);
+    click(&mut s, a.x + 0.1, a.y);
+    let before = s.doc().unwrap().selection.clone();
+    let b = at(&s, second);
+    s.pointer(&PointerEvent::new(PointerKind::Down, b.x + 0.1, b.y), v).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection, before);
+    assert!(s.tool_wants_text());
+}
+
+#[test]
+fn dropped_lent_selection_press_keeps_type_editing() {
+    let mut s = session();
+    let first = text(&mut s, "First text");
+    let second = NodeId(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Second text", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    let point = |s: &Session, id: NodeId| {
+        let target = obj(s, id);
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+        let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+        target.xf * a.midpoint(b)
+    };
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let a = point(&s, first);
+    click(&mut s, a.x + 0.1, a.y);
+    assert!(s.tool_wants_text());
+    let b = point(&s, second);
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, b.x + 0.1, b.y).with_mods(cmd), v).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![second]);
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![first]);
+    assert!(s.tool_wants_text());
+    s.tool_text("!", v).unwrap();
+    assert!(obj(&s, first).plain_text().contains('!'));
+    assert_eq!(obj(&s, second).plain_text(), "Second text");
+}
+
+#[test]
 fn undo_while_typing_takes_back_only_the_typing_and_redo_returns_it() {
     let mut s = session();
     let v = ViewInfo::default();

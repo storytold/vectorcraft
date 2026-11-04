@@ -2046,6 +2046,11 @@ font-technology	Variable	Variabla
 	New Toolbar	Nytt verktygsfält
 	Show Toolbar	Visa verktygsfält
 	List Toolbars	Lista verktygsfält
+	Manage Toolbars…	Hantera verktygsfält…
+	Manage Toolbars	Hantera verktygsfält
+	Rename Toolbar	Byt namn på verktygsfält
+	Duplicate Toolbar	Duplicera verktygsfält
+	Delete Toolbar	Radera verktygsfält
 	New {kind} Style…	Ny {kind}stil…
 	New…	Ny…
 	Next	Nästa
@@ -3502,6 +3507,7 @@ digits	Malayalam	Malayalam
 	Use Artboards	Använd ritytor
 	Use Black Point Compensation	Använd svartpunktskompensering
 	Use Compression	Använd komprimering
+	Include Editing Data for Other Apps	Inkludera redigeringsdata för andra appar
 	Use document bleed settings	Använd dokumentets inställningar för utfall
 	Use Even-Odd Fill Rule	Använd fyllningsregeln jämn-udda
 	Use Japanese Crop Marks	Använd japanska beskärningsmärken
@@ -3907,7 +3913,7 @@ axis	Both	Båda
 @msg	Save for Web: the image is empty	Spara för webb: bilden är tom
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Spara skriver {_1}, inte {_2}: använd document.export för andra format
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Spara skriver {_1}, inte {_2}: använd file.saveAsTemplate för att skriva det
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 skriver äldre .ai-filer; en .ait-mall är alltid PDF-kompatibel
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 skriver äldre .ai-filer, inte .ait-mallar
 @msg	Saved recovery data for {title}	Sparade återställningsdata för {title}
 @msg	Saved to User Defined: {_1}	Sparat i Användardefinierat: {_1}
 @msg	Saved {path}	Sparade {path}
@@ -6226,6 +6232,7 @@ breakText	Glyphs	Glyfer
 	Gap 5	Mellanrum 5
 
 @msg	{_1}: they came in as the page's art	{_1}: de importerades som sidans bild
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekt som ritades annorlunda än filens egen sida importerades som sidans bild: {_1}
 
 @msg	You must choose a side pattern.	Du måste välja ett sidomönster.
 @msg	invalid pattern tile choice	ogiltigt val av mönsterplatta

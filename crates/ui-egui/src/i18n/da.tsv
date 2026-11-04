@@ -603,6 +603,11 @@
 	New Toolbar	Ny værktøjslinje
 	Show Toolbar	Vis værktøjslinje
 	List Toolbars	Liste over værktøjslinjer
+	Manage Toolbars…	Administrér værktøjslinjer…
+	Manage Toolbars	Administrér værktøjslinjer
+	Rename Toolbar	Omdøb værktøjslinje
+	Duplicate Toolbar	Duplikér værktøjslinje
+	Delete Toolbar	Slet værktøjslinje
 	Manage Workspaces…	Administrér arbejdsområder…
 	Control	Kontrol
 	Contextual Task Bar	Kontekstuel opgavelinje
@@ -3399,6 +3404,7 @@ theme	Appearance	Udseende
 	Type Object Selection by Path Only	Markering af tekstobjekter udelukkende via kurve
 	UI Scaling	UI-skalering
 	Use Compression	Anvend komprimering
+	Include Editing Data for Other Apps	Medtag redigeringsdata til andre apps
 	Use Japanese Crop Marks	Anvend japanske beskæringsmærker
 	Use Low Resolution Proxy for Linked EPS	Anvend proxy med lav opløsning til koblede EPS-filer
 	Use Precise Cursors	Anvend præcise markører
@@ -6042,6 +6048,7 @@ breakText	Glyphs	Glyffer
 	Gap 5	Mellemrum 5
 
 @msg	{_1}: they came in as the page's art	{_1}: de blev importeret som sidens grafik
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekter, der blev tegnet anderledes end filens egen side, blev importeret som sidens grafik: {_1}
 
 @msg	You must choose a side pattern.	Du skal vælge et sidemønster.
 @msg	invalid pattern tile choice	ugyldigt valg af mønsterflise

@@ -640,6 +640,21 @@ fn nothing_closes_or_quits_while_a_sheet_is_open() {
     assert_eq!(app.ui.status, "quit");
 }
 
+/// A view Window › New Window opened does not close while a dialog's sheet is on the window either.
+#[test]
+fn no_view_closes_while_a_sheet_is_open() {
+    let (mut app, shown, _) = app();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("window.newWindow", json!({})).unwrap();
+    assert!(app.run("file.open", json!({})).is_err());
+    assert_eq!(app.run("file.close", json!({})), Err(picks::busy().to_string()));
+    assert_eq!(crate::doc_windows::windows(&app), [(0, 1), (0, 2)]);
+    shown.answer(&[]);
+    poll(&mut app);
+    app.run("file.close", json!({})).unwrap();
+    assert_eq!(crate::doc_windows::windows(&app), [(0, 1)]);
+}
+
 /// On Linux the dialog is a window of its own, not a sheet: Close and Quit go on while it is open,
 /// and its answer for the document closed meanwhile is dropped, nothing written.
 #[test]
