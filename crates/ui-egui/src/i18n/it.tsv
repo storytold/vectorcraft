@@ -4025,6 +4025,7 @@ axis	Both	Entrambi
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Crea da guide: le guide generano più di {MAX_PIECES} sezioni
 @msg	Create from Selection: the selection has no area	Crea da selezione: la selezione non ha area
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Il recupero dati non ha dove conservare le copie: imposta Preferenze → Gestione file → Recupero dati → Cartella (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	Il recupero dati non può conservare copie in {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	seleziona con Selezione diretta i punti di ancoraggio in cui tagliare (non i punti finali dei tracciati aperti)
 @msg	Divide Objects Below: select a path	Dividi oggetti sottostanti: seleziona un tracciato
 @msg	Divide Objects Below: select exactly one path	Dividi oggetti sottostanti: seleziona esattamente un tracciato

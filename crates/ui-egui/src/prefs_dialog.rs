@@ -212,7 +212,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ui.label(egui::RichText::new(tl!(cat)).font(theme::semibold(14.0)).color(t.text_strong));
                 ui.add_space(8.0);
                 egui::ScrollArea::vertical().id_salt(("prefs", cat)).max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
-                    category_fields(ui, &mut d, cat);
+                    category_fields(ui, app, &mut d, cat);
                 });
             });
         });
@@ -256,7 +256,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
-fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
+fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, cat: &str) {
     let t = Tokens::get(ui.ctx());
     let mut section = "";
     let mut first = true;
@@ -386,6 +386,19 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                     }
                 });
             }
+            // File Handling › Data Recovery › Folder: typed, or picked with Choose… where the host
+            // has a folder picker (not on the web).
+            PrefKind::Text if sp.key == "recoveryFolder" => {
+                labeled(ui, sp.label, |ui| {
+                    let mut s = v.as_str().unwrap_or("").to_string();
+                    if ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(200.0)).changed() {
+                        d.fields.insert(sp.key.into(), json!(s));
+                    }
+                    if app.services.pick_folder.is_some() && ui.button(tl!("Choose…")).clicked() {
+                        choose_recovery_folder(app, d);
+                    }
+                });
+            }
             PrefKind::Text => {
                 labeled(ui, sp.label, |ui| {
                     let mut s = v.as_str().unwrap_or("").to_string();
@@ -395,6 +408,40 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 });
             }
         }
+    }
+}
+
+/// Data Recovery › Choose…: the folder picked becomes the Folder field's value when files can be
+/// made in it. Otherwise the status bar says why and the field keeps its value, as it does when
+/// the picker is cancelled.
+fn choose_recovery_folder(app: &mut VectorcraftApp, d: &mut Dialog) {
+    let r = crate::picks::in_dialog(app, d, |app, d| {
+        let Some(path) = crate::picks::folder(app) else { return Ok(()) };
+        writable_folder(&path)?;
+        d.fields.insert("recoveryFolder".into(), json!(path));
+        Ok(())
+    });
+    if let Err(e) = r {
+        app.status(e);
+    }
+}
+
+/// `Ok` when `path` is a folder that a file can be created in: a file is made there and removed.
+fn writable_folder(path: &str) -> Result<(), String> {
+    let dir = std::path::Path::new(path);
+    if !dir.is_dir() {
+        return Err(format!("{path} is not a folder"));
+    }
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |t| t.as_nanos());
+    let check = dir.join(format!(".vectorcraft-write-check-{}-{nanos}", std::process::id()));
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(&check) {
+        Ok(f) => {
+            drop(f);
+            // Best effort: the empty file is all there is to remove.
+            let _ = std::fs::remove_file(&check);
+            Ok(())
+        }
+        Err(e) => Err(format!("Data Recovery can't keep copies in {path}: {e}")),
     }
 }
 
