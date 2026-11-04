@@ -200,4 +200,66 @@ mod tests {
         let shifted = Rect::new(0.0, 0.0, 500.0, 500.0);
         assert!(view.difference(&vector, shifted, false).any > MAX_DIFFERENCE, "wrong framing remains an error");
     }
+
+    /// The boxes `solid_regions` gives for a page of images are in the page's points: the
+    /// comparison is drawn at a multiple of the scale and resized, and the two sizes round
+    /// differently on the short side, so a box at the far edge does not drift out of the object
+    /// that makes it.
+    #[test]
+    fn solid_regions_of_a_raster_page_lie_in_the_object_that_differs() {
+        for bottom in (884..=900).map(f64::from) {
+            let object = Rect::new(1000.0, 0.0, 3000.0, bottom);
+            for r in raster_page_regions(object, 4000.0, 1006.0) {
+                assert!(
+                    r.x0 >= object.x0 - 1.0 && r.y0 >= object.y0 - 1.0 && r.x1 <= object.x1 + 1.0 && r.y1 <= object.y1 + 1.0,
+                    "{r:?} lies outside {object:?}"
+                );
+            }
+        }
+    }
+
+    /// The boxes `solid_regions` gives for a `width` × `height` page that is one image of a black
+    /// `object`, compared with layers that hold nothing.
+    fn raster_page_regions(object: Rect, width: f64, height: f64) -> Vec<Rect> {
+        use vectorcraft_color::{Color, Paint};
+        use vectorcraft_doc::{Appearance, ImageBlob, ImageObject};
+        let mut vector = Document::new(width, height);
+        let layer = vector.layers[0].id;
+        let n = Node::path(
+            vector.alloc_id(),
+            vectorcraft_geom::shapes::rectangle(object),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        vector.insert(Some(layer), usize::MAX, n).unwrap();
+        let rect = vector.artboards[0].rect;
+        let source = vectorcraft_render::Renderer::new().render_region(&vector, rect, 1.0, true);
+        let mut png = Vec::new();
+        image::RgbaImage::from_raw(source.width, source.height, source.to_straight())
+            .unwrap()
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let blob = ImageBlob::new("image/png", png);
+        let key = blob.content_key();
+        let mut page = Document::new(width, height);
+        page.images.insert(key.clone(), blob);
+        let image = Node::new(
+            page.alloc_id(),
+            NodeKind::Image(Box::new(ImageObject {
+                key,
+                width: source.width,
+                height: source.height,
+                xf: Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            })),
+        );
+        page.insert(Some(page.layers[0].id), usize::MAX, image).unwrap();
+        assert_eq!(comparison_samples(&page), 4);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let mut view = PageView::new(&frame);
+        let (_, regions) = view.solid_regions(&Document::new(width, height), rect, false).unwrap();
+        assert!(!regions.is_empty());
+        regions
+    }
 }

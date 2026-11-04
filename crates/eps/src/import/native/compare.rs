@@ -231,6 +231,11 @@ impl PageView {
         if solid.len() != w * h {
             return None;
         }
+        // A pixel's size in points: [`comparison_render`] draws at `scale * samples`, rounds that
+        // raster to whole pixels and resizes it to `w` × `h`, so the two sizes can round differently.
+        let k = f64::from(self.samples);
+        let drawn = vectorcraft_render::raster_size(rb, self.scale * k).map_or((w as f64, h as f64), |(dw, dh)| (f64::from(dw), f64::from(dh)));
+        let pitch = (drawn.0 / (w as f64 * k * self.scale), drawn.1 / (h as f64 * k * self.scale));
         let mut regions = vec![];
         let mut stack = vec![];
         for start in 0..solid.len() {
@@ -255,8 +260,7 @@ impl PageView {
                     }
                 }
             }
-            let s = self.scale;
-            let at = |i: usize, j: usize| (rb.x0 + i as f64 / s, rb.y0 + j as f64 / s);
+            let at = |i: usize, j: usize| (rb.x0 + i as f64 * pitch.0, rb.y0 + j as f64 * pitch.1);
             let ((x0, y0), (x1, y1)) = (at(i0, j0), at(i1 + 1, j1 + 1));
             regions.push(Rect::new(x0, y0, x1, y1));
         }
