@@ -4693,6 +4693,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the Pixar file's image data is damaged	τα δεδομένα εικόνας του αρχείου Pixar είναι κατεστραμμένα
 @msg	the JPEG 2000 file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	το αρχείο JPEG 2000 έχει μη υποστηριζόμενο χρωματικό χώρο ή περιεχόμενο JPX
+@msg	the HEIC or HEIF file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου HEIC ή HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	το αρχείο HEIC ή HEIF περιέχει είδος εικόνας που δεν είναι δυνατό να διαβαστεί
+@msg	HEIC and HEIF images can't be opened in this build	οι εικόνες HEIC και HEIF δεν μπορούν να ανοίξουν σε αυτή την έκδοση
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	η εικόνα PSD είναι πολύ μεγάλη για ανάγνωση ({_1} × {_2} εικονοστοιχεία)
 @msg	zipped 32-bit PSD image data with prediction can't be read	τα συμπιεσμένα δεδομένα εικόνας PSD 32 bit με πρόβλεψη δεν διαβάζονται
 @msg	{depth}-bit PSD files in this colour mode can't be read	τα αρχεία PSD {depth} bit δεν διαβάζονται σε αυτήν τη λειτουργία χρώματος

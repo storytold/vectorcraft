@@ -5256,6 +5256,9 @@ imageTrace	Outline	Körvonal
 @msg	the Pixar file's image data is damaged	a Pixar-fájl képadatai sérültek
 @msg	the JPEG 2000 file can't be read	a JPEG 2000 fájl nem olvasható
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	a JPEG 2000 fájl nem támogatott színteret vagy JPX-tartalmat tartalmaz
+@msg	the HEIC or HEIF file can't be read	a HEIC- vagy HEIF-fájl nem olvasható
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	a HEIC- vagy HEIF-fájl olyan képtípust tartalmaz, amely nem olvasható
+@msg	HEIC and HEIF images can't be opened in this build	a HEIC- és HEIF-képek ebben a buildben nem nyithatók meg
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a PSD-kép túl nagy a beolvasáshoz ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	a PDF mentése párbeszédablak nem nyílt meg
 @msg	the scale is not a usable number	a méretarány nem használható szám
