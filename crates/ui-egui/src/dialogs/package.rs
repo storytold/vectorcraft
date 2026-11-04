@@ -164,8 +164,12 @@ fn packaged(app: &mut VectorcraftApp, r: Result<Value, String>, web: bool, later
         return Ok(r);
     }
     let folder = r["folder"].as_str().unwrap_or_default().to_string();
-    // The dialog names every font left out, so the status line may cut the list short.
-    app.status(package_status(n, Some(&folder), &package_status_note(missing, &status_fonts(&fonts))));
+    // A dialog open now (another one, after a package written in the background) stays, and no
+    // dialog names the fonts left out, so the status line names every one of them. Otherwise the
+    // dialog names them all, and the status line may cut the list short.
+    let asks = app.ui.dialog.is_none();
+    let listed = if asks { status_fonts(&fonts) } else { fonts.clone() };
+    app.status(package_status(n, Some(&folder), &package_status_note(missing, &listed)));
     let shown_note = package_dialog_note(missing, &fonts);
     let detail = if shown_note.is_empty() {
         crate::i18n::fmt(
@@ -178,7 +182,7 @@ fn packaged(app: &mut VectorcraftApp, r: Result<Value, String>, web: bool, later
             &[("folder", &folder), ("note", &shown_note)],
         )
     };
-    if app.ui.dialog.is_none() {
+    if asks {
         ask(app, tl!("Package created"), &detail, "file.showPackage", json!({ "folder": folder }));
     }
     Ok(r)
@@ -212,9 +216,9 @@ pub(super) fn package_status_note(missing: usize, fonts: &str) -> String {
 /// The most bytes of font names a package status lists next to the dialog that names them all.
 const STATUS_FONTS: usize = 500;
 
-/// `fonts` (names joined with `, `) as the desktop's status line lists them: whole, or the names
-/// that fit in [`STATUS_FONTS`] bytes followed by `, …`, so the line stays short enough for the
-/// status bar to translate it.
+/// `fonts` (names joined with `, `) as the desktop's status line lists them while the Package
+/// created dialog names them all: whole, or the names that fit in [`STATUS_FONTS`] bytes followed
+/// by `, …`, so the line stays short enough for the status bar to translate it.
 pub(super) fn status_fonts(fonts: &str) -> String {
     if fonts.len() <= STATUS_FONTS {
         return fonts.to_string();
