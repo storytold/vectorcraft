@@ -1474,6 +1474,29 @@ fn missing_glyph_protection_keeps_the_version_of_the_font_kept() {
     assert_eq!(versions, [moved.clone(), kept, moved]);
 }
 
+/// The font warning of `text.setStyle` and `text.setRangeStyle` names only the fonts the command
+/// set: a character that keeps an unavailable font through Missing Glyph Protection isn't reported.
+#[test]
+fn missing_glyph_protection_leaves_the_font_kept_out_of_the_warning() {
+    let (from, to, c) = ("No Such Font Family", "JetBrains Mono", '\u{180}');
+    let db = vectorcraft_text::FontDb::global();
+    // The unavailable family is drawn in the fallback font, which has the character; the new font is installed and lacks it.
+    let installed = db.resolve(to, "Regular").is_some_and(|(_, m)| m == vectorcraft_text::FontMatch::Exact);
+    if !installed || !db.face(from, "Regular").is_some_and(|f| f.covers(c)) || db.face(to, "Regular").is_some_and(|f| f.covers(c)) {
+        return; // The fonts installed here cover other characters.
+    }
+    let mut s = new_doc();
+    let id = NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": "a\u{180}c", "font": from})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    for change in [json!({"font": to}), json!({"id": id.0, "start": 0, "end": 4, "font": to})] {
+        let cmd = if change.get("id").is_some() { "text.setRangeStyle" } else { "text.setStyle" };
+        let out = s.execute(cmd, &change).unwrap();
+        assert_eq!(style_at(&s, id, 1).font_family, from, "{cmd}: the character keeps its font");
+        assert_eq!(out.get("warning"), None, "{cmd}: {out}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
 // ---------- #394, fourth batch ----------
 
 /// Type › Type Object Selection by Path Only (#394): on, a click among point type's glyphs no

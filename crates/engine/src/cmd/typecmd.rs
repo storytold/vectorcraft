@@ -874,16 +874,16 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                     st.features = super::textedit::change_features(&st.features, c);
                 }
             });
-            if let Some(before) = before {
-                super::textedit::protect_missing_glyphs(&before, &mut t.runs);
-            }
+            let kept = before.map(|before| super::textedit::protect_missing_glyphs(&before, &mut t.runs)).unwrap_or_default();
             if font.is_some() || style.is_some() {
-                // All the text: every run, the one run of empty text included.
+                // All the text: every run, the one run of empty text included. Characters that kept their font aren't the
+                // command's.
                 let styled = match range {
-                    None => t.runs.clone(),
+                    None if kept.is_empty() => t.runs.clone(),
+                    None => super::textedit::unprotected_runs(&t.runs, 0, vectorcraft_text::edit::runs_len(&t.runs), &kept),
                     Some(r) => {
                         let (a, b) = r.bytes(t);
-                        vectorcraft_text::edit::slice_runs(&t.runs, a, b)
+                        super::textedit::unprotected_runs(&t.runs, a, b, &kept)
                     }
                 };
                 set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
