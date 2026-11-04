@@ -1996,6 +1996,35 @@ fn a_drawn_look_that_is_an_image_stands_for_its_object() {
     assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
 }
 
+/// The name and opacity mask after an image follow the operators that end its raster: `XH`, the
+/// versioned `Xr` and the `N` after `%AI5_EndRaster`.
+#[test]
+fn an_images_name_and_mask_follow_the_end_of_its_raster() {
+    let mask = "%_/ArtDictionary :\r\n%_/Mask :\r\n%_X=\r\n%_0 g\r\n%_0 0 m\r\n%_5 0 l\r\n%_5 5 l\r\n%_f\r\n%_X+\r\n%_ (Art) ,\r\n\
+                %_0 /Bool (Clipping) ,\r\n%_0 /Bool (Inverted) ,\r\n%_0 /Bool (Disabled) ,\r\n%_1 /Bool (Linked) ,\r\n%_; (AI9_Mask) ,\r\n\
+                %_/XMLUID : (Photo) ; (AI10_ArtUID) ,\r\n%_;\r\n%_\r\n";
+    for tail in [
+        "XH\r\n%AI5_EndRaster\r\nN\r\n",
+        "XH\r\n%AI17_Begin_Content_if_version_gt:24 17\r\n72 72 Xr\r\n%AI17_End_Versioned_Content\r\n%AI5_EndRaster\r\nN\r\n",
+    ] {
+        let mut data = image("[ 10 0 0 10 50 90 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 7);
+        let at = data.windows(6).position(|w| w == b"XH\r\n%A").unwrap();
+        let end = data.windows(6).position(|w| w == b"N\r\nLB\r").unwrap() + 3;
+        data.splice(at..end, [tail, mask].concat().into_bytes());
+        let r = read(&data).unwrap();
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Image(_)), "{:?}", a[0].kind);
+        assert_eq!(a[0].name.as_deref(), Some("Photo"));
+        assert!(a[0].extras().mask.is_some());
+    }
+    // An operator of another kind in between ends the image: the name has no object.
+    let mut data = image("[ 10 0 0 10 50 90 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 7);
+    let end = data.windows(6).position(|w| w == b"N\r\nLB\r").unwrap() + 3;
+    data.splice(end..end, b"0 A\r\n%_/ArtDictionary :\r\n%_/XMLUID : (Photo) ; (AI10_ArtUID) ,\r\n%_;\r\n%_\r\n".to_vec());
+    assert_eq!(art(&read(&data).unwrap().doc)[0].name, None);
+}
+
 fn pixels(doc: &Document) -> (image::RgbaImage, kurbo::Affine) {
     let a = art(doc);
     let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
@@ -2320,10 +2349,11 @@ fn a_placed_file_keeps_its_folder_relative_to_the_document() {
     assert_eq!(relative_of(&placed_in("( art /)", path, &preview)).as_deref(), Some(" art /photo.png"), "spaces are part of names");
     // On `%_` lines too.
     assert_eq!(relative_of(&hide_placed(&placed_in("(src/)", path, &preview))).as_deref(), Some("src/photo.png"));
-    // No folder, an absolute one, one too long or not a string: the path alone, and the file still
-    // opens.
+    // An empty folder is the document's own: the file's name.
+    assert_eq!(relative_of(&placed_in("()", path, &preview)).as_deref(), Some("photo.png"));
+    // An absolute folder, one too long or not a string: the path alone, and the file still opens.
     let long = format!("({})", "a/".repeat(3000));
-    for folder in ["()", "(/elsewhere/)", "(C:\\\\art\\\\)", long.as_str(), "12", "/src"] {
+    for folder in ["(/elsewhere/)", "(C:\\\\art\\\\)", long.as_str(), "12", "/src"] {
         assert_eq!(relative_of(&placed_in(folder, path, &preview)), None, "{folder}");
     }
     // A section that doesn't end leaves the folder unread.

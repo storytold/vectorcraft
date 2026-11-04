@@ -381,9 +381,11 @@ impl Writer<'_> {
         }
         self.line("n\n%_/ArtDictionary :\n%_1 /Bool (AIPattern_Editor_Backing_Tile_Rect) ,\n%_;\n%_");
         self.nest += 1;
+        self.hidden += 1;
         for a in &def.art {
             self.node(a);
         }
+        self.hidden -= 1;
         self.nest -= 1;
         let art;
         (art, (self.to_art, self.grad_space, self.canvas), self.state, self.gs, self.clip, self.block_end) = saved;
@@ -395,13 +397,7 @@ impl Writer<'_> {
         ps::push_nums(&mut text, &[tile.x0, tile.y0, tile.x1, tile.y1]);
         text.pop();
         text.push('\n');
-        for l in art.lines() {
-            if !l.starts_with("%_") {
-                text.push_str("%_");
-            }
-            text.push_str(l);
-            text.push('\n');
-        }
+        super::hide(&art, &mut text);
         text.push_str("E\n%AI3_EndPattern\n");
         self.patterns.push(PatternOut { name: name.to_string(), text, used });
         true
