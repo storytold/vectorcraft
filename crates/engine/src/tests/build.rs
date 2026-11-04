@@ -2244,6 +2244,25 @@ fn live_paint_gap_detection_stops_paint_at_a_gap() {
     assert!(node(&s, g).extras().live_paint_gaps.is_none());
 }
 
+/// A Gap Preview Color with an alpha part (`#rrggbbaa` or `#rgba`) is refused and changes nothing;
+/// `#rrggbb` and a layer color's name still set it.
+#[test]
+fn a_gap_color_with_an_alpha_part_is_refused() {
+    let mut s = session();
+    let g = live_square_with_a_gap(&mut s);
+    let depth = s.doc().unwrap().history.undo.len();
+    for bad in ["#00ff0080", "00ff0080", "#0f08"] {
+        let err = s.execute("livePaint.gapOptions", &json!({"id": g.0, "color": bad})).unwrap_err().to_string();
+        assert!(err.contains(&format!("`{bad}` is not a colour (#rrggbb or a preset name)")), "{bad}: {err}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth);
+    assert_eq!(gap_options(&s, g).color, [0xff, 0x4f, 0x4f]);
+    s.execute("livePaint.gapOptions", &json!({"id": g.0, "color": "#00ff00"})).unwrap();
+    assert_eq!(gap_options(&s, g).color, [0, 0xff, 0]);
+    s.execute("livePaint.gapOptions", &json!({"id": g.0, "color": "Green"})).unwrap();
+    assert_eq!(gap_options(&s, g).color, [0x4f, 0xff, 0x4f]);
+}
+
 #[test]
 fn medium_and_large_gaps_stop_paint_at_wider_gaps() {
     // Squares whose ends stop 5 pt and 9 pt short of their starts: each size closes the gaps up

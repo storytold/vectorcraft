@@ -1864,7 +1864,9 @@ already walks Image Trace. Short agent entry points:
   covering source, including compound paths with shared curved boundaries. Expand keeps those face fills.
   With `detect: true`, paint stops at the gaps that run
   from a loose end of a path to the nearest path, up to `size` wide (`small` 3 pt, `medium` 6 pt, `large` 12 pt, or a
-  number of points up to 72); `closeGaps: true` adds an unpainted path across each of them. The options are saved with the group, and the reply
+  number of points up to 72); `closeGaps: true` adds an unpainted path across each of them. `color` (the Gap Preview
+  Color) is `#rrggbb` or a layer color's name; a hex color with an alpha part, `#rrggbbaa` or `#rgba`, is an error and
+  changes nothing. The options are saved with the group, and the reply
   and `livePaint.info` list the gaps up to `size` wide that no path closes, as `[x0, y0, x1, y1]`. `livePaint.merge`
   keeps the bottom group's options when its Gap Detection is on, and otherwise turns Gap Detection on with `small`
   when another merged group has it on. When Gap Detection is off in every merged group, it stays off.
@@ -2600,7 +2602,8 @@ and `layerRows`, the rows highlighted in the panel.
 - **Eye and lock**: `layer.setProps {ids?, visible?, locked?, name?}` for any rows, plus Layer Options for layers:
   `template` (also locks the layer and dims its images to 50% unless given), `printable`, `preview` (off: the layer
   draws and is clicked in outline, Ctrl/Cmd-click its eye), `dimImages` (0–100, or false) and `color` (an index 0–26,
-  `#rrggbb` or a preset name). Several rows change in one undo step (a drag down the eye or lock column).
+  `#rrggbb` or a preset name; a hex color with an alpha part, `#rrggbbaa` or `#rgba`, is an error, and so it is in
+  `layer.new` and `layer.newSublayer`). Several rows change in one undo step (a drag down the eye or lock column).
 - **Dragging rows**: `layer.move {ids, target, place?: above|below|inside, copy?}` moves rows beside a row or into a
   layer or group (on top of its contents), keeping their stacking order; `copy` (Alt-drag) moves copies. Layers go
   only in layers or at the top level and objects in layers and groups (an object placed beside a top-level layer goes
