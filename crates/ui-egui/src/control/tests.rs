@@ -64,6 +64,18 @@ fn craftlink_pending_interaction_cannot_be_overwritten() {
 }
 
 #[test]
+fn craftlink_no_path_snapshot_returns_native_bytes_without_save_dialog() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let path = app.session.active().unwrap().path.clone();
+    let result = input_request(&mut app, "engine.execute", json!({"command":"file.saveCopy","params":{}}));
+    assert_eq!(result["ok"], true);
+    assert!(result["result"]["dataBase64"].as_str().is_some_and(|s| !s.is_empty()));
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.active().unwrap().path, path);
+}
+
+#[test]
 fn control_lists_and_selects_optional_addon_tools() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     let listed = input_request(&mut app, "ui.tool.list", json!({}));

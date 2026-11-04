@@ -261,6 +261,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
     match req.method.as_str() {
         "engine.execute" | "ui.menu.invoke" | "command" => {
             let Some(id) = s("command").or(s("id")) else { return err("missing `command`") };
+            if let Some(target) = p.get("document")
+                && target.as_u64() != app.session.active().map(|d| d.uid)
+            {
+                return err("conflict: requested native document is not active");
+            }
             if let Some(expected) = p.get("expected") {
                 if req.method != "engine.execute" || id != "object.setProps" {
                     return err("capability: conditional execution supports object.setProps only");
@@ -284,6 +289,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             // A key the command's description doesn't name is an error, not a default (#1442).
             if let Err(e) = crate::menus::check_params(&app.session, id, &params) {
                 return err(e);
+            }
+            // The engine's documented no-path copy returns bytes. Automation
+            // must not open a native Save dialog or change the document's path.
+            if req.method == "engine.execute" && id == "file.saveCopy" && params.get("path").is_none() {
+                return wrap(app.session.execute(id, &params).map_err(|e| e.to_string()));
             }
             wrap(app.run(id, params))
         }
