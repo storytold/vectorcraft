@@ -64,6 +64,7 @@ digits	Malayalam	말라얄람어
 	Join Our Discord	Discord 참여하기
 	Line-end Punctuation Half Width	줄 끝 문장 부호 반각
 	Insert Kashidas	카시다 삽입
+	Kashidas	카시다
 	Long	길게
 	Stylistic	스타일
 	Mojikumi Set	모지쿠미 세트
@@ -650,6 +651,11 @@ digits	Malayalam	말라얄람어
 	New Toolbar	새 도구 막대
 	Show Toolbar	도구 막대 표시
 	List Toolbars	도구 막대 목록
+	Manage Toolbars…	도구 막대 관리…
+	Manage Toolbars	도구 막대 관리
+	Rename Toolbar	도구 막대 이름 바꾸기
+	Duplicate Toolbar	도구 막대 복제
+	Delete Toolbar	도구 막대 삭제
 	Manage Workspaces…	작업 영역 관리…
 	Control	컨트롤
 	Contextual Task Bar	상황별 작업 표시줄
@@ -1981,6 +1987,8 @@ digits	Malayalam	말라얄람어
 	Large	크게
 	Large Tabs	큰 탭
 	Lasso Tool	올가미 도구
+	Enclosing Lasso Tool	둘러싸기 올가미 도구
+	Enclosing Lasso	둘러싸기 올가미
 	Last Effect: {name}	마지막 효과: {name}
 	Last Page	마지막 페이지
 	Layer Options…	레이어 옵션…
@@ -3261,6 +3269,7 @@ mark-style	Japanese	일본식
 	Use Artboards	아트보드 사용
 	Use Black Point Compensation	블랙 포인트 보정 사용
 	Use Compression	압축 사용
+	Include Editing Data for Other Apps	다른 앱용 편집 데이터 포함
 	Use Even-Odd Fill Rule	짝홀 칠 규칙 사용
 	Use Japanese Crop Marks	일본식 자르기 표시 사용
 	Use Low Resolution Proxy for Linked EPS	연결된 EPS에 저해상도 프록시 사용
@@ -4077,7 +4086,7 @@ theme	Appearance	외관
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: 여기에는 파일 시스템이 없습니다(열려면 dataBase64를 전달하고, dataBase64를 얻으려면 경로를 생략하세요)
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	저장은 {_2}이(가) 아닌 {_1}(으)로 기록합니다. 다른 형식은 document.export를 사용하세요
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	저장은 {_2}이(가) 아닌 {_1}(으)로 기록합니다. 이 형식으로 기록하려면 file.saveAsTemplate를 사용하세요
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7은(는) 레거시 .ai 파일을 기록합니다. .ait 템플릿은 항상 PDF 호환입니다
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7은(는) 레거시 .ai 파일을 기록하며 .ait 템플릿은 기록하지 않습니다
 @msg	no changes since the last save	마지막 저장 이후 변경 내용이 없습니다
 @msg	unknown format `{f}` (Save writes {_1})	알 수 없는 형식 `{f}`(저장은 {_1}(으)로 기록)
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`는 SVG 옵션 개체여야 합니다(document.formats 참조)
@@ -5752,6 +5761,7 @@ breakText	Glyphs	글리프
 	Gap 5	간격 5
 
 @msg	{_1}: they came in as the page's art	{_1}: 페이지의 아트로 가져왔습니다
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	파일 자체 페이지와 다르게 그려진 오브젝트를 페이지의 아트로 가져왔습니다: {_1}
 
 @msg	You must choose a side pattern.	측면 패턴을 선택해야 합니다.
 @msg	invalid pattern tile choice	잘못된 패턴 타일 선택

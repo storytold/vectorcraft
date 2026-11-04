@@ -94,6 +94,31 @@ fn the_default_stays_pdf_compatible_and_other_versions_are_refused() {
 }
 
 #[test]
+fn errors_name_the_legacy_ai_not_the_pdf_compatible_one() {
+    let mut s = three_boards();
+    for (cmd, p) in [
+        ("file.saveCopy", json!({"format": "ai", "aiVersion": "7", "artboard": "2"})),
+        ("document.export", json!({"format": "ai", "aiVersion": "7", "range": 2})),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains("legacy .ai (version 7) options: invalid type") && !e.contains("PDF-compatible"), "{cmd}: {e}");
+    }
+    // Version 7 writes a legacy .ai whatever pdfCompatible says, and its errors and notes name it.
+    let e = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "pdfCompatible": false, "artboard": "2"})).unwrap_err().to_string();
+    assert!(e.contains("legacy .ai (version 7) options: invalid type"), "{e}");
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "artboard": 1, "version": 3})).unwrap();
+    assert!(r["warnings"].to_string().contains("`version` was not used: legacy .ai (version 7) files don't read it"), "{r}");
+    // Several artboards are several files, which one encoded file can't hold.
+    let d = &s.doc().unwrap().doc;
+    let e = crate::cmd::fileio::encode_with_warnings(d, "ai", &json!({"aiVersion": "7"})).unwrap_err().to_string();
+    assert!(e.contains("legacy .ai (version 7) writes one file per artboard here") && !e.contains("PDF-compatible"), "{e}");
+    assert!(crate::cmd::fileio::encode_with_warnings(d, "ai", &json!({"aiVersion": "7", "artboard": 2})).is_ok());
+    // The PDF-compatible file keeps its name.
+    let e = s.execute("document.export", &json!({"format": "ai", "includeLinked": "yes"})).unwrap_err().to_string();
+    assert!(e.contains("PDF-compatible .ai options: invalid type") && !e.contains("legacy"), "{e}");
+}
+
+#[test]
 fn transparency_and_appearances_are_written_as_plain_art_and_type_as_text() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();

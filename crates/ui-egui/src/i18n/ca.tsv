@@ -1989,6 +1989,7 @@ digits	Malayalam	Malaiàlam
 	Insert Character	Insereix caràcter
 	Insert Inline Symbol	Insereix símbol en línia
 	Insert Kashidas	Insereix kashides
+	Kashidas	Kashides
 	Insert Special Character	Insereix caràcter especial
 	Insert Whitespace Character	Insereix caràcter d’espai
 	Inserting, deleting and rotating pages	Inserir, suprimir i girar pàgines
@@ -2100,6 +2101,8 @@ digits	Malayalam	Malaiàlam
 	Largest:	El més gran:
 	Lasso	Llaç
 	Lasso Tool	Eina de llaç
+	Enclosing Lasso Tool	Eina de llaç envoltant
+	Enclosing Lasso	Llaç envoltant
 	Last	Últim
 	Last Artboard	Últim tauler
 	Last commit	Últim commit
@@ -2562,6 +2565,11 @@ digits	Malayalam	Malaiàlam
 	New Toolbar	Barra d’eines nova
 	Show Toolbar	Mostra la barra d’eines
 	List Toolbars	Llista les barres d’eines
+	Manage Toolbars…	Gestiona les barres d’eines…
+	Manage Toolbars	Gestiona les barres d’eines
+	Rename Toolbar	Canvia el nom de la barra d’eines
+	Duplicate Toolbar	Duplica la barra d’eines
+	Delete Toolbar	Suprimeix la barra d’eines
 	New {kind} Style…	Nou estil de {kind}…
 	New…	Nou…
 	Next	Següent
@@ -4500,6 +4508,7 @@ digits	Malayalam	Malaiàlam
 	Use Artboards	Utilitza els taulers
 	Use Black Point Compensation	Utilitza la compensació del punt negre
 	Use Compression	Utilitza la compressió
+	Include Editing Data for Other Apps	Inclou les dades d’edició per a altres aplicacions
 	Use Default	Utilitza el valor per defecte
 	Use document bleed settings	Utilitza la configuració de sangrat del document
 	Use Document Raster Effects Resolution	Utilitza la resolució dels efectes de ràster del document
@@ -4917,7 +4926,7 @@ digits	Malayalam	Malaiàlam
 @msg	a {width}×{height} screenshot's byte count overflows	el recompte de bytes d’una captura de pantalla de {width}×{height} es desborda
 @msg	action is required	cal una acció
 @msg	add a format to export	afegiu un format per exportar
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 escriu fitxers .ai heretats; una plantilla .ait sempre és compatible amb PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 escriu fitxers .ai heretats, no plantilles .ait
 @msg	already editing a pattern	ja s’està editant un motiu
 @msg	an exporter always gets an export's budget: leave `budget` out	un exportador sempre rep el pressupost d’una exportació: ometeu `budget`
 @msg	an image has no pixels and was left out	una imatge no té píxels i s’ha omès
@@ -6155,6 +6164,7 @@ breakText	Glyphs	Glifs
 	Gap 5	Separació 5
 
 @msg	{_1}: they came in as the page's art	{_1}: han entrat com a art de la pàgina
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	els objectes que es dibuixaven diferent de la pàgina pròpia del fitxer han entrat com a art de la pàgina: {_1}
 
 @msg	the JPEG 2000 file can't be read	no es pot llegir el fitxer JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	el fitxer JPEG 2000 té un espai de color o contingut JPX no compatible

@@ -175,6 +175,13 @@ fn has_warnings(r: &Value) -> bool {
     r["warnings"].as_array().is_some_and(|w| !w.is_empty())
 }
 
+/// The preview page's name from the document's title `stem`: one file name in the preview folder.
+/// `file_stem` gives back a title it can't take a stem of ("../.."), so one with a separator or of
+/// dots only is "Untitled".
+pub(super) fn preview_name(stem: &str) -> &str {
+    if stem.trim().is_empty() || stem.contains(['/', '\\']) || stem.chars().all(|c| c == '.') { "Untitled" } else { stem }
+}
+
 /// `file.saveForWeb.browser`: the HTML page and its images in a new temporary folder, opened in the
 /// default browser (desktop). When the export has warnings, the status bar shows the first in
 /// place of "Opened …".
@@ -182,9 +189,10 @@ pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Val
     if io::is_web(app) {
         return Err("Preview in Browser needs the desktop app (the web downloads files instead)".into());
     }
+    app.refuse_automation("file.saveForWeb.browser")?;
     let stem = app.session.active().map(|st| vectorcraft_engine::cmd::fileio::file_stem(&st.doc.title)).ok_or("no document")?;
     let dir = temp_folder()?;
-    let path = format!("{dir}/{}.html", if stem.trim().is_empty() { "Untitled" } else { stem.as_str() });
+    let path = format!("{dir}/{}.html", preview_name(&stem));
     let mut q = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = q.as_object_mut() {
         o.insert("path".into(), json!(path));

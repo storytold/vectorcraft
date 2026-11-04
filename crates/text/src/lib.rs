@@ -166,7 +166,9 @@ pub struct PositionedGlyph {
     /// in text space: the font's placement of the glyph (`GPOS` x placement), less a leading space
     /// taken off, plus the manual kerning of right-to-left text, which moves the glyph right so that
     /// the space it adds lies on the glyph's left. 0 for a glyph standing upright or set across the
-    /// column in vertical type, and for an inline graphic.
+    /// column in vertical type, and for an inline graphic. An upright glyph in vertical type on a
+    /// path turns about its pen, and its cell starts one cell length before the cell's top: 0.12 em
+    /// before the pen without the font's vertical metrics.
     pub width_start: f64,
 }
 

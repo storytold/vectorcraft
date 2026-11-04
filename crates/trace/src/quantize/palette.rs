@@ -202,13 +202,9 @@ const FLAT_BINS: usize = 96;
 /// Document Library: the `k` swatches (at most) that the most pixels are nearest to (see
 /// [`nearest_library`]).
 fn library_colors(used: &[Used], swatches: &[[u8; 3]], k: usize) -> Vec<[f64; 3]> {
-    let mut all: Vec<[f64; 3]> = vec![];
-    for s in swatches {
-        let c = s.map(f64::from);
-        if !all.contains(&c) {
-            all.push(c);
-        }
-    }
+    // Each colour once, in their order: looked up in a set, not in the colours kept so far.
+    let mut seen = std::collections::HashSet::new();
+    let all: Vec<[f64; 3]> = swatches.iter().filter(|s| seen.insert(**s)).map(|s| s.map(f64::from)).collect();
     let mut weight = vec![0.0; all.len()];
     let all_labs = labs(&all);
     for (_, c, n) in used {

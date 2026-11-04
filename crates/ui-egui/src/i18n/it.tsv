@@ -1742,6 +1742,8 @@ file-filter	Templates	Modelli
 	Large Thumbnail View	Vista miniature grandi
 	Large Thumbnails	Miniature grandi
 	Lasso Tool	Strumento Lazo
+	Enclosing Lasso Tool	Strumento Lazo di inclusione
+	Enclosing Lasso	Lazo di inclusione
 	Last Effect: {name}	Ultimo effetto: {name}
 	Last Effect: {}	Ultimo effetto: {}
 	Last Effect…	Ultimo effetto…
@@ -1956,6 +1958,7 @@ file-filter	Templates	Modelli
 	Modify	Modifica
 	Mojikumi	Mojikumi
 	Insert Kashidas	Inserisci kashida
+	Kashidas	Kashida
 	Long	Lunga
 	Stylistic	Stilistica
 	Mojikumi Set	Set mojikumi
@@ -2133,6 +2136,11 @@ file-filter	Templates	Modelli
 	New Toolbar	Nuova barra degli strumenti
 	Show Toolbar	Mostra barra degli strumenti
 	List Toolbars	Elenco barre degli strumenti
+	Manage Toolbars…	Gestisci barre degli strumenti…
+	Manage Toolbars	Gestisci barre degli strumenti
+	Rename Toolbar	Rinomina barra degli strumenti
+	Duplicate Toolbar	Duplica barra degli strumenti
+	Delete Toolbar	Elimina barra degli strumenti
 	New {kind} Style…	Nuovo stile {kind}…
 	New…	Nuovo…
 	Next	Successivo
@@ -3614,6 +3622,7 @@ digits	Malayalam	Malayalam
 	Use Artboards	Usa tavole da disegno
 	Use Black Point Compensation	Usa compensazione punto nero
 	Use Compression	Usa compressione
+	Include Editing Data for Other Apps	Includi dati di modifica per altre app
 	Use document bleed settings	Usa impostazioni abbondanza del documento
 	Use Even-Odd Fill Rule	Usa regola di riempimento pari-dispari
 	Use Japanese Crop Marks	Usa segni di ritaglio giapponesi
@@ -4035,7 +4044,7 @@ axis	Both	Entrambi
 @msg	Save for Web: the image is empty	Salva per il web: l'immagine è vuota
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Salva scrive {_1}, non {_2}: usa document.export per gli altri formati
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Salva scrive {_1}, non {_2}: usa file.saveAsTemplate per scriverlo
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 scrive file .ai tradizionali; un modello .ait è sempre compatibile PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 scrive file .ai tradizionali, non modelli .ait
 @msg	Saved recovery data for {title}	Dati di recupero salvati per {title}
 @msg	Saved to User Defined: {_1}	Salvato in Definito dall'utente: {_1}
 @msg	Saved {path}	Salvato {path}
@@ -5791,6 +5800,7 @@ breakText	Glyphs	Glifi
 	Gap 5	Spazio 5
 
 @msg	{_1}: they came in as the page's art	{_1}: sono stati importati come elementi grafici della pagina
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	gli oggetti disegnati in modo diverso dalla pagina del file stesso sono stati importati come elementi grafici della pagina: {_1}
 
 @msg	You must choose a side pattern.	Devi scegliere un motivo laterale.
 @msg	invalid pattern tile choice	scelta della tessera motivo non valida

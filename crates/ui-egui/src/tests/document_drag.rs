@@ -361,3 +361,38 @@ fn scrolling_tabs_under_a_stationary_drag_does_not_cascade_to_other_documents() 
     frame(&mut app, &ctx, 2.3, vec![button(drop, false)]);
     assert_eq!(app.session.active().unwrap().selection.objects.len(), 1);
 }
+
+/// Artwork held over the tab of another view of its own document (Window › New Window) switches to
+/// that view, and a drop there moves it.
+#[test]
+fn dragging_artwork_over_another_views_tab_switches_to_that_view() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300, "name": "Logo"})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("window.newWindow", json!({})).unwrap();
+    crate::doc_windows::show_window(&mut app, (0, 1));
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&mut app, &ctx, 0.0, vec![]);
+    let tabs = frame(&mut app, &ctx, 0.01, vec![]);
+    assert_eq!(tabs.len(), 2);
+    let grab = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(100.0, 100.0));
+    frame(&mut app, &ctx, 0.05, vec![Event::PointerMoved(grab), button(grab, true)]);
+    frame(&mut app, &ctx, 0.1, vec![Event::PointerMoved(grab + egui::vec2(20.0, 10.0))]);
+    assert!(app.session.in_interaction());
+    frame(&mut app, &ctx, 0.2, vec![Event::PointerMoved(tabs[1].center())]);
+    frame(&mut app, &ctx, 0.25, vec![]);
+    frame(&mut app, &ctx, 0.8, vec![]);
+    assert_eq!(crate::doc_windows::current(&app), Some((0, 2)), "holding the artwork over the other view's tab shows that view");
+    assert!(!app.session.tool_busy(), "the switch resets the Selection tool before the drop");
+    let drop = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(200.0, 150.0));
+    frame(&mut app, &ctx, 0.9, vec![Event::PointerMoved(drop)]);
+    frame(&mut app, &ctx, 1.0, vec![button(drop, false)]);
+    let st = app.session.active().unwrap();
+    let moved = st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+    assert!((moved.center().x - 200.0).abs() < 0.01 && (moved.center().y - 150.0).abs() < 0.01, "{moved:?}");
+    assert!(!app.session.tool_busy(), "the move leaves the Selection tool idle");
+}

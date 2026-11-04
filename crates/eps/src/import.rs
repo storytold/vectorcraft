@@ -70,6 +70,7 @@ use graphics::{GState, Out};
 use interp::{Fault, Interp};
 use obj::PsError;
 
+pub(crate) use native::scale_document;
 pub use native::{ai_alone, ai_alone_on_page, is_loss, layered_ai};
 pub use text::family_style;
 

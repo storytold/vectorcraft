@@ -334,7 +334,9 @@ fn tcp_connection_is_closed_after_junk() {
     });
     let mut c = TcpStream::connect(addr).unwrap();
     c.set_read_timeout(Some(WAIT)).unwrap();
-    c.write_all(b"{\"id\":7,\"method\":\"x\"}\nhello\n{\"method\":\"y\"}\n").unwrap();
+    // Nothing after the junk line: on Windows, closing a socket with unread input resets the
+    // connection, and the reset can discard the reply before the client reads it.
+    c.write_all(b"{\"id\":7,\"method\":\"x\"}\nhello\n").unwrap();
     let mut text = String::new();
     c.read_to_string(&mut text).unwrap(); // returns at EOF: the server closed the connection
     server.join().unwrap();

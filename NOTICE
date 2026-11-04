@@ -72,10 +72,10 @@ Shared PDF backend
 
 The patched hayro-interpret 0.7.0, hayro-syntax 0.7.2, hayro-jbig2 0.3.0, hayro-cmap 0.1.0
 and hayro-postscript 0.1.0 are fetched from https://github.com/storytold/craft-libs at revision
-f8f8829cc7be65d466d687dae381d1ca60e31242. Their upstream project is
+9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb. Their upstream project is
 https://github.com/LaurenzV/hayro, licensed MIT OR Apache-2.0. The snapshot retains each
 crate's upstream licence files. The patch ledger is at
-https://github.com/storytold/craft-libs/blob/f8f8829cc7be65d466d687dae381d1ca60e31242/vendor/README.craft-reader.md.
+https://github.com/storytold/craft-libs/blob/9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb/vendor/README.craft-reader.md.
 
 Assets already bundled through Hayro's default features retain their licences:
 - Foxit standard-14 substitutes: Copyright 2014 PDFium Authors. All rights reserved.

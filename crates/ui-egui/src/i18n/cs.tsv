@@ -653,6 +653,11 @@
 	New Toolbar	Nový panel nástrojů
 	Show Toolbar	Zobrazit panel nástrojů
 	List Toolbars	Seznam panelů nástrojů
+	Manage Toolbars…	Spravovat panely nástrojů…
+	Manage Toolbars	Spravovat panely nástrojů
+	Rename Toolbar	Přejmenovat panel nástrojů
+	Duplicate Toolbar	Duplikovat panel nástrojů
+	Delete Toolbar	Odstranit panel nástrojů
 	Manage Workspaces…	Spravovat pracovní prostory…
 	Control	Ovládací panel
 	Contextual Task Bar	Kontextový panel úloh
@@ -1266,6 +1271,8 @@ lighting	Light	Světlo
 	Hand	Ručička
 	Join Tool	Nástroj Spojení
 	Lasso Tool	Nástroj Laso
+	Enclosing Lasso Tool	Nástroj obklopující laso
+	Enclosing Lasso	Obklopující laso
 	Lasso	Laso
 	Line Cut Tool	Nástroj Řez čarou
 	Line Graph Tool	Nástroj Spojnicový graf
@@ -1855,6 +1862,7 @@ digits	Malayalam	Malajálamské
 	Left-to-Right Paragraph Direction	Směr odstavce zleva doprava
 	Line-end Punctuation Half Width	Interpunkce na konci řádku poloviční šířky
 	Insert Kashidas	Vložit kašídy
+	Kashidas	Kašídy
 	Long	Dlouhý
 	Stylistic	Stylistický
 	Mojikumi Set	Sada Mojikumi
@@ -3669,6 +3677,7 @@ theme	Appearance	Motiv
 	Type Object Selection by Path Only	Výběr textového objektu pouze podle cesty
 	UI Scaling	Měřítko rozhraní
 	Use Compression	Použít kompresi
+	Include Editing Data for Other Apps	Zahrnout data pro úpravy v jiných aplikacích
 	Use Japanese Crop Marks	Použít japonské ořezové značky
 	Use Low Resolution Proxy for Linked EPS	Pro propojené EPS použít zástupce v nízkém rozlišení
 	Use Precise Cursors	Používat přesné kurzory
@@ -4301,7 +4310,7 @@ imageTrace	Outline	Obrys
 @msg	Save for Web: the image is empty	Uložit pro web: obraz je prázdný
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Uložení zapisuje {_1}, ne {_2}: pro jiné formáty použijte document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Uložení zapisuje {_1}, ne {_2}: k jeho zápisu použijte file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 zapisuje starší soubory .ai; šablona .ait je vždy kompatibilní s PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 zapisuje starší soubory .ai, ne šablony .ait
 @msg	Saved recovery data for {title}	Data pro obnovení uložena pro {title}
 @msg	Saved to User Defined: {_1}	Uloženo do uživatelských knihoven: {_1}
 @msg	Saved {path}	Uloženo: {path}
@@ -6171,6 +6180,7 @@ breakText	Glyphs	Glyfy
 	Gap 5	Mezera 5
 
 @msg	{_1}: they came in as the page's art	{_1}: byly načteny jako kresba ze stránky
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekty, které se vykreslily jinak než vlastní stránka souboru, byly načteny jako kresba ze stránky: {_1}
 
 @msg	You must choose a side pattern.	Musíte zvolit boční vzorek.
 @msg	invalid pattern tile choice	neplatná volba dlaždice vzorku

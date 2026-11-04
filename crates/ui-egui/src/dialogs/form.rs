@@ -468,7 +468,10 @@ fn typed_number(x: f64) -> Value {
 /// the rows then scroll ([`super::modal::scrolled_rows`]).
 pub(super) fn schema_fields(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, m: &Manifest) -> bool {
     let (changed, help) = schema_rows(ui, d, m);
-    if let Some(url) = help {
+    // The browser is another app: a click automation sent opens nothing.
+    if let Some(url) = help
+        && app.refuse_automation("the plug-in help button").is_ok()
+    {
         app.open_url(&url);
     }
     changed
