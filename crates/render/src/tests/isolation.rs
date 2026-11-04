@@ -417,6 +417,65 @@ fn isolation_mode_dims_the_art_around_the_isolated_group() {
     assert_eq!(isolated(NodeId(u64::MAX)).pixels, plain.pixels);
 }
 
+/// Symbol editing mode entered from an instance of art at 50% opacity, plain, with a drop shadow,
+/// or in a clip group in Outline view: the screen view draws the copy on the editing layer and not
+/// the instance, so the art shows once, as it does with the instance removed. Without the editing
+/// layer isolated (an export), the instance draws.
+#[test]
+fn symbol_editing_does_not_draw_the_instance_it_was_entered_from() {
+    use vectorcraft_doc::{Effect, Symbol, SymbolEdit};
+    let editing = |effects: &[Effect], clipped: bool, with_instance: bool| {
+        let mut d = Document::new(100.0, 100.0);
+        let mut art = rect(&mut d, Rect::new(20.0, 20.0, 80.0, 80.0), S);
+        art.opacity = 0.5;
+        d.symbols.push(Symbol { dynamic: false, name: "Square".into(), art: Arc::new(art.clone()) });
+        let mut inst = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Square".into(), xf: Affine::IDENTITY });
+        inst.appearance.effects = effects.to_vec();
+        let id = inst.id;
+        let l = d.layers[0].id;
+        let members: Vec<Node> = with_instance.then_some(inst).into_iter().collect();
+        if clipped {
+            let clip = clip_path(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0));
+            let children = std::iter::once(clip).chain(members).map(Arc::new).collect();
+            let g = Node::new(d.alloc_id(), NodeKind::Group { children, clip: true });
+            d.insert(Some(l), usize::MAX, g).unwrap();
+        } else {
+            for n in members {
+                d.insert(Some(l), usize::MAX, n).unwrap();
+            }
+        }
+        let layer = d.add_layer(Some("Square"));
+        let copy = d.reid(&art);
+        d.insert(Some(layer), usize::MAX, copy).unwrap();
+        d.symbol_edit = Some(SymbolEdit {
+            symbol: "Square".into(),
+            layer,
+            instance: Some(id),
+            xf: Affine::IDENTITY,
+            group: false,
+            changed: false,
+            back_isolation: None,
+            back_layer: None,
+        });
+        (d, layer)
+    };
+    let params = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+    let shadow = Effect { id: "stylize.dropShadow".into(), params, visible: true };
+    for (effects, clipped) in [(vec![], false), (vec![shadow], false), (vec![], true)] {
+        let what = format!("{} effects, clipped {clipped}", effects.len());
+        let (d, layer) = editing(&effects, clipped, true);
+        let (alone, alone_layer) = editing(&effects, clipped, false);
+        let opts = RenderOptions { outline: clipped, ..Default::default() };
+        let screen = |d: &Document, layer| render_with(&mut Renderer::new(), d, &RenderOptions { isolated: Some(layer), ..opts.clone() });
+        let shown = screen(&d, layer);
+        assert_eq!(shown.pixel(50, 50), screen(&alone, alone_layer).pixel(50, 50), "{what}: the art shows once");
+        assert!(shown.pixels == screen(&alone, alone_layer).pixels, "{what}: the view draws as without the instance");
+        // An export draws the instance and the copy.
+        let export = |d: &Document| render_with(&mut Renderer::new(), d, &opts).pixels;
+        assert!(export(&d) != export(&alone), "{what}: an export draws the instance");
+    }
+}
+
 /// Deeply nested isolated blending groups (#3581): each level is drawn offscreen only while the
 /// offscreen pixels alive stay within a few frames' worth; deeper levels are drawn as layers.
 #[test]

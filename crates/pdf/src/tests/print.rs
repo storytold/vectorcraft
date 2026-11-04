@@ -240,6 +240,14 @@ fn tiles_cover_the_artboard_with_overlap() {
 }
 
 #[test]
+fn a_job_of_too_many_artboards_is_refused_while_laying_out() {
+    let mut d = doc(100.0, 100.0, &[]);
+    d.artboards.extend((2..=MAX_PAGES as u32 + 2).map(|i| artboard(i, 0.0)));
+    let e = preview(&d, &settings(json!({}))).unwrap_err().to_string();
+    assert!(e.contains("more than 2000 pages"), "{e}");
+}
+
+#[test]
 fn artboard_range_skip_blank_and_ignore() {
     let mut d =
         doc(100.0, 100.0, &[(Rect::new(10.0, 10.0, 20.0, 20.0), rgb(1.0, 0.0, 0.0)), (Rect::new(410.0, 10.0, 420.0, 20.0), rgb(0.0, 0.0, 1.0))]);

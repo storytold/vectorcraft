@@ -515,6 +515,21 @@ fn add_anchor_points_doubles() {
     assert!(r.anchors().any(|(_, _, a)| a.p == Point::new(5.0, 0.0)));
 }
 
+/// The one-pass build gives what inserting a midpoint into each segment (last first) gives, open or closed.
+#[test]
+fn add_anchor_points_matches_inserting() {
+    let open = PathData::single(SubPath::new(circle(0.0, 0.0, 10.0).subpaths[0].anchors.clone(), false));
+    for src in [circle(0.0, 0.0, 10.0), rect(0.0, 0.0, 10.0, 10.0), open] {
+        let mut want = src.clone();
+        for sp in &mut want.subpaths {
+            for seg in (0..sp.segment_count()).rev() {
+                sp.insert_anchor(seg, 0.5);
+            }
+        }
+        assert_eq!(add_anchor_points(&src), want);
+    }
+}
+
 #[test]
 fn average_axes() {
     let p = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 4.0), Point::new(5.0, 8.0)], false));

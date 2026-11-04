@@ -2,10 +2,12 @@
 //! Duotone and Invert Colors, in Effect › Color Effects) are the effects crate's; here, Apply as
 //! Filter writes any colour adjustment into the colours themselves, Select by Color Kind selects the
 //! objects that use spot colours, carry a live colour adjustment, or are images of a colour model,
-//! Print Ink Fixes ([`print_fixes`]) prepares a CMYK document's inks for print, and Find Nearest
-//! Swatch ([`nearest`]) matches colours to a swatch library's. Its panel and its submenu, Object ›
+//! Print Ink Fixes ([`print_fixes`]) prepares a CMYK document's inks for print, Find Nearest
+//! Swatch ([`nearest`]) matches colours to a swatch library's, and Create Swatch Legend
+//! ([`legend`]) draws labelled chips of the document's swatches. Its panel and its submenu, Object ›
 //! Plug-ins › Color Effects, are the UI's.
 
+pub mod legend;
 mod nearest;
 mod print_fixes;
 #[cfg(test)]
@@ -57,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Find Nearest Swatch",
             ["Object", "Plug-ins", "Color Effects"],
             None,
-            "{library?: a swatch library's id or name (swatch.library.list: the built-in ones, and the colour books and libraries the user saved or loaded) or \"document\" (the document's swatches; the default), color?: colour (look this colour up; default: the selection's), fill?: true, stroke?: true (the selected objects' fills and strokes, their type's and those of the objects inside them: solid colours and gradient stops, once each, the first 100), count?: 1..50 (5), ids?: [id…] (default: the selection)} list the library's colour swatches closest to each colour, closest first, by CIEDE2000 difference (ΔE; under 1 hardly tells apart, about 2 to 3 close). Tint swatches, None and Registration aren't matched → {library, colors: [{values, hex, matches: [{name, values, hex, spot, deltaE}]}]}",
+            "{library?: a swatch library's id or name (swatch.library.list: the built-in ones, and the colour books and libraries the user saved or loaded) or \"document\" (the document's swatches; the default), color?: colour (look this colour up, #rrggbbaa and #rgba refused; default: the selection's), fill?: true, stroke?: true (the selected objects' fills and strokes, their type's and those of the objects inside them: solid colours and gradient stops, once each, the first 100), count?: 1..50 (5), ids?: [id…] (default: the selection)} list the library's colour swatches closest to each colour, closest first, by CIEDE2000 difference (ΔE; under 1 hardly tells apart, about 2 to 3 close). Tint swatches, None and Registration aren't matched → {library, colors: [{values, hex, matches: [{name, values, hex, spot, deltaE}]}]}",
             has_doc,
             nearest::find
         ),
@@ -71,6 +73,9 @@ pub fn specs() -> Vec<CommandSpec> {
             nearest::apply
         ),
     ]
+    .into_iter()
+    .chain(legend::specs())
+    .collect()
 }
 
 fn select(s: &mut Session, p: &Value) -> Result<Value> {

@@ -135,8 +135,49 @@ fn isolation_button(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// The room the Control bar's inline X/Y/W/H fields need; with less, only the Transform link shows.
-const INLINE_TRANSFORM_WIDTH: f32 = 440.0;
+/// The size of the Control bar's Global Edit Options button.
+const GLOBAL_EDIT_OPTIONS_WIDTH: f32 = 24.0;
+
+/// The Control bar's Global Edit Options dropdown, shown while `select.globalEdit` can run. The help
+/// page places the options in the Control panel as well as in Properties
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html>).
+/// It opens the Properties panel's Global Edit Options, which set the same session options, and is
+/// off and closed while Global Edit is on, as that panel's dropdown is. It sits after Recolor
+/// Artwork, ahead of the X/Y/W/H fields that the bar leaves out when it runs short of room, and is
+/// left out only when no room is left for it.
+fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if !crate::menus::enabled(app, "select.globalEdit") || ui.available_width() < GLOBAL_EDIT_OPTIONS_WIDTH {
+        return;
+    }
+    let on = app.session.active().is_some_and(|d| d.global_edit.is_some());
+    let options = widgets::icon_button_enabled(ui, "chevron-down", tl!("Global Edit Options"), false, !on, GLOBAL_EDIT_OPTIONS_WIDTH);
+    egui::Popup::menu(&options)
+        .open_memory(crate::panels::properties::global_edit_options_open(&options, on))
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| crate::panels::properties::global_edit_options(app, ui));
+}
+
+/// The width of each of the Control bar's inline X/Y/W/H fields.
+const INLINE_FIELD_WIDTH: f32 = 80.0;
+
+/// The keys and labels of the Control bar's inline X/Y/W/H fields, in their order.
+const INLINE_FIELDS: [(&str, &str); 4] = [("x", "X:"), ("y", "Y:"), ("width", "W:"), ("height", "H:")];
+
+/// The label of an inline X/Y/W/H field.
+fn inline_label(t: &Tokens, lbl: &str) -> egui::RichText {
+    egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim)
+}
+
+/// The room the Control bar's inline X/Y/W/H fields take: their labels as drawn in the current
+/// language, the four fields, the W/H link and the item spacing ahead of each of them. With less,
+/// only the Transform link shows.
+fn inline_transform_width(ui: &Ui, t: &Tokens) -> f32 {
+    let measure = |text: egui::WidgetText| text.into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Body).size().x;
+    let labels: f32 = INLINE_FIELDS.iter().map(|(_, lbl)| measure(inline_label(t, lbl).into())).sum();
+    let fields = INLINE_FIELD_WIDTH * INLINE_FIELDS.len() as f32;
+    let items = 2 * INLINE_FIELDS.len() + 1;
+    labels + fields + crate::panels::transform::CONSTRAIN_LINK_SIZE + ui.spacing().item_spacing.x * items as f32
+}
 
 /// The Control bar (Window → Control), context-sensitive like Illustrator's.
 pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -237,9 +278,15 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, 24.0).clicked() {
                         crate::menus::invoke(app, "ui.recolorDialog", json!({}));
                     }
+                    global_edit_options(app, ui);
                 }
                 ui.separator();
                 crate::panels::character::control_bar(app, ui);
+                // Area type: its vertical alignment in the frame (#3759).
+                if crate::panels::properties::vertical_align::buttons(app, ui, 24.0) {
+                    ui.add_space(4.0);
+                    ui.separator();
+                }
                 if sel.is_empty() {
                     if widgets::flat_button(ui, tl!("Document Setup"), 112.0).clicked() {
                         app.run("file.documentSetup", json!({})).ok();
@@ -262,28 +309,24 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 crate::panels::transform::link(app, ui);
                 // The bounding box, rotated with rotated objects: its centre and its own sides.
                 if let Some(b) = app.selection_box()
-                    && ui.available_width() >= INLINE_TRANSFORM_WIDTH
+                    && ui.available_width() >= inline_transform_width(ui, &t)
                 {
                     let c = b.center();
                     let origin = app.ruler_origin();
                     let link = crate::panels::transform::proportional(app, ui);
                     let copy = crate::panels::transform::alt_enter_copies(app, ui);
-                    for (k, lbl, v, offset) in [
-                        ("x", "X:", c.x, origin.x),
-                        ("y", "Y:", c.y, origin.y),
-                        ("width", "W:", b.rect.width(), 0.0),
-                        ("height", "H:", b.rect.height(), 0.0),
-                    ] {
+                    let values = [(c.x, origin.x), (c.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
+                    for ((k, lbl), (v, offset)) in INLINE_FIELDS.into_iter().zip(values) {
                         // The W/H link sits between W and H.
                         if k == "height" {
                             crate::panels::transform::constrain_link(app, ui);
                         }
-                        widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
+                        widgets::field_label(ui, inline_label(&t, lbl));
                         let (id, shown) = (("cb", k), Some(v - offset));
                         let set = if matches!(k, "width" | "height") {
-                            widgets::size_field(ui, id, shown, units, 80.0)
+                            widgets::size_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
                         } else {
-                            widgets::num_field(ui, id, shown, units, 80.0)
+                            widgets::num_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
                         };
                         if let Some(nv) = set {
                             app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link, "copy": copy})).ok();

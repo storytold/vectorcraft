@@ -29,7 +29,10 @@ mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
-pub use symbol_nine_slice::{SYMBOL_NINE_SLICE, SymbolNineSlice};
+pub use symbol_nine_slice::{
+    EditedNineSlice, MAX_SLICE_GROWTH, MIN_CENTER_BAND, NineSliceGuide, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE, SymbolNineSlice,
+    charge_symbol_art,
+};
 pub use symbol_overrides::SymbolOverride;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
@@ -37,6 +40,7 @@ pub mod live;
 pub mod live_paint;
 pub mod marks;
 mod mem;
+pub use mem::{appearance_heap_bytes, paint_heap_bytes};
 pub mod metadata;
 pub mod node;
 pub mod objects_on_path;
@@ -64,6 +68,7 @@ mod symbols;
 pub use symbols::SymbolBoxes;
 pub mod text;
 pub mod trace;
+pub mod twist;
 pub mod variables;
 pub mod xml_id;
 
@@ -75,8 +80,8 @@ pub(crate) mod skip;
 
 pub use appearance::StrokeGradientMode;
 pub use appearance::{
-    Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, PressureProfile, ProfilePreset, SavedProfile,
-    StrokeAlign, StrokeLayer, WidthProfile,
+    AngleProfile, Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, PressureProfile, ProfilePreset,
+    SavedProfile, StrokeAlign, StrokeLayer, WidthProfile,
 };
 pub use assets::ExportAsset;
 pub use compound_shape::ShapeMode;
@@ -107,6 +112,7 @@ pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
 pub use text::FontHeightReference;
+pub use text::GlyphChoice;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
     JustificationOptions, Justify, Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign, RubyPosition,
@@ -223,8 +229,9 @@ pub struct Document {
     #[serde(default, skip_serializing)]
     pub mask_edit: Option<MaskEdit>,
     /// Symbol editing mode, while active. Never saved (see [`Document::without_edit_modes`]): the
-    /// symbol already holds the art of its editing layer.
-    #[serde(default, skip_serializing)]
+    /// symbol already holds the art of its editing layer. Never read either: a value in file data
+    /// is dropped, so the layer it names is kept and saving does not write the value again.
+    #[serde(default, skip_serializing, deserialize_with = "skip::read_as_none")]
     pub symbol_edit: Option<SymbolEdit>,
     next_id: u64,
     /// Foreign data preserved on round-trip.

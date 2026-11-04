@@ -217,11 +217,27 @@ pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), St
     app.services.open_file.as_mut().ok_or("no app to open files here")?(path)
 }
 
+/// Edit Original: open `path` in the system's default app for it, or with Preferences › File
+/// Handling › Use System Defaults for Edit Original off, in the app that made it (#5236): PhotoCraft
+/// for a raster image where it is installed. Any other file, or no PhotoCraft, uses the system's app.
+pub(crate) fn open_original(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
+    let ext = std::path::Path::new(path).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+    let raster = vectorcraft_engine::cmd::fileio::readable_format(&ext).is_some_and(|f| f.raster);
+    if !app.session.prefs.edit_original_system_defaults
+        && raster
+        && let Some(open) = app.services.open_in_photocraft.as_mut()
+        && open(path)?
+    {
+        return Ok(());
+    }
+    open_in_app(app, path)
+}
+
 /// File → Export for Screens with `document.exportForScreens` params: the files go into `folder`;
 /// without one the web downloads them (the ZIP, or each file) and the other frontends get them
 /// back as base64. With `openLocation`, the file manager shows the first file written. When an
 /// export into a folder or a download has warnings, the status bar shows the first as
-/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n note(s): …".
+/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n notes: …".
 pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     export_files(app, "document.exportForScreens", params)
 }

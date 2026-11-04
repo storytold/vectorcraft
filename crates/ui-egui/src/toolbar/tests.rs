@@ -98,6 +98,17 @@ fn the_tool_buttons_are_centred_in_the_panel() {
     }
 }
 
+#[test]
+fn saved_flyout_choices_must_still_belong_to_the_slot() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    for (saved, shown) in [(vectorcraft_tools::addons::enclosing_lasso::ID, "lasso"), ("magicWand", "magicWand")] {
+        app.ui.slot_tool.insert("lasso".into(), saved.into());
+        let tree = tree(|ui| show(&mut app, ui));
+        assert_eq!(role_and_state(&tree, &tip(tool_info(shown).unwrap())), (Role::Button, Some(Toggled::False)));
+    }
+}
+
 /// Screen readers name each tool button by its tool tip and say which tool is active, and name
 /// the title bar's column toggle and grip and the paint buttons under the tools.
 #[test]
@@ -1037,9 +1048,9 @@ fn tab_skips_the_grip_and_the_tear_off_bars() {
     assert!(!buttons.is_empty(), "the Tools panel's buttons are drawn");
     let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 120, frame);
     assert!(stops.iter().any(|id| buttons.contains(id)), "Tab reaches the Tools panel's buttons: {stops:?}");
-    let close = egui::Id::unique(("tool-flyout-close", "polygon"));
+    let close = bar_id(None, "polygon").with("close");
     assert!(stops.contains(&close), "Tab reaches the strip's Put back in the toolbar button: {stops:?}");
-    for (name, id) in [("the grip", grip), ("the flyout's bar", bar_id("rectangle")), ("the strip's bar", bar_id("polygon"))] {
+    for (name, id) in [("the grip", grip), ("the flyout's bar", bar_id(None, "rectangle")), ("the strip's bar", bar_id(None, "polygon"))] {
         assert!(!stops.contains(&id), "Tab stops on {name}: {stops:?}");
     }
 }

@@ -1148,6 +1148,37 @@ fn character_direction_is_a_character_attribute_saved_only_when_set() {
     assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style).get("charDirection"), Some(&serde_json::Value::Null));
 }
 
+/// The Character-menu switch is on for new and old text, and changing a selected range leaves
+/// its neighbors alone. The paragraph's Insert Kashidas length is a separate setting.
+#[test]
+fn character_kashidas_default_on_and_round_trip_by_range() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "كتب محمد"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert!(runs(&s)[0].style.kashidas);
+    let old = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(old.get("kashidas").is_none());
+    assert!(serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().kashidas);
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 6, "kashidas": false})).unwrap();
+    assert_eq!(runs(&s).iter().map(|r| r.style.kashidas).collect::<Vec<_>>(), [true, false, true]);
+    let err = s.execute("text.setRangeStyle", &json!({"id": id, "kashidas": "off"})).unwrap_err().to_string();
+    assert!(err.contains("kashidas"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.kashidas));
+    s.execute("edit.redo", &json!({})).unwrap();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(), [true, false, true]);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"kashidas": true})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.kashidas));
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style)["kashidas"], true);
+}
+
 /// Proportional Metrics (#966): a character attribute, saved only when on.
 #[test]
 fn proportional_metrics_is_a_character_attribute_saved_only_when_on() {
@@ -1204,6 +1235,61 @@ fn tate_chu_yoko_is_a_character_attribute_saved_only_when_on() {
     assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().tate_chu_yoko);
     s.execute("text.setFormat", &json!({"tateChuYoko": false})).unwrap();
     assert!(runs(&s).iter().all(|r| !r.style.tate_chu_yoko));
+}
+
+/// Tate-chu-yoko Settings (Character panel menu): Up/Down and Left/Right are character attributes
+/// in points, 0 by default and saved only when not 0. Both commands set them without changing the
+/// Tate-chu-yoko mark, refuse a value that is not a number or lies outside -1296 to 1296, and a
+/// character style captured from the characters carries them.
+#[test]
+fn tate_chu_yoko_settings_are_character_attributes_saved_only_when_set() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "2026年"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let offsets = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.tcy_up_down, r.style.tcy_left_right)).collect::<Vec<_>>();
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(saved.get("tcyUpDown").is_none() && saved.get("tcyLeftRight").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"tcyUpDown": 3.5, "tcyLeftRight": -2})).unwrap();
+    assert_eq!(offsets(&s), [("2026年".to_string(), 3.5, -2.0)]);
+    assert!(!runs(&s)[0].style.tate_chu_yoko, "the mark stays off");
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert_eq!((saved["tcyUpDown"].clone(), saved["tcyLeftRight"].clone()), (json!(3.5), json!(-2.0)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(offsets(&s), [("2026年".to_string(), 0.0, 0.0)], "one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(offsets(&s), [("2026年".to_string(), 3.5, -2.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 4, "tateChuYoko": true, "tcyUpDown": -4})).unwrap();
+    assert_eq!(offsets(&s), [("2026".to_string(), -4.0, 0.0), ("年".to_string(), 0.0, 0.0)]);
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 4, "tcyLeftRight": 1296})).unwrap();
+    assert_eq!(offsets(&s)[0], ("2026".to_string(), -4.0, 1296.0));
+    assert!(runs(&s)[0].style.tate_chu_yoko);
+    // Saved and reopened as they were.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.tcy_up_down, r.style.tcy_left_right)).collect();
+    assert_eq!(reopened, offsets(&s));
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[0].style);
+    assert_eq!((attrs["tcyUpDown"].clone(), attrs["tcyLeftRight"].clone()), (json!(-4.0), json!(1296.0)));
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[1].style)["tcyUpDown"], json!(0.0));
+
+    let before = offsets(&s);
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"tcyUpDown": "3"}), "`tcyUpDown` must be a number"),
+        ("text.setFormat", json!({"tcyLeftRight": 1296.5}), "`tcyLeftRight` must be from -1296 to 1296"),
+        ("text.setRangeStyle", json!({"id": id, "tcyLeftRight": true}), "`tcyLeftRight` must be a number"),
+        ("text.setRangeStyle", json!({"id": id, "tcyUpDown": -2000}), "`tcyUpDown` must be from -1296 to 1296"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(offsets(&s), before);
 }
 
 /// Standard Vertical Roman Alignment (Character panel menu, East Asian options): a character
@@ -1635,4 +1721,87 @@ fn area_options_columns_change_layout() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(lay(&s).frames.len(), 1);
     assert!(s.execute("text.areaOptions", &json!({"firstBaseline": "nope"})).is_err());
+}
+
+/// `rowGutter` sets a gutter between rows of its own, the reply passes it back, and a gutter
+/// given alone is the rows' and the columns' again.
+#[test]
+fn area_options_set_a_gutter_between_rows_of_its_own() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "word ".repeat(80), "area": {"width": 300, "height": 120}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    // Without one of its own, the rows' is the gutter, and passing the reply back keeps it unset.
+    let q = s.execute("text.areaOptions", &json!({})).unwrap();
+    assert_eq!((q["gutter"].as_f64(), q["rowGutter"].as_f64()), (Some(18.0), Some(18.0)));
+    s.execute("text.areaOptions", &q).unwrap();
+    // Both given: the rows keep theirs even at the old gutter's value.
+    let r = s.execute("text.areaOptions", &json!({"gutter": 10, "rowGutter": 18})).unwrap();
+    assert_eq!((r["gutter"].as_f64(), r["rowGutter"].as_f64()), (Some(10.0), Some(18.0)));
+    s.execute("text.areaOptions", &json!({"gutter": 18})).unwrap();
+    let r = s.execute("text.areaOptions", &json!({"rows": 2, "gutter": 12, "rowGutter": 30})).unwrap();
+    assert_eq!((r["gutter"].as_f64(), r["rowGutter"].as_f64()), (Some(12.0), Some(30.0)));
+    let area = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.clone(),
+        _ => panic!(),
+    };
+    assert_eq!(area(&s).row_gutter, Some(30.0));
+    // The reply passed back keeps it; out of range it is capped; the gutter's value is none of its own.
+    s.execute("text.areaOptions", &json!({"rowGutter": 12})).unwrap();
+    assert_eq!(area(&s).row_gutter, None);
+    s.execute("text.areaOptions", &json!({"rowGutter": 30})).unwrap();
+    s.execute("text.areaOptions", &r).unwrap();
+    assert_eq!(area(&s).row_gutter, Some(30.0));
+    s.execute("text.areaOptions", &json!({"rowGutter": -5})).unwrap();
+    assert_eq!(area(&s).row_gutter, Some(0.0));
+    s.execute("text.areaOptions", &json!({"gutter": 8})).unwrap();
+    assert_eq!((area(&s).gutter, area(&s).row_gutter), (8.0, None));
+    s.execute("text.areaOptions", &json!({"rowGutter": 30})).unwrap();
+    s.execute("text.areaOptions", &json!({"rowGutter": null})).unwrap();
+    assert_eq!(area(&s).row_gutter, None);
+}
+
+/// #3759: an option given for several area types goes onto each one's own options: the others
+/// stay as each had them, not copied from the first.
+#[test]
+fn area_options_for_several_frames_change_only_what_is_given() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let make = |s: &mut Session, x: f64| {
+        s.execute("text.create", &json!({"x": x, "y": 10, "text": "A", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (make(&mut s, 10.0), make(&mut s, 200.0));
+    s.execute("text.areaOptions", &json!({"ids": [a], "columns": 3, "gutter": 6})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [b], "inset": 4})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [a, b], "verticalAlign": "bottom"})).unwrap();
+    let area = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.clone(),
+        k => panic!("{k:?}"),
+    };
+    let (oa, ob) = (area(&s, a), area(&s, b));
+    assert_eq!((oa.vertical_align, ob.vertical_align), (vectorcraft_doc::VerticalAlign::Bottom, vectorcraft_doc::VerticalAlign::Bottom));
+    assert_eq!((oa.columns, oa.gutter, oa.inset), (3, 6.0, 0.0));
+    assert_eq!((ob.columns, ob.inset), (1, 4.0), "b keeps its own options");
+}
+
+/// `fitMinPercent` alone changes only the frames that shrink text to fit, each from its own
+/// setting (#3759).
+#[test]
+fn fit_min_percent_for_several_frames_keeps_each_frames_fit() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let make = |s: &mut Session, x: f64| {
+        s.execute("text.create", &json!({"x": x, "y": 10, "text": "A", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (plain, shrink) = (make(&mut s, 10.0), make(&mut s, 200.0));
+    s.execute("text.areaOptions", &json!({"ids": [shrink], "fit": "shrinkText"})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [plain, shrink], "fitMinPercent": 30})).unwrap();
+    let fit = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.fit,
+        k => panic!("{k:?}"),
+    };
+    assert_eq!(fit(&s, plain), vectorcraft_doc::AreaFit::None, "the plain frame doesn't start shrinking");
+    assert_eq!(fit(&s, shrink), vectorcraft_doc::AreaFit::ShrinkText { min_percent: 30.0 });
 }

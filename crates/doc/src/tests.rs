@@ -451,3 +451,64 @@ fn pica_form_rejects_exponent_notation() {
         assert_eq!(Unit::Points.parse(s), None, "{s}");
     }
 }
+
+/// Symbol editing of symbol "S" on `layer`.
+fn symbol_edit_on(layer: NodeId) -> SymbolEdit {
+    SymbolEdit {
+        symbol: "S".into(),
+        layer,
+        instance: None,
+        xf: Affine::IDENTITY,
+        group: false,
+        changed: false,
+        back_isolation: None,
+        back_layer: None,
+    }
+}
+
+/// The opacity-mask and symbol editing layers are left out of the saved document wherever they
+/// are, also when `layer.move` made them sublayers of another layer.
+#[test]
+fn edit_mode_layers_are_dropped_as_sublayers_too() {
+    let mut d = Document::new(612.0, 792.0);
+    let host = d.layers[0].id;
+    let mask = d.add_layer(Some("Mask"));
+    let symbol = d.add_layer(Some("Symbol"));
+    d.move_node(mask, Some(host), 0).unwrap();
+    d.move_node(symbol, Some(host), usize::MAX).unwrap();
+    let object = d.alloc_id();
+    d.mask_edit = Some(MaskEdit { object, layer: mask });
+    d.symbol_edit = Some(symbol_edit_on(symbol));
+    let saved = d.without_edit_modes();
+    assert!(saved.node(mask).is_none(), "the mask editing layer is left out");
+    assert!(saved.node(symbol).is_none(), "the symbol editing layer is left out");
+    assert!(saved.node(host).is_some_and(|l| l.children().is_some_and(|c| c.is_empty())));
+    assert!(saved.mask_edit.is_none() && saved.symbol_edit.is_none());
+}
+
+/// Symbol editing is never read from a file, so a layer that file data names as the editing layer
+/// loads and stays in the document, and saving does not write the value again.
+#[test]
+fn symbol_edit_is_not_read_from_a_file() {
+    let mut d = Document::new(612.0, 792.0);
+    let layer = d.layers[0].id;
+    let mut v = serde_json::to_value(&d).unwrap();
+    v["symbol_edit"] = serde_json::to_value(symbol_edit_on(layer)).unwrap();
+    d = serde_json::from_value(v).unwrap();
+    assert_eq!(d.symbol_edit, None);
+    assert!(d.extra.is_empty(), "not kept as an unknown key");
+    d.drop_edit_modes();
+    assert!(d.node(layer).is_some(), "the layer is kept");
+    assert!(serde_json::to_value(&d).unwrap().get("symbol_edit").is_none(), "not saved again");
+}
+
+/// An opacity-mask editing id in file data that names art inside a layer, not a layer, leaves the
+/// art in place.
+#[test]
+fn mask_edit_naming_art_leaves_it() {
+    let (mut d, a, b) = doc_with_rects();
+    d.mask_edit = Some(MaskEdit { object: b, layer: a });
+    d.drop_edit_modes();
+    assert!(d.node(a).is_some() && d.node(b).is_some());
+    assert_eq!(d.mask_edit, None);
+}

@@ -469,11 +469,15 @@ pub fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
 }
 
+/// The width and height of [`constrain_link`]'s button.
+pub const CONSTRAIN_LINK_SIZE: f32 = 22.0;
+
 /// The link between W and H (Transform panel, Properties panel, Control bar): one toggle, the
 /// `constrainProportions` preference, which the size fields pass on as `proportional`.
 pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
     let on = app.session.prefs.constrain_proportions;
-    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, tl!("Constrain Width and Height Proportions"), on, 22.0).clicked() {
+    let tip = tl!("Constrain Width and Height Proportions");
+    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, tip, on, CONSTRAIN_LINK_SIZE).clicked() {
         set_pref(app, "constrainProportions", !on);
     }
 }

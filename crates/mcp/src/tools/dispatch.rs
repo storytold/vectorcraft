@@ -286,7 +286,8 @@ fn named_export_params(a: &Args) -> &'static [&'static str] {
 
 /// What `save_file` with arguments `a` adds to the save's `warnings`, for a file written in format
 /// `written` (none when nothing was written yet): each key in `options` that the format doesn't
-/// read. The save itself warns about `compress`, `version` and `preview` given at the top level.
+/// read. The save itself warns about `compress`, `version`, `preview` and `precision` given at the
+/// top level.
 fn save_file_warnings(a: &Args, written: Option<&str>) -> Vec<String> {
     let Some(f) = written.and_then(format) else { return vec![] };
     let nested = a.get("options").and_then(Value::as_object);
@@ -451,7 +452,8 @@ fn render_preview(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     let r = b.call("ui.render", p)?;
     let encoded = r.get("pngBase64").and_then(Value::as_str).ok_or("renderer returned no image")?;
     let png = vectorcraft_format::base64_decode(encoded).ok_or("renderer returned bad base64")?;
-    let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).map_err(|e| format!("read preview: {e}"))?;
+    // The render was asked for at most 4096 a side.
+    let img = super::handlers::decode_png(&png, 8192).map_err(|e| format!("read preview: {e}"))?;
     let img = if img.width() > max || img.height() > max { img.thumbnail(max, max) } else { img };
     let mut out = std::io::Cursor::new(Vec::new());
     img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| format!("encode preview: {e}"))?;

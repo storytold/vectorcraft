@@ -22,6 +22,7 @@ use vectorcraft_doc::{Document, GraphicStyle, ImageBlob, Node, NodeId, PatternDe
 use vectorcraft_geom::Rect;
 
 pub use flavours::{AI, BITMAP, EMF, EPS, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture};
+pub use flavours::{ImageRead, read_image};
 pub(crate) use resources::SwatchChoices;
 pub use resources::{ArtResources, art_resources};
 
@@ -92,11 +93,20 @@ pub struct Clipboard {
     /// The artboards copied with the Artboard tool (`artboard.copy`); `nodes` are then their art.
     /// Pasting adds a copy of each with the art.
     pub artboards: Vec<vectorcraft_doc::Artboard>,
+    /// The selected ruler guides copied with (or without) the objects (#3226), as canvas guides on
+    /// no layer: pasting puts them on the layer new art goes to, moved as the objects are.
+    pub guides: Vec<vectorcraft_doc::Guide>,
 }
 
 impl Clipboard {
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty() && self.artboards.is_empty()
+        self.nodes.is_empty() && self.artboards.is_empty() && self.guides.is_empty()
+    }
+
+    /// Does it hold art (objects or artboards) for other apps? Ruler guides stay in VectorCraft:
+    /// a Copy of guides alone empties the system clipboard (#3226).
+    pub fn has_art(&self) -> bool {
+        !self.nodes.is_empty() || !self.artboards.is_empty()
     }
 
     /// Objects `roots` of `st`'s document with their resources, source artboard and layers.
@@ -160,10 +170,19 @@ impl Clipboard {
         d.para_styles = self.para_styles.clone().into();
         if !self.brushes.is_empty() {
             let mut lib = vectorcraft_brush::library(&d);
+            // Each brush's place in the library by name: finding it by scanning the growing list
+            // made a library of N brushes cost N² comparisons.
+            let mut at: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+            for (i, b) in lib.iter().enumerate() {
+                at.entry(b.name.clone()).or_insert(i);
+            }
             for b in &self.brushes {
-                match lib.iter_mut().find(|x| x.name == b.name) {
+                match at.get(&b.name).and_then(|&i| lib.get_mut(i)) {
                     Some(x) => *x = b.clone(),
-                    None => lib.push(b.clone()),
+                    None => {
+                        at.insert(b.name.clone(), lib.len());
+                        lib.push(b.clone());
+                    }
                 }
             }
             vectorcraft_brush::store(&mut d, &lib);
@@ -185,7 +204,7 @@ impl Clipboard {
 
     /// The objects as standalone SVG (`None` when there are none).
     pub fn svg(&self) -> Option<String> {
-        if self.is_empty() {
+        if !self.has_art() {
             return None;
         }
         let d = self.to_document();

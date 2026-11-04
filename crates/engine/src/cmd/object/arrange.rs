@@ -315,6 +315,12 @@ pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
         if guides_locked && crate::is_guide_path(&st.doc, isolation) {
             return Err(EngineError::Other("guides are locked".into()));
         }
+        // While a symbol is edited, only its art on the editing layer is isolated.
+        if let Some(layer) = st.doc.symbol_edit.as_ref().map(|e| e.layer)
+            && !st.doc.ancestry(isolation).is_some_and(|a| a.contains(&layer))
+        {
+            return Err(bad("object.isolate", "the object is outside the isolated group"));
+        }
         (isolation, st.isolation)
     };
     if let Some(prev) = prev
@@ -339,7 +345,7 @@ pub(super) fn exit_isolation(s: &mut Session, p: &Value) -> Result<Value> {
     // Done do. A group isolated inside the symbol's art goes back to the symbol's layer.
     let st = s.doc()?;
     if let Some(layer) = st.doc.symbol_edit.as_ref().map(|e| e.layer)
-        && let Some(inner) = st.isolation.filter(|i| *i != layer)
+        && let Some(inner) = st.isolation.filter(|i| *i != layer && st.doc.ancestry(*i).is_some_and(|a| a.contains(&layer)))
     {
         crate::cmd::settle_interaction(s)?;
         let st = s.doc_mut()?;

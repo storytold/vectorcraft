@@ -240,13 +240,24 @@ fn global_edit_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             crate::menus::invoke(app, "select.globalEdit", json!({}));
         }
         let options = widgets::icon_button_enabled(ui, "chevron-down", tl!("Global Edit Options"), false, !on, 20.0);
-        egui::Popup::menu(&options).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| global_edit_options(app, ui));
+        egui::Popup::menu(&options)
+            .open_memory(global_edit_options_open(&options, on))
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| global_edit_options(app, ui));
     });
 }
 
+/// The open state for a Global Edit Options dropdown's popup: a click on the button toggles the
+/// popup, and the popup is closed while Global Edit is on, including when Global Edit starts with
+/// the popup open.
+pub(crate) fn global_edit_options_open(options: &egui::Response, on: bool) -> Option<egui::SetOpenCommand> {
+    if on { Some(egui::SetOpenCommand::Bool(false)) } else { options.clicked().then_some(egui::SetOpenCommand::Toggle) }
+}
+
 /// The Global Edit Options: what else similar objects must share (Match), where they may lie (On
-/// Artboards) and how many objects that takes now.
-fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// Artboards) and how many objects that takes now. The Control bar's Global Edit Options dropdown
+/// shows them too.
+pub(crate) fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.set_min_width(220.0);
     let o = app.session.global_edit_options.clone();
     let set = |app: &mut VectorcraftApp, p: serde_json::Value| crate::menus::invoke(app, "select.globalEditOptions", p);
@@ -272,15 +283,19 @@ fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Include Objects On Canvas"), o.include_canvas, true) {
         set(app, json!({ "includeCanvas": !o.include_canvas }));
     }
-    let count = global_edit_count(app, ui.ctx()).to_string();
-    dim_label(ui, &crate::i18n::fmt(tl!("Result(s): {count}"), &[("count", &count)]));
+    dim_label(ui, &global_edit_results(global_edit_count(app, ui.ctx())));
 }
 
-/// The cached Result(s) count: the (document, revision, options, one selected object) it was
+/// The options' line with how many objects Start Global Edit would take, in the interface language.
+pub(crate) fn global_edit_results(n: usize) -> String {
+    crate::i18n::tn(n as u64, "Result: {n}", "Results: {n}")
+}
+
+/// The cached Results count: the (document, revision, options, one selected object) it was
 /// found for, and the count.
 type GlobalEditCount = Option<((u64, u64, vectorcraft_engine::cmd::globaledit::Options, Option<u64>), usize)>;
 
-/// How many objects Start Global Edit would take now (the options' Result(s) line), cached per
+/// How many objects Start Global Edit would take now (the options' Results line), cached per
 /// document revision, options and selected object, as finding them walks the whole document.
 fn global_edit_count(app: &VectorcraftApp, ctx: &egui::Context) -> usize {
     let Some(st) = app.session.active() else { return 0 };
@@ -989,7 +1004,8 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     super::character::variable_font(app, ui, &s, w - 4.0);
     super::character::metrics_grid(app, ui, "props-char", &s, w, false);
     section_header(ui, tl!("Paragraph"));
-    // As in the Paragraph panel: the seven alignments and Hyphenate (#775); the rest is there.
+    // As in the Paragraph panel: the seven alignments and Hyphenate (#775), and area type's
+    // vertical alignment (#3759); the rest is there.
     if let Some((_, para)) = super::character::text_style(app) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
@@ -998,9 +1014,18 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.ui.open_panel = Some("paragraph".into());
             }
         });
+        // Area type: its vertical alignment in the frame (#3759).
+        if vertical_align::shown(app).is_some() {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 3.0;
+                vertical_align::buttons(app, ui, 24.0);
+            });
+        }
         super::paragraph::hyphenate_check(app, ui, &para);
     }
 }
+
+pub(crate) mod vertical_align;
 
 #[cfg(test)]
 mod tests;

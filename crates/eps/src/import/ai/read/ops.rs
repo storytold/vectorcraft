@@ -1,9 +1,9 @@
 use super::containers::close;
 use super::document::slot_of;
-use super::types::{BLENDS, FLIP, Frame, IGNORED, Kind, MAX_DEPTH};
+use super::types::{BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, Place, line_width};
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, HashMap, HashSet, Instance, Knockout,
-    LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
+    Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
 };
 
 impl<'a> Reader<'a> {
@@ -48,6 +48,31 @@ impl<'a> Reader<'a> {
         self.open(Kind::Mask, hidden)
     }
 
+    /// `LB`: a graph started in this layer that hasn't ended doesn't go on past it; the layer ends.
+    fn layer_end(&mut self) -> Result<(), String> {
+        if self.graph.as_ref().is_some_and(|g| g.frames >= self.frames.len()) {
+            self.graph = None;
+            self.warn(GRAPH_UNENDED);
+        }
+        self.end_layer_in_mask()
+    }
+
+    /// A placed file's `` ` ``: its matrix, box and path; a second one, or operands of another
+    /// shape, leave it unreadable.
+    fn place_tick(&mut self, vals: &[V], hidden: bool) {
+        let unseen = hidden || self.gs.hidden || !self.shown();
+        let p = self.place.get_or_insert_with(|| Place { hidden: unseen, ..Place::default() });
+        if p.ticked {
+            p.broken = true;
+        } else {
+            p.ticked = true;
+            match tick(vals) {
+                Some((m, b, path)) => (p.matrix, p.bounds, p.path) = (Some(m), Some(b), path),
+                None => p.broken = true,
+            }
+        }
+    }
+
     pub(super) fn op(&mut self, w: &str, hidden: bool) -> Result<(), String> {
         if self.blend_record.is_some() {
             self.end_blend();
@@ -57,6 +82,14 @@ impl<'a> Reader<'a> {
             // highlight `-- -- angle length Bh`): a NaN keeps the other operands where they are.
             "--" => return self.push(V::Num(f64::NAN)),
             "[" => {
+                // Drop marks that operators have taken off, so `marks` is the open nesting.
+                while self.marks.last().is_some_and(|&m| !matches!(self.stack.get(m), Some(V::Mark))) {
+                    self.marks.pop();
+                }
+                // Arrays nest as deep as their `[`s; dropping a deeper one would overflow the stack.
+                if self.marks.len() >= MAX_DEPTH {
+                    return Err("its objects are nested too deeply".into());
+                }
                 self.marks.push(self.stack.len());
                 return self.push(V::Mark);
             }
@@ -77,6 +110,9 @@ impl<'a> Reader<'a> {
         let mesh_ended = std::mem::take(&mut self.mesh_ended);
         let vals = self.operands();
         let vals = self.take_head(vals);
+        if self.graph_record(w, hidden) {
+            return Ok(());
+        }
         // Only `Bh` reads an undefined number. Anywhere else it would reach a point or a size, so
         // the operator is one the reader doesn't know, as before.
         if w != "Bh" && !self.frames.is_empty() && vals.iter().any(|v| matches!(v, V::Num(n) if n.is_nan())) {
@@ -125,24 +161,34 @@ impl<'a> Reader<'a> {
                 self.end_path_quietly();
                 self.open(Kind::Compound, hidden)?
             }
+            // A wraparound group takes no operands and isn't an element of a compound path.
+            "*w" | "*W" if !vals.is_empty() => return Err(format!("`{w}` takes no operands")),
+            "*w" if self.frames.iter().any(|f| matches!(f.kind, Kind::Compound)) => {
+                return Err("a wraparound group is inside a compound path".into());
+            }
+            "*w" => {
+                self.end_path_quietly();
+                self.open(Kind::Wrap, hidden)?
+            }
             "q" => {
                 self.end_path_quietly();
                 self.open(Kind::Clip, hidden)?
             }
-            "U" | "*U" | "Q" => self.end_container(w, hidden)?,
+            "U" | "*U" | "*W" | "Q" => self.end_container(w, hidden)?,
             "Lb" => self.layer_attrs(&vals),
             "Ln" => {
                 if let Some(Frame { kind: Kind::Layer(a), .. }) = self.frames.last_mut() {
                     a.name = vals.iter().rev().find_map(V::text).unwrap_or_default();
                 }
             }
-            "LB" => self.end_layer()?,
+            "LB" => self.layer_end()?,
             // Paths.
             "m" | "l" | "L" | "c" | "C" | "v" | "V" | "y" | "Y" => self.path_op(w, &vals)?,
             "h" => close(&mut self.path),
             // Ends a path that stays open.
             "H" => {}
             "W" => self.clip_next = true,
+            "Mb" | "Mv" | "Md" | "ME" | "MB" | "Mi" => self.multi_mask_op(w)?,
             // A text object's frame or path.
             "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" if self.in_text_path() => self.text_path(),
             "N" | "n" | "F" | "f" | "S" | "s" | "B" | "b" => self.paint(w, hidden, false)?,
@@ -158,6 +204,13 @@ impl<'a> Reader<'a> {
             "O" => self.gs.overprint_fill = Self::nums(&vals).last() == Some(&1.0),
             "R" => self.gs.overprint_stroke = Self::nums(&vals).last() == Some(&1.0),
             "XR" => self.gs.rule = if Self::nums(&vals).last() == Some(&1.0) { FillRule::EvenOdd } else { FillRule::NonZero },
+            // Show Center (§12): 1 shows the center point of the paths that follow, and 0 leaves
+            // them at their default, which hides it on an imported path.
+            "Ap" => match Self::nums(&vals).last().copied() {
+                Some(1.0) => self.gs.show_center = Some(true),
+                Some(0.0) => self.gs.show_center = None,
+                _ => {}
+            },
             "w" => {
                 if let Some(v) = Self::nums(&vals).last().filter(|v| v.is_finite() && **v >= 0.0) {
                     self.gs.width = *v;
@@ -203,18 +256,13 @@ impl<'a> Reader<'a> {
             "Xd" if group_ended => {
                 let gs = self.gs.clone();
                 if let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::Group { .. })) {
-                    (n.opacity, n.blend, n.isolate, n.knockout) = (gs.opacity, gs.blend, gs.isolate, gs.knockout);
+                    (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) =
+                        (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
                 }
             }
             "Xw" => self.gs.hidden = Self::nums(&vals).last() == Some(&1.0),
             "A" => self.gs.locked = Self::nums(&vals).last() == Some(&1.0),
-            "XW" => {
-                // An object's own state block ends `6 () XW`: an `Xy` after a mesh's end was the mesh's.
-                if Self::nums(&vals).last() == Some(&6.0) && self.mesh_undo.take().is_some() {
-                    self.layer_state = None;
-                }
-                self.style_marker(&vals, hidden)
-            }
+            "XW" => self.state_marker(&vals, hidden),
             // Gradients.
             "Bd" => self.gradient_def = GradientDef::begin(&vals),
             "Bs" | "BD" => {}
@@ -259,16 +307,10 @@ impl<'a> Reader<'a> {
                 }
             }
             // Placed files.
-            "`" if self.place.is_some() => {
-                let matrix = vals.iter().find_map(|v| if let V::Arr(a) = v { Some(Self::nums(a)) } else { None });
-                let path = vals.iter().rev().find_map(V::text).unwrap_or_default();
-                if let Some(p) = self.place.as_mut() {
-                    p.matrix = matrix.and_then(|m| <[f64; 6]>::try_from(m).ok()).map(Affine::new);
-                    p.bounds =
-                        Self::nums(&vals).get(..4).and_then(|b| <[f64; 4]>::try_from(b).ok()).map(|[x0, y0, x1, y1]| Rect::new(x0, y0, x1, y1));
-                    p.path = path;
-                }
-            }
+            // `[a b c d tx ty] llx lly urx ury (path) `` ` ``, three more numbers before the path in
+            // newer files: the version 7 form has no `%AI5_BeginPlace` before it. Before the art,
+            // the setup's procedures run.
+            "`" if self.place.is_some() || !self.frames.is_empty() => self.place_tick(&vals, hidden),
             "~" if self.place.is_some() => self.end_place(hidden)?,
             // Type in the legacy format.
             "To" => self.begin_text(&vals, hidden),
@@ -276,15 +318,13 @@ impl<'a> Reader<'a> {
             "TP" => self.end_text_path(),
             "TO" => self.end_text(hidden)?,
             "Tx" | "Tj" | "TX" => self.text_body(w, &vals),
-            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" => self.text_attr(w, &vals),
-            // Attributes the reader doesn't keep (kerning pairs, spacing, hanging punctuation,
-            // Far-Eastern type) and final-form positions (§15.3).
-            "Tk" | "TK" | "TC" | "TW" | "Tq" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TV" | "Tv" | "Ty" | "TY" | "TG" | "Tg"
-            | "Tu" | "Xu" => {}
-            // Hyphenation and tab-ruler attributes the reader doesn't keep either (§22): `Th`
-            // hyphen control, `XL` hyphenation language, `Xb`/`XB` a tab definition (and the `Xe`
-            // tab descriptions between them).
-            "Th" | "XL" | "Xb" | "XB" | "Xe" => {}
+            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" | "TC" | "TW" | "Tq" | "Th" => self.text_attr(w, &vals),
+            // Attributes the reader doesn't keep (kerning pairs, Far-Eastern type) and final-form
+            // positions (§15.3).
+            "Tk" | "TK" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TV" | "Tv" | "Ty" | "TY" | "TG" | "Tg" | "Tu" | "Xu" => {}
+            // The hyphenation language and tab rulers, which the reader doesn't keep either (§22): `XL`,
+            // `Xb`/`XB` a tab definition (and the `Xe` tab descriptions between them).
+            "XL" | "Xb" | "XB" | "Xe" => {}
             "TE" => self.te(&vals),
             // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).
             "XI" if self.raster.is_some() => {
@@ -308,6 +348,33 @@ impl<'a> Reader<'a> {
             _ => self.note_unknown(w, hidden),
         }
         Ok(())
+    }
+
+    /// A graph's records (version 7 specification §17 and appendix A): `%_Gs` starts the graph on
+    /// a layer, `GS` ends it, and its data and settings (the operators in [`GRAPH_OPS`], and any
+    /// operator on a `%_` line between `Gt` and `GT`) are left out with their operands. Its drawn
+    /// art, and anything else, is read as usual. `true` when `w` was one of them.
+    fn graph_record(&mut self, w: &str, hidden: bool) -> bool {
+        let Some(g) = self.graph.as_mut() else {
+            // Outside a graph, its operators stay ones the reader doesn't know.
+            if w == "Gs" && hidden && !self.frames.is_empty() {
+                self.graph = Some(Graph { settings: false, frames: self.frames.len() });
+                self.warn(GRAPH_PLAIN);
+                return true;
+            }
+            return false;
+        };
+        match w {
+            // A graph doesn't start inside another: the one being read goes on.
+            "Gs" => self.warn(GRAPH_UNENDED),
+            "GS" => self.graph = None,
+            "Gt" => g.settings = true,
+            "GT" => g.settings = false,
+            _ if GRAPH_OPS.contains(&w) => {}
+            _ if hidden && g.settings => {}
+            _ => return false,
+        }
+        true
     }
 
     /// `… Lb`: a layer's options, `visible preview unlocked printing dimmed`, then the colour index
@@ -338,7 +405,8 @@ impl<'a> Reader<'a> {
 
     /// `(name) x y scaleX scaleY angle reflect axis shear shearAxis [matrix] p` (`P`: the stroke's):
     /// the pattern swatch `name`, its space taken to art space by the matrix. A pattern this hasn't
-    /// read can't be drawn.
+    /// read can't be drawn. For a pattern defined in the version 7 form, the other operands are
+    /// applied in order before the initial matrix ([`pattern_controls`]).
     fn pattern_paint(&mut self, w: &str, vals: &[V]) {
         // In the setup it paints nothing (and the art's space isn't fixed yet).
         if self.frames.is_empty() {
@@ -349,7 +417,16 @@ impl<'a> Reader<'a> {
             self.unread_pattern(w);
             return;
         };
-        let matrix = vals.iter().rev().find_map(|v| if let V::Arr(a) = v { paint::affine(&Self::nums(a)) } else { None });
+        let mut matrix = vals.iter().rev().find_map(|v| if let V::Arr(a) = v { paint::affine(&Self::nums(a)) } else { None });
+        if name.as_ref().is_some_and(|n| self.v7_patterns.contains(n)) {
+            let controls: Vec<f64> =
+                vals.iter().skip_while(|v| !matches!(v, V::Str(_))).skip(1).take_while(|v| !matches!(v, V::Arr(_))).filter_map(V::num).collect();
+            let Some(controls) = pattern_controls(&controls) else {
+                self.unread_pattern(w);
+                return;
+            };
+            matrix = Some(matrix.unwrap_or(Affine::IDENTITY) * controls);
+        }
         let Some(xf) = pattern_xf(self.space(), matrix, tile) else {
             self.unread_pattern(w);
             return;
@@ -427,7 +504,35 @@ impl<'a> Reader<'a> {
         if !matches!(w, "J" | "j" | "w" | "M" | "d" | "XR") {
             self.layer_state = None;
             self.mesh_undo = None;
+            self.container_undo = None;
         }
+    }
+
+    /// `n (style) XW`: the end of a state block, or a style marker ([`Self::style_marker`]).
+    fn state_marker(&mut self, vals: &[V], hidden: bool) {
+        let code = Self::nums(vals).last().copied();
+        // An object's own state block ends `6 () XW`: an `Xy` after a mesh's end was the mesh's.
+        if code == Some(6.0) && self.mesh_undo.take().is_some() {
+            self.layer_state = None;
+        }
+        match code {
+            Some(6.0) => self.container_undo = None,
+            Some(7.0) => self.layer_state_block(),
+            _ => {}
+        }
+        self.style_marker(vals, hidden)
+    }
+
+    /// `7 () XW` ends a layer's own state block (after its art, before `LB`): an `Xy` that went to
+    /// the layer's last group or compound path, right after its end, was the layer's.
+    fn layer_state_block(&mut self) {
+        let Some(before) = self.container_undo.take() else { return };
+        let gs = &self.gs;
+        let state = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
+        let Some(Frame { kind: Kind::Layer(_), children, .. }) = self.frames.last_mut() else { return };
+        let Some(n) = children.last_mut().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) else { return };
+        (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = before;
+        self.layer_state = Some(state);
     }
 
     /// `mode opacity isolate knockout shape Xy`; after a group's end, the group's too, and right
@@ -455,20 +560,18 @@ impl<'a> Reader<'a> {
             let before = (n.opacity, n.blend, n.isolate, n.knockout);
             (n.opacity, n.blend, n.isolate, n.knockout) = (gs.opacity, gs.blend, gs.isolate, gs.knockout);
             self.mesh_undo = Some(before);
-            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
-        } else if self.last_object().is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
-            if let Some(n) = self.last_object() {
-                n.opacity = gs.opacity;
-                n.blend = gs.blend;
-                n.isolate = gs.isolate;
-                n.knockout = gs.knockout;
-            }
+            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape));
+        } else if let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
+            let before = (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape);
+            (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
+            // The layer's instead when the layer's `7 () XW` follows (`layer_state_block`).
+            self.container_undo = in_layer.then_some(before);
             self.layer_state = None;
         } else {
             // After a layer's art and before its `LB`: the layer's own state (#2003). Kept until
             // an operator that isn't part of the state block (or the `LB` that takes it) says the
             // art moves on, so a path's state before its paint isn't read as its layer's.
-            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
+            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape));
         }
         self.note_state();
     }
@@ -514,6 +617,18 @@ impl<'a> Reader<'a> {
         {
             self.looks.insert(look.id);
         }
+        // The type that a text object's look draws is the object's own, whatever comes of its style.
+        if after
+            && let Some(f) = self.frames.last_mut()
+            && let [.., look, object] = f.children.as_mut_slice()
+            && slot_of(object.name.as_deref()).is_some()
+            && !super::is_look_slot(object.name.as_deref())
+            && self.hidden_ids.contains(&object.id)
+            && self.hidden_ids.contains(&look.id) == hidden
+            && matches!(look.kind, NodeKind::Group { clip: false, .. })
+        {
+            strip_look_type(look);
+        }
         if code != 1.0 || style.is_empty() || !after {
             return;
         }
@@ -532,11 +647,20 @@ impl<'a> Reader<'a> {
             return;
         }
         // A style read here: the object, painted as it says.
-        if let Some(appearance) = self
-            .styles
-            .get(&style)
-            .and_then(|st| styled(object, look, st, &StylePaints { gradients: &self.gradients, patterns: &self.pattern_tiles, space }))
-        {
+        if let Some(mut appearance) = self.styles.get(&style).and_then(|st| {
+            styled(
+                object,
+                look,
+                st,
+                &StylePaints { gradients: &self.gradients, patterns: &self.pattern_tiles, v7_patterns: &self.v7_patterns, space },
+            )
+        }) {
+            // Strokes and effects at the document's scale, as the art (a Large Canvas copy's is scaled up).
+            let k = space.determinant().abs().sqrt();
+            if k.is_finite() && k > 0.0 && (k - 1.0).abs() > 1e-9 {
+                appearance.scale_strokes(k);
+                appearance.scale_effects(k, vectorcraft_effects::scale_effect);
+            }
             let Some(mut object) = f.children.pop() else { return };
             let Some(look) = f.children.pop() else { return };
             if let Some(b) = look.visual_bounds().filter(|_| !hidden && object.visible && look.visible) {
@@ -547,6 +671,10 @@ impl<'a> Reader<'a> {
             (object.opacity, object.blend, object.isolate, object.knockout) = (look.opacity, look.blend, look.isolate, look.knockout);
             // Now the object itself, not a copy an enclosing look's `strip` would remove.
             self.hidden_ids.remove(&object.id);
+            // Linked to the style when the style list has its name ([`Reader::finish`]).
+            if self.style_links.len() < MAX_NODES {
+                self.style_links.push((object.id, style.clone()));
+            }
             f.children.push(object);
             return;
         }
@@ -620,11 +748,48 @@ fn pattern_xf(space: Affine, matrix: Option<Affine>, tile: Rect) -> Option<Affin
     (xf.determinant().abs() >= 1e-12 && xf.as_coeffs().iter().all(|v| v.is_finite())).then_some(xf)
 }
 
-/// What a style's fills paint with: the file's gradients and pattern tiles, and art space → the document.
+/// A pattern fill's `x y scaleX scaleY angle reflect axis shear shearAxis` as one transform of the
+/// pattern's space, applied before its initial matrix: the shear (by `shear` degrees along the line
+/// at `shearAxis` degrees), the reflection about the line at `axis` degrees when `reflect` isn't
+/// 0, the counterclockwise rotation by `angle` degrees, the scale, then the move to `x y`. `None`
+/// unless there are nine finite numbers.
+fn pattern_controls(n: &[f64]) -> Option<Affine> {
+    let &[x, y, sx, sy, angle, reflect, axis, shear, shear_axis] = n else { return None };
+    if !n.iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let turn = |deg: f64| Affine::rotate(deg.to_radians());
+    let reflection = if reflect != 0.0 { turn(axis) * Affine::scale_non_uniform(1.0, -1.0) * turn(-axis) } else { Affine::IDENTITY };
+    let shearing = if shear != 0.0 {
+        turn(shear_axis) * Affine::new([1.0, 0.0, shear.to_radians().tan(), 1.0, 0.0, 0.0]) * turn(-shear_axis)
+    } else {
+        Affine::IDENTITY
+    };
+    let xf = Affine::translate((x, y)) * Affine::scale_non_uniform(sx, sy) * turn(angle) * reflection * shearing;
+    xf.as_coeffs().iter().all(|v| v.is_finite()).then_some(xf)
+}
+
+/// What a style's fills paint with: the file's gradients and pattern tiles, the patterns defined in
+/// the version 7 form, and art space → the document.
 struct StylePaints<'a> {
     gradients: &'a HashMap<String, Gradient>,
     patterns: &'a HashMap<String, Rect>,
+    v7_patterns: &'a HashSet<String>,
     space: Affine,
+}
+
+/// A placed file's `` ` `` operands → its matrix, its box and its path: an array of six numbers, four
+/// numbers, three more or none, and a string. `None` for any other shape or a number that isn't
+/// finite.
+fn tick(vals: &[V]) -> Option<(Affine, Rect, String)> {
+    let [V::Arr(m), rest @ .., V::Str(path)] = vals else { return None };
+    let m = <[f64; 6]>::try_from(m.iter().map(V::num).collect::<Option<Vec<f64>>>()?).ok()?;
+    let nums: Vec<f64> = rest.iter().map(V::num).collect::<Option<_>>()?;
+    let [x0, y0, x1, y1] = match nums.as_slice() {
+        [x0, y0, x1, y1] | [x0, y0, x1, y1, _, _, _] => [*x0, *y0, *x1, *y1],
+        _ => return None,
+    };
+    m.iter().chain(&nums).all(|v| v.is_finite()).then(|| (Affine::new(m), Rect::new(x0, y0, x1, y1), obj::text(path)))
 }
 
 /// The gradients and patterns `look` paints with, placed as it draws them, by their swatch's name
@@ -652,7 +817,8 @@ fn placed_paints(look: &Node, out: &mut HashMap<String, Paint>, depth: usize) {
 const PATTERN_KEY: &str = "\u{1}pattern ";
 
 /// `object`'s appearance with style `st`, its drawn look `look`: `None` when the style isn't one
-/// this reads, or asks a group for fills or strokes.
+/// this reads, asks a group for fills or strokes, or has Pathfinder effects on anything but a group
+/// with no fills or strokes.
 fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, paints: &StylePaints) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
     // A text object's slot (an empty group standing for it) takes the style as the type will.
@@ -660,6 +826,8 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     if !st.plain
         || (!slot && !st.simple)
         || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
+        || (st.pathfinder
+            && (slot || !st.items.is_empty() || object.is_compound_shape() || !matches!(object.kind, NodeKind::Group { clip: false, .. })))
     {
         return None;
     }
@@ -690,29 +858,22 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                 };
                 AppearanceItem::Fill(FillLayer::new(paint))
             }
-            StyleItem::Pattern { name, matrix } => match placed.get(&format!("{PATTERN_KEY}{name}")) {
+            StyleItem::Pattern { name, matrix, controls } => match placed.get(&format!("{PATTERN_KEY}{name}")) {
                 Some(p) => AppearanceItem::Fill(FillLayer::new(p.clone())),
                 None => {
                     let tile = paints.patterns.get(name).copied()?;
-                    let xf = pattern_xf(paints.space, matrix.and_then(|m| paint::affine(&m)), tile)?;
+                    let mut matrix = matrix.and_then(|m| paint::affine(&m));
+                    if paints.v7_patterns.contains(name) {
+                        matrix = Some(matrix.unwrap_or(Affine::IDENTITY) * pattern_controls(controls)?);
+                    }
+                    let xf = pattern_xf(paints.space, matrix, tile)?;
                     AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: name.clone(), xf }))
                 }
             },
-            StyleItem::Stroke { paint, width, cap, join, miter, dash, profile } => {
-                let mut layer = StrokeLayer::new(paint.clone(), *width);
-                (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile) = (*cap, *join, *miter, dash.clone(), profile.clone());
-                AppearanceItem::Stroke(layer)
-            }
+            StyleItem::Stroke { .. } => stroke_layer(item)?,
         };
         if let Some(look) = st.looks.get(n) {
-            match &mut layer {
-                AppearanceItem::Fill(f) => {
-                    (f.visible, f.opacity, f.blend, f.effects) = (look.visible, look.opacity, look.blend, look.effects.clone())
-                }
-                AppearanceItem::Stroke(s) => {
-                    (s.visible, s.opacity, s.blend, s.effects) = (look.visible, look.opacity, look.blend, look.effects.clone())
-                }
-            }
+            with_look(&mut layer, look);
         }
         items.push(layer);
     }
@@ -722,6 +883,54 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
         object.appearance.contents_index
     };
     Some(Appearance { items, effects: st.effects.clone(), contents_index })
+}
+
+/// A graphic style's appearance from art style `st`, on no object: `None` when the style isn't one
+/// this reads, or paints with a gradient or a pattern (placed on each object as its drawn look has them).
+pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle) -> Option<Appearance> {
+    use crate::import::ai::style::StyleItem;
+    if !st.plain {
+        return None;
+    }
+    let mut items = vec![];
+    for (n, item) in st.items.iter().enumerate() {
+        let mut layer = match item {
+            StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
+            StyleItem::Stroke { .. } => stroke_layer(item)?,
+            StyleItem::Gradient { .. } | StyleItem::Pattern { .. } => return None,
+        };
+        if let Some(look) = st.looks.get(n) {
+            with_look(&mut layer, look);
+        }
+        items.push(layer);
+    }
+    Some(Appearance { items, effects: st.effects.clone(), contents_index: st.contents_index })
+}
+
+/// A style's stroke as an appearance item (`None` for a fill).
+fn stroke_layer(item: &crate::import::ai::style::StyleItem) -> Option<AppearanceItem> {
+    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile } = item else { return None };
+    let mut layer = StrokeLayer::new(paint.clone(), line_width(*width));
+    (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile) = (*cap, *join, *miter, dash.clone(), profile.clone());
+    Some(AppearanceItem::Stroke(layer))
+}
+
+/// Give `layer` a fill's or stroke's own visibility, transparency and effects.
+fn with_look(layer: &mut AppearanceItem, look: &crate::import::ai::style::ItemLook) {
+    match layer {
+        AppearanceItem::Fill(f) => (f.visible, f.opacity, f.blend, f.effects) = (look.visible, look.opacity, look.blend, look.effects.clone()),
+        AppearanceItem::Stroke(s) => (s.visible, s.opacity, s.blend, s.effects) = (look.visible, look.opacity, look.blend, look.effects.clone()),
+    }
+}
+
+/// Remove from `n` the text slots of the type its look draws ([`super::is_look_slot`]), in its groups too.
+fn strip_look_type(n: &mut Node) {
+    if let Some(children) = n.children_mut() {
+        children.retain(|c| !super::is_look_slot(c.name.as_deref()));
+        for c in children.iter_mut().filter(|c| c.children().is_some_and(|k| !k.is_empty())) {
+            strip_look_type(Arc::make_mut(c));
+        }
+    }
 }
 
 /// Remove from `n` the children read from `%_` lines (`hidden`: the object itself, not its look).

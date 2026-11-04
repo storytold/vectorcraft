@@ -51,14 +51,14 @@ const fn spec(id: &'static str, label: &'static str, menu: &'static [&'static st
 }
 
 macro_rules! style_cmds {
-    ($kind:expr, $p:literal, $menu:literal, $what:literal) => {
+    ($kind:expr, $p:literal, $menu:literal, $what:literal, $bounds:literal) => {
         vec![
             spec(concat!($p, ".list"), concat!($what, " Styles"), &[], "{} → {styles: [{name, attrs, uses}]}", |s, _| list(s, $kind), false),
             spec(
                 concat!($p, ".new"),
                 concat!("New ", $what, " Style"),
                 &["Window", "Type", $menu],
-                "{name? (trimmed, as rename trims `to`), attrs?: {…} (default: selected text), id?, start?: byte, end?: byte} → {name}; a nonempty character range samples its first selected character; start alone keeps insertion affinity; paragraph styles sample start",
+                concat!("{name? (trimmed, as rename trims `to`), attrs?: {…} (default: selected text), id?, start?: byte, end?: byte} → {name}; a nonempty character range samples its first selected character; start alone keeps insertion affinity; paragraph styles sample start", $bounds),
                 |s, p| new(s, p, $kind),
                 true,
             ),
@@ -82,7 +82,7 @@ macro_rules! style_cmds {
                 concat!($p, ".setAttrs"),
                 concat!($what, " Style Options"),
                 &[],
-                "{name, attrs: {…}} replace the style's attributes; users keep their overrides",
+                concat!("{name, attrs: {…}} replace the style's attributes; users keep their overrides", $bounds),
                 |s, p| set_attrs(s, p, $kind),
                 true,
             ),
@@ -116,16 +116,22 @@ macro_rules! style_cmds {
 }
 
 pub fn specs() -> Vec<CommandSpec> {
-    let mut v = style_cmds!(Kind::Char, "charStyle", "Character Styles", "Character");
+    let mut v = style_cmds!(
+        Kind::Char,
+        "charStyle",
+        "Character Styles",
+        "Character",
+        "; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt"
+    );
     v.push(spec(
         "charStyle.edit",
         "Edit Character Style",
         &[],
-        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides",
+        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt",
         |s, p| edit_style(s, p, Kind::Char),
         true,
     ));
-    v.extend(style_cmds!(Kind::Para, "paraStyle", "Paragraph Styles", "Paragraph"));
+    v.extend(style_cmds!(Kind::Para, "paraStyle", "Paragraph Styles", "Paragraph", ""));
     v
 }
 
@@ -155,6 +161,8 @@ fn to_attrs<T: Serialize>(v: &T) -> Map<String, Value> {
 /// from a style instead leaves the text's own value alone.
 pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
     let mut m = to_attrs(v);
+    // A chosen glyph belongs to one character, not to a reusable character style.
+    m.remove("glyphAlternate");
     for (k, x) in [
         ("font_version", json!(v.font_version)),
         ("fontAxes", json!(v.font_axes)),
@@ -173,8 +181,11 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("small_caps", json!(v.small_caps)),
         ("charAlign", json!(v.char_align)),
         ("charDirection", json!(v.char_direction)),
+        ("kashidas", json!(v.kashidas)),
         ("proportionalMetrics", json!(v.proportional_metrics)),
         ("tateChuYoko", json!(v.tate_chu_yoko)),
+        ("tcyUpDown", json!(v.tcy_up_down)),
+        ("tcyLeftRight", json!(v.tcy_left_right)),
         ("standardVerticalRoman", json!(v.standard_vertical_roman)),
         ("noBreak", json!(v.no_break)),
         ("digits", json!(v.digits)),
@@ -267,11 +278,9 @@ fn restyle<T: Serialize + DeserializeOwned + Clone>(
     new: &Map<String, Value>,
     base: &Map<String, Value>,
 ) -> T {
-    let Some(full) = to_map(cur) else { return cur.clone() };
-    let mut m = attrs(cur);
-    if let Some(name) = full.get("style_name") {
-        m.insert("style_name".into(), name.clone());
-    }
+    // Starts from every key `cur` writes, so values no style sets (a glyph choice) are kept.
+    let Some(mut m) = to_map(cur) else { return cur.clone() };
+    m.extend(attrs(cur));
     for (k, v) in new {
         if old.get(k).is_none_or(|o| m.get(k) == Some(o)) {
             m.insert(k.clone(), v.clone());
@@ -475,7 +484,12 @@ fn name_param<'a>(p: &'a Value, kind: Kind, verb: &str) -> Result<&'a str> {
     str_param(p, "name").ok_or_else(|| bad(&kind.cmd(verb), "missing `name`"))
 }
 
-fn attrs_param(p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, Value>>> {
+/// The `attrs` of `p`, validated. `kept` holds the style's current attributes (`charStyle.edit`,
+/// `charStyle.setAttrs`), the target text's attributes (`charStyle.new`) or the attributes of the
+/// style being copied (`charStyle.duplicate`): a language tag that is not in the list, a swatch link the document does
+/// not have, or an OpenType feature tag the shaper does not know, which a file can give a style or
+/// a run, stays when `attrs` keeps it.
+fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Map<String, Value>>) -> Result<Option<Map<String, Value>>> {
     match p.get("attrs") {
         None | Some(Value::Null) => Ok(None),
         Some(Value::Object(m)) => {
@@ -484,10 +498,44 @@ fn attrs_param(p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, V
             let c = kind.cmd(verb);
             let full = match kind {
                 Kind::Char => {
+                    if m.contains_key("glyphAlternate") {
+                        return Err(bad(&c, "`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)"));
+                    }
                     let mut st = with_attrs(&CharStyle::default(), m, &c)?;
+                    let changed = |key: &str| m.contains_key(key) && kept.and_then(|k| k.get(key)) != m.get(key);
+                    for (key, value, lo, hi) in
+                        [("size", st.size, 0.1, 1296.0), ("h_scale", st.h_scale, 1.0, 10000.0), ("v_scale", st.v_scale, 1.0, 10000.0)]
+                    {
+                        if changed(key) && !(lo..=hi).contains(&value) {
+                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
+                        }
+                    }
+                    if changed("leading") && st.leading.is_some_and(|value| !(0.1..=5000.0).contains(&value)) {
+                        return Err(bad(&c, "`leading` must be from 0.1 to 5000, or null for Auto"));
+                    }
+                    let shift_max = 1296.0;
+                    for (key, value) in [("baseline_shift", st.baseline_shift), ("tcyUpDown", st.tcy_up_down), ("tcyLeftRight", st.tcy_left_right)] {
+                        if changed(key) && !(-shift_max..=shift_max).contains(&value) {
+                            return Err(bad(&c, format!("`{key}` must be from {} to {shift_max}", -shift_max)));
+                        }
+                    }
                     // A language of the list, stored as its tag (as text.setFormat takes it).
-                    if let Some(l) = &st.language {
+                    if let Some(l) = &st.language
+                        && kept.and_then(|k| k.get("language")) != m.get("language")
+                    {
                         st.language = vectorcraft_doc::setup::char_language(l).map_err(|e| bad(&c, e))?.map(str::to_string);
+                    }
+                    for (key, paint) in [("fill", &mut st.fill), ("stroke", &mut st.stroke)] {
+                        if changed(key) {
+                            style_paint(d, paint, key, &c)?;
+                        }
+                    }
+                    let (key, lo, hi) = ("stroke_width", 0.0, vectorcraft_doc::MAX_COORD);
+                    if changed(key) && !(lo..=hi).contains(&st.stroke_width) {
+                        return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
+                    }
+                    if changed("features") {
+                        style_features(&st.features, kept, &c)?;
                     }
                     char_attrs(&st)
                 }
@@ -496,6 +544,51 @@ fn attrs_param(p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, V
             Ok(Some(m.keys().filter_map(|k| full.get(k).map(|v| (k.clone(), v.clone()))).collect()))
         }
         Some(_) => Err(bad(&kind.cmd(verb), "attrs must be an object")),
+    }
+}
+
+/// Check a character style's `fill` or `stroke` (`key`): each solid color and gradient stop has a
+/// tint from 0 to 1, and a link to a global swatch of `d`, whose color at that tint it takes.
+fn style_paint(d: &Document, paint: &mut vectorcraft_color::Paint, key: &str, c: &str) -> Result<()> {
+    match paint {
+        vectorcraft_color::Paint::Solid { color, swatch, tint } => style_color(d, color, swatch.as_deref(), *tint, key, c),
+        vectorcraft_color::Paint::Gradient(g) => {
+            g.gradient.stops.iter_mut().try_for_each(|stop| style_color(d, &mut stop.color, stop.swatch.as_deref(), stop.tint, key, c))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Check one color of a character style's `key` paint for [`style_paint`].
+fn style_color(d: &Document, color: &mut vectorcraft_color::Color, swatch: Option<&str>, tint: f32, key: &str, c: &str) -> Result<()> {
+    if !(0.0..=1.0).contains(&tint) {
+        let (key, lo, hi) = (format!("{key}.tint"), 0, 1);
+        return Err(bad(c, format!("`{key}` must be from {lo} to {hi}")));
+    }
+    if let Some(name) = swatch {
+        if d.swatch(name).is_none() {
+            return Err(bad(c, format!("no swatch `{name}`")));
+        }
+        let base = d.global_color(name).ok_or_else(|| bad(c, format!("`{name}` is a process colour: tints apply to global and spot colours")))?;
+        *color = base.tinted(tint);
+    }
+    Ok(())
+}
+
+/// Check a character style's OpenType `features`: at most [`vectorcraft_text::MAX_STYLE_FEATURES`]
+/// tags, or no more than the `kept` attributes already list, each one the shaper knows or one the
+/// `kept` attributes already list.
+fn style_features(features: &[String], kept: Option<&Map<String, Value>>, c: &str) -> Result<()> {
+    let kept: Vec<&str> = kept.and_then(|k| k.get("features")).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+    let max = vectorcraft_text::MAX_STYLE_FEATURES;
+    if features.len() > max.max(kept.len()) {
+        return Err(bad(c, format!("features lists at most {max} tags")));
+    }
+    // One `-` or `+` at most, as the shaper reads a tag.
+    let known = |t: &str| vectorcraft_text::OtFeatures::known_tag(t) && !t.strip_prefix(['-', '+']).unwrap_or(t).starts_with(['-', '+']);
+    match features.iter().find(|t| !known(t) && !kept.contains(&t.as_str())) {
+        Some(t) => Err(bad(c, format!("unknown OpenType feature `{t}`"))),
+        None => Ok(()),
     }
 }
 
@@ -531,10 +624,17 @@ fn list(s: &mut Session, kind: Kind) -> Result<Value> {
 }
 
 fn new(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
+    new_from(s, p, kind, None)
+}
+
+/// `charStyle.new`, `paraStyle.new`: `copied` holds the attributes of the style a copy is made of
+/// (`charStyle.duplicate`), which `attrs` keeps as [`attrs_param`] keeps the target text's.
+fn new_from(s: &mut Session, p: &Value, kind: Kind, copied: Option<&Map<String, Value>>) -> Result<Value> {
     let c = kind.cmd("new");
-    let attrs = match attrs_param(p, kind, "new")? {
+    let target = selection_attrs(s, p, kind)?;
+    let attrs = match attrs_param(&s.doc()?.doc, p, kind, "new", copied.or(target.as_ref()))? {
         Some(a) => a,
-        None => match selection_attrs(s, p, kind)? {
+        None => match target {
             Some(a) => a,
             None => {
                 let a = new_style_attrs(s, kind);
@@ -660,7 +760,9 @@ fn redefine(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
 
 fn set_attrs(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let name = name_param(p, kind, "setAttrs")?.to_string();
-    let attrs = attrs_param(p, kind, "setAttrs")?.ok_or_else(|| bad(&kind.cmd("setAttrs"), "missing `attrs`"))?;
+    let d = &s.doc()?.doc;
+    let old = kind.attrs(d, &name);
+    let attrs = attrs_param(d, p, kind, "setAttrs", old.as_ref())?.ok_or_else(|| bad(&kind.cmd("setAttrs"), "missing `attrs`"))?;
     redefine_to(s, kind, &name, attrs, "setAttrs")
 }
 
@@ -668,9 +770,9 @@ fn edit_style(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let c = kind.cmd("edit");
     let name = name_param(p, kind, "edit")?.to_string();
     let to = str_param(p, "to").ok_or_else(|| bad(&c, "missing `to`"))?.trim().to_string();
-    let attrs = attrs_param(p, kind, "edit")?.ok_or_else(|| bad(&c, "missing `attrs`"))?;
     let d = &s.doc()?.doc;
     let old = kind.attrs(d, &name).ok_or_else(|| bad(&c, format!("no style `{name}`")))?;
+    let attrs = attrs_param(d, p, kind, "edit", Some(&old))?.ok_or_else(|| bad(&c, "missing `attrs`"))?;
     if name == kind.normal() {
         return Err(bad(&c, format!("`{name}` can't be edited this way")));
     }
@@ -718,7 +820,7 @@ fn duplicate(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
         .map(|i| if i == 1 { format!("{stem} copy") } else { format!("{stem} copy {i}") })
         .find(|n| kind.attrs(d, n).is_none())
         .unwrap_or_else(|| format!("{stem} copy"));
-    new(s, &json!({ "name": copy, "attrs": attrs }), kind)
+    new_from(s, &json!({ "name": copy, "attrs": attrs }), kind, Some(&attrs))
 }
 
 fn rename(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {

@@ -489,6 +489,319 @@ pub fn lam_alef_font(feature: &[u8; 4]) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`alternates_font`] with an `aalt` feature, and without one.
+pub fn alternates_family(aalt: bool) -> &'static str {
+    if aalt { "Alttest Sans" } else { "Alttest Sans Noaalt" }
+}
+
+/// Four glyphs of the bundled Source Sans 3 Regular that its `cmap` maps no character to, the
+/// lowest ids first: the unencoded alternates of [`alternates_font`]. `None` when there are not
+/// four.
+pub fn unencoded_glyphs() -> Option<[u32; 4]> {
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let mapped: std::collections::HashSet<u32> = font.charmap().mappings().map(|(_, g)| g.to_u32()).collect();
+    let glyphs = u32::from(font.maxp().ok()?.num_glyphs());
+    let found: Vec<u32> = (1..glyphs).filter(|g| !mapped.contains(g)).take(4).collect();
+    found.try_into().ok()
+}
+
+/// The family of [`crowded_alternates_font`].
+pub const CROWDED_ALTERNATES_FAMILY: &str = "Crowdtest Sans";
+
+/// The bundled Source Sans 3 Regular, its `cmap` kept, with a `GSUB` table whose 17 `cv01` feature
+/// records each list a single substitution of `a` by `c` 256 times, followed by a `salt` record
+/// whose single substitution gives `b`. Family [`CROWDED_ALTERNATES_FAMILY`]. `None` when it can't
+/// be built.
+pub fn crowded_alternates_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::gsub::{Gsub, SingleSubst, SingleSubstFormat2, SubstitutionLookup, SubstitutionLookupList};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let family = CROWDED_ALTERNATES_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "Crowdtest Sans Regular"), (5, "Version 1.000"), (6, "CrowdtestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let a = gid('a')?;
+    let single = |to: GlyphId16| {
+        SubstitutionLookup::Single(Lookup::new(
+            Default::default(),
+            vec![SingleSubst::from(SingleSubstFormat2::new(CoverageFormat1::new(vec![a]).into(), vec![to]))],
+        ))
+    };
+    let lookups = SubstitutionLookupList::new(vec![single(gid('c')?), single(gid('b')?)]);
+    let mut records: Vec<FeatureRecord> = (0..17).map(|_| FeatureRecord::new(Tag::new(b"cv01"), Feature::new(None, vec![0; 256]))).collect();
+    records.push(FeatureRecord::new(Tag::new(b"salt"), Feature::new(None, vec![1])));
+    let indices = (0..records.len() as u16).collect();
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(indices)), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The bundled Source Sans 3 Regular, its `cmap` kept, with a `GSUB` table of alternates for `a`
+/// and nothing else. With [`unencoded_glyphs`] `[u1, u2, u3, u4]`: `aalt` (alternate
+/// substitution) lists a, u1 and b; `cv01` (single substitution) gives c; `salt` (single) gives b;
+/// `smcp` (single) gives d; `ss01` (single, a glyph-id delta) gives u2; `ss02` (single, in an
+/// extension lookup) gives u4; and `swsh` (alternate substitution) lists u3 and u1. Without `aalt`
+/// the font has the others only. Family [`alternates_family`]. `None` when it can't be built.
+pub fn alternates_font(aalt: bool) -> Option<Vec<u8>> {
+    use write_fonts::tables::gsub::{
+        AlternateSet, AlternateSubstFormat1, ExtensionSubstFormat1, ExtensionSubtable, Gsub, SingleSubst, SingleSubstFormat1, SingleSubstFormat2,
+        SubstitutionLookup, SubstitutionLookupList,
+    };
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let family = alternates_family(aalt);
+    let full = format!("{family} Regular");
+    let postscript = format!("{}-Regular", family.replace(' ', ""));
+    let name = name_table(&[(1, family), (2, "Regular"), (4, &full), (5, "Version 1.000"), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    let id = |g: u32| Some(GlyphId16::new(u16::try_from(g).ok()?));
+    let gid = |c| id(charmap.map(c)?.to_u32());
+    let [u1, u2, u3, u4] = unencoded_glyphs()?.map(id);
+    let (u1, u2, u3, u4, a) = (u1?, u2?, u3?, u4?, gid('a')?);
+    let cover = || CoverageFormat1::new(vec![a]);
+    let single = |to: GlyphId16| SingleSubst::from(SingleSubstFormat2::new(cover().into(), vec![to]));
+    let lookup = |subtable: SingleSubst| SubstitutionLookup::Single(Lookup::new(Default::default(), vec![subtable]));
+    let alternates = |set: Vec<GlyphId16>| {
+        SubstitutionLookup::Alternate(Lookup::new(Default::default(), vec![AlternateSubstFormat1::new(cover().into(), vec![AlternateSet::new(set)])]))
+    };
+    let delta = i16::try_from(i32::from(u2.to_u16()) - i32::from(a.to_u16())).ok()?;
+    let extension = ExtensionSubtable::Single(ExtensionSubstFormat1::new(1, single(u4)));
+    // Lookups: 0 aalt, 1 cv01, 2 salt, 3 smcp, 4 ss01, 5 ss02, 6 swsh.
+    let lookups = SubstitutionLookupList::new(vec![
+        alternates(vec![a, u1, gid('b')?]),
+        lookup(single(gid('c')?)),
+        lookup(single(gid('b')?)),
+        lookup(single(gid('d')?)),
+        lookup(SingleSubst::from(SingleSubstFormat1::new(cover().into(), delta))),
+        SubstitutionLookup::Extension(Lookup::new(Default::default(), vec![extension])),
+        alternates(vec![u3, u1]),
+    ]);
+    // Features sorted by tag, as OpenType requires.
+    let tags: [&[u8; 4]; 7] = [b"aalt", b"cv01", b"salt", b"smcp", b"ss01", b"ss02", b"swsh"];
+    let records: Vec<FeatureRecord> = tags
+        .iter()
+        .zip(0u16..)
+        .filter(|(t, _)| aalt || **t != b"aalt")
+        .map(|(t, i)| FeatureRecord::new(Tag::new(t), Feature::new(None, vec![i])))
+        .collect();
+    let indices = (0..records.len() as u16).collect();
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(indices)), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`ligature_caret_font`].
+pub const LIGATURE_CARET_FAMILY: &str = "Carettest Sans";
+
+/// The glyph [`ligature_caret_font`]'s `liga` gives for f + i: W, wider than either letter.
+pub const LIGATURE_CARET_GLYPH: char = 'W';
+
+/// A test-only cmap over bundled Source Sans 3 for f, i and the space, whose `GSUB` `liga` joins f +
+/// i into [`LIGATURE_CARET_GLYPH`]. With `caret`, a `GDEF` ligature caret list puts that glyph's one
+/// caret at x = `caret` font units; without it the font has no `GDEF` table. `None` when it can't be
+/// built.
+pub fn ligature_caret_font(caret: Option<i16>) -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+    use write_fonts::tables::gdef::{CaretValue, Gdef, LigCaretList, LigGlyph};
+    use write_fonts::tables::gsub::{Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SubstitutionLookup, SubstitutionLookupList};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mapping = [('f', 'f'), ('i', 'i'), (' ', ' ')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let family = LIGATURE_CARET_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "Carettest Sans Regular"), (6, "CarettestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let ligature = gid(LIGATURE_CARET_GLYPH)?;
+    let subst = LigatureSubstFormat1::new(
+        CoverageFormat1::new(vec![gid('f')?]).into(),
+        vec![LigatureSet::new(vec![Ligature::new(ligature, vec![gid('i')?])])],
+    );
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"liga"), Feature::new(None, vec![0]))]);
+    let lookups = SubstitutionLookupList::new(vec![SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![subst]))]);
+    let langsys = || Script::new(Some(LangSys::new(vec![0])), vec![]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), langsys()), ScriptRecord::new(Tag::new(b"latn"), langsys())]);
+    builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
+    if let Some(x) = caret {
+        let carets = LigCaretList::new(CoverageFormat1::new(vec![ligature]).into(), vec![LigGlyph::new(vec![CaretValue::format_1(x)])]);
+        builder.add_table(&Gdef::new(None, None, Some(carets), None)).ok()?;
+    }
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"GDEF") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`vertical_ligature_caret_font`].
+pub const VERTICAL_LIGATURE_CARET_FAMILY: &str = "Vertical Carettest Sans";
+
+/// [`ligature_caret_font`] with its one caret at y = `caret` font units, as family
+/// [`VERTICAL_LIGATURE_CARET_FAMILY`], with vertical metrics (`vhea`, `vmtx` and `VORG`): every glyph
+/// one em down the column with its vertical origin at 0.88 em. `None` when it can't be built.
+pub fn vertical_ligature_caret_font(caret: i16) -> Option<Vec<u8>> {
+    let base = ligature_caret_font(Some(caret))?;
+    let font = skrifa::FontRef::new(&base).ok()?;
+    let n = font.maxp().ok()?.num_glyphs();
+    let be16 = |v: &mut Vec<u8>, x: i16| v.extend_from_slice(&x.to_be_bytes());
+    // vmtx: (advance height, top side bearing) for every glyph; VORG gives the origin.
+    let mut vmtx = Vec::with_capacity(4 * usize::from(n));
+    for _ in 0..n {
+        vmtx.extend_from_slice(&1000_u16.to_be_bytes());
+        be16(&mut vmtx, 0);
+    }
+    // vhea 1.1: ascent/descent of the em box across the column, then the metrics' count.
+    let mut vhea = Vec::with_capacity(36);
+    vhea.extend_from_slice(&0x0001_1000_u32.to_be_bytes());
+    for x in [500, -500, 0] {
+        be16(&mut vhea, x);
+    }
+    vhea.extend_from_slice(&1000_u16.to_be_bytes());
+    for x in [0, 0, 1000, 1, 0, 0, 0, 0, 0, 0, 0] {
+        be16(&mut vhea, x);
+    }
+    vhea.extend_from_slice(&n.to_be_bytes());
+    // VORG 1.0: the default origin and no glyph that differs.
+    let mut vorg = Vec::new();
+    for x in [1, 0, 880, 0] {
+        be16(&mut vorg, x);
+    }
+    let family = VERTICAL_LIGATURE_CARET_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "Vertical Carettest Sans Regular"), (6, "VerticalCarettestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    builder.add_raw(Tag::new(b"vhea"), vhea);
+    builder.add_raw(Tag::new(b"vmtx"), vmtx);
+    builder.add_raw(Tag::new(b"VORG"), vorg);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`variable_ligature_caret_font`].
+pub const VARIABLE_LIGATURE_CARET_FAMILY: &str = "Varicaret Sans";
+
+/// [`ligature_caret_font`] as a variable font of family [`VARIABLE_LIGATURE_CARET_FAMILY`]: one
+/// weight axis (400–700, default 400) with the named instances Regular (400) and Bold (700), and a
+/// `GDEF` ligature caret list whose one caret is a format 3 value at x = `caret` font units with a
+/// variation index into the `GDEF` item variation store that moves it by `delta` at 700. `None`
+/// when it can't be built.
+pub fn variable_ligature_caret_font(caret: i16, delta: i16) -> Option<Vec<u8>> {
+    use write_fonts::tables::gdef::{CaretValue, Gdef, LigCaretList, LigGlyph};
+    use write_fonts::tables::layout::{CoverageFormat1, DeviceOrVariationIndex};
+    use write_fonts::tables::variations::{ItemVariationData, ItemVariationStore, RegionAxisCoordinates, VariationRegion, VariationRegionList};
+    use write_fonts::types::GlyphId16;
+
+    let base = ligature_caret_font(None)?;
+    let font = skrifa::FontRef::new(&base).ok()?;
+    let ligature = GlyphId16::new(source_sans_gid(LIGATURE_CARET_GLYPH)?);
+    let value = CaretValue::format_3(caret, DeviceOrVariationIndex::variation_index(0, 0));
+    let carets = LigCaretList::new(CoverageFormat1::new(vec![ligature]).into(), vec![LigGlyph::new(vec![value])]);
+    let mut gdef = Gdef::new(None, None, Some(carets), None);
+    let region = VariationRegion::new(vec![RegionAxisCoordinates::new(F2Dot14::from_f32(0.0), F2Dot14::from_f32(1.0), F2Dot14::from_f32(1.0))]);
+    // One delta set of one 16-bit delta for the one region.
+    let data = ItemVariationData::new(1, 1, vec![0], delta.to_be_bytes().to_vec());
+    gdef.item_var_store = Some(ItemVariationStore::new(VariationRegionList::new(1, vec![region]), vec![Some(data)])).into();
+    let axis = VariationAxisRecord {
+        axis_tag: Tag::new(b"wght"),
+        min_value: Fixed::from_i32(400),
+        default_value: Fixed::from_i32(400),
+        max_value: Fixed::from_i32(700),
+        flags: 0,
+        axis_name_id: NameId::new(256),
+    };
+    let instance = |name: u16, wght: i32| InstanceRecord {
+        subfamily_name_id: NameId::new(name),
+        flags: 0,
+        coordinates: vec![Fixed::from_i32(wght)],
+        post_script_name_id: None,
+    };
+    let fvar = Fvar::new(AxisInstanceArrays::new(vec![axis], vec![instance(257, 400), instance(258, 700)]));
+    let family = VARIABLE_LIGATURE_CARET_FAMILY;
+    let name = name_table(&[
+        (1, family),
+        (2, "Regular"),
+        (4, "Varicaret Sans Regular"),
+        (6, "VaricaretSans-Regular"),
+        (256, "Weight"),
+        (257, "Regular"),
+        (258, "Bold"),
+    ])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    builder.add_table(&gdef).ok()?.add_table(&fvar).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// [`ligature_caret_font`] with its one caret at x = `caret` font units and a `GPOS` `kern` single
+/// adjustment that places the ligature glyph `x` font units right of its pen position. `None` when
+/// it can't be built.
+pub fn placed_ligature_caret_font(caret: i16, x: i16) -> Option<Vec<u8>> {
+    use write_fonts::tables::gpos::{Gpos, PositionLookup, PositionLookupList, SinglePos, ValueRecord};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    let base = ligature_caret_font(Some(caret))?;
+    let font = skrifa::FontRef::new(&base).ok()?;
+    let ligature = GlyphId16::new(source_sans_gid(LIGATURE_CARET_GLYPH)?);
+    let pos = SinglePos::format_1(CoverageFormat1::new(vec![ligature]).into(), ValueRecord::new().with_x_placement(x));
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"kern"), Feature::new(None, vec![0]))]);
+    let lookups = PositionLookupList::new(vec![PositionLookup::Single(Lookup::new(Default::default(), vec![pos]))]);
+    let langsys = || Script::new(Some(LangSys::new(vec![0])), vec![]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), langsys()), ScriptRecord::new(Tag::new(b"latn"), langsys())]);
+    let mut builder = FontBuilder::new();
+    builder.add_table(&Gpos::new(scripts, features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`pair_kerning_font`].
 pub const PAIR_KERNING_FAMILY: &str = "Pairtest Sans";
 

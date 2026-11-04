@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use vectorcraft_geom::{Affine, Rect};
 
-use crate::{AppearanceItem, Document, Node, NodeKind, SYMBOL_HALF};
+use crate::{AppearanceItem, Document, MAX_SYMBOL_NODES, Node, NodeKind, SYMBOL_HALF};
 
 /// The box a symbol instance is measured by when its symbol's art has no box
 /// ([`SymbolBoxes::art`]), and in [`Node::geometric_bounds`]: the 20 × 20 square around the origin
@@ -102,7 +102,9 @@ impl<'a> SymbolBoxes<'a> {
 
     /// Makes these boxes measure every symbol instance as [`Node::reach_bounds_with`] does, by its
     /// art box alone. An instance that scales or turns stroked art then measures a little larger
-    /// than with [`Node::visual_bounds_with`], and its art is not transformed to measure it.
+    /// than with [`Node::visual_bounds_with`], and its art is not transformed to measure it. The
+    /// visual box of an instance placed through 9-slice guides holds the art box placed by each
+    /// cell's map ([`crate::NineSliceMap::placement_bounds`]).
     pub fn quick(self) -> Self {
         self.quick.set(true);
         self
@@ -303,17 +305,28 @@ impl<'a> SymbolBoxes<'a> {
         }
     }
 
-    /// The visual bounds of symbol `name`'s art drawn as an instance with transform `xf` draws it,
-    /// its strokes at their own weight, the instances in it measured by their art boxes. `None`
-    /// when [`Self::depth`] is `None`, in boxes made by [`Self::quick`], and while symbol art or a
-    /// click's box is measured.
+    /// The visual bounds of symbol `name`'s art drawn as an instance with transform `xf` draws it
+    /// (through its 9-slice guides when it has them, [`Document::place_symbol_art`]), its strokes
+    /// at their own weight, the instances in it measured by their art boxes. `None`
+    /// when [`Self::depth`] is `None`, in boxes made by [`Self::quick`], while symbol art or a
+    /// click's box is measured, and when placing the art through its guides could make more than
+    /// [`MAX_SYMBOL_NODES`] objects ([`crate::NineSliceMap::most_placed`]).
     pub(crate) fn placed_visual(&self, name: &str, xf: Affine) -> Option<Rect> {
+        self.placed_visual_within(name, xf, MAX_SYMBOL_NODES)
+    }
+
+    /// [`Self::placed_visual`], `None` when placing the art through its guides could make more
+    /// than `most` objects.
+    pub(crate) fn placed_visual_within(&self, name: &str, xf: Affine, most: u64) -> Option<Rect> {
         if self.quick.get() {
             return None;
         }
         self.measure_art(name, |art| {
-            let mut art = (**art).clone();
-            art.transform(xf, false);
+            let art = match self.doc.symbol_slice_map(name, xf) {
+                Some(m) if m.most_placed(art, self.doc) > most => return None,
+                Some(m) => m.place(art, self.doc),
+                None => self.doc.place_symbol_art(name, art, xf)?,
+            };
             self.in_art(|| art.visual(Some(self)))
         })
         .flatten()
@@ -434,6 +447,25 @@ mod tests {
         // corner up to its miter limit).
         let reach = d.symbols[0].art.children().unwrap()[0].appearance.outset();
         assert_eq!(scaled.reach_bounds_with(&s), Some(Rect::new(0.0, 0.0, 60.0, 30.0).inflate(reach, reach)));
+    }
+
+    #[test]
+    fn quick_boxes_hold_art_that_9_slice_guides_move_past_the_instance() {
+        // A 100 × 100 frame with guides a quarter in, holding an instance of a bar from x 10 to 70.
+        // Scaled 2 times across, the bar crosses the left guide and is placed by the middle
+        // column's map, x → 3x − 50: it draws from x −20 to 160, past the frame's left edge at 0.
+        let mut d = Document::new(200.0, 200.0);
+        let bar = rect(&mut d, Rect::new(10.0, 40.0, 70.0, 60.0), 0.0);
+        symbol(&mut d, "Bar", vec![bar]);
+        let frame = rect(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), 0.0);
+        let inner = instance(&mut d, "Bar", Affine::IDENTITY);
+        symbol(&mut d, "Panel", vec![frame, inner]);
+        d.set_symbol_nine_slice("Panel", Some(crate::SymbolNineSlice::default()));
+        let panel = instance(&mut d, "Panel", Affine::scale_non_uniform(2.0, 1.0));
+        let exact = panel.visual_bounds_with(&d.symbol_boxes()).unwrap();
+        assert_eq!(exact, Rect::new(-20.0, 0.0, 200.0, 100.0));
+        let quick = panel.visual_bounds_with(&d.symbol_boxes().quick()).unwrap();
+        assert_eq!(quick.union(exact), quick, "{quick:?} holds {exact:?}");
     }
 
     #[test]

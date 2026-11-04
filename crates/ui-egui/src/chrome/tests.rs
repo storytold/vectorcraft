@@ -866,6 +866,18 @@ fn the_tab_title_names_the_opacity_mask_while_it_is_edited() {
     assert!(title(&s).ends_with("(RGB/Preview)"));
 }
 
+/// #3797: each document's tab names its own Outline or Preview.
+#[test]
+fn only_the_outlined_documents_tab_reads_outline() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.run("view.outline", json!({})).unwrap();
+    let titles: Vec<String> = (0..app.session.documents().len()).filter_map(|i| super::document_window_title(&app, (i, 1))).collect();
+    assert!(titles[0].ends_with("(RGB/Preview)"), "{titles:?}");
+    assert!(titles[1].ends_with("(RGB/Outline)"), "{titles:?}");
+}
+
 /// One headless frame of the Control bar; returns the isolation button's rectangle, if it shows.
 fn isolation_button(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Option<egui::Rect> {
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
@@ -1060,6 +1072,63 @@ fn the_control_bar_isolates_the_selected_object_and_exits_isolation_mode() {
     app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
     assert!(app.session.active().unwrap().isolation.is_some());
     assert_eq!(isolation_button(&mut app, &ctx, vec![]), None, "the isolation bar ends pattern editing");
+}
+
+/// In symbol editing mode the Control bar's isolation button is Exit Symbol Editing Mode and
+/// leaves the mode. With a group isolated inside the symbol's art it is Exit Isolation Mode and
+/// goes back to the symbol's art.
+#[test]
+fn the_control_bar_exits_symbol_editing_mode() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    app.run("symbol.new", json!({"name": "Box"})).unwrap();
+    app.run("symbol.edit", json!({"name": "Box"})).unwrap();
+    let layer = app.session.active().unwrap().doc.symbol_edit.as_ref().expect("symbol editing mode").layer;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    // The isolation button's label (the one exit label the bar shows), and a click on it.
+    let label = |app: &mut crate::VectorcraftApp| {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let exits: Vec<String> = nodes
+            .iter()
+            .filter_map(|(_, n)| n.label().map(|l| l.trim().to_string()))
+            .filter(|l| l == "Exit Symbol Editing Mode" || l == "Exit Isolation Mode")
+            .collect();
+        assert!(exits.len() <= 1, "{exits:?}");
+        exits.into_iter().next()
+    };
+    let click = |app: &mut crate::VectorcraftApp| {
+        let r = isolation_button(app, &ctx, vec![]).expect("the bar shows the isolation button");
+        let press =
+            |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        for e in [egui::Event::PointerMoved(r.center()), press(true), press(false)] {
+            isolation_button(app, &ctx, vec![e]);
+        }
+    };
+    assert_eq!(label(&mut app).as_deref(), Some("Exit Symbol Editing Mode"));
+    // Two rectangles drawn into the symbol's art, grouped and isolated.
+    let a = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 130, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": g})).unwrap();
+    assert_eq!(label(&mut app).as_deref(), Some("Exit Isolation Mode"));
+    click(&mut app);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.isolation, st.doc.symbol_edit.is_some()), (Some(layer), true), "back to the symbol's art");
+    assert_eq!(label(&mut app).as_deref(), Some("Exit Symbol Editing Mode"));
+    click(&mut app);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.isolation, st.doc.symbol_edit.is_some()), (None::<NodeId>, false), "symbol editing mode ends");
+    // The symbol keeps the art drawn while editing.
+    let symbol = st.doc.symbols.iter().find(|s| s.name == "Box").expect("the symbol");
+    assert!(symbol.art.children().is_some_and(|c| c.len() >= 2), "the edit reached the symbol");
 }
 
 /// #4819: with Direct Selection, a selected blend shows the Control bar's and the Properties
@@ -1733,4 +1802,135 @@ fn the_control_bar_shows_the_distribute_buttons_for_two_or_more_objects() {
         app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
     };
     assert_eq!((left(&app, &a), left(&app, &b), left(&app, &c)), (10.0, 105.0, 200.0), "{}", app.ui.status);
+}
+
+/// The Control bar shows the Global Edit Options dropdown while Start Global Edit can run. Its
+/// options are the session's, which the Properties panel's dropdown also sets: Match Size from
+/// the Control bar narrows the Results and the objects Start Global Edit takes. The dropdown is off
+/// and closed while Global Edit is on, and absent when the selection cannot start it.
+#[test]
+fn the_control_bar_shows_the_global_edit_options() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64, size: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 20, "width": size, "height": size})).unwrap()["id"].clone()
+    };
+    let a = rect(&mut app, 20.0, 40.0);
+    rect(&mut app, 100.0, 40.0);
+    rect(&mut app, 200.0, 80.0);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+    let find = |nodes: &Nodes, name: &str| nodes.iter().find(|(_, n)| n.label() == Some(name) || n.value() == Some(name)).map(|(_, n)| n.clone());
+    let center = |n: &egui::accesskit::Node| {
+        let b = n.bounds().unwrap_or_else(|| panic!("{n:?}"));
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    app.run("select.set", json!({"ids": []})).unwrap();
+    frame(&mut app, vec![]);
+    assert!(find(&frame(&mut app, vec![]), "Global Edit Options").is_none(), "nothing selected: no dropdown");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    let button = find(&nodes, "Global Edit Options").unwrap_or_else(|| panic!("one rectangle: the dropdown shows"));
+    let nodes = click(&mut app, center(&button));
+    assert!(find(&nodes, "Results: 3").is_some(), "the options open with their Results");
+    let size = find(&nodes, "Size").unwrap_or_else(|| panic!("the Size check"));
+    let nodes = click(&mut app, center(&size));
+    assert!(app.session.global_edit_options.size, "Match Size is the session's option, shared with Properties");
+    assert!(find(&nodes, "Results: 2").is_some(), "Size narrows the Results");
+    app.run("select.globalEdit", json!({})).unwrap();
+    let ge = app.session.active().unwrap().global_edit.as_ref().map(|g| g.members.len());
+    assert_eq!(ge, Some(2), "Start Global Edit takes the two rectangles of the same size");
+    let nodes = frame(&mut app, vec![]);
+    let button = find(&nodes, "Global Edit Options").unwrap_or_else(|| panic!("Global Edit on: the dropdown still shows"));
+    assert!(button.is_disabled(), "the options are off while Global Edit is on");
+    let results = |nodes: &Nodes| nodes.iter().any(|(_, n)| n.label().or(n.value()).is_some_and(|t| t.starts_with("Result")));
+    assert!(!results(&nodes), "Global Edit starting closes the open options");
+    assert!(!results(&frame(&mut app, vec![])));
+    app.run("select.globalEdit", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    assert!(!results(&frame(&mut app, vec![])), "the options stay closed once Global Edit stops");
+    // At any width the button either fits inside the bar or is left out, and a wider bar never
+    // leaves it out once a narrower one showed it.
+    let mut seen = false;
+    for width in (600..=2400).step_by(10) {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
+        let mut nodes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
+            out.textures_delta.clear();
+            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        }
+        let shown = find(&nodes, "Global Edit Options").and_then(|n| n.bounds());
+        if let Some(b) = shown {
+            assert!(b.x1 <= f64::from(width), "{width}: {b:?}");
+        }
+        assert!(!seen || shown.is_some(), "{width}: left out after a narrower bar showed it");
+        seen |= shown.is_some();
+    }
+    assert!(seen, "a wide bar has room for it");
+}
+
+/// At any width the Control bar shows the inline X, Y, W and H fields whole inside its right margin,
+/// or leaves all four out and keeps the Transform link; a wider bar never leaves them out once a
+/// narrower one showed them.
+#[test]
+fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    for count in [1, 2] {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let ids: Vec<_> = (0..count)
+            .map(|i| app.run("shape.rectangle", json!({"x": 20 + 100 * i, "y": 20, "width": 40, "height": 30})).unwrap()["id"].clone())
+            .collect();
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        let mut seen = false;
+        for width in (600..=2400).step_by(10) {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
+            let mut nodes = Vec::new();
+            for _ in 0..2 {
+                let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
+                out.textures_delta.clear();
+                nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+            }
+            let spacing = ctx.global_style().spacing.item_spacing.x;
+            // The right edge of the box of the field its label names. The text box sits inside the
+            // field's box with the same inset on both sides, and one item spacing after the label.
+            let right = |name: &str| {
+                let (id, label) = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::Label && n.value() == Some(name))?;
+                let input = nodes.iter().find(|(_, n)| n.labelled_by().contains(id)).and_then(|(_, n)| n.bounds())?;
+                let inset = input.x0 - label.bounds()?.x1 - f64::from(spacing);
+                Some(input.x1 + inset)
+            };
+            let fields = ["X:", "Y:", "W:", "H:"].map(right);
+            assert!(fields.iter().all(Option::is_some) || fields.iter().all(Option::is_none), "{count} objects, {width}: {fields:?}");
+            assert!(nodes.iter().any(|(_, n)| n.label() == Some("Transform")), "{count} objects, {width}: the Transform link shows");
+            // The bar's content ends at its 10-point inner margin.
+            if let Some(h) = fields[3] {
+                assert!(h <= f64::from(width) - 10.0, "{count} objects, {width}: H ends at {h}");
+            }
+            assert!(!seen || fields[3].is_some(), "{count} objects, {width}: left out after a narrower bar showed them");
+            seen |= fields[3].is_some();
+        }
+        assert!(seen, "{count} objects: a wide bar has room for the fields");
+    }
 }

@@ -185,8 +185,13 @@ impl Node {
         match &self.kind {
             NodeKind::Path { path, .. } => Some(path.to_bezpath()),
             NodeKind::Compound { children, .. } => {
-                let mut bp = vectorcraft_geom::BezPath::new();
-                children.iter().filter_map(|c| c.path_data()).for_each(|pd| bp.extend(pd.to_bezpath()));
+                // Sized up front: grown by doubling, the path of a compound path of hundreds of
+                // thousands of anchors is copied into ever larger buffers, up to tens of MB, on
+                // every call.
+                let subpaths = || children.iter().filter_map(|c| c.path_data()).flat_map(|pd| &pd.subpaths);
+                let elements = subpaths().filter(|sp| !sp.anchors.is_empty()).map(|sp| 1 + sp.segment_count() + usize::from(sp.closed)).sum();
+                let mut bp = vectorcraft_geom::BezPath::from_vec(Vec::with_capacity(elements));
+                subpaths().for_each(|sp| sp.to_bezpath_into(&mut bp));
                 Some(bp)
             }
             _ => None,
@@ -364,7 +369,12 @@ impl Node {
                         let placed = xf.transform_rect_bbox(art.geometric);
                         match s.placed_visual(symbol, *xf) {
                             Some(v) => v.union(placed),
-                            None => placed.inflate(art.reach, art.reach),
+                            // Art placed through 9-slice guides can draw outside `placed`.
+                            None => s
+                                .document()
+                                .symbol_slice_map_of(symbol, art.geometric, *xf)
+                                .map_or(placed, |m| m.placement_bounds(art.geometric).union(placed))
+                                .inflate(art.reach, art.reach),
                         }
                     }
                     None => xf.transform_rect_bbox(SYMBOL_SQUARE),
@@ -393,6 +403,12 @@ impl Node {
         self.transform_scaled(a, &scaling.into());
     }
 
+    /// The path of the child an Objects on Path group's objects are attached to.
+    fn on_path_data(&self) -> Option<&PathData> {
+        let r = self.extras().objects_on_path.as_deref()?;
+        self.children()?.iter().find(|c| c.id == r.path)?.path_data()
+    }
+
     fn transform_scaled(&mut self, a: Affine, sc: &Scaling) {
         // A dimension's measurement moves with it.
         if let Some(e) = self.extras_if_any()
@@ -400,12 +416,8 @@ impl Node {
         {
             dimension.transform(a);
         }
-        // The frames of the objects attached to a path move with them.
-        if let Some(e) = self.extras_if_any()
-            && let Some(on_path) = &mut e.objects_on_path
-        {
-            on_path.transform(a);
-        }
+        // The path the objects are attached to, before it is transformed.
+        let on_path_before = self.on_path_data().cloned();
         if !self.is_layer() {
             self.bbox_angle = crate::orient::transformed_angle(self.bbox_angle, a);
         }
@@ -495,6 +507,14 @@ impl Node {
             }
             NodeKind::Mesh(m) => m.transform(a),
             NodeKind::Repeat(r) => r.transform(a, *sc),
+        }
+        // The frames of the objects attached to a path move with them, and the distances along the
+        // path follow the path as it is now (a live shape's path is regenerated).
+        let on_path_after = on_path_before.as_ref().and_then(|_| self.on_path_data().cloned());
+        if let Some(e) = self.extras_if_any()
+            && let Some(on_path) = &mut e.objects_on_path
+        {
+            on_path.transform(a, on_path_before.as_ref().zip(on_path_after.as_ref()));
         }
         if let Some(m) = self.extras_if_any().and_then(|e| e.mask.as_mut())
             && m.linked

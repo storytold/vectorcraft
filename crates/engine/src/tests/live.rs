@@ -851,6 +851,28 @@ fn mesh_point_colour_move_and_undo() {
     assert!(s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": 99, "color": "#000000"})).is_err());
 }
 
+/// A mesh point's `color` with an alpha part (`#rrggbbaa` or `#rgba`) is refused and changes
+/// nothing, also when `opacity` is given and when Add Mesh Line takes it; `#rrggbb` still sets it.
+#[test]
+fn a_mesh_point_color_with_an_alpha_part_is_refused() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.execute("object.mesh.create", &json!({"rows": 1, "cols": 1})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in ["#00ff0080", "00ff0080", "#0f08"] {
+        let set = json!({"id": a.0, "index": 3, "color": bad, "opacity": 0.5});
+        assert!(s.execute("object.mesh.setPointColor", &set).is_err(), "{bad}");
+        assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 50, "y": 50, "color": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(*s.doc().unwrap().doc, *before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": 3, "color": "#00ff00"})).unwrap();
+    assert_eq!(mesh_of(&s, a).points[3].color.to_hex(), "#00ff00");
+    s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 50, "y": 50, "color": "#00ff00"})).unwrap();
+}
+
 /// `object.mesh.movePoints` moves just the points it names (their handles with them), over one or
 /// several meshes, as one undo step; `object.mesh.setPointColor` colours and fades several points
 /// alike. A bad index, a non-number or a move past the coordinate range fails and changes nothing
@@ -1038,6 +1060,42 @@ fn mesh_create_at_point_single_undo() {
     // Mesh boundary follows the ellipse.
     let b = node(&s, a).geometric_bounds().unwrap();
     assert!(b.x0 > -3.0 && b.x1 < 103.0, "{b:?}");
+}
+
+/// Create Gradient Mesh with an `at` the new mesh can't place its lines at (outside the object,
+/// or past `tolerance`) is an error that leaves the path a path; within `tolerance` it adds them.
+#[test]
+fn mesh_create_at_a_point_outside_keeps_the_path() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    let n = undo_len(&s);
+    for p in [json!({"at": [300, 300]}), json!({"at": [50, 103]}), json!({"at": [50, 110], "tolerance": 3})] {
+        let r = s.execute("object.mesh.create", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "point is outside the object"), "{p}: {r:?}");
+        assert!(matches!(node(&s, a).kind, NodeKind::Path { .. }), "{p}: still a path");
+    }
+    assert_eq!(undo_len(&s), n, "nothing changed");
+    let r = s.execute("object.mesh.create", &json!({"at": [50, 102], "tolerance": 3})).unwrap();
+    let m = mesh_of(&s, a);
+    assert_eq!((m.rows, m.cols), (1, 2), "a column through the bottom edge");
+    assert!(m.points[r["index"].as_u64().unwrap() as usize].p.distance(Point::new(50.0, 100.0)) < 0.5);
+}
+
+/// With several objects selected, Create Gradient Mesh at a point turns the objects that hold the
+/// point into meshes in one undo step and leaves the others paths, without an error.
+#[test]
+fn mesh_create_at_a_point_inside_one_of_two_objects_converts_only_that_one() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 0.0, 300.0, 100.0);
+    sel(&mut s, &[a, b]);
+    let n = undo_len(&s);
+    let r = s.execute("object.mesh.create", &json!({"at": [50, 50]})).unwrap();
+    assert_eq!(r["ids"], json!([a.0]), "{r}");
+    assert!(matches!(node(&s, a).kind, NodeKind::Mesh(_)), "a holds the point");
+    assert!(matches!(node(&s, b).kind, NodeKind::Path { .. }), "b stays a path");
+    assert_eq!(undo_len(&s), n + 1, "one undo step");
 }
 
 #[test]

@@ -1,8 +1,15 @@
 //! The Type tools: Type (T), Area Type and Type on a Path.
 //!
 //! Type: click places point type, drag draws an area-type frame, clicking into existing text
-//! places the caret. Area Type / Type on a Path: click a path to turn it into a text frame or a
-//! baseline (`text.createInPath`). While type is being edited, a click that lands on no type only
+//! places the caret, and a click on a path's outline makes type in or along it: area type inside a
+//! closed path and type on a path along an open one, as the reference app's Type tool does ("Select
+//! the Type tool […] and click anywhere on the object's path", [Create text](https://web.archive.org/web/20220127090642/https://helpx.adobe.com/illustrator/using/creating-text.html);
+//! "To create horizontal text along a path, select the Type tool or the Type On A Path tool […] If
+//! the path is closed, rather than open, you must use the Type On A Path tool", [Create type on a
+//! path](https://web.archive.org/web/20220127090635/https://helpx.adobe.com/illustrator/using/creating-type-path.html)),
+//! Alt or not: type along a closed path stays with Type on a Path.
+//! Area Type / Type on a Path: click a path to turn it into a text frame or a baseline
+//! (`text.createInPath`). While type is being edited, a click that lands on no type only
 //! ends the editing, and the next click makes new type. Point type placed by a click and left
 //! empty is discarded when editing ends (`text.discardEmpty`); frames keep their shape. Where new
 //! type goes (the click, the frame's corners) snaps to Smart Guides ([`DrawSnap`]), hovering too.
@@ -44,8 +51,8 @@ mod tool;
 use plain::char_range_to_bytes;
 use plain::common_affixes;
 pub use plain::step_key;
-pub(crate) use ports::port_at;
 pub use ports::{PORT_RISE_PX, PORTS_MAX, Port, PortMarks, PortState, port_centre, port_states, ported, ports_shown, push_port, thread_ports};
+pub(crate) use ports::{port_at, port_near};
 
 /// Which of the Type tools this is.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -64,6 +71,9 @@ struct Typing {
     /// previewed span starts no later, so Return at a paragraph's end splits that paragraph (its
     /// style continues), not the next one.
     lo: usize,
+    /// The other frames of the story whose text the session removed: it began by replacing the
+    /// whole story that Select All selected ([`TypeTool::story`]).
+    clear: Vec<NodeId>,
 }
 
 /// IME marked text inside the typing session, not yet committed.
@@ -164,6 +174,10 @@ pub struct TypeTool {
     /// Caret and selection anchor (byte offsets into the plain text).
     caret: usize,
     anchor: usize,
+    /// After Select All in a frame of threaded text: the story's frames in thread order, the edited
+    /// one included. While the selection is the edited frame's whole text, the text of the other
+    /// frames is selected too. Empty otherwise.
+    story: Vec<NodeId>,
     /// Horizontal position kept by Up/Down (text space).
     goal_x: Option<f64>,
     typing: Option<Typing>,
@@ -182,6 +196,8 @@ pub struct TypeTool {
     snap: DrawSnap,
     /// The press landed in the edited text: dragging selects.
     selecting: bool,
+    /// This saves the edit target, caret, and anchor until the press ends.
+    before_press: Option<BeforePress>,
     /// Click counting for double/triple click (position of the last click, count).
     clicks: (Option<Point>, u8),
     /// Styled copy of the last copied range (pasting the same plain text keeps its styles).
@@ -201,16 +217,30 @@ pub struct TypeTool {
     cache: Mutex<Option<CachedLayout>>,
 }
 
+struct BeforePress {
+    editing: Option<NodeId>,
+    fresh: Option<NodeId>,
+    caret: usize,
+    anchor: usize,
+}
+
 impl TypeTool {
-    pub(super) fn step_attribute(&mut self, key: ToolKey, mods: Mods, a: usize, b: usize, vertical: bool) -> Option<Vec<Action>> {
+    pub(super) fn step_attribute(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods, a: usize, b: usize, vertical: bool) -> Option<Vec<Action>> {
         if !mods.alt {
             return None;
         }
         let id = self.editing?;
         let (attribute, by) = plain::step_key(key, mods.shift, a == b, vertical)?;
+        let story = !self.story_others(cx).is_empty();
         let mut out = self.commit();
         let by = if mods.cmd { by * 5.0 } else { by };
-        out.push(Action::Exec("type.step".into(), json!({"id": id.0, "start": a, "end": b, "attribute": attribute, "by": by})));
+        // With the whole story selected, `type.step` steps the text of every frame of it.
+        let p = if story {
+            json!({"attribute": attribute, "by": by})
+        } else {
+            json!({"id": id.0, "start": a, "end": b, "attribute": attribute, "by": by})
+        };
+        out.push(Action::Exec("type.step".into(), p));
         Some(out)
     }
     pub fn new(id: &str) -> Self {
@@ -359,6 +389,7 @@ impl TypeTool {
             out.push(Action::Exec("text.discardEmpty".into(), json!({"id": id.0})));
         }
         self.editing = None;
+        self.story.clear();
         self.selecting = false;
         self.goal_x = None;
         out
@@ -372,8 +403,12 @@ impl TypeTool {
             return vec![];
         };
         let mut out = vec![];
+        // The whole story is selected: the edit replaces it, so the other frames' text goes too, in
+        // a typing session of its own.
+        let others = self.story_others(cx);
+        self.story.clear();
         // The document changed under us (undo, a panel edit): start a new session.
-        if self.typing.as_ref().is_some_and(|ty| ty.cur != t.runs) {
+        if self.typing.as_ref().is_some_and(|ty| ty.cur != t.runs || !others.is_empty()) {
             out.push(Action::Commit);
             self.typing = None;
             self.preedit = None;
@@ -383,7 +418,7 @@ impl TypeTool {
             out.push(Action::Begin("Typing".into()));
             self.typing_ended = false;
         }
-        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX });
+        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX, clear: others });
         let len = edit::runs_len(&ty.cur);
         let (a, b) = (self.caret.min(self.anchor).min(len), self.caret.max(self.anchor).min(len));
         ty.lo = ty.lo.min(a);
@@ -400,9 +435,22 @@ impl TypeTool {
         let (p, s) = common_affixes(&base, &cur, ty.lo);
         let runs = edit::slice_runs(&ty.cur, p, cur.len() - s);
         let runs = if runs.is_empty() { json!([]) } else { serde_json::to_value(&runs).unwrap_or(json!([])) };
-        out.push(Action::Preview("text.editRange".into(), json!({"id": id.0, "start": p, "end": base.len() - s, "runs": runs})));
+        out.push(Action::Preview("text.editRange".into(), edit_range_params(id, p, base.len() - s, runs, &ty.clear)));
         self.note_edit(fresh, id, (&base, base.len() - s), (&cur, cur.len() - s));
         out
+    }
+
+    /// The other frames whose whole text is selected along with the edited frame's after Select
+    /// All in threaded text ([`Self::story`]): none once the selection is not all of the edited
+    /// frame's text.
+    fn story_others(&self, cx: &ToolContext) -> Vec<NodeId> {
+        let Some(id) = self.editing.filter(|id| self.story.contains(id)) else { return vec![] };
+        let Some(t) = Self::text(cx, id) else { return vec![] };
+        let (a, b) = self.sel();
+        if a != 0 || b < edit::runs_len(&t.runs) {
+            return vec![];
+        }
+        self.story.iter().copied().filter(|f| *f != id && Self::text(cx, *f).is_some()).collect()
     }
 
     /// Move the caret (Shift keeps the anchor). Moving ends the typing session.
@@ -413,6 +461,7 @@ impl TypeTool {
             self.anchor = byte;
         }
         self.listed = None;
+        self.story.clear();
         out
     }
 
@@ -426,6 +475,7 @@ impl TypeTool {
         self.known = None;
         self.caret = caret;
         self.anchor = caret;
+        self.story.clear();
         self.goal_x = None;
         self.typing = None;
         self.preedit = None;
@@ -506,6 +556,7 @@ impl TypeTool {
     /// leaves the caret and the selection where they are, within the text.
     fn after_history_step(&mut self, cx: &ToolContext, undo: bool) {
         self.stepped = true;
+        self.story.clear();
         let Some(id) = self.editing else { return };
         let Some(text) = Self::text(cx, id).map(TextObject::plain_text) else { return };
         match self.known.take() {
@@ -605,16 +656,31 @@ impl TypeTool {
     fn select_word_or_para(&mut self, cx: &ToolContext, para: bool) {
         let s = self.plain(cx);
         let r = if para { edit::paragraph_at(&s, self.caret) } else { edit::word_at(&s, self.caret) };
+        self.story.clear();
         self.anchor = r.start;
         self.caret = r.end;
     }
 
-    /// Path under `p` for the Area Type / Type on a Path tools.
-    fn path_at(cx: &ToolContext, p: Point, closed: bool) -> Option<NodeId> {
-        let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { tol: cx.tol(4.0), outline: true, ..Default::default() })?;
+    /// The path whose outline is under `p`, and whether it is closed: within the isolated group
+    /// being edited, and no guide while guides are hidden or locked ([`ToolContext::hit_options`]).
+    fn path_at(cx: &ToolContext, p: Point) -> Option<(NodeId, bool)> {
+        let h = hit_test(cx.doc, p, vectorcraft_doc::hit::HitOptions { tol: cx.tol(4.0), outline: true, ..cx.hit_options() })?;
         match &cx.doc.node(h.leaf)?.kind {
-            NodeKind::Path { path, .. } if !closed || path.is_closed() => Some(h.leaf),
+            NodeKind::Path { path, .. } => Some((h.leaf, path.is_closed())),
             _ => None,
+        }
+    }
+
+    /// What a click at `p` with the tool acting as `mode` makes of the path there: the path, and
+    /// whether the type goes along it (else inside it); None when it makes no type in a path. The
+    /// Type tools set type inside a closed path and along an open one; Area Type needs a closed
+    /// path and Type on a Path takes either.
+    fn in_path(cx: &ToolContext, p: Point, mode: Mode) -> Option<(NodeId, bool)> {
+        let (id, closed) = Self::path_at(cx, p)?;
+        match mode {
+            Mode::Type => Some((id, !closed)),
+            Mode::Area => closed.then_some((id, false)),
+            Mode::OnPath => Some((id, true)),
         }
     }
 
@@ -660,18 +726,17 @@ impl TypeTool {
         if was_editing && area.is_none() {
             return out;
         }
-        // Area Type / Type on a Path: click a path.
-        if mode != Mode::Type && drag.is_none() {
-            let on_path = mode == Mode::OnPath;
-            if let Some(pid) = Self::path_at(cx, start, !on_path) {
-                let mode = if on_path { "onPath" } else { "area" };
-                out.push(Action::Exec(
-                    "text.createInPath".into(),
-                    json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": vertical, "placeholder": cx.placeholder_text}),
-                ));
-                out.push(Action::Notify("text.editNew".into()));
-                return out;
-            }
+        // A click on a path: type in it or along it.
+        if drag.is_none()
+            && let Some((pid, on_path)) = Self::in_path(cx, start, mode)
+        {
+            let mode = if on_path { "onPath" } else { "area" };
+            out.push(Action::Exec(
+                "text.createInPath".into(),
+                json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": vertical, "placeholder": cx.placeholder_text}),
+            ));
+            out.push(Action::Notify("text.editNew".into()));
+            return out;
         }
         let mut params = match area {
             Some(r) => {
@@ -736,7 +801,7 @@ impl TypeTool {
             p.range.end = shift(p.range.end.min(len));
         }
         self.goal_x = None;
-        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX });
+        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX, clear: vec![] });
         // Delete from the end so earlier offsets stay valid; each call floors to a char boundary
         // and the one Preview below still makes the whole session one undo step.
         for &(a, b) in sorted.iter().rev() {
@@ -749,10 +814,20 @@ impl TypeTool {
         let (p, s) = common_affixes(&base, &cur, ty.lo);
         let runs = edit::slice_runs(&ty.cur, p, cur.len() - s);
         let runs = if runs.is_empty() { json!([]) } else { serde_json::to_value(&runs).unwrap_or(json!([])) };
-        out.push(Action::Preview("text.editRange".into(), json!({"id": id.0, "start": p, "end": base.len() - s, "runs": runs})));
+        out.push(Action::Preview("text.editRange".into(), edit_range_params(id, p, base.len() - s, runs, &ty.clear)));
         self.note_edit(fresh, id, (&base, base.len() - s), (&cur, cur.len() - s));
         out
     }
+}
+
+/// The params of a typing session's `text.editRange` preview: bytes `start..end` of `id` become
+/// `runs`, and the text of the frames in `clear` goes.
+fn edit_range_params(id: NodeId, start: usize, end: usize, runs: Value, clear: &[NodeId]) -> Value {
+    let mut p = json!({"id": id.0, "start": start, "end": end, "runs": runs});
+    if !clear.is_empty() {
+        p["clear"] = json!(clear.iter().map(|f| f.0).collect::<Vec<_>>());
+    }
+    p
 }
 
 #[cfg(test)]

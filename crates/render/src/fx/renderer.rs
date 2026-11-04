@@ -378,6 +378,9 @@ impl Renderer {
 
     /// What [`Self::draw_object_fx`] draws inside the object's transparency group.
     fn draw_object_fx_art(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
+        if !self.charge_fx_instance(f.doc, a) {
+            return;
+        }
         let art = self.fx_art(f.doc, a, cache);
         // Art the cache did not keep is made again in the next frame.
         let kept = cache && self.fx_arts.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &art));
@@ -408,6 +411,19 @@ impl Renderer {
             _ => self.draw_fx_art(ctx, f, a, &art),
         }
         self.made_again = outer;
+    }
+
+    /// Whether the frame has room for the art of `a` when it is a symbol instance, charged to the
+    /// frame's symbol budget as an instance without effects is (`draw_node`): an instance whose
+    /// effects reshape its art draws through here, and nested instances would otherwise expand
+    /// without a limit. True for any other object.
+    pub(crate) fn charge_fx_instance(&mut self, doc: &vectorcraft_doc::Document, a: &Node) -> bool {
+        let NodeKind::SymbolInstance { symbol, .. } = &a.kind else { return true };
+        let count = doc.symbols.iter().find(|s| &s.name == symbol).map_or(0, |s| s.art.count() as u64);
+        let mut used = self.symbol_nodes;
+        let room = vectorcraft_doc::charge_symbol_art(&mut used, count, || ((), count)).is_some();
+        self.symbol_nodes = used;
+        room
     }
 
     /// The art [`Self::draw_object_fx`] draws for `a` (cached by `Arc` identity when `cache`):

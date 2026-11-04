@@ -230,6 +230,48 @@ fn curves_and_a_circle_crossed_by_a_line() {
     assert_eq!(edges.iter().filter(|e| e.key == 0).count(), 2, "two arcs");
 }
 
+/// Coincident curved boundaries retain the fill coverage of the regions they separate.
+#[test]
+fn coincident_curves_keep_their_source_faces() {
+    fn check(diameter: f64, offset: f64, rule: FillRule, reverse: bool, swap: bool) {
+        let mut ring = circle(0.5 * diameter, 0.5 * diameter, 0.5 * diameter, 0);
+        let mut hole = circle(0.5 * diameter, 0.5 * diameter, 0.3 * diameter, 1).path;
+        hole.reverse();
+        ring.path.subpaths.extend(hole.subpaths);
+        ring.rule = rule;
+        let mut disk = circle(0.5 * diameter + offset, 0.5 * diameter, 0.3 * diameter, 1);
+        disk.rule = rule;
+        if reverse {
+            ring.path.reverse();
+            disk.path.reverse();
+        }
+        let shapes = if swap { vec![disk, ring] } else { vec![ring, disk] };
+        let (faces, _) = live_paint(&shapes);
+        let label = format!("diameter={diameter}, offset={offset}, rule={rule:?}, reverse={reverse}, swap={swap}");
+        for (x, source) in [(0.1 * diameter, usize::from(swap)), (0.5 * diameter, usize::from(!swap))] {
+            let covering = at(&faces, x, 0.5 * diameter);
+            assert_eq!(covering.len(), 1, "{label}: {covering:?}");
+            assert_eq!(covering[0].sources, [source], "{label}");
+        }
+        if offset == 0.0 {
+            assert_eq!(faces.len(), 2, "{label}");
+            let ring_face = at(&faces, 0.1 * diameter, 0.5 * diameter)[0];
+            assert_eq!(ring_face.path.subpaths.len(), 2, "{label}: the ring keeps its hole");
+        }
+    }
+    for diameter in [1.0, 0.5, 2.0, 100.0] {
+        for offset in [0.0, 0.025, -0.025] {
+            for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+                for reverse in [false, true] {
+                    for swap in [false, true] {
+                        check(diameter, offset, rule, reverse, swap);
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn a_line_ending_on_an_edge_splits_the_shape() {
     let s = [line((90.0, 20.0), (70.0, 10.0), 0), rect(80.0, 10.0, 90.0, 50.0, 1)];
@@ -381,6 +423,25 @@ fn shape_builder_lines_cut_regions() {
     assert_eq!(regions.len(), 1);
     assert!(regions[0].sources.is_empty() && regions[0].top().is_none());
     assert_eq!(lines.len(), 9);
+}
+
+#[test]
+fn shape_builder_keeps_the_pieces_of_a_line_under_an_outline_in_front() {
+    // A line whose left half lies under the bottom edge of a rectangle in front of it.
+    let s = [line((0.0, 50.0), (200.0, 50.0), 0), rect(0.0, 0.0, 100.0, 50.0, 1)];
+    let BuilderArrangement { lines, edges, lines_under, .. } = shape_builder(&s, true);
+    let span = |l: &Shape| l.path.bounds().map(|b| (b.x0, b.x1));
+    assert_eq!(lines.iter().map(span).collect::<Vec<_>>(), [Some((100.0, 200.0))], "{lines:?}");
+    assert_eq!(lines_under.iter().map(span).collect::<Vec<_>>(), [Some((0.0, 100.0))], "{lines_under:?}");
+    assert!(lines.iter().chain(&lines_under).all(|l| l.key == 0));
+    // The rectangle's outline keeps its edge there.
+    assert!(!edges.is_empty() && edges.iter().all(|e| e.key == 1 && e.path.bounds() == Some(Rect::new(0.0, 0.0, 100.0, 50.0))), "{edges:?}");
+    // Live Paint keeps one edge there, the front-most input's.
+    let (_, pieces) = live_paint(&s);
+    assert!(!pieces.iter().any(|p| p.key == 0 && p.path.bounds().is_some_and(|b| b.x1 <= 100.0)), "{pieces:?}");
+    // A line in front of the outline has no pieces under it.
+    let s = [rect(0.0, 0.0, 100.0, 50.0, 0), line((0.0, 50.0), (200.0, 50.0), 1)];
+    assert!(shape_builder(&s, true).lines_under.is_empty());
 }
 
 #[test]
