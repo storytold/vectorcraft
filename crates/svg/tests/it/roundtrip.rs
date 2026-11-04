@@ -600,7 +600,9 @@ fn import_basic_shapes() {
     assert!(s.contains("<rect "), "{s}");
     assert!(s.contains("<circle "), "{s}");
     assert!(s.contains("<ellipse "), "{s}");
-    assert!(s.contains("<path "), "a polygon stays a path: {s}");
+    assert!(s.contains("<polygon "), "a straight triangle stays a polygon: {s}");
+    assert!(s.contains("<polyline "), "{s}");
+    assert!(s.contains("<line "), "{s}");
 }
 
 #[test]
