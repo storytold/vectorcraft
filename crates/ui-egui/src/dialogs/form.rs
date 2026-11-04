@@ -633,7 +633,17 @@ fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, cur: &
             let typed = crate::widgets::text_field_named(ui, ("plugin-list", k), Some(label), Some(&number_list_text(cur)), 160.0, 1);
             (typed.and_then(|text| read_number_list(&text, spec)), false)
         }
+        ParamSpec::Color { .. } => (plugin_color_button(ui, ("plugin-color", k), cur), false),
     }
+}
+
+/// A plug-in `color` parameter's button, showing `cur` (a color object or hex) and opening the color
+/// picker → the color picked, as the color object the plug-in gets.
+pub(crate) fn plugin_color_button(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, cur: &Value) -> Option<Value> {
+    let [r, g, b, _] = vectorcraft_plugins::manifest::color_value(cur).unwrap_or_default().to_rgba8(1.0);
+    let mut rgb = [r, g, b];
+    let changed = ui.push_id(id, |ui| ui.color_edit_button_srgb(&mut rgb).changed()).inner;
+    changed.then(|| serde_json::to_value(vectorcraft_color::Color::rgb8(rgb[0], rgb[1], rgb[2])).unwrap_or_default())
 }
 
 /// A `numberList` value as its field shows it: "45, 135".
@@ -790,7 +800,8 @@ pub(super) fn slider_rail_named(
     range: std::ops::RangeInclusive<f64>,
     track: &dyn Fn(f32) -> egui::Color32,
 ) {
-    let shown = crate::widgets::SliderValue::number(d.f64(key, 0.0), range.clone());
+    // Whole numbers, as a drag sets them.
+    let shown = crate::widgets::SliderValue { decimals: Some(0), ..crate::widgets::SliderValue::number(d.f64(key, 0.0), range.clone()) };
     slider_rail_valued(ui, d, key, name, range, Some(shown), track);
 }
 
@@ -813,8 +824,9 @@ pub(super) fn slider_rail_valued(
     let units = shown.as_ref().map(|s| s.range.clone());
     let (dragged, _, keyed) =
         crate::widgets::color_slider_stepped(ui, ("dlg-slider", key), name, shown, ((v - min) / (max - min)) as f32, SLIDER_WIDTH, track);
-    let keyed =
-        keyed.zip(units).map(|(k, u)| if u == range { k } else { (min + (k - u.start()) / (u.end() - u.start()) * (max - min)).clamp(min, max) });
+    // Not clamped to the rail: a screen reader's set value can reach a number past it that the
+    // field holds.
+    let keyed = keyed.zip(units).map(|(k, u)| if u == range { k } else { min + (k - u.start()) / (u.end() - u.start()) * (max - min) });
     if let Some(n) = dragged.map(|x| (min + x as f64 * (max - min)).round()).or(keyed).filter(|n| *n != held) {
         d.fields.insert(key.into(), json!(n));
     }

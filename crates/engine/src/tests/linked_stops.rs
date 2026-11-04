@@ -321,3 +321,19 @@ fn spot_gradients_drawn_as_images_warn() {
     assert!(pdf.contains("/Subtype/Image") && !pdf.contains("/Separation"), "a process Perceptual gradient");
     assert!(!spot_warning(&warnings), "{warnings:?}");
 }
+
+#[test]
+fn freeform_gradients_without_points_warn_about_spot_stops() {
+    let (mut s, id) = setup();
+    run(&mut s, "paint.editGradient", with(ink_to_white(100.0), json!({"kind": "freeform"})));
+    // A freeform field with no points of its own: the colors come from the stops, the first
+    // linked to the spot swatch.
+    let mut g = gradient(&s, id);
+    g.freeform = Some(vectorcraft_color::Freeform::default());
+    g.gradient.stops[0].swatch = Some("Ink".into());
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    d.node_mut(id).unwrap().appearance.set_fill(Paint::Gradient(Box::new(g)));
+    let (pdf, warnings) = pdf_of(&s);
+    assert!(pdf.contains("/Subtype/Image"), "an image");
+    assert!(warnings.iter().any(|w| w.contains("spot colors in gradients exported as images")), "{warnings:?}");
+}

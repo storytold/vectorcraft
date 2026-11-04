@@ -317,10 +317,10 @@ fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
 }
 
 /// The check marks of the Kerning menu's Auto and Optical entries for the selection's kerning
-/// `mode` (Optical on, manual value). A selection that mixes modes checks neither, and the menu
-/// still lists both.
+/// `mode` (Optical on, manual value). A manual value checks neither, as it sets the spacing even
+/// with Optical on. A selection that mixes modes checks neither, and the menu still lists both.
 fn kerning_methods(mode: Option<(bool, Option<f64>)>) -> (Option<bool>, Option<bool>) {
-    let (automatic, optical) = mode.map_or((false, false), |(optical, manual)| (!optical && manual.is_none(), optical));
+    let (automatic, optical) = mode.map_or((false, false), |(optical, manual)| (!optical && manual.is_none(), optical && manual.is_none()));
     (Some(automatic), Some(optical))
 }
 

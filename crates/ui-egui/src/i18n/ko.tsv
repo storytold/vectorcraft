@@ -1409,6 +1409,11 @@ digits	Malayalam	말라얄람어
 	Double-click to edit the characters' paint	더블클릭하여 문자의 색 편집
 	Click to edit	클릭하여 편집
 	Double-click to edit	더블클릭하여 편집
+	Alternates for Current Selection	현재 선택 항목의 대체 글리프
+	Select a character with the Type tool to see its alternates.	문자 도구로 문자를 선택하면 대체 글리프가 표시됩니다.
+	The selected character's font is not available.	선택한 문자의 글꼴을 사용할 수 없습니다.
+	No alternates for the selected character.	선택한 문자의 대체 글리프가 없습니다.
+	Double-click to replace	더블클릭하여 바꾸기
 	Double-click to insert	더블클릭하여 삽입
 	Double-click to rename	더블클릭하여 이름 변경
 	Double-click to target the contents	더블클릭하여 내용 선택
@@ -3377,6 +3382,12 @@ mark-style	Japanese	일본식
 	to	~
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder}에 파일 {n}개 {note}. 패키지 폴더를 표시하시겠습니까?
 @plural	{n} linked file not found|{n} linked files not found	연결된 파일 {n}개를 찾을 수 없습니다
+@msgplural	{n} linked file not found|{n} linked files not found	연결된 파일 {n}개를 찾을 수 없습니다
+@msg	fonts not copied: {fonts}	복사되지 않은 글꼴: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(연결된 파일 {n}개를 찾을 수 없습니다)
+@msg	(fonts not copied: {fonts})	(복사되지 않은 글꼴: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	복사되지 않은 글꼴: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	이 문서를 저장한 이후 연결된 이미지 {n}개가 변경되었습니다. 새 버전을 표시하시겠습니까?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	연결된 이미지 {n}개가 디스크에서 변경되었습니다. 새 버전을 표시하시겠습니까?
@@ -5908,3 +5919,13 @@ breakText	Glyphs	글리프
 	Spike	뾰족한 모양
 	Skip Spaces	공백 건너뛰기
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	아트워크가 너무 커서 이미지로 복사할 수 없습니다: 다른 앱에는 PNG가 전달되지 않습니다
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	아트보드로 선택
+	Select by Artboards…	아트보드로 선택…
+	Selection Tools	선택 도구
+	Search artboards	아트보드 검색
+	Fully Inside	완전히 안쪽
+	Fully Outside	완전히 바깥쪽
+	No artboards match.	일치하는 아트보드가 없습니다.
+	Chosen: {n} of {total}	선택됨: {n} / {total}

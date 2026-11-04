@@ -2733,6 +2733,16 @@ fn editing_text() -> String {
         square(40),
         "50 10 m 60 10 L 60 20 L 50 20 L h W f".into(),
         "Q".into(),
+        // Transparency: a path's, a group's state block, and an object's opacity mask.
+        "0 0 1 0 k\n2 0.5 0 0 1 Xy".into(),
+        square(86),
+        "0 Ae\nu".into(),
+        square(90),
+        "U\n0 0.4 1 1 1 Xy\n0 0 Xd\n6 () XW".into(),
+        square(94),
+        "%_/ArtDictionary :\n%_/Mask :\n%_X=\n%_0 g\n%_94 10 m\n%_98 10 L\n%_98 14 L\n%_f\n%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n\
+         %_0 /Bool (Inverted) ,\n%_0 /Bool (Disabled) ,\n%_1 /Bool (Linked) ,\n%_; (AI9_Mask) ,\n%_;"
+            .into(),
         // Smooth and corner anchors by the case of each segment's operator, back to the start.
         "10 50 m 20 60 30 50 40 50 c 45 50 50 55 v 55 60 60 60 Y 60 50 l 50 40 30 40 10 50 C s".into(),
         "70 50 m 80 50 l 80 60 L 70 60 y h S".into(),
@@ -2761,7 +2771,8 @@ fn editing_text() -> String {
     format!(
         "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n{PATTERN}{PALETTE}{}{}%%Trailer\n",
         layer("One", 1, &format!("{body}\n{}", layer("Sub", 1, &square(70)))),
-        layer("Two", 0, &square(80))
+        // A layer's own state block after its last compound path.
+        layer("Two", 0, &format!("{}\n*u\n{}\n{}\n*U\n1 0.6 1 2 1 Xy\n0 0 Xd\n7 () XW", square(80), square(84), square(88)))
     )
 }
 

@@ -34,7 +34,8 @@ pub(crate) struct SGlyph {
     pub dx: f64,
     pub dy: f64,
     /// Right to left: the run's manual kerning, which moves the glyph right along the baseline,
-    /// outside its Character Rotation. 0 otherwise.
+    /// outside its Character Rotation; with whole-point advances, the difference the kerning makes
+    /// to the cluster's rounded advance. 0 otherwise.
     pub kern_shift: f64,
     /// Outline scale (font units -> points).
     pub sx: f64,
@@ -742,6 +743,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         font_height_reference,
         no_break,
         language,
+        glyph_alternate,
     } = a;
     *font_family == b.font_family
         && *font_style == b.font_style
@@ -760,6 +762,10 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         && *font_height_reference == b.font_height_reference
         && *no_break == b.no_break
         && *language == b.language
+        // A choice applies to the first character of its source run. Even equal choices on
+        // neighboring runs must shape separately so ligatures cannot absorb either character.
+        && glyph_alternate.is_none()
+        && b.glyph_alternate.is_none()
         && ligatures_suppressed_by(*tracking) == ligatures_suppressed_by(b.tracking)
 }
 
@@ -1135,15 +1141,75 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     if !inside_clusters.is_empty() {
         return shape_apart(inside_clusters, out);
     }
+    // A run's chosen character that the font joins with the characters after it in the run (an f
+    // with a chosen glyph in a `fi` ligature) is shaped apart from them, so the choice is drawn.
+    // A character that starts a longer grapheme (a letter with combining marks, a Hangul syllable
+    // of jamo) stays whole.
+    let ligated: Vec<usize> = runs
+        .get(source_runs.clone())
+        .unwrap_or_default()
+        .iter()
+        .filter(|(r, s)| {
+            let ch = first_char(r.start);
+            s.glyph_alternate.as_ref().is_some_and(|c| face.draws(c, ch)) && !upper && s.digits.map(ch) == ch && range.contains(&r.start)
+        })
+        .map(|(r, _)| {
+            let grapheme = text.get(r.start..).and_then(|s| s.graphemes(true).next()).map_or(0, str::len);
+            (r.start + first_char(r.start).len_utf8(), r.start + grapheme, r.end)
+        })
+        .filter(|&(b, grapheme_end, end)| b == grapheme_end && b < end && b < range.end && cluster_starts.binary_search(&b).is_err())
+        .map(|(b, ..)| b)
+        .collect();
+    if !ligated.is_empty() {
+        return shape_apart(ligated, out);
+    }
     let n = raw.len();
+    // Cluster end: the next larger cluster value in the segment, else the segment end.
+    let cluster_end = |cl: usize| cluster_starts.get(cluster_starts.partition_point(|&c| c <= cl)).copied().unwrap_or(range.end);
+    // A glyph chosen for the run's first character replaces the one glyph shaped for it alone,
+    // drawn as typed (not All Caps, Small Caps or another numeral system), in the face the choice
+    // names.
+    let chosen_at = |gi: usize| {
+        let cl = raw[gi].1 as usize;
+        let (run, gst) = run_at(cl);
+        let ch = first_char(cl);
+        let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
+        let alone = last_in_cluster && (gi == 0 || raw[gi - 1].1 as usize != cl) && cluster_end(cl).saturating_sub(cl) == ch.len_utf8();
+        gst.glyph_alternate
+            .as_ref()
+            .filter(|c| alone && !upper && gst.digits.map(ch) == ch && runs.get(run).is_some_and(|(r, _)| r.start == cl) && face.draws(c, ch))
+    };
+    // The font's positioning (pair kerning, mark placement) was applied to the default glyph, not
+    // to the chosen one: a character drawn with another glyph is shaped apart from its neighbors.
+    let mut chosen_apart: Vec<usize> = (0..n)
+        .filter(|&gi| chosen_at(gi).is_some_and(|c| c.gid != raw[gi].0))
+        .flat_map(|gi| {
+            let cl = raw[gi].1 as usize;
+            [cl, cl + first_char(cl).len_utf8()]
+        })
+        .filter(|&b| b > range.start && b < range.end)
+        .collect();
+    if !chosen_apart.is_empty() {
+        chosen_apart.sort_unstable();
+        chosen_apart.dedup();
+        return shape_apart(chosen_apart, out);
+    }
     for (gi, &(gid, cl, xa, xo, yo)) in raw.iter().enumerate() {
         let cl = cl as usize;
         let (run, gst) = run_at(cl);
-        // Cluster end: the next larger cluster value in the segment, else the segment end.
-        let end = cluster_starts.get(cluster_starts.partition_point(|&c| c <= cl)).copied().unwrap_or(range.end);
+        let end = cluster_end(cl);
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);
         let mut adv = xa as f64 * k * hs;
+        // The chosen glyph takes its own advance.
+        let chosen = chosen_at(gi);
+        let gid = match chosen {
+            Some(c) => {
+                adv += (face.advance(c.gid) - face.advance(gid)) * k * hs;
+                c.gid
+            }
+            None => gid,
+        };
         let mut kern_shift = 0.0;
         if ch == SOFT_HYPHEN || ch == '\u{2028}' {
             adv = 0.0;

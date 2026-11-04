@@ -1484,6 +1484,11 @@ digits	Malayalam	Malajalam
 	Save Transparency Flattener Preset…	Zapisz ustawienie spłaszczania przezroczystości…
 	Basic Latin	Łaciński podstawowy
 	Currency & Symbols	Waluty i symbole
+	Alternates for Current Selection	Alternatywy bieżącego zaznaczenia
+	Select a character with the Type tool to see its alternates.	Zaznacz znak narzędziem Tekst, aby zobaczyć jego alternatywy.
+	The selected character's font is not available.	Czcionka zaznaczonego znaku jest niedostępna.
+	No alternates for the selected character.	Brak alternatyw dla zaznaczonego znaku.
+	Double-click to replace	Kliknij dwukrotnie, aby zastąpić
 	Double-click to insert	Kliknij dwukrotnie, aby wstawić
 	Entire Font	Cała czcionka
 	glyph {id}	glif {id}
@@ -2435,6 +2440,12 @@ digits	Malayalam	Malajalam
 	Save the document first?	Najpierw zapisać dokument?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Pliki: {n} w {folder} {note}. Pokazać folder pakietu?|Pliki: {n} w {folder} {note}. Pokazać folder pakietu?|Pliki: {n} w {folder} {note}. Pokazać folder pakietu?
 @plural	{n} linked file not found|{n} linked files not found	Nie znaleziono połączonych plików: {n}|Nie znaleziono połączonych plików: {n}|Nie znaleziono połączonych plików: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Nie znaleziono połączonych plików: {n}|Nie znaleziono połączonych plików: {n}|Nie znaleziono połączonych plików: {n}
+@msg	fonts not copied: {fonts}	nieskopiowane czcionki: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Nie znaleziono połączonych plików: {n})|(Nie znaleziono połączonych plików: {n})|(Nie znaleziono połączonych plików: {n})
+@msg	(fonts not copied: {fonts})	(nieskopiowane czcionki: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	nieskopiowane czcionki: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Wbudowane ustawienia są tylko do odczytu: Nowe… tworzy edytowalną kopię.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na obszarze kompozycji odpowiada {real} {unit} w scenie.
@@ -6182,3 +6193,13 @@ breakText	Glyphs	Glify
 	Spike	Szpic
 	Skip Spaces	Pomiń spacje
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika jest zbyt duża, aby skopiować ją jako obraz: inne aplikacje nie otrzymają jej w formacie PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Zaznacz według obszarów kompozycji
+	Select by Artboards…	Zaznacz według obszarów kompozycji…
+	Selection Tools	Narzędzia zaznaczania
+	Search artboards	Szukaj obszarów kompozycji
+	Fully Inside	Całkowicie wewnątrz
+	Fully Outside	Całkowicie na zewnątrz
+	No artboards match.	Żaden obszar kompozycji nie pasuje.
+	Chosen: {n} of {total}	Wybrano: {n} z {total}

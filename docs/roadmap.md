@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (OpenType panel offers font-defined Stylistic Sets; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Select by Artboards add-on selects by overlap, inside or outside several artboards; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -28,6 +28,8 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | Selection Tools add-on: Select by Artboards selects the objects overlapping, fully inside or fully outside several chosen artboards, from a dialog that lists, searches and multi-selects the artboards and fits one in the window on double-click (#5525, #5548, #5549, a VectorCraft addition); scores and estimates unchanged. |
+| 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen preset; Recent and Saved cards keep the units their document or preset was made in, and the built-in tabs still follow the chosen units (#2078). Scores and estimates unchanged. |
 | 2026-11-03 | minor | M1: Enclosing Lasso provides whole-object enclosure selection as an add-on with no default shortcut or Basic toolbar slot; estimates unchanged. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
@@ -158,6 +160,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen preset; Recent and Saved cards keep their own units; scores and estimates unchanged. |
 | 2026-11-03 | minor | M7: the OpenType panel offers the selected font's available Stylistic Sets with custom or numbered names; estimates unchanged. |
 | 2026-11-03 | minor | M1: Enclosing Lasso adds freehand whole-object selection under Object › Plug-ins; estimates unchanged. |
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control step selected text with the wheel (#5253), with one undo step per notch; scores and estimates unchanged. |

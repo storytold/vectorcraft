@@ -2801,6 +2801,50 @@ fn select_menu_commands_leave_out_an_isolated_group_hidden_or_locked_since() {
     assert_eq!(selected(&s), vec![]);
 }
 
+/// All on Same Layers takes the layers only of the selected objects that can be selected: an
+/// object that is hidden or locked, on a template layer, or outside the isolated group adds no
+/// layer. When the selection holds no such object, the command selects nothing.
+#[test]
+fn select_all_on_same_layers_skips_objects_that_cannot_be_selected() {
+    let mut s = session();
+    let [hidden, a] = [0.0, 20.0].map(|x| rect(&mut s, x, 0.0, 10.0, 10.0));
+    s.execute("layer.new", &json!({"top": true})).unwrap();
+    let [b, c, d] = [0.0, 20.0, 40.0].map(|x| rect(&mut s, x, 40.0, 10.0, 10.0));
+    let same = |s: &mut Session, from: &[NodeId]| {
+        sel(s, from);
+        assert_eq!(selected(s), from, "select.set keeps {from:?}");
+        s.execute("select.object.allOnSameLayers", &json!({})).unwrap();
+        let mut v = selected(s);
+        v.sort();
+        v
+    };
+    assert_eq!(same(&mut s, &[a, b]), vec![hidden, a, b, c, d]);
+    // A hidden or locked object on the first layer adds no layer.
+    for (on, off) in [
+        (json!({"id": hidden.0, "visible": false}), json!({"id": hidden.0, "visible": true})),
+        (json!({"id": hidden.0, "locked": true}), json!({"id": hidden.0, "locked": false})),
+    ] {
+        s.execute("layer.setProps", &on).unwrap();
+        assert_eq!(same(&mut s, &[hidden, b]), vec![b, c, d], "{on}");
+        s.execute("layer.setProps", &off).unwrap();
+    }
+    // An object on a template layer adds no layer.
+    let l3 = id_of(&s.execute("layer.new", &json!({"top": true})).unwrap());
+    let on_template = rect(&mut s, 0.0, 80.0, 10.0, 10.0);
+    s.execute("layer.setProps", &json!({"id": l3.0, "template": true})).unwrap();
+    assert_eq!(same(&mut s, &[on_template, b]), vec![b, c, d]);
+    // An object outside the isolated group adds no layer, even though its layer holds the group.
+    sel(&mut s, &[c, d]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    assert_eq!(same(&mut s, &[b]), vec![]);
+    assert_eq!(same(&mut s, &[c]), vec![c, d]);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    // With no object that can be selected, nothing is selected.
+    s.execute("layer.setProps", &json!({"id": hidden.0, "visible": false})).unwrap();
+    assert_eq!(same(&mut s, &[hidden, on_template]), vec![]);
+}
+
 /// The selection after command `c` runs with nothing selected.
 fn select_from_none(s: &mut Session, c: &str) -> Vec<NodeId> {
     s.execute("select.none", &json!({})).unwrap();

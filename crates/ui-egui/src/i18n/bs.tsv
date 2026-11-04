@@ -1547,6 +1547,11 @@ digits	Malayalam	Malajalam
 	Save Transparency Flattener Preset…	Sačuvaj predložak spljoštavanja prozirnosti…
 	Basic Latin	Osnovna latinica
 	Currency & Symbols	Valuta i simboli
+	Alternates for Current Selection	Alternative za trenutni odabir
+	Select a character with the Type tool to see its alternates.	Odaberite znak alatom za tekst da vidite njegove alternative.
+	The selected character's font is not available.	Font odabranog znaka nije dostupan.
+	No alternates for the selected character.	Nema alternativa za odabrani znak.
+	Double-click to replace	Dvostruki klik za zamjenu
 	Double-click to insert	Dvostruki klik za umetanje
 	Entire Font	Cijeli font
 	glyph {id}	glif {id}
@@ -2491,6 +2496,12 @@ digits	Malayalam	Malajalam
 	Save the document first?	Prvo sačuvati dokument?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Datoteka u {folder}: {n} {note}. Prikazati folder paketa?|Datoteka u {folder}: {n} {note}. Prikazati folder paketa?|Datoteka u {folder}: {n} {note}. Prikazati folder paketa?
 @plural	{n} linked file not found|{n} linked files not found	Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}
+@msg	fonts not copied: {fonts}	fontovi nisu kopirani: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Povezanih datoteka nije pronađeno: {n})|(Povezanih datoteka nije pronađeno: {n})|(Povezanih datoteka nije pronađeno: {n})
+@msg	(fonts not copied: {fonts})	(fontovi nisu kopirani: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	fontovi nisu kopirani: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Ugrađeni predlošci su samo za čitanje: Novo… započinje kopiju koja se može uređivati.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na radnoj ploči predstavlja {real} {unit} u sceni.
@@ -6210,3 +6221,13 @@ shape	Open	Otvoren
 	Spike	Šiljak
 	Skip Spaces	Preskoči razmake
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika je prevelika da bi se kopirala kao slika: druge aplikacije ne dobijaju njen PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Odabir po radnim pločama
+	Select by Artboards…	Odabir po radnim pločama…
+	Selection Tools	Alati za odabir
+	Search artboards	Pretraži radne ploče
+	Fully Inside	Potpuno unutra
+	Fully Outside	Potpuno vani
+	No artboards match.	Nijedna radna ploča ne odgovara.
+	Chosen: {n} of {total}	Odabrano: {n} od {total}

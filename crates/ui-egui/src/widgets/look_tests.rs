@@ -468,3 +468,31 @@ fn a_held_spinner_arrow_repeats() {
     frame(&ctx, 1.8, vec![], &mut add);
     assert_eq!(value.get(), 9.0, "letting go doesn't step once more");
 }
+
+/// The Kerning field reads `(10+5)` as 15 whether it shows a manual value (`12`) or an automatic
+/// one (`(12)`), and refuses `(10+5)*2` either way.
+#[test]
+fn kerning_reads_parentheses_around_its_text_with_a_manual_value_too() {
+    let typed = |automatic: bool, text: &str| {
+        let ctx = themed(Default::default());
+        let picked = std::cell::Cell::new(None);
+        let mut add = |ui: &mut Ui| {
+            ui.horizontal(|ui| {
+                if let Some(p) = spin_kerning(ui, "kern", Some(12.0), Some(automatic), Some(false), "Optical", automatic, 100.0, &[]) {
+                    picked.set(Some(p));
+                }
+            });
+        };
+        arm_field_focus(&ctx, "kern");
+        frame(&ctx, 0.0, vec![], &mut add);
+        frame(&ctx, 0.1, vec![], &mut add);
+        let enter = |pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        frame(&ctx, 0.2, vec![egui::Event::Text(text.into()), enter(true), enter(false)], &mut add);
+        frame(&ctx, 0.3, vec![], &mut add);
+        picked.get()
+    };
+    for automatic in [false, true] {
+        assert_eq!(typed(automatic, "(10+5)"), Some(SpinPick::Value(15.0)), "automatic: {automatic}");
+        assert_eq!(typed(automatic, "(10+5)*2"), None, "automatic: {automatic}");
+    }
+}

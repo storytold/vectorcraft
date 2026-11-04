@@ -991,6 +991,11 @@ font-technology	Variable	Biến thiên
 	Double-click to edit the characters' paint	Bấm đúp để chỉnh sửa màu ký tự
 	Click to edit	Bấm để chỉnh sửa
 	Double-click to edit	Bấm đúp để chỉnh sửa
+	Alternates for Current Selection	Glyph thay thế cho vùng chọn hiện tại
+	Select a character with the Type tool to see its alternates.	Chọn một ký tự bằng công cụ Chữ để xem các glyph thay thế.
+	The selected character's font is not available.	Phông chữ của ký tự đã chọn không khả dụng.
+	No alternates for the selected character.	Ký tự đã chọn không có glyph thay thế.
+	Double-click to replace	Bấm đúp để thay thế
 	Double-click to insert	Bấm đúp để chèn
 	Double-click to rename	Bấm đúp để đổi tên
 	Double-click to target the contents	Bấm đúp để chọn nội dung
@@ -4150,6 +4155,12 @@ mark-style	Japanese	Kiểu Nhật
 @plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} thư mục hoặc tệp không thể đọc được
 @plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Đã bỏ qua {n} thư mục, chẳng hạn thư mục của ứng dụng khác, thư mục hệ thống và thư mục ẩn
 @plural	{n} linked file not found|{n} linked files not found	Không tìm thấy {n} tệp liên kết
+@msgplural	{n} linked file not found|{n} linked files not found	Không tìm thấy {n} tệp liên kết
+@msg	fonts not copied: {fonts}	phông chữ chưa được sao chép: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Không tìm thấy {n} tệp liên kết)
+@msg	(fonts not copied: {fonts})	(phông chữ chưa được sao chép: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} ảnh liên kết đã thay đổi trên đĩa. Hiện phiên bản mới?
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} ảnh liên kết đã thay đổi kể từ khi lưu tài liệu. Hiện phiên bản mới?
 @plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	Còn {n} quy tắc nữa: Xuất sẽ ghi tất cả.
@@ -5928,3 +5939,13 @@ breakText	Glyphs	Glyph
 	Spike	Đỉnh nhọn
 	Skip Spaces	Bỏ qua khoảng trắng
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Hình vẽ quá lớn để sao chép dưới dạng ảnh: các ứng dụng khác không nhận được PNG của nó
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Chọn theo bảng vẽ
+	Select by Artboards…	Chọn theo bảng vẽ…
+	Selection Tools	Công cụ chọn
+	Search artboards	Tìm bảng vẽ
+	Fully Inside	Hoàn toàn bên trong
+	Fully Outside	Hoàn toàn bên ngoài
+	No artboards match.	Không có bảng vẽ nào khớp.
+	Chosen: {n} of {total}	Đã chọn: {n} trên {total}

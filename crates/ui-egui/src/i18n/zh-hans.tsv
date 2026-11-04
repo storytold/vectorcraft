@@ -798,6 +798,11 @@
 	Double-click to edit the characters' paint	双击以编辑字符的上色
 	Click to edit	单击以编辑
 	Double-click to edit	双击以编辑
+	Alternates for Current Selection	当前所选字符的替代字
+	Select a character with the Type tool to see its alternates.	使用文字工具选择一个字符以查看其替代字。
+	The selected character's font is not available.	所选字符的字体不可用。
+	No alternates for the selected character.	所选字符没有替代字。
+	Double-click to replace	双击以替换
 	Double-click to insert	双击以插入
 	Double-click to rename	双击以重命名
 	Double-click to target the contents	双击以指定内容
@@ -3637,6 +3642,12 @@ digits	Malayalam	马拉雅拉姆数字
 	Scrub Numeric Fields by Dragging	拖动以调整数值字段
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} 中有 {n} 个文件{note}。要显示打包文件夹吗？
 @plural	{n} linked file not found|{n} linked files not found	找不到 {n} 个链接文件
+@msgplural	{n} linked file not found|{n} linked files not found	找不到 {n} 个链接文件
+@msg	fonts not copied: {fonts}	未复制的字体：{fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(找不到 {n} 个链接文件)
+@msg	(fonts not copied: {fonts})	(未复制的字体：{fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	未复制的字体：{fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	自存储此文档后，有 {n} 个链接图像已更改。要显示新版本吗？
 @plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	另有 {n} 条规则：导出时会全部写出。
@@ -6168,3 +6179,13 @@ breakText	Glyphs	字形
 	Spike	尖峰
 	Skip Spaces	跳过空格
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	图稿太大，无法作为图片复制：其他应用不会获得它的 PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	按画板选择
+	Select by Artboards…	按画板选择…
+	Selection Tools	选择工具
+	Search artboards	搜索画板
+	Fully Inside	完全在内
+	Fully Outside	完全在外
+	No artboards match.	没有匹配的画板。
+	Chosen: {n} of {total}	已选：{n} / {total}

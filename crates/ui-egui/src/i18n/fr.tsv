@@ -859,6 +859,11 @@ font-technology	Variable	Variables
 	Double-click to edit the characters' paint	Double-cliquez pour modifier la peinture des caractères
 	Click to edit	Cliquez pour modifier
 	Double-click to edit	Double-cliquez pour modifier
+	Alternates for Current Selection	Variantes de la sélection
+	Select a character with the Type tool to see its alternates.	Sélectionnez un caractère avec l’outil Texte pour afficher ses variantes.
+	The selected character's font is not available.	La police du caractère sélectionné n’est pas disponible.
+	No alternates for the selected character.	Aucune variante pour le caractère sélectionné.
+	Double-click to replace	Double-cliquez pour remplacer
 	Double-click to insert	Double-cliquez pour insérer
 	Double-click to rename	Double-cliquez pour renommer
 	Double-click to target the contents	Double-cliquez pour cibler le contenu
@@ -3748,6 +3753,12 @@ digits	Malayalam	Malayalam
 	Scrub Numeric Fields by Dragging	Modifier les champs numériques en faisant glisser
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} fichier dans {folder} {note}. Afficher le dossier de l’assemblage ?|{n} fichiers dans {folder} {note}. Afficher le dossier de l’assemblage ?
 @plural	{n} linked file not found|{n} linked files not found	{n} fichier lié introuvable|{n} fichiers liés introuvables
+@msgplural	{n} linked file not found|{n} linked files not found	{n} fichier lié introuvable|{n} fichiers liés introuvables
+@msg	fonts not copied: {fonts}	polices non copiées : {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} fichier lié introuvable)|({n} fichiers liés introuvables)
+@msg	(fonts not copied: {fonts})	(polices non copiées : {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	polices non copiées : {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} image liée modifiée depuis l’enregistrement de ce document. Afficher la nouvelle version ?|{n} images liées modifiées depuis l’enregistrement de ce document. Afficher les nouvelles versions ?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} image liée modifiée sur le disque. Afficher la nouvelle version ?|{n} images liées modifiées sur le disque. Afficher les nouvelles versions ?
@@ -6322,3 +6333,13 @@ breakText	Glyphs	Glyphes
 	Spike	Pointe
 	Skip Spaces	Ignorer les espaces
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	L’illustration est trop grande pour être copiée en tant qu’image : les autres applications n’en reçoivent pas de PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Sélectionner par plans de travail
+	Select by Artboards…	Sélectionner par plans de travail…
+	Selection Tools	Outils de sélection
+	Search artboards	Rechercher des plans de travail
+	Fully Inside	Entièrement à l’intérieur
+	Fully Outside	Entièrement à l’extérieur
+	No artboards match.	Aucun plan de travail ne correspond.
+	Chosen: {n} of {total}	Choisis : {n} sur {total}

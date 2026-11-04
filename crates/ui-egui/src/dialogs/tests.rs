@@ -665,6 +665,35 @@ fn plugin_integer_field_with_small_bounds_keeps_numeric_editing() {
     }
 }
 
+/// A plug-in's `color` parameter shows as a color button filled with its value, whether the value
+/// is a color object or a hex string.
+#[test]
+fn plugin_color_parameter_shows_a_color_button() {
+    fn filled(shape: &egui::Shape, c: egui::Color32) -> bool {
+        match shape {
+            egui::Shape::Rect(r) => r.fill == c,
+            egui::Shape::Vec(shapes) => shapes.iter().any(|s| filled(s, c)),
+            _ => false,
+        }
+    }
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let m = vectorcraft_plugins::Manifest::parse(
+        br##"{"id":"test.grid","name":"Grid","kind":"filter","params":{"line":{"type":"color","default":"#000000"}}}"##,
+    )
+    .unwrap();
+    let want = egui::Color32::from_rgb(0x3a, 0x7b, 0xd5);
+    for cur in [json!({"model": "rgb", "r": 0x3a as f32 / 255.0, "g": 0x7b as f32 / 255.0, "b": 0xd5 as f32 / 255.0}), json!("#3a7bd5")] {
+        let mut d = Dialog::new(plugin::KIND, json!({ "line": cur }));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            form::schema_rows(ui, &mut d, &m);
+        });
+        out.textures_delta.clear();
+        assert!(out.shapes.iter().any(|s| filled(&s.shape, want)), "{cur}");
+    }
+}
+
 #[test]
 fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
     let mut app = app();
@@ -2013,6 +2042,102 @@ fn the_blob_brush_tip_preview_is_a_named_slider_with_arrow_keys() {
     assert_eq!(angle(&app), -45.0, "the drag ends down to the right");
     f.key(&mut app, ArrowRight, M::NONE);
     assert_eq!(angle(&app), -44.0, "the drag gives the preview the focus");
+}
+
+/// Screen readers can set the Blob Brush tip preview's Angle to a number: the slider offers the
+/// set-value action, a fraction rounds to the whole degrees the field shows, a number past -180° to
+/// 180° sets the nearer end, the last request in a frame wins, and a value that is not a finite
+/// number leaves the Angle as it is. On a field past its rail's end, a set value can go as far as
+/// the field's number.
+#[test]
+fn screen_readers_set_a_dialog_slider_number() {
+    use egui::accesskit::{Action, ActionData, ActionRequest, TreeId};
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let angle = |app: &VectorcraftApp| app.ui.dialog.as_ref().expect("Blob Brush Tool Options is open").f64("angle", f64::NAN);
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (node, ..) = slider_node(&out, "Angle");
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let advertised = nodes.iter().find(|(id, _)| *id == node).is_some_and(|(_, n)| n.supports_action(Action::SetValue));
+    assert!(advertised, "the Angle slider offers the set-value action");
+    let set = |value: f64| {
+        egui::Event::AccessKitActionRequest(ActionRequest {
+            action: Action::SetValue,
+            target_node: node,
+            target_tree: TreeId::ROOT,
+            data: Some(ActionData::NumericValue(value)),
+        })
+    };
+    f.run(&mut app, vec![set(30.0)]);
+    assert_eq!(angle(&app), 30.0);
+    f.run(&mut app, vec![set(12.4)]);
+    assert_eq!(angle(&app), 12.0, "the field shows whole degrees");
+    let shown = crate::widgets::SliderValue::field(12.5, -180.0..=180.0, "°", 0).value;
+    f.run(&mut app, vec![set(12.5)]);
+    assert_eq!(angle(&app), shown, "as the field shows 12.5");
+    f.run(&mut app, vec![set(500.0)]);
+    assert_eq!(angle(&app), 180.0, "past the end");
+    f.run(&mut app, vec![set(-12.0), set(-90.0)]);
+    assert_eq!(angle(&app), -90.0, "the last request");
+    f.run(&mut app, vec![set(f64::NAN)]);
+    assert_eq!(angle(&app), -90.0, "not a number");
+    f.run(&mut app, vec![set(30.0), set(f64::INFINITY)]);
+    assert_eq!(angle(&app), -90.0, "the last request is not a finite number");
+    let empty = ActionRequest { action: Action::SetValue, target_node: node, target_tree: TreeId::ROOT, data: None };
+    f.run(&mut app, vec![set(30.0), egui::Event::AccessKitActionRequest(empty)]);
+    assert_eq!(angle(&app), -90.0, "the last request has no number");
+    // A field past its rail's end extends the range screen readers get, and a set value can go
+    // that far: Transform Each's Horizontal Scale at 300% on a rail that ends at 200%.
+    app.ui.dialog = None;
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    crate::menus::invoke(&mut app, "object.transformEach", json!({}));
+    app.ui.dialog.as_mut().expect("Transform Each is open").fields.insert("scaleH".into(), json!(300));
+    let scale = |app: &VectorcraftApp| app.ui.dialog.as_ref().expect("Transform Each is open").f64("scaleH", f64::NAN);
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (node, ..) = slider_node(&out, "Horizontal:");
+    let set = |value: f64| {
+        egui::Event::AccessKitActionRequest(ActionRequest {
+            action: Action::SetValue,
+            target_node: node,
+            target_tree: TreeId::ROOT,
+            data: Some(ActionData::NumericValue(value)),
+        })
+    };
+    f.run(&mut app, vec![set(250.0)]);
+    assert_eq!(scale(&app), 250.0, "within the range screen readers get");
+    f.run(&mut app, vec![set(400.0)]);
+    assert_eq!(scale(&app), 250.0, "past 250%, the range's end now");
+    // The same for a Move slider in millimeters, whose rail ends at 1000 pt: with the field at
+    // 1200 pt, 400 mm sets about 1134 pt.
+    app.ui.dialog = None;
+    app.run("document.setUnits", json!({"units": "millimeters"})).unwrap();
+    crate::menus::invoke(&mut app, "object.transformEach", json!({}));
+    app.ui.dialog.as_mut().expect("Transform Each is open").fields.insert("moveH".into(), json!(1200));
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let mut horizontal = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider && n.label() == Some("Horizontal:"));
+    let (node, _) = horizontal.nth(1).expect("the Move slider named Horizontal:");
+    let request =
+        ActionRequest { action: Action::SetValue, target_node: *node, target_tree: TreeId::ROOT, data: Some(ActionData::NumericValue(400.0)) };
+    f.run(&mut app, vec![egui::Event::AccessKitActionRequest(request)]);
+    let moved = app.ui.dialog.as_ref().expect("Transform Each is open").f64("moveH", f64::NAN);
+    assert!((moved - 400.0 * 72.0 / 25.4).abs() < 1e-6, "{moved} pt");
+    // A slider without a field's places, Roughen's Detail, sets whole numbers as a drag does.
+    app.ui.dialog = None;
+    app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap();
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (node, ..) = slider_node(&out, "Detail:");
+    let request =
+        ActionRequest { action: Action::SetValue, target_node: node, target_tree: TreeId::ROOT, data: Some(ActionData::NumericValue(12.4)) };
+    f.run(&mut app, vec![egui::Event::AccessKitActionRequest(request)]);
+    assert_eq!(app.ui.dialog.as_ref().expect("Roughen is open").f64("detail", f64::NAN), 12.0);
 }
 
 #[test]

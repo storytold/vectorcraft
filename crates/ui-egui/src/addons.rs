@@ -7,6 +7,7 @@ pub mod document;
 pub mod enclosing_lasso;
 pub mod pathtools;
 pub mod pen;
+pub mod select;
 pub mod typetools;
 
 use crate::menus::Item;
@@ -20,6 +21,7 @@ pub fn plugin_menu() -> Vec<Item> {
         Item::Sub("Document Tools", document::menu()),
         Item::Sub("Enclosing Lasso", enclosing_lasso::menu()),
         Item::Sub("Path Precision Tools", pathtools::menu()),
+        Item::Sub("Selection Tools", select::menu()),
         Item::Sub("Smart Pen", pen::menu()),
         Item::Sub("Type Tools", typetools::menu()),
         Item::Sep,

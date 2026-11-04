@@ -854,6 +854,11 @@ font-technology	Variable	Вариативные
 	Double-click to edit the characters' paint	Дважды щёлкните, чтобы редактировать заливку символов
 	Click to edit	Щёлкните, чтобы редактировать
 	Double-click to edit	Дважды щёлкните, чтобы редактировать
+	Alternates for Current Selection	Альтернативы для текущего выделения
+	Select a character with the Type tool to see its alternates.	Выделите символ инструментом «Текст», чтобы увидеть его альтернативы.
+	The selected character's font is not available.	Шрифт выделенного символа недоступен.
+	No alternates for the selected character.	У выделенного символа нет альтернатив.
+	Double-click to replace	Дважды щёлкните для замены
 	Double-click to insert	Дважды щёлкните для вставки
 	Double-click to rename	Дважды щёлкните для переименования
 	Double-click to target the contents	Дважды щёлкните, чтобы выбрать содержимое как объект
@@ -3788,6 +3793,12 @@ digits	Malayalam	Малаялам
 	Scrub Numeric Fields by Dragging	Изменять числовые поля перетаскиванием
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?
 @plural	{n} linked file not found|{n} linked files not found	Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}
+@msg	fonts not copied: {fonts}	шрифты не скопированы: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Не найдено связанных файлов: {n})|(Не найдено связанных файлов: {n})|(Не найдено связанных файлов: {n})
+@msg	(fonts not copied: {fonts})	(шрифты не скопированы: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	шрифты не скопированы: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} связанное изображение изменилось с момента сохранения этого документа. Показать новую версию?|{n} связанных изображения изменились с момента сохранения этого документа. Показать новые версии?|{n} связанных изображений изменились с момента сохранения этого документа. Показать новые версии?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} связанное изображение изменилось на диске. Показать новую версию?|{n} связанных изображения изменились на диске. Показать новые версии?|{n} связанных изображений изменились на диске. Показать новые версии?
@@ -6416,3 +6427,13 @@ shape	Open	Открытый
 	Spike	Пик
 	Skip Spaces	Пропускать пробелы
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графика слишком велика для копирования в виде изображения: другие приложения не получат её PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Выделить по монтажным областям
+	Select by Artboards…	Выделить по монтажным областям…
+	Selection Tools	Инструменты выделения
+	Search artboards	Поиск монтажных областей
+	Fully Inside	Полностью внутри
+	Fully Outside	Полностью снаружи
+	No artboards match.	Нет подходящих монтажных областей.
+	Chosen: {n} of {total}	Выбрано: {n} из {total}

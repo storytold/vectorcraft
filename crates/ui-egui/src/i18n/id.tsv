@@ -1481,6 +1481,11 @@ digits	Malayalam	Malayalam
 	Save Transparency Flattener Preset…	Simpan preset flattener transparansi…
 	Basic Latin	Latin dasar
 	Currency & Symbols	Mata uang & simbol
+	Alternates for Current Selection	Alternatif untuk Pilihan Saat Ini
+	Select a character with the Type tool to see its alternates.	Pilih karakter dengan alat teks untuk melihat alternatifnya.
+	The selected character's font is not available.	Font karakter yang dipilih tidak tersedia.
+	No alternates for the selected character.	Tidak ada alternatif untuk karakter yang dipilih.
+	Double-click to replace	Klik ganda untuk mengganti
 	Double-click to insert	Klik ganda untuk menyisipkan
 	Entire Font	Seluruh font
 	glyph {id}	glif {id}
@@ -2309,6 +2314,12 @@ digits	Malayalam	Malayalam
 	Save the document first?	Simpan dokumen terlebih dahulu?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} file dalam {folder} {note}. Tampilkan folder paket?
 @plural	{n} linked file not found|{n} linked files not found	{n} file tertaut tidak ditemukan
+@msgplural	{n} linked file not found|{n} linked files not found	{n} file tertaut tidak ditemukan
+@msg	fonts not copied: {fonts}	font tidak disalin: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} file tertaut tidak ditemukan)
+@msg	(fonts not copied: {fonts})	(font tidak disalin: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	font tidak disalin: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Preset bawaan bersifat hanya-baca: Baru… memulai salinan yang dapat diedit.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} pada artboard mewakili {real} {unit} dalam scene.
@@ -6195,3 +6206,13 @@ breakText	Glyphs	Glif
 	Spike	Puncak
 	Skip Spaces	Lewati Spasi
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Gambar terlalu besar untuk disalin sebagai gambar: aplikasi lain tidak mendapatkan PNG darinya
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Pilih menurut Artboard
+	Select by Artboards…	Pilih menurut Artboard…
+	Selection Tools	Alat pemilihan
+	Search artboards	Cari artboard
+	Fully Inside	Sepenuhnya di dalam
+	Fully Outside	Sepenuhnya di luar
+	No artboards match.	Tidak ada artboard yang cocok.
+	Chosen: {n} of {total}	Dipilih: {n} dari {total}

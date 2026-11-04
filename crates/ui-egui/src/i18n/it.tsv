@@ -856,6 +856,11 @@ font-technology	Variable	Variabili
 	Double-click to edit the characters' paint	Fai doppio clic per modificare il colore dei caratteri
 	Click to edit	Fai clic per modificare
 	Double-click to edit	Fai doppio clic per modificare
+	Alternates for Current Selection	Alternative per la selezione corrente
+	Select a character with the Type tool to see its alternates.	Seleziona un carattere con lo strumento Testo per vederne le alternative.
+	The selected character's font is not available.	Il font del carattere selezionato non è disponibile.
+	No alternates for the selected character.	Nessuna alternativa per il carattere selezionato.
+	Double-click to replace	Fai doppio clic per sostituire
 	Double-click to insert	Fai doppio clic per inserire
 	Double-click to rename	Fai doppio clic per rinominare
 	Double-click to target the contents	Fai doppio clic per impostare il contenuto come destinazione
@@ -3793,6 +3798,12 @@ digits	Malayalam	Malayalam
 	Scrub Numeric Fields by Dragging	Regola i campi numerici trascinando
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} file in {folder} {note}. Vuoi mostrare la cartella del pacchetto?|{n} file in {folder} {note}. Vuoi mostrare la cartella del pacchetto?
 @plural	{n} linked file not found|{n} linked files not found	File collegati non trovati: {n}|File collegati non trovati: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	File collegati non trovati: {n}|File collegati non trovati: {n}
+@msg	fonts not copied: {fonts}	font non copiati: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(File collegati non trovati: {n})|(File collegati non trovati: {n})
+@msg	(fonts not copied: {fonts})	(font non copiati: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	font non copiati: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	Immagini collegate modificate dopo il salvataggio di questo documento: {n}. Vuoi mostrare le nuove versioni?|Immagini collegate modificate dopo il salvataggio di questo documento: {n}. Vuoi mostrare le nuove versioni?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	Immagini collegate modificate su disco: {n}. Vuoi mostrare le nuove versioni?|Immagini collegate modificate su disco: {n}. Vuoi mostrare le nuove versioni?
@@ -5947,3 +5958,13 @@ breakText	Glyphs	Glifi
 	Spike	Picco
 	Skip Spaces	Salta gli spazi
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	La grafica è troppo grande per essere copiata come immagine: le altre app non ne ricevono un PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Seleziona per tavole da disegno
+	Select by Artboards…	Seleziona per tavole da disegno…
+	Selection Tools	Strumenti di selezione
+	Search artboards	Cerca tavole da disegno
+	Fully Inside	Completamente interno
+	Fully Outside	Completamente esterno
+	No artboards match.	Nessuna tavola da disegno corrisponde.
+	Chosen: {n} of {total}	Scelte: {n} di {total}

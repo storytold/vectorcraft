@@ -835,6 +835,11 @@ font-technology	Variable	Variabel
 	Double-click to edit the characters' paint	Doppelklicken, um die Farbe der Zeichen zu bearbeiten
 	Click to edit	Klicken, um zu bearbeiten
 	Double-click to edit	Doppelklicken, um zu bearbeiten
+	Alternates for Current Selection	Alternativen für aktuelle Auswahl
+	Select a character with the Type tool to see its alternates.	Wählen Sie mit dem Text-Werkzeug ein Zeichen aus, um seine Alternativen zu sehen.
+	The selected character's font is not available.	Die Schrift des ausgewählten Zeichens ist nicht verfügbar.
+	No alternates for the selected character.	Keine Alternativen für das ausgewählte Zeichen.
+	Double-click to replace	Doppelklicken zum Ersetzen
 	Double-click to insert	Doppelklicken zum Einfügen
 	Double-click to rename	Doppelklicken zum Umbenennen
 	Double-click to target the contents	Doppelklicken, um den Inhalt als Ziel auszuwählen
@@ -3667,6 +3672,12 @@ effect	Points	Punkte
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} Datei in {folder} {note}. Paketordner anzeigen?|{n} Dateien in {folder} {note}. Paketordner anzeigen?
 @plural	{n} linked file not found|{n} linked files not found	{n} verknüpfte Datei nicht gefunden|{n} verknüpfte Dateien nicht gefunden
 	fonts not copied: {fonts}	nicht kopierte Schriften: {fonts}
+@msgplural	{n} linked file not found|{n} linked files not found	{n} verknüpfte Datei nicht gefunden|{n} verknüpfte Dateien nicht gefunden
+@msg	fonts not copied: {fonts}	nicht kopierte Schriften: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} verknüpfte Datei nicht gefunden)|({n} verknüpfte Dateien nicht gefunden)
+@msg	(fonts not copied: {fonts})	(nicht kopierte Schriften: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} verknüpftes Bild wurde seit dem Speichern dieses Dokuments geändert. Die neue Version anzeigen?|{n} verknüpfte Bilder wurden seit dem Speichern dieses Dokuments geändert. Die neuen Versionen anzeigen?
 @plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} weitere Regel: Der Export schreibt sie.|{n} weitere Regeln: Der Export schreibt alle.
 @plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} unbenanntes Objekt ausgelassen: Benennen Sie es oder aktivieren Sie „Unbenannte Objekte“ im Bedienfeldmenü.|{n} unbenannte Objekte ausgelassen: Benennen Sie sie oder aktivieren Sie „Unbenannte Objekte“ im Bedienfeldmenü.
@@ -5913,3 +5924,13 @@ breakText	Glyphs	Glyphen
 	Spike	Spitze
 	Skip Spaces	Leerzeichen überspringen
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Das Bildmaterial ist zu groß, um es als Bild zu kopieren: Andere Apps erhalten kein PNG davon
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Nach Zeichenflächen auswählen
+	Select by Artboards…	Nach Zeichenflächen auswählen…
+	Selection Tools	Auswahlwerkzeuge
+	Search artboards	Zeichenflächen suchen
+	Fully Inside	Vollständig innen
+	Fully Outside	Vollständig außen
+	No artboards match.	Keine Zeichenfläche passt.
+	Chosen: {n} of {total}	Gewählt: {n} von {total}

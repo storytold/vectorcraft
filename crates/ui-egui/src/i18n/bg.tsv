@@ -841,6 +841,11 @@ font-technology	Variable	Променливи
 	Double-click to edit the characters' paint	Двойно щракване за редактиране на оцветяването на знаците
 	Click to edit	Щракнете за редактиране
 	Double-click to edit	Двойно щракване за редактиране
+	Alternates for Current Selection	Алтернативи за текущата селекция
+	Select a character with the Type tool to see its alternates.	Изберете знак с инструмента „Текст“, за да видите алтернативите му.
+	The selected character's font is not available.	Шрифтът на избрания знак не е наличен.
+	No alternates for the selected character.	Няма алтернативи за избрания знак.
+	Double-click to replace	Двойно щракване за замяна
 	Double-click to insert	Двойно щракване за вмъкване
 	Double-click to rename	Двойно щракване за преименуване
 	Double-click to target the contents	Двойно щракване за насочване към съдържанието
@@ -3673,6 +3678,12 @@ digits	Malayalam	Малаялам
 	Scrub Numeric Fields by Dragging	Плъзгане на числени полета чрез влачене
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} файл в {folder} {note}. Показване на папката на пакета?|{n} файла в {folder} {note}. Показване на папката на пакета?
 @plural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени
+@msgplural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени
+@msg	fonts not copied: {fonts}	некопирани шрифтове: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} свързан файл не е намерен)|({n} свързани файла не са намерени)
+@msg	(fonts not copied: {fonts})	(некопирани шрифтове: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	некопирани шрифтове: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} свързано изображение е променено след запазването на този документ. Показване на новата версия?|{n} свързани изображения са променени след запазването на този документ. Показване на новите версии?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} свързано изображение е променено на диска. Показване на новата версия?|{n} свързани изображения са променени на диска. Показване на новите версии?
@@ -6179,3 +6190,13 @@ breakText	Glyphs	Глифи
 	Spike	Връх
 	Skip Spaces	Пропускане на интервалите
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графиката е твърде голяма, за да се копира като изображение: другите приложения не получават PNG от нея
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Избиране по работни области
+	Select by Artboards…	Избиране по работни области…
+	Selection Tools	Инструменти за избиране
+	Search artboards	Търсене в работните области
+	Fully Inside	Изцяло вътре
+	Fully Outside	Изцяло извън
+	No artboards match.	Няма съвпадащи работни области.
+	Chosen: {n} of {total}	Избрани: {n} от {total}

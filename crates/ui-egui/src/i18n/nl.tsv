@@ -1495,6 +1495,11 @@ digits	Malayalam	Malayalam
 	Save Transparency Flattener Preset…	Voorinstelling voor transparantieafvlakking opslaan…
 	Basic Latin	Basic Latin
 	Currency & Symbols	Valuta & symbolen
+	Alternates for Current Selection	Alternatieven voor huidige selectie
+	Select a character with the Type tool to see its alternates.	Selecteer een teken met het Type-gereedschap om de alternatieven te zien.
+	The selected character's font is not available.	Het lettertype van het geselecteerde teken is niet beschikbaar.
+	No alternates for the selected character.	Geen alternatieven voor het geselecteerde teken.
+	Double-click to replace	Dubbelklik om te vervangen
 	Double-click to insert	Dubbelklik om in te voegen
 	Entire Font	Volledig lettertype
 	glyph {id}	glyph {id}
@@ -2323,6 +2328,12 @@ digits	Malayalam	Malayalam
 	Save the document first?	Wil je het document eerst opslaan?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} bestand in {folder} {note}. De pakketmap openen?|{n} bestanden in {folder} {note}. De pakketmap openen?
 @plural	{n} linked file not found|{n} linked files not found	{n} gekoppeld bestand niet gevonden|{n} gekoppelde bestanden niet gevonden
+@msgplural	{n} linked file not found|{n} linked files not found	{n} gekoppeld bestand niet gevonden|{n} gekoppelde bestanden niet gevonden
+@msg	fonts not copied: {fonts}	niet gekopieerde lettertypen: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} gekoppeld bestand niet gevonden)|({n} gekoppelde bestanden niet gevonden)
+@msg	(fonts not copied: {fonts})	(niet gekopieerde lettertypen: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	niet gekopieerde lettertypen: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Ingebouwde voorinstellingen zijn alleen-lezen: Nieuw… start een bewerkbare kopie.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} op het tekenbord staat voor {real} {unit} in de scène.
@@ -6239,3 +6250,13 @@ breakText	Glyphs	Glyphs
 	Spike	Piek
 	Skip Spaces	Spaties overslaan
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Het illustratiewerk is te groot om als afbeelding te kopiëren: andere apps krijgen er geen PNG van
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Selecteren op tekengebieden
+	Select by Artboards…	Selecteren op tekengebieden…
+	Selection Tools	Selectiegereedschappen
+	Search artboards	Tekengebieden zoeken
+	Fully Inside	Volledig binnen
+	Fully Outside	Volledig buiten
+	No artboards match.	Geen tekengebied komt overeen.
+	Chosen: {n} of {total}	Gekozen: {n} van {total}

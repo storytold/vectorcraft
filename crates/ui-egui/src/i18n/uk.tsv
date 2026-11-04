@@ -850,6 +850,11 @@ font-technology	Variable	Варіативні
 	Double-click to edit the characters' paint	Двічі клацніть, щоб редагувати заливку символів
 	Click to edit	Клацніть, щоб редагувати
 	Double-click to edit	Двічі клацніть, щоб редагувати
+	Alternates for Current Selection	Альтернативи для поточного виділення
+	Select a character with the Type tool to see its alternates.	Виділіть символ інструментом «Текст», щоб побачити його альтернативи.
+	The selected character's font is not available.	Шрифт виділеного символу недоступний.
+	No alternates for the selected character.	Виділений символ не має альтернатив.
+	Double-click to replace	Двічі клацніть для заміни
 	Double-click to insert	Двічі клацніть для вставки
 	Double-click to rename	Двічі клацніть для перейменування
 	Double-click to target the contents	Двічі клацніть, щоб вибрати вміст як об’єкт
@@ -3786,6 +3791,12 @@ effect	Points	Точки
 	Scrub Numeric Fields by Dragging	Змінювати числові поля перетягуванням
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	файлів: {n} {folder} {note}. Показати папку пакета?|файлів: {n} {folder} {note}. Показати папку пакета?|файлів: {n} {folder} {note}. Показати папку пакета?
 @plural	{n} linked file not found|{n} linked files not found	не знайдено пов’язаних файлів: {n}|не знайдено пов’язаних файлів: {n}|не знайдено пов’язаних файлів: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	не знайдено пов’язаних файлів: {n}|не знайдено пов’язаних файлів: {n}|не знайдено пов’язаних файлів: {n}
+@msg	fonts not copied: {fonts}	шрифти не скопійовано: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(не знайдено пов’язаних файлів: {n})|(не знайдено пов’язаних файлів: {n})|(не знайдено пов’язаних файлів: {n})
+@msg	(fonts not copied: {fonts})	(шрифти не скопійовано: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	шрифти не скопійовано: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	пов’язані зображення ({n}) змінилися з моменту збереження цього документа. Показати нові версії?|пов’язані зображення ({n}) змінилися з моменту збереження цього документа. Показати нові версії?|пов’язані зображення ({n}) змінилися з моменту збереження цього документа. Показати нові версії?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	пов’язані зображення ({n}) змінилися на диску. Показати нові версії?|пов’язані зображення ({n}) змінилися на диску. Показати нові версії?|пов’язані зображення ({n}) змінилися на диску. Показати нові версії?
@@ -5927,3 +5938,13 @@ breakText	Glyphs	Гліфи
 	Spike	Пік
 	Skip Spaces	Пропускати пробіли
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графіка завелика, щоб скопіювати її як зображення: інші програми не отримають її PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Виділити за монтажними областями
+	Select by Artboards…	Виділити за монтажними областями…
+	Selection Tools	Інструменти виділення
+	Search artboards	Пошук монтажних областей
+	Fully Inside	Повністю всередині
+	Fully Outside	Повністю зовні
+	No artboards match.	Немає відповідних монтажних областей.
+	Chosen: {n} of {total}	Вибрано: {n} з {total}

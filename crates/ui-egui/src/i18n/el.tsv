@@ -814,6 +814,11 @@ font-technology	Variable	Μεταβλητές
 	Double-click to edit the characters' paint	Διπλό κλικ για επεξεργασία του χρωματισμού χαρακτήρων
 	Click to edit	Κλικ για επεξεργασία
 	Double-click to edit	Διπλό κλικ για επεξεργασία
+	Alternates for Current Selection	Εναλλακτικοί για την τρέχουσα επιλογή
+	Select a character with the Type tool to see its alternates.	Επιλέξτε έναν χαρακτήρα με το εργαλείο κειμένου για να δείτε τους εναλλακτικούς του.
+	The selected character's font is not available.	Η γραμματοσειρά του επιλεγμένου χαρακτήρα δεν είναι διαθέσιμη.
+	No alternates for the selected character.	Δεν υπάρχουν εναλλακτικοί για τον επιλεγμένο χαρακτήρα.
+	Double-click to replace	Διπλό κλικ για αντικατάσταση
 	Double-click to insert	Διπλό κλικ για εισαγωγή
 	Double-click to rename	Διπλό κλικ για μετονομασία
 	Double-click to target the contents	Διπλό κλικ για επιλογή του περιεχομένου ως στόχου
@@ -3994,6 +3999,12 @@ digits	Malayalam	Μαλαγιάλαμ
 	Scrub Numeric Fields by Dragging	Ρύθμιση αριθμητικών πεδίων με σύρσιμο
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} αρχείο στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;|{n} αρχεία στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;
 @plural	{n} linked file not found|{n} linked files not found	Δεν βρέθηκε {n} συνδεδεμένο αρχείο|Δεν βρέθηκαν {n} συνδεδεμένα αρχεία
+@msgplural	{n} linked file not found|{n} linked files not found	Δεν βρέθηκε {n} συνδεδεμένο αρχείο|Δεν βρέθηκαν {n} συνδεδεμένα αρχεία
+@msg	fonts not copied: {fonts}	γραμματοσειρές που δεν αντιγράφηκαν: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Δεν βρέθηκε {n} συνδεδεμένο αρχείο)|(Δεν βρέθηκαν {n} συνδεδεμένα αρχεία)
+@msg	(fonts not copied: {fonts})	(γραμματοσειρές που δεν αντιγράφηκαν: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	γραμματοσειρές που δεν αντιγράφηκαν: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} συνδεδεμένη εικόνα άλλαξε μετά την αποθήκευση του εγγράφου. Να εμφανιστεί η νέα έκδοση;|{n} συνδεδεμένες εικόνες άλλαξαν μετά την αποθήκευση του εγγράφου. Να εμφανιστούν οι νέες εκδόσεις;
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} συνδεδεμένη εικόνα άλλαξε στον δίσκο. Να εμφανιστεί η νέα έκδοση;|{n} συνδεδεμένες εικόνες άλλαξαν στον δίσκο. Να εμφανιστούν οι νέες εκδόσεις;
@@ -6279,3 +6290,13 @@ breakText	Glyphs	Γλύφοι
 	Spike	Αιχμή
 	Skip Spaces	Παράλειψη κενών
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Το γραφικό είναι πολύ μεγάλο για αντιγραφή ως εικόνα: οι άλλες εφαρμογές δεν λαμβάνουν PNG του
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Επιλογή κατά πίνακες σχεδίασης
+	Select by Artboards…	Επιλογή κατά πίνακες σχεδίασης…
+	Selection Tools	Εργαλεία επιλογής
+	Search artboards	Αναζήτηση πινάκων σχεδίασης
+	Fully Inside	Πλήρως εντός
+	Fully Outside	Πλήρως εκτός
+	No artboards match.	Κανένας πίνακας σχεδίασης δεν ταιριάζει.
+	Chosen: {n} of {total}	Επιλεγμένοι: {n} από {total}

@@ -766,6 +766,11 @@
 	Double-click to edit the characters' paint	Clique duplo para editar a pintura dos caracteres
 	Click to edit	Clique para editar
 	Double-click to edit	Clique duplo para editar
+	Alternates for Current Selection	Alternativas para a seleção atual
+	Select a character with the Type tool to see its alternates.	Selecione um caractere com a ferramenta Texto para ver as alternativas.
+	The selected character's font is not available.	A fonte do caractere selecionado não está disponível.
+	No alternates for the selected character.	Nenhuma alternativa para o caractere selecionado.
+	Double-click to replace	Clique duplo para substituir
 	Double-click to insert	Clique duplo para inserir
 	Double-click to rename	Clique duplo para renomear
 	Double-click to target the contents	Clique duplo para direcionar o conteúdo
@@ -3097,6 +3102,12 @@ digits	Malayalam	Malaiala
 	to	para
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} arquivo em {folder} {note}. Mostrar a pasta do pacote?|{n} arquivos em {folder} {note}. Mostrar a pasta do pacote?
 @plural	{n} linked file not found|{n} linked files not found	{n} arquivo vinculado não encontrado|{n} arquivos vinculados não encontrados
+@msgplural	{n} linked file not found|{n} linked files not found	{n} arquivo vinculado não encontrado|{n} arquivos vinculados não encontrados
+@msg	fonts not copied: {fonts}	fontes não copiadas: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} arquivo vinculado não encontrado)|({n} arquivos vinculados não encontrados)
+@msg	(fonts not copied: {fonts})	(fontes não copiadas: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	fontes não copiadas: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} imagem vinculada alterada desde que este documento foi salvo. Mostrar a nova versão?|{n} imagens vinculadas alteradas desde que este documento foi salvo. Mostrar as novas versões?
 @plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} regra a mais: a Exportação a escreve.|{n} regras a mais: a Exportação escreve cada uma.
@@ -6400,3 +6411,13 @@ swatch	Yellow Green	Verde-amarelado
 	Spike	Pico
 	Skip Spaces	Ignorar espaços
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	A arte é grande demais para ser copiada como imagem: outros aplicativos não recebem um PNG dela
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Selecionar por mesas de trabalho
+	Select by Artboards…	Selecionar por mesas de trabalho…
+	Selection Tools	Ferramentas de seleção
+	Search artboards	Pesquisar mesas de trabalho
+	Fully Inside	Totalmente dentro
+	Fully Outside	Totalmente fora
+	No artboards match.	Nenhuma mesa de trabalho corresponde.
+	Chosen: {n} of {total}	Escolhidas: {n} de {total}

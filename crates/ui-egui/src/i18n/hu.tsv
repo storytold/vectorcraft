@@ -1106,6 +1106,11 @@ font-technology	Variable	Változó
 	Double-click to edit the characters' paint	Dupla kattintással a karakterek festése szerkeszthető
 	Click to edit	Kattintással szerkeszthető
 	Double-click to edit	Dupla kattintással szerkeszthető
+	Alternates for Current Selection	Az aktuális kijelölés változatai
+	Select a character with the Type tool to see its alternates.	A változatok megtekintéséhez jelölj ki egy karaktert a Szöveg eszközzel.
+	The selected character's font is not available.	A kijelölt karakter betűtípusa nem érhető el.
+	No alternates for the selected character.	A kijelölt karakternek nincsenek változatai.
+	Double-click to replace	Csere dupla kattintással
 	Double-click to insert	Beszúrás dupla kattintással
 	Double-click to rename	Dupla kattintással átnevezhető
 	Double-click to target the contents	Dupla kattintással a tartalom lesz a cél
@@ -4487,6 +4492,12 @@ mark-style	Japanese	Japán
 @plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	Nem olvasható mappák vagy fájlok: {n}
 @plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Kihagyott mappák: {n} (például más alkalmazások, a rendszer és a rejtett mappák)
 @plural	{n} linked file not found|{n} linked files not found	Nem található csatolt fájlok: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Nem található csatolt fájlok: {n}
+@msg	fonts not copied: {fonts}	nem másolt betűtípusok: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Nem található csatolt fájlok: {n})
+@msg	(fonts not copied: {fonts})	(nem másolt betűtípusok: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	A lemezen módosult csatolt képek: {n}. Megjelenítsük az új változatokat?
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	A dokumentum mentése óta módosult csatolt képek: {n}. Megjelenítsük az új változatokat?
 @plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	További szabályok: {n}. Az exportálás mindet kiírja.
@@ -6311,3 +6322,13 @@ breakText	Glyphs	Glifák
 	Spike	Csúcs
 	Skip Spaces	Szóközök kihagyása
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	A grafika túl nagy ahhoz, hogy képként másolható legyen: más alkalmazások nem kapnak róla PNG-t
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Kijelölés rajztáblák szerint
+	Select by Artboards…	Kijelölés rajztáblák szerint…
+	Selection Tools	Kijelölőeszközök
+	Search artboards	Rajztáblák keresése
+	Fully Inside	Teljesen belül
+	Fully Outside	Teljesen kívül
+	No artboards match.	Nincs egyező rajztábla.
+	Chosen: {n} of {total}	Kiválasztva: {n} / {total}

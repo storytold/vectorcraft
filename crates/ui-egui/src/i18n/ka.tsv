@@ -1406,6 +1406,11 @@ digits	Malayalam	მალაიალამური
 	Save Transparency Flattener Preset…	გამჭვირვალობის გაბრტყელების პრესეტის შენახვა…
 	Basic Latin	საბაზო ლათინური
 	Currency & Symbols	ვალუტა და სიმბოლოები
+	Alternates for Current Selection	მიმდინარე მონიშვნის ალტერნატივები
+	Select a character with the Type tool to see its alternates.	ალტერნატივების სანახავად ტექსტის ხელსაწყოთი მონიშნეთ სიმბოლო.
+	The selected character's font is not available.	მონიშნული სიმბოლოს შრიფტი მიუწვდომელია.
+	No alternates for the selected character.	მონიშნულ სიმბოლოს ალტერნატივები არ აქვს.
+	Double-click to replace	ორჯერ დაწკაპეთ ჩასანაცვლებლად
 	Double-click to insert	ორჯერ დაწკაპეთ ჩასასმელად
 	Entire Font	მთელი შრიფტი
 	glyph {id}	გლიფი {id}
@@ -2211,6 +2216,12 @@ digits	Malayalam	მალაიალამური
 	Save the document first?	ჯერ შევინახოთ დოკუმენტი?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	ფაილები: {n}, ადგილი: {folder} {note}. ვაჩვენოთ შეფუთვის საქაღალდე?
 @plural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}
+@msg	fonts not copied: {fonts}	არ დაკოპირდა შრიფტები: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(ვერ მოიძებნა დაკავშირებული ფაილები: {n})
+@msg	(fonts not copied: {fonts})	(არ დაკოპირდა შრიფტები: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	არ დაკოპირდა შრიფტები: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	ჩაშენებული პრესეტები მხოლოდ წასაკითხია: „ახალი…“ ქმნის რედაქტირებად ასლს.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} სამუშაო დაფაზე სცენაში {real} {unit}-ს შეესაბამება.
@@ -6338,3 +6349,13 @@ font-script	Japanese	იაპონური
 	Spike	პიკი
 	Skip Spaces	ჰარების გამოტოვება
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	ნახატი ზედმეტად დიდია სურათად დასაკოპირებლად: სხვა აპები მის PNG-ს ვერ მიიღებენ
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	სამუშაო დაფებით არჩევა
+	Select by Artboards…	სამუშაო დაფებით არჩევა…
+	Selection Tools	მონიშვნის ხელსაწყოები
+	Search artboards	სამუშაო დაფების ძებნა
+	Fully Inside	მთლიანად შიგნით
+	Fully Outside	მთლიანად გარეთ
+	No artboards match.	შესაბამისი სამუშაო დაფა არ არის.
+	Chosen: {n} of {total}	არჩეულია: {n} / {total}

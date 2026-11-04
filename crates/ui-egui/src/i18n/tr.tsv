@@ -835,6 +835,11 @@ font-technology	Variable	Değişken
 	Double-click to edit the characters' paint	Karakterlerin boyasını düzenlemek için çift tıklayın
 	Click to edit	Düzenlemek için tıklayın
 	Double-click to edit	Düzenlemek için çift tıklayın
+	Alternates for Current Selection	Geçerli Seçim için Alternatifler
+	Select a character with the Type tool to see its alternates.	Alternatiflerini görmek için Yazım aracıyla bir karakter seçin.
+	The selected character's font is not available.	Seçili karakterin yazı tipi kullanılamıyor.
+	No alternates for the selected character.	Seçili karakter için alternatif yok.
+	Double-click to replace	Değiştirmek için çift tıklayın
 	Double-click to insert	Eklemek için çift tıklayın
 	Double-click to rename	Yeniden adlandırmak için çift tıklayın
 	Double-click to target the contents	İçeriği hedeflemek için çift tıklayın
@@ -3566,6 +3571,12 @@ digits	Malayalam	Malayalam
 	Scrub Numeric Fields by Dragging	Sayısal Alanları Sürükleyerek Fırçalayın
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} içinde {n} dosya {note}. Paket klasörü gösterilsin mi?
 @plural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı
+@msgplural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı
+@msg	fonts not copied: {fonts}	kopyalanmayan yazı tipleri: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} bağlantılı dosya bulunamadı)
+@msg	(fonts not copied: {fonts})	(kopyalanmayan yazı tipleri: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	kopyalanmayan yazı tipleri: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} bağlantılı görsel bu belgenin kaydedilmesinden bu yana değiştirildi. Yeni sürümler gösterilsin mi?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} bağlantılı görsel diskte değiştirildi. Yeni sürümler gösterilsin mi?
@@ -6284,3 +6295,13 @@ breakText	Glyphs	Glifler
 	Spike	Sivri Uç
 	Skip Spaces	Boşlukları Atla
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Çizim, resim olarak kopyalanamayacak kadar büyük: diğer uygulamalar bunun PNG'sini almaz
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Çalışma Yüzeylerine Göre Seç
+	Select by Artboards…	Çalışma Yüzeylerine Göre Seç…
+	Selection Tools	Seçim Araçları
+	Search artboards	Çalışma yüzeylerinde ara
+	Fully Inside	Tamamen içeride
+	Fully Outside	Tamamen dışarıda
+	No artboards match.	Eşleşen çalışma yüzeyi yok.
+	Chosen: {n} of {total}	Seçilen: {n}/{total}

@@ -1419,6 +1419,11 @@ digits	Malayalam	マラヤーラム数字
 	Double-click to edit the characters' paint	ダブルクリックで文字のペイントを編集
 	Click to edit	クリックで編集
 	Double-click to edit	ダブルクリックで編集
+	Alternates for Current Selection	選択文字の異体字
+	Select a character with the Type tool to see its alternates.	文字ツールで文字を選択すると、その異体字が表示されます。
+	The selected character's font is not available.	選択した文字のフォントを使用できません。
+	No alternates for the selected character.	選択した文字には異体字がありません。
+	Double-click to replace	ダブルクリックで置換
 	Double-click to insert	ダブルクリックで挿入
 	Double-click to rename	ダブルクリックで名前を変更
 	Double-click to target the contents	ダブルクリックで内容をターゲット
@@ -3388,6 +3393,12 @@ mark-style	Japanese	日本式
 	to	→
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} に {n} 個のファイル{note}。パッケージフォルダーを表示しますか？
 @plural	{n} linked file not found|{n} linked files not found	リンクファイルが {n} 個見つかりません
+@msgplural	{n} linked file not found|{n} linked files not found	リンクファイルが {n} 個見つかりません
+@msg	fonts not copied: {fonts}	コピーされなかったフォント：{fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(リンクファイルが {n} 個見つかりません)
+@msg	(fonts not copied: {fonts})	(コピーされなかったフォント：{fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	コピーされなかったフォント：{fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	保存後に {n} 個のリンク画像が変更されています。新しいバージョンを表示しますか？
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} 個のリンク画像がディスク上で変更されました。新しいバージョンを表示しますか？
@@ -6012,3 +6023,13 @@ breakText	Glyphs	字形
 	Spike	山形
 	Skip Spaces	スペースをスキップ
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	アートワークが大きすぎるため画像としてコピーできません：他のアプリには PNG が渡されません
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	アートボードで選択
+	Select by Artboards…	アートボードで選択…
+	Selection Tools	選択ツール
+	Search artboards	アートボードを検索
+	Fully Inside	完全に内側
+	Fully Outside	完全に外側
+	No artboards match.	一致するアートボードはありません。
+	Chosen: {n} of {total}	選択中: {n} / {total}
