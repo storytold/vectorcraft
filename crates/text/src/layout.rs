@@ -332,9 +332,31 @@ impl Ctx<'_> {
             Affine::IDENTITY
         };
         let mut m = pre * local;
+        // Vertical type on a path: an upright glyph's cell in font units, as (its length with the
+        // Proportional Metrics change to it, the height of its top above the baseline).
+        let path_cell = (self.vertical && self.on_path && g.inline.is_none() && g.tcy.is_none() && takes_cell(g) && stands_upright(g) && g.sy != 0.0)
+            .then(|| {
+                let (cell, top) = upright_extent(g);
+                let proportional = g.vpal.filter(|_| g.face.vertical_glyph(g.gid).is_some()).map_or(0.0, |a| a.advance) / g.sy;
+                (cell + proportional, top)
+            });
         if self.vertical && self.on_path {
             // Vertical path type keeps the baseline path and turns each glyph across it.
             m = Affine::rotate_about(std::f64::consts::FRAC_PI_2, origin) * m;
+            if let Some((cell, top)) = path_cell {
+                // An upright glyph whose top then faces the path's end turns half a turn about the
+                // centre of its cell (without its Character Rotation), so that its top faces the
+                // path's start and the characters of an upright ligature read along the path in
+                // order. The effects that keep the glyph's up direction fixed already turn it so on
+                // a path that runs to the left.
+                let turned = m * unturned;
+                let tangent = Vec2::new(angle.cos(), angle.sin());
+                let along = |y: f64| (turned * Point::new(0.0, y) - origin).dot(tangent);
+                if along(-top) > along(cell - top) {
+                    let centre = turned * Point::new(g.face.advance(g.gid) * 0.5, cell * 0.5 - top);
+                    m = Affine::translate(centre.to_vec2() * 2.0) * Affine::scale(-1.0) * m;
+                }
+            }
         } else if let (true, Some(t)) = (self.vertical, g.tcy) {
             // Tate-chu-yoko: the block set across the column, centred on its em of it, then moved up
             // by its Up/Down and right by its Left/Right (line x runs down the column and line y
@@ -408,20 +430,17 @@ impl Ctx<'_> {
         } else {
             0.0
         };
-        // On a path, an upright glyph turns about its pen: its cell runs along the path between
-        // where the glyph's transform sets the cell's foot and its top, moved by the shaper's
-        // placement and a baseline shift, and slanted by the path's effect.
-        let (width, width_start) = match (upright && self.on_path, g.sy) {
-            (true, sy) if sy != 0.0 => {
-                // In font units, with the Proportional Metrics change to its length.
-                let (cell, top) = upright_extent(g);
-                let proportional = g.vpal.filter(|_| g.face.vertical_glyph(g.gid).is_some()).map_or(0.0, |a| a.advance) / sy;
+        // On a path, an upright glyph's cell runs along the path from where the glyph's transform
+        // sets the cell's top to its foot, moved by the shaper's placement and a baseline shift, and
+        // slanted by the path's effect.
+        let (width, width_start) = match path_cell {
+            Some((cell, top)) => {
                 let tangent = Vec2::new(angle.cos(), angle.sin());
                 let along = |y: f64| (m * Point::new(0.0, y) - origin).dot(tangent);
-                let (start, end) = (along(cell + proportional - top), along(-top));
+                let (start, end) = (along(-top), along(cell - top));
                 if start.is_finite() && end > start { (end - start, start) } else { (width, width_start) }
             }
-            _ => (width, width_start),
+            None => (width, width_start),
         };
         if let Some(art) = g.inline.as_ref().and_then(|ib| ib.art) {
             self.out.inlines.push(InlineGlyph { run: g.run, byte: g.byte, glyph: self.out.glyphs.len(), xf: m, bounds: m.transform_rect_bbox(art) });
