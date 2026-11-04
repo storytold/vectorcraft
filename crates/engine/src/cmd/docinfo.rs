@@ -257,8 +257,9 @@ pub fn report(s: &mut Session, selection_only: bool) -> Result<String> {
 /// The type object `n` holds and the runs its layout draws, when it uses a pattern: the runs with a
 /// glyph outline (list markers and ruby included) or an underline or strikethrough bar. Spaces and
 /// line breaks draw no outline. A type object's characters carry their own fill and stroke, and the
-/// type object's own fills and strokes paint on its characters, so only those runs paint.
-fn painted_runs(n: &Node) -> Option<(&vectorcraft_doc::TextObject, BTreeSet<usize>)> {
+/// type object's own fills and strokes paint on its characters, so only those runs paint. The type
+/// is laid out with its inline graphics' bounds resolved from `d`'s symbols, as the renderer lays it out.
+fn painted_runs<'a>(d: &Document, n: &'a Node) -> Option<(&'a vectorcraft_doc::TextObject, BTreeSet<usize>)> {
     let NodeKind::Text(t) = &n.kind else { return None };
     let is_pattern = |p: &Paint| matches!(p, Paint::Pattern { .. });
     let own = n.appearance.items.iter().any(|i| match i {
@@ -269,9 +270,10 @@ fn painted_runs(n: &Node) -> Option<(&vectorcraft_doc::TextObject, BTreeSet<usiz
         return None;
     }
     let db = vectorcraft_text::FontDb::global();
-    let lay = vectorcraft_text::layout(db, t);
+    let resolved = d.inline_resolved(t);
+    let lay = vectorcraft_text::layout(db, &resolved);
     let mut painted: BTreeSet<usize> = lay.glyphs.iter().chain(&lay.ruby).filter(|g| !g.outline.elements().is_empty()).map(|g| g.run).collect();
-    painted.extend(vectorcraft_text::decorations(&lay, db, t).into_iter().map(|(run, _)| run));
+    painted.extend(vectorcraft_text::decorations(&lay, db, &resolved).into_iter().map(|(run, _)| run));
     Some((t, painted))
 }
 
@@ -412,7 +414,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             let mut kinds = BTreeSet::new();
             // The patterns this object's fills and strokes use, each once.
             let mut used_patterns: Vec<&str> = vec![];
-            let painted_runs = painted_runs(n);
+            let painted_runs = painted_runs(d, n);
             for pattern in own_patterns(n, &members, painted_runs.as_ref()) {
                 patterns.insert(pattern.to_string());
                 used_patterns.push(pattern);
