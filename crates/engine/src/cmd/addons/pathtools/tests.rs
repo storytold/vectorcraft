@@ -674,3 +674,200 @@ fn the_slide_tool_previews_and_commits_one_step() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(at(&s), Point::new(200.0, 100.0));
 }
+
+fn ids(v: &Value) -> Vec<NodeId> {
+    v["ids"].as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect()
+}
+
+#[test]
+fn divide_into_dashes_cuts_a_path_into_open_pieces_keeping_its_look() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (100.0, 0.0)], false);
+    select(&mut s, &[l]);
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "gap": 10})).unwrap();
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    // 30 + 10 + 30 + 10 + 20: the gaps are left empty.
+    let pieces = ids(&r);
+    assert_eq!((pieces.len(), r["dashes"].clone()), (3, json!(3)));
+    let st = s.doc().unwrap();
+    let spans: Vec<(f64, f64)> = pieces.iter().map(|id| path(&s, *id).bounds().map(|b| (b.x0, b.x1)).unwrap()).collect();
+    let want = [(0.0, 30.0), (40.0, 70.0), (80.0, 100.0)];
+    assert!(spans.iter().zip(want).all(|(a, b)| (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6), "{spans:?}");
+    assert!(pieces.iter().all(|id| st.doc.node(*id).unwrap().appearance.stroke_width() == 3.0), "the stroke stays");
+    assert_eq!(st.selection.objects, pieces);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, l).anchor_count(), 2);
+    // Kept gaps; fitted 25s with no gap.
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "gap": 10, "removeGaps": false})).unwrap();
+    assert_eq!((ids(&r).len(), r["dashes"].clone()), (5, json!(3)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 30, "fit": true})).unwrap();
+    let spans: Vec<f64> = ids(&r).iter().map(|id| path(&s, *id).bounds().unwrap().width()).collect();
+    assert_eq!(spans.len(), 3);
+    assert!(spans.iter().all(|w| (w - 100.0 / 3.0).abs() < 1e-6), "{spans:?}");
+}
+
+#[test]
+fn divide_into_dashes_divides_only_the_selected_segments() {
+    let mut s = session();
+    let u = line(&mut s, &[(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)], false);
+    // The middle side, between anchors 1 and 2.
+    select_anchors(&mut s, u, &[1, 2]);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 10})).unwrap();
+    let pieces = ids(&r);
+    assert_eq!((pieces.len(), r["dashes"].clone()), (6, json!(4)), "the first side, four dashes, the last side");
+    assert_eq!(path(&s, pieces[0]).bounds().unwrap().width(), 40.0);
+    let layer: Vec<NodeId> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(layer, pieces, "in the path's place, in order");
+}
+
+#[test]
+fn divide_into_dashes_refuses_bad_params_and_too_many_pieces() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (1e5, 0.0)], false);
+    select(&mut s, &[l]);
+    refuses(
+        &mut s,
+        "addon.pathtools.divideDashes",
+        &[
+            json!({"dash": 0}),
+            json!({"dash": -5}),
+            json!({"dash": 1e308}),
+            json!({"dash": "10"}),
+            json!({"gap": -1}),
+            json!({"gap": 2e6}),
+            json!({"fit": "yes"}),
+            json!({"removeGaps": 1}),
+            json!({"dash": 0.5}),
+        ],
+    );
+    // 200000 pieces refused above; 1000 is fine.
+    assert_eq!(s.execute("addon.pathtools.divideDashes", &json!({"dash": 100})).unwrap()["dashes"], json!(1000));
+    s.execute("select.none", &json!({})).unwrap();
+    refuses(&mut s, "addon.pathtools.divideDashes", &[json!({})]);
+}
+
+/// The dashes made of `r`'s ids: (first x, last x) of each, by its anchors.
+fn dash_spans(s: &Session, r: &Value) -> Vec<(f64, f64)> {
+    ids(r).iter().map(|id| path(s, *id).bounds().map(|b| (b.x0, b.x1)).unwrap()).collect()
+}
+
+fn near(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6)
+}
+
+#[test]
+fn expand_dashes_makes_an_open_path_of_each_dash_keeping_the_stroke() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (100.0, 0.0)], false);
+    select(&mut s, &[l]);
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3, "cap": "round", "dash": [30, 10]})).unwrap();
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    assert!(near(&dash_spans(&s, &r), &[(0.0, 30.0), (40.0, 70.0), (80.0, 100.0)]), "{:?}", dash_spans(&s, &r));
+    assert_eq!(r["dashes"], json!(3));
+    let st = s.doc().unwrap();
+    for id in ids(&r) {
+        let node = st.doc.node(id).unwrap();
+        let stroke = node.appearance.stroke().unwrap();
+        assert_eq!((stroke.width, stroke.cap, stroke.dash.clone()), (3.0, vectorcraft_doc::LineCap::Round, None), "the stroke stays, dashes off");
+        assert!(!path(&s, id).subpaths[0].closed);
+    }
+    assert_eq!(st.selection.objects, ids(&r));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(l).unwrap().appearance.stroke().unwrap().dash.is_some());
+    // The offset shifts the pattern as the stroke draws it: 20 into the first dash.
+    s.execute("stroke.set", &json!({"dashOffset": 20})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({"ids": [l.0]})).unwrap();
+    assert!(near(&dash_spans(&s, &r), &[(0.0, 10.0), (20.0, 50.0), (60.0, 90.0)]), "{:?}", dash_spans(&s, &r));
+}
+
+#[test]
+fn expand_dashes_keeps_the_fill_below_and_follows_aligned_corners() {
+    let mut s = session();
+    let rect = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 60})).unwrap());
+    select(&mut s, &[rect]);
+    s.execute("stroke.set", &json!({"dash": [20, 20]})).unwrap();
+    let had_fill = !s.doc().unwrap().doc.node(rect).unwrap().appearance.fill_paint().is_none();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    // 320 round: eight dashes of 20, a dash bending round each corner it meets.
+    let pieces = ids(&r);
+    assert_eq!(pieces.len(), 8);
+    let st = s.doc().unwrap();
+    let layer: Vec<NodeId> = st.doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    if had_fill {
+        let kept = st.doc.node(rect).unwrap();
+        assert!(kept.appearance.stroke().is_none() && kept.appearance.fill().is_some(), "the fill stays on the rectangle");
+        assert_eq!(layer, [vec![rect], pieces.clone()].concat(), "the fill below its dashes");
+    } else {
+        assert_eq!(layer, pieces);
+    }
+    assert!(pieces.iter().all(|id| st.doc.node(*id).unwrap().appearance.fill().is_none()), "an open dash isn't filled");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Aligned to corners: a dash centred on each corner, the four sides each starting and ending
+    // on half a dash; 12 dashes along the sides.
+    s.execute("stroke.set", &json!({"dash": [10, 10], "alignDashes": true})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    let corners = [Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 60.0), Point::new(0.0, 60.0)];
+    let mut centred = 0;
+    for id in ids(&r) {
+        let sp = path(&s, id).subpaths[0].clone();
+        if let [a, b, c] = sp.anchors.as_slice()
+            && corners.iter().any(|k| b.p.distance(*k) < 1e-6)
+        {
+            assert!((a.p.distance(b.p) - 5.0).abs() < 1e-6 && (c.p.distance(b.p) - 5.0).abs() < 1e-6, "{sp:?}");
+            centred += 1;
+        }
+    }
+    assert_eq!((ids(&r).len(), centred), (16, 4));
+}
+
+#[test]
+fn expand_dashes_turns_dots_into_paths_on_their_point_and_releases_compound_paths() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (100.0, 0.0)], false);
+    select(&mut s, &[l]);
+    s.execute("stroke.set", &json!({"dash": [0, 20], "cap": "round"})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    assert_eq!(ids(&r).len(), 6, "a dot every 20 from 0 to 100");
+    assert!(ids(&r).iter().all(|id| path(&s, *id).bounds().unwrap().width() == 0.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Under a butt cap a dot paints nothing, so there is nothing to expand.
+    s.execute("stroke.set", &json!({"cap": "butt"})).unwrap();
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({})]);
+    // A compound path's dashes are paths of their own with its stroke.
+    let a = line(&mut s, &[(0.0, 100.0), (50.0, 100.0)], false);
+    let b = line(&mut s, &[(0.0, 120.0), (50.0, 120.0)], false);
+    select(&mut s, &[a, b]);
+    let c = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    s.execute("stroke.set", &json!({"weight": 2, "dash": [20, 10], "cap": "butt"})).unwrap();
+    let r = s.execute("addon.pathtools.expandDashes", &json!({})).unwrap();
+    // Each 50 line: 20, gap, 20.
+    let st = s.doc().unwrap();
+    assert_eq!(ids(&r).len(), 4);
+    for id in ids(&r) {
+        let n = st.doc.node(id).unwrap();
+        assert!(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. }), "a plain path");
+        assert_eq!(n.appearance.stroke_width(), 2.0);
+        assert!(n.appearance.stroke().unwrap().dash.is_none());
+    }
+    assert!(st.doc.node(c).is_none_or(|n| n.appearance.stroke().is_none()), "the compound path's dashes are gone from it");
+}
+
+#[test]
+fn expand_dashes_refuses_without_dashes_and_past_the_limit() {
+    let mut s = session();
+    let l = line(&mut s, &[(0.0, 0.0), (1e5, 0.0)], false);
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({})]);
+    select(&mut s, &[l]);
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({}), json!({"ids": "x"}), json!({"zzz": 1})]);
+    // 125000 dashes refused; 1000 are fine.
+    s.execute("stroke.set", &json!({"dash": [0.4, 0.4]})).unwrap();
+    refuses(&mut s, "addon.pathtools.expandDashes", &[json!({})]);
+    s.execute("stroke.set", &json!({"dash": [50, 50]})).unwrap();
+    assert_eq!(s.execute("addon.pathtools.expandDashes", &json!({})).unwrap()["dashes"], json!(1000));
+}

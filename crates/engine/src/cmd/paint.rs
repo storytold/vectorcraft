@@ -303,7 +303,7 @@ pub(crate) fn check_keep_model(p: &Value, cmd: &str) -> Result<()> {
 
 /// The model RGB colours given in `p` are stored in: the document's in a CMYK document (`None` in
 /// an RGB one, or with `keepModel`).
-fn new_color_model(s: &Session, p: &Value) -> Option<vectorcraft_color::cms::Model> {
+pub(super) fn new_color_model(s: &Session, p: &Value) -> Option<vectorcraft_color::cms::Model> {
     let mode = s.active()?.doc.color_mode;
     (mode != vectorcraft_doc::ColorMode::Rgb && !bool_or(p, "keepModel", false)).then(|| mode.model())
 }
@@ -697,8 +697,8 @@ fn black_or_white(c: &Color) -> bool {
     }
 }
 
-/// The points the active tool has picked (its `meshPoints` option: the Mesh tool's or Direct
-/// Selection's) on the gradient meshes among `ids`, in range, each mesh with its points.
+/// The points the active tool has picked (its `meshPoints` option: the Mesh tool's, Direct
+/// Selection's or the Lasso's) on the gradient meshes among `ids`, in range, each mesh with its points.
 fn picked_mesh_points(s: &Session, ids: &[NodeId]) -> Vec<(NodeId, Vec<usize>)> {
     let o = s.tool_options();
     let (Some(picked), Ok(st)) = (o.get("meshPoints").and_then(Value::as_array), s.doc()) else { return vec![] };

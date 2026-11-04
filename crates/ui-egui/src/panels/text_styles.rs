@@ -375,8 +375,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     if menu_item(ui, &crate::i18n::fmt(tl!("{kind} Style Options…"), &[("kind", kind.what_label())]), user, false)
         && let Some(n) = &sel
     {
-        let label = format!("{} Style Options", kind.what());
-        app.run("ui.paramDialog", json!({ "command": format!("{p}.rename"), "label": label, "params": { "name": n, "to": n } })).ok();
+        if kind == Kind::Char {
+            app.run("ui.charStyleOptions", json!({ "name": n })).ok();
+        } else {
+            let label = format!("{} Style Options", kind.what());
+            app.run("ui.paramDialog", json!({ "command": format!("{p}.rename"), "label": label, "params": { "name": n, "to": n } })).ok();
+        }
     }
 }
 

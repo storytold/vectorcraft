@@ -176,6 +176,24 @@ mod tests {
         }
     }
 
+    /// Searching for the preference's name, Use Precise Cursors, finds the command that toggles it,
+    /// and choosing the first result changes the preference.
+    #[test]
+    fn use_precise_cursors_palette_result_toggles_the_preference() {
+        let ctx = egui::Context::default();
+        let query = "use precise cursors";
+        let entries = entries(&ctx, Lang::EN);
+        let matches: Vec<&Entry> = entries.iter().filter(|e| query.split_whitespace().all(|word| e.haystack.contains(word))).take(14).collect();
+        assert!(matches.iter().any(|e| e.id == "view.preciseCursors"), "preference toggle appears for its name");
+        assert!(entries.iter().filter(|e| e.id == "view.capsLock").all(|e| e.shown != "Use Precise Cursors"));
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let before = app.session.prefs.use_precise_cursors;
+        let first = matches.first().expect("query has a result");
+        menus::invoke(&mut app, &first.id, json!({}));
+        assert_ne!(app.session.prefs.use_precise_cursors, before, "first result toggles the preference");
+    }
+
     /// The palette lists `select.key` once, as Cancel Key Object (#541): a pick runs it with no id,
     /// which cancels the key object. `engine.commands` gives agents the same label.
     #[test]

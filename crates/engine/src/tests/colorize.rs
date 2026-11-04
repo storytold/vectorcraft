@@ -380,6 +380,38 @@ fn colorized_gray_image_is_omitted_from_legacy_ai_when_requested() {
 }
 
 #[test]
+fn eps_export_writes_a_colorized_image_in_its_spot_ink_without_flattening() {
+    let mut s = session();
+    let id = image(&mut s, "gray", gray(false));
+    s.execute("paint.setFill", &json!({"swatch": "Ink", "ids": [id.0]})).unwrap();
+    let out = s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": false})).unwrap();
+    assert!(out["warnings"].as_array().unwrap().iter().all(|w| !w.as_str().unwrap().contains("transparency is flattened")), "{}", out["warnings"]);
+    let bytes = vectorcraft_format::base64_decode(out["dataBase64"].as_str().unwrap()).unwrap();
+    let ps = String::from_utf8_lossy(&bytes);
+    assert!(ps.contains("imagemask") && ps.contains("/Separation (Ink) cvn"), "the image prints on the Ink plate");
+    assert!(ps.contains("%%DocumentCustomColors: (Ink)"));
+
+    // Opacity still flattens it.
+    s.execute("transparency.set", &json!({"ids": [id.0], "opacity": 50})).unwrap();
+    let out = s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": false})).unwrap();
+    assert!(out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("transparency is flattened")), "{}", out["warnings"]);
+}
+
+#[test]
+fn eps_export_still_flattens_a_colorize_paint_on_a_color_image() {
+    let mut s = session();
+    let rgb = png(image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(2, 1, vec![0, 128, 255, 255, 0, 0]).unwrap()));
+    let id = image(&mut s, "rgb", rgb);
+    s.edit("Colorize", |d, _| {
+        d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
+        Ok(())
+    })
+    .unwrap();
+    let out = s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": false})).unwrap();
+    assert!(out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("transparency is flattened")), "{}", out["warnings"]);
+}
+
+#[test]
 fn flattened_colorized_image_shows_the_art_under_white_pixels() {
     let mut s = session();
     let background = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();

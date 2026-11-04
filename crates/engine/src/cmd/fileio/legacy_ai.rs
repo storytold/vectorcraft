@@ -28,7 +28,7 @@
 //! layer's hidden objects go to a hidden layer of their own just above it, with `omit` they are
 //! left out, with `visible` they show where they are. Type is written as text the format's reader
 //! lays out again, in the fonts it names; `outlineText` writes its outlines instead (as type that
-//! 8-bit text can't hold always is).
+//! 8-bit text can't hold and type with rotated characters always are).
 
 use std::sync::Arc;
 
@@ -41,7 +41,7 @@ use super::super::{Affine, EngineError, NodeId, Result, bad};
 use super::{ArtboardPick, Encoded, Format};
 
 /// Does `p` ask a save in `f` for a legacy `.ai` file of version 7 (`aiVersion: "7"`)? An unknown
-/// version is an error, and so is version 7 for a `.ait` template, which is PDF-compatible only.
+/// version is an error, and so is version 7 for a `.ait` template, which is never a legacy file.
 pub(super) fn wanted(cmd: &str, f: &Format, p: &Value) -> Result<bool> {
     let legacy = match p.get("aiVersion") {
         None | Some(Value::Null) => false,
@@ -51,9 +51,15 @@ pub(super) fn wanted(cmd: &str, f: &Format, p: &Value) -> Result<bool> {
         Some(v) => return Err(bad(cmd, format!("aiVersion {v}: \"pdf\" (PDF-compatible, the default) or \"7\" (legacy .ai, version 7)"))),
     };
     if legacy && f.id == "ait" {
-        return Err(bad(cmd, "aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible"));
+        return Err(bad(cmd, "aiVersion 7 writes legacy .ai files, not .ait templates"));
     }
     Ok(legacy)
+}
+
+/// `f` (the `.ai` format, whose label names the PDF-compatible file) named, in its errors, as the
+/// legacy `.ai` file.
+pub(super) fn named(f: &Format) -> Format {
+    Format { label: "legacy .ai (version 7)", ..*f }
 }
 
 /// What a legacy `.ai` does with the images it can't hold (`transparentImages`).
@@ -109,7 +115,7 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
     }
     let mode = see_through(cmd, p)?;
     let (hidden, outline_text) = (hidden_objects(cmd, p)?, outline_text(cmd, p)?);
-    let picked: ArtboardPick = super::encode::options(f, p)?;
+    let picked: ArtboardPick = super::encode::options(&named(f), p)?;
     let boards = picked.resolve(n).map_err(|e| bad(cmd, e))?.unwrap_or_else(|| (0..n).collect());
     let mut enc = Encoded { warnings: vec![FIDELITY.to_string()], ..Encoded::default() };
     if boards.len() > 1 {
@@ -167,7 +173,7 @@ fn expand_image_patterns(d: &mut Document) -> Result<()> {
     let keys = super::super::flatten::see_through_images(d);
     let layers: Vec<NodeId> = d.layers.iter().map(|l| l.id).collect();
     for id in layers {
-        super::super::expand::expand_transparent_image_patterns(d, id, &keys)?;
+        super::super::expand::expand_transparent_image_patterns(d, id, &keys, &|_, _| true)?;
     }
     Ok(())
 }

@@ -144,6 +144,17 @@ fn catalan_reads_as_catalan() {
     assert_eq!(message(ca, nested), "l’ordre `object.group` no està disponible ara mateix: no hi ha res seleccionat");
 }
 
+#[test]
+fn font_height_reference_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in
+            ["Show Font Height Options", "Hide Font Height Options", "Set Font Height Reference", "Em Box", "Cap Height", "x-Height", "ICF Box"]
+        {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// Each language counts with its own plural rule: the form a count picks (`one`, then `few`, then
 /// `other`/`many`).
 #[test]
@@ -271,7 +282,7 @@ fn bundled_catalogs_are_consistent() {
         let mut seen = std::collections::HashSet::new();
         for (ctx, src, tr) in &entries {
             assert!(seen.insert((ctx.clone(), src.clone())), "{}: duplicate {ctx:?} {src:?}", l.code);
-            if ctx == "@plural" {
+            if ctx == "@plural" || ctx == "@msgplural" {
                 let one_other: Vec<&str> = src.split('|').collect();
                 assert_eq!(one_other.len(), 2, "{}: plural source must be `one|other`: {src:?}", l.code);
                 for form in tr.split('|') {
@@ -576,7 +587,7 @@ fn character_panel_terms_agree_within_each_catalog() {
     for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
         let (entries, _) = parse_entries(l.source);
         let row = |src: &str| entries.iter().find(|(ctx, s, _)| ctx.is_empty() && s == src).map(|(_, _, tr)| tr.to_lowercase());
-        let kerning = row("Kerning (0 = Auto)").map(|tr| tr.split(" (").next().unwrap_or_default().trim().to_string());
+        let kerning = row("Kerning");
         let leading = row("Leading");
         let tracking = row("Tracking");
         for (a, b) in [(&kerning, &leading), (&kerning, &tracking), (&leading, &tracking)] {
@@ -1500,6 +1511,159 @@ fn package_status_message_templates_parse() {
     assert!(Catalog::parse("@msg\tPackaged {n} file(s) in {folder}{note}\tbad\n").message("Packaged 1 file(s) in /a b").is_none());
 }
 
+/// A `@msgplural` row translates both English forms of a message with a count, and the count
+/// picks the language's form.
+#[test]
+fn messages_with_a_count_take_the_plural_form() {
+    let c = Catalog::parse("@msgplural\tSaved {n} file|Saved {n} files\tone {n}|few {n}|many {n}\n");
+    for s in ["Saved 1 file", "Saved 4 files"] {
+        let (forms, caps) = c.message_forms(s).unwrap();
+        assert_eq!(forms, ["one {n}", "few {n}", "many {n}"], "{s}");
+        assert_eq!(caps.len(), 1, "{s}");
+    }
+    assert!(c.message_forms("Saved 1 files!").is_none());
+    let cs = cs();
+    assert_eq!(message(cs, "Packaged 1 file"), "Zabalen 1 soubor");
+    assert_eq!(message(cs, "Packaged 4 files"), "Zabaleny 4 soubory");
+    assert_eq!(message(cs, "Packaged 21 files"), "Zabaleno 21 souborů");
+}
+
+/// The Gamut Check status line names a count of 1 in the singular and other counts in the plural,
+/// and every complete catalog translates it, in the form its plural rule picks.
+#[test]
+fn gamut_check_status_takes_the_plural_form() {
+    use crate::panels::separations::gamut_check_status;
+    assert_eq!(gamut_check_status(0), "All colors are within the CMYK gamut");
+    assert_eq!(gamut_check_status(1), "1 color is out of the CMYK gamut");
+    assert_eq!(gamut_check_status(3), "3 colors are out of the CMYK gamut");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for n in [0, 1, 3] {
+            let s = gamut_check_status(n);
+            assert_ne!(message(lang, &s), s, "{code}: {s}");
+        }
+    }
+    assert_eq!(message(de(), &gamut_check_status(1)), "1 Farbe liegt außerhalb des CMYK-Farbumfangs");
+    assert_eq!(message(de(), &gamut_check_status(3)), "3 Farben liegen außerhalb des CMYK-Farbumfangs");
+    let cs = cs();
+    assert_eq!(message(cs, &gamut_check_status(1)), "1 barva je mimo gamut CMYK");
+    assert_eq!(message(cs, &gamut_check_status(3)), "3 barvy jsou mimo gamut CMYK");
+    assert_eq!(message(cs, &gamut_check_status(5)), "5 barev je mimo gamut CMYK");
+}
+
+/// The link, font and export status messages with a count, in English for a count of 1 and of 2.
+const COUNTED_STATUS_MESSAGES: &[(&str, &str)] = &[
+    ("1 linked file can't be read here: its preview shows", "2 linked files can't be read here: their previews show"),
+    ("1 image couldn't be decoded and shows as a crossed box", "2 images couldn't be decoded and show as crossed boxes"),
+    ("1 linked image changed on disk: Update Links shows the new version", "2 linked images changed on disk: Update Links shows the new versions"),
+    ("Updated 1 linked file changed on disk", "Updated 2 linked files changed on disk"),
+    ("Exported /out/a.svg with 1 note: a note", "Exported /out/a.svg with 2 notes: a note"),
+    ("Embedded 1 image; 1 missing: relink them first", "Embedded 2 images; 1 missing: relink them first"),
+    ("Embedded 1 image", "Embedded 2 images"),
+    ("Relinked 1 image", "Relinked 2 images"),
+    ("Relinked 1 image; not in that folder: a.png", "Relinked 2 images; not in that folder: a.png"),
+    ("Relinked 1 image; a.png couldn't be relinked: a reason", "Relinked 2 images; a.png couldn't be relinked: a reason"),
+    ("Updated 1 image", "Updated 2 images"),
+    ("Replaced 1 image", "Replaced 2 images"),
+    ("Broke 1 link", "Broke 2 links"),
+    ("Broke 1 link; 1 can't be read: relink or update them first", "Broke 2 links; 1 can't be read: relink or update them first"),
+    ("1 font file is now in /fonts", "2 font files are now in /fonts"),
+    ("1 font file is now in /fonts; 1 couldn't be added: a reason", "2 font files are now in /fonts; 1 couldn't be added: a reason"),
+    ("1 font isn't available here: its text shows in another font", "2 fonts aren't available here: their text shows in another font"),
+    ("Copied the CSS of 1 object", "Copied the CSS of 2 objects"),
+    ("Downloaded 1 file", "Downloaded 2 files"),
+    ("Exported 1 file to /out", "Exported 2 files to /out"),
+];
+
+/// The link, font and export status messages name a count of 1 in the singular and other counts in
+/// the plural, and every complete catalog translates both, in the form its plural rule picks.
+#[test]
+fn counted_status_messages_take_the_plural_form() {
+    use crate::panels::links::{relinked_status, updated_status};
+    assert_eq!((relinked_status(1), relinked_status(2)), ("Relinked 1 image".to_string(), "Relinked 2 images".to_string()));
+    assert_eq!((updated_status(1), updated_status(2)), ("Updated 1 image".to_string(), "Updated 2 images".to_string()));
+    assert_eq!(crate::dialogs::missing_links::changed_on_disk_status(1), COUNTED_STATUS_MESSAGES[2].0);
+    assert_eq!(crate::dialogs::missing_links::changed_on_disk_status(2), COUNTED_STATUS_MESSAGES[2].1);
+    assert_eq!(crate::io::exported_with_notes("/out/a.svg", 1, "a note"), COUNTED_STATUS_MESSAGES[4].0);
+    assert_eq!(crate::io::exported_with_notes("/out/a.svg", 2, "a note"), COUNTED_STATUS_MESSAGES[4].1);
+    // A value that holds placeholder text is not filled in again.
+    assert_eq!(crate::io::exported_with_notes("/out/{first}.svg", 1, "{n}"), "Exported /out/{first}.svg with 1 note: {n}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in COUNTED_STATUS_MESSAGES.iter().flat_map(|(one, other)| [one, other]) {
+            assert_ne!(message(lang, s), *s, "{code}: {s}");
+        }
+    }
+    let cs = cs();
+    assert_eq!(message(cs, &relinked_status(1)), "Znovu propojen 1 obrázek");
+    assert_eq!(message(cs, &relinked_status(3)), "Znovu propojeny 3 obrázky");
+    assert_eq!(message(cs, &relinked_status(5)), "Znovu propojeno 5 obrázků");
+    assert_eq!(message(de(), &updated_status(1)), "1 Bild aktualisiert");
+    assert_eq!(message(de(), &updated_status(2)), "2 Bilder aktualisiert");
+    let noted = crate::io::exported_with_notes("/out/{n}.svg", 1, "{what}");
+    assert_eq!(message(de(), &noted), "/out/{n}.svg mit 1 Hinweis exportiert: {what}");
+    let ru = Lang::from_code("ru").expect("registered");
+    assert_eq!(message(ru, COUNTED_STATUS_MESSAGES[19].0), "Экспортирован 1 файл в /out");
+    assert_eq!(message(ru, "Exported 3 files to /out"), "Экспортировано 3 файла в /out");
+    assert_eq!(message(ru, "Exported 5 files to /out"), "Экспортировано 5 файлов в /out");
+}
+
+/// The open, save and recovery status messages with a count, in English for a count of 1 and of 2.
+const OPEN_SAVE_COUNTED_MESSAGES: &[(&str, &str)] = &[
+    ("Opened with 1 note: a note", "Opened with 2 notes: a note"),
+    ("Saved /out/a.pdf with 1 note: a note", "Saved /out/a.pdf with 2 notes: a note"),
+    ("Discarded 1 recovered document", "Discarded 2 recovered documents"),
+    ("Restored 1 recovered document: save it to keep it", "Restored 2 recovered documents: save them to keep them"),
+];
+
+/// The open, save and recovery status messages and the Global Edit options' Results line name a
+/// count of 1 in the singular and other counts in the plural, and every complete catalog
+/// translates both, in the form its plural rule picks.
+#[test]
+fn open_save_and_recovery_messages_take_the_plural_form() {
+    use crate::io::{opened_with_notes, saved_status};
+    use crate::panels::properties::global_edit_results;
+    use crate::recovery::recovered_status;
+    let saved = |path: &str, n: usize| saved_status(path, &serde_json::json!({ "warnings": vec!["a note"; n] }));
+    let made = [
+        (opened_with_notes(1, "a note"), opened_with_notes(2, "a note")),
+        (saved("/out/a.pdf", 1), saved("/out/a.pdf", 2)),
+        (recovered_status(true, 1), recovered_status(true, 2)),
+        (recovered_status(false, 1), recovered_status(false, 2)),
+    ];
+    for ((one, other), (want_one, want_other)) in made.iter().zip(OPEN_SAVE_COUNTED_MESSAGES) {
+        assert_eq!((one.as_str(), other.as_str()), (*want_one, *want_other));
+    }
+    // A path that holds placeholder text is not filled in again.
+    assert_eq!(saved("/out/{first}.pdf", 1), "Saved /out/{first}.pdf with 1 note: a note");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in OPEN_SAVE_COUNTED_MESSAGES.iter().flat_map(|(one, other)| [one, other]) {
+            assert_ne!(message(lang, s), *s, "{code}: {s}");
+        }
+    }
+    for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
+        let lang = Lang::from_code(l.code).expect("registered");
+        for n in [1, 2] {
+            assert_ne!(trn(lang, n, "Result: {n}", "Results: {n}"), trn(Lang::EN, n, "Result: {n}", "Results: {n}"), "{}: {n}", l.code);
+        }
+    }
+    assert_eq!((global_edit_results(1), global_edit_results(2)), ("Result: 1".to_string(), "Results: 2".to_string()));
+    set_current(de());
+    assert_eq!((global_edit_results(1), global_edit_results(2)), ("Ergebnis: 1".to_string(), "Ergebnisse: 2".to_string()));
+    set_current(Lang::EN);
+    assert_eq!(message(de(), OPEN_SAVE_COUNTED_MESSAGES[0].0), "Mit 1 Hinweis geöffnet: a note");
+    assert_eq!(message(de(), OPEN_SAVE_COUNTED_MESSAGES[0].1), "Mit 2 Hinweisen geöffnet: a note");
+    assert_eq!(message(de(), &saved("/out/{n}.pdf", 2)), "/out/{n}.pdf mit 2 Hinweisen gespeichert: a note");
+    let cs = cs();
+    assert_eq!(message(cs, &recovered_status(true, 1)), "Zahozen 1 obnovený dokument");
+    assert_eq!(message(cs, &recovered_status(true, 3)), "Zahozeny 3 obnovené dokumenty");
+    assert_eq!(message(cs, &recovered_status(true, 5)), "Zahozeno 5 obnovených dokumentů");
+    let ru = Lang::from_code("ru").expect("registered");
+    assert_eq!(message(ru, &opened_with_notes(1, "x")), "Открыто с 1 примечанием: x");
+    assert_eq!(message(ru, &opened_with_notes(3, "x")), "Открыто с 3 примечаниями: x");
+}
+
 /// The scan reads the message of an error made with one of the engine's [`ERROR_HELPERS`] or with
 /// an error enum's variant, `EngineError::Disabled`'s reason included: a literal or a `format!`
 /// string, on the call's line or wrapped over several lines, in the same template form as the
@@ -1620,6 +1784,25 @@ fn blend_spine_param_errors_say_what_is_wrong() {
     assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == "select a blend or give `id`"), "{e}");
 }
 
+/// Import Data Sets' refusal of two header cells that name one variable is translated in every
+/// language that translates every message.
+#[test]
+fn dataset_import_repeated_column_error_is_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let e = s.execute("dataset.import", &json!({"csv": "City,City\nParis,Rome"})).unwrap_err();
+    let want = "columns 1 and 2 both name the variable `City`";
+    assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+    let e = e.to_string();
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, &e);
+        assert!(!shown.contains(want), "{code}: {shown}");
+    }
+}
+
 /// The errors of saving, renaming and deleting a tracing preset are translated in every language
 /// that translates every message.
 #[test]
@@ -1642,6 +1825,39 @@ fn saved_tracing_preset_errors_are_translated() {
         assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
         errors.push((e.to_string(), want));
     }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, want) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(want), "{code}: {shown}");
+        }
+    }
+}
+
+/// Export Data Sets' refusals of more data sets or variables than Import Data Sets reads are
+/// translated in every language that translates every message.
+#[test]
+fn dataset_export_limit_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let rows = "x\n".repeat(1000);
+    s.execute("dataset.import", &json!({"csv": format!("V1\n{rows}")})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Set 1001"})).unwrap();
+    let mut errors = vec![];
+    let e = s.execute("dataset.export", &json!({})).unwrap_err();
+    let want = "more than 1000 data sets: Import Data Sets reads at most 1000";
+    assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+    errors.push((e.to_string(), want));
+    s.execute("dataset.delete", &json!({"names": ["Set 1001"]})).unwrap();
+    for i in 2..=257 {
+        s.execute("variable.define", &json!({"name": format!("V{i}"), "kind": "text"})).unwrap();
+    }
+    let e = s.execute("dataset.export", &json!({})).unwrap_err();
+    let want = "more than 256 variables: Import Data Sets reads at most 256";
+    assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+    errors.push((e.to_string(), want));
     for code in COMPLETE_MESSAGES {
         let lang = Lang::from_code(code).expect("registered");
         for (e, want) in &errors {
@@ -1674,6 +1890,34 @@ fn postscript_errors_keep_their_name_and_meaning() {
                 let ok = shown.contains("typecheck") && shown.contains("`add`") && meaning_shown;
                 assert!(ok, "{}: {shown}", lang.code());
             }
+        }
+    }
+}
+
+/// Import Data Sets' errors for a refused cell are translated in every language that translates
+/// every message, with the line and the variable kept.
+#[test]
+fn dataset_import_cell_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Sales", "kind": "graph"})).unwrap();
+    let mut errors = vec![];
+    for (csv, want) in [
+        ("Show\nmaybe".to_string(), "line 2: value for `Show` must be true or false"),
+        (format!("Sales\n\"{}\"", "1,".repeat(140_000)), "line 2: value for `Sales` is longer than 262144 bytes"),
+    ] {
+        let e = s.execute("dataset.import", &json!({"csv": csv})).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+        errors.push((e.to_string(), want));
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, want) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(want) && shown.contains('2') && shown.contains('`'), "{code}: {shown}");
         }
     }
 }
@@ -1925,6 +2169,7 @@ const RENDER_SITE_ROWS: &[(&str, &str)] = &[
     ("file-filter", "Flattener presets"),
     ("file-filter", "PDF presets"),
     ("file-filter", "Print presets"),
+    ("file-filter", "Export presets"),
     ("file-filter", "SVG Compressed"),
     ("file-filter", "PDF-compatible .ai"),
     ("file-filter", "VectorCraft Template"),
@@ -1967,4 +2212,20 @@ fn polish_plurals_have_three_forms() {
         }
     }
     assert!(count >= 13, "Polish plural rows missing");
+}
+
+/// Every catalog names each numeral system of Character panel menu › Digits, in the `digits`
+/// context (where the language's name would read wrong) or with its plain row (#4942).
+#[test]
+fn every_catalog_names_the_digits_menus_numeral_systems() {
+    let mut missing = Vec::new();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let cat = l.catalog();
+        for (label, _) in crate::panels::character::DIGITS {
+            if cat.contextual("digits", label).is_none() && cat.plain(label).is_none() {
+                missing.push(format!("{}: {label}", l.code));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "Digits menu labels without a row:\n{}", missing.join("\n"));
 }

@@ -24,6 +24,7 @@ pub mod intertwine;
 pub mod meshblend;
 pub mod meshedit;
 pub mod mirror;
+pub mod nineslice;
 pub mod objects_on_path;
 pub mod params;
 pub mod pathtype;
@@ -58,7 +59,7 @@ mod input;
 
 pub use context::{GlyphSnap, PaintDefaults, ScreenFrame, ToolContext};
 pub use cursor::Cursor;
-pub use input::{Action, Mods, PointerEvent, PointerKind, ToolKey};
+pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 
 /// Visual feedback drawn by the UI in screen space (coordinates here are document space).
 #[derive(Clone, Debug, PartialEq)]
@@ -122,6 +123,12 @@ pub trait Tool: Send {
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action>;
     fn key(&mut self, _cx: &ToolContext, _key: ToolKey, _mods: Mods) -> Vec<Action> {
         vec![]
+    }
+    /// The press in progress is dropped (a long touch, a canceled touch, a second finger): the
+    /// engine has undone its interaction and sends a release after this. By default the tool takes
+    /// Escape, as during a drag.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.key(cx, ToolKey::Escape, Mods::default())
     }
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         vec![]
@@ -316,7 +323,7 @@ pub(crate) const MAX_STROKE_SAMPLES: usize = 100_000;
 /// `n / PREVIEW_ALL_UNTIL` samples. Each preview carries every sample so far, so previewing at
 /// every sample cost the square of the stroke's length (a gesture of many drags sent at once
 /// spent seconds); this way it is about `PREVIEW_ALL_UNTIL` per sample.
-const PREVIEW_ALL_UNTIL: usize = 1000;
+pub(crate) const PREVIEW_ALL_UNTIL: usize = 1000;
 
 /// Whether a drag that made the stroke `n` samples long previews it ([`PREVIEW_ALL_UNTIL`]).
 pub(crate) fn previews_at(n: usize) -> bool {
@@ -507,6 +514,8 @@ pub(crate) mod testutil {
             construction_angles: guides::construction_angles(guides::DEFAULT_CONSTRUCTION_ANGLES),
             screen: None,
             plane_widget: Some(Default::default()),
+            precise_cursors: false,
+            global_edit: &[],
         }
     }
 }
@@ -529,6 +538,7 @@ mod cursor_tests {
         let away = Point::new(400.0, 400.0);
         for (id, c) in [
             ("lasso", Cursor::Lasso),
+            (addons::enclosing_lasso::ID, Cursor::Lasso),
             ("magicWand", Cursor::MagicWand),
             ("paintbrush", Cursor::Paintbrush),
             ("blobBrush", Cursor::BlobBrush),
@@ -553,7 +563,13 @@ mod cursor_tests {
         ] {
             assert_eq!(cursor_at(id, &d, away), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
-            assert_eq!(c.stand_in(), Some(if id == "mesh" { Cursor::PenAdd } else { Cursor::Crosshair }), "{id}");
+            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it.
+            let stand_in = match id {
+                "mesh" => Some(Cursor::PenAdd),
+                "blobBrush" | "eraser" => None,
+                _ => Some(Cursor::Crosshair),
+            };
+            assert_eq!(c.stand_in(), stand_in, "{id}");
         }
         // Away from a selected path the Pencil shows its new-path cursor, drawn with a star; its
         // own cursor, for drawing and for a selected path under the pointer, borrows the crosshair.

@@ -6,7 +6,7 @@ use super::props::set_props;
 use super::shape::{expand_shape, set_live_shape};
 use super::transform::{move_cmd, nudge, reflect, rotate, scale, shear, transform, transform_again};
 use super::{CommandSpec, cmd, has_doc, has_multi, has_selection, has_selection_or_guides};
-use crate::cmd::{has_selection_outside_isolation, outside_isolation};
+use crate::cmd::has_selected_member;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -150,8 +150,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Selection",
             ["Object", "Lock"],
             Some("Cmd+2"),
-            "{ids?: [id…] (selected first; default: the selection)}",
-            has_selection_outside_isolation,
+            "{ids?: [id…] (selected first; default: the selection; in isolation mode, only those inside the isolated object)}",
+            has_selected_member,
             lock
         ),
         cmd!(
@@ -159,8 +159,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unlock All",
             ["Object"],
             Some("Cmd+Alt+2"),
-            "{scope?: \"document\"|\"group\" (default document; group: only the objects inside the groups that hold the selected objects, a selected group holding its own; the in-window menu item chosen with Shift+Alt)} unlock the locked objects and select them → {count}",
-            outside_isolation,
+            "{scope?: \"document\"|\"group\" (default document, which in isolation mode is the isolated object; group: only the objects inside the groups that hold the selected objects, a selected group holding its own; the in-window menu item chosen with Shift+Alt)} unlock the locked objects and select them → {count}",
+            has_doc,
             unlock_all
         ),
         cmd!(
@@ -168,8 +168,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Selection",
             ["Object", "Hide"],
             Some("Cmd+3"),
-            "{ids?: [id…] (selected first; default: the selection)}",
-            has_selection_outside_isolation,
+            "{ids?: [id…] (selected first; default: the selection; in isolation mode, only those inside the isolated object)}",
+            has_selected_member,
             hide
         ),
         cmd!(
@@ -177,8 +177,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Show All",
             ["Object"],
             Some("Cmd+Alt+3"),
-            "{scope?: \"document\"|\"group\" (default document; group: only the objects inside the groups that hold the selected objects, a selected group holding its own; the in-window menu item chosen with Shift+Alt)} show the hidden objects and select them → {count}",
-            outside_isolation,
+            "{scope?: \"document\"|\"group\" (default document, which in isolation mode is the isolated object; group: only the objects inside the groups that hold the selected objects, a selected group holding its own; the in-window menu item chosen with Shift+Alt)} show the hidden objects and select them → {count}",
+            has_doc,
             show_all
         ),
         cmd!(

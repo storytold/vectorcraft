@@ -28,7 +28,12 @@
 //! - `import`: the PostScript interpreter.
 //! - `print`: print jobs as PostScript files ([`print()`]), their pages drawn by `scene`.
 //! - `legacy_ai`: legacy `.ai` files of version 7 ([`export_legacy_ai`]), with their layers and groups.
+//! - `ai_editing`: the editing copy of the art a PDF-compatible `.ai` file carries
+//!   ([`export_ai_editing`], [`ai_private_data`]).
+//! - `ai_ops`: the path and line style operators those two write.
 
+mod ai_editing;
+mod ai_ops;
 mod import;
 mod latin;
 mod legacy_ai;
@@ -37,7 +42,10 @@ mod ps;
 mod scene;
 mod tiff;
 
-pub use import::{Imported, POSTSCRIPT_ERRORS, ai_alone, family_style, import, import_trusting, import_with, is_loss, layered_ai, page};
+pub use ai_editing::{AiEditingOptions, AiEditingOutput, CREATOR_VERSION, export_ai_editing, private_data as ai_private_data};
+pub use import::{
+    Imported, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, family_style, import, import_trusting, import_with, is_loss, layered_ai, page,
+};
 pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai};
 pub use print::{PrintJob, PrintPage, print};
 
@@ -263,10 +271,13 @@ pub(crate) fn comments(s: &mut String, title: &str, created: Option<i64>, level:
     }
     let _ = writeln!(s, "%%LanguageLevel: {}", level.id());
     s.push_str("%%DocumentData: Clean7Bit\n");
-    for (i, (name, cmyk)) in custom.iter().enumerate() {
+    // Each `%%+` line continues the comment right above it.
+    for (i, (name, _)) in custom.iter().enumerate() {
         let _ = writeln!(s, "{}{}", if i == 0 { "%%DocumentCustomColors: " } else { "%%+ " }, ps::string(name));
+    }
+    for (i, (name, cmyk)) in custom.iter().enumerate() {
         let [c, m, y, k] = cmyk.map(|v| ps::num(f64::from(v)));
-        let _ = writeln!(s, "%%CMYKCustomColor: {c} {m} {y} {k} {}", ps::string(name));
+        let _ = writeln!(s, "{}{c} {m} {y} {k} {}", if i == 0 { "%%CMYKCustomColor: " } else { "%%+ " }, ps::string(name));
     }
 }
 

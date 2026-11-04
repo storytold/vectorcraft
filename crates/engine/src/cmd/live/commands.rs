@@ -236,7 +236,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Gradient Mesh…",
             ["Object"],
             None,
-            "{ids?, rows?: n (4), cols?: n (4), appearance?: flat|center|edge, highlight?: % (100), at?: [x,y], columns?: as cols} convert filled paths into gradient meshes in their fill colour (a gradient fill: the colour it paints at each point), lightened per `appearance` (with `at`: 1×1 mesh plus lines through that point); an embedded image becomes a mesh over its rectangle (its transform kept) whose points take the average colour and opacity of the picture around them (a linked image is refused: embed it first) → {ids, index?}",
+            "{ids?, rows?: n (4), cols?: n (4), appearance?: flat|center|edge, highlight?: % (100), at?: [x,y], tolerance?: pt (0), columns?: as cols} convert filled paths into gradient meshes in their fill colour (a gradient fill: the colour it paints at each point), lightened per `appearance` (with `at`: 1×1 mesh plus lines through that point, or through the nearest point of the edge when `at` is outside within `tolerance`); an embedded image becomes a mesh over its rectangle (its transform kept) whose points take the average colour and opacity of the picture around them (a linked image is refused: embed it first) → {ids, index?}",
             has_selection,
             mesh_create
         ),
@@ -272,7 +272,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Mesh Line",
             [],
             None,
-            "{id, x, y, color?, keepModel?: bool (as paint.setFill)} add a row and a column through (x, y) to a gradient mesh (new point in `color`) or a mesh envelope → {index}",
+            "{id, x, y, color?, keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y) to a gradient mesh (new point in `color`) or a mesh envelope; a point outside within `tolerance` of the edge adds them through the nearest point of the edge → {index}",
             has_doc,
             mesh_add_line
         ),

@@ -269,6 +269,20 @@ fn structured_junk() {
             json!({"points": [{"x": 0, "y": 0, "pressure": 2}, {"x": 1e308, "y": 0, "pressure": -1}], "extend": {"id": 2, "end": "start"}}),
         ),
         ("brush.freehand", json!({"points": [[0, 0, 0], [50, 50, 1]], "brush": "3 pt. Round"})),
+        (
+            "path.freehand",
+            json!({"points": [[0, 0, null, 1e308, -1e308, 1e308], [10, 0, 0.5, -500, null, -1e308], [20, 0, 1, 0, 0, 0], [20, 0, 1, 90, 90, 720]], "style": "brush"}),
+        ),
+        ("path.freehand", json!({"points": [{"x": 0, "y": 0, "tiltX": "a"}, {"x": 10, "y": 0, "rotation": {}}]})),
+        (
+            "brush.options",
+            json!({"name": "3 pt. Round", "params": {"modes": ["bearing", "tilt", "rotation"], "variation": [1e308, 1e308, 1e308], "angle": 1e308}}),
+        ),
+        (
+            "brush.freehand",
+            json!({"points": [[0, 0, 0.5, 30, 0, 90], [50, 50, 0.5, -30, 89, 270], [100, 0, 0.5, 0, 0, -1e308]], "brush": "3 pt. Round"}),
+        ),
+        ("brush.options", json!({"name": "Confetti", "params": {"modes": ["tilt", "bearing", "rotation", "bearing"], "rotation": [-1e308, 1e308]}})),
         ("brush.options", json!({"name": "3 pt. Round", "params": {"modes": ["pressure", "random", "nope"]}})),
         ("brush.options", json!({"name": "3 pt. Round", "params": {"modes": "pressure", "variation": [1e308, -1e308, 1e308]}})),
         (
@@ -434,8 +448,22 @@ fn structured_junk() {
         ("addon.color.printFixes", json!({"inkLimit": 1e308, "overprintBlack": -1e308})),
         ("addon.color.printFixes", json!({"inkLimit": 1, "overprintBlack": 1, "removeWhiteOverprint": true, "scope": "document", "textOnly": true})),
         ("addon.color.printFixes", json!({"inkLimit": [300], "scope": 3, "ids": "x"})),
+        ("addon.color.nearestSwatch", json!({"library": 7, "count": u64::MAX, "color": [1e308, -1e308, "x"]})),
+        ("addon.color.nearestSwatch", json!({"library": "web-safe-216", "color": {"l": 1e30, "a": -1e30, "b": 0}, "count": 50})),
+        ("addon.color.nearestSwatch", json!({"library": "spectrum-gradients", "fill": "x", "ids": [u64::MAX]})),
+        ("addon.color.applyNearestSwatch", json!({"library": "web-safe-216", "fill": true, "stroke": true})),
+        ("addon.color.applyNearestSwatch", json!({"library": "nope", "ids": "x", "stroke": 3})),
         ("effect.apply", json!({"effect": "no.such.effect"})),
         ("effect.remove", json!({"index": 99})),
+        ("effect.remove", json!({"indices": [0, 99, u64::MAX]})),
+        ("effect.remove", json!({"indices": []})),
+        ("effect.duplicate", json!({"indices": [u64::MAX, 0, 0]})),
+        ("effect.move", json!({"from": [0, u64::MAX], "to": u64::MAX, "toItem": 99})),
+        ("effect.move", json!({"from": [], "to": 0})),
+        ("appearance.moveItem", json!({"indices": [0, 1, u64::MAX], "to": u64::MAX, "contents": u64::MAX})),
+        ("appearance.moveItem", json!({"indices": [1, 0], "to": 0, "from": 0})),
+        ("appearance.duplicateItem", json!({"indices": [0, 1], "to": u64::MAX, "contents": u64::MAX})),
+        ("appearance.duplicateItem", json!({"indices": [0], "contents": 1})),
         ("effect.setParams", json!({"index": 0, "params": null})),
         ("object.path.offsetPath", json!({"offset": 1e308})),
         ("object.path.offsetPath", json!({"offset": -1e308})),
@@ -579,6 +607,36 @@ fn structured_junk() {
         ("addon.pathtools.movePointsTogether", json!({"enabled": true})),
         ("addon.pathtools.slideAnchor", json!({"id": 2, "anchor": 1, "t": 0.5})),
         ("addon.pathtools.movePointsTogether", json!({"enabled": false})),
+        // Arrange Tools add-on.
+        ("addon.arrange.grid", json!({"columns": u64::MAX, "gapX": 1e6, "gapY": -1e6, "centerOnArtboard": true})),
+        ("addon.arrange.grid", json!({"layout": "row", "gapX": f64::MAX, "columns": -1})),
+        ("addon.arrange.grid", json!({"layout": "column", "gapX": -1e6})),
+        ("addon.arrange.swap", json!({"size": true, "scaleStrokes": true})),
+        ("addon.arrange.replace", json!({"fit": "proportional", "keep": true})),
+        ("addon.arrange.replace", json!({"fit": "bounds", "scaleStrokes": true})),
+        ("addon.arrange.size", json!({"width": 1e6, "height": 0.001, "reference": 8, "scaleStrokes": true})),
+        ("addon.arrange.size", json!({"width": 0.001, "proportional": true, "reference": u64::MAX})),
+        ("addon.arrange.groupOverlapping", json!({"ids": "x", "junk": f64::MAX})),
+        ("addon.arrange.randomizeOpacity", json!({"min": 0, "max": 100, "seed": u64::MAX})),
+        ("addon.arrange.randomizeOpacity", json!({"min": f64::MAX, "max": -1e308, "seed": -1, "ids": [u64::MAX]})),
+        ("addon.arrange.randomizeOpacity", json!({"min": 100, "max": 0, "seed": 1e308, "ids": []})),
+        ("addon.arrange.sort", json!({"by": "area", "apply": "area", "distribute": true, "scaleStrokes": true})),
+        ("addon.arrange.sort", json!({"by": "stacking", "apply": "stacking", "order": "random", "seed": u64::MAX})),
+        ("addon.arrange.sort", json!({"by": "opacity", "apply": "y", "order": "descending", "ids": [u64::MAX]})),
+        ("addon.arrange.sort", json!({"by": "x", "apply": "opacity", "distribute": true, "seed": 1e308, "ids": []})),
+        ("addon.arrange.sort", json!({"by": "nope", "apply": null, "order": 3, "distribute": "x"})),
+        ("addon.pathtools.divideDashes", json!({"dash": 1e-308, "gap": -1e308, "fit": "x"})),
+        ("addon.pathtools.divideDashes", json!({"dash": 0.01, "gap": 1e6, "fit": true, "removeGaps": false})),
+        ("addon.pathtools.divideDashes", json!({"dash": f64::MAX, "gap": [0], "removeGaps": null})),
+        ("addon.pathtools.expandDashes", json!({})),
+        ("addon.pathtools.expandDashes", json!({"ids": [0, 1, 2, 3, u64::MAX]})),
+        ("addon.pathtools.expandDashes", json!({"ids": "x", "junk": f64::MAX})),
+        // Refused before anything is written: no format of that name, a time that is no time.
+        ("addon.document.saveTimestampedCopy", json!({"format": "png", "folder": 7})),
+        ("addon.document.saveTimestampedCopy", json!({"format": "svg", "time": [1e308], "folder": null})),
+        ("addon.document.symbolsFromLayers", json!({"layers": "x", "replace": 3})),
+        ("addon.document.symbolsFromLayers", json!({"layers": [1e308, -1, null, u64::MAX], "replace": true})),
+        ("addon.document.symbolsFromLayers", json!({"layers": [], "replace": true})),
         // Smart Pen add-on.
         ("addon.pen.append", json!({"id": 2, "x": 1e308, "y": 0, "in": [1e308, -1e308]})),
         ("addon.pen.append", json!({"id": 2, "subpath": u64::MAX, "x": 0, "y": 0, "segment": "curved"})),
@@ -595,12 +653,20 @@ fn structured_junk() {
         ("addon.pen.reshape", json!({"id": 2, "segment": 0, "t": "x", "dx": 1, "dy": 1, "mode": "symmetric"})),
         ("addon.pen.nextSegment", json!({"curved": "yes"})),
         ("addon.pen.closeJoin", json!({"ids": [u64::MAX]})),
+        // Type Tools add-on.
+        ("addon.type.textTweaker", json!({"attribute": "size", "from": 1296, "to": 0.1, "shape": "random", "seed": u64::MAX})),
+        ("addon.type.textTweaker", json!({"attribute": "tracking", "from": f64::MAX, "to": -1e308, "shape": "spike"})),
+        ("addon.type.textTweaker", json!({"attribute": "rotation", "from": -360, "to": 360, "shape": "bow", "skipSpaces": false, "ids": [u64::MAX]})),
+        ("addon.type.textTweaker", json!({"attribute": "hScale", "id": 2, "start": u64::MAX, "end": 0, "shape": "ease"})),
+        ("addon.type.textTweaker", json!({"attribute": ["size"], "from": "x", "seed": 1e308, "skipSpaces": "no", "ids": "all"})),
         ("addon.cleanup.breakText", json!({"by": "glyphs", "ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, u64::MAX]})),
         ("addon.cleanup.breakText", json!({"by": ["lines"]})),
         ("addon.cleanup.breakText", json!({"by": "paragraphs"})),
         ("addon.cleanup.breakText", json!({"by": "words", "ids": "all"})),
         ("addon.cleanup.combineText", json!({"ids": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]})),
         ("addon.cleanup.combineText", json!({"ids": [-1, 1e308]})),
+        ("addon.cleanup.joinText", json!({"ids": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]})),
+        ("addon.cleanup.joinText", json!({"ids": [-1, 1e308, "x"]})),
         ("addon.cleanup.removeBreaks", json!({"kind": "paragraph", "ids": [1, 2, 3, 4, 5, 6, 7, 8, u64::MAX]})),
         ("addon.cleanup.removeBreaks", json!({"kind": 3})),
         ("addon.cleanup.removeBreaks", json!({"kind": "line", "ids": null})),
@@ -699,7 +765,7 @@ fn shape_builder_options_junk() {
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
 }
 
-/// Area Type Options with junk fit values, on selected area type (the fixtures have none), with
+/// Area Type Options with junk fit and flow values, on selected area type (the fixtures have none), with
 /// text that overflows: never a panic, the document stays sound, and editing still works.
 #[test]
 fn area_options_fit_junk() {
@@ -720,6 +786,11 @@ fn area_options_fit_junk() {
         json!({"fit": "shrinkText", "columns": 100, "gutter": 0, "inset": 10000}),
         json!({"fitMinPercent": 50}),
         json!({"fit": "none", "fitMinPercent": 1e-308}),
+        json!({"flow": "rows", "rows": u64::MAX, "columns": u64::MAX, "gutter": 1e308}),
+        json!({"flow": "rows", "fit": "shrinkText", "rows": 3, "columns": 3}),
+        json!({"flow": "rows", "fit": "autoHeight", "columns": 4}),
+        json!({"flow": {"rows": 1}}),
+        json!({"flow": [1]}),
     ];
     let story = "Words that overflow a small frame. ".repeat(40);
     let mut failures = vec![];

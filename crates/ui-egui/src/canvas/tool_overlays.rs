@@ -166,6 +166,23 @@ pub(super) fn original_path_overlay(app: &VectorcraftApp, p: &egui::Painter, xf:
     }
 }
 
+/// The 9-slice guides of the symbol edited in symbol editing mode: four thin dotted lines across
+/// its art's box, with any tool, whether ruler guides are shown or hidden. The Selection tool drags
+/// them ([`vectorcraft_tools::nineslice`]) at the places drawn here.
+pub(super) fn nine_slice_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    let Some(e) = app.session.active().and_then(|st| st.doc.edited_nine_slice()) else { return };
+    let color = Tokens::get(p.ctx()).selection;
+    for (_, a, b) in e.lines() {
+        let (a, b) = (xf.to_screen(a), xf.to_screen(b));
+        if !a.is_finite() || !b.is_finite() {
+            continue;
+        }
+        if let Some((a, b)) = clip_segment(a, b, xf.rect) {
+            p.extend(Shape::dashed_line(&[a, b], Stroke::new(1.0, color), 2.0, 2.0));
+        }
+    }
+}
+
 /// The slices (unless View → Hide Slices): user and object slices outlined in the Slices
 /// preferences' line colour, auto slices dashed and dimmer, each numbered at its top left (Show
 /// Slice Numbers); selected slices have a bolder outline. The layout is cached per revision.

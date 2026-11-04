@@ -36,18 +36,35 @@ font-technology	Variable	가변
 	Em Box Top/Right	엠 박스 위/오른쪽
 	ICF Top/Right	ICF 위/오른쪽
 	ICF Bottom/Left	ICF 아래/왼쪽
+	Show Font Height Options	글꼴 높이 옵션 표시
+	Hide Font Height Options	글꼴 높이 옵션 숨기기
+	Set Font Height Reference	글꼴 높이 기준 설정
+	Em Box	엠 박스
+	Cap Height	대문자 높이
+	x-Height	x 높이
+	ICF Box	ICF 박스
 	Proportional Metrics	비례 메트릭
 	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어
 	Hindi	힌디어
 	Farsi	페르시아어
+digits	Devanagari	데바나가리
+digits	Bengali	벵골어
+digits	Gurmukhi	구르무키
+digits	Gujarati	구자라트어
+digits	Odia	오리야어
+digits	Tamil	타밀어
+digits	Telugu	텔루구어
+digits	Kannada	칸나다어
+digits	Malayalam	말라얄람어
 	Favorites	즐겨찾기
 	Flip	뒤집기
 	Japanese	일본어
 	Join Our Discord	Discord 참여하기
 	Line-end Punctuation Half Width	줄 끝 문장 부호 반각
 	Insert Kashidas	카시다 삽입
+	Kashidas	카시다
 	Long	길게
 	Stylistic	스타일
 	Mojikumi Set	모지쿠미 세트
@@ -276,6 +293,9 @@ font-technology	Variable	가변
 	Hide Live Paint Gaps	라이브 페인트 간격 숨기기
 	Select Fills	칠 선택
 	Select Strokes	선 선택
+	Paint Fills	칠 페인트
+	Paint Strokes	선 페인트
+	Highlight	강조 표시
 	Image Trace	이미지 추적
 	Image Tracing	이미지 추적
 	Tracing Presets	추적 프리셋
@@ -429,6 +449,7 @@ font-technology	Variable	가변
 	Stroke Weight	선 두께
 	Graphic Style	그래픽 스타일
 	Symbol Instance	심볼 인스턴스
+	Link Block Series	연결된 블록 시리즈
 	Font Family	글꼴 패밀리
 	Font Family & Style	글꼴 패밀리 및 스타일
 	Font Family, Style & Size	글꼴 패밀리, 스타일 및 크기
@@ -436,6 +457,7 @@ font-technology	Variable	가변
 	Variable Font	가변 글꼴
 	Text Fill Color	문자 칠 색상
 	Text Stroke Color	문자 선 색상
+	Text Fill & Stroke Color	문자 칠 및 선 색상
 	All on Same Layers	같은 레이어의 모두
 	Direction Handles	방향 핸들
 	Brush Strokes	브러시 선
@@ -620,10 +642,20 @@ font-technology	Variable	가변
 	Cascade	계단식 배열
 	Tile	바둑판식 배열
 	Float in Window	창에 플로팅
+	Float All in Windows	모두 창에 플로팅
 	Consolidate All Windows	모든 창 통합
 	Workspace	작업 영역
 	Reset Essentials	Essentials 재설정
 	New Workspace…	새 작업 영역…
+	New Toolbar…	새 도구 막대…
+	New Toolbar	새 도구 막대
+	Show Toolbar	도구 막대 표시
+	List Toolbars	도구 막대 목록
+	Manage Toolbars…	도구 막대 관리…
+	Manage Toolbars	도구 막대 관리
+	Rename Toolbar	도구 막대 이름 바꾸기
+	Duplicate Toolbar	도구 막대 복제
+	Delete Toolbar	도구 막대 삭제
 	Manage Workspaces…	작업 영역 관리…
 	Control	컨트롤
 	Contextual Task Bar	상황별 작업 표시줄
@@ -945,7 +977,7 @@ font-technology	Variable	가변
 	Apply Last Gradient	마지막 그레이디언트 적용
 	Apply Paragraph Style	단락 스타일 적용
 	Apply to All	모두에 적용
-	Apply to All ({count} more missing)	모두에 적용(누락 {count}개 더 있음)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	모두에 적용(누락 {n}개 더 있음)
 	Arc	호
 	Arc Tool	호 도구
 	Area / Path Type	영역/패스 문자
@@ -993,6 +1025,9 @@ font-technology	Variable	가변
 	Baseline Shift	기준선 이동
 	Batch	일괄 처리
 	Begin Recording	기록 시작
+	Exclude from playback	재생에서 제외
+	Include in playback	재생에 포함
+	Include Action Steps	액션 단계 포함
 	Bend:	구부리기:
 	Bevel Join	베벨 조인
 	Bitmap	비트맵
@@ -1222,6 +1257,13 @@ font-technology	Variable	가변
 	Create Path	패스 만들기
 	Create Slice	슬라이스 만들기
 	Create Sub-folders	하위 폴더 만들기
+	Clear Selection	선택 지우기
+	Export PDFs As:	PDF 내보내기 방식:
+	Single File	단일 파일
+	Multiple Files	여러 파일
+	Format Presets	형식 사전 설정
+	Grid View	격자 보기
+	Selected: {n}, Total number of files to export: {m}	선택됨: {n}, 내보낼 총 파일 수: {m}
 	Create Text	텍스트 만들기
 	Created	만든 날짜
 	Created:	만든 날짜:
@@ -1281,12 +1323,25 @@ font-technology	Variable	가변
 	Delete Stop	정지점 삭제
 	Delete Swatch	견본 삭제
 	Delete Symbol	심볼 삭제
+	Delete the selected symbol?	선택한 심볼을 삭제하시겠습니까?
+	Delete the selected symbols?	선택한 심볼을 모두 삭제하시겠습니까?
+	No unused symbols	사용하지 않는 심볼이 없습니다
+	Delete Symbols	심볼 삭제
+	One or more of the symbols are in use and cannot be deleted until their instances are expanded or deleted.	하나 이상의 심볼이 사용 중이므로 인스턴스를 확장하거나 삭제하기 전에는 삭제할 수 없습니다.
+	Expand Instances	인스턴스 확장
+	Delete Instances	인스턴스 삭제
+	Yes	예
+	No	아니요
 	Delete Tab	탭 삭제
 	Delete Theme	테마 삭제
 	Delete Transparency Flattener Preset	투명도 병합 프리셋 삭제
 	Delete Width Point	너비 포인트 삭제
 	Delete Workspace	작업 영역 삭제
 	Delete the graphic style “{name}”?	그래픽 스타일 “{name}”을(를) 삭제하시겠습니까?
+	Delete Action Sets	액션 세트 삭제
+	Duplicate Action or Action Set	액션 또는 액션 세트 복제
+	Delete the action set “{name}” and its actions?	액션 세트 “{name}”과(와) 해당 액션을 삭제하시겠습니까?
+	Delete the selected action sets and their actions?	선택한 액션 세트와 해당 액션을 삭제하시겠습니까?
 	Delete theme	테마 삭제
 	Delete this saved preset	저장된 이 프리셋 삭제
 	Delete {kind} Style	{kind} 스타일 삭제
@@ -1350,6 +1405,8 @@ font-technology	Variable	가변
 	Double Quotes:	큰따옴표:
 	Double-click	더블클릭
 	Double-click to edit the characters' paint	더블클릭하여 문자의 색 편집
+	Click to edit	클릭하여 편집
+	Double-click to edit	더블클릭하여 편집
 	Double-click to insert	더블클릭하여 삽입
 	Double-click to rename	더블클릭하여 이름 변경
 	Double-click to target the contents	더블클릭하여 내용 선택
@@ -1392,13 +1449,14 @@ font-technology	Variable	가변
 	Edit PDF Preset	PDF 프리셋 편집
 	Edit Print Preset	인쇄 프리셋 편집
 	Edit Symbol	심볼 편집
+	Exit Symbol Editing Mode	심볼 편집 모드 종료
 	Edit Theme	테마 편집
 	Edit selected paths within:	다음 범위 안의 선택한 패스 편집:
 	Edit or Apply Color Group	색상 그룹 편집 또는 적용
 	Edit or Apply Color Group…	색상 그룹 편집 또는 적용…
 	Edit or Apply Colors	색상 편집 또는 적용
 	Edit the applied effect, or add another one?	적용된 효과를 편집하거나 다른 효과를 추가하시겠습니까?
-	Edit the selected point's colour in the Color panel	색상 패널에서 선택한 포인트의 색상 편집
+	Edit the point	포인트 편집
 	Edit the stop	정지점 편집
 	Edit theme	테마 편집
 	Edit…	편집…
@@ -1473,6 +1531,16 @@ font-technology	Variable	가변
 	Delete Export Preset	내보내기 사전 설정 삭제
 	Export Presets	내보내기 사전 설정
 	Save Export Preset	내보내기 사전 설정 저장
+	Export Export Presets	내보내기 사전 설정 내보내기
+	Export Preset…	사전 설정 내보내기…
+	Import Export Presets	내보내기 사전 설정 가져오기
+	Import Preset…	사전 설정 가져오기…
+@msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset`은(는) document.exportPresets.list에 있는 사전 설정의 이름입니다
+@msg	no export preset `{n}` (see document.exportPresets.list)	내보내기 사전 설정 `{n}`이(가) 없습니다(document.exportPresets.list 참조)
+@msg	no saved export presets to export (name built-in ones in `names`)	내보낼 저장된 내보내기 사전 설정이 없습니다(기본 제공 사전 설정은 `names`에 지정하세요)
+@msg	not an export presets file (format `{_1}`)	내보내기 사전 설정 파일이 아닙니다(형식 `{_1}`)
+@msg	not an export presets file: {e}	내보내기 사전 설정 파일이 아닙니다: {e}
+@msg	`{_1}`: {msg}	`{_1}`: {msg}
 	Export Layer	레이어 내보내기
 	Export Selection	선택 영역 내보내기
 	All in One Folder	모두 폴더 하나에
@@ -1613,6 +1681,7 @@ font-technology	Variable	가변
 	Get Preferences	환경 설정 가져오기
 	Get Text Range	텍스트 범위 가져오기
 	Global	전역
+	Global Adjust	전체 조정
 	Global Brush Dimensions	전역 브러시 치수
 	Global Process Color	전역 프로세스 색상
 	Go To Link	링크로 이동
@@ -1657,6 +1726,10 @@ font-technology	Variable	가변
 	Hard Light	하드 라이트
 	Hard Mix	하드 믹스
 	Harmony Rules:	하모니 규칙:
+	Segmented color wheel	분할 색상환
+	Show smooth color wheel	부드러운 색상환 표시
+	Show segmented color wheel	분할 색상환 표시
+	Show color bars	색상 막대 표시
 	Height	높이
 	Height:	높이:
 	Help › Search Commands…	도움말 › 명령 검색…
@@ -1741,6 +1814,8 @@ font-technology	Variable	가변
 	Objects on Path	패스 위 개체
 	Attach	부착
 	Objects on Path Options	패스 위 개체 옵션
+	Pivot:	피벗:
+	Rotate:	회전:
 	Objects on Path Tool	패스 위 개체 도구
 	Attach Objects on Path	패스 위 개체 부착
 	Expand Objects on Path	패스 위 개체 확장
@@ -1862,6 +1937,7 @@ font-technology	Variable	가변
 	In Tangent Handles	안쪽 접선 핸들
 	In the selected objects	선택한 개체 안에서
 	Inches	인치
+	Include Artboard Fill	아트보드 칠 포함
 	Include Bleed	블리드 포함
 	Include CMYK PostScript in RGB Files	RGB 파일에 CMYK PostScript 포함
 	Include Document Thumbnails	문서 미리 보기 이미지 포함
@@ -1896,7 +1972,7 @@ font-technology	Variable	가변
 	Keep Plain Text	일반 텍스트 유지
 	Keep both sides the same width	양쪽 너비를 같게 유지
 	Keep this row's colors (exclude)	이 행의 색상 유지 (제외)
-	Kerning (0 = Auto)	커닝 (0 = 자동)
+	Kerning	커닝
 	Keyboard Increment	키보드 증분
 	Keyboard Shortcut Conflicts	단축키 충돌
 	Keyboard Shortcut Set	단축키 세트
@@ -1914,6 +1990,8 @@ font-technology	Variable	가변
 	Large	크게
 	Large Tabs	큰 탭
 	Lasso Tool	올가미 도구
+	Enclosing Lasso Tool	둘러싸기 올가미 도구
+	Enclosing Lasso	둘러싸기 올가미
 	Last Effect: {name}	마지막 효과: {name}
 	Last Page	마지막 페이지
 	Layer Options…	레이어 옵션…
@@ -2017,6 +2095,7 @@ font-technology	Variable	가변
 	Manage Workspaces	작업 영역 관리
 	Manually	수동
 	Mark Older Files as [Converted] When Opened	열 때 이전 파일을 [Converted]로 표시
+	Use System Defaults for Edit Original	원본 편집에 시스템 기본값 사용
 	Mark as trapped	트래핑됨으로 표시
 	Marks	표시
 	Match User Interface Brightness	사용자 인터페이스 밝기에 맞춤
@@ -2148,6 +2227,8 @@ font-technology	Variable	가변
 	Roundness:	원형률:
 	Fixed	고정
 	Pressure	필압
+	Tilt	기울기
+	Bearing	방위
 	Shape:	모양:
 	Bristle Length:	강모 길이:
 	Bristle Density:	강모 밀도:
@@ -2324,6 +2405,7 @@ font-technology	Variable	가변
 	Open the URL in the web browser	웹 브라우저에서 URL 열기
 	Optimize for fast web view	빠른 웹 보기용으로 최적화
 	Optimized	최적화됨
+	Optical	광학
 	Options	옵션
 	Options for Selection…	선택 항목 옵션…
 	Options:	옵션:
@@ -2425,6 +2507,8 @@ diagnostics	ui	UI
 	Plates	인쇄판
 	Platform:	플랫폼:
 	Play Current Selection	현재 선택 항목 재생
+	Save Actions…	액션 저장…
+	Load Actions…	액션 불러오기…
 	Plug-in Info	플러그인 정보
 	Plug-in…	플러그인…
 	Points	포인트
@@ -2594,9 +2678,11 @@ mark-style	Japanese	일본식
 	Stop	중지
 	Searching…	검색 중…
 	Not found	찾을 수 없음
-	{folders} folder(s) and {files} file(s) searched	폴더 {folders}개, 파일 {files}개 검색함
-	{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones	다른 앱과 시스템 폴더, 숨김 폴더 등 {count}개 폴더 건너뜀
-	{count} folder(s) or file(s) couldn't be read	폴더 또는 파일 {count}개를 읽을 수 없음
+	{folders} and {files} searched	{folders}, {files} 검색함
+@plural	{n} folder|{n} folders	폴더 {n}개
+@plural	{n} file|{n} files	파일 {n}개
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	다른 앱과 시스템 폴더, 숨김 폴더 등 {n}개 폴더 건너뜀
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	폴더 또는 파일 {n}개를 읽을 수 없음
 	The search stopped at its limit: search a smaller folder.	검색이 한도에서 중단됨: 더 작은 폴더를 검색하세요.
 	Copy only fonts you own or are licensed to install.	소유했거나 설치 라이선스가 있는 글꼴만 복사하세요.
 	VectorCraft copies the fonts to {folder}.	VectorCraft가 글꼴을 {folder}에 복사합니다.
@@ -2643,6 +2729,8 @@ mark-style	Japanese	일본식
 	Replace Font	글꼴 바꾸기
 	Replace Symbol	심볼 바꾸기
 	Replace With Font	바꿀 글꼴
+	Replace With Font From	바꿀 글꼴 목록
+	System	시스템
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	다른 파일로 바꾸거나 무시하세요. 무시하면 해당 이미지는 문서에 저장된 미리 보기로 계속 표시됩니다.
 	Replaces the saved preset of that name.	같은 이름으로 저장된 사전 설정을 대체합니다.
 	Replace…	바꾸기…
@@ -2708,6 +2796,7 @@ mark-style	Japanese	일본식
 	Saturate	채도 높이기
 	Saturation	채도
 	Save As	다른 이름으로 저장
+	Save As Preset…	사전 설정으로 저장…
 	Save Colors as Swatches	색상을 견본으로 저장
 	Save Document	문서 저장
 	Save Document Info…	문서 정보 저장…
@@ -2731,6 +2820,7 @@ mark-style	Japanese	일본식
 	Save a Copy	사본 저장
 	Save as Template	템플릿으로 저장
 	Save as preset:	사전 설정으로 저장:
+	Save Changes	변경 사항 저장
 	Save changes to {name}	{name}의 변경 내용 저장
 	Save color group to Swatch panel	색상 그룹을 견본 패널에 저장
 	Save each artboard to a separate file	아트보드별로 별도 파일에 저장
@@ -2845,6 +2935,7 @@ mark-style	Japanese	일본식
 	Shape Mode	모양 모드
 	Shape Modes:	모양 모드:
 	Shape Properties:	모양 속성:
+	Shape Properties	모양 속성
 	Shaper Tool	셰이퍼 도구
 	Shapes	모양
 	Shear	기울이기
@@ -2998,6 +3089,7 @@ mark-style	Japanese	일본식
 	Superscript:	위 첨자:
 	Swap Fill and Stroke	칠과 선 바꾸기
 	Swap start and end arrowheads	시작과 끝 화살촉 바꾸기
+	Stylistic Alternates	스타일 대체 글자
 	Swash	스워시
 	Swatch Conflict	견본 충돌
 	Swatch Conflicts	견본 충돌
@@ -3180,6 +3272,7 @@ mark-style	Japanese	일본식
 	Use Artboards	아트보드 사용
 	Use Black Point Compensation	블랙 포인트 보정 사용
 	Use Compression	압축 사용
+	Include Editing Data for Other Apps	다른 앱용 편집 데이터 포함
 	Use Even-Odd Fill Rule	짝홀 칠 규칙 사용
 	Use Japanese Crop Marks	일본식 자르기 표시 사용
 	Use Low Resolution Proxy for Linked EPS	연결된 EPS에 저해상도 프록시 사용
@@ -3280,13 +3373,13 @@ mark-style	Japanese	일본식
 	the preset	프리셋
 	tile {number}	타일 {number}
 	to	~
-	{count} file(s) in {folder} {note}. Show the package folder?	{folder}에 파일 {count}개{note}. 패키지 폴더를 표시하시겠습니까?
-	{count} linked file(s) not found	연결된 파일 {count}개를 찾을 수 없습니다
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder}에 파일 {n}개 {note}. 패키지 폴더를 표시하시겠습니까?
+@plural	{n} linked file not found|{n} linked files not found	연결된 파일 {n}개를 찾을 수 없습니다
 	fonts not copied: {fonts}	복사되지 않은 글꼴: {fonts}
-	{count} linked image(s) changed since this document was saved. Show the new versions?	이 문서를 저장한 이후 연결된 이미지 {count}개가 변경되었습니다. 새 버전을 표시하시겠습니까?
-	{count} linked image(s) changed on disk. Show the new versions?	연결된 이미지 {count}개가 디스크에서 변경되었습니다. 새 버전을 표시하시겠습니까?
-	{count} more rules: Export writes every one.	규칙 {count}개 더 있음: 내보내기 시 모두 기록됩니다.
-	{count} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	이름 없는 개체 {count}개가 제외되었습니다. 이름을 지정하거나 패널 메뉴에서 이름 없는 개체를 켜십시오.
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	이 문서를 저장한 이후 연결된 이미지 {n}개가 변경되었습니다. 새 버전을 표시하시겠습니까?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	연결된 이미지 {n}개가 디스크에서 변경되었습니다. 새 버전을 표시하시겠습니까?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	규칙 {n}개 더 있음: 내보내기 시 모두 기록됩니다.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	이름 없는 개체 {n}개가 제외되었습니다. 이름을 지정하거나 패널 메뉴에서 이름 없는 개체를 켜십시오.
 	{effect} is already applied	{effect}이(가) 이미 적용되어 있습니다
 	{format} Options	{format} 옵션
 	{kind} Gradient	{kind} 그레이디언트
@@ -3324,7 +3417,6 @@ gradient-kind	Radial	방사형
 	Align center	가운데 정렬
 	Align left	왼쪽 정렬
 	Align right	오른쪽 정렬
-	All colours are within the CMYK gamut	모든 색상이 CMYK 색상 범위 안에 있습니다
 	Alt	Alt
 	Amount	양
 	Area Type Options	영역 문자 옵션
@@ -3366,7 +3458,6 @@ gradient-kind	Radial	방사형
 	Compression › Color › Above Ppi	압축 › 색상 › 다음 PPI 초과
 	Contrast	대비
 	Convert To Outlines	윤곽선으로 변환
-	Copied the CSS of {rules} object(s)	개체 {rules}개의 CSS를 복사했습니다
 	Copy All Objects	모든 개체 복사
 	Copy Fonts Used in the Document	문서에 사용된 글꼴 복사
 	Copy Links	링크 복사
@@ -3386,14 +3477,12 @@ gradient-kind	Radial	방사형
 	Default Printer	기본 프린터
 	Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?
 	Delete this {n} graphic style?	그래픽 스타일 {n}개를 삭제하시겠습니까?
-	Discarded {} recovered document(s)	복구된 문서 {}개를 삭제했습니다
 	Discord	Discord
 	Do Not Move	이동 안 함
 	Document Swatches	문서 견본
 	Document profile	문서 프로파일
 	Download	다운로드
 	Downloaded {what}	{what}을(를) 다운로드했습니다
-	Downloaded {} file(s)	파일 {}개를 다운로드했습니다
 	Draw Behind	뒤에 그리기
 	Draw Inside	안쪽에 그리기
 	Draw Normal	표준 그리기
@@ -3401,15 +3490,11 @@ gradient-kind	Radial	방사형
 	Duplicate and Offset 10 pt	복제 후 10 pt 이동
 	Edit Toolbar	도구 막대 편집
 	Edit Views	보기 편집
-	Embedded {n} image(s)	이미지 {n}개를 포함했습니다
-	Embedded {n} image(s); {missing} missing: relink them first	이미지 {n}개를 포함했습니다. {missing}개 누락: 먼저 다시 연결하십시오
 	English	English
 	Entire Font	글꼴 전체
 	Export Asset	자산 내보내기
-	Exported {count} file(s) to {folder}	{folder}에 파일 {count}개를 내보냈습니다
 	Exported {path}	{path}을(를) 내보냈습니다
 	Exported {what}	{what}을(를) 내보냈습니다
-	Exported {what} with {} note(s): {first}	{what}을(를) 내보냈습니다(참고 {}건): {first}
 	Exporting {}	{} 내보내는 중
 	File Dimensions	파일 크기
 	Fill (X), double-click for the Color Picker	칠 (X), 더블 클릭하면 색상 선택기
@@ -3437,6 +3522,7 @@ file-filter	Swatch libraries	견본 라이브러리
 file-filter	Flattener presets	병합 프리셋
 file-filter	PDF presets	PDF 프리셋
 file-filter	Print presets	인쇄 프리셋
+file-filter	Export presets	내보내기 사전 설정
 file-filter	SVG Compressed	압축된 SVG
 file-filter	PDF-compatible .ai	PDF 호환 .ai
 file-filter	VectorCraft Template	VectorCraft 템플릿
@@ -3549,7 +3635,6 @@ file-filter	Templates	템플릿
 	None (/)	없음 (/)
 	None (keep transparency)	없음 (투명도 유지)
 	Offset X	X 오프셋
-	Opened with {} note(s): {}	열었습니다(참고 {}건): {}
 	Other Libraries	기타 라이브러리
 	Out of Gamut Warning	색상 범위 초과 경고
 	Out of Web Color Warning	웹 색상 초과 경고
@@ -3557,8 +3642,7 @@ file-filter	Templates	템플릿
 	Output Black	출력 검정
 	Output White	출력 흰색
 	Output › Mode	출력 › 모드
-	Packaged {n} file(s) in {folder} {note}	{folder}에 파일 {n}개를 패키지했습니다{note}
-	Packaged {n} file(s){note}	파일 {n}개를 패키지했습니다{note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{folder}에 파일 {n}개를 패키지했습니다 {note}
 	Page information	페이지 정보
 	Paragraph Style	단락 스타일
 	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.	ArtCraft의 일부입니다. MIT OR Apache-2.0. 글꼴: Source Sans 3, Inter, JetBrains Mono (OFL). 아이콘: Lucide (ISC) + VectorCraft.
@@ -3571,6 +3655,11 @@ file-filter	Templates	템플릿
 	Preset {}	프리셋 {}
 	Preview in Browser needs the desktop app (the web downloads files instead)	브라우저에서 미리 보기는 데스크톱 앱이 필요합니다(웹에서는 파일이 다운로드됩니다)
 	Print presets	인쇄 프리셋
+	Proportional Lining	비례 라이닝
+	Position:	위치:
+	Default Position	기본 위치
+	Numerator	분자
+	Denominator	분모
 	Proportional Oldstyle	비례 올드스타일
 	Punctuation	문장 부호
 	Radius 1	반지름 1
@@ -3586,15 +3675,11 @@ file-filter	Templates	템플릿
 	Registration marks	등록 표시
 	Regular	보통
 	Relink Linked Files to the Document	연결된 파일을 문서에 다시 연결
-	Relinked {n} image(s)	이미지 {n}개를 다시 연결했습니다
-	Relinked {n} image(s); not in that folder: {}	이미지 {n}개를 다시 연결했습니다. 해당 폴더에 없음: {}
-	Relinked {} image(s)	이미지 {}개를 다시 연결했습니다
 	Repeat Objects	반복 개체
 	Repeat Options	반복 옵션
 	Reset with Mesh	메시로 재설정
 	Reset with Warp	왜곡으로 재설정
 	Reset {}	{} 재설정
-	Restored {} recovered document(s): save them to keep them	복구된 문서 {}개를 복원했습니다. 보관하려면 저장하십시오
 	Right	오른쪽
 	Right in Front	오른쪽이 앞
 	Right-Justified Tab	오른쪽 정렬 탭
@@ -3605,7 +3690,6 @@ file-filter	Templates	템플릿
 	Saved to User Defined: {}	사용자 정의에 저장했습니다: {}
 	Saved {n} files beside {path}	{path} 옆에 파일 {n}개를 저장했습니다
 	Saved {path}	{path} 저장됨
-	Saved {path} with {} note(s): {first}	{path} 저장됨, 메모 {}개: {first}
 	Saving	저장 중
 	Saving recovery data for {}	{} 복구 데이터 저장 중
 	Saving {}	{} 저장 중
@@ -3652,7 +3736,12 @@ file-filter	Templates	템플릿
 	System Layout	시스템 레이아웃
 	Tabular Lining	고정폭 라이닝
 	Tabular Oldstyle	고정폭 올드스타일
+	Titling Alternates	제목 대체 글자
 	Tate-chu-yoko	다테추요코
+	Tate-chu-yoko Settings…	다테추요코 설정…
+	Tate-chu-yoko Settings	다테추요코 설정
+	Up/Down:	위/아래:
+	Left/Right:	왼쪽/오른쪽:
 	Temperature	색온도
 	Template	템플릿
 	Templates	템플릿
@@ -3675,7 +3764,6 @@ file-filter	Templates	템플릿
 	Unique	고유
 	Unite and Simplify	합치기 및 단순화
 	Untitled	제목 없음
-	Updated {} image(s)	이미지 {}개 업데이트됨
 	Use the document's swatch: pasted colors take its color.	문서의 견본 사용: 붙여넣은 색상이 문서 견본의 색상을 따릅니다.
 	User Library	사용자 라이브러리
 	User Preset	사용자 프리셋
@@ -3697,6 +3785,7 @@ file-filter	Templates	템플릿
 imageTrace	Outline	윤곽선
 @plural	Color Table ({n} color)|Color Table ({n} colors)	색상 표 ({n}색)|색상 표 ({n}색)
 @plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?|그래픽 스타일 {n}개를 삭제하시겠습니까?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	브러시 {n}개를 삭제하시겠습니까?|브러시 {n}개를 삭제하시겠습니까?
 @plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	견본과 그룹 {n}개를 삭제하시겠습니까?
 @plural	{n} Layer|{n} Layers	레이어 {n}개|레이어 {n}개
 @plural	{n} Object|{n} Objects	개체 {n}개|개체 {n}개
@@ -3868,6 +3957,7 @@ theme	Appearance	외관
 @msg	Saving {_1}	{_1} 저장 중
 @msg	Sent to {_1}	{_1}(으)로 보냈습니다
 @msg	`to` must be "corner" or "smooth"	`to`는 "corner" 또는 "smooth"여야 합니다
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference`는 "emBox", "capHeight", "xHeight" 또는 "icfBox"여야 합니다
 @msg	a layer couldn't be read	레이어를 읽을 수 없습니다
 @msg	it has more than one artboard	아트보드가 둘 이상입니다
 @msg	its editing data has no layers	편집 데이터에 레이어가 없습니다
@@ -3897,7 +3987,6 @@ theme	Appearance	외관
 @msg	the drawing is too large to open	도면이 너무 커서 열 수 없습니다
 @msg	scale must be a number from {_1} to {_2}, not {_3}	배율은 {_1}에서 {_2} 사이의 숫자여야 합니다: {_3}
 @msg	an image has no pixels and was left out	픽셀이 없는 이미지를 제외했습니다
-@msg	Embedded {n} image(s)	이미지 {n}개를 포함했습니다
 @msg	object {0} cannot have children	개체 {0}에는 하위 항목을 둘 수 없습니다
 @msg	range `{s}` is empty	범위 `{s}`이(가) 비어 있습니다
 @msg	range `{s}`: `{part}` names no number	범위 `{s}`: `{part}`에 숫자가 없습니다
@@ -3912,6 +4001,8 @@ theme	Appearance	외관
 @msg	brushes move only within their type	브러시는 같은 유형 안에서만 이동할 수 있습니다
 @msg	no symbol instances selected	선택한 심볼 인스턴스가 없습니다
 @msg	select a symbol instance	심볼 인스턴스를 선택하세요
+@msg	select instances of one symbol	한 심볼의 인스턴스를 선택하세요
+@msg	a symbol can't hold an instance of itself	심볼에는 자기 자신의 인스턴스를 넣을 수 없습니다
 @msg	the art has no bounds	아트웍에 경계가 없습니다
 @msg	Image Trace: the traced image is missing	이미지 추적: 추적한 이미지가 없습니다
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	라이브 페인트 병합: 라이브 페인트 그룹과 추가할 패스를 선택하세요
@@ -3951,7 +4042,12 @@ theme	Appearance	외관
 @msg	Make Guides: select paths	안내선 만들기: 패스를 선택하세요
 @msg	Release Guides: no guides	안내선 해제: 안내선이 없습니다
 @msg	variables are locked	변수가 잠겨 있습니다
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	데이터 세트가 {MAX_CSV_ROWS}개보다 많습니다: 데이터 세트 가져오기는 최대 {MAX_CSV_ROWS}개를 읽습니다
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	변수가 {MAX_CSV_COLS}개보다 많습니다: 데이터 세트 가져오기는 최대 {MAX_CSV_COLS}개를 읽습니다
 @msg	variables that aren't text were left out: {kinds}	텍스트가 아닌 변수는 제외되었습니다: {kinds}
+@msg	a new document won't read these variables back with their kind: {names}	새 문서는 이 변수들을 원래 종류로 다시 읽지 않습니다: {names}
+@msg	a new document refuses this file because of these variables: {names}	새 문서는 이 변수들 때문에 이 파일을 거부합니다: {names}
+@msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}`의 머리글 `{header}`은(는) 변수 `{other}`(으)로 다시 읽힙니다: 둘 중 하나의 이름을 바꾸십시오
 @msg	guides are locked	안내선이 잠겨 있습니다
 @msg	handle must be in or out	handle은 in 또는 out이어야 합니다
 @msg	no saved selection recalled	불러온 저장된 선택 영역이 없습니다
@@ -3986,13 +4082,14 @@ theme	Appearance	외관
 @msg	the document has no artboard	문서에 아트보드가 없습니다
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	이 형식은 아트보드를 하나만 담을 수 있습니다. 여러 개는 PDF로 내보내거나 document.exportForScreens를 사용하세요
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	이 파일은 PDF 호환성 없이 저장되어 편집 데이터를 읽을 수 없습니다({why})
+@msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	PDF 부분을 읽지 못했습니다({_1}). 편집 데이터에서 파일을 열었습니다
 @msg	the export wrote no file	내보내기에서 파일이 만들어지지 않았습니다
 @msg	{_1} files can be opened but not written (see document.formats)	{_1} 파일은 열 수 있지만 쓸 수 없습니다(document.formats 참조)
 @msg	{_1} files are written by file.saveAsTemplate	{_1} 파일은 file.saveAsTemplate로 기록합니다
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: 여기에는 파일 시스템이 없습니다(열려면 dataBase64를 전달하고, dataBase64를 얻으려면 경로를 생략하세요)
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	저장은 {_2}이(가) 아닌 {_1}(으)로 기록합니다. 다른 형식은 document.export를 사용하세요
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	저장은 {_2}이(가) 아닌 {_1}(으)로 기록합니다. 이 형식으로 기록하려면 file.saveAsTemplate를 사용하세요
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7은(는) 레거시 .ai 파일을 기록합니다. .ait 템플릿은 항상 PDF 호환입니다
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7은(는) 레거시 .ai 파일을 기록하며 .ait 템플릿은 기록하지 않습니다
 @msg	no changes since the last save	마지막 저장 이후 변경 내용이 없습니다
 @msg	unknown format `{f}` (Save writes {_1})	알 수 없는 형식 `{f}`(저장은 {_1}(으)로 기록)
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`는 SVG 옵션 개체여야 합니다(document.formats 참조)
@@ -4024,6 +4121,7 @@ theme	Appearance	외관
 @msg	`groupColors` must be an array	`groupColors`는 배열이어야 합니다
 @msg	`mode` applies to freeform gradients	`mode`는 자유형 그레이디언트에 적용됩니다
 @msg	`preserve` must be an object	`preserve`는 개체여야 합니다
+@msg	`globalAdjust` must be an object	`globalAdjust`는 개체여야 합니다
 @msg	`stops` must be an array	`stops`는 배열이어야 합니다
 @msg	`{k}` must be [x, y]	`{k}`은(는) [x, y]여야 합니다
 @msg	a gradient needs at least two stops	그레이디언트에는 정지점이 두 개 이상 필요합니다
@@ -4156,8 +4254,11 @@ theme	Appearance	외관
 @msg	a key object sits on that point	그 포인트에 키 개체가 있습니다
 @msg	no graphic style `{name}`	`{name}` 그래픽 스타일이 없습니다
 @msg	node {_1} is not text	노드 {_1}은(는) 텍스트가 아닙니다
+@msg	node {_1} is on a locked artboard	노드 {_1}이(가) 잠긴 아트보드에 있습니다
 @msg	Text Wrap: select a wrap object	텍스트 감싸기: 감싸기 개체를 선택하세요
 @msg	layers can't be wrap objects	레이어는 감싸기 개체가 될 수 없습니다
+@msg	line {line}: value for `{var}` must be true or false	{line}행: `{var}`의 값은 true 또는 false여야 합니다
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	{line}행: `{var}`의 값이 {MAX_GRAPH_CSV}바이트보다 깁니다
 @msg	no threaded text selected	선택한 연결 텍스트가 없습니다
 @msg	Create Outlines: select text objects	윤곽선 만들기: 텍스트 개체를 선택하세요
 @msg	paste unavailable	붙여넣을 수 없습니다
@@ -4188,8 +4289,17 @@ theme	Appearance	외관
 @msg	unknown command `{0}`; did you mean `{1}`?	알 수 없는 명령 `{0}`: `{1}`을(를) 의미하셨습니까?
 @msg	`{what}` closes nothing	`{what}`이(가) 닫는 항목이 없습니다
 @msg	`{what}` closes something it didn't open	`{what}`이(가) 열지 않은 항목을 닫습니다
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	여러 레이어에 걸친 마스크는 덮는 각 레이어에서 클리핑 그룹으로 들어옵니다
+@msg	a graph's records don't end where they should: its art was read as it is	그래프의 레코드가 끝나야 할 곳에서 끝나지 않습니다: 아트는 있는 그대로 읽었습니다
+@msg	`{w}` takes no operands	`{w}`은(는) 피연산자를 받지 않습니다
+@msg	a wraparound group is inside a compound path	문자 감싸기 그룹이 컴파운드 패스 안에 있습니다
 @msg	a path has too many points	패스의 점이 너무 많습니다
+@msg	it ends inside a group or compound path	그룹 또는 컴파운드 패스 안에서 끝납니다
 @msg	it ends inside a layer	레이어 안에서 끝납니다
+@msg	it ends inside a multi-layer mask	여러 레이어 마스크 안에서 끝납니다
+@msg	a multi-layer mask's operators are out of order	여러 레이어 마스크의 연산자 순서가 잘못되었습니다
+@msg	a multi-layer mask needs one clipping path	여러 레이어 마스크에는 클리핑 패스가 하나 필요합니다
+@msg	a group crosses a multi-layer mask	그룹이 여러 레이어 마스크에 걸쳐 있습니다
 @msg	it has art outside its layers	레이어 밖에 아트웍이 있습니다
 @msg	it has more than {MAX_NODES} objects	개체가 {MAX_NODES}개를 넘습니다
 @msg	it has no layers	레이어가 없습니다
@@ -4198,6 +4308,7 @@ theme	Appearance	외관
 @msg	its objects are nested too deeply	개체가 너무 깊게 중첩되어 있습니다
 @msg	its section ending with `%{end}` doesn't end	`%{end}`로 끝나는 구역이 끝나지 않습니다
 @msg	an image VectorCraft can't read was left out	VectorCraft가 읽을 수 없는 이미지는 제외했습니다
+@msg	graphs come in as plain art, without their data or settings	그래프는 데이터와 설정 없이 일반 아트로 가져왔습니다
 @msg	an image whose data is cut short was left out	데이터가 잘린 이미지는 제외했습니다
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	표시되는 글꼴의 한 줄보다 낮은 프레임의 영역 문자는 프레임을 더 높였습니다({_1}). 그렇지 않으면 문자가 표시되지 않습니다
@@ -4319,6 +4430,7 @@ theme	Appearance	외관
 @msg	Exporting {_1}	{_1} 내보내는 중
 @msg	Packaging {_1}	{_1} 패키지 만드는 중
 @msg	Placing {_1}	{_1} 가져오는 중
+@msg	Pasting	붙여넣는 중
 @msg	Exported {what}	{what}을(를) 내보냈습니다
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}"은(는) 색상이 아닙니다: #rrggbb 형식으로 입력하세요
 @msg	could not decode image: {0}	이미지를 디코딩할 수 없습니다: {0}
@@ -4353,6 +4465,7 @@ theme	Appearance	외관
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	내보낼 항목이 없습니다: 문서에 보이는 아트웍이 없습니다(또는 아트보드 사용을 켜세요)
 @msg	add a format to export	내보낼 형식을 추가하세요
 @msg	check an asset to export	내보낼 자산을 체크하세요
+@msg	check an artboard to export	내보낼 대지를 체크하세요
 @msg	check a layer to export	내보낼 레이어를 선택하십시오
 @msg	select the art to export first	먼저 내보낼 아트를 선택하십시오
 @msg	`{tool}` isn't a freehand tool	`{tool}`은(는) 프리핸드 도구가 아닙니다
@@ -4363,13 +4476,8 @@ theme	Appearance	외관
 @msg	the PDF is no longer loaded	PDF가 더 이상 로드되어 있지 않습니다
 @msg	no such layer or object	해당 레이어나 개체가 없습니다
 @msg	`{tool}` isn't a Liquify tool	`{tool}`은(는) 픽셀 유동화 도구가 아닙니다
-@msg	{_1} linked file(s) can't be read here: their previews show	링크된 파일 {_1}개를 여기서 읽을 수 없습니다: 미리 보기가 표시됩니다
-@msg	{undecoded} image(s) couldn't be decoded and show as crossed boxes	이미지 {undecoded}개를 디코딩할 수 없습니다: X 표시가 된 상자로 표시됩니다
-@msg	{_1} linked image(s) changed on disk: Update Links shows the new versions	링크된 이미지 {_1}개가 디스크에서 바뀌었습니다: 링크 업데이트를 하면 새 버전이 표시됩니다
-@msg	Updated {_1} linked file(s) changed on disk	디스크에서 바뀐 링크된 파일 {_1}개를 업데이트했습니다
 @msg	pick a colour, gradient or pattern to save as a swatch	견본으로 저장할 색상, 그레이디언트 또는 패턴을 선택하세요
-@msg	Packaged {n} file(s) in {folder} {note}	{folder}에 파일 {n}개를 패키지했습니다{note}
-@msg	Packaged {n} file(s){note}	파일 {n}개를 패키지했습니다{note}
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{folder}에 파일 {n}개를 패키지했습니다({note})
 @msg	choose a location for the package	패키지 위치를 선택하세요
 @msg	missing `folder`	`folder`가 없습니다
 @msg	the package came back damaged	패키지가 손상된 채로 돌아왔습니다
@@ -4394,7 +4502,6 @@ theme	Appearance	외관
 @msg	print settings are not an object	인쇄 설정이 개체가 아닙니다
 @msg	no colour group `{g}`	색상 그룹 `{g}`이(가) 없습니다
 @msg	select artwork (or a colour group) to recolor	리컬러할 아트웍(또는 색상 그룹)을 선택하세요
-@msg	Downloaded {_1} file(s)	파일 {_1}개를 다운로드했습니다
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	브라우저에서 미리 보기는 데스크톱 앱이 필요합니다(웹에서는 파일을 다운로드합니다)
 @msg	no file system here	여기에는 파일 시스템이 없습니다
 @msg	nothing to preview	미리 볼 항목이 없습니다
@@ -4422,10 +4529,8 @@ theme	Appearance	외관
 @msg	unknown panel `{raw}`	알 수 없는 패널 `{raw}`
 @msg	x and y must both be numbers	x와 y는 모두 숫자여야 합니다
 @msg	Downloaded {what}	{what}을(를) 다운로드했습니다
-@msg	Exported {count} file(s) to {folder}	파일 {count}개를 {folder}에 내보냈습니다
 @msg	Imported {what}: {_1}	{what}을(를) 가져왔습니다: {_1}
 @msg	Installed plug-in {_1}	플러그인 {_1}을(를) 설치했습니다
-@msg	Opened with {_1} note(s): {_2}	참고 {_1}건과 함께 열었습니다: {_2}
 @msg	Saved {path}	{path}을(를) 저장했습니다
 @msg	no app to open files here	여기에는 파일을 열 앱이 없습니다
 @msg	no data	데이터가 없습니다
@@ -4436,8 +4541,6 @@ theme	Appearance	외관
 @msg	the document has never been saved	문서가 저장된 적이 없습니다
 @msg	the export returned unreadable data	내보내기가 읽을 수 없는 데이터를 반환했습니다
 @msg	{status} ({e})	{status}({e})
-@msg	Exported {what} with {_1} note(s): {first}	참고 {_1}건과 함께 {what}을(를) 내보냈습니다: {first}
-@msg	Saved {path} with {_1} note(s): {first}	참고 {_1}건과 함께 {path}을(를) 저장했습니다: {first}
 @msg	Couldn't open {name}: {e}	{name}을(를) 열 수 없습니다: {e}
 @msg	Couldn't read {name}: {e}	{name}을(를) 읽을 수 없습니다: {e}
 @msg	Internal error: {msg} (please report this bug)	내부 오류: {msg}(이 버그를 신고해 주세요)
@@ -4482,9 +4585,18 @@ theme	Appearance	외관
 @msg	tool (a tool id) is required	도구(도구 id)가 필요합니다
 @msg	unknown tool `{t}`	알 수 없는 도구 `{t}`
 @msg	no such action	해당 동작이 없습니다
+@msg	no such action set	해당 액션 세트가 없습니다
+@msg	the action sets changed; nothing was deleted	액션 세트가 바뀌어 아무것도 삭제하지 않았습니다
+@msg	no action set to save	저장할 액션 세트가 없습니다
+@msg	not an action set file	액션 세트 파일이 아닙니다
+@msg	the action set file is larger than 8 MiB	액션 세트 파일이 8 MiB보다 큽니다
+@msg	the action set file holds more than 1,000 actions	액션 세트 파일의 액션이 1,000개를 넘습니다
+@msg	the action set file needs a later version of VectorCraft	이 액션 세트 파일을 열려면 최신 버전의 VectorCraft가 필요합니다
+@msg	an action in the action set file has more than 10,000 steps	액션 세트 파일에 단계가 10,000개를 넘는 액션이 있습니다
 @msg	choose a folder to export to	내보낼 폴더를 선택하세요
 @msg	the selection has no URL (or they differ)	선택 항목에 URL이 없거나 서로 다릅니다
 @msg	select some type first	먼저 문자를 선택하세요
+@msg	kerning must be a number, "auto", or "optical"	커닝은 숫자, “auto” 또는 “optical”이어야 합니다
 @msg	the selection has no gradient fill	선택 항목에 칠 그레이디언트가 없습니다
 @msg	the selection has no gradient stroke	선택 항목에 선 그레이디언트가 없습니다
 @msg	the selection has no pattern fill	선택 항목에 칠 패턴이 없습니다
@@ -4494,7 +4606,6 @@ theme	Appearance	외관
 @msg	the library item is damaged	라이브러리 항목이 손상되었습니다
 @msg	{_1} font families available	사용 가능한 글꼴 패밀리 {_1}개
 @msg	{_1} has no {_2} style	{_1}에는 {_2} 스타일이 없습니다
-@msg	Copied the CSS of {rules} object(s)	개체 {rules}개의 CSS를 복사했습니다
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
 @msg	no CSS to copy: select objects with CSS of their own	복사할 CSS가 없습니다: 자체 CSS가 있는 개체를 선택하세요
@@ -4507,12 +4618,29 @@ theme	Appearance	외관
 @msg	no library `{key}` (see {list})	라이브러리 `{key}`이(가) 없습니다({list} 참조)
 @msg	select a linked image: an embedded one has no file	링크된 이미지를 선택하세요: 포함된 이미지에는 파일이 없습니다
 @msg	{path} can't be found: relink it first	{path}을(를) 찾을 수 없습니다: 먼저 다시 링크하세요
-@msg	Embedded {n} image(s); {missing} missing: relink them first	이미지 {n}개를 포함했으며 {missing}개가 없습니다: 먼저 다시 링크하세요
-@msg	Relinked {_1} image(s)	이미지 {_1}개를 다시 링크했습니다
-@msg	Relinked {n} image(s)	이미지 {n}개를 다시 링크했습니다
-@msg	Relinked {n} image(s); not in that folder: {_1}	이미지 {n}개를 다시 링크했습니다. 해당 폴더에 없음: {_1}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	이미지 {n}개를 포함했으며 {missing}개가 없습니다: 먼저 다시 링크하세요
+@msgplural	Embedded {n} image|Embedded {n} images	이미지 {n}개를 포함했습니다
+@msgplural	Relinked {n} image|Relinked {n} images	이미지 {n}개를 다시 링크했습니다
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	이미지 {n}개를 다시 링크했습니다. 해당 폴더에 없음: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	이미지 {n}개를 다시 링크했으며 {name}은(는) 다시 링크할 수 없었습니다: {reason}
+@msgplural	Updated {n} image|Updated {n} images	이미지 {n}개를 업데이트했습니다
+@msgplural	Replaced {n} image|Replaced {n} images	이미지 {n}개를 바꿨습니다
+@msgplural	Broke {n} link|Broke {n} links	링크 {n}개를 끊었습니다
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	링크 {n}개를 끊었으며 {missing}개를 읽을 수 없습니다: 먼저 다시 링크하거나 업데이트하세요
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	링크된 파일 {n}개를 여기서 읽을 수 없습니다: 미리 보기가 표시됩니다
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	이미지 {n}개를 디코딩할 수 없습니다: X 표시가 된 상자로 표시됩니다
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	링크된 이미지 {n}개가 디스크에서 바뀌었습니다: 링크 업데이트를 하면 새 버전이 표시됩니다
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	디스크에서 바뀐 링크된 파일 {n}개를 업데이트했습니다
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	참고 {n}건과 함께 {what}을(를) 내보냈습니다: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	글꼴 파일 {n}개가 이제 {folder}에 있습니다
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	글꼴 파일 {n}개가 이제 {folder}에 있으며, {failed}개는 추가할 수 없었습니다: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	글꼴 {n}개를 여기서 사용할 수 없습니다: 해당 텍스트는 다른 글꼴로 표시됩니다
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	개체 {n}개의 CSS를 복사했습니다
+@msgplural	Downloaded {n} file|Downloaded {n} files	파일 {n}개를 다운로드했습니다
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	파일 {n}개를 {folder}에 내보냈습니다
+@msg	All colors are within the CMYK gamut	모든 색상이 CMYK 색상 범위 안에 있습니다
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	색상 {n}개가 CMYK 색상 범위를 벗어났습니다
 @msg	Unembedded to {_1}	{_1}에 포함 해제했습니다
-@msg	Updated {_1} image(s)	이미지 {_1}개를 업데이트했습니다
 @msg	no swatch library `{l}` (see swatch.library.list)	견본 라이브러리 `{l}`이(가) 없습니다(swatch.library.list 참조)
 @msg	no user library folder here	여기에는 사용자 라이브러리 폴더가 없습니다
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name}을(를) 가져올 수 없습니다: 놓은 문서가 닫혔습니다
@@ -4527,8 +4655,10 @@ theme	Appearance	외관
 @msg	there are no printer settings to open here	여기에는 열 수 있는 프린터 설정이 없습니다
 @msg	Couldn't save recovery data: {e}	복구 데이터를 저장할 수 없습니다: {e}
 @msg	Saved recovery data for {title}	{title}의 복구 데이터를 저장했습니다
-@msg	Discarded {_1} recovered document(s)	복구된 문서 {_1}개를 삭제했습니다
-@msg	Restored {_1} recovered document(s): save them to keep them	복구된 문서 {_1}개를 복원했습니다: 보관하려면 저장하세요
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	복구된 문서 {n}개를 삭제했습니다
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	복구된 문서 {n}개를 복원했습니다: 보관하려면 저장하세요
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	참고 {n}건과 함께 열었습니다: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	참고 {n}건과 함께 {path}을(를) 저장했습니다: {first}
 @msg	Saving recovery data for {_1}	{_1}의 복구 데이터를 저장하는 중
 @msg	bad shortcut	잘못된 단축키
 @msg	can't parse shortcut `{c}`	단축키 `{c}`을(를) 해석할 수 없습니다
@@ -4549,6 +4679,7 @@ theme	Appearance	외관
 @msg	{_1} is reserved by the system	{_1}은(는) 시스템에서 예약되어 있습니다
 @msg	Couldn't copy to the system clipboard: {e}	시스템 클립보드로 복사할 수 없습니다: {e}
 @msg	Couldn't paste from the clipboard: {e}	클립보드에서 붙여넣을 수 없습니다: {e}
+@msg	Couldn't paste: the document it was pasted in was closed	붙여넣을 수 없습니다: 붙여넣던 문서가 닫혔습니다
 @msg	nothing selected	선택된 항목이 없습니다
 @msg	nothing selected is in a group	선택한 항목 중 그룹에 속한 항목이 없습니다
 @msg	the {tool} tool has no options	{tool} 도구에는 옵션이 없습니다
@@ -4572,9 +4703,6 @@ theme	Appearance	외관
 @msg	every search thread stopped on an internal error (please report this bug)	내부 오류로 모든 검색 스레드가 중지되었습니다(이 버그를 신고해 주세요)
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	여기에는 VectorCraft의 글꼴 폴더가 설정되어 있지 않습니다: 데스크톱 앱과 vectorcraft-cli가 설정합니다
 @msg	choose the font files to add	추가할 글꼴 파일을 선택하세요
-@msg	{n} font file(s) are now in {folder}	글꼴 파일 {n}개가 이제 {folder}에 있습니다
-@msg	{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}	글꼴 파일 {n}개가 이제 {folder}에 있으며, {failed}개는 추가할 수 없었습니다: {reason}
-@msg	{n} font(s) aren't available here: their text shows in another font	글꼴 {n}개를 여기서 사용할 수 없습니다: 해당 텍스트는 다른 글꼴로 표시됩니다
 @msg	not a file	파일이 아닙니다
 @msg	not a font file	글꼴 파일이 아닙니다
 @msg	that document is no longer open	해당 문서는 더 이상 열려 있지 않습니다
@@ -4583,7 +4711,6 @@ theme	Appearance	외관
 @msg	every numbered name for it is taken in the Fonts folder	글꼴 폴더에서 이를 위한 번호 이름이 모두 사용 중입니다
 @msg	every numbered name for {name} is taken in the document's folder	문서 폴더에서 {name}을(를) 위한 번호 이름이 모두 사용 중입니다
 @msg	No linked files to look for	찾을 링크된 파일이 없습니다
-@msg	Relinked {n} image(s); {name} couldn't be relinked: {reason}	이미지 {n}개를 다시 링크했으며 {name}은(는) 다시 링크할 수 없었습니다: {reason}
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`는 단계 참조 {r}이며, `run`과 `command_batch`만 이를 해석합니다
 @msg	`ids` must be an array of object ids, not {v}	`ids`는 {v}이(가) 아니라 개체 id 배열이어야 합니다
 @msg	`corners` must be an array of anchor indices, not {v}	`corners`는 {v}이(가) 아니라 앵커 인덱스 배열이어야 합니다
@@ -4613,6 +4740,11 @@ theme	Appearance	외관
 @msg	the PCX file is cut short	PCX 파일이 잘려 있습니다
 @msg	the PCX file's header is damaged	PCX 파일의 헤더가 손상되었습니다
 @msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	{planes}개 평면에 {bits}비트 픽셀이 있는 PCX 파일은 읽을 수 없습니다
+@msg	the Pixar file is cut short	Pixar 파일이 잘려 있습니다
+@msg	the Pixar file's header is damaged	Pixar 파일의 헤더가 손상되었습니다
+@msg	the Pixar file's image data is damaged	Pixar 파일의 이미지 데이터가 손상되었습니다
+@msg	the JPEG 2000 file can't be read	JPEG 2000 파일을 읽을 수 없습니다
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 파일에 지원되지 않는 색 공간 또는 JPX 콘텐츠가 있습니다
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 이미지가 너무 커서 읽을 수 없습니다({_1} × {_2}픽셀)
 @msg	zipped 32-bit PSD image data with prediction can't be read	예측이 적용된 ZIP 압축 32비트 PSD 이미지 데이터는 읽을 수 없습니다
 @msg	{depth}-bit PSD files in this colour mode can't be read	이 색상 모드의 {depth}비트 PSD 파일은 읽을 수 없습니다
@@ -4975,6 +5107,11 @@ lighting	Light	광원
 	Import Data Sets…	데이터 세트 가져오기…
 	Export Data Sets…	데이터 세트 내보내기…
 	Load Variable Library…	변수 라이브러리 불러오기…
+	Save Variable Library…	변수 라이브러리 저장…
+@msg	a variable library holds text variables, and the document has none	변수 라이브러리에는 텍스트 변수가 들어가는데 문서에 텍스트 변수가 없습니다
+@msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	변수 `{name}`은(는) 변수 라이브러리에 저장할 수 없습니다: 문자나 `_`로 시작하고 공백이나 `-`, `_`, `.` 이외의 기호가 없도록 이름을 바꾸세요
+@msg	data set `{name}` holds a control character, which a variable library can't hold	데이터 세트 `{name}`에 변수 라이브러리에 담을 수 없는 제어 문자가 있습니다
+@msg	data set `{name}` starts or ends with white space, which a variable library can't hold	데이터 세트 `{name}`의 앞이나 뒤에 변수 라이브러리에 담을 수 없는 공백이 있습니다
 	Make Graph Dynamic	그래프를 동적으로 만들기
 	Batch…	일괄 처리…
 	Source Folder:	소스 폴더:
@@ -4985,9 +5122,15 @@ lighting	Light	광원
 @msg	Batch: {count} processed, {failed} failed	일괄 처리: {count}개 처리됨, {failed}개 실패
 @msg	choose a destination folder	대상 폴더를 선택하세요
 @msg	choose a source folder	소스 폴더를 선택하세요
+@msg	columns {first} and {column} both name the variable `{name}`	{first}열과 {column}열이 모두 같은 변수 `{name}`을(를) 가리킵니다
 @msg	open a document with data sets	데이터 세트가 있는 문서를 여세요
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	데이터 세트 {name}에서 적용된 항목이 없습니다: 값이 있는 변수에 연결된 개체가 없습니다
+@msg	no bound object reports a value (locked objects and embedded images report none)	값을 보고하는 연결된 개체가 없습니다(잠긴 개체와 포함된 이미지는 값을 보고하지 않습니다)
 @msg	the action has no steps	액션에 단계가 없습니다
+@msg	the action has no included steps	액션에 포함된 단계가 없습니다
+@msg	no such action step	해당 액션 단계가 없습니다
+@msg	included must be true or false	included의 값은 true 또는 false여야 합니다
+@msg	others must be true or false	others의 값은 true 또는 false여야 합니다
 
 # User Interface › Accent Color
 	Accent Color	강조 색상
@@ -5014,6 +5157,11 @@ lighting	Light	광원
 	Export Type:	내보내기 유형:
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
+@msg	an action is already recording	이미 액션을 기록하고 있습니다
+@msg	no such function key	해당 기능 키가 없습니다
+@msg	no such color	해당 색상이 없습니다
+@msg	{_1} cannot be used on Windows	{_1}은(는) Windows에서 사용할 수 없습니다
+@msg	more than one action is named “{_1}”	“{_1}”(이)라는 이름의 액션이 둘 이상 있습니다
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
 	Smudge Stick…	문지르기 막대…
 	Smudge Stick	문지르기 막대
@@ -5096,7 +5244,9 @@ lighting	Light	광원
 	Effect Gallery	효과 갤러리
 	Filters	필터
 	Select artwork to apply effects	효과를 적용할 그래픽을 선택하세요
-@msg	the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them	파일의 변수와 데이터 세트를 읽지 않았습니다(변수: {variables}, 데이터 세트: {data_sets}). 변수 패널에 표시되지 않습니다
+@msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	파일의 변수 라이브러리를 일부만 읽었습니다(건너뛴 항목: {_1}). 나머지는 변수 패널에 표시됩니다
+@msg	the file's variable library couldn't be read: the Variables panel doesn't list it	파일의 변수 라이브러리를 읽을 수 없습니다. 변수 패널에 표시되지 않습니다
+@msg	a variable of unknown kind can't be bound to objects	종류를 알 수 없는 변수는 개체에 바인딩할 수 없습니다
 # Select by Color (select.color)
 	Select by Color	색상별 선택
 	Move Anchor Point	앵커 포인트 이동
@@ -5122,6 +5272,7 @@ lighting	Light	광원
 	Ruby…	루비…
 	Ruby	루비
 	Geometric Guides	기하학적 안내선
+	Geometric Patterns	기하학적 패턴
 	Ease In	서서히 시작
 	Ease Out	서서히 종료
 	Ease In Out	서서히 시작 및 종료
@@ -5149,13 +5300,13 @@ lighting	Light	광원
 	Slope:	기울기:
 axis	X Axis	X축
 axis	Y Axis	Y축
-@msg	Packaged {n} file(s) in {folder}	{folder}에 파일 {n}개를 패키지했습니다
-@msg	Packaged {n} file(s) {note}	파일 {n}개를 패키지했습니다 {note}
-@msg	Packaged {n} file(s)	파일 {n}개를 패키지했습니다
-	Packaged {n} file(s)	파일 {n}개를 패키지했습니다
-	Packaged {n} file(s) in {folder}	{folder}에 파일 {n}개를 패키지했습니다
-	Packaged {n} file(s) {note}	파일 {n}개를 패키지했습니다 {note}
-	{count} file(s) in {folder}. Show the package folder?	{folder}에 파일 {count}개. 패키지 폴더를 표시하시겠습니까?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{folder}에 파일 {n}개를 패키지했습니다
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	파일 {n}개를 패키지했습니다 {note}
+@msgplural	Packaged {n} file|Packaged {n} files	파일 {n}개를 패키지했습니다
+@plural	Packaged {n} file|Packaged {n} files	파일 {n}개를 패키지했습니다
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{folder}에 파일 {n}개를 패키지했습니다
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	파일 {n}개를 패키지했습니다 {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{folder}에 파일 {n}개. 패키지 폴더를 표시하시겠습니까?
 	Clockwise	시계 방향
 	Dither	디더
 	Fine noise hides banding in the gradient fill	미세한 노이즈로 그레이디언트 칠의 띠를 감춥니다
@@ -5181,17 +5332,30 @@ axis	Y Axis	Y축
 	New Set	새 세트
 	Set Options…	세트 옵션…
 	Set Options	세트 옵션
+	Action Options…	액션 옵션…
+	Action Options	액션 옵션
+	Rename Action	액션 이름 바꾸기
+	New Action…	새 액션…
+	New Action	새 액션
+	Create New Action	새 액션 만들기
+	Play Action	액션 재생
+	Action Set:	액션 세트:
+	Function Key:	기능 키:
+	Record	기록
 	Create New Set	새 세트 만들기
 	Stop Global Edit	전체 편집 중지
 	Global Edit Options	전체 편집 옵션
+	Leave Out of Global Edit	전체 편집에서 제외
 	Match	일치
 	On Artboards	아트보드에서
 	All Artboards	모든 아트보드
 	Include Objects On Canvas	캔버스의 개체 포함
-	Result(s): {count}	결과: {count}
+@plural	Result: {n}|Results: {n}	결과: {n}
 @msg	select one object	개체 하나를 선택하십시오
-@msg	Global Edit works on paths, compound paths and symbol instances	전체 편집은 패스, 컴파운드 패스, 심볼 인스턴스에서 작동합니다
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	전체 편집은 패스, 컴파운드 패스, 심볼 인스턴스 및 이들의 그룹에서 작동합니다
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	유사한 개체를 찾을 수 없습니다(회전하거나 반사한 복사본은 일치하지 않습니다). 전체 편집 옵션을 변경한 후 다시 시도하십시오
+@msg	Global Edit is off	전체 편집이 꺼져 있습니다
+@msg	only an object of the Global Edit other than the one it started from can be left out	전체 편집을 시작한 개체가 아닌 전체 편집의 개체만 제외할 수 있습니다
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all 또는 1, 3-5 같은 범위여야 합니다({v}이(가) 아님)
 	Add to Symbols	심볼에 추가
 	Basic Shapes	기본 모양
@@ -5442,6 +5606,22 @@ anchor	Points:	포인트:
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	아트워크에서 점 색상 가져오기
+	Basic Character Formats	기본 문자 형식
+	Case	대소문자
+@msg	{label} must be a number	{label}은(는) 숫자여야 합니다
+@msg	{label} must be a number of at least 0.1	{label}은(는) 0.1 이상의 숫자여야 합니다
+	Advanced Character Formats	고급 문자 형식
+	Horizontal Scale	가로 비율
+	Vertical Scale	세로 비율
+@msg	{label} must be a number from {min} to {max}	{label}은(는) {min}에서 {max} 사이의 숫자여야 합니다
+	Character Color	문자 색상
+	OpenType Features	OpenType 기능
+	Stylistic Sets	스타일 세트
+	Set {n}	세트 {n}
+@msg	features lists at most {max} tags	features에는 태그를 최대 {max}개까지 지정할 수 있습니다
+@msg	unknown OpenType feature `{t}`	알 수 없는 OpenType 기능 `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label}은(는) 0 초과 {max} 이하의 숫자여야 합니다
+@msg	no character style `{name}`	문자 스타일 `{name}`을 찾을 수 없습니다
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
 	Duotone…	이중톤…
@@ -5465,6 +5645,13 @@ anchor	Points:	포인트:
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	`inkLimit`, `removeWhiteOverprint` 또는 `overprintBlack`을 지정하십시오
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	인쇄 잉크 수정은 CMYK 문서에서 작동합니다. 먼저 파일 › 문서 색상 모드 › CMYK 색상을 선택하십시오
 @msg	`{key}` must be 0..{max}	`{key}`은(는) 0..{max}이어야 합니다
+# Color Effects add-on: Find Nearest Swatch (Object › Plug-ins › Color Effects).
+	Find Nearest Swatch…	가장 가까운 견본 찾기…
+	Find Nearest Swatch	가장 가까운 견본 찾기
+	Apply Nearest Swatch	가장 가까운 견본 적용
+	Select objects to find the swatches nearest their colors.	색상에 가장 가까운 견본을 찾을 개체를 선택하십시오.
+@msg	select objects or give `color`	개체를 선택하거나 `color`를 지정하십시오
+@msg	`color` is not a colour	`color`은(는) 색상이 아닙니다
 # Path Precision Tools add-on: the Corner Tool and Slide Anchor Along Path.
 	Corner Tool	모퉁이 도구
 	Slide Anchor Along Path	패스를 따라 앵커 포인트 밀기
@@ -5492,6 +5679,7 @@ anchor	Points:	포인트:
 # Artwork Cleanup add-on: its text tools (Object › Plug-ins › Artwork Cleanup and the panel's Text row) and their messages.
 	Break Text	텍스트 나누기
 	Combine Point Text	포인트 문자 결합
+	Join Point Text	포인트 문자 연결
 	Remove Breaks	나누기 제거
 	Split Text at Cursor	커서 위치에서 텍스트 나누기
 	Set Alignment, Keep Position	위치를 유지하며 정렬 설정
@@ -5520,6 +5708,7 @@ breakText	Glyphs	글리프
 @msg	Select horizontal point or area type whose text fits	텍스트가 모두 들어가는 가로 포인트 문자 또는 영역 문자를 선택하십시오
 @msg	Nothing to split at the cursor	커서 위치에서 나눌 내용이 없습니다
 @msg	Select two or more one-line point type objects on one baseline to combine	결합하려면 같은 기준선에 있는 한 줄짜리 포인트 문자 오브젝트를 두 개 이상 선택하십시오
+@msg	Select two or more one-line point type objects to join	연결하려면 한 줄짜리 포인트 문자 오브젝트를 두 개 이상 선택하십시오
 @msg	No line breaks to remove	제거할 강제 줄 바꿈이 없습니다
 @msg	No paragraph breaks to remove	제거할 단락 나누기가 없습니다
 @msg	Too many breaks to remove at once	한 번에 제거할 나누기가 너무 많습니다
@@ -5532,6 +5721,11 @@ breakText	Glyphs	글리프
 @msg	`by` must be lines, paragraphs, words or glyphs, not {other}	`by`는 lines, paragraphs, words 또는 glyphs여야 합니다({other}는 사용할 수 없음)
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind`는 "line" 또는 "paragraph"여야 합니다({other}는 사용할 수 없음)
 @msg	`align` must be "left", "center" or "right", not {other}	`align`은 "left", "center" 또는 "right"여야 합니다({other}는 사용할 수 없음)
+	File + Number	파일 + 번호
+	File + Data Set Name	파일 + 데이터 세트 이름
+	Data Set Name	데이터 세트 이름
+@msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming`은 `fileNumber`, `fileDataSetName` 또는 `dataSetName`이어야 합니다
+@msg	no free data set file name in destination folder	대상 폴더에 사용할 수 있는 데이터 세트 파일 이름이 없습니다
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
 	Path Effects	패스 효과
@@ -5573,3 +5767,118 @@ breakText	Glyphs	글리프
 	Gap 4	간격 4
 	Dash 5	대시 5
 	Gap 5	간격 5
+
+@msg	{_1}: they came in as the page's art	{_1}: 페이지의 아트로 가져왔습니다
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	파일 자체 페이지와 다르게 그려진 오브젝트를 페이지의 아트로 가져왔습니다: {_1}
+
+@msg	You must choose a side pattern.	측면 패턴을 선택해야 합니다.
+@msg	invalid pattern tile choice	잘못된 패턴 타일 선택
+@msg	no pattern named `{choice}`	`{choice}` 이름의 패턴이 없습니다
+	Delete the selected brushes?	선택한 브러시를 삭제하시겠습니까?
+	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	선에서 이 브러시 중 하나 이상을 사용합니다. 해당 선에서 브러시를 제거하고 브러시를 삭제하시겠습니까?
+	Remove Strokes	선 제거
+# Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
+	Arrange Tools	배치 도구
+	Arrange in Grid…	격자로 배치…
+	Arrange in Grid	격자로 배치
+	Swap Objects	개체 맞바꾸기
+	Swap Objects and Sizes	개체와 크기 맞바꾸기
+	Replace with Top Object…	맨 위 개체로 바꾸기…
+	Replace with Top Object	맨 위 개체로 바꾸기
+	Set Size of Each…	각각 크기 설정…
+	Set Size of Each	각각 크기 설정
+@msg	select exactly two objects	개체를 정확히 두 개 선택하세요
+@msg	give `width` or `height`	`width` 또는 `height`를 지정하세요
+# Arrange Tools add-on: Group Overlapping Objects.
+	Group Overlapping Objects	겹치는 개체 그룹화
+@msg	too many objects selected (at most 20000)	선택한 개체가 너무 많습니다(최대 20000개)
+# Path Precision Tools add-on: Divide into Dashes.
+	Divide into Dashes…	대시로 나누기…
+	Divide into Dashes	대시로 나누기
+	Dash:	대시:
+	Gap:	간격:
+	Fit to Corners and Ends	모퉁이와 끝에 맞추기
+	Remove Gaps	간격 제거
+@msg	that makes too many pieces (at most 100000): make the dashes longer	조각이 너무 많아집니다(최대 100000개). 대시를 더 길게 하십시오
+@msg	select paths, or segments, to divide	나눌 패스나 세그먼트를 선택하십시오
+# Path Precision Tools add-on: Expand Dashes into Paths.
+	Expand Dashes into Paths	대시를 패스로 확장
+@msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오
+# Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
+	Document Tools	문서 도구
+	Save a Timestamped Copy	날짜와 시간이 붙은 사본 저장
+@msg	there is no clock here	여기에는 시계가 없습니다
+@msg	there is no clock here: give `time` (Unix seconds)	여기에는 시계가 없습니다. `time`(Unix 초)을 지정하십시오
+@msg	the document has never been saved: give `folder`	문서를 저장한 적이 없습니다. `folder`를 지정하십시오
+@msg	every numbered name for the copy is taken	사본에 쓸 번호 붙은 이름이 모두 사용 중입니다
+# Document Tools add-on: New Symbols from Layers and Convert Layers to Symbols.
+	New Symbols from Layers	레이어에서 새 심볼 만들기
+	Convert Layers to Symbols	레이어를 심볼로 변환
+@msg	{id} is no top-level layer	{id}은(는) 최상위 레이어가 아닙니다
+	Marathi	마라티어
+	Gujarati	구자라트어
+	Bengali	벵골어
+	Punjabi	펀잡어
+	Tamil	타밀어
+	Telugu	텔루구어
+	Kannada	칸나다어
+	Malayalam	말라얄람어
+	Odia	오리야어
+	Urdu	우르두어
+	VectorCraft {release} and later (version {n})	VectorCraft {release} 이상 (버전 {n})
+# Document Tools add-on: Export All Open Documents (#4920).
+	Export All Open Documents as PDF	열린 모든 문서를 PDF로 내보내기
+	Export All Open Documents as SVG	열린 모든 문서를 SVG로 내보내기
+@msgplural	Exported {n} document|Exported {n} documents	문서 {n}개를 내보냈습니다
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	문서 {n}개를 내보냈습니다; {title}을(를) 쓰지 못했습니다: {error}
+# Symbol Options › Symbol Type (dynamic symbols)
+	Symbol Type:	심볼 유형:
+	Dynamic Symbol	동적 심볼
+	Static Symbol	정적 심볼
+	Symbol Instance Appearance	심볼 인스턴스 모양새
+	Reset Symbol Instance	심볼 인스턴스 재설정
+@msg	type must be static or dynamic, not {v}	type은 static 또는 dynamic이어야 합니다({v}는 안 됨)
+@msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}`은(는) 정적 심볼입니다. 먼저 심볼 유형을 동적으로 설정하세요
+@msg	path must be a list of child indices	path는 자식 인덱스 목록이어야 합니다
+@msg	no object at path {shown} in the symbol's art	심볼 아트의 경로 {shown}에 개체가 없습니다
+@msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity 및/또는 blend를 지정하세요
+@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice 및/또는 type을 지정하세요
+	Text Flow	텍스트 흐름
+	By Rows	행 방향
+	By Columns	열 방향
+# Arrange Tools add-on: Randomize Opacity.
+	Randomize Opacity…	불투명도 무작위화…
+	Randomize Opacity	불투명도 무작위화
+	Minimum:	최소:
+	Maximum:	최대:
+	Seed:	시드:
+@msg	`min` is greater than `max`	`min`이(가) `max`보다 큽니다
+# Arrange Tools add-on: Sort Objects.
+	Sort Objects…	개체 정렬…
+	Sort Objects	개체 정렬
+	Sort By:	정렬 기준:
+	Apply To:	적용 대상:
+	Area	면적
+	X Position	X 위치
+	Y Position	Y 위치
+	Stacking Order	쌓는 순서
+	Small to Large	작은 것부터
+	Large to Small	큰 것부터
+	Distribute Evenly	균등 분포
+# Preferences > Units > East Asian Type: Q and Ha, the Japanese typesetting units (a quarter of a millimetre each), named the same in every language.
+	Q	Q
+	Ha	Ha
+	Create Swatch Legend	견본 범례 만들기
+	Create Swatch Legend…	견본 범례 만들기…
+	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	텍스트 도구
+	Text Tweaker…	텍스트 조정…
+	Text Tweaker	텍스트 조정
+	Attribute:	속성:
+	From:	시작:
+	To:	끝:
+	Bow	활 모양
+	Spike	뾰족한 모양
+	Skip Spaces	공백 건너뛰기
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	아트워크가 너무 커서 이미지로 복사할 수 없습니다: 다른 앱에는 PNG가 전달되지 않습니다

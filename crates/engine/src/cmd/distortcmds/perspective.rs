@@ -1,6 +1,6 @@
 use super::{
     Affine, Arc, Document, EngineError, Homography, NodeId, NodeKind, PerspectiveGrid, Plane, Point, Result, Session, Value, bad, check_numbers,
-    check_switches, collect_points, duplicate_in, finite_numbers, id_param, ids_param, json, matrix_param, number_or, ok, outermost, persp,
+    check_switches, collect_points, duplicate_in, finite_numbers, json, matrix_param, named_id, named_ids, number_or, ok, outermost, persp,
     point_param, project_node, selected_roots, str_param, switch_or,
 };
 
@@ -52,8 +52,8 @@ pub(super) fn grid_set(s: &mut Session, p: &Value) -> Result<Value> {
             old.adopt_stored_attachments(d);
             for (id, plane, depth) in persp::attached_roots(d) {
                 let h = old.homography_at(plane, depth).and_then(|h| h.inverse()).zip(g.homography_at(plane, depth));
-                let (hi, h) = h.ok_or_else(|| EngineError::Other("an object in perspective would leave the edited grid".into()))?;
-                let m = h.then_after(&hi);
+                let m = h.and_then(|(hi, h)| h.checked_then_after(&hi));
+                let m = m.ok_or_else(|| EngineError::Other("an object in perspective would leave the edited grid".into()))?;
                 warp_checked(d, id, &m)?;
             }
         }
@@ -92,23 +92,21 @@ fn plane_param(g: &PerspectiveGrid, p: &Value, cmd: &str) -> Result<Plane> {
 }
 
 pub(super) fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    match named_ids(p)? {
         Some(v) => Ok(outermost(&s.doc()?.doc, v)),
         None => selected_roots(s),
     }
 }
 
-/// Map `n` with `f`, failing if any point would leave the plane's visible side.
 /// Map `n` with `h` (type and symbols in perspective keep their art and are drawn through it),
-/// failing if any point would leave the plane's visible side.
+/// failing if any point would leave the plane's visible side or a projection would not be finite.
 fn warp_checked(d: &mut Document, id: NodeId, h: &Homography) -> Result<()> {
     let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
     let mut pts = vec![];
     collect_points(n, &mut pts);
-    if pts.iter().any(|q| h.apply(*q).is_none()) {
+    if pts.iter().any(|q| h.apply(*q).is_none()) || !project_node(n, h) {
         return Err(EngineError::Other("the object would cross the horizon of the perspective plane".into()));
     }
-    project_node(n, h);
     Ok(())
 }
 
@@ -480,9 +478,8 @@ pub(super) fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn plane_match(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let id = id_param(p, "id")
-        .or_else(|| st.selection.objects.first().copied())
-        .ok_or_else(|| EngineError::Other("select an object in perspective".into()))?;
+    let id =
+        named_id(p)?.or_else(|| st.selection.objects.first().copied()).ok_or_else(|| EngineError::Other("select an object in perspective".into()))?;
     let mut g = grid_of(&st.doc);
     let (plane, depth) = g.attachment_of(&st.doc, id).ok_or_else(|| EngineError::Other("the object isn't in perspective".into()))?;
     g.set_offset(plane, depth);
@@ -588,8 +585,7 @@ pub fn perspective_click(s: &Session, cmd: &str, params: &Value, at: Point) -> O
 /// mode, to be edited; exiting isolation projects it again ([`finish_edit_text`]).
 pub(super) fn edit_text(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let id =
-        id_param(p, "id").or_else(|| st.selection.objects.first().copied()).ok_or_else(|| EngineError::Other("select type in perspective".into()))?;
+    let id = named_id(p)?.or_else(|| st.selection.objects.first().copied()).ok_or_else(|| EngineError::Other("select type in perspective".into()))?;
     if !st.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)) && n.projection().is_some()) {
         return Err(EngineError::Other("select type in perspective".into()));
     }
@@ -599,11 +595,14 @@ pub(super) fn edit_text(s: &mut Session, p: &Value) -> Result<Value> {
         let NodeKind::Text(t) = &mut n.kind else { return Err(EngineError::Other("select type in perspective".into())) };
         // Shown flat where it is drawn: the type moves there and the projection moves the other
         // way, so the picture stays.
-        let (Some(flat), Some(drawn)) = (t.bounds(), t.bounds().and_then(|b| h.map_rect_bbox(b))) else { return Ok(()) };
+        let Some(flat) = t.bounds() else { return Ok(()) };
+        let cross = || EngineError::Other("the object would cross the horizon of the perspective plane".into());
+        let drawn = h.map_rect_bbox(flat).ok_or_else(cross)?;
         let shift = vectorcraft_geom::Affine::translate(drawn.center() - flat.center());
+        let moved = h.checked_then_after(&Homography::from_affine(shift.inverse())).ok_or_else(cross)?;
         t.transform(shift);
         if let Some(rec) = n.extras_if_any().and_then(|e| e.perspective.as_deref_mut()) {
-            rec.projection = Some(h.then_after(&Homography::from_affine(shift.inverse())).to_array());
+            rec.projection = Some(moved.to_array());
             rec.editing = true;
         }
         Ok(())

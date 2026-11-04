@@ -12,6 +12,23 @@ fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value
 }
 
 #[test]
+fn control_lists_and_selects_optional_addon_tools() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let listed = input_request(&mut app, "ui.tool.list", json!({}));
+    assert_eq!(listed["ok"], true);
+    let groups = listed["result"].as_array().unwrap();
+    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
+        let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
+        assert_eq!(matching.len(), 1, "{}", tool.id);
+        assert_eq!(matching[0]["label"], tool.label);
+        assert!(matching[0]["shortcut"].is_null());
+        let selected = input_request(&mut app, "ui.tool.select", json!({"tool": tool.id}));
+        assert_eq!(selected["ok"], true, "{selected}");
+        assert_eq!(selected["result"]["tool"], tool.id);
+    }
+}
+
+#[test]
 fn ui_set_turns_the_image_trace_preview_off_and_on() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     assert!(app.ui.image_trace_preview);
@@ -20,6 +37,24 @@ fn ui_set_turns_the_image_trace_preview_off_and_on() {
         assert_eq!(r["ok"], true, "{r}");
         assert_eq!(app.ui.image_trace_preview, on);
     }
+}
+
+/// #3797: `ui.set` `outline` sets the active document's view; without a document it is an error
+/// and sets nothing else either.
+#[test]
+fn ui_set_outline_sets_the_active_documents_view() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    for params in [json!({"outline": false}), json!({"outline": true, "grid": true})] {
+        let r = input_request(&mut app, "ui.set", params);
+        assert_eq!(r["ok"], false, "{r}");
+    }
+    assert!(!app.ui.view.grid, "nothing is set");
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let r = input_request(&mut app, "ui.set", json!({"outline": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(app.outline_view());
+    assert_eq!(app.views.iter().map(|v| v.outline).collect::<Vec<_>>(), [false, true], "the other document stays in Preview");
 }
 
 #[test]

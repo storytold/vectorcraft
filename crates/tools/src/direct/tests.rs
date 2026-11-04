@@ -922,6 +922,61 @@ fn shift_marquee_toggles_anchors() {
     }
 }
 
+/// #4890: Alt held at the press makes a Direct Selection marquee Group Selection's for the drag:
+/// it selects each path it touches whole (with Shift, toggles it), not the anchors inside it, and
+/// leaves the paths it misses; the Group Selection cursor stays until the release.
+#[test]
+fn an_alt_marquee_selects_the_paths_it_touches_whole() {
+    let (d, a, _) = two_squares();
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Default::default() };
+    let alt_shift = Mods { shift: true, ..alt };
+    for (mods, cmd) in [(alt, "select.set"), (alt_shift, "select.toggle")] {
+        let mut t = DirectSelectionTool::new(false);
+        // Round A's top-right corner only; B (300..400) is left out.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0).with_mods(mods));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0).with_mods(mods));
+        assert_eq!(t.cursor(&cx, Point::new(250.0, 150.0), mods), Cursor::GroupSelection, "{mods:?}");
+        let up = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0).with_mods(mods));
+        assert_eq!(up, vec![Action::Exec(cmd.into(), json!({"ids": [a.0]}))], "{mods:?}");
+    }
+}
+
+/// #4891: a press on the centre point a selected object shows (Show Center) selects it whole, and
+/// a drag from there moves it by the drag as one Move; the square is unfilled, so the press finds
+/// no fill there.
+#[test]
+fn the_centre_point_selects_and_moves_the_object_whole() {
+    let (mut d, id) = doc_with_rect();
+    let n = d.node_mut(id).unwrap();
+    n.appearance.items.retain(|i| !matches!(i, vectorcraft_doc::AppearanceItem::Fill(_)));
+    n.edit_attrs(|a| a.show_center = Some(true));
+    let p = paint();
+    // One anchor selected: the square shows its centre, (150, 150).
+    let one = anchors_of(id, &[(0, 0)]);
+    let mut t = DirectSelectionTool::new(false);
+    let c = cx(&d, &one, &p);
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 151.0, 149.0)), vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 151.0, 149.0)).is_empty());
+    // Selected whole: the press keeps the selection and the drag moves the square.
+    let mut whole = Selection::default();
+    whole.set([id]);
+    let c = ToolContext { smart_guides: false, ..cx(&d, &whole, &p) };
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0)).is_empty());
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 140.0));
+    let moved = json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(Vec2::new(20.0, -10.0))), "copy": false});
+    assert_eq!(a, vec![Action::Begin("Move".into()), Action::Preview("object.transform".into(), moved)]);
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 170.0, 140.0)), vec![Action::Commit]);
+    // Unselected, the centre isn't shown and a press there starts a marquee.
+    let none = Selection::default();
+    let mut t = DirectSelectionTool::new(false);
+    let c = cx(&d, &none, &p);
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0)).is_empty());
+    t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 140.0));
+    assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Marquee(_))));
+}
+
 /// Group Selection: E pressed during a marquee drag makes it select the objects entirely inside
 /// it whole, a group's member without its group. Direct Selection does not take E.
 #[test]

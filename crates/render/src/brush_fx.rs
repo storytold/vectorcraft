@@ -370,7 +370,7 @@ mod tests {
             shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
             Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
         );
-        d.symbols.push(vectorcraft_doc::Symbol { name: "S".into(), art: std::sync::Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: std::sync::Arc::new(art) });
         let id = d.alloc_id();
         let mut inst = Node::new(id, vectorcraft_doc::NodeKind::SymbolInstance { symbol: "S".into(), xf: Affine::translate((50.0, 50.0)) });
         inst.appearance.set_fill(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
@@ -394,7 +394,7 @@ mod tests {
         let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
         ap.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
         let art = Node::path(vectorcraft_doc::NodeId(0), shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), ap);
-        d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: std::sync::Arc::new(art) });
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: std::sync::Arc::new(art) });
         let id = d.alloc_id();
         let inst = Node::new(id, vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Nib".into(), xf: Affine::translate((-6.0, 0.0)) });
         let l = d.layers[0].id;
@@ -424,7 +424,7 @@ mod tests {
             let moved = Affine::translate((-8.0, 0.0));
             let source = if instance {
                 let art = line(&mut d);
-                d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: std::sync::Arc::new(art) });
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: std::sync::Arc::new(art) });
                 Node::new(d.alloc_id(), vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Nib".into(), xf: moved })
             } else {
                 let mut n = line(&mut d);

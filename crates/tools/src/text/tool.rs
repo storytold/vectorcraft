@@ -29,13 +29,37 @@ impl Tool for TypeTool {
     fn claims_key(&self, _: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Escape && self.editing.is_some()
     }
+    /// If the original text still exists, a dropped press restores its edit target, caret, and anchor.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let mut out = vec![];
+        if let Some(before) = self.before_press.take() {
+            if self.editing != before.editing {
+                out.extend(self.finish(cx));
+                if let Some(id) = before.editing.filter(|id| Self::text(cx, *id).is_some()) {
+                    self.start_editing(id, before.caret);
+                    self.remember(cx);
+                }
+            }
+            self.fresh = before.fresh.filter(|id| self.editing == Some(*id));
+            (self.caret, self.anchor) = (before.caret, before.anchor);
+        }
+        self.selecting = false;
+        self.clicks = (None, 0);
+        self.press = None;
+        self.held = None;
+        self.drag = None;
+        self.snap.clear();
+        out
+    }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         match ev.kind {
             PointerKind::Down => {
+                let before = super::BeforePress { editing: self.editing, fresh: self.fresh, caret: self.caret, anchor: self.anchor };
                 if let Some(byte) = self.hit_edited(cx, ev.pos) {
                     let same = self.clicks.0.is_some_and(|q| (q - ev.pos).hypot() <= cx.tol(4.0));
                     let n = if same { self.clicks.1 + 1 } else { 1 };
                     self.clicks = (Some(ev.pos), n);
+                    self.before_press = Some(before);
                     let out = self.move_to(byte, ev.mods.shift);
                     self.goal_x = None;
                     if n >= 3 {
@@ -51,6 +75,7 @@ impl Tool for TypeTool {
                 // as it does in the type being edited.
                 if let Some(out) = self.edit_at(cx, ev.pos) {
                     self.selecting = true;
+                    self.before_press = Some(before);
                     return out;
                 }
                 self.press = Some((ev.pos, self.snap.press(cx, ev.pos, self.editing.as_slice(), None)));
@@ -71,6 +96,7 @@ impl Tool for TypeTool {
                 vec![]
             }
             PointerKind::Up => {
+                self.before_press = None;
                 if self.selecting {
                     self.selecting = false;
                     return vec![];
@@ -636,9 +662,15 @@ impl Tool for TypeTool {
             (Some(_), Some(held)) => held,
             _ => self.acting(m),
         };
-        if mode != Mode::Type && Self::path_at(cx, p, mode == Mode::Area).is_some() {
-            return Cursor::Crosshair;
+        // While type is being edited a click on a path only ends the editing.
+        let in_path = if self.editing.is_some() { None } else { Self::in_path(cx, p, mode) };
+        match (in_path, vertical) {
+            (Some((_, false)), false) => Cursor::TypeArea,
+            (Some((_, false)), true) => Cursor::TypeAreaVertical,
+            (Some((_, true)), false) => Cursor::TypeOnPath,
+            (Some((_, true)), true) => Cursor::TypeOnPathVertical,
+            (None, false) => Cursor::Text,
+            (None, true) => Cursor::TypeVertical,
         }
-        if vertical { Cursor::TypeVertical } else { Cursor::Text }
     }
 }

@@ -310,3 +310,108 @@ fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A file opened under automation roots is installed under them too: the open keeps the scope it
+/// started in, not the desktop's access of the frame it finishes in.
+#[test]
+fn a_file_opened_under_automation_roots_finishes_under_them() {
+    use vectorcraft_engine::file_access;
+    let dir = scope_dir();
+    let roots = file_access::AutomationRoots::new(&[dir.as_path()], &[]).unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    file_access::confine(roots.as_ref(), || {
+        start(&mut app, "/art/Scoped.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(10.0, 10.0), false))
+    })
+    .unwrap();
+    let scope = app.opening.pending[0].scope.clone();
+    assert!(scope.run(file_access::current).is_some(), "the roots go with the open");
+}
+
+fn scope_dir() -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("vectorcraft-opening-scope-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// A file asked for again while it is still being read is not read a second time (#3455).
+#[test]
+fn a_file_asked_for_again_while_it_is_read_opens_once() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let bytes = vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false);
+    start(&mut app, "/art/Poster.vectorcraft", bytes).unwrap();
+    assert_eq!(crate::io::open_file(&mut app, "/art/Poster.vectorcraft", true).unwrap(), Value::Null);
+    assert_eq!(app.opening.pending.len(), 1);
+    let t0 = std::time::Instant::now();
+    while !app.opening.pending.is_empty() && t0.elapsed().as_secs() < 30 {
+        poll(&mut app);
+        std::thread::yield_now();
+    }
+    assert_eq!(app.session.documents().len(), 1);
+}
+
+/// A document asked for again while a dialog was open, closed meanwhile, opens again once the
+/// dialog closes and asks about its fonts; a file read meanwhile waits for that question too, so
+/// the dialog acts on its own document (#5369).
+#[test]
+fn a_queued_reopen_that_asks_holds_back_files_ready_to_open() {
+    let dir = std::env::temp_dir().join(format!("vectorcraft-opening-queued-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+    let (doc, other) = (dir.join("doc.vectorcraft"), dir.join("other.vectorcraft"));
+    let (doc, other) = (doc.to_string_lossy().into_owned(), other.to_string_lossy().into_owned());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 40, "text": "Type", "font": "No Such Font Family"})).unwrap();
+    app.run("document.save", json!({"path": doc})).unwrap();
+    app.run("file.new", json!({})).unwrap();
+    app.run("document.save", json!({"path": other})).unwrap();
+    app.run("file.new", json!({})).unwrap();
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    crate::io::open_reporting(&mut app, &doc).unwrap();
+    crate::io::open_reporting(&mut app, &other).unwrap();
+    assert_eq!(app.opening.activate.len(), 2);
+    app.session.execute("file.close", &json!({"index": 1})).unwrap();
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    start(&mut app, "/art/Other.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false)).unwrap();
+    // Time for the other file to be read; it waits for the dialog meanwhile.
+    let t0 = std::time::Instant::now();
+    while t0.elapsed().as_millis() < 500 {
+        poll(&mut app);
+        std::thread::yield_now();
+    }
+    assert_eq!(app.opening.pending.len(), 1);
+    app.ui.dialog = None;
+    poll(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::missing_fonts::KIND));
+    assert_eq!(app.session.doc().unwrap().path.as_deref(), Some(&*doc), "the dialog's document stays active");
+    assert_eq!(app.opening.activate.first().map(|(p, _)| p), Some(&other), "the later activation waits");
+    assert_eq!(app.opening.pending.len(), 1, "the other file waits");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Of two files read off the UI thread and ready in the same frame, the first that opens and asks
+/// about its fonts holds back the second, so the question acts on its own document (#5369).
+#[test]
+fn a_file_that_opens_and_asks_holds_back_the_next_one_ready() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 40, "text": "Type", "font": "No Such Font Family"})).unwrap();
+    let asks = vectorcraft_format::save(&app.session.doc().unwrap().doc, false);
+    app.session.execute("file.close", &json!({})).unwrap();
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    start(&mut app, "/art/Asks.vectorcraft", asks).unwrap();
+    start(&mut app, "/art/Plain.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(120.0, 80.0), false)).unwrap();
+    // Time for both files to be read; they wait for the dialog meanwhile.
+    let t0 = std::time::Instant::now();
+    while t0.elapsed().as_millis() < 500 {
+        poll(&mut app);
+        std::thread::yield_now();
+    }
+    assert_eq!(app.opening.pending.len(), 2);
+    app.ui.dialog = None;
+    poll(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::missing_fonts::KIND));
+    assert_eq!(app.session.doc().unwrap().path.as_deref(), Some("/art/Asks.vectorcraft"), "the dialog's document stays active");
+    assert_eq!(app.opening.pending.len(), 1, "the next file waits");
+}

@@ -1,7 +1,7 @@
 use super::drag::{drag_id, drop_press};
 use super::{CornerRadius, Drag, Point, Pos2, Rect, SCROLL_BAR, Sense, Stroke, Tokens, Ui, VectorcraftApp, View, Xf, pos2, vec2};
 
-/// Fit the view (View → Fit Artboard / Fit All / Actual Size).
+/// Fit the view (View → Fit Artboard / Fit All / Actual Size, Arrange Tools › Zoom to Selection).
 pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let Some(rect) = app.canvas_rect else {
         if let Some(v) = app.view_mut() {
@@ -15,6 +15,7 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
         "view.fitAll" => {
             st.doc.art_bounds().map(|a| st.doc.artboards.iter().fold(a, |r, ab| r.union(ab.rect))).or(st.doc.artboards.first().map(|a| a.rect))
         }
+        crate::addons::arrange::ZOOM => st.doc.bounds_of(&st.selection.objects, true),
         // The navigator's artboard (the first if it has gone).
         _ => st.doc.artboards.get(current).or(st.doc.artboards.first()).map(|a| a.rect),
     };
@@ -22,17 +23,23 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let zoom = if how == "view.actualSize" {
         actual_size_zoom(app.session.prefs.display_print_size)
     } else {
-        // The width and height of the box round the target turned with the view, at zoom 1.
-        let (sn, cs) = app.view().map_or(0.0, |v| v.rotation.to_radians()).sin_cos();
-        let (w, h) = (target.width(), target.height());
-        let zx = (rect.width() as f64 - 60.0) / (w * cs.abs() + h * sn.abs()).max(1.0);
-        let zy = (rect.height() as f64 - 60.0) / (w * sn.abs() + h * cs.abs()).max(1.0);
-        zx.min(zy).clamp(0.0313, 640.0)
+        fit_zoom(rect, target, app.view().map_or(0.0, |v| v.rotation))
     };
     let Some(v) = app.view_mut() else { return };
     v.center = target.center();
     v.fitted = true;
     v.zoom = zoom;
+}
+
+/// The zoom at which `target`, turned `rotation` degrees with the view, fits in `rect` with a
+/// 30-point margin on each side.
+pub(super) fn fit_zoom(rect: egui::Rect, target: Rect, rotation: f64) -> f64 {
+    // The width and height of the box round the target turned with the view, at zoom 1.
+    let (sn, cs) = rotation.to_radians().sin_cos();
+    let (w, h) = (target.width(), target.height());
+    let zx = (rect.width() as f64 - 60.0) / (w * cs.abs() + h * sn.abs()).max(1.0);
+    let zy = (rect.height() as f64 - 60.0) / (w * sn.abs() + h * cs.abs()).max(1.0);
+    zx.min(zy).clamp(0.0313, 640.0)
 }
 
 /// How much one point of wheel motion zooms (as `exp(points × WHEEL_ZOOM)`).

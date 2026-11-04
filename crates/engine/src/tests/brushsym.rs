@@ -1,9 +1,9 @@
 //! Brushes and symbols: commands, tools, rendering and persistence.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeKind};
+use vectorcraft_doc::{AngleProfile, Document, Node, NodeKind, PressureProfile};
 use vectorcraft_geom::Rect;
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+use vectorcraft_tools::{Mods, PenPose, PointerEvent, PointerKind};
 
 use crate::*;
 
@@ -457,6 +457,31 @@ fn brush_unused_lists_the_brushes_no_stroke_paints_with() {
     assert_eq!(unused(&mut s), ["3 pt. Round", "6 pt. Flat", "Charcoal"]);
 }
 
+/// A stroke in the tile that pattern editing's Cancel puts back counts as a use, as `brush.delete`
+/// clears it there.
+#[test]
+fn brush_unused_counts_pattern_edit_originals() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, 10.0, 40.0, 20.0);
+    s.execute("brush.apply", &json!({"name": "6 pt. Flat", "ids": [id.0]})).unwrap();
+    let name = s.execute("object.pattern.make", &json!({"ids": [id.0], "edit": false})).unwrap()["name"].clone();
+    s.execute("brush.remove", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.pattern.edit", &json!({ "name": name })).unwrap();
+    // The tile's copies in the editing layer are selected; only the tile kept for Cancel paints with the brush.
+    s.execute("brush.remove", &json!({})).unwrap();
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let original = d.pattern_edit.as_ref().and_then(|pe| pe.original.as_ref()).expect("pattern edit original");
+    assert_eq!(original.art.first().and_then(|n| n.appearance.stroke()).and_then(|k| k.brush.as_deref()), Some("6 pt. Flat"));
+    for pattern in &mut d.patterns {
+        for art in &mut pattern.art {
+            if let Some(stroke) = std::sync::Arc::make_mut(art).appearance.stroke_mut() {
+                stroke.brush = None;
+            }
+        }
+    }
+    assert!(!unused(&mut s).contains(&"6 pt. Flat".to_string()));
+}
+
 /// A brush counts as used when a stroke paints with it in an opacity mask, a symbol, a graph
 /// design, a pattern tile, a graphic style, or the art of a brush that is used. The art of a brush
 /// that is not used, its own strokes included, does not count.
@@ -641,20 +666,120 @@ fn continuing_a_stroke_joins_its_pressure() {
     assert_eq!(p.at(1.0), vectorcraft_doc::PressureProfile::MID, "the old part had no pressure");
 }
 
+/// The pen's tilt, bearing and barrel rotation recorded on the stroke `id`.
+fn pose_of(s: &Session, id: NodeId) -> (Option<PressureProfile>, Option<AngleProfile>, Option<AngleProfile>) {
+    let st = node(s, id).appearance.stroke().cloned().unwrap();
+    (st.tilt, st.bearing, st.rotation)
+}
+
+/// #764: `path.freehand` points carry the pen's tilt and barrel rotation; the stroke keeps how far
+/// the pen leaned (0 upright to 1 flat), which way (counter-clockwise on the page) and how far its
+/// barrel turned (counter-clockwise), and a continued stroke joins them.
+#[test]
+fn freehand_points_record_the_pens_tilt_bearing_and_rotation() {
+    let mut s = session();
+    let draw = |s: &mut Session, points: Value| {
+        NodeId(s.execute("path.freehand", &json!({"points": points, "style": "brush"})).unwrap()["id"].as_u64().unwrap())
+    };
+    // Leaning 30° to the right, the barrel turned 90° clockwise.
+    let id = draw(&mut s, json!([[0, 50, 0.5, 30, 0, 90], [100, 50, 0.5, 30, 0, 90]]));
+    let (tilt, bearing, rotation) = pose_of(&s, id);
+    assert!((tilt.unwrap().at(0.5) - 1.0 / 3.0).abs() < 1e-3);
+    assert!(bearing.unwrap().at(0.5).abs() < 1e-6);
+    assert!((rotation.unwrap().at(0.5) + 90.0).abs() < 1e-6, "counter-clockwise");
+    // Leaning down the page (towards the user) is −90°; no rotation axis, no rotation.
+    let id = draw(&mut s, json!([[0, 150, 0.5, 0, 30, null], {"x": 100, "y": 150, "pressure": 0.5, "tiltY": 30}]));
+    let (_, bearing, rotation) = pose_of(&s, id);
+    assert!((bearing.unwrap().at(0.5) + 90.0).abs() < 1e-6);
+    assert_eq!(rotation, None);
+    // Upright, the pen leans no way: the bearing it leaned before.
+    let id = draw(&mut s, json!([[0, 250, 0.5, 0, -40], [50, 250, 0.5, 0.2, 0.2], [100, 250, 0.5, 0, 0]]));
+    let (tilt, bearing, _) = pose_of(&s, id);
+    let bearing = bearing.unwrap();
+    assert!((bearing.at(1.0) - 90.0).abs() < 1e-6 && tilt.unwrap().at(1.0) < 1e-6, "{bearing:?}");
+    // Pressure alone, or nothing: no pen pose.
+    let id = draw(&mut s, json!([[0, 350, 0.5], [100, 350, 0.5]]));
+    assert_eq!(pose_of(&s, id), (None, None, None));
+    // Continued at its end: the old part keeps its rotation, the new part has none (unturned).
+    let id = draw(&mut s, json!([[0, 450, 0.5, 30, 0, 90], [100, 450, 0.5, 30, 0, 90]]));
+    s.execute("path.freehand", &json!({"points": [[100, 450], [200, 450]], "style": "brush", "extend": {"id": id.0, "end": "end"}})).unwrap();
+    let (tilt, _, rotation) = pose_of(&s, id);
+    let rotation = rotation.unwrap();
+    assert!((rotation.at(0.25) + 90.0).abs() < 1e-6 && rotation.at(0.9).abs() < 1e-6, "{rotation:?}");
+    assert_eq!(tilt.unwrap().at(0.9), vectorcraft_doc::PressureProfile::MID, "half way over without one");
+}
+
+/// #764: a stroke that connects two paths joins the pen's tilt, bearing and rotation of both, the
+/// connected path's after the stroke's.
+#[test]
+fn connecting_two_strokes_joins_their_pens_rotation() {
+    let mut s = session();
+    let draw = |s: &mut Session, points: Value| {
+        NodeId(s.execute("path.freehand", &json!({"points": points, "style": "brush"})).unwrap()["id"].as_u64().unwrap())
+    };
+    let a = draw(&mut s, json!([[0, 50, 0.5, 30, 0, 90], [100, 50, 0.5, 30, 0, 90]]));
+    let b = draw(&mut s, json!([[200, 50, 0.5, 30, 0, 45], [300, 50, 0.5, 30, 0, 45]]));
+    let connect =
+        json!({"points": [[100, 50], [200, 50]], "style": "brush", "extend": {"id": a.0, "end": "end"}, "connect": {"id": b.0, "end": "start"}});
+    s.execute("path.freehand", &connect).unwrap();
+    assert!(s.doc().unwrap().doc.node(b).is_none(), "joined on");
+    let (_, _, rotation) = pose_of(&s, a);
+    let rotation = rotation.unwrap();
+    assert!((rotation.at(0.1) + 90.0).abs() < 1e-6, "{rotation:?}");
+    assert!(rotation.at(0.5).abs() < 1e-6, "the stroke is unturned: {rotation:?}");
+    assert!((rotation.at(0.9) + 45.0).abs() < 1e-6, "the connected path's: {rotation:?}");
+}
+
+/// #764: the Paintbrush records a pen's tilt, bearing and rotation on the stroke, a brush with
+/// Roundness on Tilt draws it, and it lasts through saving; a mouse stroke records none.
+#[test]
+fn paintbrush_records_the_pens_tilt_on_the_stroke() {
+    let mut s = session();
+    let params = json!({"angle": 0, "roundness": 50, "size": 10, "variation": [0, 50, 0], "modes": ["fixed", "tilt", "fixed"]});
+    s.execute("brush.options", &json!({"name": "3 pt. Round", "params": params})).unwrap();
+    s.execute("brush.setCurrent", &json!({"name": "3 pt. Round"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("paintbrush", v).unwrap();
+    let strokes = |s: &mut Session, y: f64, pen: Option<PenPose>| {
+        for (k, x) in [(PointerKind::Down, 20.0), (PointerKind::Drag, 120.0), (PointerKind::Drag, 220.0), (PointerKind::Up, 320.0)] {
+            s.pointer(&PointerEvent { pen, ..PointerEvent::new(k, x, y) }, v).unwrap();
+        }
+        let id = s.doc().unwrap().selection.objects[0];
+        select(s, &[]);
+        id
+    };
+    let pen = strokes(&mut s, 60.0, Some(PenPose { tilt: Some([0.0, 0.0]), rotation: Some(30.0) }));
+    let (tilt, bearing, rotation) = pose_of(&s, pen);
+    assert_eq!(tilt.as_ref().map(|t| t.at(0.5)), Some(0.0), "upright");
+    assert!(bearing.is_some() && (rotation.unwrap().at(0.5) + 30.0).abs() < 1e-6);
+    let mouse = strokes(&mut s, 200.0, None);
+    assert_eq!(pose_of(&s, mouse), (None, None, None), "a mouse reads no tilt");
+    // Drawn: upright, the nib is round (10 pt); without a tilt, roundness 50 (5 pt).
+    assert!((brushed_bounds(&s, pen).height() - 10.0).abs() < 0.1, "{:?}", brushed_bounds(&s, pen));
+    assert!((brushed_bounds(&s, mouse).height() - 5.0).abs() < 0.1, "{:?}", brushed_bounds(&s, mouse));
+    // Saved and reopened as it was.
+    let doc: Document = (*s.doc().unwrap().doc).clone();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(back.node(pen).unwrap().appearance.stroke(), doc.node(pen).unwrap().appearance.stroke());
+}
+
 /// Pen pressure belongs to its path: new art, graphic styles and Brush Options' edits leave it.
 #[test]
 fn pressure_stays_with_its_own_path() {
     let mut s = session();
     s.execute("appearance.setNewArtBasic", &json!({"on": false})).unwrap();
-    let r = s.execute("brush.freehand", &json!({"points": [[0, 50, 0.2], [100, 50, 0.9]], "style": "brush", "brush": "3 pt. Round"})).unwrap();
+    let points = json!([[0, 50, 0.2, 30, 10, 45], [100, 50, 0.9, 20, 0, 90]]);
+    let r = s.execute("brush.freehand", &json!({"points": points, "style": "brush", "brush": "3 pt. Round"})).unwrap();
     let id = NodeId(r["id"].as_u64().unwrap());
     assert!(pressure_of(&s, id).is_some());
+    assert!(matches!(pose_of(&s, id), (Some(_), Some(_), Some(_))));
     select(&mut s, &[id]);
     s.execute("graphicStyle.new", &json!({"name": "Inked"})).unwrap();
     let style = s.doc().unwrap().doc.graphic_style("Inked").unwrap().appearance.clone();
-    assert!(style.stroke().is_some_and(|st| st.pressure.is_none()));
+    assert!(style.stroke().is_some_and(|st| st.pressure.is_none() && st.tilt.is_none() && st.bearing.is_none() && st.rotation.is_none()));
     let other = rect(&mut s, 10.0, 100.0, 50.0, 50.0);
     assert_eq!(pressure_of(&s, other), None, "new art takes the look, not the pressure");
+    assert_eq!(pose_of(&s, other), (None, None, None), "nor the tilt, bearing or rotation");
     pressure_round(&mut s);
     assert!(pressure_of(&s, id).is_some(), "editing the brush keeps the strokes' pressure");
 }
@@ -667,10 +792,18 @@ fn brush_options_set_variation_modes() {
     let b = s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap();
     assert_eq!(b["modes"], json!(["fixed", "fixed", "pressure"]));
     assert_eq!(b["variation"], json!([0.0, 0.0, 3.0]));
-    for bad in [json!({"modes": ["fixed", "fixed", "tilt"]}), json!({"modes": "pressure"}), json!({"variation": "x"}), json!({"modes": [1, 2, 3]})] {
+    for bad in [json!({"modes": ["fixed", "fixed", "wobble"]}), json!({"modes": "pressure"}), json!({"variation": "x"}), json!({"modes": [1, 2, 3]})]
+    {
         assert!(s.execute("brush.options", &json!({"name": "3 pt. Round", "params": bad})).is_err(), "{bad}");
     }
     assert_eq!(s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap(), b, "a refused edit changes nothing");
+    // #764: Tilt, Bearing and Rotation, on a Calligraphic and a Scatter brush.
+    let modes = json!(["tilt", "bearing", "rotation"]);
+    s.execute("brush.options", &json!({"name": "3 pt. Round", "params": {"modes": modes}})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({"name": "3 pt. Round"})).unwrap()["modes"], modes);
+    let modes = json!(["tilt", "bearing", "rotation", "pressure"]);
+    s.execute("brush.options", &json!({"name": "Dots", "params": {"modes": modes}})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({"name": "Dots"})).unwrap()["modes"], modes);
 }
 
 /// The bounds of the brush art `id`'s strokes draw.
@@ -728,7 +861,7 @@ fn scatter_art_and_pattern_brush_options_update_strokes() {
     );
     assert!(brushed_bounds(&s, id).is_finite());
     for (name, bad) in [
-        ("Dots", json!({"modes": ["fixed", "tilt", "fixed", "fixed"]})),
+        ("Dots", json!({"modes": ["fixed", "wobble", "fixed", "fixed"]})),
         ("Dots", json!({"modes": ["fixed"]})),
         ("Dots", json!({"colorization": {"method": "sparkle"}})),
         ("Arrow", json!({"direction": "diagonal"})),
@@ -805,6 +938,194 @@ fn art_brush_options_keep_the_scale_fields_an_edit_leaves_out() {
     // A scale that becomes a plain mode drops the guides.
     s.execute("brush.options", &json!({"name": "Bar", "params": {"scale": {"mode": "stretch"}}})).unwrap();
     assert_eq!(s.execute("brush.get", &json!({"name": "Bar"})).unwrap()["scale"], json!({"mode": "stretch"}));
+}
+
+#[test]
+fn pattern_tile_choices_copy_whole_swatch_art_and_reject_invalid_side() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{PatternDef, StrokeLayer};
+    use vectorcraft_geom::BezPath;
+
+    let mut s = session();
+    s.edit("Pattern", |d, _| {
+        let art =
+            Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 4.0)), vectorcraft_doc::Appearance::default_art());
+        d.patterns.push(PatternDef { tile: Rect::new(0.0, 0.0, 10.0, 4.0), ..PatternDef::new("Wide", vec![Arc::new(art)]) });
+        Ok(())
+    })
+    .unwrap();
+    let side = s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap()["side"].clone();
+    s.execute("brush.new", &json!({"type":"pattern", "name":"Plain Tiles", "params":{"side":side}})).unwrap();
+    let original = s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    for choice in ["none", "Missing"] {
+        let error = s.execute("brush.options", &json!({"name":"Plain Tiles", "params":{"side_tile":choice}})).unwrap_err().to_string();
+        assert!(error.contains(if choice == "none" { "You must choose a side pattern." } else { "no pattern named" }), "{error}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+        assert_eq!(s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap(), original);
+    }
+    s.execute("brush.options", &json!({"name":"Plain Tiles", "params":{"side_tile":"Wide", "fit":"addSpace"}})).unwrap();
+    let saved = s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap();
+    assert_eq!(saved["side_frame"], json!(Rect::new(0.0, 0.0, 10.0, 4.0)));
+    assert_eq!(saved["side_swatch"], "Wide");
+    let brush: vectorcraft_brush::Brush = serde_json::from_value(saved).unwrap();
+    let mut path = BezPath::new();
+    path.move_to((0.0, 0.0));
+    path.line_to((100.0, 0.0));
+    let pieces = vectorcraft_brush::stroke_pieces(
+        &s.doc().unwrap().doc,
+        &brush,
+        &path,
+        &StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0),
+    );
+    assert_eq!(pieces.len(), 10, "10 pt tile frame repeats ten times along 100 pt");
+    assert!(pieces[0].geometric_bounds().unwrap().width() >= 29.9, "whole 30 pt art is copied");
+    s.execute("brush.options", &json!({"name":"Plain Tiles", "params":{"inner_corner_tile":"Wide", "outer_corner_tile":"none"}})).unwrap();
+    let corners: vectorcraft_brush::Brush = serde_json::from_value(s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap()).unwrap();
+    let mut fallback = corners.clone();
+    if let (vectorcraft_brush::BrushKind::Pattern(actual), vectorcraft_brush::BrushKind::Pattern(legacy)) = (&corners.kind, &mut fallback.kind) {
+        assert_eq!(actual.outer_source, Some(vectorcraft_brush::CornerSource::None));
+        assert!(actual.inner_corner.is_some());
+        legacy.outer_source = None;
+    }
+    let square = |clockwise: bool| {
+        let mut p = BezPath::new();
+        p.move_to((0.0, 0.0));
+        if clockwise {
+            for point in [(100.0, 0.0), (100.0, 100.0), (0.0, 100.0)] {
+                p.line_to(point);
+            }
+        } else {
+            for point in [(0.0, 100.0), (100.0, 100.0), (100.0, 0.0)] {
+                p.line_to(point);
+            }
+        }
+        p.close_path();
+        p
+    };
+    let stroke = StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0);
+    assert!(
+        [false, true].into_iter().any(|clockwise| {
+            let path = square(clockwise);
+            vectorcraft_brush::stroke_pieces(&s.doc().unwrap().doc, &corners, &path, &stroke)
+                != vectorcraft_brush::stroke_pieces(&s.doc().unwrap().doc, &fallback, &path, &stroke)
+        }),
+        "explicit outer None omits the inner corner art on outer turns"
+    );
+    let borrowed_art = s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap()["inner_corner"].clone();
+    s.execute("brush.new", &json!({"type":"pattern", "name":"Borrowed Corner", "params":{"side":original["side"], "inner_corner":borrowed_art}}))
+        .unwrap();
+    s.execute("brush.options", &json!({"name":"Borrowed Corner", "params":{"outer_corner_tile":"original", "inner_corner_tile":"none"}})).unwrap();
+    let borrowed = s.execute("brush.get", &json!({"name":"Borrowed Corner"})).unwrap();
+    assert!(borrowed["outer_corner"].is_object());
+    assert_eq!(borrowed["inner_source"], "none");
+    s.edit("Delete pattern", |d, _| {
+        d.patterns.clear();
+        Ok(())
+    })
+    .unwrap();
+    let after: vectorcraft_brush::Brush = serde_json::from_value(s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap()).unwrap();
+    assert_eq!(
+        vectorcraft_brush::stroke_pieces(
+            &s.doc().unwrap().doc,
+            &after,
+            &path,
+            &StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0)
+        )
+        .len(),
+        10
+    );
+    let copied = s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap()["side"].clone();
+    s.execute("brush.options", &json!({"name":"Plain Tiles", "params":{"side_tile":"original"}})).unwrap();
+    let original_choice = s.execute("brush.get", &json!({"name":"Plain Tiles"})).unwrap();
+    assert_eq!(original_choice["side"], copied);
+    assert!(original_choice.get("side_swatch").is_none());
+}
+
+#[test]
+fn pattern_original_corner_keeps_borrowed_art_and_frame_when_source_is_cleared() {
+    let mut s = session();
+    let chain = s.execute("brush.get", &json!({"name": "Chain"})).unwrap();
+    let art = chain["outer_corner"].clone();
+    let frame = json!(Rect::new(1.0, 2.0, 15.0, 18.0));
+    for (name, source, borrowed) in [("Borrow Outer", "inner", "outer"), ("Borrow Inner", "outer", "inner")] {
+        let source_art = format!("{source}_corner");
+        let source_frame = format!("{source_art}_frame");
+        let borrowed_art = format!("{borrowed}_corner");
+        let borrowed_frame = format!("{borrowed_art}_frame");
+        let source_tile = format!("{source_art}_tile");
+        let borrowed_tile = format!("{borrowed_art}_tile");
+        s.execute("brush.new", &json!({"type":"pattern", "name":name, "params":{"side":chain["side"], source_art:art, source_frame:frame}})).unwrap();
+        s.execute("brush.options", &json!({"name":name, "params":{source_tile:"none", borrowed_tile:"original"}})).unwrap();
+        let saved = s.execute("brush.get", &json!({"name":name})).unwrap();
+        assert_eq!(saved[&borrowed_art], chain["outer_corner"], "{borrowed} art");
+        assert_eq!(saved[&borrowed_frame], frame, "{borrowed} frame");
+        assert_eq!(saved[format!("{source}_source")], "none");
+    }
+}
+
+#[test]
+fn pattern_tile_object_selects_reserved_swatch_names() {
+    use std::sync::Arc;
+    use vectorcraft_doc::PatternDef;
+
+    let mut s = session();
+    let names = ["none", "original", "autoCentered", "autoBetween", "autoSliced", "autoOverlap"];
+    s.edit("Patterns", |doc, _| {
+        for name in names {
+            let art = Node::path(
+                doc.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 4.0)),
+                vectorcraft_doc::Appearance::default_art(),
+            );
+            doc.patterns.push(PatternDef { tile: Rect::new(0.0, 0.0, 10.0, 4.0), ..PatternDef::new(name, vec![Arc::new(art)]) });
+        }
+        Ok(())
+    })
+    .unwrap();
+    let before = s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap();
+    for invalid in [json!({}), json!({"pattern": null}), json!({"pattern": 1})] {
+        let error = s.execute("brush.options", &json!({"name":"Diamonds", "params":{"side_tile":invalid}})).unwrap_err().to_string();
+        assert!(error.contains("invalid pattern tile choice"), "{error}");
+        assert_eq!(s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap(), before);
+    }
+    let slots = ["side_tile", "outer_corner_tile", "inner_corner_tile", "start_tile", "end_tile"];
+    for (slot, name) in slots.into_iter().zip(names) {
+        s.execute("brush.options", &json!({"name":"Diamonds", "params":{(slot):{"pattern":name}}})).unwrap();
+    }
+    let saved = s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap();
+    for (art, name) in ["side", "outer_corner", "inner_corner", "start", "end"].into_iter().zip(names) {
+        assert_eq!(saved[format!("{art}_swatch")], name);
+        assert_eq!(saved[format!("{art}_frame")], json!(Rect::new(0.0, 0.0, 10.0, 4.0)));
+    }
+    s.execute("brush.options", &json!({"name":"Diamonds", "params":{"outer_corner_tile":{"pattern":"autoOverlap"}}})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap()["outer_corner_swatch"], "autoOverlap");
+}
+
+#[test]
+fn pattern_end_tile_none_choices_leave_side_art_at_both_path_ends() {
+    use vectorcraft_doc::StrokeLayer;
+    use vectorcraft_geom::BezPath;
+
+    let mut s = session();
+    let side = s.execute("brush.get", &json!({"name":"Diamonds"})).unwrap()["side"].clone();
+    let cap = s.execute("brush.get", &json!({"name":"Chain"})).unwrap()["outer_corner"].clone();
+    s.execute("brush.new", &json!({"type":"pattern", "name":"Capped", "params":{"side":side, "start":cap, "end":cap}})).unwrap();
+    s.execute("brush.options", &json!({"name":"Capped", "params":{"start_tile":"none", "end_tile":"none"}})).unwrap();
+    let def = s.execute("brush.get", &json!({"name":"Capped"})).unwrap();
+    assert!(def.get("start").is_none() && def.get("end").is_none());
+    let brush: vectorcraft_brush::Brush = serde_json::from_value(def).unwrap();
+    let mut path = BezPath::new();
+    path.move_to((0.0, 0.0));
+    path.line_to((100.0, 0.0));
+    let pieces = vectorcraft_brush::stroke_pieces(
+        &s.doc().unwrap().doc,
+        &brush,
+        &path,
+        &StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0),
+    );
+    let bounds = pieces.iter().fold(None, |bounds, node| vectorcraft_geom::union_opt(bounds, node.geometric_bounds())).unwrap();
+    assert!((bounds.x0 - 0.0).abs() < 1e-6 && (bounds.x1 - 100.0).abs() < 1e-6, "{bounds:?}");
 }
 
 // ---------- symbols ----------
@@ -904,13 +1225,12 @@ fn place_and_break_link_round_trip_geometry() {
 }
 
 #[test]
-fn edit_then_update_redefines_all_instances() {
+fn break_link_then_update_redefines_all_instances() {
     let mut s = session();
     let (inst, name, _) = make_symbol(&mut s);
     let other = NodeId(s.execute("symbol.place", &json!({"x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
     select(&mut s, &[inst]);
-    let r = s.execute("symbol.edit", &json!({})).unwrap();
-    assert_eq!(r["name"], name);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
     let art = NodeId(r["ids"][0].as_u64().unwrap());
     // Make the art twice as wide, then redefine.
     s.execute("object.transform", &json!({"ids": [art.0], "matrix": [2, 0, 0, 1, -140, 0]})).ok();
@@ -920,6 +1240,59 @@ fn edit_then_update_redefines_all_instances() {
     assert!((bounds(&s, new_inst).width() - w).abs() < 1e-6);
     assert!((bounds(&s, other).width() - w).abs() < 1e-6, "other instances pick up the new size");
     assert!((bounds(&s, other).center().x - 300.0).abs() < 1e-6);
+}
+
+/// A linked opacity mask of a 10 × 10 square at (100, 50).
+fn square_mask(s: &mut Session) -> Box<vectorcraft_doc::OpacityMask> {
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let art = Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 50.0, 110.0, 60.0)), Default::default());
+    Box::new(vectorcraft_doc::OpacityMask::new(art, true))
+}
+
+/// Break Link to Symbol keeps the instance's opacity mask on the art.
+#[test]
+fn break_link_keeps_the_instances_opacity_mask() {
+    let mut s = session();
+    let (inst, _, _) = make_symbol(&mut s);
+    let m = square_mask(&mut s);
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(inst).unwrap().extras_mut().mask = Some(m.clone());
+    let r = s.execute("symbol.breakLink", &json!({"ids": [inst.0]})).unwrap();
+    let art = node(&s, NodeId(r["ids"][0].as_u64().unwrap()));
+    assert!(matches!(art.kind, NodeKind::Path { .. }), "{}", art.kind_label());
+    assert_eq!(art.extras().mask, Some(m), "the art keeps the mask");
+}
+
+/// When the symbol's art has an opacity mask of its own, Break Link puts the instance's mask on a
+/// group around the art, and the art keeps its own.
+#[test]
+fn break_link_puts_the_instances_mask_on_a_group_around_masked_art() {
+    let mut s = session();
+    let (inst, name, _) = make_symbol(&mut s);
+    let (own, m) = (square_mask(&mut s), square_mask(&mut s));
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let sym = doc.symbols.iter_mut().find(|s| s.name == name).unwrap();
+    std::sync::Arc::make_mut(&mut sym.art).extras_mut().mask = Some(own);
+    doc.node_mut(inst).unwrap().extras_mut().mask = Some(m.clone());
+    let r = s.execute("symbol.breakLink", &json!({"ids": [inst.0]})).unwrap();
+    let art = node(&s, NodeId(r["ids"][0].as_u64().unwrap()));
+    let NodeKind::Group { children, .. } = &art.kind else { panic!("a group around the art: {}", art.kind_label()) };
+    assert_eq!(art.extras().mask, Some(m), "the group holds the instance's mask");
+    assert!(children.len() == 1 && children[0].extras().mask.is_some(), "the art keeps its own mask");
+}
+
+/// The art of the instance's opacity mask counts against Break Link's object limit: an instance
+/// whose mask holds more than a million objects stays an instance.
+#[test]
+fn break_link_counts_the_instances_mask_art() {
+    let mut s = session();
+    let (inst, _, _) = make_symbol(&mut s);
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let square =
+        std::sync::Arc::new(Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 50.0, 110.0, 60.0)), Default::default()));
+    let art = Node::group(doc.alloc_id(), vec![square; 1_000_000]);
+    doc.node_mut(inst).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+    assert!(s.execute("symbol.breakLink", &json!({"ids": [inst.0]})).is_err(), "too many objects");
+    assert!(matches!(node(&s, inst).kind, NodeKind::SymbolInstance { .. }), "it stays an instance");
 }
 
 #[test]
@@ -1218,4 +1591,73 @@ fn symbol_nine_slice_guides_round_trip() {
     s.execute("symbol.options", &json!({"name": "Panel", "nineSlice": false})).unwrap();
     s.execute("symbol.delete", &json!({"name": "Box copy"})).unwrap();
     assert!(s.doc().unwrap().doc.unknown.get(vectorcraft_doc::SYMBOL_NINE_SLICE).is_none());
+}
+
+/// Symbols panel › Select All Unused (#4918): a symbol counts as used when an instance in the art,
+/// a pattern tile, the art of a brush or a used symbol places it; one placed only inside an unused
+/// symbol is unused too. Delete Symbol with `names` deletes several in one undo step.
+#[test]
+fn symbol_unused_lists_the_symbols_nothing_places_and_delete_takes_several() {
+    let mut s = session();
+    // A symbol of the selection (a new square at `x` when `x` is given), left placed.
+    let symbol = |s: &mut Session, name: &str, x: Option<f64>| {
+        if let Some(x) = x {
+            rect(s, x, 0.0, 10.0, 10.0);
+        }
+        NodeId(s.execute("symbol.new", &json!({"name": name})).unwrap()["id"].as_u64().unwrap())
+    };
+    let unused =
+        |s: &mut Session| -> Vec<String> { serde_json::from_value(s.execute("symbol.unused", &json!({})).unwrap()["names"].clone()).unwrap() };
+    // Placed: its instance stays on the artboard.
+    symbol(&mut s, "Placed", Some(0.0));
+    // Inner is placed only inside Outer, whose instance stays: both are used.
+    let inner = symbol(&mut s, "Inner", Some(20.0));
+    s.execute("select.set", &json!({"ids": [inner.0]})).unwrap();
+    symbol(&mut s, "Outer", None);
+    // Lonely's and Nested's instances go; Nested is placed only inside Lonely.
+    let nested = symbol(&mut s, "Nested", Some(40.0));
+    s.execute("select.set", &json!({"ids": [nested.0]})).unwrap();
+    let lonely = symbol(&mut s, "Lonely", None);
+    s.execute("edit.clear", &json!({"ids": [lonely.0]})).unwrap();
+    // In a brush's art only.
+    let in_brush = symbol(&mut s, "Brushed", Some(60.0));
+    s.execute("brush.new", &json!({"type": "art", "name": "B", "ids": [in_brush.0]})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [in_brush.0]})).unwrap();
+    assert_eq!(unused(&mut s), ["Nested", "Lonely"], "in panel order");
+    // A placed one becomes unused when its last instance goes.
+    let placed = s.doc().unwrap().doc.layers[0]
+        .children()
+        .unwrap()
+        .iter()
+        .find(|n| matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Placed"))
+        .unwrap()
+        .id;
+    s.execute("edit.clear", &json!({"ids": [placed.0]})).unwrap();
+    assert_eq!(unused(&mut s), ["Placed", "Nested", "Lonely"]);
+    // Delete Symbol takes them all in one undo step, and Undo brings them back.
+    let before = s.doc().unwrap().history.undo.len();
+    s.execute("symbol.delete", &json!({"names": ["Placed", "Nested", "Lonely"]})).unwrap();
+    let names = |s: &Session| s.doc().unwrap().doc.symbols.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&s), ["Inner", "Outer", "Brushed"]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), before + 1);
+    assert!(unused(&mut s).is_empty());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(names(&s), ["Placed", "Inner", "Outer", "Nested", "Lonely", "Brushed"]);
+    // Deleting a symbol and the one placed inside it, in either order, expands every instance
+    // while both definitions are still there: no instance is left without its symbol.
+    for order in [["Inner", "Outer"], ["Outer", "Inner"]] {
+        s.execute("symbol.delete", &json!({"names": order})).unwrap();
+        let mut dangling = 0;
+        s.doc()
+            .unwrap()
+            .doc
+            .walk(|n| dangling += usize::from(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Inner" || symbol == "Outer")));
+        assert_eq!(dangling, 0, "{order:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // Bad `names` are refused and change nothing.
+    for bad in [json!({"names": []}), json!({"names": "Placed"}), json!({"names": [1]}), json!({"names": ["Placed", "Nope"]})] {
+        assert!(s.execute("symbol.delete", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(names(&s).len(), 6);
 }

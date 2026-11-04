@@ -1,5 +1,5 @@
 use super::labels::{Role, label_style};
-use super::{CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Result, Session, Value, bad};
+use super::{Arc, CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Result, Session, Value, bad};
 
 // ---------- generation ----------
 
@@ -23,6 +23,31 @@ pub(super) fn series_marks(g: &GraphSpec, i: usize, series_fill: bool, stroke: P
     let stroke = slot.and_then(|p| p.stroke.clone()).unwrap_or(stroke);
     let width = if slot.is_some_and(|p| p.stroke.is_some()) { slot.and_then(|p| p.stroke_width).unwrap_or(width) } else { width };
     (fill, stroke, width)
+}
+
+/// The paths directly inside series `i`'s group (`items`) with the series' kept fill and stroke opacity on their
+/// topmost fill and stroke. Other art, such as a graph design, keeps its own opacity. A value read from a file is
+/// held to 0..1, and one that is not a number is left out.
+pub(super) fn with_series_opacity(g: &GraphSpec, i: usize, mut items: Vec<Arc<Node>>) -> Vec<Arc<Node>> {
+    let Some(slot) = g.series_paints.get(i) else { return items };
+    let kept = |o: Option<f32>| o.filter(|o| o.is_finite()).map(|o| o.clamp(0.0, 1.0));
+    let (fill, stroke) = (kept(slot.fill_opacity), kept(slot.stroke_opacity));
+    if fill.is_none() && stroke.is_none() {
+        return items;
+    }
+    for item in &mut items {
+        if !matches!(item.kind, NodeKind::Path { .. }) {
+            continue;
+        }
+        let ap = &mut Arc::make_mut(item).appearance;
+        if let (Some(o), Some(f)) = (fill, ap.fill_mut()) {
+            f.opacity = o;
+        }
+        if let (Some(o), Some(st)) = (stroke, ap.stroke_mut()) {
+            st.opacity = o;
+        }
+    }
+    items
 }
 
 /// Where a node inside a graph's generated series art belongs: the graph, the series group and
@@ -113,6 +138,51 @@ pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bo
         } else {
             slot.stroke = Some(paint);
             slot.stroke_width = width;
+        }
+        changed |= spec.series_paints != was;
+    }
+    changed
+}
+
+/// Copy the opacity of the topmost fill (`true`) or stroke (`false`) of generated series art just edited (`edited`:
+/// each object with the kind of row) into that series' fill or stroke opacity; art left without a row of that kind
+/// keeps none. Called inside the same document edit, so both undo together. Returns whether a series' kept opacity
+/// changed.
+pub(crate) fn capture_series_opacity(doc: &mut Document, edited: &[(NodeId, bool)]) -> bool {
+    if edited.is_empty() {
+        return false;
+    }
+    let members = series_members(doc);
+    if members.is_empty() {
+        return false;
+    }
+    let captures: Vec<_> = edited
+        .iter()
+        .filter_map(|(id, fill)| {
+            // Only the paths the graph draws again, not the copy of a graph design.
+            let r = members.get(id).filter(|r| doc.parent_of(*id) == Some(r.group))?;
+            let node = doc.node(*id).filter(|n| matches!(n.kind, NodeKind::Path { .. }))?;
+            let opacity = node.appearance.items.iter().rev().find(|it| it.is_fill() == *fill).map_or(1.0, vectorcraft_doc::AppearanceItem::opacity);
+            Some((r.graph, r.index, *fill, (opacity < 1.0).then_some(opacity)))
+        })
+        .collect();
+    let mut changed = false;
+    for (graph, index, fill, kept) in captures {
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        // A fully opaque row on a series the graph keeps nothing for leaves the graph as it is.
+        if kept.is_none() && spec.series_paints.len() <= index {
+            continue;
+        }
+        let was = spec.series_paints.clone();
+        // `index` is below the graph's series count (`series_members`).
+        if spec.series_paints.len() <= index {
+            spec.series_paints.resize(index + 1, vectorcraft_doc::SeriesPaint::default());
+        }
+        let Some(slot) = spec.series_paints.get_mut(index) else { continue };
+        if fill {
+            slot.fill_opacity = kept;
+        } else {
+            slot.stroke_opacity = kept;
         }
         changed |= spec.series_paints != was;
     }

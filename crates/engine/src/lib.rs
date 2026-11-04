@@ -48,6 +48,8 @@ pub struct Session {
     docs: Vec<DocState>,
     active: Option<usize>,
     pub prefs: Prefs,
+    /// Whether Caps Lock is on, as the desktop host reports it; never saved with the preferences.
+    pub caps_lock: bool,
     /// Fill/stroke for new art (the toolbar proxy).
     pub paint: PaintDefaults,
     /// Which proxy is in front (true = Fill, false = Stroke) — the X key toggles.
@@ -161,6 +163,14 @@ pub struct Session {
     /// While [`Session::place_queue_read`] runs `file.place.queue`: the files read for it, which
     /// the command loads the place cursor with instead of reading them; `None` otherwise.
     pub(crate) queue_hand_off: Option<cmd::place::QueueRead>,
+    /// The automation roots in force when the place cursor was last loaded (`None`: none were).
+    /// The cursor places its files later, on a click that may come from the person at the
+    /// keyboard: those files, and the files they link to, are read under these roots, so a queue
+    /// an agent loaded never reads beyond what it was given.
+    pub(crate) place_queue_roots: Option<std::sync::Arc<file_access::AutomationRoots>>,
+    /// While [`Session::import_image_read`] runs `clipboard.importImage`: the image read for it,
+    /// which the command loads instead of reading `dataBase64`; `None` otherwise.
+    pub(crate) image_hand_off: Option<cmd::clipboard::ImageRead>,
     /// What a [`cmd::TraceRun`] traced, until the next `imageTrace.make` or
     /// `imageTrace.makeAndExpand` takes it ([`cmd::Traced::hand_in`]).
     pub(crate) trace_hand_off: Option<cmd::Traced>,
@@ -193,6 +203,14 @@ pub struct Session {
     /// The pointer button is held: the last pointer event was a press or a drag, not a release or
     /// a move ([`Session::pointer_held`]).
     pub(crate) pointer_held: bool,
+    /// The id and persistent options of the tool when the press under way began, which a dropped
+    /// press puts back ([`Session::drop_tool_press`]).
+    pub(crate) press_options: Option<(String, serde_json::Map<String, serde_json::Value>)>,
+    /// The engine saves the selection and active layer before a Type press and restores them if it drops.
+    pub(crate) press_type_selection: Option<(Selection, Option<NodeId>)>,
+    /// The freeform gradient point selected once the tool took the press under way, which a
+    /// dropped press selects again ([`Session::drop_tool_press`]).
+    pub(crate) press_point: Option<Option<(usize, cmd::gradient::StopOwner)>>,
     /// A guide being dragged out of a ruler ([`Session::ruler_guide`]).
     pub(crate) ruler_guide: Option<vectorcraft_tools::rulerguide::NewGuide>,
     /// Which selected type overflows its frame, for the ports every tool but the Type tools shows.

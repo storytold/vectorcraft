@@ -1591,3 +1591,38 @@ fn a_canvas_selection_reveals_its_active_layer() {
     app.session.active_mut().unwrap().active_layer = doc.layer_of(NodeId(rects[0]));
     assert!(shown(&mut app, &top) && !shown(&mut app, &bottom), "the highlighted row keeps the view");
 }
+
+/// #4820: an open blend lists its spine below its key objects, and a click on the spine's row
+/// selects the blend (whose spine Direct Selection edits); a locked blend's spine row selects
+/// nothing, and searching leaves the row out.
+#[test]
+fn a_blends_spine_is_a_row_below_its_keys_that_selects_the_blend() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 300, "height": 200}));
+    let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap();
+    let b = run(&mut app, "shape.rectangle", json!({"x": 200, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap();
+    run(&mut app, "select.set", json!({"ids": [a, b]}));
+    let blend = NodeId(run(&mut app, "object.blend.make", json!({}))["id"].as_u64().unwrap());
+    run(&mut app, "select.none", json!({}));
+    expand(&mut app, &json!({})).unwrap();
+    let st = app.session.active().unwrap();
+    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let kinds: Vec<(u64, bool)> = rows.iter().map(|r| (r.node.id.0, r.spine)).collect();
+    assert_eq!(kinds[1..], [(blend.0, false), (b, false), (a, false), (blend.0, true)], "the spine row comes last in the blend");
+    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "rect", &Filter::default());
+    assert!(!rows.iter().any(|r| r.spine), "no spine row while searching");
+    // Rows top down: the layer, the blend, both keys (with target circles), then the spine.
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 4);
+    let spine_row = egui::pos2(150.0, circles[3].y + (circles[3].y - circles[2].y));
+    let selected = |app: &VectorcraftApp| app.session.active().unwrap().selection.objects.to_vec();
+    click_with(&mut app, &ctx, spine_row, egui::Modifiers::NONE);
+    assert_eq!(selected(&app), [blend], "its row selects the blend");
+    click_with(&mut app, &ctx, spine_row, egui::Modifiers::SHIFT);
+    assert!(selected(&app).is_empty(), "Shift-click takes it out again");
+    run(&mut app, "layer.setProps", json!({"ids": [blend.0], "locked": true}));
+    click_with(&mut app, &ctx, spine_row, egui::Modifiers::NONE);
+    assert!(selected(&app).is_empty(), "a locked blend's spine can't be selected");
+}

@@ -15,6 +15,438 @@ fn runs(s: &Session, id: u64) -> Vec<vectorcraft_doc::TextRun> {
     }
 }
 
+fn embedded_style(s: &Session, container: &str) -> (Option<String>, f64, Option<String>) {
+    let d = &s.doc().unwrap().doc;
+    let brushes = vectorcraft_brush::library(d);
+    let roots: Vec<&Node> = match container {
+        "symbol" => d.symbols.iter().map(|s| &*s.art).collect(),
+        "pattern" => d.patterns.iter().flat_map(|p| p.art.iter().map(|a| &**a)).collect(),
+        "graph" => d.graph_designs.iter().map(|g| &*g.art).collect(),
+        "brush" => brushes.iter().flat_map(|b| b.art()).collect(),
+        _ => panic!("unknown container"),
+    };
+    let mut found = None;
+    for root in roots {
+        vectorcraft_doc::swatches::walk_with_masks(root, &mut |n| {
+            if let NodeKind::Text(t) = &n.kind {
+                found = Some((t.runs[0].style.style_name.clone(), t.runs[0].style.size, t.para.style_name.clone()));
+            }
+        });
+    }
+    found.unwrap()
+}
+
+fn embedded_style_session(kind: &str, container: &str) -> Session {
+    let (mut s, id) = session_with_text("Styled");
+    s.execute(&format!("{kind}Style.new"), &json!({"name": "Body", "attrs": if kind == "char" { json!({"size": 24}) } else { json!({}) }})).unwrap();
+    s.execute(&format!("{kind}Style.apply"), &json!({"name": "Body", "id": id})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    match container {
+        "symbol" => {
+            let symbol = s.execute("symbol.new", &json!({"name": "Mark"})).unwrap();
+            s.execute("edit.clear", &json!({"ids": [symbol["id"]]})).unwrap();
+        }
+        "pattern" => {
+            s.execute("object.pattern.make", &json!({"edit": false})).unwrap();
+            if s.doc().unwrap().doc.node(NodeId(id)).is_some() {
+                s.execute("edit.clear", &json!({"ids": [id]})).unwrap();
+            }
+        }
+        "graph" => {
+            s.execute("graph.design", &json!({"new": "Bar"})).unwrap();
+            s.execute("edit.clear", &json!({"ids": [id]})).unwrap();
+        }
+        "brush" => {
+            s.execute("brush.new", &json!({"type": "art", "name": "Lettering"})).unwrap();
+            s.execute("edit.clear", &json!({"ids": [id]})).unwrap();
+        }
+        _ => panic!("unknown container"),
+    }
+    s
+}
+
+#[test]
+fn character_style_options_update_embedded_art() {
+    for container in ["symbol", "pattern", "graph", "brush"] {
+        let mut s = embedded_style_session("char", container);
+        assert_eq!(embedded_style(&s, container).0.as_deref(), Some("Body"), "{container}");
+        let before = s.doc().unwrap().doc.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        s.execute("charStyle.edit", &json!({"name": "Body", "to": "Heading", "attrs": {"size": 18}})).unwrap();
+        assert_eq!(embedded_style(&s, container).0.as_deref(), Some("Heading"), "{container}");
+        assert_eq!(embedded_style(&s, container).1, 18.0, "{container}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{container}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before, "{container}");
+        s.execute("edit.redo", &json!({})).unwrap();
+        let undo = s.doc().unwrap().history.undo.len();
+        s.execute("charStyle.delete", &json!({"name": "Heading"})).unwrap();
+        assert_eq!(embedded_style(&s, container).0, None, "{container}");
+        assert_eq!(embedded_style(&s, container).1, 18.0, "{container}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{container}");
+    }
+}
+
+#[test]
+fn character_style_edit_survives_canceling_pattern_edit() {
+    let mut s = embedded_style_session("char", "pattern");
+    let name = s.doc().unwrap().doc.patterns[0].name.clone();
+    s.execute("object.pattern.edit", &json!({"name": name})).unwrap();
+    s.execute("charStyle.edit", &json!({"name": "Body", "to": "Heading", "attrs": {"size": 18}})).unwrap();
+    s.execute("object.pattern.cancel", &json!({})).unwrap();
+
+    assert_eq!(embedded_style(&s, "pattern").0.as_deref(), Some("Heading"));
+    assert_eq!(embedded_style(&s, "pattern").1, 18.0);
+}
+
+#[test]
+fn paragraph_style_rename_updates_symbol_art() {
+    let mut s = embedded_style_session("para", "symbol");
+    assert_eq!(embedded_style(&s, "symbol").2.as_deref(), Some("Body"));
+    s.execute("paraStyle.rename", &json!({"name": "Body", "to": "Heading"})).unwrap();
+    assert_eq!(embedded_style(&s, "symbol").2.as_deref(), Some("Heading"));
+}
+
+#[test]
+fn character_style_options_keep_text_free_layer_shared() {
+    let (mut s, id) = session_with_text("Styled");
+    s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"size": 24}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Body", "id": id})).unwrap();
+    let empty_id = s.execute("layer.new", &json!({"name": "Empty"})).unwrap()["id"].as_u64().unwrap();
+    let before = s.doc().unwrap().doc.layers.iter().find(|layer| layer.id == NodeId(empty_id)).unwrap().clone();
+
+    s.execute("charStyle.edit", &json!({"name": "Body", "to": "Heading", "attrs": {"size": 18}})).unwrap();
+
+    let d = &s.doc().unwrap().doc;
+    let after = d.layers.iter().find(|layer| layer.id == NodeId(empty_id)).unwrap();
+    assert!(std::sync::Arc::ptr_eq(&before, after));
+    assert_eq!(runs(&s, id)[0].style.style_name.as_deref(), Some("Heading"));
+    assert_eq!(runs(&s, id)[0].style.size, 18.0);
+}
+
+#[test]
+fn unchanged_style_options_keep_undo_and_redo_with_and_without_preview() {
+    for preview in [false, true] {
+        let (mut s, _) = session_with_text("Text");
+        s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"size": 18, "leading": null}})).unwrap();
+        s.execute("charStyle.new", &json!({"name": "Other", "attrs": {}})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let redo = s.doc().unwrap().history.redo.len();
+        assert!(redo > 0);
+        let params = json!({"name": "Body", "to": " Body ", "attrs": {"size": 18.0, "leading": null}});
+        if preview {
+            s.begin_interaction("Character Style Options").unwrap();
+            s.preview("charStyle.edit", &params).unwrap();
+            s.commit_interaction().unwrap();
+        } else {
+            s.execute("charStyle.edit", &params).unwrap();
+        }
+        assert!(std::sync::Arc::ptr_eq(&before, &s.doc().unwrap().doc), "preview={preview}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "preview={preview}");
+        assert_eq!(s.doc().unwrap().history.redo.len(), redo, "preview={preview}");
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert!(s.doc().unwrap().doc.char_styles.iter().any(|style| style.name == "Other"));
+    }
+}
+
+#[test]
+fn unchanged_style_attributes_keep_undo_and_redo_for_both_kinds() {
+    for (command, para) in [("charStyle", false), ("paraStyle", true)] {
+        let (mut s, _) = session_with_text("Text");
+        let attrs = if para { json!({"space_before": 18}) } else { json!({"size": 18}) };
+        s.execute(&format!("{command}.new"), &json!({"name": "Body", "attrs": attrs})).unwrap();
+        s.execute(&format!("{command}.new"), &json!({"name": "Other", "attrs": {}})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let redo = s.doc().unwrap().history.redo.len();
+        assert!(redo > 0);
+        let attrs = if para { json!({"space_before": 18.0}) } else { json!({"size": 18.0}) };
+        s.execute(&format!("{command}.setAttrs"), &json!({"name": "Body", "attrs": attrs})).unwrap();
+        assert!(std::sync::Arc::ptr_eq(&before, &s.doc().unwrap().doc), "{command}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{command}");
+        assert_eq!(s.doc().unwrap().history.redo.len(), redo, "{command}");
+    }
+}
+
+#[test]
+fn character_style_options_edit_applies_to_users_and_is_one_saved_undo_step() {
+    let (mut s, id) = session_with_text("First second");
+    s.execute("charStyle.new", &json!({"name":"Body", "attrs":{"size":24.0,"tracking":20.0,"baseline_shift":3.0}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name":"Body", "id":id, "start":0, "end":5})).unwrap();
+    s.execute("charStyle.apply", &json!({"name":"Body", "id":id, "start":6, "end":12})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id":id,"start":6,"end":12,"size":31.0})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("charStyle.edit", &json!({"name":"Body","to":"Text","attrs":{"size":18.0,"tracking":40.0,"baseline_shift":3.0}})).unwrap();
+    let changed = s.doc().unwrap().doc.clone();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(
+        runs(&s, id).iter().map(|r| (r.style.style_name.as_deref(), r.style.size, r.style.tracking)).collect::<Vec<_>>(),
+        [(Some("Text"), 18.0, 40.0), (None, 12.0, 0.0), (Some("Text"), 31.0, 40.0)]
+    );
+    let future = s.execute("text.create", &json!({"x":20,"y":90,"text":""})).unwrap()["id"].as_u64().unwrap();
+    s.execute("charStyle.apply", &json!({"name":"Text","id":future})).unwrap();
+    s.execute("text.editRange", &json!({"id":future,"start":0,"end":0,"insert":"Later"})).unwrap();
+    assert_eq!((runs(&s, future)[0].style.size, runs(&s, future)[0].style.tracking), (18.0, 40.0));
+    let saved = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(
+        saved.char_styles.iter().find(|d| d.name == "Text").unwrap().attrs,
+        s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Text").unwrap().attrs
+    );
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, changed);
+}
+
+#[test]
+fn character_style_options_edit_sets_the_advanced_character_formats() {
+    let (mut s, id) = session_with_text("First second");
+    s.execute("charStyle.new", &json!({"name":"Body", "attrs":{"h_scale":100.0,"rotation":0.0}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name":"Body", "id":id})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id":id,"start":6,"end":12,"rotation":30.0})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let attrs = json!({"h_scale":80.0,"v_scale":120.0,"baseline_shift":-2.0,"rotation":15.0,"language":"German"});
+    s.execute("charStyle.edit", &json!({"name":"Body","to":"Body","attrs":attrs})).unwrap();
+    let changed = s.doc().unwrap().doc.clone();
+    let def = changed.char_styles.iter().find(|d| d.name == "Body").unwrap();
+    assert_eq!(def.attrs["language"], json!("de"));
+    assert_eq!(
+        runs(&s, id)
+            .iter()
+            .map(|r| (r.style.h_scale, r.style.v_scale, r.style.baseline_shift, r.style.rotation, r.style.language.clone()))
+            .collect::<Vec<_>>(),
+        [(80.0, 120.0, -2.0, 15.0, Some("de".to_string())), (80.0, 120.0, -2.0, 30.0, Some("de".to_string()))]
+    );
+    let saved = vectorcraft_format::load(&vectorcraft_format::save(&changed, false)).unwrap();
+    assert_eq!(saved.char_styles.iter().find(|d| d.name == "Body").unwrap().attrs, def.attrs);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, changed);
+}
+
+#[test]
+fn character_style_options_edit_keeps_a_language_tag_from_a_file() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("charStyle.new", &json!({"name":"Body", "attrs":{}})).unwrap();
+    if let Some(def) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).char_styles.iter_mut().find(|d| d.name == "Body") {
+        def.attrs.insert("language".into(), json!("x-file"));
+    }
+    s.execute("charStyle.edit", &json!({"name":"Body","to":"Body","attrs":{"size":18.0,"language":"x-file"}})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Body").unwrap().attrs["language"], json!("x-file"));
+    let error = s.execute("charStyle.edit", &json!({"name":"Body","to":"Body","attrs":{"language":"x-other"}})).unwrap_err().to_string();
+    assert!(error.contains("unknown language"), "{error}");
+}
+
+#[test]
+fn new_character_style_keeps_a_language_tag_from_the_text() {
+    let (mut s, id) = session_with_text("Text");
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(NodeId(id)).map(|n| &mut n.kind) {
+        t.runs[0].style.language = Some("x-file".into());
+    }
+    s.execute("charStyle.new", &json!({"name":"Body","id":id,"attrs":{"size":18.0,"language":"x-file"}})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Body").unwrap().attrs["language"], json!("x-file"));
+    let error = s.execute("charStyle.new", &json!({"name":"Other","id":id,"attrs":{"language":"x-other"}})).unwrap_err().to_string();
+    assert!(error.contains("unknown language"), "{error}");
+}
+
+/// The fill of the first run of `id` and its overprint flags, its stroke and stroke weight.
+fn run_paints(s: &Session, id: u64) -> (vectorcraft_color::Paint, vectorcraft_color::Paint, f64, bool, bool) {
+    let st = runs(s, id)[0].style.clone();
+    (st.fill, st.stroke, st.stroke_width, st.overprint_fill, st.overprint_stroke)
+}
+
+#[test]
+fn character_style_color_and_features_reach_text_and_follow_swatch_edits() {
+    let (mut s, id) = session_with_text("Text 1/2");
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#2050a0", "global": true})).unwrap();
+    let brand = s.doc().unwrap().doc.tint_paint("Brand", 1.0).unwrap();
+    let mut tinted = serde_json::to_value(s.doc().unwrap().doc.tint_paint("Brand", 1.0).unwrap()).unwrap();
+    // The command takes the color of the link at the tint, whatever color is sent.
+    tinted["tint"] = json!(0.4);
+    let attrs = json!({"fill": brand, "stroke": tinted, "stroke_width": 2.0, "overprint_fill": true, "overprint_stroke": false,
+        "features": ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01"]});
+    s.execute("charStyle.new", &json!({"name": "Ink", "attrs": attrs})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Ink", "id": id})).unwrap();
+    let want_stroke = s.doc().unwrap().doc.tint_paint("Brand", 0.4).unwrap();
+    assert_eq!(run_paints(&s, id), (brand, want_stroke.clone(), 2.0, true, false));
+    assert_eq!(runs(&s, id)[0].style.features, ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01"]);
+    let def = |s: &Session| s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Ink").unwrap().attrs.clone();
+    assert_eq!(def(&s)["stroke"], serde_json::to_value(&want_stroke).unwrap());
+    let saved = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(saved.char_styles.iter().find(|d| d.name == "Ink").unwrap().attrs, def(&s));
+
+    s.execute("swatch.edit", &json!({"name": "Brand", "color": "#a02050"})).unwrap();
+    let (brand, tint40) = (s.doc().unwrap().doc.tint_paint("Brand", 1.0).unwrap(), s.doc().unwrap().doc.tint_paint("Brand", 0.4).unwrap());
+    assert_eq!(run_paints(&s, id).0, brand);
+    assert_eq!(run_paints(&s, id).1, tint40);
+    assert_eq!(def(&s)["fill"], serde_json::to_value(&brand).unwrap());
+    assert_eq!(def(&s)["stroke"], serde_json::to_value(&tint40).unwrap());
+    let later = s.execute("text.create", &json!({"x": 10, "y": 90, "text": "Later"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Ink", "id": later})).unwrap();
+    assert_eq!(run_paints(&s, later).0, brand);
+}
+
+#[test]
+fn character_style_color_and_features_are_checked() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#2050a0", "global": true})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Body", "attrs": {}})).unwrap();
+    let mut over = serde_json::to_value(s.doc().unwrap().doc.tint_paint("Brand", 1.0).unwrap()).unwrap();
+    over["tint"] = json!(1.5);
+    let mut missing = over.clone();
+    missing["tint"] = json!(0.5);
+    missing["swatch"] = json!("Gone");
+    s.execute("swatch.new", &json!({"name": "Local", "color": "#102030"})).unwrap();
+    let mut local = missing.clone();
+    local["swatch"] = json!("Local");
+    let many: Vec<String> = (0..=vectorcraft_text::MAX_STYLE_FEATURES).map(|_| "dlig".to_string()).collect();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for (attrs, message) in [
+        (json!({"fill": over}), "`fill.tint` must be from 0 to 1"),
+        (json!({"stroke": missing}), "no swatch `Gone`"),
+        (json!({"stroke": local}), "`Local` is a process colour"),
+        (json!({"stroke_width": -1.0}), "`stroke_width` must be from 0 to 4000000"),
+        (json!({"stroke_width": 5.0e6}), "`stroke_width` must be from 0 to 4000000"),
+        (json!({"features": ["dlig", "zzzz"]}), "unknown OpenType feature `zzzz`"),
+        (json!({"features": ["--liga"]}), "unknown OpenType feature `--liga`"),
+        (json!({"features": many}), "features lists at most 256 tags"),
+        (json!({"fill": {"type": "solid"}}), "missing field"),
+    ] {
+        for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
+            let p = match cmd {
+                "charStyle.edit" => json!({"name": "Body", "to": "Body", "attrs": attrs}),
+                "charStyle.new" => json!({"name": "Other", "attrs": attrs}),
+                _ => json!({"name": "Body", "attrs": attrs}),
+            };
+            let error = s.execute(cmd, &p).unwrap_err().to_string();
+            assert!(error.contains(message), "{cmd} {attrs}: {error}");
+        }
+    }
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn text_style_rejects_doubly_signed_feature_tags() {
+    let (mut s, id) = session_with_text("Text");
+    let before = runs(&s, id);
+    let undo = s.doc().unwrap().history.undo.len();
+    for cmd in ["text.setStyle", "text.setRangeStyle"] {
+        for tag in ["--liga", "+-dnom", "-+ss01", "++liga"] {
+            let error = s.execute(cmd, &json!({"id": id, "start": 0, "end": 4, "features": [tag]})).unwrap_err().to_string();
+            assert!(error.contains(&format!("`{tag}`")), "{cmd}: {error}");
+        }
+    }
+    assert_eq!(runs(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn style_paints_count_as_swatch_uses_and_gradient_stops_are_checked() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#2050a0", "global": true})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Spare", "color": "#a02050", "global": true})).unwrap();
+    let unused = |s: &mut Session| s.execute("swatch.unused", &json!({})).unwrap()["names"].clone();
+    assert!(unused(&mut s).as_array().unwrap().contains(&json!("Brand")));
+    let brand = s.doc().unwrap().doc.tint_paint("Brand", 0.5).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Ink", "attrs": {"stroke": brand}})).unwrap();
+    let names = unused(&mut s);
+    assert!(!names.as_array().unwrap().contains(&json!("Brand")), "{names}");
+    assert!(names.as_array().unwrap().contains(&json!("Spare")), "{names}");
+
+    let mut g = vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default());
+    g.gradient.stops[0].swatch = Some("Brand".into());
+    g.gradient.stops[0].tint = 0.25;
+    let fill = serde_json::to_value(vectorcraft_color::Paint::Gradient(Box::new(g.clone()))).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Fade", "attrs": {"fill": fill}})).unwrap();
+    let def = s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Fade").unwrap().attrs.clone();
+    let want = s.doc().unwrap().doc.global_color("Brand").unwrap().tinted(0.25);
+    assert_eq!(def["fill"]["gradient"]["stops"][0]["color"], serde_json::to_value(want).unwrap());
+    g.gradient.stops[0].swatch = Some("Gone".into());
+    let gone = serde_json::to_value(vectorcraft_color::Paint::Gradient(Box::new(g))).unwrap();
+    let error = s.execute("charStyle.new", &json!({"name": "Bad", "attrs": {"fill": gone}})).unwrap_err().to_string();
+    assert!(error.contains("no swatch `Gone`"), "{error}");
+}
+
+#[test]
+fn styles_from_files_keep_their_unknown_feature_tags_and_swatch_links() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("charStyle.new", &json!({"name": "Body", "attrs": {}})).unwrap();
+    let linked = json!({"type": "solid", "color": {"model": "rgb", "r": 1.0, "g": 0.0, "b": 0.0}, "swatch": "Gone"});
+    if let Some(def) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).char_styles.iter_mut().find(|d| d.name == "Body") {
+        def.attrs.insert("features".into(), json!(["zzzz", "dlig"]));
+        def.attrs.insert("fill".into(), linked.clone());
+    }
+    let fill = s.doc().unwrap().doc.char_styles[0].attrs["fill"].clone();
+    s.execute("charStyle.edit", &json!({"name": "Body", "to": "Body", "attrs": {"features": ["zzzz", "-dlig"], "fill": fill}})).unwrap();
+    let def = s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Body").unwrap().attrs.clone();
+    assert_eq!(def["features"], json!(["zzzz", "-dlig"]));
+    let mut replaced = def.clone();
+    replaced.insert("size".into(), json!(14.0));
+    s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": replaced})).unwrap();
+    s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": def})).unwrap();
+    s.execute("charStyle.duplicate", &json!({"name": "Body"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Body copy").unwrap().attrs, def);
+    // A list longer than a style made here can have stays editable, but does not grow.
+    let long: Vec<String> = (0..300).map(|i| if i % 2 == 0 { "dlig".to_string() } else { "-dlig".to_string() }).collect();
+    if let Some(def) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).char_styles.iter_mut().find(|d| d.name == "Body") {
+        def.attrs.insert("features".into(), json!(long));
+    }
+    let mut shorter = long.clone();
+    shorter.pop();
+    s.execute("charStyle.edit", &json!({"name": "Body", "to": "Body", "attrs": {"features": shorter}})).unwrap();
+    let mut longer = shorter.clone();
+    longer.extend(["swsh".to_string(), "salt".to_string()]);
+    let error = s.execute("charStyle.edit", &json!({"name": "Body", "to": "Body", "attrs": {"features": longer}})).unwrap_err().to_string();
+    assert!(error.contains("features lists at most 256 tags"), "{error}");
+}
+
+#[test]
+fn editing_character_style_clears_removed_size_without_losing_local_override() {
+    let (mut s, id) = session_with_text("One two");
+    s.execute("charStyle.setAttrs", &json!({"name": NORMAL_CHAR, "attrs": {"size": 15.0}})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Body", "id": id})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 7, "size": 31.0})).unwrap();
+    s.execute("charStyle.edit", &json!({"name": "Body", "to": "Body", "attrs": {}})).unwrap();
+    let r = runs(&s, id);
+    assert_eq!((r[0].style.size, r[1].style.size), (15.0, 31.0));
+}
+
+#[test]
+fn replacing_character_style_attrs_clears_removed_size() {
+    let (mut s, id) = session_with_text("Text");
+    s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Body", "id": id})).unwrap();
+    s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {}})).unwrap();
+    assert_eq!(runs(&s, id)[0].style.size, 12.0);
+}
+
+#[test]
+fn character_style_options_edit_validates_names_and_allows_case_changes() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("charStyle.new", &json!({"name":"Body","attrs":{"size":24.0}})).unwrap();
+    s.execute("charStyle.new", &json!({"name":"Other","attrs":{}})).unwrap();
+    for (name, to, message) in
+        [(super::NORMAL_CHAR, "New", "can't be edited this way"), ("Body", "  ", "give the style a name"), ("Body", "Other", "already exists")]
+    {
+        let error = s.execute("charStyle.edit", &json!({"name":name,"to":to,"attrs":{}})).unwrap_err().to_string();
+        assert!(error.contains(message), "{error}");
+    }
+    s.execute("charStyle.edit", &json!({"name":"Body","to":"body","attrs":{"size":18.0}})).unwrap();
+    s.execute("charStyle.edit", &json!({"name":"body","to":" body ","attrs":{"size":20.0}})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|style| style.name == "body").unwrap().attrs["size"], json!(20.0));
+}
+
 #[test]
 fn char_style_new_apply_range_redefine_keeps_overrides() {
     let (mut s, id) = session_with_text("Hello world");
@@ -293,10 +725,10 @@ fn auto_leading_redefine_keeps_overrides_and_history() {
         s.execute("text.setStyle", &json!({"ids": [linked], "leading": "auto"})).unwrap();
         s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"leading": 28}})).unwrap();
         assert_eq!(ids.map(|id| runs(&s, id)[0].style.leading), [Some(28.0), None, Some(42.0)]);
-        // Omitting leading replaces the definition without resetting the text's leading.
+        // Omitting leading returns linked text to Auto and keeps local overrides.
         s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"tracking": 20}})).unwrap();
         assert!(!s.doc().unwrap().doc.char_styles[0].attrs.contains_key("leading"));
-        assert_eq!(ids.map(|id| runs(&s, id)[0].style.leading), [Some(28.0), None, Some(42.0)]);
+        assert_eq!(ids.map(|id| runs(&s, id)[0].style.leading), [None, None, Some(42.0)]);
     }
 }
 
@@ -308,7 +740,7 @@ fn settable<T: DeserializeOwned>() -> std::collections::BTreeSet<String> {
 /// New and Redefine capture every paragraph attribute. A paragraph style redefined from a
 /// paragraph at the defaults gives its paragraphs the defaults back where they had the old
 /// definition's values, and `setAttrs` with a default value does too; local overrides, and
-/// attributes `setAttrs` leaves out, stay.
+/// attributes `setAttrs` leaves out return to the base value.
 #[test]
 fn para_style_redefined_to_the_defaults_updates_its_paragraphs() {
     use vectorcraft_doc::{Composer, HyphenationOptions};
@@ -335,11 +767,11 @@ fn para_style_redefined_to_the_defaults_updates_its_paragraphs() {
     assert_eq!(defined(&s, 0), settable::<ParaStyle>(), "Redefine captures every attribute");
     s.execute("paraStyle.new", &json!({"name": "Copy", "id": local})).unwrap();
     assert_eq!(defined(&s, 1), settable::<ParaStyle>(), "New captures every attribute");
-    // Style options: a default value reaches the users too; an attribute left out stays as it is.
+    // Style options: a default value reaches users, and an attribute left out returns to base.
     s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": {"hyphenation": {"hyphen_limit": 3}, "composer": "singleLine"}})).unwrap();
     assert_eq!((limits(&s), composers(&s)), ([3, 3, 4], [Composer::SingleLine; 3]));
     s.execute("paraStyle.setAttrs", &json!({"name": "Body", "attrs": {"composer": "everyLine"}})).unwrap();
-    assert_eq!((limits(&s), composers(&s)), ([3, 3, 4], [Composer::EveryLine; 3]));
+    assert_eq!((limits(&s), composers(&s)), ([0, 0, 4], [Composer::EveryLine; 3]));
     assert_eq!(Value::Object(s.doc().unwrap().doc.para_styles[0].attrs.clone()), json!({"composer": "everyLine"}));
 }
 
@@ -368,7 +800,7 @@ fn char_style_redefined_to_the_defaults_updates_its_text() {
     s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"kerning": 10, "charAlign": "emBoxTop"}})).unwrap();
     assert_eq!((kerning(&s), aligns(&s)), ([Some(10.0), Some(10.0), Some(60.0)], [CharAlign::EmBoxTop; 3]));
     s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"charAlign": "romanBaseline"}})).unwrap();
-    assert_eq!((kerning(&s), aligns(&s)), ([Some(10.0), Some(10.0), Some(60.0)], [CharAlign::RomanBaseline; 3]));
+    assert_eq!((kerning(&s), aligns(&s)), ([None, None, Some(60.0)], [CharAlign::RomanBaseline; 3]));
     assert_eq!(Value::Object(s.doc().unwrap().doc.char_styles[0].attrs.clone()), json!({"charAlign": "romanBaseline"}));
 }
 
@@ -458,6 +890,20 @@ fn auto_leading_new_distinguishes_unset_attributes() {
     s.execute("charStyle.apply", &json!({"name": "Captured", "id": id})).unwrap();
     assert_eq!(runs(&s, id)[0].style.leading, None);
     assert_eq!(s.doc().unwrap().doc.char_styles[2].attrs.get("leading"), Some(&Value::Null));
+}
+
+#[test]
+fn optical_character_style_captures_and_redefines_automatic_mode() {
+    let (mut s, id) = session_with_text("III");
+    s.execute("text.setRangeStyle", &json!({"id": id, "kerning": "optical"})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Profile", "id": id})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.char_styles[0].attrs.get("opticalKerning"), Some(&json!(true)));
+    s.execute("text.setRangeStyle", &json!({"id": id, "kerning": "auto"})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Profile", "id": id})).unwrap();
+    assert!(runs(&s, id)[0].style.optical_kerning);
+    s.execute("text.setRangeStyle", &json!({"id": id, "kerning": "auto"})).unwrap();
+    s.execute("charStyle.redefine", &json!({"name": "Profile", "id": id})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.char_styles[0].attrs.get("opticalKerning"), Some(&json!(false)));
 }
 
 #[test]
