@@ -2803,7 +2803,9 @@ an instance when the effects in the symbol's art, or the instance's own, paint o
 ## Expand
 
 `object.expand {object?, fill?, stroke?, gradient?, steps?}` (Object → Expand…) turns the selection into plain art in
-one undo step. `object` (on by default) outlines type, turns live shapes into paths and bakes effects; `stroke` (on)
+one undo step. `object` (on by default) turns the symbol instances in the selection without effects (on the instance
+or on its fills and strokes) and not in perspective, those in a placed document's art included, into their art as `symbol.breakLink` places it (the instances
+that art holds stay instances; a hidden or locked instance's art stays hidden or locked), outlines type, turns live shapes into paths and bakes effects; `stroke` (on)
 outlines strokes into filled paths, the stroked paths that baking effects leaves included (a group's own stroke among
 them, #3089); `fill` (on) expands gradient fills: with `gradient: "objects"` (the default) into
 `steps` (1–1000, default 255) solid objects (rectangles across a linear gradient, each from its band to the far end so
@@ -2831,9 +2833,11 @@ or a geometry effect on a group or type, which the canvas draws turned or scaled
 and those of the object shape the outline of the clip group, the gradient fits that outline and the tiles reach its
 box, as the canvas paints the fill; the expanded art does not keep them. With `fill: false` gradient and pattern fills
 stay live. `object.expand.info` answers which options have something to expand in the selection
-(`{object, fill, stroke, gradient, appearance}`; `gradient` says whether Fill has a gradient fill, which Expand
+(`{object, fill, stroke, gradient, appearance, symbolArt?}`; `gradient` says whether Fill has a gradient fill, which Expand
 Gradient To applies to; `appearance` whether the selection has appearance attributes Expand Appearance expands first,
-for which Object → Expand… is dimmed in the menus), and `object.mesh.create` on a gradient-filled object colours the
+for which Object → Expand… is dimmed in the menus; `symbolArt: {fill, stroke, gradient}`, present when the selection
+holds symbol instances that `object` expands, whether only their art holds it, which Fill and Stroke reach only with
+`object` on), and `object.mesh.create` on a gradient-filled object colours the
 mesh points as the gradient paints them, with the colors Object › Expand gives them.
 
 ```json
