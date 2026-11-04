@@ -925,9 +925,10 @@ Method (the Gradient panel's menu): `classic` (the default) mixes the colours be
 `perceptual` mixes a linear or radial gradient's colours in OKLab so the steps look even. SVG exports write a
 Perceptual gradient as an image at the Document Raster Effects resolution (a dithered Perceptual fill with its noise).
 PDF exports write it the same way, except for a linear or radial gradient with spot color stops whose other stops
-are all paper white, CMYK or gray, that is not a dithered fill and whose curve does not have too many stops. PDF
-writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK or gray
-inks as a DeviceN shading.
+are all paper white or written in CMYK or gray, that is not a dithered fill and whose curve does not have too many
+stops. A CMYK document, or an export that converts colors to a CMYK destination profile, writes RGB and Lab stops in
+CMYK. PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK
+or gray inks as a DeviceN shading.
 `paint.setFill`/`paint.setStroke` take it in `gradient` too:
 
 ```json
@@ -2786,8 +2787,9 @@ give it `swatch` (and `tint` %, default 100 or a tint swatch's own) instead of `
 {stops}` or a `gradient` paint's stops. Editing or deleting the swatch then recolours or unlinks the stop, in art and
 in gradient swatches. A spot stop separates on its plate. A linear or radial gradient whose stops are all tints of one spot ink (or
 paper white, 0 %) exports to PDF as a Separation shading, and one that mixes spot inks with other spot, CMYK or gray
-inks exports as a DeviceN shading. A gradient that mixes a spot ink with RGB or Lab colors is written in process
-colors, with a warning. Freeform gradients and dithered fills export to PDF as images in process colors, and Method
+inks exports as a DeviceN shading. A gradient that mixes a spot ink with colors written in RGB or Lab is written in
+process colors, with a warning; a CMYK document, or an export that converts colors to a CMYK destination profile,
+writes RGB and Lab stops in CMYK. Freeform gradients and dithered fills export to PDF as images in process colors, and Method
 above covers Perceptual gradients.
 
 ```json
@@ -5434,7 +5436,8 @@ the paragraph's text now starts; when the text before `at` starts no list, nothi
 
 `text.setRangeStyle {id, start, end, kerning}` (a range) and `text.setFormat {ids?, kerning}`
 (the selected type) accept `kerning: "auto" | "optical" | number` (1/1000 em). Auto uses the font's
-pair metrics; Optical spaces horizontal pairs from their glyph shapes. Vertical text uses font
+pair metrics; Optical spaces horizontal pairs from their glyph shapes, moving each toward the font's own
+stem spacing; ideographs, kana, fullwidth forms and dashes keep the font's spacing. Vertical text uses font
 metrics in either mode. A number sets a manual pair value,
 replacing that pair's automatic correction while tracking remains additive. Choosing `"optical"` or
 `"auto"` clears existing manual pair values in the text it applies to. New text and files without an Optical setting use Auto. The Character

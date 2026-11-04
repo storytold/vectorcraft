@@ -109,6 +109,14 @@ impl Clipboard {
         !self.nodes.is_empty() || !self.artboards.is_empty()
     }
 
+    /// One newly made clipboard object and the source document resources it uses. Type-range
+    /// Copy builds an object from selected runs rather than copying a whole document node.
+    pub fn from_node(st: &DocState, node: Node) -> Self {
+        let mut clip = Self::gather(&st.doc, vec![node]);
+        clip.source_doc = Some(st.uid);
+        clip
+    }
+
     /// Objects `roots` of `st`'s document with their resources, source artboard and layers.
     pub(crate) fn copy(st: &DocState, roots: &[NodeId]) -> Self {
         let d = &*st.doc;

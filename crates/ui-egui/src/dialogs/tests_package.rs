@@ -342,6 +342,27 @@ fn a_long_list_of_fonts_left_out_is_cut_short_in_the_status() {
     assert!(package::package_dialog_note(0, &fonts).contains("Family 199 Regular"));
 }
 
+/// A package written in the background while another dialog is open shows no dialog, so its
+/// status line names every font left out, however long the list.
+#[test]
+fn a_background_package_behind_another_dialog_names_every_font_in_the_status() {
+    let dir = Folder::new("fonts-behind");
+    let gate = Gate::default();
+    let (mut app, _files) = saved_with_worker(&dir, &gate);
+    for i in 0..30 {
+        app.run("text.create", json!({"x": 10, "y": 40 + i, "text": "Gone", "font": format!("No Such Font Family {i}")})).unwrap();
+    }
+    package_dialog(&mut app, &dir.path("out"));
+    assert_eq!(confirm(&mut app).unwrap()["background"], true);
+    app.run("ui.packageDialog", json!({})).unwrap();
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("package"), "the other dialog stays");
+    let status = &app.ui.status;
+    assert!(status.contains("No Such Font Family 0 Regular") && status.contains("No Such Font Family 29 Regular"), "{status}");
+    assert!(!status.contains('…'), "{status}");
+}
+
 /// A package status written in English, for one file or several, with or without a folder and a
 /// note, is translated by every catalog when the status bar shows it after a language switch, in
 /// the form the language's plural rule picks for the count, and a folder whose name has a space or

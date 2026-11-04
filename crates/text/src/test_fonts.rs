@@ -830,16 +830,30 @@ pub const RIGHT_TO_LEFT_OPTICAL_FAMILY: &str = "Right-to-left Profile Sans";
 
 /// Two Hebrew characters mapped to the bundled Source Sans 3 A and V outlines.
 pub fn right_to_left_optical_font() -> Option<Vec<u8>> {
+    remapped_source_sans(RIGHT_TO_LEFT_OPTICAL_FAMILY, "RtlProfileSans-Regular", &[('א', 'A'), ('ב', 'V')])
+}
+
+/// The family of [`ideograph_optical_font`].
+pub const IDEOGRAPH_OPTICAL_FAMILY: &str = "Ideograph Profile Sans";
+
+/// Two ideographs, two kana and a fullwidth letter mapped to the bundled Source Sans 3 A, V, T, o
+/// and W outlines: shapes Optical would space, on characters that keep the font's spacing.
+pub fn ideograph_optical_font() -> Option<Vec<u8>> {
+    remapped_source_sans(IDEOGRAPH_OPTICAL_FAMILY, "IdeographProfileSans-Regular", &[('日', 'A'), ('本', 'V'), ('カ', 'T'), ('な', 'o'), ('Ｗ', 'W')])
+}
+
+/// A face named `family` that maps only the characters of `mapping` to the bundled Source Sans 3
+/// outlines of their letters, with no `GPOS` or `kern` table.
+fn remapped_source_sans(family: &str, postscript: &str, mapping: &[(char, char)]) -> Option<Vec<u8>> {
     use write_fonts::tables::cmap::Cmap;
 
     const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
     let font = skrifa::FontRef::new(BASE).ok()?;
     let charmap = font.charmap();
-    let mapping = [('א', 'A'), ('ב', 'V')];
-    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let mappings = mapping.iter().map(|&(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
     let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
-    let family = RIGHT_TO_LEFT_OPTICAL_FAMILY;
-    let name = name_table(&[(1, family), (2, "Regular"), (4, "Right-to-left Profile Sans Regular"), (6, "RtlProfileSans-Regular")])?;
+    let full = format!("{family} Regular");
+    let name = name_table(&[(1, family), (2, "Regular"), (4, full.as_str()), (6, postscript)])?;
     let mut builder = FontBuilder::new();
     builder.add_table(&cmap).ok()?;
     builder.add_raw(Tag::new(b"name"), name);

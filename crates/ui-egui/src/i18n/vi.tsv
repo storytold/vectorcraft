@@ -4426,6 +4426,7 @@ theme	Appearance	Giao diện
 @msg	Create Outlines: select text objects	Tạo đường bao: hãy chọn đối tượng văn bản
 @msg	damaged	bị hỏng
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Phục hồi dữ liệu không có nơi lưu bản sao: đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	Phục hồi dữ liệu không thể lưu bản sao vào {path}: {e}
 @msg	decimals must be {_1}–{_2} (got {_3})	số thập phân phải từ {_1}–{_2} (nhận được {_3})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	chọn trực tiếp các điểm neo để cắt (không phải điểm cuối của đường dẫn mở)
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Đã loại bỏ {n} tài liệu đã phục hồi
