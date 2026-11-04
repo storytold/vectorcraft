@@ -23,6 +23,9 @@ mod nodes;
 mod paint;
 mod text;
 
+#[cfg(test)]
+pub(crate) use paint::{CROP_STROKES, crop_line};
+
 impl Renderer {
     pub fn new() -> Self {
         Self {
