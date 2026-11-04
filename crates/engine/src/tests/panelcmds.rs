@@ -162,6 +162,56 @@ fn artboard_color_is_set_and_cleared_in_one_undo_step() {
     assert_eq!(*s.doc().unwrap().doc, *before, "a bad color changes nothing");
 }
 
+/// A color param given as a hex color with an alpha part (`#rrggbbaa` or `#rgba`, with or without
+/// the `#`) is refused and changes nothing: a Rasterize background, an artboard's color, a fill or
+/// stroke, a swatch's colors and the color of new type. `#rrggbb`, a color key and `[r, g, b]`
+/// still set the color.
+#[test]
+fn a_color_with_an_alpha_part_is_refused() {
+    let mut s = session();
+    let id = rect(&mut s);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in ["#ff000080", "ff000080", " #FF000080 ", "#f008"] {
+        for (cmd, p) in [
+            ("object.rasterize", json!({"ppi": 72, "background": bad})),
+            ("artboard.setProps", json!({"index": 0, "color": bad})),
+            ("artboard.new", json!({"color": bad})),
+            ("paint.setFill", json!({"ids": [id.0], "color": bad})),
+            ("paint.setStroke", json!({"ids": [id.0], "color": bad})),
+            ("swatch.new", json!({"name": "Half", "color": bad})),
+            ("swatch.new", json!({"colors": ["#00ff00", bad]})),
+            ("swatch.newGroup", json!({"name": "Half", "colors": ["#00ff00", bad]})),
+            ("text.create", json!({"x": 10, "y": 10, "text": "a", "color": bad})),
+            ("text.createInPath", json!({"path": id.0, "mode": "area", "text": "a", "color": bad})),
+            ("document.export", json!({"format": "png", "background": bad})),
+            ("document.export", json!({"format": "gif", "matte": bad})),
+        ] {
+            assert!(s.execute(cmd, &p).is_err(), "{cmd} {p}");
+        }
+    }
+    assert_eq!(*s.doc().unwrap().doc, *before, "a color with an alpha part changes nothing");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "and records no undo step");
+    s.execute("artboard.setProps", &json!({"index": 0, "color": "#ff0000"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards[0].color.map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
+    let fill = node(&s, id).appearance.fill_paint();
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "cmyk 0 100 100 0"})).unwrap();
+    assert!(node(&s, id).appearance.fill_paint() != fill && node(&s, id).appearance.fill_paint().color().is_some());
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": [0, 0, 1]})).unwrap();
+    assert_eq!(node(&s, id).appearance.fill_paint().color().map(|c| c.to_hex()).as_deref(), Some("#0000ff"));
+    s.execute("swatch.new", &json!({"name": "Pure Green", "color": "#00ff00"})).unwrap();
+    let green = s.doc().unwrap().doc.swatches.iter().find(|w| w.name == "Pure Green").map(|w| w.paint.clone());
+    assert_eq!(green.and_then(|p| p.color()).map(|c| c.to_hex()).as_deref(), Some("#00ff00"));
+    let t = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "a", "color": "#ff0000"})).unwrap();
+    let NodeKind::Text(t) = node(&s, NodeId(t["id"].as_u64().unwrap())).kind else { panic!("not type") };
+    assert_eq!(t.runs[0].style.fill.color().map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
+    s.execute("document.export", &json!({"format": "png", "background": "#ff0000"})).unwrap();
+    s.execute("document.export", &json!({"format": "gif", "matte": "#ff0000"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.rasterize", &json!({"ppi": 72, "background": "#ff0000"})).unwrap();
+}
+
 /// The native format writes an artboard's background color and reads it back. An artboard without
 /// one is written as before, with no `color` key.
 #[test]

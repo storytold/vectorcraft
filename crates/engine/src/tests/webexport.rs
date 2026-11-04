@@ -373,7 +373,9 @@ fn image_size_region_and_metadata() {
         json!({"format": "bmp"}),
         json!({"colors": "many"}),
         json!({"matte": "plaid"}),
+        json!({"matte": "#ffff0080"}),
         json!({"colorTable": {"locked": ["nope"]}}),
+        json!({"colorTable": {"transparent": ["#ff000080"]}}),
         json!({"artboard": 3}),
         json!({"preset": "Nope"}),
     ] {

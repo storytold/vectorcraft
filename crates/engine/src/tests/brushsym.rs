@@ -1405,6 +1405,26 @@ fn symbolism_adjustments() {
     assert!(s.execute("symbol.adjust", &json!({"tool": "nope", "points": at})).is_err());
 }
 
+/// The Symbol Stainer's `color` with an alpha part (`#rrggbbaa` or `#rgba`) is refused and changes
+/// nothing, rather than staining with the current fill; `#rrggbb` still stains with it.
+#[test]
+fn a_stain_color_with_an_alpha_part_is_refused() {
+    let mut s = session();
+    let (inst, _, b) = make_symbol(&mut s);
+    let c = b.center();
+    let at = json!([[c.x, c.y]]);
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in ["#ff000080", "ff000080", "#f008"] {
+        assert!(s.execute("symbol.adjust", &json!({"tool": "stain", "points": at, "color": bad, "intensity": 10})).is_err(), "{bad}");
+    }
+    assert_eq!(*s.doc().unwrap().doc, *before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("symbol.adjust", &json!({"tool": "stain", "points": at, "color": "#ff0000", "intensity": 10})).unwrap();
+    let f = node(&s, inst).appearance.fill().cloned().unwrap();
+    assert_eq!(f.paint.color().map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
+}
+
 /// In a CMYK document the Symbol Stainer's RGB `color` separates through the color settings, as
 /// `paint.setFill` stores it.
 #[test]
