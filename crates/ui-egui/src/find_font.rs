@@ -24,12 +24,13 @@ pub fn open_on_missing(app: &mut VectorcraftApp) {
     open_at(app, first.unwrap_or(0));
 }
 
-/// Open the dialog with the document's font `selected` (an index into `text.fonts`) chosen, and
-/// System's font ([`system_family`]) to change to.
+/// Open the dialog with the document's font `selected` (an index into `text.fonts`) chosen,
+/// System's font ([`system_family`]) to change to, and the last Find In choice (Document at first).
 fn open_at(app: &mut VectorcraftApp, selected: usize) {
+    let find_in = FIND_IN.iter().find(|f| **f == app.ui.find_font_in).copied().unwrap_or("document");
     app.ui.dialog = Some(Dialog::new(
         "findFont",
-        json!({ "selected": selected, "family": system_family(), "style": "", "selectionOnly": false, "replaceFrom": "system", "findIn": "document" }),
+        json!({ "selected": selected, "family": system_family(), "style": "", "selectionOnly": false, "replaceFrom": "system", "findIn": find_in }),
     ));
 }
 
@@ -131,6 +132,18 @@ fn find_scope(app: &VectorcraftApp, find_in: &str) -> Value {
             if layers.is_empty() { json!("document") } else { json!({ "layers": layers }) }
         }
         _ => json!("document"),
+    }
+}
+
+/// Run the dialog's button `button` (find, change or changeAll) on the document font `from`.
+fn run_button(app: &mut VectorcraftApp, d: &Dialog, button: &str, from: &Value) -> Result<Value, String> {
+    match button {
+        "find" => {
+            let scope = find_scope(app, &d.str("findIn"));
+            app.run("select.font", json!({ "family": from["family"], "style": from["style"], "scope": scope }))
+        }
+        "change" => change(app, d, from, false),
+        _ => change(app, d, from, true),
     }
 }
 
@@ -254,19 +267,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         });
     });
+    app.ui.find_font_in = d.str("findIn");
     let sel = d.fields.get("selected").and_then(Value::as_u64).unwrap_or(0) as usize;
-    if let (Some(a), Some(from)) = (act, list.get(sel)) {
-        let r = match a {
-            "find" => {
-                let scope = find_scope(app, &d.str("findIn"));
-                app.run("select.font", json!({ "family": from["family"], "style": from["style"], "scope": scope }))
-            }
-            "change" => change(app, &d, from, false),
-            _ => change(app, &d, from, true),
-        };
-        if let Err(e) = r {
-            app.ui.status = e;
-        }
+    if let (Some(a), Some(from)) = (act, list.get(sel))
+        && let Err(e) = run_button(app, &d, a, from)
+    {
+        app.ui.status = e;
     }
     if close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         app.ui.dialog = None;
@@ -334,24 +340,32 @@ mod tests {
         let layer = app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
         let second = text(&mut app, 210);
         let third = text(&mut app, 20);
-        open(&mut app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("findIn"), "document");
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui.ctx()));
-        out.textures_delta.clear();
+        // Choose Find In on the open dialog, draw a frame, then press Find.
         let find = |app: &mut VectorcraftApp, find_in: &str| {
-            let scope = find_scope(app, find_in);
-            app.run("select.font", json!({ "family": "Inter", "scope": scope })).unwrap();
+            open(app);
+            app.ui.dialog.as_mut().unwrap().fields.insert("findIn".into(), json!(find_in));
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx()));
+            out.textures_delta.clear();
+            let d = app.ui.dialog.clone().unwrap();
+            let from = fonts(app).into_iter().find(|f| f["family"] == "Inter").unwrap();
+            run_button(app, &d, "find", &from).unwrap();
             let mut ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
             ids.sort_unstable();
             ids
         };
+        open(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("findIn"), "document");
         assert_eq!(find(&mut app, "document"), [first, second, third]);
         // Without a view, the active artboard is the first.
         assert_eq!(find(&mut app, "artboard"), [first, third]);
         assert_eq!(find_scope(&app, "layers"), json!({ "layers": [layer] }));
         assert_eq!(find(&mut app, "layers"), [second, third]);
+        // Closing and opening the dialog again keeps the last choice.
+        app.ui.dialog = None;
+        open(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("findIn"), "layers");
     }
 
     /// Change All leaves locked text in its font, and the status bar says so.

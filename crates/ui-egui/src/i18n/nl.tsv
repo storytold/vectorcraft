@@ -3709,6 +3709,7 @@ effect	Regular	Regelmatig
 	Find in Folder…	Zoeken in map…
 	Replace With Font	Vervangen door lettertype
 	Replace With Font From	Vervangen door lettertype uit
+	Find In	Zoeken in
 	System	Systeem
 	  — substituted by {style}	  — vervangen door {style}
 	  — {n} characters from another font	  — {n} tekens van een ander lettertype
