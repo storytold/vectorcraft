@@ -86,6 +86,9 @@ const TINT_STEPS: u32 = 16;
 const MIN_INK_LIGHTNESS_SPAN: f64 = 1.0 / 255.0;
 /// Most stops on a gradient's curve that [`Gradient::ink_tints`] finds tints for.
 const MAX_INK_TINTS: usize = 4096;
+/// How many even steps [`Gradient::ink_mixes`] checks the lightness of two stops' display RGB mix
+/// at, to tell whether it moves steadily from one stop's lightness to the other's.
+const INK_MIX_STEPS: u32 = 64;
 
 /// The mix positions (0..1, after `v0`, before `v1`) between which display RGB mixed linearly
 /// stays within [`PERCEPTUAL_TOLERANCE`] of the perceptual mix of `a` and `b`: the span halved
@@ -401,8 +404,10 @@ impl Gradient {
     /// The weight is the one at which the two stops' colors mixed in display RGB have the OKLab
     /// lightness of the color on the curve there, found to [`TINT_STEPS`] halvings, or the mix
     /// position itself when the two colors' lightness differs by less than
-    /// [`MIN_INK_LIGHTNESS_SPAN`]. `None` for a Classic gradient, and when the curve has more than
-    /// [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
+    /// [`MIN_INK_LIGHTNESS_SPAN`], or when the display RGB mix's lightness turns back somewhere
+    /// on the way from one color's lightness to the other's (checked at [`INK_MIX_STEPS`] even
+    /// steps), as from red to blue. `None` for a Classic gradient, and when the curve has more
+    /// than [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
     pub fn ink_mixes(&self) -> Option<Vec<(f32, usize, f32, f32)>> {
         use crate::libraries::srgb_to_oklab;
         if self.method.is_classic() || !self.fits_ink_tints() {
@@ -414,8 +419,16 @@ impl Gradient {
             out.push((s.offset, i, 0.0, s.opacity));
             let Some(n) = self.stops.get(i + 1) else { continue };
             let (l0, l1) = (lightness(&s.color), lightness(&n.color));
+            let mixed_lightness = |w: f32| lightness(&GradientMethod::Classic.mix(&s.color, &n.color, w));
+            // The mix position itself when the lightness doesn't tell the mixes apart.
+            let by_position = (l1 - l0).abs() < MIN_INK_LIGHTNESS_SPAN
+                || !(0..=INK_MIX_STEPS)
+                    .map(|k| mixed_lightness(k as f32 / INK_MIX_STEPS as f32))
+                    .collect::<Vec<_>>()
+                    .windows(2)
+                    .all(|w| (w[1] - w[0]) * (l1 - l0) >= 0.0);
             for v in perceptual_mixes(s, n) {
-                let weight = if (l1 - l0).abs() < MIN_INK_LIGHTNESS_SPAN {
+                let weight = if by_position {
                     v
                 } else {
                     let want = lightness(&self.method.mix(&s.color, &n.color, v));
@@ -423,7 +436,7 @@ impl Gradient {
                     for _ in 0..TINT_STEPS {
                         let mid = (lo + hi) / 2.0;
                         // The mix at `mid` has not yet gone from stop `i`'s lightness to the wanted one.
-                        if (lightness(&GradientMethod::Classic.mix(&s.color, &n.color, mid)) - want) * (l1 - l0) < 0.0 {
+                        if (mixed_lightness(mid) - want) * (l1 - l0) < 0.0 {
                             lo = mid;
                         } else {
                             hi = mid;
