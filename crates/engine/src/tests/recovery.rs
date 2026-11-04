@@ -417,6 +417,21 @@ fn the_folder_store_makes_owner_only_folders() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
+/// An entry that is a link (the copy's metadata names it) is not followed out of the store.
+#[cfg(unix)]
+#[test]
+fn the_folder_store_reads_no_linked_entries() {
+    let base = std::env::temp_dir().join(format!("vc-recovery-links-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let store = FolderStore::new(&base);
+    store.write("1-1/Untitled-1-1.vectorcraft", b"copy").unwrap();
+    std::fs::write(base.join("outside"), b"private").unwrap();
+    std::os::unix::fs::symlink(base.join("outside"), base.join("1-1").join("img")).unwrap();
+    assert_eq!(store.read("1-1/Untitled-1-1.vectorcraft").unwrap(), b"copy");
+    assert!(store.read("1-1/img").is_err());
+    let _ = std::fs::remove_dir_all(&base);
+}
+
 #[test]
 fn saving_reverting_or_closing_removes_the_copy() {
     let dir = std::env::temp_dir().join(format!("vc-recovery-save-{}", std::process::id()));
@@ -626,6 +641,31 @@ fn images_are_kept_apart_and_written_again_only_when_they_change() {
     s.execute("file.close", &json!({"index": 0})).unwrap();
     s.execute("file.recovery.save", &json!({})).unwrap();
     assert!(store.images().is_empty(), "{:?}", store.list());
+}
+
+/// Image keys sharing their bytes share one entry: it is written once when saved, and read and
+/// written once when restored.
+#[test]
+fn images_sharing_an_entry_are_written_once() {
+    let store = Arc::new(Counting::default());
+    let mut s = Session::new();
+    s.recovery.set_store(store.clone());
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    place_png(&mut s, "red.png", crate::tests_links::RED);
+    let doc = Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let blob = doc.images.values().next().unwrap().clone();
+    for i in 0..50 {
+        doc.images.insert(format!("copy-{i}"), blob.clone());
+    }
+    s.execute("file.recovery.save", &json!({})).unwrap();
+    assert_eq!(store.images_written().len(), 1);
+    let images = images_of(&s);
+    drop(s);
+    let mut s = Session::new();
+    s.recovery.set_store(store.clone());
+    assert_eq!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()), 1);
+    assert_eq!(images_of(&s), images);
+    assert_eq!(store.images_written().len(), 1, "restored into this session's area once");
 }
 
 #[test]

@@ -2,8 +2,9 @@
 //! their size; Break Link to Symbol gives the art as it draws, in one step.
 
 use serde_json::json;
-use vectorcraft_doc::{Node, NodeKind};
-use vectorcraft_geom::Rect;
+use vectorcraft_doc::{EditedNineSlice, NineSliceGuide, Node, NodeKind};
+use vectorcraft_geom::{Point, Rect};
+use vectorcraft_tools::{PointerEvent, PointerKind};
 
 use crate::*;
 
@@ -208,4 +209,44 @@ fn a_dynamic_instance_keeps_its_changes_through_the_guides() {
     });
     assert_eq!(fills.last().cloned().flatten().as_deref(), Some("#ff0000"), "{fills:?}");
     assert_ne!(fills[0].as_deref(), Some("#ff0000"), "only the changed object");
+}
+
+/// The boxes of the paths a symbol instance `id` draws, placed through its symbol's guides.
+fn placed_boxes(s: &Session, id: NodeId) -> Vec<Rect> {
+    let d = &s.doc().unwrap().doc;
+    let NodeKind::SymbolInstance { symbol, xf } = &d.node(id).unwrap().kind else { panic!("still an instance") };
+    let art = d.symbols.iter().find(|s| &s.name == symbol).unwrap().art.clone();
+    path_boxes(&d.place_symbol_art(symbol, &art, *xf).unwrap())
+}
+
+/// Dragging the left guide on the canvas while editing the symbol changes how a scaled instance
+/// draws: with the guide moved from 25% to 5%, the corner square of the 200 × 150 instance reaches
+/// past the left cell into the stretched center band, so it draws about 17.14 pt wide instead of 10.
+#[test]
+fn a_guide_dragged_on_the_canvas_changes_how_a_scaled_instance_draws() {
+    let (mut s, id) = panel();
+    assert_sliced(&placed_boxes(&s, id));
+    s.execute("symbol.edit", &json!({"name": "Panel"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let mid = |e: &EditedNineSlice, g| {
+        let (a, b) = e.line(g);
+        Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
+    };
+    let e = s.doc().unwrap().doc.edited_nine_slice().unwrap();
+    // The left guide sits at 25% of the art's width and the right one at 75%: 5% lies 0.4 of
+    // that span to the left of the left guide.
+    let (from, right) = (mid(&e, NineSliceGuide::Left), mid(&e, NineSliceGuide::Right));
+    let to = from + (from - right) * 0.4;
+    s.pointer(&PointerEvent::new(PointerKind::Down, from.x + 1.0, from.y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, to.x, to.y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, to.x, to.y), v).unwrap();
+    s.execute("symbol.exitEditing", &json!({})).unwrap();
+    let boxes = placed_boxes(&s, id);
+    assert_eq!(boxes.len(), 3, "{boxes:?}");
+    // 5 pt of the square in the left cell, then 5 pt of the 70 pt center band stretched to 170 pt.
+    let want = 5.0 + 5.0 * 170.0 / 70.0;
+    assert!(close(boxes[1], Rect::new(50.0, 50.0, 50.0 + want, 60.0)), "{boxes:?}");
+    let left = s.doc().unwrap().doc.symbol_nine_slice("Panel").unwrap().left;
+    assert!((left - 0.05).abs() < 1e-9, "{left}");
 }

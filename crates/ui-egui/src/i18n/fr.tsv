@@ -296,6 +296,9 @@ font-technology	Variable	Variables
 	Basic Latin	Latin de base
 	Batch	Traitement par lots
 	Begin Recording	Démarrer l’enregistrement
+	Exclude from playback	Exclure de l’exécution
+	Include in playback	Inclure dans l’exécution
+	Include Action Steps	Inclure les étapes du script
 	Bend:	Courbure :
 	Bevel Join	Sommet en biseau
 	Bitmap	Bitmap
@@ -1220,6 +1223,7 @@ font-technology	Variable	Variables
 	Flip Row Order	Inverser l’ordre des lignes
 	Flip Vertical	Retourner verticalement
 	Float in Window	Flottant dans une fenêtre
+	Float All in Windows	Tout flottant dans des fenêtres
 	Focal Fill	Fond actif
 	Focal Stroke	Contour actif
 	Folder	Dossier
@@ -1382,6 +1386,10 @@ font-technology	Variable	Variables
 	Handles	Poignées
 	Hard Light	Lumière crue
 	Hard Mix	Mélange maximal
+	Segmented color wheel	Roue chromatique segmentée
+	Show smooth color wheel	Afficher la roue chromatique continue
+	Show segmented color wheel	Afficher la roue chromatique segmentée
+	Show color bars	Afficher les barres de couleur
 	Harmony Rules:	Règles d’harmonie :
 	Harmony Sets	Ensembles d’harmonies
 	Height	Hauteur
@@ -1702,6 +1710,8 @@ font-technology	Variable	Variables
 	Large Thumbnail View	Grandes vignettes
 	Large Thumbnails	Grandes vignettes
 	Lasso Tool	Outil Lasso
+	Enclosing Lasso Tool	Outil Lasso englobant
+	Enclosing Lasso	Lasso englobant
 	Last Effect: {name}	Dernier effet : {name}
 	Last Effect: {}	Dernier effet : {}
 	Last Effect…	Dernier effet…
@@ -1853,6 +1863,7 @@ font-technology	Variable	Variables
 	Manually	Manuellement
 	Mark as trapped	Marquer comme grossi-maigri
 	Mark Older Files as [Converted] When Opened	Marquer les anciens fichiers comme [Converti] à l’ouverture
+	Use System Defaults for Edit Original	Utiliser les applications par défaut du système pour Modifier l’original
 	Marker…	Marqueur…
 	Marks	Repères
 	Marks and Bleed	Repères et fond perdu
@@ -1915,6 +1926,7 @@ font-technology	Variable	Variables
 	Modify	Modifier
 	Mojikumi	Mojikumi
 	Insert Kashidas	Insérer des kashidas
+	Kashidas	Kashidas
 	Long	Longue
 	Stylistic	Stylistique
 	Mojikumi Set	Jeu de mojikumi
@@ -2090,6 +2102,11 @@ font-technology	Variable	Variables
 	New Toolbar	Nouvelle barre d’outils
 	Show Toolbar	Afficher la barre d’outils
 	List Toolbars	Liste des barres d’outils
+	Manage Toolbars…	Gérer les barres d’outils…
+	Manage Toolbars	Gérer les barres d’outils
+	Rename Toolbar	Renommer la barre d’outils
+	Duplicate Toolbar	Dupliquer la barre d’outils
+	Delete Toolbar	Supprimer la barre d’outils
 	New {kind} Style…	Nouveau style de {kind}…
 	New…	Nouveau…
 	Next	Suivant
@@ -2697,6 +2714,8 @@ digits	Malayalam	Malayalam
 	Replace Spine	Remplacer la dorsale
 	Replace Symbol	Remplacer le symbole
 	Replace With Font	Remplacer par la police
+	Replace With Font From	Remplacer par une police de
+	System	Système
 	Replaces the saved preset of that name.	Remplace le paramètre prédéfini enregistré sous ce nom.
 	Replace…	Remplacer…
 	Require a password to open the document	Exiger un mot de passe pour ouvrir le document
@@ -3382,6 +3401,7 @@ digits	Malayalam	Malayalam
 	Templates…	Modèles…
 	Text Displayed in Cell:	Texte affiché dans la cellule :
 	Text Export Options	Options d’exportation du texte
+	Text Fill & Stroke Color	Couleur de fond et de contour du texte
 	Text Fill Color	Couleur de fond du texte
 	Text Import Options	Options d’importation du texte
 	Text Stroke Color	Couleur de contour du texte
@@ -3560,6 +3580,7 @@ digits	Malayalam	Malayalam
 	Use Artboards	Utiliser les plans de travail
 	Use Black Point Compensation	Utiliser la compensation du point noir
 	Use Compression	Utiliser la compression
+	Include Editing Data for Other Apps	Inclure les données de modification pour d’autres applications
 	Use document bleed settings	Utiliser les paramètres de fond perdu du document
 	Use Even-Odd Fill Rule	Utiliser la règle de remplissage pair-impair
 	Use Japanese Crop Marks	Utiliser les traits de coupe japonais
@@ -3974,7 +3995,7 @@ axis	Both	Les deux
 @msg	Save for Web: the image is empty	Enregistrer pour le Web : l’image est vide
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Enregistrer écrit du {_1}, pas du {_2} : utilisez document.export pour les autres formats
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Enregistrer écrit du {_1}, pas du {_2} : utilisez file.saveAsTemplate pour l’écrire
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 écrit des fichiers .ai hérités, alors qu’un modèle .ait est toujours compatible PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 écrit des fichiers .ai hérités, pas des modèles .ait
 @msg	Saved recovery data for {title}	Données de récupération enregistrées pour {title}
 @msg	Saved to User Defined: {_1}	Enregistré dans Défini par l’utilisateur : {_1}
 @msg	Saved {path}	{path} enregistré
@@ -4615,6 +4636,7 @@ axis	Both	Les deux
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	elles contiennent {_1}, que VectorCraft n’y lit pas encore
 @msg	its objects are nested too deeply	leurs objets sont imbriqués trop profondément
 @msg	its section ending with `%{end}` doesn't end	leur section qui se termine par `%{end}` ne se termine pas
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	les formes que VectorCraft ne sait pas encore lire ont été omises du panneau Formes ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	les objets à plusieurs fonds ou contours, effets ou formes ont été importés tels qu’ils sont dessinés ({_1}) : leur aspect n’est pas encore modifiable
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	le dégradé « {name} » n’est pas défini dans le fichier : une couleur unie le remplace
 @msg	an image VectorCraft can't read was left out	une image que VectorCraft ne peut pas lire a été ignorée
@@ -5528,6 +5550,10 @@ theme	Appearance	Apparence
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	rien du jeu de données {name} n’a été appliqué, car aucun objet n’est lié à une variable pour laquelle il a une valeur
 @msg	no bound object reports a value (locked objects and embedded images report none)	aucun objet lié ne fournit de valeur (les objets verrouillés et les images incorporées n’en fournissent aucune)
 @msg	the action has no steps	l'action n'a aucune étape
+@msg	the action has no included steps	le script n’a aucune étape incluse
+@msg	no such action step	étape de script inexistante
+@msg	included must be true or false	included doit valoir true ou false
+@msg	others must be true or false	others doit valoir true ou false
 
 # User Interface › Accent Color
 	Accent Color	Couleur d’accent
@@ -5553,6 +5579,11 @@ theme	Appearance	Apparence
 	Export Type:	Type d'exportation :
 	Movie Clip	Clip
 @msg	name is empty	le nom est vide
+@msg	an action is already recording	un script est déjà en cours d’enregistrement
+@msg	no such function key	touche de fonction inexistante
+@msg	no such color	couleur inexistante
+@msg	{_1} cannot be used on Windows	{_1} ne peut pas être utilisé sous Windows
+@msg	more than one action is named “{_1}”	plusieurs scripts s’appellent « {_1} »
 @msg	no symbol named `{n}`	aucun symbole nommé `{n}`
 	Smudge Stick…	Estompe…
 	Smudge Stick	Estompe
@@ -5634,6 +5665,7 @@ theme	Appearance	Apparence
 	Effect Gallery	Galerie d'effets
 	Filters	Filtres
 	Select artwork to apply effects	Sélectionnez des éléments graphiques pour appliquer des effets
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	les liaisons de variables du fichier n’ont pas toutes été lues (liaisons ignorées : {_1}) : ces objets ne sont pas liés à leurs variables
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	la bibliothèque de variables du fichier n’a été lue qu’en partie (entrées ignorées : {_1}) : le panneau Variables affiche le reste
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	la bibliothèque de variables du fichier n’a pas pu être lue : le panneau Variables ne l’affiche pas
 @msg	a variable of unknown kind can't be bound to objects	une variable de type inconnu ne peut pas être liée à des objets
@@ -5723,9 +5755,17 @@ axis	Y Axis	Axe Y
 	Action Options…	Options de script…
 	Action Options	Options de script
 	Rename Action	Renommer le script
+	New Action…	Nouveau script…
+	New Action	Nouveau script
+	Create New Action	Créer un script
+	Play Action	Exécuter le script
+	Action Set:	Jeu de scripts :
+	Function Key:	Touche de fonction :
+	Record	Enregistrer
 	Create New Set	Créer un jeu
 	Stop Global Edit	Arrêter la modification globale
 	Global Edit Options	Options de modification globale
+	Leave Out of Global Edit	Exclure de la modification globale
 	Match	Correspondance
 	On Artboards	Sur les plans de travail
 	All Artboards	Tous les plans de travail
@@ -5734,6 +5774,8 @@ axis	Y Axis	Axe Y
 @msg	select one object	sélectionnez un seul objet
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La modification globale s’applique aux tracés, aux tracés transparents, aux occurrences de symboles et aux groupes de ces objets
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	aucun objet similaire trouvé (les copies pivotées ou symétriques ne sont pas reconnues) ; modifiez les options de modification globale et réessayez
+@msg	Global Edit is off	La modification globale n’est pas active
+@msg	only an object of the Global Edit other than the one it started from can be left out	seul un objet de la modification globale autre que celui à partir duquel elle a commencé peut être exclu
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards` : all ou une plage telle que 1, 3-5, et non {v}
 	Add to Symbols	Ajouter aux symboles
 	Basic Shapes	Formes de base
@@ -5989,6 +6031,12 @@ anchor	Points:	Points :
 	Horizontal Scale	Mise à l’échelle horizontale
 	Vertical Scale	Échelle verticale
 @msg	{label} must be a number from {min} to {max}	{label} doit être un nombre compris entre {min} et {max}
+	Character Color	Couleur des caractères
+	OpenType Features	Fonctions OpenType
+	Stylistic Sets	Jeux stylistiques
+	Set {n}	Jeu {n}
+@msg	features lists at most {max} tags	features contient au plus {max} balises
+@msg	unknown OpenType feature `{t}`	fonction OpenType inconnue `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} doit être un nombre supérieur à 0 et au plus égal à {max}
 @msg	no character style `{name}`	Style de caractère `{name}` introuvable
 
@@ -6137,6 +6185,7 @@ breakText	Glyphs	Glyphes
 	Gap 5	Écart 5
 
 @msg	{_1}: they came in as the page's art	{_1} : ils ont été importés comme le dessin de la page
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	les objets dessinés différemment de la page du fichier lui-même ont été importés comme le dessin de la page : {_1}
 
 @msg	You must choose a side pattern.	Vous devez choisir un motif latéral.
 @msg	invalid pattern tile choice	choix de tuile de motif non valide
@@ -6238,3 +6287,14 @@ breakText	Glyphs	Glyphes
 	Create Swatch Legend	Créer une légende des nuances
 	Create Swatch Legend…	Créer une légende des nuances…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Outils de texte
+	Text Tweaker…	Ajusteur de texte…
+	Text Tweaker	Ajusteur de texte
+	Attribute:	Attribut :
+	From:	De :
+	To:	À :
+	Bow	Arc
+	Spike	Pointe
+	Skip Spaces	Ignorer les espaces
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	L’illustration est trop grande pour être copiée en tant qu’image : les autres applications n’en reçoivent pas de PNG

@@ -339,10 +339,11 @@ fn show_panel(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String>
     if !layout.contains(&panel.to_string()) && !app.ui.docking_hidden.contains_key(panel) && crate::panels::library_panel::parse(panel).is_some() {
         return crate::panels::library_panel::float(app, panel);
     }
-    if app.ui.docking_hidden.contains_key(panel) {
-        return restore_hidden_group(app, panel);
-    }
-    let value = shared_command(app, "window.panel.activate", &json!({"panel": panel}))?;
+    let value = if app.ui.docking_hidden.contains_key(panel) {
+        restore_hidden_group(app, panel)?
+    } else {
+        shared_command(app, "window.panel.activate", &json!({"panel": panel}))?
+    };
     let layout = layout_of(&app.ui);
     Ok(match floating_window(&layout, panel) {
         Some(window) => json!({"floating": window_panels(window)}),
@@ -1177,8 +1178,9 @@ pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
 /// Keys, text and clipboard events that a floating panel's own OS window left over run the main
 /// window's shortcuts, tool keys and clipboard on its next frame ([`VectorcraftApp::raw_input_hook`]).
 /// craft-ui forwards nothing while a field in that window has the keyboard. A field of the main
-/// window loses it, as a click elsewhere in one window would take it.
-fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: Option<egui::Modifiers>) {
+/// window loses it, as a click elsewhere in one window would take it. A floating document's OS
+/// window forwards its keys here too ([`crate::doc_windows`]).
+pub(crate) fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: Option<egui::Modifiers>) {
     if events.is_empty() {
         return;
     }

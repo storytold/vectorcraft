@@ -82,6 +82,25 @@ fn an_illustrator_ai_file_opens_from_its_editing_data() {
     assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
 }
 
+/// Opening a `.ai` or a PDF whose PDF part reads, or a `.ai` saved without PDF compatibility,
+/// reads and checks the file once, on any thread, for the document it may carry, its pages, its
+/// editing data and its File Info, with pages picked or not.
+#[test]
+fn an_ai_or_pdf_file_is_read_once_when_it_opens() {
+    let ai_file = ai::ai(&compressed(&ai::sample_data()), ai::page_pdf());
+    let pdf_file = pdf_with(&[PdfPage::new(100.0, 100.0, "0 0 1 rg 10 10 50 50 re f")], &[], None);
+    let placeholder = ai::ai(&compressed(&ai::sample_data()), PLACEHOLDER);
+    for (name, file) in [("art.ai", &ai_file), ("art.pdf", &pdf_file), ("placeholder.ai", &placeholder)] {
+        for opts in [LoadOptions::default(), LoadOptions { pages: Some("1".into()), ..Default::default() }] {
+            let before = vectorcraft_pdf::reads_of(file);
+            let loaded = load_with(name, file, &opts).unwrap();
+            assert_eq!(vectorcraft_pdf::reads_of(file) - before, 1, "{name}, pages {:?}", opts.pages);
+            let editing_data = name == "placeholder.ai" || (name == "art.ai" && opts.pages.is_none());
+            assert_eq!(loaded.editing_data, editing_data, "{name}, pages {:?}", opts.pages);
+        }
+    }
+}
+
 #[test]
 fn an_ai_file_opens_with_its_artboard_options_raster_settings_and_author() {
     let document = "%_/Document :\n%_/Dictionary :\n%_/Dictionary :\n%_150 /Int (dpi.) ,\n%_1 /Bool (mask) ,\n%_; (AI Auto Rasterize) ,\n\
@@ -125,6 +144,45 @@ fn an_ai_unread_group_keeps_its_layers_and_live_neighbor() {
         "{result}"
     );
     assert!(result["warnings"].to_string().contains("`ZZ` (1)"), "{result}");
+}
+
+#[test]
+fn a_differing_object_keeps_the_layers_with_a_note() {
+    let square = |cmyk: &str, x: f64| format!("{cmyk} k\n{}f\n", ai::rect(x, 40.0, x + 16.0, 56.0));
+    let front = square("0 0 0 1", 90.0) + &square("0 0 1 0", 160.0);
+    let data = ai::editing_data(200.0, 100.0, &(ai::layer("Back", &square("0 0 1 0", 20.0)) + &ai::layer("Front", &front)));
+    let page = "0 0 1 0 k 20 40 16 16 re f 1 0 0 0 k 90 40 16 16 re f 0 0 1 0 k 160 40 16 16 re f";
+    let mut session = Session::new();
+    let result = open(&mut session, "differs.ai", &ai::ai(&compressed(data.as_bytes()), page), json!({})).unwrap();
+    let doc = &session.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Back", "Front"], "{result}");
+    let front = doc.layers[1].children().unwrap();
+    assert!(matches!(front[0].kind, NodeKind::Group { .. }) && matches!(front[1].kind, NodeKind::Path { .. }), "{result}");
+    let replacement = &front[0].children().unwrap()[0];
+    assert!(
+        matches!(replacement.appearance.items.first(), Some(vectorcraft_doc::AppearanceItem::Fill(fill))
+        if fill.paint == vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(1.0, 0.0, 0.0, 0.0))),
+        "{result}"
+    );
+    assert!(
+        result["warnings"].to_string().contains("objects that drew differently from the file's own page came in as its art: Front (1)"),
+        "{result}"
+    );
+    // An export to the file's own path is refused unless it is given `acknowledgeLoss`.
+    let d = std::env::temp_dir().join(format!("vc-aidiffers-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("differs.ai");
+    let file = ai::ai(&compressed(data.as_bytes()), page);
+    std::fs::write(&path, &file).unwrap();
+    let path = path.to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    let e = s.execute("document.export", &json!({"path": path})).unwrap_err().to_string();
+    assert!(e.contains("left things out") && e.contains("objects that drew differently"), "{e}");
+    assert_eq!(std::fs::read(&path).unwrap(), file);
+    s.execute("document.export", &json!({"path": path, "acknowledgeLoss": true})).unwrap();
+    assert_ne!(std::fs::read(&path).unwrap(), file);
+    std::fs::remove_dir_all(d).ok();
 }
 
 /// A palette of three swatches and a color group `Inks` holding a fourth.
@@ -617,21 +675,25 @@ fn what_the_reader_doesnt_read_opens_as_before_with_a_warning() {
 /// A `.ai` whose document data has a variable library opens with its variables, data sets, active
 /// data set and lock, whether its layers are read or it comes in as its PDF part: `variable.list`
 /// and `dataset.list` report them. A variable of unknown kind can't be bound. What of the library
-/// can't be read is noted.
+/// can't be read is noted. With its layers read, the object a variable is bound to comes in bound,
+/// and selecting a data set changes it; the bindings to objects the file doesn't have are noted.
 #[test]
 fn an_ai_file_opens_its_variable_library() {
     let library = ai::variable_library_data(&ai::sample_variable_sets("variableAndTypes", &[]));
-    let square = format!("0 1 1 0 1 0 0 Xa\n{}f\n", ai::rect(10.0, 50.0, 40.0, 90.0));
+    let square = format!("0 1 1 0 1 0 0 Xa\n{}f\n{}", ai::rect(10.0, 50.0, 40.0, 90.0), ai::named("path_x5F_1"));
     let notes = |r: &Value| {
         r["warnings"].as_array().map_or(vec![], |w| w.iter().filter(|w| w.as_str().unwrap().contains("variable")).cloned().collect::<Vec<_>>())
     };
-    let check = |s: &mut Session| {
+    let skipped = |n: usize| {
+        json!(format!("the file's variable bindings weren't all read (bindings skipped: {n}): those objects aren't bound to their variables"))
+    };
+    let check = |s: &mut Session, bound: usize| {
         let r = s.execute("variable.list", &json!({})).unwrap();
         assert_eq!(
             r,
             json!({"variables": [
                 {"name": "v_text", "kind": "text", "bindings": 0},
-                {"name": "v_visible", "kind": "visibility", "bindings": 0},
+                {"name": "v_visible", "kind": "visibility", "bindings": bound},
                 {"name": "v_file", "kind": "image", "bindings": 0},
                 {"name": "v_graph", "kind": "graph", "bindings": 0},
                 {"name": "v_unbound", "kind": "unknown", "bindings": 0},
@@ -651,23 +713,34 @@ fn an_ai_file_opens_its_variable_library() {
     let file = ai::ai(&compressed(layered.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
     let r = open(&mut s, "variables.ai", &file, json!({})).unwrap();
     assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
-    assert!(notes(&r).is_empty(), "{r}");
-    check(&mut s);
-    let id = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id.0;
-    let e = s.execute("variable.bind", &json!({"variable": "v_unbound", "ids": [id]})).unwrap_err();
+    // The library's text and image variables are bound to objects the file doesn't have.
+    assert_eq!(notes(&r), [skipped(2)], "{r}");
+    check(&mut s, 1);
+    let id = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id;
+    assert_eq!(s.doc().unwrap().doc.variables.objects_of("v_visible"), [id]);
+    s.execute("dataset.select", &json!({"name": "ds_two"})).unwrap();
+    assert!(!s.doc().unwrap().doc.node(id).unwrap().visible, "ds_two hides the square");
+    s.execute("dataset.select", &json!({"name": "ds_one"})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).unwrap().visible, "ds_one shows it");
+    let e = s.execute("variable.bind", &json!({"variable": "v_unbound", "ids": [id.0]})).unwrap_err();
     assert!(e.to_string().contains("a variable of unknown kind can't be bound to objects"), "{e}");
-    // Its layers can't be read (a symbol): it comes in as its PDF part, with the library.
+    // Its layers can't be read (a symbol): it comes in as its PDF part, with the library and none
+    // of its bindings.
     let symbols = ai::editing_data(200.0, 100.0, &format!("{library}{}", ai::layer("Art", "/SymbolInstance :\n(Dot) /SymbolRef ,\n;\n")));
     let r = open(&mut s, "symbols.ai", &ai::ai(&compressed(symbols.as_bytes()), ai::page_pdf()), json!({})).unwrap();
     assert!(r["warnings"].to_string().contains("PDF part"), "{r}");
-    assert!(notes(&r).is_empty(), "{r}");
-    check(&mut s);
+    assert_eq!(notes(&r), [skipped(3)], "{r}");
+    check(&mut s, 0);
     // A graph value isn't read: the note says how many entries were left out.
     let graph = ai::xml_element("v_graph", &[], &[ai::xml_text(ai::XmlValue::Str("a,b"))]);
     let partly = ai::variable_library_data(&ai::sample_variable_sets("none", &[graph]));
     let layered = ai::editing_data(200.0, 100.0, &format!("{partly}{}", ai::layer("Art", &square)));
     let r = open(&mut s, "graph.ai", &ai::ai(&compressed(layered.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();
-    assert_eq!(notes(&r), [json!("the file's variable library was partly read (entries skipped: 1): the Variables panel lists the rest")], "{r}");
+    assert_eq!(
+        notes(&r),
+        [json!("the file's variable library was partly read (entries skipped: 1): the Variables panel lists the rest"), skipped(2)],
+        "{r}"
+    );
     // Without a library, no note and no variables.
     let plain = ai::editing_data(200.0, 100.0, &ai::layer("Art", &square));
     let r = open(&mut s, "plain.ai", &ai::ai(&compressed(plain.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();

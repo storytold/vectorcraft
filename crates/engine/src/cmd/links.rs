@@ -1338,8 +1338,10 @@ fn placement_json(o: PlacementOptions) -> Value {
 
 /// Link Info's fields of the linked file `l` (of object `id` of `st`) into `out`.
 fn file_fields(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) {
-    // Within what the caller that opened the document may read, whoever asks.
-    crate::file_access::confine(st.opened_by.as_ref(), || file_fields_here(st, id, l, out));
+    // A confined caller reads within its own roots; anyone else within what the caller that
+    // opened the document may read (never wider than the caller asking now).
+    let roots = crate::file_access::current().or_else(|| st.opened_by.clone());
+    crate::file_access::confine(roots.as_ref(), || file_fields_here(st, id, l, out));
 }
 
 fn file_fields_here(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) {

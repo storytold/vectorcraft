@@ -1445,6 +1445,35 @@ mod tests {
         assert!(import_json(&json!({})).is_err());
     }
 
+    /// The dialog's Import… leaves an action its function key when the imported set gives the key
+    /// to a command, through both Cancel and OK.
+    #[test]
+    fn importing_into_the_dialog_preserves_action_keys_on_ok() {
+        use crate::panels::actions::{Action, ActionSet, FunctionKey};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let f15 = FunctionKey { key: 15, cmd: false, shift: false };
+        let mut nudge = Action::new("Nudge", vec![]);
+        nudge.key = Some(f15);
+        app.ui.action_sets.push(ActionSet::new("Mine", vec![nudge]));
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "edit.duplicate", "F15");
+        let bytes = serde_json::to_vec(&export_json("Imported", &ov)).unwrap();
+        app.services.pick_open = Some(Box::new(|_: &crate::FilePick| Some("/sets/Imported.json".to_string())));
+        app.services.read = Some(Box::new(move |_: &str| Ok(bytes.clone())));
+        let key = |app: &VectorcraftApp| app.ui.action_sets.last().and_then(|s| s.actions.first()).and_then(|a| a.key);
+        open(&mut app);
+        import_into_dialog(&mut app);
+        assert_eq!(key(&app), Some(f15), "the import alone keeps the action's key");
+        assert!(app.ui.shortcut_overrides.is_empty(), "the import is only in the dialog");
+        app.ui.dialog = None;
+        assert_eq!(key(&app), Some(f15), "Cancel keeps the action's key");
+        open(&mut app);
+        import_into_dialog(&mut app);
+        assert_eq!(key(&app), Some(f15));
+        confirm(&mut app).unwrap();
+        assert_eq!(key(&app), Some(f15), "OK keeps the action's function key");
+    }
+
     #[test]
     fn presets_are_the_defaults() {
         for p in PRESETS {

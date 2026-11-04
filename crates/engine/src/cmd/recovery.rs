@@ -308,6 +308,14 @@ impl RecoveryStore for FolderStore {
     }
     fn read(&self, name: &str) -> std::result::Result<Vec<u8>, String> {
         let f = self.file(name)?;
+        // Entry names come from the copy's metadata: refuse a link (or a folder another account
+        // owns) that would read a file from outside the store.
+        if let Some(dir) = f.parent() {
+            Self::own_area(dir)?;
+        }
+        if !std::fs::symlink_metadata(&f).map_err(|e| format!("{}: {e}", f.display()))?.file_type().is_file() {
+            return Err(format!("{}: not a plain file", f.display()));
+        }
         std::fs::read(&f).map_err(|e| format!("{}: {e}", f.display()))
     }
     fn write(&self, name: &str, bytes: &[u8]) -> std::result::Result<(), String> {
@@ -693,11 +701,12 @@ impl RecoveryJob {
         let meta_bytes = serde_json::to_vec_pretty(&meta).map_err(|e| e.to_string())?;
         let area = self.file.split_once('/').map_or("", |(a, _)| a);
         let _turn = WRITES.lock().unwrap_or_else(|e| e.into_inner());
-        let have: BTreeSet<String> = if images.is_empty() { BTreeSet::new() } else { store.list()?.into_iter().collect() };
+        let mut have: BTreeSet<String> = if images.is_empty() { BTreeSet::new() } else { store.list()?.into_iter().collect() };
         let mut image_bytes = 0;
         for (blob, data) in images {
             let name = format!("{area}/{blob}");
-            if !have.contains(&name) {
+            // Images of several keys can share one entry: it is written once.
+            if have.insert(name.clone()) {
                 store.write(&name, data)?;
                 image_bytes += data.len();
             }
@@ -1001,16 +1010,21 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     super::threads::mark_continued(&mut doc);
     // The images, from the entries of the copy's area.
     let from = file.split_once('/').map_or("", |(a, _)| a);
-    let mut blobs = vec![];
+    let mut blobs: BTreeMap<String, Arc<Vec<u8>>> = BTreeMap::new();
     for (key, r) in &meta.images {
-        match store.read(&format!("{from}/{}", r.blob)) {
+        // Keys sharing an entry share its bytes: each entry is read (and written again) once.
+        let read = match blobs.get(&r.blob) {
+            Some(data) => Ok(data.clone()),
+            None => store.read(&format!("{from}/{}", r.blob)).map(Arc::new),
+        };
+        match read {
             Ok(data) => {
-                let mut blob = ImageBlob::new(r.mime.clone(), data);
+                let mut blob = ImageBlob { mime: r.mime.clone(), bytes: data, proxy: None };
                 // Until the linked file is read, the preview stands in for it.
                 if r.proxy {
                     blob.proxy = Some(blob.bytes.clone());
                 }
-                blobs.push((r.blob.clone(), blob.bytes.clone()));
+                blobs.insert(r.blob.clone(), blob.bytes.clone());
                 doc.images.insert(key.clone(), blob);
             }
             Err(e) => warnings.push(format!("the image “{key}” of the recovered document couldn't be read: {e}")),

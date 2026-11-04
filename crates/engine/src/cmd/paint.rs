@@ -303,7 +303,7 @@ pub(crate) fn check_keep_model(p: &Value, cmd: &str) -> Result<()> {
 
 /// The model RGB colours given in `p` are stored in: the document's in a CMYK document (`None` in
 /// an RGB one, or with `keepModel`).
-fn new_color_model(s: &Session, p: &Value) -> Option<vectorcraft_color::cms::Model> {
+pub(super) fn new_color_model(s: &Session, p: &Value) -> Option<vectorcraft_color::cms::Model> {
     let mode = s.active()?.doc.color_mode;
     (mode != vectorcraft_doc::ColorMode::Rgb && !bool_or(p, "keepModel", false)).then(|| mode.model())
 }
@@ -433,29 +433,36 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
         && let Some((id, a, b)) = super::textedit::editing_range(s)?
         && a != b
     {
+        // After Select All in threaded text, every frame's text takes it.
+        let story = super::textedit::editing_story(s);
+        let ranges: Vec<(NodeId, usize, usize)> =
+            if story.is_empty() { vec![(id, a, b)] } else { story.iter().map(|f| (*f, 0, usize::MAX)).collect() };
+        let ids: Vec<NodeId> = ranges.iter().map(|(f, _, _)| *f).collect();
         // When the type comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
         super::overprint::edit_counted(s, if fill { "Fill Color" } else { "Stroke Color" }, |d| {
-            let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
-            let (xf, lb) = (t.xf, t.local_bounds());
-            vectorcraft_text::edit::style_range(&mut t.runs, a, b, |st| {
-                if fill {
-                    st.fill = place_run_paint(&paint, p, xf, lb);
-                } else {
-                    if !paint.is_none() {
-                        run_stroke_weight(st);
+            for &(id, a, b) in &ranges {
+                let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+                let (xf, lb) = (t.xf, t.local_bounds());
+                vectorcraft_text::edit::style_range(&mut t.runs, a, b, |st| {
+                    if fill {
+                        st.fill = place_run_paint(&paint, p, xf, lb);
+                    } else {
+                        if !paint.is_none() {
+                            run_stroke_weight(st);
+                        }
+                        st.stroke = place_run_paint(&paint, p, xf, vectorcraft_doc::appearance::stroke_paint_bounds(lb, st.stroke_width));
                     }
-                    st.stroke = place_run_paint(&paint, p, xf, vectorcraft_doc::appearance::stroke_paint_bounds(lb, st.stroke_width));
-                }
-            });
-            super::typecmd::refresh_bounds(t);
-            Ok(super::appearance::count_changed(d, &before, &[id]))
+                });
+                super::typecmd::refresh_bounds(t);
+            }
+            Ok(super::appearance::count_changed(d, &before, &ids))
         })?;
         if focus {
             s.fill_active = fill;
         }
         s.remember_paint(&paint);
-        return Ok(json!({"objects": 1}));
+        return Ok(json!({"objects": ids.len()}));
     }
     // Resolve the requested targets before mutating defaults or the active proxy.
     let item = item_target(s, p, cmd)?.of_kind(s, fill);
@@ -697,8 +704,8 @@ fn black_or_white(c: &Color) -> bool {
     }
 }
 
-/// The points the active tool has picked (its `meshPoints` option: the Mesh tool's or Direct
-/// Selection's) on the gradient meshes among `ids`, in range, each mesh with its points.
+/// The points the active tool has picked (its `meshPoints` option: the Mesh tool's, Direct
+/// Selection's or the Lasso's) on the gradient meshes among `ids`, in range, each mesh with its points.
 fn picked_mesh_points(s: &Session, ids: &[NodeId]) -> Vec<(NodeId, Vec<usize>)> {
     let o = s.tool_options();
     let (Some(picked), Ok(st)) = (o.get("meshPoints").and_then(Value::as_array), s.doc()) else { return vec![] };

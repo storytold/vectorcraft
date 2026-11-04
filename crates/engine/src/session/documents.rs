@@ -79,6 +79,7 @@ impl Session {
             batch_steps: None,
             place_hand_off: None,
             queue_hand_off: None,
+            place_queue_roots: None,
             image_hand_off: None,
             trace_hand_off: None,
             place_cursor_requests: false,
@@ -91,6 +92,9 @@ impl Session {
             liquify_stroke: None,
             plane_widget_press: false,
             pointer_held: false,
+            press_options: None,
+            press_type_selection: None,
+            press_point: None,
             ruler_guide: None,
             port_marks: Default::default(),
             font_search: None,
@@ -139,6 +143,7 @@ impl Session {
         if self.active.is_none() {
             return;
         }
+        self.press_type_selection = None;
         let view = self.last_view;
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
@@ -153,6 +158,12 @@ impl Session {
         self.tool = self.make_tool(self.tool.id());
         self.tool_resets = self.tool_resets.wrapping_add(1);
         self.tool_set_since_reset = false;
+    }
+
+    /// Finish the tool's pending work and give it fresh state, as a switch to another document
+    /// does, while the current document stays the same (a switch to another view of it).
+    pub fn reset_tool(&mut self) {
+        self.reset_tool_for_doc_switch();
     }
 
     pub fn set_active(&mut self, index: usize) -> bool {
@@ -206,6 +217,7 @@ impl Session {
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
+        st.opened_as_tab = self.prefs.open_documents_as_tabs;
         self.docs.push(st);
         let i = self.docs.len() - 1;
         self.active = Some(i);
@@ -236,6 +248,7 @@ impl Session {
         st.history.limit = old.history.limit;
         // Same open document (caches keyed by uid stay valid); a new revision redraws it.
         st.uid = old.uid;
+        st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
         st.save_options = old.save_options.clone();

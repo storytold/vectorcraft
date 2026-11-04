@@ -448,3 +448,15 @@ fn private_data_reads_without_a_pdf_part_that_cant_be_read() {
         assert!(illustrator_data_without_pdf_part(&pdf, None).is_none(), "{odd}");
     }
 }
+
+/// Art in ordinary tags nested inside a layer's sequence goes to that layer; the group is kept
+/// with each level, not searched for through the tags for each object.
+#[test]
+fn art_deep_in_tags_inside_a_layer_reaches_it() {
+    let (objs, catalog, ids) = groups(1, "/OFF [{B}]");
+    let content = format!("/OC /MC0 BDC {} 1 0 0 rg 10 10 30 30 re f {} EMC 0 1 0 rg 0 0 5 5 re f", "/Span BMC ".repeat(200), "EMC ".repeat(200));
+    let page = PdfPage { resources: format!("/Properties << /MC0 {} 0 R /MC1 {} 0 R >>", ids[0], ids[1]), ..PdfPage::new(100.0, 100.0, &content) };
+    let d = import(&pdf_with_catalog(&[page], &[&objs[0], &objs[1]], &catalog, None)).unwrap();
+    let shapes = d.layers.iter().find(|l| l.name.as_deref() == Some("Shapes")).unwrap();
+    assert_eq!(colors(shapes), [Color::rgb(1.0, 0.0, 0.0)]);
+}

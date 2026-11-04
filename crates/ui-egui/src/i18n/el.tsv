@@ -273,6 +273,9 @@ font-technology	Variable	Μεταβλητές
 	Basic Latin	Βασικά λατινικά
 	Batch	Μαζική επεξεργασία
 	Begin Recording	Έναρξη καταγραφής
+	Exclude from playback	Εξαίρεση από την αναπαραγωγή
+	Include in playback	Συμπερίληψη στην αναπαραγωγή
+	Include Action Steps	Συμπερίληψη βημάτων ενέργειας
 	Bend:	Καμπυλότητα:
 	Bevel Join	Λοξότμητη ένωση
 	Bitmap	Ασπρόμαυρο bitmap
@@ -1150,6 +1153,7 @@ font-technology	Variable	Μεταβλητές
 	Flip Row Order	Αντιστροφή σειράς γραμμών
 	Flip Vertical	Κατακόρυφη αναστροφή
 	Float in Window	Μετατροπή σε ανεξάρτητο παράθυρο
+	Float All in Windows	Μετατροπή όλων σε ανεξάρτητα παράθυρα
 	Focal Fill	Εστιακό γέμισμα
 	Focal Stroke	Εστιακό περίγραμμα
 	Folder	Φάκελος
@@ -1310,6 +1314,10 @@ font-technology	Variable	Μεταβλητές
 	Hard Light	Έντονο φως
 	Hard Mix	Έντονη ανάμειξη
 	Harmony Rules:	Κανόνες χρωματικής αρμονίας:
+	Segmented color wheel	Τμηματοποιημένος χρωματικός τροχός
+	Show smooth color wheel	Εμφάνιση ομαλού χρωματικού τροχού
+	Show segmented color wheel	Εμφάνιση τμηματοποιημένου χρωματικού τροχού
+	Show color bars	Εμφάνιση χρωματικών ράβδων
 	Harmony Sets	Σύνολα χρωματικής αρμονίας
 	Height	Ύψος
 	Height:	Ύψος:
@@ -1615,6 +1623,8 @@ font-technology	Variable	Μεταβλητές
 	Large Thumbnail View	Προβολή μεγάλων μικρογραφιών
 	Large Thumbnails	Μεγάλες μικρογραφίες
 	Lasso Tool	Λάσο (Lasso Tool)
+	Enclosing Lasso Tool	Εργαλείο περικλείοντος λάσου
+	Enclosing Lasso	Περικλείον λάσο
 	Last Effect: {name}	Τελευταίο εφέ: {name}
 	Last Effect: {}	Τελευταίο εφέ: {}
 	Last Effect…	Τελευταίο εφέ…
@@ -1718,6 +1728,11 @@ font-technology	Variable	Μεταβλητές
 	New Toolbar	Νέα γραμμή εργαλείων
 	Show Toolbar	Εμφάνιση γραμμής εργαλείων
 	List Toolbars	Λίστα γραμμών εργαλείων
+	Manage Toolbars…	Διαχείριση γραμμών εργαλείων…
+	Manage Toolbars	Διαχείριση γραμμών εργαλείων
+	Rename Toolbar	Μετονομασία γραμμής εργαλείων
+	Duplicate Toolbar	Δημιουργία αντιγράφου γραμμής εργαλείων
+	Delete Toolbar	Διαγραφή γραμμής εργαλείων
 	New…	Νέο…
 	Next	Επόμενο
 	No document	Δεν υπάρχει έγγραφο
@@ -2196,7 +2211,7 @@ axis	Both	Και τα δύο
 @msg	Save for Web: the image is empty	Αποθήκευση για ιστό: η εικόνα είναι κενή
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Η αποθήκευση γράφει {_1}, όχι {_2}: χρησιμοποιήστε το document.export για άλλες μορφές
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Η αποθήκευση γράφει {_1}, όχι {_2}: χρησιμοποιήστε το file.saveAsTemplate για να το γράψετε
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	Το aiVersion 7 γράφει αρχεία .ai παλαιού τύπου· ένα πρότυπο .ait είναι πάντα συμβατό με PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	Το aiVersion 7 γράφει αρχεία .ai παλαιού τύπου, όχι πρότυπα .ait
 @msg	Saved recovery data for {title}	Αποθηκεύτηκαν δεδομένα ανάκτησης για το {title}
 @msg	Saved to User Defined: {_1}	Αποθηκεύτηκε στις προσαρμοσμένες ρυθμίσεις: {_1}
 @msg	Saved {path}	Αποθηκεύτηκε το {path}
@@ -2646,6 +2661,7 @@ theme	Appearance	Εμφάνιση
 	Manually	Χειροκίνητα
 	Mark as trapped	Σήμανση ως επικαλυπτόμενου
 	Mark Older Files as [Converted] When Opened	Σήμανση παλαιότερων αρχείων ως [Μετατράπηκε] κατά το άνοιγμα
+	Use System Defaults for Edit Original	Χρήση προεπιλογών συστήματος για την Επεξεργασία πρωτοτύπου
 	Marker…	Δείκτης…
 	Marks	Σημάδια
 	Marks and Bleed	Σημάδια και ξάκρισμα
@@ -2692,6 +2708,7 @@ theme	Appearance	Εμφάνιση
 	Modified:	Τροποποιήθηκε:
 	Mojikumi	Mojikumi
 	Insert Kashidas	Εισαγωγή κασίντα
+	Kashidas	Κασίντα
 	Long	Μακρύ
 	Stylistic	Στιλιστικό
 	Mojikumi Set	Σύνολο Mojikumi
@@ -3258,6 +3275,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Replace Spine	Αντικατάσταση κεντρικής καμπύλης
 	Replace Symbol	Αντικατάσταση συμβόλου
 	Replace With Font	Αντικατάσταση με γραμματοσειρά
+	Replace With Font From	Αντικατάσταση με γραμματοσειρά από
+	System	Σύστημα
 	Replaces the saved preset of that name.	Αντικαθιστά την αποθηκευμένη προεπιλογή με αυτό το όνομα.
 	Require a password to open the document	Απαίτηση κωδικού για το άνοιγμα εγγράφου
 	Reset Bounding Box	Επαναφορά πλαισίου οριοθέτησης
@@ -3727,6 +3746,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Templates Folder	Φάκελος προτύπων
 	Text Displayed in Cell:	Κείμενο που εμφανίζεται στο κελί:
 	Text Export Options	Επιλογές εξαγωγής κειμένου
+	Text Fill & Stroke Color	Χρώμα γεμίσματος και περιγράμματος κειμένου
 	Text Fill Color	Χρώμα γεμίσματος κειμένου
 	Text Import Options	Επιλογές εισαγωγής κειμένου
 	Text Stroke Color	Χρώμα περιγράμματος κειμένου
@@ -3854,6 +3874,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Use Artboards	Χρήση πινάκων σχεδίασης
 	Use Black Point Compensation	Χρήση αντιστάθμισης μαύρου σημείου
 	Use Compression	Χρήση συμπίεσης
+	Include Editing Data for Other Apps	Συμπερίληψη δεδομένων επεξεργασίας για άλλες εφαρμογές
 	Use document bleed settings	Χρήση ρυθμίσεων ξακρίσματος εγγράφου
 	Use Even-Odd Fill Rule	Χρήση κανόνα γεμίσματος άρτιου-περιττού
 	Use Japanese Crop Marks	Χρήση ιαπωνικών σημαδιών περικοπής
@@ -4576,6 +4597,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	περιέχει {_1}, τα οποία το VectorCraft δεν μπορεί ακόμη να διαβάσει
 @msg	its objects are nested too deeply	τα αντικείμενά του έχουν υπερβολικά βαθιά ένθεση
 @msg	its section ending with `%{end}` doesn't end	η ενότητά του που τελειώνει σε `%{end}` δεν τερματίζεται
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	τα πινέλα που το VectorCraft δεν μπορεί ακόμη να διαβάσει παραλείφθηκαν από τον πίνακα Πινέλα ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	τα αντικείμενα με πολλαπλά γεμίσματα, περιγράμματα, εφέ ή πινέλα εισήχθησαν ως απεικονίσεις ({_1}): η εμφάνισή τους δεν είναι ακόμη επεξεργάσιμη
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	το ντεγκραντέ «{name}» δεν ορίζεται στο αρχείο: χρησιμοποιείται στη θέση του ένα συμπαγές χρώμα
 @msg	an image VectorCraft can't read was left out	παραλείφθηκε εικόνα που δεν μπορεί να διαβάσει το VectorCraft
@@ -5478,6 +5500,10 @@ effect	Points	Σημεία
 @msg	the Simplify slider is not open	ο ρυθμιστής Απλοποίησης δεν είναι ανοιχτός
 @msg	the Smooth slider is not open	ο ρυθμιστής Εξομάλυνσης δεν είναι ανοιχτός
 @msg	the action has no steps	η ενέργεια δεν έχει βήματα
+@msg	the action has no included steps	η ενέργεια δεν έχει βήματα που συμπεριλαμβάνονται
+@msg	no such action step	δεν υπάρχει τέτοιο βήμα ενέργειας
+@msg	included must be true or false	Το included πρέπει να είναι true ή false
+@msg	others must be true or false	Το others πρέπει να είναι true ή false
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	τα επίπεδα του αρχείου δεν διαβάστηκαν ({_1}): εισάγεται ως η σελίδα του, σε ένα επίπεδο
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	τα επίπεδα του αρχείου δεν διαβάστηκαν από τα δεδομένα επεξεργασίας του ({_1}): προέρχονται από το τμήμα PDF του
 @msg	the screen color sampler is already open	η δειγματοληψία χρώματος από την οθόνη είναι ήδη ανοιχτή
@@ -5509,6 +5535,11 @@ effect	Points	Σημεία
 	Export Type:	Τύπος εξαγωγής:
 	Movie Clip	Κλιπ ταινίας
 @msg	name is empty	το όνομα είναι κενό
+@msg	an action is already recording	μια ενέργεια καταγράφεται ήδη
+@msg	no such function key	δεν υπάρχει τέτοιο πλήκτρο λειτουργίας
+@msg	no such color	δεν υπάρχει τέτοιο χρώμα
+@msg	{_1} cannot be used on Windows	Το {_1} δεν μπορεί να χρησιμοποιηθεί στα Windows
+@msg	more than one action is named “{_1}”	περισσότερες από μία ενέργειες ονομάζονται «{_1}»
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
 	Smudge Stick…	Μουτζούρα…
 	Smudge Stick	Μουτζούρα
@@ -5590,6 +5621,7 @@ effect	Points	Σημεία
 	Effect Gallery	Συλλογή εφέ
 	Filters	Φίλτρα
 	Select artwork to apply effects	Επιλέξτε γραφικά για να εφαρμόσετε εφέ
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	δεν διαβάστηκαν όλες οι συνδέσεις μεταβλητών του αρχείου (συνδέσεις που παραλείφθηκαν: {_1}): αυτά τα αντικείμενα δεν είναι συνδεδεμένα με τις μεταβλητές τους
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	η βιβλιοθήκη μεταβλητών του αρχείου διαβάστηκε μόνο εν μέρει (καταχωρίσεις που παραλείφθηκαν: {_1}): ο πίνακας Μεταβλητές εμφανίζει τις υπόλοιπες
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	δεν ήταν δυνατή η ανάγνωση της βιβλιοθήκης μεταβλητών του αρχείου: ο πίνακας Μεταβλητές δεν την εμφανίζει
 @msg	a variable of unknown kind can't be bound to objects	μια μεταβλητή άγνωστου είδους δεν μπορεί να συνδεθεί με αντικείμενα
@@ -5679,9 +5711,17 @@ axis	Y Axis	Άξονας Y
 	Action Options…	Επιλογές ενέργειας…
 	Action Options	Επιλογές ενέργειας
 	Rename Action	Μετονομασία ενέργειας
+	New Action…	Νέα ενέργεια…
+	New Action	Νέα ενέργεια
+	Create New Action	Δημιουργία νέας ενέργειας
+	Play Action	Αναπαραγωγή ενέργειας
+	Action Set:	Σύνολο ενεργειών:
+	Function Key:	Πλήκτρο λειτουργίας:
+	Record	Καταγραφή
 	Create New Set	Δημιουργία νέου συνόλου
 	Stop Global Edit	Τερματισμός καθολικής επεξεργασίας
 	Global Edit Options	Επιλογές καθολικής επεξεργασίας
+	Leave Out of Global Edit	Εξαίρεση από την καθολική επεξεργασία
 	Match	Αντιστοίχιση
 	On Artboards	Σε πίνακες σχεδίασης
 	All Artboards	Όλοι οι πίνακες σχεδίασης
@@ -5690,6 +5730,8 @@ axis	Y Axis	Άξονας Y
 @msg	select one object	επιλέξτε ένα αντικείμενο
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Η καθολική επεξεργασία λειτουργεί σε διαδρομές, σύνθετες διαδρομές, παρουσίες συμβόλων και ομάδες τους
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	δεν βρέθηκαν παρόμοια αντικείμενα (τα περιστραμμένα ή κατοπτρισμένα αντίγραφα δεν εντοπίζονται)· αλλάξτε τις επιλογές καθολικής επεξεργασίας και δοκιμάστε ξανά
+@msg	Global Edit is off	Η καθολική επεξεργασία δεν είναι ενεργή
+@msg	only an object of the Global Edit other than the one it started from can be left out	μπορεί να εξαιρεθεί μόνο ένα αντικείμενο της καθολικής επεξεργασίας εκτός από εκείνο με το οποίο ξεκίνησε
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ή ένα εύρος όπως 1, 3-5, όχι {v}
 	Add to Symbols	Προσθήκη στα σύμβολα
 	Basic Shapes	Βασικά σχήματα
@@ -5945,6 +5987,12 @@ anchor	Points:	Σημεία:
 	Horizontal Scale	Οριζόντια κλίμακα
 	Vertical Scale	Κατακόρυφη κλίμακα
 @msg	{label} must be a number from {min} to {max}	Το {label} πρέπει να είναι αριθμός από {min} έως {max}
+	Character Color	Χρώμα χαρακτήρων
+	OpenType Features	Χαρακτηριστικά OpenType
+	Stylistic Sets	Στιλιστικά σύνολα
+	Set {n}	Σύνολο {n}
+@msg	features lists at most {max} tags	Το features περιέχει έως {max} ετικέτες
+@msg	unknown OpenType feature `{t}`	άγνωστο χαρακτηριστικό OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	Το {label} πρέπει να είναι αριθμός μεγαλύτερος από 0 και έως {max}
 @msg	no character style `{name}`	Δεν βρέθηκε το στυλ χαρακτήρων `{name}`
 
@@ -6094,6 +6142,7 @@ breakText	Glyphs	Γλύφοι
 	Gap 5	Διάκενο 5
 
 @msg	{_1}: they came in as the page's art	{_1}: εισήχθησαν ως γραφικά της σελίδας
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	τα αντικείμενα που σχεδιάστηκαν διαφορετικά από την ίδια τη σελίδα του αρχείου εισήχθησαν ως γραφικά της σελίδας: {_1}
 
 @msg	You must choose a side pattern.	Πρέπει να επιλέξετε πλευρικό μοτίβο.
 @msg	invalid pattern tile choice	μη έγκυρη επιλογή πλακιδίου μοτίβου
@@ -6195,3 +6244,14 @@ breakText	Glyphs	Γλύφοι
 	Create Swatch Legend	Δημιουργία υπομνήματος δειγμάτων χρωμάτων
 	Create Swatch Legend…	Δημιουργία υπομνήματος δειγμάτων χρωμάτων…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Εργαλεία κειμένου
+	Text Tweaker…	Ρύθμιση κειμένου…
+	Text Tweaker	Ρύθμιση κειμένου
+	Attribute:	Ιδιότητα:
+	From:	Από:
+	To:	Έως:
+	Bow	Τόξο
+	Spike	Αιχμή
+	Skip Spaces	Παράλειψη κενών
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Το γραφικό είναι πολύ μεγάλο για αντιγραφή ως εικόνα: οι άλλες εφαρμογές δεν λαμβάνουν PNG του

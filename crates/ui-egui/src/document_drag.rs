@@ -26,6 +26,8 @@ struct Artwork {
 #[derive(Clone)]
 struct Hover {
     uid: u64,
+    /// The hovered tab's view of its document (Window › New Window).
+    view: u32,
     since: f64,
 }
 
@@ -91,14 +93,16 @@ pub(crate) fn cleanup(app: &VectorcraftApp, ctx: &Context) {
     }
 }
 
-/// Hover uses `contains_pointer`: the source canvas still owns egui's dragged widget.
-pub(crate) fn hover_tab(app: &mut VectorcraftApp, resp: &Response, index: usize, close: egui::Rect) -> bool {
+/// Hover uses `contains_pointer`: the source canvas still owns egui's dragged widget. The tab is
+/// window `win`'s: another view of the current document's is a tab to switch to as well.
+pub(crate) fn hover_tab(app: &mut VectorcraftApp, resp: &Response, win: crate::doc_windows::Win, close: egui::Rect) -> bool {
     let ctx = &resp.ctx;
+    let (index, view) = win;
     let eligible = resp.contains_pointer()
         && ctx
             .input(|i| i.pointer.primary_down() && !i.key_pressed(egui::Key::Escape) && i.pointer.interact_pos().is_some_and(|p| !close.contains(p)))
         && app.ui.dialog.is_none();
-    if !eligible || app.session.active_index() == Some(index) || ctx.data(|d| d.get_temp::<egui::Pos2>(activated_at_id()).is_some()) {
+    if !eligible || crate::doc_windows::current(app) == Some(win) || ctx.data(|d| d.get_temp::<egui::Pos2>(activated_at_id()).is_some()) {
         return false;
     }
     let transfer = egui::DragAndDrop::has_payload_of_type::<Artwork>(ctx);
@@ -110,7 +114,7 @@ pub(crate) fn hover_tab(app: &mut VectorcraftApp, resp: &Response, index: usize,
         return false;
     };
     let now = ctx.input(|i| i.time);
-    let hover = ctx.data(|d| d.get_temp::<Hover>(hover_id())).filter(|h| h.uid == uid).unwrap_or(Hover { uid, since: now });
+    let hover = ctx.data(|d| d.get_temp::<Hover>(hover_id())).filter(|h| h.uid == uid && h.view == view).unwrap_or(Hover { uid, view, since: now });
     ctx.data_mut(|d| d.insert_temp(hover_id(), hover.clone()));
     let remaining = HOVER_SECONDS - (now - hover.since);
     if remaining > 0.0 {
@@ -147,7 +151,7 @@ pub(crate) fn hover_tab(app: &mut VectorcraftApp, resp: &Response, index: usize,
         egui::DragAndDrop::set_payload(ctx, art);
     }
     app.ui.home = None;
-    app.session.set_active(index);
+    crate::doc_windows::show_window(app, win);
     ctx.request_repaint();
     let at = ctx.input(|i| i.pointer.interact_pos());
     ctx.data_mut(|d| {

@@ -165,14 +165,18 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
 /// of its art, which it carries: its layers and hidden objects as they were, and the art outside
 /// its artboard (its PDF part has only what is on the artboards), as an EPS of the editor is read.
 /// Anything else as it was. `unit`: the size in points of a unit of the PDF part's user space (its
-/// first page's `UserUnit`) → (document, warnings, whether its layers were read).
-fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warnings: Vec<String>, unit: f64) -> (Document, Vec<String>, bool) {
-    if opts.pages.is_some() || !opts.layers || !opts.editing_data {
-        return (doc, warnings, false);
-    }
-    let Some(private) = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref()) else { return (doc, warnings, false) };
+/// first page's `UserUnit`) → (document, warnings, whether its layers were read). `private`: the
+/// editor's copy ([`editing_copy`]).
+fn through_editing_data(
+    private: Option<&[u8]>,
+    opts: &LoadOptions,
+    doc: Document,
+    warnings: Vec<String>,
+    unit: f64,
+) -> (Document, Vec<String>, bool) {
+    let Some(private) = private else { return (doc, warnings, false) };
     let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
-    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai(&private, doc, warnings, outlined, opts.trust_editing_data, unit);
+    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai(private, doc, warnings, outlined, opts.trust_editing_data, unit);
     // The layers weren't read (or couldn't be): the notes of reading the PDF part still hold.
     if !read {
         return (doc, warnings, false);
@@ -189,18 +193,33 @@ fn through_editing_data(bytes: &[u8], opts: &LoadOptions, doc: Document, warning
     (doc, warnings, true)
 }
 
-/// A `.ai` saved without PDF compatibility (its PDF part is a placeholder page) from the editor's
-/// own copy of its art alone: `None` when the file has none (or pages are picked, or layers or the
-/// editing data are off), an error when it can't be read.
-fn from_editing_data_alone(bytes: &[u8], opts: &LoadOptions) -> Option<Result<(Document, Vec<String>)>> {
-    if opts.pages.is_some() || !opts.layers || !opts.editing_data {
+/// A `.ai` saved without PDF compatibility (its PDF part is a placeholder page), `opened`, from the
+/// editor's own copy of its art alone: `None` when the file has none (or the pages picked don't
+/// name every page, or layers or the editing data are off), an error when it can't be read.
+fn from_editing_data_alone(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions) -> Option<Result<(Document, Vec<String>)>> {
+    if !every_page(opened.page_count(), opts) || !opts.layers || !opts.editing_data {
         return None;
     }
-    let private = vectorcraft_pdf::illustrator_data(bytes, opts.password.as_deref())?;
-    Some(
-        vectorcraft_eps::ai_alone(&private)
-            .map_err(|why| err(format!("this file was saved without PDF compatibility, and its editing data can't be read ({why})"))),
-    )
+    let private = opened.illustrator_data()?;
+    Some(editing_copy_alone(&private))
+}
+
+/// [`from_editing_data_alone`] of `private`, the editor's copy already read.
+fn editing_copy_alone(private: &[u8]) -> Result<(Document, Vec<String>)> {
+    vectorcraft_eps::ai_alone(private)
+        .map_err(|why| err(format!("this file was saved without PDF compatibility, and its editing data can't be read ({why})")))
+}
+
+/// Does a file opened with `opts` read the editor's own copy of its art: no pages picked, and
+/// layers and the editing data on?
+fn reads_editing_copy(opts: &LoadOptions) -> bool {
+    opts.pages.is_none() && opts.layers && opts.editing_data
+}
+
+/// The editor's own copy of its art that `opened` carries (as [`vectorcraft_pdf::illustrator_data`]
+/// reads it), when `opts` read it ([`reads_editing_copy`]).
+fn editing_copy(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions) -> Option<Vec<u8>> {
+    reads_editing_copy(opts).then(|| opened.illustrator_data()).flatten()
 }
 
 /// A `.ai`, or a PDF saved with the editing data, whose PDF part can't be read (`e`, the import's
@@ -266,10 +285,10 @@ pub(crate) fn is_placeholder(e: &EngineError) -> bool {
     e.to_string() == vectorcraft_pdf::PdfError::PlaceholderOnly.to_string()
 }
 
-/// Do `opts` read every page of the PDF `bytes`: no `pages`, or a range that names each one?
-fn every_page(bytes: &[u8], opts: &LoadOptions) -> bool {
+/// Do `opts` read every page of a PDF of `count` pages: no `pages`, or a range that names each one?
+fn every_page(count: usize, opts: &LoadOptions) -> bool {
     let Some(range) = &opts.pages else { return true };
-    vectorcraft_pdf::info(bytes, opts.password.as_deref()).is_ok_and(|i| parse_range(range, i.pages.len()).is_ok_and(|p| p.len() == i.pages.len()))
+    parse_range(range, count).is_ok_and(|p| p.len() == count)
 }
 
 /// Page `page_index` (0-based) read from a PDF or `.ai` (`read`, as [`super::page_document`] reads
@@ -306,6 +325,8 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         None => err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")),
     })?;
     let title = file_name(name);
+    // The File Info a PDF, `.ai` or `.ait` gives.
+    let mut file_info = None;
     let mut converted = false;
     let mut preview_only = false;
     let mut editing_data = false;
@@ -332,15 +353,22 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             restore_or_import(editing, || import_svg(&text, folder.as_deref()))?
         }
         "pdf" | "ai" | "ait" => {
+            // The file is read and checked once, for the document it carries, its pages, the
+            // editor's copy and its File Info.
+            let opened = vectorcraft_pdf::open_pdf(bytes, opts.password.as_deref());
             // Saved with Preserve Editing: the document it carries, unless some pages are picked.
-            let editing = opts
-                .pages
-                .is_none()
-                .then(|| vectorcraft_pdf::editing_with(bytes, opts.password.as_deref()))
+            let editing = (opts.pages.is_none() && opts.native)
+                .then(|| opened.as_ref().ok().and_then(|o| o.editing()))
                 .flatten()
                 .map(|e| (e.intact, move || Some(e.data)));
-            restore_or_import(editing, || match super::pdfimport::import(bytes, opts, format.id != "pdf") {
+            let imported = || match &opened {
+                Ok(o) => super::pdfimport::import(bytes, o, opts, format.id != "pdf"),
+                Err(e) => Err(err(e)),
+            };
+            let read = restore_or_import(editing, || match imported() {
                 Ok(r) => {
+                    // The editor's copy, read once the import is done with the pages.
+                    let private = opened.as_ref().ok().and_then(|o| editing_copy(o, opts));
                     // Pages of text alone: the editing copy alone where it reads, as for a file
                     // saved without its PDF part (#1387: else the page, which is the art). So too
                     // pages that draw nothing at all: there is no page art to check the layers
@@ -349,30 +377,35 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                     // decoded draws nothing either): its notes are at most the page's own.
                     let empty = draws_nothing(&r.document) && r.warnings.iter().all(|w| is_page_note(w));
                     let alone = (r.only_text || empty)
-                        .then(|| from_editing_data_alone(bytes, opts))
+                        .then(|| private.as_deref().map(editing_copy_alone))
                         .flatten()
                         .and_then(|read| read.ok())
                         .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts));
                     let (doc, warnings, read) = match alone {
                         Some((doc, warnings)) => (doc, warnings, true),
-                        None => through_editing_data(bytes, opts, r.document, r.warnings, r.user_unit),
+                        None => through_editing_data(private.as_deref(), opts, r.document, r.warnings, r.user_unit),
                     };
                     editing_data = read;
                     Ok((doc, warnings))
                 }
                 // Saved without its PDF part: the editing copy is all the file has (`pages` that
                 // name every page read it as the whole file).
-                Err(e) if is_placeholder(&e) => {
-                    let whole = LoadOptions { pages: None, ..opts.clone() };
-                    from_editing_data_alone(bytes, if every_page(bytes, opts) { &whole } else { opts })
-                        .unwrap_or(Err(e))
-                        .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts))
-                        .inspect(|_| editing_data = true)
-                }
+                Err(e) if is_placeholder(&e) => opened
+                    .as_ref()
+                    .ok()
+                    .and_then(|o| from_editing_data_alone(o, opts))
+                    .unwrap_or(Err(e))
+                    .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts))
+                    .inspect(|_| editing_data = true),
                 // A PDF part that can't be read (a stream the import refuses): the editing copy
                 // alone where it reads, else the error.
                 Err(e) => without_pdf_part(bytes, opts, &e).inspect(|_| editing_data = true).ok_or(e),
-            })?
+            })?;
+            // The File Info of a file read from its pages or its editing copy.
+            if !read.2 {
+                file_info = opened.as_ref().ok().map(|o| o.file_info());
+            }
+            read
         }
         "dxf" => {
             let (doc, warnings) = super::dxfimport::import(bytes, &opts.dxf)?;
@@ -394,7 +427,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     // it carries, opens with the File Info it gives (a PostScript `.ai` gives none).
     if matches!(format.id, "pdf" | "ai" | "ait")
         && !restored
-        && let Some(info) = vectorcraft_pdf::file_info(bytes, opts.password.as_deref())
+        && let Some(info) = file_info
     {
         super::super::fileinfo::read_pdf(&mut doc.metadata, info);
     }

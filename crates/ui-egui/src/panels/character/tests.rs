@@ -1028,6 +1028,45 @@ fn no_break_menu_item_toggles_the_selected_characters() {
     assert!(!on(&app));
 }
 
+/// Kashidas appears with Middle Eastern options, starts checked, and a mixed selection is
+/// unchecked until the user enables all of its characters.
+#[test]
+fn kashidas_menu_item_handles_default_and_mixed_ranges() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.show_indic_options = true;
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "AB"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let row = |app: &mut VectorcraftApp| {
+        super::super::tests_appearance::frame_events(&ctx, app, vec![], menu)
+            .into_iter()
+            .find(|(text, _)| text.trim_start_matches(['✓', ' ']) == "Kashidas")
+            .expect("Kashidas menu item")
+    };
+    assert!(row(&mut app).0.starts_with('✓'));
+    app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 1, "kashidas": false})).unwrap();
+    assert!(!row(&mut app).0.starts_with('✓'));
+    let at = row(&mut app).1.center();
+    super::super::tests_appearance::click(&ctx, &mut app, at, menu);
+    assert!(row(&mut app).0.starts_with('✓'));
+    let states = match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(states.iter().all(|v| *v));
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
+    let at = row(&mut app).1.center();
+    super::super::tests_appearance::click(&ctx, &mut app, at, menu);
+    let after = match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(after.iter().all(|v| *v), "an empty caret leaves all characters unchanged");
+}
+
 /// Reset Panel sets every character attribute the panel shows, except the font family, style
 /// and size, back to its default (Small Caps, the position, Character Alignment, Proportional
 /// Metrics, Tate-chu-yoko and its settings, No Break, Character Direction, Digits and the font height reference
@@ -1131,4 +1170,46 @@ fn snap_to_glyph_options_show_from_the_menu_and_set_the_options() {
     assert!(app.session.prefs.glyph_snap.angular);
     toggle(&mut app, "Hide Snap to Glyph Options");
     assert!(!section(&mut app).iter().any(|(t, _)| t == "Proximity Guides"));
+}
+
+/// After Select All in a frame of threaded text, the Character and Paragraph panels and Copy act on
+/// the text of every frame of the story.
+#[test]
+fn select_all_in_threaded_text_formats_and_copies_the_whole_story() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+    let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+    let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": b, "anchor": 0, "caret": 0}));
+    app.run("select.all", json!({})).unwrap();
+    assert_eq!(text_story(&app), Some(vec![NodeId(a), NodeId(b)]));
+    let frame = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("not text"),
+    };
+    format(&mut app, json!({"size": 9}));
+    crate::panels::paragraph::run_on_paragraphs(&mut app, "text.setFormat", json!({"spaceBefore": 4})).unwrap();
+    for id in [a, b] {
+        let t = frame(&app, id);
+        assert!(t.runs.iter().all(|r| (r.style.size - 9.0).abs() < 1e-9), "every character of frame {id} is 9 pt");
+        assert!((t.para_at(0).space_before - 4.0).abs() < 1e-9, "frame {id}'s paragraphs take the space");
+    }
+    assert!(intercept_text_command(&mut app, "edit.copy").is_some());
+    let copied: Vec<String> = app
+        .session
+        .clipboard
+        .nodes
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some(t.plain_text()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(copied, [story]);
 }

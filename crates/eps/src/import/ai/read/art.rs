@@ -15,17 +15,21 @@ impl<'a> Reader<'a> {
         if self.pattern.is_some() {
             self.unreadable("type in a pattern", false);
         }
-        // `1 /FreeUndo`: the type in the drawn look of a text object that has an appearance. Its
-        // story is one of another text document (`/AI11UndoFreeTextDocument`), which counts its
-        // stories on its own; the object itself follows the look, on `%_` lines, and is the type.
-        if o.nums("FreeUndo").first() == Some(&1.0) {
-            return Ok(());
-        }
+        // `1 /FreeUndo`: type in a drawn look. Its story is one of another text document
+        // (`/AI11UndoFreeTextDocument`), which counts its stories on its own, so its slot has none.
+        // In the look of a text object that has an appearance, the object itself follows the look,
+        // on `%_` lines, and is the type (`style_marker` takes the slot out); in the look of a layer
+        // or a group it is the type of a copy that the look draws.
+        let look = o.nums("FreeUndo").first() == Some(&1.0);
         let index = |key: &str| o.nums(key).first().copied().filter(|v| (0.0..f64::from(u32::MAX)).contains(v)).map(|v| v as u32);
-        let (story, frame) = (index("StoryIndex"), index("FrameIndex").unwrap_or(0));
+        let (story, frame) = (index("StoryIndex").filter(|_| !look), index("FrameIndex").unwrap_or(0));
         let gs = self.gs.clone();
         let mut n = self.new_node(NodeKind::Group { children: vec![], clip: false }, &gs);
-        n.name = Some(story.map_or_else(|| TEXT_SLOT.to_string(), |s| format!("{TEXT_SLOT}{s}:{frame}")));
+        n.name = Some(match story {
+            _ if look => super::document::LOOK_SLOT.to_string(),
+            Some(s) => format!("{TEXT_SLOT}{s}:{frame}"),
+            None => TEXT_SLOT.to_string(),
+        });
         // The type takes the state's transparency, as a path does; an `Xy` after it sets the slot's own.
         n.opacity = gs.opacity;
         n.blend = gs.blend;

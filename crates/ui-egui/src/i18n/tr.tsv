@@ -280,6 +280,9 @@ font-technology	Variable	Değişken
 	Basic Latin	Temel Latince
 	Batch	Toplu
 	Begin Recording	Kaydı Başlat
+	Exclude from playback	Oynatmadan hariç tut
+	Include in playback	Oynatmaya dahil et
+	Include Action Steps	Eylem Adımlarını Dahil Et
 	Bend:	Bükülme:
 	Bevel Join	Eğimli Birleştirme
 	Bitmap	Bit eşlem
@@ -1179,6 +1182,7 @@ font-technology	Variable	Değişken
 	Flip Row Order	Satır Sırasını Çevir
 	Flip Vertical	Dikey Çevir
 	Float in Window	Pencerede Yüzer Yap
+	Float All in Windows	Tümünü Pencerelerde Yüzer Yap
 	Focal Fill	Odak Dolgusu
 	Focal Stroke	Odak Konturu
 	Folder	Klasör
@@ -1311,6 +1315,10 @@ font-technology	Variable	Değişken
 	Handles	Kollar
 	Hard Light	Sert Işık
 	Harmony Rules:	Uyum Kuralları:
+	Segmented color wheel	Bölümlü renk tekerleği
+	Show smooth color wheel	Kesintisiz renk tekerleğini göster
+	Show segmented color wheel	Bölümlü renk tekerleğini göster
+	Show color bars	Renk çubuklarını göster
 	Harmony Sets	Armoni Setleri
 	Height	Yükseklik
 	Height:	Yükseklik:
@@ -1545,6 +1553,8 @@ font-technology	Variable	Değişken
 	Large Thumbnail View	Büyük Küçük Resim Görünümü
 	Large Thumbnails	Büyük Küçük Resimler
 	Lasso Tool	Kement Aracı
+	Enclosing Lasso Tool	Çevreleyen Kement Aracı
+	Enclosing Lasso	Çevreleyen Kement
 	Last Effect: {name}	Son Etki: {name}
 	Last Effect: {}	Son Etki: {}
 	Last Effect…	Son Etki…
@@ -1694,6 +1704,7 @@ font-technology	Variable	Değişken
 	Manually	Manuel olarak
 	Mark as trapped	Sıkışmış olarak işaretle
 	Mark Older Files as [Converted] When Opened	Eski Dosyaları Açıldığında [Dönüştürülmüş] Olarak İşaretle
+	Use System Defaults for Edit Original	Orijinali Düzenle için Sistem Varsayılanlarını Kullan
 	Marker…	işaretleyici…
 	Marks	İşaretler
 	Marks and Bleed	İşaretler ve Taşma Payı
@@ -1910,6 +1921,11 @@ font-technology	Variable	Değişken
 	New Toolbar	Yeni Araç Çubuğu
 	Show Toolbar	Araç Çubuğunu Göster
 	List Toolbars	Araç Çubuklarını Listele
+	Manage Toolbars…	Araç Çubuklarını Yönet…
+	Manage Toolbars	Araç Çubuklarını Yönet
+	Rename Toolbar	Araç Çubuğunu Yeniden Adlandır
+	Duplicate Toolbar	Araç Çubuğunu Çoğalt
+	Delete Toolbar	Araç Çubuğunu Sil
 	New {kind} Style…	Yeni {kind} Stili…
 	New…	Yeni…
 	Next	Sonraki
@@ -2512,6 +2528,8 @@ digits	Malayalam	Malayalam
 	Replace Spine	Omurgayı Değiştir
 	Replace Symbol	Sembolü Değiştir
 	Replace With Font	Yazı Tipiyle Değiştir
+	Replace With Font From	Değiştirilecek Yazı Tipi Kaynağı
+	System	Sistem
 	Replaces the saved preset of that name.	Bu adın kayıtlı ön ayarını değiştirir.
 	Replace…	Değiştir…
 	Require a password to open the document	Belgeyi açmak için parola gerektir
@@ -3205,6 +3223,7 @@ digits	Malayalam	Malayalam
 	Templates…	Şablonlar…
 	Text Displayed in Cell:	Hücrede Görüntülenen Metin:
 	Text Export Options	Metin Dışa Aktarma Seçenekleri
+	Text Fill & Stroke Color	Metin Dolgu ve Kontur Rengi
 	Text Fill Color	Metin Dolgu Rengi
 	Text Import Options	Metin İçe Aktarma Seçenekleri
 	Text Stroke Color	Metin Kontur Rengi
@@ -3381,6 +3400,7 @@ digits	Malayalam	Malayalam
 	Use Artboards	Çalışma Yüzeylerini Kullan
 	Use Black Point Compensation	Siyah Nokta Telafisi Kullan
 	Use Compression	Sıkıştırmayı Kullan
+	Include Editing Data for Other Apps	Diğer Uygulamalar İçin Düzenleme Verilerini Ekle
 	Use document bleed settings	Belge taşma payı ayarlarını kullan
 	Use Even-Odd Fill Rule	Çift-Tek Doldurma Kuralını Kullan
 	Use Japanese Crop Marks	Japonca Kırpma İşaretlerini Kullan
@@ -4364,6 +4384,7 @@ axis	Both	Her İkisi
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	VectorCraft'ın henüz okumadığı {_1} var
 @msg	its objects are nested too deeply	nesneleri çok derin bir şekilde iç içe geçmiş
 @msg	its section ending with `%{end}` doesn't end	`%{end}` ile biten bölümü bitmiyor
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft'ın henüz okuyamadığı fırçalar Fırçalar panelinin dışında bırakıldı ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	çeşitli dolgulara veya konturlara, efektlere veya fırçalara sahip nesneler çizilmiş görünümleri olarak geldi ({_1}): görünümleri henüz düzenlenemez
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	“{name}” degradesi dosyada tanımlı değil: onun yerine düz bir renk geliyor
 @msg	an image VectorCraft can't read was left out	VectorCraft'ın okuyamadığı bir resim dışarıda bırakıldı
@@ -5209,6 +5230,10 @@ theme	Appearance	Görünüm
 @msg	choose a source folder	bir kaynak klasör seçin
 @msg	open a document with data sets	veri kümeleri içeren bir belge açın
 @msg	the action has no steps	eylemin hiçbir adımı yok
+@msg	the action has no included steps	eylemin dahil edilmiş adımı yok
+@msg	no such action step	öyle bir eylem adımı yok
+@msg	included must be true or false	"included" true veya false olmalıdır
+@msg	others must be true or false	"others" true veya false olmalıdır
 	Accent Color	Vurgu Rengi
 	Amber	kehribar
 	Coral	Mercan
@@ -5223,6 +5248,11 @@ theme	Appearance	Görünüm
 	Export Type:	İhracat Türü:
 	Movie Clip	Film Klibi
 @msg	name is empty	isim boş
+@msg	an action is already recording	zaten bir eylem kaydediliyor
+@msg	no such function key	öyle bir işlev tuşu yok
+@msg	no such color	öyle bir renk yok
+@msg	{_1} cannot be used on Windows	{_1} Windows'ta kullanılamaz
+@msg	more than one action is named “{_1}”	birden fazla eylemin adı “{_1}”
 @msg	no symbol named `{n}`	`{n}` adında bir sembol yok
 	Artboard Options: edit with the Artboard tool	Çalışma Yüzeyi Seçenekleri: Çalışma Yüzeyi aracıyla düzenleme
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	bu henüz açılamayan bir PostScript dosyasıdır (eski bir formatta kaydedilmiş veya PDF uyumluluğu olmayan bir .ai veya bir EPS dosyası): PDF, PDF uyumlu .ai veya SVG olarak kaydedin
@@ -5386,7 +5416,7 @@ theme	Appearance	Görünüm
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	{MAX_CSV_ROWS} veri setinden fazla: Veri Kümelerini İçe Aktar en fazla {MAX_CSV_ROWS} tane okur
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	{MAX_CSV_COLS} değişkenden fazla: Veri Kümelerini İçe Aktar en fazla {MAX_CSV_COLS} tane okur
 @msg	x and y must be finite	x ve y sonlu olmalıdır
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 eski .ai dosyalarını yazar; bir .ait şablonu her zaman PDF uyumludur
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 eski .ai dosyalarını yazar, .ait şablonlarını yazmaz
 @msg	Edit Original opens image and document files only; “{name}” is not one	Özgünü Düzenle yalnızca görüntü ve belge dosyalarını açar; “{name}” bunlardan biri değil
 @msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	düzenleme verileri {w} × {h} pt boyutunda bir sayfa içindir, dosyanın {pw} × {ph} pt sayfası için değil
 @msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	düzenleme verileri {w} × {h} pt boyutunda bir sayfa içindir, dosyanın {scale} ölçeğindeki {pw} × {ph} pt sayfası
@@ -5406,6 +5436,7 @@ theme	Appearance	Görünüm
 @msg	its zlib compression is damaged	zlib sıkıştırması hasarlı
 @msg	its Zstandard compression is damaged	Zstandard sıkıştırması hasarlı
 @msg	it decompresses to more than {_1} MB	açıldığında {_1} MB'tan fazla alan kaplıyor
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	dosyanın değişken bağlantılarının tümü okunmadı (atlanan bağlantılar: {_1}): bu nesneler değişkenlerine bağlı değil
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	dosyanın değişken kitaplığı yalnızca kısmen okundu (atlanan girdiler: {_1}): Değişkenler paneli kalanları listeliyor
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	dosyanın değişken kitaplığı okunamadı: Değişkenler paneli onu listelemiyor
 @msg	a variable of unknown kind can't be bound to objects	türü bilinmeyen bir değişken nesnelere bağlanamaz
@@ -5509,6 +5540,7 @@ theme	Appearance	Görünüm
 	Highlight:	Vurgu:
 	In Merge Mode, Clicking Stroke Splits the Path	Birleştirme modunda kontura tıklamak yolu böler
 	Insert Kashidas	Keşide Ekle
+	Kashidas	Keşide
 	Load Variable Library…	Değişken Kitaplığı Yükle…
 	Save Variable Library…	Değişken Kitaplığını Kaydet…
 @msg	a variable library holds text variables, and the document has none	değişken kitaplığı metin değişkenleri içerir ve belgede hiç metin değişkeni yok
@@ -5685,9 +5717,17 @@ axis	Y Axis	Y ekseni
 	Action Options…	Eylem Seçenekleri…
 	Action Options	Eylem Seçenekleri
 	Rename Action	Eylemi Yeniden Adlandır
+	New Action…	Yeni Eylem…
+	New Action	Yeni Eylem
+	Create New Action	Yeni Eylem Oluştur
+	Play Action	Eylemi Oynat
+	Action Set:	Eylem Seti:
+	Function Key:	İşlev Tuşu:
+	Record	Kayıt
 	Create New Set	Yeni Set Oluştur
 	Stop Global Edit	Genel Düzenlemeyi Durdur
 	Global Edit Options	Genel Düzenleme Seçenekleri
+	Leave Out of Global Edit	Genel Düzenlemenin Dışında Bırak
 	Match	Eşleştir
 	On Artboards	Çalışma Yüzeylerinde
 	All Artboards	Tüm Çalışma Yüzeyleri
@@ -5696,6 +5736,8 @@ axis	Y Axis	Y ekseni
 @msg	select one object	bir nesne seçin
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Genel düzenleme yollar, bileşik yollar, sembol örnekleri ve bunların grupları üzerinde çalışır
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	benzer nesne bulunamadı (döndürülmüş veya yansıtılmış kopyalar eşleşmez); Genel Düzenleme Seçeneklerini değiştirip yeniden deneyin
+@msg	Global Edit is off	Genel düzenleme kapalı
+@msg	only an object of the Global Edit other than the one it started from can be left out	yalnızca genel düzenlemenin başladığı nesne dışındaki bir nesne düzenlemenin dışında bırakılabilir
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ya da 1, 3-5 gibi bir aralık olmalı, {v} değil
 	Add to Symbols	Sembollere Ekle
 	Basic Shapes	Temel Şekiller
@@ -5951,6 +5993,12 @@ anchor	Points:	Noktalar:
 	Horizontal Scale	Yatay Ölçek
 	Vertical Scale	Dikey Ölçek
 @msg	{label} must be a number from {min} to {max}	{label} {min} ile {max} arasında bir sayı olmalıdır
+	Character Color	Karakter Rengi
+	OpenType Features	OpenType Özellikleri
+	Stylistic Sets	Stilistik Setler
+	Set {n}	Set {n}
+@msg	features lists at most {max} tags	features en fazla {max} etiket içerebilir
+@msg	unknown OpenType feature `{t}`	bilinmeyen OpenType özelliği `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0'ın üzerinde ve en fazla {max} olan bir sayı olmalıdır
 @msg	no character style `{name}`	`{name}` karakter stili bulunamadı
 
@@ -6099,6 +6147,7 @@ breakText	Glyphs	Glifler
 	Gap 5	Boşluk 5
 
 @msg	{_1}: they came in as the page's art	{_1}: sayfanın çizimi olarak içe aktarıldılar
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	dosyanın kendi sayfasından farklı çizilen nesneler sayfanın çizimi olarak içe aktarıldı: {_1}
 
 @msg	You must choose a side pattern.	Bir yan desen seçmelisiniz.
 @msg	invalid pattern tile choice	geçersiz desen döşemesi seçimi
@@ -6200,3 +6249,14 @@ breakText	Glyphs	Glifler
 	Create Swatch Legend	Renk Örneği Açıklaması Oluştur
 	Create Swatch Legend…	Renk Örneği Açıklaması Oluştur…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Metin Araçları
+	Text Tweaker…	Metin Ayarlayıcı…
+	Text Tweaker	Metin Ayarlayıcı
+	Attribute:	Öznitelik:
+	From:	Başlangıç:
+	To:	Bitiş:
+	Bow	Yay
+	Spike	Sivri Uç
+	Skip Spaces	Boşlukları Atla
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Çizim, resim olarak kopyalanamayacak kadar büyük: diğer uygulamalar bunun PNG'sini almaz

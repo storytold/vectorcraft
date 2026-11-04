@@ -884,3 +884,17 @@ fn darkness_adjusts_gradient_stop_colors_before_interpolation() {
         }
     }
 }
+
+/// A symbol instance with object effects is charged to the frame's symbol budget like one
+/// without: past the budget it isn't expanded.
+#[test]
+fn symbol_instances_with_effects_are_charged_to_the_symbol_budget() {
+    let d = symbol_doc(vec![fx("distort.roughen", json!({}))]);
+    let inst = d.layers[0].children().unwrap()[0].clone();
+    let mut r = Renderer::new();
+    r.symbol_nodes = vectorcraft_doc::MAX_SYMBOL_NODES - 1;
+    assert!(r.charge_fx_instance(&d, &inst), "one object fits");
+    assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
+    assert!(!r.charge_fx_instance(&d, &inst), "the next does not");
+    assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
+}

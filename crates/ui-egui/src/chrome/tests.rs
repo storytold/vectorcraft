@@ -873,7 +873,7 @@ fn only_the_outlined_documents_tab_reads_outline() {
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     app.run("view.outline", json!({})).unwrap();
-    let titles: Vec<String> = app.session.documents().iter().enumerate().map(|(i, d)| super::tabs::doc_tab_title(&app, i, d)).collect();
+    let titles: Vec<String> = (0..app.session.documents().len()).filter_map(|i| super::document_window_title(&app, (i, 1))).collect();
     assert!(titles[0].ends_with("(RGB/Preview)"), "{titles:?}");
     assert!(titles[1].ends_with("(RGB/Outline)"), "{titles:?}");
 }
@@ -1802,4 +1802,82 @@ fn the_control_bar_shows_the_distribute_buttons_for_two_or_more_objects() {
         app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
     };
     assert_eq!((left(&app, &a), left(&app, &b), left(&app, &c)), (10.0, 105.0, 200.0), "{}", app.ui.status);
+}
+
+/// The Control bar shows the Global Edit Options dropdown while Start Global Edit can run. Its
+/// options are the session's, which the Properties panel's dropdown also sets: Match Size from
+/// the Control bar narrows the Results and the objects Start Global Edit takes. The dropdown is off
+/// while Global Edit is on, and absent when the selection cannot start it.
+#[test]
+fn the_control_bar_shows_the_global_edit_options() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64, size: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 20, "width": size, "height": size})).unwrap()["id"].clone()
+    };
+    let a = rect(&mut app, 20.0, 40.0);
+    rect(&mut app, 100.0, 40.0);
+    rect(&mut app, 200.0, 80.0);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+    let find = |nodes: &Nodes, name: &str| nodes.iter().find(|(_, n)| n.label() == Some(name) || n.value() == Some(name)).map(|(_, n)| n.clone());
+    let center = |n: &egui::accesskit::Node| {
+        let b = n.bounds().unwrap_or_else(|| panic!("{n:?}"));
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    app.run("select.set", json!({"ids": []})).unwrap();
+    frame(&mut app, vec![]);
+    assert!(find(&frame(&mut app, vec![]), "Global Edit Options").is_none(), "nothing selected: no dropdown");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    let button = find(&nodes, "Global Edit Options").unwrap_or_else(|| panic!("one rectangle: the dropdown shows"));
+    let nodes = click(&mut app, center(&button));
+    assert!(find(&nodes, "Results: 3").is_some(), "the options open with their Results");
+    let size = find(&nodes, "Size").unwrap_or_else(|| panic!("the Size check"));
+    let nodes = click(&mut app, center(&size));
+    assert!(app.session.global_edit_options.size, "Match Size is the session's option, shared with Properties");
+    assert!(find(&nodes, "Results: 2").is_some(), "Size narrows the Results");
+    app.run("select.globalEdit", json!({})).unwrap();
+    let ge = app.session.active().unwrap().global_edit.as_ref().map(|g| g.members.len());
+    assert_eq!(ge, Some(2), "Start Global Edit takes the two rectangles of the same size");
+    let nodes = frame(&mut app, vec![]);
+    let button = find(&nodes, "Global Edit Options").unwrap_or_else(|| panic!("Global Edit on: the dropdown still shows"));
+    assert!(button.is_disabled(), "the options are off while Global Edit is on");
+    // At any width the button either fits inside the bar or is left out, and a wider bar never
+    // leaves it out once a narrower one showed it.
+    app.run("select.globalEdit", json!({})).unwrap();
+    let mut seen = false;
+    for width in (600..=2400).step_by(10) {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
+        let mut nodes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
+            out.textures_delta.clear();
+            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        }
+        let shown = find(&nodes, "Global Edit Options").and_then(|n| n.bounds());
+        if let Some(b) = shown {
+            assert!(b.x1 <= f64::from(width), "{width}: {b:?}");
+        }
+        assert!(!seen || shown.is_some(), "{width}: left out after a narrower bar showed it");
+        seen |= shown.is_some();
+    }
+    assert!(seen, "a wide bar has room for it");
 }

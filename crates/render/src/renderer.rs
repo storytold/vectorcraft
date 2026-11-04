@@ -172,9 +172,11 @@ impl Renderer {
     /// so the nodes they hold go with them).
     fn end_frame(&mut self) {
         let g = self.stamp;
-        if self.geom.len() > 1024 {
-            self.geom.retain(|_, e| g - e.stamp <= 3);
-        }
+        // Swept however few the entries: each keeps its node alive, and an object dragged or
+        // edited makes a new node (with its layer) in every frame. Kept until there were 1,024 of
+        // them, a drag left up to that many old copies of the object alive, each with all its
+        // members (and, for a compound path, its assembled path).
+        self.geom.retain(|_, e| g - e.stamp <= 3);
         if self.strokes.len() > 1024 {
             self.strokes.retain(|_, e| g - e.stamp <= 3);
         }
@@ -305,15 +307,19 @@ impl Renderer {
 
     /// Render node `n` of `doc` (its resources) into `w`×`h` transparent pixels through `view`.
     pub fn render_node(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine) -> Option<Rendered> {
+        self.render_node_with(doc, n, w, h, view, &RenderOptions::default())
+    }
+
+    /// [`Self::render_node`] with `opts` (e.g. [`RenderOptions::mark_undecoded_images`]).
+    pub fn render_node_with(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine, opts: &RenderOptions) -> Option<Rendered> {
         self.check_plugins();
         self.check_symbols(doc);
         let inv = view.inverse();
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
         let mut ctx = single_threaded_context(w, h);
-        let opts = RenderOptions::default();
         let symbols = doc.symbol_boxes().quick();
-        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts: &opts, ink: Ink::Display, plates: None };
+        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, plates: None };
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();

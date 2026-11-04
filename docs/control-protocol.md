@@ -264,7 +264,10 @@ same sliders under the wheel, and its mode menu also has Global Adjust (`sliderM
 Brightness, Temperature and Luminosity sliders that set `globalAdjust` (`{saturation, brightness, temperature,
 luminosity}`, percent from -100 to 100, 0 by default). The dialog sends a non-zero `globalAdjust` as `recolor.apply`'s
 `globalAdjust` in every slider mode, so one slider changes every recolored color at once and the rows keep their new
-colors; colors opened alone are saved as a group with the change. Setting
+colors; colors opened alone are saved as a group with the change. `display` sets how the Edit tab shows the new
+colors: `smooth` (the smooth wheel, also when unset; each opening starts there), `segmented` (a wheel of solid patches,
+24 hues by 5 saturations, whose markers move as freely) or `bars` (a solid bar per recolored color in row order; a click
+selects its row for the sliders and a drag moves the row without changing a color). Setting
 `colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`). The dialog previews
 `recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
@@ -379,6 +382,16 @@ two-column flag, top-left corner, the groups torn off it). They are kept with th
 switching workspaces shows that workspace's toolbars, Reset Workspace keeps them, and New Workspace starts the new
 workspace with a copy of them.
 
+Manage Toolbars: Window › Toolbars › Manage Toolbars… (or Manage Toolbars… in the drawer's ☰ menu,
+`window.toolbar.manage`) lists these toolbars. A new name typed for the selected toolbar renames it at Enter, when
+the text box loses focus, or at OK (`window.toolbar.rename {name, to}`; the name must not be empty, longer than 200
+characters or another toolbar's, whatever the case). The + button copies the selected toolbar with its tools as
+"`name` Copy", shown a little below it and below earlier copies (`window.toolbar.duplicate {name}`), and with none
+selected it makes a blank toolbar called "Toolbar N" (`window.toolbar.duplicate {}`). The trash can deletes the
+selected toolbar and the groups torn off it (`window.toolbar.delete {name}`). Renaming or deleting a toolbar closes
+the drawer and a group's flyout open on it; a new name that changes only the case leaves them open. Each change is
+kept with the current workspace.
+
 The Contextual Task Bar: its handle (the grip at its left end) drags it anywhere on the canvas, which always holds
 it whole, also when the window shrinks. Unpinned, the bar keeps that offset as it follows the selection, until
 another document becomes active. Its More Options (…) menu has Hide Bar (`window.taskBar`); Pin Bar Position
@@ -442,7 +455,9 @@ changed since); its preview greys the art and paints the highlighted objects or 
 
 Expand: Object → Expand… (`ui.expandDialog`, or `object.expand` without params from the menus, palette and shortcuts)
 opens the `expand` dialog for the selection. Fields: `object`, `fill`, `stroke` (all on; `__object`, `__fill`,
-`__stroke` say which the selection has something for, as `object.expand.info` does, and the others are disabled),
+`__stroke` say which the selection has something for, as `object.expand.info` does, and the others are disabled;
+`__fill_symbol`, `__stroke_symbol` and `__gradient_symbol` say that only the art of symbol instances holds it, and
+those options are enabled only while `object` is on),
 `gradient` (`objects` or `mesh`) and `steps` (1–1000, default 255), which are enabled when `fill` is on and
 `__gradient` says the selection has a gradient fill (`object.expand.info`'s `gradient`). `ui.dialog.confirm` runs `object.expand` with them as
 one undo step. While the selection has an appearance Expand Appearance expands (effects, several fills or strokes, a
@@ -665,6 +680,11 @@ one undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.li
 `links.info`; `links.editOriginal` and `links.reveal` (Edit › Edit Original, Show in Folder) hand the linked file to
 the system and return `{path}`. Edit Original opens only a regular file whose extension is a format `document.open`
 reads, and answers a control request with an error unless the file is a placed document (which opens in a tab).
+The preference `editOriginalSystemDefaults` (Preferences › File Handling › Use System Defaults for Edit Original, on
+by default, #5236) opens the file in the system's default app for it; off, in the app that made it: a raster image in
+PhotoCraft, looked for only where it installs (the Applications folders on macOS; on Windows the path its installer
+registers under App Paths, then `ArtCraft\PhotoCraft` in the per-user and per-machine program folders, then the `PATH`;
+the `PATH` elsewhere), and any other file, or a raster image without PhotoCraft installed, in the system's default app.
 
 Package: File → Package… (`ui.packageDialog`) opens the `package` dialog for a saved document (a document never saved
 gets a `confirm` dialog whose OK runs `file.saveAs`). Fields: `folder` (the location), `name` (the package folder),

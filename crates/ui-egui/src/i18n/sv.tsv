@@ -284,6 +284,9 @@ font-technology	Variable	Variabla
 	Basic Latin	Grundläggande latin
 	Batch	Batch
 	Begin Recording	Börja spela in
+	Exclude from playback	Uteslut från uppspelning
+	Include in playback	Ta med i uppspelning
+	Include Action Steps	Ta med åtgärdssteg
 	Bend:	Böjning:
 	Bevel Join	Fasad fog
 	Bitmap	Bitmapp
@@ -1185,6 +1188,7 @@ font-technology	Variable	Variabla
 	Flip Row Order	Vänd radordning
 	Flip Vertical	Vänd lodrätt
 	Float in Window	Gör flytande i fönster
+	Float All in Windows	Gör alla flytande i fönster
 	Focal Fill	Fokal fyllning
 	Focal Stroke	Fokal kontur
 	Folder	Mapp
@@ -1348,6 +1352,10 @@ font-technology	Variable	Variabla
 	Hard Light	Hårt ljus
 	Hard Mix	Hård blandning
 	Harmony Rules:	Harmoniregler:
+	Segmented color wheel	Segmenterat färghjul
+	Show smooth color wheel	Visa steglöst färghjul
+	Show segmented color wheel	Visa segmenterat färghjul
+	Show color bars	Visa färgstaplar
 	Harmony Sets	Harmoniuppsättningar
 	Height	Höjd
 	Height:	Höjd:
@@ -1663,6 +1671,8 @@ font-technology	Variable	Variabla
 	Large Thumbnail View	Stor miniatyrvy
 	Large Thumbnails	Stora miniatyrer
 	Lasso Tool	Lassoverktyg
+	Enclosing Lasso Tool	Omslutande lassoverktyg
+	Enclosing Lasso	Omslutande lasso
 	Last Effect: {name}	Senaste effekten: {name}
 	Last Effect: {}	Senaste effekten: {}
 	Last Effect…	Senaste effekten…
@@ -1800,6 +1810,7 @@ font-technology	Variable	Variabla
 	Manually	Manuellt
 	Mark as trapped	Märk som överfyllt
 	Mark Older Files as [Converted] When Opened	Märk äldre filer som [Konverterad] när de öppnas
+	Use System Defaults for Edit Original	Använd systemets standardinställningar för Redigera original
 	Marker…	Markör…
 	Marks	Märken
 	Marks and Bleed	Märken och utfall
@@ -1862,6 +1873,7 @@ font-technology	Variable	Variabla
 	Modify	Ändra
 	Mojikumi	Mojikumi
 	Insert Kashidas	Infoga kashidor
+	Kashidas	Kashidor
 	Long	Lång
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-uppsättning
@@ -2037,6 +2049,11 @@ font-technology	Variable	Variabla
 	New Toolbar	Nytt verktygsfält
 	Show Toolbar	Visa verktygsfält
 	List Toolbars	Lista verktygsfält
+	Manage Toolbars…	Hantera verktygsfält…
+	Manage Toolbars	Hantera verktygsfält
+	Rename Toolbar	Byt namn på verktygsfält
+	Duplicate Toolbar	Duplicera verktygsfält
+	Delete Toolbar	Radera verktygsfält
 	New {kind} Style…	Ny {kind}stil…
 	New…	Ny…
 	Next	Nästa
@@ -2641,6 +2658,8 @@ digits	Malayalam	Malayalam
 	Replace Spine	Ersätt ryggrad
 	Replace Symbol	Ersätt symbol
 	Replace With Font	Ersätt med typsnitt
+	Replace With Font From	Ersätt med typsnitt från
+	System	System
 	Replaces the saved preset of that name.	Ersätter den sparade förinställningen med samma namn.
 	Replace…	Ersätt…
 	Require a password to open the document	Kräv lösenord för att öppna dokumentet
@@ -3312,6 +3331,7 @@ digits	Malayalam	Malayalam
 	Templates…	Mallar…
 	Text Displayed in Cell:	Text som visas i cellen:
 	Text Export Options	Alternativ för textexport
+	Text Fill & Stroke Color	Textens fyllnads- och konturfärg
 	Text Fill Color	Textens fyllnadsfärg
 	Text Import Options	Alternativ för textimport
 	Text Stroke Color	Textens konturfärg
@@ -3490,6 +3510,7 @@ digits	Malayalam	Malayalam
 	Use Artboards	Använd ritytor
 	Use Black Point Compensation	Använd svartpunktskompensering
 	Use Compression	Använd komprimering
+	Include Editing Data for Other Apps	Inkludera redigeringsdata för andra appar
 	Use document bleed settings	Använd dokumentets inställningar för utfall
 	Use Even-Odd Fill Rule	Använd fyllningsregeln jämn-udda
 	Use Japanese Crop Marks	Använd japanska beskärningsmärken
@@ -3895,7 +3916,7 @@ axis	Both	Båda
 @msg	Save for Web: the image is empty	Spara för webb: bilden är tom
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Spara skriver {_1}, inte {_2}: använd document.export för andra format
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Spara skriver {_1}, inte {_2}: använd file.saveAsTemplate för att skriva det
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 skriver äldre .ai-filer; en .ait-mall är alltid PDF-kompatibel
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 skriver äldre .ai-filer, inte .ait-mallar
 @msg	Saved recovery data for {title}	Sparade återställningsdata för {title}
 @msg	Saved to User Defined: {_1}	Sparat i Användardefinierat: {_1}
 @msg	Saved {path}	Sparade {path}
@@ -4526,6 +4547,7 @@ axis	Both	Båda
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	den innehåller {_1}, som VectorCraft inte kan läsa från den än
 @msg	its objects are nested too deeply	dess objekt är för djupt kapslade
 @msg	its section ending with `%{end}` doesn't end	dess avsnitt som slutar med `%{end}` avslutas aldrig
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	penslar som VectorCraft ännu inte kan läsa utelämnades från panelen Penslar ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekt med flera fyllningar eller konturer, effekter eller penslar importerades som sitt ritade utseende ({_1}): deras utseende går inte att redigera än
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten ”{name}” är inte definierad i filen: en enfärgad fyllning används i stället
 @msg	an image VectorCraft can't read was left out	en bild som VectorCraft inte kan läsa utelämnades
@@ -5482,6 +5504,10 @@ theme	Appearance	Utseende
 @msg	the Simplify slider is not open	Förenkla-reglaget är inte öppet
 @msg	the Smooth slider is not open	Jämna ut-reglaget är inte öppet
 @msg	the action has no steps	åtgärden har inga steg
+@msg	the action has no included steps	åtgärden har inga medtagna steg
+@msg	no such action step	åtgärdssteget finns inte
+@msg	included must be true or false	included måste vara true eller false
+@msg	others must be true or false	others måste vara true eller false
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	filens lager lästes inte ({_1}): den hämtas in som en sida, i ett enda lager
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	filens lager lästes inte från dess redigeringsdata ({_1}): de kommer från dess PDF-del
 @msg	the screen color sampler is already open	färghämtningen från skärmen är redan öppen
@@ -5513,6 +5539,11 @@ theme	Appearance	Utseende
 	Export Type:	Exporttyp:
 	Movie Clip	Filmklipp
 @msg	name is empty	namnet är tomt
+@msg	an action is already recording	en åtgärd spelas redan in
+@msg	no such function key	funktionstangenten finns inte
+@msg	no such color	färgen finns inte
+@msg	{_1} cannot be used on Windows	{_1} kan inte användas i Windows
+@msg	more than one action is named “{_1}”	fler än en åtgärd heter ”{_1}”
 @msg	no symbol named `{n}`	ingen symbol med namnet `{n}`
 	Angular	Vinkelmått
 	Away from the Line	Bort från linjen
@@ -5661,6 +5692,7 @@ swatch	Yellow Green	Gulgrön
 	Effect Gallery	Effektgalleri
 	Filters	Filter
 	Select artwork to apply effects	Välj grafik för att tillämpa effekter
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	alla filens variabelbindningar lästes inte (överhoppade bindningar: {_1}): de objekten är inte bundna till sina variabler
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	filens variabelbibliotek lästes bara delvis (överhoppade poster: {_1}): panelen Variabler visar resten
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunde inte läsas: panelen Variabler visar det inte
 @msg	a variable of unknown kind can't be bound to objects	en variabel av okänd typ kan inte kopplas till objekt
@@ -5751,9 +5783,17 @@ axis	Y Axis	Y-axel
 	Action Options…	Alternativ för åtgärd…
 	Action Options	Alternativ för åtgärd
 	Rename Action	Byt namn på åtgärd
+	New Action…	Ny åtgärd…
+	New Action	Ny åtgärd
+	Create New Action	Skapa ny åtgärd
+	Play Action	Spela upp åtgärd
+	Action Set:	Åtgärdsuppsättning:
+	Function Key:	Funktionstangent:
+	Record	Spela in
 	Create New Set	Skapa ny uppsättning
 	Stop Global Edit	Avsluta global redigering
 	Global Edit Options	Alternativ för global redigering
+	Leave Out of Global Edit	Uteslut från global redigering
 	Match	Matcha
 	On Artboards	På ritytor
 	All Artboards	Alla ritytor
@@ -5762,6 +5802,8 @@ axis	Y Axis	Y-axel
 @msg	select one object	markera ett objekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering fungerar på banor, sammansatta banor, symbolinstanser och grupper av dem
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	inga liknande objekt hittades (roterade eller speglade kopior matchas inte); ändra alternativen för global redigering och försök igen
+@msg	Global Edit is off	Global redigering är inte aktiv
+@msg	only an object of the Global Edit other than the one it started from can be left out	bara ett annat objekt än det som den globala redigeringen började med kan uteslutas
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all eller ett intervall som 1, 3-5, inte {v}
 	Add to Symbols	Lägg till i symboler
 	Basic Shapes	Grundformer
@@ -6046,6 +6088,12 @@ shape	Open	Öppen
 	Horizontal Scale	Horisontell skala
 	Vertical Scale	Vertikal skala
 @msg	{label} must be a number from {min} to {max}	{label} måste vara ett tal från {min} till {max}
+	Character Color	Teckenfärg
+	OpenType Features	OpenType-funktioner
+	Stylistic Sets	Stilistiska uppsättningar
+	Set {n}	Uppsättning {n}
+@msg	features lists at most {max} tags	features får innehålla högst {max} taggar
+@msg	unknown OpenType feature `{t}`	okänd OpenType-funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} måste vara ett tal över 0 och högst {max}
 @msg	no character style `{name}`	Teckenformatet `{name}` hittades inte
 
@@ -6194,6 +6242,7 @@ breakText	Glyphs	Glyfer
 	Gap 5	Mellanrum 5
 
 @msg	{_1}: they came in as the page's art	{_1}: de importerades som sidans bild
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekt som ritades annorlunda än filens egen sida importerades som sidans bild: {_1}
 
 @msg	You must choose a side pattern.	Du måste välja ett sidomönster.
 @msg	invalid pattern tile choice	ogiltigt val av mönsterplatta
@@ -6295,3 +6344,18 @@ breakText	Glyphs	Glyfer
 	Create Swatch Legend	Skapa färgrutelegend
 	Create Swatch Legend…	Skapa färgrutelegend…
 	HEX	HEX
+
+# The strings the report listed as missing for sv.
+	Font Size:	Teckenstorlek:
+digits	Hindi	Hindi
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Textverktyg
+	Text Tweaker…	Textjustering…
+	Text Tweaker	Textjustering
+	Attribute:	Attribut:
+	From:	Från:
+	To:	Till:
+	Bow	Båge
+	Spike	Spets
+	Skip Spaces	Hoppa över mellanslag
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Teckningen är för stor för att kopieras som en bild: andra appar får ingen PNG av den

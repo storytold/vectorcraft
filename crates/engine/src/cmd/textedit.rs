@@ -7,6 +7,7 @@ use vectorcraft_doc::{Appearance, CharStyle, Node, NodeId, NodeKind, TextKind, T
 use vectorcraft_geom::{Affine, Point, Vec2};
 use vectorcraft_text::edit;
 
+use super::menucmds::whole_or;
 use super::stroke::StrokeChange;
 use super::typecmd::refresh_bounds;
 use super::{
@@ -21,7 +22,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Text",
             [],
             None,
-            "{id, start: byte, end: byte, insert?: string, runs?: [{text, style}]} replace bytes start..end of the plain text (inserted text takes the replaced text's style unless styled `runs` are given) → {id, caret}",
+            "{id, start: byte, end: byte, insert?: string, runs?: [{text, style}], clear?: [id…] (other type objects whose whole text goes in the same edit, as when typing replaces a threaded story that Select All selected)} replace bytes start..end of the plain text (inserted text takes the replaced text's style unless styled `runs` are given) → {id, caret}",
             has_doc,
             edit_range
         ),
@@ -39,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_range_style
         ),
@@ -48,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Touch Type",
             [],
             None,
-            "{id, start: byte (a character of it), dx?: pt, dy?: pt, hScale?: %, vScale?: %, rotation?: deg} change one character (a ligature, one glyph for several characters, as a whole) as a Touch Type tool drag does, as one undo step: dx moves it along its line in reading order by changing the kerning of the character before it on the line and its own kerning, and the characters after it stay where they are (an error for the first character of a line and for a right-to-left character; limited to what kerning from -1000 to 10000 can give); dy raises it (baseline shift, up from its line whatever its rotation, also for the first character of a line and a right-to-left character); dx and dy are document points; hScale (including the object transform), vScale and rotation set its scales and rotation as text.setRangeStyle does. The kerning of the two characters also keeps the character and the ones after it where they were along the line when the font kerned them with their neighbors; a wider or narrower character moves the ones after it by the change in its width → {id, start, end} (the character's bytes)",
+            "{id, start: byte (a character of it), dx?: pt, dy?: pt, hScale?: %, vScale?: %, rotation?: deg} change one character (a ligature, one glyph for several characters, as a whole) as a Touch Type tool drag does, as one undo step: dx moves it along its line in reading order by changing the kerning of the character before it on the line and its own kerning, and the characters after it stay where they are (an error for the first logical character of a line or at a reading-direction boundary; supported in either reading direction; limited to what kerning from -1000 to 10000 can give); dy raises it (baseline shift, up from its line whatever its rotation, also for the first character of a line and a right-to-left character); dx and dy are document points; hScale (including the object transform), vScale and rotation set its scales and rotation as text.setRangeStyle does. The kerning of the two characters also keeps the character and the ones after it where they were along the line when the font kerned them with their neighbors; a wider or narrower character moves the ones after it by the change in its width → {id, start, end} (the character's bytes)",
             has_doc,
             touch_type
         ),
@@ -57,7 +58,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Get Text Range",
             [],
             None,
-            "{id, start?, end?, effective?: bool = false} → {text, runs: [{text, style}], length}; effective uses document-point size/leading/baseline shift and transformed horizontal scale; default returns stored local styles for rich-text copying",
+            "{id, start?, end?, effective?: bool = false, story?: bool = false (the whole text of the threaded story `id` is a frame of, its frames in thread order; no `start` or `end`)} → {text, runs: [{text, style}], length}; effective uses document-point size/leading/baseline shift and transformed horizontal scale; default returns stored local styles for rich-text copying",
             has_doc,
             get_range
         ),
@@ -154,14 +155,14 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-fn text_mut(d: &mut vectorcraft_doc::Document, id: NodeId) -> Option<&mut TextObject> {
+pub(crate) fn text_mut(d: &mut vectorcraft_doc::Document, id: NodeId) -> Option<&mut TextObject> {
     match d.node_mut(id).map(|n| &mut n.kind) {
         Some(NodeKind::Text(t)) => Some(t),
         _ => None,
     }
 }
 
-fn text_ref(s: &Session, id: NodeId) -> Result<TextObject> {
+pub(crate) fn text_ref(s: &Session, id: NodeId) -> Result<TextObject> {
     match s.doc()?.doc.node(id).map(|n| &n.kind) {
         Some(NodeKind::Text(t)) => Ok((**t).clone()),
         Some(_) => Err(EngineError::Other(format!("node {} is not text", id.0))),
@@ -233,12 +234,21 @@ fn byte_param(p: &Value, k: &str) -> Option<usize> {
     p.get(k).and_then(Value::as_u64).map(index)
 }
 
+/// The byte offset that `p` gives for `k`, or `default` when `p` leaves it out or gives null. Any
+/// other value that is not a whole number of at least 0, such as `"2"`, `-1` or `1.5`, is an error.
+fn offset_or(p: &Value, k: &str, default: usize, cmd: &str) -> Result<usize> {
+    match p.get(k) {
+        None | Some(Value::Null) => Ok(default),
+        Some(_) => Ok(index(whole_or(p, k, 0, cmd)?)),
+    }
+}
+
 /// The bytes `start..end` of `p` in text of `len` bytes, clamped and ordered (without them, all of
-/// it). A `start` or `end` that is not a number or null, such as `"2"`, is an error.
+/// it). A `start` or `end` that is not a whole number of at least 0 or null, such as `"2"`, `-1`
+/// or `1.5`, is an error.
 fn range_of(p: &Value, len: usize, cmd: &str) -> Result<(usize, usize)> {
-    check_numbers(p, &["start", "end"], cmd)?;
-    let a = byte_param(p, "start").unwrap_or(0).min(len);
-    let b = byte_param(p, "end").unwrap_or(len).min(len);
+    let a = offset_or(p, "start", 0, cmd)?.min(len);
+    let b = offset_or(p, "end", len, cmd)?.min(len);
     Ok((a.min(b), a.max(b)))
 }
 
@@ -253,7 +263,16 @@ fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => Some(serde_json::from_value(v.clone()).map_err(|e| bad(C, format!("bad `runs`: {e}")))?),
     };
     let insert = str_param(p, "insert").unwrap_or("").to_string();
+    let clear = clear_param(s, p, id, C)?;
     let caret = s.edit("Typing", |d, _| {
+        for other in &clear {
+            let t = text_mut(d, *other).ok_or(EngineError::NoNode(*other))?;
+            let len = edit::runs_len(&t.runs);
+            t.splice_paras(0, len, "");
+            edit::replace_range(&mut t.runs, 0, len, "");
+            t.ruby_after_replace(0, len, 0);
+            refresh_bounds(t);
+        }
         let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
         // Paragraph styles follow the edit: a split paragraph's new one continues its style, a
         // merge keeps the first paragraph's.
@@ -274,13 +293,36 @@ fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"id": id.0, "caret": caret}))
 }
 
+/// The `clear` param of `text.editRange`: other type objects whose text the edit removes, each
+/// once. An error when it is not a list of ids of type objects other than `id`.
+fn clear_param(s: &Session, p: &Value, id: NodeId, c: &str) -> Result<Vec<NodeId>> {
+    let ids = match p.get("clear") {
+        None | Some(Value::Null) => return Ok(vec![]),
+        Some(Value::Array(ids)) => ids,
+        Some(v) => return Err(bad(c, format!("`clear` must be a list of type object ids, not {v}"))),
+    };
+    let mut out = vec![];
+    for v in ids {
+        let other = v.as_u64().map(NodeId).ok_or_else(|| bad(c, format!("`clear` must be a list of type object ids, not {v}")))?;
+        if other == id {
+            return Err(bad(c, "`clear` must not list `id`"));
+        }
+        if !matches!(s.doc()?.doc.node(other).map(|n| &n.kind), Some(NodeKind::Text(_))) {
+            return Err(bad(c, format!("`clear` must list type objects; {} is not one", other.0)));
+        }
+        if !out.contains(&other) {
+            out.push(other);
+        }
+    }
+    Ok(out)
+}
+
 fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.startList";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
-    check_numbers(p, &["at"], C)?;
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
-    let at = byte_param(p, "at").unwrap_or(len).min(len);
+    let at = offset_or(p, "at", len, C)?.min(len);
     let Some((start, list)) = t.typed_list_at(at) else {
         return Ok(json!({"id": id.0, "started": false, "caret": at}));
     };
@@ -306,6 +348,9 @@ fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn get_range(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("text.getRange", "missing `id`"))?;
+    if switch_or(p, "story", false, "text.getRange")? {
+        return get_story(s, p, id);
+    }
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
     let (a, b) = range_of(p, len, "text.getRange")?;
@@ -316,6 +361,31 @@ fn get_range(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+    Ok(json!({"text": text, "runs": runs, "length": len}))
+}
+
+/// `text.getRange {id, story: true}`: the whole text of the story `id` is a frame of, its thread's
+/// frames in order (`id` alone when it is in no thread).
+fn get_story(s: &mut Session, p: &Value, id: NodeId) -> Result<Value> {
+    const C: &str = "text.getRange";
+    if ["start", "end"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
+        return Err(bad(C, "`story` takes the whole story: give no `start` or `end`"));
+    }
+    let effective = switch_or(p, "effective", false, C)?;
+    let story = super::threads::story_of(&s.doc()?.doc, id);
+    let frames = if story.is_empty() { vec![id] } else { story };
+    let mut runs = vec![];
+    for f in frames {
+        let t = text_ref(s, f)?;
+        for mut run in edit::slice_runs(&t.runs, 0, edit::runs_len(&t.runs)) {
+            if effective {
+                run.style = t.effective_char_style(&run.style).ok_or_else(|| bad(C, "text transform is collapsed or unrepresentable"))?;
+            }
+            runs.push(run);
+        }
+    }
+    let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+    let len = text.len();
     Ok(json!({"text": text, "runs": runs, "length": len}))
 }
 
@@ -351,6 +421,8 @@ pub(crate) struct CharChange {
     stroke: Option<Paint>,
     /// Weight (`strokeWidth`), cap, join, miter limit and dashes of the character stroke.
     stroke_opts: StrokeChange,
+    /// Document points per text-space point for a stroke edit.
+    stroke_scale: Option<f64>,
     underline: Option<bool>,
     strikethrough: Option<bool>,
     all_caps: Option<bool>,
@@ -361,6 +433,7 @@ pub(crate) struct CharChange {
     small_caps: Option<Option<f64>>,
     char_align: Option<vectorcraft_doc::CharAlign>,
     char_direction: Option<Option<vectorcraft_doc::ParaDirection>>,
+    kashidas: Option<bool>,
     proportional_metrics: Option<bool>,
     tate_chu_yoko: Option<bool>,
     /// Tate-chu-yoko Settings › Up/Down and Left/Right, in points.
@@ -600,7 +673,11 @@ impl CharChange {
     /// `setup` gives the superscript, subscript and small caps proportions.
     pub(crate) fn parse(p: &Value, cmd: &str, setup: &vectorcraft_doc::DocSetup) -> Result<Self> {
         check_numbers(p, &["size", "tracking", "baselineShift", "hScale", "vScale", "rotation", "strokeWidth"], cmd)?;
-        check_switches(p, &["underline", "strikethrough", "allCaps", "proportionalMetrics", "tateChuYoko", "standardVerticalRoman", "noBreak"], cmd)?;
+        check_switches(
+            p,
+            &["underline", "strikethrough", "allCaps", "proportionalMetrics", "tateChuYoko", "standardVerticalRoman", "noBreak", "kashidas"],
+            cmd,
+        )?;
         let num = |k: &str| p.get(k).and_then(Value::as_f64);
         let (position, small_caps) = super::docsetup::script_params(p, setup, cmd)?;
         let flag = |k: &str| p.get(k).and_then(Value::as_bool);
@@ -636,6 +713,7 @@ impl CharChange {
             fill: paint_param(p, "fill", cmd)?,
             stroke: paint_param(p, "stroke", cmd)?,
             stroke_opts,
+            stroke_scale: None,
             underline: flag("underline"),
             strikethrough: flag("strikethrough"),
             all_caps: flag("allCaps"),
@@ -645,6 +723,7 @@ impl CharChange {
             small_caps,
             char_align: char_align_param(p, cmd)?,
             char_direction: char_direction_param(p, cmd)?,
+            kashidas: flag("kashidas"),
             proportional_metrics: flag("proportionalMetrics"),
             tate_chu_yoko: flag("tateChuYoko"),
             tcy_up_down: tcy_offset_param(p, "tcyUpDown", cmd)?,
@@ -696,6 +775,7 @@ impl CharChange {
             && self.small_caps.is_none()
             && self.char_align.is_none()
             && self.char_direction.is_none()
+            && self.kashidas.is_none()
             && self.proportional_metrics.is_none()
             && self.tate_chu_yoko.is_none()
             && self.tcy_up_down.is_none()
@@ -708,7 +788,7 @@ impl CharChange {
             && self.font_height_reference.is_none()
     }
 
-    fn localize(&mut self, t: &TextObject, cmd: &str) -> Result<()> {
+    pub(crate) fn localize(&mut self, t: &TextObject, cmd: &str) -> Result<()> {
         use super::typecmd::local_type_value;
         self.size = self.size.map(|v| local_type_value(t, v, (0.1, 1296.0), false, cmd)).transpose()?;
         self.leading = self.leading.map(|v| v.map(|v| local_type_value(t, v, (0.1, 5000.0), false, cmd)).transpose()).transpose()?;
@@ -716,6 +796,7 @@ impl CharChange {
         self.tcy_up_down = self.tcy_up_down.map(|v| local_type_value(t, v, (-1296.0, 1296.0), false, cmd)).transpose()?;
         self.tcy_left_right = self.tcy_left_right.map(|v| local_type_value(t, v, (-1296.0, 1296.0), false, cmd)).transpose()?;
         self.h_scale = self.h_scale.map(|v| local_type_value(t, v, (1.0, 10000.0), true, cmd)).transpose()?;
+        self.stroke_scale = Some(vectorcraft_doc::Scaling::factor(t.xf).filter(|k| k.is_finite() && *k > 1e-12).unwrap_or(1.0));
         Ok(())
     }
 
@@ -748,6 +829,9 @@ impl CharChange {
         }
         if let Some(v) = self.char_direction {
             st.char_direction = v;
+        }
+        if let Some(v) = self.kashidas {
+            st.kashidas = v;
         }
         if let Some(v) = self.proportional_metrics {
             st.proportional_metrics = v;
@@ -799,10 +883,13 @@ impl CharChange {
             st.fill = v.clone();
         }
         if let Some(v) = &self.stroke {
+            if !v.is_none() {
+                super::gradient::run_stroke_weight(st);
+            }
             st.stroke = v.clone();
         }
         if !self.stroke_opts.is_empty() {
-            self.stroke_opts.apply_char(st);
+            self.stroke_opts.apply_char_scaled(st, self.stroke_scale.unwrap_or(1.0));
         }
         if let Some(v) = self.underline {
             st.underline = v;
@@ -896,37 +983,56 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
             _ => return Err(bad(C, "missing `id`: give one, or select one type object")),
         },
     };
-    let mut change = CharChange::parse(p, C, &s.doc()?.doc.setup)?;
-    super::paint::check_keep_model(p, C)?;
-    change.store_colors(s, p);
-    if change.is_empty() {
-        return Err(bad(C, "nothing to change"));
+    let story = switch_or(p, "story", false, C)?;
+    if story && ["start", "end"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
+        return Err(bad(C, "`story` styles the whole story: give no `start` or `end`"));
     }
-    let protect = s.prefs.missing_glyph_protection && (change.font.is_some() || change.style.is_some());
-    let t = text_ref(s, id)?;
-    change.localize(&t, C)?;
-    let (a, b) = range_of(p, edit::runs_len(&t.runs), C)?;
+    let frames = match super::threads::story_of(&s.doc()?.doc, id) {
+        all if story && !all.is_empty() => all,
+        _ => vec![id],
+    };
+    // Each frame's change (sizes are in its own text space) and range.
+    let mut parts = Vec::with_capacity(frames.len());
+    for f in frames {
+        let mut change = CharChange::parse(p, C, &s.doc()?.doc.setup)?;
+        super::paint::check_keep_model(p, C)?;
+        change.store_colors(s, p);
+        if change.is_empty() {
+            return Err(bad(C, "nothing to change"));
+        }
+        let t = text_ref(s, f)?;
+        change.localize(&t, C)?;
+        let (a, b) = if story { (0, edit::runs_len(&t.runs)) } else { range_of(p, edit::runs_len(&t.runs), C)? };
+        parts.push((f, change, a, b));
+    }
+    let sets_font = parts.first().is_some_and(|(_, change, _, _)| change.font.is_some() || change.style.is_some());
+    let protect = s.prefs.missing_glyph_protection && sets_font;
     // The fonts the styled characters are set in, for the warning.
     let mut set = std::collections::BTreeSet::new();
-    let sets_font = change.font.is_some() || change.style.is_some();
     let n = s.edit("Character", |d, _| {
-        let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
-        if a == b && !t.plain_text().is_empty() {
-            // An empty range inside text styles nothing (Illustrator keeps it for the next typing).
-            return Ok(t.runs.len());
+        let mut n = 0;
+        for (f, change, a, b) in &parts {
+            let (a, b) = (*a, *b);
+            let t = text_mut(d, *f).ok_or(EngineError::NoNode(*f))?;
+            if a == b && !t.plain_text().is_empty() {
+                // An empty range inside text styles nothing (Illustrator keeps it for the next typing).
+                n = if *f == id { t.runs.len() } else { n };
+                continue;
+            }
+            let before = protect.then(|| t.runs.clone());
+            edit::style_range(&mut t.runs, a, b, |st| change.apply(st));
+            if let Some(before) = before {
+                protect_missing_glyphs(&before, &mut t.runs);
+            }
+            if sets_font {
+                // Empty text has one run, which the empty range styles.
+                let styled = if a == b { t.runs.clone() } else { edit::slice_runs(&t.runs, a, b) };
+                set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
+            }
+            refresh_bounds(t);
+            n = if *f == id { t.runs.len() } else { n };
         }
-        let before = protect.then(|| t.runs.clone());
-        edit::style_range(&mut t.runs, a, b, |st| change.apply(st));
-        if let Some(before) = before {
-            protect_missing_glyphs(&before, &mut t.runs);
-        }
-        if sets_font {
-            // Empty text has one run, which the empty range styles.
-            let styled = if a == b { t.runs.clone() } else { edit::slice_runs(&t.runs, a, b) };
-            set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
-        }
-        refresh_bounds(t);
-        Ok(t.runs.len())
+        Ok(n)
     })?;
     let mut out = json!({"id": id.0, "runs": n});
     if let Some(w) = super::fonts::set_font_warning(set) {
@@ -1007,11 +1113,8 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     // Document points per text-space point along `v`.
     let doc_len = |v: Vec2| linear(t.xf, v).hypot() / v.hypot();
     let limit = 1296.0 / points;
-    if dx != 0.0 && g.rtl {
-        return Err(bad(C, "a right-to-left character moves only up and down (dy)"));
-    }
     // A list marker's glyphs (length 0) stand for no character.
-    let prev = lay.glyphs.iter().find(|h| h.line == g.line && h.len > 0 && h.byte + h.len == a);
+    let prev = lay.glyphs.iter().find(|h| h.line == g.line && h.len > 0 && h.byte + h.len == a && h.rtl == g.rtl);
     let pr = prev.map(|h| (h.byte, h.byte + h.len));
     let db = vectorcraft_text::FontDb::global();
     let em = glyph_em(db, &t, g).ok_or_else(|| bad(C, "the character's size can't be measured"))?;
@@ -1055,8 +1158,10 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     // to Fit and a path effect such as Skew scale: two layouts with the call's other changes and shifts one step apart, both within the range,
     // measure that length. Neither shift is one that a run already has, so the character's run
     // splits off alike in both.
-    let raise = if dy == 0.0 {
-        0.0
+    let drawn_move = g.rtl && moved != 0.0;
+    let up = Vec2::new(d.y, -d.x);
+    let (mut raise, baseline_step) = if dy == 0.0 && !drawn_move {
+        (0.0, 0.0)
     } else {
         let shift = edit::slice_runs(&t.runs, a, b).first().map_or(0.0, |r| r.style.baseline_shift);
         let from = shift.clamp(-limit, limit);
@@ -1068,21 +1173,44 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
         // The character's pen with its baseline shift set to `to`.
         let pen_at = |to: f64| {
             let mut trial = t.clone();
-            touch(&mut trial, None, None, to - shift);
+            // Hold kerning fixed: Optical spacing can change along the line as the baseline
+            // rises, which would make its horizontal drift count as baseline movement.
+            touch(&mut trial, pr.map(|_| 0.0), Some(0.0), to - shift);
             let l = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &trial);
             l.glyphs.iter().find(|h| h.byte == a && h.len > 0).map(|h| h.xf * Point::ZERO)
         };
-        let per_step = match (pen_at(from + step), pen_at(from + 2.0 * step)) {
-            (Some(p), Some(q)) => linear(t.xf, q - p).hypot() / step.abs(),
-            _ => 0.0,
+        let (per_step, across) = match (pen_at(from + step), pen_at(from + 2.0 * step)) {
+            (Some(p), Some(q)) => (linear(t.xf, q - p).hypot() / step.abs(), (q - p).dot(up) / step),
+            _ => (0.0, 0.0),
         };
-        dy / per_step
+        (dy / per_step, across)
     };
     if !raise.is_finite() {
         return Err(bad(C, "the character's size can't be measured"));
     }
-    // Where a glyph starts along the line.
-    let pen = |h: &vectorcraft_text::PositionedGlyph| h.origin.to_vec2().dot(along);
+    // Along-line RTL movement must measure the drawn glyph: turning off automatic kerning can
+    // also remove font placement, and Character Rotation turns that placement across the line.
+    let pen = |h: &vectorcraft_text::PositionedGlyph| {
+        let at = if drawn_move {
+            h.xf * Point::ZERO
+        } else if h.rtl {
+            h.origin + Vec2::new(h.angle.cos(), h.angle.sin()) * h.width_start
+        } else {
+            h.origin
+        };
+        at.to_vec2().dot(along)
+    };
+    // Scaling or rotation in the same call may intentionally turn the glyph's font placement
+    // about its pen. Keep that change while compensating placement lost to manual kerning.
+    let intrinsic_delta = if drawn_move && ["hScale", "vScale", "rotation"].iter().any(|key| p.get(*key).is_some_and(|v| !v.is_null())) {
+        let mut trial = t.clone();
+        touch(&mut trial, None, None, 0.0);
+        let l = vectorcraft_text::layout(db, &trial);
+        let intrinsic = |h: &vectorcraft_text::PositionedGlyph| h.xf * Point::ZERO - h.xf * h.pivot;
+        l.glyphs.iter().find(|h| h.byte == a && h.len > 0).map_or(Vec2::ZERO, |h| intrinsic(h) - intrinsic(g))
+    } else {
+        Vec2::ZERO
+    };
     // How much further the character's new scales advance it along the line: the character laid
     // out alone, in point type of the same orientation, before and after the change.
     let grown = {
@@ -1096,10 +1224,27 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // The character lands `moved` further on, and the character after it on its line keeps its
     // distance from it, wider or narrower only by the character's new scales.
-    let goal = pen(g) + moved;
+    let goal = pen(g) + moved + intrinsic_delta.dot(along);
     let next_goal = lay.glyphs.iter().find(|h| h.byte == b && h.len > 0 && h.line == g.line).map(|h| pen(h) + grown);
-    // How far the character and the character after it on its line miss their places, along the
-    // line, with the kerning `k` (before, own) added.
+    let prev_goal = prev.map(pen);
+    let mut k = if moved != 0.0 { (em_prev.map(|ep| moved / ep * 1000.0), Some(-moved / em * 1000.0)) } else { (None, None) };
+    if drawn_move {
+        if !baseline_step.is_finite() || baseline_step.abs() <= 1e-12 {
+            return Err(bad(C, "the character's size can't be measured"));
+        }
+        let mut trial = t.clone();
+        touch(&mut trial, k.0, k.1, raise);
+        let l = vectorcraft_text::layout(db, &trial);
+        let h = l.glyphs.iter().find(|h| h.byte == a && h.len > 0).ok_or_else(|| bad(C, "the character's size can't be measured"))?;
+        let across_goal = (g.xf * Point::ZERO).to_vec2().dot(up) + dy / doc_len(up) + intrinsic_delta.dot(up);
+        raise += (across_goal - (h.xf * Point::ZERO).to_vec2().dot(up)) / baseline_step;
+        if !raise.is_finite() {
+            return Err(bad(C, "the character's size can't be measured"));
+        }
+    }
+    // Keep both neighbors: alignment can pin either end of an RTL line, making one neighbor
+    // insensitive to kerning even though the other one moves. The two spacing values must place
+    // the selected character and keep every available neighbor in place.
     let miss = |k: (Option<f64>, Option<f64>)| {
         let mut trial = t.clone();
         touch(&mut trial, k.0, k.1, raise);
@@ -1109,30 +1254,40 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
             (Some(n), Some(at)) => pen(n) - at,
             _ => 0.0,
         };
-        Some((pen(h) - goal, next))
+        let previous = match (pr.and_then(|(byte, _)| l.glyphs.iter().find(|n| n.byte == byte && n.len > 0 && n.line == h.line)), prev_goal) {
+            (Some(n), Some(at)) => pen(n) - at,
+            _ => 0.0,
+        };
+        Some([pen(h) - goal, next, previous])
     };
-    let placed = |m: (f64, f64)| m.0.abs() <= 1e-9 && m.1.abs() <= 1e-9;
-    let mut k = if moved != 0.0 { (em_prev.map(|ep| moved / ep * 1000.0), Some(-moved / em * 1000.0)) } else { (None, None) };
+    let placed = |m: [f64; 3]| m.iter().all(|v| v.abs() <= 1e-9);
     // A manual kerning value turns off the font's kerning for its character, each style run is
     // shaped apart, and centered, right-aligned and justified lines move as their width changes, so
     // the first values can miss. Layouts then measure what each kerning value does to the two
-    // characters, and the values are solved for from that (at most six layouts).
-    if !g.rtl && miss(k).is_some_and(|m| !placed(m)) {
+    // characters, and the values are solved for with a bounded set of layouts.
+    if miss(k).is_some_and(|m| !placed(m)) {
         k = (pr.map(|_| k.0.unwrap_or(0.0)), Some(k.1.unwrap_or(0.0)));
         if let Some(mut m) = miss(k) {
             const STEP: f64 = 10.0;
-            let column = |dk: (f64, f64)| miss((k.0.map(|v| v + dk.0), k.1.map(|v| v + dk.1))).map(|n| ((n.0 - m.0) / STEP, (n.1 - m.1) / STEP));
+            let column = |dk: (f64, f64)| miss((k.0.map(|v| v + dk.0), k.1.map(|v| v + dk.1))).map(|n| std::array::from_fn(|i| (n[i] - m[i]) / STEP));
             let by_before = if k.0.is_some() { column((STEP, 0.0)) } else { None };
             let by_own = column((0.0, STEP));
             // The kerning changes that cancel the misses `m`.
-            let solve = |m: (f64, f64)| match (by_before, by_own) {
-                (Some(p), Some(q)) if (p.0 * q.1 - q.0 * p.1).abs() > 1e-12 => {
-                    let det = p.0 * q.1 - q.0 * p.1;
-                    ((q.0 * m.1 - m.0 * q.1) / det, (m.0 * p.1 - p.0 * m.1) / det)
+            let solve = |m: [f64; 3]| {
+                let dot = |a: [f64; 3], b: [f64; 3]| a.into_iter().zip(b).map(|(a, b)| a * b).sum::<f64>();
+                let (p, q) = (by_before.unwrap_or([0.0; 3]), by_own.unwrap_or([0.0; 3]));
+                let (pp, pq, qq) = (dot(p, p), dot(p, q), dot(q, q));
+                let (pm, qm) = (dot(p, m), dot(q, m));
+                let det = pp * qq - pq * pq;
+                if det > 1e-12 * pp * qq {
+                    ((pq * qm - qq * pm) / det, (pq * pm - pp * qm) / det)
+                } else if pp >= qq && pp > 1e-24 {
+                    (-pm / pp, 0.0)
+                } else if qq > 1e-24 {
+                    (0.0, -qm / qq)
+                } else {
+                    (0.0, 0.0)
                 }
-                (Some(p), _) if p.0.abs() > 1e-12 => (-m.0 / p.0, 0.0),
-                (_, Some(q)) if q.1.abs() > 1e-12 => (0.0, -m.1 / q.1),
-                _ => (0.0, 0.0),
             };
             for _ in 0..2 {
                 if placed(m) {
@@ -1251,11 +1406,23 @@ pub(crate) fn editing_range(s: &mut Session) -> Result<Option<(NodeId, usize, us
     Ok(Some((id, at("start"), at("end"))))
 }
 
+/// The frames of the story whose whole text the Type tool has selected after Select All in a
+/// frame of threaded text, in thread order; empty when its selection is in one type object.
+pub(crate) fn editing_story(s: &Session) -> Vec<NodeId> {
+    let o = s.tool_options();
+    let Some(id) = o.get("editing").and_then(Value::as_u64).map(NodeId) else { return vec![] };
+    if !o.get("story").and_then(Value::as_array).is_some_and(|ids| !ids.is_empty()) {
+        return vec![];
+    }
+    s.active().map(|st| super::threads::story_of(&st.doc, id)).unwrap_or_default()
+}
+
 /// The text ranges a type shortcut changes: the range of `id`, else all the text of the type
-/// objects in `ids`, else the text the Type tool has selected, else all the text of every selected
+/// objects in `ids`, else the text the Type tool has selected (all the text of every frame of the
+/// story after Select All in threaded text, [`editing_story`]), else all the text of every selected
 /// type object. At a caret, `at_caret` gives the range from the plain text and the caret's byte
 /// (None: nothing changes there). Each range comes with whether it came from a caret.
-fn type_ranges(
+pub(crate) fn type_ranges(
     s: &mut Session,
     p: &Value,
     c: &str,
@@ -1263,10 +1430,17 @@ fn type_ranges(
 ) -> Result<Vec<(NodeId, usize, usize, bool)>> {
     // (text, its range; None: all of it).
     let targets: Vec<(NodeId, Option<(usize, usize)>)> = match id_param(p, "id") {
+        // An object that isn't type is refused as `ids` of it is.
+        Some(id) if s.doc()?.doc.node(id).is_some_and(|n| !matches!(n.kind, NodeKind::Text(_))) => {
+            return Err(bad(c, "no text objects selected"));
+        }
         Some(id) => vec![(id, Some(range_of(p, edit::runs_len(&text_ref(s, id)?.runs), c)?))],
         None => {
             let editing = editing_range(s)?.filter(|_| p.get("ids").filter(|v| !v.is_null()).is_none());
+            let story = if editing.is_some() { editing_story(s) } else { vec![] };
             match editing {
+                // Select All in threaded text: every frame's text.
+                Some(_) if !story.is_empty() => story.into_iter().map(|id| (id, None)).collect(),
                 Some((id, a, b)) => vec![(id, Some((a.min(b), a.max(b))))],
                 None => super::typecmd::text_targets(s, p, c)?.into_iter().map(|id| (id, None)).collect(),
             }
