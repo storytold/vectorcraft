@@ -3051,6 +3051,67 @@ fn egui_backtick_drag_uses_key_state_at_release() {
     );
 }
 
+/// The release takes Backtick as it was at the button-up, when the key goes up or down later in the
+/// same frame.
+#[test]
+fn backtick_changed_after_the_button_up_in_its_frame_does_not_change_the_release() {
+    use egui::Event;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let tile = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.pattern.make", json!({"ids": [tile], "name": "Dots", "width": 20, "height": 20})).unwrap();
+    app.run("object.pattern.done", json!({})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("paint.setFill", json!({"ids": [id], "swatch": "Dots"})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.select_tool("selection");
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let from = xf.to_screen(Point::new(125.0, 125.0));
+    let to = xf.to_screen(Point::new(145.0, 125.0));
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let key = |pressed| Event::Key { key: egui::Key::Backtick, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    let node = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let pattern_x = |node: &vectorcraft_doc::Node| {
+        let vectorcraft_color::Paint::Pattern { xf, .. } = node.appearance.fill_paint() else { panic!("pattern fill expected") };
+        xf.as_coeffs()[4]
+    };
+    let before = node(&app);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![key(true), Event::PointerMoved(to)]);
+    frame(&mut app, &ctx, vec![button(to, false), key(false)]);
+    let pattern_only = node(&app);
+    assert!(app.session.active().unwrap().interaction.is_none(), "committed");
+    assert_eq!(pattern_only.geometric_bounds(), before.geometric_bounds(), "Backtick held at the button-up keeps geometry still");
+    assert!((pattern_x(&pattern_only) - pattern_x(&before) - 20.0).abs() < 0.001, "Backtick held at the button-up moves the pattern");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(node(&app), before);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
+    frame(&mut app, &ctx, vec![button(to, false), key(true)]);
+    let ordinary = node(&app);
+    frame(&mut app, &ctx, vec![key(false)]);
+    assert!(
+        (ordinary.geometric_bounds().unwrap().x0 - before.geometric_bounds().unwrap().x0 - 20.0).abs() < 0.001,
+        "Backtick pressed after the button-up commits an ordinary move"
+    );
+    assert!((pattern_x(&ordinary) - pattern_x(&before)).abs() < 0.001, "the ordinary move keeps the pattern matrix");
+    // A focus loss after the button-up lets go of Backtick with no release event.
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(node(&app), before);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(from), button(from, true)]);
+    frame(&mut app, &ctx, vec![key(true), Event::PointerMoved(to)]);
+    frame(&mut app, &ctx, vec![button(to, false), Event::WindowFocused(false)]);
+    let unfocused = node(&app);
+    assert_eq!(unfocused.geometric_bounds(), before.geometric_bounds(), "a focus loss after the button-up keeps geometry still");
+    assert!((pattern_x(&unfocused) - pattern_x(&before) - 20.0).abs() < 0.001, "a focus loss after the button-up moves the pattern");
+}
+
 #[test]
 fn mirror_axis_drag_uses_canvas_coordinates_in_a_zoomed_rotated_view() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
