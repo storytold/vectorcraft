@@ -5845,6 +5845,11 @@ breakText	Glyphs	Glyphen
 	Export All Open Documents as SVG	Alle geöffneten Dokumente als SVG exportieren
 @msgplural	Exported {n} document|Exported {n} documents	{n} Dokument exportiert|{n} Dokumente exportiert
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} Dokument exportiert; {title} wurde nicht geschrieben: {error}|{n} Dokumente exportiert; {title} wurde nicht geschrieben: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Ordner stapelweise nachzeichnen
+@msgplural	Traced {n} image|Traced {n} images	{n} Bild nachgezeichnet|{n} Bilder nachgezeichnet
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} Bild konnte nicht nachgezeichnet werden|{n} Bilder konnten nicht nachgezeichnet werden
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} Bild nachgezeichnet; nicht nachgezeichnet: {failed}|{n} Bilder nachgezeichnet; nicht nachgezeichnet: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symboltyp:
 	Dynamic Symbol	Dynamisches Symbol

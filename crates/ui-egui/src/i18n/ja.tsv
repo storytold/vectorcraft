@@ -5944,6 +5944,11 @@ breakText	Glyphs	字形
 	Export All Open Documents as SVG	開いているすべてのドキュメントを SVG として書き出し
 @msgplural	Exported {n} document|Exported {n} documents	{n} 個のドキュメントを書き出しました
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} 個のドキュメントを書き出しました; {title} は書き出されませんでした: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	フォルダーを一括トレース
+@msgplural	Traced {n} image|Traced {n} images	{n} 個の画像をトレースしました
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} 個の画像をトレースできませんでした
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} 個の画像をトレースしました; トレースできなかった画像: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	シンボルの種類:
 	Dynamic Symbol	ダイナミックシンボル

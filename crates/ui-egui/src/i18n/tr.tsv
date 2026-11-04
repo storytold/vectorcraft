@@ -6216,6 +6216,11 @@ breakText	Glyphs	Glifler
 	Export All Open Documents as SVG	Tüm Açık Belgeleri SVG Olarak Dışa Aktar
 @msgplural	Exported {n} document|Exported {n} documents	{n} belge dışa aktarıldı
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} belge dışa aktarıldı; {title} yazılamadı: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Klasörü Toplu İzle
+@msgplural	Traced {n} image|Traced {n} images	{n} resim izlendi
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} resim izlenemedi
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} resim izlendi; izlenemeyen: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Sembol Türü:
 	Dynamic Symbol	Dinamik Sembol

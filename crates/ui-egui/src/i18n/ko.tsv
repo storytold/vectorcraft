@@ -5840,6 +5840,11 @@ breakText	Glyphs	글리프
 	Export All Open Documents as SVG	열린 모든 문서를 SVG로 내보내기
 @msgplural	Exported {n} document|Exported {n} documents	문서 {n}개를 내보냈습니다
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	문서 {n}개를 내보냈습니다; {title}을(를) 쓰지 못했습니다: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	폴더 일괄 추적
+@msgplural	Traced {n} image|Traced {n} images	이미지 {n}개를 추적했습니다
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	이미지 {n}개를 추적하지 못했습니다
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	이미지 {n}개를 추적했습니다; 추적하지 못한 이미지: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	심볼 유형:
 	Dynamic Symbol	동적 심볼

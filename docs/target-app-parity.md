@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (area type vertical alignment in the Properties and Control panels, #3759; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Document Tools add-on: Batch Trace Folder, #4921; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
@@ -23,6 +23,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | Document Tools add-on (a VectorCraft addition): Batch Trace Folder under Object › Plug-ins (`addon.document.batchTraceFolder`, #4921); evidence added; scores unchanged. |
 | 2026-11-04 | minor | Object › Expand turns selected symbol instances into their art as Break Link places it, one level deep, with the Expand dialog's Fill and Stroke reaching that art. Scores and estimates unchanged. |
 | 2026-11-03 | minor | The OpenType panel offers the selected font's stylistic sets by custom or numbered name, and allows several to be active. Scores and estimates unchanged. |
 | 2026-11-03 | minor | Actions panel: an expanded action's steps can be excluded from playback and Batch… by clearing their checkmarks; action and set checkmarks include or exclude all their steps, and exclusions survive restart, duplication and `.vcactions` save/load. Scores and estimates unchanged. |
@@ -1571,6 +1572,10 @@ Symbols area (#4938), from the public symbol documentation ([create and place sy
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Document Tools › Export All Open Documents as PDF (or as SVG) asks for a folder and writes a copy of every open document there, each named after its document with `-2`, `-3`… added when a name is taken, so no file is replaced (`addon.document.exportAllOpen {folder, format?}`, #4920). Each copy is written as Save a Copy writes it: the documents keep their paths, titles and modified state, and the active one stays active. A document that can't be written is named in the status bar and the others are still written. Tests: `addons::document::tests::export_all_open_documents_writes_each_to_the_folder_picked` (ui-egui), `cmd::addons::document::tests::export_all_open_documents_writes_each_and_reports_failures` (engine).
 
+## Document Tools add-on: Batch Trace Folder (2026-11-04)
+
+A VectorCraft addition (it replaces a script some users ran), so no area score moves. Object › Plug-ins › Document Tools › Batch Trace Folder (`addon.document.batchTraceFolder`) asks for a folder of images and a destination folder, traces each image with a preset (optionally expanded) and saves it there under its own name as `.vectorcraft`, `.svg`, `.pdf`, `.ai` or `.eps`, without replacing files, closing each image's document again and reporting the images it couldn't trace (#4921). A folder with more than 1,000 entries is refused rather than traced in part. Tests: `cmd::addons::document::tests::batch_trace_folder_traces_and_saves_each_image` and `batch_trace_folder_refuses_a_folder_it_cannot_list_in_full` (engine), `addons::document::tests::batch_trace_folder_asks_for_both_folders` (ui-egui).
+
 ## Color Effects add-on: Find Nearest Swatch (2026-11-01)
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Color Effects › Find Nearest Swatch… lists each colour of the selection (fills and strokes, as ticked; solid colours and gradient stops, inside groups and type) with the three swatches of the chosen library closest to it by CIEDE2000 difference, with that difference (`addon.color.nearestSwatch`, #4923). The library is the document's swatches, a built-in library, or a library or colour book the user saved or loaded (no colour book data ships with VectorCraft). Apply gives each colour its nearest swatch as one undo step (`addon.color.applyNearestSwatch`): global and spot swatches link, and a library's swatches the colours take are added to the document first, so a spot colour stays spot. Remaining: typing a colour to look up in the dialog (the command takes `color`), and applying a match other than the nearest. Tests: `cmd::addons::color::nearest::tests` (engine), `addons::color::nearest::tests::find_nearest_swatch_lists_the_matches_and_applies_the_nearest` (ui-egui).
@@ -1602,6 +1607,7 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Batch Trace Folder (`imageTrace.batchFolder`, #4921); evidence added; scores unchanged. |
 | 2026-11-01 | minor | Copy and paste ruler guides (#3226); evidence added; scores unchanged. |
 | 2026-11-04 | minor | Area type vertical alignment buttons in the Properties panel's Paragraph section and the Control panel, off for columns, rows and threaded frames (#3759); evidence added; scores unchanged. |
 | 2026-11-03 | minor | Enclosing Lasso is an add-on with no default shortcut or Basic toolbar slot. Scores and estimates remain unchanged. |

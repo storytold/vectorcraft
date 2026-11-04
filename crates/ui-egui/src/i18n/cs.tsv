@@ -6259,6 +6259,11 @@ breakText	Glyphs	Glyfy
 	Export All Open Documents as SVG	Exportovat všechny otevřené dokumenty jako SVG
 @msgplural	Exported {n} document|Exported {n} documents	Exportován {n} dokument|Exportovány {n} dokumenty|Exportováno {n} dokumentů
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportován {n} dokument; {title} nebyl zapsán: {error}|Exportovány {n} dokumenty; {title} nebyl zapsán: {error}|Exportováno {n} dokumentů; {title} nebyl zapsán: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Dávková vektorizace složky
+@msgplural	Traced {n} image|Traced {n} images	Vektorizován {n} obraz|Vektorizovány {n} obrazy|Vektorizováno {n} obrazů
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} obraz nebylo možné vektorizovat|{n} obrazy nebylo možné vektorizovat|{n} obrazů nebylo možné vektorizovat
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Vektorizován {n} obraz; nevektorizováno: {failed}|Vektorizovány {n} obrazy; nevektorizováno: {failed}|Vektorizováno {n} obrazů; nevektorizováno: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Typ symbolu:
 	Dynamic Symbol	Dynamický symbol

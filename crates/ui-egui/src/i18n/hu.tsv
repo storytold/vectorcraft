@@ -6243,6 +6243,11 @@ breakText	Glyphs	Glifák
 	Export All Open Documents as SVG	Az összes megnyitott dokumentum exportálása SVG-ként
 @msgplural	Exported {n} document|Exported {n} documents	Exportált dokumentumok: {n}
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportált dokumentumok: {n}; {title} nem lett kiírva: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Mappa kötegelt vektorizálása
+@msgplural	Traced {n} image|Traced {n} images	Vektorizált képek: {n}
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	Nem vektorizálható képek: {n}
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Vektorizált képek: {n}; nem vektorizálható: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Szimbólum típusa:
 	Dynamic Symbol	Dinamikus szimbólum

@@ -566,6 +566,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         crate::addons::arrange::ZOOM => crate::addons::arrange::zoom(app),
         crate::addons::document::SAVE_COPY => crate::addons::document::save_copy(app, p),
         crate::addons::document::EXPORT_ALL => crate::addons::document::export_all(app, p),
+        crate::addons::document::BATCH_TRACE => crate::addons::document::batch_trace(app, p),
         "tool.setOption" => app.session.set_tool_option_cmd(p),
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),

@@ -5879,6 +5879,11 @@ breakText	Glyphs	Glifi
 	Export All Open Documents as SVG	Esporta tutti i documenti aperti come SVG
 @msgplural	Exported {n} document|Exported {n} documents	Esportato {n} documento|Esportati {n} documenti
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Esportato {n} documento; {title} non è stato scritto: {error}|Esportati {n} documenti; {title} non è stato scritto: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Ricalca cartella in batch
+@msgplural	Traced {n} image|Traced {n} images	Ricalcata {n} immagine|Ricalcate {n} immagini
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	Impossibile ricalcare {n} immagine|Impossibile ricalcare {n} immagini
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Ricalcata {n} immagine; non ricalcate: {failed}|Ricalcate {n} immagini; non ricalcate: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Tipo di simbolo:
 	Dynamic Symbol	Simbolo dinamico
