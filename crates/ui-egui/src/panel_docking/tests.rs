@@ -613,6 +613,19 @@ fn f7_hides_and_restores_a_floating_tab_group() {
 }
 
 #[test]
+fn showing_a_hidden_floating_group_returns_its_window_panels() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.float", json!({"panel": "swatches"})).unwrap();
+    h.app.run("window.panel.float", json!({"panel": "layers", "group": true})).unwrap();
+    h.app.run("window.panel.activate", json!({"panel": "layers"})).unwrap();
+    h.frame(vec![]);
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(floating_window(&h.layout(), "layers").is_none());
+    let reply = h.app.run("window.panel", json!({"panel": "layers"})).unwrap();
+    assert_eq!(reply, json!({"floating": ["properties", "layers", "libraries"]}), "only the restored window's panels");
+}
+
+#[test]
 fn f7_toggles_a_multi_tab_icon_flyout() {
     let mut h = Harness::new();
     h.app.run("window.collapseDock", json!({"collapsed": true})).unwrap();
