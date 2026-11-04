@@ -554,6 +554,49 @@ fn add_fill_copies_the_active_row_in_each_object_that_has_it() {
     }
 }
 
+/// A paint edit of the active row changes the equal row of each object that has one, even when
+/// another selected object has none; that object's row stands for itself, as with only it and the
+/// first selected object selected.
+#[test]
+fn paint_edits_change_the_active_row_in_each_object_that_has_it() {
+    let mut s = session();
+    let [a, b, c] = [rect(&mut s, 50.0), rect(&mut s, 200.0), rect(&mut s, 300.0)];
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0, c.0]}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "color": "#00ff00"}));
+    run(&mut s, "appearance.setItem", json!({"index": 2, "color": "#ff0000"})); // [Fill green, Stroke, Fill red]
+    // b gets a yellow fill below the others: [Fill yellow, Fill green, Stroke, Fill red].
+    run(&mut s, "appearance.addFill", json!({"ids": [b.0]}));
+    run(&mut s, "appearance.moveItem", json!({"ids": [b.0], "from": 3, "to": 0}));
+    run(&mut s, "appearance.setItem", json!({"ids": [b.0], "index": 0, "color": "#ffff00"}));
+    run(&mut s, "appearance.setItem", json!({"ids": [c.0], "index": 0, "color": "#0000ff"})); // [Fill blue, Stroke, Fill red]
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0, c.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff00ff"}));
+    let (na, nb, nc) = (node(&s, a), node(&s, b), node(&s, c));
+    assert_eq!(fill_paint(&na, 0).color().unwrap().to_hex(), "#ff00ff");
+    assert_eq!(fill_paint(&nb, 1).color().unwrap().to_hex(), "#ff00ff", "{:?}", nb.appearance);
+    assert_eq!(fill_paint(&nb, 0).color().unwrap().to_hex(), "#ffff00", "{:?}", nb.appearance);
+    assert_eq!(fill_paint(&nc, 0).color().unwrap().to_hex(), "#ff00ff", "{:?}", nc.appearance);
+}
+
+/// An object-level effect is removed from each object that has an equal one, even when another
+/// selected object has none.
+#[test]
+fn removing_an_effect_reaches_each_object_that_has_it() {
+    let mut s = session();
+    let [a, b, c] = [rect(&mut s, 50.0), rect(&mut s, 200.0), rect(&mut s, 300.0)];
+    run(&mut s, "effect.apply", json!({"ids": [a.0], "effect": "stylize.feather", "item": null}));
+    run(&mut s, "effect.apply", json!({"ids": [a.0, b.0], "effect": "distort.twist", "item": null}));
+    // a has [feather, twist], b [twist], c none.
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0, c.0]}));
+    run(&mut s, "effect.remove", json!({"index": 1, "item": null, "aligned": true}));
+    let ids = |id: NodeId| node(&s, id).appearance.effects.iter().map(|e| e.id.clone()).collect::<Vec<_>>();
+    assert_eq!(ids(a), ["stylize.feather"]);
+    assert!(ids(b).is_empty(), "b loses its twist: {:?}", ids(b));
+    assert!(ids(c).is_empty());
+}
+
 /// b `[Fill red, Fill white, Stroke]` above a `[Fill white, Stroke]`, selected b first: b's rows 1
 /// and 2 equal a's rows 0 and 1.
 fn reversed_pair(s: &mut Session) -> (NodeId, NodeId) {
@@ -914,6 +957,16 @@ fn shared_effects_and_new_fills_reach_every_selected_object() {
     assert_eq!((node(&s, a).appearance.items.len(), node(&s, b).appearance.items.len()), (na + 1, nb + 1));
     // Rows of different stacks aren't reordered together.
     assert!(s.execute("appearance.moveItem", &json!({"from": 1, "to": 0, "aligned": true})).is_err());
+}
+
+/// An effect applied to the first object's stroke row goes on the equal stroke of the other
+/// object, which sits lower in a longer stack there.
+#[test]
+fn an_effect_on_a_shared_row_reaches_it_at_another_index() {
+    let mut s = session();
+    let (a, b) = mixed_circles(&mut s, true);
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": 1, "aligned": true}));
+    assert_eq!((stroke(&node(&s, a), 1).effects.len(), stroke(&node(&s, b), 2).effects.len()), (1, 1));
 }
 
 /// Rows deleted together, one shared (the stroke) and one not (a's fill): each object loses its

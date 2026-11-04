@@ -276,22 +276,24 @@ impl ItemTarget {
     /// This target for each of `ids` (in their order): an aligned item (a row of the first
     /// target's stack, or for the active item of the first selected object's, see
     /// [`ItemTarget::anchor`]) is, in each other target, the item equal to it there (see
-    /// [`SharedStack`]); `None` for a target that has none, which the edit leaves alone. A row the
-    /// targets don't share, and any other target, stands for itself in every target.
+    /// [`SharedStack`]), each target matched against that stack on its own, whatever the other
+    /// targets have. In a target without an equal item, and for any other target, the row stands
+    /// for itself. Every entry is `Some`.
     pub(crate) fn per_target(self, s: &Session, ids: &[NodeId]) -> Vec<Option<ItemTarget>> {
         let ItemTarget::Item { index, explicit, aligned: true } = self else { return vec![Some(self); ids.len()] };
         let Some(st) = s.active().filter(|_| ids.len() >= 2) else { return vec![Some(self); ids.len()] };
         let k = self.anchor(s, ids);
-        let mut order = ids.to_vec();
-        order.swap(0, k);
-        let Some(shared) = shared_stack(&st.doc, &order) else { return vec![Some(self); ids.len()] };
-        if !shared.has_item(index) {
-            return vec![Some(self); ids.len()];
-        }
-        let mut per: Vec<Option<ItemTarget>> =
-            (0..order.len()).map(|j| shared.item_in(index, j).map(|index| ItemTarget::Item { index, explicit, aligned: true })).collect();
-        per.swap(0, k);
-        per
+        let Some(first) = ids.get(k).and_then(|id| st.doc.node(*id)) else { return vec![Some(self); ids.len()] };
+        ids.iter()
+            .enumerate()
+            .map(|(j, id)| match st.doc.node(*id) {
+                Some(n) if j != k => {
+                    let at = SharedStack::of(&[&*first.appearance, &*n.appearance]).item_in(index, 1);
+                    Some(at.map_or(self, |index| ItemTarget::Item { index, explicit, aligned: true }))
+                }
+                _ => Some(self),
+            })
+            .collect()
     }
 
     /// Where among `ids` (the targets, in paint order) the object whose stack this item is a row of
