@@ -44,7 +44,8 @@ mod tiff;
 
 pub use ai_editing::{AiEditingOptions, AiEditingOutput, CREATOR_VERSION, export_ai_editing, private_data as ai_private_data};
 pub use import::{
-    Imported, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, family_style, import, import_trusting, import_with, is_loss, layered_ai, page,
+    AiLayers, Imported, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, ai_layers_alone, family_style, import, import_trusting, import_with, is_loss,
+    layered_ai, layered_ai_from, page,
 };
 pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai};
 pub use print::{PrintJob, PrintPage, print};

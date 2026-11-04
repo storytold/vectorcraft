@@ -280,6 +280,36 @@ impl Opened {
     pub fn page_count(&self) -> usize {
         self.pdf.pages().len()
     }
+
+    /// The pages' trim boxes and bleed, as an import of every page on its trim box takes them,
+    /// without importing any page's art.
+    pub fn trim_pages(&self) -> TrimPages {
+        let pages = self.pdf.pages();
+        let mut bleed = [0.0; 4];
+        for page in pages.iter() {
+            for (side, b) in bleed.iter_mut().zip(self::bleed(page)) {
+                *side = f64::max(*side, b);
+            }
+        }
+        TrimPages {
+            sizes: pages.iter().map(|page| frame(page, CropTo::Trim).1).map(|r| (r.width(), r.height())).collect(),
+            user_unit: pages.first().map_or(1.0, |page| f64::from(page.user_unit())),
+            bleed,
+        }
+    }
+}
+
+/// A PDF's pages as an import on their trim boxes sizes them ([`Opened::trim_pages`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TrimPages {
+    /// Each page's trim box (its crop box when it has none) in points, rotated as the page shows:
+    /// width and height.
+    pub sizes: Vec<(f64, f64)>,
+    /// The size in points of a unit of the first page's user space (its `UserUnit`).
+    pub user_unit: f64,
+    /// The bleed of the pages, `[top, bottom, left, right]` in points: on each side, the widest
+    /// of the pages' bleed, as the import makes it the document's bleed.
+    pub bleed: [f64; 4],
 }
 
 /// Preserve the application's existing accepted file sizes. Ordinary stream decoding still

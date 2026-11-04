@@ -1,4 +1,4 @@
-use super::build::{PAGE_MOVE, Page, build, build_from, build_on_page};
+use super::build::{PAGE_MOVE, Page, build, build_from, build_on_page, build_without_page};
 use super::slots::LAYERS_UNREAD;
 use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect, Vec2, ai};
 
@@ -110,11 +110,24 @@ fn layer_tree(nodes: &[Arc<Node>]) -> Vec<Arc<Node>> {
 /// units comes in `unit` times as large, and so does the artboard layout `place_pages` takes from
 /// it.
 pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outlined: bool, trust: bool, unit: f64) -> (Document, Vec<String>, bool) {
+    layered_ai_from(AiLayers::decode(private), visible, warnings, outlined, trust, unit)
+}
+
+/// [`layered_ai`] of the editing copy `layers`, as far as it was already decoded and read.
+pub fn layered_ai_from(
+    layers: AiLayers,
+    visible: Document,
+    warnings: Vec<String>,
+    outlined: bool,
+    trust: bool,
+    unit: f64,
+) -> (Document, Vec<String>, bool) {
     let unread = |mut all: Vec<String>, why: &str| {
         all.push(format!("{LAYERS_UNREAD} from its editing data ({why}): they come from its PDF part"));
         all
     };
-    let data = match ai::decode_private(private) {
+    let AiLayers { data, structure } = layers;
+    let data = match data {
         Ok(data) => data,
         Err(why) => return (visible, unread(warnings, &why), false),
     };
@@ -137,7 +150,10 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
         use_variables(&data, &mut visible, &mut all);
         (visible, all, false)
     };
-    match build(&data, Some(&visible), Page::Artboard, outlined, trust, unit) {
+    let built = structure
+        .unwrap_or_else(|| ai::read(&data, false).map(Box::new))
+        .and_then(|structure| build_from(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit));
+    match built {
         // An image too large for the editing data's reader would be missing from the layers, while
         // the PDF part has it: the file comes in as its PDF part instead (#1479).
         Ok((_, notes)) if notes.iter().any(|n| n == ai::IMAGE_TOO_LARGE) => {
@@ -150,6 +166,51 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
             (done, all, true)
         }
         Err(why) => from_pdf_part(visible, warnings, &why),
+    }
+}
+
+/// The `.ai` whose editing copy is `private` (as [`layered_ai`] takes it) from its layers alone,
+/// without its PDF part, whose pages (each its trim box in points, width and height) are `pages`
+/// and are in units of `unit` points (its first page's `UserUnit`): the document and the notes of
+/// reading it, when the file's text document makes all of its type and nothing in its layers needs
+/// the PDF part (see `build_without_page`). Nothing is compared with the PDF part. Else, as the
+/// error, what was decoded and read of the editing copy, for [`layered_ai_from`] once the PDF part
+/// is imported.
+pub fn ai_layers_alone(private: &[u8], pages: &[(f64, f64)], unit: f64) -> Result<(Document, Vec<String>), AiLayers> {
+    let data = match ai::decode_private(private) {
+        Ok(data) => data,
+        Err(why) => return Err(AiLayers { data: Err(why), structure: None }),
+    };
+    if !has_layers(&data) {
+        return Err(AiLayers { data: Ok(data), structure: None });
+    }
+    let structure = match ai::read(&data, false) {
+        Ok(structure) => structure,
+        Err(why) => return Err(AiLayers { data: Ok(data), structure: Some(Err(why)) }),
+    };
+    match build_without_page(structure, &data, pages, unit) {
+        // An image too large for the editing data's reader is missing from the layers: the PDF
+        // part has it (as in `layered_ai`).
+        Ok(Ok((doc, notes))) if !notes.iter().any(|n| n == ai::IMAGE_TOO_LARGE) => Ok((doc, notes)),
+        Ok(_) => Err(AiLayers { data: Ok(data), structure: None }),
+        Err(structure) => Err(AiLayers { data: Ok(data), structure: Some(Ok(structure)) }),
+    }
+}
+
+/// A `.ai`'s editing copy decoded, and its layers read when they were, for [`layered_ai_from`]:
+/// what [`ai_layers_alone`] read isn't decoded or read again.
+pub struct AiLayers {
+    /// The editing copy decoded, or why it can't be.
+    data: Result<Vec<u8>, String>,
+    /// Its layers read with [`ai::read`] as [`layered_ai`] reads them, or why they can't be; `None`
+    /// when they are still to be read.
+    structure: Option<Result<Box<ai::Structure>, String>>,
+}
+
+impl AiLayers {
+    /// The editing copy `private` (as [`layered_ai`] takes it), decoded.
+    pub fn decode(private: &[u8]) -> Self {
+        Self { data: ai::decode_private(private), structure: None }
     }
 }
 
