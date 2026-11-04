@@ -126,8 +126,9 @@ pub(super) enum BrushError {
 }
 
 /// The strings of a plug-in object's section (`section`: what follows `%AI8_BeginPluginObject`):
-/// its plug-in name, its name and its parameters, joined. `None` with fewer than two strings.
-pub(super) fn plugin_strings(section: &[u8]) -> Option<(String, String, String)> {
+/// its plug-in name, its name and its parameters, joined. The name is `None` with one string, and
+/// the whole is `None` with none.
+pub(super) fn plugin_strings(section: &[u8]) -> Option<(String, Option<String>, String)> {
     let mut lex = Lexer::new(section);
     let mut strings = vec![];
     let mut params = vec![];
@@ -142,8 +143,9 @@ pub(super) fn plugin_strings(section: &[u8]) -> Option<(String, String, String)>
             }
         }
     }
-    let [kind, name]: [String; 2] = strings.try_into().ok()?;
-    Some((kind, name, obj::text(&params)))
+    let mut strings = strings.into_iter();
+    let kind = strings.next()?;
+    Some((kind, strings.next(), obj::text(&params)))
 }
 
 /// The brush manager's order (`params`: its parameters): the kind and name of each brush. Pairs

@@ -5224,6 +5224,20 @@ fn a_file_whose_brushes_are_all_left_out_has_none() {
     assert!(vectorcraft_brush::library(&r.doc).is_empty());
 }
 
+/// A brush object that ends after its plug-in name is counted as a brush left out, and the file
+/// gets no default brushes.
+#[test]
+fn a_brush_object_without_a_name_is_counted_as_left_out() {
+    let nameless = format!("%AI5_Begin_NonPrinting\nNp\n%AI8_BeginPluginObject\n({CALLIGRAPHIC})\n%AI8_EndPluginObject\n%AI5_End_NonPrinting--\n");
+    let r = read_ok(&format!("{nameless}{}", layer("")));
+    assert!(vectorcraft_brush::library(&r.doc).is_empty(), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.ends_with("Brushes panel (1)")), "{:?}", r.warnings);
+    let r = read_ok(&format!("{}{nameless}{}", plugin_object(CALLIGRAPHIC, "Nib", NIB), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Nib"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.ends_with("Brushes panel (1)")), "{:?}", r.warnings);
+}
+
 /// A gradient's `Br` (a stop's ramp) isn't a brush: the gradient keeps its stops.
 #[test]
 fn a_gradients_br_is_not_a_brush() {
