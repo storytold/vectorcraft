@@ -214,6 +214,33 @@ fn ai_without_pdf_content_and_compression() {
 }
 
 #[test]
+fn ai_option_errors_name_a_file_saved_without_pdf_content() {
+    let mut s = three_boards();
+    for p in
+        [json!({"format": "ai", "pdfCompatible": false, "artboard": "2"}), json!({"format": "ai", "pdfCompatible": false, "includeLinked": "yes"})]
+    {
+        let e = s.execute("file.saveCopy", &p).unwrap_err().to_string();
+        assert!(e.contains("non-PDF-compatible .ai options: invalid type"), "{p}: {e}");
+    }
+    let e = s.execute("document.export", &json!({"format": "ai", "pdfCompatible": false, "artboard": "2"})).unwrap_err().to_string();
+    assert!(e.contains("`document.export`") && e.contains("non-PDF-compatible .ai options: invalid type"), "{e}");
+    let p = json!({"format": "ait", "pdfCompatible": false, "includeLinked": "yes"});
+    let e = s.execute("file.saveAsTemplate", &p).unwrap_err().to_string();
+    assert!(e.contains("non-PDF-compatible .ait template options: invalid type"), "{e}");
+    // A template saved without PDF content is written.
+    let r = s.execute("file.saveAsTemplate", &json!({"format": "ait", "pdfCompatible": false})).unwrap();
+    assert!(r["warnings"].to_string().contains("without PDF content"), "{r}");
+    // So are the notes on native options the file doesn't read.
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "pdfCompatible": false, "version": 3})).unwrap();
+    assert!(r["warnings"].to_string().contains("`version` was not used: non-PDF-compatible .ai files don't read it"), "{r}");
+    // A PDF-compatible file keeps its name.
+    let e = s.execute("file.saveCopy", &json!({"format": "ai", "includeLinked": "yes"})).unwrap_err().to_string();
+    assert!(e.contains("PDF-compatible .ai options: invalid type") && !e.contains("non-PDF"), "{e}");
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "version": 3})).unwrap();
+    assert!(r["warnings"].to_string().contains("`version` was not used: PDF-compatible .ai files don't read it"), "{r}");
+}
+
+#[test]
 fn a_remembered_artboard_the_document_no_longer_has_is_dropped() {
     let dir = Folder::new("remembered-artboards");
     for (name, p) in [
