@@ -110,6 +110,39 @@ fn picker_initialization_preserves_working_values() {
     }
 }
 
+/// The picker's R, G and B fields show the stored RGB components in every working profile.
+#[test]
+fn picker_rgb_fields_show_working_values() {
+    use egui_kittest::kittest::Queryable;
+
+    for profile in [SRGB, DISPLAY_P3, WIDE_GAMUT_RGB, PROPHOTO_RGB] {
+        let _space = WorkingSpace::new(profile);
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("ui.colorPicker", json!({"color": [0.6, 0.4, 0.2]})).unwrap();
+        let mut fonts = false;
+        let mut harness = egui_kittest::Harness::builder().with_size(egui::vec2(1280.0, 900.0)).with_accessibility_check(false).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    vectorcraft_ui_egui::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                vectorcraft_ui_egui::dialogs::show(app, ui.ctx());
+            },
+            app,
+        );
+        harness.run_steps(3);
+        // HSB's Brightness field is also labelled B, so the fields labelled B are read together.
+        for (label, expected) in [("R", "153"), ("G", "102"), ("B", "51")] {
+            let values: Vec<String> = harness
+                .query_all_by_role_and_label(egui::accesskit::Role::TextInput, label)
+                .filter_map(|field| field.value().map(|v| v.to_string()))
+                .collect();
+            assert!(values.iter().any(|v| v == expected), "{profile}: {label} shows {values:?}");
+        }
+    }
+}
+
 /// Shared hex and web-safe numeric controls round the native working RGB components.
 #[test]
 fn shared_hex_and_websafe_preserve_working_values() {
