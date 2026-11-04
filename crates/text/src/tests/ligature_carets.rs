@@ -459,6 +459,66 @@ fn an_upright_ligature_takes_its_caret_down_its_cell() {
     assert!((at(900) - 0.5).abs() < 1e-9, "{}", at(900));
 }
 
+/// On a path, an upright ligature in vertical type turns about its pen, so its cell runs from
+/// 0.12 em before the pen to 0.88 em after it, with or without the font's vertical metrics. The
+/// inner stop lies at the middle of that cell, and the first character's selection ends there.
+#[test]
+fn an_upright_ligature_on_a_path_takes_its_stop_in_its_turned_cell() {
+    for (font, family) in [(ligature_caret_font(None), LIGATURE_CARET_FAMILY), (vertical_ligature_caret_font(900), VERTICAL_LIGATURE_CARET_FAMILY)] {
+        let db = db_with(font);
+        let mut line = BezPath::new();
+        line.move_to((0.0, 0.0));
+        line.line_to((1000.0, 0.0));
+        let mut t = point("fi", family);
+        t.vertical = true;
+        t.runs[0].style.standard_vertical_roman = true;
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        let l = layout(&db, &t);
+        assert!(l.on_path);
+        let Some(g) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+        assert_eq!(g.carets, vec![(1, 0.5)], "{family}");
+        assert!((g.width - 100.0).abs() < 1e-9 && (g.width_start + 12.0).abs() < 1e-9, "{family}: {} {}", g.width, g.width_start);
+        let x = |b| caret_position(&l, b).0.x - g.origin.x;
+        assert!((x(1) - 38.0).abs() < 1e-6, "{family}: {}", x(1));
+        let q = selection_quads(&l, 0, 1);
+        assert_eq!(q.len(), 1, "{q:?}");
+        assert!(((q[0][1] - q[0][0]).hypot() - 38.0).abs() < 1e-6, "{family}: {q:?}");
+        // A baseline shift moves the turned glyph along the path, and its stop with it.
+        let ink = g.outline.bounding_box().x0;
+        t.runs[0].style.baseline_shift = 10.0;
+        let l = layout(&db, &t);
+        let Some(s) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+        let moved = s.outline.bounding_box().x0 - ink;
+        assert!(moved.abs() > 1.0, "{family}: the shift moves the glyph along the path: {moved}");
+        let stop = caret_position(&l, 1).0.x - s.origin.x;
+        assert!((stop - 38.0 - moved).abs() < 1e-6, "{family}: {stop} against {}", 38.0 + moved);
+        // Horizontal Scale widens the glyph across the path; its stop stays inside the glyph.
+        t.runs[0].style.baseline_shift = 0.0;
+        t.runs[0].style.h_scale = 200.0;
+        let l = layout(&db, &t);
+        let Some(s) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+        let bounds = s.outline.bounding_box();
+        let stop = caret_position(&l, 1).0.x - s.origin.x;
+        assert!(bounds.x0 < stop && stop < bounds.x1 && stop > 0.0, "{family}: {stop} outside {bounds:?}");
+        t.runs[0].style.h_scale = 100.0;
+        // Skew on a slanted path: the stop stays inside the drawn glyph along the path.
+        let mut slant = BezPath::new();
+        slant.move_to((0.0, 0.0));
+        slant.line_to((1000.0, 1000.0));
+        t.runs[0].style.baseline_shift = 0.0;
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&slant), start: 0.0, end: None };
+        t.path_effect = vectorcraft_doc::PathEffect::Skew;
+        let l = layout(&db, &t);
+        let Some(s) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+        let tangent = Vec2::new(s.angle.cos(), s.angle.sin());
+        let ink = s.outline.elements().iter().filter_map(|el| el.end_point()).map(|p| (p - s.origin).dot(tangent));
+        let (lo, hi) = ink.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), d| (lo.min(d), hi.max(d)));
+        let (a, b) = caret_position(&l, 1);
+        let stop = (a.midpoint(b) - s.origin).dot(tangent);
+        assert!(lo < stop && stop < hi, "{family}: {stop} outside {lo}..{hi}");
+    }
+}
+
 /// Tracking that makes an upright ligature's advance negative leaves it upright: it keeps its
 /// caret down its cell, and its cell starts where it does without tracking, with or without the
 /// font's vertical metrics.
