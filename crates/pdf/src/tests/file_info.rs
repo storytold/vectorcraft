@@ -221,6 +221,16 @@ fn a_written_pdf_gives_its_file_info_back() {
 }
 
 #[test]
+fn a_written_pdf_carries_the_file_info_title_not_the_documents_name() {
+    let mut d = Document::new(100.0, 100.0);
+    d.title = "poster.svg".into();
+    d.metadata.title = Some("Fair poster".into());
+    let bytes = export(&d, &PdfOptions { created: Some(CREATED), ..PdfOptions::uncompressed() }).unwrap();
+    assert_eq!(file_info(&bytes, None).unwrap().title.as_deref(), Some("Fair poster"));
+    assert!(!String::from_utf8_lossy(&bytes).contains("poster.svg"));
+}
+
+#[test]
 fn a_written_pdf_gives_its_copyright_back() {
     use vectorcraft_doc::CopyrightStatus;
     let notice = "(c) 2026 Ada & <Babbage>\r\nAll rights \"reserved\"";

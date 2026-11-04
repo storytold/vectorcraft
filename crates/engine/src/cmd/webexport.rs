@@ -644,7 +644,7 @@ fn flatten(rgba: &[u8], matte: [u8; 3]) -> impl Iterator<Item = [u8; 3]> + '_ {
 
 /// The File Info text `s.metadata` lets into the files: `(keyword, text)`.
 fn metadata(doc: &Document, s: &WebSettings) -> Vec<(&'static str, String)> {
-    doc.metadata.png_text(&doc.title).into_iter().filter(|(k, _)| s.metadata.keeps(k)).map(|(k, v)| (k, v.into_owned())).collect()
+    doc.metadata.png_text(doc.info_title()).into_iter().filter(|(k, _)| s.metadata.keeps(k)).map(|(k, v)| (k, v.into_owned())).collect()
 }
 
 /// Encode straight RGBA pixels (`w`×`h`) as `s` says; `doc` gives the metadata.

@@ -142,7 +142,7 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
                 }
             }
         }
-        let o = vectorcraft_eps::LegacyAiOptions { title: doc.title.clone(), created, hidden, outline_text };
+        let o = vectorcraft_eps::LegacyAiOptions { title: doc.info_title().to_owned(), created, hidden, outline_text };
         let out = vectorcraft_eps::export_legacy_ai(&d, &o).map_err(|e| bad(cmd, e))?;
         for w in placed.iter().chain(&out.warnings) {
             note(&mut enc.warnings, w);

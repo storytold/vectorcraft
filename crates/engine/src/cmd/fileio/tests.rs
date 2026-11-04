@@ -67,8 +67,7 @@ fn opens_every_readable_format() {
     ] {
         let r = open(&mut s, name, &bytes);
         assert_eq!(r["format"], format, "{name}");
-        // The document that wrote the file never had a title of its own, so the file gives none and the name (without its extension) titles it.
-        assert_eq!(r["title"], if format == "vectorcraft" { "Untitled-1" } else { "a" }, "{name}");
+        assert_eq!(r["title"], if format == "vectorcraft" { "Untitled-1" } else { name }, "{name}");
         assert!(s.doc().unwrap().doc.node_count() >= 2, "{name}: the rectangle came through");
     }
     for (name, kind) in [

@@ -674,7 +674,7 @@ pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Res
         // With the artboards' background colors, as the pages draw them.
         let art = super::export::with_artboard_fills(art, &params, 0..art.artboards.len()).map_err(|e| bad(cmd, e))?;
         let o = vectorcraft_eps::AiEditingOptions {
-            title: doc.title.clone(),
+            title: doc.info_title().to_owned(),
             created: doc.metadata.created.or_else(vectorcraft_doc::metadata::output_time),
         };
         let (data, lost) = vectorcraft_eps::ai_private_data(&art, &o).map_err(|e| bad(cmd, e))?;

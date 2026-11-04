@@ -1,7 +1,8 @@
 //! File → File Info (`file.info`): the document title and its descriptive metadata (author,
 //! description, keywords, rating, copyright), with the read-only created and modified dates. The
-//! SVG (with `metadata`), PDF and PNG writers carry it, and a PDF or `.ai` opens with the File Info
-//! it gives ([`read_pdf`]).
+//! title is the one the file the document was opened from gave itself ([`DocMetadata::title`]),
+//! else the document's name. The SVG (with `metadata`), PDF and PNG writers carry it, and a PDF or
+//! `.ai` opens with the File Info it gives ([`read_pdf`]).
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::metadata::{MAX_RATING, iso8601};
@@ -22,7 +23,7 @@ const READ_ONLY: [&str; 6] = ["created", "modified", "colorMode", "units", "artb
 pub(crate) fn info_json(d: &Document) -> Value {
     let m = &d.metadata;
     json!({
-        "title": d.title,
+        "title": d.info_title(),
         "author": m.author,
         "authorTitle": m.author_title,
         "description": m.description,
@@ -48,14 +49,22 @@ pub(crate) fn file_info(s: &mut Session, p: &Value) -> Result<Value> {
         _ => return Err(bad(C, "params must be an object")),
     };
     let d = &s.doc()?.doc;
-    let (mut title, mut m) = (d.title.clone(), d.metadata.clone());
+    let (mut title, mut m) = (d.info_title().to_string(), d.metadata.clone());
     for (k, v) in o {
         apply(&mut title, &mut m, k, v)?;
     }
     let d = &s.doc()?.doc;
-    if title != d.title || m != d.metadata {
+    // A title File Info changes becomes the document's own, as it always has (the tab and Save As
+    // offer it where the document has no file), and replaces the one its file gave.
+    let retitled = title != d.info_title();
+    if retitled {
+        m.title = None;
+    }
+    if retitled || m != d.metadata {
         s.edit("File Info", |d, _| {
-            d.title = title;
+            if retitled {
+                d.title = title;
+            }
             d.metadata = m;
             Ok(())
         })?;
@@ -64,8 +73,8 @@ pub(crate) fn file_info(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The File Info a PDF or PDF-compatible `.ai` gives ([`vectorcraft_pdf::file_info`]) into `m`: each
-/// field that `file.info` would take (a value it refuses is left out), and the created and
-/// modified dates.
+/// field that `file.info` would take (a value it refuses is left out), its title ([`imported_title`])
+/// as the File Info title, and the created and modified dates.
 pub(crate) fn read_pdf(m: &mut DocMetadata, f: vectorcraft_pdf::FileInfo) {
     let status = f.copyrighted.map(|c| if c { CopyrightStatus::Copyrighted } else { CopyrightStatus::PublicDomain });
     let fields = [
@@ -83,6 +92,7 @@ pub(crate) fn read_pdf(m: &mut DocMetadata, f: vectorcraft_pdf::FileInfo) {
             let _ = apply(&mut title, m, k, &v);
         }
     }
+    m.title = f.title.as_deref().and_then(imported_title);
     m.created = f.created.or(m.created);
     m.modified = f.modified.or(m.modified);
 }
@@ -141,29 +151,16 @@ fn text(k: &str, v: &Value, multiline: bool) -> Result<String> {
     Ok(s.to_string())
 }
 
-/// The title `raw`, read from a file, makes a document: runs of white space (line breaks too)
+/// The File Info title `raw`, read from a file, makes: runs of white space (line breaks too)
 /// become single spaces, other control characters are dropped, at most [`MAX_TEXT`] characters
 /// are kept, as `file.info` takes a title. `None` when nothing is left, or when it is the
 /// Untitled-N name New gives (what a document that never had a title writes to its files).
 pub(crate) fn imported_title(raw: &str) -> Option<String> {
-    let title = cleaned_title(raw);
-    super::fileio::is_own_title(&title).then_some(title)
-}
-
-/// `raw` as `file.info` takes a title (see [`imported_title`]), empty when nothing is left. An
-/// Untitled-N name stays.
-fn cleaned_title(raw: &str) -> String {
     let words: Vec<String> =
         raw.split_whitespace().map(|w| w.chars().filter(|c| !c.is_control()).collect::<String>()).filter(|w| !w.is_empty()).collect();
     let title: String = words.join(" ").chars().take(MAX_TEXT).collect();
-    title.trim_end().to_string()
-}
-
-/// The title a document without one of its own takes from its file name's `stem`: cleaned as an
-/// imported title is, so `file.info` takes it, and the Untitled-1 name a new document starts
-/// with when nothing is left of it.
-pub(crate) fn stem_title(stem: &str) -> String {
-    Some(cleaned_title(stem)).filter(|t| !t.is_empty()).unwrap_or_else(|| "Untitled-1".to_string())
+    let title = title.trim_end();
+    super::fileio::is_own_title(title).then(|| title.to_string())
 }
 
 /// Keywords from a list or a comma- or semicolon-separated string: trimmed, each once (ignoring

@@ -142,11 +142,9 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     let k = units.k;
     let mut doc = Document::new(size.width() as f64 * k, size.height() as f64 * k);
     doc.units = units.unit;
-    // The file's own title, when it gives one; else the document keeps the placeholder name
-    // `Document::new` gave it, for the caller to name after the file.
-    if let Some(title) = root_title(xml.root_element()) {
-        doc.title = title;
-    }
+    // The file's own title, when it gives one, is the document's File Info title; the document's
+    // name stays what `Document::new` gave it, for the caller to name after the file.
+    doc.metadata.title = root_title(xml.root_element());
     let mut im = Importer {
         doc,
         warnings,
