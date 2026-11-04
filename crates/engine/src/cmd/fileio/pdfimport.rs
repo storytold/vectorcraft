@@ -39,6 +39,10 @@ pub struct LoadOptions {
     /// A `.ai` opens from its editing copy even where that draws differently from its PDF part
     /// (which can be older than it), with a warning, instead of from the PDF part.
     pub trust_editing_data: bool,
+    /// A PDF's type in a font it embeds and this machine lacks is drawn in the file's own glyphs
+    /// (default; the `embeddedFonts` param, and Preferences › File Handling › Use fonts embedded in
+    /// imported PDFs for opens and places that give none).
+    pub embedded_fonts: bool,
     /// A PDF or `.ai` saved with Preserve Editing opens from the VectorCraft document it carries;
     /// off, it opens as another app would open it, from the editing copy of its art or its pages.
     pub native: bool,
@@ -57,6 +61,7 @@ impl Default for LoadOptions {
             dxf: Default::default(),
             editing_data: true,
             trust_editing_data: false,
+            embedded_fonts: true,
             native: true,
         }
     }
@@ -65,7 +70,7 @@ impl Default for LoadOptions {
 impl LoadOptions {
     /// From command params: `pages` (`"2-3, 5"`, a page number or `"all"`), `page` (one page, when
     /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`) with `grays`,
-    /// `textAs` (`text` | `outlines`), `layers` (true | false), `editingData` (true | false | `always`) and `dxf`
+    /// `textAs` (`text` | `outlines`), `layers` (true | false), `embeddedFonts` (true | false), `editingData` (true | false | `always`) and `dxf`
     /// (the DXF import options).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
         let pages = match p.get("pages").filter(|v| !v.is_null()).or_else(|| p.get("page").filter(|v| !v.is_null())) {
@@ -95,7 +100,11 @@ impl LoadOptions {
             Some(v) => (v.as_bool().ok_or_else(|| bad(cmd, "editingData must be true, false or \"always\""))?, false),
         };
         let dxf = super::dxfimport::options(cmd, p.get("dxf"))?;
-        Ok(Self { pages, crop, password, color_mode, grays, text_as, layers, dxf, editing_data, trust_editing_data, native: true })
+        let embedded_fonts = match p.get("embeddedFonts").filter(|v| !v.is_null()) {
+            None => true,
+            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "embeddedFonts must be true or false"))?,
+        };
+        Ok(Self { pages, crop, password, color_mode, grays, text_as, layers, dxf, editing_data, trust_editing_data, embedded_fonts, native: true })
     }
 
     /// Does the document read only part of the file, or read it differently (a page range, another
@@ -124,6 +133,7 @@ impl LoadOptions {
             text_as: self.text_as,
             layers: self.layers,
             uncalibrated_rgb: editor_document,
+            embedded_fonts: self.embedded_fonts,
             ..Default::default()
         })
     }
@@ -155,6 +165,7 @@ pub fn page_document(bytes: &[u8], page: usize, o: &LoadOptions) -> Result<(Docu
         password: o.password.clone(),
         text_as: o.text_as,
         layers: false,
+        embedded_fonts: o.embedded_fonts,
         ..Default::default()
     };
     vectorcraft_pdf::import_with_report(bytes, &opts).map(|r| (r.document, r.warnings)).map_err(err)

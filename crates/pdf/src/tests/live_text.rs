@@ -10,7 +10,7 @@ use vectorcraft_doc::{Document, NodeKind, TextObject};
 use crate::*;
 
 const SOURCE_SANS: &[u8] = include_bytes!("../../../../assets/fonts/SourceSans3-Regular.ttf");
-const SOURCE_SERIF: &[u8] = include_bytes!("../../../../assets/fonts/SourceSerif4-Regular.ttf");
+pub(crate) const SOURCE_SERIF: &[u8] = include_bytes!("../../../../assets/fonts/SourceSerif4-Regular.ttf");
 
 /// A 300 × 200 pt page with `lines` of (x, y from the top, size, text) in Source Sans 3, and the
 /// same rotated 90° when `rotated`.
@@ -33,7 +33,7 @@ pub(crate) fn text_pdf(lines: &[(f32, f32, f32, &str)], rotated: bool) -> Vec<u8
     pdf.finish().unwrap()
 }
 
-fn texts(d: &Document) -> Vec<TextObject> {
+pub(crate) fn texts(d: &Document) -> Vec<TextObject> {
     let mut v = vec![];
     d.walk(|n| {
         if let NodeKind::Text(t) = &n.kind {
@@ -294,7 +294,7 @@ fn uninstalled_font() -> Vec<u8> {
 
 /// Source Serif 4 renamed `SourceSerif9-Regular`, family Source Serif 9: a serif font that isn't
 /// installed (the fallback font, Source Sans 3, is a sans).
-fn uninstalled_serif() -> Vec<u8> {
+pub(crate) fn uninstalled_serif() -> Vec<u8> {
     renamed(SOURCE_SERIF, &[("SourceSerif4", "SourceSerif9"), ("Source Serif 4", "Source Serif 9")])
 }
 
@@ -310,7 +310,7 @@ fn one_line_pdf(font: Vec<u8>, text: &str) -> Vec<u8> {
 }
 
 /// The outlines text imported as (`textAs: outlines`), as one path.
-fn outlines(d: &Document) -> kurbo::BezPath {
+pub(crate) fn outlines(d: &Document) -> kurbo::BezPath {
     let mut all = kurbo::BezPath::new();
     d.walk(|n| {
         if let NodeKind::Path { path, .. } = &n.kind {

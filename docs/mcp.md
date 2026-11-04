@@ -774,7 +774,7 @@ groups open ungrouped), with a warning saying why. Layers look different when th
 miss one it draws), and, for an EPS whose page is the box of its art, when they print art outside it. A file whose
 editing data is for a page of another size opens the same way, and its warning gives both sizes in points, with the
 scale of the editing data's page to the file's page (1:10 for a tenth of its size) when their sides are in proportion.
-With `textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines. A PDF
+Type in a font a PDF embeds and this machine lacks is drawn in glyphs built from the file's own, kept with the document (#4568); `embeddedFonts: false` (default `true`) sets it in the fallback font with the missing-font warning instead, as before. Preferences › File Handling › Use fonts embedded in imported PDFs (`pdfImportEmbeddedFonts`, on by default) is the choice `document.open` and `file.place` take when they give none; a call's own `embeddedFonts` wins. With `textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines. A PDF
 saved with Illustrator's editing data holds it in `AIPDFPrivateData` streams and opens from it as a `.ai` file does.
 
 The document then has what the file's page doesn't print: hidden objects and layers, layers that don't print, guides and

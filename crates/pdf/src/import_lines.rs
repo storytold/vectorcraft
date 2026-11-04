@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use kurbo::{Point, Rect, Shape};
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{AppearanceItem, CharStyle, Justify, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{AppearanceItem, CharStyle, FileFont, FileFonts, Justify, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::shapes;
 
 use crate::import_text::{LineFacts, median};
@@ -258,6 +258,14 @@ fn laid_out(texts: &[(&TextObject, &LineFacts)], b: &Block, justify: Justify, wi
     }
     let mut t = (*first).clone();
     t.runs = runs;
+    // The fonts the file carries that draw the lines draw them as one object too.
+    let mut fonts: Vec<FileFont> = vec![];
+    for f in texts.iter().flat_map(|(t, _)| t.file_fonts_in_use()) {
+        if !fonts.contains(f) {
+            fonts.push(f.clone());
+        }
+    }
+    t.file_fonts = (!fonts.is_empty()).then(|| Box::new(FileFonts::new(fonts, &t.plain_text())));
     t.para.justify = justify;
     t.para.space_before = b.space;
     let last = b.ys.last().copied()?;

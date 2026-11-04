@@ -1991,3 +1991,23 @@ fn snap_to_glyph_options_read_set_and_reset() {
     s.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), all);
 }
+
+/// File Handling › Use fonts embedded in imported PDFs (`pdfImportEmbeddedFonts`, on by default)
+/// reaches Open and Place as the `embeddedFonts` choice, unless a call gives its own (#4568).
+#[test]
+fn the_embedded_fonts_preference_reaches_the_import_options() {
+    use crate::cmd::fileio::LoadOptions;
+    let mut s = Session::new();
+    assert!(s.prefs.pdf_import_embedded_fonts, "on by default");
+    let on = s.prefs.with_pdf_font_choice(&json!({}));
+    assert!(LoadOptions::from_params("x", &on).unwrap().embedded_fonts);
+    s.execute("prefs.set", &json!({"key": "pdfImportEmbeddedFonts", "value": false})).unwrap();
+    let off = s.prefs.with_pdf_font_choice(&json!({"page": 2}));
+    assert_eq!(off["page"], 2, "the call's own params stay");
+    assert!(!LoadOptions::from_params("x", &off).unwrap().embedded_fonts);
+    assert!(!LoadOptions::from_params("x", &s.prefs.with_pdf_font_choice(&Value::Null)).unwrap().embedded_fonts);
+    // A call that says so wins over the preference.
+    let own = s.prefs.with_pdf_font_choice(&json!({"embeddedFonts": true}));
+    assert!(LoadOptions::from_params("x", &own).unwrap().embedded_fonts);
+    assert!(LoadOptions::from_params("x", &json!({"embeddedFonts": "yes"})).is_err());
+}

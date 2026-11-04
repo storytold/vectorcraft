@@ -61,6 +61,7 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
     // Update Links (Preferences › File Handling) applies there as it is set now.
     let update_links = app.session.prefs.update_links == "automatically";
     let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
+    let open_params = app.session.prefs.with_pdf_font_choice(&Value::Null);
     // The automation roots in force here are in force there.
     let scope = ScopeHandle::capture();
     let opener = scope.clone();
@@ -68,7 +69,7 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
         let r = scope
             .run(|| {
                 vectorcraft_engine::guard::catch_panic(|| {
-                    fileio::read_for_open(&name, &file, Some(name.clone()), &Value::Null, update_links, low_res_proxy_eps).map_err(|e| e.to_string())
+                    fileio::read_for_open(&name, &file, Some(name.clone()), &open_params, update_links, low_res_proxy_eps).map_err(|e| e.to_string())
                 })
             })
             .unwrap_or_else(|msg| Err(format!("internal error: {msg} (please report this bug)")));

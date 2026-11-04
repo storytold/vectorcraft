@@ -172,22 +172,7 @@ pub fn two_axis_font() -> Option<Vec<u8>> {
 
 /// A `name` table of Windows English (US) records (name id, string).
 pub fn name_table(records: &[(u16, &str)]) -> Option<Vec<u8>> {
-    let mut records = records.to_vec();
-    records.sort_by_key(|r| r.0);
-    let n = u16::try_from(records.len()).ok()?;
-    let (mut head, mut strings) = (Vec::new(), Vec::new());
-    for v in [0, n, 6 + 12 * n] {
-        head.extend_from_slice(&v.to_be_bytes());
-    }
-    for (id, s) in records {
-        let bytes: Vec<u8> = s.encode_utf16().flat_map(u16::to_be_bytes).collect();
-        for v in [3, 1, 0x0409, id, u16::try_from(bytes.len()).ok()?, u16::try_from(strings.len()).ok()?] {
-            head.extend_from_slice(&v.to_be_bytes());
-        }
-        strings.extend(bytes);
-    }
-    head.extend(strings);
-    Some(head)
+    crate::file_font::name_table(records)
 }
 
 /// The family of [`vertical_font`].

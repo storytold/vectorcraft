@@ -176,6 +176,10 @@ pub struct Prefs {
     pub recovery_off_for_complex: bool,
     pub recent_files_count: u32,
     pub low_res_proxy_eps: bool,
+    /// File Handling › Use fonts embedded in imported PDFs: type in a font a PDF embeds and this
+    /// machine lacks is drawn in the file's own glyphs (on by default); off, it is set in the
+    /// fallback font with the missing-font warning (#4568).
+    pub pdf_import_embedded_fonts: bool,
     pub anti_aliased_bitmaps: bool,
     pub update_links: String,
     // Clipboard Handling
@@ -322,6 +326,19 @@ pub struct Prefs {
     pub import_matches: Vec<cmd::importmatches::ImportMatch>,
 }
 
+impl Prefs {
+    /// The `document.open` / place params `p` with `embeddedFonts: false` added when Preferences
+    /// › File Handling › Use fonts embedded in imported PDFs is off and `p` gives no choice of its own.
+    pub fn with_pdf_font_choice(&self, p: &serde_json::Value) -> serde_json::Value {
+        if self.pdf_import_embedded_fonts || p.get("embeddedFonts").is_some_and(|v| !v.is_null()) {
+            return p.clone();
+        }
+        let mut out = if p.is_object() { p.clone() } else { serde_json::json!({}) };
+        out["embeddedFonts"] = serde_json::json!(false);
+        out
+    }
+}
+
 impl Default for Prefs {
     fn default() -> Self {
         let s = |v: &str| v.to_string();
@@ -437,6 +454,7 @@ impl Default for Prefs {
             recovery_off_for_complex: false,
             recent_files_count: 20,
             low_res_proxy_eps: false,
+            pdf_import_embedded_fonts: true,
             anti_aliased_bitmaps: false,
             update_links: s("askWhenModified"),
             copy_as_svg: true,
