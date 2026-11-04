@@ -6424,3 +6424,13 @@ shape	Open	Открытый
 	Spike	Пик
 	Skip Spaces	Пропускать пробелы
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графика слишком велика для копирования в виде изображения: другие приложения не получат её PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Выделить по монтажным областям
+	Select by Artboards…	Выделить по монтажным областям…
+	Selection Tools	Инструменты выделения
+	Search artboards	Поиск монтажных областей
+	Fully Inside	Полностью внутри
+	Fully Outside	Полностью снаружи
+	No artboards match.	Нет подходящих монтажных областей.
+	Chosen: {n} of {total}	Выбрано: {n} из {total}

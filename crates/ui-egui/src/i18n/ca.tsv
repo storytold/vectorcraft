@@ -6321,3 +6321,13 @@ breakText	Glyphs	Glifs
 	Spike	Pic
 	Skip Spaces	Omet els espais
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	La il·lustració és massa gran per copiar-la com a imatge: les altres aplicacions no en reben cap PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Selecciona per taulers
+	Select by Artboards…	Selecciona per taulers…
+	Selection Tools	Eines de selecció
+	Search artboards	Cerca taulers
+	Fully Inside	Totalment a dins
+	Fully Outside	Totalment fora
+	No artboards match.	Cap tauler no coincideix.
+	Chosen: {n} of {total}	Triats: {n} de {total}

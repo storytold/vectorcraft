@@ -6292,3 +6292,13 @@ breakText	Glyphs	Glifler
 	Spike	Sivri Uç
 	Skip Spaces	Boşlukları Atla
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Çizim, resim olarak kopyalanamayacak kadar büyük: diğer uygulamalar bunun PNG'sini almaz
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Çalışma Yüzeylerine Göre Seç
+	Select by Artboards…	Çalışma Yüzeylerine Göre Seç…
+	Selection Tools	Seçim Araçları
+	Search artboards	Çalışma yüzeylerinde ara
+	Fully Inside	Tamamen içeride
+	Fully Outside	Tamamen dışarıda
+	No artboards match.	Eşleşen çalışma yüzeyi yok.
+	Chosen: {n} of {total}	Seçilen: {n}/{total}

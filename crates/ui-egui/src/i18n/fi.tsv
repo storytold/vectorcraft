@@ -6365,3 +6365,13 @@ breakText	Glyphs	Merkit
 	Spike	Piikki
 	Skip Spaces	Ohita välilyönnit
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafiikka on liian suuri kopioitavaksi kuvana: muut sovellukset eivät saa siitä PNG-kuvaa
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Valitse piirtoalustojen mukaan
+	Select by Artboards…	Valitse piirtoalustojen mukaan…
+	Selection Tools	Valintatyökalut
+	Search artboards	Hae piirtoalustoja
+	Fully Inside	Kokonaan sisällä
+	Fully Outside	Kokonaan ulkona
+	No artboards match.	Mikään piirtoalusta ei vastaa hakua.
+	Chosen: {n} of {total}	Valittu: {n}/{total}

@@ -6190,3 +6190,13 @@ breakText	Glyphs	Glify
 	Spike	Szpic
 	Skip Spaces	Pomiń spacje
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika jest zbyt duża, aby skopiować ją jako obraz: inne aplikacje nie otrzymają jej w formacie PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Zaznacz według obszarów kompozycji
+	Select by Artboards…	Zaznacz według obszarów kompozycji…
+	Selection Tools	Narzędzia zaznaczania
+	Search artboards	Szukaj obszarów kompozycji
+	Fully Inside	Całkowicie wewnątrz
+	Fully Outside	Całkowicie na zewnątrz
+	No artboards match.	Żaden obszar kompozycji nie pasuje.
+	Chosen: {n} of {total}	Wybrano: {n} z {total}

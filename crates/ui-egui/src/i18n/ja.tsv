@@ -6020,3 +6020,13 @@ breakText	Glyphs	字形
 	Spike	山形
 	Skip Spaces	スペースをスキップ
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	アートワークが大きすぎるため画像としてコピーできません：他のアプリには PNG が渡されません
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	アートボードで選択
+	Select by Artboards…	アートボードで選択…
+	Selection Tools	選択ツール
+	Search artboards	アートボードを検索
+	Fully Inside	完全に内側
+	Fully Outside	完全に外側
+	No artboards match.	一致するアートボードはありません。
+	Chosen: {n} of {total}	選択中: {n} / {total}

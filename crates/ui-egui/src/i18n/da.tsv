@@ -6203,3 +6203,13 @@ breakText	Glyphs	Glyffer
 	Spike	Spids
 	Skip Spaces	Spring mellemrum over
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafikken er for stor til at blive kopieret som et billede: andre programmer får ingen PNG af den
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Markér efter tegneflader
+	Select by Artboards…	Markér efter tegneflader…
+	Selection Tools	Markeringsværktøjer
+	Search artboards	Søg i tegneflader
+	Fully Inside	Helt indenfor
+	Fully Outside	Helt udenfor
+	No artboards match.	Ingen tegneflader passer.
+	Chosen: {n} of {total}	Valgt: {n} af {total}
