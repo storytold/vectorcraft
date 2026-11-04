@@ -125,6 +125,16 @@ fn a_range_changes_only_its_characters() {
 }
 
 #[test]
+fn a_range_inside_a_multibyte_character_uses_character_boundaries() {
+    let mut s = session();
+    let id = text(&mut s, "éx");
+    let out = s.execute(C, &json!({"id": id.0, "start": 1, "end": 2, "attribute": "tracking", "from": 100, "to": 300})).unwrap();
+    assert_eq!(out["count"], 1);
+    let tracking: Vec<f64> = styles(&s, id).iter().map(|(_, st)| st.tracking).collect();
+    assert_eq!(tracking, [100.0, 0.0]);
+}
+
+#[test]
 fn random_values_stay_in_range_and_repeat_with_the_seed() {
     let mut s = session();
     let id = text(&mut s, "randomness");
