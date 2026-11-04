@@ -1,6 +1,6 @@
 //! A rectangle, circle, or ellipse exports as that element only when the path is that shape.
-//! A bowtie, a repeated corner, and a near-ellipse stay paths. resvg must paint the real shapes
-//! the way the canvas does.
+//! A bowtie and a repeated corner are straight segments, so they are polygons, not rectangles.
+//! A near-ellipse stays a path. resvg must paint the real shapes the way the canvas does.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use kurbo::Vec2;
@@ -53,21 +53,21 @@ fn a_rectangle_circle_and_ellipse_export_as_those_elements() {
 }
 
 #[test]
-fn a_bowtie_a_repeated_corner_and_a_near_ellipse_stay_paths() {
+fn a_bowtie_and_a_repeated_corner_are_polygons_and_a_near_ellipse_stays_a_path() {
     let bowtie = filled(PathData::single(SubPath::polyline(
         &[Point::new(10.0, 10.0), Point::new(60.0, 40.0), Point::new(60.0, 10.0), Point::new(10.0, 40.0)],
         true,
     )));
     let bowtie_svg = export(&bowtie, &ExportOptions::default());
-    assert!(bowtie_svg.contains("<path "), "{bowtie_svg}");
-    assert!(!bowtie_svg.contains("<rect "), "{bowtie_svg}");
+    assert!(bowtie_svg.contains("<polygon "), "{bowtie_svg}");
+    assert!(!bowtie_svg.contains("<rect ") && !bowtie_svg.contains("<path "), "{bowtie_svg}");
 
     let triangle = filled(PathData::single(SubPath::polyline(
         &[Point::new(10.0, 10.0), Point::new(60.0, 10.0), Point::new(60.0, 40.0), Point::new(60.0, 40.0)],
         true,
     )));
     let triangle_svg = export(&triangle, &ExportOptions::default());
-    assert!(triangle_svg.contains("<path "), "{triangle_svg}");
+    assert!(triangle_svg.contains("<polygon "), "{triangle_svg}");
     assert!(!triangle_svg.contains("<rect "), "{triangle_svg}");
 
     let mut path = shapes::ellipse(Rect::new(40.0, 40.0, 42.0, 42.0));
