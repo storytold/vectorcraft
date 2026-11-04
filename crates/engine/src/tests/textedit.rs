@@ -2536,6 +2536,31 @@ fn the_glyph_drawn_for_a_character_with_a_combining_mark_is_reported() {
     assert_eq!(r["gid"], json!(g('b')), "the overflowing a is shaped with its mark");
 }
 
+/// Vertical type draws `vert` glyphs (the test font's `vert` draws ！ as I). A character of
+/// vertical type that overflows its area is shaped as vertical type, so choosing its default glyph
+/// keeps the choice.
+#[test]
+fn the_default_glyph_chosen_in_overflowing_vertical_type_is_kept() {
+    use vectorcraft_text::test_fonts::{VERTICAL_PUNCTUATION_FAMILY, vertical_punctuation_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(vertical_punctuation_font(true).expect("the test font builds"));
+    let face = db.face(VERTICAL_PUNCTUATION_FAMILY, "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let text = |area: Value| json!({"x": 0, "y": 0, "text": "！！", "size": 20, "font": VERTICAL_PUNCTUATION_FAMILY, "vertical": true, "area": area});
+    let open = NodeId(s.execute("text.create", &text(json!({"width": 200, "height": 200}))).unwrap()["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, open)).glyphs.iter().map(|g| g.gid).collect();
+    assert_eq!(gids, [g('I'), g('I')], "vert draws each ！ as I");
+
+    let boxed = NodeId(s.execute("text.create", &text(json!({"width": 4, "height": 4}))).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 0, "gid": g('！')})).unwrap();
+    assert_eq!(r["gid"], json!(g('！')));
+    let held: Vec<_> = obj(&s, boxed).runs.iter().filter_map(|r| r.style.glyph_alternate.as_ref().map(|c| c.gid)).collect();
+    assert_eq!(held, [g('！')], "the default glyph is kept as the choice");
+}
+
 #[test]
 fn glyph_alternates_query_reports_the_fallback_glyph_that_is_drawn() {
     use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
