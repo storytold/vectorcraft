@@ -126,7 +126,7 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.cancelExport" => Ok(io::cancel_exports(app)),
         "file.exportInBackground" => Ok(io::hide_exports(app)),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
-            Some(path) => io::open_recent_reporting(app, &path),
+            Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
         },
         "type.findFont" => {
@@ -545,7 +545,11 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             None => Err("brightness must be dark|mediumDark|mediumLight|light".into()),
         },
         "window.newWindow" => Err("New Window isn't available yet: a document opens in one window".into()),
+        "window.arrange.cascade" => crate::doc_windows::cascade(app),
         "window.arrange.tile" => crate::canvas::tile(app),
+        "window.arrange.floatInWindow" => crate::doc_windows::float_in_window(app, p),
+        "window.arrange.floatAllInWindows" => crate::doc_windows::float_all(app),
+        "window.arrange.consolidateAllWindows" if p.get("index").is_some_and(|i| !i.is_null()) => crate::doc_windows::dock(app, p),
         "window.arrange.consolidateAllWindows" => crate::canvas::consolidate(app),
         "window.nextDocument" => crate::chrome::step_document(app, true),
         "window.previousDocument" => crate::chrome::step_document(app, false),
@@ -811,6 +815,10 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         }
         "ui.packageDialog" => crate::dialogs::package::open(app),
         crate::panels::actions::RENAME_ACTION => crate::panels::actions::rename_action(app, p),
+        crate::panels::actions::NEW_ACTION => crate::panels::actions::new_action(app, p),
+        crate::panels::actions::ACTION_OPTIONS => crate::panels::actions::action_options(app, p),
+        crate::panels::actions::PLAY_ACTION => crate::panels::actions::play_action(app, p),
+        crate::panels::actions::STOP_RECORDING => crate::panels::actions::stop(app, p),
         "ui.batchDialog" => {
             let set = p.get("set").and_then(Value::as_u64).unwrap_or(0) as usize;
             let action = p.get("action").and_then(Value::as_u64).unwrap_or(0) as usize;

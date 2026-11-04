@@ -600,6 +600,7 @@
 	Cascade	Trapsgewijs schikken
 	Tile	Naast elkaar schikken
 	Float in Window	In venster zweven
+	Float All in Windows	Alles in vensters zweven
 	Consolidate All Windows	Alle vensters samenvoegen
 	Workspace	Werkruimte
 	Reset Essentials	Essentials herstellen
@@ -1192,6 +1193,8 @@ lighting	Light	Licht
 	Hand	Hand
 	Join Tool	Samenvoegen-gereedschap
 	Lasso Tool	Lasso-gereedschap
+	Enclosing Lasso Tool	Omsluitend lassogereedschap
+	Enclosing Lasso	Omsluitende lasso
 	Lasso	Lasso
 	Line Cut Tool	Lijnknip-gereedschap
 	Line Graph Tool	Lijndiagram-gereedschap
@@ -1673,6 +1676,7 @@ digits	Malayalam	Malayalam
 	Left-to-Right Paragraph Direction	Alinearichting van links naar rechts
 	Line-end Punctuation Half Width	Leestekens op regeleinde op halve breedte
 	Insert Kashidas	Kashida's invoegen
+	Kashidas	Kashida's
 	Long	Lang
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-set
@@ -3342,6 +3346,7 @@ theme	Appearance	Vormgeving
 	List Preferences	Voorkeuren weergeven
 	Manually	Handmatig
 	Mark Older Files as [Converted] When Opened	Oudere bestanden bij het openen markeren als [geconverteerd]
+	Use System Defaults for Edit Original	Systeemstandaarden gebruiken voor Origineel bewerken
 	Match User Interface Brightness	Aanpassen aan helderheid van gebruikersinterface
 	Light Gray	Lichtgrijs
 	Medium Gray	Middelgrijs
@@ -3694,6 +3699,8 @@ effect	Regular	Regelmatig
 	In the selected objects	In de geselecteerde objecten
 	Find in Folder…	Zoeken in map…
 	Replace With Font	Vervangen door lettertype
+	Replace With Font From	Vervangen door lettertype uit
+	System	Systeem
 	  — substituted by {style}	  — vervangen door {style}
 	  — {n} characters from another font	  — {n} tekens van een ander lettertype
 	All Scripts	Alle scripts
@@ -5365,6 +5372,11 @@ swatch	Bright Violet	Felviolet
 	Export Type:	Exporttype:
 	Movie Clip	Filmclip
 @msg	name is empty	naam is leeg
+@msg	an action is already recording	er wordt al een actie opgenomen
+@msg	no such function key	functietoets bestaat niet
+@msg	no such color	kleur bestaat niet
+@msg	{_1} cannot be used on Windows	{_1} kan niet worden gebruikt in Windows
+@msg	more than one action is named “{_1}”	meer dan één actie heet „{_1}”
 @msg	no symbol named `{n}`	geen symbool met de naam `{n}`
 	Remove Color Profile…	Kleurprofiel verwijderen…
 	Color wheel	Kleurenwiel
@@ -5680,6 +5692,13 @@ axis	Y Axis	Y-as
 	Action Options…	Actieopties…
 	Action Options	Actieopties
 	Rename Action	Actie hernoemen
+	New Action…	Nieuwe actie…
+	New Action	Nieuwe actie
+	Create New Action	Nieuwe actie maken
+	Play Action	Actie afspelen
+	Action Set:	Actieset:
+	Function Key:	Functietoets:
+	Record	Opnemen
 	Create New Set	Nieuwe set maken
 	Stop Global Edit	Globale bewerking stoppen
 	Global Edit Options	Opties voor globale bewerking
@@ -6169,3 +6188,14 @@ breakText	Glyphs	Glyphs
 	Create Swatch Legend	Stalenlegenda maken
 	Create Swatch Legend…	Stalenlegenda maken…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Teksthulpmiddelen
+	Text Tweaker…	Tekst bijstellen…
+	Text Tweaker	Tekst bijstellen
+	Attribute:	Kenmerk:
+	From:	Van:
+	To:	Tot:
+	Bow	Boog
+	Spike	Piek
+	Skip Spaces	Spaties overslaan
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Het illustratiewerk is te groot om als afbeelding te kopiëren: andere apps krijgen er geen PNG van

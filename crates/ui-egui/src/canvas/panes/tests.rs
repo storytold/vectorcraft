@@ -151,7 +151,7 @@ fn consolidate_all_windows_shows_one_document_again() {
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0.len(), 2);
-    assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({})).unwrap(), json!({"tiled": false}));
+    assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({})).unwrap(), json!({"tiled": false, "floating": []}));
     frame(&mut app, &ctx, vec![]);
     assert!(panes(&app).0.is_empty() && app.canvas.panes.shown.is_empty());
     assert_eq!(app.canvas_rect, Some(tabbed), "the current document fills the document area again");
@@ -177,6 +177,18 @@ fn arrange_items_follow_the_open_documents() {
     frame(&mut app, &ctx, vec![]);
     assert_eq!(items(&app), (false, false), "every document closed");
     assert!(!app.ui.tiled);
+}
+
+#[test]
+fn tile_with_one_document_leaves_the_next_one_under_its_tab() {
+    let mut app = app_with(1);
+    let ctx = egui::Context::default();
+    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": false, "panes": 1}));
+    assert!(!app.ui.tiled);
+    assert!(!enabled(&app, "window.arrange.consolidateAllWindows"));
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert!(panes(&app).0.is_empty(), "the second document opens under its tab");
 }
 
 #[test]

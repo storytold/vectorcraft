@@ -1203,6 +1203,7 @@ file-filter	Templates	範本
 	Flip Row Order	反轉列順序
 	Flip Vertical	垂直翻轉
 	Float in Window	在視窗中浮動
+	Float All in Windows	全部在視窗中浮動
 	Focal Fill	焦點填色
 	Focal Stroke	焦點筆畫
 	Folder	資料夾
@@ -2496,7 +2497,7 @@ file-filter	Templates	範本
 @msg	the action has no steps	動作沒有步驟
 @msg	cancelled; nothing was changed	已取消；未做任何變更
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	「儲存」會寫入 {_1}，而非 {_2}：若要寫入該格式，請使用 file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 會寫入舊版 .ai 檔案；.ait 範本一律與 PDF 相容
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 會寫入舊版 .ai 檔案，不會寫入 .ait 範本
 @msg	a mask has more than one art block	遮色片含有多個圖稿區塊
 @msg	mask art ends outside a mask dictionary	遮色片圖稿在遮色片字典之外結束
 @msg	`{key}` must be a #rrggbb color	`{key}` 必須是 #rrggbb 格式的顏色
@@ -2576,6 +2577,8 @@ file-filter	Templates	範本
 	Large Thumbnail View	大縮圖檢視
 	Large Thumbnails	大縮圖
 	Lasso Tool	套索工具
+	Enclosing Lasso Tool	包圍套索工具
+	Enclosing Lasso	包圍套索
 	Last Effect: {name}	最後一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	最後一次效果…
@@ -2728,6 +2731,7 @@ file-filter	Templates	範本
 	Manually	手動
 	Mark as trapped	標示為已陷印
 	Mark Older Files as [Converted] When Opened	開啟舊檔時標示為 [已轉換]
+	Use System Defaults for Edit Original	「編輯原稿」使用系統預設值
 	Marker…	標記…
 	Marks	標記
 	Marks and Bleed	標記與出血
@@ -2789,6 +2793,7 @@ file-filter	Templates	範本
 	Modified:	修改時間：
 	Modify	修改
 	Insert Kashidas	插入卡希達
+	Kashidas	卡希達
 	Long	長
 	Stylistic	風格化
 	Mojikumi Set	標點間距
@@ -3595,6 +3600,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Replace Spine	取代脊線
 	Replace Symbol	取代符號
 	Replace With Font	取代為字體
+	Replace With Font From	取代字體來源
+	System	系統
 	Replaces the saved preset of that name.	取代同名的已儲存預設集。
 	Replace…	取代…
 	Require a password to open the document	開啟文件時需要密碼
@@ -5214,6 +5221,11 @@ lighting	Light	光源
 	Export Type:	轉存類型:
 	Movie Clip	影片片段
 @msg	name is empty	名稱為空
+@msg	an action is already recording	已在錄製動作
+@msg	no such function key	沒有這個功能鍵
+@msg	no such color	沒有這個顏色
+@msg	{_1} cannot be used on Windows	{_1} 無法在 Windows 上使用
+@msg	more than one action is named “{_1}”	有多個動作名為「{_1}」
 @msg	no symbol named `{n}`	沒有名為 `{n}` 的符號
 	Smudge Stick…	塗抹棒…
 	Smudge Stick	塗抹棒
@@ -5368,6 +5380,13 @@ axis	Y Axis	Y 軸
 	Action Options…	動作選項…
 	Action Options	動作選項
 	Rename Action	重新命名動作
+	New Action…	新增動作…
+	New Action	新增動作
+	Create New Action	建立新動作
+	Play Action	播放動作
+	Action Set:	動作組：
+	Function Key:	功能鍵：
+	Record	錄製
 	Create New Set	建立新組
 	Stop Global Edit	停止整體編輯
 	Global Edit Options	整體編輯選項
@@ -5640,6 +5659,11 @@ anchor	Points:	點：
 	Horizontal Scale	水平縮放
 	Vertical Scale	垂直縮放
 @msg	{label} must be a number from {min} to {max}	{label} 必須是 {min} 到 {max} 之間的數字
+	Character Color	字元顏色
+	OpenType Features	OpenType 功能
+	Stylistic Sets	風格集
+@msg	features lists at most {max} tags	features 最多包含 {max} 個標籤
+@msg	unknown OpenType feature `{t}`	未知的 OpenType 功能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必須是大於 0 且不超過 {max} 的數字
 @msg	no character style `{name}`	找不到字元樣式 `{name}`
 
@@ -5890,3 +5914,14 @@ breakText	Glyphs	字符
 	Create Swatch Legend	建立色票圖例
 	Create Swatch Legend…	建立色票圖例…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	文字工具
+	Text Tweaker…	文字微調…
+	Text Tweaker	文字微調
+	Attribute:	屬性：
+	From:	起始：
+	To:	結束：
+	Bow	弓形
+	Spike	尖峰
+	Skip Spaces	略過空格
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	圖稿太大，無法作為圖片複製：其他應用程式不會取得它的 PNG

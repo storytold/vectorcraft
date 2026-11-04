@@ -229,15 +229,9 @@ pub fn open_reporting(app: &mut VectorcraftApp, path: &str) -> Result<Value, Str
     r
 }
 
-/// Home › Recent Files and File › Open Recent: focus an already-open tab for that path instead of
-/// calling `document.open` again (#3455).
-pub fn open_recent_reporting(app: &mut VectorcraftApp, path: &str) -> Result<Value, String> {
-    if let Some(r) = try_activate_open_document(app, path)? {
-        return Ok(r);
-    }
-    open_reporting(app, path)
-}
-
+/// A file already open in a tab is not opened again: its tab comes to the front, unsaved edits
+/// and all (#3455), without the questions asked after an open (missing links and fonts).
+/// → `{activated: true, …}` as `document.open`'s result, or None.
 fn try_activate_open_document(app: &mut VectorcraftApp, path: &str) -> Result<Option<Value>, String> {
     let Some(index) = document_index_for_path(app, path) else {
         return Ok(None);
@@ -252,7 +246,7 @@ fn try_activate_open_document(app: &mut VectorcraftApp, path: &str) -> Result<Op
         "activated": true,
     });
     app.run("document.activate", json!({ "index": index }))?;
-    opened(app, &r);
+    app.sync_views();
     Ok(Some(r))
 }
 
@@ -279,6 +273,14 @@ pub fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<Value, String> 
 /// [`open_path`]; with `background`, a document (not a file that installs, imports or asks
 /// first) is decoded off the UI thread ([`crate::opening::start`]).
 pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) -> Result<Value, String> {
+    // File › Open, Open Recent, the Home screen, a drop and the Finder all focus a document that
+    // is already open, or still being read, instead of opening a second copy.
+    if let Some(r) = try_activate_open_document(app, path)? {
+        return Ok(r);
+    }
+    if app.opening.pending.iter().any(|p| same_open_path(&p.path, path)) {
+        return Ok(Value::Null);
+    }
     // A shortcut set is read by Import Shortcut Set, up to its reader's cap.
     if dialogs::shortcut_import::is_kys(path) {
         dialogs::shortcut_import::command(app, &json!({ "path": path }))?;

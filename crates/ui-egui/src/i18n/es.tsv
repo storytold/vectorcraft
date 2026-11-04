@@ -1227,6 +1227,7 @@ font-technology	Variable	Variables
 	Flip Row Order	Invertir orden de filas
 	Flip Vertical	Voltear verticalmente
 	Float in Window	Flotar en ventana
+	Float All in Windows	Flotar todo en ventanas
 	Focal Fill	Relleno focal
 	Focal Stroke	Trazo focal
 	Folder	Carpeta
@@ -1713,6 +1714,8 @@ font-technology	Variable	Variables
 	Large Thumbnail View	Vista de miniaturas grandes
 	Large Thumbnails	Miniaturas grandes
 	Lasso Tool	Herramienta Lazo
+	Enclosing Lasso Tool	Herramienta Lazo envolvente
+	Enclosing Lasso	Lazo envolvente
 	Last Effect: {name}	Último efecto: {name}
 	Last Effect: {}	Último efecto: {}
 	Last Effect…	Último efecto…
@@ -1864,6 +1867,7 @@ font-technology	Variable	Variables
 	Manually	Manualmente
 	Mark as trapped	Marcar como reventado
 	Mark Older Files as [Converted] When Opened	Marcar archivos antiguos como [Convertido] al abrirlos
+	Use System Defaults for Edit Original	Usar valores predeterminados del sistema para Editar original
 	Marker…	Marcador…
 	Marks	Marcas
 	Marks and Bleed	Marcas y sangrado
@@ -1926,6 +1930,7 @@ font-technology	Variable	Variables
 	Modify	Modificar
 	Mojikumi	Mojikumi
 	Insert Kashidas	Insertar kashidas
+	Kashidas	Kashidas
 	Long	Larga
 	Stylistic	Estilística
 	Mojikumi Set	Conjunto de mojikumi
@@ -2710,6 +2715,8 @@ digits	Malayalam	Malayálam
 	Replace Spine	Reemplazar eje
 	Replace Symbol	Reemplazar símbolo
 	Replace With Font	Reemplazar con fuente
+	Replace With Font From	Reemplazar con fuente de
+	System	Sistema
 	Replaces the saved preset of that name.	Reemplaza el preajuste guardado con ese nombre.
 	Replace…	Reemplazar…
 	Require a password to open the document	Solicitar una contraseña para abrir el documento
@@ -3990,7 +3997,7 @@ axis	Both	Ambos
 @msg	Save for Web: the image is empty	Guardar para web: la imagen está vacía
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Guardar escribe {_1}, no {_2}: usa document.export para otros formatos
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Guardar escribe {_1}, no {_2}: usa file.saveAsTemplate para escribirlo
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 escribe archivos .ai heredados; una plantilla .ait siempre es compatible con PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 escribe archivos .ai heredados, no plantillas .ait
 @msg	Saved recovery data for {title}	Se guardaron los datos de recuperación de {title}
 @msg	Saved to User Defined: {_1}	Se guardó en Definido por el usuario: {_1}
 @msg	Saved {path}	Se guardó {path}
@@ -5505,6 +5512,11 @@ mark-style	Japanese	Japonesas
 	Export Type:	Tipo de exportación:
 	Movie Clip	Clip de película
 @msg	name is empty	el nombre está vacío
+@msg	an action is already recording	ya se está grabando una acción
+@msg	no such function key	no existe esa tecla de función
+@msg	no such color	no existe ese color
+@msg	{_1} cannot be used on Windows	{_1} no se puede usar en Windows
+@msg	more than one action is named “{_1}”	más de una acción se llama “{_1}”
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
 	Smudge Stick…	Difuminar con barra…
 	Smudge Stick	Difuminar con barra
@@ -5675,6 +5687,13 @@ axis	Y Axis	Eje Y
 	Action Options…	Opciones de acción…
 	Action Options	Opciones de acción
 	Rename Action	Cambiar nombre de acción
+	New Action…	Nueva acción…
+	New Action	Nueva acción
+	Create New Action	Crear nueva acción
+	Play Action	Reproducir acción
+	Action Set:	Conjunto de acciones:
+	Function Key:	Tecla de función:
+	Record	Grabar
 	Create New Set	Crear nuevo conjunto
 	Stop Global Edit	Detener edición global
 	Global Edit Options	Opciones de edición global
@@ -5945,6 +5964,11 @@ anchor	Points:	Puntos:
 	Horizontal Scale	Escala horizontal
 	Vertical Scale	Escala vertical
 @msg	{label} must be a number from {min} to {max}	{label} debe ser un número de {min} a {max}
+	Character Color	Color de los caracteres
+	OpenType Features	Funciones OpenType
+	Stylistic Sets	Conjuntos estilísticos
+@msg	features lists at most {max} tags	features admite como máximo {max} etiquetas
+@msg	unknown OpenType feature `{t}`	función OpenType desconocida `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} debe ser un número mayor que 0 y como máximo {max}
 @msg	no character style `{name}`	No existe el estilo de carácter `{name}`
 
@@ -6194,3 +6218,14 @@ breakText	Glyphs	Glifos
 	Create Swatch Legend	Crear leyenda de muestras
 	Create Swatch Legend…	Crear leyenda de muestras…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Herramientas de texto
+	Text Tweaker…	Ajustador de texto…
+	Text Tweaker	Ajustador de texto
+	Attribute:	Atributo:
+	From:	Desde:
+	To:	Hasta:
+	Bow	Arco
+	Spike	Pico
+	Skip Spaces	Omitir espacios
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	La ilustración es demasiado grande para copiarla como imagen: las demás aplicaciones no reciben un PNG de ella

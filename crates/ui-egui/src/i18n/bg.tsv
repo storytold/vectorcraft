@@ -1178,6 +1178,7 @@ font-technology	Variable	Променливи
 	Flip Row Order	Обръщане реда на редовете
 	Flip Vertical	Вертикално обръщане
 	Float in Window	Плаващ прозорец
+	Float All in Windows	Всички в плаващи прозорци
 	Focal Fill	Фокусно запълване
 	Focal Stroke	Фокусен щрих
 	Folder	Папка
@@ -1662,6 +1663,8 @@ font-technology	Variable	Променливи
 	Large Thumbnail View	Изглед с големи миниатюри
 	Large Thumbnails	Големи миниатюри
 	Lasso Tool	Инструмент „Ласо“
+	Enclosing Lasso Tool	Инструмент „Обхващащо ласо“
+	Enclosing Lasso	Обхващащо ласо
 	Last Effect: {name}	Посл. ефект: {name}
 	Last Effect: {}	Посл. ефект: {}
 	Last Effect…	Посл. ефект…
@@ -1799,6 +1802,7 @@ font-technology	Variable	Променливи
 	Manually	Ръчно
 	Mark as trapped	Маркиране като прехванато
 	Mark Older Files as [Converted] When Opened	Маркиране на по-стари файлове като [Конвертирани] при отваряне
+	Use System Defaults for Edit Original	Системни настройки по подразбиране за „Редактиране на оригинал“
 	Marker…	Маркер…
 	Marks	Маркери
 	Marks and Bleed	Маркери и изтичане
@@ -1861,6 +1865,7 @@ font-technology	Variable	Променливи
 	Modify	Модифициране
 	Mojikumi	Моджикуми
 	Insert Kashidas	Вмъкване на кашиди
+	Kashidas	Кашиди
 	Long	Дълго
 	Stylistic	Стилистично
 	Mojikumi Set	Набор Mojikumi
@@ -2640,6 +2645,8 @@ digits	Malayalam	Малаялам
 	Replace Spine	Замяна на оста
 	Replace Symbol	Замяна на символ
 	Replace With Font	Замяна с шрифт
+	Replace With Font From	Замяна с шрифт от
+	System	Система
 	Replaces the saved preset of that name.	Заменя записаната предварителна настройка с това име.
 	Replace…	Замяна…
 	Require a password to open the document	Изискване на парола за отваряне на документа
@@ -5473,6 +5480,11 @@ theme	Appearance	Външен вид
 	Export Type:	Тип на експортиране:
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
+@msg	an action is already recording	вече се записва действие
+@msg	no such function key	няма такъв функционален клавиш
+@msg	no such color	няма такъв цвят
+@msg	{_1} cannot be used on Windows	{_1} не може да се използва в Windows
+@msg	more than one action is named “{_1}”	повече от едно действие се казва „{_1}“
 @msg	no symbol named `{n}`	няма символ с име `{n}`
 	Smudge Stick…	Размазваща пръчка…
 	Smudge Stick	Размазваща пръчка
@@ -5619,6 +5631,13 @@ axis	Y Axis	Y ос
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
 	Rename Action	Преименуване на действие
+	New Action…	Ново действие…
+	New Action	Ново действие
+	Create New Action	Създаване на ново действие
+	Play Action	Изпълнение на действие
+	Action Set:	Набор от действия:
+	Function Key:	Функционален клавиш:
+	Record	Запис
 	Create New Set	Създаване на нов набор
 	Stop Global Edit	Край на глобалното редактиране
 	Global Edit Options	Опции за глобално редактиране
@@ -6109,3 +6128,14 @@ breakText	Glyphs	Глифи
 	Create Swatch Legend	Създаване на легенда на образците
 	Create Swatch Legend…	Създаване на легенда на образците…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Инструменти за текст
+	Text Tweaker…	Настройка на текста…
+	Text Tweaker	Настройка на текста
+	Attribute:	Атрибут:
+	From:	От:
+	To:	До:
+	Bow	Дъга
+	Spike	Връх
+	Skip Spaces	Пропускане на интервалите
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Графиката е твърде голяма, за да се копира като изображение: другите приложения не получават PNG от нея

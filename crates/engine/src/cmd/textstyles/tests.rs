@@ -257,6 +257,159 @@ fn new_character_style_keeps_a_language_tag_from_the_text() {
     assert!(error.contains("unknown language"), "{error}");
 }
 
+/// The fill of the first run of `id` and its overprint flags, its stroke and stroke weight.
+fn run_paints(s: &Session, id: u64) -> (vectorcraft_color::Paint, vectorcraft_color::Paint, f64, bool, bool) {
+    let st = runs(s, id)[0].style.clone();
+    (st.fill, st.stroke, st.stroke_width, st.overprint_fill, st.overprint_stroke)
+}
+
+#[test]
+fn character_style_color_and_features_reach_text_and_follow_swatch_edits() {
+    let (mut s, id) = session_with_text("Text 1/2");
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#2050a0", "global": true})).unwrap();
+    let brand = s.doc().unwrap().doc.tint_paint("Brand", 1.0).unwrap();
+    let mut tinted = serde_json::to_value(s.doc().unwrap().doc.tint_paint("Brand", 1.0).unwrap()).unwrap();
+    // The command takes the color of the link at the tint, whatever color is sent.
+    tinted["tint"] = json!(0.4);
+    let attrs = json!({"fill": brand, "stroke": tinted, "stroke_width": 2.0, "overprint_fill": true, "overprint_stroke": false,
+        "features": ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01"]});
+    s.execute("charStyle.new", &json!({"name": "Ink", "attrs": attrs})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Ink", "id": id})).unwrap();
+    let want_stroke = s.doc().unwrap().doc.tint_paint("Brand", 0.4).unwrap();
+    assert_eq!(run_paints(&s, id), (brand, want_stroke.clone(), 2.0, true, false));
+    assert_eq!(runs(&s, id)[0].style.features, ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01"]);
+    let def = |s: &Session| s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Ink").unwrap().attrs.clone();
+    assert_eq!(def(&s)["stroke"], serde_json::to_value(&want_stroke).unwrap());
+    let saved = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(saved.char_styles.iter().find(|d| d.name == "Ink").unwrap().attrs, def(&s));
+
+    s.execute("swatch.edit", &json!({"name": "Brand", "color": "#a02050"})).unwrap();
+    let (brand, tint40) = (s.doc().unwrap().doc.tint_paint("Brand", 1.0).unwrap(), s.doc().unwrap().doc.tint_paint("Brand", 0.4).unwrap());
+    assert_eq!(run_paints(&s, id).0, brand);
+    assert_eq!(run_paints(&s, id).1, tint40);
+    assert_eq!(def(&s)["fill"], serde_json::to_value(&brand).unwrap());
+    assert_eq!(def(&s)["stroke"], serde_json::to_value(&tint40).unwrap());
+    let later = s.execute("text.create", &json!({"x": 10, "y": 90, "text": "Later"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Ink", "id": later})).unwrap();
+    assert_eq!(run_paints(&s, later).0, brand);
+}
+
+#[test]
+fn character_style_color_and_features_are_checked() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#2050a0", "global": true})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Body", "attrs": {}})).unwrap();
+    let mut over = serde_json::to_value(s.doc().unwrap().doc.tint_paint("Brand", 1.0).unwrap()).unwrap();
+    over["tint"] = json!(1.5);
+    let mut missing = over.clone();
+    missing["tint"] = json!(0.5);
+    missing["swatch"] = json!("Gone");
+    s.execute("swatch.new", &json!({"name": "Local", "color": "#102030"})).unwrap();
+    let mut local = missing.clone();
+    local["swatch"] = json!("Local");
+    let many: Vec<String> = (0..=vectorcraft_text::MAX_STYLE_FEATURES).map(|_| "dlig".to_string()).collect();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for (attrs, message) in [
+        (json!({"fill": over}), "`fill.tint` must be from 0 to 1"),
+        (json!({"stroke": missing}), "no swatch `Gone`"),
+        (json!({"stroke": local}), "`Local` is a process colour"),
+        (json!({"stroke_width": -1.0}), "`stroke_width` must be from 0 to 4000000"),
+        (json!({"stroke_width": 5.0e6}), "`stroke_width` must be from 0 to 4000000"),
+        (json!({"features": ["dlig", "zzzz"]}), "unknown OpenType feature `zzzz`"),
+        (json!({"features": ["--liga"]}), "unknown OpenType feature `--liga`"),
+        (json!({"features": many}), "features lists at most 256 tags"),
+        (json!({"fill": {"type": "solid"}}), "missing field"),
+    ] {
+        for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
+            let p = match cmd {
+                "charStyle.edit" => json!({"name": "Body", "to": "Body", "attrs": attrs}),
+                "charStyle.new" => json!({"name": "Other", "attrs": attrs}),
+                _ => json!({"name": "Body", "attrs": attrs}),
+            };
+            let error = s.execute(cmd, &p).unwrap_err().to_string();
+            assert!(error.contains(message), "{cmd} {attrs}: {error}");
+        }
+    }
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn text_style_rejects_doubly_signed_feature_tags() {
+    let (mut s, id) = session_with_text("Text");
+    let before = runs(&s, id);
+    let undo = s.doc().unwrap().history.undo.len();
+    for cmd in ["text.setStyle", "text.setRangeStyle"] {
+        for tag in ["--liga", "+-dnom", "-+ss01", "++liga"] {
+            let error = s.execute(cmd, &json!({"id": id, "start": 0, "end": 4, "features": [tag]})).unwrap_err().to_string();
+            assert!(error.contains(&format!("`{tag}`")), "{cmd}: {error}");
+        }
+    }
+    assert_eq!(runs(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn style_paints_count_as_swatch_uses_and_gradient_stops_are_checked() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#2050a0", "global": true})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Spare", "color": "#a02050", "global": true})).unwrap();
+    let unused = |s: &mut Session| s.execute("swatch.unused", &json!({})).unwrap()["names"].clone();
+    assert!(unused(&mut s).as_array().unwrap().contains(&json!("Brand")));
+    let brand = s.doc().unwrap().doc.tint_paint("Brand", 0.5).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Ink", "attrs": {"stroke": brand}})).unwrap();
+    let names = unused(&mut s);
+    assert!(!names.as_array().unwrap().contains(&json!("Brand")), "{names}");
+    assert!(names.as_array().unwrap().contains(&json!("Spare")), "{names}");
+
+    let mut g = vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default());
+    g.gradient.stops[0].swatch = Some("Brand".into());
+    g.gradient.stops[0].tint = 0.25;
+    let fill = serde_json::to_value(vectorcraft_color::Paint::Gradient(Box::new(g.clone()))).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Fade", "attrs": {"fill": fill}})).unwrap();
+    let def = s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Fade").unwrap().attrs.clone();
+    let want = s.doc().unwrap().doc.global_color("Brand").unwrap().tinted(0.25);
+    assert_eq!(def["fill"]["gradient"]["stops"][0]["color"], serde_json::to_value(want).unwrap());
+    g.gradient.stops[0].swatch = Some("Gone".into());
+    let gone = serde_json::to_value(vectorcraft_color::Paint::Gradient(Box::new(g))).unwrap();
+    let error = s.execute("charStyle.new", &json!({"name": "Bad", "attrs": {"fill": gone}})).unwrap_err().to_string();
+    assert!(error.contains("no swatch `Gone`"), "{error}");
+}
+
+#[test]
+fn styles_from_files_keep_their_unknown_feature_tags_and_swatch_links() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("charStyle.new", &json!({"name": "Body", "attrs": {}})).unwrap();
+    let linked = json!({"type": "solid", "color": {"model": "rgb", "r": 1.0, "g": 0.0, "b": 0.0}, "swatch": "Gone"});
+    if let Some(def) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).char_styles.iter_mut().find(|d| d.name == "Body") {
+        def.attrs.insert("features".into(), json!(["zzzz", "dlig"]));
+        def.attrs.insert("fill".into(), linked.clone());
+    }
+    let fill = s.doc().unwrap().doc.char_styles[0].attrs["fill"].clone();
+    s.execute("charStyle.edit", &json!({"name": "Body", "to": "Body", "attrs": {"features": ["zzzz", "-dlig"], "fill": fill}})).unwrap();
+    let def = s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Body").unwrap().attrs.clone();
+    assert_eq!(def["features"], json!(["zzzz", "-dlig"]));
+    let mut replaced = def.clone();
+    replaced.insert("size".into(), json!(14.0));
+    s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": replaced})).unwrap();
+    s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": def})).unwrap();
+    s.execute("charStyle.duplicate", &json!({"name": "Body"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Body copy").unwrap().attrs, def);
+    // A list longer than a style made here can have stays editable, but does not grow.
+    let long: Vec<String> = (0..300).map(|i| if i % 2 == 0 { "dlig".to_string() } else { "-dlig".to_string() }).collect();
+    if let Some(def) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).char_styles.iter_mut().find(|d| d.name == "Body") {
+        def.attrs.insert("features".into(), json!(long));
+    }
+    let mut shorter = long.clone();
+    shorter.pop();
+    s.execute("charStyle.edit", &json!({"name": "Body", "to": "Body", "attrs": {"features": shorter}})).unwrap();
+    let mut longer = shorter.clone();
+    longer.extend(["swsh".to_string(), "salt".to_string()]);
+    let error = s.execute("charStyle.edit", &json!({"name": "Body", "to": "Body", "attrs": {"features": longer}})).unwrap_err().to_string();
+    assert!(error.contains("features lists at most 256 tags"), "{error}");
+}
+
 #[test]
 fn editing_character_style_clears_removed_size_without_losing_local_override() {
     let (mut s, id) = session_with_text("One two");

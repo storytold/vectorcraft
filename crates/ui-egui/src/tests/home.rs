@@ -299,10 +299,11 @@ fn home_scrolls_in_a_short_window() {
     assert_eq!(app.session.documents().len(), 1, "the card opened its preset");
 }
 
-/// Home › Recent Files and File › Open Recent focus an open tab instead of opening a second copy
-/// (#3455); `document.open` is unchanged.
+/// A file that is already open is not opened again, however it is asked for: Home › Recent Files,
+/// File › Open Recent, File › Open, the Finder and a drop all focus its tab, unsaved edits and all
+/// (#3455).
 #[test]
-fn home_recent_reopen_focuses_an_already_open_document() {
+fn reopening_an_open_file_focuses_its_tab() {
     let services = crate::Services {
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
@@ -316,13 +317,35 @@ fn home_recent_reopen_focuses_an_already_open_document() {
     app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
     app.run("shape.rectangle", json!({"x": 1, "y": 2, "width": 10, "height": 10})).unwrap();
     app.run("file.saveAs", json!({"path": path})).unwrap();
-    app.run("file.new", json!({})).unwrap();
-    assert_eq!(app.session.documents().len(), 2);
-    assert_eq!(app.session.active_index(), Some(1));
-    let r = crate::io::open_recent_reporting(&mut app, &path).unwrap();
+    // An edit not saved yet.
+    app.run("shape.rectangle", json!({"x": 20, "y": 2, "width": 10, "height": 10})).unwrap();
+    let back = |app: &mut VectorcraftApp| {
+        app.run("file.new", json!({})).unwrap();
+        assert_eq!(app.session.documents().len(), 2);
+    };
+    let focused = |app: &VectorcraftApp, how: &str| {
+        assert_eq!(app.session.documents().len(), 2, "{how}: no second copy");
+        assert_eq!(app.session.active_index(), Some(0), "{how}");
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 2, "{how}: the unsaved edit is kept");
+        app.session.doc().unwrap().uid
+    };
+    back(&mut app);
+    // Home › Recent Files, File › Open Recent, File › Open… and the Finder.
+    let r = crate::io::open_reporting(&mut app, &path).unwrap();
     assert_eq!(r["activated"], true);
-    assert_eq!(app.session.documents().len(), 2);
-    assert_eq!(app.session.active_index(), Some(0));
-    assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
+    let uid = focused(&app, "open_reporting");
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("file.close", json!({})).unwrap();
+    back(&mut app);
+    // File › Open with a path (an open dialog's answer, `app.open`), and a path spelled differently.
+    let other = d.join(".").join("doc.vectorcraft").to_string_lossy().to_string();
+    assert_eq!(app.run("file.open", json!({"path": other})).unwrap()["activated"], true);
+    assert_eq!(focused(&app, "file.open"), uid);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("file.close", json!({})).unwrap();
+    back(&mut app);
+    // A drop.
+    crate::place::drop_files(&mut app, vec![(crate::place::DropTarget::Open, ("doc.vectorcraft".into(), Some(path.clone()), vec![]))]);
+    assert_eq!(focused(&app, "drop"), uid);
     let _ = std::fs::remove_dir_all(d);
 }

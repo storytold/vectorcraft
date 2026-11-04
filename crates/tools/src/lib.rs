@@ -124,6 +124,12 @@ pub trait Tool: Send {
     fn key(&mut self, _cx: &ToolContext, _key: ToolKey, _mods: Mods) -> Vec<Action> {
         vec![]
     }
+    /// The press in progress is dropped (a long touch, a canceled touch, a second finger): the
+    /// engine has undone its interaction and sends a release after this. By default the tool takes
+    /// Escape, as during a drag.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.key(cx, ToolKey::Escape, Mods::default())
+    }
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         vec![]
     }
@@ -532,6 +538,7 @@ mod cursor_tests {
         let away = Point::new(400.0, 400.0);
         for (id, c) in [
             ("lasso", Cursor::Lasso),
+            (addons::enclosing_lasso::ID, Cursor::Lasso),
             ("magicWand", Cursor::MagicWand),
             ("paintbrush", Cursor::Paintbrush),
             ("blobBrush", Cursor::BlobBrush),

@@ -146,9 +146,14 @@ impl Shared {
     fn long_running(&self, st: &State) -> Option<Value> {
         let r = st.running.as_ref()?;
         let secs = r.since.elapsed();
-        (secs >= self.busy_after).then(|| json!({"running": r.label, "requestId": r.key, "seconds": secs.as_secs()}))
+        // A long id isn't repeated: every busy reply would carry it twice.
+        let key = r.key.as_deref().filter(|k| k.len() <= MAX_ECHOED_ID);
+        (secs >= self.busy_after).then(|| json!({"running": r.label, "requestId": key, "seconds": secs.as_secs()}))
     }
 }
+
+/// The longest running request id a busy reply repeats (as JSON, quotes included).
+const MAX_ECHOED_ID: usize = 256;
 
 /// The id of a request message: `Some` when `msg` is a JSON-RPC 2.0 request with a usable id.
 fn request_id(msg: &Value) -> Option<&Value> {

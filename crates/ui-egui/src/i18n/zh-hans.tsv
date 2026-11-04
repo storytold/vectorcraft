@@ -1177,6 +1177,7 @@ file-filter	Templates	模板
 	Flip Row Order	反转行顺序
 	Flip Vertical	垂直翻转
 	Float in Window	在窗口中浮动
+	Float All in Windows	全部在窗口中浮动
 	Focal Fill	焦点填色
 	Focal Stroke	焦点描边
 	Folder	文件夹
@@ -1629,6 +1630,8 @@ file-filter	Templates	模板
 	Large Thumbnail View	大缩略图视图
 	Large Thumbnails	大缩略图
 	Lasso Tool	套索工具
+	Enclosing Lasso Tool	包围套索工具
+	Enclosing Lasso	包围套索
 	Last Effect: {name}	最后一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	上次效果…
@@ -1744,7 +1747,7 @@ file-filter	Templates	模板
 	Lossy:	有损：
 	Low	低
 	lowercase	小写
-	Luminosity	亮度
+	Luminosity	明度
 	LZW Compression	LZW 压缩
 	Mac	Mac
 	Magenta	洋红
@@ -1774,6 +1777,7 @@ file-filter	Templates	模板
 	Manually	手动
 	Mark as trapped	标示为已陷印
 	Mark Older Files as [Converted] When Opened	打开旧文件时标记为 [已转换]
+	Use System Defaults for Edit Original	“编辑原稿”使用系统默认设置
 	Marker…	标记…
 	Marks	标记
 	Marks and Bleed	标记和出血
@@ -2613,6 +2617,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Replace Spine	替换脊线
 	Replace Symbol	替换符号
 	Replace With Font	替换为字体
+	Replace With Font From	替换字体来源
+	System	系统
 	Replaces the saved preset of that name.	替换同名已存预设。
 	Replace…	替换…
 	Require a password to open the document	打开文档时需要密码
@@ -4902,6 +4908,7 @@ font-technology	Variable	可变
 	Right-to-Left Paragraph Direction	从右到左段落方向
 	Line-end Punctuation Half Width	行尾标点半角
 	Insert Kashidas	插入卡希达
+	Kashidas	卡希达
 	Long	长
 	Stylistic	风格化
 	Mojikumi Set	标点挤压集
@@ -5397,6 +5404,11 @@ lighting	Light	光源
 	Export Type:	导出类型:
 	Movie Clip	影片剪辑
 @msg	name is empty	名称为空
+@msg	an action is already recording	已在记录动作
+@msg	no such function key	没有此功能键
+@msg	no such color	没有此颜色
+@msg	{_1} cannot be used on Windows	{_1} 在 Windows 上不能使用
+@msg	more than one action is named “{_1}”	有多个动作名为“{_1}”
 @msg	no symbol named `{n}`	没有名为 `{n}` 的符号
 	Smudge Stick…	涂抹棒…
 	Smudge Stick	涂抹棒
@@ -5423,7 +5435,7 @@ lighting	Light	光源
 	Enable Guides for 9-Slice Scaling	启用 9-slice 缩放参考线
 @msg	cancelled; nothing was changed	已取消；未做任何更改
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	保存会写入 {_1}，而不是 {_2}：要写入该格式请使用 file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 写入旧版 .ai 文件；.ait 模板始终与 PDF 兼容
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 写入旧版 .ai 文件，不写入 .ait 模板
 @msg	a mask has more than one art block	蒙版包含多个图稿块
 @msg	mask art ends outside a mask dictionary	蒙版图稿在蒙版字典之外结束
 @msg	`{key}` must be a #rrggbb color	`{key}` 必须是 #rrggbb 格式的颜色
@@ -5572,6 +5584,13 @@ axis	Y Axis	Y 轴
 	Action Options…	动作选项…
 	Action Options	动作选项
 	Rename Action	重命名动作
+	New Action…	新建动作…
+	New Action	新建动作
+	Create New Action	创建新动作
+	Play Action	播放动作
+	Action Set:	动作组：
+	Function Key:	功能键：
+	Record	记录
 	Create New Set	创建新组
 	Stop Global Edit	停止全局编辑
 	Global Edit Options	全局编辑选项
@@ -5844,6 +5863,11 @@ anchor	Points:	点：
 	Horizontal Scale	水平缩放
 	Vertical Scale	垂直缩放
 @msg	{label} must be a number from {min} to {max}	{label} 必须是 {min} 到 {max} 之间的数字
+	Character Color	字符颜色
+	OpenType Features	OpenType 特性
+	Stylistic Sets	风格集
+@msg	features lists at most {max} tags	features 最多包含 {max} 个标签
+@msg	unknown OpenType feature `{t}`	未知的 OpenType 特性 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必须是大于 0 且不超过 {max} 的数字
 @msg	no character style `{name}`	找不到字符样式 `{name}`
 
@@ -6093,3 +6117,14 @@ breakText	Glyphs	字形
 	Create Swatch Legend	创建色板图例
 	Create Swatch Legend…	创建色板图例…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	文字工具
+	Text Tweaker…	文字微调…
+	Text Tweaker	文字微调
+	Attribute:	属性：
+	From:	起始：
+	To:	结束：
+	Bow	弓形
+	Spike	尖峰
+	Skip Spaces	跳过空格
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	图稿太大，无法作为图片复制：其他应用不会获得它的 PNG

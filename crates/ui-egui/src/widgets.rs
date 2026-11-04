@@ -43,7 +43,7 @@ pub use drag::{
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
-pub(crate) use dropdowns::{combo, combo_menu, combo_named};
+pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
     panel_scroll, popover, set_menu_floor, strip_scroll,
@@ -52,9 +52,9 @@ pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_labe
 pub(crate) use labels::{label_field, take_previous_label};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
-    SpinPick, mixed_field, mixed_field_named, num_field, num_field_named, num_field_within, opt_field, opt_field_named, range_field,
-    range_field_named, range_field_stepped, size_field, size_field_named, slider, spin_field, spin_field_auto, spin_field_auto_named,
-    spin_field_named, spin_field_stops_named, spin_kerning, spin_plain, spin_plain_named,
+    SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_within, opt_field, opt_field_named,
+    plain_field_live, range_field, range_field_live, range_field_named, range_field_stepped, size_field, size_field_named, slider, spin_field,
+    spin_field_auto, spin_field_auto_named, spin_field_named, spin_field_stops_named, spin_kerning, spin_plain, spin_plain_named,
 };
 #[cfg(test)]
 use numeric::{decimal_point, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};

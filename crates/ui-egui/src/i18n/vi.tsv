@@ -1432,6 +1432,7 @@ file-filter	Templates	Mẫu
 	Flip Vertical	Lật dọc
 	Flip:	Lật:
 	Float in Window	Nổi trong cửa sổ
+	Float All in Windows	Nổi tất cả trong cửa sổ
 	Float Panel	Thả nổi bảng
 	Float Tool Group	Thả nổi nhóm công cụ
 	Focal Fill	Tô tiêu điểm
@@ -1990,6 +1991,8 @@ digits	Hindi	Hindi
 	Large Thumbnails	Hình thu nhỏ lớn
 	Largest:	Lớn nhất:
 	Lasso Tool	Công cụ Lasso
+	Enclosing Lasso Tool	Công cụ Lasso bao quanh
+	Enclosing Lasso	Lasso bao quanh
 	Last	Cuối cùng
 	Last commit	Commit cuối cùng
 	Last Effect: {name}	Hiệu ứng vừa dùng: {name}
@@ -2172,6 +2175,7 @@ digits	Hindi	Hindi
 	Manually	Thủ công
 	Mark as trapped	Đánh dấu đã chồng màu
 	Mark Older Files as [Converted] When Opened	Đánh dấu tệp cũ là [Đã chuyển đổi] khi mở
+	Use System Defaults for Edit Original	Dùng mặc định hệ thống cho Chỉnh sửa bản gốc
 	Marker…	Ký hiệu đánh dấu…
 	Marks	Dấu in
 	Marks and Bleed	Dấu in và chảy tràn
@@ -2250,6 +2254,7 @@ digits	Hindi	Hindi
 	Modify	Sửa đổi
 	Mojikumi	Mojikumi
 	Insert Kashidas	Chèn kashida
+	Kashidas	Kashida
 	Long	Dài
 	Stylistic	Kiểu cách
 	Mojikumi Set	Bộ Mojikumi
@@ -3004,6 +3009,8 @@ mark-style	Japanese	Kiểu Nhật
 	Replace Spine	Thay thế trục
 	Replace Symbol	Thay thế ký hiệu
 	Replace With Font	Thay thế bằng phông chữ
+	Replace With Font From	Thay thế bằng phông chữ từ
+	System	Hệ thống
 	Replace “{name}”, the file this document was opened from?	Thay thế “{name}”, tệp mà tài liệu này được mở từ đó?
 	Replaces the saved preset of that name.	Thay thế thiết lập sẵn đã lưu có tên đó.
 	Replace…	Thay thế…
@@ -4751,7 +4758,7 @@ theme	Appearance	Giao diện
 @msg	Save for Web: the image is empty	Lưu cho Web: ảnh trống
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Lưu ghi {_1}, không phải {_2}: dùng document.export cho các định dạng khác
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Lưu ghi {_1}, không phải {_2}: dùng file.saveAsTemplate để ghi định dạng này
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 ghi tệp .ai cũ; mẫu .ait luôn tương thích PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 ghi tệp .ai cũ, không ghi mẫu .ait
 @msg	saved panel layout is invalid; reset the workspace first	bố cục bảng đã lưu không hợp lệ; hãy đặt lại không gian làm việc trước
 @msg	Saved recovery data for {title}	Đã lưu dữ liệu phục hồi cho {title}
 @msg	Saved to User Defined: {_1}	Đã lưu vào Người dùng tùy chỉnh: {_1}
@@ -5158,6 +5165,11 @@ theme	Appearance	Giao diện
 	Export Type:	Kiểu xuất:
 	Movie Clip	Clip phim
 @msg	name is empty	tên trống
+@msg	an action is already recording	đang ghi một hành động
+@msg	no such function key	không có phím chức năng như vậy
+@msg	no such color	không có màu như vậy
+@msg	{_1} cannot be used on Windows	không thể dùng {_1} trên Windows
+@msg	more than one action is named “{_1}”	có nhiều hành động tên là “{_1}”
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
 	Smudge Stick…	Bút chì xóa mờ…
 	Smudge Stick	Bút chì xóa mờ
@@ -5331,6 +5343,13 @@ axis	Y Axis	Trục Y
 	Action Options…	Tùy chọn hành động…
 	Action Options	Tùy chọn hành động
 	Rename Action	Đổi tên hành động
+	New Action…	Hành động mới…
+	New Action	Hành động mới
+	Create New Action	Tạo hành động mới
+	Play Action	Phát hành động
+	Action Set:	Bộ hành động:
+	Function Key:	Phím chức năng:
+	Record	Ghi
 	Create New Set	Tạo bộ mới
 	Stop Global Edit	Dừng chỉnh sửa toàn cục
 	Global Edit Options	Tùy chọn chỉnh sửa toàn cục
@@ -5603,6 +5622,11 @@ anchor	Points:	Điểm:
 	Horizontal Scale	Tỷ lệ ngang
 	Vertical Scale	Tỷ lệ dọc
 @msg	{label} must be a number from {min} to {max}	{label} phải là một số từ {min} đến {max}
+	Character Color	Màu ký tự
+	OpenType Features	Tính năng OpenType
+	Stylistic Sets	Bộ phong cách
+@msg	features lists at most {max} tags	features chứa tối đa {max} thẻ
+@msg	unknown OpenType feature `{t}`	tính năng OpenType không xác định `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} phải là một số lớn hơn 0 và tối đa {max}
 @msg	no character style `{name}`	Không tìm thấy kiểu ký tự `{name}`
 
@@ -5853,3 +5877,14 @@ breakText	Glyphs	Glyph
 	Create Swatch Legend	Tạo chú giải mẫu màu
 	Create Swatch Legend…	Tạo chú giải mẫu màu…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Công cụ văn bản
+	Text Tweaker…	Tinh chỉnh văn bản…
+	Text Tweaker	Tinh chỉnh văn bản
+	Attribute:	Thuộc tính:
+	From:	Từ:
+	To:	Đến:
+	Bow	Cung
+	Spike	Đỉnh nhọn
+	Skip Spaces	Bỏ qua khoảng trắng
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Hình vẽ quá lớn để sao chép dưới dạng ảnh: các ứng dụng khác không nhận được PNG của nó

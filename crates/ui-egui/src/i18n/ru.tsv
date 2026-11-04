@@ -1236,6 +1236,7 @@ file-filter	Templates	Шаблоны
 	Flip Row Order	Изменить порядок строк
 	Flip Vertical	Отразить по вертикали
 	Float in Window	Плавать в окне
+	Float All in Windows	Все плавающие в окнах
 	Focal Fill	Фокусная заливка
 	Focal Stroke	Фокусная обводка
 	Folder	Папка
@@ -1739,6 +1740,8 @@ file-filter	Templates	Шаблоны
 	Large Thumbnail View	Крупные миниатюры
 	Large Thumbnails	Крупные миниатюры
 	Lasso Tool	Инструмент «Лассо»
+	Enclosing Lasso Tool	Инструмент «Охватывающее лассо»
+	Enclosing Lasso	Охватывающее лассо
 	Last Effect: {name}	Последний эффект: {name}
 	Last Effect: {}	Последний эффект: {}
 	Last Effect…	Последний эффект…
@@ -1890,6 +1893,7 @@ file-filter	Templates	Шаблоны
 	Manually	Вручную
 	Mark as trapped	Пометить как треппинг
 	Mark Older Files as [Converted] When Opened	Помечать старые файлы как [Преобразованные] при открытии
+	Use System Defaults for Edit Original	Использовать системные значения по умолчанию для «Редактировать оригинал»
 	Marker…	Маркер…
 	Marks	Метки
 	Marks and Bleed	Метки и вылет
@@ -1952,6 +1956,7 @@ file-filter	Templates	Шаблоны
 	Modify	Изменить
 	Mojikumi	Mojikumi
 	Insert Kashidas	Вставлять кашиды
+	Kashidas	Кашиды
 	Long	Длинные
 	Stylistic	Стилистические
 	Mojikumi Set	Набор mojikumi
@@ -2738,6 +2743,8 @@ digits	Malayalam	Малаялам
 	Replace Spine	Заменить остов
 	Replace Symbol	Заменить символ
 	Replace With Font	Заменить шрифтом
+	Replace With Font From	Заменить шрифтом из
+	System	Система
 	Replaces the saved preset of that name.	Заменяет сохранённый набор с таким именем.
 	Replace…	Заменить…
 	Require a password to open the document	Требовать пароль для открытия документа
@@ -4027,7 +4034,7 @@ axis	Both	Оба
 @msg	Save for Web: the image is empty	Сохранить для web: изображение пусто
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Сохранение записывает {_1}, а не {_2}: используйте document.export для других форматов
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Сохранение записывает {_1}, а не {_2}: чтобы записать его, используйте file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 записывает устаревшие файлы .ai; шаблон .ait всегда совместим с PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 записывает устаревшие файлы .ai, а не шаблоны .ait
 @msg	Saved recovery data for {title}	Сохранены данные восстановления для {title}
 @msg	Saved to User Defined: {_1}	Сохранено в «Пользовательский»: {_1}
 @msg	Saved {path}	Сохранено: {path}
@@ -5172,6 +5179,11 @@ lighting	Light	Свет
 	Export Type:	Тип экспорта:
 	Movie Clip	Видеоклип
 @msg	name is empty	имя пустое
+@msg	an action is already recording	действие уже записывается
+@msg	no such function key	такой функциональной клавиши нет
+@msg	no such color	такого цвета нет
+@msg	{_1} cannot be used on Windows	Сочетание {_1} нельзя использовать в Windows
+@msg	more than one action is named “{_1}”	несколько действий называются «{_1}»
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
 	Smudge Stick…	Растушёвка…
 	Smudge Stick	Растушёвка
@@ -5345,6 +5357,13 @@ axis	Y Axis	Ось Y
 	Action Options…	Параметры действия…
 	Action Options	Параметры действия
 	Rename Action	Переименовать действие
+	New Action…	Новое действие…
+	New Action	Новое действие
+	Create New Action	Создать новое действие
+	Play Action	Воспроизвести действие
+	Action Set:	Набор действий:
+	Function Key:	Функциональная клавиша:
+	Record	Записать
 	Create New Set	Создать новый набор
 	Stop Global Edit	Завершить глобальное редактирование
 	Global Edit Options	Параметры глобального редактирования
@@ -5980,6 +5999,11 @@ anchor	Points:	Точки:
 	Horizontal Scale	Масштаб по горизонтали
 	Vertical Scale	Масштаб по вертикали
 @msg	{label} must be a number from {min} to {max}	{label} должно быть числом от {min} до {max}
+	Character Color	Цвет символов
+	OpenType Features	Функции OpenType
+	Stylistic Sets	Стилистические наборы
+@msg	features lists at most {max} tags	features содержит не более {max} тегов
+@msg	unknown OpenType feature `{t}`	неизвестная функция OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} должно быть числом больше 0 и не более {max}
 @msg	no character style `{name}`	Стиль символов `{name}` не найден
 
@@ -6341,3 +6365,14 @@ breakText	Glyphs	Глифы
 digits	Hindi	Хинди
 font-script	Japanese	Японский
 shape	Open	Открытый
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Инструменты текста
+	Text Tweaker…	Настройка текста…
+	Text Tweaker	Настройка текста
+	Attribute:	Атрибут:
+	From:	От:
+	To:	До:
+	Bow	Дуга
+	Spike	Пик
+	Skip Spaces	Пропускать пробелы
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Графика слишком велика для копирования в виде изображения: другие приложения не получат её PNG

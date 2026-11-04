@@ -4,10 +4,12 @@
 //! Every operation counts against a budget and procedures nest only so deep, so a looping or
 //! recursing program ends with [`PsError::Limit`] instead of hanging.
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use vectorcraft_geom::Affine;
 
+use super::data::Stream;
 use super::graphics::{GState, Out};
 use super::lex::{IMMEDIATE, Lexer};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
@@ -32,6 +34,9 @@ pub(crate) struct Interp<'a> {
     /// The list of the arrays and dictionaries made since this started ([`super::obj::track`]).
     made: u64,
     pub lex: Lexer<'a>,
+    /// The files being run (`cvx exec`), innermost last: the program reads from the last one, and
+    /// it is `currentfile` while it runs.
+    pub running: Vec<Rc<RefCell<Stream>>>,
     pub stack: Vec<Obj>,
     pub dicts: Vec<DictRef>,
     system: DictRef,
@@ -105,13 +110,18 @@ impl<'a> Interp<'a> {
     pub fn new(src: &'a [u8], g: GState, out: Out) -> Self {
         let made = super::obj::track();
         let system = new_dict();
+        // The standard encodings are also instances of the Encoding category, the same arrays
+        // (PLRM 3rd ed., §3.9.2 and `findencoding`, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>).
+        let encodings = new_dict();
         {
             let mut d = system.borrow_mut();
             for (op, name) in Op::ALL {
                 d.insert(Key::name(name), Obj::Op(*op));
             }
             for name in ["StandardEncoding", "ISOLatin1Encoding"] {
-                d.insert(Key::name(name), encoding());
+                let e = encoding();
+                d.insert(Key::name(name), e.clone());
+                encodings.borrow_mut().insert(Key::name(name), e);
             }
             // An integer, as interpreters have it (`systemdict /languagelevel get 2 ge`): run, the
             // name pushes it all the same.
@@ -122,6 +132,7 @@ impl<'a> Interp<'a> {
             CATEGORIES.split_whitespace().map(|c| (Key::name(c), Obj::dict(Dict::from([(Key::name("Category"), Obj::name(c))])))).collect();
         let resources = new_dict();
         resources.borrow_mut().insert(Key::name("Category"), Obj::dict(categories));
+        resources.borrow_mut().insert(Key::name("Encoding"), Obj::Dict(encodings));
         let fonts = new_dict();
         system.borrow_mut().insert(Key::name("FontDirectory"), Obj::Dict(fonts.clone()));
         for name in ["GlobalFontDirectory", "SharedFontDirectory"] {
@@ -145,6 +156,7 @@ impl<'a> Interp<'a> {
         Self {
             made,
             lex: Lexer::new(src),
+            running: vec![],
             stack: vec![],
             dicts: vec![system.clone(), global.clone(), user.clone()],
             system,
@@ -382,10 +394,7 @@ impl<'a> Interp<'a> {
     pub fn call(&mut self, v: Obj) -> Res {
         match v {
             Obj::Array { items, exec: true } => self.run_proc(&items),
-            Obj::File { stream, exec: true } => match self.program_of(&stream)? {
-                Some(program) => self.run_program(&program),
-                None => Ok(()),
-            },
+            Obj::File { stream, exec: true } => self.run_file(&stream),
             Obj::ExecStr(s) => self.run_program(&s.to_vec()),
             // Through the depth guard: `stopped` and the like call back into here.
             Obj::Op(op) => {
@@ -422,7 +431,35 @@ impl<'a> Interp<'a> {
         r
     }
 
-    /// Run `program` (what is left of an executable file, an executable string), token by token.
+    /// Run file `f` (`cvx exec`), reading its objects from it as it goes. While it runs it is
+    /// `currentfile`, the topmost file being run (PLRM 3rd ed., `currentfile`, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>),
+    /// so data the program reads from there (an inline image's samples) comes from `f`, after the
+    /// object that reads it. The program's own file is being run already.
+    fn run_file(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
+        if matches!(&*f.borrow(), Stream::Current) {
+            return Ok(());
+        }
+        // Its data, decoded from the program it was made over, before it becomes the program.
+        self.materialize(f)?;
+        self.enter()?;
+        self.running.push(f.clone());
+        let r = loop {
+            match self.next_in(f) {
+                Ok((Some(o), immediate)) => {
+                    if let Err(e) = self.scanned(o, immediate).and_then(|o| self.exec_token(o)) {
+                        break Err(e);
+                    }
+                }
+                Ok((None, _)) => break Ok(()),
+                Err(e) => break Err(e),
+            }
+        };
+        self.running.pop();
+        self.depth -= 1;
+        r
+    }
+
+    /// Run `program` (an executable string), token by token.
     fn run_program(&mut self, program: &[u8]) -> Res {
         self.enter()?;
         let mut lex = Lexer::new(program);
@@ -1044,10 +1081,10 @@ impl<'a> Interp<'a> {
                 self.insert(&d, k, Some(v))?;
             }
             Known => {
-                let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
+                let k = self.pop()?;
                 let d = self.pop_dict()?;
-                let known = d.borrow().contains_key(&k);
-                self.push(Obj::Bool(known))?;
+                let found = known(&d, &k)?;
+                self.push(Obj::Bool(found))?;
             }
             Where => {
                 let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
@@ -1409,6 +1446,17 @@ fn index(k: &Obj) -> Res<usize> {
     match *k {
         Obj::Int(i) if i >= 0 => Ok(i as usize),
         _ => ps_err("rangecheck", "an index"),
+    }
+}
+
+/// `known`: a key may be any object but null (PLRM 3rd ed., §3.3.9, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>),
+/// and one that can't be a key here (an array, a dictionary, a real with a fraction) is in no
+/// dictionary, since `put` here refuses it.
+fn known(d: &DictRef, k: &Obj) -> Res<bool> {
+    match k.key() {
+        Some(key) => Ok(d.borrow().contains_key(&key)),
+        None if matches!(k, Obj::Null) => ps_err("typecheck", "known"),
+        None => Ok(false),
     }
 }
 

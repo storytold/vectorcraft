@@ -1871,6 +1871,41 @@ fn escape_drops_the_loaded_text() {
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 30.0, 420.0)), vec![Action::Exec("select.none".into(), json!({}))]);
 }
 
+/// A dropped press with the pointer loaded with text threads nothing, and the text stays loaded:
+/// the next click threads it. A dropped press on the port loads no text.
+#[test]
+fn a_dropped_press_keeps_the_text_loaded() {
+    let (d, id, _, port) = overflowing_area_type();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+    t.drop_press(&cx);
+    t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    assert_ne!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText, "the dropped press loads no text");
+    t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+    t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    // The engine sends the release after the drop.
+    t.pointer(&cx, &ev(PointerKind::Down, 20.0, 20.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 80.0, 90.0));
+    assert!(t.drop_press(&cx).is_empty());
+    assert!(t.pointer(&cx, &ev(PointerKind::Up, 80.0, 90.0)).is_empty(), "the release threads nothing");
+    assert!(!t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Marquee(_))), "the new frame's outline is removed");
+    assert_eq!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText);
+    // A press on the port that loaded the text puts it down; dropped, it leaves the text loaded.
+    t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+    assert!(t.drop_press(&cx).is_empty());
+    t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    assert_eq!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText, "a dropped press on the port");
+    t.pointer(&cx, &ev(PointerKind::Down, 30.0, 420.0));
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Up, 30.0, 420.0)),
+        vec![Action::Exec("text.thread.add".into(), json!({"from": id.0, "at": [30.0, 420.0]}))]
+    );
+}
+
 /// [`doc_with_area_type`], its text fitting its frame; where its in and out ports are.
 fn fitting_area_type() -> (vectorcraft_doc::Document, NodeId, Point, Point) {
     let (d, id) = doc_with_area_type();

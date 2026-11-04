@@ -1992,6 +1992,19 @@ fn select_same_text_fill_and_stroke_color_needs_both_to_match() {
 }
 
 #[test]
+fn select_same_character_colors_ignore_empty_text() {
+    let mut s = session();
+    let a = id_of(&s.execute("text.create", &json!({"x": 0, "y": 20, "text": "a"})).unwrap());
+    let b = id_of(&s.execute("text.create", &json!({"x": 0, "y": 40, "text": "b"})).unwrap());
+    let empty = id_of(&s.execute("text.create", &json!({"x": 0, "y": 60, "text": ""})).unwrap());
+    for cmd in ["select.same.textFillColor", "select.same.textStrokeColor", "select.same.textFillAndStrokeColor"] {
+        sel(&mut s, &[a]);
+        s.execute(cmd, &json!({})).unwrap();
+        assert_eq!(selected(&s), vec![a, b], "{cmd}: empty object {empty:?}");
+    }
+}
+
+#[test]
 fn select_same_link_block_series_selects_the_frames_of_a_thread() {
     let mut s = session();
     let frame = |s: &mut Session, x: f64, y: f64| {

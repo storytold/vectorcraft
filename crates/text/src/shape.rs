@@ -375,7 +375,13 @@ pub(crate) fn shape_range(
         art: Option<&'a InlineArt>,
     }
     let mut spans: Vec<ShapeSpan<'_>> = Vec::new();
-    for (ri, (rr, st)) in runs.iter().enumerate() {
+    // The runs are in order: start at the first that ends inside the range and stop past it, so
+    // that each paragraph looks only at its own runs.
+    let first = runs.partition_point(|(rr, _)| rr.end <= range.start);
+    for (ri, (rr, st)) in runs.iter().enumerate().skip(first) {
+        if rr.start >= range.end {
+            break;
+        }
         let a = rr.start.max(range.start);
         let b = rr.end.min(range.end);
         if a >= b || text.get(a..b).is_none() {
@@ -688,7 +694,7 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
 /// They do when they differ only in paint and stroke, underline and strikethrough, overprint, the
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
-/// Direction (text is shaped apart where its bidi level changes), the kerning (each glyph takes its
+/// Direction (text is shaped apart where its bidi level changes), Kashidas, the kerning (each glyph takes its
 /// run's, see [`shape_segment`]) and the tracking, as long as the tracking keeps or drops standard
 /// ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
@@ -726,6 +732,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         small_caps,
         char_align: _,
         char_direction: _,
+        kashidas: _,
         proportional_metrics,
         tate_chu_yoko,
         tcy_up_down: _,

@@ -1092,6 +1092,7 @@
 	Flip Row Order	Inverter Ordem das Linhas
 	Flip Vertical	Espelhar Verticalmente
 	Float in Window	Flutuar na Janela
+	Float All in Windows	Flutuar Tudo em Janelas
 	Folder	Pasta
 	Folder Name:	Nome da Pasta:
 	Font	Fonte
@@ -1460,6 +1461,8 @@
 	Large	Grande
 	Large Tabs	Guias Grandes
 	Lasso Tool	Ferramenta Laço
+	Enclosing Lasso Tool	Ferramenta Laço envolvente
+	Enclosing Lasso	Laço envolvente
 	Last Effect: {name}	Último Efeito: {name}
 	Last Effect…	Último Efeito…
 	Last Page	Última Página
@@ -1585,6 +1588,7 @@
 	Manage Workspaces…	Gerenciar Espaços de Trabalho…
 	Manually	Manualmente
 	Mark Older Files as [Converted] When Opened	Marcar Arquivos Antigos como [Convertido] Ao Abrir
+	Use System Defaults for Edit Original	Usar Padrões do Sistema para Editar Original
 	Mark as trapped	Marcar como sobreimpresso
 	Marker…	Marcador…
 	Marks	Marcas
@@ -2258,6 +2262,8 @@ digits	Malayalam	Malaiala
 	Replace Spine	Substituir Coluna
 	Replace Symbol	Substituir Símbolo
 	Replace With Font	Substituir Com Fonte
+	Replace With Font From	Substituir Com Fonte De
+	System	Sistema
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Substitua por outro arquivo, ou ignore-o: suas imagens continuam mostrando a pré-visualização salva com o documento.
 	Replaces the saved preset of that name.	Substitui o predefinido salvo com esse nome.
 	Replace…	Substituir…
@@ -3323,6 +3329,7 @@ font-technology	Variable	Variáveis
 	Merge Selected	Mesclar selecionados
 	Model	Modelo
 	Insert Kashidas	Inserir Kashidas
+	Kashidas	Kashidas
 	Long	Longo
 	Stylistic	Estilístico
 	Mojikumi Set	Conjunto Mojikumi
@@ -3584,7 +3591,7 @@ axis	Both	Ambos
 @msg	Save for Web: the image is empty	Salvar para Web: a imagem está vazia
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Salvar grava {_1}, não {_2}: use document.export para outros formatos
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Salvar grava {_1}, não {_2}: use file.saveAsTemplate para gravá-lo
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 grava arquivos .ai legados; um modelo .ait é sempre compatível com PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 grava arquivos .ai legados, não modelos .ait
 @msg	Saved recovery data for {title}	Dados de recuperação de {title} salvos
 @msg	Saved to User Defined: {_1}	Salvo em Definido pelo usuário: {_1}
 @msg	Saved {path}	{path} salvo
@@ -5479,6 +5486,11 @@ mark-style	Japanese	Japonesas
 
 # Symbol Options › Export Type
 @msg	name is empty	o nome está vazio
+@msg	an action is already recording	uma ação já está sendo gravada
+@msg	no such function key	tecla de função inexistente
+@msg	no such color	cor inexistente
+@msg	{_1} cannot be used on Windows	{_1} não pode ser usado no Windows
+@msg	more than one action is named “{_1}”	mais de uma ação se chama “{_1}”
 @msg	no symbol named `{n}`	nenhum símbolo chamado `{n}`
 	Smudge Stick…	Esfuminho…
 	Smudge Stick	Esfuminho
@@ -5649,6 +5661,13 @@ axis	Y Axis	Eixo Y
 	Action Options…	Opções da Ação…
 	Action Options	Opções da Ação
 	Rename Action	Renomear Ação
+	New Action…	Nova Ação…
+	New Action	Nova Ação
+	Create New Action	Criar Nova Ação
+	Play Action	Reproduzir Ação
+	Action Set:	Conjunto de Ações:
+	Function Key:	Tecla de Função:
+	Record	Gravar
 	Create New Set	Criar Novo Conjunto
 	Stop Global Edit	Parar Edição Global
 	Global Edit Options	Opções de Edição Global
@@ -5919,6 +5938,11 @@ anchor	Points:	Pontos:
 	Horizontal Scale	Escala Horizontal
 	Vertical Scale	Escala Vertical
 @msg	{label} must be a number from {min} to {max}	{label} deve ser um número de {min} a {max}
+	Character Color	Cor do Caractere
+	OpenType Features	Recursos OpenType
+	Stylistic Sets	Conjuntos Estilísticos
+@msg	features lists at most {max} tags	features aceita no máximo {max} marcas
+@msg	unknown OpenType feature `{t}`	recurso OpenType desconhecido `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve ser um número maior que 0 e no máximo {max}
 @msg	no character style `{name}`	Estilo de caractere `{name}` não encontrado
 
@@ -6325,3 +6349,14 @@ swatch	Yellow Green	Verde-amarelado
 	Create Swatch Legend	Criar Legenda de Amostras
 	Create Swatch Legend…	Criar Legenda de Amostras…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Ferramentas de texto
+	Text Tweaker…	Ajustador de texto…
+	Text Tweaker	Ajustador de texto
+	Attribute:	Atributo:
+	From:	De:
+	To:	Até:
+	Bow	Arco
+	Spike	Pico
+	Skip Spaces	Ignorar espaços
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	A arte é grande demais para ser copiada como imagem: outros aplicativos não recebem um PNG dela

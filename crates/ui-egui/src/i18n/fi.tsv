@@ -627,6 +627,7 @@
 	Cascade	Porrasta
 	Tile	Vierekkäin
 	Float in Window	Kelluta ikkunassa
+	Float All in Windows	Kelluta kaikki ikkunoissa
 	Consolidate All Windows	Yhdistä kaikki ikkunat
 	Workspace	Työtila
 	Reset Essentials	Palauta Essentials
@@ -1241,6 +1242,8 @@ lighting	Light	Valo
 	Hand	Käsi
 	Join Tool	Liitostyökalu
 	Lasso Tool	Lassotyökalu
+	Enclosing Lasso Tool	Sulkeva lassotyökalu
+	Enclosing Lasso	Sulkeva lasso
 	Lasso	Lasso
 	Line Cut Tool	Viivaleikkaustyökalu
 	Line Graph Tool	Viivakaaviotyökalu
@@ -1815,6 +1818,7 @@ digits	Malayalam	Malajalam
 	Left-to-Right Paragraph Direction	Kappaleen suunta vasemmalta oikealle
 	Line-end Punctuation Half Width	Rivinlopun välimerkit puolileveinä
 	Insert Kashidas	Lisää kashidat
+	Kashidas	Kashidat
 	Long	Pitkä
 	Stylistic	Tyylitelty
 	Mojikumi Set	Mojikumi-joukko
@@ -3525,6 +3529,7 @@ theme	Appearance	Ulkoasu
 	List Preferences	Luettele asetukset
 	Manually	Manuaalisesti
 	Mark Older Files as [Converted] When Opened	Merkitse vanhemmat tiedostot [Muunnettu] avattaessa
+	Use System Defaults for Edit Original	Käytä järjestelmän oletuksia toiminnossa Muokkaa alkuperäistä
 	Match User Interface Brightness	Sovita käyttöliittymän kirkkauteen
 	Light Gray	Vaaleanharmaa
 	Medium Gray	Keskiharmaa
@@ -3879,6 +3884,8 @@ effect	Regular	Normaali
 	In the selected objects	Valituissa objekteissa
 	Find in Folder…	Etsi kansiosta…
 	Replace With Font	Korvaa fontilla
+	Replace With Font From	Korvaavan fontin lähde
+	System	Järjestelmä
 	  — substituted by {style}	  — korvattu tyylillä {style}
 	  — {n} characters from another font	  — {n} merkkiä toisesta fontista
 	All Scripts	Kaikki kirjoitusjärjestelmät
@@ -4212,7 +4219,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Save for Web: the image is empty	Tallenna verkkoon: kuva on tyhjä
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Tallenna kirjoittaa muotoa {_1}, ei {_2}: käytä muille muodoille komentoa document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Tallenna kirjoittaa muotoa {_1}, ei {_2}: kirjoita se komennolla file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 kirjoittaa vanhoja .ai-tiedostoja; .ait-malli on aina PDF-yhteensopiva
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 kirjoittaa vanhoja .ai-tiedostoja, ei .ait-malleja
 @msg	Saved recovery data for {title}	Tallennettiin palautustiedot: {title}
 @msg	Saved to User Defined: {_1}	Tallennettiin kohteeseen Käyttäjän määrittämä: {_1}
 @msg	Saved {path}	Tallennettiin {path}
@@ -5527,6 +5534,11 @@ mark-style	Japanese	Japanilainen
 	Export Type:	Vientityyppi:
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
+@msg	an action is already recording	toimintoa nauhoitetaan jo
+@msg	no such function key	toimintonäppäintä ei ole
+@msg	no such color	väriä ei ole
+@msg	{_1} cannot be used on Windows	{_1} ei ole käytettävissä Windowsissa
+@msg	more than one action is named “{_1}”	useamman kuin yhden toiminnon nimi on ”{_1}”
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
 	Smudge Stick…	Sumennuskynä…
 	Smudge Stick	Sumennuskynä
@@ -5764,6 +5776,13 @@ axis	Y Axis	Y-akseli
 	Action Options…	Toiminnon asetukset…
 	Action Options	Toiminnon asetukset
 	Rename Action	Nimeä toiminto uudelleen
+	New Action…	Uusi toiminto…
+	New Action	Uusi toiminto
+	Create New Action	Luo uusi toiminto
+	Play Action	Toista toiminto
+	Action Set:	Toimintosarja:
+	Function Key:	Toimintonäppäin:
+	Record	Nauhoita
 	Create New Set	Luo uusi sarja
 	Stop Global Edit	Lopeta yleismuokkaus
 	Global Edit Options	Yleismuokkauksen asetukset
@@ -6033,6 +6052,11 @@ anchor	Points:	Pisteet:
 	Horizontal Scale	Vaakaskaalaus
 	Vertical Scale	Pystyskaalaus
 @msg	{label} must be a number from {min} to {max}	{label} on oltava luku {min} ja {max} väliltä
+	Character Color	Merkin väri
+	OpenType Features	OpenType-ominaisuudet
+	Stylistic Sets	Tyylisarjat
+@msg	features lists at most {max} tags	features sisältää enintään {max} tunnistetta
+@msg	unknown OpenType feature `{t}`	tuntematon OpenType-ominaisuus `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} on oltava luku, joka on yli 0 ja enintään {max}
 @msg	no character style `{name}`	Merkkityyliä `{name}` ei löytynyt
 
@@ -6282,3 +6306,14 @@ breakText	Glyphs	Merkit
 	Create Swatch Legend	Luo värimallien selite
 	Create Swatch Legend…	Luo värimallien selite…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Tekstityökalut
+	Text Tweaker…	Tekstin säätö…
+	Text Tweaker	Tekstin säätö
+	Attribute:	Määrite:
+	From:	Alku:
+	To:	Loppu:
+	Bow	Kaari
+	Spike	Piikki
+	Skip Spaces	Ohita välilyönnit
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafiikka on liian suuri kopioitavaksi kuvana: muut sovellukset eivät saa siitä PNG-kuvaa
