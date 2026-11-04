@@ -30,11 +30,14 @@ pub(crate) type PtrMap<K, V> = HashMap<K, V, std::hash::BuildHasherDefault<PtrHa
 /// stroke's place in it, width bits, tolerance level).
 pub(crate) type StrokeKey = (usize, usize, u64, i32);
 
-/// A stroke expanded to a fill outline: (owning node, outline, last frame used).
+/// A stroke expanded to a fill outline: (owning node, outline, last frame used, and the region a
+/// frame must lie in to draw the outline, when the outline leaves out the segments far from that
+/// region; `None` when it has every segment).
 pub(crate) struct StrokeEntry {
     pub(crate) node: Arc<Node>,
     pub(crate) outline: Arc<BezPath>,
     pub(crate) stamp: u64,
+    pub(crate) crop: Option<Rect>,
 }
 
 /// The slices of a stroke whose gradient runs along or across it, each with its paint and bounds.

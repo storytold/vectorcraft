@@ -54,7 +54,7 @@ impl Renderer {
         let split_frame;
         let (f, screen) = match content.kept.and_then(|k| k.frame.map(|frame| (k.window, frame))) {
             Some((window, (view, px))) => {
-                split_frame = Frame { view, px, ..*f };
+                split_frame = Frame { view, visible: window, px, ..*f };
                 (&split_frame, view.transform_rect_bbox(window))
             }
             None => (f, Rect::new(0.0, 0.0, ctx.width() as f64, ctx.height() as f64)),
@@ -580,7 +580,10 @@ impl Renderer {
             None => (x0, y0, w, h, k),
         };
         let mut off = f.offscreen_context(w, h);
-        let shifted = Frame { mt: false, view: Affine::scale(k) * Affine::translate((-x0, -y0)) * f.view, px: f.px / k, ..*f };
+        let view = Affine::scale(k) * Affine::translate((-x0, -y0)) * f.view;
+        // Art is culled against, and long strokes outlined around, the offscreen's own area.
+        let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(w), f64::from(h)));
+        let shifted = Frame { mt: false, view, visible, px: f.px / k, ..*f };
         self.inside_layer(|r| draw(r, &mut off, &shifted, None));
         off.flush();
         let mut pm = vello_cpu::Pixmap::new(w, h);

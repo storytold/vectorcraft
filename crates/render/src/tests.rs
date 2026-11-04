@@ -21,6 +21,7 @@ mod fxzoom;
 mod isolation;
 mod knockout;
 mod layeropts;
+mod longstroke;
 mod memory;
 mod objectfx;
 mod placed_document;
