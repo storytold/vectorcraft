@@ -4209,8 +4209,12 @@ and every stroke a line. `alterPaths` writes as filled outlines those strokes (w
 wider than the widest lineweight (2.11 mm), and every stroke in R13 and R14, which have no lineweights; it keeps other
 strokes as lines. `outlineText` outlines type, `selectedOnly` writes only the
 selected objects in their layers (every export takes it), and `useArtboards: true` writes one drawing per chosen
-artboard holding the art over it. What DXF can't hold (gradients and patterns as one colour, blending, opacity masks,
-raster effects, clipping) comes back in `warnings`. In R13 and later, an image that can't be decoded is left out with
+artboard holding the art over it. `dxfPreset: "cnc"` (CNC / CAM; default `"custom"`) sets the options for cutting
+software that the call does not give: version `2000` (the oldest version that has both lightweight polylines and lineweights), `unit:
+"mm"` and `scale: 1`, `colors: 256` (all version 2000 holds), `preserve: "editability"` with `alterPaths: false` (every
+stroke a center line), `outlineText: true` (type as paths), and `rasterFormat: "png"`. DXF Options has the same choice as its Preset menu,
+which shows Custom again once a field it sets is changed. What DXF can't hold (gradients and patterns as one colour,
+blending, opacity masks, raster effects, clipping) comes back in `warnings`. In R13 and later, an image that can't be decoded is left out with
 no linked file, and `warnings` carries "an image couldn't be decoded and is missing from the picture" once for all such
 images.
 
@@ -4221,6 +4225,7 @@ opened.
 ```json
 {"name":"run_command","arguments":{"command":"document.exportDxf","params":{"path":"/tmp/plan.dxf","version":"2013","unit":"mm","scale":10,"preserve":"editability"}}}
 {"name":"export","arguments":{"path":"/tmp/plan.dxf","options":{"useArtboards":true,"colors":256}}}
+{"name":"run_command","arguments":{"command":"document.exportDxf","params":{"path":"/tmp/sign.dxf","dxfPreset":"cnc"}}}
 ```
 
 ## DXF import
