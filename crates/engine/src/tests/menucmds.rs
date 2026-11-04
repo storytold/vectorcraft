@@ -865,6 +865,51 @@ fn hide_unselected_artwork_keeps_groups_with_locked_guides_and_the_selected_laye
     assert_eq!(selected(&s), [other]);
 }
 
+/// While Lock Guides is on, Hide › Unselected Artwork keeps a group visible when it holds a guide path that is locked
+/// itself, and hides the group's other members one by one.
+#[test]
+fn hide_unselected_artwork_keeps_groups_with_a_locked_guide_path() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let guide = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    let x = rect(&mut s, 60.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[guide, x]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    sel(&mut s, &[guide]);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    s.execute("layer.setProps", &json!({"id": guide.0, "locked": true})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    sel(&mut s, &[a]);
+    assert_eq!(s.execute("object.hide.unselected", &json!({})).unwrap(), json!({"count": 1}));
+    assert_eq!([a, g, guide, x].map(|id| node(&s, id).visible), [true, true, true, false]);
+}
+
+/// Hide › Unselected Artwork keeps a group visible when it holds a selected layer whose art is all locked, and hides the
+/// group's other members one by one.
+#[test]
+fn hide_unselected_artwork_keeps_a_group_that_holds_a_selected_layer() {
+    let mut s = session();
+    let b = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let y = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let z = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[y]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    let sub = s
+        .edit("nest", |d, _| {
+            let id = d.alloc_id();
+            d.insert(Some(g), usize::MAX, Node::layer(id, "Sub", vectorcraft_doc::LayerColor::Preset(1)))
+                .map_err(|e| EngineError::Other(e.to_string()))?;
+            let art = d.remove(z).map_err(|e| EngineError::Other(e.to_string()))?;
+            d.insert(Some(id), 0, (*art).clone()).map_err(|e| EngineError::Other(e.to_string()))?;
+            Ok(id)
+        })
+        .unwrap();
+    s.execute("layer.setProps", &json!({"id": z.0, "locked": true})).unwrap();
+    sel(&mut s, &[sub]);
+    assert_eq!(s.execute("object.hide.unselected", &json!({})).unwrap(), json!({"count": 2}));
+    assert_eq!([b, g, y, sub, z].map(|id| node(&s, id).visible), [false, true, false, true, true]);
+}
+
 /// Lock Unselected Artwork locks `b`, `n` in the group that holds selected `m`, `p` on another layer, and the clip
 /// group's unselected members `c1` and clipping path `c3` in one undo step labeled "Lock". The clip group container,
 /// `c2`, the selected objects, group `g`, hidden object `h` and art `q` on a locked layer stay unlocked. `k` was locked
