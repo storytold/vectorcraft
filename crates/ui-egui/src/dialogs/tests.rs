@@ -2098,6 +2098,17 @@ fn screen_readers_set_a_dialog_slider_number() {
     f.run(&mut app, vec![egui::Event::AccessKitActionRequest(request)]);
     let moved = app.ui.dialog.as_ref().expect("Transform Each is open").f64("moveH", f64::NAN);
     assert!((moved - 400.0 * 72.0 / 25.4).abs() < 1e-6, "{moved} pt");
+    // A slider without a field's places, Roughen's Detail, sets whole numbers as a drag does.
+    app.ui.dialog = None;
+    app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap();
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (node, ..) = slider_node(&out, "Detail:");
+    let request =
+        ActionRequest { action: Action::SetValue, target_node: node, target_tree: TreeId::ROOT, data: Some(ActionData::NumericValue(12.4)) };
+    f.run(&mut app, vec![egui::Event::AccessKitActionRequest(request)]);
+    assert_eq!(app.ui.dialog.as_ref().expect("Roughen is open").f64("detail", f64::NAN), 12.0);
 }
 
 #[test]

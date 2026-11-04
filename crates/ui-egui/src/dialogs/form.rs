@@ -790,7 +790,8 @@ pub(super) fn slider_rail_named(
     range: std::ops::RangeInclusive<f64>,
     track: &dyn Fn(f32) -> egui::Color32,
 ) {
-    let shown = crate::widgets::SliderValue::number(d.f64(key, 0.0), range.clone());
+    // Whole numbers, as a drag sets them.
+    let shown = crate::widgets::SliderValue { decimals: Some(0), ..crate::widgets::SliderValue::number(d.f64(key, 0.0), range.clone()) };
     slider_rail_valued(ui, d, key, name, range, Some(shown), track);
 }
 
