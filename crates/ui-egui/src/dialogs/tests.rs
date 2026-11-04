@@ -2015,6 +2015,48 @@ fn the_blob_brush_tip_preview_is_a_named_slider_with_arrow_keys() {
     assert_eq!(angle(&app), -44.0, "the drag gives the preview the focus");
 }
 
+/// Screen readers can set the Blob Brush tip preview's Angle to a number: the slider offers the
+/// set-value action, a fraction rounds to the whole degrees the field shows, a number past -180° to
+/// 180° sets the nearer end, the last request in a frame wins, and a value that is not a finite
+/// number leaves the Angle as it is.
+#[test]
+fn screen_readers_set_the_blob_brush_angle() {
+    use egui::accesskit::{Action, ActionData, ActionRequest, TreeId};
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let angle = |app: &VectorcraftApp| app.ui.dialog.as_ref().expect("Blob Brush Tool Options is open").f64("angle", f64::NAN);
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (node, ..) = slider_node(&out, "Angle");
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let advertised = nodes.iter().find(|(id, _)| *id == node).is_some_and(|(_, n)| n.supports_action(Action::SetValue));
+    assert!(advertised, "the Angle slider offers the set-value action");
+    let set = |value: f64| {
+        egui::Event::AccessKitActionRequest(ActionRequest {
+            action: Action::SetValue,
+            target_node: node,
+            target_tree: TreeId::ROOT,
+            data: Some(ActionData::NumericValue(value)),
+        })
+    };
+    f.run(&mut app, vec![set(30.0)]);
+    assert_eq!(angle(&app), 30.0);
+    f.run(&mut app, vec![set(12.4)]);
+    assert_eq!(angle(&app), 12.0, "the field shows whole degrees");
+    let shown = crate::widgets::SliderValue::field(12.5, -180.0..=180.0, "°", 0).value;
+    f.run(&mut app, vec![set(12.5)]);
+    assert_eq!(angle(&app), shown, "as the field shows 12.5");
+    f.run(&mut app, vec![set(500.0)]);
+    assert_eq!(angle(&app), 180.0, "past the end");
+    f.run(&mut app, vec![set(-12.0), set(-90.0)]);
+    assert_eq!(angle(&app), -90.0, "the last request");
+    f.run(&mut app, vec![set(f64::NAN)]);
+    assert_eq!(angle(&app), -90.0, "not a number");
+    f.run(&mut app, vec![set(30.0), set(f64::INFINITY)]);
+    assert_eq!(angle(&app), -90.0, "the last request is not a finite number");
+}
+
 #[test]
 fn polar_grid_shared_canvas_click_defaults_units_counts_and_history() {
     use vectorcraft_doc::NodeId;
