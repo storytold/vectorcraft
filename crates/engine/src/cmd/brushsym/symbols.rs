@@ -341,7 +341,8 @@ pub(super) fn symbol_place(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The plain art of instance `inst` in document space (fresh ids), with the instance's own
 /// appearance changes to a dynamic symbol's art when `own`, placed through its symbol's 9-slice
-/// guides when it has them.
+/// guides when it has them. The instance's opacity mask goes on the art, or on a group around it
+/// when the art has a mask of its own.
 fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return None };
     let sym = d.symbols.iter().find(|s| &s.name == symbol)?;
@@ -361,13 +362,21 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
         art.opacity *= inst.opacity;
         art.blend = inst.blend;
     }
+    if let Some(mask) = &inst.extras().mask {
+        if art.extras().mask.is_some() {
+            let id = d.alloc_id();
+            art = Node::group(id, vec![Arc::new(art)]);
+        }
+        art.extras_mut().mask = Some(mask.clone());
+    }
     Some(art)
 }
 
 /// The most objects [`expanded_instance`] makes of instance `inst` in `d` (`own` as there): its
 /// symbol's object count with the art of its opacity masks, or
 /// [`vectorcraft_doc::NineSliceMap::most_placed`] when it is placed through 9-slice guides, plus
-/// the group that opacity or a blending mode adds. 0 for any other object.
+/// the group that opacity, a blending mode or the instance's opacity mask adds, plus the art of
+/// the instance's opacity mask. 0 for any other object.
 fn expanded_bound(d: &Document, inst: &Node, own: bool) -> u64 {
     let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return 0 };
     let Some(sym) = d.symbols.iter().find(|s| &s.name == symbol) else { return 0 };
@@ -378,7 +387,8 @@ fn expanded_bound(d: &Document, inst: &Node, own: bool) -> u64 {
         None if dynamic => vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst).count_with_masks() as u64,
         None => sym.art.count_with_masks() as u64,
     };
-    most.saturating_add(1)
+    let mask = inst.extras().mask.as_ref().map_or(0, |m| m.art.count_with_masks() as u64);
+    most.saturating_add(1).saturating_add(mask)
 }
 
 /// Replace instances `ids` with their art ([`expanded_instance`], `own` as there). Returns the
