@@ -3794,6 +3794,12 @@ digits	Malayalam	Malayalam
 	Scrub Numeric Fields by Dragging	Regola i campi numerici trascinando
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} file in {folder} {note}. Vuoi mostrare la cartella del pacchetto?|{n} file in {folder} {note}. Vuoi mostrare la cartella del pacchetto?
 @plural	{n} linked file not found|{n} linked files not found	File collegati non trovati: {n}|File collegati non trovati: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	File collegati non trovati: {n}|File collegati non trovati: {n}
+@msg	fonts not copied: {fonts}	font non copiati: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(File collegati non trovati: {n})|(File collegati non trovati: {n})
+@msg	(fonts not copied: {fonts})	(font non copiati: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	font non copiati: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	Immagini collegate modificate dopo il salvataggio di questo documento: {n}. Vuoi mostrare le nuove versioni?|Immagini collegate modificate dopo il salvataggio di questo documento: {n}. Vuoi mostrare le nuove versioni?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	Immagini collegate modificate su disco: {n}. Vuoi mostrare le nuove versioni?|Immagini collegate modificate su disco: {n}. Vuoi mostrare le nuove versioni?

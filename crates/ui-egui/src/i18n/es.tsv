@@ -3757,6 +3757,12 @@ digits	Malayalam	Malayálam
 	Scrub Numeric Fields by Dragging	Ajustar campos numéricos arrastrando
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} archivo en {folder} {note}. ¿Mostrar la carpeta del paquete?|{n} archivos en {folder} {note}. ¿Mostrar la carpeta del paquete?
 @plural	{n} linked file not found|{n} linked files not found	No se encontró {n} archivo vinculado|No se encontraron {n} archivos vinculados
+@msgplural	{n} linked file not found|{n} linked files not found	No se encontró {n} archivo vinculado|No se encontraron {n} archivos vinculados
+@msg	fonts not copied: {fonts}	fuentes no copiadas: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(No se encontró {n} archivo vinculado)|(No se encontraron {n} archivos vinculados)
+@msg	(fonts not copied: {fonts})	(fuentes no copiadas: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	fuentes no copiadas: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} imagen vinculada cambió desde que se guardó este documento. ¿Mostrar la versión nueva?|{n} imágenes vinculadas cambiaron desde que se guardó este documento. ¿Mostrar las versiones nuevas?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} imagen vinculada cambió en el disco. ¿Mostrar la versión nueva?|{n} imágenes vinculadas cambiaron en el disco. ¿Mostrar las versiones nuevas?

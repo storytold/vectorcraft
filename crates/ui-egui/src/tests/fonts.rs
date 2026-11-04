@@ -13,14 +13,26 @@ fn type_font_menu_lists_every_available_family() {
     let fonts = |app: &VectorcraftApp| -> Vec<String> {
         menus::menu_entries(app).into_iter().filter(|e| e.path == ["Type", "Font"]).map(|e| e.label).collect()
     };
-    let labels = fonts(&app);
-    assert_eq!(labels, *FontDb::global().menu_family_list());
     let installed = FontDb::with_font_dirs(system_font_dirs());
     installed.load_system_fonts();
-    let missing: Vec<String> = installed.menu_family_list().iter().filter(|f| !labels.contains(f)).cloned().collect();
-    assert!(missing.is_empty(), "installed but not in Type › Font: {missing:?}");
-    // The menu is built every frame, from a list built once.
-    assert_eq!(fonts(&app), labels);
+    // A test running alongside can add a font (and the installed fonts' scan can end), and the menu
+    // is then built again: judge a run in which the fonts held still.
+    for _ in 0..20 {
+        let generation = FontDb::global().generation();
+        let labels = fonts(&app);
+        let listed = FontDb::global().menu_family_list();
+        // The menu is built every frame, from a list built once.
+        let again = fonts(&app);
+        if FontDb::global().generation() != generation {
+            continue;
+        }
+        assert_eq!(labels, *listed);
+        let missing: Vec<String> = installed.menu_family_list().iter().filter(|f| !labels.contains(f)).cloned().collect();
+        assert!(missing.is_empty(), "installed but not in Type › Font: {missing:?}");
+        assert_eq!(again, labels);
+        return;
+    }
+    panic!("the fonts kept changing");
 }
 
 #[test]

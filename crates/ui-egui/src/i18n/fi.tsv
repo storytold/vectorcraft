@@ -2465,6 +2465,12 @@ digits	Malayalam	Malajalam
 	Save the document first?	Tallennetaanko asiakirja ensin?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} tiedosto kansiossa {folder} {note}. Näytetäänkö pakettikansio?|{n} tiedostoa kansiossa {folder} {note}. Näytetäänkö pakettikansio?
 @plural	{n} linked file not found|{n} linked files not found	{n} linkitettyä tiedostoa ei löytynyt|{n} linkitettyä tiedostoa ei löytynyt
+@msgplural	{n} linked file not found|{n} linked files not found	{n} linkitettyä tiedostoa ei löytynyt|{n} linkitettyä tiedostoa ei löytynyt
+@msg	fonts not copied: {fonts}	fontteja ei kopioitu: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} linkitettyä tiedostoa ei löytynyt)|({n} linkitettyä tiedostoa ei löytynyt)
+@msg	(fonts not copied: {fonts})	(fontteja ei kopioitu: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	fontteja ei kopioitu: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Sisäiset esiasetukset ovat vain luku -tilassa: Uusi… luo muokattavan kopion.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} piirtoalustalla vastaa {real} {unit} näkymässä.

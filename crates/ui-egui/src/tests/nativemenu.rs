@@ -388,12 +388,20 @@ fn click(at: Pos2, pressed: bool) -> Event {
 }
 
 /// Run `drag` on a new app with the fake native menu, and run it again on another new app until
-/// the shortcut and plug-in generations hold still through a run (at most 20 runs). Return that app
-/// and what `drag` returned. The generations are process-wide and only grow. A test running
-/// alongside can bump them, and the app then reads the menus again, so every step whose menu
-/// reads a test counts runs inside `drag`.
+/// the shortcut, plug-in and font generations hold still through a run (at most 20 runs). Return
+/// that app and what `drag` returned. The generations are process-wide and only grow. A test
+/// running alongside can bump them (a font it adds, the installed fonts' scan ending), and the app
+/// then reads the menus again, so every step whose menu reads a test counts runs inside `drag`.
 fn undisturbed<R>(drag: impl Fn(&mut Mac) -> R) -> (Mac, R) {
-    let generations = || (crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed), crate::menus::plugin_revision());
+    let fonts = vectorcraft_text::FontDb::global();
+    let generations = || {
+        (
+            crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed),
+            crate::menus::plugin_revision(),
+            fonts.generation(),
+            fonts.installed_fonts_ready(),
+        )
+    };
     for _ in 0..20 {
         let mut m = Mac::new(true);
         let before = generations();
@@ -420,10 +428,18 @@ fn key_equivalents_run_through_the_normal_shortcut_path_once() {
     m.key_equivalent("Cmd+Z");
     assert_eq!(undo(&m), before - 1, "⌘Z undid one step");
     assert!(m.fake.synced() >= 1, "the menus were built");
-    // Idle frames don't read the menus again. The shortcut and plug-in generations are
-    // process-wide, and tests running alongside with other shortcuts bump them (rightly reading
-    // the menus again), so judge two idle frames in which they held still.
-    let globals = || (crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed), crate::menus::plugin_revision());
+    // Idle frames don't read the menus again. The shortcut, plug-in and font generations are
+    // process-wide, and tests running alongside with other shortcuts or fonts bump them (rightly
+    // reading the menus again), so judge two idle frames in which they held still.
+    let fonts = vectorcraft_text::FontDb::global();
+    let globals = || {
+        (
+            crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed),
+            crate::menus::plugin_revision(),
+            fonts.generation(),
+            fonts.installed_fonts_ready(),
+        )
+    };
     let quiet = (0..50).any(|_| {
         let (before, synced) = (globals(), m.fake.synced());
         m.frame(vec![]);
@@ -538,6 +554,23 @@ fn applying_a_dialog_preview_reads_the_menus() {
     assert!(closed);
     assert_eq!(after, synced + 1, "the menus were read");
     assert_eq!(find(&m.fake.last(), "edit.undo").label, "Undo Rotate");
+}
+
+/// Fonts that come in after the menus were read (the installed fonts' scan ending, #5483) make the
+/// next frame read them again, with no click or key, so Type › Font lists them.
+#[test]
+fn fonts_that_load_read_the_menus_again() {
+    use vectorcraft_text::test_fonts as t;
+    let db = vectorcraft_text::FontDb::global();
+    // A test font no other test loaded yet, so adding it changes the fonts.
+    let fonts = [t::vertical_font(true), t::two_axis_font(), t::variable_font()];
+    let mut m = Mac::new(true);
+    let synced = m.fake.synced();
+    if !fonts.into_iter().flatten().any(|data| db.add_font(data) > 0) {
+        return;
+    }
+    m.frame(vec![]);
+    assert!(m.fake.synced() > synced, "the menus were read again");
 }
 
 /// The font menu previews each font it highlights on the selected type, in one interaction: the

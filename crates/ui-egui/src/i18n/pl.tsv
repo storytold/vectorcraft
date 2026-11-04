@@ -2435,6 +2435,12 @@ digits	Malayalam	Malajalam
 	Save the document first?	Najpierw zapisać dokument?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Pliki: {n} w {folder} {note}. Pokazać folder pakietu?|Pliki: {n} w {folder} {note}. Pokazać folder pakietu?|Pliki: {n} w {folder} {note}. Pokazać folder pakietu?
 @plural	{n} linked file not found|{n} linked files not found	Nie znaleziono połączonych plików: {n}|Nie znaleziono połączonych plików: {n}|Nie znaleziono połączonych plików: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Nie znaleziono połączonych plików: {n}|Nie znaleziono połączonych plików: {n}|Nie znaleziono połączonych plików: {n}
+@msg	fonts not copied: {fonts}	nieskopiowane czcionki: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Nie znaleziono połączonych plików: {n})|(Nie znaleziono połączonych plików: {n})|(Nie znaleziono połączonych plików: {n})
+@msg	(fonts not copied: {fonts})	(nieskopiowane czcionki: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	nieskopiowane czcionki: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Wbudowane ustawienia są tylko do odczytu: Nowe… tworzy edytowalną kopię.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na obszarze kompozycji odpowiada {real} {unit} w scenie.

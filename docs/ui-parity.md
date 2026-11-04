@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Document Tools add-on: Batch Trace Folder under Object › Plug-ins, #4921; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (New Document's units belong to the chosen preset; Recent and Saved cards keep their own units; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -423,6 +423,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen document, as the pane's options are listed "for the selected preset" ([public source](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/start-a-new-file/create-and-save-custom-document-presets.html)); the chosen card shows them, every other Recent and Saved card keeps the units its document or preset was made in, and the built-in tabs still follow the chosen units (#2078); scores and estimates unchanged |
 | 2026-11-01 | minor | Object › Image Trace › Batch Trace Folder asks for a source and a destination folder and traces each image into it (#4921); scores and estimates unchanged |
 | 2026-11-01 | minor | Edit › Copy and Cut take the selected ruler guides, with the objects or alone; pasting puts them on the layer new art goes to, moved as the objects are (alone: where they were), Paste in Place onto the active artboard and Paste on All Artboards onto each (#3226); scores and estimates unchanged |
 | 2026-11-04 | minor | Area type: Align Top / Center / Bottom / Justify Vertically buttons in the Properties panel (Paragraph section) and the Control panel set its vertical alignment in the frame, as Area Type Options does; turned off for frames with rows or columns and threaded frames (#3759); scores and estimates unchanged |

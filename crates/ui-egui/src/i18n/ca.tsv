@@ -4743,6 +4743,12 @@ digits	Malayalam	Malaiàlam
 @plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	No s’ha pogut llegir {n} carpeta o fitxer|No s’han pogut llegir {n} carpetes o fitxers
 @plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	S’ha omès {n} carpeta, com ara les d’altres aplicacions, les del sistema i les ocultes|S’han omès {n} carpetes, com ara les d’altres aplicacions, les del sistema i les ocultes
 @plural	{n} linked file not found|{n} linked files not found	No s’ha trobat {n} fitxer enllaçat|No s’han trobat {n} fitxers enllaçats
+@msgplural	{n} linked file not found|{n} linked files not found	No s’ha trobat {n} fitxer enllaçat|No s’han trobat {n} fitxers enllaçats
+@msg	fonts not copied: {fonts}	tipus de lletra no copiats: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(No s’ha trobat {n} fitxer enllaçat)|(No s’han trobat {n} fitxers enllaçats)
+@msg	(fonts not copied: {fonts})	(tipus de lletra no copiats: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} imatge enllaçada ha canviat al disc. Voleu mostrar la versió nova?|{n} imatges enllaçades han canviat al disc. Voleu mostrar les versions noves?
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} imatge enllaçada ha canviat des que es va desar aquest document. Voleu mostrar la versió nova?|{n} imatges enllaçades han canviat des que es va desar aquest document. Voleu mostrar les versions noves?
 @plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} regla més: l’exportació l’escriu.|{n} regles més: l’exportació les escriu totes.

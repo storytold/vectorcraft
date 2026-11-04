@@ -3389,6 +3389,12 @@ mark-style	Japanese	日本式
 	to	→
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} に {n} 個のファイル{note}。パッケージフォルダーを表示しますか？
 @plural	{n} linked file not found|{n} linked files not found	リンクファイルが {n} 個見つかりません
+@msgplural	{n} linked file not found|{n} linked files not found	リンクファイルが {n} 個見つかりません
+@msg	fonts not copied: {fonts}	コピーされなかったフォント：{fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(リンクファイルが {n} 個見つかりません)
+@msg	(fonts not copied: {fonts})	(コピーされなかったフォント：{fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	コピーされなかったフォント：{fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	保存後に {n} 個のリンク画像が変更されています。新しいバージョンを表示しますか？
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} 個のリンク画像がディスク上で変更されました。新しいバージョンを表示しますか？

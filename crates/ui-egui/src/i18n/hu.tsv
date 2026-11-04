@@ -4488,6 +4488,12 @@ mark-style	Japanese	Japán
 @plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	Nem olvasható mappák vagy fájlok: {n}
 @plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Kihagyott mappák: {n} (például más alkalmazások, a rendszer és a rejtett mappák)
 @plural	{n} linked file not found|{n} linked files not found	Nem található csatolt fájlok: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Nem található csatolt fájlok: {n}
+@msg	fonts not copied: {fonts}	nem másolt betűtípusok: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Nem található csatolt fájlok: {n})
+@msg	(fonts not copied: {fonts})	(nem másolt betűtípusok: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	A lemezen módosult csatolt képek: {n}. Megjelenítsük az új változatokat?
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	A dokumentum mentése óta módosult csatolt képek: {n}. Megjelenítsük az új változatokat?
 @plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	További szabályok: {n}. Az exportálás mindet kiírja.

@@ -466,6 +466,29 @@ fn held_escape_that_cancels_ruler_origin_drag_keeps_the_tool() {
 }
 
 #[test]
+fn held_escape_that_cancels_a_move_skips_a_command_bound_to_escape() {
+    for ruler in [false, true] {
+        let ctx = egui::Context::default();
+        let mut app = in_screen_mode(&ctx, 0);
+        app.run("shortcuts.set", json!({"id": "select.none", "shortcut": "Escape", "force": true})).unwrap();
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        assert!(!selected.is_empty());
+        let to = if ruler { begin_ruler_origin_drag(&mut app, &ctx) } else { begin_tools_move(&mut app, &ctx).1 };
+        frame(&mut app, &ctx, escape_event(true, false));
+        assert_eq!(app.session.active().unwrap().selection.objects, selected, "the cancelling Escape runs no command (ruler: {ruler})");
+        for _ in 0..3 {
+            frame(&mut app, &ctx, escape_event(true, true));
+        }
+        release_drag(&mut app, &ctx, to);
+        frame(&mut app, &ctx, escape_event(true, true));
+        assert_eq!(app.session.active().unwrap().selection.objects, selected, "held Escape runs no command (ruler: {ruler})");
+        frame(&mut app, &ctx, escape_event(false, false));
+        frame(&mut app, &ctx, escape());
+        assert!(app.session.active().unwrap().selection.objects.is_empty(), "the next Escape runs the command (ruler: {ruler})");
+    }
+}
+
+#[test]
 fn a_popup_takes_escape_before_full_screen_exits() {
     let ctx = egui::Context::default();
     let mut app = in_screen_mode(&ctx, 2);

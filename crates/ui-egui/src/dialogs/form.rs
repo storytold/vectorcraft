@@ -790,7 +790,8 @@ pub(super) fn slider_rail_named(
     range: std::ops::RangeInclusive<f64>,
     track: &dyn Fn(f32) -> egui::Color32,
 ) {
-    let shown = crate::widgets::SliderValue::number(d.f64(key, 0.0), range.clone());
+    // Whole numbers, as a drag sets them.
+    let shown = crate::widgets::SliderValue { decimals: Some(0), ..crate::widgets::SliderValue::number(d.f64(key, 0.0), range.clone()) };
     slider_rail_valued(ui, d, key, name, range, Some(shown), track);
 }
 
@@ -813,8 +814,9 @@ pub(super) fn slider_rail_valued(
     let units = shown.as_ref().map(|s| s.range.clone());
     let (dragged, _, keyed) =
         crate::widgets::color_slider_stepped(ui, ("dlg-slider", key), name, shown, ((v - min) / (max - min)) as f32, SLIDER_WIDTH, track);
-    let keyed =
-        keyed.zip(units).map(|(k, u)| if u == range { k } else { (min + (k - u.start()) / (u.end() - u.start()) * (max - min)).clamp(min, max) });
+    // Not clamped to the rail: a screen reader's set value can reach a number past it that the
+    // field holds.
+    let keyed = keyed.zip(units).map(|(k, u)| if u == range { k } else { min + (k - u.start()) / (u.end() - u.start()) * (max - min) });
     if let Some(n) = dragged.map(|x| (min + x as f64 * (max - min)).round()).or(keyed).filter(|n| *n != held) {
         d.fields.insert(key.into(), json!(n));
     }

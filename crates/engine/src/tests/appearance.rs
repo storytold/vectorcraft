@@ -323,6 +323,36 @@ fn add_fill_copies_the_active_fill_row_right_above_it() {
     assert_eq!(s.appearance_item(), Some(0));
 }
 
+/// With a fill row active, Add New Fill given `id` alone also puts a copy of the top fill on top,
+/// and the active row stays.
+#[test]
+fn add_fill_with_id_leaves_the_active_fill_row_alone() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 2, "color": "#0000ff"})); // [red, Stroke, blue]
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "appearance.addFill", json!({"id": id.0}));
+    let n = node(&s, id);
+    assert_eq!(n.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "stroke", "fill", "fill"]);
+    assert_eq!(fill_paint(&n, 0).color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(fill_paint(&n, 3).color().unwrap().to_hex(), "#0000ff");
+    assert_eq!(s.appearance_item(), Some(0));
+}
+
+/// Add New Stroke copies the top stroke's weight but makes the new stroke at least 1 pt.
+#[test]
+fn add_stroke_is_at_least_one_point() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "stroke.set", json!({"weight": 0.5}));
+    run(&mut s, "appearance.addStroke", json!({})); // [Fill, Stroke, Stroke]
+    let n = node(&s, id);
+    assert_eq!(stroke(&n, 1).width, 0.5);
+    assert_eq!(stroke(&n, 2).width, 1.0);
+}
+
 /// The new fill above the active fill row takes only the row's paint: the row's opacity, blend
 /// mode, visibility, overprint and effects are not copied (Duplicate Item copies those).
 #[test]

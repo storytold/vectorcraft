@@ -3995,6 +3995,12 @@ digits	Malayalam	Μαλαγιάλαμ
 	Scrub Numeric Fields by Dragging	Ρύθμιση αριθμητικών πεδίων με σύρσιμο
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} αρχείο στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;|{n} αρχεία στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;
 @plural	{n} linked file not found|{n} linked files not found	Δεν βρέθηκε {n} συνδεδεμένο αρχείο|Δεν βρέθηκαν {n} συνδεδεμένα αρχεία
+@msgplural	{n} linked file not found|{n} linked files not found	Δεν βρέθηκε {n} συνδεδεμένο αρχείο|Δεν βρέθηκαν {n} συνδεδεμένα αρχεία
+@msg	fonts not copied: {fonts}	γραμματοσειρές που δεν αντιγράφηκαν: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Δεν βρέθηκε {n} συνδεδεμένο αρχείο)|(Δεν βρέθηκαν {n} συνδεδεμένα αρχεία)
+@msg	(fonts not copied: {fonts})	(γραμματοσειρές που δεν αντιγράφηκαν: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	γραμματοσειρές που δεν αντιγράφηκαν: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} συνδεδεμένη εικόνα άλλαξε μετά την αποθήκευση του εγγράφου. Να εμφανιστεί η νέα έκδοση;|{n} συνδεδεμένες εικόνες άλλαξαν μετά την αποθήκευση του εγγράφου. Να εμφανιστούν οι νέες εκδόσεις;
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} συνδεδεμένη εικόνα άλλαξε στον δίσκο. Να εμφανιστεί η νέα έκδοση;|{n} συνδεδεμένες εικόνες άλλαξαν στον δίσκο. Να εμφανιστούν οι νέες εκδόσεις;

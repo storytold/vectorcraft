@@ -2309,6 +2309,12 @@ digits	Malayalam	Malayalam
 	Save the document first?	Gem dokumentet først?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} fil i {folder} {note}. Vis pakkemappen?|{n} filer i {folder} {note}. Vis pakkemappen?
 @plural	{n} linked file not found|{n} linked files not found	{n} linket fil ikke fundet|{n} linkede filer ikke fundet
+@msgplural	{n} linked file not found|{n} linked files not found	{n} linket fil ikke fundet|{n} linkede filer ikke fundet
+@msg	fonts not copied: {fonts}	skrifttyper ikke kopieret: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} linket fil ikke fundet)|({n} linkede filer ikke fundet)
+@msg	(fonts not copied: {fonts})	(skrifttyper ikke kopieret: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	skrifttyper ikke kopieret: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Indbyggede forudindstillinger er skrivebeskyttede: Ny… starter en redigerbar kopi.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} på tegnebrættet svarer til {real} {unit} i scenen.

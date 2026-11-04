@@ -2211,6 +2211,12 @@ digits	Malayalam	მალაიალამური
 	Save the document first?	ჯერ შევინახოთ დოკუმენტი?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	ფაილები: {n}, ადგილი: {folder} {note}. ვაჩვენოთ შეფუთვის საქაღალდე?
 @plural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}
+@msg	fonts not copied: {fonts}	არ დაკოპირდა შრიფტები: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(ვერ მოიძებნა დაკავშირებული ფაილები: {n})
+@msg	(fonts not copied: {fonts})	(არ დაკოპირდა შრიფტები: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	არ დაკოპირდა შრიფტები: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	ჩაშენებული პრესეტები მხოლოდ წასაკითხია: „ახალი…“ ქმნის რედაქტირებად ასლს.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} სამუშაო დაფაზე სცენაში {real} {unit}-ს შეესაბამება.
