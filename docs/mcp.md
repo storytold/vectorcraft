@@ -1854,7 +1854,9 @@ already walks Image Trace. Short agent entry points:
   Pause For it plays the first step at once and returns `{results: [the first step's result], pending}`, where
   `pending` counts the steps still to play; the app plays them one at a time, each as its own undo step. A name that no
   action has, or that more than one action in the sets looked in has, or whose every step is excluded, is an error, and
-  then nothing plays. So is an action played while another is still playing at Step by Step or Pause For.
+  then nothing plays. So is an action played while another is still playing at Step by Step or Pause For. A
+  `command.batch` step, which an action played or a panel operation run as one batch records, plays as its own steps,
+  here and in Batch….
 - Actions: `ui.action.playbackOptions {speed?, seconds?}` sets how the Actions panel plays actions and returns
   `{speed, seconds}`. `speed` is `accelerated` (the default: every step at once), `step` (one step at a time, with the
   window drawn after each step before the next runs) or `pause` (a pause of `seconds` between steps). `seconds` is a

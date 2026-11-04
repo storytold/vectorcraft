@@ -61,12 +61,18 @@ impl Action {
         }
     }
 
+    /// The included steps as `command.batch` takes them. A recorded `command.batch` step (an action
+    /// played, or a panel operation that runs as one batch, while recording) gives its own steps,
+    /// since batches do not nest.
     pub(crate) fn included_commands(&self) -> Vec<Value> {
         self.steps
             .iter()
             .enumerate()
             .filter(|(i, _)| !self.excluded_steps.contains(i))
-            .map(|(_, (command, params))| json!({"command": command, "params": params}))
+            .flat_map(|(_, (command, params))| match params.get("commands").and_then(Value::as_array) {
+                Some(steps) if command == "command.batch" => steps.clone(),
+                _ => vec![json!({"command": command, "params": params})],
+            })
             .collect()
     }
 }
@@ -226,7 +232,8 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
     let result = play_step(app, &a.name, first)?;
     let pending = steps.len();
     if pending > 0 {
-        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None });
+        let hold = options.speed == PlaybackSpeed::Step;
+        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None, hold });
         if let Some(ctx) = &app.ui_ctx {
             ctx.request_repaint();
         }
@@ -288,14 +295,21 @@ pub struct Playing {
     /// With Pause For, when the next step runs (seconds on the app's clock); none until the frame
     /// after the first step, which starts the first pause.
     next_at: Option<f64>,
+    /// With Step by Step, set until the first frame after the first step: that frame draws the
+    /// first step's result and runs no step, since Play in the panel can run after the canvas drew.
+    hold: bool,
 }
 
 /// Runs the next step of the paced playback in progress when it is due at `now` (seconds on the
-/// app's clock): with Step by Step at each call, so each frame runs one step; with Pause For once
-/// the pause after the step before has passed. A step that fails ends the playback and shows its
-/// error. → the seconds until the window should draw again while playback goes on
+/// app's clock): with Step by Step at each call after the first, so each frame runs one step and the
+/// frame after Play draws the first step; with Pause For once the pause after the step before has
+/// passed. A step that fails ends the playback and shows its error. → the seconds until the window
+/// should draw again while playback goes on
 pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     let playing = app.ui.action_playing.as_mut()?;
+    if std::mem::take(&mut playing.hold) {
+        return Some(0.0);
+    }
     let pause = f64::from(playing.options.seconds);
     if playing.options.speed == PlaybackSpeed::Pause {
         let due = *playing.next_at.get_or_insert(now + pause);
@@ -2892,6 +2906,8 @@ mod tests {
         let before = undo_steps(&app);
         assert_eq!(play(&mut app, 0, 0).unwrap()["pending"], json!(2));
         assert_eq!(x(&app), 1.0, "the first step runs at once");
+        assert_eq!(tick_playback(&mut app, 0.0), Some(0.0), "the frame after Play draws the first step");
+        assert_eq!(x(&app), 1.0, "and runs no step, even when Play ran after the canvas drew");
         assert_eq!(tick_playback(&mut app, 0.0), Some(0.0), "the window draws again before the next step");
         assert_eq!(x(&app), 3.0, "one more step in this frame");
         assert_eq!(tick_playback(&mut app, 0.0), None, "the last step ends the playback");
@@ -2938,11 +2954,39 @@ mod tests {
     }
 
     #[test]
+    fn an_action_recorded_while_another_plays_plays_its_steps() {
+        let (mut app, x) = app_with_three_moves();
+        // Accelerated: the recording gets the played action as one batch step.
+        app.run(START_RECORDING, json!({"set": 0})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions[1].steps.iter().map(|s| s.0.as_str()).collect::<Vec<_>>(), ["command.batch"]);
+        assert_eq!(x(&app), 7.0);
+        play(&mut app, 0, 1).unwrap();
+        assert_eq!(x(&app), 14.0, "the batch step plays its moves");
+        // Step by Step: recording begins after the first step, and gets each later step as a batch.
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        app.run(START_RECORDING, json!({"set": 0})).unwrap();
+        while tick_playback(&mut app, 0.0).is_some() {}
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert_eq!(x(&app), 21.0);
+        assert_eq!(app.ui.action_sets[0].actions[2].steps.len(), 2);
+        play(&mut app, 0, 2).unwrap();
+        while tick_playback(&mut app, 0.0).is_some() {}
+        assert_eq!(x(&app), 27.0, "paced: the recorded batches play the second and third moves");
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "accelerated"})).unwrap();
+        play(&mut app, 0, 2).unwrap();
+        assert_eq!(x(&app), 33.0, "accelerated: the recorded batches play inside the action's batch");
+    }
+
+    #[test]
     fn a_failing_step_ends_a_paced_playback_with_its_error() {
         let (mut app, x) = app_with_three_moves();
         app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
         app.ui.action_sets[0].actions[0].steps[1] = ("no.such.command".into(), json!({}));
         play(&mut app, 0, 0).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.0), Some(0.0), "the frame after Play draws the first step");
         assert_eq!(tick_playback(&mut app, 0.0), None);
         assert!(app.ui.action_playing.is_none());
         assert!(!app.ui.status.is_empty(), "the step's error shows");
