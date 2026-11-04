@@ -1807,7 +1807,7 @@ fn the_control_bar_shows_the_distribute_buttons_for_two_or_more_objects() {
 /// The Control bar shows the Global Edit Options dropdown while Start Global Edit can run. Its
 /// options are the session's, which the Properties panel's dropdown also sets: Match Size from
 /// the Control bar narrows the Results and the objects Start Global Edit takes. The dropdown is off
-/// while Global Edit is on, and absent when the selection cannot start it.
+/// and closed while Global Edit is on, and absent when the selection cannot start it.
 #[test]
 fn the_control_bar_shows_the_global_edit_options() {
     crate::i18n::set_current(crate::i18n::Lang::EN);
@@ -1860,9 +1860,14 @@ fn the_control_bar_shows_the_global_edit_options() {
     let nodes = frame(&mut app, vec![]);
     let button = find(&nodes, "Global Edit Options").unwrap_or_else(|| panic!("Global Edit on: the dropdown still shows"));
     assert!(button.is_disabled(), "the options are off while Global Edit is on");
+    let results = |nodes: &Nodes| nodes.iter().any(|(_, n)| n.label().or(n.value()).is_some_and(|t| t.starts_with("Result")));
+    assert!(!results(&nodes), "Global Edit starting closes the open options");
+    assert!(!results(&frame(&mut app, vec![])));
+    app.run("select.globalEdit", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    assert!(!results(&frame(&mut app, vec![])), "the options stay closed once Global Edit stops");
     // At any width the button either fits inside the bar or is left out, and a wider bar never
     // leaves it out once a narrower one showed it.
-    app.run("select.globalEdit", json!({})).unwrap();
     let mut seen = false;
     for width in (600..=2400).step_by(10) {
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
