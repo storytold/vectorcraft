@@ -190,11 +190,11 @@ pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
     // they take root's (https://github.com/unicode-org/cldr/blob/main/common/main/root.xml,
     // `delimiters`): sa.xml, ne.xml, as.xml, kok.xml and sd.xml (Arabic script; sd_Deva.xml for
     // Devanagari inherits too) in https://github.com/unicode-org/cldr/blob/main/common/main/.
-    ("Sanskrit", "sa", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
-    ("Nepali", "ne", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
-    ("Assamese", "as", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
-    ("Konkani", "kok", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
-    ("Sindhi", "sd", Quotes { double: ['“', '”'], single: ['‘', '’'] }),
+    ("Sanskrit", "sa", Quotes::ENGLISH),
+    ("Nepali", "ne", Quotes::ENGLISH),
+    ("Assamese", "as", Quotes::ENGLISH),
+    ("Konkani", "kok", Quotes::ENGLISH),
+    ("Sindhi", "sd", Quotes::ENGLISH),
 ];
 
 /// The quotes of a [`LANGUAGES`] entry (case-insensitive).
