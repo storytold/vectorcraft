@@ -8910,3 +8910,97 @@ fn double_clicking_a_ruler_adds_a_guide_at_that_position() {
         assert_eq!(guides(&mut app), vec![]);
     }
 }
+
+/// A fresh app with a 400 x 300 document, rulers on, the view at zoom 2 turned `rotation` degrees,
+/// and its first frame drawn.
+fn ruler_guide_app(rotation: f64) -> (VectorcraftApp, egui::Context) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.rulers = true;
+    app.ui.view.guides = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let view = app.view_mut().unwrap();
+    view.zoom = 2.0;
+    view.rotation = rotation;
+    view.center = Point::new(200.0, 150.0);
+    frame(&mut app, &ctx, vec![]);
+    (app, ctx)
+}
+
+/// One primary click at `at`, as three frames (move, press, release).
+fn click_at(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2) {
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(app, ctx, vec![button(true)]);
+    frame(app, ctx, vec![button(false)]);
+}
+
+/// The ruler guides as (vertical, position).
+fn guide_list(app: &mut VectorcraftApp) -> Vec<(bool, f64)> {
+    let list = app.session.execute("guide.list", &json!({})).unwrap();
+    list.as_array().unwrap().iter().map(|g| (g["vertical"].as_bool().unwrap(), g["pos"].as_f64().unwrap())).collect()
+}
+
+/// #5239 review: egui counts a double-click by position and time, not by widget, so a click on
+/// the canvas right at a ruler followed at once by a click on the ruler is not a double-click on
+/// the ruler. No guide; two clicks on the ruler still make one.
+#[test]
+fn a_canvas_click_then_a_ruler_click_adds_no_guide() {
+    for (top, canvas_first) in [(true, true), (false, true), (true, false), (false, false)] {
+        let (mut app, ctx) = ruler_guide_app(0.0);
+        let rect = app.canvas_rect.unwrap();
+        // Two points less than 6 pt apart, either side of the ruler's inner edge.
+        let (on_canvas, on_ruler) = if top {
+            (pos2(rect.center().x, rect.top() + 1.0), pos2(rect.center().x, rect.top() - 1.0))
+        } else {
+            (pos2(rect.left() + 1.0, rect.center().y), pos2(rect.left() - 1.0, rect.center().y))
+        };
+        click_at(&mut app, &ctx, if canvas_first { on_canvas } else { on_ruler });
+        click_at(&mut app, &ctx, on_ruler);
+        let want = usize::from(!canvas_first);
+        assert_eq!(guide_list(&mut app).len(), want, "top ruler: {top}, first click on the canvas: {canvas_first}");
+    }
+}
+
+/// #5239 review: the rulers read the canvas's coordinates turned with the view, so a guide made
+/// by a double-click runs across the ruler's axis in any view: it passes through the clicked
+/// point and crosses the ruler's edge at it, never along it. At 90° the top ruler reads the
+/// document's y, so its guide is horizontal; the left ruler reads x, so its guide is vertical.
+/// A view turned part of the way takes the document axis nearer to the ruler's.
+#[test]
+fn a_ruler_double_click_follows_a_rotated_view() {
+    // Rotation (degrees), top ruler's guide is vertical, left ruler's guide is vertical.
+    for (rotation, top_vertical, left_vertical) in [
+        (0.0, true, false),
+        (90.0, false, true),
+        (-90.0, false, true),
+        (180.0, true, false),
+        (270.0, false, true),
+        (30.0, true, false),
+        (60.0, false, true),
+    ] {
+        for top in [true, false] {
+            let (mut app, ctx) = ruler_guide_app(rotation);
+            let rect = app.canvas_rect.unwrap();
+            let xf = Xf::new(rect, app.view().unwrap());
+            let at =
+                if top { pos2(rect.center().x + 37.0, rect.top() - RULER / 2.0) } else { pos2(rect.left() - RULER / 2.0, rect.center().y + 23.0) };
+            click_at(&mut app, &ctx, at);
+            click_at(&mut app, &ctx, at);
+            let got = guide_list(&mut app);
+            let label = format!("rotation {rotation}, top ruler: {top}: {got:?}");
+            assert_eq!(got.len(), 1, "{label}");
+            let (vertical, pos) = got[0];
+            assert_eq!(vertical, if top { top_vertical } else { left_vertical }, "{label}");
+            // Through the clicked point.
+            let doc = xf.to_doc(at);
+            assert!((pos - if vertical { doc.x } else { doc.y }).abs() < 0.01, "{label}: through {doc:?}");
+            // Its direction on screen is not along the ruler: the line crosses the ruler's edge.
+            let along = if vertical { Point::new(doc.x, doc.y + 1.0) } else { Point::new(doc.x + 1.0, doc.y) };
+            let dir = (xf.to_screen(along) - xf.to_screen(doc)).normalized();
+            let across = if top { dir.y.abs() } else { dir.x.abs() };
+            assert!(across > 0.5, "{label}: the guide runs along the ruler ({dir:?})");
+        }
+    }
+}

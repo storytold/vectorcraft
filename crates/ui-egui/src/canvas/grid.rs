@@ -178,9 +178,10 @@ pub(super) fn ruler_rects(full: egui::Rect) -> [egui::Rect; 3] {
 /// A drag from a ruler onto the canvas makes a guide where the button is released (the engine's
 /// `Session::ruler_guide`): a horizontal one from the top ruler, a vertical one from the left
 /// ruler, snapped as a moved guide is (with Shift to the ruler's ticks). Released anywhere else,
-/// it makes none. A double-click on a ruler makes a guide at the pointer, across the ruler's
-/// axis (a vertical one on the top ruler, a horizontal one on the left), unsnapped, as one
-/// `guide.add` and so one undo step. The corner drags the rulers' origin or resets it on a
+/// it makes none. A double-click on a ruler (both clicks on that ruler) makes a guide at the
+/// pointer, across the ruler's axis (a vertical one on the top ruler, a horizontal one on the
+/// left; swapped in a view turned 90°, where the rulers read the other document axis, and the
+/// nearer axis in between), unsnapped, as one `guide.add` and so one undo step. The corner drags the rulers' origin or resets it on a
 /// double-click.
 pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui::Rect, xf: &Xf) -> Option<Point> {
     let [top, left, corner] = ruler_rects(full);
@@ -192,13 +193,31 @@ pub(super) fn ruler_input(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, c
         // (right). Not focusable (`click_and_drag` is): no key acts on a ruler, so Tab skips it.
         let resp = ui.interact(r, egui::Id::unique(id), Sense::CLICK | Sense::DRAG);
         resp.context_menu(|ui| crate::menus::ruler_menu_body(app, ui, &mut unit_clicked));
+        // egui counts a double-click by position and time alone, so a click on the canvas right
+        // at the ruler and one on the ruler would pass for one: the pair counts only when the
+        // ruler's own click before it came within the double-click delay.
+        let last_click = egui::Id::unique(if vertical { "ruler-left-last-click" } else { "ruler-top-last-click" });
+        let now = ui.input(|i| i.time);
+        let first_here =
+            ui.data(|d| d.get_temp::<f64>(last_click)).is_some_and(|t| now - t <= ui.ctx().options(|o| o.input_options.max_double_click_delay));
+        if resp.clicked_by(egui::PointerButton::Primary) {
+            ui.data_mut(|d| d.insert_temp(last_click, now));
+        }
         if resp.double_clicked_by(egui::PointerButton::Primary)
+            && first_here
             && let Some(p) = resp.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos()))
         {
-            // The same document point the drag path reads; the guide runs across the other axis
-            // than the ruler, so it takes the pointer's coordinate along the ruler.
+            // The same document point the drag path reads. A ruler reads the canvas's coordinates
+            // turned with the view, so the guide is the one whose line crosses the ruler's axis:
+            // the vertical one when that axis (the screen's x for the top ruler, y for the left,
+            // in document directions) is nearer the document's x, else the horizontal one. At 0°
+            // that is a vertical guide from the top ruler; at 90° a horizontal one; between, the
+            // nearer axis, whose line still runs through the point and never along the ruler.
             let at = xf.to_doc(p);
-            let mut params = json!({"vertical": !vertical, "pos": if vertical { at.y } else { at.x }});
+            let (sn, cs) = xf.rot.sin_cos();
+            let axis = if vertical { (sn, cs) } else { (cs, -sn) };
+            let across = axis.0.abs() >= axis.1.abs();
+            let mut params = json!({"vertical": across, "pos": if across { at.x } else { at.y }});
             if let Some(ab) = app.session.ruler_guide_artboard() {
                 params["artboard"] = json!(ab);
             }
