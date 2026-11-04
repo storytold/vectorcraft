@@ -171,8 +171,10 @@ pointers are offsets into the module's memory.
   each clamped to `min..max`; a list of too few or too many is an error, and `maxItems` is at most 256) and `color`
   (`{"type": "color", "default": "#3a7bd5"}`: a color button that opens a color picker; the default, black when left
   out, and a value given to `plugin.run` may be a color object as paints hold one or a hex string, and the plug-in
-  always gets a color object, its components clamped, such as `{"model": "rgb", "r": 0.23, "g": 0.48, "b": 0.84}`; the
-  picker gives RGB). Hosts from before `color` refuse a manifest that uses it. A plug-in declares up to 256
+  always gets a color object, its components clamped, such as `{"model": "rgb", "r": 0.23, "g": 0.48, "b": 0.84}`; a
+  hex string and the picker's choice are display colors, given as the working RGB color that shows as them, so in a
+  working RGB space other than sRGB the numbers differ from the hex). Hosts from before `color` refuse a manifest that
+  uses it. A plug-in declares up to 256
   parameters, at most 64 of them outside groups.
 
 Each parameter may also say how dialogs show it. Hosts from before these keys ignore them, so a plug-in that
@@ -194,8 +196,8 @@ parameters uses `label`, `unit`, `help` and `visibleWhen`, and lists the paramet
 ### Input
 
 `input` is UTF-8 JSON: `{"objects": [...]}`. An object filter gets the selected paths and compound paths in paint
-order (bottom first): the selected ones and those inside selected groups and layers; hidden, locked, guide and clipping
-paths are left out, and so are other kinds of object (type, images, symbols, live blends…), which a filter never
+order (bottom first): the selected ones and those inside selected groups and layers; hidden, locked, guide (compound
+guides too) and clipping paths are left out, and so are other kinds of object (type, images, symbols, live blends…), which a filter never
 touches. With nothing selected the list is empty (a generator then adds its own objects). A live effect gets one
 object: its geometry (`type`, `path`, `fillRule`, `bounds`) and its `fills` and `strokes`, as a filter gets them (hosts
 from before these give geometry only). The paints are read only: an effect may draw as wide as a stroke or use a

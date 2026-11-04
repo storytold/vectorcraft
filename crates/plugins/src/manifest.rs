@@ -117,24 +117,29 @@ pub enum ParamSpec {
     /// `plugin.run`, is a color object as paints hold one (`{"model": "rgb", "r", "g", "b"}`, or
     /// `cmyk`, `gray`, `lab`) or a hex string (`"#3a7bd5"`); the plug-in always gets a color object.
     Color {
-        #[serde(default, deserialize_with = "color_default")]
-        default: vectorcraft_color::Color,
+        /// As the manifest gives it (`null`: black), read with [`color_value`] when used, so a hex
+        /// default follows the working RGB space in use then, not the one at install.
+        #[serde(default)]
+        default: Value,
     },
 }
 
-/// A color parameter's value: a color object or a hex string, its components clamped into range.
+/// A color parameter's value: a color object, or a hex string (display sRGB, converted into the
+/// active working RGB space as the color picker's choices are), its components clamped into range.
 pub fn color_value(v: &Value) -> Option<vectorcraft_color::Color> {
+    use vectorcraft_color::{Color, cms};
     let c = match v {
-        Value::String(s) => vectorcraft_color::Color::from_hex(s)?,
+        Value::String(s) => match Color::from_hex(s)? {
+            Color::Rgb { r, g, b } => {
+                let [r, g, b] = cms::active().srgb_to_rgb([r, g, b]);
+                Color::rgb(r, g, b)
+            }
+            other => other,
+        },
         Value::Object(_) => serde_json::from_value(v.clone()).ok()?,
         _ => return None,
     };
     Some(crate::objects::clamp_color(c))
-}
-
-fn color_default<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<vectorcraft_color::Color, D::Error> {
-    let v = Value::deserialize(d)?;
-    color_value(&v).ok_or_else(|| serde::de::Error::custom("a color default must be a color object or a hex string such as \"#3a7bd5\""))
 }
 
 fn int_min() -> i64 {
@@ -176,7 +181,7 @@ impl ParamSpec {
             ParamSpec::Choice { options, default } => json!(default.clone().or_else(|| options.first().cloned()).unwrap_or_default()),
             ParamSpec::Text { default, max_length } => json!(default.chars().take(*max_length).collect::<String>()),
             ParamSpec::NumberList { min, max, default, .. } => json!(default.iter().map(|x| x.clamp(*min, *max)).collect::<Vec<f64>>()),
-            ParamSpec::Color { default } => serde_json::to_value(default).unwrap_or_default(),
+            ParamSpec::Color { default } => serde_json::to_value(color_value(default).unwrap_or_default()).unwrap_or_default(),
         }
     }
 
@@ -195,6 +200,9 @@ impl ParamSpec {
                     return bad("default is not one of the options");
                 }
                 Ok(())
+            }
+            ParamSpec::Color { default } if !default.is_null() && color_value(default).is_none() => {
+                bad("a color default must be a color object or a hex string such as \"#3a7bd5\"")
             }
             ParamSpec::Text { default, max_length } if !(1..=MAX_TEXT).contains(max_length) || default.chars().count() > *max_length => {
                 bad(&format!("`maxLength` must be 1-{MAX_TEXT}, and the default no longer"))
@@ -344,7 +352,7 @@ impl Manifest {
                 ParamSpec::NumberList { min, max, min_items, max_items, .. } => {
                     format!("{k}: {min_items} to {max_items} numbers {min}..{max} ({})", p.spec.default_value())
                 }
-                ParamSpec::Color { default } => format!("{k}: color object or hex ({})", default.to_hex()),
+                ParamSpec::Color { default } => format!("{k}: color object or hex ({})", color_value(default).unwrap_or_default().to_hex()),
             })
             .collect();
         format!("{{{}}}", parts.join(", "))
@@ -633,6 +641,40 @@ mod tests {
         }
         assert!(m.params_doc().starts_with("{line: color object or hex (#ff0000)"));
         assert!(Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","params":{"c":{"type":"color","default":"nope"}}}"#).is_err());
+    }
+
+    /// A hex color is display sRGB: in a wide-gamut working RGB space it becomes the working RGB
+    /// color that shows as that hex, read when used, while the manifest keeps the default as written.
+    #[test]
+    fn hex_colors_follow_the_working_rgb_space() {
+        const CHILD: &str = "VECTORCRAFT_TEST_PLUGIN_COLOR_PROFILE";
+        if std::env::var_os(CHILD).is_none() {
+            // Color settings are process-wide: exercise this profile in a separate test process.
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "manifest::tests::hex_colors_follow_the_working_rgb_space", "--nocapture"])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+                "isolated color profile test failed:\n{stdout}\n{}",
+                String::from_utf8_lossy(&output.stderr),
+            );
+            return;
+        }
+        use vectorcraft_color::{Color, cms};
+        let m =
+            Manifest::parse(br##"{"id":"org.example.grid","name":"Grid","kind":"filter","params":{"line":{"type":"color","default":"#3a7bd5"}}}"##)
+                .unwrap();
+        cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+        for c in [m.defaults()["line"].clone(), m.resolve_params(&json!({"line": "#3a7bd5"})).unwrap()["line"].clone()] {
+            let c: Color = serde_json::from_value(c).unwrap();
+            assert_ne!(c, Color::rgb8(0x3a, 0x7b, 0xd5), "converted into the working space");
+            assert_eq!(c.to_hex(), "#3a7bd5", "shows as the hex given");
+        }
+        assert_eq!(serde_json::to_value(&m).unwrap()["params"]["line"]["default"], json!("#3a7bd5"), "kept as written");
+        cms::set_active(&cms::ColorSettings::default()).unwrap();
     }
 
     #[test]

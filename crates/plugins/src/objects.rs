@@ -621,8 +621,9 @@ pub fn selectable(n: &Node) -> bool {
 }
 
 /// The paths and compound paths a filter reads from the selection `selected`, in paint order:
-/// selected ones, and those inside selected groups and layers; hidden, locked, guide and clipping
-/// paths are left out (so are paths inside compound paths, blends and other live objects).
+/// selected ones, and those inside selected groups and layers; hidden, locked, guide (compound
+/// guides too) and clipping paths are left out (so are paths inside compound paths, blends and
+/// other live objects).
 pub fn filter_targets(doc: &Document, selected: &[NodeId]) -> Vec<NodeId> {
     fn visit(list: &[Arc<Node>], sel: &HashSet<NodeId>, inside: bool, out: &mut Vec<NodeId>) {
         for n in list {
@@ -631,7 +632,7 @@ pub fn filter_targets(doc: &Document, selected: &[NodeId]) -> Vec<NodeId> {
             }
             let picked = inside || sel.contains(&n.id);
             match &n.kind {
-                NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. } if picked => out.push(n.id),
+                NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. } if picked && !is_guide(n) => out.push(n.id),
                 NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => visit(children, sel, picked, out),
                 _ => {}
             }

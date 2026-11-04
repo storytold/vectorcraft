@@ -638,12 +638,14 @@ fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, cur: &
 }
 
 /// A plug-in `color` parameter's button, showing `cur` (a color object or hex) and opening the color
-/// picker → the color picked, as the color object the plug-in gets.
+/// picker → the color picked, as the color object the plug-in gets: the picker's display sRGB in the
+/// working RGB space, so the color shows as it was picked whatever the working profile.
 pub(crate) fn plugin_color_button(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, cur: &Value) -> Option<Value> {
     let [r, g, b, _] = vectorcraft_plugins::manifest::color_value(cur).unwrap_or_default().to_rgba8(1.0);
     let mut rgb = [r, g, b];
     let changed = ui.push_id(id, |ui| ui.color_edit_button_srgb(&mut rgb).changed()).inner;
-    changed.then(|| serde_json::to_value(vectorcraft_color::Color::rgb8(rgb[0], rgb[1], rgb[2])).unwrap_or_default())
+    let picked = || crate::screen_color::sampled(&vectorcraft_color::cms::active(), rgb.map(|v| f32::from(v) / 255.0));
+    changed.then(|| serde_json::to_value(picked()).unwrap_or_default())
 }
 
 /// A `numberList` value as its field shows it: "45, 135".
