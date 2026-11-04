@@ -88,7 +88,8 @@ fn reapply_restarts_the_renderer_after_a_render_threads_change() {
     apply_runtime(&mut app, &ctx);
     app.canvas.worker_started = true;
     // The automatic count as an explicit value: the process-wide count other tests read stays the same.
-    let threads = vectorcraft_render::default_threads();
+    // `VECTORCRAFT_RENDER_THREADS` can give more than the 64 the preference accepts.
+    let threads = vectorcraft_render::default_threads().min(64);
     app.run("prefs.set", json!({"key": "renderThreads", "value": threads})).unwrap();
     reapply(&mut app, &ctx);
     let restarted = !app.canvas.worker_started;
