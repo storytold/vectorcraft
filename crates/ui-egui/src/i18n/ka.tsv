@@ -32,6 +32,14 @@
 @msg	{key} must be [x, y] with finite coordinates	{key} უნდა იყოს [x, y] სასრული კოორდინატებით
 @msg	ids must contain 1–10000 object ids	ids უნდა შეიცავდეს 1–10000 ობიექტის იდენტიფიკატორს
 
+	Kaku #2	Kaku #2
+	Kaku #3	Kaku #3
+	PDF/X-1a:2001	PDF/X-1a:2001
+	PDF/X-3:2002	PDF/X-3:2002
+	PDF/X-4:2010	PDF/X-4:2010
+	Simplified Chinese	გამარტივებული ჩინური
+	Yonroku-ban	Yonroku-ban
+@id	file.close	ფაილის დახურვა
 	File	ფაილი
 	New…	ახალი…
 	New Without Dialog	ახალი დიალოგის გარეშე
@@ -6270,6 +6278,21 @@ breakText	Glyphs	გლიფები
 	Create Swatch Legend	ფერის ნიმუშების ლეგენდის შექმნა
 	Create Swatch Legend…	ფერის ნიმუშების ლეგენდის შექმნა…
 	HEX	HEX
+	Check for Updates…	განახლებების შემოწმება…
+	VectorCraft Updates	VectorCraft-ის განახლებები
+	Preparing the image…	გამოსახულების მომზადება…
+	Tracing the colors…	ფერების ვექტორიზაცია…
+	Invalid panel layout; restored the default dock	პანელების განლაგება არასწორია; აღდგენილია ნაგულისხმევი დოკი
+	Include All Subdirectories	ყველა ქვესაქაღალდის ჩართვა
+	Save and Close	შენახვა და დახურვა
+	Load Variable Library	ცვლადების ბიბლიოთეკის ჩატვირთვა
+shape	Open	ღია
+font-script	Japanese	იაპონური
+	Japanese Postcard	იაპონური ღია ბარათი
+	Japanese Double Postcard	იაპონური ორმაგი ღია ბარათი
+	Japanese Envelope #3	იაპონური კონვერტი #3
+	Japanese Envelope #4	იაპონური კონვერტი #4
+@msg	not an RTF file: it doesn't start with {\\rtf	RTF ფაილი არ არის: არ იწყება {\\rtf-ით
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	ტექსტის ხელსაწყოები
 	Text Tweaker…	ტექსტის მორგება…
