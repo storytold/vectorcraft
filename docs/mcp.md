@@ -5605,14 +5605,15 @@ it, as with any style change to one character (`text.setRangeStyle`). The type s
 ## Alternate glyphs
 
 The Glyphs panel's Show › Alternates for Current Selection lists the alternate glyphs of the character selected with
-the Type tool (a range's first character, else the one before the caret), and a double-click on one draws that character
-with it. `text.glyphAlternates {id, start}` lists them for the character at byte `start`: `{char, font, style, default,
+the Type tool (a range's first character, else the one before the caret), with the default glyph first when the font
+does not list it, and a double-click on one draws that character with it. `text.glyphAlternates {id, start}` lists them for the character at byte `start`: `{char, font, style, default,
 chosen, alternates: [{gid, feature}]}`, where `default` is the glyph the font's character map gives, `chosen` the glyph
 drawn now, and `alternates` the glyphs the font's `GSUB` single and alternate substitutions put in place of the default
 glyph: `aalt` first, then `salt`, `ss01` to `ss20`, `swsh`, `cv01` to `cv99`, `hist`, `jalt`, `nalt`, `ornm` and
 `titl`, in lookup order within each, each glyph once. The default glyph is listed only when `aalt` lists it. Ligatures
 and contextual substitutions are not listed. `text.setGlyphAlternate {id, start, gid}` draws the character with glyph
-`gid`, one of those alternates, as one undo step; the default glyph or `gid: null` puts the default glyph back. The text
+`gid`, one of those alternates or the default glyph, as one undo step; `gid: null` takes the choice away, and the
+character is drawn as its style draws it (a feature such as `salt` can draw another glyph than the default). The text
 keeps the character and its other attributes, and characters typed next to it take their default glyphs. The choice is
 saved with the character's style as `glyphAlternate: {ch, gid, font, version}`, the face's PostScript name and version
 string: set in another font or version, or with the font missing, the character takes its default glyph. Both commands
