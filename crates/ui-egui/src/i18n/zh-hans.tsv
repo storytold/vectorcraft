@@ -798,6 +798,11 @@
 	Double-click to edit the characters' paint	双击以编辑字符的上色
 	Click to edit	单击以编辑
 	Double-click to edit	双击以编辑
+	Alternates for Current Selection	当前所选字符的替代字
+	Select a character with the Type tool to see its alternates.	使用文字工具选择一个字符以查看其替代字。
+	The selected character's font is not available.	所选字符的字体不可用。
+	No alternates for the selected character.	所选字符没有替代字。
+	Double-click to replace	双击以替换
 	Double-click to insert	双击以插入
 	Double-click to rename	双击以重命名
 	Double-click to target the contents	双击以指定内容

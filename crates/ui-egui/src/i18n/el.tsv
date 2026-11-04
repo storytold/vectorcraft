@@ -814,6 +814,11 @@ font-technology	Variable	Μεταβλητές
 	Double-click to edit the characters' paint	Διπλό κλικ για επεξεργασία του χρωματισμού χαρακτήρων
 	Click to edit	Κλικ για επεξεργασία
 	Double-click to edit	Διπλό κλικ για επεξεργασία
+	Alternates for Current Selection	Εναλλακτικοί για την τρέχουσα επιλογή
+	Select a character with the Type tool to see its alternates.	Επιλέξτε έναν χαρακτήρα με το εργαλείο κειμένου για να δείτε τους εναλλακτικούς του.
+	The selected character's font is not available.	Η γραμματοσειρά του επιλεγμένου χαρακτήρα δεν είναι διαθέσιμη.
+	No alternates for the selected character.	Δεν υπάρχουν εναλλακτικοί για τον επιλεγμένο χαρακτήρα.
+	Double-click to replace	Διπλό κλικ για αντικατάσταση
 	Double-click to insert	Διπλό κλικ για εισαγωγή
 	Double-click to rename	Διπλό κλικ για μετονομασία
 	Double-click to target the contents	Διπλό κλικ για επιλογή του περιεχομένου ως στόχου

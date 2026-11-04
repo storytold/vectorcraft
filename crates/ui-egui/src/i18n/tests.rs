@@ -1702,6 +1702,22 @@ fn open_save_and_recovery_messages_take_the_plural_form() {
     assert_eq!(message(ru, &opened_with_notes(3, "x")), "Открыто с 3 примечаниями: x");
 }
 
+/// The `{n}` of a message with a count matches only a number, so a path that holds the text after
+/// the path keeps its count and its whole path. A `{n}` in a message without a count is any text.
+#[test]
+fn a_count_placeholder_matches_only_a_number() {
+    use crate::io::saved_status;
+    let saved = |path: &str, n: usize| saved_status(path, &serde_json::json!({ "warnings": vec!["a note"; n] }));
+    let path = "/out/art with notes.pdf";
+    assert_eq!(message(de(), &saved(path, 1)), "/out/art with notes.pdf mit 1 Hinweis gespeichert: a note");
+    assert_eq!(message(de(), &saved(path, 2)), "/out/art with notes.pdf mit 2 Hinweisen gespeichert: a note");
+    let c = Catalog::parse("@msgplural\tSaved {path} with {n} note|Saved {path} with {n} notes\tone|other\n");
+    let (_, caps) = c.message_forms("Saved /a with 1 b with 2 notes").expect("matches");
+    assert_eq!(caps, [("path", "/a with 1 b"), ("n", "2")]);
+    assert!(c.message_forms("Saved /a with b notes").is_none());
+    assert_eq!(message(de(), "no brush `with 2`"), "kein Pinsel `with 2`");
+}
+
 /// The scan reads the message of an error made with one of the engine's [`ERROR_HELPERS`] or with
 /// an error enum's variant, `EngineError::Disabled`'s reason included: a literal or a `format!`
 /// string, on the call's line or wrapped over several lines, in the same template form as the

@@ -113,6 +113,28 @@ pub enum ParamSpec {
         #[serde(default = "list_max")]
         max_items: usize,
     },
+    /// A color (a color button that opens a color picker). Its default, and a value passed to
+    /// `plugin.run`, is a color object as paints hold one (`{"model": "rgb", "r", "g", "b"}`, or
+    /// `cmyk`, `gray`, `lab`) or a hex string (`"#3a7bd5"`); the plug-in always gets a color object.
+    Color {
+        #[serde(default, deserialize_with = "color_default")]
+        default: vectorcraft_color::Color,
+    },
+}
+
+/// A color parameter's value: a color object or a hex string, its components clamped into range.
+pub fn color_value(v: &Value) -> Option<vectorcraft_color::Color> {
+    let c = match v {
+        Value::String(s) => vectorcraft_color::Color::from_hex(s)?,
+        Value::Object(_) => serde_json::from_value(v.clone()).ok()?,
+        _ => return None,
+    };
+    Some(crate::objects::clamp_color(c))
+}
+
+fn color_default<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<vectorcraft_color::Color, D::Error> {
+    let v = Value::deserialize(d)?;
+    color_value(&v).ok_or_else(|| serde::de::Error::custom("a color default must be a color object or a hex string such as \"#3a7bd5\""))
 }
 
 fn int_min() -> i64 {
@@ -154,6 +176,7 @@ impl ParamSpec {
             ParamSpec::Choice { options, default } => json!(default.clone().or_else(|| options.first().cloned()).unwrap_or_default()),
             ParamSpec::Text { default, max_length } => json!(default.chars().take(*max_length).collect::<String>()),
             ParamSpec::NumberList { min, max, default, .. } => json!(default.iter().map(|x| x.clamp(*min, *max)).collect::<Vec<f64>>()),
+            ParamSpec::Color { default } => serde_json::to_value(default).unwrap_or_default(),
         }
     }
 
@@ -321,6 +344,7 @@ impl Manifest {
                 ParamSpec::NumberList { min, max, min_items, max_items, .. } => {
                     format!("{k}: {min_items} to {max_items} numbers {min}..{max} ({})", p.spec.default_value())
                 }
+                ParamSpec::Color { default } => format!("{k}: color object or hex ({})", default.to_hex()),
             })
             .collect();
         format!("{{{}}}", parts.join(", "))
@@ -381,6 +405,10 @@ impl Manifest {
                     }
                     let numbers: Option<Vec<f64>> = items.iter().map(|x| x.as_f64().filter(|f| f.is_finite()).map(|f| f.clamp(*min, *max))).collect();
                     json!(numbers.ok_or_else(|| wrong("a list of numbers"))?)
+                }
+                ParamSpec::Color { .. } => {
+                    let c = color_value(v).ok_or_else(|| wrong("a color object or a hex string such as \"#3a7bd5\""))?;
+                    serde_json::to_value(c).map_err(|e| Error::Params(format!("`{k}`: {e}")))?
                 }
             };
             out.insert(k.clone(), resolved);
@@ -578,6 +606,33 @@ mod tests {
             m.params_doc(),
             r#"{label: string of at most 8 ("Rose"), angles: 1 to 3 numbers 0..360 ([45.0,135.0]), free: string of at most 256 ("")}"#
         );
+    }
+
+    /// A color's default and value may be a color object or a hex string; the plug-in always gets
+    /// a color object, its components clamped. Without a default it is black.
+    #[test]
+    fn colors_resolve_to_color_objects() {
+        let m = Manifest::parse(
+            br##"{"id":"org.example.grid","name":"Grid","kind":"filter","params":{
+                "line":{"type":"color","default":"#ff0000"},
+                "ink":{"type":"color","default":{"model":"cmyk","c":1,"m":0,"y":0,"k":2}},
+                "plain":{"type":"color"}}}"##,
+        )
+        .unwrap();
+        assert_eq!(
+            Value::Object(m.defaults()),
+            json!({"line": {"model": "rgb", "r": 1.0, "g": 0.0, "b": 0.0},
+                   "ink": {"model": "cmyk", "c": 1.0, "m": 0.0, "y": 0.0, "k": 1.0},
+                   "plain": {"model": "rgb", "r": 0.0, "g": 0.0, "b": 0.0}})
+        );
+        let p = m.resolve_params(&json!({"line": "#0000ff", "ink": {"model": "gray", "k": 0.5}})).unwrap();
+        assert_eq!(p["line"], json!({"model": "rgb", "r": 0.0, "g": 0.0, "b": 1.0}));
+        assert_eq!(p["ink"], json!({"model": "gray", "k": 0.5}));
+        for bad in [json!({"line": "not a color"}), json!({"line": 3}), json!({"line": {"model": "hsv", "h": 1}})] {
+            assert!(m.resolve_params(&bad).is_err(), "{bad}");
+        }
+        assert!(m.params_doc().starts_with("{line: color object or hex (#ff0000)"));
+        assert!(Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","params":{"c":{"type":"color","default":"nope"}}}"#).is_err());
     }
 
     #[test]

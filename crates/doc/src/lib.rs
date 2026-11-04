@@ -112,6 +112,7 @@ pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
 pub use text::FontHeightReference;
+pub use text::GlyphChoice;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
     JustificationOptions, Justify, Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign, RubyPosition,
@@ -228,8 +229,9 @@ pub struct Document {
     #[serde(default, skip_serializing)]
     pub mask_edit: Option<MaskEdit>,
     /// Symbol editing mode, while active. Never saved (see [`Document::without_edit_modes`]): the
-    /// symbol already holds the art of its editing layer.
-    #[serde(default, skip_serializing)]
+    /// symbol already holds the art of its editing layer. Never read either: a value in file data
+    /// is dropped, so the layer it names is kept and saving does not write the value again.
+    #[serde(default, skip_serializing, deserialize_with = "skip::read_as_none")]
     pub symbol_edit: Option<SymbolEdit>,
     next_id: u64,
     /// Foreign data preserved on round-trip.

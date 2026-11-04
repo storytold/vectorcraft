@@ -1481,6 +1481,11 @@ digits	Malayalam	Malayalam
 	Save Transparency Flattener Preset…	Gem forudindstilling til fladtrykning af gennemsigtighed…
 	Basic Latin	Grundlæggende latinsk
 	Currency & Symbols	Valuta & symboler
+	Alternates for Current Selection	Alternativer til den aktuelle markering
+	Select a character with the Type tool to see its alternates.	Markér et tegn med tekstværktøjet for at se dets alternativer.
+	The selected character's font is not available.	Skrifttypen for det markerede tegn er ikke tilgængelig.
+	No alternates for the selected character.	Ingen alternativer til det markerede tegn.
+	Double-click to replace	Dobbeltklik for at erstatte
 	Double-click to insert	Dobbeltklik for at indsætte
 	Entire Font	Hele skrifttypen
 	glyph {id}	glyf {id}

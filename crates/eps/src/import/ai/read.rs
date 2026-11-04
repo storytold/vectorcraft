@@ -310,10 +310,13 @@ struct Reader<'a> {
     /// dictionary (its name, its opacity mask and the mask's art).
     mesh_ended: bool,
     /// A layer's own state (`Xy` after its art, before `LB`), until something says the art moves on.
-    layer_state: Option<(f32, BlendMode, bool, Knockout)>,
+    layer_state: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// The state a mesh or blend had before an `Xy` right after its end, which is the layer's
     /// instead when the layer's `LB` follows rather than their own `6 () XW`.
     mesh_undo: Option<(f32, BlendMode, bool, Knockout)>,
+    /// The state a layer's last group or compound path had before an `Xy` right after its end,
+    /// which is the layer's instead when the layer's own `7 () XW` follows.
+    container_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// Painted copies of clipping paths that have a fill (drawn under what they clip).
     clip_fills: HashSet<NodeId>,
     /// Groups closed as an object's drawn look (`9 () XW`).
@@ -476,6 +479,7 @@ impl<'a> Reader<'a> {
             mesh_ended: false,
             layer_state: None,
             mesh_undo: None,
+            container_undo: None,
             styles: HashMap::new(),
             style_list: vec![],
             style_links: vec![],

@@ -161,6 +161,8 @@ fn to_attrs<T: Serialize>(v: &T) -> Map<String, Value> {
 /// from a style instead leaves the text's own value alone.
 pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
     let mut m = to_attrs(v);
+    // A chosen glyph belongs to one character, not to a reusable character style.
+    m.remove("glyphAlternate");
     for (k, x) in [
         ("font_version", json!(v.font_version)),
         ("fontAxes", json!(v.font_axes)),
@@ -276,11 +278,9 @@ fn restyle<T: Serialize + DeserializeOwned + Clone>(
     new: &Map<String, Value>,
     base: &Map<String, Value>,
 ) -> T {
-    let Some(full) = to_map(cur) else { return cur.clone() };
-    let mut m = attrs(cur);
-    if let Some(name) = full.get("style_name") {
-        m.insert("style_name".into(), name.clone());
-    }
+    // Starts from every key `cur` writes, so values no style sets (a glyph choice) are kept.
+    let Some(mut m) = to_map(cur) else { return cur.clone() };
+    m.extend(attrs(cur));
     for (k, v) in new {
         if old.get(k).is_none_or(|o| m.get(k) == Some(o)) {
             m.insert(k.clone(), v.clone());
@@ -498,6 +498,9 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
             let c = kind.cmd(verb);
             let full = match kind {
                 Kind::Char => {
+                    if m.contains_key("glyphAlternate") {
+                        return Err(bad(&c, "`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)"));
+                    }
                     let mut st = with_attrs(&CharStyle::default(), m, &c)?;
                     let changed = |key: &str| m.contains_key(key) && kept.and_then(|k| k.get(key)) != m.get(key);
                     for (key, value, lo, hi) in

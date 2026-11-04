@@ -1544,6 +1544,11 @@ digits	Malayalam	Malajalam
 	Save Transparency Flattener Preset…	Tallenna läpinäkyvyyden litistyksen esiasetus…
 	Basic Latin	Latinalainen perusmerkistö
 	Currency & Symbols	Valuutat ja symbolit
+	Alternates for Current Selection	Nykyisen valinnan vaihtoehdot
+	Select a character with the Type tool to see its alternates.	Näet merkin vaihtoehdot valitsemalla sen tekstityökalulla.
+	The selected character's font is not available.	Valitun merkin fontti ei ole saatavilla.
+	No alternates for the selected character.	Valitulla merkillä ei ole vaihtoehtoja.
+	Double-click to replace	Korvaa kaksoisnapsauttamalla
 	Double-click to insert	Lisää kaksoisnapsauttamalla
 	Entire Font	Koko fontti
 	glyph {id}	merkki {id}

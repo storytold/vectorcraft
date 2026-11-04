@@ -18,7 +18,7 @@ from the public specifications, and users' own `.ai` files are used locally only
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
 | Formats opened or placed | ~30 | 29 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, PICT, PS |
-| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, artboards) or as legacy version 7 (layers and groups, one artboard per file) |
+| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, artboards, transparency, opacity masks, clipping) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 17 | missing: DWG, 3D (OBJ/USDA/glTF); extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
 
@@ -62,9 +62,12 @@ private editing data. VectorCraft:
   Editing Data for Other Apps) every page's `PieceInfo` also carries an editing copy of the art in
   `AIPrivateData` streams, in the form VectorCraft's `.ai` reader reads: layers and sublayers, groups, paths with
   their fills and strokes (a compound path as one path of all its subpaths), process, spot and global colors, swatches and color groups, guides,
-  hidden and locked objects, object names and every artboard with its name. Type, gradients, patterns, images,
-  symbols, clipping groups and live objects are written as plain filled and stroked paths, each with a warning;
-  transparency and effects other than geometry effects are left out.
+  hidden and locked objects, object names, every artboard with its name, the transparency of objects and layers
+  (opacity, blending mode, isolation, knockout and knockout shape), objects' opacity masks, and clipping groups and
+  clipping layers clipped by a path or compound path. Type, gradients, patterns, images, symbols, other clipping
+  objects and live objects are written as plain filled and stroked paths, each with a warning; the opacity and
+  blending mode of single fills and strokes, opacity masks on layers and effects other than geometry effects are
+  left out.
 - **Writes** a legacy `.ai` of version 7 (Save As › `ai` › Version: Legacy (version 7), `aiVersion: "7"`): the
   PostScript form, from the published *Adobe Illustrator File Format Specification* version 7.0
   ([PRONOM fmt/423](https://www.nationalarchives.gov.uk/PRONOM/fmt/423)), which apps reading `.ai` open with its

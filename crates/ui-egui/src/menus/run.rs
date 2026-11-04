@@ -170,6 +170,19 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             let mut params = if p.is_object() { p.clone() } else { json!({}) };
             params["format"] = json!("png");
             params["path"] = json!(path);
+            // No artboard named: the artboard in use rather than the first (#5502), or each one the
+            // Artboard tool has selected, one file each.
+            let named = ["useArtboards", "rect"].iter().chain(vectorcraft_engine::cmd::fileio::ARTBOARD_PARAMS.iter()).any(|k| !params[*k].is_null());
+            let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+            if !named && n > 0 {
+                match crate::panels::artboards::picked(app, n).as_slice() {
+                    [i] => params["artboard"] = json!(i),
+                    several => {
+                        params["artboards"] = json!(several);
+                        params["useArtboards"] = json!(true);
+                    }
+                }
+            }
             crate::dialogs::open_raster_options(app, f, params);
             Ok(Value::Null)
         }),

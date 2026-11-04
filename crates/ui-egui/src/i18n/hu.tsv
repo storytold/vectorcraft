@@ -1106,6 +1106,11 @@ font-technology	Variable	Változó
 	Double-click to edit the characters' paint	Dupla kattintással a karakterek festése szerkeszthető
 	Click to edit	Kattintással szerkeszthető
 	Double-click to edit	Dupla kattintással szerkeszthető
+	Alternates for Current Selection	Az aktuális kijelölés változatai
+	Select a character with the Type tool to see its alternates.	A változatok megtekintéséhez jelölj ki egy karaktert a Szöveg eszközzel.
+	The selected character's font is not available.	A kijelölt karakter betűtípusa nem érhető el.
+	No alternates for the selected character.	A kijelölt karakternek nincsenek változatai.
+	Double-click to replace	Csere dupla kattintással
 	Double-click to insert	Beszúrás dupla kattintással
 	Double-click to rename	Dupla kattintással átnevezhető
 	Double-click to target the contents	Dupla kattintással a tartalom lesz a cél

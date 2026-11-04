@@ -1484,6 +1484,11 @@ digits	Malayalam	Malajalam
 	Save Transparency Flattener Preset…	Zapisz ustawienie spłaszczania przezroczystości…
 	Basic Latin	Łaciński podstawowy
 	Currency & Symbols	Waluty i symbole
+	Alternates for Current Selection	Alternatywy bieżącego zaznaczenia
+	Select a character with the Type tool to see its alternates.	Zaznacz znak narzędziem Tekst, aby zobaczyć jego alternatywy.
+	The selected character's font is not available.	Czcionka zaznaczonego znaku jest niedostępna.
+	No alternates for the selected character.	Brak alternatyw dla zaznaczonego znaku.
+	Double-click to replace	Kliknij dwukrotnie, aby zastąpić
 	Double-click to insert	Kliknij dwukrotnie, aby wstawić
 	Entire Font	Cała czcionka
 	glyph {id}	glif {id}

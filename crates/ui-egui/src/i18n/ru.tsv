@@ -854,6 +854,11 @@ font-technology	Variable	Вариативные
 	Double-click to edit the characters' paint	Дважды щёлкните, чтобы редактировать заливку символов
 	Click to edit	Щёлкните, чтобы редактировать
 	Double-click to edit	Дважды щёлкните, чтобы редактировать
+	Alternates for Current Selection	Альтернативы для текущего выделения
+	Select a character with the Type tool to see its alternates.	Выделите символ инструментом «Текст», чтобы увидеть его альтернативы.
+	The selected character's font is not available.	Шрифт выделенного символа недоступен.
+	No alternates for the selected character.	У выделенного символа нет альтернатив.
+	Double-click to replace	Дважды щёлкните для замены
 	Double-click to insert	Дважды щёлкните для вставки
 	Double-click to rename	Дважды щёлкните для переименования
 	Double-click to target the contents	Дважды щёлкните, чтобы выбрать содержимое как объект

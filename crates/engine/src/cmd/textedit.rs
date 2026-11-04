@@ -54,6 +54,24 @@ pub fn specs() -> Vec<CommandSpec> {
             touch_type
         ),
         cmd!(
+            "text.setGlyphAlternate",
+            "Glyphs",
+            [],
+            None,
+            "{id, start: byte (a character of it), gid: glyph id|null} draw that one character with another glyph of its font as one undo step, what a double-click in the Glyphs panel's Show › Alternates for Current Selection does: gid is one of the glyphs text.glyphAlternates lists for it; its own default glyph, or null, puts the default glyph back. The text keeps the character, and its other attributes do not change. The choice is saved with the character's style and names the face it was made in (PostScript name and version): set in another font or version, or after the font goes missing, the character takes its default glyph; typed characters take their default glyphs. Choosing the glyph the character already draws is not an edit. An error when the character's font is not available, the glyph is not one of its alternates, or the character's style does not draw it (All Caps, Small Caps, another numeral system) → {id, start, end (the character's bytes), gid (the glyph drawn)}",
+            has_doc,
+            set_glyph_alternate
+        ),
+        cmd!(
+            query "text.glyphAlternates",
+            "Glyphs",
+            [],
+            None,
+            "{id, start: byte (a character of it)} the alternate glyphs of that character in its font, what the Glyphs panel's Show › Alternates for Current Selection lists: from the font's OpenType GSUB table, the glyphs that single and alternate substitutions put in place of the character's default glyph, `aalt` first, then `salt`, `ss01` to `ss20`, `swsh`, `cv01` to `cv99`, `hist`, `jalt`, `nalt`, `ornm` and `titl`, each glyph once, the default glyph only when `aalt` lists it → {char, font: family, style: style, default: glyph id, chosen: glyph id (the glyph drawn now), alternates: [{gid, feature}]} (empty when the font has none for it; an error when the character's font is not available)",
+            has_doc,
+            glyph_alternates
+        ),
+        cmd!(
             query "text.getRange",
             "Get Text Range",
             [],
@@ -1106,6 +1124,104 @@ pub fn effective_kerning(db: &vectorcraft_text::FontDb, t: &TextObject, lay: &ve
     };
     let em = owner.and_then(|g| glyph_em(db, t, g)).unwrap_or(0.0);
     if em > 0.0 { drawn_gap(original).zip(drawn_gap(&base)).map_or(0.0, |(a, b)| (a - b) * 1000.0 / em) } else { 0.0 }
+}
+
+/// The character at byte `start` of `p` in text object `t`, its bytes and its font's face. An error
+/// when there is no character there, it is an inline graphic, or its font is not available.
+fn glyph_target(t: &TextObject, p: &Value, c: &str) -> Result<(char, std::ops::Range<usize>, std::sync::Arc<vectorcraft_text::FontFace>)> {
+    check_numbers(p, &["start"], c)?;
+    let start = byte_param(p, "start").ok_or_else(|| bad(c, "missing `start` (the byte offset of a character)"))?;
+    let mut at = 0;
+    for run in &t.runs {
+        let end = at + run.text.len();
+        if (at..end).contains(&start) {
+            let ch = run.text.get(start - at..).and_then(|s| s.chars().next()).ok_or_else(|| bad(c, format!("no character at byte {start}")))?;
+            if run.inline.is_some() {
+                return Err(bad(c, "an inline graphic has no glyphs"));
+            }
+            let db = vectorcraft_text::FontDb::global();
+            let face = db.style_face(&run.style).filter(|_| db.has_family(&run.style.font_family));
+            let face = face.ok_or_else(|| bad(c, format!("the font {} is not available", run.style.font_family)))?;
+            return Ok((ch, start..start + ch.len_utf8(), face));
+        }
+        at = end;
+    }
+    Err(bad(c, format!("no character at byte {start}")))
+}
+
+fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.setGlyphAlternate";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let gid = match p.get("gid") {
+        None => return Err(bad(C, "missing `gid` (a glyph id, or null for the default glyph)")),
+        Some(Value::Null) => None,
+        Some(v) => Some(v.as_u64().and_then(|g| u32::try_from(g).ok()).ok_or_else(|| bad(C, format!("`gid` must be a glyph id, not {v}")))?),
+    };
+    let t = text_ref(s, id)?;
+    let (ch, bytes, face) = glyph_target(&t, p, C)?;
+    let default = face.glyph_for(ch);
+    let choice = match gid.filter(|g| *g != default) {
+        None => None,
+        Some(g) if face.alternates(ch).iter().any(|a| a.gid == g) => Some(face.choice(ch, g)),
+        Some(g) => return Err(bad(C, format!("glyph {g} is not an alternate of {ch} in {} {}", face.family, face.style))),
+    };
+    let drawn = choice.as_ref().map_or(default, |c| c.gid);
+    // The run holding the character. The request changes nothing when the choice is the one the
+    // character's run holds and that run holds the character alone; otherwise the edit splits the
+    // run, so that the following text does not take the character into a ligature.
+    let holder = t
+        .runs
+        .iter()
+        .scan(0, |at, r| {
+            let start = *at;
+            *at += r.text.len();
+            Some((start..*at, r))
+        })
+        .find(|(bytes_of_run, _)| bytes_of_run.contains(&bytes.start));
+    let held = holder.as_ref().filter(|(bytes_of_run, _)| bytes_of_run.start == bytes.start).and_then(|(_, r)| r.style.glyph_alternate.clone());
+    let alone = holder.as_ref().is_some_and(|(bytes_of_run, _)| *bytes_of_run == bytes);
+    // A choice that the character's style keeps from being drawn (All Caps, Small Caps, another
+    // numeral system) is an error, not an edit that leaves the page as it was. The style decides
+    // for a character outside its frame too; one that is laid out is checked in the layout.
+    if let Some(c) = &choice {
+        let styled = holder
+            .as_ref()
+            .is_some_and(|(_, r)| r.style.all_caps || (r.style.small_caps.is_some() && ch.is_lowercase()) || r.style.digits.map(ch) != ch);
+        let shown = || {
+            let mut probe = t.clone();
+            edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = Some(c.clone()));
+            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe);
+            lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len)).map(|g| g.gid)
+        };
+        if styled || shown().is_some_and(|g| g != c.gid) {
+            return Err(bad(
+                C,
+                format!("glyph {} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)", c.gid),
+            ));
+        }
+    }
+    if held == choice && (choice.is_none() || alone) {
+        return Ok(json!({"id": id.0, "start": bytes.start, "end": bytes.end, "gid": drawn}));
+    }
+    s.edit("Glyphs", |d, _| {
+        let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
+        edit::style_range(&mut t.runs, bytes.start, bytes.end, |st| st.glyph_alternate = choice.clone());
+        refresh_bounds(t);
+        Ok(())
+    })?;
+    Ok(json!({"id": id.0, "start": bytes.start, "end": bytes.end, "gid": drawn}))
+}
+
+fn glyph_alternates(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.glyphAlternates";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let t = text_ref(s, id)?;
+    let (ch, bytes, face) = glyph_target(&t, p, C)?;
+    let default = face.glyph_for(ch);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let chosen = lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len)).map_or(default, |g| g.gid);
+    let alternates: Vec<Value> = face.alternates(ch).iter().map(|a| json!({"gid": a.gid, "feature": String::from_utf8_lossy(&a.feature)})).collect();
+    Ok(json!({"char": ch.to_string(), "font": face.family, "style": face.style, "default": default, "chosen": chosen, "alternates": alternates}))
 }
 
 fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {

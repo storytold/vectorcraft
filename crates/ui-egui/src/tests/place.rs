@@ -786,6 +786,9 @@ fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64
 #[test]
 fn a_file_placed_while_idle_follows_its_changes() {
     let mut app = app();
+    // Every frame renders on this thread, however long it takes: a frame finished by the render
+    // worker during the idle frames asks for a repaint.
+    app.canvas.worker_started = true;
     app.run("prefs.set", json!({"key": "updateLinks", "value": "automatically"})).unwrap();
     let ctx = egui::Context::default();
     let mut time = 0.0;
@@ -799,9 +802,12 @@ fn a_file_placed_while_idle_follows_its_changes() {
     app.run("file.place", json!({"path": path})).unwrap();
     let id = app.session.active().unwrap().selection.objects[0];
     idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
-    std::thread::sleep(std::time::Duration::from_millis(30));
+    let stamp = std::fs::metadata(&path).unwrap().modified().unwrap();
     let changed = png(60, 30, 72.0);
     std::fs::write(&path, &changed).unwrap();
+    // The rewritten file is dated 2 s later, however fast it was written.
+    let later = std::fs::FileTimes::new().set_modified(stamp + std::time::Duration::from_secs(2));
+    std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_times(later).unwrap();
     let hash = vectorcraft_doc::links::hash_bytes(&changed);
     let updated = |app: &VectorcraftApp| {
         let st = app.session.active().unwrap();

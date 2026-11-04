@@ -843,6 +843,11 @@ font-technology	Variable	Variabla
 	Double-click to edit the characters' paint	Dubbelklicka för att redigera tecknens färg
 	Click to edit	Klicka för att redigera
 	Double-click to edit	Dubbelklicka för att redigera
+	Alternates for Current Selection	Alternativ för aktuell markering
+	Select a character with the Type tool to see its alternates.	Markera ett tecken med textverktyget för att se dess alternativ.
+	The selected character's font is not available.	Teckensnittet för det markerade tecknet är inte tillgängligt.
+	No alternates for the selected character.	Inga alternativ för det markerade tecknet.
+	Double-click to replace	Dubbelklicka för att ersätta
 	Double-click to insert	Dubbelklicka för att infoga
 	Double-click to rename	Dubbelklicka för att byta namn
 	Double-click to target the contents	Dubbelklicka för att välja innehållet som mål
