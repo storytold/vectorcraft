@@ -402,8 +402,8 @@ impl Layers<'_> {
             let path = shape.map_or_else(|| PathData::new(subs), |s| s.path());
             Some((path, shape))
         };
-        // In chunks, so that the anchor budget still stops the work early: a hostile image is refused after at most one
-        // chunk beyond the limit, not after every component is fitted.
+        // In chunks, so that the anchor budget still stops the work early: a hostile image is refused after fitting at most
+        // the rest of one chunk, not after every component is fitted.
         let accepted = fit_in_chunks(&comps, FIT_CHUNK, fit_comp, |comp, fitted| {
             let Some((path, shape)) = fitted else { return true };
             add(path, comp.pixels, area_stroke, shape, false)
@@ -469,7 +469,7 @@ const FIT_CHUNK: usize = 256;
 fn fit_in_chunks<T: Sync, R: Send>(items: &[T], chunk: usize, fit: impl Fn(&T) -> R + Sync, mut accept: impl FnMut(&T, R) -> bool) -> bool {
     for part in items.chunks(chunk.max(1)) {
         // (A few components are not worth starting threads for.)
-        let fitted = if part.len() < 4 { part.iter().map(&fit).collect() } else { parallel_map(part, &fit) };
+        let fitted = if part.len() < 16 { part.iter().map(&fit).collect() } else { parallel_map(part, &fit) };
         for (item, result) in part.iter().zip(fitted) {
             if !accept(item, result) {
                 return false;

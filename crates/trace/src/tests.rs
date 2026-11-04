@@ -630,6 +630,8 @@ fn many_components_come_out_in_scan_order_and_still_meet_the_budget() {
     assert_eq!(trace(&img, &p), full, "tracing twice differs");
     let anchors = full.anchor_count();
     assert!(matches!(trace_within(&img, &p, anchors / 2), Err(TraceError::TooComplex { max }) if max == anchors / 2));
+    // The last component alone is over the budget: a refusal in a later chunk.
+    assert!(matches!(trace_within(&img, &p, anchors - 1), Err(TraceError::TooComplex { .. })));
     assert_eq!(trace_within(&img, &p, anchors).unwrap(), full);
 }
 
