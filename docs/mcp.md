@@ -6794,6 +6794,29 @@ on the object or on one of its fills or strokes; a group carrying one is selecte
 `grayImages` (images whose pixels are RGB, CMYK, or grayscale or 1-bit, read from the image's header). It returns the
 `count` selected.
 
+### Selection Tools
+
+Selection Tools is a built-in add-on: its commands are `addon.select.*`, and in the desktop app it lives in Object ›
+Plug-ins › Selection Tools.
+
+`addon.select.byArtboards {artboards, relation?}` (Select by Artboards…, #5525) selects objects by where they sit
+relative to one or more artboards. `artboards` lists 0-based artboard indices (at least one; one listed twice counts
+once). `relation` is `overlap` (the default: on at least one of them, as `select.allOnArtboard` takes it, the bounds
+overlapping the artboard or the centre on it), `inside` (the bounds wholly within one of them, edges included; an object
+straddling two touching artboards is inside neither) or `outside` (on none of them). It looks at the objects Select All
+takes, or the isolated container's in isolation mode, so hidden and locked objects, objects on hidden, locked or template
+layers and art held by a locked artboard are left out. Bounds are geometric, a symbol instance's measured by its art. It
+returns the `count` selected. An empty list, an index with no artboard, a value that isn't an index, or another
+relation is an error, and the selection is left as it was.
+
+```json
+{"name":"run_command","arguments":{"command":"addon.select.byArtboards","params":{"artboards":[2,6,11],"relation":"inside"}}}
+```
+
+The dialog lists every artboard with its number, name and size in the document's units. Search filters the list by
+name; a click chooses one artboard, Shift-click adds a range and Cmd/Ctrl-click toggles one, and Select All / None act
+on the rows shown (rows hidden by the search stay chosen). It opens with the active artboard chosen and Overlapping.
+
 ### Vector Halftone (live)
 
 `addon.color.halftone` (Effect › Color Effects › Vector Halftone…, also in Object › Plug-ins › Color Effects) draws its
