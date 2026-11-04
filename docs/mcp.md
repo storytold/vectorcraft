@@ -6921,6 +6921,7 @@ type it is the size shown.
 It changes the range of `id` (`start`/`end` bytes), else all the text of the type objects in `ids`, else the text the
 Type tool has selected (at a caret: all of that object's text), else all the text of every selected type object; each
 object gets its own ramp, and at most 100000 characters change in one run. A run that changes nothing makes no step.
+A `start` or `end` byte inside a character rounds down to that character's start.
 
 | Parameter | Values (default) |
 |---|---|
