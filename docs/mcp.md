@@ -1685,11 +1685,11 @@ already walks Image Trace. Short agent entry points:
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
   `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object), `dataset.import {path|data|dataBase64|csv}` /
   `dataset.export {path?}` (CSV: one column per variable, and no column of data set names). `dataset.import` also
-  reads tab-separated files. Every header cell is a variable, whatever its case (`name` and `Name` included), as the
+  reads tab-separated files. Every header cell is a variable, whatever its case (`name` and `Name` included). The
+  first row holds the field names, as the
   [set-up page](https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/set-up-data-source-files.html)
-  describes the first row: "Specify your data field name in the first row of your spreadsheet." The rows replace every
-  data set of the document and are named `Data Set 1`, `Data Set 2` and so on, in file order; the document's variables
-  and their bindings stay, and the reply's `deletedDataSets` lists the data sets that were replaced. An import error
+  describes. The rows replace every data set of the document and are named `Data Set 1`, `Data Set 2` and so on, in file order;
+  the document's variables and their bindings stay, and the reply's `deletedDataSets` lists the data sets that were replaced. An import error
   about a row's values gives the file line the row starts on. A header cell that names no variable defines one, unbound, in the same undo step as the
   rows. `#Shown` defines a visibility variable `Shown`, `@Photo` defines an image variable `Photo`, and a cell without
   a prefix defines a text variable. `dataset.export` writes a visibility variable's header as `#Shown` and an image
