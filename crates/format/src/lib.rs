@@ -29,6 +29,13 @@
 //! `data`. Every version loads, and [`save_with`] writes any of them for older apps (under the
 //! format name `drawcraft`, which every version reads). Readers reject files whose `version` is
 //! newer than they support.
+//!
+//! The document has a version of its own (`document.version`, [`vectorcraft_doc::FORMAT_VERSION`]),
+//! which readers do not check. A version 2 document's Twist effects turn clockwise for a positive
+//! angle. A version 1 document's Twist angles are negated when it opens, unless the file is of
+//! [`VERSION`] and its `generator` is VectorCraft 0.21.0 or later, which turned them clockwise
+//! already; [`save_with`] writes a version 1 document with them negated back for an older file
+//! version ([`vectorcraft_doc::twist`]).
 #![forbid(unsafe_code)]
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -243,6 +250,10 @@ fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
     let blobs = std::mem::take(&mut d.images);
     if version < 3 {
         d.store_legacy_color_profiles();
+    }
+    // Apps that read only older file versions predate 0.21.0 and turn Twist the other way.
+    if version < VERSION {
+        d.store_legacy_twist_angles();
     }
     let v1 = if version == 1 {
         let mut v = serde_json::to_value(&d).map_err(encode_err)?;
@@ -489,7 +500,7 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
             vectorcraft_doc::node::with_buffered_value_budget(max_values, || Contents::<Document>::read(file.json()))
         })
     };
-    let f = vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, read).map_err(|e| match e {
+    let mut f = vectorcraft_doc::geom::path::with_anchor_budget(vectorcraft_doc::geom::path::MAX_READ_ANCHORS, read).map_err(|e| match e {
         ReadError::Json(e) => {
             let why = if e.to_string().contains("recursion limit") { format!("its objects are nested too deep ({e})") } else { e.to_string() };
             FormatError::NotVectorcraft(why)
@@ -498,6 +509,12 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
         e => FormatError::NotVectorcraft(e.to_string()),
     })?;
     let info = FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION };
+    // A version 1 document saved before VectorCraft 0.21.0, or for an app before it (an older file
+    // version): its Twist angles turned the other way. The app that wrote it is read from the JSON
+    // before the data after it is taken; the walk's depth is bounded by the JSON reader's nesting
+    // limit.
+    let current_file = f.version >= VERSION;
+    f.document.migrate_twist_angles(|| current_file && vectorcraft_doc::twist::written_clockwise(generator(file.json()).as_deref()));
     // The bytes after the JSON, read in one pass: the images' first, then the profiles'.
     let entries: Vec<[u64; 2]> = f.images.values().chain(f.profiles.values()).filter_map(|i| i.blob).collect();
     let tail = file.entries(&entries)?;
@@ -559,6 +576,8 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
     // labels and the character styles, within the ranges `document.setup` takes (after the depth
     // limit: the walk recurses).
     doc.keep_scripts_in_range();
+    // The conversions above bring an older document to today's version.
+    doc.version = doc.version.max(vectorcraft_doc::FORMAT_VERSION);
     let profiles = f
         .profiles
         .into_iter()
@@ -572,6 +591,37 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
         })
         .collect::<Result<_, FormatError>>()?;
     Ok(NativeFile { doc, depth_notes, info, profiles })
+}
+
+/// The file's first `generator` member, the app that wrote it (`None`: it has none, it is not a
+/// string, or the file is not an object of members). The other members, and any further
+/// `generator`, are skipped without being kept, as reading the file skips them.
+fn generator(json: &[u8]) -> Option<String> {
+    struct Generator(Option<String>);
+    struct Members;
+    impl<'de> serde::de::Visitor<'de> for Members {
+        type Value = Generator;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a file's members")
+        }
+        fn visit_map<A: serde::de::MapAccess<'de>>(self, mut m: A) -> Result<Generator, A::Error> {
+            let mut first: Option<serde_json::Value> = None;
+            while let Some(key) = m.next_key::<std::borrow::Cow<'de, str>>()? {
+                if key == "generator" && first.is_none() {
+                    first = Some(m.next_value()?);
+                } else {
+                    m.next_value::<serde::de::IgnoredAny>()?;
+                }
+            }
+            Ok(Generator(first.and_then(|v| v.as_str().map(str::to_owned))))
+        }
+    }
+    impl<'de> serde::Deserialize<'de> for Generator {
+        fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            d.deserialize_map(Members)
+        }
+    }
+    serde_json::from_slice::<Generator>(json).ok()?.0
 }
 
 /// The bytes of the member of the file's head `pick` picks (only that entry of the data after
@@ -851,6 +901,66 @@ mod tests {
             panic!("past the budget must be refused")
         };
         assert!(why.contains("more than 100 values before its type"), "{why}");
+    }
+
+    /// A version 1 document written before VectorCraft 0.21.0 (or by an app the file does not
+    /// name) has its Twist angles negated when it opens; one written by 0.21.0 or later, and a
+    /// version 2 document, keep them. Each opens as version 2. A save for an older file version
+    /// negates them back.
+    #[test]
+    fn twist_angles_follow_the_document_version_and_generator() {
+        use vectorcraft_doc::Effect;
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut a = Appearance::default_art();
+        a.effects.push(Effect { id: "distort.twist".into(), params: serde_json::json!({"angle": 30.0}), visible: true });
+        d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), a)).unwrap();
+        let angle = |d: &Document| d.node(id).and_then(|n| n.appearance.effects[0].params["angle"].as_f64());
+        let current = save(&d, false);
+        let back = load(&current).unwrap();
+        assert_eq!((back.version, angle(&back)), (2, Some(30.0)), "a version 2 document is read as saved");
+        let opened = |generator: Option<&str>| {
+            let mut v: serde_json::Value = serde_json::from_slice(&current).unwrap();
+            v["document"]["version"] = 1.into();
+            match generator {
+                Some(g) => v["generator"] = g.into(),
+                None => {
+                    v.as_object_mut().unwrap().remove("generator");
+                }
+            }
+            let d = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+            (d.version, angle(&d))
+        };
+        for g in [Some("VectorCraft 0.20.0"), Some("VectorCraft 0.9.12"), Some("DrawCraft 0.1.0"), Some("VectorCraft"), None] {
+            assert_eq!(opened(g), (2, Some(-30.0)), "{g:?}");
+        }
+        for g in ["VectorCraft 0.21.0", "VectorCraft 0.21.3", "VectorCraft 1.0.0"] {
+            assert_eq!(opened(Some(g)), (2, Some(30.0)), "{g}");
+        }
+        // A file may repeat `generator`: the first one names the app.
+        let mut v: serde_json::Value = serde_json::from_slice(&current).unwrap();
+        v["document"]["version"] = 1.into();
+        v["generator"] = "VectorCraft 0.21.0".into();
+        let text = serde_json::to_string(&v).unwrap();
+        let first = r#""generator":"VectorCraft 0.21.0""#;
+        let twice = text.replacen(first, &format!(r#"{first},"generator":"DrawCraft 0.1.0""#), 1);
+        assert_ne!(twice, text);
+        assert_eq!(angle(&load(twice.as_bytes()).unwrap()), Some(30.0));
+        v["generator"] = "VectorCraft 0.20.0".into();
+        let old = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+        let again = load(&save(&old, false)).unwrap();
+        assert_eq!((again.version, angle(&again)), (2, Some(-30.0)), "saved again, it is version 2");
+        // Saved for an older file version (apps before 0.21.0): version 1 with the angle negated
+        // back, whatever the generator, and it reopens as it was.
+        for version in MIN_VERSION..VERSION {
+            let bytes = save_with(&d, &SaveOptions { version, ..SaveOptions::default() }).unwrap();
+            let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(v["document"]["version"], 1, "file version {version}");
+            assert!(String::from_utf8_lossy(&bytes).contains(r#""angle":-30.0"#), "file version {version}");
+            let back = load(&bytes).unwrap();
+            assert_eq!((back.version, angle(&back)), (2, Some(30.0)), "file version {version}");
+        }
     }
 
     #[test]
