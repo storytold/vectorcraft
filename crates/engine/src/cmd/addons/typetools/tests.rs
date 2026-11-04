@@ -196,7 +196,7 @@ fn bad_params_are_refused_without_a_change() {
         json!({"ids": [999_999]}),
         json!({"id": id.0, "start": -1}),
         json!({"id": id.0, "start": 1, "end": 1.5}),
-        json!({"end": "2"}),
+        json!({"id": id.0, "end": "2"}),
     ] {
         assert!(s.execute(C, &p).is_err(), "{p}");
         assert_eq!(s.doc().unwrap().doc, before, "{p}");

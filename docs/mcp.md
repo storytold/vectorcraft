@@ -1207,6 +1207,11 @@ and `amount` in `color.harmony`; `angle` in `paint.editGradient` and in the `gra
 `width` and `tolerance` in `livePaint.strokeEdge`. A null is read as a key left out. A gradient stop that names a
 swatch refuses a `tint` that is not a number with `` stop 0: `tint` must be a number ``.
 
+A byte offset must be a whole number of at least 0. `at` in `text.startList`, and `start` and `end` in
+`text.editRange`, `text.getRange`, `text.setRangeStyle` and the `type.step`, `type.size.*`, `type.resetTracking`,
+`type.resetHorizontalScale` and `addon.type.textTweaker` commands given an `id`, refuse a negative or fractional number with
+`` `at` must be a whole number ``, naming the key, and change nothing. `2.0` is read as `2`, and a null as the key left out.
+
 A step can use an earlier step's result, in `run` as in the `command_batch` tool. A parameter string that is exactly
 `$N` or `$N.path` takes that value from the result of step `N` (counting from 0, in the order they ran; `run --in`'s
 open isn't a step), and `$last…` from the step before. A path goes into objects by key and arrays by index:

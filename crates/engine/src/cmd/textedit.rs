@@ -7,6 +7,7 @@ use vectorcraft_doc::{Appearance, CharStyle, Node, NodeId, NodeKind, TextKind, T
 use vectorcraft_geom::{Affine, Point, Vec2};
 use vectorcraft_text::edit;
 
+use super::menucmds::whole_or;
 use super::stroke::StrokeChange;
 use super::typecmd::refresh_bounds;
 use super::{
@@ -233,12 +234,21 @@ fn byte_param(p: &Value, k: &str) -> Option<usize> {
     p.get(k).and_then(Value::as_u64).map(index)
 }
 
+/// The byte offset that `p` gives for `k`, or `default` when `p` leaves it out or gives null. Any
+/// other value that is not a whole number of at least 0, such as `"2"`, `-1` or `1.5`, is an error.
+fn offset_or(p: &Value, k: &str, default: usize, cmd: &str) -> Result<usize> {
+    match p.get(k) {
+        None | Some(Value::Null) => Ok(default),
+        Some(_) => Ok(index(whole_or(p, k, 0, cmd)?)),
+    }
+}
+
 /// The bytes `start..end` of `p` in text of `len` bytes, clamped and ordered (without them, all of
-/// it). A `start` or `end` that is not a number or null, such as `"2"`, is an error.
+/// it). A `start` or `end` that is not a whole number of at least 0 or null, such as `"2"`, `-1`
+/// or `1.5`, is an error.
 fn range_of(p: &Value, len: usize, cmd: &str) -> Result<(usize, usize)> {
-    check_numbers(p, &["start", "end"], cmd)?;
-    let a = byte_param(p, "start").unwrap_or(0).min(len);
-    let b = byte_param(p, "end").unwrap_or(len).min(len);
+    let a = offset_or(p, "start", 0, cmd)?.min(len);
+    let b = offset_or(p, "end", len, cmd)?.min(len);
     Ok((a.min(b), a.max(b)))
 }
 
@@ -310,10 +320,9 @@ fn clear_param(s: &Session, p: &Value, id: NodeId, c: &str) -> Result<Vec<NodeId
 fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.startList";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
-    check_numbers(p, &["at"], C)?;
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
-    let at = byte_param(p, "at").unwrap_or(len).min(len);
+    let at = offset_or(p, "at", len, C)?.min(len);
     let Some((start, list)) = t.typed_list_at(at) else {
         return Ok(json!({"id": id.0, "started": false, "caret": at}));
     };
