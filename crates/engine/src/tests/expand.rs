@@ -53,6 +53,29 @@ fn expandable(s: &Session) -> bool {
 }
 
 #[test]
+fn symbol_instance_tint_survives_expanding_an_object_effect() {
+    let mut s = session();
+    square(&mut s);
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Tinted Square"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let fill = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": fill, "color": "#00ff00", "opacity": 50}));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "item": null, "effect": "path.offsetPath", "params": {"offset": 6}}));
+    assert!(matches!(node(&s, id).kind, NodeKind::SymbolInstance { .. }));
+    let before = render(&s);
+    assert_ne!(before.pixel(100, 100), [255, 255, 255, 255], "the symbol is visible");
+    assert_ne!(before.pixel(100, 100), [255, 0, 0, 255], "the instance fill tints the red symbol art");
+    assert!(expandable(&s));
+
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, id);
+    assert!(!matches!(n.kind, NodeKind::SymbolInstance { .. }));
+    n.walk(&mut |part| assert!(part.appearance.effects.is_empty()));
+    let after = render(&s);
+    assert!(differing(&before, &after, 8) < 200, "expanding changed {} pixels", differing(&before, &after, 8));
+}
+
+#[test]
 fn two_fills_and_an_offset_stroke_become_three_paths_that_look_the_same() {
     let mut s = session();
     let id = square(&mut s);
