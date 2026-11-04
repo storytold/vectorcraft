@@ -114,13 +114,16 @@ pub(super) fn split_at(pts: &[Point], corner: &[bool], closed: bool, marks: &[f6
     let seg_count = if closed { n } else { n.saturating_sub(1) };
     let mut out = (Vec::with_capacity(n + marks.len()), Vec::with_capacity(n + marks.len()));
     let mut acc = 0.0;
+    // Sorted once, so each segment finds its marks by search, not by a pass over all of them.
+    let mut marks = marks.to_vec();
+    marks.sort_by(f64::total_cmp);
     for i in 0..seg_count {
         let (a, b) = (pts[i], pts[(i + 1) % n]);
         let len = a.distance(b);
         out.0.push(a);
         out.1.push(corner[i]);
-        let mut inner: Vec<f64> = marks.iter().copied().filter(|d| *d > acc + 1e-9 && *d < acc + len - 1e-9).collect();
-        inner.sort_by(f64::total_cmp);
+        let from = marks.partition_point(|d| *d <= acc + 1e-9);
+        let mut inner: Vec<f64> = marks.iter().skip(from).copied().take_while(|d| *d < acc + len - 1e-9).collect();
         inner.dedup_by(|a, b| (*a - *b).abs() <= 1e-9);
         for d in inner {
             out.0.push(a.lerp(b, (d - acc) / len));

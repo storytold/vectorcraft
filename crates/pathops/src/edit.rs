@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use kurbo::{CubicBez, PathSeg, Point, Rect, Vec2};
+use kurbo::{CubicBez, ParamCurve, PathSeg, Point, Rect, Vec2};
 use vectorcraft_geom::path::measured_arclen;
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
@@ -628,9 +628,32 @@ fn golden_min(f: impl Fn(f64) -> (CubicBez, f64, usize), mut a: f64, mut b: f64)
 pub fn add_anchor_points(path: &PathData) -> PathData {
     let mut out = path.clone();
     for sp in &mut out.subpaths {
-        for seg in (0..sp.segment_count()).rev() {
-            sp.insert_anchor(seg, 0.5);
+        let n = sp.segment_count();
+        if n == 0 {
+            continue;
         }
+        // Built in one pass (inserting into the middle of the vector shifts the rest each time):
+        // anchor k lands at 2k and the new anchor of segment k at 2k + 1.
+        let mut v = Vec::with_capacity(sp.anchors.len() * 2);
+        for (k, a) in sp.anchors.iter().enumerate() {
+            v.push(*a);
+            if k < n {
+                v.push(*a);
+            }
+        }
+        for seg in 0..n {
+            let c = sp.segment(seg);
+            let (l, r) = (c.subsegment(0.0..0.5), c.subsegment(0.5..1.0));
+            if sp.segment_is_line(seg) {
+                v[2 * seg + 1] = Anchor::corner(l.p3);
+            } else {
+                let at = (2 * seg + 2) % v.len();
+                v[2 * seg].h_out = l.p1;
+                v[at].h_in = r.p2;
+                v[2 * seg + 1] = Anchor { p: l.p3, h_in: l.p2, h_out: r.p1, kind: AnchorKind::Smooth };
+            }
+        }
+        sp.anchors = v;
     }
     out
 }
