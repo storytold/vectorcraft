@@ -158,6 +158,12 @@ impl Session {
         self.tool_set_since_reset = false;
     }
 
+    /// Finish the tool's pending work and give it fresh state, as a switch to another document
+    /// does, while the current document stays the same (a switch to another view of it).
+    pub fn reset_tool(&mut self) {
+        self.reset_tool_for_doc_switch();
+    }
+
     pub fn set_active(&mut self, index: usize) -> bool {
         if index < self.docs.len() {
             if self.active != Some(index) {

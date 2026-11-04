@@ -608,7 +608,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done:** Window › Arrange › Tile (`window.arrange.tile`) shows every open document in its own pane, edge to edge in the document area, and Consolidate All Windows (`window.arrange.consolidateAllWindows`) goes back to one document under its tab, on the desktop and the web. Estimate unchanged.
 - **Done:** Window › Arrange › Float in Window (`window.arrange.floatInWindow`), Float All in Windows (`window.arrange.floatAllInWindows`) and Cascade (`window.arrange.cascade`) move documents out of the tab strip into floating windows of their own, OS windows on the desktop and windows inside the app's window on the web and on Wayland; Cascade stacks them from the upper left to the lower right. Consolidate All Windows brings them back under the tabs. Estimate unchanged.
 - **Done:** a document tab dragged off the tab strip floats its document in a window under the pointer, and a document window dragged by its title bar (an OS window by the tab at its top) onto the tab strip goes back under the tabs. Estimate unchanged.
-- **Missing:** several windows of one document (Window › New Window).
+- **Done (#4116):** Window › New Window (`window.newWindow`) opens another view of the current document, with its own zoom, center, rotation, artboard and Outline or Preview, as a tab titled with the view's number ("Name:2"); Tile, Cascade, Float in Window, Float All in Windows and Consolidate All Windows arrange each view as they arrange a document. Closing a view leaves the document open until its last view closes. Estimate unchanged.
 - **Estimate:** 15–25 h.
 
 ## G6 Automation and scripting
