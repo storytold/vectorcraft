@@ -51,6 +51,7 @@ vectorcraft-cad = { path = "crates/cad" }
 vectorcraft-eps = { path = "crates/eps" }
 vectorcraft-metafile = { path = "crates/metafile" }
 vectorcraft-plugins = { path = "crates/plugins" }
+vectorcraft-barcode = { path = "crates/barcode" }
 vectorcraft-affinity = { path = "crates/affinity" }
 vectorcraft-scriptcheck = { path = "crates/scriptcheck" }
 

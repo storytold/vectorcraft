@@ -34,6 +34,7 @@ impl Serialize for Node {
             e.trace.is_none(),
             e.wrap.is_none(),
             e.graph.is_none(),
+            e.barcode.is_none(),
             e.series_index.is_none(),
             is_default(&e.type_outlines),
             is_default(&e.pixelated),
@@ -75,6 +76,7 @@ impl Serialize for Node {
         field!("trace", &e.trace);
         field!("wrap", &e.wrap);
         field!("graph", &e.graph);
+        field!("barcode", &e.barcode);
         field!("series_index", &e.series_index);
         field!("type_outlines", &e.type_outlines);
         field!("pixelated", &e.pixelated);
@@ -196,6 +198,8 @@ pub(super) struct NodeWire {
     #[serde(default)]
     graph: Option<Box<crate::graph::GraphSpec>>,
     #[serde(default)]
+    barcode: Option<Box<vectorcraft_barcode::BarcodeSpec>>,
+    #[serde(default)]
     series_index: Option<u32>,
     #[serde(default)]
     type_outlines: bool,
@@ -241,6 +245,7 @@ impl From<NodeWire> for Node {
             trace: w.trace,
             wrap: w.wrap,
             graph: w.graph,
+            barcode: w.barcode,
             series_index: w.series_index,
             type_outlines: w.type_outlines,
             pixelated: w.pixelated,

@@ -15,6 +15,7 @@ default = ["bundled-fonts"]
 bundled-fonts = ["vectorcraft-text/bundled-fonts"]
 
 [dependencies]
+vectorcraft-barcode = { workspace = true }
 # Which paths stored in documents may be opened.
 craft-docpath = { workspace = true }
 vectorcraft-geom = { workspace = true }
