@@ -120,8 +120,15 @@ struct Cache {
 
 static CACHE: Mutex<Option<Cache>> = Mutex::new(None);
 
+/// Cache units a path takes: its anchors, and one for each subpath's own allocation.
 fn anchors(p: &PathData) -> usize {
-    p.subpaths.iter().map(|sp| sp.anchors.len()).sum()
+    p.subpaths.iter().map(|sp| sp.anchors.len() + 1).sum()
+}
+
+/// Cache units an entry takes: its input and result paths, and the serialized parameters and
+/// paints its key owns (one unit per [`CACHE_ANCHORS`]'s 50 bytes an anchor stands for).
+fn weight(key: &Key, out: Option<&PathData>) -> usize {
+    anchors(&key.path) + out.map_or(0, anchors) + (key.params.len() + key.paints.len()) / 50 + 1
 }
 static ERRORS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
@@ -168,7 +175,7 @@ pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: Fill
     }
     note(id, &r);
     let out = r.ok();
-    let size = anchors(&key.path) + out.as_ref().map_or(0, anchors);
+    let size = weight(&key, out.as_ref());
     if size > CACHE_ANCHORS / 4 {
         return out;
     }
@@ -178,7 +185,7 @@ pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: Fill
         *cache = Cache::default();
     }
     if let Some((old, old_out)) = cache.entries.insert(h, (key, out.clone())) {
-        cache.anchors = cache.anchors.saturating_sub(anchors(&old.path) + old_out.as_ref().map_or(0, anchors));
+        cache.anchors = cache.anchors.saturating_sub(weight(&old, old_out.as_ref()));
     }
     cache.anchors += size;
     out

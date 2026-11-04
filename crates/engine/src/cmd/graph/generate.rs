@@ -244,7 +244,8 @@ impl<'a> Plot<'a> {
         if marker_cost(g, &designs) > MARKER_BUDGET {
             designs.clear();
         }
-        let nser = g.rows.iter().map(Vec::len).max().unwrap_or(0).max(1);
+        // The same dimensions `GraphSpec::cells` reads: raw rows can be longer than the grid they are read through.
+        let nser = g.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES);
         let kinds: Vec<GraphKind> = (0..nser).map(|s| g.series_kind(s)).collect();
         Plot {
             g,
@@ -253,7 +254,7 @@ impl<'a> Plot<'a> {
             designs,
             r: g.rect,
             nser,
-            ncat: g.rows.len().max(1),
+            ncat: g.rows.len().clamp(1, vectorcraft_doc::MAX_GRAPH_CATEGORIES),
             vs: label_size(&g.label_styles, Role::Value),
             cs: label_size(&g.label_styles, Role::Category),
             ls: label_size(&g.label_styles, Role::Legend),
