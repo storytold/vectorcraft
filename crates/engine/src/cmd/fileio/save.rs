@@ -274,8 +274,7 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     // later save cannot change what this one writes. Invalid non-null values still reach validation.
     if matches!(format.id, "vectorcraft" | "template") {
         let pdf = match options.get("pdfCompatible") {
-            None => Some(native_pdf_preference(s, Some(st)).unwrap_or(true)),
-            Some(Value::Null) => Some(true),
+            None | Some(Value::Null) => Some(native_pdf_preference(s, Some(st)).unwrap_or(true)),
             _ => None,
         };
         if let Some(pdf) = pdf {

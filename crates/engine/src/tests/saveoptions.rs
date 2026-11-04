@@ -251,6 +251,17 @@ fn a_default_native_save_keeps_its_pdf_after_another_document_opts_out() {
 }
 
 #[test]
+fn a_null_nested_pdf_option_keeps_the_saved_opt_out() {
+    let dir = Folder::new("null-nested-pdf-option");
+    let mut s = three_boards();
+    let path = dir.file("compact.vectorcraft");
+    s.execute("file.saveAs", &json!({"path": path, "pdfCompatible": false})).unwrap();
+    s.execute("document.save", &json!({"options": {"pdfCompatible": null}})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_none(), "null leaves the saved choice");
+    assert_eq!(s.doc().unwrap().save_options.get("pdfCompatible"), Some(&json!(false)));
+}
+
+#[test]
 fn reopening_native_files_keeps_each_files_pdf_compatibility() {
     let dir = Folder::new("pdf-reopened-options");
     let mut s = three_boards();
