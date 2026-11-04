@@ -328,9 +328,9 @@ fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool)
 
 /// Call `f` with each type object among the selected objects and inside them, in selection order,
 /// keeping only those [`walk_selectable`] visits: none that is hidden, locked, on a hidden, locked
-/// or template layer, or outside the isolated group. A selected layer or sublayer gives the type
-/// on it that passes the same test. A type object inside two selected objects is given twice. The
-/// walk stops when `f` returns false.
+/// or template layer, or outside the isolated group. A selected layer or sublayer, or a selected
+/// group that holds the isolated group, gives the type in it that passes the same test. A type
+/// object inside two selected objects is given twice. The walk stops when `f` returns false.
 fn each_selected_text(s: &Session, mut f: impl FnMut(NodeId) -> bool) {
     fn inside(n: &Node, f: &mut impl FnMut(NodeId) -> bool) -> bool {
         if !n.visible || n.locked {
@@ -341,18 +341,23 @@ fn each_selected_text(s: &Session, mut f: impl FnMut(NodeId) -> bool) {
         }
         n.children().into_iter().flatten().all(|c| inside(c, f))
     }
-    fn from(n: &Node, selectable: &impl Fn(NodeId) -> bool, f: &mut impl FnMut(NodeId) -> bool) -> bool {
-        if n.is_layer() {
-            return n.children().into_iter().flatten().all(|c| from(c, selectable, f));
+    fn from(n: &Node, selectable: &impl Fn(NodeId) -> bool, holds_isolated: &[NodeId], f: &mut impl FnMut(NodeId) -> bool) -> bool {
+        if selectable(n.id) {
+            return inside(n, f);
         }
-        !selectable(n.id) || inside(n, f)
+        if n.is_layer() || holds_isolated.contains(&n.id) {
+            return n.children().into_iter().flatten().all(|c| from(c, selectable, holds_isolated, f));
+        }
+        true
     }
     let Some(st) = s.active() else { return };
     let locks = st.doc.locked_artboards();
     let selectable = |id| is_selectable(&st.doc, st.isolation, &locks, id);
+    // The isolated group and the groups and layers that hold it.
+    let holds_isolated = st.isolation.and_then(|i| st.doc.ancestry(i)).unwrap_or_default();
     for id in &st.selection.objects {
         if let Some(n) = st.doc.node(*id)
-            && !from(n, &selectable, &mut f)
+            && !from(n, &selectable, &holds_isolated, &mut f)
         {
             return;
         }
