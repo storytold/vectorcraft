@@ -298,6 +298,7 @@ registry! {
     Shortcuts: ["shortcuts"] => DialogSpec::window(crate::shortcut_editor::show, |app, _| crate::shortcut_editor::confirm(app)),
     Workspaces: ["newWorkspace", "manageWorkspaces"] => DialogSpec::window(crate::workspaces::show, |app, _| crate::workspaces::confirm(app)),
     NewToolbar: [crate::custom_toolbars::KIND] => DialogSpec::window(crate::custom_toolbars::show_dialog, |app, _| crate::custom_toolbars::confirm(app)),
+    ManageToolbars: [crate::custom_toolbars::MANAGE] => DialogSpec::window(crate::custom_toolbars::show_manage, |app, _| crate::custom_toolbars::confirm_manage(app)),
     FindFont: ["findFont"] => DialogSpec::window(crate::find_font::show, |app, _| crate::find_font::confirm(app)),
     SwatchOptions: [swatch_options::KIND] => swatch_options::SPEC,
     Confirm: [confirm::KIND] => confirm::SPEC,
@@ -452,13 +453,18 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 
 /// Set `field` of `d` to `value` for `ui.dialog.set`, as the dialog's own control for it does: a
 /// Pattern Brush Options corner tile set this way is saved by OK, as one chosen from its menu is,
-/// and an Edit Data Set field set this way is no longer the row's empty text value.
+/// an Edit Data Set field set this way is no longer the row's empty text value, and a Layer
+/// Options setting set this way for several rows is sent to every row (Template also sets Lock
+/// and Dim Images, as its checkbox does).
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
     }
     if d.kind == variables::KIND {
         variables::note_set(d, &field);
+    }
+    if d.kind == layer_options::KIND {
+        layer_options::note_set(d, &field, &value);
     }
     d.fields.insert(field, value);
 }

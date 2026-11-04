@@ -617,6 +617,11 @@
 	New Toolbar	Nieuwe werkbalk
 	Show Toolbar	Werkbalk tonen
 	List Toolbars	Lijst met werkbalken
+	Manage Toolbars…	Werkbalken beheren…
+	Manage Toolbars	Werkbalken beheren
+	Rename Toolbar	Werkbalk hernoemen
+	Duplicate Toolbar	Werkbalk dupliceren
+	Delete Toolbar	Werkbalk verwijderen
 	Manage Workspaces…	Werkruimten beheren…
 	Control	Bediening
 	Contextual Task Bar	Contextuele taakbalk
@@ -3413,6 +3418,7 @@ theme	Appearance	Vormgeving
 	Type Object Selection by Path Only	Tekstobjecten alleen via hun pad selecteren
 	UI Scaling	UI-schaling
 	Use Compression	Compressie gebruiken
+	Include Editing Data for Other Apps	Bewerkingsgegevens voor andere apps opnemen
 	Use Japanese Crop Marks	Japanse aftekenlijnen gebruiken
 	Use Low Resolution Proxy for Linked EPS	Proxy met lage resolutie gebruiken voor gekoppelde EPS
 	Use Precise Cursors	Nauwkeurige cursors gebruiken
@@ -6086,6 +6092,7 @@ breakText	Glyphs	Glyphs
 	Gap 5	Tussenruimte 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ze zijn geïmporteerd als pagina-afbeelding
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objecten die anders werden getekend dan de eigen pagina van het bestand, zijn geïmporteerd als pagina-afbeelding: {_1}
 
 @msg	You must choose a side pattern.	Kies een zijpatroon.
 @msg	invalid pattern tile choice	ongeldige keuze voor patroontegel

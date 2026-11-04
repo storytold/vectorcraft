@@ -235,8 +235,10 @@ pub fn new_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
     s.actions.push(action);
     let index = s.actions.len() - 1;
     start_recording(app, set, name, Some(id));
-    app.ui.action_set = Some(set);
-    app.ui.action_sets_selected = vec![set];
+    if app.ui.action_set != Some(set) {
+        app.ui.action_set = Some(set);
+        app.ui.action_sets_selected = vec![set];
+    }
     if let Some(ctx) = app.ui_ctx.clone() {
         set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((set, index)));
     }
@@ -327,6 +329,40 @@ pub fn play_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
 
 /// The command that ends a recording ([`stop`]).
 pub const STOP_RECORDING: &str = "ui.action.stop";
+
+/// The command that begins a plain recording ([`record`]).
+pub const START_RECORDING: &str = "ui.action.record";
+
+/// `ui.action.record {set?}`: begins recording an automatically named Action N in `set`, or in
+/// the current set (the first if none is current). With no sets, makes Set 1. Stop adds the action
+/// after the set's existing actions. An explicit invalid set or an existing recording is an error
+/// and leaves the panel unchanged. → {set, name}
+pub fn record(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    if app.ui.recording.is_some() {
+        return Err("an action is already recording".into());
+    }
+    let set = match p.get("set") {
+        Some(v) => v.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|&i| i < app.ui.action_sets.len()).ok_or("no such action set")?,
+        _ => {
+            if app.ui.action_sets.is_empty() {
+                app.ui.action_sets.push(ActionSet::new("Set 1", vec![]));
+            }
+            app.ui.action_set.filter(|&i| i < app.ui.action_sets.len()).unwrap_or(0)
+        }
+    };
+    app.ui.action_set = Some(set);
+    app.ui.action_sets_selected = vec![set];
+    let mut number = app.ui.action_sets[set].actions.len() + 1;
+    let name = loop {
+        let name = format!("Action {number}");
+        if app.ui.action_sets[set].actions.iter().all(|action| action.name != name) {
+            break name;
+        }
+        number += 1;
+    };
+    start_recording(app, set, name.clone(), None);
+    Ok(json!({ "set": set, "name": name }))
+}
 
 /// `ui.action.stop {}`: ends the recording in progress and keeps its steps, in the action New
 /// Action made for it, else in a new action after the last action of its set, as the bottom bar's
@@ -786,19 +822,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         }
         let (r, resp) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
         ui.painter().circle_filled(r.center(), 6.0, if recording { egui::Color32::from_rgb(0xe0, 0x30, 0x30) } else { t.icon });
-        if resp.on_hover_text(tl!("Begin Recording")).clicked() && !recording {
-            if app.ui.action_sets.is_empty() {
-                app.ui.action_sets.push(ActionSet::new("Set 1", vec![]));
-            }
-            let set = current.filter(|&s| s < app.ui.action_sets.len()).unwrap_or(0);
-            // With no set current, the recording goes into the first set, which becomes current so
-            // the panel shows where the recording goes.
-            if app.ui.action_set != Some(set) {
-                app.ui.action_set = Some(set);
-                app.ui.action_sets_selected = vec![set];
-            }
-            let n = app.ui.action_sets.get(set).map_or(0, |s| s.actions.len()) + 1;
-            start_recording(app, set, format!("Action {n}"), None);
+        if resp.on_hover_text(tl!("Begin Recording")).clicked()
+            && !recording
+            && let Err(e) = app.run(START_RECORDING, json!({}))
+        {
+            app.status(e);
         }
         if widgets::icon_button(ui, "dc-actions", tl!("Play Current Selection"), false, 24.0).clicked()
             && let Some(s) = selected
@@ -845,6 +873,28 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn begin_recording_command_matches_the_panel_button() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.ui.action_sets.clear();
+        app.ui.action_set = None;
+        assert_eq!(app.run(START_RECORDING, json!({})).unwrap(), json!({"set": 0, "name": "Action 1"}));
+        assert_eq!((app.ui.action_sets[0].name.as_str(), app.ui.action_set), ("Set 1", Some(0)));
+        assert_eq!(app.run(START_RECORDING, json!({})).unwrap_err(), "an action is already recording");
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        assert_eq!(app.run(STOP_RECORDING, json!({})).unwrap(), json!({"stopped": true}));
+        assert_eq!((app.ui.action_sets[0].actions[0].name.as_str(), app.ui.action_sets[0].actions[0].steps.len()), ("Action 1", 1));
+
+        app.ui.action_sets.push(ActionSet::new("Other", vec![]));
+        assert_eq!(app.run(START_RECORDING, json!({"set": 99})).unwrap_err(), "no such action set");
+        assert_eq!(app.run(START_RECORDING, json!({"set": null})).unwrap_err(), "no such action set");
+        assert!(app.ui.recording.is_none());
+        assert_eq!(app.run(START_RECORDING, json!({"set": 1})).unwrap(), json!({"set": 1, "name": "Action 1"}));
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.as_slice()), (Some(1), &[1][..]));
+        assert_eq!(app.run(STOP_RECORDING, json!({})).unwrap(), json!({"stopped": true}));
     }
 
     /// #1629: a clicked action stays selected, so Play Current Selection plays it and Delete

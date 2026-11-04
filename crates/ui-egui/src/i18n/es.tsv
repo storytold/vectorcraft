@@ -2107,6 +2107,11 @@ font-technology	Variable	Variables
 	New Toolbar	Nueva barra de herramientas
 	Show Toolbar	Mostrar barra de herramientas
 	List Toolbars	Lista de barras de herramientas
+	Manage Toolbars…	Administrar barras de herramientas…
+	Manage Toolbars	Administrar barras de herramientas
+	Rename Toolbar	Cambiar nombre de la barra de herramientas
+	Duplicate Toolbar	Duplicar barra de herramientas
+	Delete Toolbar	Eliminar barra de herramientas
 	New {kind} Style…	Nuevo estilo de {kind}…
 	New…	Nuevo…
 	Next	Siguiente
@@ -3580,6 +3585,7 @@ digits	Malayalam	Malayálam
 	Use Artboards	Usar mesas de trabajo
 	Use Black Point Compensation	Usar compensación de punto negro
 	Use Compression	Usar compresión
+	Include Editing Data for Other Apps	Incluir datos de edición para otras aplicaciones
 	Use document bleed settings	Usar los ajustes de sangrado del documento
 	Use Even-Odd Fill Rule	Usar regla de relleno par-impar
 	Use Japanese Crop Marks	Usar marcas de corte japonesas
@@ -3996,7 +4002,7 @@ axis	Both	Ambos
 @msg	Save for Web: the image is empty	Guardar para web: la imagen está vacía
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Guardar escribe {_1}, no {_2}: usa document.export para otros formatos
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Guardar escribe {_1}, no {_2}: usa file.saveAsTemplate para escribirlo
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 escribe archivos .ai heredados; una plantilla .ait siempre es compatible con PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 escribe archivos .ai heredados, no plantillas .ait
 @msg	Saved recovery data for {title}	Se guardaron los datos de recuperación de {title}
 @msg	Saved to User Defined: {_1}	Se guardó en Definido por el usuario: {_1}
 @msg	Saved {path}	Se guardó {path}
@@ -6116,6 +6122,7 @@ breakText	Glyphs	Glifos
 	Gap 5	Hueco 5
 
 @msg	{_1}: they came in as the page's art	{_1}: se importaron como el arte de la página
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	los objetos que se dibujaban de forma distinta a la página del propio archivo se importaron como el arte de la página: {_1}
 
 @msg	You must choose a side pattern.	Debe elegir un motivo lateral.
 @msg	invalid pattern tile choice	selección de mosaico de motivo no válida

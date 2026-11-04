@@ -242,9 +242,10 @@ fn place_art(layer: &mut Node, pages: &[Rect], moves: &[Vec2]) {
 
 /// A `.ai` saved without its PDF part (its pages show only a placeholder) from its editing copy
 /// alone (`private`, the joined `AIPrivateData` streams) → the document and the import's notes.
+/// Editing data written on a large canvas comes in at its declared scale: no page holds the size.
 pub fn ai_alone(private: &[u8]) -> Result<(Document, Vec<String>), String> {
     let data = ai::decode_private(private)?;
-    build(&data, None, Page::Artboard, false, false, 1.0)
+    build_from(ai::read(&data, true)?, &data, None, Page::Artboard, false, false, 1.0)
 }
 
 /// [`ai_alone`] for a `.ai` whose PDF part can't be read, its first page `page` (width and height)

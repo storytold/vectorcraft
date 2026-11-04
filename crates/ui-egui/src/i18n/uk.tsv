@@ -2128,6 +2128,11 @@ file-filter	Templates	Шаблони
 	New Toolbar	Нова панель інструментів
 	Show Toolbar	Показати панель інструментів
 	List Toolbars	Список панелей інструментів
+	Manage Toolbars…	Керування панелями інструментів…
+	Manage Toolbars	Керування панелями інструментів
+	Rename Toolbar	Перейменувати панель інструментів
+	Duplicate Toolbar	Дублювати панель інструментів
+	Delete Toolbar	Видалити панель інструментів
 	New {kind} Style…	Новий стиль {kind}…
 	New…	Створити…
 	Next	Далі
@@ -3610,6 +3615,7 @@ effect	Points	Точки
 	Use Artboards	Використовувати монтажні області
 	Use Black Point Compensation	Використовувати компенсацію чорної точки
 	Use Compression	Використовувати стиск
+	Include Editing Data for Other Apps	Включати дані редагування для інших програм
 	Use document bleed settings	Використовувати параметри вильоту документа
 	Use Even-Odd Fill Rule	Використовувати правило заливки «парне–непарне»
 	Use Japanese Crop Marks	Використовувати японські мітки обрізання
@@ -4022,7 +4028,7 @@ axis	Both	Обидві
 @msg	Save for Web: the image is empty	Зберегти для Інтернету: зображення пусте
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Збереження записує {_1}, а не {_2}: використовуйте document.export для інших форматів
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Збереження записує {_1}, а не {_2}: щоб записати його, використовуйте file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 записує застарілі файли .ai; шаблон .ait завжди сумісний із PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 записує застарілі файли .ai, а не шаблони .ait
 @msg	Saved recovery data for {title}	Збережено дані відновлення для {title}
 @msg	Saved to User Defined: {_1}	Збережено в «Користувацькі»: {_1}
 @msg	Saved {path}	Збережено: {path}
@@ -5774,6 +5780,7 @@ breakText	Glyphs	Гліфи
 	Gap 5	Проміжок 5
 
 @msg	{_1}: they came in as the page's art	{_1}: їх імпортовано як графіку сторінки
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	об’єкти, що малювалися інакше, ніж власна сторінка файлу, імпортовано як графіку сторінки: {_1}
 
 @msg	You must choose a side pattern.	Виберіть бічний візерунок.
 @msg	invalid pattern tile choice	недійсний вибір плитки візерунка
