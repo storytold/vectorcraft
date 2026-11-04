@@ -1868,13 +1868,18 @@ already walks Image Trace. Short agent entry points:
   and `livePaint.info` list the gaps up to `size` wide that no path closes, as `[x0, y0, x1, y1]`. `livePaint.merge`
   keeps the bottom group's options when its Gap Detection is on, and otherwise turns Gap Detection on with `small`
   when another merged group has it on. When Gap Detection is off in every merged group, it stays off.
+  The Gap Options dialog (`ui.livePaintGapOptions`) takes `color` as `#rrggbb` or a layer color's name; its OK gives
+  an error for a `color` with an alpha part (`#rrggbbaa` or `#rgba`) and changes nothing. With Preview on, a
+  `#rrggbbaa` color is not previewed: the groups keep their own color, and the previewed gaps draw in black.
   `view.livePaintGaps` (View › Show Live Paint Gaps, or Hide Live Paint Gaps while it is on) turns the drawing of
   those gaps on or off. While it is on and edges show, the canvas draws the gaps of each selected Live Paint group in
   that group's Gap Preview Color. The reply is the new state (`true` when on).
   The Live Paint Selection tool's options (`tool.setOption {tool: "livePaintSelection", values}`; double-clicking the
   tool opens them, dialog `livePaintSelectionOptions`) are `selectFills` and `selectStrokes` (both on), `color` (the
   highlight color, `#rrggbb` or a layer color's name; `#ff2a2a`) and `width` (the highlight's width, 1 to 20 screen
-  pixels; 4). With `selectStrokes` off, Alt-click selects the face under the pointer as a click does; with
+  pixels; 4). The dialog's OK gives an error for a `color` with an alpha part (`#rrggbbaa` or `#rgba`) and changes
+  nothing.
+  With `selectStrokes` off, Alt-click selects the face under the pointer as a click does; with
   `selectFills` off, a click selects the edge nearest the pointer as Alt-click does; with both off, a click selects
   no face or edge. A drag of 3 screen pixels or more draws a marquee, and the release runs `select.set {ids}` with
   the faces and edges it touches (a face or edge partly inside counts, and so does a face that holds the whole
@@ -1887,7 +1892,8 @@ already walks Image Trace. Short agent entry points:
   The Live Paint Bucket's options (`tool.setOption {tool: "livePaintBucket", values}`; double-clicking the tool opens
   them, dialog `livePaintBucketOptions`) are `paintFills` (on), `paintStrokes` (off), `highlight` (on), `color` (the
   highlight color, `#rrggbb` or a layer color's name; `#ff2a2a`) and `width` (the face highlight's width, 1 to 20 screen
-  pixels; 4; an edge's highlight is half as wide). With `paintFills` alone on, a click runs `livePaint.fill` and Shift-click runs `livePaint.strokeEdge`.
+  pixels; 4; an edge's highlight is half as wide). The dialog's OK gives an error for a `color` with an alpha part
+  (`#rrggbbaa` or `#rgba`) and changes nothing. With `paintFills` alone on, a click runs `livePaint.fill` and Shift-click runs `livePaint.strokeEdge`.
   With `paintStrokes` alone on, a click runs `livePaint.strokeEdge` on the edge within 4 screen pixels of the pointer,
   or nothing when none is in reach, and Shift-click runs `livePaint.fill`. With both on, a click runs
   `livePaint.strokeEdge` when an edge is within 4 screen pixels of the pointer and `livePaint.fill` otherwise, and
