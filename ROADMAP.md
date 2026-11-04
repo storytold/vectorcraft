@@ -1,5 +1,7 @@
 # VectorCraft Roadmap
 
+- NATIVE.1 (2026-11-04): additive command invalidations reuse the proposed shared command bus; active-document conditional `object.setProps` rejects stale revisions. See `docs/craftlink-native.md`. No parity scores or estimates changed; auth/shared IPC adoption remains separately owned.
+
 - Paint: new gradients use the document's color model for default stops, including Gradient tool creation. Scores and estimates unchanged.
 
 - PDF.R1: editable PDF import uses the shared reader, scans page content in windows, and rejects known incomplete input before returning a document.

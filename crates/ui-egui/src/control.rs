@@ -261,6 +261,24 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
     match req.method.as_str() {
         "engine.execute" | "ui.menu.invoke" | "command" => {
             let Some(id) = s("command").or(s("id")) else { return err("missing `command`") };
+            if let Some(expected) = p.get("expected") {
+                if req.method != "engine.execute" || id != "object.setProps" {
+                    return err("capability: conditional execution supports object.setProps only");
+                }
+                let (Some(document), Some(revision)) =
+                    (expected.get("document").and_then(Value::as_u64), expected.get("revision").and_then(Value::as_u64))
+                else {
+                    return err("expected requires integer document and revision");
+                };
+                if let Some(target) = p.get("document")
+                    && target.as_u64() != Some(document)
+                {
+                    return err("conflict: target document differs from expected document");
+                }
+                if let Err(e) = app.session.check_property_revision(document, revision) {
+                    return err(e.to_string());
+                }
+            }
             let params = p.get("params").cloned().unwrap_or(json!({}));
             let params = if params.is_null() { json!({}) } else { params };
             // A key the command's description doesn't name is an error, not a default (#1442).
@@ -270,7 +288,18 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             wrap(app.run(id, params))
         }
         "engine.commands" => ok(all_commands(app)),
-        "document.inspect" => wrap(app.run("document.inspect", p.clone())),
+        "document.inspect" => {
+            if let Some(target) = p.get("document")
+                && target.as_u64() != app.session.active().map(|d| d.uid)
+            {
+                return err("conflict: requested native document is not active");
+            }
+            let mut params = p.clone();
+            if let Some(fields) = params.as_object_mut() {
+                fields.remove("document");
+            }
+            wrap(app.run("document.inspect", params))
+        }
         "ui.inspect" => ok(inspect(app, ctx)),
         "ui.docking" => ok(crate::panel_docking::inspect(app, ctx)),
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),

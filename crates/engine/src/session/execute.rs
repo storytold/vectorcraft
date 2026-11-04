@@ -1,6 +1,7 @@
 use super::{
     CommandSpec, EngineError, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard, strip_replay_only,
 };
+use std::sync::Arc;
 
 impl Session {
     /// `spec`'s `enabled` with `ids` selected instead of the selection, which is then put back.
@@ -105,6 +106,8 @@ impl Session {
         // The entries the command journals belong to the undo groups of the documents it edits, and to
         // the group of the document it starts in when it ends there too.
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
+        let before = (self.depth == 0)
+            .then(|| self.docs.iter().map(|d| (d.uid, d.interaction.as_ref().map_or_else(|| d.doc.clone(), |i| i.doc.clone()))).collect::<Vec<_>>());
         let open = (self.depth == 0).then(|| self.docs.iter().map(|d| d.uid).collect::<Vec<_>>());
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
         if r.is_err() && self.depth == 0 {
@@ -148,7 +151,31 @@ impl Session {
             // A step of `command.batch`: the tool hears of it as it does of the command alone.
             self.notify_text_tool(id);
         }
+        if let Some(before) = before {
+            for (uid, _) in &before {
+                if !self.docs.iter().any(|d| d.uid == *uid) {
+                    self.changes.publish(*uid, 0, id);
+                }
+            }
+            for state in &self.docs {
+                if state.interaction.is_none()
+                    && before.iter().find(|(uid, _)| *uid == state.uid).is_none_or(|(_, doc)| !Arc::ptr_eq(doc, &state.doc) && **doc != *state.doc)
+                {
+                    self.changes.publish(state.uid, state.revision, id);
+                }
+            }
+        }
         Ok(r)
+    }
+
+    /// Check on the engine thread immediately before synchronous property dispatch.
+    /// Native tokens are scoped to this authenticated app launch, not persistent IDs.
+    pub fn check_property_revision(&self, document: u64, revision: u64) -> Result<()> {
+        let state = self.active().ok_or_else(|| EngineError::Other("conflict: native document closed".into()))?;
+        if state.uid != document || state.revision != revision || state.interaction.is_some() {
+            return Err(EngineError::Other("conflict: native document/revision changed or an interaction is pending".into()));
+        }
+        Ok(())
     }
 
     /// Is the interface in Japanese? Then new type starts with em box top-to-top leading and em

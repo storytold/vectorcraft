@@ -12,6 +12,58 @@ fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value
 }
 
 #[test]
+fn craftlink_conditional_properties_reject_stale_and_wrong_document() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x":0,"y":0,"width":10,"height":10})).unwrap()["id"].as_u64().unwrap();
+    let state = app.session.active().unwrap();
+    let (document, revision) = (state.uid, state.revision);
+    let params = json!({"command":"object.setProps","params":{"ids":[id],"name":"first"},"expected":{"document":document,"revision":revision}});
+    assert_eq!(input_request(&mut app, "engine.execute", params.clone())["ok"], true);
+    let doc = app.session.active().unwrap().doc.clone();
+    let current = app.session.active().unwrap().revision;
+    let cursor = app.session.changes.latest();
+    let history = app.session.active().unwrap().history.undo.len();
+    assert_eq!(input_request(&mut app, "engine.execute", params.clone())["ok"], false);
+    let mut wrong = params;
+    wrong["expected"] = json!({"document":document+1,"revision":current});
+    assert_eq!(input_request(&mut app, "engine.execute", wrong)["ok"], false);
+    assert_eq!(app.session.active().unwrap().doc, doc);
+    assert_eq!(app.session.active().unwrap().revision, current);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history);
+    assert_eq!(app.session.changes.latest(), cursor);
+}
+
+#[test]
+fn craftlink_malformed_guard_and_inactive_inspection_fail_closed() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let doc = app.session.active().unwrap().uid;
+    for expected in [json!(null), json!({}), json!({"document":doc,"revision":"bad"})] {
+        assert_eq!(input_request(&mut app, "engine.execute", json!({"command":"object.setProps","params":{},"expected":expected}))["ok"], false);
+    }
+    assert_eq!(input_request(&mut app, "engine.execute", json!({"command":"edit.undo","expected":{"document":doc,"revision":0}}))["ok"], false);
+    assert_eq!(input_request(&mut app, "document.inspect", json!({"document":doc+1}))["ok"], false);
+    let inspected = input_request(&mut app, "document.inspect", json!({"document":doc}));
+    assert_eq!(inspected["ok"], true);
+    assert_eq!(inspected["result"]["capabilities"]["conditionalExecute"], 1);
+}
+
+#[test]
+fn craftlink_pending_interaction_cannot_be_overwritten() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({})).unwrap();
+    app.session.begin_interaction("Native preview").unwrap();
+    let state = app.session.active().unwrap();
+    let expected = json!({"document":state.uid,"revision":state.revision});
+    let before = state.doc.clone();
+    let result = input_request(&mut app, "engine.execute", json!({"command":"object.setProps","params":{},"expected":expected}));
+    assert_eq!(result["ok"], false);
+    assert!(app.session.active().unwrap().interaction.is_some());
+    assert_eq!(app.session.active().unwrap().doc, before);
+}
+
+#[test]
 fn control_lists_and_selects_optional_addon_tools() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     let listed = input_request(&mut app, "ui.tool.list", json!({}));

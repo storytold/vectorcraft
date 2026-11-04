@@ -6,6 +6,7 @@
 //! reduce to commands, so every gesture is journaled and replayable.
 #![forbid(unsafe_code)]
 
+pub mod changes;
 pub mod cmd;
 pub mod file_access;
 pub mod guard;
@@ -58,6 +59,8 @@ pub struct Session {
     pub clipboard: Clipboard,
     /// Executed commands (for actions and debugging), the most recent ones kept ([`Journal`]).
     pub journal: Journal,
+    /// Committed command invalidations; no native snapshots are retained by the feed.
+    pub changes: Arc<changes::DocumentChanges>,
     pub(crate) tool: Box<dyn Tool>,
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
