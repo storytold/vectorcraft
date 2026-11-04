@@ -1445,6 +1445,12 @@ several runs, one run has to match both: type with the fill in one run and the s
 and stroke of other objects are not compared. Without type among the selected objects it returns the error "select a
 text object", and it records no undo step.
 
+The font and text color commands (`select.same.fontFamily`, `fontFamilyStyle`, `fontFamilyStyleSize`, `fontSize`,
+`textFillColor`, `textStrokeColor` and `textFillAndStrokeColor`) take the first character of the first type among the
+selected objects and the objects inside them, in selection order, as the one to match. Type that is hidden or locked,
+inside a hidden or locked group or layer, on a template layer, or outside the isolated group is passed over. When the
+selection holds no other type, they return the error "select a text object".
+
 ## Shaper Groups
 
 `shaper.releaseSource {source, group?}` takes the original shape `source` out of its Shaper Group: the shape becomes a
