@@ -1410,6 +1410,31 @@ fn crop_image_to_rect() {
     assert!(s.execute("object.cropImage", &json!({})).is_err());
 }
 
+#[test]
+fn crop_image_to_rect_copies_the_pixels_without_resampling() {
+    // 100 × 80 px of a busy pattern, placed at 2 pt a pixel.
+    let mut px = image::RgbaImage::new(100, 80);
+    for (x, y, p) in px.enumerate_pixels_mut() {
+        *p = image::Rgba([(x * 37 % 256) as u8, (y * 91 % 256) as u8, ((x ^ y) * 13 % 256) as u8, 255]);
+    }
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "art.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    // Pixels (10.5, 5.5) to (40.5, 25.5), as points: off the pixel grid, so drawing the cut would blend
+    // neighbouring pixels. The cut keeps whole pixels, (11, 6) to (41, 26), as they are.
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 60, 40]})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (30, 20), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 22.0) && close(b.y0, 12.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert_eq!(out, image::imageops::crop_imm(&px, 11, 6, 30, 20).to_image());
+}
+
 /// Crop Image refuses a `rect` that is not an array, such as text, and the image stays as it was; a
 /// null `rect` crops to the artboard as a missing one does.
 #[test]
