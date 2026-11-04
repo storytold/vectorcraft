@@ -316,6 +316,14 @@ fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
     Some((value, true))
 }
 
+/// The check marks of the Kerning menu's Auto and Optical entries for the selection's kerning
+/// `mode` (Optical on, manual value). A selection that mixes modes checks neither, and the menu
+/// still lists both.
+fn kerning_methods(mode: Option<(bool, Option<f64>)>) -> (Option<bool>, Option<bool>) {
+    let (automatic, optical) = mode.map_or((false, false), |(optical, manual)| (!optical && manual.is_none(), optical));
+    (Some(automatic), Some(optical))
+}
+
 /// The faces Type › Bold and Type › Italic switch to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Face {
@@ -756,8 +764,7 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             let caret = text_editing(app).is_some_and(|(_, a, b)| a == b);
             let at_caret = if caret { caret_kerning(app, ui) } else { None };
             let kerning = at_caret.map(|(v, _)| v).or_else(|| mode.map(|(_, manual)| manual.unwrap_or(0.0)));
-            let automatic = mode.map(|(optical, manual)| !optical && manual.is_none());
-            let optical = mode.map(|(optical, _)| optical);
+            let (automatic, optical) = kerning_methods(mode);
             match widgets::spin_kerning(
                 ui,
                 "ch-kern",
