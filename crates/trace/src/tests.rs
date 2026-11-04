@@ -609,6 +609,30 @@ fn a_trace_past_its_anchor_budget_is_refused() {
     assert_eq!(trace_within(&img, &p, anchors).unwrap(), full);
 }
 
+/// Components of a layer are fitted in parallel, a chunk at a time, and added in the order they were found (top to
+/// bottom, left to right), also across the chunks. The anchor budget still refuses a trace with many components.
+#[test]
+fn many_components_come_out_in_scan_order_and_still_meet_the_budget() {
+    // 20 x 20 black dots, more than one chunk of components.
+    let img = Raster::from_fn(120, 120, |x, y| if x % 6 < 3 && y % 6 < 3 { BLACK } else { WHITE });
+    let p = TraceParams { noise: 1, ..bw() };
+    let full = trace(&img, &p);
+    assert_eq!(full.paths.len(), 400);
+    let tops: Vec<(i64, i64)> = full
+        .paths
+        .iter()
+        .map(|t| {
+            let b = t.path.bounds().unwrap();
+            (b.y0.round() as i64, b.x0.round() as i64)
+        })
+        .collect();
+    assert!(tops.windows(2).all(|w| w[0] < w[1]), "not in scan order: {tops:?}");
+    assert_eq!(trace(&img, &p), full, "tracing twice differs");
+    let anchors = full.anchor_count();
+    assert!(matches!(trace_within(&img, &p, anchors / 2), Err(TraceError::TooComplex { max }) if max == anchors / 2));
+    assert_eq!(trace_within(&img, &p, anchors).unwrap(), full);
+}
+
 /// #3098: a watched trace says how far it has got, layer by layer, and stops when told to.
 #[test]
 fn a_watched_trace_counts_its_layers_and_stops_when_told() {
