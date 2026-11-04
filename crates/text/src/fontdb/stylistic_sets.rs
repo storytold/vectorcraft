@@ -8,11 +8,11 @@ use super::FontFace;
 use super::names::name;
 
 /// One `ss01`–`ss20` feature in a face. `number` is the tag's number; `name` is the font's UI
-/// label when it supplies one, otherwise `Set 1` through `Set 20`.
+/// label when it supplies one, and `None` otherwise.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StylisticSet {
     pub number: u8,
-    pub name: String,
+    pub name: Option<String>,
 }
 
 /// The `ssNN` number in a feature tag, if it is one of the twenty registered sets.
@@ -25,8 +25,9 @@ fn number(tag: [u8; 4]) -> Option<usize> {
 }
 
 /// Collect registered set records from either layout table. Fonts may carry a set in GSUB, GPOS,
-/// or both. A readable custom name takes precedence over the numbered fallback.
-fn collect(font: &skrifa::FontRef<'_>, features: FeatureList<'_>, labels: &mut [Option<String>; 20]) {
+/// or both. `labels[n - 1]` is `Some` once set `n` is found, holding its readable custom name if
+/// any record supplies one.
+fn collect(font: &skrifa::FontRef<'_>, features: FeatureList<'_>, labels: &mut [Option<Option<String>>; 20]) {
     for record in features.feature_records().iter().take(4096) {
         let Some(n) = number(record.feature_tag().to_be_bytes()) else { continue };
         let Ok(feature) = record.feature(features.offset_data()) else { continue };
@@ -38,10 +39,10 @@ fn collect(font: &skrifa::FontRef<'_>, features: FeatureList<'_>, labels: &mut [
             _ => None,
         });
         let slot = &mut labels[n - 1];
-        if let Some(custom) = custom {
+        if custom.is_some() {
             *slot = Some(custom);
         } else if slot.is_none() {
-            *slot = Some(format!("Set {n}"));
+            *slot = Some(None);
         }
     }
 }
@@ -51,7 +52,7 @@ impl FontFace {
     /// skipped, and no more than 4096 feature records from either table are read.
     pub fn stylistic_sets(&self) -> Vec<StylisticSet> {
         let Some(font) = self.skrifa() else { return Vec::new() };
-        let mut labels: [Option<String>; 20] = std::array::from_fn(|_| None);
+        let mut labels: [Option<Option<String>>; 20] = std::array::from_fn(|_| None);
         if let Ok(gsub) = font.gsub()
             && let Ok(features) = gsub.feature_list()
         {
@@ -120,9 +121,6 @@ mod tests {
         let db = super::super::FontDb::with_font_dirs(vec![]);
         assert_eq!(db.add_font(builder.build()), 1);
         let face = db.face("Stylistic Test Sans", "Regular").unwrap();
-        assert_eq!(
-            face.stylistic_sets(),
-            [StylisticSet { number: 1, name: "Curved Capitals".into() }, StylisticSet { number: 3, name: "Set 3".into() }]
-        );
+        assert_eq!(face.stylistic_sets(), [StylisticSet { number: 1, name: Some("Curved Capitals".into()) }, StylisticSet { number: 3, name: None }]);
     }
 }

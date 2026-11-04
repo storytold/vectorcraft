@@ -6021,6 +6021,7 @@ anchor	Points:	Pontok:
 	Character Color	Karakterszín
 	OpenType Features	OpenType-funkciók
 	Stylistic Sets	Stíluskészletek
+	Set {n}	{n}. készlet
 @msg	features lists at most {max} tags	a features legfeljebb {max} címkét tartalmazhat
 @msg	unknown OpenType feature `{t}`	ismeretlen OpenType-funkció: `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0-nál nagyobb és legfeljebb {max} értékű szám kell legyen

@@ -6037,6 +6037,7 @@ anchor	Points:	Body:
 	Character Color	Barva znaků
 	OpenType Features	Funkce OpenType
 	Stylistic Sets	Stylistické sady
+	Set {n}	Sada {n}
 @msg	features lists at most {max} tags	features obsahuje nejvýše {max} značek
 @msg	unknown OpenType feature `{t}`	neznámá funkce OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musí být číslo větší než 0 a nejvýše {max}

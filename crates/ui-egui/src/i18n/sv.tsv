@@ -6089,6 +6089,7 @@ shape	Open	Öppen
 	Character Color	Teckenfärg
 	OpenType Features	OpenType-funktioner
 	Stylistic Sets	Stilistiska uppsättningar
+	Set {n}	Uppsättning {n}
 @msg	features lists at most {max} tags	features får innehålla högst {max} taggar
 @msg	unknown OpenType feature `{t}`	okänd OpenType-funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} måste vara ett tal över 0 och högst {max}

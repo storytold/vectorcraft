@@ -5637,6 +5637,7 @@ anchor	Points:	Điểm:
 	Character Color	Màu ký tự
 	OpenType Features	Tính năng OpenType
 	Stylistic Sets	Bộ phong cách
+	Set {n}	Bộ {n}
 @msg	features lists at most {max} tags	features chứa tối đa {max} thẻ
 @msg	unknown OpenType feature `{t}`	tính năng OpenType không xác định `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} phải là một số lớn hơn 0 và tối đa {max}

@@ -4,7 +4,7 @@
 
 use egui::Ui;
 use serde_json::json;
-use vectorcraft_text::{EXTRA_FEATURES, FontDb, OtFeatures};
+use vectorcraft_text::{EXTRA_FEATURES, FontDb, OtFeatures, StylisticSet};
 
 use super::character::{shared, text_editing, text_style};
 use crate::VectorcraftApp;
@@ -208,7 +208,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             for set in &sets {
                 let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
                 let on = flag.get(&next);
-                if widgets::check(ui, &set.name, on, true) {
+                if widgets::check(ui, &set_label(set), on, true) {
                     change = Some(Change::Toggle(flag, !on));
                 }
             }
@@ -219,6 +219,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if let Some(c) = change {
         edit(app, c);
+    }
+}
+
+/// A Stylistic Sets menu entry: the font's own name for the set, or `Set 1` through `Set 20` in
+/// the UI language.
+fn set_label(set: &StylisticSet) -> String {
+    match &set.name {
+        Some(name) => name.clone(),
+        None => crate::i18n::fmt(tl!("Set {n}"), &[("n", &set.number.to_string())]),
     }
 }
 
@@ -309,6 +318,21 @@ mod tests {
         assert_eq!(text_style(&app).unwrap().0.features, ["ss01", "ss03"]);
         edit(&mut app, Change::Toggle(Flag::Extra("ss01"), false));
         assert_eq!(text_style(&app).unwrap().0.features, ["ss03"]);
+    }
+
+    /// A set the font names keeps the font's name; a set without one gets the numbered label in
+    /// the UI language.
+    #[test]
+    fn stylistic_set_labels_follow_the_ui_language() {
+        let named = StylisticSet { number: 1, name: Some("Curved Capitals".into()) };
+        let numbered = StylisticSet { number: 3, name: None };
+        assert_eq!(set_label(&numbered), "Set 3");
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let (named_de, numbered_de) = (set_label(&named), set_label(&numbered));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(named_de, "Curved Capitals");
+        assert_eq!(numbered_de, "Satz 3");
     }
 
     /// The Figure menu lists its five entries in order; Proportional Lining sets `pnum` and

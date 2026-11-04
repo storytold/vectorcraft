@@ -6033,6 +6033,7 @@ anchor	Points:	წერტილები:
 	Character Color	სიმბოლოს ფერი
 	OpenType Features	OpenType შესაძლებლობები
 	Stylistic Sets	სტილისტური ნაკრებები
+	Set {n}	ნაკრები {n}
 @msg	features lists at most {max} tags	features შეიძლება შეიცავდეს არაუმეტეს {max} ტეგს
 @msg	unknown OpenType feature `{t}`	უცნობი OpenType შესაძლებლობა `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} უნდა იყოს 0-ზე მეტი და არაუმეტეს {max}-ისა რიცხვი
