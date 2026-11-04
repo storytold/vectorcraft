@@ -211,7 +211,7 @@ pub const NEW_ACTION: &str = "ui.action.new";
 /// recording into it; Stop Playing/Recording ends the recording. `key` (1 to 15, F1 to F15; 0 or
 /// null for none) with `cmd` (Ctrl, Command on macOS) and `shift` is the function key that plays
 /// it, and `color` (one of [`COLORS`]; null or `""` for none) its Button Mode color. The action's
-/// function key takes priority over command shortcuts. The set becomes current and the new action is selected. While an
+/// function key takes priority over command shortcuts. The set becomes current and the only selected set, and the new action is selected. While an
 /// action is recording, and for an index past the last set, an empty name, a key or color that is
 /// not one of them, nothing is added. The New Action dialog's Record runs this. → {set, action}
 pub fn new_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
@@ -235,10 +235,8 @@ pub fn new_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
     s.actions.push(action);
     let index = s.actions.len() - 1;
     start_recording(app, set, name, Some(id));
-    if app.ui.action_set != Some(set) {
-        app.ui.action_set = Some(set);
-        app.ui.action_sets_selected = vec![set];
-    }
+    app.ui.action_set = Some(set);
+    app.ui.action_sets_selected = vec![set];
     if let Some(ctx) = app.ui_ctx.clone() {
         set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((set, index)));
     }
@@ -1404,6 +1402,21 @@ mod tests {
         click_set(&ctx, &mut app, "Other", egui::Modifiers::SHIFT);
         assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(1), vec![1, 2]));
         assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), None, "the action is no longer selected");
+    }
+
+    /// New Action in the current set of a Shift-selected range leaves that set as the only selected
+    /// one, so Delete Selection does not ask about the rest of the range afterwards.
+    #[test]
+    fn new_action_in_the_current_set_clears_the_selected_range() {
+        let mut app = app_with_sets();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        click_set(&ctx, &mut app, "Mine", egui::Modifiers::NONE);
+        click_set(&ctx, &mut app, "Other", egui::Modifiers::SHIFT);
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(1), vec![1, 2]));
+        app.run(NEW_ACTION, json!({"set": 1, "name": "Fresh"})).unwrap();
+        assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(1), vec![1]));
+        assert_eq!(selected_sets(&app), [1]);
     }
 
     /// The default set can be deleted, and so can the last set: the panel is then empty, no set is
