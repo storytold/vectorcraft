@@ -1141,7 +1141,7 @@ nothing.
 
 These Object menu commands refuse a string, a number or another value that is not true or false with
 `` `copy` must be true or false ``, naming the key, and change nothing: `reflectX`, `reflectY`, `random`, `copy`,
-`strokes`, `corners`, `objects` and `patterns` in `object.transformEach`; `gray` and `deleteRaster` in
+`relative`, `strokes`, `corners`, `objects` and `patterns` in `object.transformEach`; `gray` and `deleteRaster` in
 `object.createObjectMosaic`; `trim` in `object.cropImage`; `allArtboards` in `object.createTrimMarks`; and `byColumn`,
 `moveArtwork` and `patterns` in `artboard.rearrange`. A null is read as a key left out. `object.createTrimMarks`
 refuses a `style` that is not a string, such as `5`, with `` `style` must be roman or japanese ``, the message it gives
@@ -3200,6 +3200,19 @@ used, as a transform's does.
 ```json
 {"name":"run_command","arguments":{"command":"object.scale","params":{"sx":200,"strokes":true}}}
 {"name":"run_command","arguments":{"command":"object.transformEach","params":{"scaleH":50,"scaleV":50,"strokes":false}}}
+```
+
+## Transform Each: Relative and Absolute
+
+`object.transformEach` scales by percentages of each object's size (the dialog's Relative, the default), or with
+`relative: false` to the width and height each object becomes: `scaleH` and `scaleV` in pt, as the dialog's Absolute.
+Absolute is measured on each object's own geometric bounds, so objects of different sizes come out alike about their
+own reference points. A side left out keeps its size, a side the object doesn't have (a line's height, say) keeps its
+factor 1, and a scale of 0 is refused in either mode, as it collapses the object. `object.transformAgain` repeats the
+Absolute target, so it leaves objects that already have that size as they are; repeat a scale with Relative instead.
+
+```json
+{"name":"run_command","arguments":{"command":"object.transformEach","params":{"relative":false,"scaleH":50,"scaleV":50}}}
 ```
 
 ## Live Corners
