@@ -160,12 +160,13 @@ fn a_long_dashed_stroke_draws_the_same_pixels_after_its_path_changes() {
     let mut r = Renderer::new();
     render(&mut r, &doc(&zigzag(), st.clone()), at);
     // An anchor in the view moved, then one far before it, which shifts every dash after it.
-    for (i, by) in [(1500, Vec2::new(0.0, 12.0)), (40, Vec2::new(-3.0, 0.0))] {
+    for (i, by) in [(1501, Vec2::new(0.0, 12.0)), (40, Vec2::new(-3.0, 0.0))] {
         let mut bp = zigzag();
         let mut els = bp.elements().to_vec();
-        if let Some(kurbo::PathEl::LineTo(p)) = els.get_mut(i) {
-            *p += by;
-        }
+        let Some(kurbo::PathEl::LineTo(p)) = els.get_mut(i) else {
+            panic!("anchor {i} is not a line");
+        };
+        *p += by;
         bp = BezPath::from_vec(els);
         let d = doc(&bp, st.clone());
         assert!(render(&mut r, &d, at).pixels == whole(&d, at).pixels, "anchor {i} moved: the same pixels");
