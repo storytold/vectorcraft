@@ -3377,6 +3377,12 @@ mark-style	Japanese	일본식
 	to	~
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder}에 파일 {n}개 {note}. 패키지 폴더를 표시하시겠습니까?
 @plural	{n} linked file not found|{n} linked files not found	연결된 파일 {n}개를 찾을 수 없습니다
+@msgplural	{n} linked file not found|{n} linked files not found	연결된 파일 {n}개를 찾을 수 없습니다
+@msg	fonts not copied: {fonts}	복사되지 않은 글꼴: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(연결된 파일 {n}개를 찾을 수 없습니다)
+@msg	(fonts not copied: {fonts})	(복사되지 않은 글꼴: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	복사되지 않은 글꼴: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	이 문서를 저장한 이후 연결된 이미지 {n}개가 변경되었습니다. 새 버전을 표시하시겠습니까?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	연결된 이미지 {n}개가 디스크에서 변경되었습니다. 새 버전을 표시하시겠습니까?
