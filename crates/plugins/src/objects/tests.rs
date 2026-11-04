@@ -151,6 +151,19 @@ fn geometry_type_and_strokes_change() {
     assert!(n.appearance.stroke().is_none());
 }
 
+/// A compound path made a guide is left out of a later filter's inputs, as guide paths are; a
+/// plain compound path is still one of them.
+#[test]
+fn compound_guides_are_not_filter_targets() {
+    let (mut d, _, layer) = doc();
+    let two = PathData::new(square(0.0).subpaths.into_iter().chain(square(2.0).subpaths).collect());
+    let out = json!({"objects": [{"type": "compound", "path": two.clone(), "guide": true}, {"type": "compound", "path": two}]});
+    let made = apply_output(&mut d, &[], decode_json(out).unwrap(), Some(layer), &keep).unwrap();
+    let targets = filter_targets(&d, &[layer]);
+    assert!(!targets.contains(&made[0]), "the compound guide");
+    assert!(targets.contains(&made[1]), "the plain compound path");
+}
+
 /// `guide` and `locked` make objects guides (a compound path's members too) and lock them, or undo
 /// both; locked objects and guides are not [`selectable`]. Other values are refused.
 #[test]
