@@ -6245,6 +6245,11 @@ breakText	Glyphs	Glifs
 	Export All Open Documents as SVG	Exporta tots els documents oberts com a SVG
 @msgplural	Exported {n} document|Exported {n} documents	S’ha exportat {n} document|S’han exportat {n} documents
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	S’ha exportat {n} document; no s’ha escrit {title}: {error}|S’han exportat {n} documents; no s’ha escrit {title}: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Traçat per lots d’una carpeta
+@msgplural	Traced {n} image|Traced {n} images	S’ha traçat {n} imatge|S’han traçat {n} imatges
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	No s’ha pogut traçar {n} imatge|No s’han pogut traçar {n} imatges
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	S’ha traçat {n} imatge; no traçades: {failed}|S’han traçat {n} imatges; no traçades: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Tipus de símbol:
 	Dynamic Symbol	Símbol dinàmic

@@ -6100,6 +6100,11 @@ breakText	Glyphs	字形
 	Export All Open Documents as SVG	将所有打开的文档导出为 SVG
 @msgplural	Exported {n} document|Exported {n} documents	已导出 {n} 个文档
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	已导出 {n} 个文档; 未写入 {title}：{error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	批量描摹文件夹
+@msgplural	Traced {n} image|Traced {n} images	已描摹 {n} 个图像
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} 个图像无法描摹
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	已描摹 {n} 个图像; 无法描摹：{failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	符号类型:
 	Dynamic Symbol	动态符号

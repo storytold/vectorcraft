@@ -6289,6 +6289,11 @@ breakText	Glyphs	Merkit
 	Export All Open Documents as SVG	Vie kaikki avoimet asiakirjat SVG-muodossa
 @msgplural	Exported {n} document|Exported {n} documents	Vietiin {n} asiakirja|Vietiin {n} asiakirjaa
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Vietiin {n} asiakirja; {title} jäi kirjoittamatta: {error}|Vietiin {n} asiakirjaa; {title} jäi kirjoittamatta: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Jäljitä kansio erässä
+@msgplural	Traced {n} image|Traced {n} images	Jäljitettiin {n} kuva|Jäljitettiin {n} kuvaa
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} kuvaa ei voitu jäljittää|{n} kuvaa ei voitu jäljittää
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Jäljitettiin {n} kuva; jäljittämättä: {failed}|Jäljitettiin {n} kuvaa; jäljittämättä: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symbolin tyyppi:
 	Dynamic Symbol	Dynaaminen symboli

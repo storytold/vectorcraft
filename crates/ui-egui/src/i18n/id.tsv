@@ -6127,6 +6127,11 @@ breakText	Glyphs	Glif
 	Export All Open Documents as SVG	Ekspor Semua Dokumen Terbuka sebagai SVG
 @msgplural	Exported {n} document|Exported {n} documents	Berhasil mengekspor {n} dokumen
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Berhasil mengekspor {n} dokumen; {title} tidak ditulis: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Telusuri Folder secara Batch
+@msgplural	Traced {n} image|Traced {n} images	Berhasil menelusuri {n} gambar
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} gambar tidak dapat ditelusuri
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Berhasil menelusuri {n} gambar; tidak ditelusuri: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Jenis simbol:
 	Dynamic Symbol	Simbol dinamis
