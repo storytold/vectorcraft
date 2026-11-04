@@ -1580,6 +1580,197 @@ fn a_pdf_of_its_second_artboard_is_compared_on_that_artboard() {
     assert!((e - 190.0).abs() < 1e-6 && (f - 20.0).abs() < 1e-6, "on the second artboard: {:?}", texts[0].xf);
 }
 
+/// Two 100-point artboards, the second 50 below the first (art space, y up), as the editing data
+/// lists them.
+const TWO_BOARDS: &str = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+    %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+    %_/Dictionary :\n%_0 -50 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 -150 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+    %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+
+/// The PDF part of a file with [`TWO_BOARDS`]: a page for each artboard in a row, the first with a
+/// square at (10, 86), and the second with one at (`x`, `y`) of its own when given.
+fn two_pages(second: Option<(f64, f64)>) -> Document {
+    let mut page = pdf_part(10.0, 86.0);
+    let mut board = page.artboards[0].clone();
+    (board.id, board.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    page.artboards.push(board);
+    if let Some((x, y)) = second {
+        let other = pdf_part(120.0 + x, y);
+        let square = page.reid(&other.layers[0].children().unwrap()[0]);
+        let layer = page.layers[0].id;
+        page.insert(Some(layer), 1, square).unwrap();
+    }
+    page
+}
+
+/// The layers are compared with every page: art that they draw on the second artboard and its page
+/// doesn't sends the file to its PDF part, as it would on the first.
+#[test]
+fn art_only_the_layers_draw_on_the_second_artboard_makes_the_file_come_in_as_its_pdf_part() {
+    // A 60-point square on the second artboard, 20 from its left and 20 down.
+    let big = "0 0 1 0 k\n20 -130 m\n80 -130 L\n80 -70 L\n20 -70 L\nf";
+    let art = native(&(TWO_BOARDS.to_string() + &layer("Live", true, &square(10, 10)) + &layer("Second", true, big)));
+    let (d, w, read) = crate::layered_ai(&private(&art), two_pages(None), vec![], false, false, 1.0);
+    assert!(!read, "{w:?}");
+    assert_ne!(names(&d), ["Live", "Second"], "{w:?}");
+    assert!(w.iter().any(|w| w.contains("differs from the page's")), "{w:?}");
+    // The same square on the first artboard, which its page doesn't draw either.
+    let big = "0 0 1 0 k\n20 20 m\n80 20 L\n80 80 L\n20 80 L\nf";
+    let art = native(&(TWO_BOARDS.to_string() + &layer("Live", true, &square(10, 10)) + &layer("Second", true, big)));
+    let (_, w, read) = crate::layered_ai(&private(&art), two_pages(None), vec![], false, false, 1.0);
+    assert!(!read && w.iter().any(|w| w.contains("differs from the page's")), "{w:?}");
+}
+
+/// Art that the second page draws and the layers don't sends the file to its PDF part too.
+#[test]
+fn art_only_the_second_page_draws_makes_the_file_come_in_as_its_pdf_part() {
+    let art = native(&(TWO_BOARDS.to_string() + &layer("Live", true, &square(10, 10))));
+    // A 60-point square on the second page, 20 from its left and 20 down.
+    let mut page = two_pages(None);
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(140.0, 20.0, 200.0, 80.0));
+    let paint = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let appearance = vectorcraft_doc::Appearance {
+        items: vec![vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint))],
+        ..Default::default()
+    };
+    let node = Node::path(page.alloc_id(), path, appearance);
+    let layer_id = page.layers[0].id;
+    page.insert(Some(layer_id), 1, node).unwrap();
+    let (_, w, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(!read, "{w:?}");
+    assert!(w.iter().any(|w| w.contains("differs from the page's")), "{w:?}");
+}
+
+/// A PDF saved with some of the artboards, not starting with the first, can hold any of the
+/// others after it: its later pages aren't compared with the artboards that follow the first.
+#[test]
+fn the_later_pages_of_a_pdf_of_some_artboards_are_not_compared() {
+    // Four 100-point artboards side by side, 50 apart (art space, y up), a 4-point square on the
+    // first, second and fourth, and a 60-point square on the third.
+    let board = |x0: i32| {
+        format!(
+            "%_/Dictionary :\n%_{x0} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            x0 + 100
+        )
+    };
+    let boards = format!(
+        "%_/Document :\n%_/Dictionary :\n%_/Array :\n{}{}{}{}%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n",
+        board(0),
+        board(150),
+        board(300),
+        board(450)
+    );
+    let big = "0 0 1 0 k\n320 20 m\n380 20 L\n380 80 L\n320 80 L\nf";
+    let art = native(&(boards + &layer("Art", true, &(square(10, 10) + "\n" + &square(180, 50) + "\n" + big + "\n" + &square(460, 30)))));
+    // The PDF part: a page for the second artboard, then one for the fourth.
+    let mut pdf = pdf_part(30.0, 46.0);
+    let mut second = pdf.artboards[0].clone();
+    (second.id, second.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    pdf.artboards.push(second);
+    let other = pdf_part(130.0, 66.0);
+    let fourth = pdf.reid(&other.layers[0].children().unwrap()[0]);
+    let layer_id = pdf.layers[0].id;
+    pdf.insert(Some(layer_id), 1, fourth).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.artboards.len(), 4, "{w:?}");
+}
+
+/// Layers that draw each page's art on its artboard come in.
+#[test]
+fn layers_that_match_every_page_come_in() {
+    // A square on the second artboard, 50 from its left and 46 down, which its page draws too.
+    let second = "0 0 1 0 k\n50 -100 m\n54 -100 L\n54 -96 L\n50 -96 L\nf";
+    let art = native(&(TWO_BOARDS.to_string() + &layer("Live", true, &square(10, 10)) + &layer("Second", true, second)));
+    let (d, w, read) = crate::layered_ai(&private(&art), two_pages(Some((50.0, 46.0))), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Live", "Second"], "{w:?}");
+    assert!(w.is_empty(), "{w:?}");
+}
+
+/// Layers that draw each page's art come in from [`TWO_BOARDS`] changed to `boards`.
+fn two_boards_come_in(boards: String) {
+    let second = "0 0 1 0 k\n50 -100 m\n54 -100 L\n54 -96 L\n50 -96 L\nf";
+    let art = native(&(boards + &layer("Live", true, &square(10, 10)) + &layer("Second", true, second)));
+    let (d, w, read) = crate::layered_ai(&private(&art), two_pages(Some((50.0, 46.0))), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Live", "Second"], "{w:?}");
+}
+
+/// A first artboard up to half a point larger than its page is compared on an area of the page's
+/// size.
+#[test]
+fn a_first_artboard_a_little_wider_than_its_page_is_compared_on_the_pages_size() {
+    two_boards_come_in(TWO_BOARDS.replace("%_100 0 /", "%_100.3 0 /"));
+}
+
+/// A later artboard up to half a point smaller than its page is compared on an area of the page's
+/// size.
+#[test]
+fn a_second_artboard_a_little_shorter_than_its_page_is_compared_on_the_pages_size() {
+    two_boards_come_in(TWO_BOARDS.replace("%_100 -150", "%_100 -149.7"));
+}
+
+/// A text object the second page doesn't draw is left out even when the first page differs by more
+/// than the comparison allows.
+#[test]
+fn an_unseen_text_object_on_the_second_page_is_weighed_while_the_first_page_differs() {
+    let doc = text_document(&[("Ghost\r", 0, (8200.0, 8330.0), (0.0, 0.0), 0.0)]);
+    let big = "0 0 1 0 k\n20 20 m\n80 20 L\n80 80 L\n20 80 L\nf";
+    let art = native_with_text(&(TWO_BOARDS.to_string() + &layer("Art", true, &(square(10, 10) + "\n" + big + "\n" + &text_object(0)))), &doc);
+    // The first page draws the 60-point square in black.
+    let mut page = two_pages(None);
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(20.0, 20.0, 80.0, 80.0));
+    let paint = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let appearance = vectorcraft_doc::Appearance {
+        items: vec![vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint))],
+        ..Default::default()
+    };
+    let node = Node::path(page.alloc_id(), path, appearance);
+    let layer_id = page.layers[0].id;
+    page.insert(Some(layer_id), 1, node).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    let mut texts = vec![];
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            texts.push(t.plain_text());
+        }
+    });
+    assert!(texts.is_empty(), "{w:?}");
+    assert!(w.iter().any(|w| w.contains("doesn't draw")), "{w:?}");
+}
+
+/// A text object on the second artboard that its page doesn't draw is weighed as one on the first
+/// is: it is taken out, unless its layer doesn't print.
+#[test]
+fn a_text_object_the_second_page_doesnt_draw_is_left_out_unless_its_layer_doesnt_print() {
+    // "Ghost" 38.5 down the second artboard (150 below the first's anchor in the canvas).
+    let doc = text_document(&[("Ghost\r", 0, (8200.0, 8330.0), (0.0, 0.0), 0.0)]);
+    let all_text = |d: &Document| {
+        let mut all = vec![];
+        d.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                all.push(t.plain_text());
+            }
+        });
+        all
+    };
+    let art = native_with_text(&(TWO_BOARDS.to_string() + &layer("Art", true, &(square(10, 10) + "\n" + &text_object(0)))), &doc);
+    let (d, w, read) = crate::layered_ai(&private(&art), two_pages(None), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert!(all_text(&d).is_empty(), "{w:?}");
+    assert!(w.iter().any(|w| w.contains("doesn't draw")), "{w:?}");
+    // On a layer that shows and doesn't print, it stays.
+    let tips = layer("Tips", true, &text_object(0)).replace("1 1 1 1 0 0 1 0 79", "1 1 1 0 0 0 1 0 79");
+    let art = native_with_text(&(TWO_BOARDS.to_string() + &layer("Art", true, &square(10, 10)) + &tips), &doc);
+    let (d, w, read) = crate::layered_ai(&private(&art), two_pages(None), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Art", "Tips"], "{w:?}");
+    assert_eq!(all_text(&d), ["Ghost"], "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("doesn't draw")), "{w:?}");
+}
+
 #[test]
 fn an_ai_file_that_cant_be_read_through_its_editing_data_keeps_its_pdf_part() {
     let pdf = pdf_part(10.0, 86.0);
