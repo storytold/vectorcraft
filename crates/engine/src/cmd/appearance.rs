@@ -357,11 +357,23 @@ pub(crate) fn appearances_differ(d: &vectorcraft_doc::Document, ids: &[NodeId]) 
 
 /// Indices `idx` of the first target's items (aligned with `aligned`) in each of `ids`: the first
 /// target's own, and in each other one the items equal to them there (see [`SharedStack`]), each
-/// index on its own: one the targets don't share is left out of the others (never taken as the
-/// same index there). Not aligned, or one target: the same indices in each.
+/// index and each target on its own: an index a target doesn't share with the first is left out
+/// of that target (never taken as the same index there), whatever the other targets have. Not
+/// aligned, or one target: the same indices in each.
 pub(crate) fn items_per_target(d: &vectorcraft_doc::Document, ids: &[NodeId], idx: &[usize], aligned: bool) -> Vec<Vec<usize>> {
-    match shared_stack(d, ids).filter(|_| aligned) {
-        Some(sh) => (0..ids.len()).map(|k| if k == 0 { idx.to_vec() } else { idx.iter().filter_map(|i| sh.item_in(*i, k)).collect() }).collect(),
+    let aps: Option<Vec<&Appearance>> = ids.iter().map(|id| d.node(*id).map(|n| &*n.appearance)).collect();
+    match aps.filter(|aps| aligned && aps.len() >= 2) {
+        Some(aps) => aps
+            .iter()
+            .enumerate()
+            .map(|(k, ap)| match aps.first() {
+                Some(first) if k > 0 => {
+                    let sh = SharedStack::of(&[*first, *ap]);
+                    idx.iter().filter_map(|i| sh.item_in(*i, 1)).collect()
+                }
+                _ => idx.to_vec(),
+            })
+            .collect(),
         None => vec![idx.to_vec(); ids.len()],
     }
 }
