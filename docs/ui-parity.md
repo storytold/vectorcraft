@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (New Document's units belong to the chosen preset; Recent and Saved cards keep their own units; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (File › Export › Export As PNG exports the active artboard, or each one the Artboard tool selected, not always the first, #5502; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -30,6 +30,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | File › Export › Export As PNG… exports the active artboard, or each artboard the Artboard tool has selected (one file each), instead of always the first (#5502); a choice the caller gives is kept; scores and estimates unchanged |
 | 2026-11-04 | minor | Document Tools add-on (a VectorCraft addition): Object › Plug-ins › Document Tools › Batch Trace Folder asks for a folder of images and a destination folder and traces each image into it (#4921); scores and estimates unchanged |
 | 2026-11-03 | minor | The Action Options row cites the public Actions panel page and describes its controls. Scores and estimates remain unchanged. |
 | 2026-11-03 | minor | Enclosing Lasso provides whole-object enclosure selection as an add-on with no default shortcut or Basic toolbar slot. Scores and estimates remain unchanged. |
