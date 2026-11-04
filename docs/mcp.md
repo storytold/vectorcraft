@@ -5436,7 +5436,8 @@ the paragraph's text now starts; when the text before `at` starts no list, nothi
 
 `text.setRangeStyle {id, start, end, kerning}` (a range) and `text.setFormat {ids?, kerning}`
 (the selected type) accept `kerning: "auto" | "optical" | number` (1/1000 em). Auto uses the font's
-pair metrics; Optical spaces horizontal pairs from their glyph shapes. Vertical text uses font
+pair metrics; Optical spaces horizontal pairs from their glyph shapes, moving each toward the font's own
+stem spacing; ideographs, kana, fullwidth forms and dashes keep the font's spacing. Vertical text uses font
 metrics in either mode. A number sets a manual pair value,
 replacing that pair's automatic correction while tracking remains additive. Choosing `"optical"` or
 `"auto"` clears existing manual pair values in the text it applies to. New text and files without an Optical setting use Auto. The Character
