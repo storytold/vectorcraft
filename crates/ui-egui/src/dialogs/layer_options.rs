@@ -53,19 +53,17 @@ pub(super) fn note_set(d: &mut Dialog, field: &str, value: &Value) {
 }
 
 /// Turns Template on or off. A template is locked and dims its images, and turning Template off
-/// unlocks it and turns Dim Images off; a Lock or Dim Images that was set in the dialog keeps its
-/// value. For several rows, OK sends Lock and Dim Images only when
-/// they are set in the dialog. `layer.setProps` then locks each row that becomes a template and
+/// unlocks it and turns Dim Images off; a Dim Images that was set in the dialog keeps its value.
+/// For several rows, OK sends Lock and Dim Images only when they are set in the dialog. `layer.setProps` then locks each row that becomes a template and
 /// dims it to 50%, unless a percentage is set in the dialog, so the dialog shows 50%; it unlocks
 /// each row that stops being a template and stops dimming it.
 /// When Template is set back to the first row's value, Lock and Dim Images that were not set in
 /// the dialog show the first row's values again.
 fn set_template(d: &mut Dialog, on: bool) {
     choose(d, "template", json!(on));
-    for key in ["locked", "dimImages"] {
-        if !is_set(d, key) {
-            d.fields.insert(key.into(), json!(on));
-        }
+    d.fields.insert("locked".into(), json!(on));
+    if !is_set(d, "dimImages") {
+        d.fields.insert("dimImages".into(), json!(on));
     }
     let Some(opened) = d.fields.get(OPENED).cloned() else {
         return;
@@ -588,25 +586,29 @@ mod tests {
         assert_eq!(p, json!({"template": false, "dimImages": 40.0, "ids": [first.0, second.0]}));
     }
 
-    /// Lock and Dim Images set in the dialog stay as set when Template is set after them, so
-    /// `ui.dialog.set` gives the same result in either order.
+    /// A Dim Images set in the dialog stays as set when Template is set after it, so
+    /// `ui.dialog.set` gives the same result in either order. Template still locks the layers.
     #[test]
-    fn template_keeps_lock_and_dim_images_that_were_set() {
-        let mut app = app();
-        let (first, second) = two_layers(&mut app);
-        set(&mut app, "locked", json!(false));
-        set(&mut app, "dimImages", json!(false));
-        set(&mut app, "template", json!(true));
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert!(d.bool("template") && !d.bool("locked") && !d.bool("dimImages"));
-        let by_template_last = params(d).1;
-        assert_eq!(by_template_last, json!({"template": true, "locked": false, "dimImages": false, "ids": [first.0, second.0]}));
-        app.run("ui.layerOptions", json!({"ids": [first.0, second.0]})).unwrap();
-        draw(&mut app);
-        set(&mut app, "template", json!(true));
-        set(&mut app, "locked", json!(false));
-        set(&mut app, "dimImages", json!(false));
-        assert_eq!(params(app.ui.dialog.as_ref().unwrap()).1, by_template_last);
+    fn template_keeps_dim_images_that_was_set() {
+        for dim_first in [true, false] {
+            let mut app = app();
+            let (first, second) = two_layers(&mut app);
+            if dim_first {
+                set(&mut app, "dimImages", json!(false));
+                set(&mut app, "template", json!(true));
+            } else {
+                set(&mut app, "template", json!(true));
+                set(&mut app, "dimImages", json!(false));
+            }
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert!(d.bool("template") && d.bool("locked") && !d.bool("dimImages"), "dim first: {dim_first}");
+            assert_eq!(params(d).1, json!({"template": true, "dimImages": false, "ids": [first.0, second.0]}), "dim first: {dim_first}");
+            super::super::confirm(&mut app).unwrap();
+            for id in [first, second] {
+                let n = layer(&app, id);
+                assert!(n.locked && matches!(n.kind, NodeKind::Layer { template: true, dim_images: None, .. }), "{id:?}, dim first: {dim_first}");
+            }
+        }
     }
 
     #[test]
