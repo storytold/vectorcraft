@@ -14,6 +14,9 @@ use crate::{Appearance, Document, Effect, Node};
 const PIXEL_RADII_SINCE: u32 = 3;
 const HALFTONE: &str = "pixelate.colorHalftone";
 const RADIUS: &str = "maxRadius";
+/// The key of `Document::unknown` that holds the brush definitions (`vectorcraft-brush`'s
+/// `DOC_KEY`), whose art can carry effects.
+const BRUSHES: &str = "brushes";
 /// The radius (points) an older document's halftone without one drew with.
 const OLD_DEFAULT: f64 = 8.0;
 /// The range the radius was kept within in points, and is kept within in pixels.
@@ -49,7 +52,8 @@ impl Document {
     }
 
     /// `fix` each effect in the art, symbols, patterns (and the one being edited as it was), graph
-    /// designs, opacity masks and graphic styles that use a Color Halftone.
+    /// designs, opacity masks, Shaper edits, graphic styles and brush definitions that use a Color
+    /// Halftone.
     fn each_halftone(&mut self, fix: &mut dyn FnMut(&mut Effect)) {
         for l in &mut self.layers {
             node(l, fix);
@@ -71,6 +75,25 @@ impl Document {
                 appearance(&mut s.appearance, fix);
             }
         }
+        if let Some(b) = self.unknown.get_mut(BRUSHES) {
+            brushes(b, fix);
+        }
+    }
+}
+
+/// `fix` each Color Halftone in JSON `v` (brush definitions): every object whose `id` is
+/// [`HALFTONE`] is a serialized [`Effect`] (object ids are numbers).
+fn brushes(v: &mut Value, fix: &mut dyn FnMut(&mut Effect)) {
+    match v {
+        Value::Object(m) if m.get("id").and_then(Value::as_str) == Some(HALFTONE) => {
+            let params = m.get("params").cloned().unwrap_or(Value::Null);
+            let mut e = Effect { id: HALFTONE.into(), params, visible: true };
+            fix(&mut e);
+            m.insert("params".into(), e.params);
+        }
+        Value::Object(m) => m.values_mut().for_each(|v| brushes(v, fix)),
+        Value::Array(a) => a.iter_mut().for_each(|v| brushes(v, fix)),
+        _ => {}
     }
 }
 
@@ -98,14 +121,24 @@ fn appearance(a: &mut Appearance, fix: &mut dyn FnMut(&mut Effect)) {
     }
 }
 
-/// Fix the effects of `n`'s subtree and its opacity masks (copying only what changes).
+/// Fix the effects of `n`'s subtree, its opacity masks and its Shaper edits (copying only what
+/// changes).
 fn node(n: &mut Arc<Node>, fix: &mut dyn FnMut(&mut Effect)) {
     let n = Arc::make_mut(n);
     if has_halftone(&n.appearance) {
         appearance(&mut n.appearance, fix);
     }
-    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
-        node(&mut m.art, fix);
+    if let Some(x) = n.extras_if_any() {
+        if let Some(m) = x.mask.as_mut() {
+            node(&mut m.art, fix);
+        }
+        // A Shaper Group's face and edge edits paint with appearances of their own.
+        if let Some(s) = x.shaper.as_mut() {
+            let faces = s.faces.iter_mut().filter_map(|f| f.paint.as_mut());
+            for p in faces.chain(s.edges.iter_mut().filter_map(|e| e.paint.as_mut())) {
+                appearance(p, fix);
+            }
+        }
     }
     if let Some(ch) = n.children_mut() {
         for c in ch {
@@ -183,6 +216,46 @@ mod tests {
         assert_eq!(d, points, "already in points");
         d.migrate_halftone_radii();
         assert!((r(&d, 0) - 100.0).abs() < 1e-9, "{}", r(&d, 0));
+    }
+
+    /// Shaper face and edge edits paint with appearances of their own, and brush definitions keep
+    /// their art as JSON: their radii convert both ways too.
+    #[test]
+    fn shaper_edits_and_brushes_are_converted_both_ways() {
+        use crate::shaper::{FaceEdit, FaceSelector, ShaperSpec};
+        let mut d = Document::new(100.0, 100.0);
+        d.raster_effects_ppi = 300.0;
+        d.version = 1;
+        let mut look = Appearance::default_art();
+        look.effects = vec![halftone(Some(8.0))];
+        let face = FaceEdit {
+            selector: FaceSelector { sources: vec![0], anchor: vectorcraft_geom::Point::ZERO },
+            erase: false,
+            erase_edges: false,
+            paint_source: None,
+            merge: None,
+            paint: Some(look),
+        };
+        let mut shaper = Node::group(d.alloc_id(), vec![]);
+        shaper.extras_mut().shaper = Some(Box::new(ShaperSpec { faces: vec![face], edges: vec![] }));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, shaper).unwrap();
+        let effect = serde_json::to_value(halftone(Some(8.0))).unwrap();
+        d.unknown.insert(BRUSHES.into(), json!([{"name": "B", "art": {"id": 99, "appearance": {"effects": [effect]}}}]));
+        let radii = |d: &Document| {
+            let shaper = d.layers[0].children().and_then(|c| c.first()).cloned().unwrap();
+            let paint = shaper.extras().shaper.as_ref().and_then(|s| s.faces[0].paint.clone()).unwrap();
+            let brush = d.unknown[BRUSHES][0]["art"]["appearance"]["effects"][0]["params"][RADIUS].as_f64().unwrap();
+            (radius(&paint.effects[0]), brush)
+        };
+        d.migrate_halftone_radii();
+        let (face, brush) = radii(&d);
+        assert!((face - 33.333333333333336).abs() < 1e-9, "the face edit: {face}");
+        assert!((brush - 33.333333333333336).abs() < 1e-9, "the brush: {brush}");
+        assert_eq!(d.unknown[BRUSHES][0]["art"]["appearance"]["effects"][0]["params"]["channel1"], json!(108.0));
+        d.halftone_radii_to_points();
+        let (face, brush) = radii(&d);
+        assert!((face - 8.0).abs() < 1e-9 && (brush - 8.0).abs() < 1e-9, "back in points: {face}, {brush}");
     }
 
     #[test]
