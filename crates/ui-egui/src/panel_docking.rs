@@ -1123,8 +1123,15 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         .input_blocked(modal)
         .auto_collapse_iconic(app.session.prefs.auto_collapse_icon_panels);
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some(hook) = app.services.native_input_hook.clone() {
-        dock = dock.native_input_hook(move |_, raw| hook(raw));
+    {
+        crate::font_menu::ensure_native_wheel_layers(ui.ctx());
+        let hook = app.services.native_input_hook.clone();
+        dock = dock.native_input_hook(move |ctx, raw| {
+            if let Some(hook) = &hook {
+                hook(raw);
+            }
+            crate::font_menu::take_raw_wheel(ctx, raw);
+        });
     }
     // Tab and Shift+Tab (`window.dock`, `window.panels`) and the full screen modes hide the panels;
     // the canvas stays.

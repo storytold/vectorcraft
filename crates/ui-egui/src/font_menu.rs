@@ -447,6 +447,57 @@ struct WheelFields {
     pending: HashMap<egui::Id, Vec<WheelInput>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone)]
+struct WheelLayers(Arc<dyn Fn(egui::Pos2) -> Option<egui::LayerId> + Send + Sync>);
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Default)]
+struct WheelLayerSnapshot;
+
+#[cfg(not(target_arch = "wasm32"))]
+impl egui::Plugin for WheelLayerSnapshot {
+    fn debug_name(&self) -> &'static str {
+        "font wheel viewport layers"
+    }
+
+    fn on_end_pass(&mut self, ui: &mut Ui) {
+        let ctx = ui.ctx();
+        let viewport = ctx.viewport_id();
+        if viewport == egui::ViewportId::ROOT || ctx.data(|d| d.get_temp::<WheelFields>(wheel_fields_id(viewport))).is_none() {
+            return;
+        }
+        let current_layers = ctx.viewport(|viewport| {
+            viewport.this_pass.widgets.layers().filter_map(|(layer, widgets)| (!widgets.is_empty()).then_some(*layer)).collect::<Vec<_>>()
+        });
+        let layers = ctx.memory(|m| {
+            m.layer_ids()
+                .filter(|layer| current_layers.contains(layer))
+                .filter(|layer| m.areas().is_visible(layer))
+                .filter_map(|layer| m.area_rect(layer.id).map(|rect| (layer, rect)))
+                .collect::<Vec<_>>()
+        });
+        let layers = layers
+            .into_iter()
+            .filter(|(layer, _)| egui::AreaState::load(ctx, layer.id).is_some_and(|state| state.interactable))
+            .map(|(layer, rect)| (layer, ctx.layer_transform_to_global(layer).map_or(rect, |transform| transform * rect)))
+            .collect::<Vec<_>>();
+        ctx.data_mut(|d| {
+            d.insert_temp(
+                wheel_fields_id(viewport).with("layers"),
+                WheelLayers(Arc::new(move |p| layers.iter().rev().find(|(_, rect)| rect.contains(p)).map(|(layer, _)| *layer))),
+            )
+        });
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn ensure_native_wheel_layers(ctx: &egui::Context) {
+    if ctx.with_plugin(|_: &mut WheelLayerSnapshot| ()).is_none() {
+        ctx.add_plugin(WheelLayerSnapshot);
+    }
+}
+
 fn wheel_fields_id(viewport: egui::ViewportId) -> egui::Id {
     egui::Id::unique("font-wheel-fields").with(viewport)
 }
@@ -535,6 +586,10 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     let Some(mut fields) = ctx.data(|d| d.get_temp::<WheelFields>(key)) else { return };
     if !ctx.input(|i| i.raw.viewports.contains_key(&raw.viewport_id)) {
         ctx.data_mut(|d| d.remove::<WheelFields>(key));
+        #[cfg(not(target_arch = "wasm32"))]
+        ctx.data_mut(|d| {
+            d.remove::<WheelLayers>(key.with("layers"));
+        });
         return;
     }
     let frame = ctx.cumulative_frame_nr_for(raw.viewport_id);
@@ -548,9 +603,28 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
         fields.pending.clear();
     }
     let line = ctx.options(|o| o.input_options.line_scroll_speed).max(1.0);
-    let mut pointer = fields.pointer.or_else(|| ctx.input(|i| i.pointer.latest_pos()));
-    let over =
-        |field: &WheelField, point: Option<egui::Pos2>| point.is_some_and(|p| field.rect.contains(p) && ctx.layer_id_at(p) == Some(field.layer));
+    let mut pointer = fields.pointer.or_else(|| ctx.input_for(raw.viewport_id, |i| i.pointer.latest_pos()));
+    #[cfg(not(target_arch = "wasm32"))]
+    let native_layers = ctx.data(|d| d.get_temp::<WheelLayers>(key.with("layers")));
+    let over = |field: &WheelField, point: Option<egui::Pos2>| {
+        point.is_some_and(|p| {
+            if !field.rect.contains(p) {
+                return false;
+            }
+            if ctx.viewport_id() == raw.viewport_id {
+                ctx.layer_id_at(p) == Some(field.layer)
+            } else {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    native_layers.as_ref().is_some_and(|layers| (layers.0)(p) == Some(field.layer))
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    false
+                }
+            }
+        })
+    };
     // An activation batch belongs to the popup, including a release after a prior press.
     if fields.activation_pass != pass {
         fields.activation_pass = pass;
