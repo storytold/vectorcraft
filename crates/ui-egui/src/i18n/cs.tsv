@@ -1571,6 +1571,11 @@ digits	Malayalam	Malajálamské
 	Save Transparency Flattener Preset…	Uložit přednastavení sloučení průhlednosti…
 	Basic Latin	Základní latinka
 	Currency & Symbols	Měny a symboly
+	Alternates for Current Selection	Alternativy pro aktuální výběr
+	Select a character with the Type tool to see its alternates.	Alternativy znaku uvidíte, když ho vyberete nástrojem Text.
+	The selected character's font is not available.	Písmo vybraného znaku není k dispozici.
+	No alternates for the selected character.	Vybraný znak nemá žádné alternativy.
+	Double-click to replace	Dvojklikem nahradíte
 	Double-click to insert	Dvojklikem vložíte
 	Entire Font	Celé písmo
 	glyph {id}	glyf {id}

@@ -1419,6 +1419,11 @@ digits	Malayalam	マラヤーラム数字
 	Double-click to edit the characters' paint	ダブルクリックで文字のペイントを編集
 	Click to edit	クリックで編集
 	Double-click to edit	ダブルクリックで編集
+	Alternates for Current Selection	選択文字の異体字
+	Select a character with the Type tool to see its alternates.	文字ツールで文字を選択すると、その異体字が表示されます。
+	The selected character's font is not available.	選択した文字のフォントを使用できません。
+	No alternates for the selected character.	選択した文字には異体字がありません。
+	Double-click to replace	ダブルクリックで置換
 	Double-click to insert	ダブルクリックで挿入
 	Double-click to rename	ダブルクリックで名前を変更
 	Double-click to target the contents	ダブルクリックで内容をターゲット

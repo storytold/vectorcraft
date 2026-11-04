@@ -856,6 +856,11 @@ font-technology	Variable	Variables
 	Double-click to edit the characters' paint	Doble clic para editar la pintura de los caracteres
 	Click to edit	Clic para editar
 	Double-click to edit	Doble clic para editar
+	Alternates for Current Selection	Alternativas para la selección actual
+	Select a character with the Type tool to see its alternates.	Selecciona un carácter con la herramienta Texto para ver sus alternativas.
+	The selected character's font is not available.	La fuente del carácter seleccionado no está disponible.
+	No alternates for the selected character.	No hay alternativas para el carácter seleccionado.
+	Double-click to replace	Doble clic para reemplazar
 	Double-click to insert	Doble clic para insertar
 	Double-click to rename	Doble clic para cambiar el nombre
 	Double-click to target the contents	Doble clic para seleccionar el contenido como destino

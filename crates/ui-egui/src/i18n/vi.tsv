@@ -991,6 +991,11 @@ font-technology	Variable	Biến thiên
 	Double-click to edit the characters' paint	Bấm đúp để chỉnh sửa màu ký tự
 	Click to edit	Bấm để chỉnh sửa
 	Double-click to edit	Bấm đúp để chỉnh sửa
+	Alternates for Current Selection	Glyph thay thế cho vùng chọn hiện tại
+	Select a character with the Type tool to see its alternates.	Chọn một ký tự bằng công cụ Chữ để xem các glyph thay thế.
+	The selected character's font is not available.	Phông chữ của ký tự đã chọn không khả dụng.
+	No alternates for the selected character.	Ký tự đã chọn không có glyph thay thế.
+	Double-click to replace	Bấm đúp để thay thế
 	Double-click to insert	Bấm đúp để chèn
 	Double-click to rename	Bấm đúp để đổi tên
 	Double-click to target the contents	Bấm đúp để chọn nội dung
