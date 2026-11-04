@@ -304,21 +304,16 @@ fn same(s: &mut Session, cmd: &str, eq: fn(&Node, &Node) -> bool) -> Result<Valu
     finish_same(s, cmd, ids)
 }
 
+/// The first character style of the first type object [`each_selected_text`] gives.
 fn first_text_style(s: &Session) -> Option<CharStyle> {
     let st = s.active()?;
     let mut out = None;
-    for id in &st.selection.objects {
-        st.doc.node(*id)?.walk(&mut |n| {
-            if out.is_none()
-                && let NodeKind::Text(t) = &n.kind
-            {
-                out = Some(t.first_style());
-            }
-        });
-        if out.is_some() {
-            break;
+    each_selected_text(s, |id| {
+        if let Some(NodeKind::Text(t)) = st.doc.node(id).map(|n| &n.kind) {
+            out = Some(t.first_style());
         }
-    }
+        out.is_none()
+    });
     out
 }
 

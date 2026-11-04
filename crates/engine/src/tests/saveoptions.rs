@@ -196,7 +196,11 @@ fn ai_without_pdf_content_and_compression() {
     };
     let (full, _) = ai(&mut s, json!({}));
     let (blank, warnings) = ai(&mut s, json!({"pdfCompatible": false}));
-    assert!(warnings.as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("without PDF content")), "{warnings}");
+    let says = |w: &Value, text: &str| w.as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains(text));
+    assert!(says(&warnings, "without PDF content") && says(&warnings, "apps that read its editing data open it"), "{warnings}");
+    // Without the editing copy, other apps show empty pages.
+    let (_, plain) = ai(&mut s, json!({"pdfCompatible": false, "editingData": false}));
+    assert!(says(&plain, "VectorCraft opens it as before") && !says(&plain, "editing data"), "{plain}");
     // The pages are empty (an import of a page finds no art), the document comes back whole.
     let page = |s: &mut Session, b: &[u8]| {
         s.execute("document.open", &json!({"name": "x.ai", "dataBase64": vectorcraft_format::base64_encode(b), "pages": "1"})).unwrap();
@@ -211,6 +215,33 @@ fn ai_without_pdf_content_and_compression() {
     let (packed, _) = ai(&mut s, json!({"compress": true}));
     let (loose, _) = ai(&mut s, json!({"compress": false}));
     assert!(loose.len() > packed.len(), "{} vs {}", loose.len(), packed.len());
+}
+
+#[test]
+fn ai_option_errors_name_a_file_saved_without_pdf_content() {
+    let mut s = three_boards();
+    for p in
+        [json!({"format": "ai", "pdfCompatible": false, "artboard": "2"}), json!({"format": "ai", "pdfCompatible": false, "includeLinked": "yes"})]
+    {
+        let e = s.execute("file.saveCopy", &p).unwrap_err().to_string();
+        assert!(e.contains("non-PDF-compatible .ai options: invalid type"), "{p}: {e}");
+    }
+    let e = s.execute("document.export", &json!({"format": "ai", "pdfCompatible": false, "artboard": "2"})).unwrap_err().to_string();
+    assert!(e.contains("`document.export`") && e.contains("non-PDF-compatible .ai options: invalid type"), "{e}");
+    let p = json!({"format": "ait", "pdfCompatible": false, "includeLinked": "yes"});
+    let e = s.execute("file.saveAsTemplate", &p).unwrap_err().to_string();
+    assert!(e.contains("non-PDF-compatible .ait template options: invalid type"), "{e}");
+    // A template saved without PDF content is written.
+    let r = s.execute("file.saveAsTemplate", &json!({"format": "ait", "pdfCompatible": false})).unwrap();
+    assert!(r["warnings"].to_string().contains("without PDF content"), "{r}");
+    // So are the notes on native options the file doesn't read.
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "pdfCompatible": false, "version": 3})).unwrap();
+    assert!(r["warnings"].to_string().contains("`version` was not used: non-PDF-compatible .ai files don't read it"), "{r}");
+    // A PDF-compatible file keeps its name.
+    let e = s.execute("file.saveCopy", &json!({"format": "ai", "includeLinked": "yes"})).unwrap_err().to_string();
+    assert!(e.contains("PDF-compatible .ai options: invalid type") && !e.contains("non-PDF"), "{e}");
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "version": 3})).unwrap();
+    assert!(r["warnings"].to_string().contains("`version` was not used: PDF-compatible .ai files don't read it"), "{r}");
 }
 
 #[test]

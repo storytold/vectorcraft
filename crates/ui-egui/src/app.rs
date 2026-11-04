@@ -444,10 +444,10 @@ impl VectorcraftApp {
         if !canvas::tiled_area(self, ui) {
             if floats {
                 let rect = ui.available_rect_before_wrap();
-                if let Some(i) = crate::doc_windows::tab_document(self)
-                    && canvas::pane(self, ui, i, rect)
+                if let Some(w) = crate::doc_windows::tab_window(self)
+                    && canvas::pane(self, ui, w, rect)
                 {
-                    chrome::show_document(self, i);
+                    crate::doc_windows::show_window(self, w);
                 }
             } else {
                 canvas::show(self, ui);

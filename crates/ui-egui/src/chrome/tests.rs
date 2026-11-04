@@ -873,7 +873,7 @@ fn only_the_outlined_documents_tab_reads_outline() {
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     app.run("view.outline", json!({})).unwrap();
-    let titles: Vec<String> = app.session.documents().iter().enumerate().map(|(i, d)| super::tabs::doc_tab_title(&app, i, d)).collect();
+    let titles: Vec<String> = (0..app.session.documents().len()).filter_map(|i| super::document_window_title(&app, (i, 1))).collect();
     assert!(titles[0].ends_with("(RGB/Preview)"), "{titles:?}");
     assert!(titles[1].ends_with("(RGB/Outline)"), "{titles:?}");
 }

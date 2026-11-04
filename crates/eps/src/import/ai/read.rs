@@ -159,6 +159,8 @@ pub struct Structure {
     pub envelopes_drawn: Vec<(NodeId, Node)>,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
+    /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
+    pub canvas_scale: f64,
     pub warnings: Vec<String>,
 }
 
@@ -325,6 +327,8 @@ struct Reader<'a> {
     /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one, `None`
     /// when the declared factor is not applied ([`read`]).
     large_canvas: Option<f64>,
+    /// The declared `%AI24_LargeCanvasScale` (1 without one), applied or not.
+    canvas_scale: f64,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
     ruler_units: Option<u8>,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
@@ -348,6 +352,11 @@ struct Reader<'a> {
 fn marker(c: &str) -> &str {
     let word = c.split(|ch: char| ch == ':' || ch.is_whitespace()).next().unwrap_or(c);
     word.strip_prefix("AI").map(|r| r.trim_start_matches(|ch: char| ch.is_ascii_digit())).and_then(|r| r.strip_prefix('_')).unwrap_or(word)
+}
+
+/// Is `name` that of a text slot for type that a look draws ([`document::LOOK_SLOT`])?
+pub(crate) fn is_look_slot(name: Option<&str>) -> bool {
+    name == Some(document::LOOK_SLOT)
 }
 
 impl<'a> Reader<'a> {
@@ -435,6 +444,7 @@ impl<'a> Reader<'a> {
             art_size: None,
             template_center: None,
             large_canvas: None,
+            canvas_scale: 1.0,
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),

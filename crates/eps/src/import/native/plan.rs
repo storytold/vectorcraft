@@ -90,26 +90,171 @@ pub(super) fn make_slots(
     made
 }
 
-/// Does the file's text document make the type of every slot that shows (at least one does)?
+/// Does the file's text document make the type of every slot that shows (at least one does)? Type
+/// that a look draws doesn't count: only the page has it.
 pub(super) fn readable_all(infos: &[SlotInfo], made: &[Option<Made>]) -> bool {
-    infos.iter().any(|i| i.shown) && infos.iter().zip(made).all(|(i, m)| !i.shown || m.is_some())
+    let counted = |i: &SlotInfo| i.shown && i.look.is_none();
+    infos.iter().any(counted) && infos.iter().zip(made).all(|(i, m)| !counted(i) || m.is_some())
 }
 
-/// Each slot's made type, where its slot is (the page's type that shows isn't put anywhere). Shown
-/// made type with none of the page's type where it draws is weighed against the page (see
-/// `prune_unseen`); the page's type that no made type takes, shown or not, is left out with a note
-/// in `warn`. Slots that don't show and whose type isn't made take the page's type that doesn't
-/// show (`pages`: the page's text objects that show and that don't), by painting order.
+/// Each slot's made type, where its slot is (the page's type that shows isn't put anywhere, but for
+/// the type of the copies that looks draw, see [`fill_look_slots`]). Shown made type with none of
+/// the page's type where it draws is weighed against the page (see `prune_unseen`); the page's type
+/// that no made type takes, shown or not, is left out with a note in `warn`. Slots that don't show
+/// and whose type isn't made take the page's type that doesn't show (`pages`: the page's text
+/// objects that show and that don't), by painting order.
 pub(super) fn made_only(infos: &[SlotInfo], made: Vec<Option<Made>>, pages: [&[Vec<Arc<Node>>]; 2], warn: &mut Vec<String>) -> Vec<Content> {
     let [shown, hidden] = pages;
     let mut content = made_content(infos, made);
-    match see_page_type(&mut content, shown) {
+    // The page's type where no made type draws, in the copies that looks draw, is theirs (past
+    // `MAX_PAIRS` comparisons it isn't looked for).
+    let looks = infos.iter().any(|i| i.shown && i.look.is_some());
+    let mut taken = std::collections::HashSet::new();
+    if looks && infos.len().saturating_mul(shown.len()) <= MAX_PAIRS {
+        let spelled: Vec<String> =
+            content.iter().map(|c| if let Content::Made(node, ..) = c { spelling(&plain_text(node)) } else { String::new() }).collect();
+        let made_type = |o: &[Arc<Node>]| covered(o, &content, |_| true) && has_made_words(o, &content, &spelled);
+        let mut spare: Vec<Vec<Arc<Node>>> = shown.iter().filter(|o| !made_type(o)).cloned().collect();
+        fill_look_slots(infos, &mut content, &mut spare);
+        for c in &content {
+            if let Content::Page(parts) = c {
+                taken.extend(parts.iter().map(|n| n.id));
+            }
+        }
+    }
+    let rest: Vec<Vec<Arc<Node>>>;
+    let untaken = if taken.is_empty() {
+        shown
+    } else {
+        rest = shown.iter().filter(|o| !o.iter().any(|n| taken.contains(&n.id))).cloned().collect();
+        &rest
+    };
+    match see_page_type(&mut content, untaken) {
         Some(0) => {}
         Some(_) => warn.push(PAGE_TYPE_LEFT_OUT.into()),
         None => warn.push(PAGE_TYPE_UNCHECKED.into()),
     }
+    drop_look_slots(infos, &mut content);
     fill_hidden(infos, &mut content, hidden);
     content
+}
+
+/// Give the page's type in `spare` that lies in a copy that a layer's or group's look draws (at least
+/// half of it in the box of the copy's other art, or round it as far as strokes round type reach; of
+/// overlapping copies, the one that holds the most of it, else the smallest) to that copy's text
+/// slots that show, by painting order, taking it out of `spare`. Type further out than that stays in
+/// `spare`. The other text objects in a copy's group that have
+/// nothing yet take its type with them, in their order. Where the page's type outside the copies is
+/// too little for the other text objects that have nothing yet, a copy with more of the page's text
+/// objects than slots leaves the extra ones in `spare` for them. The look's other slots are dropped
+/// ([`drop_look_slots`]).
+fn fill_look_slots(infos: &[SlotInfo], content: &mut [Content], spare: &mut Vec<Vec<Arc<Node>>>) {
+    // Each copy's group and box, the slots in it that show and have nothing yet, in order, and the
+    // page's text objects (by their place in `spare`) it holds.
+    // A group has one box: that of its art, or of the group around it.
+    type Copy = (Option<NodeId>, Rect, Vec<usize>, Vec<usize>);
+    let mut copies: Vec<Copy> = vec![];
+    let mut by_group: std::collections::HashMap<Option<NodeId>, usize> = Default::default();
+    for info in infos {
+        let Some(copy) = info.look.filter(|r| info.shown && !r.is_zero_area()) else { continue };
+        by_group.entry(info.group).or_insert_with(|| {
+            copies.push((info.group, copy, vec![], vec![]));
+            copies.len() - 1
+        });
+    }
+    if copies.is_empty() || spare.is_empty() {
+        return drop_look_slots(infos, content);
+    }
+    for (k, (info, c)) in infos.iter().zip(content.iter()).enumerate() {
+        if let Some(copy) = by_group.get(&info.group).and_then(|i| copies.get_mut(*i)).filter(|_| info.shown && matches!(c, Content::Empty)) {
+            copy.2.push(k);
+        }
+    }
+    for (j, object) in spare.iter().enumerate() {
+        let Some(r) = extent(object) else { continue };
+        let share = |copy: &Rect| copy.inflate(OUTLINE_REACH, OUTLINE_REACH).intersect(r).area() / r.area().max(1e-9);
+        let best = copies
+            .iter_mut()
+            .map(|c| (share(&c.1), c))
+            .filter(|(s, c)| *s >= 0.5 && !c.2.is_empty())
+            .max_by(|a, b| a.0.total_cmp(&b.0).then_with(|| b.1.1.area().total_cmp(&a.1.1.area())));
+        if let Some((_, (.., held))) = best {
+            held.push(j);
+        }
+    }
+    // Copies with the same box share its type, by painting order.
+    let mut boxes: Vec<(Rect, Vec<usize>, Vec<usize>)> = vec![];
+    for (_, copy, slots, held) in copies {
+        match boxes.iter_mut().find(|b| b.0 == copy) {
+            Some(b) => {
+                b.1.extend(slots);
+                b.2.extend(held);
+            }
+            None => boxes.push((copy, slots, held)),
+        }
+    }
+    // Other text objects that show and have nothing yet, outside the copies.
+    let in_copy: std::collections::BTreeSet<usize> = boxes.iter().flat_map(|b| b.1.iter().copied()).collect();
+    let others: Vec<usize> = infos
+        .iter()
+        .zip(content.iter())
+        .enumerate()
+        .filter(|(k, (i, c))| i.shown && i.look.is_none() && matches!(c, Content::Empty) && !in_copy.contains(k))
+        .map(|(k, _)| k)
+        .collect();
+    // How many of them the page's type outside the copies leaves without any.
+    let outside = spare.len().saturating_sub(boxes.iter().map(|b| b.2.len()).sum());
+    let mut short = others.len().saturating_sub(outside);
+    let mut taken = vec![false; spare.len()];
+    for (_, slots, held) in &mut boxes {
+        held.sort_unstable();
+        // The page paints in the order of the layers: the extra ones go first to the other text objects
+        // before the copy, from the start, then to those after it, from the end.
+        let first = slots.first().copied().unwrap_or(0);
+        let extra = held.len().saturating_sub(slots.len()).min(short);
+        short -= extra;
+        let before = others.iter().filter(|k| **k < first).count().min(extra);
+        held.drain(..before);
+        held.truncate(held.len() - (extra - before));
+        let objects: Vec<Vec<Arc<Node>>> = held.iter().filter_map(|j| spare.get(*j).cloned()).collect();
+        for j in held.iter() {
+            if let Some(t) = taken.get_mut(*j) {
+                *t = true;
+            }
+        }
+        for (slot, parts) in slots.iter().zip(assign(&objects, slots.len())) {
+            if let Some(c) = content.get_mut(*slot).filter(|_| !parts.is_empty()) {
+                *c = Content::Page(parts.into_iter().flat_map(|p| p.iter().cloned()).collect());
+            }
+        }
+    }
+    let mut kept = taken.iter();
+    spare.retain(|_| !kept.next().copied().unwrap_or(false));
+    drop_look_slots(infos, content);
+}
+
+/// Has made type that shows and draws where the page's text object `object` lies every word of it
+/// ([`spelling`], each slot's in `spelled`), in any order?
+fn has_made_words(object: &[Arc<Node>], content: &[Content], spelled: &[String]) -> bool {
+    let Some(r) = extent(object) else { return true };
+    let near: Vec<&String> = content
+        .iter()
+        .zip(spelled)
+        .filter(|(c, _)| matches!(c, Content::Made(_, Some(region), _) if !region.intersect(r).is_zero_area()))
+        .map(|(_, s)| s)
+        .collect();
+    object_words(object).iter().all(|w| near.iter().any(|s| s.contains(w.as_str())))
+}
+
+/// The text slots for type that a look draws and that have nothing have no type of their own to hold
+/// (the page has it, or the text document of such type isn't read): they go, and aren't counted as
+/// text objects that couldn't be read.
+fn drop_look_slots(infos: &[SlotInfo], content: &mut [Content]) {
+    for (info, c) in infos.iter().zip(content) {
+        if info.look.is_some() && matches!(c, Content::Empty) {
+            *c = Content::Merged;
+        }
+    }
 }
 
 /// The letters and digits of `s`, in any script, in lower case: what is compared of the page's type
@@ -176,7 +321,8 @@ fn see_page_type(content: &mut [Content], shown: &[Vec<Arc<Node>>]) -> Option<us
 
 /// What goes into each of `infos`' slots when the file's text document can't make the type of every
 /// slot that shows: type made from the text document (`made`) where it can, else the page's type that
-/// the text document puts where the page has it, else the page's type in painting order. The page's
+/// the text document puts where the page has it, else the page's type in a copy that a layer's or
+/// group's look draws (see [`fill_look_slots`]), else the page's type in painting order. The page's
 /// type that lies where made type draws and has its words is that type as the page draws it; the
 /// rest goes only into slots without made type.
 pub(super) fn plan(
@@ -231,17 +377,6 @@ pub(super) fn plan(
             _ => String::new(),
         })
         .collect();
-    // Has made type that draws where `object` lies every word of it ([`spelling`]), in any order?
-    let made_words = |object: &[Arc<Node>], content: &[Content]| {
-        let Some(r) = extent(object) else { return true };
-        let near: Vec<&String> = content
-            .iter()
-            .zip(&spelled)
-            .filter(|(c, _)| matches!(c, Content::Made(_, Some(region), _) if !region.intersect(r).is_zero_area()))
-            .map(|(_, s)| s)
-            .collect();
-        object_words(object).iter().all(|w| near.iter().any(|s| s.contains(w.as_str())))
-    };
     let mut spare: Vec<Vec<Arc<Node>>> = vec![];
     for (j, object) in shown.iter().enumerate() {
         match owner.get(j).copied().flatten() {
@@ -252,7 +387,7 @@ pub(super) fn plan(
             },
             // What lies where made type draws, with its words, is that type as the page draws it (in
             // another font, maybe, and in any script).
-            None if covered(object, &content, |_| true) && made_words(object, &content) => {}
+            None if covered(object, &content, |_| true) && has_made_words(object, &content, &spelled) => {}
             None if hidden_type(object) => {}
             None => spare.push(object.clone()),
         }
@@ -264,6 +399,7 @@ pub(super) fn plan(
             join_pieces(parts, l);
         }
     }
+    fill_look_slots(infos, &mut content, &mut spare);
     // What is left of the page goes by painting order into the shown slots the file can't say.
     let loose: Vec<usize> =
         infos.iter().enumerate().filter(|(k, i)| i.shown && matches!(content.get(*k), Some(Content::Empty))).map(|(k, _)| k).collect();

@@ -603,6 +603,11 @@
 	New Toolbar	Bilah alat baru
 	Show Toolbar	Tampilkan bilah alat
 	List Toolbars	Daftar bilah alat
+	Manage Toolbars…	Kelola bilah alat…
+	Manage Toolbars	Kelola bilah alat
+	Rename Toolbar	Ganti nama bilah alat
+	Duplicate Toolbar	Duplikatkan bilah alat
+	Delete Toolbar	Hapus bilah alat
 	Manage Workspaces…	Kelola ruang kerja…
 	Control	Kontrol
 	Contextual Task Bar	Bilah tugas kontekstual
@@ -3399,6 +3404,7 @@ theme	Appearance	Tampilan
 	Type Object Selection by Path Only	Pemilihan objek teks hanya berdasarkan jalur
 	UI Scaling	Penskalaan UI
 	Use Compression	Gunakan kompresi
+	Include Editing Data for Other Apps	Sertakan data penyuntingan untuk aplikasi lain
 	Use Japanese Crop Marks	Gunakan tanda potong Jepang
 	Use Low Resolution Proxy for Linked EPS	Gunakan proksi resolusi rendah untuk EPS tertaut
 	Use Precise Cursors	Gunakan kursor presisi
@@ -6042,6 +6048,7 @@ breakText	Glyphs	Glif
 	Gap 5	Jarak 5
 
 @msg	{_1}: they came in as the page's art	{_1}: diimpor sebagai gambar halaman
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objek yang tergambar berbeda dari halaman file itu sendiri diimpor sebagai gambar halaman: {_1}
 
 @msg	You must choose a side pattern.	Anda harus memilih pola sisi.
 @msg	invalid pattern tile choice	pilihan ubin pola tidak valid

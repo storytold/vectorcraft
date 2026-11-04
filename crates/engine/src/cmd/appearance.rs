@@ -178,6 +178,23 @@ pub(crate) struct ActiveItem {
 }
 
 impl Session {
+    /// The method returns explicit target parameters and the selected appearance effect list.
+    pub fn appearance_effect_target(&self, params: &Value) -> Option<(Value, &[vectorcraft_doc::Effect])> {
+        let mut ids = appearance_targets(self, params).ok()?;
+        let item = item_target(self, params, "effect.apply").ok()?;
+        let anchor = item.anchor(self, &ids);
+        let node = self.active()?.doc.node(*ids.get(anchor)?)?;
+        let at = item.effects_item(&node.appearance, "effect.apply").ok()?;
+        let effects = node.appearance.effects_at(at)?;
+        ids.swap(0, anchor);
+        let ids: Vec<u64> = ids.into_iter().map(|id| id.0).collect();
+        let aligned = match item {
+            ItemTarget::Item { aligned, .. } => aligned,
+            ItemTarget::Top => aligned(params),
+        };
+        Some((json!({"ids": ids, "item": at, "aligned": aligned}), effects.as_slice()))
+    }
+
     /// The Appearance panel's active fill/stroke: a paint-order index into the first selected
     /// object's stack, while the selection it was chosen for is unchanged.
     pub fn appearance_item(&self) -> Option<usize> {
@@ -514,6 +531,7 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
         }
         _ => vec![None; ids.len()],
     };
+    let before = s.doc()?.doc.clone();
     let mut inserted = None;
     // Where the new fill went in on the active item's object, when it went above the active row.
     let mut above = None;
@@ -560,6 +578,7 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
                 }
             }
         }
+        super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
         Ok(())
     })?;
     // A fill added above the active row becomes the active row; otherwise the rows above the new
@@ -578,10 +597,26 @@ fn clear_appearance(s: &mut Session, p: &Value) -> Result<Value> {
                 clear(n);
             }
         }
-        Ok(count_changed(d, &before, &ids))
+        let kept = super::graph::capture_series_opacity(d, &both_kinds(&ids));
+        Ok(count_changed(d, &before, &ids) + usize::from(kept))
     })?;
     s.active_appearance_item = None;
     ok()
+}
+
+/// Each of `ids` with both kinds of row (fill, then stroke), for [`super::graph::capture_series_opacity`] after an
+/// edit that replaces whole stacks.
+fn both_kinds(ids: &[NodeId]) -> Vec<(NodeId, bool)> {
+    ids.iter().flat_map(|id| [(*id, true), (*id, false)]).collect()
+}
+
+/// Each of `ids` with each kind of row (fill `true`, stroke `false`) whose topmost row has another opacity in `d` than
+/// in `before` (no row counts as opaque), for [`super::graph::capture_series_opacity`].
+fn top_opacity_changed(before: &vectorcraft_doc::Document, d: &vectorcraft_doc::Document, ids: &[NodeId]) -> Vec<(NodeId, bool)> {
+    let top = |d: &vectorcraft_doc::Document, id: NodeId, fill: bool| {
+        d.node(id).and_then(|n| n.appearance.items.iter().rev().find(|it| it.is_fill() == fill).map(AppearanceItem::opacity)).unwrap_or(1.0)
+    };
+    ids.iter().flat_map(|id| [(*id, true), (*id, false)]).filter(|(id, fill)| top(before, *id, *fill) != top(d, *id, *fill)).collect()
 }
 
 /// Clear Appearance on `n`: no fill, no stroke, and the object's Opacity row back to Default. A
@@ -619,7 +654,9 @@ fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
             clear(n);
             (n.isolate, n.knockout, n.knockout_shape) = (false, Default::default(), false);
         }
-        Ok(count_changed(d, &before, &[source, target]))
+        let changed = if copy { vec![target] } else { vec![source, target] };
+        let kept = super::graph::capture_series_opacity(d, &both_kinds(&changed));
+        Ok(count_changed(d, &before, &[source, target]) + usize::from(kept))
     })?;
     s.active_appearance_item = None;
     Ok(json!({ "source": source.0, "target": target.0 }))
@@ -672,7 +709,8 @@ fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        Ok(count_changed(d, &before, &ids))
+        let kept = super::graph::capture_series_opacity(d, &both_kinds(&ids));
+        Ok(count_changed(d, &before, &ids) + usize::from(kept))
     })?;
     s.active_appearance_item = None;
     ok()
@@ -694,9 +732,14 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     let before = s.doc()?.doc.clone();
     let per = items_per_target(&before, &ids, &[idx], aligned(p));
     super::overprint::edit_counted(s, "Appearance", |d| {
+        let mut edited = Vec::new();
         for (id, at) in ids.iter().zip(&per) {
             let Some(&idx) = at.first() else { continue };
             let Some(n) = d.node_mut(*id) else { continue };
+            let items = &n.appearance.items;
+            if let Some(fill) = items.get(idx).map(AppearanceItem::is_fill).filter(|f| items.iter().rposition(|it| it.is_fill() == *f) == Some(idx)) {
+                edited.push((*id, fill));
+            }
             if p.get("weight").is_none()
                 && let Some(pa) = &paint
             {
@@ -727,7 +770,9 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
                 *vis = v;
             }
         }
-        Ok(count_changed(d, &before, &ids))
+        // The graph keeps an opacity set on the topmost fill or stroke of its series art for when it is drawn again.
+        let kept = p.get("opacity").and_then(Value::as_f64).is_some() && super::graph::capture_series_opacity(d, &edited);
+        Ok(count_changed(d, &before, &ids) + usize::from(kept))
     })?;
     if let Some(pa) = &paint {
         s.remember_paint(pa);
@@ -770,7 +815,8 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        Ok(count_changed(d, &before, &ids))
+        let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
+        Ok(count_changed(d, &before, &ids) + usize::from(kept))
     })?;
     s.remap_appearance_item(&ids, |a| (!idx.contains(&a)).then(|| a - idx.iter().filter(|i| **i < a).count()));
     ok()
@@ -796,7 +842,8 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
     if aligned(p) && to.is_some() && shared_stack(&s.doc()?.doc, &ids).is_some() {
         return Err(bad(C, "`to` takes the rows of one object's stack, not aligned rows"));
     }
-    let per = items_per_target(&s.doc()?.doc, &ids, &idx, aligned(p));
+    let before = s.doc()?.doc.clone();
+    let per = items_per_target(&before, &ids, &idx, aligned(p));
     s.edit("Duplicate Item", |d, _| {
         let mut any = false;
         for (id, idx) in ids.iter().zip(&per) {
@@ -834,7 +881,11 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        if any { Ok(()) } else { Err(bad(C, format!("no item at index {}", idx[0]))) }
+        if !any {
+            return Err(bad(C, format!("no item at index {}", idx[0])));
+        }
+        super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
+        Ok(())
     })?;
     // Rows at or above each copy move up by one (by the block, for copies placed at `to`).
     let m = idx.len();
@@ -893,7 +944,8 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
                 n.appearance.set_contents_at(k);
             }
         }
-        Ok(count_changed(d, &before, &ids))
+        let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
+        Ok(count_changed(d, &before, &ids) + usize::from(kept))
     })?;
     // The moved row stays the active one; the rows it passed shift by one.
     s.remap_appearance_item(&ids, |a| {
@@ -936,7 +988,8 @@ fn move_items(s: &mut Session, p: &Value, ids: &[NodeId], to: usize) -> Result<V
                 n.appearance.set_contents_at(k);
             }
         }
-        Ok(count_changed(d, &before, ids))
+        let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, ids));
+        Ok(count_changed(d, &before, ids) + usize::from(kept))
     })?;
     let m = idx.len();
     let landed = first_landed.unwrap_or(to);
@@ -1073,7 +1126,8 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
                 picked.apply(n, &attrs, append);
             }
         }
-        Ok(count_changed(d, &before, &targets))
+        let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &targets));
+        Ok(count_changed(d, &before, &targets) + usize::from(kept))
     })?;
     Ok(json!({ "ids": targets.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }

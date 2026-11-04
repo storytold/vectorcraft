@@ -19,7 +19,7 @@ pub const KIND: &str = "saveChanges";
 
 /// Nothing closes while a file dialog's sheet is on the window (macOS): what asked for it runs
 /// again when it answers. (Elsewhere the dialog is a window of its own, and closing goes on.)
-fn refuse_while_picking(app: &VectorcraftApp) -> Result<(), String> {
+pub(crate) fn refuse_while_picking(app: &VectorcraftApp) -> Result<(), String> {
     if app.file_sheet_open() { Err(crate::picks::busy().into()) } else { Ok(()) }
 }
 

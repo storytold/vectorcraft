@@ -263,7 +263,7 @@ pub const EDITING_NEEDS_EVERY_ARTBOARD: &str =
 pub fn encode(cmd: &str, doc: &Document, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
     // Keep the editable object tree independent of preview fallbacks used by the drawn pages.
     let (full, mut warnings) = crate::cmd::place::document::full_documents(doc);
-    let (bytes, drawn_warnings) = encode_carrying(cmd, &full, p, || Ok(vectorcraft_format::save(doc, false)))?;
+    let (bytes, drawn_warnings) = encode_carrying(cmd, &full, p, || Ok(vectorcraft_format::save(doc, false)), || Ok(None))?;
     warnings.extend(drawn_warnings);
     warnings.extend(overflow_warning(cmd, &full, p)?);
     Ok((bytes, warnings))
@@ -281,8 +281,15 @@ fn overflow_warning(cmd: &str, doc: &Document, p: &Value) -> Result<Option<Strin
 }
 
 /// [`encode`] the pages of `doc`, carrying `native()` as the editing data (a `.ai` file: the
-/// native document with its save options, whose pages may be left blank).
-pub(super) fn encode_carrying(cmd: &str, doc: &Document, p: &Value, native: impl FnOnce() -> Result<Vec<u8>>) -> Result<(Vec<u8>, Vec<String>)> {
+/// native document with its save options, whose pages may be left blank), and `private()`, the
+/// editing copy of the art for other apps with what it couldn't hold, on every page.
+pub(super) fn encode_carrying(
+    cmd: &str,
+    doc: &Document,
+    p: &Value,
+    native: impl FnOnce() -> Result<Vec<u8>>,
+    private: impl FnOnce() -> Result<Option<(vectorcraft_pdf::PrivateData, Vec<String>)>>,
+) -> Result<(Vec<u8>, Vec<String>)> {
     let mut opts = options(cmd, doc, p)?;
     // The pages' background colors, behind the art (the editing data keeps them as colors).
     let pages = opts.artboards.clone().unwrap_or_else(|| (0..doc.artboards.len()).collect());
@@ -295,6 +302,10 @@ pub(super) fn encode_carrying(cmd: &str, doc: &Document, p: &Value, native: impl
     if opts.settings.preserve_editing {
         if opts.artboards.as_ref().is_none_or(|v| v.iter().copied().eq(0..doc.artboards.len())) {
             opts.native = Some(native()?);
+            if let Some((data, lost)) = private()? {
+                opts.private_data = Some(data);
+                warnings.extend(lost);
+            }
         } else {
             opts.settings.preserve_editing = false;
             warnings.push(EDITING_NEEDS_EVERY_ARTBOARD.to_string());
