@@ -5187,6 +5187,7 @@ theme	Appearance	Giao diện
 @msg	name is empty	tên trống
 @msg	an action is already recording	đang ghi một hành động
 @msg	an action is already playing	đang phát một hành động
+@msg	the action stopped playing: its document is no longer active	hành động đã dừng phát: tài liệu của nó không còn hoạt động
 @msg	speed must be accelerated, step or pause	speed phải là accelerated, step hoặc pause
 @msg	seconds must be a whole number from 1 to 60	seconds phải là số nguyên từ 1 đến 60
 @msg	no such function key	không có phím chức năng như vậy

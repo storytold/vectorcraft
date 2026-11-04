@@ -5201,6 +5201,7 @@ lighting	Light	Свет
 @msg	name is empty	имя пустое
 @msg	an action is already recording	действие уже записывается
 @msg	an action is already playing	действие уже воспроизводится
+@msg	the action stopped playing: its document is no longer active	воспроизведение действия остановлено: его документ больше не активен
 @msg	speed must be accelerated, step or pause	speed должен быть accelerated, step или pause
 @msg	seconds must be a whole number from 1 to 60	seconds должно быть целым числом от 1 до 60
 @msg	no such function key	такой функциональной клавиши нет

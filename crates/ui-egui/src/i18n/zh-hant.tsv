@@ -5244,6 +5244,7 @@ lighting	Light	光源
 @msg	name is empty	名稱為空
 @msg	an action is already recording	已在錄製動作
 @msg	an action is already playing	已在播放動作
+@msg	the action stopped playing: its document is no longer active	動作已停止播放：其文件不再是作用中文件
 @msg	speed must be accelerated, step or pause	speed 必須為 accelerated、step 或 pause
 @msg	seconds must be a whole number from 1 to 60	seconds 必須為 1 到 60 之間的整數
 @msg	no such function key	沒有這個功能鍵

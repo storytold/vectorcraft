@@ -5249,6 +5249,7 @@ lighting	Light	ライト
 @msg	name is empty	名前が空です
 @msg	an action is already recording	すでにアクションを記録中です
 @msg	an action is already playing	すでにアクションを再生中です
+@msg	the action stopped playing: its document is no longer active	アクションの再生を停止しました: そのドキュメントはアクティブではなくなりました
 @msg	speed must be accelerated, step or pause	speed には accelerated、step または pause を指定してください
 @msg	seconds must be a whole number from 1 to 60	seconds には 1 から 60 までの整数を指定してください
 @msg	no such function key	指定されたファンクションキーが見つかりません

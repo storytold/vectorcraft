@@ -5257,6 +5257,7 @@ theme	Appearance	Görünüm
 @msg	name is empty	isim boş
 @msg	an action is already recording	zaten bir eylem kaydediliyor
 @msg	an action is already playing	zaten bir eylem oynatılıyor
+@msg	the action stopped playing: its document is no longer active	eylemin oynatılması durdu: belgesi artık etkin değil
 @msg	speed must be accelerated, step or pause	speed accelerated, step veya pause olmalıdır
 @msg	seconds must be a whole number from 1 to 60	seconds 1 ile 60 arasında bir tam sayı olmalıdır
 @msg	no such function key	öyle bir işlev tuşu yok

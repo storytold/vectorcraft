@@ -5503,6 +5503,7 @@ theme	Appearance	Външен вид
 @msg	name is empty	името е празно
 @msg	an action is already recording	вече се записва действие
 @msg	an action is already playing	вече се възпроизвежда действие
+@msg	the action stopped playing: its document is no longer active	действието спря: документът му вече не е активен
 @msg	speed must be accelerated, step or pause	speed трябва да е accelerated, step или pause
 @msg	seconds must be a whole number from 1 to 60	seconds трябва да е цяло число от 1 до 60
 @msg	no such function key	няма такъв функционален клавиш

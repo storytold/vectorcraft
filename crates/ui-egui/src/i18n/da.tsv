@@ -5388,6 +5388,7 @@ swatch	Bright Violet	Kraftig violet
 @msg	name is empty	navnet er tomt
 @msg	an action is already recording	en handling optages allerede
 @msg	an action is already playing	en handling afspilles allerede
+@msg	the action stopped playing: its document is no longer active	handlingen stoppede: dens dokument er ikke længere aktivt
 @msg	speed must be accelerated, step or pause	speed skal være accelerated, step eller pause
 @msg	seconds must be a whole number from 1 to 60	seconds skal være et heltal fra 1 til 60
 @msg	no such function key	ingen sådan funktionstast

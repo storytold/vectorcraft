@@ -5507,6 +5507,7 @@ mark-style	Japanese	Japanski
 @msg	name is empty	naziv je prazan
 @msg	an action is already recording	akcija se već snima
 @msg	an action is already playing	akcija se već reproducira
+@msg	the action stopped playing: its document is no longer active	reprodukcija akcije je zaustavljena: njen dokument više nije aktivan
 @msg	speed must be accelerated, step or pause	speed mora biti accelerated, step ili pause
 @msg	seconds must be a whole number from 1 to 60	seconds mora biti cijeli broj od 1 do 60
 @msg	no such function key	nema takve funkcijske tipke

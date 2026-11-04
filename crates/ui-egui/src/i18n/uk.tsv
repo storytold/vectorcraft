@@ -5186,6 +5186,7 @@ lighting	Light	Світло
 @msg	name is empty	ім’я порожнє
 @msg	an action is already recording	дія вже записується
 @msg	an action is already playing	дія вже відтворюється
+@msg	the action stopped playing: its document is no longer active	відтворення дії зупинено: її документ більше не активний
 @msg	speed must be accelerated, step or pause	speed має бути accelerated, step або pause
 @msg	seconds must be a whole number from 1 to 60	seconds має бути цілим числом від 1 до 60
 @msg	no such function key	такої функціональної клавіші немає

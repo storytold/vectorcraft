@@ -5544,6 +5544,7 @@ effect	Points	Σημεία
 @msg	name is empty	το όνομα είναι κενό
 @msg	an action is already recording	μια ενέργεια καταγράφεται ήδη
 @msg	an action is already playing	μια ενέργεια αναπαράγεται ήδη
+@msg	the action stopped playing: its document is no longer active	η αναπαραγωγή της ενέργειας σταμάτησε: το έγγραφό της δεν είναι πλέον ενεργό
 @msg	speed must be accelerated, step or pause	το speed πρέπει να είναι accelerated, step ή pause
 @msg	seconds must be a whole number from 1 to 60	το seconds πρέπει να είναι ακέραιος από 1 έως 60
 @msg	no such function key	δεν υπάρχει τέτοιο πλήκτρο λειτουργίας

@@ -5396,6 +5396,7 @@ swatch	Bright Violet	Felviolet
 @msg	name is empty	naam is leeg
 @msg	an action is already recording	er wordt al een actie opgenomen
 @msg	an action is already playing	er wordt al een actie afgespeeld
+@msg	the action stopped playing: its document is no longer active	de actie is gestopt: het document ervan is niet meer actief
 @msg	speed must be accelerated, step or pause	speed moet accelerated, step of pause zijn
 @msg	seconds must be a whole number from 1 to 60	seconds moet een geheel getal van 1 tot 60 zijn
 @msg	no such function key	functietoets bestaat niet

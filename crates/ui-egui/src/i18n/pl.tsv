@@ -5446,6 +5446,7 @@ mark-style	Japanese	Japońskie
 @msg	name is empty	nazwa jest pusta
 @msg	an action is already recording	operacja jest już nagrywana
 @msg	an action is already playing	operacja jest już odtwarzana
+@msg	the action stopped playing: its document is no longer active	odtwarzanie operacji zatrzymano: jej dokument nie jest już aktywny
 @msg	speed must be accelerated, step or pause	speed musi mieć wartość accelerated, step lub pause
 @msg	seconds must be a whole number from 1 to 60	seconds musi być liczbą całkowitą od 1 do 60
 @msg	no such function key	brak takiego klawisza funkcyjnego

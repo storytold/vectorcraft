@@ -5593,6 +5593,7 @@ mark-style	Japanese	Japonské
 @msg	name is empty	název je prázdný
 @msg	an action is already recording	akce se už zaznamenává
 @msg	an action is already playing	akce se už přehrává
+@msg	the action stopped playing: its document is no longer active	přehrávání akce se zastavilo: její dokument už není aktivní
 @msg	speed must be accelerated, step or pause	speed musí být accelerated, step nebo pause
 @msg	seconds must be a whole number from 1 to 60	seconds musí být celé číslo od 1 do 60
 @msg	no such function key	taková funkční klávesa neexistuje

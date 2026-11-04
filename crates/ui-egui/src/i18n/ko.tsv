@@ -5167,6 +5167,7 @@ lighting	Light	광원
 @msg	name is empty	이름이 비어 있습니다
 @msg	an action is already recording	이미 액션을 기록하고 있습니다
 @msg	an action is already playing	이미 액션을 재생하고 있습니다
+@msg	the action stopped playing: its document is no longer active	액션 재생이 중지되었습니다: 해당 문서가 더 이상 활성 상태가 아닙니다
 @msg	speed must be accelerated, step or pause	speed는 accelerated, step 또는 pause여야 합니다
 @msg	seconds must be a whole number from 1 to 60	seconds는 1에서 60 사이의 정수여야 합니다
 @msg	no such function key	해당 기능 키가 없습니다

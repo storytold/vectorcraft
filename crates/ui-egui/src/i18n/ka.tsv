@@ -5301,6 +5301,7 @@ imageTrace	Outline	კონტური
 @msg	name is empty	სახელი ცარიელია
 @msg	an action is already recording	მოქმედება უკვე იწერება
 @msg	an action is already playing	მოქმედება უკვე სრულდება
+@msg	the action stopped playing: its document is no longer active	მოქმედება შეჩერდა: მისი დოკუმენტი აღარ არის აქტიური
 @msg	speed must be accelerated, step or pause	speed უნდა იყოს accelerated, step ან pause
 @msg	seconds must be a whole number from 1 to 60	seconds უნდა იყოს მთელი რიცხვი 1-დან 60-მდე
 @msg	no such function key	ასეთი ფუნქციური კლავიში არ არის

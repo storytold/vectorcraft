@@ -233,7 +233,8 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
     let pending = steps.len();
     if pending > 0 {
         let hold = options.speed == PlaybackSpeed::Step;
-        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None, hold });
+        let doc = active_doc(app);
+        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None, hold, doc });
         if let Some(ctx) = &app.ui_ctx {
             ctx.request_repaint();
         }
@@ -298,14 +299,24 @@ pub struct Playing {
     /// With Step by Step, set until the first frame after the first step: that frame draws the
     /// first step's result and runs no step, since Play in the panel can run after the canvas drew.
     hold: bool,
+    /// The [`uid`](vectorcraft_engine::DocState::uid) of the document that was active after the
+    /// last step played, if any.
+    doc: Option<u64>,
+}
+
+fn active_doc(app: &VectorcraftApp) -> Option<u64> {
+    app.session.active().map(|d| d.uid)
 }
 
 /// Runs the next step of the paced playback in progress when it is due at `now` (seconds on the
 /// app's clock): with Step by Step at each call after the first, so each frame runs one step and the
 /// frame after Play draws the first step; with Pause For once the pause after the step before has
-/// passed. A step that fails ends the playback and shows its error. → the seconds until the window
-/// should draw again while playback goes on
+/// passed. A step that fails ends the playback and shows its error. When a step is due and the active
+/// document is not the one that was active after the last step (another document was made active,
+/// or that one was closed), the playback ends with a status and the rest do not run. → the seconds
+/// until the window should draw again while playback goes on
 pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
+    let doc = active_doc(app);
     let playing = app.ui.action_playing.as_mut()?;
     if std::mem::take(&mut playing.hold) {
         return Some(0.0);
@@ -318,6 +329,11 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
         }
         // The next pause starts when this step runs.
         playing.next_at = Some(now + pause);
+    }
+    if playing.doc != doc {
+        app.ui.action_playing = None;
+        app.status("the action stopped playing: its document is no longer active");
+        return None;
     }
     let Some(step) = playing.steps.pop_front() else {
         app.ui.action_playing = None;
@@ -332,7 +348,10 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
         app.status(e);
         return None;
     }
-    let playing = app.ui.action_playing.as_ref()?;
+    let doc = active_doc(app);
+    let playing = app.ui.action_playing.as_mut()?;
+    // A step of the action may open, close or switch documents itself.
+    playing.doc = doc;
     Some(if playing.options.speed == PlaybackSpeed::Pause { pause } else { 0.0 })
 }
 
@@ -2978,6 +2997,38 @@ mod tests {
         app.run(PLAYBACK_OPTIONS, json!({"speed": "accelerated"})).unwrap();
         play(&mut app, 0, 2).unwrap();
         assert_eq!(x(&app), 33.0, "accelerated: the recorded batches play inside the action's batch");
+    }
+
+    #[test]
+    fn a_paced_playback_ends_when_another_document_becomes_active() {
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.0), Some(1.0));
+        app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.5), Some(0.5), "nothing ends before the next step is due");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(tick_playback(&mut app, 1.0), Some(1.0));
+        assert_eq!(x(&app), 3.0, "the document is active again when the step is due, so it runs");
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let other = app.session.active().unwrap().doc.clone();
+        assert_eq!(tick_playback(&mut app, 5.0), None, "the playback ends");
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(app.ui.status, "the action stopped playing: its document is no longer active");
+        assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &other), "no step ran in the other document");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(tick_playback(&mut app, 10.0), None);
+        assert_eq!(x(&app), 3.0, "the rest of the steps do not run in the first document either");
+        // A step that makes another document active itself does not end the playback.
+        app.ui.action_sets[0].actions[0].steps.insert(0, ("document.activate".into(), json!({"index": 0})));
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        app.ui.status.clear();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.0), Some(0.0));
+        while tick_playback(&mut app, 0.0).is_some() {}
+        assert_ne!(app.ui.status, "the action stopped playing: its document is no longer active");
+        assert_eq!(x(&app), 10.0, "the moves after the step ran in the document it made active");
     }
 
     #[test]

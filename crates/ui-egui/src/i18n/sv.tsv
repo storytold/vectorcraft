@@ -5548,6 +5548,7 @@ theme	Appearance	Utseende
 @msg	name is empty	namnet är tomt
 @msg	an action is already recording	en åtgärd spelas redan in
 @msg	an action is already playing	en åtgärd spelas redan upp
+@msg	the action stopped playing: its document is no longer active	åtgärden stoppades: dess dokument är inte längre aktivt
 @msg	speed must be accelerated, step or pause	speed måste vara accelerated, step eller pause
 @msg	seconds must be a whole number from 1 to 60	seconds måste vara ett heltal från 1 till 60
 @msg	no such function key	funktionstangenten finns inte

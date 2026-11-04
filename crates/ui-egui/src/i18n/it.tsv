@@ -5206,6 +5206,7 @@ lighting	Light	Luce
 @msg	name is empty	il nome è vuoto
 @msg	an action is already recording	è già in corso la registrazione di un’azione
 @msg	an action is already playing	è già in corso la riproduzione di un’azione
+@msg	the action stopped playing: its document is no longer active	la riproduzione dell’azione si è interrotta: il suo documento non è più attivo
 @msg	speed must be accelerated, step or pause	speed deve essere accelerated, step o pause
 @msg	seconds must be a whole number from 1 to 60	seconds deve essere un numero intero da 1 a 60
 @msg	no such function key	tasto funzione inesistente

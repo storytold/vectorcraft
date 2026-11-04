@@ -1239,7 +1239,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::PLAY_ACTION,
         "Play Action",
         "",
-        "{action: name, set?: name} play the Actions panel's action named action at the speed ui.action.playbackOptions sets; set names the set to look in (default: every set). Accelerated plays it as one undoable batch → what command.batch returns. Step by Step and Pause For play its first step now and the others one at a time, each its own undo step, until the last or ui.action.stop → {results: [the first step's result], pending: the steps left}. A name no action has, or one that more than one action in the sets looked in has, or an action played while another is still playing step by step or with pauses, is an error and nothing plays",
+        "{action: name, set?: name} play the Actions panel's action named action at the speed ui.action.playbackOptions sets; set names the set to look in (default: every set). Accelerated plays it as one undoable batch → what command.batch returns. Step by Step and Pause For play its first step now and the others one at a time, each its own undo step, until the last, ui.action.stop, or a step that comes due while a different document is active than after the step before → {results: [the first step's result], pending: the steps left}. A name no action has, or one that more than one action in the sets looked in has, or an action played while another is still playing step by step or with pauses, is an error and nothing plays",
     ),
     (
         crate::panels::actions::PLAYBACK_OPTIONS,

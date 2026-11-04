@@ -5193,6 +5193,7 @@ digits	Malayalam	Malaiàlam
 @msg	name is empty	el nom és buit
 @msg	an action is already recording	ja s’està enregistrant una acció
 @msg	an action is already playing	ja s’està reproduint una acció
+@msg	the action stopped playing: its document is no longer active	l’acció s’ha aturat: el seu document ja no és l’actiu
 @msg	speed must be accelerated, step or pause	speed ha de ser accelerated, step o pause
 @msg	seconds must be a whole number from 1 to 60	seconds ha de ser un nombre enter de l’1 al 60
 @msg	no such function key	no existeix aquesta tecla de funció
