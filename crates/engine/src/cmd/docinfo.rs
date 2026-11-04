@@ -394,10 +394,11 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     spot.insert(name.clone());
                 }
             }
-            // The characters' own paints: an inline graphic does not take its run's paint, and a
-            // stroke with no width paints nothing.
+            // The characters' own paints: an inline graphic draws no outline and does not take its
+            // run's paint (a list marker set in its run does), and a stroke with no width paints
+            // nothing.
             if let Some((t, painted)) = &painted_runs {
-                for run in painted.iter().filter_map(|i| t.runs.get(*i)).filter(|r| r.inline.is_none()) {
+                for run in painted.iter().filter_map(|i| t.runs.get(*i)) {
                     let stroke = (run.style.stroke_width > 0.0).then_some(&run.style.stroke);
                     for paint in std::iter::once(&run.style.fill).chain(stroke) {
                         if let Paint::Pattern { pattern, .. } = paint {
@@ -740,6 +741,15 @@ mod tests {
         s.execute("select.set", &json!({"ids": [bar]})).unwrap();
         s.execute("text.setFormat", &json!({"underline": true})).unwrap();
         s.execute("layer.setProps", &json!({"id": bar, "name": "Bar"})).unwrap();
+        // A list marker set in an inline graphic's run draws in that run's pattern, so that type object is listed.
+        s.execute("shape.ellipse", &json!({"x": 300, "y": 300, "width": 10, "height": 10})).unwrap();
+        s.execute("symbol.new", &json!({"name": "Mark"})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let listed = s.execute("text.create", &json!({"x": 0, "y": 360, "text": ""})).unwrap()["id"].clone();
+        s.execute("text.insertInline", &json!({"id": listed, "at": 0, "symbol": "Mark"})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [listed], "list": "bullet"})).unwrap();
+        s.execute("paint.setFill", &json!({"ids": [listed], "swatch": "Dots"})).unwrap();
+        s.execute("layer.setProps", &json!({"id": listed, "name": "Listed"})).unwrap();
         let i = s.execute("document.info", &json!({})).unwrap();
         assert_eq!(
             i["patternObjects"],
@@ -748,17 +758,21 @@ mod tests {
                 {"id": b, "name": "<Rectangle>", "patterns": ["Dots"]},
                 {"id": t, "name": "Type", "patterns": ["Dots"]},
                 {"id": bar, "name": "Bar", "patterns": ["Dots"]},
+                {"id": listed, "name": "Listed", "patterns": ["Dots"]},
             ])
         );
         assert_eq!(i["patternNames"], json!(["Dots"]));
         // Objects counts the objects that Pattern Objects lists.
-        assert_eq!(i["objects"]["patterns"].as_u64(), Some(4), "{}", i["objects"]);
+        assert_eq!(i["objects"]["patterns"].as_u64(), Some(5), "{}", i["objects"]);
         s.execute("select.set", &json!({"ids": [d, e, empty, blank, guide]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
         assert!(i["objects"]["patterns"].is_null() && i["patternObjects"] == json!([]), "{}", i["objects"]);
         let i = s.execute("document.info", &json!({"category": "patterns"})).unwrap();
         assert_eq!((i["sections"][0]["id"].as_str(), i["sections"][0]["title"].as_str()), (Some("patterns"), Some("Pattern Objects")));
-        assert_eq!(i["sections"][0]["rows"], json!([["Both", "Dots"], ["<Rectangle>", "Dots"], ["Type", "Dots"], ["Bar", "Dots"]]));
+        assert_eq!(
+            i["sections"][0]["rows"],
+            json!([["Both", "Dots"], ["<Rectangle>", "Dots"], ["Type", "Dots"], ["Bar", "Dots"], ["Listed", "Dots"]])
+        );
         s.execute("select.set", &json!({"ids": [b]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
         assert_eq!(i["sections"][0]["rows"], json!([["<Rectangle>", "Dots"]]));
@@ -766,7 +780,7 @@ mod tests {
         let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "patterns"})).unwrap();
         assert_eq!((i["sections"][0]["rows"].clone(), i["patternNames"].clone()), (json!([["Type", "Dots"]]), json!(["Dots"])));
         let text = s.execute("document.info", &json!({"category": "patterns", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
-        assert!(text.contains("\nPATTERN OBJECTS\nBoth: Dots\n<Rectangle>: Dots\nType: Dots\nBar: Dots\n"), "{text}");
+        assert!(text.contains("\nPATTERN OBJECTS\nBoth: Dots\n<Rectangle>: Dots\nType: Dots\nBar: Dots\nListed: Dots\n"), "{text}");
         assert!(!text.contains("Unused"), "{text}");
     }
 
