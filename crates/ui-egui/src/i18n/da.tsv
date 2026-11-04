@@ -603,6 +603,11 @@
 	New Toolbar	Ny værktøjslinje
 	Show Toolbar	Vis værktøjslinje
 	List Toolbars	Liste over værktøjslinjer
+	Manage Toolbars…	Administrér værktøjslinjer…
+	Manage Toolbars	Administrér værktøjslinjer
+	Rename Toolbar	Omdøb værktøjslinje
+	Duplicate Toolbar	Duplikér værktøjslinje
+	Delete Toolbar	Slet værktøjslinje
 	Manage Workspaces…	Administrér arbejdsområder…
 	Control	Kontrol
 	Contextual Task Bar	Kontekstuel opgavelinje
@@ -1179,6 +1184,8 @@ lighting	Light	Lys
 	Hand	Hånd
 	Join Tool	Sammenføjningsværktøj
 	Lasso Tool	Lassoværktøj
+	Enclosing Lasso Tool	Omsluttende lassoværktøj
+	Enclosing Lasso	Omsluttende lasso
 	Lasso	Lasso
 	Line Cut Tool	Linjeskæringsværktøj
 	Line Graph Tool	Linjediagramværktøj
@@ -1660,6 +1667,7 @@ digits	Malayalam	Malayalam
 	Left-to-Right Paragraph Direction	Afsnitsretning fra venstre mod højre
 	Line-end Punctuation Half Width	Skilletegn i halv bredde ved linjeslut
 	Insert Kashidas	Indsæt kashidaer
+	Kashidas	Kashidaer
 	Long	Lang
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
@@ -3328,6 +3336,7 @@ theme	Appearance	Udseende
 	List Preferences	Oplist indstillinger
 	Manually	Manuelt
 	Mark Older Files as [Converted] When Opened	Markér ældre filer som [konverteret] ved åbning
+	Use System Defaults for Edit Original	Anvend systemets standarder til Redigér original
 	Match User Interface Brightness	Match lysstyrken i brugergrænsefladen
 	Light Gray	Lysegrå
 	Medium Gray	Mellemgrå
@@ -5359,6 +5368,11 @@ swatch	Bright Violet	Kraftig violet
 	Export Type:	Eksporttype:
 	Movie Clip	Filmklip
 @msg	name is empty	navnet er tomt
+@msg	an action is already recording	en handling optages allerede
+@msg	no such function key	ingen sådan funktionstast
+@msg	no such color	ingen sådan farve
+@msg	{_1} cannot be used on Windows	{_1} kan ikke bruges i Windows
+@msg	more than one action is named “{_1}”	mere end én handling hedder »{_1}«
 @msg	no symbol named `{n}`	intet symbol med navnet `{n}`
 	Remove Color Profile…	Fjern farveprofil…
 	Color wheel	Farvehjul
@@ -5638,6 +5652,13 @@ axis	Y Axis	Y-akse
 	Action Options…	Indstillinger for handling…
 	Action Options	Indstillinger for handling
 	Rename Action	Omdøb handling
+	New Action…	Ny handling…
+	New Action	Ny handling
+	Create New Action	Opret ny handling
+	Play Action	Afspil handling
+	Action Set:	Handlingssæt:
+	Function Key:	Funktionstast:
+	Record	Optag
 	Create New Set	Opret nyt sæt
 	Stop Global Edit	Stop global redigering
 	Global Edit Options	Indstillinger for global redigering
@@ -6026,6 +6047,7 @@ breakText	Glyphs	Glyffer
 	Gap 5	Mellemrum 5
 
 @msg	{_1}: they came in as the page's art	{_1}: de blev importeret som sidens grafik
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekter, der blev tegnet anderledes end filens egen side, blev importeret som sidens grafik: {_1}
 
 @msg	You must choose a side pattern.	Du skal vælge et sidemønster.
 @msg	invalid pattern tile choice	ugyldigt valg af mønsterflise
@@ -6127,3 +6149,14 @@ breakText	Glyphs	Glyffer
 	Create Swatch Legend	Opret farveprøveforklaring
 	Create Swatch Legend…	Opret farveprøveforklaring…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Tekstværktøjer
+	Text Tweaker…	Tekstjustering…
+	Text Tweaker	Tekstjustering
+	Attribute:	Attribut:
+	From:	Fra:
+	To:	Til:
+	Bow	Bue
+	Spike	Spids
+	Skip Spaces	Spring mellemrum over
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafikken er for stor til at blive kopieret som et billede: andre programmer får ingen PNG af den

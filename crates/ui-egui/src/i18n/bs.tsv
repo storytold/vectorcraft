@@ -645,6 +645,11 @@
 	New Toolbar	Nova traka s alatima
 	Show Toolbar	Prikaži traku s alatima
 	List Toolbars	Izlistaj trake s alatima
+	Manage Toolbars…	Upravljaj trakama s alatima…
+	Manage Toolbars	Upravljaj trakama s alatima
+	Rename Toolbar	Preimenuj traku s alatima
+	Duplicate Toolbar	Dupliciraj traku s alatima
+	Delete Toolbar	Izbriši traku s alatima
 	Manage Workspaces…	Upravljaj radnim prostorima…
 	Control	Kontrola
 	Contextual Task Bar	Kontekstna traka zadataka
@@ -1245,6 +1250,8 @@ lighting	Light	Svjetlo
 	Hand	Ruka
 	Join Tool	Alat za spajanje
 	Lasso Tool	Alat laso
+	Enclosing Lasso Tool	Alat laso za obuhvatanje
+	Enclosing Lasso	Laso za obuhvatanje
 	Lasso	Laso
 	Line Cut Tool	Alat za rez linijom
 	Line Graph Tool	Alat za linijski grafikon
@@ -1828,6 +1835,7 @@ digits	Malayalam	Malajalam
 	Left-to-Right Paragraph Direction	Smjer pasusa s lijeva nadesno
 	Line-end Punctuation Half Width	Interpunkcija na kraju reda u pola širine
 	Insert Kashidas	Umetni kašide
+	Kashidas	Kašide
 	Long	Dugo
 	Stylistic	Stilsko
 	Mojikumi Set	Mojikumi skup
@@ -3560,6 +3568,7 @@ theme	Appearance	Izgled
 	List Preferences	Izlistaj postavke
 	Manually	Ručno
 	Mark Older Files as [Converted] When Opened	Označi starije datoteke kao [Pretvoreno] pri otvaranju
+	Use System Defaults for Edit Original	Koristi sistemske zadane postavke za Uredi original
 	Match User Interface Brightness	Uskladi sa svjetlinom korisničkog interfejsa
 	Light Gray	Svijetlosiva
 	Medium Gray	Srednje siva
@@ -4252,7 +4261,7 @@ imageTrace	Outline	Obris
 @msg	Save for Web: the image is empty	Sačuvaj za web: slika je prazna
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Sačuvaj zapisuje {_1}, a ne {_2}: za druge formate koristite document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Sačuvaj zapisuje {_1}, a ne {_2}: za zapisivanje koristite file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 zapisuje naslijeđene .ai datoteke; .ait predložak je uvijek kompatibilan s PDF-om
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 zapisuje naslijeđene .ai datoteke, a ne .ait predloške
 @msg	Saved recovery data for {title}	Sačuvani podaci za oporavak za {title}
 @msg	Saved to User Defined: {_1}	Sačuvano u korisnički definisano: {_1}
 @msg	Saved {path}	Sačuvano: {path}
@@ -5479,6 +5488,11 @@ mark-style	Japanese	Japanski
 	Export Type:	Vrsta izvoza:
 	Movie Clip	Filmski klip
 @msg	name is empty	naziv je prazan
+@msg	an action is already recording	akcija se već snima
+@msg	no such function key	nema takve funkcijske tipke
+@msg	no such color	nema takve boje
+@msg	{_1} cannot be used on Windows	{_1} se ne može koristiti na Windowsu
+@msg	more than one action is named “{_1}”	više od jedne akcije ima naziv „{_1}”
 @msg	no symbol named `{n}`	nema simbola pod nazivom `{n}`
 	Smudge Stick…	Štapić za razmazivanje…
 	Smudge Stick	Štapić za razmazivanje
@@ -5644,6 +5658,13 @@ axis	Y Axis	Y osa
 	Action Options…	Opcije akcije…
 	Action Options	Opcije akcije
 	Rename Action	Preimenuj akciju
+	New Action…	Nova akcija…
+	New Action	Nova akcija
+	Create New Action	Napravi novu akciju
+	Play Action	Reprodukuj akciju
+	Action Set:	Skup akcija:
+	Function Key:	Funkcijska tipka:
+	Record	Snimi
 	Create New Set	Napravi novi skup
 	Stop Global Edit	Zaustavi globalno uređivanje
 	Global Edit Options	Opcije globalnog uređivanja
@@ -6044,6 +6065,7 @@ shape	Open	Otvoren
 @msg	the paths have nothing to merge there	putanje tu nemaju šta spojiti
 @msg	the path is locked or hidden	putanja je zaključana ili skrivena
 @msg	{_1}: they came in as the page's art	{_1}: uvezeni su kao ilustracija stranice
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekti koji su se iscrtali drugačije od vlastite stranice datoteke uvezeni su kao ilustracija stranice: {_1}
 
 @msg	You must choose a side pattern.	Morate odabrati bočni uzorak.
 @msg	invalid pattern tile choice	nevažeći izbor pločice uzorka
@@ -6145,3 +6167,14 @@ shape	Open	Otvoren
 	Create Swatch Legend	Kreiraj legendu uzoraka boja
 	Create Swatch Legend…	Kreiraj legendu uzoraka boja…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Alati za tekst
+	Text Tweaker…	Podešavanje teksta…
+	Text Tweaker	Podešavanje teksta
+	Attribute:	Atribut:
+	From:	Od:
+	To:	Do:
+	Bow	Luk
+	Spike	Šiljak
+	Skip Spaces	Preskoči razmake
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika je prevelika da bi se kopirala kao slika: druge aplikacije ne dobijaju njen PNG

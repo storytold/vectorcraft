@@ -390,10 +390,19 @@ fn a_projection_follows_the_transform_or_is_removed() {
     let mut n = instance(far);
     n.transform(Affine::scale(1e150), false);
     assert_eq!(projection(&n), None);
-    // A transform that is not invertible leaves the projection as it is.
+    // A transform that is not invertible leaves the projection as it is, at any scale.
     let mut n = instance(far);
     n.transform(Affine::scale(0.0), false);
     assert_eq!(projection(&n), Some(far.to_array()));
+    let mut n = instance(far);
+    n.transform(Affine::new([1e-8, 2e-8, 2e-8, 4e-8, 0.0, 0.0]), false);
+    assert_eq!(projection(&n), Some(far.to_array()));
+    // A scale by 1e-8 is invertible: a move by 10 becomes a move by 1e-7.
+    let ten = Homography::from_affine(Affine::translate((10.0, 0.0)));
+    let mut n = instance(ten);
+    n.transform(Affine::scale(1e-8), false);
+    let q = n.projection().unwrap().apply(Point::new(3e-8, 7e-8)).unwrap();
+    assert!(q.distance(Point::new(1.3e-7, 7e-8)) < 1e-20, "{q:?}");
 }
 
 #[test]

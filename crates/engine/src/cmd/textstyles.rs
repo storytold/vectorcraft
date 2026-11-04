@@ -173,6 +173,7 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("small_caps", json!(v.small_caps)),
         ("charAlign", json!(v.char_align)),
         ("charDirection", json!(v.char_direction)),
+        ("kashidas", json!(v.kashidas)),
         ("proportionalMetrics", json!(v.proportional_metrics)),
         ("tateChuYoko", json!(v.tate_chu_yoko)),
         ("tcyUpDown", json!(v.tcy_up_down)),

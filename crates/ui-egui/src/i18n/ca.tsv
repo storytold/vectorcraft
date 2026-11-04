@@ -1989,6 +1989,7 @@ digits	Malayalam	Malaiàlam
 	Insert Character	Insereix caràcter
 	Insert Inline Symbol	Insereix símbol en línia
 	Insert Kashidas	Insereix kashides
+	Kashidas	Kashides
 	Insert Special Character	Insereix caràcter especial
 	Insert Whitespace Character	Insereix caràcter d’espai
 	Inserting, deleting and rotating pages	Inserir, suprimir i girar pàgines
@@ -2100,6 +2101,8 @@ digits	Malayalam	Malaiàlam
 	Largest:	El més gran:
 	Lasso	Llaç
 	Lasso Tool	Eina de llaç
+	Enclosing Lasso Tool	Eina de llaç envoltant
+	Enclosing Lasso	Llaç envoltant
 	Last	Últim
 	Last Artboard	Últim tauler
 	Last commit	Últim commit
@@ -2330,6 +2333,7 @@ digits	Malayalam	Malaiàlam
 	Manually	Manualment
 	Mark as trapped	Marca com a reventat
 	Mark Older Files as [Converted] When Opened	Marca els fitxers antics com a [Convertit] en obrir-los
+	Use System Defaults for Edit Original	Utilitza els valors per defecte del sistema per a Edita l’original
 	Marker…	Marcador…
 	Marks	Marques
 	Marks and Bleed	Marques i sangrat
@@ -2561,6 +2565,11 @@ digits	Malayalam	Malaiàlam
 	New Toolbar	Barra d’eines nova
 	Show Toolbar	Mostra la barra d’eines
 	List Toolbars	Llista les barres d’eines
+	Manage Toolbars…	Gestiona les barres d’eines…
+	Manage Toolbars	Gestiona les barres d’eines
+	Rename Toolbar	Canvia el nom de la barra d’eines
+	Duplicate Toolbar	Duplica la barra d’eines
+	Delete Toolbar	Suprimeix la barra d’eines
 	New {kind} Style…	Nou estil de {kind}…
 	New…	Nou…
 	Next	Següent
@@ -3773,6 +3782,13 @@ digits	Malayalam	Malaiàlam
 	Action Options…	Opcions de l’acció…
 	Action Options	Opcions de l’acció
 	Rename Action	Canvia el nom de l’acció
+	New Action…	Acció nova…
+	New Action	Acció nova
+	Create New Action	Crea una acció nova
+	Play Action	Reprodueix l’acció
+	Action Set:	Conjunt d’accions:
+	Function Key:	Tecla de funció:
+	Record	Enregistra
 	Set Options…	Defineix les opcions…
 	Set Preference	Defineix la preferència
 	Set Slice Rectangle	Defineix el rectangle del tall
@@ -4909,7 +4925,7 @@ digits	Malayalam	Malaiàlam
 @msg	a {width}×{height} screenshot's byte count overflows	el recompte de bytes d’una captura de pantalla de {width}×{height} es desborda
 @msg	action is required	cal una acció
 @msg	add a format to export	afegiu un format per exportar
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 escriu fitxers .ai heretats; una plantilla .ait sempre és compatible amb PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 escriu fitxers .ai heretats, no plantilles .ait
 @msg	already editing a pattern	ja s’està editant un motiu
 @msg	an exporter always gets an export's budget: leave `budget` out	un exportador sempre rep el pressupost d’una exportació: ometeu `budget`
 @msg	an image has no pixels and was left out	una imatge no té píxels i s’ha omès
@@ -5159,6 +5175,11 @@ digits	Malayalam	Malaiàlam
 @msg	move requires an existing destination panel	per moure cal un panell de destinació existent
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	Els fitxers PSD multicanal no es poden llegir: deseu-los en mode RGB, CMYK o escala de grisos
 @msg	name is empty	el nom és buit
+@msg	an action is already recording	ja s’està enregistrant una acció
+@msg	no such function key	no existeix aquesta tecla de funció
+@msg	no such color	no existeix aquest color
+@msg	{_1} cannot be used on Windows	{_1} no es pot fer servir al Windows
+@msg	more than one action is named “{_1}”	més d’una acció es diu “{_1}”
 @msg	name the file	poseu un nom al fitxer
 @msg	New Window isn't available yet: a document opens in one window	Finestra nova encara no està disponible: un document s’obre en una sola finestra
 @msg	no active document	no hi ha cap document actiu
@@ -6142,6 +6163,7 @@ breakText	Glyphs	Glifs
 	Gap 5	Separació 5
 
 @msg	{_1}: they came in as the page's art	{_1}: han entrat com a art de la pàgina
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	els objectes que es dibuixaven diferent de la pàgina pròpia del fitxer han entrat com a art de la pàgina: {_1}
 
 @msg	the JPEG 2000 file can't be read	no es pot llegir el fitxer JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	el fitxer JPEG 2000 té un espai de color o contingut JPX no compatible
@@ -6245,3 +6267,14 @@ breakText	Glyphs	Glifs
 	Create Swatch Legend	Crea una llegenda de mostres
 	Create Swatch Legend…	Crea una llegenda de mostres…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Eines de text
+	Text Tweaker…	Ajustador de text…
+	Text Tweaker	Ajustador de text
+	Attribute:	Atribut:
+	From:	De:
+	To:	A:
+	Bow	Arc
+	Spike	Pic
+	Skip Spaces	Omet els espais
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	La il·lustració és massa gran per copiar-la com a imatge: les altres aplicacions no en reben cap PNG

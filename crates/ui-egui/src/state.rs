@@ -468,10 +468,10 @@ pub struct UiState {
     /// saved, as `tiled` is not.
     #[serde(skip)]
     pub floating: Vec<crate::doc_windows::DocWindow>,
-    /// The document (its uid) the tab strip shows while the current document is in a floating
-    /// window: the tabbed document that was current last.
+    /// The window (its document's uid and its view's number) the tab strip shows while the current
+    /// window is a floating one: the tabbed window that was current last.
     #[serde(skip)]
-    pub tab_document: Option<u64>,
+    pub tab_document: Option<(u64, u32)>,
     /// Draw Normal / Behind / Inside.
     pub draw_mode: u8,
     pub about: bool,
@@ -491,6 +491,11 @@ pub struct UiState {
     /// Recording in progress: (set index, action name, journal length when recording started).
     #[serde(skip)]
     pub recording: Option<(usize, String, usize)>,
+    /// The id of the action New Action made for the recording in progress
+    /// ([`crate::panels::actions::Action::id`]): Stop gives it the recorded steps. None when Stop
+    /// adds a new action, as after Begin Recording.
+    #[serde(skip)]
+    pub recording_into: Option<u64>,
     /// Keyboard shortcut overrides: command id, `tool:<id>` or `panel:<id>` → chord ("" = none),
     /// stored in the form every earlier version reads.
     #[serde(default, with = "crate::keymap::stored")]
@@ -961,6 +966,7 @@ impl Default for UiState {
             action_set: None,
             action_sets_selected: vec![],
             recording: None,
+            recording_into: None,
             shortcut_overrides: Default::default(),
             shortcut_set: default_shortcut_set(),
             workspace: default_workspace(),

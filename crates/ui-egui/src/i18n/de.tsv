@@ -1710,6 +1710,8 @@ file-filter	Templates	Vorlagen
 	Large Thumbnail View	Große Miniaturansicht
 	Large Thumbnails	Große Miniaturen
 	Lasso Tool	Lasso-Werkzeug
+	Enclosing Lasso Tool	Umschließendes Lasso-Werkzeug
+	Enclosing Lasso	Umschließendes Lasso
 	Last Effect: {name}	Letzter Effekt: {name}
 	Last Effect: {}	Letzter Effekt: {}
 	Last Effect…	Letzter Effekt…
@@ -1861,6 +1863,7 @@ file-filter	Templates	Vorlagen
 	Manually	Manuell
 	Mark as trapped	Als überfüllt kennzeichnen
 	Mark Older Files as [Converted] When Opened	Ältere Dateien beim Öffnen als [Konvertiert] kennzeichnen
+	Use System Defaults for Edit Original	Systemstandards für „Original bearbeiten“ verwenden
 	Marker…	Markierung…
 	Marks	Marken
 	Marks and Bleed	Marken und Anschnitt
@@ -1923,6 +1926,7 @@ file-filter	Templates	Vorlagen
 	Modify	Ändern
 	Mojikumi	Mojikumi
 	Insert Kashidas	Kashidas einfügen
+	Kashidas	Kashidas
 	Long	Lang
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-Satz
@@ -2056,6 +2060,11 @@ file-filter	Templates	Vorlagen
 	New Toolbar	Neue Werkzeugleiste
 	Show Toolbar	Werkzeugleiste einblenden
 	List Toolbars	Werkzeugleisten auflisten
+	Manage Toolbars…	Werkzeugleisten verwalten…
+	Manage Toolbars	Werkzeugleisten verwalten
+	Rename Toolbar	Werkzeugleiste umbenennen
+	Duplicate Toolbar	Werkzeugleiste duplizieren
+	Delete Toolbar	Werkzeugleiste löschen
 	New {kind} Style…	Neues {kind}format…
 	New…	Neu…
 	Next	Weiter
@@ -3907,7 +3916,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Save for Web: the image is empty	Für Web speichern: Das Bild ist leer
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	„Speichern“ schreibt {_1}, nicht {_2}: Verwenden Sie document.export für andere Formate
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	„Speichern“ schreibt {_1}, nicht {_2}: Verwenden Sie dafür file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 schreibt ältere .ai-Dateien; eine .ait-Vorlage ist immer PDF-kompatibel
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 schreibt ältere .ai-Dateien, keine .ait-Vorlagen
 @msg	Saved recovery data for {title}	Wiederherstellungsdaten für {title} gespeichert
 @msg	Saved to User Defined: {_1}	In „Benutzerdefiniert“ gespeichert: {_1}
 @msg	Saved {path}	{path} gespeichert
@@ -5144,6 +5153,11 @@ effect	Soft	Weich
 	Export Type:	Exporttyp:
 	Movie Clip	Movieclip
 @msg	name is empty	Name ist leer
+@msg	an action is already recording	eine Aktion wird bereits aufgezeichnet
+@msg	no such function key	keine solche Funktionstaste
+@msg	no such color	keine solche Farbe
+@msg	{_1} cannot be used on Windows	{_1} kann unter Windows nicht verwendet werden
+@msg	more than one action is named “{_1}”	mehr als eine Aktion heißt „{_1}“
 @msg	no symbol named `{n}`	kein Symbol namens `{n}`
 	Smudge Stick…	Wischstift…
 	Smudge Stick	Wischstift
@@ -5318,6 +5332,13 @@ axis	Y Axis	Y-Achse
 	Action Options…	Aktionsoptionen…
 	Action Options	Aktionsoptionen
 	Rename Action	Aktion umbenennen
+	New Action…	Neue Aktion…
+	New Action	Neue Aktion
+	Create New Action	Neue Aktion erstellen
+	Play Action	Aktion abspielen
+	Action Set:	Aktionssatz:
+	Function Key:	Funktionstaste:
+	Record	Aufzeichnen
 	Create New Set	Neuen Satz erstellen
 	Stop Global Edit	Globale Bearbeitung beenden
 	Global Edit Options	Optionen für globale Bearbeitung
@@ -5744,6 +5765,7 @@ breakText	Glyphs	Glyphen
 	Gap 5	Lücke 5
 
 @msg	{_1}: they came in as the page's art	{_1}: sie wurden als Seitengrafik importiert
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	Objekte, die anders als die eigene Seite der Datei gezeichnet wurden, wurden als Seitengrafik importiert: {_1}
 
 @msg	You must choose a side pattern.	Sie müssen ein Seitenmuster auswählen.
 @msg	invalid pattern tile choice	ungültige Auswahl einer Musterkachel
@@ -5845,3 +5867,14 @@ breakText	Glyphs	Glyphen
 	Create Swatch Legend	Farbfeldlegende erstellen
 	Create Swatch Legend…	Farbfeldlegende erstellen…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Textwerkzeuge
+	Text Tweaker…	Text-Tweaker…
+	Text Tweaker	Text-Tweaker
+	Attribute:	Attribut:
+	From:	Von:
+	To:	Bis:
+	Bow	Bogen
+	Spike	Spitze
+	Skip Spaces	Leerzeichen überspringen
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Das Bildmaterial ist zu groß, um es als Bild zu kopieren: Andere Apps erhalten kein PNG davon

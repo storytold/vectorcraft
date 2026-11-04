@@ -19,6 +19,175 @@ fn db_with(font: Option<Vec<u8>>) -> FontDb {
     db
 }
 
+/// Put a contour-point caret on the existing test ligature without changing its outline.
+fn contour_caret_font(point_index: u16) -> Vec<u8> {
+    use write_fonts::FontBuilder;
+    use write_fonts::tables::gdef::{CaretValue, Gdef, LigCaretList, LigGlyph};
+    use write_fonts::tables::layout::CoverageFormat1 as WriteCoverage;
+    use write_fonts::types::{GlyphId16, Tag};
+
+    let base = ligature_caret_font(None).expect("test font builds");
+    let font = skrifa::FontRef::new(&base).expect("test font parses");
+    let gid = source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph");
+    let mut builder = FontBuilder::new();
+    let list = LigCaretList::new(WriteCoverage::new(vec![GlyphId16::new(gid)]).into(), vec![LigGlyph::new(vec![CaretValue::format_2(point_index)])]);
+    builder.add_table(&Gdef::new(None, None, Some(list), None)).expect("GDEF builds");
+    for record in font.table_directory.table_records() {
+        let tag = Tag::new(&record.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(record.tag()).expect("base table reads").as_bytes());
+        }
+    }
+    builder.build()
+}
+
+#[test]
+fn a_contour_point_caret_uses_its_unhinted_x_and_y() {
+    use skrifa::raw::TableProvider;
+    use skrifa::raw::tables::glyf::Glyph;
+
+    let base = ligature_caret_font(None).expect("test font builds");
+    let font = skrifa::FontRef::new(&base).expect("test font parses");
+    let gid = u32::from(source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph"));
+    let outline = font.loca(None).expect("loca reads").get(skrifa::GlyphId::new(gid), &font.glyf().expect("glyf reads")).expect("glyph reads");
+    let Glyph::Simple(simple) = outline.into_glyph().expect("glyph has an outline") else { panic!("W is simple") };
+    let (point_index, point) =
+        simple.points().enumerate().find(|(_, p)| p.x > 0 && p.x < 500 && p.y > -500 && p.y < 1000).expect("W has an interior contour point");
+    let db = db_with(Some(contour_caret_font(u16::try_from(point_index).unwrap())));
+    let face = db.face(LIGATURE_CARET_FAMILY, "Regular").unwrap();
+    assert_eq!(face.ligature_carets(gid, 1), Some(vec![f64::from(point.x)]));
+    assert_eq!(face.vertical_ligature_carets(gid, 1, 1000.0, 1500.0), Some(vec![1000.0 - f64::from(point.y)]));
+
+    let bad = db_with(Some(contour_caret_font(u16::MAX)));
+    assert_eq!(bad.face(LIGATURE_CARET_FAMILY, "Regular").unwrap().ligature_carets(gid, 1), None);
+}
+
+/// `count` glyph ids of [`contour_caret_font`] other than the ligature's.
+fn spare_gids(count: usize) -> Vec<u16> {
+    let ligature = source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph");
+    (1..).filter(|g| *g != ligature).take(count).collect()
+}
+
+/// [`contour_caret_font`], whose caret is the ligature's point 0, with its `glyf` and `loca`
+/// replaced: each `(gid, data)` in `glyphs` gives that glyph's `glyf` data, and every other glyph
+/// is empty.
+fn glyf_caret_font(glyphs: &[(u16, Vec<u8>)]) -> Vec<u8> {
+    use skrifa::raw::TableProvider;
+    use write_fonts::FontBuilder;
+    use write_fonts::types::Tag;
+
+    let base = contour_caret_font(0);
+    let font = skrifa::FontRef::new(&base).expect("test font parses");
+    let num_glyphs = font.maxp().expect("maxp reads").num_glyphs();
+    let short_loca = font.head().expect("head reads").index_to_loc_format() == 0;
+    let mut glyf = Vec::new();
+    let mut offsets = vec![0usize];
+    for gid in 0..num_glyphs {
+        if let Some((_, data)) = glyphs.iter().find(|(g, _)| *g == gid) {
+            glyf.extend(data);
+            // Keep every offset even for the short `loca` format.
+            if glyf.len() % 2 == 1 {
+                glyf.push(0);
+            }
+        }
+        offsets.push(glyf.len());
+    }
+    let loca: Vec<u8> = if short_loca {
+        offsets.iter().flat_map(|o| u16::try_from(o / 2).expect("short offset").to_be_bytes()).collect()
+    } else {
+        offsets.iter().flat_map(|o| u32::try_from(*o).expect("long offset").to_be_bytes()).collect()
+    };
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"glyf"), glyf);
+    builder.add_raw(Tag::new(b"loca"), loca);
+    for record in font.table_directory.table_records() {
+        let tag = Tag::new(&record.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(record.tag()).expect("base table reads").as_bytes());
+        }
+    }
+    builder.build()
+}
+
+/// [`glyf_caret_font`] whose ligature is a composite of eight copies of a glyph that is itself
+/// eight copies of the next, 15 levels down to a glyph with no contours.
+fn composite_fan_caret_font() -> Vec<u8> {
+    const FAN: usize = 8;
+    let ligature = source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph");
+    let levels = spare_gids(15);
+    let composite = |child: u16| {
+        let mut data = vec![0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0];
+        for i in 0..FAN {
+            // ARGS_ARE_XY_VALUES, plus MORE_COMPONENTS on all but the last; byte offsets of 0.
+            let flags: u16 = if i + 1 < FAN { 0x0022 } else { 0x0002 };
+            data.extend(flags.to_be_bytes());
+            data.extend(child.to_be_bytes());
+            data.extend([0, 0]);
+        }
+        data
+    };
+    let mut glyphs = vec![(ligature, composite(levels[0]))];
+    for (level, gid) in levels.iter().enumerate() {
+        match levels.get(level + 1) {
+            Some(child) => glyphs.push((*gid, composite(*child))),
+            // No contours, a zero bounding box and no instructions.
+            None => glyphs.push((*gid, vec![0; 12])),
+        }
+    }
+    glyf_caret_font(&glyphs)
+}
+
+/// A contour-point caret on a composite's point uses the component offset the outline loader
+/// uses. The ligature is one component, a glyph with a single point at (50, 0), turned a quarter
+/// turn and scaled by 1.5 with a two-by-two matrix and placed at (100, 0). With
+/// SCALED_COMPONENT_OFFSET the offset's x scales by the length of the x basis, 1.5, so the point
+/// lands at x = 150; with UNSCALED_COMPONENT_OFFSET as well the offset stays (100, 0).
+#[test]
+fn a_contour_point_caret_on_a_composite_takes_its_scaled_offset() {
+    let gid = source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph");
+    let [leaf] = spare_gids(1)[..] else { panic!("one spare glyph") };
+    // One on-curve point at (50, 0) with word coordinates, and no instructions.
+    let mut point = vec![0, 1, 0, 0, 0, 0, 0, 50, 0, 0, 0, 0, 0, 0, 0x01];
+    point.extend(50i16.to_be_bytes());
+    point.extend(0i16.to_be_bytes());
+    let composite = |offset_flags: u16| {
+        // ARG_1_AND_2_ARE_WORDS, ARGS_ARE_XY_VALUES and WE_HAVE_A_TWO_BY_TWO.
+        let flags = 0x0083 | offset_flags;
+        let mut data = vec![0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0];
+        data.extend(flags.to_be_bytes());
+        data.extend(leaf.to_be_bytes());
+        data.extend(100i16.to_be_bytes());
+        data.extend(0i16.to_be_bytes());
+        // xx = 0, yx = 1.5, xy = -1.5, yy = 0 in F2Dot14.
+        for f2dot14 in [0x0000u16, 0x6000, 0xa000, 0x0000] {
+            data.extend(f2dot14.to_be_bytes());
+        }
+        data
+    };
+    let caret = |offset_flags: u16| {
+        let db = db_with(Some(glyf_caret_font(&[(gid, composite(offset_flags)), (leaf, point.clone())])));
+        db.face(LIGATURE_CARET_FAMILY, "Regular").unwrap().ligature_carets(u32::from(gid), 1)
+    };
+    // SCALED_COMPONENT_OFFSET, then with UNSCALED_COMPONENT_OFFSET too.
+    assert_eq!(caret(0x0800), Some(vec![150.0]));
+    assert_eq!(caret(0x1800), Some(vec![100.0]));
+}
+
+/// A contour-point caret on a composite that expands to billions of glyphs with no points gives
+/// no caret, and quickly, rather than reading every one of them.
+#[test]
+fn a_contour_point_caret_on_a_huge_empty_composite_gives_up() {
+    let gid = u32::from(source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph"));
+    let (send, receive) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let db = db_with(Some(composite_fan_caret_font()));
+        let carets = db.face(LIGATURE_CARET_FAMILY, "Regular").map(|face| face.ligature_carets(gid, 1));
+        let _ = send.send(carets);
+    });
+    let carets = receive.recv_timeout(std::time::Duration::from_secs(30)).expect("the caret lookup finishes");
+    assert_eq!(carets, Some(None));
+}
+
 fn point(text: &str, family: &str) -> TextObject {
     TextObject::point(Point::ZERO, text, CharStyle { font_family: family.into(), size: 100.0, ..CharStyle::default() })
 }
@@ -457,6 +626,66 @@ fn an_upright_ligature_takes_its_caret_down_its_cell() {
     assert!((at(280) - 0.6).abs() < 1e-9, "{}", at(280));
     assert!((at(-50) - 0.93).abs() < 1e-9, "{}", at(-50));
     assert!((at(900) - 0.5).abs() < 1e-9, "{}", at(900));
+}
+
+/// On a path, an upright ligature in vertical type turns about its pen, so its cell runs from
+/// 0.12 em before the pen to 0.88 em after it, with or without the font's vertical metrics. The
+/// inner stop lies at the middle of that cell, and the first character's selection ends there.
+#[test]
+fn an_upright_ligature_on_a_path_takes_its_stop_in_its_turned_cell() {
+    for (font, family) in [(ligature_caret_font(None), LIGATURE_CARET_FAMILY), (vertical_ligature_caret_font(900), VERTICAL_LIGATURE_CARET_FAMILY)] {
+        let db = db_with(font);
+        let mut line = BezPath::new();
+        line.move_to((0.0, 0.0));
+        line.line_to((1000.0, 0.0));
+        let mut t = point("fi", family);
+        t.vertical = true;
+        t.runs[0].style.standard_vertical_roman = true;
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        let l = layout(&db, &t);
+        assert!(l.on_path);
+        let Some(g) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+        assert_eq!(g.carets, vec![(1, 0.5)], "{family}");
+        assert!((g.width - 100.0).abs() < 1e-9 && (g.width_start + 12.0).abs() < 1e-9, "{family}: {} {}", g.width, g.width_start);
+        let x = |b| caret_position(&l, b).0.x - g.origin.x;
+        assert!((x(1) - 38.0).abs() < 1e-6, "{family}: {}", x(1));
+        let q = selection_quads(&l, 0, 1);
+        assert_eq!(q.len(), 1, "{q:?}");
+        assert!(((q[0][1] - q[0][0]).hypot() - 38.0).abs() < 1e-6, "{family}: {q:?}");
+        // A baseline shift moves the turned glyph along the path, and its stop with it.
+        let ink = g.outline.bounding_box().x0;
+        t.runs[0].style.baseline_shift = 10.0;
+        let l = layout(&db, &t);
+        let Some(s) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+        let moved = s.outline.bounding_box().x0 - ink;
+        assert!(moved.abs() > 1.0, "{family}: the shift moves the glyph along the path: {moved}");
+        let stop = caret_position(&l, 1).0.x - s.origin.x;
+        assert!((stop - 38.0 - moved).abs() < 1e-6, "{family}: {stop} against {}", 38.0 + moved);
+        // Horizontal Scale widens the glyph across the path; its stop stays inside the glyph.
+        t.runs[0].style.baseline_shift = 0.0;
+        t.runs[0].style.h_scale = 200.0;
+        let l = layout(&db, &t);
+        let Some(s) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+        let bounds = s.outline.bounding_box();
+        let stop = caret_position(&l, 1).0.x - s.origin.x;
+        assert!(bounds.x0 < stop && stop < bounds.x1 && stop > 0.0, "{family}: {stop} outside {bounds:?}");
+        t.runs[0].style.h_scale = 100.0;
+        // Skew on a slanted path: the stop stays inside the drawn glyph along the path.
+        let mut slant = BezPath::new();
+        slant.move_to((0.0, 0.0));
+        slant.line_to((1000.0, 1000.0));
+        t.runs[0].style.baseline_shift = 0.0;
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&slant), start: 0.0, end: None };
+        t.path_effect = vectorcraft_doc::PathEffect::Skew;
+        let l = layout(&db, &t);
+        let Some(s) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+        let tangent = Vec2::new(s.angle.cos(), s.angle.sin());
+        let ink = s.outline.elements().iter().filter_map(|el| el.end_point()).map(|p| (p - s.origin).dot(tangent));
+        let (lo, hi) = ink.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), d| (lo.min(d), hi.max(d)));
+        let (a, b) = caret_position(&l, 1);
+        let stop = (a.midpoint(b) - s.origin).dot(tangent);
+        assert!(lo < stop && stop < hi, "{family}: {stop} outside {lo}..{hi}");
+    }
 }
 
 /// Tracking that makes an upright ligature's advance negative leaves it upright: it keeps its

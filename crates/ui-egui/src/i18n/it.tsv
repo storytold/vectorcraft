@@ -1742,6 +1742,8 @@ file-filter	Templates	Modelli
 	Large Thumbnail View	Vista miniature grandi
 	Large Thumbnails	Miniature grandi
 	Lasso Tool	Strumento Lazo
+	Enclosing Lasso Tool	Strumento Lazo di inclusione
+	Enclosing Lasso	Lazo di inclusione
 	Last Effect: {name}	Ultimo effetto: {name}
 	Last Effect: {}	Ultimo effetto: {}
 	Last Effect…	Ultimo effetto…
@@ -1893,6 +1895,7 @@ file-filter	Templates	Modelli
 	Manually	Manualmente
 	Mark as trapped	Contrassegna come sottoposto a trapping
 	Mark Older Files as [Converted] When Opened	Contrassegna i file meno recenti come [Convertito] all'apertura
+	Use System Defaults for Edit Original	Usa le impostazioni predefinite di sistema per Modifica originale
 	Marker…	Indicatore…
 	Marks	Segni
 	Marks and Bleed	Segni e abbondanza
@@ -1955,6 +1958,7 @@ file-filter	Templates	Modelli
 	Modify	Modifica
 	Mojikumi	Mojikumi
 	Insert Kashidas	Inserisci kashida
+	Kashidas	Kashida
 	Long	Lunga
 	Stylistic	Stilistica
 	Mojikumi Set	Set mojikumi
@@ -2132,6 +2136,11 @@ file-filter	Templates	Modelli
 	New Toolbar	Nuova barra degli strumenti
 	Show Toolbar	Mostra barra degli strumenti
 	List Toolbars	Elenco barre degli strumenti
+	Manage Toolbars…	Gestisci barre degli strumenti…
+	Manage Toolbars	Gestisci barre degli strumenti
+	Rename Toolbar	Rinomina barra degli strumenti
+	Duplicate Toolbar	Duplica barra degli strumenti
+	Delete Toolbar	Elimina barra degli strumenti
 	New {kind} Style…	Nuovo stile {kind}…
 	New…	Nuovo…
 	Next	Successivo
@@ -4034,7 +4043,7 @@ axis	Both	Entrambi
 @msg	Save for Web: the image is empty	Salva per il web: l'immagine è vuota
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Salva scrive {_1}, non {_2}: usa document.export per gli altri formati
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Salva scrive {_1}, non {_2}: usa file.saveAsTemplate per scriverlo
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 scrive file .ai tradizionali; un modello .ait è sempre compatibile PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 scrive file .ai tradizionali, non modelli .ait
 @msg	Saved recovery data for {title}	Dati di recupero salvati per {title}
 @msg	Saved to User Defined: {_1}	Salvato in Definito dall'utente: {_1}
 @msg	Saved {path}	Salvato {path}
@@ -5179,6 +5188,11 @@ lighting	Light	Luce
 	Export Type:	Tipo di esportazione:
 	Movie Clip	Clip filmato
 @msg	name is empty	il nome è vuoto
+@msg	an action is already recording	è già in corso la registrazione di un’azione
+@msg	no such function key	tasto funzione inesistente
+@msg	no such color	colore inesistente
+@msg	{_1} cannot be used on Windows	{_1} non può essere usato su Windows
+@msg	more than one action is named “{_1}”	più di un’azione si chiama “{_1}”
 @msg	no symbol named `{n}`	nessun simbolo denominato `{n}`
 	Smudge Stick…	Sfumino…
 	Smudge Stick	Sfumino
@@ -5352,6 +5366,13 @@ axis	Y Axis	Asse Y
 	Action Options…	Opzioni azione…
 	Action Options	Opzioni azione
 	Rename Action	Rinomina azione
+	New Action…	Nuova azione…
+	New Action	Nuova azione
+	Create New Action	Crea nuova azione
+	Play Action	Esegui azione
+	Action Set:	Set di azioni:
+	Function Key:	Tasto funzione:
+	Record	Registra
 	Create New Set	Crea nuovo set
 	Stop Global Edit	Interrompi modifica globale
 	Global Edit Options	Opzioni modifica globale
@@ -5778,6 +5799,7 @@ breakText	Glyphs	Glifi
 	Gap 5	Spazio 5
 
 @msg	{_1}: they came in as the page's art	{_1}: sono stati importati come elementi grafici della pagina
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	gli oggetti disegnati in modo diverso dalla pagina del file stesso sono stati importati come elementi grafici della pagina: {_1}
 
 @msg	You must choose a side pattern.	Devi scegliere un motivo laterale.
 @msg	invalid pattern tile choice	scelta della tessera motivo non valida
@@ -5879,3 +5901,14 @@ breakText	Glyphs	Glifi
 	Create Swatch Legend	Crea legenda campioni
 	Create Swatch Legend…	Crea legenda campioni…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Strumenti testo
+	Text Tweaker…	Regolatore testo…
+	Text Tweaker	Regolatore testo
+	Attribute:	Attributo:
+	From:	Da:
+	To:	A:
+	Bow	Arco
+	Spike	Picco
+	Skip Spaces	Salta gli spazi
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	La grafica è troppo grande per essere copiata come immagine: le altre app non ne ricevono un PNG

@@ -603,6 +603,11 @@
 	New Toolbar	Nowy pasek narzędzi
 	Show Toolbar	Pokaż pasek narzędzi
 	List Toolbars	Lista pasków narzędzi
+	Manage Toolbars…	Zarządzaj paskami narzędzi…
+	Manage Toolbars	Zarządzaj paskami narzędzi
+	Rename Toolbar	Zmień nazwę paska narzędzi
+	Duplicate Toolbar	Powiel pasek narzędzi
+	Delete Toolbar	Usuń pasek narzędzi
 	Manage Workspaces…	Zarządzaj obszarami roboczymi…
 	Control	Sterowanie
 	Contextual Task Bar	Kontekstowy pasek zadań
@@ -1190,6 +1195,8 @@ lighting	Light	Światło
 	Hand Tool	Narzędzie Rączka
 	Join Tool	Narzędzie Łączenie
 	Lasso Tool	Narzędzie Lasso
+	Enclosing Lasso Tool	Narzędzie lassa obejmującego
+	Enclosing Lasso	Lasso obejmujące
 	Line Cut Tool	Narzędzie Cięcie linią
 	Line Graph Tool	Narzędzie Wykres liniowy
 	Line Segment Tool	Narzędzie Odcinek
@@ -1774,6 +1781,7 @@ digits	Malayalam	Malajalam
 	Left-to-Right Paragraph Direction	Kierunek akapitu od lewej do prawej
 	Line-end Punctuation Half Width	Interpunkcja na końcu wiersza o połowie szerokości
 	Insert Kashidas	Wstaw kaszidy
+	Kashidas	Kaszidy
 	Long	Długi
 	Stylistic	Stylistyczny
 	Mojikumi Set	Zestaw mojikumi
@@ -3464,6 +3472,7 @@ theme	Appearance	Wygląd
 	List Preferences	Wyświetl preferencje
 	Manually	Ręcznie
 	Mark Older Files as [Converted] When Opened	Oznaczaj starsze pliki jako [Przekonwertowane] przy otwieraniu
+	Use System Defaults for Edit Original	Używaj ustawień domyślnych systemu dla polecenia Edytuj oryginał
 	Match User Interface Brightness	Dopasuj do jasności interfejsu
 	Light Gray	Jasnoszary
 	Medium Gray	Średnio szary
@@ -4123,7 +4132,7 @@ imageTrace	Outline	Kontur
 @msg	Save for Web: the image is empty	Zapisz dla Internetu: obraz jest pusty
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Zapis tworzy {_1}, nie {_2}: dla innych formatów użyj document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Zapis tworzy {_1}, nie {_2}: aby go zapisać, użyj file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 zapisuje starsze pliki .ai; szablon .ait jest zawsze zgodny z PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 zapisuje starsze pliki .ai, a nie szablony .ait
 @msg	Saved recovery data for {title}	Zapisano dane odzyskiwania dla {title}
 @msg	Saved to User Defined: {_1}	Zapisano w zdefiniowanych przez użytkownika: {_1}
 @msg	Saved {path}	Zapisano {path}
@@ -5419,6 +5428,11 @@ mark-style	Japanese	Japońskie
 	Export Type:	Typ eksportu:
 	Movie Clip	Klip filmowy
 @msg	name is empty	nazwa jest pusta
+@msg	an action is already recording	operacja jest już nagrywana
+@msg	no such function key	brak takiego klawisza funkcyjnego
+@msg	no such color	brak takiego koloru
+@msg	{_1} cannot be used on Windows	Skrótu {_1} nie można używać w systemie Windows
+@msg	more than one action is named “{_1}”	więcej niż jedna operacja nazywa się „{_1}”
 @msg	no symbol named `{n}`	brak symbolu o nazwie `{n}`
 	Smudge Stick…	Rozmazywacz…
 	Smudge Stick	Rozmazywacz
@@ -5589,6 +5603,13 @@ axis	Y Axis	Oś Y
 	Action Options…	Opcje operacji…
 	Action Options	Opcje operacji
 	Rename Action	Zmień nazwę operacji
+	New Action…	Nowa operacja…
+	New Action	Nowa operacja
+	Create New Action	Utwórz nową operację
+	Play Action	Odtwórz operację
+	Action Set:	Zestaw operacji:
+	Function Key:	Klawisz funkcyjny:
+	Record	Nagraj
 	Create New Set	Utwórz nowy zestaw
 	Stop Global Edit	Zakończ edycję globalną
 	Global Edit Options	Opcje edycji globalnej
@@ -6013,6 +6034,7 @@ breakText	Glyphs	Glify
 	Gap 5	Odstęp 5
 
 @msg	{_1}: they came in as the page's art	{_1}: zaimportowano je jako grafikę strony
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	obiekty rysowane inaczej niż własna strona pliku zaimportowano jako grafikę strony: {_1}
 
 @msg	You must choose a side pattern.	Musisz wybrać wzór boczny.
 @msg	invalid pattern tile choice	nieprawidłowy wybór kafelka wzoru
@@ -6114,3 +6136,14 @@ breakText	Glyphs	Glify
 	Create Swatch Legend	Utwórz legendę próbek
 	Create Swatch Legend…	Utwórz legendę próbek…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Narzędzia tekstu
+	Text Tweaker…	Strojenie tekstu…
+	Text Tweaker	Strojenie tekstu
+	Attribute:	Atrybut:
+	From:	Od:
+	To:	Do:
+	Bow	Łuk
+	Spike	Szpic
+	Skip Spaces	Pomiń spacje
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika jest zbyt duża, aby skopiować ją jako obraz: inne aplikacje nie otrzymają jej w formacie PNG

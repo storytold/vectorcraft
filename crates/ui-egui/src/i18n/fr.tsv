@@ -1707,6 +1707,8 @@ font-technology	Variable	Variables
 	Large Thumbnail View	Grandes vignettes
 	Large Thumbnails	Grandes vignettes
 	Lasso Tool	Outil Lasso
+	Enclosing Lasso Tool	Outil Lasso englobant
+	Enclosing Lasso	Lasso englobant
 	Last Effect: {name}	Dernier effet : {name}
 	Last Effect: {}	Dernier effet : {}
 	Last Effect…	Dernier effet…
@@ -1858,6 +1860,7 @@ font-technology	Variable	Variables
 	Manually	Manuellement
 	Mark as trapped	Marquer comme grossi-maigri
 	Mark Older Files as [Converted] When Opened	Marquer les anciens fichiers comme [Converti] à l’ouverture
+	Use System Defaults for Edit Original	Utiliser les applications par défaut du système pour Modifier l’original
 	Marker…	Marqueur…
 	Marks	Repères
 	Marks and Bleed	Repères et fond perdu
@@ -1920,6 +1923,7 @@ font-technology	Variable	Variables
 	Modify	Modifier
 	Mojikumi	Mojikumi
 	Insert Kashidas	Insérer des kashidas
+	Kashidas	Kashidas
 	Long	Longue
 	Stylistic	Stylistique
 	Mojikumi Set	Jeu de mojikumi
@@ -2095,6 +2099,11 @@ font-technology	Variable	Variables
 	New Toolbar	Nouvelle barre d’outils
 	Show Toolbar	Afficher la barre d’outils
 	List Toolbars	Liste des barres d’outils
+	Manage Toolbars…	Gérer les barres d’outils…
+	Manage Toolbars	Gérer les barres d’outils
+	Rename Toolbar	Renommer la barre d’outils
+	Duplicate Toolbar	Dupliquer la barre d’outils
+	Delete Toolbar	Supprimer la barre d’outils
 	New {kind} Style…	Nouveau style de {kind}…
 	New…	Nouveau…
 	Next	Suivant
@@ -3982,7 +3991,7 @@ axis	Both	Les deux
 @msg	Save for Web: the image is empty	Enregistrer pour le Web : l’image est vide
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Enregistrer écrit du {_1}, pas du {_2} : utilisez document.export pour les autres formats
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Enregistrer écrit du {_1}, pas du {_2} : utilisez file.saveAsTemplate pour l’écrire
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 écrit des fichiers .ai hérités, alors qu’un modèle .ait est toujours compatible PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 écrit des fichiers .ai hérités, pas des modèles .ait
 @msg	Saved recovery data for {title}	Données de récupération enregistrées pour {title}
 @msg	Saved to User Defined: {_1}	Enregistré dans Défini par l’utilisateur : {_1}
 @msg	Saved {path}	{path} enregistré
@@ -5561,6 +5570,11 @@ theme	Appearance	Apparence
 	Export Type:	Type d'exportation :
 	Movie Clip	Clip
 @msg	name is empty	le nom est vide
+@msg	an action is already recording	un script est déjà en cours d’enregistrement
+@msg	no such function key	touche de fonction inexistante
+@msg	no such color	couleur inexistante
+@msg	{_1} cannot be used on Windows	{_1} ne peut pas être utilisé sous Windows
+@msg	more than one action is named “{_1}”	plusieurs scripts s’appellent « {_1} »
 @msg	no symbol named `{n}`	aucun symbole nommé `{n}`
 	Smudge Stick…	Estompe…
 	Smudge Stick	Estompe
@@ -5731,6 +5745,13 @@ axis	Y Axis	Axe Y
 	Action Options…	Options de script…
 	Action Options	Options de script
 	Rename Action	Renommer le script
+	New Action…	Nouveau script…
+	New Action	Nouveau script
+	Create New Action	Créer un script
+	Play Action	Exécuter le script
+	Action Set:	Jeu de scripts :
+	Function Key:	Touche de fonction :
+	Record	Enregistrer
 	Create New Set	Créer un jeu
 	Stop Global Edit	Arrêter la modification globale
 	Global Edit Options	Options de modification globale
@@ -6153,6 +6174,7 @@ breakText	Glyphs	Glyphes
 	Gap 5	Écart 5
 
 @msg	{_1}: they came in as the page's art	{_1} : ils ont été importés comme le dessin de la page
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	les objets dessinés différemment de la page du fichier lui-même ont été importés comme le dessin de la page : {_1}
 
 @msg	You must choose a side pattern.	Vous devez choisir un motif latéral.
 @msg	invalid pattern tile choice	choix de tuile de motif non valide
@@ -6254,3 +6276,14 @@ breakText	Glyphs	Glyphes
 	Create Swatch Legend	Créer une légende des nuances
 	Create Swatch Legend…	Créer une légende des nuances…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Outils de texte
+	Text Tweaker…	Ajusteur de texte…
+	Text Tweaker	Ajusteur de texte
+	Attribute:	Attribut :
+	From:	De :
+	To:	À :
+	Bow	Arc
+	Spike	Pointe
+	Skip Spaces	Ignorer les espaces
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	L’illustration est trop grande pour être copiée en tant qu’image : les autres applications n’en reçoivent pas de PNG

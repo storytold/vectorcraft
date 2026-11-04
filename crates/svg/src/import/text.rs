@@ -192,17 +192,30 @@ impl TextSlots {
 }
 
 /// Replace every `<text>` usvg would draw by a placeholder group (see the module docs).
-pub(super) fn prepare<'s>(svg: &'s str, xml: &roxmltree::Document, dpi: f64, warnings: &mut Vec<String>) -> (Cow<'s, str>, TextSlots) {
+/// `original_xml` supplies text styles; `xml` supplies placeholder positions and tracking IDs.
+pub(super) fn prepare<'s>(
+    svg: &'s str,
+    xml: &roxmltree::Document,
+    original_xml: Option<&roxmltree::Document>,
+    dpi: f64,
+    warnings: &mut Vec<String>,
+) -> (Cow<'s, str>, TextSlots) {
     let mut prefix = String::from("vectorcraft-text-");
     while xml.descendants().any(|n| n.attribute("id").is_some_and(|id| id.starts_with(&prefix))) {
         prefix.insert(0, '_');
     }
     let mut slots = TextSlots { prefix, texts: vec![] };
-    let cx = Ctx::new(xml, dpi);
+    let style_xml = original_xml.unwrap_or(xml);
+    let cx = Ctx::new(style_xml, dpi);
     let mut out = String::new();
     let mut copied = 0;
-    let is_text = |n: &XNode| n.is_element() && matches!(n.tag_name().name(), "text" | "flowRoot") && n.tag_name().namespace() == Some(SVG_NS);
-    for t in xml.descendants().filter(is_text) {
+    let is_text = |n: &XNode| {
+        n.is_element()
+            && matches!(n.tag_name().name(), "text" | "flowRoot")
+            && n.tag_name().namespace() == Some(SVG_NS)
+            && !n.ancestors().any(|a| a.has_tag_name("style"))
+    };
+    for (t, style_t) in xml.descendants().filter(is_text).zip(style_xml.descendants().filter(is_text)) {
         let label = t.attribute("id").map_or_else(|| "a text".to_string(), |id| format!("text '{id}'"));
         if t.ancestors().skip(1).any(|a| a.is_element() && a.tag_name().name() == "clipPath") {
             warnings.push(format!("{label} in a clip path ignored"));
@@ -220,13 +233,13 @@ pub(super) fn prepare<'s>(svg: &'s str, xml: &roxmltree::Document, dpi: f64, war
         };
         let flowed = t.tag_name().name() == "flowRoot";
         let Some(q) = qname.strip_suffix(t.tag_name().name()).filter(|q| q.is_empty() || q.ends_with(':')) else { continue };
-        if cx.css.own(t, "display").as_deref() == Some("none") || r.start < copied {
+        if cx.css.own(style_t, "display").as_deref() == Some("none") || r.start < copied {
             continue;
         }
-        let built = if flowed { cx.build_flow(t, &label, warnings) } else { cx.build(xml, t, &label, warnings) };
+        let built = if flowed { cx.build_flow(style_t, &label, warnings) } else { cx.build(style_xml, style_t, &label, warnings) };
         let Some((text, paints)) = built else { continue };
         out.push_str(&svg[copied..r.start]);
-        placeholder(&mut out, q, &cx.css, t, &slots.prefix, slots.texts.len(), text.marker, &paints);
+        placeholder(&mut out, q, &cx.css, t, style_t, &slots.prefix, slots.texts.len(), text.marker, &paints);
         copied = r.end;
         slots.texts.push(text);
     }
@@ -239,7 +252,7 @@ pub(super) fn prepare<'s>(svg: &'s str, xml: &roxmltree::Document, dpi: f64, war
 
 /// Write the placeholder group for text `t` (namespace prefix `q`), slot `index`.
 #[allow(clippy::too_many_arguments)]
-fn placeholder(out: &mut String, q: &str, css: &Styles, t: XNode, prefix: &str, index: usize, b: Rect, paints: &[String]) {
+fn placeholder(out: &mut String, q: &str, css: &Styles, t: XNode, style_t: XNode, prefix: &str, index: usize, b: Rect, paints: &[String]) {
     let _ = write!(out, "<{q}g");
     for a in ["id", "transform", "systemLanguage", "requiredFeatures", "requiredExtensions"] {
         if let Some(v) = t.attribute(a) {
@@ -251,9 +264,9 @@ fn placeholder(out: &mut String, q: &str, css: &Styles, t: XNode, prefix: &str, 
     for (p, initial) in
         [("opacity", "1"), ("clip-path", "none"), ("mask", "none"), ("filter", "none"), ("mix-blend-mode", "normal"), ("isolation", "auto")]
     {
-        let _ = write!(style, "{p}:{};", css.own(t, p).as_deref().unwrap_or(initial));
+        let _ = write!(style, "{p}:{};", css.own(style_t, p).as_deref().unwrap_or(initial));
     }
-    if let Some(v) = css.own(t, "visibility") {
+    if let Some(v) = css.own(style_t, "visibility") {
         let _ = write!(style, "visibility:{v};");
     }
     let _ = write!(out, " style=\"{}display:inline\">", xml_escape(&style));

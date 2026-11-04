@@ -103,7 +103,7 @@ fn densified(sp: &SubPath, flat_tol: f64, max_du: f64) -> Option<Vec<Point>> {
     let mut bp = BezPath::new();
     sp.to_bezpath_into(&mut bp);
     let mut pts = vec![];
-    kurbo::flatten(bp.iter(), flat_tol.max(1e-4), |e| {
+    vectorcraft_geom::flatten(bp.iter(), flat_tol.max(1e-4), |e| {
         if let PathEl::MoveTo(q) | PathEl::LineTo(q) = e {
             pts.push(q);
         }

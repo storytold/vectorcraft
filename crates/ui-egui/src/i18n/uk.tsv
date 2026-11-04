@@ -1736,6 +1736,8 @@ file-filter	Templates	Шаблони
 	Large Thumbnail View	Великі мініатюри
 	Large Thumbnails	Великі мініатюри
 	Lasso Tool	Інструмент «Ласо»
+	Enclosing Lasso Tool	Інструмент «Охоплювальне ласо»
+	Enclosing Lasso	Охоплювальне ласо
 	Last Effect: {name}	Останній ефект: {name}
 	Last Effect: {}	Останній ефект: {}
 	Last Effect…	Останній ефект…
@@ -1887,6 +1889,7 @@ file-filter	Templates	Шаблони
 	Manually	Вручну
 	Mark as trapped	Позначити як трепінг
 	Mark Older Files as [Converted] When Opened	Помічати старі файли як [Перетворені] при відкритті
+	Use System Defaults for Edit Original	Використовувати системні типові програми для «Редагувати оригінал»
 	Marker…	Маркер…
 	Marks	Мітки
 	Marks and Bleed	Мітки та виліт
@@ -1949,6 +1952,7 @@ file-filter	Templates	Шаблони
 	Modify	Змінити
 	Mojikumi	Mojikumi
 	Insert Kashidas	Вставляти кашиди
+	Kashidas	Кашиди
 	Long	Довгі
 	Stylistic	Стилістичні
 	Mojikumi Set	Набір mojikumi
@@ -2124,6 +2128,11 @@ file-filter	Templates	Шаблони
 	New Toolbar	Нова панель інструментів
 	Show Toolbar	Показати панель інструментів
 	List Toolbars	Список панелей інструментів
+	Manage Toolbars…	Керування панелями інструментів…
+	Manage Toolbars	Керування панелями інструментів
+	Rename Toolbar	Перейменувати панель інструментів
+	Duplicate Toolbar	Дублювати панель інструментів
+	Delete Toolbar	Видалити панель інструментів
 	New {kind} Style…	Новий стиль {kind}…
 	New…	Створити…
 	Next	Далі
@@ -4018,7 +4027,7 @@ axis	Both	Обидві
 @msg	Save for Web: the image is empty	Зберегти для Інтернету: зображення пусте
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Збереження записує {_1}, а не {_2}: використовуйте document.export для інших форматів
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Збереження записує {_1}, а не {_2}: щоб записати його, використовуйте file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 записує застарілі файли .ai; шаблон .ait завжди сумісний із PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 записує застарілі файли .ai, а не шаблони .ait
 @msg	Saved recovery data for {title}	Збережено дані відновлення для {title}
 @msg	Saved to User Defined: {_1}	Збережено в «Користувацькі»: {_1}
 @msg	Saved {path}	Збережено: {path}
@@ -5159,6 +5168,11 @@ lighting	Light	Світло
 	Export Type:	Тип експорту:
 	Movie Clip	Кліп
 @msg	name is empty	ім’я порожнє
+@msg	an action is already recording	дія вже записується
+@msg	no such function key	такої функціональної клавіші немає
+@msg	no such color	такого кольору немає
+@msg	{_1} cannot be used on Windows	Сполучення {_1} не можна використовувати у Windows
+@msg	more than one action is named “{_1}”	кілька дій мають назву «{_1}»
 @msg	no symbol named `{n}`	немає символу з назвою `{n}`
 	Smudge Stick…	Розтушовування…
 	Smudge Stick	Розтушовування
@@ -5332,6 +5346,13 @@ axis	Y Axis	Вісь Y
 	Action Options…	Параметри дії…
 	Action Options	Параметри дії
 	Rename Action	Перейменувати дію
+	New Action…	Нова дія…
+	New Action	Нова дія
+	Create New Action	Створити нову дію
+	Play Action	Відтворити дію
+	Action Set:	Набір дій:
+	Function Key:	Функціональна клавіша:
+	Record	Записати
 	Create New Set	Створити новий набір
 	Stop Global Edit	Завершити глобальне редагування
 	Global Edit Options	Параметри глобального редагування
@@ -5758,6 +5779,7 @@ breakText	Glyphs	Гліфи
 	Gap 5	Проміжок 5
 
 @msg	{_1}: they came in as the page's art	{_1}: їх імпортовано як графіку сторінки
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	об’єкти, що малювалися інакше, ніж власна сторінка файлу, імпортовано як графіку сторінки: {_1}
 
 @msg	You must choose a side pattern.	Виберіть бічний візерунок.
 @msg	invalid pattern tile choice	недійсний вибір плитки візерунка
@@ -5859,3 +5881,14 @@ breakText	Glyphs	Гліфи
 	Create Swatch Legend	Створити легенду зразків
 	Create Swatch Legend…	Створити легенду зразків…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Інструменти тексту
+	Text Tweaker…	Налаштування тексту…
+	Text Tweaker	Налаштування тексту
+	Attribute:	Атрибут:
+	From:	Від:
+	To:	До:
+	Bow	Дуга
+	Spike	Пік
+	Skip Spaces	Пропускати пробіли
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Графіка завелика, щоб скопіювати її як зображення: інші програми не отримають її PNG
