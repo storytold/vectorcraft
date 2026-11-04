@@ -2176,6 +2176,44 @@ fn select_same_symbol_instance_skips_objects_that_cannot_be_selected() {
     assert_eq!(selected(&s), vec![a1, on_template]);
 }
 
+/// Select › Same › Symbol Instance takes as its reference the first selected object that can be
+/// selected, whatever its kind: an instance inside a selected group, and an instance just placed
+/// on a locked artboard while it stays selected. A first object that is not an instance matches
+/// nothing, so the selection is cleared.
+#[test]
+fn select_same_symbol_instance_reference_can_be_any_selectable_object() {
+    const C: &str = "select.same.symbolInstance";
+    let mut s = session();
+    let place = |s: &mut Session, name: &str, x: f64| id_of(&s.execute("symbol.place", &json!({"name": name, "x": x, "y": 200})).unwrap());
+    rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let a1 = id_of(&s.execute("symbol.new", &json!({"name": "A"})).unwrap());
+    rect(&mut s, 50.0, 0.0, 20.0, 20.0);
+    let b1 = id_of(&s.execute("symbol.new", &json!({"name": "B"})).unwrap());
+    let b2 = place(&mut s, "B", 200.0);
+    let plain = rect(&mut s, 0.0, 100.0, 20.0, 20.0);
+    // A path selected before an instance is the reference, and no instance matches it.
+    sel(&mut s, &[plain, b1]);
+    assert_eq!(s.execute(C, &json!({})).unwrap()["count"], 0);
+    assert!(selected(&s).is_empty());
+    // An instance inside a group, selected on its own, is the reference.
+    sel(&mut s, &[b1, plain]);
+    s.execute("object.group", &json!({})).unwrap();
+    sel(&mut s, &[b1]);
+    assert_eq!(s.execute(C, &json!({})).unwrap()["count"], 2);
+    let mut got = selected(&s);
+    got.sort();
+    let mut want = vec![b1, b2];
+    want.sort();
+    assert_eq!(got, want);
+    // An instance placed on a locked artboard is the reference while it stays selected.
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    let a2 = place(&mut s, "A", 1100.0);
+    assert_eq!(selected(&s), vec![a2]);
+    assert_eq!(s.execute(C, &json!({})).unwrap()["count"], 2);
+    assert_eq!(selected(&s), vec![a1, a2]);
+}
+
 /// Select › Same › Text Fill & Stroke Color selects the type with characters whose fill and stroke
 /// both match the first character of the selected type: the same fill with another stroke, or the
 /// same stroke with another fill, is left out, and in type with several runs one run has to match

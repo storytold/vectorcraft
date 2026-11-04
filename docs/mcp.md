@@ -1475,10 +1475,12 @@ selection holds no other type, they return the error "select a text object".
 
 `select.same.fillColor`, `strokeColor`, `fillAndStroke`, `strokeWeight`, `opacity`, `blendingMode`, `appearance`,
 `shapeType`, `graphicStyle`, `appearanceAttribute` and `symbolInstance` compare the other objects with the first
-selected object, in selection order, that these commands could select. A selected object that is hidden or locked,
-inside a hidden or locked group or layer, on a template layer, on a locked artboard while nothing is isolated, or
-outside the isolated group is passed over. When the selection holds no other object, they return the error "nothing
-selected".
+selected object, in selection order, that can be selected. That object can be of any kind: a group, a member of a
+group selected on its own, or, for `symbolInstance`, an object that is not a symbol instance, which matches nothing and
+leaves the selection empty. A selected object that is hidden or locked, inside a hidden or locked group or layer, on a
+template layer, on a locked artboard while nothing is isolated, or outside the isolated group is passed over. New art,
+such as a symbol instance just placed, is not passed over for being on a locked artboard while it stays selected. When
+the selection holds no other object, they return the error "nothing selected".
 
 ## Shaper Groups
 
