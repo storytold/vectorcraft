@@ -441,8 +441,11 @@ struct QueuedWheel {
     frame: u64,
     field: egui::Id,
     position: egui::Pos2,
+    rect: egui::Rect,
     event: egui::Event,
-    turns: i32,
+    amount: f32,
+    reset_after: bool,
+    positions_after: Vec<egui::Pos2>,
 }
 
 #[derive(Clone, Default)]
@@ -490,24 +493,26 @@ impl egui::Plugin for WheelLayerSnapshot {
                 true
             }
         });
-        let invalid = ready
-            .iter()
-            .filter(|event| {
-                fields.fields.iter().find(|field| field.id == event.field).is_none_or(|field| ctx.layer_id_at(event.position) != Some(field.layer))
-            })
-            .map(|event| event.field)
-            .collect::<HashSet<_>>();
         let replayed = fields.replay.len();
         for event in ready {
-            if invalid.contains(&event.field) {
+            let layer = fields.fields.iter().find(|field| field.id == event.field).map(|field| field.layer);
+            let active = layer.is_some_and(|layer| ctx.layer_id_at(event.position) == Some(layer));
+            let id = event.field.with("wheel");
+            if !active {
+                ctx.data_mut(|d| d.remove::<f32>(id));
                 fields.replay.push(egui::Event::PointerMoved(event.position));
                 fields.replay.push(event.event);
-            } else if event.turns != 0 {
-                fields.pending.entry(event.field).or_default().push(WheelInput::Notches(event.turns));
+            } else {
+                let notches = ctx.data(|d| d.get_temp::<f32>(id)).unwrap_or(0.0) + event.amount;
+                let whole = notches.trunc();
+                ctx.data_mut(|d| d.insert_temp(id, notches - whole));
+                if whole != 0.0 {
+                    fields.pending.entry(event.field).or_default().push(WheelInput::Notches(whole as i32));
+                }
             }
-        }
-        for id in invalid {
-            ctx.data_mut(|d| d.remove::<f32>(id.with("wheel")));
+            if event.reset_after || event.positions_after.iter().any(|position| ctx.layer_id_at(*position) != layer) {
+                ctx.data_mut(|d| d.remove::<f32>(id));
+            }
         }
         if fields.replay.len() > replayed {
             ctx.request_repaint();
@@ -554,6 +559,18 @@ pub(crate) fn ensure_native_wheel_layers(ctx: &egui::Context) {
 
 fn wheel_fields_id(viewport: egui::ViewportId) -> egui::Id {
     egui::Id::unique("font-wheel-fields").with(viewport)
+}
+
+fn mark_queued_wheel_leaves(fields: &mut WheelFields, point: Option<egui::Pos2>) {
+    let mut marked = HashSet::new();
+    for event in fields.queued.iter_mut().rev() {
+        if marked.insert(event.field) {
+            match point {
+                Some(position) if event.rect.contains(position) => event.positions_after.push(position),
+                _ => event.reset_after = true,
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -713,8 +730,9 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
         }
         match event {
             egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } => {
+                mark_queued_wheel_leaves(&mut fields, Some(*p));
                 for field in &fields.fields {
-                    if over(field, pointer) && !over(field, Some(*p)) {
+                    if pointer.is_some_and(|point| field.rect.contains(point)) && !field.rect.contains(*p) {
                         ctx.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
                         fields.pending.entry(field.id).or_default().push(WheelInput::Leave);
                     }
@@ -723,6 +741,7 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
             }
             egui::Event::PointerGone => {
                 pointer = None;
+                mark_queued_wheel_leaves(&mut fields, None);
                 for field in &fields.fields {
                     ctx.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
                     fields.pending.entry(field.id).or_default().push(WheelInput::Leave);
@@ -730,20 +749,31 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
             }
             egui::Event::MouseWheel { unit, delta, modifiers, .. } if modifiers.is_none() && delta.y != 0.0 => {
                 if let Some(field) = fields.fields.iter().rev().find(|f| !fields.activating.contains(&f.id) && over(f, pointer)).copied() {
-                    let id = field.id.with("wheel");
-                    let mut notches: f32 = ctx.data(|d| d.get_temp(id)).unwrap_or(0.0);
-                    notches -= match unit {
+                    let amount = -match unit {
                         egui::MouseWheelUnit::Point => delta.y / line,
                         egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => delta.y,
                     };
-                    let whole = notches.trunc();
-                    ctx.data_mut(|d| d.insert_temp(id, notches - whole));
                     if cfg!(not(target_arch = "wasm32")) && ctx.viewport_id() != raw.viewport_id {
                         if let Some(position) = pointer {
-                            fields.queued.push(QueuedWheel { frame, field: field.id, position, event: event.clone(), turns: whole as i32 });
+                            fields.queued.push(QueuedWheel {
+                                frame,
+                                field: field.id,
+                                position,
+                                rect: field.rect,
+                                event: event.clone(),
+                                amount,
+                                reset_after: false,
+                                positions_after: Vec::new(),
+                            });
                         }
-                    } else if whole != 0.0 {
-                        fields.pending.entry(field.id).or_default().push(WheelInput::Notches(whole as i32));
+                    } else {
+                        let id = field.id.with("wheel");
+                        let notches = ctx.data(|d| d.get_temp::<f32>(id)).unwrap_or(0.0) + amount;
+                        let whole = notches.trunc();
+                        ctx.data_mut(|d| d.insert_temp(id, notches - whole));
+                        if whole != 0.0 {
+                            fields.pending.entry(field.id).or_default().push(WheelInput::Notches(whole as i32));
+                        }
                     }
                     captured = true;
                     return false;
