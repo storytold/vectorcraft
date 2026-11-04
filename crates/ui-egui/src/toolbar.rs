@@ -59,6 +59,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
             &["rotate", "reflect", "scale", "shear", "reshape", "freeTransform", "puppetWarp"],
             &["shapeBuilder", "livePaintBucket", "livePaintSelection", "blend"],
             &["dimension"],
+            &["contour"],
         ],
     ),
     ("Type", &[&["areaType", "typeOnPath", "verticalAreaType", "verticalTypeOnPath"], &["type", "verticalType", "touchType"]]),

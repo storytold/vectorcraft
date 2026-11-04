@@ -12,6 +12,7 @@ mod colorcmds;
 pub mod colormgmt;
 pub mod colortheme;
 mod compoundshape;
+pub(crate) mod contour;
 pub(crate) mod create;
 mod css;
 mod cut;
@@ -262,6 +263,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
         v.extend(pathops::specs());
+        v.extend(contour::specs());
         v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
         v.extend(menucmds::specs());

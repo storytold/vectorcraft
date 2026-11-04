@@ -11,6 +11,7 @@ pub mod addons;
 pub mod bbox;
 pub mod builder;
 pub mod catalog;
+pub mod contour;
 pub mod corners;
 pub mod cropimage;
 pub mod cut;
@@ -296,6 +297,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
             .or_else(|| printtiling::create(other))
             .or_else(|| cropimage::create(other))
             .or_else(|| cut::create(other))
+            .or_else(|| contour::create(other))
             .or_else(|| intertwine::create(other))
             .or_else(|| objects_on_path::create(other))
             .or_else(|| touchtype::create(other))

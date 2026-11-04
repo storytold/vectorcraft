@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (document tabs are reordered by dragging them along the tab strip; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Contour tool, beyond Illustrator; scores and estimates unchanged; Select by Artboards add-on selects by overlap, inside or outside several artboards; Cmd+Space keeps the active drawing cursor during its drag; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -437,6 +437,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | Contour tool (beyond Illustrator): drag away from a selected shape's edge to grow a live copy of it, or toward the inside to shrink it; the copy carries a live Offset Path effect, so it stays editable until Bake (Expand Appearance), a second drag changes the same Contour instead of nesting one, and a floating bar sets the distance and the Sharp, Round or Square corners. `object.contour` is the command behind it. A VectorCraft design built on Offset Path; no other application was inspected. Scores and estimates unchanged. |
 | 2026-11-05 | minor | Document tabs are reordered by dragging them along the tab strip (`document.move`, #5663). |
 | 2026-11-04 | minor | Path Precision Tools add-on (a VectorCraft addition): Set Corners… rounds only the corners in an angle range (#5545); scores and estimates unchanged |
 | 2026-11-04 | minor | Path Precision Tools add-on (a VectorCraft addition): Set Corners… rounds all, the odd-numbered or the even-numbered anchors (#5546); scores and estimates unchanged |
