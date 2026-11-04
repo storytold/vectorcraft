@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Gradient panel: Delete Stop beside the ramp, #5403; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Type Tools add-on: Release Type on a Path, a VectorCraft addition, #5532; optical kerning spaces pairs by the font's own stem spacing instead of a fixed tight gap; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
@@ -8,7 +8,7 @@ Ligature caret stops use a font's GDEF contour-point positions in horizontal and
 
 Creating a gradient from solid or empty paint uses the document's color model for its default stops, including drawing its vector with the Gradient tool. Explicit `keepModel: true` retains RGB defaults, and existing gradients keep their own colors. Scores and estimates are unchanged.
 
-**Feature evidence last updated:** 2026-11-03.
+**Feature evidence last updated:** 2026-11-05.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
@@ -23,6 +23,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Type Tools add-on: Release Type on a Path (a VectorCraft addition, #5532): evidence added; scores unchanged. |
 | 2026-11-04 | minor | Path Precision Tools add-on (a VectorCraft addition): Set Corners… and `addon.pathtools.cornerSet` `minAngle`/`maxAngle` round only the corners whose angle is in a range (#5545); evidence added; scores unchanged. |
 | 2026-11-04 | minor | Path Precision Tools add-on (a VectorCraft addition): Set Corners… and `addon.pathtools.cornerSet` `every` round all, the odd-numbered or the even-numbered anchors of each path (#5546); evidence added; scores unchanged. |
 | 2026-11-04 | minor | Transform Each's Scale has the documented Relative and Absolute radio buttons (`object.transformEach` `relative`: percentages of each object's size, or the width and height it becomes, measured on each object's own bounds) and the link that keeps the two scales in proportion; the panel lists Scale, Move, Rotate, the Options in two columns, the Reference Point and Preview (level with Copy, Cancel and OK) in the documented order. Scores and estimates unchanged. |
@@ -1581,6 +1582,10 @@ A VectorCraft addition, not a feature of the reference app, so no area score mov
 ## Type Tools add-on: Text Tweaker (2026-11-03)
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Type Tools › Text Tweaker… gives one character attribute (size, baseline shift, character rotation, horizontal or vertical scale, tracking, leading or stroke weight) to the selected characters letter by letter, from a start value to an end value along a straight ramp, an ease in and out, a bow, a spike or at random with a seed, while the text stays live and editable (#4924). Values are set as the Character panel sets them, in its units and ranges, so scaled type takes the sizes shown; spaces and line breaks are skipped unless asked for, each type object gets its own ramp, the range is the Type tool's selection or all the text of the selected type objects, and the run is one undo step from a dialog with Preview. Tests: `cmd::addons::typetools::tests` in `vectorcraft-engine` (each shape, each attribute, skipped spaces, ranges, one ramp per object, seeded random values, scaled type, one undo step, bad params refused), `addons::typetools::tests` in `vectorcraft-ui-egui` (the submenu, the dialog, Preview and Cancel, OK) and `command_sweep`. Commands: `docs/mcp.md` › Type Tools add-on.
+
+## Type Tools add-on: Release Type on a Path (2026-11-05)
+
+A VectorCraft addition, not a feature of the reference app (it has no command for this), so no area score moves. Object › Plug-ins › Type Tools › Release Type on a Path… splits each selected type on a path into point type holding the same text and the plain path it was set on, or keeps only one of them (#5532). The path keeps its exact shape (open or closed, anchors and handles, the object's transform), layer and place in the stacking order, with no fill and no stroke since type paths carry no paint of their own. The text keeps its runs, character and paragraph attributes and becomes point type on one straight line whose baseline starts where the first character sat on the path; Type on a Path Options don't apply to point type and are dropped. Keep Original leaves the type on a path and adds the released objects above it. Other objects are left alone and a selection with no type on a path makes no undo step; otherwise the run is one undo step, the released objects are selected, and the dialog's Preview works as Type on a Path Options' does (#5360). Tests: `cmd::addons::typetools::tests::release` in `vectorcraft-engine` (each mode, Keep Original, mixed and empty selections, closed, open, curved and flipped paths, transformed and grouped type, multi-style and unicode text with a centred paragraph, empty type, undo and redo, preview, cancel and commit, bad params refused), `release_type_on_a_path_previews_cancels_and_runs_on_ok` in `vectorcraft-ui-egui` and `command_sweep`. Commands: `docs/mcp.md` › Type Tools add-on › Release Type on a Path.
 
 ## Path Precision Tools add-on: Divide into Dashes (2026-11-01)
 

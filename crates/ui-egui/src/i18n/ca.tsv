@@ -6321,6 +6321,10 @@ breakText	Glyphs	Glifs
 	Bow	Arc
 	Spike	Pic
 	Skip Spaces	Omet els espais
+	Release Type on a Path…	Allibera el text sobre un traçat…
+	Release Type on a Path	Allibera el text sobre un traçat
+	Text and Path	Text i traçat
+	Path Only	Només traçat
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	La il·lustració és massa gran per copiar-la com a imatge: les altres aplicacions no en reben cap PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

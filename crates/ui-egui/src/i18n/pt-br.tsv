@@ -6408,6 +6408,10 @@ swatch	Yellow Green	Verde-amarelado
 	Bow	Arco
 	Spike	Pico
 	Skip Spaces	Ignorar espaços
+	Release Type on a Path…	Liberar Texto em um Caminho…
+	Release Type on a Path	Liberar Texto em um Caminho
+	Text and Path	Texto e caminho
+	Path Only	Somente caminho
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	A arte é grande demais para ser copiada como imagem: outros aplicativos não recebem um PNG dela
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

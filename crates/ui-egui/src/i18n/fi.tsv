@@ -6365,6 +6365,10 @@ breakText	Glyphs	Merkit
 	Bow	Kaari
 	Spike	Piikki
 	Skip Spaces	Ohita välilyönnit
+	Release Type on a Path…	Vapauta teksti polulta…
+	Release Type on a Path	Vapauta teksti polulta
+	Text and Path	Teksti ja polku
+	Path Only	Vain polku
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafiikka on liian suuri kopioitavaksi kuvana: muut sovellukset eivät saa siitä PNG-kuvaa
 	Check for Updates…	Tarkista päivitykset…
 	VectorCraft Updates	VectorCraft-päivitykset

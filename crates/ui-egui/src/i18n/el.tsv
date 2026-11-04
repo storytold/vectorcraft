@@ -6287,6 +6287,10 @@ breakText	Glyphs	Γλύφοι
 	Bow	Τόξο
 	Spike	Αιχμή
 	Skip Spaces	Παράλειψη κενών
+	Release Type on a Path…	Αποδέσμευση κειμένου σε διαδρομή…
+	Release Type on a Path	Αποδέσμευση κειμένου σε διαδρομή
+	Text and Path	Κείμενο και διαδρομή
+	Path Only	Μόνο διαδρομή
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Το γραφικό είναι πολύ μεγάλο για αντιγραφή ως εικόνα: οι άλλες εφαρμογές δεν λαμβάνουν PNG του
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

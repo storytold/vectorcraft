@@ -6319,6 +6319,10 @@ breakText	Glyphs	Glifák
 	Bow	Ív
 	Spike	Csúcs
 	Skip Spaces	Szóközök kihagyása
+	Release Type on a Path…	Útvonalszöveg szétválasztása…
+	Release Type on a Path	Útvonalszöveg szétválasztása
+	Text and Path	Szöveg és útvonal
+	Path Only	Csak útvonal
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	A grafika túl nagy ahhoz, hogy képként másolható legyen: más alkalmazások nem kapnak róla PNG-t
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

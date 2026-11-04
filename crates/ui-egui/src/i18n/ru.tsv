@@ -6424,6 +6424,10 @@ shape	Open	Открытый
 	Bow	Дуга
 	Spike	Пик
 	Skip Spaces	Пропускать пробелы
+	Release Type on a Path…	Освободить текст по контуру…
+	Release Type on a Path	Освободить текст по контуру
+	Text and Path	Текст и контур
+	Path Only	Только контур
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графика слишком велика для копирования в виде изображения: другие приложения не получат её PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

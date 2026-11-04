@@ -6335,6 +6335,10 @@ breakText	Glyphs	Glyfy
 	Bow	Oblouk
 	Spike	Špička
 	Skip Spaces	Přeskočit mezery
+	Release Type on a Path…	Uvolnit text na cestě…
+	Release Type on a Path	Uvolnit text na cestě
+	Text and Path	Text a cesta
+	Path Only	Pouze cesta
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Kresba je příliš velká na zkopírování jako obrázek: ostatní aplikace z ní nedostanou PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

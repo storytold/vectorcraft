@@ -6190,6 +6190,10 @@ breakText	Glyphs	Glify
 	Bow	Łuk
 	Spike	Szpic
 	Skip Spaces	Pomiń spacje
+	Release Type on a Path…	Uwolnij tekst na ścieżce…
+	Release Type on a Path	Uwolnij tekst na ścieżce
+	Text and Path	Tekst i ścieżka
+	Path Only	Tylko ścieżka
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika jest zbyt duża, aby skopiować ją jako obraz: inne aplikacje nie otrzymają jej w formacie PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

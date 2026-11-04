@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Find Font's Replace With Font lists family and style rows, searchable, with its own scroll state and a refresh after each replacement; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Release Type on a Path in the Type Tools add-on, beyond Illustrator, #5532; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -69,6 +69,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | No Break | done | Character panel menu (`text.setFormat` / `text.setRangeStyle {noBreak}`): the marked characters stay on one line, including across a space; a run that does not fit after earlier text moves together, and a run longer than the line stays together. Evidence: `layout::wrapping_tests::no_break_keeps_marked_characters_on_one_line`, `tests::no_break_keeps_marked_words_on_one_line`, `typecmd::no_break_is_a_character_attribute_saved_only_when_on` |
 | Inline symbols in text | beyond Illustrator | not scored |
 | Align Stroke (inside, outside) on live type's character stroke | beyond Illustrator | not scored; `stroke.set {align}` and `text.setRangeStyle {strokeOptions: {align}}`; saved natively, drawn around the glyphs on the canvas and in PDF, EPS and SVG (live text, stroke on the glyph outlines); visual bounds grow with it (#2294) |
+| Release Type on a Path (Object › Plug-ins › Type Tools) | beyond Illustrator | not scored; `addon.type.releasePath` splits type on a path into point type with the same text and attributes, on one straight line starting where its first character sat, and the plain path it was set on (exact shape, place in the stacking order, no paint), or keeps only one of them, optionally leaving the original; a dialog with Preview, one undo step (#5532) |
 
 Character Styles menu New/Redefine and footer New capture the first selected character of a nonempty Type selection, including exact style-run and UTF-8 boundaries; New adds a definition without applying it. New/Redefine commands accept optional `end` for range capture. Start-only command affinity, existing UI caret/object behavior and paragraph capture at `start` remain unchanged. Pointer regressions assert captured definitions, linked-text updates and local overrides, complete-document Undo/Redo and saved state, with whole-object, collapsed-caret and range-Apply controls. Capture closes prior typing while preserving the Type selection. Live text and Select All regressions exercise menu New/Redefine and footer New, asserting that further typing retains the captured definition and that typing, capture and further typing have separate Undo/Redo steps. Focused engine and egui input tests pass for boundary capture, all three live-typing capture routes and the existing compatibility controls. Full workspace CI passes.
 
@@ -76,6 +77,7 @@ Character Styles menu New/Redefine and footer New capture the first selected cha
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Release Type on a Path joins the Type Tools add-on: type on a path splits into point type and its path (#5532, beyond Illustrator). Scores and estimates unchanged. |
 | 2026-11-04 | minor | A Type-range Copy or Cut publishes styled art alongside plain text, so a later canvas Paste keeps its character formatting after editing ends (#5636). Scores and estimates unchanged. |
 | 2026-11-03 | minor | Glyphs panel adds Alternates for Current Selection. A chosen alternate changes one character's drawn glyph while keeping its Unicode text; character-style capture does not copy that per-character choice. Scores and estimates unchanged. |
 | 2026-11-04 | minor | Find Font's Replace With Font lists family and style rows, one click setting both, with a search over them; the list scrolls apart from the document's font list and refreshes after each replacement (#4972); scores and estimates unchanged. |

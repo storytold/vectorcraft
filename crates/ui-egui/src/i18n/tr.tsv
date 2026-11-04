@@ -6292,6 +6292,10 @@ breakText	Glyphs	Glifler
 	Bow	Yay
 	Spike	Sivri Uç
 	Skip Spaces	Boşlukları Atla
+	Release Type on a Path…	Yoldaki Metni Ayır…
+	Release Type on a Path	Yoldaki Metni Ayır
+	Text and Path	Metin ve yol
+	Path Only	Yalnızca yol
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Çizim, resim olarak kopyalanamayacak kadar büyük: diğer uygulamalar bunun PNG'sini almaz
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
