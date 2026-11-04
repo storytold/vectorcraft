@@ -55,4 +55,3 @@ fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(10.0);
     crate::community::links(app, ui);
 }
-

@@ -197,9 +197,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
         // Cloud storage: nothing without a service, and the ones that act on a drawing need one open.
-        "cloud.open" | "cloud.browse" | "cloud.shared" | "cloud.link" | "cloud.status" | "cloud.openFile" => {
-            crate::cloud::available(app)
-        }
+        "cloud.open" | "cloud.browse" | "cloud.shared" | "cloud.link" | "cloud.status" | "cloud.openFile" => crate::cloud::available(app),
         "cloud.share" => crate::cloud::available(app) && app.share.available() && app.session.active().is_some(),
         "cloud.saveAs" | "cloud.save" | "cloud.reload" => crate::cloud::available(app) && app.session.active().is_some(),
         "type.bold" | "type.italic" | "type.underline" | "type.lineComposer" | "type.hyphenate" => {
