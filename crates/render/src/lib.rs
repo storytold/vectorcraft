@@ -74,6 +74,9 @@ pub struct Renderer {
     /// Expanded stroke outlines keyed by ([`Self::stroke_owner`], stroke layer address, width bits,
     /// tolerance level): panning re-renders reuse them instead of re-expanding every stroke.
     strokes: PtrMap<StrokeKey, StrokeEntry>,
+    /// The key in `strokes` of the latest outline of each stroke of an object, under its
+    /// [`MovedKey`]: a moved copy of the object draws that outline moved ([`Self::moved_outline`]).
+    moved_strokes: PtrMap<MovedKey, StrokeKey>,
     /// Expanded character stroke outlines, with the glyph geometry kept in `texts` they belong to,
     /// keyed by ([`Self::stroke_owner`] of that geometry, run, width bits, tolerance level): type
     /// that doesn't change draws them again instead of expanding its strokes in every frame. Within
@@ -215,7 +218,9 @@ mod threads;
 
 pub use bounds::{drawn_bounds, drawn_outline, effect_bounds, painted_bounds};
 pub use frame::FrameStats;
-use frame::{ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey};
+use frame::{
+    ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, MovedKey, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey,
+};
 #[cfg(test)]
 use frame::{OFFSCREEN_PIXELS, Slices};
 pub use geometry::region_pixels;

@@ -1,8 +1,8 @@
 use super::blobs::{blob_key, blob_pixmap, image_mip, lookup, mask_value, mip_level, plain_image, shape_masked_image, white_shape_mask};
 use super::clock::now;
 use super::frame::{
-    ClipEntry, ClipPaintEntry, Frame, FrameStats, GeomEntry, MAX_INLINE_DEPTH, MISSING_INLINE_LOGGED, PlacedEntry, PlacedKey, PtrMap, SliceEntry,
-    Slices, StrokeEntry,
+    ClipEntry, ClipPaintEntry, Frame, FrameStats, GeomEntry, MAX_INLINE_DEPTH, MISSING_INLINE_LOGGED, MovedKey, PlacedEntry, PlacedKey, PtrMap,
+    SliceEntry, Slices, StrokeEntry,
 };
 use super::geometry::{MAX_GUIDE_DASHES, polygon_length, rects_overlap, region_pixels};
 use super::node_checks::{
@@ -24,7 +24,7 @@ mod paint;
 mod text;
 
 #[cfg(test)]
-pub(crate) use paint::{CROP_STROKES, crop_line};
+pub(crate) use paint::{CROP_STROKES, STROKES_OUTLINED, crop_line, offset_between};
 
 impl Renderer {
     pub fn new() -> Self {
@@ -38,6 +38,7 @@ impl Renderer {
             symbols: vec![],
             plugin_revision: 0,
             strokes: PtrMap::default(),
+            moved_strokes: PtrMap::default(),
             char_strokes: FrameCache::new(lru::CHAR_STROKE_BUDGET, 0),
             cur: None,
             made_again: false,
@@ -186,6 +187,8 @@ impl Renderer {
         self.kept.retain(|_, e| g - e.stamp <= 3 || geom.get(&(Arc::as_ptr(&e.node) as usize)).is_some_and(|k| Arc::ptr_eq(&k.node, &e.node)));
         if self.strokes.len() > 1024 {
             self.strokes.retain(|_, e| g - e.stamp <= 3);
+            let strokes = &self.strokes;
+            self.moved_strokes.retain(|_, k| strokes.contains_key(k));
         }
         if self.stroke_slices.len() > 256 {
             self.stroke_slices.retain(|_, e| g - e.stamp <= 3);

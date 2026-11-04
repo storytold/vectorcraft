@@ -1,7 +1,7 @@
 use super::{
-    Affine, AppearanceItem, Arc, BezPath, BlendMode, Compose, FillRule, Frame, Ink, Mix, Node, Rect, RenderContext, Renderer, Shape, SliceEntry,
-    Slices, StrokeAlign, StrokeEntry, StrokeLayer, TextGeom, blend_mode, drawable, effects, fill_rule, fx, kurbo, lru, owns_stroke, peniko,
-    rects_overlap,
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, Compose, FillRule, Frame, Ink, Mix, MovedKey, Node, Rect, RenderContext, Renderer, Shape,
+    SliceEntry, Slices, StrokeAlign, StrokeEntry, StrokeLayer, TextGeom, blend_mode, drawable, effects, fill_rule, fx, kurbo, lru, owns_stroke,
+    peniko, rects_overlap,
 };
 use crate::paint;
 
@@ -269,30 +269,88 @@ impl Renderer {
             e.stamp = self.stamp;
             return Some(e.outline.clone());
         }
+        // Under its object's id, the stroke's place and the outline's width and tolerance, the key
+        // of the stroke's latest outline is kept, except for art made again in every frame.
+        let place = node.appearance.items.iter().position(|i| matches!(i, AppearanceItem::Stroke(s) if std::ptr::eq(s, st)));
+        let moved = place.filter(|_| !self.made_again).map(|place| (node.id.0, place, width.to_bits(), level));
+        let kept = moved.map(|_| Arc::new(line.clone()));
+        if let Some(mk) = moved
+            && let Some((outline, crop)) = self.moved_outline(mk, &node, st, line, v)
+        {
+            self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, line: kept });
+            self.keep_latest(mk, key);
+            return Some(outline);
+        }
+        #[cfg(test)]
+        STROKES_OUTLINED.with(|n| n.set(n.get() + 1));
         // A long stroke without a width profile is outlined only in and around the view, with a
         // margin of the view's own size on each side ([`crop_dashed`] for a dashed one,
         // [`crop_line`] otherwise).
         let region = v.inflate(v.width(), v.height());
         let tol = 2f64.powi(level);
-        if crops()
+        let (outline, crop) = if crops()
             && line.elements().len() > CROP_ELEMENTS
             && st.dash.is_some()
             && st.profile.is_none()
             && let Some(outline) = crop_dashed(line, st, width, region, crop_reach(st, width, f.px, tol), tol)
         {
-            let outline = Arc::new(outline);
-            self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop: Some(region) });
-            return Some(outline);
-        }
-        let cropped = (crops() && line.elements().len() > CROP_ELEMENTS && st.dash.is_none() && st.profile.is_none())
-            .then(|| crop_line(line, region, crop_reach(st, width, f.px, tol), width))
-            .flatten();
-        let (outline, crop) = match cropped {
-            Some(part) => (Arc::new(effects::stroke::line_outline(&part, st, width, tol)), Some(region)),
-            None => (expand(), None),
+            (Arc::new(outline), Some(region))
+        } else {
+            let cropped = (crops() && line.elements().len() > CROP_ELEMENTS && st.dash.is_none() && st.profile.is_none())
+                .then(|| crop_line(line, region, crop_reach(st, width, f.px, tol), width))
+                .flatten();
+            match cropped {
+                Some(part) => (Arc::new(effects::stroke::line_outline(&part, st, width, tol)), Some(region)),
+                None => (expand(), None),
+            }
         };
-        self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop });
+        self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, line: kept });
+        if let Some(mk) = moved {
+            self.keep_latest(mk, key);
+        }
         Some(outline)
+    }
+
+    /// Lists `key` as the latest outline under `mk`, and drops the line kept with the outline listed
+    /// there before, which no moved copy draws from any more: one line is kept per [`MovedKey`].
+    fn keep_latest(&mut self, mk: MovedKey, key: crate::frame::StrokeKey) {
+        if let Some(before) = self.moved_strokes.insert(mk, key)
+            && before != key
+            && let Some(e) = self.strokes.get_mut(&before)
+        {
+            e.line = None;
+        }
+    }
+
+    /// The outline of stroke `st` of `node` along `line`, made from the latest outline kept under
+    /// `mk` ([`MovedKey`]) when that outline's object is `node` changed, its stroke differs from `st`
+    /// in its paint at most, and its line is `line` moved (to within rounding): that outline moved
+    /// by the same offset, with the region it was cropped to moved too. `None` when there is no
+    /// such outline, or when its region does not hold the view `v`.
+    fn moved_outline(&self, mk: MovedKey, node: &Node, st: &StrokeLayer, line: &BezPath, v: Rect) -> Option<(Arc<BezPath>, Option<Rect>)> {
+        let e = self.strokes.get(self.moved_strokes.get(&mk)?)?;
+        let was = e.line.as_deref()?;
+        if e.node.id != node.id {
+            return None;
+        }
+        let Some(AppearanceItem::Stroke(old)) = e.node.appearance.items.get(mk.1) else {
+            return None;
+        };
+        let unpainted = |s: &StrokeLayer| StrokeLayer { paint: vectorcraft_color::Paint::None, ..s.clone() };
+        if !std::ptr::eq(old, st) && unpainted(old) != unpainted(st) {
+            return None;
+        }
+        let by = offset_between(was, line)?;
+        let crop = e.crop.map(|r| r + by);
+        if crop.is_some_and(|r| r.x0 > v.x0 || r.y0 > v.y0 || r.x1 < v.x1 || r.y1 < v.y1) {
+            return None;
+        }
+        if by == kurbo::Vec2::ZERO {
+            return Some((e.outline.clone(), crop));
+        }
+        let mut outline = (*e.outline).clone();
+        outline.apply_affine(Affine::translate(by));
+        Some((Arc::new(outline), crop))
     }
 
     /// What the `strokes`, `char_strokes` and `stroke_slices` keys hold for a stroke owner at
@@ -311,6 +369,38 @@ pub(crate) const CROP_ELEMENTS: usize = 1024;
 thread_local! {
     /// Whether long strokes are outlined near the view only on this thread ([`crop_line`]).
     pub(crate) static CROP_STROKES: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    /// How many stroke outlines of nodes [`Renderer::cached_stroke`] has made on this thread.
+    pub(crate) static STROKES_OUTLINED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The offset that moves path `was` onto path `now`, when `now` is `was` moved (each coordinate
+/// within a few units in the last place of the moved one, the error that adding the offset and
+/// measuring it from the first points can make). `None` otherwise, and for an empty path.
+pub(crate) fn offset_between(was: &BezPath, now: &BezPath) -> Option<kurbo::Vec2> {
+    use kurbo::PathEl;
+    let (was, now) = (was.elements(), now.elements());
+    if was.len() != now.len() {
+        return None;
+    }
+    let (by, first) = match (was.first()?, now.first()?) {
+        (PathEl::MoveTo(a), PathEl::MoveTo(b)) => (*b - *a, a.x.abs().max(b.x.abs()).max(a.y.abs()).max(b.y.abs())),
+        _ => return None,
+    };
+    if !by.is_finite() {
+        return None;
+    }
+    let near = |a: &kurbo::Point, b: &kurbo::Point| {
+        let close = |a: f64, by: f64, b: f64| (a + by - b).abs() <= 4.0 * f64::EPSILON * (a.abs() + b.abs() + first);
+        close(a.x, by.x, b.x) && close(a.y, by.y, b.y)
+    };
+    let moved = was.iter().zip(now).all(|pair| match pair {
+        (PathEl::MoveTo(a), PathEl::MoveTo(b)) | (PathEl::LineTo(a), PathEl::LineTo(b)) => near(a, b),
+        (PathEl::QuadTo(a0, a1), PathEl::QuadTo(b0, b1)) => near(a0, b0) && near(a1, b1),
+        (PathEl::CurveTo(a0, a1, a2), PathEl::CurveTo(b0, b1, b2)) => near(a0, b0) && near(a1, b1) && near(a2, b2),
+        (PathEl::ClosePath, PathEl::ClosePath) => true,
+        _ => false,
+    });
+    moved.then_some(by)
 }
 
 fn crops() -> bool {
