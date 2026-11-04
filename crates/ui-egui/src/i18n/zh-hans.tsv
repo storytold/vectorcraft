@@ -2006,6 +2006,11 @@ file-filter	Templates	模板
 	New Toolbar	新建工具栏
 	Show Toolbar	显示工具栏
 	List Toolbars	列出工具栏
+	Manage Toolbars…	管理工具栏…
+	Manage Toolbars	管理工具栏
+	Rename Toolbar	重命名工具栏
+	Duplicate Toolbar	复制工具栏
+	Delete Toolbar	删除工具栏
 	New {kind} Style…	新建{kind}样式…
 	New…	新建…
 	Next	下一个
@@ -3452,6 +3457,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Use Artboards	使用画板
 	Use Black Point Compensation	使用黑场补偿
 	Use Compression	使用压缩
+	Include Editing Data for Other Apps	包含供其他应用使用的编辑数据
 	Use document bleed settings	使用文档的出血设置
 	Use Even-Odd Fill Rule	使用奇偶填色规则
 	Use Japanese Crop Marks	使用日式裁切标记
@@ -5434,7 +5440,7 @@ lighting	Light	光源
 	Enable Guides for 9-Slice Scaling	启用 9-slice 缩放参考线
 @msg	cancelled; nothing was changed	已取消；未做任何更改
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	保存会写入 {_1}，而不是 {_2}：要写入该格式请使用 file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 写入旧版 .ai 文件；.ait 模板始终与 PDF 兼容
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 写入旧版 .ai 文件，不写入 .ait 模板
 @msg	a mask has more than one art block	蒙版包含多个图稿块
 @msg	mask art ends outside a mask dictionary	蒙版图稿在蒙版字典之外结束
 @msg	`{key}` must be a #rrggbb color	`{key}` 必须是 #rrggbb 格式的颜色
@@ -6015,6 +6021,7 @@ breakText	Glyphs	字形
 	Gap 5	间隔 5
 
 @msg	{_1}: they came in as the page's art	{_1}：已作为页面图稿导入
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	与文件自身页面绘制不同的对象已作为页面图稿导入：{_1}
 
 @msg	You must choose a side pattern.	必须选择侧边图案。
 @msg	invalid pattern tile choice	图案拼块选项无效

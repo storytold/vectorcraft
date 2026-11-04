@@ -603,6 +603,11 @@
 	New Toolbar	Nowy pasek narzędzi
 	Show Toolbar	Pokaż pasek narzędzi
 	List Toolbars	Lista pasków narzędzi
+	Manage Toolbars…	Zarządzaj paskami narzędzi…
+	Manage Toolbars	Zarządzaj paskami narzędzi
+	Rename Toolbar	Zmień nazwę paska narzędzi
+	Duplicate Toolbar	Powiel pasek narzędzi
+	Delete Toolbar	Usuń pasek narzędzi
 	Manage Workspaces…	Zarządzaj obszarami roboczymi…
 	Control	Sterowanie
 	Contextual Task Bar	Kontekstowy pasek zadań
@@ -3535,6 +3540,7 @@ theme	Appearance	Wygląd
 	Type Object Selection by Path Only	Zaznaczanie obiektów tekstowych tylko po ścieżce
 	UI Scaling	Skalowanie interfejsu
 	Use Compression	Używaj kompresji
+	Include Editing Data for Other Apps	Dołącz dane edycji dla innych aplikacji
 	Use Japanese Crop Marks	Używaj japońskich znaczników przycięcia
 	Use Low Resolution Proxy for Linked EPS	Używaj podglądu niskiej rozdzielczości dla połączonych EPS
 	Use Precise Cursors	Używaj precyzyjnych kursorów
@@ -4127,7 +4133,7 @@ imageTrace	Outline	Kontur
 @msg	Save for Web: the image is empty	Zapisz dla Internetu: obraz jest pusty
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Zapis tworzy {_1}, nie {_2}: dla innych formatów użyj document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Zapis tworzy {_1}, nie {_2}: aby go zapisać, użyj file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 zapisuje starsze pliki .ai; szablon .ait jest zawsze zgodny z PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 zapisuje starsze pliki .ai, a nie szablony .ait
 @msg	Saved recovery data for {title}	Zapisano dane odzyskiwania dla {title}
 @msg	Saved to User Defined: {_1}	Zapisano w zdefiniowanych przez użytkownika: {_1}
 @msg	Saved {path}	Zapisano {path}
@@ -6029,6 +6035,7 @@ breakText	Glyphs	Glify
 	Gap 5	Odstęp 5
 
 @msg	{_1}: they came in as the page's art	{_1}: zaimportowano je jako grafikę strony
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	obiekty rysowane inaczej niż własna strona pliku zaimportowano jako grafikę strony: {_1}
 
 @msg	You must choose a side pattern.	Musisz wybrać wzór boczny.
 @msg	invalid pattern tile choice	nieprawidłowy wybór kafelka wzoru

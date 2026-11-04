@@ -382,6 +382,21 @@ impl Ctx<'_> {
         } else {
             0.0
         };
+        // On a path, an upright glyph turns about its pen: its cell runs along the path between
+        // where the glyph's transform sets the cell's foot and its top, moved by the shaper's
+        // placement and a baseline shift, and slanted by the path's effect.
+        let (width, width_start) = match (upright && self.on_path, g.sy) {
+            (true, sy) if sy != 0.0 => {
+                // In font units, with the Proportional Metrics change to its length.
+                let (cell, top) = upright_extent(g);
+                let proportional = g.vpal.filter(|_| g.face.vertical_glyph(g.gid).is_some()).map_or(0.0, |a| a.advance) / sy;
+                let tangent = Vec2::new(angle.cos(), angle.sin());
+                let along = |y: f64| (m * Point::new(0.0, y) - origin).dot(tangent);
+                let (start, end) = (along(cell + proportional - top), along(-top));
+                if start.is_finite() && end > start { (end - start, start) } else { (width, width_start) }
+            }
+            _ => (width, width_start),
+        };
         if let Some(art) = g.inline.as_ref().and_then(|ib| ib.art) {
             self.out.inlines.push(InlineGlyph { run: g.run, byte: g.byte, glyph: self.out.glyphs.len(), xf: m, bounds: m.transform_rect_bbox(art) });
         }

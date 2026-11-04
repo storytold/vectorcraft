@@ -1,7 +1,7 @@
 # PDF backend
 
 PDF writing uses `craft-pdf` from `storytold/craft-libs`, pinned to
-`f8f8829cc7be65d466d687dae381d1ca60e31242`. Its `write` feature supplies Krilla configuration,
+`9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb`. Its `write` feature supplies Krilla configuration,
 metadata construction, fallible font preparation and serialization, and native unwind guards.
 The dependency disables default features and enables `write` and `interpret`.
 The production writer retains Krilla’s raster-image support without its optional text shaper.
@@ -16,7 +16,7 @@ Desktop printer submission remains in `craft-print`.
 
 The shared writer vendors Krilla 0.8.2 with an unwind-safe cleanup and poisoning patch.
 The root `[patch.crates-io]` selects that copy from craft-libs revision
-`f8f8829cc7be65d466d687dae381d1ca60e31242`, which includes craft-libs#417 (CMYK, gray and spot
+`9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb`, which includes craft-libs#417 (CMYK, gray and spot
 colors keep their exact inks): Cargo does not inherit a dependency workspace's patches. A failed page or surface cleanup poisons the
 backend document, so serialization cannot return an incomplete PDF after unwinding.
 The shared crate's compile-time backend marker and `cargo xtask pdf-deps` (included in CI)

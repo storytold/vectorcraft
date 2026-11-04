@@ -336,6 +336,21 @@ fn character_style_color_and_features_are_checked() {
 }
 
 #[test]
+fn text_style_rejects_doubly_signed_feature_tags() {
+    let (mut s, id) = session_with_text("Text");
+    let before = runs(&s, id);
+    let undo = s.doc().unwrap().history.undo.len();
+    for cmd in ["text.setStyle", "text.setRangeStyle"] {
+        for tag in ["--liga", "+-dnom", "-+ss01", "++liga"] {
+            let error = s.execute(cmd, &json!({"id": id, "start": 0, "end": 4, "features": [tag]})).unwrap_err().to_string();
+            assert!(error.contains(&format!("`{tag}`")), "{cmd}: {error}");
+        }
+    }
+    assert_eq!(runs(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
 fn style_paints_count_as_swatch_uses_and_gradient_stops_are_checked() {
     let (mut s, _) = session_with_text("Text");
     s.execute("swatch.new", &json!({"name": "Brand", "color": "#2050a0", "global": true})).unwrap();
