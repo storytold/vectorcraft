@@ -36,7 +36,9 @@ use crate::ps;
 
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
 pub(crate) use frames::text_frames;
-pub use read::{Brushes, IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, brushes, palette, read, read_beside, variables};
+pub use read::{
+    BindingRef, Brushes, IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, bindings_note, brushes, palette, read, read_beside, variables,
+};
 pub(crate) use read::{join_and, slot_frame, slot_of};
 
 pub(crate) use read::is_look_slot;

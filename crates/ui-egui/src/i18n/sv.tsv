@@ -5692,6 +5692,7 @@ swatch	Yellow Green	Gulgrön
 	Effect Gallery	Effektgalleri
 	Filters	Filter
 	Select artwork to apply effects	Välj grafik för att tillämpa effekter
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	alla filens variabelbindningar lästes inte (överhoppade bindningar: {_1}): de objekten är inte bundna till sina variabler
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	filens variabelbibliotek lästes bara delvis (överhoppade poster: {_1}): panelen Variabler visar resten
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunde inte läsas: panelen Variabler visar det inte
 @msg	a variable of unknown kind can't be bound to objects	en variabel av okänd typ kan inte kopplas till objekt

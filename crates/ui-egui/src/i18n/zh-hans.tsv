@@ -5507,6 +5507,7 @@ lighting	Light	光源
 	Effect Gallery	效果库
 	Filters	滤镜
 	Select artwork to apply effects	选择要应用效果的图稿
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	未读取文件的全部变量绑定（跳过的绑定：{_1}）：这些对象未绑定到其变量
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	文件的变量库只读取了一部分（跳过的条目：{_1}）：“变量”面板列出其余部分
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	无法读取文件的变量库：“变量”面板不会列出它
 @msg	a variable of unknown kind can't be bound to objects	类型未知的变量不能绑定到对象

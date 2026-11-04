@@ -1429,6 +1429,75 @@ fn ai_variable_library_definitions() {
     assert!(!r.warnings.iter().any(|w| w.contains("variable")), "{:?}", r.warnings);
 }
 
+/// The objects a variable is bound to come with the library, each by the XML id its `docRef` gives,
+/// in the order the library declares them: a variable bound to two objects is declared twice and
+/// comes in once. A `docRef` that isn't an XML id is kept as unreadable, a declaration without one
+/// binds nothing, and a second variable of the same name and another kind is left out with a note,
+/// its binding counted as left out.
+/// The objects read keep their XML ids; an id two objects have names neither of them.
+#[test]
+fn ai_variable_library_bindings() {
+    use vectorcraft_testkit::ai::{XmlValue, named, variable_library_data, xml_element, xml_node};
+    let declare = |name: &str, t: &str, art: Option<XmlValue>| {
+        let mut attributes = vec![("trait", XmlValue::Str(t)), ("varName", XmlValue::Unicode(name))];
+        attributes.extend(art.map(|a| ("docRef", a)));
+        xml_node(1, "variable", XmlValue::Str(""), &attributes, &[])
+    };
+    let declared = vec![
+        declare("v_shown", "visibility", Some(XmlValue::Raw("/XMLUIDREF : (one) ;"))),
+        declare("v_text", "textcontent", Some(XmlValue::Str("one"))),
+        declare("v_shown", "visibility", Some(XmlValue::Raw("/XMLUIDREF : (two) ;"))),
+        declare("v_shown", "textcontent", Some(XmlValue::Raw("/XMLUIDREF : (two) ;"))),
+        declare("v_free", "visibility", None),
+    ];
+    let set = xml_element("variableSet", &[("locked", "none")], &[xml_element("variables", &[], &declared)]);
+    let library = variable_library_data(&xml_element("variableSets", &[], &[set]));
+    let square = |x: f64, id: &str| format!("{RED}{}f\n{}", rect_path(x, 0.0, x + 10.0, 10.0), named(id));
+    let squares = layer(&[square(0.0, "one"), square(20.0, "two"), square(40.0, "twice"), square(60.0, "twice")].concat());
+    let r = read_ok(&format!("{library}{squares}"));
+    let names: Vec<&str> = r.doc.variables.variables.iter().map(|v| v.name.as_str()).collect();
+    assert_eq!(names, ["v_shown", "v_text", "v_free"]);
+    let refs: Vec<(&str, Option<&str>)> = r.bindings.iter().map(|b| (b.variable.as_str(), b.target.as_deref())).collect();
+    assert_eq!(refs, [("v_shown", Some("one")), ("v_text", None), ("v_shown", Some("two"))]);
+    assert!(r.warnings.contains(&partly_read(1)), "{:?}", r.warnings);
+    // The object the declaration left out binds is counted for the bindings' note.
+    assert_eq!(r.bindings_skipped, 1);
+    // The reader doesn't bind them: the importer does, with the objects it keeps.
+    assert!(r.doc.variables.bindings.is_empty());
+    let ids: Vec<vectorcraft_doc::NodeId> = art(&r.doc).iter().map(|n| n.id).collect();
+    assert_eq!(r.xml_ids.get("one"), Some(&Some(ids[0])));
+    assert_eq!(r.xml_ids.get("two"), Some(&Some(ids[1])));
+    assert_eq!(r.xml_ids.get("twice"), Some(&None));
+}
+
+/// The bindings count against the library's 8 MB of names and values: each one keeps its
+/// variable's name and its target. The declarations past that bind nothing and are counted as left
+/// out.
+#[test]
+fn ai_variable_library_bindings_stay_within_the_byte_budget() {
+    use vectorcraft_testkit::ai::{XmlValue, variable_library_data, xml_element, xml_node};
+    let (name, id) = ("é".repeat(255), "a".repeat(255));
+    let target = format!("/XMLUIDREF : ({id}) ;");
+    let declare = || {
+        xml_node(
+            1,
+            "variable",
+            XmlValue::Str(""),
+            &[("trait", XmlValue::Str("visibility")), ("varName", XmlValue::Unicode(&name)), ("docRef", XmlValue::Raw(&target))],
+            &[],
+        )
+    };
+    let declared: Vec<_> = (0..11_500).map(|_| declare()).collect();
+    let set = xml_element("variableSet", &[("locked", "none")], &[xml_element("variables", &[], &declared)]);
+    let square = layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let r = read_ok(&format!("{}{square}", variable_library_data(&xml_element("variableSets", &[], &[set]))));
+    assert_eq!(r.doc.variables.variables.len(), 1);
+    // The variable's name, then each binding's name and target.
+    let kept = ((8 << 20) - name.len()) / (name.len() + id.len());
+    assert_eq!(r.bindings.len(), kept);
+    assert_eq!(r.bindings_skipped, 11_500 - kept);
+}
+
 /// The data sets come in in order with their values: text of one paragraph per `p` element (`&`,
 /// `<` and accented letters as they are), whether the objects show, and a linked file's path from
 /// its URL, kept when it names no file. A variable of unknown kind has no value.
@@ -2162,6 +2231,34 @@ fn previewless_placement_placeholder_inherits_lock() {
     let node = result.doc.node(result.unread[0].0).unwrap();
     assert!(node.locked);
     assert!(node.visible);
+}
+
+/// A placed file's XML id names the linked image it comes in as, for the variable library's
+/// bindings.
+#[test]
+fn a_placed_files_xml_id_names_its_image() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let name = "%_/ArtDictionary :\r%_/XMLUID : (photo_x5F_1) ; (AI10_ArtUID) ,\r%_;\r";
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/pics/photo.png", Some(&preview), name)).unwrap();
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Image(_)), "{:?}", a[0].kind);
+    assert_eq!(r.xml_ids.get("photo_x5F_1"), Some(&Some(a[0].id)));
+}
+
+/// The XML ids kept stay within `MAX_XML_ID_BYTES` in all: an id that would pass it is left out,
+/// and a shorter one after it still fits.
+#[test]
+fn xml_ids_stay_within_their_byte_budget() {
+    use vectorcraft_doc::NodeId;
+    let (mut ids, mut bytes) = (std::collections::HashMap::new(), 0);
+    super::read::remember_xml_id(&mut ids, &mut bytes, "a".repeat(super::read::MAX_XML_ID_BYTES - 4), NodeId(1));
+    super::read::remember_xml_id(&mut ids, &mut bytes, "long_id".into(), NodeId(2));
+    super::read::remember_xml_id(&mut ids, &mut bytes, "id_2".into(), NodeId(3));
+    super::read::remember_xml_id(&mut ids, &mut bytes, "id_2".into(), NodeId(4));
+    assert_eq!(ids.len(), 2);
+    assert!(!ids.contains_key("long_id"));
+    assert_eq!(ids.get("id_2"), Some(&None), "two objects with one id are neither of them that id's");
+    assert_eq!(bytes, super::read::MAX_XML_ID_BYTES);
 }
 
 #[test]
