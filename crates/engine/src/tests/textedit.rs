@@ -2561,6 +2561,72 @@ fn the_default_glyph_chosen_in_overflowing_vertical_type_is_kept() {
     assert_eq!(held, [g('！')], "the default glyph is kept as the choice");
 }
 
+/// A character that overflows its area reports as `chosen` the glyph it is drawn with when it is
+/// shaped alone: the glyph `salt` draws, a chosen default glyph, and the `vert` glyph of vertical
+/// type.
+#[test]
+fn the_glyph_query_shapes_an_overflowing_character() {
+    use vectorcraft_text::test_fonts::{VERTICAL_PUNCTUATION_FAMILY, alternates_family, alternates_font, vertical_punctuation_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    db.add_font(vertical_punctuation_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let chosen = |s: &mut Session, id: NodeId, start: usize| {
+        s.execute("text.glyphAlternates", &json!({"id": id.0, "start": start})).unwrap()["chosen"].clone()
+    };
+
+    let area = json!({"x": 0, "y": 300, "text": "xa", "size": 20, "font": alternates_family(true), "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": 2, "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    assert_eq!(chosen(&mut s, boxed, 1), json!(g('b')), "the glyph salt draws");
+    s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 1, "gid": g('a')})).unwrap();
+    assert_eq!(chosen(&mut s, boxed, 1), json!(g('a')), "the chosen default glyph");
+
+    let vface = db.face(VERTICAL_PUNCTUATION_FAMILY, "Regular").expect("the test face");
+    let text =
+        json!({"x": 0, "y": 0, "text": "！！", "size": 20, "font": VERTICAL_PUNCTUATION_FAMILY, "vertical": true, "area": {"width": 4, "height": 4}});
+    let vertical = NodeId(s.execute("text.create", &text).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, vertical)).glyphs.is_empty(), "the text overflows");
+    assert_eq!(chosen(&mut s, vertical, 0), json!(vface.glyph_for('I')), "vert draws ！ as I");
+}
+
+/// A parenthesis set right to left is drawn mirrored: in a paragraph whose direction is right to
+/// left, and after Hebrew in a paragraph of automatic direction, but not when its character
+/// direction is left to right. When it overflows its area, the glyph query shapes it in the same
+/// direction and reports the glyph the text draws when it fits.
+#[test]
+fn the_glyph_query_shapes_an_overflowing_character_in_its_paragraph_direction() {
+    let db = vectorcraft_text::FontDb::global();
+    let face = db.face("Source Sans 3", "Regular").expect("the bundled face");
+    let mut s = session();
+    let create = |s: &mut Session, text: &str, rtl: bool, char_ltr: bool, height: f64| {
+        let spec = json!({"x": 0, "y": 0, "text": text, "size": 20, "font": "Source Sans 3", "area": {"width": 200, "height": height}});
+        let id = NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap());
+        if rtl {
+            s.execute("text.setFormat", &json!({"ids": [id.0], "direction": "rightToLeft", "start": 2, "end": 3})).unwrap();
+        }
+        if char_ltr {
+            s.execute("text.setFormat", &json!({"ids": [id.0], "charDirection": "leftToRight", "start": 2, "end": 3})).unwrap();
+        }
+        id
+    };
+    for (text, rtl, char_ltr, at, drawn) in [("a\n(", true, false, 2, ')'), ("a\n\u{5D0}(", false, false, 4, ')'), ("a\n(", true, true, 2, '(')] {
+        let open = create(&mut s, text, rtl, char_ltr, 200.0);
+        let lay = vectorcraft_text::layout(db, &obj(&s, open));
+        assert_eq!(lay.glyphs.iter().find(|g| g.byte == at).map(|g| g.gid), Some(face.glyph_for(drawn)), "{text:?}: the parenthesis drawn");
+
+        let boxed = create(&mut s, text, rtl, char_ltr, 30.0);
+        let lay = vectorcraft_text::layout(db, &obj(&s, boxed));
+        assert!(lay.glyphs.iter().all(|g| g.byte < 2), "{text:?}: the second paragraph overflows");
+        let r = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": at})).unwrap();
+        assert_eq!(r["chosen"], json!(face.glyph_for(drawn)), "{text:?}: the glyph drawn when it fits");
+    }
+}
+
 /// A vowel sign drawn before its consonant (Devanagari Ka with the vowel sign I) is in the
 /// consonant's cluster, drawn first: with `salt`, the glyph reported for the consonant is the one
 /// the feature draws, not the vowel sign's, and the default glyph chosen for it is drawn.
