@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (OpenType panel offers font-defined Stylistic Sets; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Select Text by Font takes an artboard or layer scope; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -28,6 +28,7 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | M7: Select Text by Font takes a scope: the document, chosen artboards or chosen layers; Find Font's Find In offers Document, Artboard (the active one) and Layers (the selected ones, else the current one) (#5529, a VectorCraft addition); estimates unchanged. |
 | 2026-11-03 | minor | M1: Enclosing Lasso provides whole-object enclosure selection as an add-on with no default shortcut or Basic toolbar slot; estimates unchanged. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
