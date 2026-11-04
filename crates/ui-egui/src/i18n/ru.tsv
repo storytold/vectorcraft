@@ -4033,7 +4033,7 @@ axis	Both	Оба
 @msg	Save for Web: the image is empty	Сохранить для web: изображение пусто
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Сохранение записывает {_1}, а не {_2}: используйте document.export для других форматов
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Сохранение записывает {_1}, а не {_2}: чтобы записать его, используйте file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 записывает устаревшие файлы .ai; шаблон .ait всегда совместим с PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 записывает устаревшие файлы .ai, а не шаблоны .ait
 @msg	Saved recovery data for {title}	Сохранены данные восстановления для {title}
 @msg	Saved to User Defined: {_1}	Сохранено в «Пользовательский»: {_1}
 @msg	Saved {path}	Сохранено: {path}

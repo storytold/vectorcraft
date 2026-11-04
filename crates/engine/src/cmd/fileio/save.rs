@@ -249,11 +249,6 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     if let Some((key, top, inner)) = disagreeing_option(p, is_svg(format)).map_err(|e| bad(cmd, e))? {
         return Err(bad(cmd, format!("`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once")));
     }
-    let notes = NATIVE_OPTIONS
-        .iter()
-        .filter(|k| p.get(**k).is_some_and(|v| !v.is_null()) && !reads_option(format, k))
-        .map(|k| format!("`{k}` was not used: {} files don't read it", format.label))
-        .collect();
     let mut given: Map<String, Value> = match p.get("options") {
         Some(Value::Object(o)) => o.iter().filter(|(k, _)| reads_option(format, k)).map(|(k, v)| (k.clone(), v.clone())).collect(),
         None | Some(Value::Null) => Map::new(),
@@ -293,6 +288,12 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     if let Some(path) = &path {
         super::check_not_lossy_overwrite(st, path, p, cmd)?;
     }
+    let written = written_as(cmd, format, &Value::Object(options.clone()));
+    let notes = NATIVE_OPTIONS
+        .iter()
+        .filter(|k| p.get(**k).is_some_and(|v| !v.is_null()) && !reads_option(format, k))
+        .map(|k| format!("`{k}` was not used: {} files don't read it", written.label))
+        .collect();
     Ok(SavePlan { mode, path, format, options, name, folder, modified, notes })
 }
 
@@ -576,6 +577,25 @@ fn blank_pages(doc: &Document) -> Document {
 /// Why a `.ai` file saved without PDF content looks empty elsewhere.
 const NOT_PDF_COMPATIBLE: &str = "saved without PDF content: VectorCraft opens it as before, other apps show empty pages";
 
+/// `f` (`.ai` or `.ait`) named, in its option errors, as a file saved without PDF content.
+fn without_pdf(f: &Format) -> Format {
+    let label = if f.id == "ait" { "non-PDF-compatible .ait template" } else { "non-PDF-compatible .ai" };
+    Format { label, ..*f }
+}
+
+/// `f` named, in its errors and notes, as the file a save with options `p` writes: a version 7
+/// `.ai` as the legacy `.ai`, and a `.ai` or `.ait` with `pdfCompatible: false` as one saved
+/// without PDF content.
+fn written_as(cmd: &str, f: &Format, p: &Value) -> Format {
+    if f.id == "ai" && super::legacy_ai::wanted(cmd, f, p).unwrap_or(false) {
+        super::legacy_ai::named(f)
+    } else if matches!(f.id, "ai" | "ait") && !bool_or(p, "pdfCompatible", true) {
+        without_pdf(f)
+    } else {
+        *f
+    }
+}
+
 /// `e`, an error of the export encoders, under the save command `cmd` instead of
 /// `document.export`.
 fn named_for_save(cmd: &str, e: crate::EngineError) -> crate::EngineError {
@@ -585,8 +605,9 @@ fn named_for_save(cmd: &str, e: crate::EngineError) -> crate::EngineError {
     }
 }
 
-/// The shared Save and Export encoder for PDF-compatible `.ai` files (and `.ait` templates, the
-/// same file).
+/// The shared Save and Export encoder for `.ai` files (and `.ait` templates, the same file):
+/// PDF-compatible by default, without PDF content (`pdfCompatible: false`), or legacy version 7
+/// `.ai` files (`aiVersion: "7"`).
 pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Encoded> {
     if super::legacy_ai::wanted(cmd, f, p)? {
         return super::legacy_ai::encode(cmd, f, doc, p);
@@ -605,8 +626,9 @@ pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Res
             }
         }
     }
-    let native_options = super::native::ai_options(cmd, f, doc, &params)?;
     let pdf_compatible = bool_or(&params, "pdfCompatible", true);
+    let f = &if pdf_compatible { *f } else { without_pdf(f) };
+    let native_options = super::native::ai_options(cmd, f, doc, &params)?;
     if !pdf_compatible {
         let picked: ArtboardPick = super::encode::options(f, &params)?;
         let picked = picked.resolve(doc.artboards.len()).map_err(|e| bad(cmd, e))?;

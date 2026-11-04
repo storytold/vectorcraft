@@ -5521,7 +5521,7 @@ imageTrace	Outline	კონტური
 @msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	მისი რედაქტირების მონაცემები {w} × {h} pt გვერდს ეკუთვნის: ეს ფაილის {pw} × {ph} pt გვერდია მასშტაბით {scale}
 @msg	no history to clear	გასასუფთავებელი ისტორია არ არის
 @msg	{_1} files are written by file.saveAsTemplate	{_1} ფაილებს წერს file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 წერს ძველი ფორმატის .ai ფაილებს; .ait შაბლონი ყოველთვის PDF-თან თავსებადია
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 წერს ძველი ფორმატის .ai ფაილებს და არა .ait შაბლონებს
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ფაილის ცვლადების ბიბლიოთეკა მხოლოდ ნაწილობრივ იქნა წაკითხული (გამოტოვებული ჩანაწერები: {_1}): პანელი „ცვლადები“ დანარჩენს აჩვენებს
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ფაილის ცვლადების ბიბლიოთეკის წაკითხვა ვერ მოხერხდა: პანელი „ცვლადები“ მას არ აჩვენებს
 @msg	a variable of unknown kind can't be bound to objects	უცნობი სახის ცვლადის ობიექტებთან დაკავშირება შეუძლებელია

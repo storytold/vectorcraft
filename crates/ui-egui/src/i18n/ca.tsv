@@ -4920,7 +4920,7 @@ digits	Malayalam	Malaiàlam
 @msg	a {width}×{height} screenshot's byte count overflows	el recompte de bytes d’una captura de pantalla de {width}×{height} es desborda
 @msg	action is required	cal una acció
 @msg	add a format to export	afegiu un format per exportar
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 escriu fitxers .ai heretats; una plantilla .ait sempre és compatible amb PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 escriu fitxers .ai heretats, no plantilles .ait
 @msg	already editing a pattern	ja s’està editant un motiu
 @msg	an exporter always gets an export's budget: leave `budget` out	un exportador sempre rep el pressupost d’una exportació: ometeu `budget`
 @msg	an image has no pixels and was left out	una imatge no té píxels i s’ha omès
