@@ -1,7 +1,7 @@
 use super::dynamic::{fit_overrides, type_id, type_param};
 use super::{
     Affine, AppearanceItem, Arc, CURRENT_SYMBOL, Color, Document, EngineError, FillLayer, HALF, Node, NodeId, NodeKind, Paint, Point, Result,
-    SIZES_KEY, Session, Symbol, SymbolExportType, SymbolNineSlice, SymbolRegistration, Value, Vec2, bad, brush, color_value, ids_json, json,
+    SIZES_KEY, Session, Symbol, SymbolExportType, SymbolNineSlice, SymbolRegistration, Value, Vec2, bad, brush, color_param, ids_json, json,
     name_param, number_or, ok, remove_each, roots, selection_art, separate, set_unknown, str_param, switch_or,
 };
 
@@ -834,7 +834,7 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     let intensity = number_or(p, "intensity", 5.0, C)?.clamp(1.0, 10.0) / 10.0;
     let alt = switch_or(p, "alt", false, C)?;
     let st = s.doc()?;
-    let color = match p.get("color").and_then(color_value) {
+    let color = match color_param(p, "color", C)? {
         Some(c) => crate::cmd::paint::new_color(s, p, c),
         None => s.paint.fill.color().unwrap_or(Color::BLACK),
     };

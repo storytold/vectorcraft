@@ -115,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rasterize…",
             ["Object"],
             None,
-            "{ppi?, background?: transparent|white|black|\"#rrggbb\", antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
+            "{ppi?, background?: transparent|white|black|\"#rrggbb\" (#rrggbbaa and #rgba are refused), antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
             has_selection,
             rasterize
         ),
@@ -347,7 +347,7 @@ fn other_layers(s: &mut Session, lock: bool) -> Result<Value> {
 }
 
 /// Returns the objects [`super::select::walk_selectable`] visits that are not among the selected objects `roots` and
-/// hold none of them. A selected layer's objects count as selected. The walk goes into a plain group, but not a Shaper
+/// hold none of them. A selected layer and its objects count as selected. The walk goes into a plain group, but not a Shaper
 /// group, that holds a selected object. With `lock`, it also goes into a clip group or compound path that holds one,
 /// and includes guide paths while `guides_locked`. Without `lock`, guide paths and the objects that hold one are left
 /// out while `guides_locked`; a clip group, Shaper group, compound path and every other object that holds a selected
@@ -360,13 +360,31 @@ fn unselected(
     guides_locked: bool,
     lock: bool,
 ) -> Vec<NodeId> {
+    /// Pushes the visible guide paths in `n`, `n` included, locked ones too.
+    fn shown_guides(n: &vectorcraft_doc::Node, out: &mut Vec<NodeId>) {
+        if !n.visible {
+            return;
+        }
+        if matches!(n.kind, NodeKind::Path { guide: true, .. }) {
+            out.push(n.id);
+        }
+        for c in n.children().into_iter().flatten() {
+            shown_guides(c, out);
+        }
+    }
     let mut roots: HashSet<NodeId> = roots.iter().copied().collect();
-    roots.extend(selection.iter().filter_map(|id| d.node(*id)).filter(|n| n.is_layer()).flat_map(|l| l.layer_art(true)));
+    let layers = || selection.iter().filter_map(|id| d.node(*id)).filter(|n| n.is_layer());
+    roots.extend(layers().map(|l| l.id));
+    roots.extend(layers().flat_map(|l| l.layer_art(true)));
     let mut kept: Vec<NodeId> = roots.iter().copied().collect();
     if guides_locked && !lock {
         super::select::walk_selectable(d, iso, |n| {
             if matches!(n.kind, NodeKind::Path { guide: true, .. }) {
                 kept.push(n.id);
+            }
+            // The walk skips locked objects, so the guide paths in them are looked for here.
+            for c in n.children().into_iter().flatten().filter(|c| c.locked) {
+                shown_guides(c, &mut kept);
             }
             true
         });

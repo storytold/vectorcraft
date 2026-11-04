@@ -1955,6 +1955,10 @@ digits	Hindi	Hindi
 	Joins	Kiểu nối
 	Justification…	Căn đều…
 	Justify all lines	Căn đều tất cả dòng
+	Align Top	Căn trên
+	Align Center	Căn giữa theo chiều dọc
+	Align Bottom	Căn dưới
+	Justify Vertically	Căn đều theo chiều dọc
 	Justify with last line aligned center	Căn đều, dòng cuối giữa
 	Justify with last line aligned left	Căn đều, dòng cuối trái
 	Justify with last line aligned right	Căn đều, dòng cuối phải
@@ -2051,6 +2055,7 @@ digits	Hindi	Hindi
 	Ligatures are off while the text is tracked.	Chữ ghép tắt khi văn bản được giãn chữ.
 	Light	Sáng
 	Light Blue	Xanh lam nhạt
+	Light Red	Đỏ nhạt
 	Light Direction	Hướng ánh sáng
 	Light Gray	Xám nhạt
 	Light Intensity	Cường độ ánh sáng
@@ -2315,6 +2320,8 @@ digits	Hindi	Hindi
 	Name:	Tên:
 	Navigate	Dẫn hướng
 	Navigator	Bộ dẫn hướng
+	Navigator Panel Options	Tùy chọn bảng bộ dẫn hướng
+	Draw Dashed Lines as Solid Lines	Vẽ đường nét đứt thành đường liền
 	Needs the desktop app	Cần ứng dụng máy tính để bàn
 	Neutral Gradients	Chuyển sắc trung tính
 	New	Mới
@@ -4690,6 +4697,7 @@ theme	Appearance	Giao diện
 @msg	object {0} cannot have children	đối tượng {0} không thể có phần tử con
 @msg	object {id} is not a path	đối tượng {id} không phải là đường dẫn
 @msg	object {id} is not a selected top-level object	đối tượng {id} không phải là đối tượng cấp cao nhất đã chọn
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	các cọ mà VectorCraft chưa đọc được đã bị bỏ khỏi bảng Cọ ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	đối tượng có nhiều tô hoặc nét, hiệu ứng hoặc cọ đã vào dưới dạng bề ngoài ({_1}): diện mạo chưa thể chỉnh sửa
 @msg	Offset Path: select paths	Đường dẫn độ lệch: hãy chọn đường dẫn
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Đường dẫn độ lệch: độ lệch không để lại gì từ các đường dẫn đã chọn (độ lệch vào trong lớn hơn hình)
@@ -5179,6 +5187,10 @@ theme	Appearance	Giao diện
 	Movie Clip	Clip phim
 @msg	name is empty	tên trống
 @msg	an action is already recording	đang ghi một hành động
+@msg	an action is already playing	đang phát một hành động
+@msg	the action stopped playing: its document is no longer active	hành động đã dừng phát: tài liệu của nó không còn hoạt động
+@msg	speed must be accelerated, step or pause	speed phải là accelerated, step hoặc pause
+@msg	seconds must be a whole number from 1 to 60	seconds phải là số nguyên từ 1 đến 60
 @msg	no such function key	không có phím chức năng như vậy
 @msg	no such color	không có màu như vậy
 @msg	{_1} cannot be used on Windows	không thể dùng {_1} trên Windows
@@ -5265,6 +5277,7 @@ theme	Appearance	Giao diện
 	Effect Gallery	Thư viện hiệu ứng
 	Filters	Bộ lọc
 	Select artwork to apply effects	Chọn đồ họa để áp dụng hiệu ứng
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	không phải mọi liên kết biến số của tệp đều được đọc (liên kết đã bỏ qua: {_1}): các đối tượng đó không được liên kết với biến số của chúng
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	thư viện biến số của tệp chỉ được đọc một phần (mục đã bỏ qua: {_1}): bảng Biến liệt kê phần còn lại
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	không thể đọc thư viện biến số của tệp: bảng Biến không liệt kê nó
 @msg	a variable of unknown kind can't be bound to objects	không thể liên kết biến thuộc loại không xác định với đối tượng
@@ -5355,6 +5368,11 @@ axis	Y Axis	Trục Y
 	Set Options	Tùy chọn bộ
 	Action Options…	Tùy chọn hành động…
 	Action Options	Tùy chọn hành động
+	Playback Options…	Tùy chọn phát lại…
+	Playback Options	Tùy chọn phát lại
+	Accelerated	Tăng tốc
+	Step by Step	Từng bước
+	Pause For	Tạm dừng
 	Rename Action	Đổi tên hành động
 	New Action…	Hành động mới…
 	New Action	Hành động mới
@@ -5852,6 +5870,11 @@ breakText	Glyphs	Glyph
 	Export All Open Documents as SVG	Xuất tất cả tài liệu đang mở dưới dạng SVG
 @msgplural	Exported {n} document|Exported {n} documents	Đã xuất {n} tài liệu
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Đã xuất {n} tài liệu; không ghi được {title}: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Vector hóa thư mục hàng loạt
+@msgplural	Traced {n} image|Traced {n} images	Đã vector hóa {n} hình ảnh
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	Không thể vector hóa {n} hình ảnh
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Đã vector hóa {n} hình ảnh; không vector hóa được: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Kiểu ký hiệu:
 	Dynamic Symbol	Ký hiệu động

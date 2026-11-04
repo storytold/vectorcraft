@@ -865,6 +865,51 @@ fn hide_unselected_artwork_keeps_groups_with_locked_guides_and_the_selected_laye
     assert_eq!(selected(&s), [other]);
 }
 
+/// While Lock Guides is on, Hide › Unselected Artwork keeps a group visible when it holds a guide path that is locked
+/// itself, and hides the group's other members one by one.
+#[test]
+fn hide_unselected_artwork_keeps_groups_with_a_locked_guide_path() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let guide = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    let x = rect(&mut s, 60.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[guide, x]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    sel(&mut s, &[guide]);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    s.execute("layer.setProps", &json!({"id": guide.0, "locked": true})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    sel(&mut s, &[a]);
+    assert_eq!(s.execute("object.hide.unselected", &json!({})).unwrap(), json!({"count": 1}));
+    assert_eq!([a, g, guide, x].map(|id| node(&s, id).visible), [true, true, true, false]);
+}
+
+/// Hide › Unselected Artwork keeps a group visible when it holds a selected layer whose art is all locked, and hides the
+/// group's other members one by one.
+#[test]
+fn hide_unselected_artwork_keeps_a_group_that_holds_a_selected_layer() {
+    let mut s = session();
+    let b = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let y = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let z = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[y]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    let sub = s
+        .edit("nest", |d, _| {
+            let id = d.alloc_id();
+            d.insert(Some(g), usize::MAX, Node::layer(id, "Sub", vectorcraft_doc::LayerColor::Preset(1)))
+                .map_err(|e| EngineError::Other(e.to_string()))?;
+            let art = d.remove(z).map_err(|e| EngineError::Other(e.to_string()))?;
+            d.insert(Some(id), 0, (*art).clone()).map_err(|e| EngineError::Other(e.to_string()))?;
+            Ok(id)
+        })
+        .unwrap();
+    s.execute("layer.setProps", &json!({"id": z.0, "locked": true})).unwrap();
+    sel(&mut s, &[sub]);
+    assert_eq!(s.execute("object.hide.unselected", &json!({})).unwrap(), json!({"count": 2}));
+    assert_eq!([b, g, y, sub, z].map(|id| node(&s, id).visible), [false, true, false, true, true]);
+}
+
 /// Lock Unselected Artwork locks `b`, `n` in the group that holds selected `m`, `p` on another layer, and the clip
 /// group's unselected members `c1` and clipping path `c3` in one undo step labeled "Lock". The clip group container,
 /// `c2`, the selected objects, group `g`, hidden object `h` and art `q` on a locked layer stay unlocked. `k` was locked
@@ -2049,6 +2094,41 @@ fn select_same_font_takes_its_reference_from_the_isolated_group_on_a_selected_la
     assert!(!got.contains(&outside));
 }
 
+/// A template sublayer inside a selected sublayer of the isolated layer gives no type for the
+/// reference of the font Same commands, so the reference is the first type that can be selected.
+#[test]
+fn select_same_font_ignores_type_on_a_template_sublayer_inside_the_isolated_layer() {
+    let mut s = session();
+    let typed =
+        |s: &mut Session, y: f64, font: &str| id_of(&s.execute("text.create", &json!({"x": 0, "y": y, "text": "type", "font": font})).unwrap());
+    let l2 = id_of(&s.execute("layer.new", &json!({"top": true})).unwrap());
+    let sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": l2.0})).unwrap());
+    let template = id_of(&s.execute("layer.newSublayer", &json!({"parent": sub.0, "bottom": true})).unwrap());
+    s.execute("layer.setCurrent", &json!({"id": template.0})).unwrap();
+    let on_template = typed(&mut s, 20.0, "Arial");
+    s.execute("layer.setProps", &json!({"id": template.0, "template": true})).unwrap();
+    s.execute("layer.setProps", &json!({"id": template.0, "locked": false})).unwrap();
+    assert!(s.doc().unwrap().doc.node(template).is_some_and(|n| n.is_template() && !n.locked));
+    s.execute("layer.setCurrent", &json!({"id": sub.0})).unwrap();
+    let courier = typed(&mut s, 60.0, "Courier");
+    let other_courier = typed(&mut s, 100.0, "Courier");
+    let arial = typed(&mut s, 140.0, "Arial");
+    let doc = &s.doc().unwrap().doc;
+    let order: Vec<NodeId> = doc.node(sub).unwrap().children().unwrap().iter().map(|c| c.id).collect();
+    assert_eq!(order, vec![template, courier, other_courier, arial]);
+    assert!(doc.ancestry(on_template).unwrap().contains(&template), "{:?}", doc.ancestry(on_template));
+    s.execute("object.isolate", &json!({"id": l2.0})).unwrap();
+    sel(&mut s, &[sub]);
+    assert_eq!(s.doc().unwrap().isolation, Some(l2));
+    assert_eq!(s.execute("select.same.fontFamily", &json!({})).unwrap()["count"], 2);
+    let mut got = selected(&s);
+    got.sort();
+    let mut want = vec![courier, other_courier];
+    want.sort();
+    assert_eq!(got, want);
+    assert!(!got.contains(&arial) && !got.contains(&on_template));
+}
+
 /// Select › Same › Symbol Instance takes its reference from the first selected object that can be
 /// selected: an instance that is hidden, locked, on a template layer or outside the isolated group
 /// is passed over.
@@ -2094,6 +2174,44 @@ fn select_same_symbol_instance_skips_objects_that_cannot_be_selected() {
     sel(&mut s, &[a1, on_template]);
     assert!(s.execute(C, &json!({})).is_err());
     assert_eq!(selected(&s), vec![a1, on_template]);
+}
+
+/// Select › Same › Symbol Instance takes as its reference the first selected object that can be
+/// selected, whatever its kind: an instance inside a selected group, and an instance just placed
+/// on a locked artboard while it stays selected. A first object that is not an instance matches
+/// nothing, so the selection is cleared.
+#[test]
+fn select_same_symbol_instance_reference_can_be_any_selectable_object() {
+    const C: &str = "select.same.symbolInstance";
+    let mut s = session();
+    let place = |s: &mut Session, name: &str, x: f64| id_of(&s.execute("symbol.place", &json!({"name": name, "x": x, "y": 200})).unwrap());
+    rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let a1 = id_of(&s.execute("symbol.new", &json!({"name": "A"})).unwrap());
+    rect(&mut s, 50.0, 0.0, 20.0, 20.0);
+    let b1 = id_of(&s.execute("symbol.new", &json!({"name": "B"})).unwrap());
+    let b2 = place(&mut s, "B", 200.0);
+    let plain = rect(&mut s, 0.0, 100.0, 20.0, 20.0);
+    // A path selected before an instance is the reference, and no instance matches it.
+    sel(&mut s, &[plain, b1]);
+    assert_eq!(s.execute(C, &json!({})).unwrap()["count"], 0);
+    assert!(selected(&s).is_empty());
+    // An instance inside a group, selected on its own, is the reference.
+    sel(&mut s, &[b1, plain]);
+    s.execute("object.group", &json!({})).unwrap();
+    sel(&mut s, &[b1]);
+    assert_eq!(s.execute(C, &json!({})).unwrap()["count"], 2);
+    let mut got = selected(&s);
+    got.sort();
+    let mut want = vec![b1, b2];
+    want.sort();
+    assert_eq!(got, want);
+    // An instance placed on a locked artboard is the reference while it stays selected.
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    let a2 = place(&mut s, "A", 1100.0);
+    assert_eq!(selected(&s), vec![a2]);
+    assert_eq!(s.execute(C, &json!({})).unwrap()["count"], 2);
+    assert_eq!(selected(&s), vec![a1, a2]);
 }
 
 /// Select › Same › Text Fill & Stroke Color selects the type with characters whose fill and stroke
@@ -2427,6 +2545,8 @@ fn select_color_matches_fill_and_stroke_without_a_selection() {
     assert_eq!(pick(&mut s, json!({"fill": "#000000"})), vec![a, t, empty]);
     assert!(s.execute("select.color", &json!({})).is_err());
     assert!(s.execute("select.color", &json!({"fill": "not a colour"})).is_err());
+    assert!(s.execute("select.color", &json!({"fill": "#00000080"})).is_err(), "a hex color with an alpha part");
+    assert!(s.execute("select.color", &json!({"stroke": "#ff000080"})).is_err(), "a hex color with an alpha part");
 }
 
 #[test]

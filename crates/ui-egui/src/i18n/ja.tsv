@@ -692,6 +692,8 @@ digits	Malayalam	マラヤーラム数字
 	Links	リンク
 	Magic Wand	自動選択
 	Navigator	ナビゲーター
+	Navigator Panel Options	ナビゲーターパネルオプション
+	Draw Dashed Lines as Solid Lines	破線を実線で表示
 	Pattern Options	パターンオプション
 	Properties	プロパティ
 	Separations Preview	分版プレビュー
@@ -3597,6 +3599,10 @@ file-filter	Templates	テンプレート
 	Installed plug-in {}	プラグイン {} をインストールしました
 	Internal CSS	内部 CSS
 	Justify all lines	両端揃え (最終行も均等配置)
+	Align Top	上揃え
+	Align Center	上下中央揃え
+	Align Bottom	下揃え
+	Justify Vertically	縦方向に均等配置
 	Justify with last line aligned center	両端揃え (最終行中央揃え)
 	Justify with last line aligned left	両端揃え (最終行左揃え)
 	Justify with last line aligned right	両端揃え (最終行右揃え)
@@ -3618,6 +3624,7 @@ file-filter	Templates	テンプレート
 	Left-Justified Tab	左揃えタブ
 	Letter	レター
 	Light Blue	ライトブルー
+	Light Red	ライトレッド
 	Lightness	明度
 	Link	リンク
 	Low	低
@@ -4387,6 +4394,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft がまだ読み込めないブラシ {_1} 個はブラシパネルに追加されませんでした
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
 @msg	patterns nested too deeply are filled with mid-grey	入れ子が深すぎるパターンは中間のグレーで塗りつぶされています
 @msg	shadings of an unknown type were left out	種類が不明なシェーディングは除外されました
@@ -5241,6 +5249,10 @@ lighting	Light	ライト
 	Movie Clip	ムービークリップ
 @msg	name is empty	名前が空です
 @msg	an action is already recording	すでにアクションを記録中です
+@msg	an action is already playing	すでにアクションを再生中です
+@msg	the action stopped playing: its document is no longer active	アクションの再生を停止しました: そのドキュメントはアクティブではなくなりました
+@msg	speed must be accelerated, step or pause	speed には accelerated、step または pause を指定してください
+@msg	seconds must be a whole number from 1 to 60	seconds には 1 から 60 までの整数を指定してください
 @msg	no such function key	指定されたファンクションキーが見つかりません
 @msg	no such color	指定されたカラーが見つかりません
 @msg	{_1} cannot be used on Windows	{_1} は Windows では使用できません
@@ -5327,6 +5339,7 @@ lighting	Light	ライト
 	Effect Gallery	効果ギャラリー
 	Filters	フィルター
 	Select artwork to apply effects	効果を適用するグラフィックを選択してください
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	ファイルの変数のバインドの一部が読み込まれませんでした (スキップしたバインド: {_1})。それらのオブジェクトは変数にバインドされていません
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ファイルの変数ライブラリは一部だけ読み込まれました (スキップした項目: {_1})。残りは変数パネルに表示されます
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ファイルの変数ライブラリを読み込めませんでした。変数パネルには表示されません
 @msg	a variable of unknown kind can't be bound to objects	種類が不明な変数はオブジェクトにバインドできません
@@ -5439,6 +5452,11 @@ axis	Y Axis	Y 軸
 	Set Options	セットオプション
 	Action Options…	アクションオプション…
 	Action Options	アクションオプション
+	Playback Options…	再生オプション…
+	Playback Options	再生オプション
+	Accelerated	高速
+	Step by Step	ステップ実行
+	Pause For	一時停止
 	Rename Action	アクション名を変更
 	New Action…	新規アクション…
 	New Action	新規アクション
@@ -5936,6 +5954,11 @@ breakText	Glyphs	字形
 	Export All Open Documents as SVG	開いているすべてのドキュメントを SVG として書き出し
 @msgplural	Exported {n} document|Exported {n} documents	{n} 個のドキュメントを書き出しました
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} 個のドキュメントを書き出しました; {title} は書き出されませんでした: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	フォルダーを一括トレース
+@msgplural	Traced {n} image|Traced {n} images	{n} 個の画像をトレースしました
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} 個の画像をトレースできませんでした
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} 個の画像をトレースしました; トレースできなかった画像: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	シンボルの種類:
 	Dynamic Symbol	ダイナミックシンボル

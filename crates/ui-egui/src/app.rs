@@ -370,6 +370,12 @@ impl VectorcraftApp {
         }
         self.flush_clipboard_out(ctx);
         self.drain_inbox();
+        // An action playing at Step by Step or Pause For runs its next step when it is due, after
+        // the control requests and opened files above: a Stop or a document switch they bring
+        // comes first.
+        if let Some(wait) = crate::panels::actions::tick_playback(self, now) {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        }
         if self.viewport_hidden(ctx) && (self.needs_hidden_paint() || (!dialog_was_open && self.ui.dialog.is_some())) {
             // A plain repaint runs only logic in a hidden window: the ui that applies injected
             // input, shows a queued dialog or issues a capture needs this command. egui-winit
@@ -494,6 +500,8 @@ impl VectorcraftApp {
             return;
         }
         crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
+        // Whether this pass draws the last step of an action playing at Step by Step.
+        let step_held = crate::panels::actions::playback_held(self);
         let t0 = now_ms();
         widgets::set_dialog_open(&ctx, self.ui.dialog.is_some());
         // The canvas records this pass's IME caret geometry; a pass that draws no canvas has none.
@@ -558,6 +566,10 @@ impl VectorcraftApp {
         if !ctx.will_discard() {
             self.perf.frame_ms = now_ms() - t0;
             self.issue_screenshots(&ctx);
+            // A hidden window's pass shows nothing, so the step waits for a pass the user sees.
+            if step_held && !self.viewport_hidden(&ctx) {
+                crate::panels::actions::playback_drawn(self);
+            }
         }
         let _ = json!(null);
     }

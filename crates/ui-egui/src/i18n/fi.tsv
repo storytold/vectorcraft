@@ -682,6 +682,8 @@
 	Update Changed Links	Päivitä muuttuneet linkit
 	Magic Wand	Taikasauva
 	Navigator	Navigaattori
+	Navigator Panel Options	Navigaattori-paneelin asetukset
+	Draw Dashed Lines as Solid Lines	Piirrä katkoviivat yhtenäisinä viivoina
 	Pattern Options	Kuvion asetukset
 	Properties	Ominaisuudet
 	Separations Preview	Erottelujen esikatselu
@@ -946,6 +948,10 @@ lighting	Light	Valo
 	Home	Aloitus
 	Import Keyboard Shortcuts…	Tuo pikanäppäimet…
 	Justify all lines	Tasaa kaikki rivit
+	Align Top	Tasaa ylös
+	Align Center	Tasaa pystysuunnassa keskelle
+	Align Bottom	Tasaa alas
+	Justify Vertically	Tasaa pystysuunnassa
 	Justify with last line aligned left	Tasaa, viimeinen rivi vasemmalle
 	Keyboard Shortcut Conflicts	Pikanäppäinristiriidat
 	Keyboard Shortcut Set	Pikanäppäinjoukko
@@ -2370,6 +2376,7 @@ digits	Malayalam	Malajalam
 	“{file}” is protected by a password.	”{file}” on suojattu salasanalla.
 	Dim Images to:	Himmennä kuvat:
 	Light Blue	Vaaleansininen
+	Light Red	Vaalea punainen
 	Layers Panel Options	Tasot-paneelin asetukset
 	Row Size:	Rivin koko:
 	Show Layers Only	Näytä vain tasot
@@ -4857,6 +4864,7 @@ imageTrace	Outline	Ääriviiva
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	siinä on {_1}, jota VectorCraft ei vielä lue siitä
 @msg	its objects are nested too deeply	sen objektit ovat liian syvällä sisäkkäin
 @msg	its section ending with `%{end}` doesn't end	sen `%{end}`-merkintään päättyvä osio ei pääty
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	siveltimet, joita VectorCraft ei vielä osaa lukea, jätettiin pois Siveltimet-paneelista ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objektit, joilla on useita täyttöjä tai viivoja, tehosteita tai siveltimiä, tuotiin piirretyn näköisinä ({_1}): niiden ulkoasua ei voi vielä muokata
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	liukuväriä “{name}” ei ole määritetty tiedostossa: sen tilalla on tasaväri
 @msg	an image VectorCraft can't read was left out	kuva, jota VectorCraft ei voi lukea, jätettiin pois
@@ -5548,6 +5556,10 @@ mark-style	Japanese	Japanilainen
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
 @msg	an action is already recording	toimintoa nauhoitetaan jo
+@msg	an action is already playing	toimintoa toistetaan jo
+@msg	the action stopped playing: its document is no longer active	toiminnon toisto pysähtyi: sen asiakirja ei ole enää aktiivinen
+@msg	speed must be accelerated, step or pause	speed on oltava accelerated, step tai pause
+@msg	seconds must be a whole number from 1 to 60	seconds on oltava kokonaisluku 1:stä 60:een
 @msg	no such function key	toimintonäppäintä ei ole
 @msg	no such color	väriä ei ole
 @msg	{_1} cannot be used on Windows	{_1} ei ole käytettävissä Windowsissa
@@ -5633,6 +5645,7 @@ mark-style	Japanese	Japanilainen
 	Effect Gallery	Tehostegalleria
 	Filters	Suodattimet
 	Select artwork to apply effects	Valitse kuvitus, johon tehosteet lisätään
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	kaikkia tiedoston muuttujasidoksia ei luettu (ohitettuja sidoksia: {_1}): niitä objekteja ei ole sidottu muuttujiinsa
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	tiedoston muuttujakirjasto luettiin vain osittain (ohitettuja kohtia: {_1}): Muuttujat-paneeli näyttää loput
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	tiedoston muuttujakirjastoa ei voitu lukea: Muuttujat-paneeli ei näytä sitä
 @msg	a variable of unknown kind can't be bound to objects	tuntemattoman tyyppistä muuttujaa ei voi sitoa objekteihin
@@ -5788,6 +5801,11 @@ axis	Y Axis	Y-akseli
 	Set Options	Sarjan asetukset
 	Action Options…	Toiminnon asetukset…
 	Action Options	Toiminnon asetukset
+	Playback Options…	Toistoasetukset…
+	Playback Options	Toistoasetukset
+	Accelerated	Nopeutettu
+	Step by Step	Vaihe kerrallaan
+	Pause For	Tauko
 	Rename Action	Nimeä toiminto uudelleen
 	New Action…	Uusi toiminto…
 	New Action	Uusi toiminto
@@ -6281,6 +6299,11 @@ breakText	Glyphs	Merkit
 	Export All Open Documents as SVG	Vie kaikki avoimet asiakirjat SVG-muodossa
 @msgplural	Exported {n} document|Exported {n} documents	Vietiin {n} asiakirja|Vietiin {n} asiakirjaa
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Vietiin {n} asiakirja; {title} jäi kirjoittamatta: {error}|Vietiin {n} asiakirjaa; {title} jäi kirjoittamatta: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Jäljitä kansio erässä
+@msgplural	Traced {n} image|Traced {n} images	Jäljitettiin {n} kuva|Jäljitettiin {n} kuvaa
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} kuvaa ei voitu jäljittää|{n} kuvaa ei voitu jäljittää
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Jäljitettiin {n} kuva; jäljittämättä: {failed}|Jäljitettiin {n} kuvaa; jäljittämättä: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symbolin tyyppi:
 	Dynamic Symbol	Dynaaminen symboli

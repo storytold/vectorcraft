@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Sample Color",
             [],
             None,
-            "{color, stroke?: bool (default: whichever proxy is active), ids?, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
+            "{color (#rrggbbaa and #rgba are refused), stroke?: bool (default: whichever proxy is active), ids?, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
             has_doc,
             sample_color
         ),

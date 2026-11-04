@@ -7,6 +7,7 @@ use vectorcraft_doc::{Appearance, CharStyle, Node, NodeId, NodeKind, TextKind, T
 use vectorcraft_geom::{Affine, Point, Vec2};
 use vectorcraft_text::edit;
 
+use super::menucmds::whole_or;
 use super::stroke::StrokeChange;
 use super::typecmd::refresh_bounds;
 use super::{
@@ -39,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\" (#rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_range_style
         ),
@@ -233,12 +234,21 @@ fn byte_param(p: &Value, k: &str) -> Option<usize> {
     p.get(k).and_then(Value::as_u64).map(index)
 }
 
+/// The byte offset that `p` gives for `k`, or `default` when `p` leaves it out or gives null. Any
+/// other value that is not a whole number of at least 0, such as `"2"`, `-1` or `1.5`, is an error.
+fn offset_or(p: &Value, k: &str, default: usize, cmd: &str) -> Result<usize> {
+    match p.get(k) {
+        None | Some(Value::Null) => Ok(default),
+        Some(_) => Ok(index(whole_or(p, k, 0, cmd)?)),
+    }
+}
+
 /// The bytes `start..end` of `p` in text of `len` bytes, clamped and ordered (without them, all of
-/// it). A `start` or `end` that is not a number or null, such as `"2"`, is an error.
+/// it). A `start` or `end` that is not a whole number of at least 0 or null, such as `"2"`, `-1`
+/// or `1.5`, is an error.
 fn range_of(p: &Value, len: usize, cmd: &str) -> Result<(usize, usize)> {
-    check_numbers(p, &["start", "end"], cmd)?;
-    let a = byte_param(p, "start").unwrap_or(0).min(len);
-    let b = byte_param(p, "end").unwrap_or(len).min(len);
+    let a = offset_or(p, "start", 0, cmd)?.min(len);
+    let b = offset_or(p, "end", len, cmd)?.min(len);
     Ok((a.min(b), a.max(b)))
 }
 
@@ -310,10 +320,9 @@ fn clear_param(s: &Session, p: &Value, id: NodeId, c: &str) -> Result<Vec<NodeId
 fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.startList";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
-    check_numbers(p, &["at"], C)?;
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
-    let at = byte_param(p, "at").unwrap_or(len).min(len);
+    let at = offset_or(p, "at", len, C)?.min(len);
     let Some((start, list)) = t.typed_list_at(at) else {
         return Ok(json!({"id": id.0, "started": false, "caret": at}));
     };
@@ -921,8 +930,8 @@ impl CharChange {
 
 /// Type › Enable Missing Glyph Protection: after a font change, the characters of `runs` their new
 /// font has no glyph for, but their font `before` the change had, keep that font: its family,
-/// style, version and Variable Font settings.
-pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>) {
+/// style, version and Variable Font settings. Returns the byte ranges that kept their font, in order.
+pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>) -> Vec<(usize, usize)> {
     fn chars(runs: &[TextRun]) -> impl Iterator<Item = (usize, char, &CharStyle)> {
         runs.iter()
             .scan(0, |at, r| {
@@ -954,6 +963,7 @@ pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>
             _ => keep.push((at, end, old)),
         }
     }
+    let kept = keep.iter().map(|(a, b, _)| (*a, *b)).collect();
     for (a, b, old) in keep {
         edit::style_range(runs, a, b, |st| {
             st.font_family.clone_from(&old.font_family);
@@ -962,6 +972,30 @@ pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>
             st.font_axes.clone_from(&old.font_axes);
         });
     }
+    kept
+}
+
+/// The runs of `runs` from byte `a` to `b`, leaving out the ranges `kept` (in order) that Missing
+/// Glyph Protection gave their earlier font: the characters a font command set its font on.
+pub(crate) fn unprotected_runs(runs: &[TextRun], a: usize, b: usize, kept: &[(usize, usize)]) -> Vec<TextRun> {
+    let mut out = vec![];
+    let mut at = a;
+    for &(k0, k1) in kept {
+        if k1 <= at {
+            continue;
+        }
+        if k0 >= b {
+            break;
+        }
+        if k0 > at {
+            out.extend(edit::slice_runs(runs, at, k0));
+        }
+        at = k1;
+    }
+    if at < b {
+        out.extend(edit::slice_runs(runs, at, b));
+    }
+    out
 }
 
 fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1012,12 +1046,10 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
             }
             let before = protect.then(|| t.runs.clone());
             edit::style_range(&mut t.runs, a, b, |st| change.apply(st));
-            if let Some(before) = before {
-                protect_missing_glyphs(&before, &mut t.runs);
-            }
+            let kept = before.map(|before| protect_missing_glyphs(&before, &mut t.runs)).unwrap_or_default();
             if sets_font {
-                // Empty text has one run, which the empty range styles.
-                let styled = if a == b { t.runs.clone() } else { edit::slice_runs(&t.runs, a, b) };
+                // Empty text has one run, which the empty range styles. Characters that kept their font aren't the command's.
+                let styled = if a == b { t.runs.clone() } else { unprotected_runs(&t.runs, a, b, &kept) };
                 set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
             }
             refresh_bounds(t);
@@ -1321,6 +1353,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     super::paint::check_keep_model(p, C)?;
     check_numbers(p, &["size"], C)?;
     check_switches(p, &["vertical", "placeholder"], C)?;
+    super::color_param(p, "color", C)?;
     let style = super::create::new_type_style(s, p);
     let text = str_param(p, "text").unwrap_or("").to_string();
     let start = match point_param(p, "at") {

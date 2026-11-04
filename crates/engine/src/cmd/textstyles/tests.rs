@@ -336,6 +336,54 @@ fn character_style_color_and_features_are_checked() {
 }
 
 #[test]
+fn character_style_dimensions_are_checked_before_a_definition_changes() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for attrs in [
+        json!({"size": 0.0}),
+        json!({"size": 1296.1}),
+        json!({"leading": 0.0}),
+        json!({"leading": 5000.1}),
+        json!({"h_scale": 0.0}),
+        json!({"h_scale": 0.9}),
+        json!({"h_scale": 10000.1}),
+        json!({"v_scale": 0.0}),
+        json!({"v_scale": 0.9}),
+        json!({"v_scale": 10000.1}),
+        json!({"baseline_shift": -1296.1}),
+        json!({"baseline_shift": 1296.1}),
+        json!({"tcyUpDown": 1296.1}),
+        json!({"tcyLeftRight": -1296.1}),
+    ] {
+        let key = attrs.as_object().unwrap().keys().next().unwrap();
+        for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
+            let params = match cmd {
+                "charStyle.edit" => json!({"name": "Body", "to": "Body", "attrs": attrs}),
+                "charStyle.new" => json!({"name": "Other", "attrs": attrs}),
+                _ => json!({"name": "Body", "attrs": attrs}),
+            };
+            let error = s.execute(cmd, &params).unwrap_err().to_string();
+            assert!(error.contains(&format!("`{key}`")), "{cmd} {attrs}: {error}");
+        }
+    }
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+
+    s.execute(
+        "charStyle.setAttrs",
+        &json!({"name": "Body", "attrs": {
+            "size": 1296.0, "leading": 5000.0,
+            "h_scale": 1.0, "v_scale": 10000.0,
+            "baseline_shift": -1296.0,
+            "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0
+        }}),
+    )
+    .unwrap();
+}
+
+#[test]
 fn text_style_rejects_doubly_signed_feature_tags() {
     let (mut s, id) = session_with_text("Text");
     let before = runs(&s, id);

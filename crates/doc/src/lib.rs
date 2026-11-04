@@ -40,6 +40,7 @@ pub mod live;
 pub mod live_paint;
 pub mod marks;
 mod mem;
+pub use mem::{appearance_heap_bytes, paint_heap_bytes};
 pub mod metadata;
 pub mod node;
 pub mod objects_on_path;
@@ -67,6 +68,7 @@ mod symbols;
 pub use symbols::SymbolBoxes;
 pub mod text;
 pub mod trace;
+pub mod twist;
 pub mod variables;
 pub mod xml_id;
 

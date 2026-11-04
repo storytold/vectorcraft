@@ -9,6 +9,7 @@
 mod about;
 pub mod action_batch;
 pub mod action_new;
+pub mod action_playback;
 pub mod action_set_options;
 pub mod artboard_options;
 pub mod blend_options;
@@ -63,6 +64,7 @@ pub mod live_paint_selection;
 pub mod missing_fonts;
 pub mod missing_links;
 pub(crate) mod modal;
+pub mod navigator_panel_options;
 pub mod new_brush;
 pub mod new_color_group;
 mod new_document;
@@ -364,6 +366,7 @@ registry! {
     ActionBatch: [action_batch::KIND] => action_batch::SPEC,
     ActionSetOptions: [action_set_options::KIND] => action_set_options::SPEC,
     ActionNew: [action_new::KIND] => action_new::SPEC,
+    ActionPlayback: [action_playback::KIND] => action_playback::SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
@@ -405,6 +408,7 @@ registry! {
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
+    NavigatorPanelOptions: [navigator_panel_options::KIND] => navigator_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,

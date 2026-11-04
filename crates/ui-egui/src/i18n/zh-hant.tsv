@@ -1638,6 +1638,10 @@ file-filter	Templates	範本
 	Join Tool	連接工具
 	Justification…	對齊設定…
 	Justify all lines	兩端對齊所有行
+	Align Top	靠上對齊
+	Align Center	垂直置中對齊
+	Align Bottom	靠下對齊
+	Justify Vertically	垂直齊行
 	Justify with last line aligned center	兩端對齊，最後一行置中
 	Justify with last line aligned left	兩端對齊，最後一行靠左
 	Justify with last line aligned right	兩端對齊，最後一行靠右
@@ -2003,6 +2007,7 @@ file-filter	Templates	範本
 @msg	graphs come in as plain art, without their data or settings	圖表以一般圖稿匯入，不保留其資料與設定
 @msg	an image whose data is cut short was left out	已略過資料不完整的影像
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	檔案中未定義漸層「{name}」：已改用單色替代
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft 尚無法讀取的筆刷未加入「筆刷」面板 ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	具有多個填色或筆畫、效果或筆刷的物件已依其繪製外觀匯入 ({_1})：其外觀目前尚無法編輯
 @msg	patterns nested too deeply are filled with mid-grey	巢狀層級過深的圖樣以中灰色填滿
 @msg	shadings of an unknown type were left out	已略過類型未知的著色
@@ -2049,6 +2054,7 @@ file-filter	Templates	範本
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	其上的圖稿與頁面的圖稿有 {_1}% 不同：仍從其編輯資料匯入
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	未讀取檔案的圖層 ({_1})：檔案以其頁面匯入，位於單一圖層中
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	未從檔案的編輯資料讀取圖層 ({_1})：圖層來自其 PDF 部分
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	未讀取檔案的全部變數繫結 (略過的繫結：{_1})：這些物件未繫結至其變數
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	只讀取了檔案的部分變數資料庫 (略過的項目：{_1})：「變數」面板會列出其餘部分
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	無法讀取檔案的變數資料庫：「變數」面板不會列出它
 @msg	a variable of unknown kind can't be bound to objects	種類不明的變數無法繫結至物件
@@ -2635,6 +2641,7 @@ file-filter	Templates	範本
 	Ligatures are off while the text is tracked.	文字套用字距時，連字功能會關閉。
 	Light	淺色
 	Light Blue	淺藍色
+	Light Red	淺紅色
 	Lighten	變亮
 	Lightness	亮度
 	Limit Color Guide to Library	將色彩參考限制於資料庫
@@ -2865,6 +2872,8 @@ file-filter	Templates	範本
 	Name:	名稱：
 	Navigate	導覽
 	Navigator	導覽器
+	Navigator Panel Options	導覽器面板選項
+	Draw Dashed Lines as Solid Lines	將虛線繪製為實線
 	Needs the desktop app	需要桌面版應用程式
 	Neutral Gradients	中性漸層
 	New	新增
@@ -5235,6 +5244,10 @@ lighting	Light	光源
 	Movie Clip	影片片段
 @msg	name is empty	名稱為空
 @msg	an action is already recording	已在錄製動作
+@msg	an action is already playing	已在播放動作
+@msg	the action stopped playing: its document is no longer active	動作已停止播放：其文件不再是作用中文件
+@msg	speed must be accelerated, step or pause	speed 必須為 accelerated、step 或 pause
+@msg	seconds must be a whole number from 1 to 60	seconds 必須為 1 到 60 之間的整數
 @msg	no such function key	沒有這個功能鍵
 @msg	no such color	沒有這個顏色
 @msg	{_1} cannot be used on Windows	{_1} 無法在 Windows 上使用
@@ -5392,6 +5405,11 @@ axis	Y Axis	Y 軸
 	Set Options	組選項
 	Action Options…	動作選項…
 	Action Options	動作選項
+	Playback Options…	播放選項…
+	Playback Options	播放選項
+	Accelerated	加速
+	Step by Step	逐步
+	Pause For	暫停
 	Rename Action	重新命名動作
 	New Action…	新增動作…
 	New Action	新增動作
@@ -5889,6 +5907,11 @@ breakText	Glyphs	字符
 	Export All Open Documents as SVG	將所有開啟的文件匯出為 SVG
 @msgplural	Exported {n} document|Exported {n} documents	已匯出 {n} 份文件
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	已匯出 {n} 份文件; 未寫入 {title}：{error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	批次描圖資料夾
+@msgplural	Traced {n} image|Traced {n} images	已描圖 {n} 個影像
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} 個影像無法描圖
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	已描圖 {n} 個影像; 無法描圖：{failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	符號類型:
 	Dynamic Symbol	動態符號

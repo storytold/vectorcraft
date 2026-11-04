@@ -1200,6 +1200,33 @@ fn start_list_command_removes_the_typed_characters_and_starts_the_list() {
     assert!(s.execute("text.startList", &json!({"at": 3})).is_err(), "id required");
 }
 
+/// A byte offset given as a negative or fractional number is an error, not the end of the text
+/// (`at`) or its start or end (`start`, `end`), and the text is left as it was. Null keeps the default.
+#[test]
+fn byte_offsets_that_are_not_whole_numbers_are_refused() {
+    let mut s = session();
+    let id = text(&mut s, "x\n# ");
+    for at in [json!(-1), json!(1.5)] {
+        let e = s.execute("text.startList", &json!({"id": id.0, "at": at})).unwrap_err().to_string();
+        assert!(e.contains("`at`"), "{e}");
+    }
+    assert_eq!(obj(&s, id).plain_text(), "x\n# ", "no list was started");
+    assert_eq!(s.execute("text.startList", &json!({"id": id.0, "at": null})).unwrap()["started"], json!(true));
+    let id = text(&mut s, "Hello");
+    for (cmd, p, key) in [
+        ("text.getRange", json!({"id": id.0, "start": -1, "end": 2}), "start"),
+        ("text.getRange", json!({"id": id.0, "start": 1, "end": 2.5}), "end"),
+        ("text.editRange", json!({"id": id.0, "start": 1.5, "end": 2, "insert": "!"}), "start"),
+        ("text.editRange", json!({"id": id.0, "start": 1, "end": -2, "insert": "!"}), "end"),
+        ("text.setRangeStyle", json!({"id": id.0, "start": 0.5, "size": 30}), "start"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{key}`")), "{cmd} {p}: {e}");
+    }
+    assert_eq!(obj(&s, id).plain_text(), "Hello");
+    assert_eq!(s.execute("text.getRange", &json!({"id": id.0, "start": 1.0, "end": null})).unwrap()["text"], json!("ello"));
+}
+
 /// #1881: a Cmd/Ctrl drag while typing (the Selection tool lent to the Type tool) moves the type
 /// and keeps what was typed, and typing goes on after it.
 #[test]

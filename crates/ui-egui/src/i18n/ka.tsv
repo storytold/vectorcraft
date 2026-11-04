@@ -590,6 +590,8 @@
 	Update Changed Links	შეცვლილი ბმულების განახლება
 	Magic Wand	ჯადოსნური ჯოხი
 	Navigator	ნავიგატორი
+	Navigator Panel Options	ნავიგატორის პანელის პარამეტრები
+	Draw Dashed Lines as Solid Lines	ტირეებიანი ხაზების უწყვეტ ხაზებად დახატვა
 	Pattern Options	პატერნის პარამეტრები
 	Properties	თვისებები
 	Separations Preview	სეპარაციის წინასწარი ნახვა
@@ -834,6 +836,10 @@ lighting	Light	სინათლე
 	Home	საწყისი ეკრანი
 	Import Keyboard Shortcuts…	კლავიატურის მალსახმობების იმპორტირება…
 	Justify all lines	ყველა სტრიქონის ორმხრივი სწორება
+	Align Top	ზემოთ სწორება
+	Align Center	შუაში სწორება
+	Align Bottom	ქვემოთ სწორება
+	Justify Vertically	ვერტიკალური ორმხრივი სწორება
 	Justify with last line aligned left	ორმხრივი სწორება, ბოლო სტრიქონი მარცხნივ
 	Keyboard Shortcut Conflicts	კლავიატურის მალსახმობების კონფლიქტები
 	Keyboard Shortcut Set	კლავიატურის მალსახმობების ნაკრები
@@ -2117,6 +2123,7 @@ digits	Malayalam	მალაიალამური
 	“{file}” is protected by a password.	„{file}“ დაცულია პაროლით.
 	Dim Images to:	გამოსახულებების ჩაბნელება:
 	Light Blue	ღია ლურჯი
+	Light Red	ღია წითელი
 	Layers Panel Options	შრეების პანელის პარამეტრები
 	Row Size:	სტრიქონის ზომა:
 	Show Layers Only	მხოლოდ შრეების ჩვენება
@@ -4386,6 +4393,7 @@ font-technology	Variable	ცვლადი
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	მას აქვს {_1}, რასაც VectorCraft მისგან ჯერ ვერ კითხულობს
 @msg	its objects are nested too deeply	მისი ობიექტები ზედმეტად ღრმადაა ჩადგმული
 @msg	its section ending with `%{end}` doesn't end	მისი სექცია, რომელიც `%{end}`-ით მთავრდება, არ სრულდება
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	ფუნჯები, რომლებსაც VectorCraft ჯერ ვერ კითხულობს, ფუნჯების პანელში არ დაემატა ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	რამდენიმე შევსების ან კონტურის, ეფექტის ან ფუნჯის მქონე ობიექტები შემოვიდა დახატული სახით ({_1}): მათი იერსახე ჯერ არ რედაქტირდება
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	გრადიენტი „{name}“ ფაილში განსაზღვრული არ არის: მის ნაცვლად ერთგვაროვანი ფერია
 @msg	an image VectorCraft can't read was left out	გამოსახულება, რომელსაც VectorCraft ვერ კითხულობს, გამოტოვებულია
@@ -5293,6 +5301,10 @@ imageTrace	Outline	კონტური
 	Movie Clip	ანიმაციური კლიპი
 @msg	name is empty	სახელი ცარიელია
 @msg	an action is already recording	მოქმედება უკვე იწერება
+@msg	an action is already playing	მოქმედება უკვე სრულდება
+@msg	the action stopped playing: its document is no longer active	მოქმედება შეჩერდა: მისი დოკუმენტი აღარ არის აქტიური
+@msg	speed must be accelerated, step or pause	speed უნდა იყოს accelerated, step ან pause
+@msg	seconds must be a whole number from 1 to 60	seconds უნდა იყოს მთელი რიცხვი 1-დან 60-მდე
 @msg	no such function key	ასეთი ფუნქციური კლავიში არ არის
 @msg	no such color	ასეთი ფერი არ არის
 @msg	{_1} cannot be used on Windows	{_1} ვერ გამოიყენება Windows-ში
@@ -5544,6 +5556,7 @@ imageTrace	Outline	კონტური
 @msg	no history to clear	გასასუფთავებელი ისტორია არ არის
 @msg	{_1} files are written by file.saveAsTemplate	{_1} ფაილებს წერს file.saveAsTemplate
 @msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 წერს ძველი ფორმატის .ai ფაილებს და არა .ait შაბლონებს
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	ფაილის ცვლადების ყველა კავშირი არ იქნა წაკითხული (გამოტოვებული კავშირები: {_1}): ეს ობიექტები არ არის დაკავშირებული თავიანთ ცვლადებთან
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ფაილის ცვლადების ბიბლიოთეკა მხოლოდ ნაწილობრივ იქნა წაკითხული (გამოტოვებული ჩანაწერები: {_1}): პანელი „ცვლადები“ დანარჩენს აჩვენებს
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ფაილის ცვლადების ბიბლიოთეკის წაკითხვა ვერ მოხერხდა: პანელი „ცვლადები“ მას არ აჩვენებს
 @msg	a variable of unknown kind can't be bound to objects	უცნობი სახის ცვლადის ობიექტებთან დაკავშირება შეუძლებელია
@@ -5680,6 +5693,11 @@ axis	Y Axis	Y ღერძი
 	Set Options	ნაკრების პარამეტრები
 	Action Options…	მოქმედების პარამეტრები…
 	Action Options	მოქმედების პარამეტრები
+	Playback Options…	შესრულების პარამეტრები…
+	Playback Options	შესრულების პარამეტრები
+	Accelerated	დაჩქარებული
+	Step by Step	ნაბიჯ-ნაბიჯ
+	Pause For	პაუზა
 	Rename Action	მოქმედების სახელის შეცვლა
 	New Action…	ახალი მოქმედება…
 	New Action	ახალი მოქმედება
@@ -6247,6 +6265,11 @@ breakText	Glyphs	გლიფები
 	Export All Open Documents as SVG	ყველა ღია დოკუმენტის ექსპორტი SVG-ად
 @msgplural	Exported {n} document|Exported {n} documents	ექსპორტირებულია დოკუმენტი ({n})
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	საქაღალდის პაკეტური ვექტორიზაცია
+@msgplural	Traced {n} image|Traced {n} images	ვექტორიზებულია გამოსახულება ({n})
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	ვერ მოხერხდა გამოსახულების ვექტორიზაცია ({n})
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	ვექტორიზებულია გამოსახულება ({n}); ვერ მოხერხდა: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	სიმბოლოს ტიპი:
 	Dynamic Symbol	დინამიკური სიმბოლო

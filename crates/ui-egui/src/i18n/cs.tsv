@@ -691,6 +691,8 @@
 	Update Changed Links	Aktualizovat změněná propojení
 	Magic Wand	Kouzelná hůlka
 	Navigator	Navigátor
+	Navigator Panel Options	Možnosti panelu Navigátor
+	Draw Dashed Lines as Solid Lines	Kreslit čárkované čáry jako plné
 	Pattern Options	Možnosti vzorku
 	Properties	Vlastnosti
 	Separations Preview	Náhled separací
@@ -967,6 +969,10 @@ lighting	Light	Světlo
 	Home	Domů
 	Import Keyboard Shortcuts…	Importovat klávesové zkratky…
 	Justify all lines	Do bloku včetně posledního řádku
+	Align Top	Zarovnat nahoru
+	Align Center	Zarovnat svisle na střed
+	Align Bottom	Zarovnat dolů
+	Justify Vertically	Zarovnat svisle do bloku
 	Justify with last line aligned left	Do bloku, poslední řádek vlevo
 	Keyboard Shortcut Conflicts	Konflikty klávesových zkratek
 	Keyboard Shortcut Set	Sada klávesových zkratek
@@ -2426,6 +2432,7 @@ digits	Malayalam	Malajálamské
 	“{file}” is protected by a password.	Soubor „{file}“ je chráněn heslem.
 	Dim Images to:	Ztlumit obrázky na:
 	Light Blue	Světle modrá
+	Light Red	Světle červená
 	Layers Panel Options	Možnosti panelu Vrstvy
 	Row Size:	Velikost řádků:
 	Show Layers Only	Zobrazit pouze vrstvy
@@ -4955,6 +4962,7 @@ imageTrace	Outline	Obrys
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	obsahuje {_1}, což z něj VectorCraft zatím nečte
 @msg	its objects are nested too deeply	jeho objekty jsou vnořené příliš hluboko
 @msg	its section ending with `%{end}` doesn't end	jeho oddíl končící `%{end}` nemá konec
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	štětce, které VectorCraft zatím neumí načíst, byly vynechány z panelu Štětce ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekty s více výplněmi nebo tahy, efekty či štětci byly načteny jako vykreslený vzhled ({_1}): jejich vzhled zatím nelze upravovat
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	přechod „{name}“ není v souboru definován: zastupuje ho plná barva
 @msg	an image VectorCraft can't read was left out	obrázek, který VectorCraft neumí přečíst, byl vynechán
@@ -5585,6 +5593,10 @@ mark-style	Japanese	Japonské
 	Movie Clip	Filmový klip
 @msg	name is empty	název je prázdný
 @msg	an action is already recording	akce se už zaznamenává
+@msg	an action is already playing	akce se už přehrává
+@msg	the action stopped playing: its document is no longer active	přehrávání akce se zastavilo: její dokument už není aktivní
+@msg	speed must be accelerated, step or pause	speed musí být accelerated, step nebo pause
+@msg	seconds must be a whole number from 1 to 60	seconds musí být celé číslo od 1 do 60
 @msg	no such function key	taková funkční klávesa neexistuje
 @msg	no such color	taková barva neexistuje
 @msg	{_1} cannot be used on Windows	Zkratku {_1} nelze ve Windows použít
@@ -5657,7 +5669,7 @@ mark-style	Japanese	Japonské
 	Word Spacing:	Mezery mezi slovy:
 	Letter Spacing:	Mezery mezi písmeny:
 	Glyph Scaling:	Změna velikosti glyfů:
-	Auto Leading:	Automatické proklady:
+	Auto Leading:	Automatický proklad:
 	Single Word Justification:	Zarovnání jednoho slova:
 	Full Justify	Zarovnat do bloku
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum.
@@ -5670,6 +5682,7 @@ mark-style	Japanese	Japonské
 	Effect Gallery	Galerie efektů
 	Filters	Filtry
 	Select artwork to apply effects	Vyberte grafiku, na kterou chcete použít efekty
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	nebyly načteny všechny vazby proměnných souboru (vynechané vazby: {_1}): tyto objekty nejsou vázány na své proměnné
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	knihovna proměnných souboru byla načtena jen částečně (vynechané položky: {_1}): panel Proměnné zobrazuje zbytek
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	knihovnu proměnných souboru nebylo možné načíst: panel Proměnné ji nezobrazuje
 @msg	a variable of unknown kind can't be bound to objects	proměnnou neznámého druhu nelze svázat s objekty
@@ -5758,6 +5771,11 @@ axis	Y Axis	osa Y
 	Set Options	Možnosti sady
 	Action Options…	Možnosti akce…
 	Action Options	Možnosti akce
+	Playback Options…	Možnosti přehrávání…
+	Playback Options	Možnosti přehrávání
+	Accelerated	Zrychleně
+	Step by Step	Krok za krokem
+	Pause For	Pozastavit na
 	Rename Action	Přejmenovat akci
 	New Action…	Nová akce…
 	New Action	Nová akce
@@ -6251,6 +6269,11 @@ breakText	Glyphs	Glyfy
 	Export All Open Documents as SVG	Exportovat všechny otevřené dokumenty jako SVG
 @msgplural	Exported {n} document|Exported {n} documents	Exportován {n} dokument|Exportovány {n} dokumenty|Exportováno {n} dokumentů
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportován {n} dokument; {title} nebyl zapsán: {error}|Exportovány {n} dokumenty; {title} nebyl zapsán: {error}|Exportováno {n} dokumentů; {title} nebyl zapsán: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Dávková vektorizace složky
+@msgplural	Traced {n} image|Traced {n} images	Vektorizován {n} obraz|Vektorizovány {n} obrazy|Vektorizováno {n} obrazů
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} obraz nebylo možné vektorizovat|{n} obrazy nebylo možné vektorizovat|{n} obrazů nebylo možné vektorizovat
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Vektorizován {n} obraz; nevektorizováno: {failed}|Vektorizovány {n} obrazy; nevektorizováno: {failed}|Vektorizováno {n} obrazů; nevektorizováno: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Typ symbolu:
 	Dynamic Symbol	Dynamický symbol

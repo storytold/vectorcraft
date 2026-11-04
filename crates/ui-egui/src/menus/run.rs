@@ -566,6 +566,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         crate::addons::arrange::ZOOM => crate::addons::arrange::zoom(app),
         crate::addons::document::SAVE_COPY => crate::addons::document::save_copy(app, p),
         crate::addons::document::EXPORT_ALL => crate::addons::document::export_all(app, p),
+        crate::addons::document::BATCH_TRACE => crate::addons::document::batch_trace(app, p),
         "tool.setOption" => app.session.set_tool_option_cmd(p),
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
@@ -694,6 +695,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.newLayer" => crate::dialogs::layer_options::open_new(app, p),
         "ui.newArtboard" => crate::dialogs::artboard_options::open_new(app),
         "ui.layersPanelOptions" => crate::dialogs::layers_panel_options::open(app),
+        "ui.navigatorPanelOptions" => crate::panels::navigator::set_options(app, p),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),
         "ui.layersFilter" => crate::panels::layers::set_filter(app, p),
         "ui.flattenTransparencyDialog" => {
@@ -824,6 +826,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         crate::panels::actions::NEW_ACTION => crate::panels::actions::new_action(app, p),
         crate::panels::actions::ACTION_OPTIONS => crate::panels::actions::action_options(app, p),
         crate::panels::actions::PLAY_ACTION => crate::panels::actions::play_action(app, p),
+        crate::panels::actions::PLAYBACK_OPTIONS => crate::panels::actions::playback_options(app, p),
         crate::panels::actions::START_RECORDING => crate::panels::actions::record(app, p),
         crate::panels::actions::STOP_RECORDING => crate::panels::actions::stop(app, p),
         "ui.batchDialog" => {

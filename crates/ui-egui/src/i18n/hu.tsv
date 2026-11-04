@@ -2074,6 +2074,10 @@ file-filter	Templates	Sablonok
 	Justification…	Sorkizárás…
 	Justify	Sorkizárt
 	Justify all lines	Sorkizárás minden sorra
+	Align Top	Igazítás felülre
+	Align Center	Igazítás függőlegesen középre
+	Align Bottom	Igazítás alulra
+	Justify Vertically	Függőleges sorkizárás
 	Justify with last line aligned center	Sorkizárás, utolsó sor középre
 	Justify with last line aligned left	Sorkizárás, utolsó sor balra
 	Justify with last line aligned right	Sorkizárás, utolsó sor jobbra
@@ -2223,6 +2227,7 @@ file-filter	Templates	Sablonok
 	Ligatures are off while the text is tracked.	Ha a szövegnek betűköze van, a ligatúrák ki vannak kapcsolva.
 	Light	Fény
 	Light Blue	Világoskék
+	Light Red	Világospiros
 	Light Direction	Fény iránya
 	Light Gray	Világosszürke
 	Light Intensity	Fény erőssége
@@ -2505,6 +2510,8 @@ file-filter	Templates	Sablonok
 	Name:	Név:
 	Navigate	Navigálás
 	Navigator	Navigátor
+	Navigator Panel Options	Navigátor panel beállításai
+	Draw Dashed Lines as Solid Lines	Szaggatott vonalak rajzolása folytonosként
 	Needs the desktop app	Az asztali alkalmazás kell hozzá
 	Negative	Negatív
 	Neutral Gradients	Semleges színátmenetek
@@ -5036,6 +5043,7 @@ imageTrace	Outline	Körvonal
 @msg	object {0} cannot have children	ennek az objektumnak nem lehetnek gyermekei: {0}
 @msg	object {id} is not a path	az objektum nem útvonal: {id}
 @msg	object {id} is not a selected top-level object	az objektum nem kijelölt legfelső szintű objektum: {id}
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	a VectorCraft által még nem olvasható ecsetek kimaradtak az Ecsetek panelről ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	a több kitöltésű vagy körvonalú, effektusos vagy ecsetes objektumok a megrajzolt kinézetükkel kerültek be ({_1}): a megjelenésük még nem szerkeszthető
 @msg	Offset Path: select paths	Útvonal eltolása: jelölj ki útvonalakat
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Útvonal eltolása: az eltolás után semmi sem marad a kijelölt útvonalakból (a befelé eltolás nagyobb az alakzatoknál)
@@ -5568,6 +5576,10 @@ imageTrace	Outline	Körvonal
 	Movie Clip	Mozgóklip
 @msg	name is empty	a név üres
 @msg	an action is already recording	már folyik egy művelet felvétele
+@msg	an action is already playing	már folyik egy művelet lejátszása
+@msg	the action stopped playing: its document is no longer active	a művelet lejátszása leállt: a dokumentuma már nem az aktív
+@msg	speed must be accelerated, step or pause	a speed értéke accelerated, step vagy pause lehet
+@msg	seconds must be a whole number from 1 to 60	a seconds értéke 1 és 60 közötti egész szám lehet
 @msg	no such function key	nincs ilyen funkcióbillentyű
 @msg	no such color	nincs ilyen szín
 @msg	{_1} cannot be used on Windows	A(z) {_1} nem használható Windows rendszeren
@@ -5653,6 +5665,7 @@ imageTrace	Outline	Körvonal
 	Effect Gallery	Effektusgaléria
 	Filters	Szűrők
 	Select artwork to apply effects	Válasszon ki grafikát az effektusok alkalmazásához
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	a fájl változókötései közül nem mindegyik lett beolvasva (kihagyott kötések: {_1}): ezek az objektumok nincsenek a változóikhoz kötve
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	a fájl változókönyvtára csak részben lett beolvasva (kihagyott bejegyzések: {_1}): a Változók panel a többit listázza
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	a fájl változókönyvtárát nem sikerült beolvasni: a Változók panel nem listázza
 @msg	a variable of unknown kind can't be bound to objects	ismeretlen típusú változó nem köthető objektumokhoz
@@ -5741,6 +5754,11 @@ axis	Y Axis	Y tengely
 	Set Options	Készlet beállításai
 	Action Options…	Művelet beállításai…
 	Action Options	Művelet beállításai
+	Playback Options…	Lejátszási beállítások…
+	Playback Options	Lejátszási beállítások
+	Accelerated	Gyorsított
+	Step by Step	Lépésenként
+	Pause For	Szünet
 	Rename Action	Művelet átnevezése
 	New Action…	Új művelet…
 	New Action	Új művelet
@@ -6235,6 +6253,11 @@ breakText	Glyphs	Glifák
 	Export All Open Documents as SVG	Az összes megnyitott dokumentum exportálása SVG-ként
 @msgplural	Exported {n} document|Exported {n} documents	Exportált dokumentumok: {n}
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportált dokumentumok: {n}; {title} nem lett kiírva: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Mappa kötegelt vektorizálása
+@msgplural	Traced {n} image|Traced {n} images	Vektorizált képek: {n}
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	Nem vektorizálható képek: {n}
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Vektorizált képek: {n}; nem vektorizálható: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Szimbólum típusa:
 	Dynamic Symbol	Dinamikus szimbólum
