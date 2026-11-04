@@ -351,6 +351,8 @@ pub(crate) struct CharChange {
     stroke: Option<Paint>,
     /// Weight (`strokeWidth`), cap, join, miter limit and dashes of the character stroke.
     stroke_opts: StrokeChange,
+    /// Document points per text-space point for a stroke edit.
+    stroke_scale: Option<f64>,
     underline: Option<bool>,
     strikethrough: Option<bool>,
     all_caps: Option<bool>,
@@ -641,6 +643,7 @@ impl CharChange {
             fill: paint_param(p, "fill", cmd)?,
             stroke: paint_param(p, "stroke", cmd)?,
             stroke_opts,
+            stroke_scale: None,
             underline: flag("underline"),
             strikethrough: flag("strikethrough"),
             all_caps: flag("allCaps"),
@@ -723,6 +726,7 @@ impl CharChange {
         self.tcy_up_down = self.tcy_up_down.map(|v| local_type_value(t, v, (-1296.0, 1296.0), false, cmd)).transpose()?;
         self.tcy_left_right = self.tcy_left_right.map(|v| local_type_value(t, v, (-1296.0, 1296.0), false, cmd)).transpose()?;
         self.h_scale = self.h_scale.map(|v| local_type_value(t, v, (1.0, 10000.0), true, cmd)).transpose()?;
+        self.stroke_scale = Some(vectorcraft_doc::Scaling::factor(t.xf).filter(|k| k.is_finite() && *k > 1e-12).unwrap_or(1.0));
         Ok(())
     }
 
@@ -809,10 +813,13 @@ impl CharChange {
             st.fill = v.clone();
         }
         if let Some(v) = &self.stroke {
+            if !v.is_none() {
+                super::gradient::run_stroke_weight(st);
+            }
             st.stroke = v.clone();
         }
         if !self.stroke_opts.is_empty() {
-            self.stroke_opts.apply_char(st);
+            self.stroke_opts.apply_char_scaled(st, self.stroke_scale.unwrap_or(1.0));
         }
         if let Some(v) = self.underline {
             st.underline = v;
@@ -1608,4 +1615,28 @@ fn discard_empty(s: &mut Session, p: &Value) -> Result<Value> {
     }
     s.edit("Discard Empty Type", |d, _| d.remove(id).map(|_| ()).map_err(|_| EngineError::NoNode(id)))?;
     Ok(json!({"removed": true}))
+}
+
+#[cfg(test)]
+mod range_stroke_tests {
+    use super::*;
+
+    #[test]
+    fn range_stroke_gains_a_default_weight_and_scales_explicit_weight() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "ABCD"})).unwrap()["id"].as_u64().unwrap();
+        let weights = |s: &Session| {
+            let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind else { panic!("text missing") };
+            t.runs.iter().map(|r| r.style.stroke_width).collect::<Vec<_>>()
+        };
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 2, "stroke": "#ff0000"})).unwrap();
+        assert_eq!(weights(&s), [1.0, 0.0], "a newly painted range has a visible default stroke");
+
+        s.execute("object.scale", &json!({"ids": [id], "sx": 200, "sy": 200})).unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 2, "strokeWidth": 2.0})).unwrap();
+        assert_eq!(weights(&s), [1.0, 0.0], "two document points become one text-space point at 200% scale");
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 2, "end": 4, "stroke": "#0000ff", "strokeWidth": 4.0})).unwrap();
+        assert_eq!(weights(&s), [1.0, 2.0], "a different range receives its scaled weight");
+    }
 }
