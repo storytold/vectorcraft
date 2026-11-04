@@ -9,14 +9,31 @@ pub(super) const TYPE_LEFT_OUT: &str = "text objects of kinds VectorCraft doesn'
 
 pub(super) const ART_LEFT_OUT: &str = "hidden layers have art this can't read";
 
+/// The page's type that no text object takes, left out.
+pub(super) const PAGE_TYPE_LEFT_OUT: &str = "some of the page's type has no text object in the layers, so it is left out";
+
+/// The page's type, too much to check against the text objects (it may have some that none takes).
+pub(super) const PAGE_TYPE_UNCHECKED: &str =
+    "the page's type wasn't checked against the text objects, as there is too much of it: some of it may have no text object";
+
 pub(super) const LAYERS_UNREAD: &str = "the file's layers weren't read";
 
+/// Objects of the layers replaced with the page's art where they drew differently from it,
+/// followed by the layers they are on.
+pub(super) const DREW_DIFFERENTLY: &str = "objects that drew differently from the file's own page came in as its art";
+
 /// Does this import note say that the file has something the document doesn't (hidden text, art or
-/// layers that could not be read)? Writing the document over the file would lose it for good.
+/// layers that could not be read, or the page's type that no text object takes or may not take)?
+/// Writing the document over the file would lose it for good.
 pub fn is_loss(note: &str) -> bool {
     note.ends_with(TEXT_LEFT_OUT)
         || note.ends_with(TYPE_LEFT_OUT)
-        || [ART_LEFT_OUT, LAYERS_UNREAD, crate::import::graphics::TOO_MUCH, crate::import::graphics::FAR_AWAY].iter().any(|n| note.starts_with(n))
+        || note.ends_with("they came in as the page's art")
+        || note == PAGE_TYPE_LEFT_OUT
+        || note == PAGE_TYPE_UNCHECKED
+        || [ART_LEFT_OUT, LAYERS_UNREAD, DREW_DIFFERENTLY, crate::import::graphics::TOO_MUCH, crate::import::graphics::FAR_AWAY]
+            .iter()
+            .any(|n| note.starts_with(n))
 }
 
 /// Most text objects in the layers, and most pieces of type in one place on the page, that are matched
@@ -52,16 +69,64 @@ pub(super) struct SlotInfo {
     pub(super) shown: bool,
     /// Its own frame or path, where the file places it ([`ai::text_frames`]).
     pub(super) art_path: Option<PathData>,
+    /// For type that a layer's or group's look draws ([`ai::is_look_slot`]): the box of the group
+    /// it is in, the copy of the art that the look draws (that of the group around it when it draws
+    /// nothing but type).
+    pub(super) look: Option<Rect>,
+    /// The group it is in.
+    pub(super) group: Option<NodeId>,
 }
 
 /// The text slots of the layers and objects, in order.
 pub(super) fn collect_slots(nodes: &[Arc<Node>], shown: bool, out: &mut Vec<SlotInfo>) {
+    slots_in(nodes, shown, &mut vec![], &mut Default::default(), out);
+}
+
+/// [`collect_slots`] for `nodes` in the innermost of `groups`. The boxes of groups are measured
+/// only for type that looks draw, once each (`boxes`).
+fn slots_in<'a>(
+    nodes: &'a [Arc<Node>],
+    shown: bool,
+    groups: &mut Vec<&'a Node>,
+    boxes: &mut std::collections::HashMap<NodeId, Option<Rect>>,
+    out: &mut Vec<SlotInfo>,
+) {
     for n in nodes {
         let shown = shown && n.visible;
         if let Some(story) = slot_of(n.name.as_deref()) {
-            out.push(SlotInfo { story, frame: ai::slot_frame(n.name.as_deref()), shown, art_path: None });
+            // A group with nothing to draw but type is in the box of the group around it.
+            let look = ai::is_look_slot(n.name.as_deref())
+                .then(|| groups.iter().rev().find_map(|g| *boxes.entry(g.id).or_insert_with(|| g.visual_bounds())).unwrap_or(Rect::ZERO));
+            let group = groups.last().map(|g| g.id);
+            out.push(SlotInfo { story, frame: ai::slot_frame(n.name.as_deref()), shown, art_path: None, look, group });
         } else if let Some(c) = n.children().filter(|_| !matches!(n.kind, NodeKind::Compound { .. })) {
-            collect_slots(c, shown, out);
+            groups.push(n);
+            slots_in(c, shown, groups, boxes, out);
+            groups.pop();
+        }
+    }
+}
+
+/// Past the limits on matching the page's type (`pieces` text objects) with the text slots `infos` of
+/// `layers`, the slots of type that looks draw go: their copies' type is matched like any other of
+/// the page's type. They also go when the page's type comes in as outlines (`outlined`), which leaves
+/// them no type to hold.
+pub(super) fn limit_look_slots(layers: &mut Vec<Arc<Node>>, infos: &mut Vec<SlotInfo>, pieces: usize, outlined: bool) {
+    let looks = infos.iter().filter(|i| i.look.is_some()).count();
+    if looks > 0 && (outlined || looks > MAX_SLOTS || infos.len().saturating_mul(pieces) > MAX_PAIRS) {
+        drop_look_type_slots(layers);
+        infos.retain(|i| i.look.is_none());
+    }
+}
+
+/// Remove the text slots of type that looks draw ([`ai::is_look_slot`]) from `nodes` and their groups.
+fn drop_look_type_slots(nodes: &mut Vec<Arc<Node>>) {
+    nodes.retain(|n| !ai::is_look_slot(n.name.as_deref()));
+    for n in nodes.iter_mut() {
+        if n.children().is_some_and(|c| !c.is_empty())
+            && let Some(c) = Arc::make_mut(n).children_mut()
+        {
+            drop_look_type_slots(c);
         }
     }
 }
@@ -163,10 +228,9 @@ pub(super) fn assign(objects: &[Vec<Arc<Node>>], slots: usize) -> Vec<Vec<&[Arc<
 pub(super) enum Content {
     /// Text objects (with the strokes round them) of the page.
     Page(Vec<Arc<Node>>),
-    /// A text object made from the file's text document, where it lies on the document, whether
-    /// the page has type where it is, and the page's type of no text object that is nearest it
-    /// (kept after it).
-    Made(Box<Node>, Option<Rect>, bool, Vec<Arc<Node>>),
+    /// A text object made from the file's text document, where it draws on the document (when it
+    /// shows), and whether the page has type where it is.
+    Made(Box<Node>, Option<Rect>, bool),
     /// Nothing the file lets this read.
     Empty,
     /// Its type is on the page with another text object's; there is nothing to put here.
@@ -204,8 +268,12 @@ pub(super) fn fill_slots(
             let frame = ai::slot_frame(n.name.as_deref());
             let state = (n.opacity, n.blend, n.isolate, n.knockout);
             let transparent = see_through(n);
+            // A text object that is a wrap object stays one.
+            let wrap = n.extras().wrap;
             // An art style read onto the slot (fills, strokes and effects round the characters) is the type's.
             let styled = (!n.appearance.items.is_empty() || !n.appearance.effects.is_empty()).then(|| n.appearance.clone());
+            // The graphic style it is linked to, which the type made from the text document keeps with it.
+            let linked = n.extras().graphic_style;
             let replacement = match content.next() {
                 Some(Content::Page(parts)) if !parts.is_empty() => {
                     // The page's type (and the strokes round it) take the slot's place as they are.
@@ -247,12 +315,32 @@ pub(super) fn fill_slots(
                             parts.push(Arc::new(group));
                         }
                     }
+                    // A wrap object stays one: the page's parts of it in a group, when there are several.
+                    if wrap.is_some() {
+                        if parts.len() > 1 {
+                            let mut group = Node::group(doc.alloc_id(), std::mem::take(&mut parts));
+                            group.visible = visible;
+                            parts.push(Arc::new(group));
+                        }
+                        for p in &mut parts {
+                            Arc::make_mut(p).extras_mut().wrap = wrap;
+                        }
+                    }
+                    // One text object with the slot's appearance and transparency keeps its graphic style.
+                    if let ([p], Some(a)) = (parts.as_mut_slice(), styled.as_ref())
+                        && linked.is_some()
+                        && matches!(p.kind, NodeKind::Text(_))
+                        && a.approx_eq(&p.appearance)
+                        && (p.opacity, p.blend, p.isolate, p.knockout) == state
+                    {
+                        Arc::make_mut(p).extras_mut().graphic_style = linked;
+                    }
                     let n = parts.len();
                     nodes.splice(i..=i, parts);
                     i += n;
                     continue;
                 }
-                Some(Content::Made(mut text, _, seen, extra)) => {
+                Some(Content::Made(mut text, _, seen)) => {
                     text.id = doc.alloc_id();
                     if let Some(story) = story {
                         made.push((story, frame, text.id));
@@ -262,23 +350,21 @@ pub(super) fn fill_slots(
                     let seen = seen || styled.is_some();
                     if let Some(appearance) = styled {
                         text.appearance = appearance;
+                        if linked.is_some() {
+                            text.extras_mut().graphic_style = linked;
+                        }
                     }
                     // Type the page shows is kept; other made type is weighed against the page.
                     text.name = if seen { name.cloned() } else { Some(format!("{MADE}{}", name.map_or("", String::as_str))) };
-                    let extra: Vec<Arc<Node>> = extra.iter().map(|p| reid(doc, p)).collect();
-                    // The type takes the slot's transparency; the page's type kept after it, where it has
-                    // none of its own, goes into a group with it that has the transparency instead.
-                    let parts: Vec<Arc<Node>> = if transparent && !extra.is_empty() && !extra.iter().any(|p| see_through(p)) {
-                        let mut group = Node::group(doc.alloc_id(), std::iter::once(Arc::new(*text)).chain(extra).collect());
-                        (group.opacity, group.blend, group.isolate, group.knockout) = state;
-                        vec![Arc::new(group)]
-                    } else {
-                        (text.opacity, text.blend, text.isolate, text.knockout) = state;
-                        std::iter::once(Arc::new(*text)).chain(extra).collect()
-                    };
-                    let n = parts.len();
-                    nodes.splice(i..=i, parts);
-                    i += n;
+                    // The type takes the slot's transparency.
+                    (text.opacity, text.blend, text.isolate, text.knockout) = state;
+                    if wrap.is_some() {
+                        text.extras_mut().wrap = wrap;
+                    }
+                    if let Some(slot) = nodes.get_mut(i) {
+                        *slot = Arc::new(*text);
+                    }
+                    i += 1;
                     continue;
                 }
                 Some(Content::Merged) => {
@@ -474,4 +560,69 @@ pub(super) fn covered(object: &[Arc<Node>], content: &[Content], keep: impl Fn(u
 /// The box round `parts`.
 pub(super) fn extent(parts: &[Arc<Node>]) -> Option<Rect> {
     parts.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Past the limits, the slots of type that looks draw go, in groups too, and other slots stay.
+    #[test]
+    fn look_type_slots_are_dropped_from_groups() {
+        let mut doc = Document::new(100.0, 100.0);
+        let mut slot = |name: &str| {
+            let mut n = Node::group(doc.alloc_id(), vec![]);
+            n.name = Some(name.into());
+            Arc::new(n)
+        };
+        let (look, own) = (slot("\u{0}text:look"), slot("\u{0}text0:0"));
+        let inner = Arc::new(Node::group(NodeId(90), vec![look.clone(), own.clone()]));
+        let mut nodes = vec![look, inner];
+        let collected = |nodes: &[Arc<Node>]| {
+            let mut infos = vec![];
+            collect_slots(nodes, true, &mut infos);
+            infos
+        };
+        let stories = |infos: &[SlotInfo]| infos.iter().map(|i| (i.story, i.look.is_some())).collect::<Vec<_>>();
+        // Within the limits, they stay.
+        let mut infos = collected(&nodes);
+        limit_look_slots(&mut nodes, &mut infos, 10, false);
+        assert_eq!(stories(&infos), [(None, true), (None, true), (Some(0), false)]);
+        assert_eq!(stories(&collected(&nodes)), stories(&infos));
+        // Three slots and a third of `MAX_PAIRS` pieces of the page's type, and more, are past them.
+        let mut past = nodes.clone();
+        let mut past_infos = collected(&past);
+        limit_look_slots(&mut past, &mut past_infos, MAX_PAIRS / 3 + 1, false);
+        assert_eq!(stories(&past_infos), [(Some(0), false)]);
+        assert_eq!(stories(&collected(&past)), stories(&past_infos));
+        // With the page's type as outlines, they go within the limits too.
+        limit_look_slots(&mut nodes, &mut infos, 10, true);
+        assert_eq!(stories(&infos), [(Some(0), false)]);
+        assert_eq!(stories(&collected(&nodes)), stories(&infos));
+    }
+
+    /// A text slot that is a wrap object, filled with the page's type in two parts, stays one
+    /// wrap object: a group of the parts.
+    #[test]
+    fn a_wrapped_slot_filled_from_the_page_stays_one_wrap_object() {
+        let mut doc = Document::new(100.0, 100.0);
+        let mut slot = Node::group(doc.alloc_id(), vec![]);
+        slot.name = Some("\u{0}text0:0".into());
+        let wrap = vectorcraft_doc::TextWrap { offset: 3.0, invert: true };
+        slot.extras_mut().wrap = Some(wrap);
+        let part = |doc: &mut Document, x: f64| {
+            let t = vectorcraft_doc::TextObject::point(Point::new(x, 50.0), "Part", Default::default());
+            Arc::new(Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t))))
+        };
+        let parts = vec![part(&mut doc, 10.0), part(&mut doc, 60.0)];
+        let mut nodes = vec![Arc::new(slot)];
+        let mut content = vec![Content::Page(parts)].into_iter();
+        let (mut empty, mut made) = (0, vec![]);
+        fill_slots(&mut doc, &mut nodes, &mut content, &Default::default(), &mut empty, &mut made, &mut vec![]);
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].extras().wrap, Some(wrap));
+        let NodeKind::Group { children, .. } = &nodes[0].kind else { panic!("a group: {:?}", nodes[0].kind) };
+        assert_eq!(children.len(), 2);
+        assert!(children.iter().all(|c| c.extras().wrap.is_none() && matches!(c.kind, NodeKind::Text(_))));
+    }
 }

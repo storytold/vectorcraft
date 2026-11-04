@@ -87,7 +87,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area Type Options…",
             ["Type"],
             None,
-            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt, inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt, verticalAlign?: top|center|bottom|justify, fit?: none|autoHeight|shrinkText, fitMinPercent?: 10..100, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options; width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit (none given: query) → the first object's options, plus overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
+            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt, verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText, fitMinPercent?: 10..100, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options; width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit (none given: query) → the first object's options, plus overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
             has_selection,
             area_options
         ),
@@ -123,7 +123,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, keepModel?: bool (as paint.setFill), features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", …] OpenType, featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -785,12 +785,23 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         None => None,
     };
     super::paint::check_keep_model(p, C)?;
-    let fill = match p.get("fill") {
-        None | Some(Value::Null) => None,
-        Some(Value::String(n)) if n.eq_ignore_ascii_case("none") => Some(vectorcraft_color::Paint::None),
-        Some(v) => Some(vectorcraft_color::Paint::solid(super::paint::new_color(s, p, color_value(v).ok_or_else(|| bad(C, "bad fill colour"))?))),
+    let paint = |k: &str| -> Result<Option<vectorcraft_color::Paint>> {
+        Ok(match p.get(k) {
+            None | Some(Value::Null) => None,
+            Some(Value::String(n)) if n.eq_ignore_ascii_case("none") => Some(vectorcraft_color::Paint::None),
+            Some(v) => {
+                Some(vectorcraft_color::Paint::solid(super::paint::new_color(s, p, color_value(v).ok_or_else(|| bad(C, format!("bad {k} colour")))?)))
+            }
+        })
     };
+    let fill = paint("fill")?;
+    let stroke = paint("stroke")?;
+    check_numbers(p, &["strokeWidth"], C)?;
+    // The weight of the character stroke.
+    let mut stroke_weight = super::stroke::StrokeChange::default();
+    stroke_weight.weight = p.get("strokeWidth").and_then(Value::as_f64).map(|w| w.clamp(0.0, 1000.0));
     let features = super::textedit::features_param(p, C)?;
+    let feature_changes = super::textedit::feature_changes_param(p, C)?;
     if font.is_none()
         && style.is_none()
         && size.is_none()
@@ -798,7 +809,10 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         && tracking.is_none()
         && justify.is_none()
         && fill.is_none()
+        && stroke.is_none()
+        && stroke_weight.is_empty()
         && features.is_none()
+        && feature_changes.is_none()
     {
         return Err(bad(C, "nothing to change"));
     }
@@ -812,6 +826,8 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let size = size.map(|v| local_type_value(t, v, (0.1, 1296.0), false, C)).transpose()?;
             let leading = leading.map(|v| v.map(|v| local_type_value(t, v, (0.1, 5000.0), false, C)).transpose()).transpose()?;
+            // The stroke weight is in document points, as stroke.set gives it; the character stroke is drawn in text space.
+            let k = vectorcraft_doc::Scaling::factor(t.xf).filter(|k| k.is_finite() && *k > 1e-12).unwrap_or(1.0);
             let before = protect.then(|| t.runs.clone());
             style_chars(t, range, |st| {
                 if let Some(f) = &font {
@@ -841,8 +857,21 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(f) = &fill {
                     st.fill = f.clone();
                 }
+                if let Some(f) = &stroke {
+                    // A painted stroke on a run without a weight gets 1 pt, as with paint.setStroke.
+                    if !f.is_none() {
+                        super::gradient::run_stroke_weight(st);
+                    }
+                    st.stroke = f.clone();
+                }
+                if !stroke_weight.is_empty() {
+                    stroke_weight.apply_char_scaled(st, k);
+                }
                 if let Some(f) = &features {
                     st.features = f.clone();
+                }
+                if let Some(c) = &feature_changes {
+                    st.features = super::textedit::change_features(&st.features, c);
                 }
             });
             if let Some(before) = before {
@@ -894,8 +923,20 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(f) = &fill {
                     st.fill = f.clone();
                 }
+                if let Some(f) = &stroke {
+                    if !f.is_none() {
+                        super::gradient::run_stroke_weight(st);
+                    }
+                    st.stroke = f.clone();
+                }
+                if !stroke_weight.is_empty() {
+                    stroke_weight.apply_char(st);
+                }
                 if let Some(f) = &features {
                     st.features = f.clone();
+                }
+                if let Some(c) = &feature_changes {
+                    st.features = super::textedit::change_features(&st.features, c);
                 }
             });
         }
@@ -1006,6 +1047,9 @@ pub(crate) fn area_options_json(t: &TextObject) -> Result<Value> {
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     if let Some(o) = v.as_object_mut() {
         o.insert("fit".into(), json!(t.area.fit.id()));
+        o.insert("flow".into(), json!(t.area.flow));
+        // The gutter between rows, the gutter's when the rows have none of their own.
+        o.insert("rowGutter".into(), json!(t.area.row_gutter.unwrap_or(t.area.gutter)));
         let min = match t.area.fit {
             AreaFit::ShrinkText { min_percent } => min_percent,
             _ => AreaFit::DEFAULT_MIN_PERCENT,
@@ -1022,7 +1066,7 @@ pub(crate) fn area_options_json(t: &TextObject) -> Result<Value> {
 }
 
 /// The [`vectorcraft_doc::AreaOptions`] keys `text.areaOptions` merges as they are.
-const AREA_KEYS: [&str; 7] = ["rows", "columns", "gutter", "inset", "firstBaseline", "firstBaselineMin", "verticalAlign"];
+const AREA_KEYS: [&str; 9] = ["rows", "columns", "gutter", "rowGutter", "inset", "firstBaseline", "firstBaselineMin", "verticalAlign", "flow"];
 
 fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.areaOptions";
@@ -1056,6 +1100,11 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     opts.columns = opts.columns.clamp(1, vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS);
     let finite = |x: f64| if x.is_finite() { x } else { 0.0 };
     opts.gutter = finite(opts.gutter).clamp(0.0, 10_000.0);
+    // A gutter given alone is the rows' and the columns'.
+    if p.get("gutter").is_some() && p.get("rowGutter").is_none() {
+        opts.row_gutter = None;
+    }
+    opts.row_gutter = opts.row_gutter.map(|g| finite(g).clamp(0.0, 10_000.0)).filter(|g| *g != opts.gutter);
     opts.inset = finite(opts.inset).clamp(0.0, 10_000.0);
     opts.first_baseline_min = finite(opts.first_baseline_min).clamp(0.0, 10_000.0);
     opts.fit = fit.unwrap_or(cur.fit);

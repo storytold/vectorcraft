@@ -114,15 +114,32 @@ impl Renderer {
     /// The cached path of path or compound path `n` ([`Self::path_of`]) when the frame is in
     /// Outline view and `n` is `fx_owner`, else `None`.
     fn outline_path(&mut self, f: &Frame, n: &Node) -> Option<Arc<BezPath>> {
-        let owner = self.fx_owner.as_ref().filter(|o| f.opts.outline && std::ptr::eq(&***o, n)).cloned()?;
+        if !f.opts.outline {
+            return None;
+        }
+        self.owner_path(f, n)
+    }
+
+    /// The cached path of path or compound path `n` ([`Self::path_of`]) when `n` is `fx_owner`,
+    /// else `None`.
+    fn owner_path(&mut self, f: &Frame, n: &Node) -> Option<Arc<BezPath>> {
+        let owner = self.fx_owner.as_ref().filter(|o| std::ptr::eq(&***o, n)).cloned()?;
         self.path_of(f.symbols, &owner)
     }
 
-    /// Whether `a` is left out of this frame: hidden, a skipped template or guide, or culled.
+    /// Symbol editing mode on screen: `id` is the instance editing was entered from, which is not
+    /// drawn (with its masks and effects), since the editing layer holds a copy of its art in its
+    /// place.
+    fn edited_instance(f: &Frame, id: NodeId) -> bool {
+        f.opts.isolated.is_some() && f.doc.symbol_edit.as_ref().is_some_and(|e| e.instance == Some(id))
+    }
+
+    /// Whether `a` is left out of this frame: hidden, a skipped template or guide, the instance a
+    /// symbol is edited from, or culled.
     fn skipped(&mut self, f: &Frame, a: &Arc<Node>) -> bool {
         let skipped_view_item = (f.opts.skip_templates || f.opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
             || (f.opts.skip_templates || f.opts.hide_guides) && matches!(a.kind, NodeKind::Path { guide: true, .. });
-        if !a.visible || skipped_view_item || f.opts.hidden.contains(&a.id) {
+        if !a.visible || skipped_view_item || f.opts.hidden.contains(&a.id) || Self::edited_instance(f, a.id) {
             return true;
         }
         match self.bounds_of(f.symbols, a) {
@@ -265,7 +282,14 @@ impl Renderer {
             return;
         }
         if vectorcraft_doc::live::is_live(a) || effects::has_pathfinder(a) {
-            return self.draw_live(ctx, f, a);
+            // The isolated object itself (a repeat isolated to edit its source, #5054) draws its
+            // art as usual, as an isolated group does in `draw_layer_node`.
+            let settle = f.opts.isolated == Some(a.id) && f.doc.mask_edit.is_none();
+            let outer = self.isolation_settled;
+            self.isolation_settled = outer || settle;
+            self.draw_live(ctx, f, a);
+            self.isolation_settled = outer;
+            return;
         }
         // Its live-effect geometry depends on the node alone, and for plug-in effects on the
         // plug-ins installed (`check_plugins`), so it can be kept across frames.
@@ -455,26 +479,32 @@ impl Renderer {
                     self.draw_shape(ctx, f, n, &bp, *rule);
                 }
             }
-            NodeKind::Compound { children, rule } => {
-                if let Some(bp) = self.outline_path(f, n) {
-                    return self.draw_shape(ctx, f, n, &bp, *rule);
+            NodeKind::Compound { rule, .. } => {
+                // Its members assembled once and kept with the node in `geom`, as plain paths are
+                // (`path_of`): a compound path of thousands of members is not assembled again in
+                // every frame.
+                if let Some(bp) = self.owner_path(f, n).or_else(|| n.stroke_path().map(Arc::new)) {
+                    self.draw_shape(ctx, f, n, &bp, *rule);
                 }
-                let mut bp = BezPath::new();
-                for c in children {
-                    if let Some(p) = c.path_data() {
-                        bp.extend(p.to_bezpath());
-                    }
-                }
-                self.draw_shape(ctx, f, n, &bp, *rule);
             }
             NodeKind::Text(t) => self.draw_text(ctx, f, n, t),
             NodeKind::Image(im) => self.draw_image_in(ctx, f, im, None, images::image_tint(n, f.ink), n.extras().pixelated),
             NodeKind::SymbolInstance { symbol, xf } => {
-                if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol)
-                    && self.charge_symbol(&sym.art)
-                {
-                    let (art, kept) = self.placed_art(&sym.art, *xf, false, Some(n));
-                    self.draw_placed_art(ctx, f, &art, kept);
+                if let Some(sym) = f.doc.symbols.iter().find(|s| &s.name == symbol) {
+                    // The instance draws when the frame has room for its art's objects; a symbol
+                    // with 9-slice guides is placed cell by cell (`Self::sliced_art`).
+                    let mut used = self.symbol_nodes;
+                    let placed = match f.doc.symbol_slice_map(symbol, *xf) {
+                        Some(m) => self.sliced_art(f.doc, &sym.art, &m, *xf, n, &mut used),
+                        None => {
+                            let count = sym.art.count() as u64;
+                            vectorcraft_doc::charge_symbol_art(&mut used, count, || (self.placed_art(&sym.art, *xf, false, Some(n)), count))
+                        }
+                    };
+                    self.symbol_nodes = used;
+                    if let Some((art, kept)) = placed {
+                        self.draw_placed_art(ctx, f, &art, kept);
+                    }
                 }
             }
             NodeKind::Blend { .. }
@@ -487,13 +517,6 @@ impl Renderer {
                 None => self.draw_live_node(ctx, f, n),
             },
         }
-    }
-
-    /// Count symbol art `art`'s objects against the frame's [`vectorcraft_doc::MAX_SYMBOL_NODES`]: `false` (the
-    /// instance isn't drawn) once they would pass it.
-    fn charge_symbol(&mut self, art: &Node) -> bool {
-        let total = self.symbol_nodes.saturating_add(art.count() as u64);
-        (total <= vectorcraft_doc::MAX_SYMBOL_NODES).then(|| self.symbol_nodes = total).is_some()
     }
 
     /// Draw symbol art `art` as [`Self::placed_art`] placed it for an instance or an inline graphic
@@ -551,7 +574,11 @@ impl Renderer {
     /// `fx_owner`, so its path, its live-effect geometry and, through [`Self::draw_kept_node`], a
     /// live object's evaluation come from the caches.
     fn draw_outline_member(&mut self, ctx: &mut RenderContext, f: &Frame, c: &Arc<Node>) {
-        if !c.visible || f.opts.hidden.contains(&c.id) || f.opts.hide_guides && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+        if !c.visible
+            || f.opts.hidden.contains(&c.id)
+            || f.opts.hide_guides && matches!(c.kind, NodeKind::Path { guide: true, .. })
+            || Self::edited_instance(f, c.id)
+        {
             return;
         }
         match self.bounds_of(f.symbols, c) {

@@ -994,6 +994,50 @@ fn dragging_a_row_onto_new_artboard_duplicates_it() {
     assert_eq!(app.view().unwrap().artboard, 1);
 }
 
+/// #4687: a row dragged above or below another row reorders the artboards there (a line shows
+/// where it lands), in one undo step, and the moved artboard becomes the active one.
+#[test]
+fn dragging_a_row_onto_another_row_reorders_the_artboards() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
+    let ctx = egui::Context::default();
+    let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: screen, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+    };
+    let shapes = frame(&mut app, vec![]);
+    let name_at = |label: &str| {
+        shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text() == label => Some(t.pos + vec2(4.0, 4.0)),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let (first, last) = (name_at("Artboard 1"), name_at("Artboard 3"));
+    let names = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+    let button = |at, pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    // Artboard 1 dragged onto the lower half of Artboard 3's row lands below it.
+    let below = last + vec2(0.0, 8.0);
+    frame(&mut app, vec![egui::Event::PointerMoved(first), button(first, true)]);
+    frame(&mut app, vec![egui::Event::PointerMoved(first + vec2(0.0, 12.0))]);
+    let held = frame(&mut app, vec![egui::Event::PointerMoved(below)]);
+    let accent = Tokens::get(&ctx).accent;
+    assert!(
+        held.iter().any(|c| matches!(&c.shape, egui::Shape::LineSegment { stroke, .. } if stroke.color == accent)),
+        "a line shows where it lands"
+    );
+    frame(&mut app, vec![button(below, false)]);
+    assert_eq!(names(&app), ["Artboard 2", "Artboard 3", "Artboard 1"]);
+    assert_eq!(app.view().unwrap().artboard, 2, "the moved artboard is active");
+    // One undo step puts it back.
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(names(&app), ["Artboard 1", "Artboard 2", "Artboard 3"]);
+}
+
 /// A click in a row's lock column locks its artboard and shows the lock next to the name, a
 /// second click unlocks it, and each click is one undo step. Delete Artboard leaves a locked
 /// artboard.

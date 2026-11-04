@@ -278,7 +278,7 @@ impl SubPath {
         }
         let mut pos = vec![0.0];
         for i in 0..self.segment_count() {
-            let len = kurbo::ParamCurveArclen::arclen(&self.segment(i), 1e-3);
+            let len = measured_arclen(&PathSeg::Cubic(self.segment(i)), 1e-3);
             pos.push(pos.last().copied().unwrap_or(0.0) + len);
         }
         pos
@@ -621,7 +621,7 @@ const MEASURE_LIMIT: f64 = 1e9;
 
 /// The length of `seg` to `accuracy`; 0 for a segment whose control points are not finite or past
 /// [`MEASURE_LIMIT`].
-pub(crate) fn measured_arclen(seg: &PathSeg, accuracy: f64) -> f64 {
+pub fn measured_arclen(seg: &PathSeg, accuracy: f64) -> f64 {
     let ok = |p: Point| p.x.is_finite() && p.y.is_finite() && p.x.abs() <= MEASURE_LIMIT && p.y.abs() <= MEASURE_LIMIT;
     let fits = match seg {
         PathSeg::Line(l) => ok(l.p0) && ok(l.p1),
@@ -836,6 +836,13 @@ mod tests {
         assert_eq!(a.kind, AnchorKind::Smooth);
         let c = Anchor::with_handles(Point::new(0.0, 0.0), Point::new(-1.0, 0.0), Point::new(0.0, 2.0));
         assert_eq!(c.kind, AnchorKind::Corner);
+    }
+
+    /// Handles too large to measure give the curve no length instead of subdividing it without end.
+    #[test]
+    fn anchor_positions_of_an_unmeasurable_curve_are_finite() {
+        let p = curve(Point::new(100.0, 1e300), Point::new(300.0, -1e300));
+        assert_eq!(p.subpaths[0].anchor_arc_positions(), [0.0, 0.0]);
     }
 
     #[test]

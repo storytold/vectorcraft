@@ -811,7 +811,8 @@ pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str) -> Result<vectorcraf
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p` (an RGB
 /// `color` in a CMYK document as [`super::paint::new_color`] stores it), else the defaults,
-/// filled with the current fill unless that is None or white (black then).
+/// filled with the current fill unless that is None or white (black then), in the document's
+/// language.
 pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
     let mut style = CharStyle::default();
     if let Some(sz) = p.get("size").and_then(Value::as_f64) {
@@ -831,5 +832,7 @@ pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
         None if !s.paint.fill.is_none() && s.paint.fill != vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE) => s.paint.fill.clone(),
         None => vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
     };
+    // In the document's language (Document Setup), none for the default.
+    style.language = s.doc().ok().and_then(|d| vectorcraft_doc::setup::char_language(&d.doc.setup.language).ok().flatten()).map(str::to_string);
     style
 }

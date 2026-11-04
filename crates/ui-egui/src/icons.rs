@@ -29,10 +29,12 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-pen-delete" => "pen-tool-delete",
         "tool-anchor" => "dc-anchor",
         "tool-curvature" => "spline",
-        "tool-type" => "type",
+        "tool-type" => "dc-type",
         "tool-type-area" => "dc-type-area",
         "tool-type-path" => "dc-type-path",
         "tool-type-vertical" => "dc-type-vertical",
+        "tool-type-vertical-area" => "dc-type-vertical-area",
+        "tool-type-vertical-path" => "dc-type-vertical-path",
         "tool-touch-type" => "dc-touch-type",
         "tool-line" => "dc-line",
         "tool-arc" => "dc-arc",
@@ -210,6 +212,20 @@ mod tests {
             assert!(icon.len() > pen.len(), "{tool}'s icon has a badge of its own");
         }
         assert_ne!(add, delete, "plus and minus differ");
+    }
+
+    /// The seven type tools each have an icon of their own, drawn for VectorCraft (the vertical
+    /// Area and Path tools used to borrow the horizontal ones' icons).
+    #[test]
+    fn every_type_tool_has_its_own_icon_with_the_same_t() {
+        let tools = ["type", "areaType", "typeOnPath", "verticalType", "verticalAreaType", "verticalTypeOnPath", "touchType"];
+        let names: Vec<&str> = tools.iter().map(|id| tool_icon(vectorcraft_tools::catalog::tool_info(id).unwrap().icon)).collect();
+        let unique: std::collections::BTreeSet<_> = names.iter().collect();
+        assert_eq!(unique.len(), tools.len(), "{names:?}");
+        for name in &names {
+            assert!(name.starts_with("dc-"), "{name} is drawn for VectorCraft");
+            assert!(exists(name), "{name}");
+        }
     }
 
     #[test]

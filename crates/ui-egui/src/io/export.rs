@@ -91,7 +91,7 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         };
         let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
         app.status(match warnings.first() {
-            Some(first) => format!("Exported {what} with {} note(s): {first}", warnings.len()),
+            Some(first) => exported_with_notes(&what, warnings.len(), first),
             None => format!("Exported {what}"),
         });
         Ok(r)
@@ -100,6 +100,12 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         r["path"] = json!(target);
     }
     Ok(r)
+}
+
+/// The status bar's line for an export of `what` with `n` notes, the first of them `first`.
+pub(crate) fn exported_with_notes(what: &str, n: usize, first: &str) -> String {
+    let (one, other) = ("Exported {what} with {n} note: {first}", "Exported {what} with {n} notes: {first}");
+    crate::i18n::msg_n(n as u64, one, other, &[("what", what), ("first", first)])
 }
 
 /// Run an engine command that returns `{dataBase64}` and write the bytes to a picked path
@@ -211,11 +217,27 @@ pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), St
     app.services.open_file.as_mut().ok_or("no app to open files here")?(path)
 }
 
+/// Edit Original: open `path` in the system's default app for it, or with Preferences › File
+/// Handling › Use System Defaults for Edit Original off, in the app that made it (#5236): PhotoCraft
+/// for a raster image where it is installed. Any other file, or no PhotoCraft, uses the system's app.
+pub(crate) fn open_original(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
+    let ext = std::path::Path::new(path).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+    let raster = vectorcraft_engine::cmd::fileio::readable_format(&ext).is_some_and(|f| f.raster);
+    if !app.session.prefs.edit_original_system_defaults
+        && raster
+        && let Some(open) = app.services.open_in_photocraft.as_mut()
+        && open(path)?
+    {
+        return Ok(());
+    }
+    open_in_app(app, path)
+}
+
 /// File → Export for Screens with `document.exportForScreens` params: the files go into `folder`;
 /// without one the web downloads them (the ZIP, or each file) and the other frontends get them
 /// back as base64. With `openLocation`, the file manager shows the first file written. When an
 /// export into a folder or a download has warnings, the status bar shows the first as
-/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n note(s): …".
+/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n notes: …".
 pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     export_files(app, "document.exportForScreens", params)
 }
@@ -273,7 +295,7 @@ fn report_exported(app: &mut VectorcraftApp, r: Value, folder: &str, open_locati
     };
     if returned.is_empty() {
         let first = r["path"].as_str().or_else(|| r["files"][0].as_str());
-        let mut status = format!("Exported {count} file(s) to {folder}");
+        let mut status = crate::i18n::msg_n(count as u64, "Exported {n} file to {folder}", "Exported {n} files to {folder}", &[("folder", folder)]);
         if warned {
             status = saved_status(r["path"].as_str().unwrap_or(folder), &r);
         }
@@ -285,6 +307,8 @@ fn report_exported(app: &mut VectorcraftApp, r: Value, folder: &str, open_locati
         }
         app.status(status);
     } else if let Some(download) = app.services.download.as_mut() {
+        // A browser download has no folders: a file from a sub-folder (`2x/Logo@2x.png`) is named alone.
+        let returned: Vec<(&str, &str)> = returned.iter().map(|(name, data)| (name.rsplit('/').next().unwrap_or(name), *data)).collect();
         for (name, data) in &returned {
             let bytes = vectorcraft_format::base64_decode(data).ok_or("the export returned unreadable data")?;
             download(name, &bytes)?;

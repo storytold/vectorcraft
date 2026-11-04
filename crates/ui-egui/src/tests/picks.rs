@@ -238,8 +238,8 @@ fn load_profile_asks_off_the_ui_thread() {
 }
 
 /// The Variables panel menu's Import Data Sets… and Export Data Sets… ask off the UI thread: the
-/// data sets in the file picked are loaded, and the header and data set `B` are written to the
-/// path the dialog answers.
+/// data sets in the file picked are loaded, and the header and the data set's row are written to
+/// the path the dialog answers.
 #[test]
 fn variables_panel_data_sets_ask_off_the_ui_thread() {
     let (mut app, shown, _) = app();
@@ -250,20 +250,20 @@ fn variables_panel_data_sets_ask_off_the_ui_thread() {
     }
     std::fs::create_dir_all(&dir).unwrap();
     let (csv, out) = (dir.join("sets.csv"), dir.join("out.csv"));
-    std::fs::write(&csv, "name,Name\nB,y\n").unwrap();
+    std::fs::write(&csv, "Name\ny\n").unwrap();
     let sets = |app: &VectorcraftApp| app.session.doc().unwrap().doc.variables.datasets.iter().map(|d| d.name.clone()).collect::<Vec<_>>();
 
     click(&mut app, "Import Data Sets…", crate::panels::variables::menu);
     assert!(matches!(shown.requests().as_slice(), [PickRequest::Open(_)]));
     shown.answer(&[&csv.to_string_lossy()]);
     poll(&mut app);
-    assert_eq!(sets(&app), ["B"], "{}", app.ui.status);
+    assert_eq!(sets(&app), ["Data Set 1"], "{}", app.ui.status);
 
     click(&mut app, "Export Data Sets…", crate::panels::variables::menu);
     assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
     shown.answer(&[&out.to_string_lossy()]);
     poll(&mut app);
-    assert_eq!(std::fs::read_to_string(&out).ok().as_deref(), Some("name,Name\nB,y\n"), "{}", app.ui.status);
+    assert_eq!(std::fs::read_to_string(&out).ok().as_deref(), Some("Name\ny\n"), "{}", app.ui.status);
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -331,6 +331,39 @@ fn load_variable_library_asks_off_the_ui_thread() {
     shown.answer(&[&library.to_string_lossy()]);
     poll(&mut app);
     assert_eq!(sets(&app), ["A"], "{}", app.ui.status);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The Variables panel menu's Save Variable Library… is enabled once the document has a text
+/// variable, and then asks off the UI thread: the library is written
+/// to the path the dialog answers, Load Variable Library reads it back, and the warning about the
+/// visibility variable it left out shows in the status bar.
+#[test]
+fn save_variable_library_asks_off_the_ui_thread() {
+    let (mut app, shown, _) = app();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("variable.define", json!({"name": "Shown", "kind": "visibility"})).unwrap();
+    // Without a text variable the item is disabled and asks for no file.
+    click(&mut app, "Save Variable Library…", crate::panels::variables::menu);
+    assert!(shown.requests().is_empty(), "{:?}", shown.requests());
+    app.run("variable.define", json!({"name": "Name", "kind": "text"})).unwrap();
+    app.run("dataset.new", json!({"name": "A", "values": {"Name": "x", "Shown": true}})).unwrap();
+    let dir = vectorcraft_testkit::temp_dir("picks-save-variable-library");
+    if let Err(e) = std::fs::remove_dir_all(&dir) {
+        assert_eq!(e.kind(), std::io::ErrorKind::NotFound, "cannot empty {}: {e}", dir.display());
+    }
+    std::fs::create_dir_all(&dir).unwrap();
+    let library = dir.join("library.xml");
+
+    click(&mut app, "Save Variable Library…", crate::panels::variables::menu);
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(p)] if p.name == "variables.xml"));
+    assert!(!library.exists(), "nothing is written before the dialog answers");
+    shown.answer(&[&library.to_string_lossy()]);
+    poll(&mut app);
+    assert_eq!(app.ui.status, "variables that aren't text were left out: visibility (1)");
+    let xml = std::fs::read_to_string(&library).unwrap_or_else(|e| panic!("{e}: {}", app.ui.status));
+    let loaded = app.run("variable.loadLibrary", json!({"xml": xml})).unwrap();
+    assert_eq!((loaded["variables"].clone(), loaded["names"].clone()), (json!(["Name"]), json!(["A"])));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -605,6 +638,21 @@ fn nothing_closes_or_quits_while_a_sheet_is_open() {
     poll(&mut app);
     app.run("app.quit", json!({})).unwrap();
     assert_eq!(app.ui.status, "quit");
+}
+
+/// A view Window › New Window opened does not close while a dialog's sheet is on the window either.
+#[test]
+fn no_view_closes_while_a_sheet_is_open() {
+    let (mut app, shown, _) = app();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("window.newWindow", json!({})).unwrap();
+    assert!(app.run("file.open", json!({})).is_err());
+    assert_eq!(app.run("file.close", json!({})), Err(picks::busy().to_string()));
+    assert_eq!(crate::doc_windows::windows(&app), [(0, 1), (0, 2)]);
+    shown.answer(&[]);
+    poll(&mut app);
+    app.run("file.close", json!({})).unwrap();
+    assert_eq!(crate::doc_windows::windows(&app), [(0, 1)]);
 }
 
 /// On Linux the dialog is a window of its own, not a sheet: Close and Quit go on while it is open,

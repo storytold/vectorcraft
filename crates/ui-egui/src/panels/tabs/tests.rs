@@ -619,6 +619,133 @@ fn a_stop_dragged_past_another_stays_selected() {
     assert!(texts.iter().any(|(t, _)| *t == shown), "{shown} in {texts:?}");
 }
 
+/// Press on the stop at `from` (points), move to `to` and release there with Ctrl (Command on
+/// macOS) held → the stems' x positions painted in the frame before the release.
+fn command_drag_on_ruler(ctx: &egui::Context, app: &mut VectorcraftApp, from: f64, to: f64) -> Vec<f32> {
+    let labels = ruler_frame(ctx, app, vec![], false);
+    let [(zero, a), (next, b), ..] = &labels[..] else { panic!("ruler labels {labels:?}") };
+    assert_eq!(zero, "0");
+    let per = next.parse::<f64>().unwrap() * app.session.general_unit().points();
+    let x = |pt: f64| a.x - 2.0 + (pt / per) as f32 * (b.x - a.x);
+    let y = a.y + 15.0;
+    let command = egui::Event::ModifiersChanged(egui::Modifiers::COMMAND);
+    let button =
+        |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::COMMAND };
+    let (press, end) = (egui::pos2(x(from), y), egui::pos2(x(to), y));
+    ruler_frame(ctx, app, vec![command.clone(), egui::Event::PointerMoved(press), button(press, true)], false);
+    for f in [0.25, 0.5] {
+        ruler_frame(ctx, app, vec![command.clone(), egui::Event::PointerMoved(press.lerp(end, f))], false);
+    }
+    let stems = stems_frame(ctx, app, vec![command.clone(), egui::Event::PointerMoved(end)]);
+    ruler_frame(ctx, app, vec![command, button(end, false)], false);
+    ruler_frame(ctx, app, vec![], false);
+    stems.into_iter().map(|(x, _)| x).collect()
+}
+
+/// Ctrl-dragging a stop (Command on macOS) moves every stop by the same distance in one
+/// `text.tabs.set`, one undo step, keeping each stop's alignment and leader, and the ruler shows
+/// them moving during the drag. A plain drag still moves one stop.
+#[test]
+fn command_drag_moves_all_the_stops_together() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b	c", "area": {"width": 300, "height": 100}})).unwrap();
+    app.session
+        .execute(
+            "text.tabs.set",
+            &json!({"stops": [{"position": 30, "leader": "."}, {"position": 50, "align": "right"}, {"position": 80, "align": "decimal", "alignOn": ","}]}),
+        )
+        .unwrap();
+    let ctx = egui::Context::default();
+    let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+    let before = app.session.active().unwrap().history.undo.len();
+    let during = command_drag_on_ruler(&ctx, &mut app, 50.0, 70.0);
+    assert_eq!(positions(&app), [50.0, 70.0, 100.0]);
+    let stops = current(&app).unwrap().1;
+    assert_eq!(stops.iter().map(|s| s.align).collect::<Vec<_>>(), [TabAlign::Left, TabAlign::Right, TabAlign::Decimal]);
+    assert_eq!((stops[0].leader.as_str(), stops[2].align_on), (".", ','));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+    assert_eq!(pstate::<usize>(&ctx, "tabs-sel"), 1);
+    let after: Vec<f32> = stems_frame(&ctx, &mut app, vec![]).into_iter().map(|(x, _)| x).collect();
+    assert_eq!(during.len(), 3, "{during:?}");
+    assert!(during.iter().zip(&after).all(|(d, a)| (d - a).abs() < 0.5), "during the drag {during:?}, after it {after:?}");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(positions(&app), [30.0, 50.0, 80.0]);
+    drag_on_ruler(&ctx, &mut app, 50.0, 70.0, false);
+    assert_eq!(positions(&app), [30.0, 70.0, 80.0]);
+}
+
+/// A Ctrl-drag (Command on macOS) that would put a stop below 0 stops when the leftmost stop
+/// reaches 0, so the stops keep their spacing.
+#[test]
+fn command_drag_stops_at_zero_and_keeps_the_spacing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    app.session.execute("text.tabs.set", &json!({"stops": [{"position": 30}, {"position": 50}]})).unwrap();
+    let ctx = egui::Context::default();
+    command_drag_on_ruler(&ctx, &mut app, 50.0, 5.0);
+    assert_eq!(current(&app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>(), [0.0, 20.0]);
+    assert_eq!(moved_all(&current(&app).unwrap().1, 1, 0.0).unwrap().iter().map(|s| s.position).collect::<Vec<_>>(), [0.0, 20.0]);
+    assert!(moved_all(&[], 0, 10.0).is_none());
+}
+
+/// A Ctrl-drag (Command on macOS) that would put a stop past 100,000 pt stops when the rightmost
+/// stop reaches 100,000 pt, so the stops move and keep their spacing.
+#[test]
+fn command_drag_stops_at_the_largest_position_and_keeps_the_spacing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    app.session.execute("text.tabs.set", &json!({"stops": [{"position": 50}, {"position": 99_990}]})).unwrap();
+    let ctx = egui::Context::default();
+    command_drag_on_ruler(&ctx, &mut app, 50.0, 70.0);
+    assert_eq!(current(&app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>(), [60.0, 100_000.0]);
+}
+
+/// Press on the stop at `from` (points), move to `to` and `below` px under the ruler, and release
+/// there in the same frame as Escape, Ctrl (Command on macOS) held when `command`.
+fn escaped_drag_on_ruler(ctx: &egui::Context, app: &mut VectorcraftApp, from: f64, to: f64, below: f32, command: bool) {
+    let labels = ruler_frame(ctx, app, vec![], false);
+    let [(zero, a), (next, b), ..] = &labels[..] else { panic!("ruler labels {labels:?}") };
+    assert_eq!(zero, "0");
+    let per = next.parse::<f64>().unwrap() * app.session.general_unit().points();
+    let x = |pt: f64| a.x - 2.0 + (pt / per) as f32 * (b.x - a.x);
+    let y = a.y + 15.0;
+    let modifiers = if command { egui::Modifiers::COMMAND } else { egui::Modifiers::NONE };
+    let held = egui::Event::ModifiersChanged(modifiers);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers };
+    let (press, end) = (egui::pos2(x(from), y), egui::pos2(x(to), y + below));
+    ruler_frame(ctx, app, vec![held.clone(), egui::Event::PointerMoved(press), button(press, true)], false);
+    for f in [0.25, 0.5, 1.0] {
+        ruler_frame(ctx, app, vec![held.clone(), egui::Event::PointerMoved(press.lerp(end, f))], false);
+    }
+    ruler_frame(ctx, app, vec![held, escape, button(end, false)], false);
+    ruler_frame(ctx, app, vec![], false);
+}
+
+/// Escape pressed in the frame a stop is released cancels the drag: a plain drag, a Ctrl-drag
+/// (Command on macOS) and a drag off the ruler all leave the stops where they were.
+#[test]
+fn escape_in_the_release_frame_cancels_a_stop_drag() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    app.session.execute("text.tabs.set", &json!({"stops": [{"position": 30}, {"position": 50}]})).unwrap();
+    let ctx = egui::Context::default();
+    let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+    let before = app.session.active().unwrap().history.undo.len();
+    for (below, command) in [(0.0, false), (0.0, true), (60.0, false), (60.0, true)] {
+        escaped_drag_on_ruler(&ctx, &mut app, 50.0, 70.0, below, command);
+        assert_eq!(positions(&app), [30.0, 50.0], "{below} px below, command {command}");
+    }
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before);
+    // The next drag without Escape still moves the stop.
+    drag_on_ruler(&ctx, &mut app, 50.0, 70.0, false);
+    assert_eq!(positions(&app), [30.0, 70.0]);
+}
+
 /// A stop placed by a click on the ruler or dragged on it lands on the nearest whole point, and
 /// the moved stop stays selected. A position typed in the X field keeps its hundredths of a point.
 #[test]
@@ -857,6 +984,76 @@ fn delete_tab_after_the_last_stop_deletes_the_stop_the_ruler_shows_selected() {
     assert!(current(&app).unwrap().1.is_empty());
 }
 
+/// Position Panel Above Text on text narrower than a floating panel can be at the zoom: the panel
+/// comes out wider than asked, and its ruler draws the text at the zoom, running on past the text,
+/// so its marks stay over the text. A ruler wider than the narrowest panel, for other text or in
+/// another document fits the span to its width as before.
+#[test]
+fn above_text_keeps_the_zoom_on_a_ruler_wider_than_asked() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    app.session.execute("text.create", &json!({"x": 40, "y": 200, "text": "a	b", "area": {"width": 100, "height": 100}})).unwrap();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
+    if let Some(v) = app.view_mut() {
+        v.zoom = 0.5;
+    }
+    let ctx = egui::Context::default();
+    let (node, _, span) = current(&app).unwrap();
+    place_above_text(&mut app, &ctx, &node, span);
+    // The panel asked for: a 50 pt ruler, less than the narrowest panel's.
+    let asked = app.ui.docking.clone().unwrap().floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap().rect[2];
+    assert!((asked - RULER_LEFT * 2.0 - 50.0).abs() < 0.01, "{asked}");
+    // Screen points per point of text on a ruler `width` wide, from its first two labels.
+    let scale = |app: &mut VectorcraftApp, width: f32| {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(width, 400.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let labels: Vec<(f64, f32)> = out
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.job.sections.first().is_some_and(|s| s.format.font_id.size == 9.0) => {
+                    Some((t.galley.text().parse::<f64>().ok()?, t.pos.x))
+                }
+                _ => None,
+            })
+            .collect();
+        let [(0.0, a), (next, b), ..] = labels[..] else { panic!("ruler labels {labels:?}") };
+        (b - a) as f64 / next
+    };
+    let narrowest = crate::panel_docking::PANEL_MIN_WIDTH;
+    let fitted = (f64::from(narrowest) - 8.0) / span;
+    let at_zoom = scale(&mut app, narrowest);
+    assert!((at_zoom - 0.5).abs() < 1e-3, "{at_zoom}");
+    let other =
+        app.session.execute("text.create", &json!({"x": 300, "y": 200, "text": "c", "area": {"width": 100, "height": 100}})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [other]})).unwrap();
+    assert!((scale(&mut app, narrowest) - fitted).abs() < 1e-3, "other text fits its span to the ruler");
+    app.session.execute("select.set", &json!({"ids": [node.id.0]})).unwrap();
+    assert!((scale(&mut app, narrowest) - 0.5).abs() < 1e-3);
+    // At another zoom the ruler follows it.
+    if let Some(v) = app.view_mut() {
+        v.zoom = 2.0;
+    }
+    assert!((scale(&mut app, narrowest) - 2.0).abs() < 1e-3, "another zoom");
+    if let Some(v) = app.view_mut() {
+        v.zoom = 0.5;
+    }
+    app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    app.session.execute("text.create", &json!({"x": 40, "y": 200, "text": "d", "area": {"width": 100, "height": 100}})).unwrap();
+    if let Some(v) = app.view_mut() {
+        v.zoom = 0.5;
+    }
+    assert!((scale(&mut app, narrowest) - fitted).abs() < 1e-3, "another document");
+    assert!(app.session.set_active(0));
+    assert!((scale(&mut app, narrowest) - 0.5).abs() < 1e-3);
+    // The panel made wider than the narrowest floating window fits the span to its ruler again.
+    let docking = app.ui.docking.as_mut().unwrap();
+    docking.floating.iter_mut().find(|w| w.contains(&"tabs".to_string())).unwrap().rect[2] = 400.0;
+    let wide = scale(&mut app, 400.0);
+    assert!((wide - (400.0 - 8.0) / span).abs() < 1e-3, "{wide}");
+}
+
 /// Position Panel Above Text floats the panel over the text, its ruler's 0 on the frame's left
 /// edge and a stop's mark over the column it sets, at any zoom (#729).
 #[test]
@@ -864,7 +1061,8 @@ fn above_text_puts_the_ruler_over_the_text_at_the_zoom() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
     app.session.execute("text.create", &json!({"x": 40, "y": 200, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
+    // The canvas starts low enough in the window for the panel to fit above the text at 200%.
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 440.0), vec2(1000.0, 700.0)));
     for zoom in [1.0, 2.0] {
         if let Some(v) = app.view_mut() {
             v.zoom = zoom;
@@ -884,4 +1082,97 @@ fn above_text_puts_the_ruler_over_the_text_at_the_zoom() {
         assert!((ruler - 300.0 * zoom as f32).abs() < 0.01);
     }
     assert_eq!(app.ui.docking.unwrap().floating.len(), 1, "placed again, not floated twice");
+}
+
+/// Position Panel Above Text moves the panel when it already floats in an OS window of its own:
+/// the window's desktop rect goes above the text too, from the main window's top-left (#4995).
+#[test]
+fn above_text_moves_a_panel_floating_in_its_own_window() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    app.session.execute("text.create", &json!({"x": 40, "y": 200, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
+    if let Some(v) = app.view_mut() {
+        v.zoom = 1.0;
+    }
+    let (node, _, span) = current(&app).unwrap();
+    let ctx = egui::Context::default();
+    above_text(&mut app, &ctx, &node, span).unwrap();
+    // The panel's OS window sits elsewhere on the desktop, as after the user dragged it there.
+    let mut layout = app.ui.docking.clone().unwrap();
+    let window = layout.floating.iter_mut().find(|w| w.contains(&"tabs".to_string())).unwrap();
+    window.native = Some([1500.0, 900.0, window.rect[2], window.rect[3]]);
+    app.ui.docking = Some(layout);
+    // The main window's content starts at (200, 100) on the desktop.
+    let mut raw = egui::RawInput::default();
+    raw.viewports.entry(egui::ViewportId::ROOT).or_default().inner_rect =
+        Some(egui::Rect::from_min_size(egui::pos2(200.0, 100.0), vec2(1200.0, 800.0)));
+    ctx.run_ui(raw, |_| {}).textures_delta.clear();
+    above_text(&mut app, &ctx, &node, span).unwrap();
+    let layout = app.ui.docking.clone().unwrap();
+    let g = layout.floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap();
+    let native = g.native.unwrap();
+    assert_eq!([native[0], native[1]], [200.0 + g.rect[0], 100.0 + g.rect[1]], "the OS window goes above the text");
+    assert_eq!([native[2], native[3]], [g.rect[2], g.rect[3]]);
+}
+
+/// Text near the top of the window: Position Panel Above Text puts the panel just below the text,
+/// so neither the panel nor its OS window goes above the screen and the text stays in view. Text
+/// with no room below it either gets the panel at the window's top.
+#[test]
+fn above_text_keeps_the_panel_bar_in_the_window() {
+    for (text_height, below) in [(100.0, true), (760.0, false)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+        app.session.execute("text.create", &json!({"x": 40, "y": 10, "text": "a	b", "area": {"width": 300, "height": text_height}})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
+        if let Some(v) = app.view_mut() {
+            v.zoom = 1.0;
+        }
+        let (node, _, span) = current(&app).unwrap();
+        let xf = crate::canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let frame = xf.rect_to_screen(node.geometric_bounds().unwrap());
+        assert!(frame.top() < 240.0, "no room above the text");
+        let ctx = egui::Context::default();
+        above_text(&mut app, &ctx, &node, span).unwrap();
+        let mut layout = app.ui.docking.clone().unwrap();
+        let window = layout.floating.iter_mut().find(|w| w.contains(&"tabs".to_string())).unwrap();
+        let top = if below { frame.bottom() + 6.0 } else { 0.0 };
+        assert_eq!(window.rect[1], top, "text {text_height} high");
+        window.native = Some([1500.0, 900.0, window.rect[2], window.rect[3]]);
+        app.ui.docking = Some(layout);
+        let mut raw = egui::RawInput::default();
+        raw.viewports.entry(egui::ViewportId::ROOT).or_default().inner_rect =
+            Some(egui::Rect::from_min_size(egui::pos2(200.0, 100.0), vec2(1200.0, 800.0)));
+        ctx.run_ui(raw, |_| {}).textures_delta.clear();
+        above_text(&mut app, &ctx, &node, span).unwrap();
+        let layout = app.ui.docking.clone().unwrap();
+        let g = layout.floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap();
+        assert_eq!(g.native.unwrap()[1], 100.0 + top, "text {text_height} high: the OS window");
+    }
+}
+
+/// Position Panel Above Text puts the panel at the window's top when the place below the text is
+/// above the window (text panned above the canvas), or when the panel at the height it floats at
+/// does not fit below the text in the canvas.
+#[test]
+fn above_text_puts_the_panel_at_the_top_when_below_the_text_does_not_fit() {
+    // The view's centre and the text's height: panned so the text is above the canvas, and a text
+    // whose bottom leaves room for 240 points of panel but not for the 360 it floats at.
+    for (center_y, text_height) in [(600.0, 100.0), (350.0, 340.0)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 600, "height": 800})).unwrap();
+        app.session.execute("text.create", &json!({"x": 40, "y": 20, "text": "a	b", "area": {"width": 300, "height": text_height}})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(50.0, 40.0), vec2(1000.0, 700.0)));
+        if let Some(v) = app.view_mut() {
+            v.zoom = 1.0;
+            v.center = vectorcraft_geom::Point::new(300.0, center_y);
+        }
+        let (node, _, span) = current(&app).unwrap();
+        let ctx = egui::Context::default();
+        above_text(&mut app, &ctx, &node, span).unwrap();
+        let layout = app.ui.docking.clone().unwrap();
+        let g = layout.floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap();
+        assert_eq!(g.rect[1], 0.0, "view centered at y {center_y}");
+    }
 }

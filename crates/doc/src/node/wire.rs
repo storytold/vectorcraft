@@ -46,11 +46,13 @@ impl Serialize for Node {
             e.perspective.is_none(),
             e.dimension.is_none(),
             e.intertwine.is_none(),
+            e.intertwine_tiers.is_empty(),
             e.live_paint_gaps.is_none(),
             e.objects_on_path.is_none(),
             e.colorize.is_none(),
             is_default(&e.compound_shape),
             is_default(&e.shape_mode),
+            e.symbol_overrides.is_empty(),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -85,11 +87,13 @@ impl Serialize for Node {
         field!("perspective", &e.perspective);
         field!("dimension", &e.dimension);
         field!("intertwine", &e.intertwine);
+        field!("intertwine_tiers", &e.intertwine_tiers);
         field!("live_paint_gaps", &e.live_paint_gaps);
         field!("objects_on_path", &e.objects_on_path);
         field!("colorize", &e.colorize);
         field!("compound_shape", &e.compound_shape);
         field!("shape_mode", &e.shape_mode);
+        field!("symbol_overrides", &e.symbol_overrides);
         st.end()
     }
 }
@@ -123,11 +127,39 @@ pub fn with_node_budget<T>(max: usize, f: impl FnOnce() -> T) -> T {
 /// each counts once, and the id usually comes first, before the node's children are read.
 fn counted_id<'de, D: serde::Deserializer<'de>>(d: D) -> Result<NodeId, D::Error> {
     let id = NodeId::deserialize(d)?;
+    count_one()?;
+    Ok(id)
+}
+
+/// Count one object against [`with_node_budget`].
+fn count_one<E: serde::de::Error>() -> Result<(), E> {
     if let Some((left, max)) = NODES_LEFT.get() {
-        let left = left.checked_sub(1).ok_or_else(|| serde::de::Error::custom(format!("the document has more than {max} objects")))?;
+        let left = left.checked_sub(1).ok_or_else(|| E::custom(format!("the document has more than {max} objects")))?;
         NODES_LEFT.set(Some((left, max)));
     }
-    Ok(id)
+    Ok(())
+}
+
+/// A list read from a file (a member's Intertwine areas of tier 2 and up, an instance's symbol
+/// overrides), each item counting against [`with_node_budget`] as an object does: a compressed
+/// file of repeated empty items stays small while they take memory once read.
+fn counted_list<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
+    struct Items<T>(std::marker::PhantomData<T>);
+    impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for Items<T> {
+        type Value = Vec<T>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a list")
+        }
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<T>, A::Error> {
+            let mut out = Vec::new();
+            while let Some(item) = seq.next_element::<T>()? {
+                count_one()?;
+                out.push(item);
+            }
+            Ok(out)
+        }
+    }
+    d.deserialize_seq(Items(std::marker::PhantomData))
 }
 
 /// How a [`Node`] is read: the flat field list of the file format. Fields move into the node
@@ -186,6 +218,8 @@ pub(super) struct NodeWire {
     dimension: Option<Box<crate::dimension::Dimension>>,
     #[serde(default)]
     intertwine: Option<Box<PathData>>,
+    #[serde(default, deserialize_with = "counted_list")]
+    intertwine_tiers: Vec<PathData>,
     #[serde(default)]
     live_paint_gaps: Option<Box<crate::live_paint::GapOptions>>,
     #[serde(default)]
@@ -196,6 +230,8 @@ pub(super) struct NodeWire {
     compound_shape: bool,
     #[serde(default)]
     shape_mode: crate::ShapeMode,
+    #[serde(default, deserialize_with = "counted_list")]
+    symbol_overrides: Vec<crate::SymbolOverride>,
 }
 
 impl From<NodeWire> for Node {
@@ -215,11 +251,13 @@ impl From<NodeWire> for Node {
             perspective: w.perspective,
             dimension: w.dimension,
             intertwine: w.intertwine,
+            intertwine_tiers: w.intertwine_tiers,
             live_paint_gaps: w.live_paint_gaps,
             objects_on_path: w.objects_on_path,
             colorize: w.colorize,
             compound_shape: w.compound_shape,
             shape_mode: w.shape_mode,
+            symbol_overrides: w.symbol_overrides,
         };
         Node {
             id: w.id,

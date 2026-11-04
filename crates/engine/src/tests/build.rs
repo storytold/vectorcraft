@@ -785,6 +785,51 @@ fn shape_builder_merge_across_a_line_removes_the_piece_between() {
     assert_eq!(layer_children(&s), 2);
 }
 
+/// A line from (100, 200) to (300, 200) and one from (200, 100) to (200, 300), with an unfilled
+/// square from (100, 100) to (300, 300) in front of them, selected; the top row merged, which puts
+/// the merged shape in front of the lines with its bottom edge along the first line. Returns the
+/// first line and the merged shape.
+fn lines_under_a_merged_row(s: &mut Session) -> (NodeId, NodeId) {
+    let h = line(s, (100.0, 200.0), (300.0, 200.0));
+    let v = line(s, (200.0, 100.0), (200.0, 300.0));
+    let sq = rect(s, 100.0, 100.0, 200.0, 200.0);
+    s.edit("t", |d, _| {
+        for id in [h, v, sq] {
+            d.node_mut(id).unwrap().appearance.set_fill(Paint::None);
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [h.0, v.0, sq.0]})).unwrap();
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[150, 150], [250, 150]]})).unwrap();
+    (h, NodeId(r["merged"].as_u64().unwrap()))
+}
+
+/// The left half of `h` (from x = 100 to 200) is gone.
+fn left_half_gone(s: &Session, h: NodeId) -> bool {
+    s.doc().unwrap().doc.node(h).is_none_or(|n| outline(n).0.bounds().is_none_or(|b| b.x0 > 199.0))
+}
+
+#[test]
+fn shape_builder_drag_from_a_merged_shape_over_a_line_under_its_edge_makes_one_region() {
+    let mut s = session();
+    let (h, m1) = lines_under_a_merged_row(&mut s);
+    let r = s.execute("shapeBuilder.merge", &json!({"points": [[250, 150], [150, 250]]})).unwrap();
+    let merged = NodeId(r["merged"].as_u64().unwrap());
+    assert!(s.doc().unwrap().doc.node(m1).is_none(), "the merged row is part of the new shape");
+    assert!((area(&s, merged) - 30000.0).abs() < 1.0);
+    assert!(left_half_gone(&s, h), "the line's stretch between the merged regions is removed");
+    let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+    let ours = r["regions"].as_array().unwrap().iter().filter(|x| x["sources"] == json!([merged.0])).count();
+    assert_eq!(ours, 1, "{r}");
+
+    // Erasing from the merged row into the cell below takes the line's stretch between them too.
+    let mut s = session();
+    let (h, _) = lines_under_a_merged_row(&mut s);
+    s.execute("shapeBuilder.merge", &json!({"points": [[250, 150], [150, 250]], "erase": true})).unwrap();
+    assert!(left_half_gone(&s, h));
+}
+
 #[test]
 fn shape_builder_alt_deletes_a_region_or_a_line_piece() {
     let mut s = session();
@@ -1760,6 +1805,71 @@ fn live_paint_make_builds_group_with_hidden_sources() {
     let info = s.execute("livePaint.info", &json!({"group": g.0})).unwrap();
     assert_eq!(info["faces"].as_array().unwrap().len(), 3);
     assert_eq!(info["sources"], 2);
+}
+
+/// Make and Expand preserve the colors of compound paths sharing a curved boundary.
+#[test]
+fn live_paint_make_and_expand_keep_abutting_compound_colors() {
+    use kurbo::Shape as _;
+    use vectorcraft_geom::shapes;
+
+    let mut s = session();
+    let mut ring = shapes::ellipse(Rect::new(0.0, 0.0, 1.0, 1.0));
+    let mut disk = shapes::ellipse(Rect::new(0.2, 0.2, 0.8, 0.8));
+    let mut hole = disk.clone();
+    hole.reverse();
+    ring.subpaths.extend(hole.subpaths);
+    disk.subpaths.extend(shapes::rectangle(Rect::new(1.0, 0.0, 1.3, 1.0)).subpaths);
+    let compound = |s: &mut Session, path: &PathData, color: &str| {
+        let id = s.execute("path.create", &json!({"d": path.to_bezpath().to_svg()})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"id": id, "color": color})).unwrap();
+        s.execute("paint.setStroke", &json!({"id": id, "none": true})).unwrap();
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap())
+    };
+    let ink = compound(&mut s, &ring, "#000000");
+    let blue = compound(&mut s, &disk, "#2878f0");
+    s.execute("select.set", &json!({"ids": [ink.0, blue.0]})).unwrap();
+    let history = s.doc().unwrap().history.undo.len();
+    let made = s.execute("livePaint.make", &json!({})).unwrap();
+    assert_eq!(made["faces"], 3);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history + 1);
+    let group = NodeId(made["id"].as_u64().unwrap());
+    let paint_at = |n: &Node, p: Point| {
+        n.children()
+            .unwrap()
+            .iter()
+            .filter(|c| c.visible && !c.appearance.fill_paint().is_none())
+            .filter(|c| c.path_data().is_some_and(|path| path.to_bezpath().winding(p) != 0))
+            .map(|c| c.appearance.fill_paint())
+            .collect::<Vec<_>>()
+    };
+    let check_colors = |n: &Node| {
+        assert_eq!(paint_at(n, Point::new(0.1, 0.5)), vec![Paint::solid(Color::BLACK)]);
+        let blue = Paint::solid(Color::from_hex("#2878f0").unwrap());
+        assert_eq!(paint_at(n, Point::new(0.5, 0.5)), vec![blue.clone()]);
+        assert_eq!(paint_at(n, Point::new(1.15, 0.5)), vec![blue]);
+    };
+    check_colors(&node(&s, group));
+    let info = s.execute("livePaint.info", &json!({"group": group.0})).unwrap();
+    assert_eq!(info["sources"], 2);
+    assert_eq!(info["faces"].as_array().unwrap().len(), 3);
+    s.execute("livePaint.expand", &json!({})).unwrap();
+    let expanded = node(&s, group);
+    assert!(!vectorcraft_tools::builder::is_live_paint(&expanded));
+    assert_eq!(expanded.children().unwrap().len(), 3);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history + 2);
+    check_colors(&expanded);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(vectorcraft_tools::builder::is_live_paint(&node(&s, group)));
+    check_colors(&node(&s, group));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(layer_children(&s), 2);
+    assert!(matches!(node(&s, ink).kind, NodeKind::Compound { .. }));
+    assert!(matches!(node(&s, blue).kind, NodeKind::Compound { .. }));
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    check_colors(&node(&s, group));
 }
 
 #[test]

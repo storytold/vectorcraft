@@ -289,6 +289,239 @@ fn painting_one_bar_sets_the_colour_used_by_the_whole_series_on_rebuild() {
     assert!(group(node, "2024").children().unwrap().iter().all(|n| n.appearance.fill_paint().color() == Some(green)));
 }
 
+/// An opacity set on the fill or stroke item of one series mark is kept by the graph: every path of that series has
+/// it after the graph is drawn again, the other series stay opaque, 100% forgets it, and undo takes it back.
+#[test]
+fn an_item_opacity_on_a_series_mark_survives_regeneration() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = graph(&mut s, "column");
+    let opacities = |s: &Session, index: u32| -> Vec<(f32, f32)> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let marks = series(&n, index).children().unwrap().to_vec();
+        marks.iter().map(|m| (m.appearance.fill().unwrap().opacity, m.appearance.stroke().unwrap().opacity)).collect()
+    };
+    let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.execute("transparency.set", &json!({"ids": [bar.0], "item": 0, "opacity": 40})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [bar.0], "item": 1, "opacity": 60})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (Some(0.4), Some(0.6)));
+    let restored: GraphSpec = serde_json::from_value(serde_json::to_value(spec(&s, id)).unwrap()).unwrap();
+    assert_eq!(restored, spec(&s, id));
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    assert!(opacities(&s, 0).iter().all(|o| *o == (0.4, 0.6)), "{:?}", opacities(&s, 0));
+    assert!(opacities(&s, 1).iter().all(|o| *o == (1.0, 1.0)), "{:?}", opacities(&s, 1));
+    // Back to 100%: the graph keeps no opacity for the fill.
+    let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.execute("transparency.set", &json!({"ids": [bar.0], "item": 0, "opacity": 100})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].fill_opacity, None);
+    s.execute("graph.setType", &json!({"type": "bar"})).unwrap();
+    assert!(opacities(&s, 0).iter().all(|o| *o == (1.0, 0.6)), "{:?}", opacities(&s, 0));
+    // Undo goes back through the type change, the 100% and the data edit, then takes the stroke opacity away with its
+    // edit.
+    for _ in 0..4 {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (Some(0.4), None));
+}
+
+/// Clear Appearance and Reduce to Basic Appearance on a series mark take its fill and stroke opacity away, and the
+/// graph keeps none, so the series stays opaque when it is drawn again.
+#[test]
+fn clearing_a_series_marks_appearance_forgets_its_kept_opacity() {
+    for cmd in ["appearance.clear", "appearance.reduceToBasic"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "column");
+        let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+        s.execute("transparency.set", &json!({"ids": [bar.0], "item": 0, "opacity": 40})).unwrap();
+        s.execute("transparency.set", &json!({"ids": [bar.0], "item": 1, "opacity": 60})).unwrap();
+        s.execute(cmd, &json!({"ids": [bar.0]})).unwrap();
+        let kept = spec(&s, id).series_paints[0].clone();
+        assert_eq!((kept.fill_opacity, kept.stroke_opacity), (None, None), "{cmd}");
+        s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        assert!(series(&n, 0).children().unwrap().iter().all(|m| m.appearance.fill().unwrap().opacity == 1.0), "{cmd}");
+    }
+}
+
+/// Removing the fill whose opacity the graph keeps takes the kept opacity away; an edit that leaves a mark opaque
+/// (a blend mode alone) keeps nothing for its series.
+#[test]
+fn removing_a_series_marks_fill_forgets_its_kept_opacity() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = graph(&mut s, "column");
+    let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.execute("transparency.set", &json!({"ids": [bar.0], "item": 0, "blend": "multiply"})).unwrap();
+    assert!(spec(&s, id).series_paints.is_empty());
+    s.execute("transparency.set", &json!({"ids": [bar.0], "item": 0, "opacity": 40})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].fill_opacity, Some(0.4));
+    s.execute("appearance.removeItem", &json!({"ids": [bar.0], "index": 0})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].fill_opacity, None);
+    // An opaque fill added over the kept one takes it away too.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("appearance.addFill", &json!({"ids": [bar.0]})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].fill_opacity, None);
+}
+
+/// An opacity set on a row added to a graph design's copy inside a series is not kept for the series: the graph draws
+/// the design again from the design itself.
+#[test]
+fn an_opacity_on_a_design_copy_in_a_series_is_not_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    save_design(&mut s, "Square");
+    s.execute("graph.column", &json!({"id": id.0, "design": "Square"})).unwrap();
+    let copy = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].clone();
+    assert!(matches!(copy.kind, NodeKind::Group { .. }));
+    s.execute("appearance.addFill", &json!({"ids": [copy.id.0]})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [copy.id.0], "item": 0, "opacity": 40})).unwrap();
+    assert!(spec(&s, id).series_paints.first().is_none_or(|p| p.fill_opacity.is_none()));
+}
+
+/// A series' kept opacity goes on its generated marks only: a column design made of one path keeps its own opacity.
+#[test]
+fn a_column_design_keeps_its_own_opacity_under_a_series_opacity() {
+    let mut d = vectorcraft_doc::Document::new(800.0, 800.0);
+    let mut look = vectorcraft_doc::Appearance::basic(Paint::solid(vectorcraft_color::Color::BLACK), Paint::None, 0.0);
+    look.fill_mut().unwrap().opacity = 0.5;
+    let rect = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0));
+    let art = vectorcraft_doc::Node::path(d.alloc_id(), rect, look);
+    d.graph_designs.push(vectorcraft_doc::GraphDesign { name: "Square".into(), art: std::sync::Arc::new(art) });
+    let options = ColumnDesign { design: "Square".into(), column_type: ColumnType::Vertical, ..ColumnDesign::default() };
+    let paints = vec![vectorcraft_doc::SeriesPaint { fill_opacity: Some(0.2), ..Default::default() }];
+    let g = GraphSpec {
+        rows: vec![vec![35.0]],
+        axis_min: Some(0.0),
+        axis_max: Some(50.0),
+        series_columns: vec![Some(options)],
+        series_paints: paints,
+        ..GraphSpec::default()
+    };
+    let out = super::generate(&mut d, &g);
+    let group = out.iter().find(|n| n.extras().series_index == Some(0)).unwrap();
+    let mut fills = vec![];
+    group.walk(&mut |n| {
+        if matches!(n.kind, NodeKind::Path { .. }) {
+            fills.push(n.appearance.fill().unwrap().opacity);
+        }
+    });
+    assert!(!fills.is_empty() && fills.iter().all(|o| *o == 0.5), "{fills:?}");
+}
+
+/// An opacity set on an item that the graph does not draw again (a second fill added to a mark) is not kept.
+#[test]
+fn an_opacity_on_an_added_item_of_a_series_mark_is_not_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = graph(&mut s, "column");
+    let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.execute("appearance.addFill", &json!({"ids": [bar.0]})).unwrap();
+    let items = s.doc().unwrap().doc.node(bar).unwrap().appearance.items.clone();
+    let lower = items.iter().position(vectorcraft_doc::AppearanceItem::is_fill).unwrap();
+    assert!(items.iter().rposition(vectorcraft_doc::AppearanceItem::is_fill).unwrap() != lower);
+    s.execute("transparency.set", &json!({"ids": [bar.0], "item": lower, "opacity": 40})).unwrap();
+    assert!(spec(&s, id).series_paints.first().is_none_or(|p| p.fill_opacity.is_none()));
+}
+
+/// The fill positions (lowest, topmost) in a mark's appearance stack.
+fn fill_rows(s: &Session, mark: NodeId) -> (usize, usize) {
+    let items = s.doc().unwrap().doc.node(mark).unwrap().appearance.items.clone();
+    let lower = items.iter().position(vectorcraft_doc::AppearanceItem::is_fill).unwrap();
+    let upper = items.iter().rposition(vectorcraft_doc::AppearanceItem::is_fill).unwrap();
+    assert!(lower < upper);
+    (lower, upper)
+}
+
+/// Moving a translucent fill to the top of a series mark's stack, or placing a copy of it there, makes the graph keep
+/// its opacity.
+#[test]
+fn moving_or_duplicating_a_series_marks_fill_to_the_top_keeps_its_opacity() {
+    for cmd in ["appearance.moveItem", "appearance.duplicateItem"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "column");
+        let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+        s.execute("appearance.addFill", &json!({"ids": [bar.0]})).unwrap();
+        let (lower, upper) = fill_rows(&s, bar);
+        s.execute("transparency.set", &json!({"ids": [bar.0], "item": lower, "opacity": 40})).unwrap();
+        assert!(spec(&s, id).series_paints.first().is_none_or(|p| p.fill_opacity.is_none()), "{cmd}");
+        let p = if cmd == "appearance.moveItem" {
+            json!({"ids": [bar.0], "from": lower, "to": upper})
+        } else {
+            json!({"ids": [bar.0], "index": lower, "to": upper + 1})
+        };
+        s.execute(cmd, &p).unwrap();
+        let top = fill_rows(&s, bar).1;
+        assert_eq!(s.doc().unwrap().doc.node(bar).unwrap().appearance.items[top].opacity(), 0.4, "{cmd}");
+        assert_eq!(spec(&s, id).series_paints[0].fill_opacity, Some(0.4), "{cmd}");
+    }
+}
+
+/// Moving or copying a translucent mark's appearance onto a mark of another series (the Layers panel's target
+/// circle, or the Eyedropper) makes the graph keep the opacity for that series; a move leaves the source series with
+/// none.
+#[test]
+fn moving_or_copying_an_appearance_onto_a_series_mark_keeps_its_opacity() {
+    for (cmd, source_keeps) in [("move", None), ("copy", Some(0.4)), ("eyedropper", Some(0.4))] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = graph(&mut s, "column");
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let (from, to) = (series(&n, 0).children().unwrap()[0].id, series(&n, 1).children().unwrap()[0].id);
+        s.execute("transparency.set", &json!({"ids": [from.0], "item": 0, "opacity": 40})).unwrap();
+        match cmd {
+            "eyedropper" => s.execute("appearance.copyFrom", &json!({"source": from.0, "ids": [to.0]})).unwrap(),
+            _ => s.execute("appearance.transfer", &json!({"source": from.0, "target": to.0, "copy": cmd == "copy"})).unwrap(),
+        };
+        let paints = spec(&s, id).series_paints;
+        assert_eq!(paints.get(1).and_then(|p| p.fill_opacity), Some(0.4), "{cmd}");
+        assert_eq!(paints[0].fill_opacity, source_keeps, "{cmd}");
+    }
+}
+
+/// A line graph keeps a stroke opacity set on a series' line, and puts it on the line drawn again.
+#[test]
+fn a_stroke_opacity_on_a_series_line_survives_regeneration() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = graph(&mut s, "line");
+    let lines = |s: &Session| -> Vec<vectorcraft_doc::Node> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let marks = series(&n, 0).children().unwrap().to_vec();
+        marks.iter().filter(|m| m.appearance.stroke().is_some_and(|st| st.width > 0.0)).map(|m| (**m).clone()).collect()
+    };
+    let line = lines(&s).first().unwrap().clone();
+    let row = line.appearance.items.iter().rposition(|it| !it.is_fill()).unwrap();
+    s.execute("transparency.set", &json!({"ids": [line.id.0], "item": row, "opacity": 60})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].stroke_opacity, Some(0.6));
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4], [2, 5]]})).unwrap();
+    let after = lines(&s);
+    assert!(!after.is_empty() && after.iter().all(|m| m.appearance.stroke().unwrap().opacity == 0.6));
+}
+
+/// A kept opacity read from a file outside 0..1 is held to that range, and one that is not a number is left out.
+#[test]
+fn a_kept_series_opacity_from_a_file_is_held_to_its_range() {
+    let mut d = vectorcraft_doc::Document::new(800.0, 800.0);
+    let paints = vec![vectorcraft_doc::SeriesPaint { fill_opacity: Some(-1.0), stroke_opacity: Some(f32::NAN), ..Default::default() }];
+    let paints = [paints, vec![vectorcraft_doc::SeriesPaint { fill_opacity: Some(40.0), ..Default::default() }]].concat();
+    let g = GraphSpec { rows: vec![vec![35.0, 20.0]], axis_min: Some(0.0), axis_max: Some(50.0), series_paints: paints, ..GraphSpec::default() };
+    let out = super::generate(&mut d, &g);
+    for (index, want) in [(0, 0.0), (1, 1.0)] {
+        let group = out.iter().find(|n| n.extras().series_index == Some(index)).unwrap();
+        let marks: Vec<_> = group.children().unwrap().iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).collect();
+        assert!(!marks.is_empty());
+        for m in marks {
+            assert_eq!(m.appearance.fill().unwrap().opacity, want);
+            assert!(m.appearance.stroke().is_none_or(|st| st.opacity == 1.0));
+        }
+    }
+}
+
 /// A series index read from a file past the graph's series is not a series: painting its art
 /// paints the art alone and stores nothing (no allocation sized by the file).
 #[test]
@@ -1304,6 +1537,10 @@ fn graph_designs_are_saved_pasted_and_deleted() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(series_parts(&s, id, 0).iter().skip(1).all(|n| matches!(n.kind, NodeKind::Group { .. })));
     assert!(s.execute("graph.design", &json!({"delete": "Nope"})).is_err());
+    // A name listed many times deletes once (its graphs regenerate once).
+    s.execute("graph.design", &json!({"delete": vec!["Pill"; 1000]})).unwrap();
+    assert!(s.doc().unwrap().doc.graph_designs.is_empty());
+    assert!(series_parts(&s, id, 0).iter().all(|n| matches!(n.kind, NodeKind::Path { .. })));
 }
 
 #[test]
@@ -2586,6 +2823,18 @@ fn formatting_the_whole_graphs_text_survives_it_being_drawn_again() {
     assert!(spec(&s, id).label_styles.values.is_some());
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(spec(&s, id).label_styles, vectorcraft_doc::LabelStyles::default());
+}
+
+/// A stroke given to all of a graph's text without a weight is kept at 1 pt, as `paint.setStroke` keeps it.
+#[test]
+fn a_stroke_given_to_the_whole_graphs_text_is_kept_at_1_pt() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.setStyle", &json!({"stroke": "#ff0000"})).unwrap();
+    let legend = spec(&s, id).label_styles.legend.unwrap();
+    assert_eq!((legend.stroke.color().map(|c| c.to_hex()), legend.stroke_width), (Some("#ff0000".into()), 1.0));
 }
 
 #[test]

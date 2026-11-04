@@ -39,6 +39,8 @@ pub(crate) const COLUMN_MIN: f32 = 220.0;
 pub(crate) const COLUMN_MAX: f32 = 720.0;
 /// Width of a column collapsed to icons.
 pub(crate) const ICON_WIDTH: f32 = 38.0;
+/// The narrowest a panel other than the canvas is drawn, docked or floating.
+pub(crate) const PANEL_MIN_WIDTH: f32 = 220.0;
 
 /// Docking state that lives for the session only.
 #[derive(Default)]
@@ -787,8 +789,9 @@ fn float_space(app: &VectorcraftApp) -> FloatSpace<String> {
 }
 
 /// Float `panel` (open or not) as a window of its own with its top-left corner at `at`, `width`
-/// wide: the Tabs panel over the text it sets.
-pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, at: egui::Pos2, width: f32) -> Result<(), String> {
+/// wide: the Tabs panel over the text it sets. `origin`: the main window's content top-left on the
+/// desktop. A panel already floating in an OS window of its own moves to `at` from there (#4995).
+pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, at: egui::Pos2, width: f32, origin: Option<egui::Pos2>) -> Result<(), String> {
     let panel = normalize(panel).ok_or("unknown panel")?.to_string();
     if !(at.x.is_finite() && at.y.is_finite() && width.is_finite()) {
         return Err("panel position must be finite".into());
@@ -800,8 +803,13 @@ pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, at: egui::Po
     let height = floating_window(&txn.workspace.layout, &panel).map_or(floating_size(&panel).y, |w| w.rect[3]);
     let rect = [at.x, at.y, width.max(1.0), height];
     let whole = floating_window(&txn.workspace.layout, &panel).is_some_and(|w| w.panels().count() == 1);
-    let action = if whole { Action::MoveFloating { panel, rect } } else { Action::Float { panel, rect } };
+    let native = whole && floating_window(&txn.workspace.layout, &panel).is_some_and(|w| w.native.is_some());
+    let action = if whole { Action::MoveFloating { panel: panel.clone(), rect } } else { Action::Float { panel: panel.clone(), rect } };
     txn.apply(action)?;
+    // The OS window follows its desktop rect, not the in-window one.
+    if let Some(origin) = origin.filter(|o| native && o.is_finite()) {
+        txn.apply(Action::SetNative { panel, rect: Some([origin.x + at.x, origin.y + at.y, rect[2], rect[3]]) })?;
+    }
     txn.commit(app, Vec::new(), None);
     Ok(())
 }
@@ -1169,8 +1177,9 @@ pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
 /// Keys, text and clipboard events that a floating panel's own OS window left over run the main
 /// window's shortcuts, tool keys and clipboard on its next frame ([`VectorcraftApp::raw_input_hook`]).
 /// craft-ui forwards nothing while a field in that window has the keyboard. A field of the main
-/// window loses it, as a click elsewhere in one window would take it.
-fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: Option<egui::Modifiers>) {
+/// window loses it, as a click elsewhere in one window would take it. A floating document's OS
+/// window forwards its keys here too ([`crate::doc_windows`]).
+pub(crate) fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: Option<egui::Modifiers>) {
     if events.is_empty() {
         return;
     }
@@ -1231,7 +1240,7 @@ const DOCK_LABELS: &[(&str, &str)] = &[
 ];
 
 /// The size a panel floats at (tab strip included), whatever the size of the dock it left.
-fn floating_size(panel: &str) -> egui::Vec2 {
+pub(crate) fn floating_size(panel: &str) -> egui::Vec2 {
     match panel {
         "properties" | "layers" | "libraries" => egui::vec2(300.0, 420.0),
         // Tall enough to show its Corners and Shared Edges sections, last in it, which the Corner
@@ -1292,7 +1301,7 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     }
 
     fn limits(&self, id: &String) -> craft_ui::docking::PanelLimits {
-        let min = if id == CANVAS { egui::vec2(200.0, 120.0) } else { egui::vec2(220.0, 80.0) };
+        let min = if id == CANVAS { egui::vec2(200.0, 120.0) } else { egui::vec2(PANEL_MIN_WIDTH, 80.0) };
         craft_ui::docking::PanelLimits { min, ..Default::default() }
     }
 

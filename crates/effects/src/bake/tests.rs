@@ -106,6 +106,63 @@ fn a_baked_stroke_with_a_gradient_along_it_becomes_meshes_clipped_to_its_outline
     assert_eq!(ch[1].opacity, 0.5);
 }
 
+/// A 100 pt square at the origin painted by `fill` and `stroke` (`width` pt), with the Transform
+/// effect `params`.
+fn transformed(fill: Paint, stroke: Paint, width: f64, params: serde_json::Value) -> Node {
+    let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(fill, stroke, width));
+    n.appearance.effects.push(fx("distort.transform", params));
+    n
+}
+
+/// The paths under `n`, in document order.
+fn baked_paths(n: &Node) -> Vec<&Node> {
+    match n.children() {
+        Some(ch) if !matches!(n.kind, NodeKind::Compound { .. }) => ch.iter().flat_map(|c| baked_paths(c)).collect(),
+        _ => vec![n],
+    }
+}
+
+fn widths(n: &Node) -> Vec<f64> {
+    baked_paths(n).iter().map(|p| p.geometric_bounds().unwrap().width()).collect()
+}
+
+#[test]
+fn a_baked_transform_copy_keeps_its_scaled_stroke() {
+    // Distort Appearance: the 200% copy's stroke is 4 pt, as outside the envelope, so its outline
+    // is 204 pt wide.
+    let n = transformed(Paint::None, Paint::solid(Color::BLACK), 2.0, json!({"scaleH": 200, "scaleV": 200, "copies": 1, "strokes": true}));
+    let m = bake_appearance(&n).unwrap();
+    let w = widths(&m);
+    assert_eq!(w.len(), 2, "{w:?}");
+    assert!((w[0] - 102.0).abs() < 0.5 && (w[1] - 204.0).abs() < 0.5, "{w:?}");
+    assert!(baked_paths(&m).iter().all(|p| p.appearance.stroke().is_none()), "the strokes are outlined");
+}
+
+#[test]
+fn a_baked_transform_copy_keeps_its_moved_pattern() {
+    let paint = Paint::Pattern { pattern: "p".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+    let n = transformed(paint, Paint::None, 0.0, json!({"moveH": 30, "copies": 1, "patterns": true}));
+    let m = bake_appearance(&n).unwrap();
+    let xs: Vec<f64> = baked_paths(&m)
+        .iter()
+        .map(|p| match p.appearance.fill_paint() {
+            Paint::Pattern { xf, .. } => xf.as_coeffs()[4],
+            p => panic!("not a pattern: {p:?}"),
+        })
+        .collect();
+    assert_eq!(xs, vec![0.0, 30.0]);
+}
+
+#[test]
+fn a_baked_transform_without_its_options_outlines_the_copies_together() {
+    // Without Scale Strokes & Effects the copy keeps the 2 pt stroke: one outline of both squares.
+    let n = transformed(Paint::None, Paint::solid(Color::BLACK), 2.0, json!({"scaleH": 200, "scaleV": 200, "copies": 1}));
+    let m = bake_appearance(&n).unwrap();
+    let w = widths(&m);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!((w[0] - 202.0).abs() < 0.5, "{w:?}");
+}
+
 /// Black 24 pt "Type" with its baseline at (20, 60).
 fn type_node(id: u64) -> Node {
     let style = CharStyle { size: 24.0, fill: Paint::solid(Color::BLACK), ..Default::default() };

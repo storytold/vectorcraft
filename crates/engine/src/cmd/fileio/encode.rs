@@ -420,7 +420,10 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
 /// font; PDF, EPS, SVG, EMF, WMF and the raster formats: type that doesn't fit its frame).
 pub fn encode_with_warnings(doc: &Document, format: &str, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
     let f = super::writable(C, Some(format), None)?;
-    encode_all(doc, f.id, p)?.single(f)
+    let enc = encode_all(doc, f.id, p)?;
+    // The error for a version 7 .ai of several artboards names the legacy .ai.
+    let legacy = f.id == "ai" && super::legacy_ai::wanted(C, f, p)?;
+    enc.single(&if legacy { super::legacy_ai::named(f) } else { *f })
 }
 
 /// [`encode`], with every file the export writes.
@@ -565,6 +568,9 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
                 (RasterFormat::Jpeg, Some(m)) => MapKind::from_id(m).ok_or_else(|| bad(C, format!("imageMap `{m}`: none, client or server")))?,
                 _ => MapKind::None,
             };
+            // The artboards' background colors, behind the art (a transparent background too).
+            let filled = super::export::with_artboard_fills(doc, p, chosen.iter().copied()).map_err(|e| bad(C, e))?;
+            let doc = &*filled;
             let mut enc = Encoded::default();
             let mut renderer = vectorcraft_render::Renderer::new();
             let total = chosen.len() as u64;

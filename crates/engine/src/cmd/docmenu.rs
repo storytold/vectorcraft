@@ -2,7 +2,7 @@
 //! brush strokes, Save/recall selections), View → Guides, and File → Close All / Document Color
 //! Mode / File Info.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -11,7 +11,7 @@ use vectorcraft_geom::Vec2;
 
 use super::edit::selected_roots;
 use super::pathops::Beside;
-use super::select::{selectable_ids, walk_selectable};
+use super::select::{is_selectable, selectable_ids, walk_selectable};
 use super::{
     CommandSpec, EngineError, Point, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ok,
     str_param,
@@ -27,6 +27,15 @@ pub fn specs() -> Vec<CommandSpec> {
                 _ => false,
             }
         )),
+        cmd!(
+            "select.same.linkBlockSeries",
+            "Link Block Series",
+            ["Select", "Same"],
+            None,
+            "{} select every frame of the threads of the selected type objects (and of the type inside selected groups); type in no thread selects itself; type and frames that are hidden or locked, inside a hidden or locked object or layer, on a template layer, or outside the isolated group or layer neither count as selected nor are selected → {count}",
+            has_text_selection,
+            same_link_block_series
+        ),
         cmd!("select.same.fontFamily", "Font Family", ["Select", "Same"], None, "{} → {count}", has_selection, |s, _| same_text(
             s,
             "select.same.fontFamily",
@@ -57,6 +66,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "select.same.textStrokeColor",
             |a, b| a.stroke == b.stroke
         )),
+        cmd!(
+            "select.same.textFillAndStrokeColor",
+            "Text Fill & Stroke Color",
+            ["Select", "Same"],
+            None,
+            "{} select the type objects with characters whose fill and stroke both match the first character of the first selected type → {count}",
+            has_selection,
+            |s, _| same_text(s, "select.same.textFillAndStrokeColor", |a, b| a.fill == b.fill && a.stroke == b.stroke)
+        ),
         cmd!(
             "select.object.directionHandles",
             "Direction Handles",
@@ -286,31 +304,116 @@ fn same(s: &mut Session, cmd: &str, eq: fn(&Node, &Node) -> bool) -> Result<Valu
     finish_same(s, cmd, ids)
 }
 
+/// The first character style of the first type object [`each_selected_text`] gives.
 fn first_text_style(s: &Session) -> Option<CharStyle> {
     let st = s.active()?;
     let mut out = None;
-    for id in &st.selection.objects {
-        st.doc.node(*id)?.walk(&mut |n| {
-            if out.is_none()
-                && let NodeKind::Text(t) = &n.kind
-            {
-                out = Some(t.first_style());
-            }
-        });
-        if out.is_some() {
-            break;
+    each_selected_text(s, |id| {
+        if let Some(NodeKind::Text(t)) = st.doc.node(id).map(|n| &n.kind) {
+            out = Some(t.first_style());
         }
-    }
+        out.is_none()
+    });
     out
 }
 
 fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool) -> Result<Value> {
     let r = first_text_style(s).ok_or_else(|| bad(cmd, "select a text object"))?;
     let ids = candidates(s, |n| match &n.kind {
-        NodeKind::Text(t) => t.runs.iter().any(|run| eq(&run.style, &r)),
+        NodeKind::Text(t) => t.runs.iter().any(|run| !run.text.is_empty() && eq(&run.style, &r)),
         _ => false,
     })?;
     finish_same(s, cmd, ids)
+}
+
+/// Call `f` with each type object among the selected objects and inside them, in selection order,
+/// keeping only those [`walk_selectable`] visits: none that is hidden, locked, on a hidden, locked
+/// or template layer, or outside the isolated group. A selected layer or sublayer, or a selected
+/// group that holds the isolated group, gives the type in it that passes the same test. A type
+/// object inside two selected objects is given twice. The walk stops when `f` returns false.
+fn each_selected_text(s: &Session, mut f: impl FnMut(NodeId) -> bool) {
+    fn inside(n: &Node, f: &mut impl FnMut(NodeId) -> bool) -> bool {
+        if !n.visible || n.locked {
+            return true;
+        }
+        if matches!(n.kind, NodeKind::Text(_)) && !f(n.id) {
+            return false;
+        }
+        n.children().into_iter().flatten().all(|c| inside(c, f))
+    }
+    fn from(n: &Node, selectable: &impl Fn(NodeId) -> bool, holds_isolated: &[NodeId], f: &mut impl FnMut(NodeId) -> bool) -> bool {
+        if selectable(n.id) {
+            return inside(n, f);
+        }
+        if n.is_layer() || holds_isolated.contains(&n.id) {
+            return n.children().into_iter().flatten().all(|c| from(c, selectable, holds_isolated, f));
+        }
+        true
+    }
+    let Some(st) = s.active() else { return };
+    let locks = st.doc.locked_artboards();
+    let selectable = |id| is_selectable(&st.doc, st.isolation, &locks, id);
+    // The isolated group and the groups and layers that hold it.
+    let holds_isolated = st.isolation.and_then(|i| st.doc.ancestry(i)).unwrap_or_default();
+    for id in &st.selection.objects {
+        if let Some(n) = st.doc.node(*id)
+            && !from(n, &selectable, &holds_isolated, &mut f)
+        {
+            return;
+        }
+    }
+}
+
+/// The type objects [`each_selected_text`] gives, each once, in selection order.
+fn selected_text(s: &Session) -> Vec<NodeId> {
+    let (mut out, mut seen) = (vec![], HashSet::new());
+    each_selected_text(s, |id| {
+        if seen.insert(id) {
+            out.push(id);
+        }
+        true
+    });
+    out
+}
+
+/// A type object is selected, or is inside a selected object.
+fn has_text_selection(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    let mut any = false;
+    each_selected_text(s, |_| {
+        any = true;
+        false
+    });
+    if any { Ok(()) } else { Err("select a text object".into()) }
+}
+
+/// Select › Same › Link Block Series: the frames of the threads the selected type objects are
+/// in, in thread order; a type object in no thread is its own series.
+fn same_link_block_series(s: &mut Session, _: &Value) -> Result<Value> {
+    const C: &str = "select.same.linkBlockSeries";
+    let seeds = selected_text(s);
+    if seeds.is_empty() {
+        return Err(bad(C, "select a text object"));
+    }
+    let st = s.doc()?;
+    let can = selectable_ids(&st.doc, st.isolation);
+    // Each frame's thread: the first thread that lists it.
+    let mut threads: HashMap<NodeId, &[NodeId]> = HashMap::new();
+    for t in &st.doc.text_threads {
+        for id in t {
+            threads.entry(*id).or_insert(t.as_slice());
+        }
+    }
+    let (mut ids, mut seen): (Vec<NodeId>, HashSet<NodeId>) = (vec![], HashSet::new());
+    for seed in &seeds {
+        let series = threads.get(seed).copied().unwrap_or(std::slice::from_ref(seed));
+        for id in series {
+            if can.contains(id) && seen.insert(*id) {
+                ids.push(*id);
+            }
+        }
+    }
+    finish_same(s, C, ids)
 }
 
 fn by_kind(s: &mut Session, f: impl Fn(&Node) -> bool) -> Result<Value> {

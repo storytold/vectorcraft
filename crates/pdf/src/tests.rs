@@ -194,7 +194,7 @@ fn an_instance_whose_art_reaches_the_page_is_written() {
     // the 20 × 20 square around the origin, moved to (-60, -60) to (-40, -40), is off it.
     let mut d = doc(200.0, 100.0);
     let red = rect_node(Rect::new(100.0, 50.0, 140.0, 90.0), Color::rgb(1.0, 0.0, 0.0));
-    let far = vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(red) };
+    let far = vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(red) };
     d.symbols.push(far.clone());
     let instance = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) });
     add(&mut d, instance.clone());
@@ -228,12 +228,66 @@ fn an_instance_whose_brush_art_reaches_the_page_is_written() {
     let mut stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
     stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
     let line = Node::path(NodeId(0), shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), stroke);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: Arc::new(line) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: Arc::new(line) });
     add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Nib".into(), xf: Affine::translate((-5.0, 0.0)) }));
     let out = roundtrip(&d);
     let l = leaves(&out);
     assert_eq!(l.len(), 1, "the nib's art");
     assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(-15.0, 30.0, 5.0, 70.0), 0.01), "{:?}", l[0].geometric_bounds());
+}
+
+/// An instance of a symbol with 9-slice guides, scaled to 200 × 150, is written as the canvas
+/// draws it: its 10 × 10 corner square stays 10 × 10 and its 10 × 10 center square becomes 30 × 20.
+#[test]
+fn a_scaled_nine_slice_instance_keeps_its_corners() {
+    let mut d = doc(300.0, 200.0);
+    let art = Node::group(
+        NodeId(0),
+        vec![
+            Arc::new(rect_node(Rect::new(0.0, 0.0, 100.0, 100.0), Color::rgb8(200, 200, 200))),
+            Arc::new(rect_node(Rect::new(0.0, 0.0, 10.0, 10.0), Color::rgb(1.0, 0.0, 0.0))),
+            Arc::new(rect_node(Rect::new(45.0, 45.0, 55.0, 55.0), Color::rgb(0.0, 0.0, 1.0))),
+        ],
+    );
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+    d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let xf = Affine::translate((20.0, 20.0)) * Affine::scale_non_uniform(2.0, 1.5);
+    add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Panel".into(), xf }));
+    let out = roundtrip(&d);
+    let boxes: Vec<Rect> = leaves(&out).iter().filter_map(|n| n.geometric_bounds()).collect();
+    assert_eq!(boxes.len(), 3, "{boxes:?}");
+    assert!(close(boxes[0], Rect::new(20.0, 20.0, 220.0, 170.0), 0.01), "{boxes:?}");
+    assert!(close(boxes[1], Rect::new(20.0, 20.0, 30.0, 30.0), 0.01), "{boxes:?}");
+    assert!(close(boxes[2], Rect::new(105.0, 85.0, 135.0, 105.0), 0.01), "{boxes:?}");
+}
+
+/// The placed art of all the 9-slice instances in one export holds at most `MAX_SYMBOL_NODES`
+/// objects, opacity-mask art included, as on the canvas: of two instances whose art placed through
+/// the guides holds about 9,009,000 objects each (a gradient square in all nine cells, each copy
+/// with a disabled opacity mask of 1,001,001 objects), the first is written in its nine cells and
+/// the second is left out. With a small mask both are written.
+#[test]
+fn nine_slice_instances_share_one_object_limit_in_an_export() {
+    let doc = |mask_objects: usize| {
+        let mut d = doc(300.0, 200.0);
+        let leaf = Arc::new(rect_node(Rect::new(0.0, 0.0, 1.0, 1.0), Color::BLACK));
+        let inner = Arc::new(Node::group(NodeId(0), vec![leaf; mask_objects]));
+        let mut mask = vectorcraft_doc::OpacityMask::new(Node::group(NodeId(0), vec![inner; mask_objects]), true);
+        (mask.linked, mask.disabled) = (false, true);
+        let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+        let mut square = Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(gradient, Paint::None, 0.0));
+        square.extras_mut().mask = Some(Box::new(mask));
+        let art = Node::group(NodeId(0), vec![Arc::new(square)]);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+        d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+        for x in [20.0, 40.0] {
+            let xf = Affine::translate((x, 20.0)) * Affine::scale_non_uniform(2.0, 1.5);
+            add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Panel".into(), xf }));
+        }
+        d
+    };
+    assert_eq!(leaves(&roundtrip(&doc(2))).len(), 18);
+    assert_eq!(leaves(&roundtrip(&doc(1_000))).len(), 9);
 }
 
 #[test]

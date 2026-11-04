@@ -162,9 +162,10 @@ pub struct Prefs {
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
     pub render_threads: i32,
-    /// Linux: `automatic` opens the window on the session's display server; `x11` opens it through
-    /// XWayland on a Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it
-    /// through XWayland only when a pen is attached (#2028). Read when the app starts.
+    /// Linux: `automatic` opens the window on the session's display server, or through XWayland on
+    /// a Wayland session when a pen is attached (#4967); `x11` opens it through XWayland on a
+    /// Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it through XWayland
+    /// only when a pen is attached (#2028). Read when the app starts.
     pub linux_display_server: String,
     // File Handling
     pub background_save: bool,
@@ -252,6 +253,10 @@ pub struct Prefs {
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/VectorCraft Templates`).
     pub templates_folder: String,
+    /// File Handling → Use System Defaults for Edit Original (#5236): Links panel › Edit Original
+    /// opens a linked file in the system's default app for it; off, in the app that made it
+    /// (PhotoCraft for a raster image, where it is installed; the system's app otherwise).
+    pub edit_original_system_defaults: bool,
     /// Open older native files as "<name> [Converted]" so Save asks for a new name.
     pub append_converted: bool,
     /// File Handling → Use Compression: native saves are gzip-compressed (`document.save
@@ -463,6 +468,7 @@ impl Default for Prefs {
             pdf_presets: vec![],
             screen_export_presets: vec![],
             templates_folder: String::new(),
+            edit_original_system_defaults: true,
             append_converted: true,
             use_compression: false,
             web_export_presets: vec![],

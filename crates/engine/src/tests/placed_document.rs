@@ -32,7 +32,7 @@ fn star_source(path: &str, title: &str) {
     d.title = title.into();
     let layer = d.layers[0].id;
     let art = Node::path(vectorcraft_doc::NodeId(900), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), look(BLUE));
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Star".into(), art: std::sync::Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Star".into(), art: std::sync::Arc::new(art) });
     let id = d.alloc_id();
     d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Star".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
     write(path, &vectorcraft_format::save_file(&d));
@@ -45,9 +45,11 @@ fn look(c: [u8; 3]) -> Appearance {
 /// The active document gets a red symbol named `Star` of its own.
 fn parent_star(s: &mut Session) {
     let star = Node::path(vectorcraft_doc::NodeId(901), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), look(RED));
-    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc)
-        .symbols
-        .push(vectorcraft_doc::Symbol { name: "Star".into(), art: std::sync::Arc::new(star) });
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).symbols.push(vectorcraft_doc::Symbol {
+        dynamic: false,
+        name: "Star".into(),
+        art: std::sync::Arc::new(star),
+    });
 }
 
 /// Place `path` (linked: the default), centred on the artboard → its id.
@@ -189,7 +191,7 @@ fn the_preview_is_saved_so_the_document_shows_it_without_its_file() {
     assert_eq!(s.execute("links.check", &json!({})).unwrap()["missing"], 1);
     // Output with the file gone: the preview, with a warning.
     let png = s.execute("document.serialize", &json!({"format": "png"})).unwrap();
-    assert!(png["warnings"].to_string().contains("output as their previews"), "{png}");
+    assert!(png["warnings"].to_string().contains("1 placed document output as its preview"), "{png}");
     let [r, g, b, _] = image::load_from_memory(&decode(&png)).unwrap().to_rgba8().get_pixel(200, 150).0;
     assert!(near([r, g, b], RED), "{:?}", [r, g, b]);
     // Saved for older apps: the art it shows (here its preview), as plain objects.
@@ -231,7 +233,7 @@ fn ai_export_preserves_placed_links_while_drawing_full_art_or_previews() {
                     let (images, paths) = pdf_contents(&bytes);
                     if missing {
                         assert!(images > 0, "the missing file draws its preview");
-                        assert!(out["warnings"].to_string().contains("output as their previews"));
+                        assert!(out["warnings"].to_string().contains("1 placed document output as its preview"));
                     } else {
                         assert_eq!(images, 0, "the PDF uses the file's vectors");
                         assert!(paths > 0);
@@ -285,6 +287,30 @@ fn ai_export_public_aliases_preserve_missing_placed_links() {
         );
         assert!(native.images[&original.key].is_proxy(), "{alias}");
         assert_eq!(placed(&s, id), original, "{alias}: source changed");
+    }
+}
+
+/// The `.ai` editing copy for other apps draws a missing placed file as its preview, with the
+/// pages or without them, and says so.
+#[test]
+fn ai_editing_copy_warns_about_missing_placed_files() {
+    let dir = Folder::new("placed-ai-editing-copy-missing");
+    let src = dir.file("logo.vectorcraft");
+    star_source(&src, "placed-ai-editing-copy-missing-unique");
+    let mut s = session();
+    place(&mut s, &src);
+    let parent = dir.file("parent.vectorcraft");
+    save(&mut s, &parent);
+    std::fs::remove_file(&src).unwrap();
+    open(&mut s, &parent);
+    let doc = &s.doc().unwrap().doc;
+    let (_, missing) = cmd::place::document::full_documents(doc);
+    assert!(!missing.is_empty());
+    for compatible in [true, false] {
+        let enc = cmd::fileio::encode_all(doc, "ai", &json!({"pdfCompatible": compatible})).unwrap();
+        for w in &missing {
+            assert!(enc.warnings.contains(w), "pdfCompatible {compatible}: {w:?} not in {:?}", enc.warnings);
+        }
     }
 }
 
@@ -345,6 +371,30 @@ fn native_included_links_keep_missing_placed_documents_editable() {
             }
         }
     }
+}
+
+/// Output prepared by a caller that may not read the placed file shows its preview, not the full
+/// art an earlier caller that could read it left cached.
+#[test]
+fn a_confined_export_does_not_reuse_full_art_read_for_another_caller() {
+    let dir = Folder::new("placed-confined");
+    let other = Folder::new("placed-confined-other");
+    let src = dir.file("src.vectorcraft");
+    source(&src, 100.0, 50.0, BLUE, 0);
+    let mut s = session();
+    place(&mut s, &src);
+    // As a document saved with previews opens: each placed file's blob holds only its preview.
+    for b in std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).images.values_mut() {
+        if let Some(p) = b.proxy.clone() {
+            b.bytes = p;
+        }
+    }
+    let d = s.doc().unwrap().doc.clone();
+    let preview = |d: &Document| d.images.keys().any(|k| k.starts_with(vectorcraft_doc::placed_document::RESOURCE_PREFIX) && k.ends_with("/preview"));
+    assert!(!preview(&d.with_placed_art()), "the file is read in full");
+    let roots = crate::file_access::AutomationRoots::new(&[&other.0], &[]).unwrap().unwrap();
+    let confined = crate::file_access::confine(Some(&roots), || d.with_placed_art().into_owned());
+    assert!(preview(&confined), "only the preview shows");
 }
 
 #[test]
@@ -692,6 +742,53 @@ fn a_placed_documents_resources_stay_its_own() {
 }
 
 #[test]
+fn saved_for_older_apps_with_a_precision_the_placed_art_is_rounded_too() {
+    let dir = Folder::new("placed-precision");
+    let src = dir.file("triangle.vectorcraft");
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let points = [(3.4876474632797176, 1.0), (90.0, 2.123456789), (40.0, 80.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+    let path = vectorcraft_geom::PathData::single(vectorcraft_geom::path::SubPath::polyline(&points, true));
+    d.insert(Some(layer), 0, Node::path(id, path, look(BLUE))).unwrap();
+    write(&src, &vectorcraft_format::save_file(&d));
+    let mut s = session();
+    place(&mut s, &src);
+    // The coordinates of every anchor and handle in a file's layers.
+    fn coords(v: &Value, out: &mut Vec<f64>) {
+        match v {
+            Value::Object(o) => {
+                for a in o.get("anchors").and_then(Value::as_array).into_iter().flatten() {
+                    out.extend(["p", "in", "out"].iter().filter_map(|k| a[*k].as_array()).flatten().filter_map(Value::as_f64));
+                }
+                o.values().for_each(|c| coords(c, out));
+            }
+            Value::Array(a) => a.iter().for_each(|c| coords(c, out)),
+            _ => {}
+        }
+    }
+    let mut saved = |p: Value| {
+        let file: Value = serde_json::from_slice(&decode(&s.execute("document.serialize", &p).unwrap())).unwrap();
+        assert!(!file.to_string().contains("placeddocument"), "{file}");
+        let mut out = vec![];
+        coords(&file["document"]["layers"], &mut out);
+        out
+    };
+    let at4 = |x: f64| (x * 1e4).round() / 1e4 == x;
+    let exact = saved(json!({"format": "vectorcraft", "version": 3}));
+    assert!(exact.len() >= 6 && !exact.iter().all(|x| at4(*x)), "{exact:?}");
+    let rounded = saved(json!({"format": "vectorcraft", "version": 3, "precision": 4}));
+    assert_eq!(rounded.len(), exact.len());
+    assert!(rounded.iter().all(|x| at4(*x)), "{rounded:?}");
+    // The preview shows the rounded art the older app opens, not the placed file's exact art.
+    let file = decode(&s.execute("file.saveCopy", &json!({"version": 3, "precision": 0, "preview": true})).unwrap());
+    let preview = vectorcraft_format::preview(&file);
+    assert!(preview.is_some());
+    assert_eq!(preview, crate::cmd::fileio::preview_png(&vectorcraft_format::load(&file).unwrap()).unwrap());
+    assert_ne!(preview, crate::cmd::fileio::preview_png(&s.doc().unwrap().doc).unwrap());
+}
+
+#[test]
 fn break_link_gives_the_editable_copy_placing_without_link_gives() {
     let dir = Folder::new("placed-break");
     let src = dir.file("badge.vectorcraft");
@@ -858,7 +955,7 @@ fn pdf_editing_keeps_placed_links_separate_from_drawn_previews() {
                 assert!(paths > 0);
             }
             assert_eq!(
-                out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("placed document(s) output as their previews")),
+                out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("1 placed document output as its preview")),
                 missing,
                 "{out}"
             );
@@ -927,7 +1024,7 @@ fn eps_editing_keeps_placed_links_and_requested_source_bytes() {
                     assert_eq!(blob.bytes.as_slice(), source_bytes.as_slice());
                 }
                 assert_eq!(
-                    out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("placed document(s) output as their previews")),
+                    out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("1 placed document output as its preview")),
                     missing,
                     "{out}"
                 );
@@ -997,7 +1094,7 @@ fn svg_editing_keeps_placed_links_separate_from_drawn_previews() {
                 let text = vectorcraft_svg::text_of(&bytes).unwrap();
                 assert_eq!(text.contains("<image"), missing, "{format}/{command}: {text}");
                 assert_eq!(
-                    out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("placed document(s) output as their previews")),
+                    out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("1 placed document output as its preview")),
                     missing,
                     "{out}"
                 );

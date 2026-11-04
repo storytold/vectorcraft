@@ -12,7 +12,7 @@ use vectorcraft_doc::Document;
 use vectorcraft_eps::{EpsOptions, Level, Overprint, Preview, Raster};
 use vectorcraft_geom::{Point, Rect};
 
-use super::super::flatten::{FlattenOptions, flatten_document};
+use super::super::flatten::{FlattenOptions, expand_transparent_tile_images, flatten_expanded};
 use super::super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, str_param};
 use super::{ArtboardPick, Encoded, FormatOption};
 
@@ -152,6 +152,8 @@ fn parse(p: &Value) -> Result<Settings> {
     let overprint = choice("overprints", q.overprints.clone(), Overprint::from_id, d.overprint, "preserve or discard")?;
     let mut flatten = flattener(&q, &[])?;
     flatten.preserve_overprints &= overprint == Overprint::Preserve;
+    // The writer draws colorized images in their ink.
+    flatten.keeps_colorize = true;
     let level = q.level.as_ref().map(super::dxf::text);
     let eps = EpsOptions {
         level: choice("level", level, Level::from_id, d.level, "2 or 3")?,
@@ -298,12 +300,17 @@ fn encode_document(doc: &Document, p: &Value, saving: bool) -> Result<Encoded> {
     if pages.is_empty() {
         return Err(bad(C, "the document has no artboard"));
     }
+    // The artboards' background colors, behind the art (the editing data keeps them as colors).
+    let filled = super::export::with_artboard_fills(doc, p, pages.iter().filter_map(|(b, ..)| *b)).map_err(|e| bad(C, e))?;
+    let doc = &*filled;
     let regions: Vec<Rect> = pages.iter().map(|(_, region, _)| *region).collect();
-    let transparent = doc.layers.iter().any(|l| l.shows_transparency());
-    let flat = flatten_document(doc, &set.flatten)?;
-    let drawn = flat.as_ref().unwrap_or(doc);
+    let expanded = expand_transparent_tile_images(doc, &set.flatten)?;
+    let source = expanded.as_ref().unwrap_or(doc);
+    let transparent = source.layers.iter().any(|l| set.flatten.shows_transparency(source, l));
+    let flat = flatten_expanded(source, &set.flatten)?;
+    let drawn = flat.as_ref().unwrap_or(source);
     let mut enc = Encoded { warnings, joiner: Some("_"), ..Encoded::default() };
-    if transparent && flat.is_some() {
+    if transparent && (flat.is_some() || expanded.is_some()) {
         enc.warnings.push("transparency is flattened into opaque art and images (EPS has none): see the flattener preset".into());
     }
     let preview_limit = if saving { SAVE_PREVIEW } else { MAX_PREVIEW };

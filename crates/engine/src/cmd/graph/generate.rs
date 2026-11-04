@@ -5,7 +5,7 @@ use super::labels::{
     FILLED_LINE_BUDGET, Gen, Role, SHADOW_BUDGET, SHADOW_OPACITY, blank_label, label_size, label_width, polyline, recolour_text, runs, shadow_of,
 };
 use super::markers::{MARKER_BUDGET, marker_cost, marker_designs};
-use super::series::series_marks;
+use super::series::{series_marks, with_series_opacity};
 use super::{
     Arc, BezPath, Color, Document, GraphKind, GraphSpec, Justify, Node, NodeKind, Paint, PathData, Point, Rect, TickLength, ValueAxisSide, shapes,
 };
@@ -244,7 +244,8 @@ impl<'a> Plot<'a> {
         if marker_cost(g, &designs) > MARKER_BUDGET {
             designs.clear();
         }
-        let nser = g.rows.iter().map(Vec::len).max().unwrap_or(0).max(1);
+        // The same dimensions `GraphSpec::cells` reads: raw rows can be longer than the grid they are read through.
+        let nser = g.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES);
         let kinds: Vec<GraphKind> = (0..nser).map(|s| g.series_kind(s)).collect();
         Plot {
             g,
@@ -253,7 +254,7 @@ impl<'a> Plot<'a> {
             designs,
             r: g.rect,
             nser,
-            ncat: g.rows.len().max(1),
+            ncat: g.rows.len().clamp(1, vectorcraft_doc::MAX_GRAPH_CATEGORIES),
             vs: label_size(&g.label_styles, Role::Value),
             cs: label_size(&g.label_styles, Role::Category),
             ls: label_size(&g.label_styles, Role::Legend),
@@ -1001,7 +1002,7 @@ impl<'a> Plot<'a> {
                 }
             }
             let name = g.series.get(s).cloned().filter(|n| !n.is_empty()).unwrap_or_else(|| format!("Series {}", s + 1));
-            let grp = self.b.series(&name, s, items);
+            let grp = self.b.series(&name, s, with_series_opacity(g, s, items));
             self.b.out.push(grp);
         }
         self.b.out.append(&mut self.on_top);

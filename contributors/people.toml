@@ -180,3 +180,24 @@ real_name = "Ashok Ram"
 
 [people.dylanmtaylor]
 sync_github_name = true
+
+[people.marshiyar]
+display_name = "Arshiya"
+real_name = "Arshiya Rahgozar"
+sync_github_name = false
+
+[people.WadahBadawi]
+display_name = "Wadah Badawi"
+sync_github_name = true
+
+[people.JonRC]
+real_name = "Jonathan Cardoso"
+display_name = "Jonathan Cardoso"
+
+[people.vangel76]
+real_name = "Valentin Klein"
+display_name = "vangel76"
+sync_github_name = false
+
+[people.FrancoJacquet]
+real_name = "Franco Jacquet"
