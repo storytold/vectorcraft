@@ -379,6 +379,27 @@ fn a_scaled_instance_is_culled_by_the_effects_in_its_art_as_placed() {
 }
 
 #[test]
+fn an_instance_is_culled_by_the_art_its_9_slice_guides_move() {
+    // A 100 × 100 frame with guides a quarter in, holding an instance of a red bar from x 10 to
+    // 70. Scaled 2 times across, the bar crosses the left guide and is placed by the middle
+    // column's map, x → 3x − 50: moved 110 pt right, it draws from x 90 to 270 while the frame
+    // starts at x 110, out of view.
+    let mut d = Document::new(100.0, 100.0);
+    let bar = rect_node(&mut d, Rect::new(10.0, 40.0, 70.0, 60.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bar".into(), art: Arc::new(bar) });
+    let frame = rect_node(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), Paint::None, Paint::None, 0.0);
+    let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::IDENTITY });
+    let art = Node::group(d.alloc_id(), vec![Arc::new(frame), Arc::new(inner)]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+    d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    let xf = Affine::translate((110.0, 0.0)) * Affine::scale_non_uniform(2.0, 1.0);
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Panel".into(), xf })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(img.pixel(95, 50), [255, 0, 0, 255]);
+}
+
+#[test]
 fn an_instance_with_a_geometry_effect_is_culled_by_its_reshaped_art() {
     // The art, (0, 0) to (20, 20), drawn from (-100, 10) is out of view, and the Transform effect
     // moves it 150 pt right, into view.

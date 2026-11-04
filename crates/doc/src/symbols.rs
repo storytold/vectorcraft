@@ -102,7 +102,9 @@ impl<'a> SymbolBoxes<'a> {
 
     /// Makes these boxes measure every symbol instance as [`Node::reach_bounds_with`] does, by its
     /// art box alone. An instance that scales or turns stroked art then measures a little larger
-    /// than with [`Node::visual_bounds_with`], and its art is not transformed to measure it.
+    /// than with [`Node::visual_bounds_with`], and its art is not transformed to measure it. The
+    /// visual box of an instance placed through 9-slice guides holds the art box placed by each
+    /// cell's map ([`crate::NineSliceMap::placement_bounds`]).
     pub fn quick(self) -> Self {
         self.quick.set(true);
         self
@@ -445,6 +447,25 @@ mod tests {
         // corner up to its miter limit).
         let reach = d.symbols[0].art.children().unwrap()[0].appearance.outset();
         assert_eq!(scaled.reach_bounds_with(&s), Some(Rect::new(0.0, 0.0, 60.0, 30.0).inflate(reach, reach)));
+    }
+
+    #[test]
+    fn quick_boxes_hold_art_that_9_slice_guides_move_past_the_instance() {
+        // A 100 × 100 frame with guides a quarter in, holding an instance of a bar from x 10 to 70.
+        // Scaled 2 times across, the bar crosses the left guide and is placed by the middle
+        // column's map, x → 3x − 50: it draws from x −20 to 160, past the frame's left edge at 0.
+        let mut d = Document::new(200.0, 200.0);
+        let bar = rect(&mut d, Rect::new(10.0, 40.0, 70.0, 60.0), 0.0);
+        symbol(&mut d, "Bar", vec![bar]);
+        let frame = rect(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), 0.0);
+        let inner = instance(&mut d, "Bar", Affine::IDENTITY);
+        symbol(&mut d, "Panel", vec![frame, inner]);
+        d.set_symbol_nine_slice("Panel", Some(crate::SymbolNineSlice::default()));
+        let panel = instance(&mut d, "Panel", Affine::scale_non_uniform(2.0, 1.0));
+        let exact = panel.visual_bounds_with(&d.symbol_boxes()).unwrap();
+        assert_eq!(exact, Rect::new(-20.0, 0.0, 200.0, 100.0));
+        let quick = panel.visual_bounds_with(&d.symbol_boxes().quick()).unwrap();
+        assert_eq!(quick.union(exact), quick, "{quick:?} holds {exact:?}");
     }
 
     #[test]
