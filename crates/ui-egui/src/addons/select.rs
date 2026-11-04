@@ -1,7 +1,7 @@
 //! Selection Tools in the interface: its submenu (Object › Plug-ins › Selection Tools) and the
 //! Select by Artboards dialog (#5548), which lists the artboards with their number, name and size,
-//! filters them by name, picks several, and on OK runs `addon.select.byArtboards` with the
-//! relation chosen.
+//! filters them by name, picks several, fits one in the window on double-click (#5549), and on OK
+//! runs `addon.select.byArtboards` with the relation chosen.
 
 use egui::{Sense, Ui, vec2};
 use serde_json::{Value, json};
@@ -94,7 +94,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     d.fields.insert("__search".into(), json!(query));
     let rows = shown(&names, &query);
     let picked = chosen(d);
-    let mut clicked = None;
+    let (mut clicked, mut double) = (None, None);
     ui.add_space(4.0);
     egui::ScrollArea::vertical().max_height(LIST_H).auto_shrink([false, true]).show(ui, |ui| {
         if rows.is_empty() {
@@ -118,13 +118,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             p.text(size_at, egui::Align2::RIGHT_CENTER, &size, font.clone(), t.text_dim);
             p.with_clip_rect(r.with_max_x(size_at.x - 80.0)).text(mid + vec2(NUMBER_W, 0.0), egui::Align2::LEFT_CENTER, name, font, t.text);
             resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListItem, true, on, format!("{} {name} {size}", i + 1)));
-            if resp.clicked() {
+            if resp.double_clicked() {
+                double = Some(i);
+            } else if resp.clicked() {
                 clicked = Some((i, ui.input(|inp| inp.modifiers)));
             }
         }
     });
     if let Some((i, m)) = clicked {
         row_clicked(d, i, &rows, m);
+    }
+    if let Some(i) = double {
+        row_double_clicked(app, d, i);
     }
     let mut picked = chosen(d);
     ui.add_space(4.0);
@@ -151,11 +156,24 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
 /// chosen artboards.
 pub(crate) fn row_clicked(d: &mut Dialog, i: usize, shown: &[usize], m: egui::Modifiers) {
     let mut picked = chosen(d);
+    // What a double-click's first click changed, for its second to put back.
+    d.fields.insert("__before".into(), json!(picked));
     let anchor = d.fields.get("__anchor").and_then(Value::as_u64).and_then(|a| usize::try_from(a).ok());
     if let Some(a) = click(&mut picked, anchor, i, shown, m.shift, m.command) {
         d.fields.insert("__anchor".into(), json!(a));
     }
     d.fields.insert("artboards".into(), json!(picked));
+}
+
+/// A double-click on row `i`: artboard `i` becomes active and fits in the window, as a
+/// double-click on its number in the Artboards panel does (`view.goToArtboard`). The dialog stays
+/// open, and the artboards chosen are those chosen before the double-click.
+pub(crate) fn row_double_clicked(app: &mut VectorcraftApp, d: &mut Dialog, i: usize) {
+    if let Some(before) = d.fields.remove("__before") {
+        d.fields.insert("artboards".into(), before);
+    }
+    // An artboard the list showed a frame ago can't be missing, and a failure only leaves the view.
+    app.run("view.goToArtboard", json!({ "index": i })).ok();
 }
 
 /// OK: select the objects and close.

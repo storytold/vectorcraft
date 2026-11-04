@@ -1,7 +1,7 @@
 use serde_json::json;
 use vectorcraft_engine::Session;
 
-use super::{click, shown};
+use super::{click, row_clicked, row_double_clicked, shown};
 use crate::tests_labels::painted_text;
 use crate::{VectorcraftApp, menus};
 
@@ -66,4 +66,27 @@ fn select_by_artboards_lists_the_artboards_and_selects_on_ok() {
     crate::dialogs::confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
     assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(inside)]);
+}
+
+#[test]
+fn double_clicking_a_row_fits_its_artboard_and_keeps_the_choice() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    for x in [150, 300] {
+        app.run("artboard.new", json!({"x": x, "y": 0, "width": 100, "height": 100})).unwrap();
+    }
+    app.run("view.goToArtboard", json!({"index": 0})).unwrap();
+    menus::invoke(&mut app, super::COMMAND, serde_json::Value::Null);
+    let mut d = app.ui.dialog.take().unwrap();
+    d.fields.insert("artboards".into(), json!([0, 1]));
+    // The search shows boards 0 and 2: row 2 is the second row, but board 2 is the one fitted.
+    let rows = [0, 2];
+    row_clicked(&mut d, 2, &rows, egui::Modifiers::NONE);
+    assert_eq!(d.fields["artboards"], json!([2]), "the first click chooses the row");
+    // The dialog frame lends the dialog to its body while the app still shows it.
+    app.ui.dialog = Some(d.clone());
+    row_double_clicked(&mut app, &mut d, 2);
+    assert_eq!(d.fields["artboards"], json!([0, 1]), "the double-click puts the choice back");
+    assert_eq!(app.view().unwrap().artboard, 2, "the artboard is active");
+    assert!(app.ui.dialog.is_some(), "the dialog stays open");
 }
