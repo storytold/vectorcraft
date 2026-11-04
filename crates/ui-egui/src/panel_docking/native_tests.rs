@@ -396,6 +396,84 @@ fn a_modal_blocks_native_windows_and_takes_the_keyboard_from_them() {
     assert_eq!(h.app.session.tool_id(), "pen", "the window takes keys again once the modal closes");
 }
 
+/// The level and visibility a palette window takes under a dialog or a menu, and otherwise: a
+/// palette stays out of the way of anything drawn in the main window.
+#[test]
+fn a_palette_window_keeps_out_of_the_way_of_the_main_windows_dialog_and_menus() {
+    use egui::WindowLevel;
+    assert_eq!(palette_window_state(true, true, true), (WindowLevel::Normal, false), "hidden under a dialog, even in a menu");
+    assert_eq!(palette_window_state(true, false, true), (WindowLevel::Normal, false), "hidden under a dialog");
+    assert_eq!(palette_window_state(false, true, true), (WindowLevel::Normal, false), "hidden under a menu: it is drawn in the main window");
+    assert_eq!(palette_window_state(false, false, true), (WindowLevel::AlwaysOnTop, true), "its palette level while the app is active");
+    let inactive = palette_window_state(false, false, false);
+    assert!(inactive.1, "shown while the app is inactive");
+    assert_ne!(inactive.0, WindowLevel::AlwaysOnTop, "and not above other applications' windows: {:?}", inactive.0);
+}
+
+/// With a menu of the in-window menu bar open, the palettes take the normal level (still shown):
+/// the menu is drawn in the main window, or it would open under them.
+#[test]
+fn a_menu_of_the_menu_bar_lowers_the_palette_windows() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().commands.clear();
+    let layout = layout_of(&h.app.ui);
+    h.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("menu-bar-open"), true));
+    assert!(crate::menus::menu_open(&h.ctx), "the menu bar's state says a menu is open");
+    palette_window_levels(&h.ctx, &layout, false, crate::menus::menu_open(&h.ctx));
+    h.frames(1);
+    let commands: Vec<(egui::ViewportId, ViewportCommand)> = h.host.borrow().commands.clone();
+    let levels: Vec<egui::WindowLevel> = commands
+        .iter()
+        .filter_map(|(id, command)| match command {
+            ViewportCommand::WindowLevel(level) if *id == viewport => Some(*level),
+            _ => None,
+        })
+        .collect();
+    assert!(levels.contains(&egui::WindowLevel::Normal), "the palette drops its topmost level under the menu: {levels:?}");
+    assert!(
+        commands.iter().any(|(id, command)| *id == viewport && matches!(command, ViewportCommand::Visible(false))),
+        "and is hidden until the menu closes"
+    );
+}
+/// A modal dialog is drawn in the main window, so the palettes' OS windows leave their topmost
+/// level while it is open and take it back after, or the dialog would be covered by them.
+#[test]
+fn a_modal_lowers_the_native_palette_windows() {
+    let mut h = Harness::new();
+    let viewport = h.float("swatches");
+    let levels = |h: &Harness| -> Vec<egui::WindowLevel> {
+        h.host
+            .borrow()
+            .commands
+            .iter()
+            .filter_map(|(id, command)| match command {
+                ViewportCommand::WindowLevel(level) if *id == viewport => Some(*level),
+                _ => None,
+            })
+            .collect()
+    };
+    let hidden = |h: &Harness| -> Vec<bool> {
+        h.host
+            .borrow()
+            .commands
+            .iter()
+            .filter_map(|(id, command)| match command {
+                ViewportCommand::Visible(visible) if *id == viewport => Some(*visible),
+                _ => None,
+            })
+            .collect()
+    };
+    h.app.ui.about = true;
+    h.frames(4);
+    assert!(levels(&h).contains(&egui::WindowLevel::Normal), "the palette leaves AlwaysOnTop under the modal: {:?}", levels(&h));
+    assert_eq!(hidden(&h), [false], "and is hidden, so a click cannot bring it up over the dialog: {:?}", hidden(&h));
+    h.app.ui.about = false;
+    h.frames(4);
+    assert!(levels(&h).contains(&egui::WindowLevel::AlwaysOnTop), "and takes its palette level back: {:?}", levels(&h));
+    assert_eq!(hidden(&h), [false, true], "shown again with the dialog gone: {:?}", hidden(&h));
+}
+
 #[test]
 fn a_file_dropped_on_a_native_window_opens() {
     let mut h = Harness::new();

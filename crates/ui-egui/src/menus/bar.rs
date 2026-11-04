@@ -42,6 +42,10 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
             (ui.cursor().min.x, switch_on_hover(ui.ctx(), &titles))
         })
         .inner;
+    // Whether a top-level menu is open: the docking renderer lowers the floating panels' OS windows
+    // while one is, or the menu would open under them.
+    ctx.data_mut(|d| d.insert_temp(menu_open_id(), open));
+
     let field = ctx.data(|d| d.get_temp::<Field>(field_key));
     if !open && focused_text_field(&ctx).is_none() {
         ctx.data_mut(|d| d.remove::<Field>(field_key));
@@ -56,6 +60,16 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         }
     }
     end
+}
+
+/// Where the menu bar keeps whether one of its top-level menus is open.
+fn menu_open_id() -> egui::Id {
+    egui::Id::unique("menu-bar-open")
+}
+
+/// Whether a menu of the in-window menu bar is open (`false` when no menu bar was drawn yet).
+pub(crate) fn menu_open(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(menu_open_id())).unwrap_or(false)
 }
 
 /// Whether the pointer at `p` is really over the menu title `title`: inside it, and with no
