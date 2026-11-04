@@ -1767,6 +1767,7 @@ font-technology	Variable	Variables
 	Ligatures are off while the text is tracked.	Las ligaduras se desactivan mientras el texto tiene espaciado.
 	Light	Claro
 	Light Blue	Azul claro
+	Light Red	Rojo claro
 	Lighten	Aclarar
 	Lightness	Luminosidad
 	Limit Color Guide to Library	Limitar guía de color a la biblioteca
