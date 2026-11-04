@@ -45,7 +45,11 @@ fn clicks_choose_toggle_and_extend_rows() {
     let a = click(&mut c, a, 3, &rows, false, false);
     assert_eq!((c.clone(), a), (vec![3], Some(3)));
     let a = click(&mut c, None, 5, &rows, true, false);
-    assert_eq!((c, a), (vec![5], Some(5)));
+    assert_eq!((c.clone(), a), (vec![5], Some(5)));
+    // Board 4, chosen but hidden by the search, stays chosen through a plain click.
+    c.push(4);
+    click(&mut c, a, 2, &rows, false, false);
+    assert_eq!(c, vec![2, 4]);
 }
 
 #[test]
@@ -92,7 +96,8 @@ fn double_clicking_a_row_fits_its_artboard_and_keeps_the_choice() {
     // The search shows boards 0 and 2: row 2 is the second row, but board 2 is the one fitted.
     let rows = [0, 2];
     row_clicked(&mut d, 2, &rows, egui::Modifiers::NONE);
-    assert_eq!(d.fields["artboards"], json!([2]), "the first click chooses the row");
+    // Board 1, hidden by the search, stays chosen.
+    assert_eq!(d.fields["artboards"], json!([1, 2]), "the first click chooses the row among those shown");
     // The dialog frame lends the dialog to its body while the app still shows it.
     app.ui.dialog = Some(d.clone());
     row_double_clicked(&mut app, &mut d, 2);
