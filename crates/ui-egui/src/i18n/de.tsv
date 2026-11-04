@@ -270,6 +270,9 @@ font-technology	Variable	Variabel
 	Basic Latin	Lateinisch (Basis)
 	Batch	Stapelverarbeitung
 	Begin Recording	Aufzeichnung beginnen
+	Exclude from playback	Von der Wiedergabe ausschließen
+	Include in playback	In die Wiedergabe einbeziehen
+	Include Action Steps	Aktionsschritte einbeziehen
 	Bend:	Biegung:
 	Bevel Join	Abgeflachte Ecke
 	Bitmap	Bitmap
@@ -5128,6 +5131,10 @@ effect	Soft	Weich
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	aus dem Datensatz {name} wurde nichts angewendet: kein Objekt ist an eine Variable gebunden, für die er einen Wert hat
 @msg	no bound object reports a value (locked objects and embedded images report none)	kein gebundenes Objekt liefert einen Wert (gesperrte Objekte und eingebettete Bilder liefern keinen)
 @msg	the action has no steps	die Aktion hat keine Schritte
+@msg	the action has no included steps	die Aktion hat keine einbezogenen Schritte
+@msg	no such action step	kein solcher Aktionsschritt
+@msg	included must be true or false	included muss true oder false sein
+@msg	others must be true or false	others muss true oder false sein
 
 # User Interface › Accent Color
 	Accent Color	Akzentfarbe

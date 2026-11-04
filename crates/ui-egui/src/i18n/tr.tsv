@@ -280,6 +280,9 @@ font-technology	Variable	Değişken
 	Basic Latin	Temel Latince
 	Batch	Toplu
 	Begin Recording	Kaydı Başlat
+	Exclude from playback	Oynatmadan hariç tut
+	Include in playback	Oynatmaya dahil et
+	Include Action Steps	Eylem Adımlarını Dahil Et
 	Bend:	Bükülme:
 	Bevel Join	Eğimli Birleştirme
 	Bitmap	Bit eşlem
@@ -5226,6 +5229,10 @@ theme	Appearance	Görünüm
 @msg	choose a source folder	bir kaynak klasör seçin
 @msg	open a document with data sets	veri kümeleri içeren bir belge açın
 @msg	the action has no steps	eylemin hiçbir adımı yok
+@msg	the action has no included steps	eylemin dahil edilmiş adımı yok
+@msg	no such action step	öyle bir eylem adımı yok
+@msg	included must be true or false	"included" true veya false olmalıdır
+@msg	others must be true or false	"others" true veya false olmalıdır
 	Accent Color	Vurgu Rengi
 	Amber	kehribar
 	Coral	Mercan

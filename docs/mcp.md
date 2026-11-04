@@ -1771,14 +1771,20 @@ already walks Image Trace. Short agent entry points:
   the file at `path`, else a picked one, or the file's text `data`, adds its set after the other sets and returns
   `{set, name, actions}`. A set named like one already in the panel gets the next free number (`Print 2`), and the
   other sets and the current set stay as they are. An action set file (`.vcactions`) is JSON:
-  `{"format": "vcactions", "version": 1, "name", "actions": [{"name", "steps": [{"command", "params"}]}]}`, each step
-  a command id and its params as `command.batch` takes them. A file with another `format` or a `version` other than
-  1, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
+  `{"format": "vcactions", "version": 1 or 2, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
+  a command id and its params as `command.batch` takes them. `excluded: true` preserves a step but omits it from playback;
+  an absent or false flag includes the step. Files with excluded steps use version 2, so older builds refuse them
+  instead of playing the excluded steps; files without exclusions use version 1. A file with another `format` or a `version` other than
+  1 or 2, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
   refused, and no set is added. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
   disabled where there is no open dialog (the web).
 - Actions: `ui.action.rename {set, action, name}` renames the Actions panel's action at `action` in set `set` (0 is
   the top set) to `name` with spaces trimmed from both ends, keeps its steps, function key and color, and returns
   `{name}`. An index past the last set or action, or an empty name, is an error, and then nothing is renamed.
+- Actions: `ui.action.stepsIncluded {set, action?, step?, included, others?}` includes or excludes all steps of a set,
+  one action, or one step. With `step` and `others: true`, it leaves that step as it was and applies `included` to the
+  other steps of its action (the panel's Alt/Option-click). An invalid set, action or step changes nothing. The panel's
+  checkmarks run this command; normal playback and Batch… skip excluded steps.
 - Actions: `ui.action.new {set, name, key?, cmd?, shift?, color?}` adds an action named `name` (spaces
   trimmed) after the last action of set `set` (0 is the top set), starts recording into it and returns
   `{set, action}`; Stop Playing/Recording (`ui.action.stop`) ends the recording. `key` 1 to 15 is the function key F1 to F15 that plays the
@@ -1803,7 +1809,7 @@ already walks Image Trace. Short agent entry points:
   plays. A stored key reserved on the current platform does not play an action.
 - Actions: `ui.action.play {action, set?}` plays the action named `action` as one undoable batch; `set` names the set
   to look in (default: every set), and a `set` that is not a string is an error. A name that no action has, or that
-  more than one action in the sets looked in has, is an error, and then nothing plays.
+  more than one action in the sets looked in has, or whose every step is excluded, is an error, and then nothing plays.
 - Actions: `ui.action.stop {}` ends the recording in progress and keeps its steps, in the action `ui.action.new` made
   for it, else in a new action after the last action of its set, and returns `{stopped}`. With nothing recording it
   changes nothing. The panel's Stop Playing/Recording button runs this.
@@ -3236,7 +3242,9 @@ for `edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack`, and to each
 none, when the step runs. When the document a step runs in has no artboard at that index (for example, after an
 earlier step deleted the active artboard when it was the last one), the step gets that document's last artboard. In
 remote mode, MCP's `run_command` calls and each step of the `command_batch` tool get the active artboard too. The
-Actions panel plays an action as a `command.batch`. The Actions panel menu's Batch… runs
+Actions panel plays an action as a `command.batch`, omitting steps whose playback checkmarks are
+cleared. An action set saved as `.vcactions` keeps each excluded step with `excluded: true`; loading
+an earlier version 1 set without that flag includes every step. The Actions panel menu's Batch… runs
 `action.batch`: the same steps on every readable file in a folder (or every data set of the open document), with
 destination `none` | `saveAndClose` | `folder` and Override Open / Save / Export. For a Data Sets source,
 `datasetFileNaming?: fileNumber | fileDataSetName | dataSetName` chooses File + Number (`source001`),

@@ -1212,6 +1212,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{set: index, action: index, name} rename the Actions panel's action at action in set (0 is the top set) to name, with spaces trimmed from both ends; its steps, function key and color stay. An index past the last set or action, or an empty name, is an error and renames nothing → {name}",
     ),
     (
+        crate::panels::actions::INCLUDE_STEPS,
+        "Include Action Steps",
+        "",
+        "{set: index, action?: index, step?: index, included: bool, others?: bool} include or exclude the playback of every step in a set, every step in one action, or one step. With a step and others: true, leave that step unchanged and apply included to every other step in its action (Alt/Option-click). Invalid indexes change nothing → {set, action?, step?, included}",
+    ),
+    (
         crate::panels::actions::NEW_ACTION,
         "New Action",
         "",

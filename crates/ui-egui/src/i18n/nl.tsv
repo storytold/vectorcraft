@@ -1273,6 +1273,9 @@ lighting	Light	Licht
 	Zoom Tool	Zoom-gereedschap
 	Action {n}	Actie {n}
 	Begin Recording	Opname starten
+	Exclude from playback	Uitsluiten van afspelen
+	Include in playback	Insluiten bij afspelen
+	Include Action Steps	Actiestappen insluiten
 	Center on Artboard	Centreren op tekengebied
 	Default Actions	Standaardacties
 	▾ Default Actions	▾ Standaardacties
@@ -5214,6 +5217,10 @@ mark-style	Japanese	Japans
 @msg	choose a source folder	kies een bronmap
 @msg	open a document with data sets	open een document met gegevenssets
 @msg	the action has no steps	de actie heeft geen stappen
+@msg	the action has no included steps	de actie heeft geen ingesloten stappen
+@msg	no such action step	actiestap bestaat niet
+@msg	included must be true or false	included moet true of false zijn
+@msg	others must be true or false	others moet true of false zijn
 	Registration:	Passermarkering:
 	By Layer	Per laag
 	By Object	Per object

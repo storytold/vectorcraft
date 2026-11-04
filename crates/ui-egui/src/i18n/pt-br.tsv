@@ -278,6 +278,9 @@
 	Baseline Shift	Deslocamento da Linha de Base
 	Batch	Lote
 	Begin Recording	Começar a Gravar
+	Exclude from playback	Excluir da reprodução
+	Include in playback	Incluir na reprodução
+	Include Action Steps	Incluir Etapas da Ação
 	Bend:	Curvar:
 	Bevel Join	Junção em Bisel
 	Bitmap	Bitmap
@@ -5424,6 +5427,10 @@ mark-style	Japanese	Japonesas
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	nada do conjunto de dados {name} foi aplicado: nenhum objeto está vinculado a uma variável para a qual ele tem um valor
 @msg	no bound object reports a value (locked objects and embedded images report none)	nenhum objeto vinculado informa um valor (objetos bloqueados e imagens incorporadas não informam nenhum)
 @msg	the action has no steps	a ação não tem etapas
+@msg	the action has no included steps	a ação não tem etapas incluídas
+@msg	no such action step	etapa de ação inexistente
+@msg	included must be true or false	included deve ser true ou false
+@msg	others must be true or false	others deve ser true ou false
 @msg	Angles require two straight segments	Ângulos exigem dois segmentos retos
 @msg	Choose a circle or a perfect arc	Escolha um círculo ou um arco perfeito
 @msg	Choose a precision from 0 to 6	Escolha uma precisão de 0 a 6

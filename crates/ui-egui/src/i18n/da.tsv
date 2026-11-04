@@ -1259,6 +1259,9 @@ lighting	Light	Lys
 	Zoom Tool	Zoomværktøj
 	Action {n}	Handling {n}
 	Begin Recording	Start optagelse
+	Exclude from playback	Udelad fra afspilning
+	Include in playback	Medtag i afspilning
+	Include Action Steps	Medtag handlingstrin
 	Center on Artboard	Centrér på tegnebræt
 	Default Actions	Standardhandlinger
 	▾ Default Actions	▾ Standardhandlinger
@@ -5206,6 +5209,10 @@ mark-style	Japanese	Japansk
 @msg	choose a source folder	vælg en kildemappe
 @msg	open a document with data sets	åbn et dokument med datasæt
 @msg	the action has no steps	handlingen har ingen trin
+@msg	the action has no included steps	handlingen har ingen medtagne trin
+@msg	no such action step	intet sådant handlingstrin
+@msg	included must be true or false	included skal være true eller false
+@msg	others must be true or false	others skal være true eller false
 	Registration:	Passning:
 	By Layer	Efter lag
 	By Object	Efter objekt

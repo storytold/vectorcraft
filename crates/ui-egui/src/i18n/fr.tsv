@@ -296,6 +296,9 @@ font-technology	Variable	Variables
 	Basic Latin	Latin de base
 	Batch	Traitement par lots
 	Begin Recording	Démarrer l’enregistrement
+	Exclude from playback	Exclure de l’exécution
+	Include in playback	Inclure dans l’exécution
+	Include Action Steps	Inclure les étapes du script
 	Bend:	Courbure :
 	Bevel Join	Sommet en biseau
 	Bitmap	Bitmap
@@ -5546,6 +5549,10 @@ theme	Appearance	Apparence
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	rien du jeu de données {name} n’a été appliqué, car aucun objet n’est lié à une variable pour laquelle il a une valeur
 @msg	no bound object reports a value (locked objects and embedded images report none)	aucun objet lié ne fournit de valeur (les objets verrouillés et les images incorporées n’en fournissent aucune)
 @msg	the action has no steps	l'action n'a aucune étape
+@msg	the action has no included steps	le script n’a aucune étape incluse
+@msg	no such action step	étape de script inexistante
+@msg	included must be true or false	included doit valoir true ou false
+@msg	others must be true or false	others doit valoir true ou false
 
 # User Interface › Accent Color
 	Accent Color	Couleur d’accent

@@ -1187,6 +1187,9 @@ lighting	Light	სინათლე
 	Zoom Tool	მასშტაბის ხელსაწყო
 	Action {n}	მოქმედება {n}
 	Begin Recording	ჩაწერის დაწყება
+	Exclude from playback	შესრულებიდან გამორიცხვა
+	Include in playback	შესრულებაში ჩართვა
+	Include Action Steps	მოქმედების ნაბიჯების ჩართვა
 	Center on Artboard	სამუშაო დაფის ცენტრში მოთავსება
 	Default Actions	ნაგულისხმევი მოქმედებები
 	Duplicate and Offset 10 pt	დუბლირება და 10 pt-ით წანაცვლება
@@ -5193,6 +5196,10 @@ imageTrace	Outline	კონტური
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	მონაცემთა ნაკრები {name}: არაფერი გამოყენებულა; არცერთი ობიექტი არ არის მიბმული ცვლადზე, რომელსაც მასში მნიშვნელობა აქვს
 @msg	no bound object reports a value (locked objects and embedded images report none)	არცერთი მიბმული ობიექტი არ აბრუნებს მნიშვნელობას (ჩაკეტილი ობიექტები და ჩაშენებული გამოსახულებები მნიშვნელობას არ აბრუნებს)
 @msg	the action has no steps	მოქმედებას ნაბიჯები არ აქვს
+@msg	the action has no included steps	მოქმედებას ჩართული ნაბიჯები არ აქვს
+@msg	no such action step	მოქმედების ასეთი ნაბიჯი არ არის
+@msg	included must be true or false	included უნდა იყოს true ან false
+@msg	others must be true or false	others უნდა იყოს true ან false
 	Convert to Straight Lines	სწორ ხაზებად გარდაქმნა
 	Corner Point Angle Threshold:	კუთხოვანი წერტილის კუთხის ზღვარი:
 	Decrease Font Size by Five Steps	შრიფტის შემცირება ხუთი საფეხურით

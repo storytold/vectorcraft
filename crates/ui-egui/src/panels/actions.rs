@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::BTreeSet;
 
 use super::{pstate, set_pstate};
 use crate::theme::Tokens;
@@ -23,6 +24,10 @@ pub struct Action {
     pub id: u64,
     pub name: String,
     pub steps: Vec<(String, Value)>,
+    /// Step indexes omitted from playback. A sidecar keeps existing recorded command pairs and
+    /// their params unchanged; newly recorded steps are included by default.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub excluded_steps: BTreeSet<usize>,
     /// The function key that plays the action when shortcuts are read, if one is assigned. A
     /// saved value that is not a function key loads as none.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_key")]
@@ -36,13 +41,33 @@ pub struct Action {
 impl Action {
     /// An action with a new [`Action::id`], no function key and no color.
     pub fn new(name: impl Into<String>, steps: Vec<(String, Value)>) -> Self {
-        Self { id: next_action_id(), name: name.into(), steps, key: None, color: None }
+        Self { id: next_action_id(), name: name.into(), steps, excluded_steps: BTreeSet::new(), key: None, color: None }
     }
 
     /// A copy of the action with a new [`Action::id`] and no function key, so the key still plays
     /// only the original.
     pub fn copy(&self) -> Self {
         Self { id: next_action_id(), key: None, ..self.clone() }
+    }
+
+    fn all_steps_included(&self) -> bool {
+        (0..self.steps.len()).all(|i| !self.excluded_steps.contains(&i))
+    }
+
+    fn set_steps_included(&mut self, included: bool) {
+        self.excluded_steps.clear();
+        if !included {
+            self.excluded_steps.extend(0..self.steps.len());
+        }
+    }
+
+    pub(crate) fn included_commands(&self) -> Vec<Value> {
+        self.steps
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !self.excluded_steps.contains(i))
+            .map(|(_, (command, params))| json!({"command": command, "params": params}))
+            .collect()
     }
 }
 
@@ -181,8 +206,63 @@ pub fn default_sets() -> Vec<ActionSet> {
 /// Run an action as a single undoable batch.
 pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, String> {
     let Some(a) = app.ui.action_sets.get(set).and_then(|s| s.actions.get(idx)).cloned() else { return Err("no such action".into()) };
-    let commands: Vec<Value> = a.steps.iter().map(|(c, p)| json!({"command": c, "params": p})).collect();
+    let commands = a.included_commands();
+    if commands.is_empty() {
+        return Err("the action has no included steps".into());
+    }
     app.run("command.batch", json!({"label": a.name, "commands": commands}))
+}
+
+/// The command behind the Actions panel's set, action and step checkmarks.
+pub const INCLUDE_STEPS: &str = "ui.action.stepsIncluded";
+
+/// `{set, action?, step?, included, others?}` includes or excludes all steps of a set, all steps
+/// of one action, or one step. With `step` and `others: true`, leaves that step as it was and
+/// applies `included` to the other steps of its action. Invalid indexes change nothing.
+pub fn include_steps(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let index = |key: &str| p.get(key).and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok());
+    let set = index("set").ok_or("no such action set")?;
+    let included = p.get("included").and_then(Value::as_bool).ok_or("included must be true or false")?;
+    let others = match p.get("others") {
+        None => false,
+        Some(Value::Bool(value)) => *value,
+        _ => return Err("others must be true or false".into()),
+    };
+    let action = if p.get("action").is_some() { Some(index("action").ok_or("no such action")?) } else { None };
+    let step = if p.get("step").is_some() { Some(index("step").ok_or("no such action step")?) } else { None };
+    if (step.is_some() && action.is_none()) || (others && step.is_none()) {
+        return Err("no such action step".into());
+    }
+    let set_ref = app.ui.action_sets.get_mut(set).ok_or("no such action set")?;
+    match (action, step) {
+        (None, None) => {
+            for action in &mut set_ref.actions {
+                action.set_steps_included(included);
+            }
+        }
+        (Some(ai), None) => set_ref.actions.get_mut(ai).ok_or("no such action")?.set_steps_included(included),
+        (Some(ai), Some(si)) => {
+            let action = set_ref.actions.get_mut(ai).ok_or("no such action")?;
+            if si >= action.steps.len() {
+                return Err("no such action step".into());
+            }
+            if others {
+                let was_excluded = action.excluded_steps.contains(&si);
+                action.set_steps_included(included);
+                if was_excluded {
+                    action.excluded_steps.insert(si);
+                } else {
+                    action.excluded_steps.remove(&si);
+                }
+            } else if included {
+                action.excluded_steps.remove(&si);
+            } else {
+                action.excluded_steps.insert(si);
+            }
+        }
+        (None, Some(_)) => return Err("no such action step".into()),
+    }
+    Ok(json!({"set": set, "action": action, "step": step, "included": included}))
 }
 
 /// The command that renames an action ([`rename_action`]).
@@ -737,6 +817,42 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     }
 }
 
+fn inclusion_box(
+    ui: &mut egui::Ui,
+    row: egui::Rect,
+    x: f32,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    included: bool,
+    mixed: bool,
+) -> (bool, egui::Rect) {
+    let t = Tokens::get(ui.ctx());
+    let hit = egui::Rect::from_center_size(egui::pos2(row.left() + x, row.center().y), egui::vec2(18.0, 18.0));
+    let response = ui.interact(hit, ui.scope_id().with(id), egui::Sense::click());
+    let box_rect = egui::Rect::from_center_size(hit.center(), egui::vec2(11.0, 11.0));
+    ui.painter().rect_stroke(
+        box_rect,
+        1.0,
+        egui::Stroke::new(1.0, if response.hovered() { t.text_strong } else { t.icon }),
+        egui::StrokeKind::Inside,
+    );
+    if included || mixed {
+        ui.painter().text(
+            box_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            if mixed { "−" } else { "✓" },
+            egui::FontId::proportional(12.0),
+            t.text_strong,
+        );
+    }
+    (response.on_hover_text(if included { tl!("Exclude from playback") } else { tl!("Include in playback") }).clicked(), hit)
+}
+
+enum InclusionChange {
+    Set(usize),
+    Action(usize, usize),
+    Step(usize, usize, usize, bool),
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     // The selected action as (set, action). Read as the type it is stored as: egui keeps a
@@ -751,6 +867,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let mut current = app.ui.action_set;
     let mut sets_selected = selected_sets(app);
     let shift = ui.input(|i| i.modifiers.shift);
+    let alt = ui.input(|i| i.modifiers.alt);
+    let mut expanded: BTreeSet<u64> = pstate(ui.ctx(), "actions-expanded");
+    let mut inclusion_changes = Vec::new();
     let mut play_req = None;
     egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
         for (si, set) in app.ui.action_sets.iter().enumerate() {
@@ -760,8 +879,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
             } else if resp.hovered() {
                 ui.painter().rect_filled(r, 0.0, t.hover);
             }
-            ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, format!("▾ {}", set.name), egui::FontId::proportional(12.5), t.text);
-            if resp.clicked() {
+            let step_count: usize = set.actions.iter().map(|a| a.steps.len()).sum();
+            let excluded_count: usize = set.actions.iter().map(|a| (0..a.steps.len()).filter(|i| a.excluded_steps.contains(i)).count()).sum();
+            let (check_clicked, check_rect) =
+                inclusion_box(ui, r, 10.0, ("set-inclusion", set.id), excluded_count == 0, excluded_count > 0 && excluded_count < step_count);
+            if check_clicked && step_count > 0 {
+                inclusion_changes.push(InclusionChange::Set(si));
+            }
+            ui.painter().text(
+                r.left_center() + egui::vec2(22.0, 0.0),
+                egui::Align2::LEFT_CENTER,
+                format!("▾ {}", set.name),
+                egui::FontId::proportional(12.5),
+                t.text,
+            );
+            if resp.clicked() && !resp.interact_pointer_pos().is_some_and(|p| check_rect.contains(p)) {
                 // Shift-click selects the sets from the current one to the one clicked; the current
                 // set stays as it was.
                 match current {
@@ -781,8 +913,26 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 } else if resp.hovered() {
                     ui.painter().rect_filled(r, 0.0, t.hover);
                 }
+                let excluded = (0..a.steps.len()).filter(|i| a.excluded_steps.contains(i)).count();
+                let (check_clicked, check_rect) =
+                    inclusion_box(ui, r, 10.0, ("action-inclusion", a.id), excluded == 0, excluded > 0 && excluded < a.steps.len());
+                if check_clicked && !a.steps.is_empty() {
+                    inclusion_changes.push(InclusionChange::Action(si, ai));
+                }
+                let disclosure = egui::Rect::from_center_size(egui::pos2(r.left() + 29.0, r.center().y), egui::vec2(18.0, 18.0));
+                let disclosure_resp = ui.interact(disclosure, ui.scope_id().with(("action-disclosure", a.id)), egui::Sense::click());
+                let open = expanded.contains(&a.id);
+                icons::paint(
+                    ui,
+                    if open { "chevron-down" } else { "chevron-right" },
+                    disclosure,
+                    if disclosure_resp.hovered() { t.text_strong } else { t.icon },
+                );
+                if disclosure_resp.clicked() && !expanded.insert(a.id) {
+                    expanded.remove(&a.id);
+                }
                 ui.painter().text(
-                    r.left_center() + egui::vec2(18.0, 0.0),
+                    r.left_center() + egui::vec2(42.0, 0.0),
                     egui::Align2::LEFT_CENTER,
                     &a.name,
                     egui::FontId::proportional(12.5),
@@ -795,17 +945,60 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                     egui::FontId::proportional(11.0),
                     t.text_dim,
                 );
-                if resp.clicked() {
+                if resp.clicked() && !resp.interact_pointer_pos().is_some_and(|p| check_rect.contains(p) || disclosure.contains(p)) {
                     selected = Some((si, ai));
                     current = Some(si);
                     sets_selected = vec![si];
                 }
-                if resp.double_clicked() {
+                if resp.double_clicked() && !resp.interact_pointer_pos().is_some_and(|p| check_rect.contains(p) || disclosure.contains(p)) {
                     play_req = Some((si, ai));
+                }
+                if open {
+                    for (step, (command, params)) in a.steps.iter().enumerate() {
+                        let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 20.0), egui::Sense::hover());
+                        if resp.hovered() {
+                            ui.painter().rect_filled(r, 0.0, t.hover);
+                        }
+                        let (clicked, _) = inclusion_box(ui, r, 55.0, ("step-inclusion", a.id, step), !a.excluded_steps.contains(&step), false);
+                        if clicked {
+                            inclusion_changes.push(InclusionChange::Step(si, ai, step, alt));
+                        }
+                        ui.painter().text(
+                            r.left_center() + egui::vec2(70.0, 0.0),
+                            egui::Align2::LEFT_CENTER,
+                            command,
+                            egui::FontId::proportional(11.0),
+                            t.text_dim,
+                        );
+                        resp.on_hover_ui(|ui| {
+                            ui.label(format!("{command}\n{params}"));
+                        });
+                    }
                 }
             }
         }
     });
+    for change in inclusion_changes {
+        let params = match change {
+            InclusionChange::Set(si) => {
+                json!({"set": si, "included": app.ui.action_sets.get(si).is_some_and(|s| s.actions.iter().any(|a| !a.all_steps_included()))})
+            }
+            InclusionChange::Action(si, ai) => {
+                json!({"set": si, "action": ai, "included": app.ui.action_sets.get(si).and_then(|s| s.actions.get(ai)).is_some_and(|a| !a.all_steps_included())})
+            }
+            InclusionChange::Step(si, ai, step, alt) => json!({
+                "set": si,
+                "action": ai,
+                "step": step,
+                "others": alt,
+                "included": app.ui.action_sets.get(si).and_then(|s| s.actions.get(ai)).is_some_and(|a| a.excluded_steps.contains(&step)),
+            }),
+        };
+        if let Err(error) = app.run(INCLUDE_STEPS, params) {
+            app.status(error);
+        }
+    }
+    set_pstate(ui.ctx(), "actions-expanded", expanded);
     set_pstate(ui.ctx(), SELECTED, selected);
     app.ui.action_set = current;
     app.ui.action_sets_selected = sets_selected;
@@ -870,6 +1063,99 @@ mod tests {
                     assert!(vectorcraft_engine::find_command(&c).is_some(), "{c}");
                 }
             }
+        }
+    }
+
+    #[test]
+    fn excluded_steps_do_not_play_and_survive_saved_sets() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let id = vectorcraft_doc::NodeId(
+            app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap(),
+        );
+        app.run("select.set", json!({"ids": [id.0]})).unwrap();
+        let mut action =
+            Action::new("Move twice", vec![("object.move".into(), json!({"dx": 5, "dy": 0})), ("object.move".into(), json!({"dx": 20, "dy": 0}))]);
+        action.excluded_steps.insert(1);
+        assert_eq!(
+            action.included_commands(),
+            [json!({"command": "object.move", "params": {"dx": 5, "dy": 0}})],
+            "normal and Batch playback use the same included commands"
+        );
+        app.ui.action_sets = vec![ActionSet::new("Test", vec![action])];
+        let x = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0;
+        let before = x(&app);
+        play(&mut app, 0, 0).unwrap();
+        assert!((x(&app) - before - 5.0).abs() < 1e-9, "the excluded second move did not run");
+        let saved = files::write_set(&app.ui.action_sets[0]);
+        assert!(saved.contains("\"excluded\": true"), "the set file keeps the exclusion");
+        assert_eq!(serde_json::from_str::<Value>(&saved).unwrap()["version"], json!(2), "older builds must refuse excluded steps");
+        let loaded = files::read_set(&saved, "Test").unwrap();
+        assert_eq!(loaded.actions[0].excluded_steps, BTreeSet::from([1]));
+        assert_eq!(loaded.actions[0].copy().excluded_steps, BTreeSet::from([1]));
+        assert_eq!(serde_json::from_value::<Action>(serde_json::to_value(&loaded.actions[0]).unwrap()).unwrap().excluded_steps, BTreeSet::from([1]));
+        app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "included": false})).unwrap();
+        assert_eq!(play(&mut app, 0, 0).unwrap_err(), "the action has no included steps");
+        assert_eq!(crate::dialogs::action_batch::open(&mut app, 0, 0).unwrap_err(), "the action has no included steps");
+    }
+
+    #[test]
+    fn inclusion_controls_expand_and_toggle_steps_without_selecting_the_action() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let action = Action::new(
+            "Mixed",
+            vec![
+                ("object.move".into(), json!({"dx": 1})),
+                ("object.rotate".into(), json!({"angle": 1})),
+                ("object.reflect".into(), json!({"axis": "vertical"})),
+            ],
+        );
+        app.ui.action_sets = vec![ActionSet::new("Example", vec![action])];
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        assert!(!texts.iter().any(|(s, _)| s == "object.rotate"), "steps start collapsed");
+        let label = text_rect(&texts, "Mixed");
+        click(&ctx, &mut app, egui::pos2(label.left() - 13.0, label.center().y), show);
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        let step = text_rect(&texts, "object.rotate");
+        click(&ctx, &mut app, egui::pos2(step.left() - 15.0, step.center().y), show);
+        assert_eq!(app.ui.action_sets[0].actions[0].excluded_steps, BTreeSet::from([1]));
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), None, "the checkbox does not select the action");
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        let label = text_rect(&texts, "Mixed");
+        click(&ctx, &mut app, egui::pos2(label.left() - 32.0, label.center().y), show);
+        assert!(app.ui.action_sets[0].actions[0].excluded_steps.is_empty(), "mixed action check includes all steps");
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        let label = text_rect(&texts, "▾ Example");
+        click(&ctx, &mut app, egui::pos2(label.left() - 12.0, label.center().y), show);
+        assert_eq!(app.ui.action_sets[0].actions[0].excluded_steps, BTreeSet::from([0, 1, 2]), "set check excludes all steps");
+    }
+
+    #[test]
+    fn alt_click_keeps_the_chosen_step_and_toggles_the_others() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let action = Action::new("Three", vec![("a".into(), json!({})), ("b".into(), json!({})), ("c".into(), json!({}))]);
+        app.ui.action_sets = vec![ActionSet::new("Example", vec![action])];
+        app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "step": 1, "included": false, "others": true})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions[0].excluded_steps, BTreeSet::from([0, 2]));
+        app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "step": 0, "included": true, "others": true})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions[0].excluded_steps, BTreeSet::from([0]));
+        app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "step": 0, "included": true})).unwrap();
+        assert!(app.ui.action_sets[0].actions[0].excluded_steps.is_empty());
+        app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "step": 0, "included": true, "others": true})).unwrap();
+        assert!(app.ui.action_sets[0].actions[0].excluded_steps.is_empty(), "including the other steps preserves the clicked included step");
+        for invalid in [
+            json!({"set": 0, "action": 0, "step": 3, "included": false}),
+            json!({"set": 0, "action": 3, "included": false}),
+            json!({"set": 2, "included": false}),
+            json!({"set": 0, "step": 1, "included": false}),
+            json!({"set": 0, "included": false, "others": true}),
+            json!({"set": 0, "included": "false"}),
+        ] {
+            assert!(app.run(INCLUDE_STEPS, invalid.clone()).is_err(), "{invalid}");
+            assert!(app.ui.action_sets[0].actions[0].excluded_steps.is_empty(), "invalid params changed playback: {invalid}");
         }
     }
 
@@ -1783,7 +2069,7 @@ mod tests {
             (json!(long.to_string()), "an action in the action set file has more than 10,000 steps"),
             (json!(" ".repeat(files::MAX_SET_FILE + 1)), "the action set file is larger than 8 MiB"),
             (
-                json!("{\"format\": \"vcactions\", \"version\": 2, \"name\": \"S\", \"actions\": []}"),
+                json!("{\"format\": \"vcactions\", \"version\": 3, \"name\": \"S\", \"actions\": []}"),
                 "the action set file needs a later version of VectorCraft",
             ),
         ] {

@@ -254,6 +254,9 @@ font-technology	Variable	可變
 	Basic Latin	基本拉丁文
 	Batch	批次
 	Begin Recording	開始錄製
+	Exclude from playback	從播放中排除
+	Include in playback	包含在播放中
+	Include Action Steps	包含動作步驟
 	Bend:	彎曲：
 	Bevel Join	斜角
 	Bitmap	點陣圖
@@ -2494,6 +2497,10 @@ file-filter	Templates	範本
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	資料集 {name} 未套用任何內容：沒有物件綁定到該資料集中有值的變數
 @msg	no bound object reports a value (locked objects and embedded images report none)	沒有綁定的物件回報值 (鎖定的物件和內嵌的影像不回報值)
 @msg	the action has no steps	動作沒有步驟
+@msg	the action has no included steps	動作沒有包含的步驟
+@msg	no such action step	沒有這個動作步驟
+@msg	included must be true or false	included 必須是 true 或 false
+@msg	others must be true or false	others 必須是 true 或 false
 @msg	cancelled; nothing was changed	已取消；未做任何變更
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	「儲存」會寫入 {_1}，而非 {_2}：若要寫入該格式，請使用 file.saveAsTemplate
 @msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 會寫入舊版 .ai 檔案，不會寫入 .ait 範本
