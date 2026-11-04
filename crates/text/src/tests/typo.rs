@@ -172,6 +172,10 @@ fn optical_pair_after_separate_combining_mark_uses_base_outline() {
 
 #[test]
 fn optical_pair_after_rtl_separate_mark_uses_base_outline() {
+    if db().face("Noto Sans Arabic", "Regular").is_none_or(|f| f.family != "Noto Sans Arabic") {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
     let st = CharStyle { font_family: "Noto Sans Arabic".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
     let shaped = |text: &str, manual: bool| {
         let mut style = st.clone();
