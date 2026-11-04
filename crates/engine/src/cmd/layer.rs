@@ -83,7 +83,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Layer Options…",
             ["Window", "Layers"],
             None,
-            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name} Layer Options; rows that are not layers take name, visible and locked. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. One undo step",
+            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name (a hex color with an alpha part, #rrggbbaa or #rgba, is an error)} Layer Options; rows that are not layers take name, visible and locked. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. One undo step",
             has_doc,
             set_props
         ),
@@ -297,7 +297,8 @@ pub(crate) fn make_layer(d: &mut Document, name: Option<&str>) -> Node {
     NewLayers::of(d).make(d, name)
 }
 
-/// A layer colour: a preset index (0–26), `#rrggbb` or a preset's name (any case).
+/// A layer colour: a preset index (0–26), `#rrggbb` or a preset's name (any case). A hex color
+/// with an alpha part (`#rrggbbaa` or `#rgba`) is an error.
 pub(super) fn layer_color_param(v: &Value) -> std::result::Result<LayerColor, String> {
     match v {
         Value::Number(n) => match n.as_u64() {
@@ -308,7 +309,13 @@ pub(super) fn layer_color_param(v: &Value) -> std::result::Result<LayerColor, St
             if let Some(i) = LAYER_COLORS.iter().position(|(name, _)| name.eq_ignore_ascii_case(s.trim())) {
                 return Ok(LayerColor::Preset(i as u8));
             }
-            let c = vectorcraft_color::Color::from_hex(s).ok_or_else(|| format!("`{s}` is not a colour (#rrggbb or a preset name)"))?;
+            let refused = || format!("`{s}` is not a colour (#rrggbb or a preset name)");
+            // `Color::from_hex` reads `#rrggbbaa` as `#rrggbb`, dropping the alpha.
+            let digits = s.trim();
+            if digits.strip_prefix('#').unwrap_or(digits).len() == 8 {
+                return Err(refused());
+            }
+            let c = vectorcraft_color::Color::from_hex(s).ok_or_else(refused)?;
             let [r, g, b, _] = c.to_rgba8(1.0);
             Ok(LayerColor::Custom([r, g, b]))
         }
