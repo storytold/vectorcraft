@@ -758,7 +758,8 @@ fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> std::ti
 /// for) or until `done` → whether it was.
 fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64, done: &dyn Fn(&VectorcraftApp) -> bool) -> bool {
     let end = *time + secs;
-    let real_end = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    // The look last waited for: one that a frame after the wait still holds ended without stamps.
+    let mut waited: Option<vectorcraft_engine::link_watch::LinkScan> = None;
     loop {
         let wait = frame_at(app, ctx, *time);
         if done(app) {
@@ -769,10 +770,13 @@ fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64
             *time = end;
             return false;
         }
-        // The look runs on a worker thread, in real time: the clock waits for it, else a busy
-        // machine's slow look outlasts the simulated seconds and the test fails at random.
-        if app.session.link_scan.is_some() && std::time::Instant::now() < real_end {
-            std::thread::sleep(std::time::Duration::from_millis(5));
+        // The look runs on a worker thread, in real time: the clock waits for it to finish, else a
+        // busy machine's slow look outlasts the simulated seconds and the test fails at random.
+        if let Some(scan) = app.session.link_scan.clone()
+            && !waited.as_ref().is_some_and(|w| std::sync::Arc::ptr_eq(w, &scan))
+        {
+            app.session.wait_link_scan();
+            waited = Some(scan);
             continue;
         }
         *time = next;
