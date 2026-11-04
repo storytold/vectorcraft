@@ -216,8 +216,10 @@ pub(super) fn encode_to(cmd: &str, f: &Format, doc: &Document, p: &Value, w: imp
         so.preview = preview_png(&drawn)?;
     }
     if extras.pdf && !drawn.artboards.is_empty() {
-        // Every artboard as PDF pages (no editing data: the file is the native document).
-        so.pdf = Some(super::pdf::encode(cmd, &drawn, &json!({ "range": "all", "preserveEditing": false }))?.0);
+        // Every artboard as PDF pages (no editing data: the file is the native document), dated by
+        // the document's File Info, so the same document and dates give the same bytes.
+        let at = drawn.metadata.modified.or(drawn.metadata.created);
+        so.pdf = Some(super::pdf::encode_at(cmd, &drawn, &json!({ "range": "all", "preserveEditing": false }), at)?.0);
     }
     drop(drawn);
     let native = match full {
