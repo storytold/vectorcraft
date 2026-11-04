@@ -57,7 +57,7 @@ pub(crate) fn shown(names: &[String], query: &str) -> Vec<usize> {
     names.iter().enumerate().filter(|(_, n)| q.is_empty() || n.to_lowercase().contains(&q)).map(|(i, _)| i).collect()
 }
 
-/// A click on row `i` of the rows `shown`: alone it chooses only that artboard, with Cmd/Ctrl it
+/// A click on row `i` of the rows `shown`: alone it chooses only that artboard of those shown, with Cmd/Ctrl it
 /// toggles it, with Shift it adds the rows from the last one clicked (`anchor`) to it. Returns the
 /// new anchor.
 pub(crate) fn click(chosen: &mut Vec<usize>, anchor: Option<usize>, i: usize, shown: &[usize], shift: bool, command: bool) -> Option<usize> {
@@ -75,7 +75,11 @@ pub(crate) fn click(chosen: &mut Vec<usize>, anchor: Option<usize>, i: usize, sh
             }
             None => chosen.push(i),
         },
-        _ => *chosen = vec![i],
+        // Of the rows shown, only this one; rows the search hides keep their state.
+        _ => {
+            chosen.retain(|j| !shown.contains(j));
+            chosen.push(i);
+        }
     }
     chosen.sort_unstable();
     Some(i)

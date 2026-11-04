@@ -1160,15 +1160,6 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     let t = text_ref(s, id)?;
     let (ch, bytes, face) = glyph_target(&t, p, C)?;
     let default = face.glyph_for(ch);
-    let choice = match gid.filter(|g| *g != default) {
-        None => None,
-        Some(g) if face.alternates(ch).iter().any(|a| a.gid == g) => Some(face.choice(ch, g)),
-        Some(g) => return Err(bad(C, format!("glyph {g} is not an alternate of {ch} in {} {}", face.family, face.style))),
-    };
-    let drawn = choice.as_ref().map_or(default, |c| c.gid);
-    // The run holding the character. The request changes nothing when the choice is the one the
-    // character's run holds and that run holds the character alone; otherwise the edit splits the
-    // run, so that the following text does not take the character into a ligature.
     let holder = t
         .runs
         .iter()
@@ -1178,15 +1169,64 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
             Some((start..*at, r))
         })
         .find(|(bytes_of_run, _)| bytes_of_run.contains(&bytes.start));
+    let styled =
+        holder.as_ref().is_some_and(|(_, r)| r.style.all_caps || (r.style.small_caps.is_some() && ch.is_lowercase()) || r.style.digits.map(ch) != ch);
+    // The glyph the character is drawn with when it holds no choice, drawn alone in its face: a
+    // feature of its style (`salt`, a stylistic set) can draw another glyph than the default one.
+    // The default glyph is then kept as a choice, so that it is drawn. A character that is not laid
+    // out (overflowing text) is shaped alone in its style and writing direction. A character that starts a longer
+    // grapheme (a letter and its combining marks) is drawn in the grapheme's cluster, and is shaped
+    // with the grapheme. Of a cluster of several glyphs (a mark, a vowel sign drawn before the
+    // letter), the character's glyph is its default glyph or one of its alternates.
+    let plain = t.plain_text();
+    let grapheme = plain.get(bytes.start..edit::next_cluster(&plain, bytes.start).max(bytes.end)).map_or_else(|| ch.to_string(), str::to_owned);
+    let listed = face.alternates(ch);
+    let own_glyph = |lay: &vectorcraft_text::TextLayout, at: usize| {
+        let cluster: Vec<u32> = lay
+            .glyphs
+            .iter()
+            .filter(|g| g.byte == at && [bytes.len(), grapheme.len()].contains(&g.len) && g.font_id == face.id())
+            .map(|g| g.gid)
+            .collect();
+        match cluster[..] {
+            [one] => Some(one),
+            _ => cluster.into_iter().find(|&g| g == default || listed.iter().any(|a| a.gid == g)),
+        }
+    };
+    let alone_in_face = |lay: &vectorcraft_text::TextLayout| {
+        let found = lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len));
+        found.map(|_| own_glyph(lay, bytes.start))
+    };
+    let unchosen = match holder.as_ref().filter(|_| !styled) {
+        None => None,
+        Some((_, run)) => {
+            let mut probe = t.clone();
+            edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = None);
+            let db = vectorcraft_text::FontDb::global();
+            alone_in_face(&vectorcraft_text::layout(db, &probe)).unwrap_or_else(|| {
+                let st = CharStyle { glyph_alternate: None, ..run.style.clone() };
+                let mut single = TextObject::point(Point::ZERO, &grapheme, st);
+                single.vertical = t.vertical;
+                own_glyph(&vectorcraft_text::layout(db, &single), 0)
+            })
+        }
+    };
+    let substituted = unchosen.is_some_and(|g| g != default);
+    let choice = match gid.filter(|g| *g != default || substituted) {
+        None => None,
+        Some(g) if g == default || face.alternates(ch).iter().any(|a| a.gid == g) => Some(face.choice(ch, g)),
+        Some(g) => return Err(bad(C, format!("glyph {g} is not an alternate of {ch} in {} {}", face.family, face.style))),
+    };
+    let drawn = choice.as_ref().map_or(unchosen.unwrap_or(default), |c| c.gid);
+    // The run holding the character. The request changes nothing when the choice is the one the
+    // character's run holds and that run holds the character alone; otherwise the edit splits the
+    // run, so that the following text does not take the character into a ligature.
     let held = holder.as_ref().filter(|(bytes_of_run, _)| bytes_of_run.start == bytes.start).and_then(|(_, r)| r.style.glyph_alternate.clone());
     let alone = holder.as_ref().is_some_and(|(bytes_of_run, _)| *bytes_of_run == bytes);
     // A choice that the character's style keeps from being drawn (All Caps, Small Caps, another
     // numeral system) is an error, not an edit that leaves the page as it was. The style decides
     // for a character outside its frame too; one that is laid out is checked in the layout.
     if let Some(c) = &choice {
-        let styled = holder
-            .as_ref()
-            .is_some_and(|(_, r)| r.style.all_caps || (r.style.small_caps.is_some() && ch.is_lowercase()) || r.style.digits.map(ch) != ch);
         let shown = || {
             let mut probe = t.clone();
             edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = Some(c.clone()));

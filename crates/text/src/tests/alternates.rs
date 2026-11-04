@@ -117,6 +117,21 @@ fn a_chosen_character_is_not_taken_into_a_ligature_in_its_run() {
     assert_eq!(gids(chosen), [i, i], "the f draws the chosen glyph and the i stays apart");
 }
 
+/// A run "f" + combining acute + "i" whose f has a chosen glyph is not split between the f and its
+/// mark: the f and the mark stay one cluster, shaped as they are without a choice.
+#[test]
+fn a_chosen_character_that_starts_a_longer_grapheme_is_not_split_from_it() {
+    let db = FontDb::with_font_dirs(vec![]);
+    let face = db.face(FALLBACK_FAMILY, "Regular").expect("the bundled face");
+    let plain = CharStyle { font_family: FALLBACK_FAMILY.into(), size: 100.0, ..CharStyle::default() };
+    let glyphs =
+        |st: CharStyle| layout(&db, &TextObject::point(Point::ZERO, "f\u{301}i", st)).glyphs.into_iter().map(|g| (g.gid, g.byte)).collect::<Vec<_>>();
+    let shaped = glyphs(plain.clone());
+    assert!(shaped.iter().filter(|g| g.1 == 0).count() >= 2, "the mark is shaped in the f's cluster: {shaped:?}");
+    let chosen = CharStyle { glyph_alternate: Some(face.choice('f', face.glyph_for('i'))), ..plain };
+    assert_eq!(glyphs(chosen), shaped, "the f and its mark are shaped together, as without a choice");
+}
+
 /// The font's pair kerning was looked up for the default glyph: a character drawn with another
 /// glyph takes no part in it, before or after it.
 #[test]

@@ -5010,6 +5010,74 @@ fn space_during_a_zoom_drag_keeps_the_zoom_cursor() {
     shown(&mut app, vec![space(false)]);
 }
 
+/// Space pressed while the Pencil holds the press is ignored: the cursor keeps the pencil (its
+/// crosshair stand-in) instead of turning into the hand, and the stroke goes on. Space pans only
+/// when it is down at the press. Once the button is up, Space shows the hand again.
+#[test]
+fn space_during_a_pencil_drag_keeps_the_pencil_cursor() {
+    use egui::{CursorIcon, Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("pencil");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let c = app.canvas_rect.unwrap().center();
+    let shown = |app: &mut VectorcraftApp, events: Vec<Event>| {
+        let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, focused: false, events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.cursor_icon
+    };
+    let space = |pressed| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Modifiers::NONE };
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    assert_eq!(shown(&mut app, vec![Event::PointerMoved(c)]), CursorIcon::Crosshair, "the pencil's cursor");
+    shown(&mut app, vec![button(c, true)]);
+    shown(&mut app, vec![Event::PointerMoved(c + vec2(10.0, 5.0))]);
+    assert_eq!(
+        shown(&mut app, vec![space(true), Event::PointerMoved(c + vec2(40.0, 20.0))]),
+        CursorIcon::Crosshair,
+        "Space during the drawing drag is ignored"
+    );
+    assert_eq!(shown(&mut app, vec![Event::PointerMoved(c + vec2(60.0, 30.0))]), CursorIcon::Crosshair, "still ignored while Space is held");
+    shown(&mut app, vec![button(c + vec2(60.0, 30.0), false)]);
+    assert_eq!(shown(&mut app, vec![]), CursorIcon::Grab, "after the drag, Space shows the hand");
+    shown(&mut app, vec![space(false)]);
+}
+
+/// Cmd+Space pressed after a tool starts drawing does not borrow the Selection cursor: the
+/// drawing tool still owns the drag. The Zoom cursor takes over once the button is released.
+#[test]
+fn cmd_space_mid_tool_drag_keeps_the_active_tool_cursor() {
+    use egui::{CursorIcon, Event, Modifiers};
+    for tool in ["pencil", "rectangle", "pen"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool(tool);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let c = app.canvas_rect.unwrap().center();
+        let shown = |app: &mut VectorcraftApp, events: Vec<Event>| {
+            let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect, focused: false, events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.platform_output.cursor_icon
+        };
+        let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        let space = |pressed| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Modifiers::COMMAND };
+        let tool_cursor = shown(&mut app, vec![Event::PointerMoved(c)]);
+        shown(&mut app, vec![button(c, true)]);
+        shown(&mut app, vec![Event::PointerMoved(c + vec2(10.0, 5.0))]);
+        let center = app.view().unwrap().center;
+        assert_eq!(
+            shown(&mut app, vec![Event::ModifiersChanged(Modifiers::COMMAND), space(true), Event::PointerMoved(c + vec2(40.0, 20.0))]),
+            tool_cursor,
+            "{tool}: Cmd+Space must keep the active drag's cursor"
+        );
+        assert_eq!(app.view().unwrap().center, center, "{tool}: the view stays still during the drag");
+        assert_eq!(shown(&mut app, vec![button(c + vec2(40.0, 20.0), false)]), CursorIcon::ZoomIn, "{tool}: Zoom returns after release");
+    }
+}
+
 /// In a rotated view the Selection tool's marquee is drawn where the tool selects: through the
 /// screen corners of the document rectangle between the press and the pointer.
 #[test]

@@ -486,6 +486,20 @@ mod field_number_tests {
         assert_eq!(field_number("45*2°", "°", false), Some(90.0));
         assert_eq!(field_number("50% / 2", "%", false), Some(25.0));
     }
+
+    /// A thousands comma is refused inside Kerning's pair of parentheses and before `%` or the
+    /// suffix, as it is in plain text, rather than read as a decimal comma (`(1,000)` as 1).
+    #[test]
+    fn a_thousands_comma_is_refused_inside_parentheses_and_before_a_suffix() {
+        for text in ["(1,000)", " (-1,000) ", "(12,500)"] {
+            assert_eq!(field_number(text, "", true), None, "{text}");
+        }
+        assert_eq!(field_number("1,000%", "%", false), None);
+        assert_eq!(field_number("1,000°", "°", false), None);
+        assert_eq!(field_number("(1,5)", "", true), Some(1.5));
+        assert_eq!(field_number("(0,125)", "", true), Some(0.125));
+        assert_eq!(field_number("12,5%", "%", false), Some(12.5));
+    }
 }
 
 #[cfg(test)]

@@ -342,9 +342,9 @@ fn font_row(app: &mut VectorcraftApp, ui: &mut Ui, family: &str, style: &str, w:
 
 /// The grid of Show › Alternates for Current Selection: the alternate glyphs of the Type tool's
 /// selected character in the face its text is set in, whatever font the panel browses
-/// ([`vectorcraft_text::FontFace::alternates`]), with that face's name under the grid. The glyph
-/// the character is drawn with is highlighted. A double-click draws the character with the glyph
-/// (`text.setGlyphAlternate`); the default glyph, when the font lists it, puts it back.
+/// ([`vectorcraft_text::FontFace::alternates`]), with that face's name under the grid. The default
+/// glyph comes first when the font does not list it. The glyph the character is drawn with is
+/// highlighted. A double-click draws the character with the glyph (`text.setGlyphAlternate`).
 fn alternates(app: &mut VectorcraftApp, ui: &mut Ui, w: f32) {
     let t = Tokens::get(ui.ctx());
     let db = FontDb::global();
@@ -392,7 +392,8 @@ fn alternates(app: &mut VectorcraftApp, ui: &mut Ui, w: f32) {
                     let tex = glyph_texture(ui.ctx(), &face, a.gid, px);
                     ui.painter().image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), t.text_strong);
                     let glyph = crate::i18n::fmt(tl!("glyph {id}"), &[("id", &a.gid.to_string())]);
-                    let resp = resp.on_hover_text(format!("{glyph}  ({})\n{}", String::from_utf8_lossy(&a.feature), tl!("Double-click to replace")));
+                    let glyph = if a.feature == [0; 4] { glyph } else { format!("{glyph}  ({})", String::from_utf8_lossy(&a.feature)) };
+                    let resp = resp.on_hover_text(format!("{glyph}\n{}", tl!("Double-click to replace")));
                     if resp.double_clicked() {
                         pick = Some(a.gid);
                     }
@@ -440,7 +441,12 @@ fn alternates_and_drawn(
         })
         .and_then(|layout| layout.glyphs.into_iter().find(|g| g.byte <= byte && byte < g.byte.saturating_add(g.len)))
         .map(|g| (g.font_id, g.gid));
-    let found = (face.alternates(ch), drawn);
+    let mut list = face.alternates(ch);
+    let default = face.glyph_for(ch);
+    if !list.is_empty() && default != 0 && !list.iter().any(|a| a.gid == default) {
+        list.insert(0, vectorcraft_text::GlyphAlternate { gid: default, feature: [0; 4] });
+    }
+    let found = (list, drawn);
     if let Some(key) = key {
         ui.ctx().data_mut(|d| d.insert_temp(slot, (key, found.clone())));
     }
@@ -769,6 +775,29 @@ mod tests {
         app.session.active_mut().unwrap().revision += 1;
         let found = shapes(&ctx, &mut app, vec![]);
         assert_eq!(highlighted(&found, &t), [cells[1].center()], "the next revision finds the chosen glyph");
+    }
+
+    /// A font whose `aalt` does not list the default glyph (here no `aalt` at all) still shows it,
+    /// first in the grid, so a chosen alternate can be put back.
+    #[test]
+    fn the_default_glyph_is_listed_when_the_font_leaves_it_out() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+        FontDb::global().add_font(alternates_font(false).expect("the test font builds"));
+        let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
+        let (mut app, id) = editing("xay");
+        app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(false)})).unwrap();
+        select(&mut app, 2, 2);
+        let ctx = egui::Context::default();
+        let t = Tokens::get(&ctx);
+        choose(&ctx, &mut app, "Alternates for Current Selection");
+        let found = shapes(&ctx, &mut app, vec![]);
+        let cells = squares(&found);
+        assert_eq!(cells.len(), 7, "the default glyph and the six alternates");
+        assert_eq!(highlighted(&found, &t), [cells[0].center()], "the default glyph is first and drawn");
+        app.run("text.setGlyphAlternate", json!({"id": id, "start": 1, "gid": u1})).unwrap();
+        let found = shapes(&ctx, &mut app, vec![]);
+        assert_eq!(squares(&found).len(), 7);
+        assert_eq!(highlighted(&found, &t), [squares(&found)[5].center()], "the chosen glyph, after b, u2, u4 and u3");
     }
 
     #[test]

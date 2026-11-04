@@ -6,10 +6,13 @@ use serde_json::{Value, json};
 use crate::tests_links::{BLUE, Folder, RED, centre_colour, place, png, session};
 use crate::*;
 
-/// Write `bytes` to `path` so its modification time moves even on coarse file systems.
+/// Write `bytes` to `path`, dated 2 s after the file it replaces so its modification time moves
+/// even on coarse file systems.
 fn save(path: &str, bytes: &[u8]) {
-    std::thread::sleep(std::time::Duration::from_millis(30));
+    let stamp = std::fs::metadata(path).unwrap().modified().unwrap();
     std::fs::write(path, bytes).unwrap();
+    let later = std::fs::FileTimes::new().set_modified(stamp + std::time::Duration::from_secs(2));
+    std::fs::OpenOptions::new().write(true).open(path).unwrap().set_times(later).unwrap();
 }
 
 fn colour(s: &Session) -> [u8; 3] {
@@ -19,14 +22,8 @@ fn colour(s: &Session) -> [u8; 3] {
 /// One background look, waited for.
 fn look(s: &mut Session) -> Value {
     s.start_link_scan();
-    let t0 = std::time::Instant::now();
-    loop {
-        if let Some(r) = s.poll_link_scan() {
-            return r.unwrap();
-        }
-        assert!(t0.elapsed().as_secs() < 10, "the look never finished");
-        std::thread::yield_now();
-    }
+    s.wait_link_scan();
+    s.poll_link_scan().expect("a look ran").unwrap()
 }
 
 #[test]

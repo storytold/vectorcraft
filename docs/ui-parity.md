@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Select by Artboards add-on selects by overlap, inside or outside several artboards; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Select by Artboards add-on selects by overlap, inside or outside several artboards; Cmd+Space keeps the active drawing cursor during its drag; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -30,6 +30,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | Cmd+Space pressed during an active drawing drag keeps that tool's cursor; clarify that Space can move an in-progress shape or anchor. Scores and estimates unchanged. |
 | 2026-11-04 | minor | Selection Tools add-on: Select by Artboards selects the objects overlapping, fully inside or fully outside several chosen artboards, from a dialog that lists, searches and multi-selects the artboards and fits one in the window on double-click (#5525, #5548, #5549, a VectorCraft addition); scores and estimates unchanged. |
 | 2026-11-04 | minor | File › Export › Export As PNG… exports the active artboard, or each artboard the Artboard tool has selected (one file each), instead of always the first (#5502); a choice the caller gives is kept; scores and estimates unchanged |
 | 2026-11-04 | minor | Document Tools add-on (a VectorCraft addition): Object › Plug-ins › Document Tools › Batch Trace Folder asks for a folder of images and a destination folder and traces each image into it (#4921); scores and estimates unchanged |
@@ -234,7 +235,7 @@ tools, never checked side by side) isn't captured row by row.
 
 | Behaviour | Status | Notes |
 |---|---|---|
-| Space: Hand; Cmd+Space / Cmd+Alt+Space: zoom in/out; middle button pans | done | |
+| Space: Hand; Cmd+Space / Cmd+Alt+Space: zoom in/out; middle button pans | done | Space pressed after a tool takes a drag keeps the view still and shows that tool's cursor. Shape and anchor tools may use Space to move the geometry being drawn. Cmd+Space pressed mid-drag likewise keeps the active tool cursor. Space held before a press starts a view gesture, and its view cursor returns after release. `space_during_a_pencil_drag_keeps_the_pencil_cursor`, `cmd_space_mid_tool_drag_keeps_the_active_tool_cursor` |
 | Document window scroll bars along the right and bottom edges (Normal and Full Screen Mode with Menu Bar; none in Full Screen and Presentation Mode): a thumb as long as the view against the art and the artboards; dragging it scrolls, a click on the track pages, the wheel over a bar scrolls along it; in a rotated view they follow the screen's axes | partial | #2322. The span is the art and the artboards with half a window around them, not Illustrator's 227 in canvas: VectorCraft has no bounded drawing area (#2284). A track click pages rather than jumping to the click; the page size and the rotated-view behaviour are our own choice (the public documentation gives neither) |
 | Cmd/Ctrl: last-used selection tool; Cmd+Alt: Group Selection inside Direct Selection | done | Cmd+Alt lends Group Selection only while Direct Selection is active (Cmd borrow from the Pen keeps Direct Selection so Alt stays copy/subtract); engine pointer regressions |
 | Eyedropper styles highlighted characters only and preserves ranges across Type switches | done | Font/paint, Shift color-only, Unicode, Undo/Redo and stale-range regression tests; enabled non-neutral source or target object transparency is refused atomically; disable Transparency to sample supported attributes |

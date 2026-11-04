@@ -2301,6 +2301,7 @@ fn a_family_without_its_style_takes_its_closest_style() {
 #[test]
 fn a_glyph_alternate_replaces_one_character_through_undo_and_reopen() {
     use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let _fonts = crate::adding_fonts();
     let db = vectorcraft_text::FontDb::global();
     db.add_font(alternates_font(true).expect("the test font builds"));
     let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
@@ -2385,6 +2386,7 @@ fn a_glyph_alternate_replaces_one_character_through_undo_and_reopen() {
 #[test]
 fn a_glyph_alternate_already_drawn_is_not_an_edit() {
     use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let _fonts = crate::adding_fonts();
     let db = vectorcraft_text::FontDb::global();
     db.add_font(alternates_font(true).expect("the test font builds"));
     let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
@@ -2443,6 +2445,7 @@ fn a_glyph_alternate_already_drawn_is_not_an_edit() {
 #[test]
 fn a_glyph_alternate_that_the_style_does_not_draw_is_an_error() {
     use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let _fonts = crate::adding_fonts();
     vectorcraft_text::FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
     let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
     let mut s = session();
@@ -2457,9 +2460,111 @@ fn a_glyph_alternate_that_the_style_does_not_draw_is_an_error() {
     assert!(obj(&s, id).runs.iter().all(|r| r.style.glyph_alternate.is_none()));
 }
 
+/// With a style feature that draws another glyph (`salt` draws the a as b), choosing the default
+/// glyph draws it, and `gid: null` takes the choice away and reports the glyph the feature draws.
+#[test]
+fn the_default_glyph_chosen_under_a_substituting_feature_is_drawn() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xaay", "size": 20, "font": alternates_family(true)})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "features": ["salt"]})).unwrap();
+    let gids = |s: &Session| vectorcraft_text::layout(db, &obj(s, id)).glyphs.iter().map(|g| g.gid).collect::<Vec<_>>();
+    assert_eq!(gids(&s), [g('x'), g('b'), g('b'), g('y')], "salt draws each a as b");
+
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": g('a')})).unwrap();
+    assert_eq!(r["gid"], json!(g('a')));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(gids(&s), [g('x'), g('a'), g('b'), g('y')], "the first a draws its default glyph");
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 1})).unwrap()["chosen"], json!(g('a')));
+
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the glyph salt draws");
+    assert_eq!(gids(&s), [g('x'), g('b'), g('b'), g('y')]);
+
+    // A character that overflows its area is not laid out: the choice is kept for when it is.
+    let area = json!({"x": 0, "y": 300, "text": "xa", "size": 20, "font": alternates_family(true), "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": 2, "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 1, "gid": g('a')})).unwrap();
+    let held: Vec<_> = obj(&s, boxed).runs.iter().filter_map(|r| r.style.glyph_alternate.as_ref().map(|c| c.gid)).collect();
+    assert_eq!(held, [g('a')], "the default glyph is kept as the choice");
+}
+
+/// A character followed by a combining mark is drawn in one cluster with the mark: with `salt`,
+/// `gid: null` reports the glyph the feature draws, also when the text overflows, and choosing the
+/// default glyph draws it.
+#[test]
+fn the_glyph_drawn_for_a_character_with_a_combining_mark_is_reported() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let text = "xa\u{331}y";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": alternates_family(true)})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    let lay = vectorcraft_text::layout(db, &obj(&s, id));
+    let at = lay.glyphs.iter().find(|gl| gl.byte == 1).expect("the a is laid out");
+    assert_eq!((at.gid, at.len), (g('b'), 3), "salt draws the a as b, in one cluster with its mark");
+
+    let state = |s: &Session| (s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision);
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the glyph salt draws");
+    let undo = state(&s).0;
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": g('a')})).unwrap();
+    assert_eq!(r["gid"], json!(g('a')));
+    assert_eq!(state(&s).0, undo + 1, "one undo step");
+    let lay = vectorcraft_text::layout(db, &obj(&s, id));
+    assert_eq!(lay.glyphs.iter().find(|gl| gl.byte == 1).map(|gl| gl.gid), Some(g('a')), "the a draws its default glyph");
+
+    let area = json!({"x": 0, "y": 300, "text": "xa\u{331}", "size": 20, "font": alternates_family(true), "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": 4, "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the overflowing a is shaped with its mark");
+}
+
+/// Vertical type draws `vert` glyphs (the test font's `vert` draws ！ as I). A character of
+/// vertical type that overflows its area is shaped as vertical type, so choosing its default glyph
+/// keeps the choice.
+#[test]
+fn the_default_glyph_chosen_in_overflowing_vertical_type_is_kept() {
+    use vectorcraft_text::test_fonts::{VERTICAL_PUNCTUATION_FAMILY, vertical_punctuation_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(vertical_punctuation_font(true).expect("the test font builds"));
+    let face = db.face(VERTICAL_PUNCTUATION_FAMILY, "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let text = |area: Value| json!({"x": 0, "y": 0, "text": "！！", "size": 20, "font": VERTICAL_PUNCTUATION_FAMILY, "vertical": true, "area": area});
+    let open = NodeId(s.execute("text.create", &text(json!({"width": 200, "height": 200}))).unwrap()["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, open)).glyphs.iter().map(|g| g.gid).collect();
+    assert_eq!(gids, [g('I'), g('I')], "vert draws each ！ as I");
+
+    let boxed = NodeId(s.execute("text.create", &text(json!({"width": 4, "height": 4}))).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 0, "gid": g('！')})).unwrap();
+    assert_eq!(r["gid"], json!(g('！')));
+    let held: Vec<_> = obj(&s, boxed).runs.iter().filter_map(|r| r.style.glyph_alternate.as_ref().map(|c| c.gid)).collect();
+    assert_eq!(held, [g('！')], "the default glyph is kept as the choice");
+}
+
 #[test]
 fn glyph_alternates_query_reports_the_fallback_glyph_that_is_drawn() {
     use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+    let _fonts = crate::adding_fonts();
     let db = vectorcraft_text::FontDb::global();
     db.add_font(alternates_font(true).expect("the test font builds"));
     let requested = db.face(alternates_family(true), "Regular").expect("the test face");

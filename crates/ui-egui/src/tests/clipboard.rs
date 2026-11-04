@@ -277,3 +277,36 @@ fn copying_text_and_pasting_on_canvas_in_another_document() {
     assert_eq!(t.plain_text(), "Hello");
     assert_eq!(t.runs[0].style.size, 28.0);
 }
+
+/// Copy of a styled Type range publishes rich formats to the desktop clipboard. After leaving
+/// text editing, canvas Paste must use that copy rather than import its plain-text representation.
+#[test]
+fn type_range_copy_stays_styled_when_pasted_as_art() {
+    let _guard = TEST_CLIP_LOCK.lock().unwrap();
+    let (mut app, board) = super::sysclip::app();
+    super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::TEXT, b"Older plain text".to_vec())]);
+    let source =
+        run(&mut app, "text.create", json!({"x": 20, "y": 40, "text": "Hello", "font": "Source Serif 4", "size": 28, "color": "#00ff00"}))["id"]
+            .as_u64()
+            .unwrap();
+    run(&mut app, "charStyle.new", json!({"name": "Emphasis", "attrs": {"size": 28.0}}));
+    run(&mut app, "charStyle.apply", json!({"name": "Emphasis", "id": source}));
+    let view = app.view_info();
+    app.session.select_tool("type", view).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": source, "start": 0, "end": 5}));
+    crate::panels::character::intercept_text_command(&mut app, "edit.copy");
+    crate::background::wait_all(&mut app);
+    assert!(super::sysclip::written(&board).contains(&vectorcraft_engine::cmd::clipboard::SVG), "desktop Copy publishes rich art");
+    assert!(app.session.clipboard.char_styles.iter().any(|style| style.name == "Emphasis"), "rich Copy includes the referenced character style");
+
+    app.session.select_tool("selection", view).unwrap();
+    run(&mut app, "edit.paste", json!({}));
+    let id = app.session.active().unwrap().selection.objects[0];
+    let node = app.session.active().unwrap().doc.node(id).unwrap();
+    let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!("Paste did not create text art") };
+    assert_eq!(t.plain_text(), "Hello");
+    assert_eq!(t.runs[0].style.font_family, "Source Serif 4");
+    assert_eq!(t.runs[0].style.size, 28.0);
+    assert_eq!(t.runs[0].style.fill, Paint::solid(Color::rgb8(0, 255, 0)));
+    assert_eq!(t.runs[0].style.style_name.as_deref(), Some("Emphasis"));
+}

@@ -69,6 +69,11 @@ fn apply(s: &mut Session, p: &Value, stops: Vec<TabStop>, label: &str) -> Result
     let ids = text_targets(s, p, "text.tabs.set")?;
     let range = TextRange::parse(p, "text.tabs.set")?;
     let n = stops.len();
+    // A typing session ends here as `s.edit` would end it, whether or not the stops then change:
+    // the typing is its own undo step.
+    if !s.previewing && super::typing_in_progress(s) {
+        super::settle_interaction(s)?;
+    }
     // Every targeted paragraph already holds these stops: no edit and no undo step.
     let doc = &s.doc()?.doc;
     let unchanged = ids.iter().all(|id| match doc.node(*id).map(|node| &node.kind) {
@@ -151,6 +156,33 @@ mod tests {
         s.execute("text.tabs.set", &stops).unwrap();
         assert_eq!(undo(&s), before + 1);
         assert_eq!(s.execute("text.tabs.get", &json!({"start": 4})).unwrap()["stops"][1]["position"], json!(20.0));
+    }
+
+    /// Setting the stops the paragraphs already hold, while the Type tool is typing, still ends the
+    /// typing session: the typing is its own undo step, as when the stops change.
+    #[test]
+    fn setting_the_same_stops_ends_the_typing() {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+
+        use crate::ViewInfo;
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "a\tb"})).unwrap()["id"].as_u64().unwrap();
+        let stops = json!({"stops": [{"position": 40}], "ids": [id]});
+        s.execute("text.tabs.set", &stops).unwrap();
+        let v = ViewInfo::default();
+        s.select_tool("type", v).unwrap();
+        let b = s.doc().unwrap().doc.bounds_of(&[vectorcraft_doc::NodeId(id)], false).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, b.x1 - 1.0, b.center().y), v).unwrap();
+        }
+        s.tool_text("!", v).unwrap();
+        assert!(crate::cmd::typing_in_progress(&s));
+        let steps = s.active().unwrap().history.undo.len();
+        s.execute("text.tabs.set", &stops).unwrap();
+        assert!(!crate::cmd::typing_in_progress(&s));
+        let labels: Vec<String> = s.active().unwrap().history.undo.iter().map(|e| e.label.clone()).collect();
+        assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Typing")));
     }
 
     /// #1877: a leader set the way the Tabs panel sets it fills the tab's gap with its dots.
