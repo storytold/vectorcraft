@@ -723,6 +723,7 @@ impl<'a> Reader<'a> {
             placed_elsewhere: self.placed_elsewhere,
             envelopes_drawn: self.envelopes_drawn,
             styles_read,
+            canvas_scale: self.canvas_scale,
             warnings,
         })
     }

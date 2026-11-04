@@ -12,7 +12,9 @@
 //!   document's author), `%%Canvassize`, `%%BoundingBox`,
 //!   `%%HiResBoundingBox`, `%AI5_FileFormat 14.0`, `%AI7_ImageSettings`, the first artboard as
 //!   `%AI3_Cropmarks` and `%AI3_TileBox`, the canvas's center as `%AI3_TemplateBox`,
-//!   `%AI5_ArtSize 14400 14400`, `%AI5_RulerUnits`, `%AI9_ColorModel` (1 RGB, 2 CMYK),
+//!   `%AI5_ArtSize 14400 14400`, `%AI5_RulerUnits`, `%AI24_LargeCanvasScale` (1, or 10 when the
+//!   artboards together don't fit on the canvas: the art, boxes and artboards are then written at
+//!   1/10 of their size), `%AI9_ColorModel` (1 RGB, 2 CMYK),
 //!   `%AI5_ArtFlags`, `%AI5_TargetResolution`, `%AI5_NumLayers`, `%AI5_OpenViewLayers` (a digit for
 //!   each layer, 7 shown and 6 hidden), `%AI7_GridSettings` (§2.1.1), and the version comment
 //!   `%%AI8_CreatorVersion` ([`CREATOR_VERSION`]).
@@ -73,6 +75,9 @@ const ROUNDTRIP_STREAM_TYPE: u32 = 2;
 const ZSTD_MARKER: &[u8] = b"%AI24_ZStandard_Data";
 /// `%%Canvassize`: the side of the canvas in points, as the files users sent have it.
 const CANVAS_SIZE: u32 = 16383;
+/// The scale of a large canvas: its sides are ten times the canvas's, as the format's large canvas
+/// documents have them (2270 inches square).
+const LARGE_CANVAS_SCALE: f64 = 10.0;
 /// `%AI5_ArtSize`, as the files users sent have it.
 const ART_SIZE: u32 = 14400;
 /// `%AI5_ArtFlags` (§2.1.1, Table 4), as the files users sent have them: page setup, print tiles,
@@ -120,6 +125,25 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     // Live geometry effects as their result, as the PDF part draws them.
     let baked = baked(doc);
     let doc = baked.as_ref().unwrap_or(doc);
+    // Artboards that don't fit on the canvas are written on a large canvas, at 1/scale.
+    let scale = canvas_scale(doc);
+    let reduced = (scale != 1.0).then(|| {
+        let mut d = doc.clone();
+        crate::import::scale_document(&mut d, 1.0 / scale, true);
+        // Symbol and pattern art is placed without scaling its strokes, so its strokes and effects
+        // are scaled here.
+        for s in d.symbols.iter_mut() {
+            scale_strokes(Arc::make_mut(&mut s.art), 1.0 / scale);
+        }
+        for p in d.patterns.iter_mut() {
+            for a in &mut p.art {
+                scale_strokes(Arc::make_mut(a), 1.0 / scale);
+            }
+        }
+        d
+    });
+    let doc = reduced.as_ref().unwrap_or(doc);
+    let board = doc.artboards.first().map_or(board, |a| a.rect);
     // The document is y down; art space is ruler space: y up, its origin the first artboard's
     // top-left corner.
     let to_art = Affine::new([1.0, 0.0, 0.0, -1.0, -board.x0, board.y0]);
@@ -138,7 +162,7 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
         .reduce(|a, b| a.union(b))
         .unwrap_or(first);
     let origin = ruler_origin(doc, to_art);
-    let header = header(doc, o, &w, art, first, origin);
+    let header = header(doc, o, &w, art, first, origin, scale);
     let mut s = header.clone();
     // No gradient definitions: gradients are written as their average color.
     s.push_str("%%BeginProlog\n%%EndProlog\n%%BeginSetup\n0 Bn\n");
@@ -216,14 +240,38 @@ fn ruler_origin(doc: &Document, to_art: Affine) -> (f64, f64) {
     ((mid - c.0).floor(), (mid + c.1).floor())
 }
 
+/// `%AI24_LargeCanvasScale`: 1 when the artboards together fit on the canvas, with a point to
+/// spare on each side for the rounding of [`ruler_origin`], else [`LARGE_CANVAS_SCALE`]: then the
+/// art, boxes and artboards are written at 1/[`LARGE_CANVAS_SCALE`] of their size.
+fn canvas_scale(doc: &Document) -> f64 {
+    let all = doc.artboards.iter().map(|ab| ab.rect).filter(|r| r.is_finite()).reduce(|a, b| a.union(b));
+    let room = f64::from(CANVAS_SIZE) - 2.0;
+    if all.is_some_and(|r| r.width() > room || r.height() > room) { LARGE_CANVAS_SCALE } else { 1.0 }
+}
+
+/// The strokes and effects of `n` and of what it holds, `k` times as large.
+fn scale_strokes(n: &mut Node, k: f64) {
+    n.appearance.scale_strokes(k);
+    n.appearance.scale_effects(k, vectorcraft_effects::scale_effect);
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        scale_strokes(Arc::make_mut(&mut mask.art), k);
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children {
+            scale_strokes(Arc::make_mut(c), k);
+        }
+    }
+}
+
 /// The canvas's center, on its own axes and in both directions.
 fn canvas_center() -> f64 {
     f64::from(CANVAS_SIZE) / 2.0
 }
 
 /// The header comments, through `%%EndComments`. `art`: the visible art's bounds, `first` the first
-/// artboard, in art space; `origin` art space's origin on the canvas ([`ruler_origin`]).
-fn header(doc: &Document, o: &AiEditingOptions, w: &Writer, art: Rect, first: Rect, origin: (f64, f64)) -> String {
+/// artboard, in art space; `origin` art space's origin on the canvas ([`ruler_origin`]); `scale`
+/// the large canvas scale ([`canvas_scale`]).
+fn header(doc: &Document, o: &AiEditingOptions, w: &Writer, art: Rect, first: Rect, origin: (f64, f64), scale: f64) -> String {
     let mut s = String::new();
     s.push_str(PS_HEADER);
     s.push('\n');
@@ -267,7 +315,7 @@ fn header(doc: &Document, o: &AiEditingOptions, w: &Writer, art: Rect, first: Re
     s.push_str("%AI3_DocumentPreview: None\n");
     let _ = writeln!(s, "%AI5_ArtSize: {ART_SIZE} {ART_SIZE}");
     let _ = writeln!(s, "%AI5_RulerUnits: {}", ruler_units(doc.units));
-    s.push_str("%AI24_LargeCanvasScale: 1\n");
+    let _ = writeln!(s, "%AI24_LargeCanvasScale: {}", ps::num(scale));
     let model = if doc.color_mode == vectorcraft_doc::ColorMode::Cmyk { 2 } else { 1 };
     let _ = writeln!(s, "%AI9_ColorModel: {model}");
     let _ = writeln!(s, "%AI5_ArtFlags: {ART_FLAGS}");

@@ -56,7 +56,8 @@ pub(super) fn build(
 /// [`build`] without a page, for a `.ai` whose PDF part can't be read, its first page `page`
 /// (width and height, either way round) points large in units of `unit` points: the document is
 /// drawn `unit` times as large when its first artboard, or its art's box, has the page's size in
-/// those units and not in points, as [`build_from`] decides with a page.
+/// those units and not in points, as [`build_from`] decides with a page; else as many times as
+/// large as its declared large canvas scale when it has the page's size at that scale.
 pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64) -> Result<(Document, Vec<String>), String> {
     let structure = ai::read(data, false)?;
     let board = structure.artboard.map(|a| structure.to_doc.transform_rect_bbox(a));
@@ -65,12 +66,12 @@ pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64) -> Result<
     let fits = |r: Option<Rect>, k: f64| {
         r.is_some_and(|r| [(w, h), (h, w)].iter().any(|(a, b)| (r.width() - a / k).abs() <= 0.5 && (r.height() - b / k).abs() <= 0.5))
     };
-    let in_units = |r: Option<Rect>| unit.is_finite() && unit > 1.0 && fits(r, unit) && !fits(r, 1.0);
-    let scale = in_units(board) || (!fits(board, 1.0) && in_units(art));
+    let in_units = |r: Option<Rect>, k: f64| k.is_finite() && k > 1.0 && fits(r, k) && !fits(r, 1.0);
+    let scale = [unit, structure.canvas_scale].into_iter().find(|&k| in_units(board, k) || (!fits(board, 1.0) && in_units(art, k)));
     let (mut doc, notes) = build_from(structure, data, None, Page::Artboard, false, false, 1.0)?;
-    if scale {
+    if let Some(k) = scale {
         // The graphic styles here are all the file's, drawn in its units too.
-        scale_document(&mut doc, unit, true);
+        scale_document(&mut doc, k, true);
     }
     Ok((doc, notes))
 }
@@ -99,16 +100,19 @@ pub(super) fn build_from(
         placed_elsewhere,
         envelopes_drawn,
         styles_read,
+        canvas_scale,
         warnings,
     } = structure;
-    // Editing data in the units of the page's user space ([`in_units`]) is compared with the page
-    // scaled down to those units, and the document read from it is scaled up by `unit`.
+    // Editing data in the units of the page's user space ([`in_units`]), or at its declared large
+    // canvas scale ([`page_scale`]), is compared with the page scaled down to those units, and the
+    // document read from it is scaled up by `unit`.
     let board = artboard.map(|a| to_doc.transform_rect_bbox(a));
     // A page cropped to the art (see below) is in those units as well, when the art's box is and
     // the artboard isn't the page in points.
     let art = bbox.map(|[a, b, c, d]| to_doc.transform_rect_bbox(Rect::new(a, b, c, d)));
-    let units = |v: &Document| in_units(board, v, unit) || (!same_size(board, v) && in_units(art, v, unit));
-    let small = visible.filter(|v| matches!(page, Page::Artboard) && units(v)).map(|v| {
+    let scaled = page_scale(board, art, visible.filter(|_| matches!(page, Page::Artboard)), unit, canvas_scale);
+    let unit = scaled.unwrap_or(unit);
+    let small = visible.filter(|_| scaled.is_some()).map(|v| {
         let mut v = v.clone();
         scale_document(&mut v, 1.0 / unit, false);
         v
@@ -1001,6 +1005,23 @@ fn placed_files(nodes: &[Arc<Node>], out: &mut Vec<Rect>) {
     }
 }
 
+/// Is the editing data in units of `unit` points beside `page` ([`in_units`])? Its first artboard
+/// `board` is, or, when that isn't the page in points, its art's box `art` is (a page cropped to the
+/// art).
+fn in_units_or_art(board: Option<Rect>, art: Option<Rect>, page: &Document, unit: f64) -> bool {
+    in_units(board, page, unit) || (!same_size(board, page) && in_units(art, page, unit))
+}
+
+/// The size in points of a unit of the editing data whose first artboard is `board` and whose
+/// art's box is `art` (the document's coordinates), read beside `page`: `unit` (the page's
+/// `UserUnit`) when the data is in those units ([`in_units_or_art`]), else `canvas_scale` (its
+/// declared large canvas scale) when the data is at that scale; `None` when it is in points or
+/// there is no page.
+fn page_scale(board: Option<Rect>, art: Option<Rect>, page: Option<&Document>, unit: f64, canvas_scale: f64) -> Option<f64> {
+    let page = page?;
+    [unit, canvas_scale].into_iter().find(|&k| in_units_or_art(board, art, page, k))
+}
+
 /// Does the editing data's first artboard `board` (in the document read from it: art space through
 /// `to_doc`) have the size of `page`'s first artboard in units of `unit` points, `unit` being above
 /// 1, and not its size in points? `page` is a PDF part read in points from pages of `unit` points a
@@ -1054,7 +1075,7 @@ fn drop_guides_off_boards(doc: &mut Document) {
 /// Draw `doc`'s layers, artboards and guides `k` times as large, from the origin, with their
 /// strokes, effects and pattern tiles, and with `styles` the strokes and effects of its graphic
 /// styles.
-fn scale_document(doc: &mut Document, k: f64, styles: bool) {
+pub(crate) fn scale_document(doc: &mut Document, k: f64, styles: bool) {
     let a = Affine::scale(k);
     let scaling = Scaling { strokes: true, effects: Some(vectorcraft_effects::scale_effect), patterns: true, ..Default::default() };
     for layer in &mut doc.layers {

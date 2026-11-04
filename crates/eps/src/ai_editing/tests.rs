@@ -412,6 +412,61 @@ fn artboards_of_different_sizes_keep_their_names_and_places() {
     assert_eq!(bounds, Rect::new(50.0, 50.0, 590.0, 100.0));
 }
 
+/// An artboard larger than the canvas (20,000 points square): the data is written on a large
+/// canvas, at 1/10 of the size, so the artboard lies on the canvas; read beside a page of the
+/// artboard's size in points, it comes back at its size.
+#[test]
+fn an_artboard_larger_than_the_canvas_is_written_on_a_large_canvas() {
+    let mut doc = Document::new(20_000.0, 20_000.0);
+    add_rect(&mut doc, Rect::new(1000.0, 1000.0, 3000.0, 2000.0));
+    let text = program(&doc);
+    for line in [
+        "%AI24_LargeCanvasScale: 10\n",
+        "%AI3_Cropmarks: 0 -2000 2000 0\n",
+        "\n100 -100 m\n",
+        "%_0 0 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_2000 -2000 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_7191 7191 /RealPoint\n%_ (RulerOrigin) ,\n",
+        RECORDED,
+    ] {
+        assert!(text.contains(line), "{line}\n{text}");
+    }
+    // A page of the artboard's size in points, as a PDF part in larger units gives it.
+    let mut page = Document::new(20_000.0, 20_000.0);
+    add_rect(&mut page, Rect::new(1000.0, 1000.0, 3000.0, 2000.0));
+    let (p, _) = private_data(&doc, &opts()).unwrap();
+    let (read, notes, layers) = crate::layered_ai(&p.data, page, vec![], false, true, 1.389);
+    assert!(layers, "{notes:?}");
+    assert_eq!(read.artboards.iter().map(|a| a.rect).collect::<Vec<_>>(), [Rect::new(0.0, 0.0, 20_000.0, 20_000.0)], "{notes:?}");
+    let bounds = read.layers.iter().filter_map(|l| l.visual_bounds()).reduce(|a, b| a.union(b)).unwrap();
+    assert!((bounds.x0 - 1000.0).abs() < 1e-6 && (bounds.y1 - 2000.0).abs() < 1e-6 && (bounds.width() - 2000.0).abs() < 1e-6, "{bounds:?}");
+    // The same without a readable PDF part, on its first page's size.
+    let (alone, notes) = crate::ai_alone_on_page(&p.data, (20_000.0, 20_000.0), 1.389).unwrap();
+    assert_eq!(alone.artboards.iter().map(|a| a.rect).collect::<Vec<_>>(), [Rect::new(0.0, 0.0, 20_000.0, 20_000.0)], "{notes:?}");
+    // And from the editing data alone, as a file saved without its PDF part opens.
+    let alone = read_back(&doc);
+    assert_eq!(alone.artboards.iter().map(|a| a.rect).collect::<Vec<_>>(), [Rect::new(0.0, 0.0, 20_000.0, 20_000.0)]);
+    let bounds = alone.layers.iter().filter_map(|l| l.visual_bounds()).reduce(|a, b| a.union(b)).unwrap();
+    assert!((bounds.x0 - 1000.0).abs() < 1e-6 && (bounds.width() - 2000.0).abs() < 1e-6, "{bounds:?}");
+
+    // A symbol's 30-point stroke is written at 1/10 too, as the layers' strokes are.
+    let mut doc = Document::new(20_000.0, 20_000.0);
+    let line = shapes::rectangle(Rect::new(0.0, 0.0, 500.0, 500.0));
+    let art = Node::path(doc.alloc_id(), line, Appearance::basic(Paint::None, solid(Color::gray(0.5)), 30.0));
+    doc.symbols.push(Symbol { dynamic: false, name: "Box".into(), art: Arc::new(art) });
+    let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Box".into(), xf: Affine::translate((1000.0, 1000.0)) });
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, instance).unwrap();
+    let (p, _) = private_data(&doc, &opts()).unwrap();
+    let (read, notes, layers) = crate::layered_ai(&p.data, Document::new(20_000.0, 20_000.0), vec![], false, true, 1.389);
+    assert!(layers, "{notes:?}");
+    let mut all = vec![];
+    paths(read.layers[0].children().unwrap(), &mut all);
+    let widths: Vec<f64> = all.iter().filter_map(|n| n.appearance.stroke().map(|s| s.width)).collect();
+    assert!(!widths.is_empty() && widths.iter().all(|w| (w - 30.0).abs() < 1e-6), "{widths:?}");
+
+    // Artboards that fit stay on the canvas at their size.
+    assert!(program(&Document::new(16_000.0, 16_000.0)).contains("%AI24_LargeCanvasScale: 1\n"));
+}
+
 #[test]
 fn a_pdf_carries_the_data_on_its_first_page() {
     let doc = sample();
