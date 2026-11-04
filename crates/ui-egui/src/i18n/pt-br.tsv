@@ -5585,6 +5585,7 @@ mark-style	Japanese	Japonesas
 	Effect Gallery	Galeria de Efeitos
 	Filters	Filtros
 	Select artwork to apply effects	Selecione a arte para aplicar efeitos
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	nem todos os vínculos de variáveis do arquivo foram lidos (vínculos ignorados: {_1}): esses objetos não estão vinculados às suas variáveis
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	a biblioteca de variáveis do arquivo foi lida só em parte (entradas ignoradas: {_1}): o painel Variáveis lista o restante
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	não foi possível ler a biblioteca de variáveis do arquivo: o painel Variáveis não a lista
 @msg	a variable of unknown kind can't be bound to objects	uma variável de tipo desconhecido não pode ser vinculada a objetos

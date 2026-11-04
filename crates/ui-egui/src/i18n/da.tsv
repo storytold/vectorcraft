@@ -5243,6 +5243,7 @@ mark-style	Japanese	Japansk
 	Path Length	Stilængde
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	filens lag blev ikke læst ({_1}): den kommer ind som sin side, i ét lag
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	filens lag blev ikke læst fra dens redigeringsdata ({_1}): de kommer fra dens PDF-del
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	ikke alle filens variabelbindinger blev læst (udeladte bindinger: {_1}): de objekter er ikke bundet til deres variabler
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	filens variabelbibliotek blev kun delvist læst (udeladte poster: {_1}): variabelpanelet viser resten
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunne ikke læses: variabelpanelet viser det ikke
 @msg	a variable of unknown kind can't be bound to objects	en variabel af ukendt type kan ikke bindes til objekter

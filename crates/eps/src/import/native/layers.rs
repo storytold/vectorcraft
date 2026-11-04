@@ -156,10 +156,12 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
 /// `doc` (a file read as its page or PDF part, in place of its layers) with the variables, data
 /// sets, active data set and lock of the variable library of its editing data `data`, as [`build`]
 /// gives a document read from the layers, and the note about what of the library wasn't read
-/// added to `warnings`. Left as it is when the editing data has no library.
+/// added to `warnings`: its bindings aren't, as the objects they bind aren't the layers' objects.
+/// Left as it is when the editing data has no library.
 fn use_variables(data: &[u8], doc: &mut Document, warnings: &mut Vec<String>) {
     let read = ai::variables(data);
     warnings.extend(read.note());
+    warnings.extend(ai::bindings_note(read.bindings.len() + read.bindings_skipped));
     if read.present {
         doc.variables = read.variables.into();
     }

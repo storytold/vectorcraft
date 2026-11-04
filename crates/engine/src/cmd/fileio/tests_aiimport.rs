@@ -675,21 +675,25 @@ fn what_the_reader_doesnt_read_opens_as_before_with_a_warning() {
 /// A `.ai` whose document data has a variable library opens with its variables, data sets, active
 /// data set and lock, whether its layers are read or it comes in as its PDF part: `variable.list`
 /// and `dataset.list` report them. A variable of unknown kind can't be bound. What of the library
-/// can't be read is noted.
+/// can't be read is noted. With its layers read, the object a variable is bound to comes in bound,
+/// and selecting a data set changes it; the bindings to objects the file doesn't have are noted.
 #[test]
 fn an_ai_file_opens_its_variable_library() {
     let library = ai::variable_library_data(&ai::sample_variable_sets("variableAndTypes", &[]));
-    let square = format!("0 1 1 0 1 0 0 Xa\n{}f\n", ai::rect(10.0, 50.0, 40.0, 90.0));
+    let square = format!("0 1 1 0 1 0 0 Xa\n{}f\n{}", ai::rect(10.0, 50.0, 40.0, 90.0), ai::named("path_x5F_1"));
     let notes = |r: &Value| {
         r["warnings"].as_array().map_or(vec![], |w| w.iter().filter(|w| w.as_str().unwrap().contains("variable")).cloned().collect::<Vec<_>>())
     };
-    let check = |s: &mut Session| {
+    let skipped = |n: usize| {
+        json!(format!("the file's variable bindings weren't all read (bindings skipped: {n}): those objects aren't bound to their variables"))
+    };
+    let check = |s: &mut Session, bound: usize| {
         let r = s.execute("variable.list", &json!({})).unwrap();
         assert_eq!(
             r,
             json!({"variables": [
                 {"name": "v_text", "kind": "text", "bindings": 0},
-                {"name": "v_visible", "kind": "visibility", "bindings": 0},
+                {"name": "v_visible", "kind": "visibility", "bindings": bound},
                 {"name": "v_file", "kind": "image", "bindings": 0},
                 {"name": "v_graph", "kind": "graph", "bindings": 0},
                 {"name": "v_unbound", "kind": "unknown", "bindings": 0},
@@ -709,23 +713,34 @@ fn an_ai_file_opens_its_variable_library() {
     let file = ai::ai(&compressed(layered.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
     let r = open(&mut s, "variables.ai", &file, json!({})).unwrap();
     assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
-    assert!(notes(&r).is_empty(), "{r}");
-    check(&mut s);
-    let id = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id.0;
-    let e = s.execute("variable.bind", &json!({"variable": "v_unbound", "ids": [id]})).unwrap_err();
+    // The library's text and image variables are bound to objects the file doesn't have.
+    assert_eq!(notes(&r), [skipped(2)], "{r}");
+    check(&mut s, 1);
+    let id = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id;
+    assert_eq!(s.doc().unwrap().doc.variables.objects_of("v_visible"), [id]);
+    s.execute("dataset.select", &json!({"name": "ds_two"})).unwrap();
+    assert!(!s.doc().unwrap().doc.node(id).unwrap().visible, "ds_two hides the square");
+    s.execute("dataset.select", &json!({"name": "ds_one"})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).unwrap().visible, "ds_one shows it");
+    let e = s.execute("variable.bind", &json!({"variable": "v_unbound", "ids": [id.0]})).unwrap_err();
     assert!(e.to_string().contains("a variable of unknown kind can't be bound to objects"), "{e}");
-    // Its layers can't be read (a symbol): it comes in as its PDF part, with the library.
+    // Its layers can't be read (a symbol): it comes in as its PDF part, with the library and none
+    // of its bindings.
     let symbols = ai::editing_data(200.0, 100.0, &format!("{library}{}", ai::layer("Art", "/SymbolInstance :\n(Dot) /SymbolRef ,\n;\n")));
     let r = open(&mut s, "symbols.ai", &ai::ai(&compressed(symbols.as_bytes()), ai::page_pdf()), json!({})).unwrap();
     assert!(r["warnings"].to_string().contains("PDF part"), "{r}");
-    assert!(notes(&r).is_empty(), "{r}");
-    check(&mut s);
+    assert_eq!(notes(&r), [skipped(3)], "{r}");
+    check(&mut s, 0);
     // A graph value isn't read: the note says how many entries were left out.
     let graph = ai::xml_element("v_graph", &[], &[ai::xml_text(ai::XmlValue::Str("a,b"))]);
     let partly = ai::variable_library_data(&ai::sample_variable_sets("none", &[graph]));
     let layered = ai::editing_data(200.0, 100.0, &format!("{partly}{}", ai::layer("Art", &square)));
     let r = open(&mut s, "graph.ai", &ai::ai(&compressed(layered.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();
-    assert_eq!(notes(&r), [json!("the file's variable library was partly read (entries skipped: 1): the Variables panel lists the rest")], "{r}");
+    assert_eq!(
+        notes(&r),
+        [json!("the file's variable library was partly read (entries skipped: 1): the Variables panel lists the rest"), skipped(2)],
+        "{r}"
+    );
     // Without a library, no note and no variables.
     let plain = ai::editing_data(200.0, 100.0, &ai::layer("Art", &square));
     let r = open(&mut s, "plain.ai", &ai::ai(&compressed(plain.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();

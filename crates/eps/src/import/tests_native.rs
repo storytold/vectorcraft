@@ -1476,6 +1476,76 @@ fn ai_variable_library_pdf_fallback() {
     assert!(warnings.contains(&note), "{warnings:?}");
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
     assert!(r.warnings.contains(&note), "{:?}", r.warnings);
+    // The objects the library binds aren't those of the page: none is bound, and the note counts
+    // the library's three bindings.
+    let bindings = "the file's variable bindings weren't all read (bindings skipped: 3): those objects aren't bound to their variables".to_string();
+    assert!(r.warnings.contains(&bindings), "{:?}", r.warnings);
+    assert!(r.document.variables.bindings.is_empty());
+    let (d, warnings, _) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(warnings.contains(&bindings), "{warnings:?}");
+    assert!(d.variables.bindings.is_empty());
+}
+
+/// The objects the variable library binds come in bound to its variables: type (made from the text
+/// document), an object in a group, and a second object of the same variable, each found by its XML
+/// id. A binding whose object isn't in the file, whose object isn't of the variable's kind (type
+/// for a text variable), whose variable is of unknown kind, or whose reference can't be read binds
+/// nothing, and the note counts them. Another object with the same id as the group is left alone.
+#[test]
+fn ai_variable_bindings_bind_the_objects_they_name() {
+    use vectorcraft_testkit::ai::{XmlValue, named, variable_library_data, xml_element, xml_node};
+    let declare = |name: &str, t: Option<&str>, art: Option<XmlValue>| {
+        let mut attributes: Vec<(&str, XmlValue)> = t.map(|t| ("trait", XmlValue::Str(t))).into_iter().collect();
+        attributes.push(("varName", XmlValue::Unicode(name)));
+        attributes.extend(art.map(|a| ("docRef", a)));
+        xml_node(1, "variable", XmlValue::Str(""), &attributes, &[])
+    };
+    let uid = |id: &str| format!("/XMLUIDREF : ({id}) ;");
+    let declared = vec![
+        declare("v_text", Some("textcontent"), Some(XmlValue::Raw(&uid("type_x5F_1")))),
+        declare("v_shown", Some("visibility"), Some(XmlValue::Raw(&uid("square_x5F_1")))),
+        declare("v_shown", Some("visibility"), Some(XmlValue::Raw(&uid("inner_x5F_1")))),
+        declare("v_wrong", Some("textcontent"), Some(XmlValue::Raw(&uid("square_x5F_1")))),
+        declare("v_gone", Some("visibility"), Some(XmlValue::Raw(&uid("nowhere")))),
+        declare("v_odd", None, Some(XmlValue::Raw(&uid("square_x5F_1")))),
+        declare("v_bad", Some("visibility"), Some(XmlValue::Str("square_x5F_1"))),
+        declare("v_twice", Some("visibility"), Some(XmlValue::Raw(&uid("twice")))),
+        declare("v_free", Some("visibility"), None),
+    ];
+    let set = xml_element("variableSet", &[("locked", "none")], &[xml_element("variables", &[], &declared)]);
+    let library = variable_library_data(&xml_element("variableSets", &[], &[set]));
+    let back = format!(
+        "u\n{}\n{}U\n{}{}\n{}{}\n{}",
+        square(10, 10),
+        named("inner_x5F_1"),
+        named("twice"),
+        square(30, 10),
+        named("square_x5F_1"),
+        square(50, 10),
+        named("twice")
+    );
+    let spare = format!("{}{}", text_object(0), named("type_x5F_1"));
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    // The type is on a layer that shows and doesn't print (its fourth flag off), which the page
+    // doesn't draw: it is made from the text document.
+    let spare = layer("Spare", true, &spare).replace("1 1 1 1 0 0 1 0 79", "1 1 1 0 0 0 1 0 79");
+    let art = native_with_text(&(library + &layer("Back", true, &back) + &spare), &doc);
+    let page = [10, 30, 50].map(|x| page_square(x, 10)).join("\n");
+    let r = import(&eps(&page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Back", "Spare"], "{:?}", r.warnings);
+    let back = r.document.layers[0].children().unwrap();
+    let inner = back[0].children().unwrap()[0].id;
+    let (square_id, type_id) = (back[1].id, r.document.layers[1].children().unwrap()[0].id);
+    assert!(matches!(r.document.node(type_id).map(|n| &n.kind), Some(NodeKind::Text(_))), "{:?}", r.warnings);
+    let vars = &r.document.variables;
+    assert_eq!(vars.objects_of("v_text"), [type_id], "{:?}", r.warnings);
+    let mut shown = vec![square_id, inner];
+    shown.sort_unstable();
+    assert_eq!(vars.objects_of("v_shown"), shown);
+    assert_eq!(vars.bindings.len(), 3, "{:?}", vars.bindings);
+    let note = "the file's variable bindings weren't all read (bindings skipped: 5): those objects aren't bound to their variables".to_string();
+    assert!(r.warnings.contains(&note), "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("variable library")), "{:?}", r.warnings);
 }
 
 /// An EPS whose editing data can't be used, a palette with no layers among others, comes in as its

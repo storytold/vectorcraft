@@ -3,10 +3,12 @@ use super::compare::{
 };
 use super::plan::{made_only, make_slots, plan, readable_all};
 use super::slots::{
-    ART_LEFT_OUT, Content, DREW_DIFFERENTLY, MAX_PAIRS, MAX_SLOTS, MAX_TEXT, OUTLINE_REACH, SlotInfo, TEXT_LEFT_OUT, TYPE_LEFT_OUT, collect_slots,
-    extent, few, fill_slots, letters, text_objects, words,
+    ART_LEFT_OUT, Content, DREW_DIFFERENTLY, Filled, MAX_PAIRS, MAX_SLOTS, MAX_TEXT, OUTLINE_REACH, SlotInfo, TEXT_LEFT_OUT, TYPE_LEFT_OUT,
+    collect_slots, extent, few, fill_slots, letters, text_objects, words,
 };
-use super::{Affine, Arc, BTreeSet, Document, Node, NodeId, NodeKind, PathData, Rect, Scaling, Story, Structure, Texts, Unit, Vec2, ai};
+use super::{
+    Affine, Arc, BTreeSet, Document, Node, NodeId, NodeKind, PathData, Rect, Scaling, Story, Structure, Texts, Unit, VariableKind, Vec2, ai,
+};
 
 /// Which box of the editing copy is the page.
 #[derive(Clone, Copy)]
@@ -107,6 +109,9 @@ pub(super) fn build_from(
         envelopes_drawn,
         styles_read,
         canvas_scale,
+        xml_ids,
+        bindings,
+        bindings_skipped,
         warnings,
     } = structure;
     // Editing data in the units of the page's user space ([`in_units`]), or at its declared large
@@ -282,7 +287,8 @@ pub(super) fn build_from(
     let mut empty = 0;
     let mut layers = std::mem::take(&mut doc.layers);
     let mut made = vec![];
-    fill_slots(&mut doc, &mut layers, &mut content.into_iter(), &slot_names, &mut empty, &mut made, &mut vec![]);
+    let mut filled = std::collections::HashMap::new();
+    fill_slots(&mut doc, &mut layers, &mut content.into_iter(), &slot_names, &mut empty, &mut made, &mut vec![], &mut filled);
     doc.layers = layers;
     made.sort();
     let threaded_frames: BTreeSet<NodeId> =
@@ -378,11 +384,72 @@ pub(super) fn build_from(
         None => unmark(&mut doc.layers, true, true, &mut vec![]),
     }
     doc.limit_depth_noting(&mut notes);
+    bind_variables(&mut doc, &bindings, bindings_skipped, &xml_ids, &filled, &mut notes);
     if small.is_some() {
         scale_document(&mut doc, unit, styles_read);
         relayout_wrapped(&mut doc);
     }
     Ok((doc, notes))
+}
+
+/// Bind the objects of `doc` to the variables of its library that `bindings` binds them to, each
+/// object named by its XML id (`ids`: the object read with that id, or what `filled` made of a text
+/// object's slot: for a visibility variable every object that took the slot's place, for a text
+/// variable the one text object among them). An object is bound when it is of the variable's kind:
+/// type for a text variable, a linked image for an image variable, any object for a visibility
+/// variable. Locked and hidden objects, objects in locked or hidden layers and groups, and objects
+/// on locked artboards keep their bindings. Graph variables and
+/// variables of unknown kind bind nothing. The note counts the bindings that weren't made, with
+/// `skipped` more that the reader left out.
+fn bind_variables(
+    doc: &mut Document,
+    bindings: &[ai::BindingRef],
+    skipped: usize,
+    ids: &std::collections::HashMap<String, Option<NodeId>>,
+    filled: &std::collections::HashMap<NodeId, Filled>,
+    notes: &mut Vec<String>,
+) {
+    let mut skipped = skipped;
+    if bindings.is_empty() {
+        notes.extend(ai::bindings_note(skipped));
+        return;
+    }
+    let mut bound = vec![];
+    for b in bindings {
+        let kind = doc.variables.variable(&b.variable).map(|v| v.kind);
+        let targets = match (b.target.as_ref().and_then(|t| ids.get(t).copied().flatten()), kind) {
+            (Some(id), Some(kind)) => match filled.get(&id) {
+                Some(f) if kind == VariableKind::Visibility => f.objects.clone(),
+                Some(f) => match f.text.as_slice() {
+                    [one] => vec![*one],
+                    _ => vec![],
+                },
+                None => vec![id],
+            },
+            _ => vec![],
+        };
+        // Those still in the document: a part of a slot can have been taken out since.
+        let targets: Vec<NodeId> = targets.into_iter().filter(|id| doc.node(*id).is_some()).collect();
+        let fits = |id: &NodeId| {
+            doc.node(*id).is_some_and(|n| match (kind, &n.kind) {
+                (Some(VariableKind::Visibility), _) => true,
+                (Some(VariableKind::Text), NodeKind::Text(_)) => true,
+                (Some(VariableKind::Image), NodeKind::Image(im)) => im.link.is_some(),
+                _ => false,
+            })
+        };
+        if !targets.is_empty() && targets.iter().all(fits) {
+            bound.push((targets, b.variable.as_str()));
+        } else {
+            skipped += 1;
+        }
+    }
+    for (targets, variable) in bound {
+        for id in targets {
+            doc.variables.bind(id, variable);
+        }
+    }
+    notes.extend(ai::bindings_note(skipped));
 }
 
 /// Most anchors copied into the wrap shapes of a file's area type ([`vectorcraft_doc::text::wrap_work`]).
@@ -1535,6 +1602,102 @@ mod candidate_tests {
         doc.remove(wrap).unwrap();
         relayout_wrapped(&mut doc);
         assert_eq!(wrap_shapes(&doc, text), 0);
+    }
+
+    /// An image variable binds the linked image its XML id names, and not an embedded image or a
+    /// path; a text variable binds the type a slot became, and not a slot that became two text
+    /// objects; a visibility variable binds every object that took a slot's place and is still in
+    /// the document; a graph variable
+    /// binds nothing. A locked object, one in a hidden group and objects on a locked artboard are
+    /// bound too. Every binding left out, and those the reader left out, are counted in one note.
+    #[test]
+    fn variable_bindings_take_objects_of_their_kind() {
+        use vectorcraft_doc::{LinkInfo, Variable, Variables};
+        let mut doc = Document::new(100.0, 100.0);
+        let made = insert_area(&mut doc, 0, Rect::new(0.0, 0.0, 50.0, 50.0));
+        let (one, two) = (insert_area(&mut doc, 1, Rect::new(50.0, 0.0, 60.0, 10.0)), insert_area(&mut doc, 2, Rect::new(60.0, 0.0, 70.0, 10.0)));
+        let path = insert_wrap(&mut doc, Rect::new(0.0, 60.0, 10.0, 70.0), 4);
+        let locked = insert_wrap(&mut doc, Rect::new(20.0, 60.0, 30.0, 70.0), 4);
+        let image = |doc: &mut Document, link: Option<LinkInfo>| {
+            let id = doc.alloc_id();
+            let im = ImageObject { key: "k".into(), width: 1, height: 1, xf: Affine::IDENTITY, link, placement: Default::default(), pixels: None };
+            doc.insert(Some(doc.layers[0].id), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+            id
+        };
+        let (linked, embedded) = (image(&mut doc, Some(LinkInfo::new("/a.png"))), image(&mut doc, None));
+        doc.node_mut(locked).unwrap().locked = true;
+        let hidden = doc.alloc_id();
+        let inside = doc.alloc_id();
+        let mut group = Node::group(
+            hidden,
+            vec![Arc::new(Node::new(
+                inside,
+                NodeKind::Image(Box::new(ImageObject {
+                    key: "k".into(),
+                    width: 1,
+                    height: 1,
+                    xf: Affine::IDENTITY,
+                    link: Some(LinkInfo::new("/b.png")),
+                    placement: Default::default(),
+                    pixels: None,
+                })),
+            ))],
+        );
+        group.visible = false;
+        doc.insert(Some(doc.layers[0].id), 0, group).unwrap();
+        doc.artboards[0].locked = true;
+        let var = |name: &str, kind| Variable { name: name.into(), kind };
+        doc.variables = Variables {
+            variables: vec![
+                var("v_image", VariableKind::Image),
+                var("v_text", VariableKind::Text),
+                var("v_shown", VariableKind::Visibility),
+                var("v_graph", VariableKind::Graph),
+            ],
+            ..Default::default()
+        }
+        .into();
+        // The slots the text objects came from are gone; their ids are the ones the reader gave.
+        let (slot, split) = (NodeId(9000), NodeId(9001));
+        let ids: std::collections::HashMap<String, Option<NodeId>> = [
+            ("linked", Some(linked)),
+            ("embedded", Some(embedded)),
+            ("path", Some(path)),
+            ("locked", Some(locked)),
+            ("inside", Some(inside)),
+            ("slot", Some(slot)),
+            ("split", Some(split)),
+        ]
+        .map(|(k, v)| (k.to_string(), v))
+        .into();
+        let filled: std::collections::HashMap<NodeId, Filled> = [
+            (slot, Filled { text: vec![made], objects: vec![made] }),
+            (split, Filled { text: vec![one, two], objects: vec![one, two, NodeId(9002)] }),
+        ]
+        .into();
+        let bind = |variable: &str, target: &str| ai::BindingRef { variable: variable.into(), target: Some(target.into()) };
+        let refs = [
+            bind("v_image", "linked"),
+            bind("v_image", "embedded"),
+            bind("v_image", "path"),
+            bind("v_image", "inside"),
+            bind("v_text", "slot"),
+            bind("v_text", "split"),
+            bind("v_shown", "split"),
+            bind("v_shown", "locked"),
+            bind("v_graph", "path"),
+        ];
+        let mut notes = vec![];
+        bind_variables(&mut doc, &refs, 3, &ids, &filled, &mut notes);
+        let sorted = |mut v: Vec<NodeId>| {
+            v.sort();
+            v
+        };
+        assert_eq!(sorted(doc.variables.objects_of("v_image")), sorted(vec![linked, inside]));
+        assert_eq!(doc.variables.objects_of("v_text"), [made]);
+        assert_eq!(sorted(doc.variables.objects_of("v_shown")), sorted(vec![one, two, locked]));
+        assert!(doc.variables.objects_of("v_graph").is_empty());
+        assert_eq!(notes, ai::bindings_note(4 + 3).into_iter().collect::<Vec<_>>());
     }
 
     /// Area type wrapped around a placed image flows around it at the image's other placement.

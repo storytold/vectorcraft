@@ -1705,7 +1705,9 @@ already walks Image Trace. Short agent entry points:
   `variable.bind`, `variable.unbind` and the `dataset.*` commands still run (except a `dataset.import` whose header
   would define a variable, below), and `variable.list` reports `locked`. A variable that an opened `.ai` declares
   without a kind VectorCraft reads is listed with `kind: "unknown"`: it takes no values, and `variable.bind`
-  refuses it.
+  refuses it. When an opened `.ai`'s layers are read, the objects it binds to its text, visibility and image
+  variables come in bound when they are of the variable's kind, locked and hidden objects included, and
+  `variable.list` counts them in `bindings`.
 - Data sets: `dataset.list`, `dataset.new {name, values?}`, `dataset.set {name, newName?, values?}` (`newName` also
   renames the row, in the same undo step; Edit Data Set's Name field sends it), `dataset.rename`,
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
