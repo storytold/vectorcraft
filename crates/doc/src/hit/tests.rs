@@ -222,7 +222,9 @@ fn a_selected_objects_hidden_art_on_a_preview_off_layer_counts_on_its_outline() 
 /// #2345: a marquee touches a clip group only where its art shows. Over the clipped-away
 /// half alone it selects nothing, and around a rectangle drawn beside the group's mask it
 /// takes that rectangle alone; reaching into the mask takes the group. The same holds for
-/// Group Selection's leaves and in isolation mode.
+/// Group Selection's leaves. In isolation mode (#3748) the isolated group's own mask does not
+/// limit the marquee, as it does not limit clicks: with the group or the art isolated, the
+/// marquee takes the hidden art.
 #[test]
 fn a_marquee_leaves_a_clip_group_by_its_clipped_away_art() {
     let mut d = Document::new(300.0, 200.0);
@@ -237,8 +239,9 @@ fn a_marquee_leaves_a_clip_group_by_its_clipped_away_art() {
     let hidden = Rect::new(150.0, -10.0, 210.0, 50.0);
     assert!(marquee(&d, hidden, None, false).is_empty());
     assert!(marquee(&d, hidden, None, true).is_empty());
-    assert!(marquee(&d, hidden, Some(g), false).is_empty());
-    assert!(marquee(&d, hidden, Some(art_id), false).is_empty());
+    assert_eq!(marquee(&d, hidden, Some(g), false), vec![art_id]);
+    assert_eq!(marquee(&d, hidden, Some(g), true), vec![art_id]);
+    assert_eq!(marquee(&d, hidden, Some(art_id), false), vec![art_id]);
     // This marquee surrounds the rectangle beside and crosses the hidden art's bottom edge.
     assert_eq!(marquee(&d, Rect::new(140.0, 70.0, 195.0, 140.0), None, false), vec![beside]);
     // This marquee crosses the shown half's top edge and goes on into the hidden half.
@@ -647,6 +650,82 @@ fn select_behind_takes_a_layer_masks_outline_first() {
     }
     // Without clip_outlines, as before.
     assert_eq!(objects_at(&d, Point::new(138.5, 90.0), HitOptions::default(), None), vec![art, clip]);
+}
+
+/// #3748: in isolation mode the selection tools hit the art that the isolated clip group (or
+/// the isolated layer with a clipping mask) hides outside its mask, and the art when it is the
+/// single object isolated; the mask's outline is still hit first. Outside isolation mode, and
+/// for the tools that act on what is drawn, the hidden art is not hit. The Unlock submenu
+/// lists the hidden art when it is locked.
+#[test]
+fn isolation_reaches_the_art_a_clipping_mask_hides() {
+    let hidden = Point::new(170.0, 90.0);
+    for layer in [false, true] {
+        let (mut d, g, clip, art) = masked_square(layer);
+        let isolated = HitOptions { scope: Some(g), ..SELECTING };
+        assert!(hit_test(&d, hidden, SELECTING).is_none(), "layer {layer}: not isolated");
+        let h = hit_test(&d, hidden, isolated);
+        assert_eq!(h.map(|h| (h.leaf, h.top_object(Some(g)))), Some((art, art)), "layer {layer}");
+        assert_eq!(objects_at(&d, hidden, SELECTING, Some(g)), vec![art], "layer {layer}");
+        assert_eq!(hit_test(&d, Point::new(140.0, 90.0), isolated).map(|h| h.leaf), Some(clip), "layer {layer}: the outline first");
+        let one = HitOptions { scope: Some(art), ..SELECTING };
+        assert_eq!(hit_test(&d, hidden, one).map(|h| h.leaf), Some(art), "layer {layer}: the art isolated");
+        assert!(hit_test(&d, hidden, HitOptions { scope: Some(g), ..HitOptions::default() }).is_none(), "layer {layer}: drawn art only");
+        assert!(hit_test_visible(&d, hidden, isolated).is_none(), "layer {layer}: sampling");
+        d.node_mut(art).unwrap().locked = true;
+        assert_eq!(locked_objects_at(&d, hidden, HitOptions { scope: Some(g), ..HitOptions::default() }), vec![art], "layer {layer}");
+        assert!(locked_objects_at(&d, hidden, HitOptions::default()).is_empty(), "layer {layer}: not isolated");
+    }
+}
+
+/// #3748, nested clip groups: with the outer clip group isolated, a click or a marquee takes
+/// the art its own mask hides, while the mask of a clip group inside it still limits that
+/// group's art. With the inner clip group isolated, or its art, the inner mask does not.
+#[test]
+fn isolation_reaches_hidden_art_only_for_the_isolated_clip_group() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (outer, outer_clip, outer_art, inner, inner_clip, inner_art) =
+        (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let mask = |id, r| {
+        let mut path = Node::path(id, shapes::rectangle(r), Appearance::basic(Paint::None, Paint::None, 0.0));
+        if let NodeKind::Path { clipping, .. } = &mut path.kind {
+            *clipping = true;
+        }
+        Arc::new(path)
+    };
+    let art = |id, r| Arc::new(Node::path(id, shapes::rectangle(r), Appearance::default_art()));
+    let inner_group = Node::new(
+        inner,
+        NodeKind::Group {
+            children: vec![mask(inner_clip, Rect::new(60.0, 60.0, 120.0, 120.0)), art(inner_art, Rect::new(40.0, 40.0, 160.0, 160.0))],
+            clip: true,
+        },
+    );
+    let children =
+        vec![mask(outer_clip, Rect::new(20.0, 20.0, 180.0, 180.0)), art(outer_art, Rect::new(190.0, 20.0, 260.0, 180.0)), Arc::new(inner_group)];
+    d.insert(Some(l), 0, Node::new(outer, NodeKind::Group { children, clip: true })).unwrap();
+    // `outer_hidden` is outside the outer mask, on the outer group's own art; `inner_hidden` is
+    // inside the outer mask and outside the inner one, on the inner group's art.
+    let (outer_hidden, inner_hidden, shown) = (Point::new(220.0, 100.0), Point::new(150.0, 100.0), Point::new(90.0, 90.0));
+    let leaf = |p, scope| hit_test(&d, p, HitOptions { scope, ..SELECTING }).map(|h| h.leaf);
+    assert_eq!((leaf(outer_hidden, None), leaf(inner_hidden, None)), (None, None), "not isolated");
+    assert_eq!(leaf(outer_hidden, Some(outer)), Some(outer_art), "outer isolated: its own hidden art");
+    assert_eq!(leaf(inner_hidden, Some(outer)), None, "outer isolated: the inner mask still clips");
+    let h = hit_test(&d, shown, HitOptions { scope: Some(outer), ..SELECTING });
+    assert_eq!(h.map(|h| (h.leaf, h.top_object(Some(outer)))), Some((inner_art, inner)), "outer isolated: shown art");
+    assert_eq!(leaf(inner_hidden, Some(inner)), Some(inner_art), "inner isolated");
+    assert_eq!(leaf(outer_hidden, Some(inner)), None, "inner isolated: the outer group's art");
+    assert_eq!(leaf(inner_hidden, Some(inner_art)), Some(inner_art), "the inner art isolated");
+    // These marquees cross the right edge of the outer art (outside the outer mask) and of the
+    // inner art (inside the outer mask, outside the inner one).
+    let (outer_edge, inner_edge) = (Rect::new(255.0, 95.0, 265.0, 105.0), Rect::new(155.0, 95.0, 165.0, 105.0));
+    assert_eq!(marquee(&d, outer_edge, Some(outer), false), vec![outer_art]);
+    assert!(marquee(&d, inner_edge, Some(outer), false).is_empty());
+    assert!(marquee(&d, inner_edge, Some(outer), true).is_empty());
+    assert_eq!(marquee(&d, inner_edge, Some(inner), false), vec![inner_art]);
+    assert!(marquee(&d, inner_edge, None, false).is_empty());
+    assert!(marquee(&d, outer_edge, None, false).is_empty());
 }
 
 /// Art in a sublayer is an object of its own: a click or a marquee takes it, not the
