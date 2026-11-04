@@ -19,7 +19,7 @@ use super::edit::{outermost, selected_roots};
 use super::pathops::{remove_each, separate};
 use super::swatch::{anchor, names_param};
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, cmd, color_value, find_command, has_doc, has_selection, id_param, named_ids, number_or, ok,
+    CommandSpec, Result, Session, bad, check_numbers, cmd, color_param, find_command, has_doc, has_selection, id_param, named_ids, number_or, ok,
     str_param, switch_or,
 };
 use crate::EngineError;
@@ -304,7 +304,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbolism Tool",
             [],
             None,
-            "{tool: shift|scrunch|size|spin|stain|screen|style, points: [[x,y]…], radius?: 40, intensity?: 1..10 (5), alt?: bool, color?, keepModel?: bool (as paint.setFill), style?: name} adjust instances near the points (selection, else all) → {count}",
+            "{tool: shift|scrunch|size|spin|stain|screen|style, points: [[x,y]…], radius?: 40, intensity?: 1..10 (5), alt?: bool, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), style?: name} adjust instances near the points (selection, else all) → {count}",
             has_doc,
             symbol_adjust
         ),

@@ -199,6 +199,8 @@ fn slice_options_set_read_and_undo_in_one_step() {
     assert_eq!(slices(&mut s)[0]["name"], "cell");
     assert!(s.execute("object.slice.options", &json!({"kind": "htmlText"})).is_err(), "HTML Text is for type");
     assert!(s.execute("object.slice.options", &json!({"background": "pink-ish"})).is_err());
+    assert!(s.execute("object.slice.options", &json!({"background": "#00ff0080"})).is_err(), "a hex color with an alpha part");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(s.doc().unwrap().doc.slices[0].options, Default::default());
     // An object slice of type can be HTML Text.

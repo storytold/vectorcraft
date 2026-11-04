@@ -242,6 +242,10 @@ fn gamut_check_flags_unprintable_colours() {
     let r = s.execute("color.gamutCheck", &json!({"colors": ["#00ff00", {"c": 100, "m": 0, "y": 0, "k": 0}]})).unwrap();
     assert_eq!(r["checked"], 2);
     assert_eq!(r["outOfGamut"].as_array().unwrap().len(), 1);
+    // A color it can't read, a hex color with an alpha part included, is an error, not skipped.
+    for bad in ["#0000ff80", "nope"] {
+        assert!(s.execute("color.gamutCheck", &json!({"colors": ["#00ff00", bad]})).is_err(), "{bad}");
+    }
 }
 
 #[test]

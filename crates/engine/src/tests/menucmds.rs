@@ -2545,6 +2545,8 @@ fn select_color_matches_fill_and_stroke_without_a_selection() {
     assert_eq!(pick(&mut s, json!({"fill": "#000000"})), vec![a, t, empty]);
     assert!(s.execute("select.color", &json!({})).is_err());
     assert!(s.execute("select.color", &json!({"fill": "not a colour"})).is_err());
+    assert!(s.execute("select.color", &json!({"fill": "#00000080"})).is_err(), "a hex color with an alpha part");
+    assert!(s.execute("select.color", &json!({"stroke": "#ff000080"})).is_err(), "a hex color with an alpha part");
 }
 
 #[test]
