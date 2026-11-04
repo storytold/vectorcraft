@@ -969,6 +969,10 @@ lighting	Light	Světlo
 	Home	Domů
 	Import Keyboard Shortcuts…	Importovat klávesové zkratky…
 	Justify all lines	Do bloku včetně posledního řádku
+	Align Top	Zarovnat nahoru
+	Align Center	Zarovnat svisle na střed
+	Align Bottom	Zarovnat dolů
+	Justify Vertically	Zarovnat svisle do bloku
 	Justify with last line aligned left	Do bloku, poslední řádek vlevo
 	Keyboard Shortcut Conflicts	Konflikty klávesových zkratek
 	Keyboard Shortcut Set	Sada klávesových zkratek

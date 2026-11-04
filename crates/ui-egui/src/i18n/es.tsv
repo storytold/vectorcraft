@@ -1647,6 +1647,10 @@ font-technology	Variable	Variables
 	Join Tool	Herramienta Unir
 	Justification…	Justificación…
 	Justify all lines	Justificar todas las líneas
+	Align Top	Alinear arriba
+	Align Center	Alinear en el medio
+	Align Bottom	Alinear abajo
+	Justify Vertically	Justificar verticalmente
 	Justify with last line aligned center	Justificar con la última línea centrada
 	Justify with last line aligned left	Justificar con la última línea alineada a la izquierda
 	Justify with last line aligned right	Justificar con la última línea alineada a la derecha

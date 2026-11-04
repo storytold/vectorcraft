@@ -1671,6 +1671,10 @@ file-filter	Templates	Шаблоны
 	Join Tool	Инструмент «Соединение»
 	Justification…	Выключка…
 	Justify all lines	Выключить все строки
+	Align Top	Выровнять по верху
+	Align Center	Выровнять по середине
+	Align Bottom	Выровнять по низу
+	Justify Vertically	Выключка по вертикали
 	Justify with last line aligned center	Выключить с последней строкой по центру
 	Justify with last line aligned left	Выключить с последней строкой по левому краю
 	Justify with last line aligned right	Выключить с последней строкой по правому краю

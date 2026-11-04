@@ -263,6 +263,11 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 ui.separator();
                 crate::panels::character::control_bar(app, ui);
+                // Area type: its vertical alignment in the frame (#3759).
+                if crate::panels::properties::vertical_align::buttons(app, ui, 24.0) {
+                    ui.add_space(4.0);
+                    ui.separator();
+                }
                 if sel.is_empty() {
                     if widgets::flat_button(ui, tl!("Document Setup"), 112.0).clicked() {
                         app.run("file.documentSetup", json!({})).ok();

@@ -1485,6 +1485,10 @@ font-technology	Variable	Değişken
 	Join Tool	Birleştirme Aracı
 	Justification…	İki Yana Yaslama…
 	Justify all lines	Tüm satırları iki yana yasla
+	Align Top	Üste hizala
+	Align Center	Dikey ortala
+	Align Bottom	Alta hizala
+	Justify Vertically	Dikey olarak iki yana yasla
 	Justify with last line aligned center	Son satıra hizalanmış merkeze yasla
 	Justify with last line aligned left	Son satırı sola hizalanmış şekilde iki yana yasla
 	Justify with last line aligned right	Son satırı sağa hizalayarak yasla

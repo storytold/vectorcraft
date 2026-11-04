@@ -948,6 +948,10 @@ lighting	Light	Valo
 	Home	Aloitus
 	Import Keyboard Shortcuts…	Tuo pikanäppäimet…
 	Justify all lines	Tasaa kaikki rivit
+	Align Top	Tasaa ylös
+	Align Center	Tasaa pystysuunnassa keskelle
+	Align Bottom	Tasaa alas
+	Justify Vertically	Tasaa pystysuunnassa
 	Justify with last line aligned left	Tasaa, viimeinen rivi vasemmalle
 	Keyboard Shortcut Conflicts	Pikanäppäinristiriidat
 	Keyboard Shortcut Set	Pikanäppäinjoukko
