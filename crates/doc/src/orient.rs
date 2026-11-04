@@ -125,9 +125,19 @@ impl Document {
         if angle == 0.0 {
             return self.bounds_of(ids, visual).map(OrientedBox::aligned);
         }
+        self.oriented_bounds_with(ids, visual, &self.symbol_boxes())
+    }
+
+    /// [`oriented_bounds`](Document::oriented_bounds) measuring symbol instances from `symbols`,
+    /// a cache shared across calls: measuring many instances one by one otherwise measures their
+    /// art again for each.
+    pub fn oriented_bounds_with(&self, ids: &[NodeId], visual: bool, symbols: &crate::SymbolBoxes) -> Option<OrientedBox> {
+        let angle = self.bbox_angle(ids);
+        if angle == 0.0 {
+            return self.bounds_of_with(ids, visual, symbols).map(OrientedBox::aligned);
+        }
         let to_local = OrientedBox { angle, rect: Rect::ZERO }.to_doc().inverse();
-        let symbols = self.symbol_boxes();
-        let rect = ids.iter().filter_map(|id| self.node(*id)).fold(None, |acc, n| union_opt(acc, n.bounds_in(&symbols, to_local, visual)))?;
+        let rect = ids.iter().filter_map(|id| self.node(*id)).fold(None, |acc, n| union_opt(acc, n.bounds_in(symbols, to_local, visual)))?;
         Some(OrientedBox { angle, rect })
     }
 }
