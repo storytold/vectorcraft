@@ -50,7 +50,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use craft_vectorcraft_format::{Contents, Head, Image, ReadError, Tail};
-use serde::de::{IgnoredAny, MapAccess, SeqAccess, Visitor};
+use serde::de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::{Deserializer, Serialize};
 use vectorcraft_doc::{Document, ImageBlob};
 
@@ -477,7 +477,7 @@ pub struct FileInfo {
     /// Written under the project's former name (`"format": "drawcraft"`).
     pub legacy: bool,
     /// The saved `pdfCompatible` preference, or the presence of a non-null `pdf` member in
-    /// files without that preference. The PDF payload is not read or validated.
+    /// files without a boolean preference. The PDF payload is not read or validated.
     pub pdf_compatible: bool,
 }
 
@@ -622,7 +622,7 @@ fn pdf_member(json: &[u8]) -> Result<bool, serde_json::Error> {
             let mut preference = None;
             while let Some(key) = map.next_key::<String>()? {
                 match key.as_str() {
-                    "pdfCompatible" => preference = map.next_value::<Option<bool>>()?,
+                    "pdfCompatible" => preference = map.next_value_seed(Preference)?,
                     "pdf" => present = map.next_value::<Option<IgnoredAny>>()?.is_some(),
                     _ => {
                         map.next_value::<IgnoredAny>()?;
@@ -638,6 +638,58 @@ fn pdf_member(json: &[u8]) -> Result<bool, serde_json::Error> {
         }
     }
     serde_json::Deserializer::from_slice(json).deserialize_any(PdfMember)
+}
+
+/// A `pdfCompatible` value: `Some` for a boolean, `None` for null or any other value, which is
+/// skipped without being kept, as an unknown member is.
+struct Preference;
+
+impl<'de> DeserializeSeed<'de> for Preference {
+    type Value = Option<bool>;
+
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Option<bool>, D::Error> {
+        d.deserialize_any(self)
+    }
+}
+
+impl<'de> Visitor<'de> for Preference {
+    type Value = Option<bool>;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("any value")
+    }
+
+    fn visit_bool<E>(self, v: bool) -> Result<Option<bool>, E> {
+        Ok(Some(v))
+    }
+
+    fn visit_i64<E>(self, _: i64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_u64<E>(self, _: u64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_f64<E>(self, _: f64) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_str<E>(self, _: &str) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_unit<E>(self) -> Result<Option<bool>, E> {
+        Ok(None)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<Option<bool>, A::Error> {
+        IgnoredAny.visit_seq(seq).map(|_| None)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Option<bool>, A::Error> {
+        IgnoredAny.visit_map(map).map(|_| None)
+    }
 }
 
 /// The file's first `generator` member, the app that wrote it (`None`: it has none, it is not a
@@ -729,6 +781,15 @@ mod tests {
         value["pdf"] = serde_json::Value::Null;
         value["unrecognized"] = serde_json::json!({"pdf":{"data":"nested"}});
         assert!(!load_info(&serde_json::to_vec(&value).unwrap()).unwrap().1.pdf_compatible);
+        // A preference that is not a boolean is skipped like an unknown member: the file opens,
+        // and the presence of the PDF decides.
+        for odd in [serde_json::json!(1), serde_json::json!("yes"), serde_json::json!([true]), serde_json::json!({"on": true})] {
+            for (pdf, present) in [(serde_json::Value::Null, false), (serde_json::json!({"mime":"application/pdf"}), true)] {
+                value["pdf"] = pdf;
+                value["pdfCompatible"] = odd.clone();
+                assert_eq!(load_info(&serde_json::to_vec(&value).unwrap()).unwrap().1.pdf_compatible, present, "{odd}");
+            }
+        }
     }
 
     #[test]
