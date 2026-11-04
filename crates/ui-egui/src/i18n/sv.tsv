@@ -6392,3 +6392,13 @@ digits	Hindi	Hindi
 	Spike	Spets
 	Skip Spaces	Hoppa över mellanslag
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Teckningen är för stor för att kopieras som en bild: andra appar får ingen PNG av den
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Markera efter ritytor
+	Select by Artboards…	Markera efter ritytor…
+	Selection Tools	Markeringsverktyg
+	Search artboards	Sök ritytor
+	Fully Inside	Helt inuti
+	Fully Outside	Helt utanför
+	No artboards match.	Ingen rityta matchar.
+	Chosen: {n} of {total}	Valda: {n} av {total}

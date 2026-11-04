@@ -6320,3 +6320,13 @@ breakText	Glyphs	Glifák
 	Spike	Csúcs
 	Skip Spaces	Szóközök kihagyása
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	A grafika túl nagy ahhoz, hogy képként másolható legyen: más alkalmazások nem kapnak róla PNG-t
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Kijelölés rajztáblák szerint
+	Select by Artboards…	Kijelölés rajztáblák szerint…
+	Selection Tools	Kijelölőeszközök
+	Search artboards	Rajztáblák keresése
+	Fully Inside	Teljesen belül
+	Fully Outside	Teljesen kívül
+	No artboards match.	Nincs egyező rajztábla.
+	Chosen: {n} of {total}	Kiválasztva: {n} / {total}

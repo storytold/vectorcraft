@@ -5264,7 +5264,9 @@ Neither value turns `tateChuYoko` on. Both are 0 by default and saved only when 
 them. A value that is not a number is refused with `` `tcyUpDown` must be a number ``, and one outside the range with
 `` `tcyUpDown` must be from -1296 to 1296 ``, naming the key. One undo step. `ui.tateChuYokoSettings` opens the
 Tate-chu-yoko Settings dialog (the menu item shows with Show East Asian Options) on the values the selected characters
-share, a blank field where they differ; OK sends the values that changed.
+share, a blank field where they differ; OK sends the values that changed and leaves a blank field's value alone. OK
+with a field that is not a length returns `Up/Down must be a number` or `Left/Right must be a number` and keeps the
+dialog open.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":4,"tateChuYoko":true,"tcyUpDown":2,"tcyLeftRight":-1}}}
@@ -6791,6 +6793,29 @@ with a spot colour swatch, solid or in a gradient's stops), `colorEffects` (carr
 on the object or on one of its fills or strokes; a group carrying one is selected whole), `rgbImages`, `cmykImages` or
 `grayImages` (images whose pixels are RGB, CMYK, or grayscale or 1-bit, read from the image's header). It returns the
 `count` selected.
+
+### Selection Tools
+
+Selection Tools is a built-in add-on: its commands are `addon.select.*`, and in the desktop app it lives in Object ›
+Plug-ins › Selection Tools.
+
+`addon.select.byArtboards {artboards, relation?}` (Select by Artboards…, #5525) selects objects by where they sit
+relative to one or more artboards. `artboards` lists 0-based artboard indices (at least one; one listed twice counts
+once). `relation` is `overlap` (the default: on at least one of them, as `select.allOnArtboard` takes it, the bounds
+overlapping the artboard or the centre on it), `inside` (the bounds wholly within one of them, edges included; an object
+straddling two touching artboards is inside neither) or `outside` (on none of them). It looks at the objects Select All
+takes, or the isolated container's in isolation mode, so hidden and locked objects, objects on hidden, locked or template
+layers and art held by a locked artboard are left out. Bounds are geometric, a symbol instance's measured by its art. It
+returns the `count` selected. An empty list, an index with no artboard, a value that isn't an index, or another
+relation is an error, and the selection is left as it was.
+
+```json
+{"name":"run_command","arguments":{"command":"addon.select.byArtboards","params":{"artboards":[2,6,11],"relation":"inside"}}}
+```
+
+The dialog lists every artboard with its number, name and size in the document's units. Search filters the list by
+name; a click chooses one artboard, Shift-click adds a range and Cmd/Ctrl-click toggles one, and Select All / None act
+on the rows shown (rows hidden by the search stay chosen). It opens with the active artboard chosen and Overlapping.
 
 ### Vector Halftone (live)
 

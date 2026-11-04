@@ -5974,3 +5974,13 @@ breakText	Glyphs	字符
 	Spike	尖峰
 	Skip Spaces	略過空格
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	圖稿太大，無法作為圖片複製：其他應用程式不會取得它的 PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	依工作區域選取
+	Select by Artboards…	依工作區域選取…
+	Selection Tools	選取工具
+	Search artboards	搜尋工作區域
+	Fully Inside	完全在內
+	Fully Outside	完全在外
+	No artboards match.	沒有符合的工作區域。
+	Chosen: {n} of {total}	已選：{n} / {total}

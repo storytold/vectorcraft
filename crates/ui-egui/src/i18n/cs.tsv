@@ -6336,3 +6336,13 @@ breakText	Glyphs	Glyfy
 	Spike	Špička
 	Skip Spaces	Přeskočit mezery
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Kresba je příliš velká na zkopírování jako obrázek: ostatní aplikace z ní nedostanou PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Vybrat podle pracovních ploch
+	Select by Artboards…	Vybrat podle pracovních ploch…
+	Selection Tools	Nástroje výběru
+	Search artboards	Hledat pracovní plochy
+	Fully Inside	Zcela uvnitř
+	Fully Outside	Zcela vně
+	No artboards match.	Žádná pracovní plocha neodpovídá.
+	Chosen: {n} of {total}	Zvoleno: {n} z {total}

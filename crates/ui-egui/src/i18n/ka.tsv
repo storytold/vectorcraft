@@ -6347,3 +6347,13 @@ font-script	Japanese	იაპონური
 	Spike	პიკი
 	Skip Spaces	ჰარების გამოტოვება
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	ნახატი ზედმეტად დიდია სურათად დასაკოპირებლად: სხვა აპები მის PNG-ს ვერ მიიღებენ
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	სამუშაო დაფებით არჩევა
+	Select by Artboards…	სამუშაო დაფებით არჩევა…
+	Selection Tools	მონიშვნის ხელსაწყოები
+	Search artboards	სამუშაო დაფების ძებნა
+	Fully Inside	მთლიანად შიგნით
+	Fully Outside	მთლიანად გარეთ
+	No artboards match.	შესაბამისი სამუშაო დაფა არ არის.
+	Chosen: {n} of {total}	არჩეულია: {n} / {total}

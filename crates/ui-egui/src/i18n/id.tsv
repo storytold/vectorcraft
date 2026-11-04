@@ -6204,3 +6204,13 @@ breakText	Glyphs	Glif
 	Spike	Puncak
 	Skip Spaces	Lewati Spasi
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Gambar terlalu besar untuk disalin sebagai gambar: aplikasi lain tidak mendapatkan PNG darinya
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Pilih menurut Artboard
+	Select by Artboards…	Pilih menurut Artboard…
+	Selection Tools	Alat pemilihan
+	Search artboards	Cari artboard
+	Fully Inside	Sepenuhnya di dalam
+	Fully Outside	Sepenuhnya di luar
+	No artboards match.	Tidak ada artboard yang cocok.
+	Chosen: {n} of {total}	Dipilih: {n} dari {total}

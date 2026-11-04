@@ -5956,3 +5956,13 @@ breakText	Glyphs	Glifi
 	Spike	Picco
 	Skip Spaces	Salta gli spazi
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	La grafica è troppo grande per essere copiata come immagine: le altre app non ne ricevono un PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Seleziona per tavole da disegno
+	Select by Artboards…	Seleziona per tavole da disegno…
+	Selection Tools	Strumenti di selezione
+	Search artboards	Cerca tavole da disegno
+	Fully Inside	Completamente interno
+	Fully Outside	Completamente esterno
+	No artboards match.	Nessuna tavola da disegno corrisponde.
+	Chosen: {n} of {total}	Scelte: {n} di {total}

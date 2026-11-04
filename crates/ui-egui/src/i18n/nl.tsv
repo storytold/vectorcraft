@@ -6248,3 +6248,13 @@ breakText	Glyphs	Glyphs
 	Spike	Piek
 	Skip Spaces	Spaties overslaan
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Het illustratiewerk is te groot om als afbeelding te kopiëren: andere apps krijgen er geen PNG van
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Selecteren op tekengebieden
+	Select by Artboards…	Selecteren op tekengebieden…
+	Selection Tools	Selectiegereedschappen
+	Search artboards	Tekengebieden zoeken
+	Fully Inside	Volledig binnen
+	Fully Outside	Volledig buiten
+	No artboards match.	Geen tekengebied komt overeen.
+	Chosen: {n} of {total}	Gekozen: {n} van {total}
