@@ -34,7 +34,8 @@ pub(crate) struct SGlyph {
     pub dx: f64,
     pub dy: f64,
     /// Right to left: the run's manual kerning, which moves the glyph right along the baseline,
-    /// outside its Character Rotation. 0 otherwise.
+    /// outside its Character Rotation; with whole-point advances, the difference the kerning makes
+    /// to the cluster's rounded advance. 0 otherwise.
     pub kern_shift: f64,
     /// Outline scale (font units -> points).
     pub sx: f64,
