@@ -345,7 +345,7 @@ impl Ctx<'_> {
             m = Affine::rotate_about(std::f64::consts::FRAC_PI_2, origin) * m;
             if let Some((cell, top)) = path_cell {
                 // An upright glyph whose top then faces the path's end turns half a turn about the
-                // centre of its cell (without its Character Rotation), so that its top faces the
+                // center of its cell (without its Character Rotation), so that its top faces the
                 // path's start and the characters of an upright ligature read along the path in
                 // order. The effects that keep the glyph's up direction fixed already turn it so on
                 // a path that runs to the left.
