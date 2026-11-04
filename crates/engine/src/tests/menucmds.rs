@@ -2049,6 +2049,53 @@ fn select_same_font_takes_its_reference_from_the_isolated_group_on_a_selected_la
     assert!(!got.contains(&outside));
 }
 
+/// Select › Same › Symbol Instance takes its reference from the first selected object that can be
+/// selected: an instance that is hidden, locked, on a template layer or outside the isolated group
+/// is passed over.
+#[test]
+fn select_same_symbol_instance_skips_objects_that_cannot_be_selected() {
+    const C: &str = "select.same.symbolInstance";
+    let mut s = session();
+    let place = |s: &mut Session, name: &str, x: f64| id_of(&s.execute("symbol.place", &json!({"name": name, "x": x, "y": 200})).unwrap());
+    rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let a1 = id_of(&s.execute("symbol.new", &json!({"name": "A"})).unwrap());
+    rect(&mut s, 50.0, 0.0, 20.0, 20.0);
+    let b1 = id_of(&s.execute("symbol.new", &json!({"name": "B"})).unwrap());
+    let a2 = place(&mut s, "A", 100.0);
+    let b2 = place(&mut s, "B", 200.0);
+    // A hidden or locked instance of A, selected first, is not the reference.
+    for (on, off) in [
+        (json!({"id": a1.0, "visible": false}), json!({"id": a1.0, "visible": true})),
+        (json!({"id": a1.0, "locked": true}), json!({"id": a1.0, "locked": false})),
+    ] {
+        s.execute("layer.setProps", &on).unwrap();
+        sel(&mut s, &[a1, b1]);
+        assert_eq!(s.execute(C, &json!({})).unwrap()["count"], 2, "{on}");
+        assert_eq!(selected(&s), vec![b1, b2], "{on}");
+        s.execute("layer.setProps", &off).unwrap();
+    }
+    // An instance on a template layer, selected by id, is not the reference.
+    let l2 = id_of(&s.execute("layer.new", &json!({"top": true})).unwrap());
+    let on_template = place(&mut s, "A", 300.0);
+    s.execute("layer.setProps", &json!({"id": l2.0, "template": true})).unwrap();
+    sel(&mut s, &[on_template, b1]);
+    s.execute(C, &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![b1, b2]);
+    // An instance outside the isolated group is not the reference.
+    sel(&mut s, &[b1, b2]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    sel(&mut s, &[a2, b1]);
+    s.execute(C, &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![b1, b2]);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    // A selection whose only objects cannot be selected has no reference.
+    s.execute("layer.setProps", &json!({"id": a1.0, "visible": false})).unwrap();
+    sel(&mut s, &[a1, on_template]);
+    assert!(s.execute(C, &json!({})).is_err());
+    assert_eq!(selected(&s), vec![a1, on_template]);
+}
+
 /// Select › Same › Text Fill & Stroke Color selects the type with characters whose fill and stroke
 /// both match the first character of the selected type: the same fill with another stroke, or the
 /// same stroke with another fill, is left out, and in type with several runs one run has to match

@@ -267,6 +267,12 @@ pub(crate) fn is_selectable(d: &Document, iso: Option<NodeId>, locks: &LockedArt
     }
 }
 
+/// The first selected object, in selection order, that [`is_selectable`] accepts.
+pub(crate) fn first_selectable(st: &DocState) -> Option<&Node> {
+    let locks = st.doc.locked_artboards();
+    st.selection.objects.iter().find(|id| is_selectable(&st.doc, st.isolation, &locks, **id)).and_then(|id| st.doc.node(*id))
+}
+
 fn all(s: &mut Session, _: &Value) -> Result<Value> {
     // While the Type tool edits text, Select All takes all of that text and leaves the art
     // selection as it is (Illustrator: text cursor in a text object).
@@ -718,14 +724,7 @@ fn paint_reported(d: &Document, n: &Node) -> bool {
 fn same_reference<'a>(st: &'a DocState, cmd: &str) -> Result<(&'a Node, bool)> {
     let compound = |n: &Node| matches!(n.kind, NodeKind::Compound { .. });
     let members = st.isolation.and_then(|i| st.doc.ancestry(i)).is_some_and(|a| a.iter().any(|i| st.doc.node(*i).is_some_and(compound)));
-    let locks = st.doc.locked_artboards();
-    let first = st
-        .selection
-        .objects
-        .iter()
-        .find(|id| is_selectable(&st.doc, st.isolation, &locks, **id))
-        .and_then(|id| st.doc.node(*id))
-        .ok_or_else(|| bad(cmd, "nothing selected"))?;
+    let first = first_selectable(st).ok_or_else(|| bad(cmd, "nothing selected"))?;
     let refn = match st.doc.parent_of(first.id).and_then(|p| st.doc.node(p)) {
         Some(p) if !members && compound(p) => p,
         _ => first,

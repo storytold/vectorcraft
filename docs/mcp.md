@@ -1465,10 +1465,11 @@ inside a hidden or locked group or layer, on a template layer, or outside the is
 selection holds no other type, they return the error "select a text object".
 
 `select.same.fillColor`, `strokeColor`, `fillAndStroke`, `strokeWeight`, `opacity`, `blendingMode`, `appearance`,
-`shapeType`, `graphicStyle` and `appearanceAttribute` compare the other objects with the first selected object, in
-selection order, that these commands could select. A selected object that is hidden or locked, inside a hidden or
-locked group or layer, on a template layer, or outside the isolated group is passed over. When the selection holds no other
-object, they return the error "nothing selected".
+`shapeType`, `graphicStyle`, `appearanceAttribute` and `symbolInstance` compare the other objects with the first
+selected object, in selection order, that these commands could select. A selected object that is hidden or locked,
+inside a hidden or locked group or layer, on a template layer, on a locked artboard while nothing is isolated, or
+outside the isolated group is passed over. When the selection holds no other object, they return the error "nothing
+selected".
 
 ## Shaper Groups
 
