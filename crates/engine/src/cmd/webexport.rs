@@ -21,7 +21,7 @@ use vectorcraft_render::encode::quantize::{self, Dither, Indexed, PaletteOptions
 use vectorcraft_render::encode::web::{self, ColorSort};
 use vectorcraft_render::encode::{gif, jpeg, png};
 
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_or, has_doc, str_param, unique_name};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_or, has_doc, str_param, unique_name_from};
 
 const C: &str = "document.exportForWeb";
 
@@ -866,6 +866,8 @@ pub fn export_files(doc: &Document, selected: &[NodeId], s: &WebSettings, stem: 
         placed.push((None, Some(name)));
     } else {
         let mut taken = HashSet::new();
+        // Per base, where the suffix search resumes, so many slices of one name don't each count up from 2.
+        let mut next = std::collections::HashMap::new();
         for c in &cells {
             let kind = c.area.id.and_then(|id| doc.slice_options(id)).map(|o| o.kind).unwrap_or_default();
             if kind != SliceKind::Image {
@@ -875,7 +877,7 @@ pub fn export_files(doc: &Document, selected: &[NodeId], s: &WebSettings, stem: 
             let base: String = doc.slice_name(c.area).chars().map(|ch| if ch.is_alphanumeric() || "-_.".contains(ch) { ch } else { '-' }).collect();
             // A slice named after a Windows device (`aux`, `NUL`…) gets a `-` after the device name.
             let file = |base: &str| super::fileio::safe_file_name(&format!("{base}.{ext}"));
-            let base = unique_name(&base, |n| taken.contains(&file(n).to_lowercase()));
+            let base = unique_name_from(&base, &mut next, |n| taken.contains(&file(n).to_lowercase()));
             taken.insert(file(&base).to_lowercase());
             let name = format!("{IMAGES}/{}", file(&base));
             let [x0, y0, x1, y1] = c.px;
