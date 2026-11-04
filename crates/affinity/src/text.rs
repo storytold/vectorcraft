@@ -51,6 +51,9 @@ const MAX_TABLE_LINES: usize = 4096;
 /// Cells a table may have (rows × columns): each becomes a text object with its edge lines.
 const MAX_TABLE_CELLS: usize = 1 << 16;
 
+/// Work charged for each copy of a run's formatting a table cell keeps.
+const TABLE_RUN_COST: usize = 16;
+
 /// A table node (`TxtT`): the grid, the cells' text and the lines on the cell edges.
 pub(crate) fn table(r: &mut Reader, id: ObjId, world: Affine) -> Option<Table> {
     let s = r.s;
@@ -108,9 +111,10 @@ pub(crate) fn table(r: &mut Reader, id: ObjId, world: Affine) -> Option<Table> {
         let mut parts = run.text.split(CELL_BREAK).peekable();
         while let Some(part) = parts.next() {
             if !part.is_empty() {
+                // Each cell keeps its own copy of the run's formatting, so each copy is charged.
                 match target.and_then(|i| cells.get_mut(i)) {
-                    Some(cell) => cell.runs.push(TextRun { text: part.to_string(), ..run.clone() }),
-                    None => extra = true,
+                    Some(cell) if r.budget.spend(TABLE_RUN_COST).is_ok() => cell.runs.push(TextRun { text: part.to_string(), ..run.clone() }),
+                    _ => extra = true,
                 }
             }
             if parts.peek().is_some() {
@@ -157,6 +161,13 @@ pub(crate) fn story_runs(r: &mut Reader, story: ObjId, world: Affine) -> (Vec<Te
     let mut placeholders = false;
     let mut attribute_budget = Some(MAX_ATTRIBUTE_BYTES);
     for block in s.objs(story, b"Blok") {
+        // Shared blocks and run lists are visited once per link, so every visit is charged, empty or not.
+        let paragraph_runs = s.obj(block, b"PAtt").map(|p| s.objs(p, b"Runs")).unwrap_or_default();
+        let attribute_runs = s.obj(block, b"GAtt").map(|g| s.objs(g, b"Runs")).unwrap_or_default();
+        if r.budget.spend(1 + paragraph_runs.len() + attribute_runs.len()).is_err() {
+            r.warn("text beyond the work one document may hold (truncated)");
+            break;
+        }
         let Some(glyphs) = s.obj(block, b"Glyp") else {
             r.warn("a text block without readable characters (left out)");
             continue;
@@ -209,7 +220,7 @@ pub(crate) fn story_runs(r: &mut Reader, story: ObjId, world: Affine) -> (Vec<Te
         // Paragraph formats by end index; a run without an index covers the rest of the block.
         let mut paragraphs: Vec<(usize, Paragraph)> = Vec::new();
         let mut open: Option<Paragraph> = None;
-        for run in s.obj(block, b"PAtt").map(|p| s.objs(p, b"Runs")).unwrap_or_default() {
+        for run in paragraph_runs {
             let Some(attrs) = s.obj(run, b"Item") else { continue };
             let a = paragraph(r, attrs);
             first_align.get_or_insert(a.align);
@@ -238,7 +249,7 @@ pub(crate) fn story_runs(r: &mut Reader, story: ObjId, world: Affine) -> (Vec<Te
             }
         };
         let mut start = 0usize;
-        for run in s.obj(block, b"GAtt").map(|g| s.objs(g, b"Runs")).unwrap_or_default() {
+        for run in attribute_runs {
             let Some(index) = s.int(run, b"Indx").and_then(|v| usize::try_from(v).ok()) else {
                 r.warn("invalid text attribute range (bounded; unassigned characters use defaults)");
                 continue;
