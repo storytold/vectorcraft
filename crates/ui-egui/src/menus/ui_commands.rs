@@ -1206,6 +1206,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{action: name, set?: name} play the Actions panel's action named action as one undoable batch; set names the set to look in (default: every set). A name no action has, or one that more than one action in the sets looked in has, is an error and nothing plays → what command.batch returns",
     ),
     (
+        crate::panels::actions::START_RECORDING,
+        "Begin Recording",
+        "",
+        "{set?: index} begin recording an automatically named Action N in the Actions panel's set at set (0 is the top set), by default the current set or the first set; with no sets, make Set 1. The set becomes current, and ui.action.stop adds the recorded action after that set's existing actions. An explicit invalid set or an existing recording is an error and changes nothing → {set, name}",
+    ),
+    (
         crate::panels::actions::STOP_RECORDING,
         "Stop Playing/Recording",
         "",

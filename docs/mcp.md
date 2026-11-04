@@ -1774,6 +1774,10 @@ already walks Image Trace. Short agent entry points:
   cannot be used. While an action is recording, and for an index past the last set,
   an empty name, or a key or color that is not one of these, it is an error and nothing is added. The panel's Create
   New Action button and menu's New Action… open the `actionNew` dialog, whose Record runs this.
+- Actions: `ui.action.record {set?}` starts recording a new action in the chosen set, or the current set when `set`
+  is left out, and returns `{set, name}`. With no sets, it creates Set 1. The action gets the next available
+  `Action N` name in that set. The Actions panel's Begin Recording button runs this command. An invalid set or an
+  existing recording is an error and leaves the sets and recording unchanged.
 - Actions: `ui.action.options {set, action, name?, key?, cmd?, shift?, color?}` changes the action at
   `action` in set `set` and keeps its steps: `name` renames it, `key` with `cmd` and `shift` sets its function key,
   and `color` its Button Mode color, as `ui.action.new` takes them; a param left out keeps what the action has, and
