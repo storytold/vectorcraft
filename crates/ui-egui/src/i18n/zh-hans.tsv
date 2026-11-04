@@ -2006,6 +2006,11 @@ file-filter	Templates	模板
 	New Toolbar	新建工具栏
 	Show Toolbar	显示工具栏
 	List Toolbars	列出工具栏
+	Manage Toolbars…	管理工具栏…
+	Manage Toolbars	管理工具栏
+	Rename Toolbar	重命名工具栏
+	Duplicate Toolbar	复制工具栏
+	Delete Toolbar	删除工具栏
 	New {kind} Style…	新建{kind}样式…
 	New…	新建…
 	Next	下一个

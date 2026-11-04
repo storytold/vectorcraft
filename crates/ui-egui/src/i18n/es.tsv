@@ -2107,6 +2107,11 @@ font-technology	Variable	Variables
 	New Toolbar	Nueva barra de herramientas
 	Show Toolbar	Mostrar barra de herramientas
 	List Toolbars	Lista de barras de herramientas
+	Manage Toolbars…	Administrar barras de herramientas…
+	Manage Toolbars	Administrar barras de herramientas
+	Rename Toolbar	Cambiar nombre de la barra de herramientas
+	Duplicate Toolbar	Duplicar barra de herramientas
+	Delete Toolbar	Eliminar barra de herramientas
 	New {kind} Style…	Nuevo estilo de {kind}…
 	New…	Nuevo…
 	Next	Siguiente

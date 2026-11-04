@@ -2040,6 +2040,11 @@ font-technology	Variable	Променливи
 	New Toolbar	Нова лента с инструменти
 	Show Toolbar	Показване на лента с инструменти
 	List Toolbars	Списък на лентите с инструменти
+	Manage Toolbars…	Управление на лентите с инструменти…
+	Manage Toolbars	Управление на лентите с инструменти
+	Rename Toolbar	Преименуване на лентата с инструменти
+	Duplicate Toolbar	Дублиране на лентата с инструменти
+	Delete Toolbar	Изтриване на лентата с инструменти
 	New {kind} Style…	Нов стил ({kind})…
 	New…	Нов…
 	Next	Следващ
