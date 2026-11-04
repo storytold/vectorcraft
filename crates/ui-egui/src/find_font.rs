@@ -130,8 +130,10 @@ fn push_family(rows: &mut Vec<Row>, db: &vectorcraft_text::FontDb, family: &str)
         return;
     }
     let mut styles = db.styles(family);
-    // The face a style-less request picks comes first, by its own name, not again without one.
-    if let Some(closest) = db.face(family, "").map(|f| f.style.clone())
+    // The style a style-less request picks comes first, by its own name, not again without one. Its
+    // name comes from the catalog's metadata: the rows of every family would otherwise have to read
+    // the family's font files.
+    if let Some(closest) = db.closest_style(family)
         && let Some(i) = styles.iter().position(|s| s.eq_ignore_ascii_case(&closest))
     {
         let style = styles.remove(i);
@@ -151,6 +153,18 @@ fn rows_json(rows: &[Row]) -> Value {
     Value::Array(rows.iter().map(|r| json!({ "family": r.family, "style": r.style })).collect())
 }
 
+/// Can the replacement name that very face: `family` and `style` both exist, no stand-in. A row of
+/// an unavailable style stays listed, but only a font with that style is chosen as the replacement.
+fn exact(family: &str, style: &str) -> bool {
+    !family.is_empty() && vectorcraft_text::FontDb::global().resolve(family, style).is_some_and(|(_, m)| m == vectorcraft_text::FontMatch::Exact)
+}
+
+/// Can a row be chosen as the replacement: its family is installed and the style is the font's own
+/// (or the family names no styles, and its closest style stands for them).
+fn listed(row: &Row) -> bool {
+    installed(&row.family) && (row.style.is_empty() || exact(&row.family, &row.style))
+}
+
 /// Is `family` installed: it resolves to a face of its own, as `text.replaceFont` requires.
 fn installed(family: &str) -> bool {
     !family.is_empty()
@@ -161,6 +175,10 @@ fn installed(family: &str) -> bool {
 /// and it is one of the list Replace With Font From shows (System's list is the font menu).
 fn can_replace(d: &Dialog, families: Option<&[String]>) -> bool {
     let family = d.str("family");
+    let style = d.str("style");
+    if !style.is_empty() && !exact(&family, &style) {
+        return false;
+    }
     match families {
         Some(list) => can_replace_in(&family, installed, list),
         None => can_replace_in(&family, installed, &vectorcraft_text::FontDb::global().menu_family_list()),
@@ -182,12 +200,12 @@ fn set_source(app: &VectorcraftApp, d: &mut Dialog, source: &str, used: &[Value]
     // The chosen font stays only when the new list has that family and style; otherwise the family
     // and the style both come from a row the list shows, so Change replaces with what is listed.
     let (family, style) = (d.str("family"), d.str("style"));
-    if rows.iter().any(|r| r.family.eq_ignore_ascii_case(&family) && r.style.eq_ignore_ascii_case(&style) && installed(&r.family)) {
+    if rows.iter().any(|r| r.family.eq_ignore_ascii_case(&family) && r.style.eq_ignore_ascii_case(&style) && listed(r)) {
         return;
     }
     let system = if source == "system" { system_family() } else { String::new() };
     let pick =
-        rows.iter().find(|r| !system.is_empty() && r.family.eq_ignore_ascii_case(&system)).or_else(|| rows.iter().find(|r| installed(&r.family)));
+        rows.iter().find(|r| !system.is_empty() && r.family.eq_ignore_ascii_case(&system) && listed(r)).or_else(|| rows.iter().find(|r| listed(r)));
     d.fields.insert("family".into(), json!(pick.map(|r| r.family.clone()).unwrap_or_default()));
     d.fields.insert("style".into(), json!(pick.map(|r| r.style.clone()).unwrap_or_default()));
 }
@@ -543,6 +561,41 @@ mod tests {
         app
     }
 
+    /// The catalog's closest style is the face a style-less request resolves to, and finding it reads
+    /// no font file.
+    #[test]
+    fn the_closest_style_is_the_face_a_style_less_request_gets() {
+        let db = vectorcraft_text::FontDb::global();
+        for family in ["Source Sans 3", "Inter"] {
+            let closest = db.closest_style(family).unwrap_or_else(|| panic!("{family} is installed"));
+            let face = db.face(family, "").unwrap_or_else(|| panic!("{family} resolves"));
+            assert_eq!(closest, face.style, "{family}");
+        }
+    }
+
+    /// A document font drawn in a substitute style stays listed, but it is not chosen as the
+    /// replacement and Change stays off for it: only a style the font has can be the target.
+    #[test]
+    fn a_substituted_style_is_listed_but_not_chosen() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        // A style Source Sans 3 has none of: its closest style stands in.
+        app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Source Sans 3", "style": "Black Wide"})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 70, "text": "Hi", "font": "Inter"})).unwrap();
+        open(&mut app);
+        let used = fonts(&mut app);
+        assert!(used.iter().any(|f| f["family"] == "Source Sans 3" && f["style"] == "Black Wide" && f["status"] == "substitute"), "{used:?}");
+        let rows = replacement_rows(&app, "document", &used);
+        let stand_in = Row { family: "Source Sans 3".into(), style: "Black Wide".into() };
+        assert!(rows.contains(&stand_in), "the row stays listed: {rows:?}");
+        let mut d = app.ui.dialog.clone().unwrap();
+        set_source(&app, &mut d, "document", &used);
+        assert_eq!((d.str("family").as_str(), d.str("style").as_str()), ("Inter", "Regular"), "the first font whose style it has");
+        d.fields.insert("family".into(), json!("Source Sans 3"));
+        d.fields.insert("style".into(), json!("Black Wide"));
+        assert!(!can_replace(&d, replacement_families(&app, "document", &used).as_deref()), "Change stays off for the stand-in style");
+    }
+
     /// A new source picks the family and the style from a row its list shows, so Change replaces with
     /// what is listed rather than a closest style of its own choosing.
     #[test]
@@ -689,7 +742,7 @@ mod tests {
             "one row per family and style the document uses"
         );
         let db = vectorcraft_text::FontDb::global();
-        let closest = db.face("Inter", "").expect("Inter is installed").style.clone();
+        let closest = db.closest_style("Inter").expect("Inter is installed");
         let recent = replacement_rows(&app, "recent", &used);
         assert_eq!(recent.first(), Some(&Row { family: "Inter".into(), style: closest.clone() }), "the closest style comes first, by name");
         assert!(recent.iter().all(|r| r.family == "Inter"), "{recent:?}");
