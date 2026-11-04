@@ -2780,8 +2780,8 @@ give it `swatch` (and `tint` %, default 100 or a tint swatch's own) instead of `
 {stops}` or a `gradient` paint's stops. Editing or deleting the swatch then recolours or unlinks the stop, in art and
 in gradient swatches. A spot stop separates on its plate. A linear or radial gradient whose stops are all tints of one spot ink (or
 paper white, 0 %) exports to PDF as a Separation shading, and one that mixes spot inks with other spot, CMYK or gray
-inks exports as a DeviceN shading. A gradient that mixes a spot ink with RGB or Lab colours is written in process
-colours, with a warning. Freeform gradients and dithered fills export to PDF as images in process colours, and Method
+inks exports as a DeviceN shading. A gradient that mixes a spot ink with RGB or Lab colors is written in process
+colors, with a warning. Freeform gradients and dithered fills export to PDF as images in process colors, and Method
 above covers Perceptual gradients.
 
 ```json
