@@ -166,7 +166,17 @@ fn scale_option(app: &VectorcraftApp, d: &Dialog, field: &str) -> bool {
 /// The Scale Corners and Scale Strokes & Effects checkboxes (fields `corners` and `strokes`),
 /// starting from the preferences.
 pub(super) fn scale_options(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    for (field, _, label) in SCALE_OPTIONS {
+    scale_options_ordered(app, ui, d, false);
+}
+
+/// [`scale_options`], with `strokes_first` putting Scale Strokes & Effects above Scale Corners as
+/// Transform Each lists them.
+pub(super) fn scale_options_ordered(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, strokes_first: bool) {
+    let mut options = SCALE_OPTIONS;
+    if strokes_first {
+        options.reverse();
+    }
+    for (field, _, label) in options {
         let on = scale_option(app, d, field);
         d.fields.insert(field.into(), Value::Bool(on));
         form::check(ui, d, field, tl!(label));

@@ -1149,6 +1149,35 @@ fn glyph_target(t: &TextObject, p: &Value, c: &str) -> Result<(char, std::ops::R
     Err(bad(c, format!("no character at byte {start}")))
 }
 
+/// The glyph of `face` that `lay` draws for the character `ch` at `bytes` of `plain`, the laid-out
+/// text; `None` when the character is not laid out (overflowing text). A character that starts a
+/// longer grapheme (a letter and its combining marks) is drawn in the grapheme's cluster. Of a
+/// cluster of several glyphs (a mark, a vowel sign drawn before the letter), the character's glyph
+/// is its default glyph or one of its alternates; `Some(None)` when the cluster holds neither.
+fn own_glyph(
+    plain: &str,
+    lay: &vectorcraft_text::TextLayout,
+    ch: char,
+    bytes: &std::ops::Range<usize>,
+    face: &vectorcraft_text::FontFace,
+) -> Option<Option<u32>> {
+    lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len))?;
+    let grapheme = edit::next_cluster(plain, bytes.start).max(bytes.end) - bytes.start;
+    let cluster: Vec<u32> = lay
+        .glyphs
+        .iter()
+        .filter(|g| g.byte == bytes.start && [bytes.len(), grapheme].contains(&g.len) && g.font_id == face.id())
+        .map(|g| g.gid)
+        .collect();
+    Some(match cluster[..] {
+        [one] => Some(one),
+        _ => {
+            let (default, listed) = (face.glyph_for(ch), face.alternates(ch));
+            cluster.into_iter().find(|&g| g == default || listed.iter().any(|a| a.gid == g))
+        }
+    })
+}
+
 fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setGlyphAlternate";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
@@ -1174,40 +1203,21 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     // The glyph the character is drawn with when it holds no choice, drawn alone in its face: a
     // feature of its style (`salt`, a stylistic set) can draw another glyph than the default one.
     // The default glyph is then kept as a choice, so that it is drawn. A character that is not laid
-    // out (overflowing text) is shaped alone in its style and writing direction. A character that starts a longer
-    // grapheme (a letter and its combining marks) is drawn in the grapheme's cluster, and is shaped
-    // with the grapheme. Of a cluster of several glyphs (a mark, a vowel sign drawn before the
-    // letter), the character's glyph is its default glyph or one of its alternates.
+    // out (overflowing text) is shaped alone in its writing direction, with the rest of its grapheme
+    // in the grapheme's own styles.
     let plain = t.plain_text();
     let grapheme = plain.get(bytes.start..edit::next_cluster(&plain, bytes.start).max(bytes.end)).map_or_else(|| ch.to_string(), str::to_owned);
-    let listed = face.alternates(ch);
-    let own_glyph = |lay: &vectorcraft_text::TextLayout, at: usize| {
-        let cluster: Vec<u32> = lay
-            .glyphs
-            .iter()
-            .filter(|g| g.byte == at && [bytes.len(), grapheme.len()].contains(&g.len) && g.font_id == face.id())
-            .map(|g| g.gid)
-            .collect();
-        match cluster[..] {
-            [one] => Some(one),
-            _ => cluster.into_iter().find(|&g| g == default || listed.iter().any(|a| a.gid == g)),
-        }
-    };
-    let alone_in_face = |lay: &vectorcraft_text::TextLayout| {
-        let found = lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len));
-        found.map(|_| own_glyph(lay, bytes.start))
-    };
     let unchosen = match holder.as_ref().filter(|_| !styled) {
         None => None,
         Some((_, run)) => {
             let mut probe = t.clone();
             edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = None);
             let db = vectorcraft_text::FontDb::global();
-            alone_in_face(&vectorcraft_text::layout(db, &probe)).unwrap_or_else(|| {
-                let st = CharStyle { glyph_alternate: None, ..run.style.clone() };
-                let mut single = TextObject::point(Point::ZERO, &grapheme, st);
+            own_glyph(&plain, &vectorcraft_text::layout(db, &probe), ch, &bytes, &face).unwrap_or_else(|| {
+                let mut single = TextObject::point(Point::ZERO, &grapheme, run.style.clone());
+                single.runs = edit::slice_runs(&probe.runs, bytes.start, bytes.start + grapheme.len());
                 single.vertical = t.vertical;
-                own_glyph(&vectorcraft_text::layout(db, &single), 0)
+                own_glyph(&grapheme, &vectorcraft_text::layout(db, &single), ch, &(0..bytes.len()), &face).flatten()
             })
         }
     };
@@ -1230,10 +1240,9 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
         let shown = || {
             let mut probe = t.clone();
             edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = Some(c.clone()));
-            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe);
-            lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len)).map(|g| g.gid)
+            own_glyph(&plain, &vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe), ch, &bytes, &face)
         };
-        if styled || shown().is_some_and(|g| g != c.gid) {
+        if styled || shown().is_some_and(|g| g != Some(c.gid)) {
             return Err(bad(
                 C,
                 format!("glyph {} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)", c.gid),
@@ -1259,7 +1268,8 @@ fn glyph_alternates(s: &mut Session, p: &Value) -> Result<Value> {
     let (ch, bytes, face) = glyph_target(&t, p, C)?;
     let default = face.glyph_for(ch);
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
-    let chosen = lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len)).map_or(default, |g| g.gid);
+    let first = lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len)).map(|g| g.gid);
+    let chosen = own_glyph(&t.plain_text(), &lay, ch, &bytes, &face).flatten().or(first).unwrap_or(default);
     let alternates: Vec<Value> = face.alternates(ch).iter().map(|a| json!({"gid": a.gid, "feature": String::from_utf8_lossy(&a.feature)})).collect();
     Ok(json!({"char": ch.to_string(), "font": face.family, "style": face.style, "default": default, "chosen": chosen, "alternates": alternates}))
 }

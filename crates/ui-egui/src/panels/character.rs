@@ -590,17 +590,27 @@ fn text_key(app: &mut VectorcraftApp, k: ToolKey, m: Mods) {
 }
 
 fn text_paste(app: &mut VectorcraftApp, s: Option<String>, plain: bool) {
-    let text_from_clip = CLIP.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    let s = s.unwrap_or(text_from_clip);
+    let s = match s {
+        Some(text) => text,
+        None if app.services.system_clipboard.is_some() => app.written_clipboard_text().unwrap_or_default(),
+        None => CLIP.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+    };
     if !s.is_empty() {
-        if plain {
-            app.session.set_tool_option("copy", &json!([]));
-        } else if let Some(runs) = CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+        let internal = app.type_paste_has_our_clipboard();
+        let mut styled = false;
+        if !plain
+            && internal
+            && let Some(runs) = CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        {
             let clip_text: String =
                 serde_json::from_value::<Vec<vectorcraft_doc::TextRun>>(runs.clone()).unwrap_or_default().into_iter().map(|r| r.text).collect();
             if clip_text == s {
                 app.session.set_tool_option("copy", &runs);
+                styled = true;
             }
+        }
+        if !styled {
+            app.session.set_tool_option("copy", &json!([]));
         }
         let v = app.view_info();
         let target_before = crate::ime::target(&mut app.session, v);

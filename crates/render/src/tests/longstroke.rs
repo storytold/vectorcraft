@@ -1,5 +1,5 @@
-//! A long stroke without dashes or a width profile is outlined in and around the view only
-//! (`crop_line`), and draws the same pixels as when it is outlined whole.
+//! A long stroke without a width profile is outlined in and around the view only (`crop_line`,
+//! and for dashes `dash_kept`), and draws the same pixels as when it is outlined whole.
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, LineCap, LineJoin, Node, StrokeLayer};
@@ -12,8 +12,13 @@ const SIZE: u32 = 200;
 
 /// A document holding `path` stroked with `st` and no fill.
 fn doc(path: &BezPath, st: StrokeLayer) -> Document {
+    doc_with(path, vec![AppearanceItem::Stroke(st)])
+}
+
+/// A document holding `path` painted with `items`.
+fn doc_with(path: &BezPath, items: Vec<AppearanceItem>) -> Document {
     let mut d = Document::new(1000.0, 1000.0);
-    let n = Node::path(d.alloc_id(), PathData::from_bezpath(path), Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() });
+    let n = Node::path(d.alloc_id(), PathData::from_bezpath(path), Appearance { items, ..Default::default() });
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
     d
@@ -95,6 +100,111 @@ fn a_long_stroke_draws_the_same_pixels_outlined_near_the_view() {
             let next = *at + step.to_vec2();
             assert!(render(&mut r, d, next).pixels == whole(d, next).pixels, "{what}, moved by {step:?}: the same pixels");
         }
+    }
+}
+
+fn dashed(mut st: StrokeLayer, pattern: &[f64], offset: f64, align_corners: bool) -> StrokeLayer {
+    st.dash = Some(vectorcraft_doc::Dash { pattern: pattern.to_vec(), offset, align_corners });
+    st
+}
+
+/// A document holding `path` filled red and stroked with `st`.
+fn filled(path: &BezPath, st: StrokeLayer) -> Document {
+    let fill = AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0))));
+    doc_with(path, vec![fill, AppearanceItem::Stroke(st)])
+}
+
+#[test]
+fn a_long_dashed_stroke_draws_the_same_pixels_outlined_near_the_view() {
+    let round = stroke(6.0, LineJoin::Round, LineCap::Round);
+    let mut two_rings = ring(4000, 5000.0);
+    two_rings.extend(ring(3000, 4980.0).iter());
+    let cases = [
+        (
+            "zigzag, miter joins, square caps",
+            doc(&zigzag(), dashed(stroke(6.0, LineJoin::Miter, LineCap::Square), &[30.0, 12.0], 7.0, false)),
+            Point::new(12_000.0, 15.0),
+        ),
+        (
+            "ring through its start, a dash across it",
+            doc(&ring(4000, 5000.0), dashed(round.clone(), &[40.0, 25.0], 0.0, false)),
+            Point::new(5000.0, 0.0),
+        ),
+        ("ring, dots", doc(&ring(4000, 5000.0), dashed(round.clone(), &[0.0, 9.0], 0.0, false)), Point::new(0.0, 5000.0)),
+        ("ring filled, dashed", filled(&ring(4000, 5000.0), dashed(round.clone(), &[15.0, 10.0, 0.0, 10.0], 4.0, false)), Point::new(-5000.0, 0.0)),
+        (
+            "zigzag, dashes fitted to corners",
+            doc(&zigzag(), dashed(stroke(4.0, LineJoin::Bevel, LineCap::Butt), &[5.0, 3.0], 0.0, true)),
+            Point::new(8000.0, 15.0),
+        ),
+        ("two subpaths, dashed", doc(&two_rings, dashed(round.clone(), &[25.0, 15.0], 0.0, false)), Point::new(0.0, -4990.0)),
+        ("a pattern too fine, drawn solid", doc(&zigzag(), dashed(round, &[0.001, 0.001], 0.0, false)), Point::new(12_000.0, 15.0)),
+    ];
+    for (what, d, at) in &cases {
+        let mut r = Renderer::new();
+        let img = render(&mut r, d, *at);
+        assert!(r.strokes.values().any(|e| e.crop.is_some()), "{what}: outlined near the view");
+        assert!(img.pixels == whole(d, *at).pixels, "{what}: the same pixels as the whole outline");
+        assert!(img.pixels.chunks(4).any(|p| p[0] < 128), "{what}: the stroke shows");
+        for step in [Point::new(60.0, 40.0), Point::new(450.0, 0.0), Point::new(-900.0, 300.0)] {
+            let next = *at + step.to_vec2();
+            assert!(render(&mut r, d, next).pixels == whole(d, next).pixels, "{what}, moved by {step:?}: the same pixels");
+        }
+    }
+}
+
+#[test]
+fn a_long_dashed_stroke_draws_the_same_pixels_after_its_path_changes() {
+    let st = dashed(stroke(5.0, LineJoin::Miter, LineCap::Butt), &[18.0, 7.0], 3.0, false);
+    let at = Point::new(12_000.0, 15.0);
+    let mut r = Renderer::new();
+    render(&mut r, &doc(&zigzag(), st.clone()), at);
+    // An anchor in the view moved, then one far before it, which shifts every dash after it.
+    for (i, by) in [(1501, Vec2::new(0.0, 12.0)), (40, Vec2::new(-3.0, 0.0))] {
+        let mut bp = zigzag();
+        let mut els = bp.elements().to_vec();
+        let Some(kurbo::PathEl::LineTo(p)) = els.get_mut(i) else {
+            panic!("anchor {i} is not a line");
+        };
+        *p += by;
+        bp = BezPath::from_vec(els);
+        let d = doc(&bp, st.clone());
+        assert!(render(&mut r, &d, at).pixels == whole(&d, at).pixels, "anchor {i} moved: the same pixels");
+    }
+}
+
+#[test]
+fn short_dashed_strokes_are_outlined_whole() {
+    let st = dashed(stroke(4.0, LineJoin::Round, LineCap::Round), &[6.0, 4.0], 0.0, false);
+    let one = BezPath::from_vec(vec![kurbo::PathEl::MoveTo(Point::new(100.0, 100.0))]);
+    let mut dot = one.clone();
+    dot.line_to((100.0, 100.0));
+    for (what, bp) in
+        [("empty", BezPath::new()), ("one anchor", one), ("one anchor, closed on itself", dot), ("a ring of 40 anchors", ring(40, 80.0))]
+    {
+        let d = doc(&bp, st.clone());
+        let mut r = Renderer::new();
+        let img = render(&mut r, &d, Point::new(100.0, 100.0));
+        assert!(r.strokes.values().all(|e| e.crop.is_none()), "{what}: outlined whole");
+        assert!(img.pixels == whole(&d, Point::new(100.0, 100.0)).pixels, "{what}: the same pixels");
+    }
+}
+
+#[test]
+fn a_dashed_stroke_a_wide_stroke_crosses_over_draws_the_same_pixels() {
+    // The closed sliver of `a_stroke_a_wide_stroke_crosses_over_stays_whole`, dashed.
+    let mut bp = BezPath::new();
+    bp.move_to((0.0, 0.0));
+    for i in 1..=2000 {
+        bp.line_to((f64::from(i) * 10.0, 0.0));
+    }
+    bp.line_to((20_000.0, 4.0));
+    bp.line_to((0.0, 4.0));
+    bp.close_path();
+    let d = doc(&bp, dashed(stroke(10.0, LineJoin::Miter, LineCap::Butt), &[35.0, 15.0], 0.0, false));
+    for at in [Point::new(20_000.0, 2.0), Point::new(9_000.0, 2.0), Point::new(0.0, 2.0)] {
+        let mut r = Renderer::new();
+        assert!(render(&mut r, &d, at).pixels == whole(&d, at).pixels, "at {at:?}: the same pixels");
     }
 }
 

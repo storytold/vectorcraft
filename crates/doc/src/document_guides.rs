@@ -6,9 +6,15 @@ impl Document {
     /// Union of the geometric bounds of `ids` (their visual bounds when `visual`), with symbol
     /// instances measured by their art ([`Node::geometric_bounds_with`]).
     pub fn bounds_of(&self, ids: &[NodeId], visual: bool) -> Option<Rect> {
-        let symbols = self.symbol_boxes();
+        self.bounds_of_with(ids, visual, &self.symbol_boxes())
+    }
+
+    /// [`bounds_of`](Document::bounds_of) measuring symbol instances from `symbols`, a cache shared
+    /// across calls: measuring many instances one by one otherwise measures their art again for
+    /// each.
+    pub fn bounds_of_with(&self, ids: &[NodeId], visual: bool, symbols: &crate::SymbolBoxes) -> Option<Rect> {
         ids.iter().filter_map(|id| self.node(*id)).fold(None, |acc, n| {
-            vectorcraft_geom::union_opt(acc, if visual { n.visual_bounds_with(&symbols) } else { n.geometric_bounds_with(&symbols) })
+            vectorcraft_geom::union_opt(acc, if visual { n.visual_bounds_with(symbols) } else { n.geometric_bounds_with(symbols) })
         })
     }
 

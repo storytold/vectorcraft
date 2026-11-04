@@ -8,11 +8,12 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
+use vectorcraft_doc::appearance::SharedStack;
 use vectorcraft_doc::{Document, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_render::effects;
 
-use super::appearance::{ItemTarget, aligned, appearance_targets, index_param, item_indices, item_target, item_target_at, shared_stack};
+use super::appearance::{ItemTarget, aligned, appearance_targets, index_param, item_indices, item_target, item_target_at};
 use super::expand::has_seeded;
 use super::rasterfx;
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, fileio, has_doc, str_param};
@@ -105,24 +106,23 @@ fn ids_json(ids: &[NodeId]) -> Value {
 /// Each target of an effect edit aimed at `item` and effect `index`: the object, the item whose
 /// effects it edits (`None`: the object's own) and the effect's index there. With `aligned` (see
 /// [`ItemTarget::per_target`]) `item` and `index` are the first target's, and each other target
-/// edits its equal item, or its equal object-level effect; a target without them is left out.
+/// edits its equal item, or its equal object-level effect, each target matched on its own whatever
+/// the other targets have; in a target without them, `item` and `index` stand for themselves.
 pub(crate) fn effect_targets(s: &Session, p: &Value, item: ItemTarget, index: usize, cmd: &str) -> Result<Vec<(NodeId, Option<usize>, usize)>> {
     let roots = appearance_targets(s, p)?;
     let d = &s.doc()?.doc;
     let per = item.per_target(s, &roots);
-    let shared = if aligned(p) { shared_stack(d, &roots) } else { None };
+    let first = roots.first().and_then(|f| d.node(*f));
+    // Whether `item` names an item in the stack it is a row of (else the edit is object-level there).
+    let anchor = roots.get(item.anchor(s, &roots)).and_then(|a| d.node(*a));
+    let anchor_level = anchor.map(|a| item.effects_item(&a.appearance, cmd)).transpose()?.flatten();
     let mut out = Vec::with_capacity(roots.len());
-    for (k, (id, item)) in roots.iter().zip(per).enumerate() {
+    for (id, item) in roots.iter().zip(per) {
         let (Some(item), Some(n)) = (item, d.node(*id)) else { continue };
         let at = item.effects_item(&n.appearance, cmd)?;
-        // An object-level effect the targets share is, in each, where it is there.
-        let first = roots.first().and_then(|f| d.node(*f));
-        let first_level = first.map(|f| item.effects_item(&f.appearance, cmd)).transpose()?.flatten();
-        let index = match (&shared, at, first_level) {
-            (Some(sh), None, None) if sh.has_effect(index) => match sh.effect_in(index, k) {
-                Some(i) => i,
-                None => continue,
-            },
+        // An object-level effect this target shares with the first is where it is in this target.
+        let index = match (first.filter(|_| aligned(p)), at, anchor_level) {
+            (Some(f), None, None) => SharedStack::of(&[&*f.appearance, &*n.appearance]).effect_in(index, 1).unwrap_or(index),
             _ => index,
         };
         out.push((*id, at, index));

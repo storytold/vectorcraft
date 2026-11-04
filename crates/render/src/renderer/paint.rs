@@ -269,10 +269,21 @@ impl Renderer {
             e.stamp = self.stamp;
             return Some(e.outline.clone());
         }
-        // A long stroke without dashes or a width profile is outlined only in and around the view,
-        // with a margin of the view's own size on each side ([`crop_line`]).
+        // A long stroke without a width profile is outlined only in and around the view, with a
+        // margin of the view's own size on each side ([`crop_dashed`] for a dashed one,
+        // [`crop_line`] otherwise).
         let region = v.inflate(v.width(), v.height());
         let tol = 2f64.powi(level);
+        if crops()
+            && line.elements().len() > CROP_ELEMENTS
+            && st.dash.is_some()
+            && st.profile.is_none()
+            && let Some(outline) = crop_dashed(line, st, width, region, crop_reach(st, width, f.px, tol), tol)
+        {
+            let outline = Arc::new(outline);
+            self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop: Some(region) });
+            return Some(outline);
+        }
         let cropped = (crops() && line.elements().len() > CROP_ELEMENTS && st.dash.is_none() && st.profile.is_none())
             .then(|| crop_line(line, region, crop_reach(st, width, f.px, tol), width))
             .flatten();
@@ -316,6 +327,38 @@ pub(crate) fn crop_reach(st: &StrokeLayer, width: f64, px: f64, tol: f64) -> f64
     width / 2.0 * corner + 2.0 * px + tol
 }
 
+/// Whether the box of segment `s`'s control points meets `near`. A coordinate that is not a number
+/// counts as near.
+fn is_near(s: &kurbo::PathSeg, near: Rect) -> bool {
+    use kurbo::PathSeg;
+    let pts: &[kurbo::Point] = match s {
+        PathSeg::Line(l) => &[l.p0, l.p1],
+        PathSeg::Quad(q) => &[q.p0, q.p1, q.p2],
+        PathSeg::Cubic(c) => &[c.p0, c.p1, c.p2, c.p3],
+    };
+    !(pts.iter().all(|p| p.x < near.x0)
+        || pts.iter().all(|p| p.x > near.x1)
+        || pts.iter().all(|p| p.y < near.y0)
+        || pts.iter().all(|p| p.y > near.y1))
+}
+
+/// The outline of the line `line` of dashed stroke `st` (without a width profile) at `width`,
+/// flattened to `tol`, made from the segments within `reach` of `region` only, for drawing in
+/// `region`. The dashes and dots on those segments sit where the whole line puts them
+/// ([`effects::stroke::dash_kept`]); a pattern that draws the stroke solid is outlined as a solid
+/// line along [`crop_line`]. `None` when every segment is kept.
+fn crop_dashed(line: &BezPath, st: &StrokeLayer, width: f64, region: Rect, reach: f64, tol: f64) -> Option<BezPath> {
+    let near = region.inflate(reach, reach);
+    if kurbo::segments(line.elements().iter().copied()).all(|s| is_near(&s, near)) {
+        return None;
+    }
+    if let Some(outline) = effects::stroke::dashed_line_outline_kept(line, st, width, tol, &|s| is_near(s, near)) {
+        return Some(outline);
+    }
+    let solid = StrokeLayer { dash: None, ..st.clone() };
+    crop_line(line, region, reach, width).map(|part| effects::stroke::line_outline(&part, &solid, width, tol))
+}
+
 /// The stroke line `line` without the segments whose control points' box lies more than `reach`
 /// from `region`, for outlining a stroke of `width` that is drawn only in `region`. A subpath that
 /// loses some of its segments is replaced by its runs of kept segments, each an open subpath; a
@@ -326,18 +369,7 @@ pub(crate) fn crop_reach(st: &StrokeLayer, width: f64, px: f64, tol: f64) -> f64
 pub(crate) fn crop_line(line: &BezPath, region: Rect, reach: f64, width: f64) -> Option<BezPath> {
     use kurbo::{PathEl, PathSeg};
     let near = region.inflate(reach, reach);
-    let keep = |s: &PathSeg| {
-        let pts: &[kurbo::Point] = match s {
-            PathSeg::Line(l) => &[l.p0, l.p1],
-            PathSeg::Quad(q) => &[q.p0, q.p1, q.p2],
-            PathSeg::Cubic(c) => &[c.p0, c.p1, c.p2, c.p3],
-        };
-        // A coordinate that is not a number keeps the segment.
-        !(pts.iter().all(|p| p.x < near.x0)
-            || pts.iter().all(|p| p.x > near.x1)
-            || pts.iter().all(|p| p.y < near.y0)
-            || pts.iter().all(|p| p.y > near.y1))
-    };
+    let keep = |s: &PathSeg| is_near(s, near);
     let els = line.elements();
     let mut starts: Vec<usize> = els.iter().enumerate().filter(|(_, e)| matches!(e, PathEl::MoveTo(_))).map(|(i, _)| i).collect();
     if starts.first() != Some(&0) {

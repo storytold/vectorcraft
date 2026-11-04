@@ -232,6 +232,47 @@ fn paste_without_formatting_takes_surrounding_style() {
     assert!(t2.runs.iter().all(|r| r.style.size == 10.0), "all runs take 10 pt size: {:?}", t2.runs);
 }
 
+#[test]
+fn external_plain_text_matching_an_old_copy_uses_destination_style() {
+    let _guard = TEST_CLIP_LOCK.lock().unwrap();
+    let (mut app, board) = super::sysclip::app();
+    let source = run(&mut app, "text.create", json!({"x": 20, "y": 40, "text": "Hello", "size": 36, "color": "#ff0000"}))["id"].as_u64().unwrap();
+    let v = app.view_info();
+    app.session.select_tool("type", v).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": source, "start": 0, "end": 5}));
+    crate::panels::character::intercept_text_command(&mut app, "edit.copy");
+    crate::background::wait_all(&mut app);
+
+    let own_destination =
+        run(&mut app, "text.create", json!({"x": 20, "y": 60, "text": "Own: ", "size": 12, "color": "#000000"}))["id"].as_u64().unwrap();
+    app.session.select_tool("type", v).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": own_destination, "start": 5, "end": 5}));
+    crate::panels::character::intercept_text_command(&mut app, "edit.paste");
+    let node = app.session.doc().unwrap().doc.node(NodeId(own_destination)).unwrap();
+    let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!() };
+    assert_eq!(t.plain_text(), "Own: Hello");
+    assert_eq!(t.runs.last().unwrap().style.size, 36.0, "our copy keeps its style");
+
+    // Another app later copies the same characters as plain text. Their style is unrelated.
+    super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::TEXT, b"Hello".to_vec())]);
+    let destination =
+        run(&mut app, "text.create", json!({"x": 20, "y": 80, "text": "Before ", "size": 12, "color": "#000000"}))["id"].as_u64().unwrap();
+    app.session.select_tool("type", v).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": destination, "start": 7, "end": 7}));
+    super::sysclip::frame(&mut app, vec![egui::Event::Paste("Hello".into())]);
+    assert_eq!(app.system_clipboard_text().as_deref(), Some("Hello"));
+    app.session.select_tool("selection", v).unwrap();
+    app.session.select_tool("type", v).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"id": destination, "start": 12, "end": 12}));
+    assert!(app.session.tool_wants_text());
+    assert!(crate::panels::character::intercept_text_command(&mut app, "edit.paste").is_some());
+
+    let node = app.session.doc().unwrap().doc.node(NodeId(destination)).unwrap();
+    let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!() };
+    assert_eq!(t.plain_text(), "Before HelloHello");
+    assert!(t.runs.iter().all(|run| run.style.size == 12.0 && run.style.fill == Paint::solid(Color::rgb8(0, 0, 0))));
+}
+
 /// https://helpx.adobe.com/illustrator/using/format-text.html
 #[test]
 fn copying_single_character_carries_formatting_across_documents() {
