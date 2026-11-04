@@ -3997,7 +3997,7 @@ axis	Both	Ambos
 @msg	Save for Web: the image is empty	Guardar para web: la imagen está vacía
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Guardar escribe {_1}, no {_2}: usa document.export para otros formatos
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Guardar escribe {_1}, no {_2}: usa file.saveAsTemplate para escribirlo
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 escribe archivos .ai heredados; una plantilla .ait siempre es compatible con PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 escribe archivos .ai heredados, no plantillas .ait
 @msg	Saved recovery data for {title}	Se guardaron los datos de recuperación de {title}
 @msg	Saved to User Defined: {_1}	Se guardó en Definido por el usuario: {_1}
 @msg	Saved {path}	Se guardó {path}
@@ -6117,6 +6117,7 @@ breakText	Glyphs	Glifos
 	Gap 5	Hueco 5
 
 @msg	{_1}: they came in as the page's art	{_1}: se importaron como el arte de la página
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	los objetos que se dibujaban de forma distinta a la página del propio archivo se importaron como el arte de la página: {_1}
 
 @msg	You must choose a side pattern.	Debe elegir un motivo lateral.
 @msg	invalid pattern tile choice	selección de mosaico de motivo no válida

@@ -4154,7 +4154,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: この環境にはファイルシステムがありません (開くには dataBase64 を渡し、dataBase64 を受け取るにはパスを省略してください)
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	保存できる形式は {_1} のみで、{_2} 形式では保存できません: ほかの形式には document.export を使用してください
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	保存できる形式は {_1} のみで、{_2} 形式では保存できません: この形式で保存するには file.saveAsTemplate を使用してください
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 は従来の .ai ファイルを書き出します。.ait テンプレートは常に PDF 互換です
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 は従来の .ai ファイルを書き出し、.ait テンプレートは書き出しません
 @msg	no changes since the last save	前回の保存以降、変更はありません
 @msg	unknown format `{f}` (Save writes {_1})	`{f}` は不明な形式です (保存できる形式: {_1})
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` には SVG オプションのオブジェクトを指定してください (document.formats を参照)
@@ -5860,6 +5860,7 @@ breakText	Glyphs	字形
 	Gap 5	間隔 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ページのアートとして読み込みました
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	ファイル自身のページと描画が異なるオブジェクトをページのアートとして読み込みました: {_1}
 
 @msg	You must choose a side pattern.	側面パターンを選択してください。
 @msg	invalid pattern tile choice	パターンタイルの選択が無効です

@@ -4219,7 +4219,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Save for Web: the image is empty	Tallenna verkkoon: kuva on tyhjä
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Tallenna kirjoittaa muotoa {_1}, ei {_2}: käytä muille muodoille komentoa document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Tallenna kirjoittaa muotoa {_1}, ei {_2}: kirjoita se komennolla file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 kirjoittaa vanhoja .ai-tiedostoja; .ait-malli on aina PDF-yhteensopiva
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 kirjoittaa vanhoja .ai-tiedostoja, ei .ait-malleja
 @msg	Saved recovery data for {title}	Tallennettiin palautustiedot: {title}
 @msg	Saved to User Defined: {_1}	Tallennettiin kohteeseen Käyttäjän määrittämä: {_1}
 @msg	Saved {path}	Tallennettiin {path}
@@ -6205,6 +6205,7 @@ breakText	Glyphs	Merkit
 	Gap 5	Väli 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ne tuotiin sivun piirroksena
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objektit, jotka piirtyivät eri tavoin kuin tiedoston oma sivu, tuotiin sivun piirroksena: {_1}
 
 @msg	You must choose a side pattern.	Valitse sivukuvio.
 @msg	invalid pattern tile choice	virheellinen kuviolaatan valinta

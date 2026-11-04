@@ -5104,7 +5104,7 @@ imageTrace	Outline	Körvonal
 @msg	Save for Web: the image is empty	Mentés webre: a kép üres
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	a Mentés ezt írja: {_1}, ezt nem: {_2}; más formátumhoz használd a document.export parancsot
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	a Mentés ezt írja: {_1}, ezt nem: {_2}; ennek írásához használd a file.saveAsTemplate parancsot
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	az aiVersion 7 régi .ai fájlokat ír; egy .ait sablon mindig PDF-kompatibilis
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	az aiVersion 7 régi .ai fájlokat ír, nem .ait sablonokat
 @msg	saved panel layout is invalid; reset the workspace first	a mentett panelelrendezés érvénytelen; előbb állítsd vissza a munkaterületet
 @msg	Saved recovery data for {title}	Helyreállítási adatok mentve: {title}
 @msg	Saved to User Defined: {_1}	Mentve a felhasználóiak közé: {_1}
@@ -6159,6 +6159,7 @@ breakText	Glyphs	Glifák
 	Gap 5	Hézag 5
 
 @msg	{_1}: they came in as the page's art	{_1}: az oldal rajzaként lettek importálva
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	a fájl saját oldalától eltérően rajzolt objektumok az oldal rajzaként lettek importálva: {_1}
 
 @msg	You must choose a side pattern.	Válasszon oldalsó mintát.
 @msg	invalid pattern tile choice	érvénytelen mintacsempe-választás

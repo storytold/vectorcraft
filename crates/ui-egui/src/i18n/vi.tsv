@@ -4758,7 +4758,7 @@ theme	Appearance	Giao diện
 @msg	Save for Web: the image is empty	Lưu cho Web: ảnh trống
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Lưu ghi {_1}, không phải {_2}: dùng document.export cho các định dạng khác
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Lưu ghi {_1}, không phải {_2}: dùng file.saveAsTemplate để ghi định dạng này
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 ghi tệp .ai cũ; mẫu .ait luôn tương thích PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 ghi tệp .ai cũ, không ghi mẫu .ait
 @msg	saved panel layout is invalid; reset the workspace first	bố cục bảng đã lưu không hợp lệ; hãy đặt lại không gian làm việc trước
 @msg	Saved recovery data for {title}	Đã lưu dữ liệu phục hồi cho {title}
 @msg	Saved to User Defined: {_1}	Đã lưu vào Người dùng tùy chỉnh: {_1}
@@ -5776,6 +5776,7 @@ breakText	Glyphs	Glyph
 	Gap 5	Khoảng hở 5
 
 @msg	{_1}: they came in as the page's art	{_1}: đã được nhập dưới dạng hình vẽ của trang
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	các đối tượng được vẽ khác với trang riêng của tệp đã được nhập dưới dạng hình vẽ của trang: {_1}
 
 @msg	You must choose a side pattern.	Bạn phải chọn mẫu bên.
 @msg	invalid pattern tile choice	lựa chọn ô mẫu không hợp lệ

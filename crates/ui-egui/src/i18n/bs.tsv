@@ -4257,7 +4257,7 @@ imageTrace	Outline	Obris
 @msg	Save for Web: the image is empty	Sačuvaj za web: slika je prazna
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Sačuvaj zapisuje {_1}, a ne {_2}: za druge formate koristite document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Sačuvaj zapisuje {_1}, a ne {_2}: za zapisivanje koristite file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 zapisuje naslijeđene .ai datoteke; .ait predložak je uvijek kompatibilan s PDF-om
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 zapisuje naslijeđene .ai datoteke, a ne .ait predloške
 @msg	Saved recovery data for {title}	Sačuvani podaci za oporavak za {title}
 @msg	Saved to User Defined: {_1}	Sačuvano u korisnički definisano: {_1}
 @msg	Saved {path}	Sačuvano: {path}
@@ -6061,6 +6061,7 @@ shape	Open	Otvoren
 @msg	the paths have nothing to merge there	putanje tu nemaju šta spojiti
 @msg	the path is locked or hidden	putanja je zaključana ili skrivena
 @msg	{_1}: they came in as the page's art	{_1}: uvezeni su kao ilustracija stranice
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekti koji su se iscrtali drugačije od vlastite stranice datoteke uvezeni su kao ilustracija stranice: {_1}
 
 @msg	You must choose a side pattern.	Morate odabrati bočni uzorak.
 @msg	invalid pattern tile choice	nevažeći izbor pločice uzorka

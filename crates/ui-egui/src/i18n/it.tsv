@@ -4039,7 +4039,7 @@ axis	Both	Entrambi
 @msg	Save for Web: the image is empty	Salva per il web: l'immagine è vuota
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Salva scrive {_1}, non {_2}: usa document.export per gli altri formati
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Salva scrive {_1}, non {_2}: usa file.saveAsTemplate per scriverlo
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 scrive file .ai tradizionali; un modello .ait è sempre compatibile PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 scrive file .ai tradizionali, non modelli .ait
 @msg	Saved recovery data for {title}	Dati di recupero salvati per {title}
 @msg	Saved to User Defined: {_1}	Salvato in Definito dall'utente: {_1}
 @msg	Saved {path}	Salvato {path}
@@ -5795,6 +5795,7 @@ breakText	Glyphs	Glifi
 	Gap 5	Spazio 5
 
 @msg	{_1}: they came in as the page's art	{_1}: sono stati importati come elementi grafici della pagina
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	gli oggetti disegnati in modo diverso dalla pagina del file stesso sono stati importati come elementi grafici della pagina: {_1}
 
 @msg	You must choose a side pattern.	Devi scegliere un motivo laterale.
 @msg	invalid pattern tile choice	scelta della tessera motivo non valida

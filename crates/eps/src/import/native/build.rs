@@ -1,8 +1,8 @@
-use super::compare::{MAX_DIFFERENCE, PageView, compare, difference};
+use super::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, compare, difference};
 use super::plan::{made_only, make_slots, plan, readable_all};
 use super::slots::{
-    ART_LEFT_OUT, Content, MAX_PAIRS, MAX_SLOTS, MAX_TEXT, OUTLINE_REACH, SlotInfo, TEXT_LEFT_OUT, TYPE_LEFT_OUT, collect_slots, extent, few,
-    fill_slots, letters, text_objects, words,
+    ART_LEFT_OUT, Content, DREW_DIFFERENTLY, MAX_PAIRS, MAX_SLOTS, MAX_TEXT, OUTLINE_REACH, SlotInfo, TEXT_LEFT_OUT, TYPE_LEFT_OUT, collect_slots,
+    extent, few, fill_slots, letters, text_objects, words,
 };
 use super::{Affine, Arc, BTreeSet, Document, Node, NodeId, NodeKind, PathData, Rect, Scaling, Story, Structure, Texts, Unit, Vec2, ai};
 
@@ -345,10 +345,22 @@ pub(super) fn build_from(
                         doc = other;
                         notes.extend(unseen_note(unseen).into_iter().chain(note));
                     }
-                    _ => {
-                        let more = drawn_or_trusted(&frame, &mut view, &mut doc, &envelopes_drawn, &notes, unseen, trust, why, reflow)?;
-                        notes.extend(more);
-                    }
+                    other => match drawn_or_trusted(&frame, &mut view, &mut doc, &envelopes_drawn, &notes, unseen, trust, why, reflow) {
+                        Ok(more) => notes.extend(more),
+                        // The objects that draw differently from the page come in as its art, from
+                        // the placement that draws closer to it.
+                        Err(why) => {
+                            let other = other.map(|(_, other, unseen)| (other, unseen));
+                            let placements = closer_first(&frame, &mut view, (doc, unseen), other, reflow);
+                            let Some((kept, unseen, kept_notes)) = placements.into_iter().find_map(|(base, unseen)| {
+                                keep_differing(&base, &frame, &mut view, &threaded_frames, &shown, reflow).map(|(kept, n)| (kept, unseen, n))
+                            }) else {
+                                return Err(why);
+                            };
+                            doc = kept;
+                            notes.extend(unseen_note(unseen).into_iter().chain(kept_notes));
+                        }
+                    },
                 },
             }
         }
@@ -768,6 +780,135 @@ fn replace_unread(
         }
     }
     Ok(counts.into_iter().map(|(kind, count)| format!("{kind} ({count})")).collect())
+}
+
+/// Most objects of the layers that come in as the page's art where they draw differently from it.
+const MAX_DIFFERING: usize = 64;
+
+/// Most pairs of a patch where the layers and the page differ and a top-level object that may hold
+/// it, weighed to find the objects that come in as the page's art.
+const MAX_PATCH_PAIRS: usize = 4_000_000;
+
+/// The layers as read and at the placed files' other placement (each with its count of text
+/// objects the page doesn't draw), the one that draws closer to the page first. `reflow` as in
+/// [`PageView::difference`].
+fn closer_first(
+    frame: &Frame<'_>,
+    view: &mut PageView,
+    doc: (Document, usize),
+    other: Option<(Document, usize)>,
+    reflow: bool,
+) -> Vec<(Document, usize)> {
+    match other {
+        Some(other) if view.difference(&other.0, frame.rect, reflow).any < view.difference(&doc.0, frame.rect, reflow).any => vec![other, doc],
+        Some(other) => vec![doc, other],
+        None => vec![doc],
+    }
+}
+
+/// `doc`, whose layers draw differently from the page (an object in another color, or one that only
+/// one of them draws), with each of its top-level objects that holds such a difference replaced by the
+/// page's art in its bounds, when that makes the two look alike → the document and its notes: the
+/// comparison's, and how many objects were replaced on each layer (by name, in the layers' order).
+/// `None` when only edges or type differ, a difference lies outside every object, more than half
+/// of the objects (or more than [`MAX_DIFFERING`]) hold one, one of them holds type or a wrap
+/// object, the page's art can't replace one of them ([`replace_unread`]), the page's type of a text
+/// object that stays is copied into a replacement, or the two still differ. `shown` is the page's
+/// type of each text object that shows. `reflow` as in [`PageView::difference`].
+fn keep_differing(
+    doc: &Document,
+    frame: &Frame<'_>,
+    view: &mut PageView,
+    threaded_frames: &BTreeSet<NodeId>,
+    shown: &[Vec<Arc<Node>>],
+    reflow: bool,
+) -> Option<(Document, Vec<String>)> {
+    /// The top-level objects that show and print (the outermost objects under a layer or
+    /// sublayer), with the name of that layer or sublayer as the Layers panel shows it and their
+    /// bounds.
+    fn top_level(nodes: &[Arc<Node>], layer: &str, out: &mut Vec<(String, NodeId, Rect)>) {
+        for n in nodes.iter().filter(|n| n.visible) {
+            match &n.kind {
+                NodeKind::Layer { printable: false, .. } => {}
+                NodeKind::Layer { .. } => {
+                    let name = Some(n.display_name()).filter(|name| !name.is_empty()).unwrap_or_else(|| format!("<{}>", n.kind_label()));
+                    top_level(n.children().map_or(&[], Vec::as_slice), &name, out);
+                }
+                NodeKind::Path { guide: true, .. } => {}
+                _ => {
+                    if let Some(b) = n.visual_bounds().filter(|b| b.area().is_finite() && b.area() > 0.0) {
+                        out.push((layer.to_string(), n.id, b));
+                    }
+                }
+            }
+        }
+    }
+
+    // Where only spread edges or type differ, or only the art around the page, no object is
+    // replaced.
+    let (diff, regions) = view.solid_regions(doc, frame.rect, reflow)?;
+    if diff.solid <= MAX_SOLID_DIFFERENCE {
+        return None;
+    }
+    let mut objects = vec![];
+    top_level(&doc.layers, "", &mut objects);
+    objects.retain(|(_, _, b)| !b.intersect(frame.rect).is_zero_area());
+    if regions.len().saturating_mul(objects.len()) > MAX_PATCH_PAIRS {
+        return None;
+    }
+    // Each patch is the smallest object's that holds it.
+    let most = MAX_DIFFERING.min(objects.len() / 2);
+    let mut targets = BTreeSet::new();
+    for region in regions {
+        let (_, id, _) = objects.iter().filter(|(_, _, b)| inside(region, *b)).min_by(|a, b| a.2.area().total_cmp(&b.2.area()))?;
+        targets.insert(*id);
+        if targets.len() > most {
+            return None;
+        }
+    }
+    if targets.is_empty() {
+        return None;
+    }
+    // A replaced wrap object keeps its wrap options, and the area type is wrapped around the page's
+    // art that replaces it. An object inside a replaced group can't keep them, so such a group isn't
+    // replaced. Neither is an object that holds type: the page's art that replaces it would hold
+    // type the page draws for other text objects too.
+    let mut wraps = vec![];
+    for id in &targets {
+        let node = doc.node(*id)?;
+        let mut held = matches!(node.kind, NodeKind::Text(_));
+        for child in node.children().into_iter().flatten() {
+            child.walk(&mut |n| held |= n.extras().wrap.is_some() || matches!(n.kind, NodeKind::Text(_)));
+        }
+        if held {
+            return None;
+        }
+        if let Some(wrap) = node.extras().wrap {
+            wraps.push((*id, wrap));
+        }
+    }
+    let mut kept = doc.clone();
+    let replace: Vec<(NodeId, Vec<String>)> = targets.iter().map(|id| (*id, vec![])).collect();
+    let mut copied = BTreeSet::new();
+    replace_unread(&mut kept, frame, &replace, &[], threaded_frames, &mut copied).ok()?;
+    // A text object that stays draws its page type, so a copy of that type would draw it twice.
+    if shown.iter().flatten().any(|n| copied.contains(&n.id)) {
+        return None;
+    }
+    for (id, wrap) in wraps {
+        kept.node_mut(id)?.extras_mut().wrap = Some(wrap);
+    }
+    resolve_text_wrap(&mut kept).ok()?;
+    let note = compare(frame, view, &kept, reflow).ok()?;
+    let mut layers: Vec<(String, usize)> = vec![];
+    for (layer, _, _) in objects.iter().filter(|(_, id, _)| targets.contains(id)) {
+        match layers.iter_mut().find(|(name, _)| name == layer) {
+            Some((_, count)) => *count += 1,
+            None => layers.push((layer.clone(), 1)),
+        }
+    }
+    let layers: Vec<String> = layers.into_iter().map(|(layer, count)| format!("{layer} ({count})")).collect();
+    Some((kept, note.into_iter().chain([format!("{DREW_DIFFERENTLY}: {}", layers.join(", "))]).collect()))
 }
 
 /// Copy page drawing IDs, including mask art outside the ordinary child tree.

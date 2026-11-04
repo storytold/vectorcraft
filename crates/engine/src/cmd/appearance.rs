@@ -178,6 +178,23 @@ pub(crate) struct ActiveItem {
 }
 
 impl Session {
+    /// The method returns explicit target parameters and the selected appearance effect list.
+    pub fn appearance_effect_target(&self, params: &Value) -> Option<(Value, &[vectorcraft_doc::Effect])> {
+        let mut ids = appearance_targets(self, params).ok()?;
+        let item = item_target(self, params, "effect.apply").ok()?;
+        let anchor = item.anchor(self, &ids);
+        let node = self.active()?.doc.node(*ids.get(anchor)?)?;
+        let at = item.effects_item(&node.appearance, "effect.apply").ok()?;
+        let effects = node.appearance.effects_at(at)?;
+        ids.swap(0, anchor);
+        let ids: Vec<u64> = ids.into_iter().map(|id| id.0).collect();
+        let aligned = match item {
+            ItemTarget::Item { aligned, .. } => aligned,
+            ItemTarget::Top => aligned(params),
+        };
+        Some((json!({"ids": ids, "item": at, "aligned": aligned}), effects.as_slice()))
+    }
+
     /// The Appearance panel's active fill/stroke: a paint-order index into the first selected
     /// object's stack, while the selection it was chosen for is unchanged.
     pub fn appearance_item(&self) -> Option<usize> {

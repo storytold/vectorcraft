@@ -3908,7 +3908,7 @@ axis	Both	Båda
 @msg	Save for Web: the image is empty	Spara för webb: bilden är tom
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Spara skriver {_1}, inte {_2}: använd document.export för andra format
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Spara skriver {_1}, inte {_2}: använd file.saveAsTemplate för att skriva det
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 skriver äldre .ai-filer; en .ait-mall är alltid PDF-kompatibel
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 skriver äldre .ai-filer, inte .ait-mallar
 @msg	Saved recovery data for {title}	Sparade återställningsdata för {title}
 @msg	Saved to User Defined: {_1}	Sparat i Användardefinierat: {_1}
 @msg	Saved {path}	Sparade {path}
@@ -6227,6 +6227,7 @@ breakText	Glyphs	Glyfer
 	Gap 5	Mellanrum 5
 
 @msg	{_1}: they came in as the page's art	{_1}: de importerades som sidans bild
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekt som ritades annorlunda än filens egen sida importerades som sidans bild: {_1}
 
 @msg	You must choose a side pattern.	Du måste välja ett sidomönster.
 @msg	invalid pattern tile choice	ogiltigt val av mönsterplatta

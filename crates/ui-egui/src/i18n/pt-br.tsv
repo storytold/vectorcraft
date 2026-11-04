@@ -3591,7 +3591,7 @@ axis	Both	Ambos
 @msg	Save for Web: the image is empty	Salvar para Web: a imagem está vazia
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Salvar grava {_1}, não {_2}: use document.export para outros formatos
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Salvar grava {_1}, não {_2}: use file.saveAsTemplate para gravá-lo
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 grava arquivos .ai legados; um modelo .ait é sempre compatível com PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 grava arquivos .ai legados, não modelos .ait
 @msg	Saved recovery data for {title}	Dados de recuperação de {title} salvos
 @msg	Saved to User Defined: {_1}	Salvo em Definido pelo usuário: {_1}
 @msg	Saved {path}	{path} salvo
@@ -6093,6 +6093,7 @@ breakText	Glyphs	Glifos
 	Gap 5	Lacuna 5
 
 @msg	{_1}: they came in as the page's art	{_1}: foram importados como arte da página
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	os objetos desenhados de forma diferente da própria página do arquivo foram importados como arte da página: {_1}
 
 @msg	You must choose a side pattern.	Você deve escolher um padrão lateral.
 @msg	invalid pattern tile choice	escolha inválida de ladrilho de padrão

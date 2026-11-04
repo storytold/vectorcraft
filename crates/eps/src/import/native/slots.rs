@@ -18,6 +18,10 @@ pub(super) const PAGE_TYPE_UNCHECKED: &str =
 
 pub(super) const LAYERS_UNREAD: &str = "the file's layers weren't read";
 
+/// Objects of the layers replaced with the page's art where they drew differently from it,
+/// followed by the layers they are on.
+pub(super) const DREW_DIFFERENTLY: &str = "objects that drew differently from the file's own page came in as its art";
+
 /// Does this import note say that the file has something the document doesn't (hidden text, art or
 /// layers that could not be read, or the page's type that no text object takes or may not take)?
 /// Writing the document over the file would lose it for good.
@@ -27,7 +31,9 @@ pub fn is_loss(note: &str) -> bool {
         || note.ends_with("they came in as the page's art")
         || note == PAGE_TYPE_LEFT_OUT
         || note == PAGE_TYPE_UNCHECKED
-        || [ART_LEFT_OUT, LAYERS_UNREAD, crate::import::graphics::TOO_MUCH, crate::import::graphics::FAR_AWAY].iter().any(|n| note.starts_with(n))
+        || [ART_LEFT_OUT, LAYERS_UNREAD, DREW_DIFFERENTLY, crate::import::graphics::TOO_MUCH, crate::import::graphics::FAR_AWAY]
+            .iter()
+            .any(|n| note.starts_with(n))
 }
 
 /// Most text objects in the layers, and most pieces of type in one place on the page, that are matched

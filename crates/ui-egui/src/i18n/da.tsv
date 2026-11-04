@@ -6043,6 +6043,7 @@ breakText	Glyphs	Glyffer
 	Gap 5	Mellemrum 5
 
 @msg	{_1}: they came in as the page's art	{_1}: de blev importeret som sidens grafik
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekter, der blev tegnet anderledes end filens egen side, blev importeret som sidens grafik: {_1}
 
 @msg	You must choose a side pattern.	Du skal vælge et sidemønster.
 @msg	invalid pattern tile choice	ugyldigt valg af mønsterflise

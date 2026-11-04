@@ -323,7 +323,7 @@ pub(crate) const MAX_STROKE_SAMPLES: usize = 100_000;
 /// `n / PREVIEW_ALL_UNTIL` samples. Each preview carries every sample so far, so previewing at
 /// every sample cost the square of the stroke's length (a gesture of many drags sent at once
 /// spent seconds); this way it is about `PREVIEW_ALL_UNTIL` per sample.
-const PREVIEW_ALL_UNTIL: usize = 1000;
+pub(crate) const PREVIEW_ALL_UNTIL: usize = 1000;
 
 /// Whether a drag that made the stroke `n` samples long previews it ([`PREVIEW_ALL_UNTIL`]).
 pub(crate) fn previews_at(n: usize) -> bool {

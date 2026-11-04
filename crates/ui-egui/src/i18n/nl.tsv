@@ -6087,6 +6087,7 @@ breakText	Glyphs	Glyphs
 	Gap 5	Tussenruimte 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ze zijn geïmporteerd als pagina-afbeelding
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objecten die anders werden getekend dan de eigen pagina van het bestand, zijn geïmporteerd als pagina-afbeelding: {_1}
 
 @msg	You must choose a side pattern.	Kies een zijpatroon.
 @msg	invalid pattern tile choice	ongeldige keuze voor patroontegel

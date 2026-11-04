@@ -2203,7 +2203,7 @@ axis	Both	Και τα δύο
 @msg	Save for Web: the image is empty	Αποθήκευση για ιστό: η εικόνα είναι κενή
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Η αποθήκευση γράφει {_1}, όχι {_2}: χρησιμοποιήστε το document.export για άλλες μορφές
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Η αποθήκευση γράφει {_1}, όχι {_2}: χρησιμοποιήστε το file.saveAsTemplate για να το γράψετε
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	Το aiVersion 7 γράφει αρχεία .ai παλαιού τύπου· ένα πρότυπο .ait είναι πάντα συμβατό με PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	Το aiVersion 7 γράφει αρχεία .ai παλαιού τύπου, όχι πρότυπα .ait
 @msg	Saved recovery data for {title}	Αποθηκεύτηκαν δεδομένα ανάκτησης για το {title}
 @msg	Saved to User Defined: {_1}	Αποθηκεύτηκε στις προσαρμοσμένες ρυθμίσεις: {_1}
 @msg	Saved {path}	Αποθηκεύτηκε το {path}
@@ -6127,6 +6127,7 @@ breakText	Glyphs	Γλύφοι
 	Gap 5	Διάκενο 5
 
 @msg	{_1}: they came in as the page's art	{_1}: εισήχθησαν ως γραφικά της σελίδας
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	τα αντικείμενα που σχεδιάστηκαν διαφορετικά από την ίδια τη σελίδα του αρχείου εισήχθησαν ως γραφικά της σελίδας: {_1}
 
 @msg	You must choose a side pattern.	Πρέπει να επιλέξετε πλευρικό μοτίβο.
 @msg	invalid pattern tile choice	μη έγκυρη επιλογή πλακιδίου μοτίβου

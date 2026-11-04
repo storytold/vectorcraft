@@ -1445,6 +1445,12 @@ several runs, one run has to match both: type with the fill in one run and the s
 and stroke of other objects are not compared. Without type among the selected objects it returns the error "select a
 text object", and it records no undo step.
 
+The font and text color commands (`select.same.fontFamily`, `fontFamilyStyle`, `fontFamilyStyleSize`, `fontSize`,
+`textFillColor`, `textStrokeColor` and `textFillAndStrokeColor`) take the first character of the first type among the
+selected objects and the objects inside them, in selection order, as the one to match. Type that is hidden or locked,
+inside a hidden or locked group or layer, on a template layer, or outside the isolated group is passed over. When the
+selection holds no other type, they return the error "select a text object".
+
 ## Shaper Groups
 
 `shaper.releaseSource {source, group?}` takes the original shape `source` out of its Shaper Group: the shape becomes a
@@ -1685,11 +1691,11 @@ already walks Image Trace. Short agent entry points:
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
   `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object), `dataset.import {path|data|dataBase64|csv}` /
   `dataset.export {path?}` (CSV: one column per variable, and no column of data set names). `dataset.import` also
-  reads tab-separated files. Every header cell is a variable, whatever its case (`name` and `Name` included), as the
+  reads tab-separated files. Every header cell is a variable, whatever its case (`name` and `Name` included). The
+  first row holds the field names, as the
   [set-up page](https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/set-up-data-source-files.html)
-  describes the first row: "Specify your data field name in the first row of your spreadsheet." The rows replace every
-  data set of the document and are named `Data Set 1`, `Data Set 2` and so on, in file order; the document's variables
-  and their bindings stay, and the reply's `deletedDataSets` lists the data sets that were replaced. An import error
+  describes. The rows replace every data set of the document and are named `Data Set 1`, `Data Set 2` and so on, in file order;
+  the document's variables and their bindings stay, and the reply's `deletedDataSets` lists the data sets that were replaced. An import error
   about a row's values gives the file line the row starts on. A header cell that names no variable defines one, unbound, in the same undo step as the
   rows. `#Shown` defines a visibility variable `Shown`, `@Photo` defines an image variable `Photo`, and a cell without
   a prefix defines a text variable. `dataset.export` writes a visibility variable's header as `#Shown` and an image
@@ -1768,6 +1774,10 @@ already walks Image Trace. Short agent entry points:
   cannot be used. While an action is recording, and for an index past the last set,
   an empty name, or a key or color that is not one of these, it is an error and nothing is added. The panel's Create
   New Action button and menu's New Action… open the `actionNew` dialog, whose Record runs this.
+- Actions: `ui.action.record {set?}` starts recording a new action in the chosen set, or the current set when `set`
+  is left out, and returns `{set, name}`. With no sets, it creates Set 1. The action gets the next available
+  `Action N` name in that set. The Actions panel's Begin Recording button runs this command. An invalid set or an
+  existing recording is an error and leaves the sets and recording unchanged.
 - Actions: `ui.action.options {set, action, name?, key?, cmd?, shift?, color?}` changes the action at
   `action` in set `set` and keeps its steps: `name` renames it, `key` with `cmd` and `shift` sets its function key,
   and `color` its Button Mode color, as `ui.action.new` takes them; a param left out keeps what the action has, and
@@ -3692,6 +3702,17 @@ it returns `{tiled, floating}`. An `index` that names no open document fails wit
 is not saved. `ui.inspect` reports `tiled`, `panes` (each pane's `document` index, `rect` and
 whether it is `active`) and `floating`; canvas coordinates map to the current document's pane or window
 (`canvasRect`), in that window's coordinates while it floats.
+`window.newWindow` (Window › New Window) opens another view of the current document, with its own zoom, center,
+rotation, artboard and Outline or Preview, makes it the current window and returns `{index, view}`, the view's number.
+Each view has a tab of its own; while a document has more than one view, its tabs and windows show the view's number
+after the name ("Name:2"). It opens in a floating window when the view it came from is in one. With no document open
+it fails with "no document open". The Arrange commands treat each view as a window: `floatInWindow` and
+`consolidateAllWindows` take `view` beside `index` (the document's current view without it), and Tile and Cascade
+count views. `file.close` without an `index` closes the current view, and the document's last view closes the document;
+with an `index` it closes the document and all its views. `window.nextDocument` and `window.previousDocument` step
+through the views in tab order and add `view` to their reply for a document with more than one view. `ui.inspect`
+reports `windows` (every window as `[document index, view number]`, in tab order), `currentWindow` and each pane's
+`view`. Views are not saved.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}
