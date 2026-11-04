@@ -1790,6 +1790,7 @@ file-filter	Templates	Шаблони
 	Ligatures are off while the text is tracked.	Лігатури вимкнено, поки для тексту заданий трекінг.
 	Light	Світлий
 	Light Blue	Блакитний
+	Light Red	Світло-червоний
 	Lighten	Освітлення
 	Lightness	Світлота
 	Limit Color Guide to Library	Обмежити колірний гід бібліотекою
@@ -2008,6 +2009,8 @@ file-filter	Templates	Шаблони
 	Name:	Назва:
 	Navigate	Навігація
 	Navigator	Навігатор
+	Navigator Panel Options	Параметри панелі «Навігатор»
+	Draw Dashed Lines as Solid Lines	Малювати штрихові лінії суцільними
 	Needs the desktop app	Потрібен настільний додаток
 	Neutral Gradients	Нейтральні градієнти
 	New	Створити

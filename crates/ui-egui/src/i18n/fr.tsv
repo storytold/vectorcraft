@@ -1761,6 +1761,7 @@ font-technology	Variable	Variables
 	Ligatures are off while the text is tracked.	Les ligatures sont désactivées tant qu’une approche est appliquée au texte.
 	Light	Clair
 	Light Blue	Bleu clair
+	Light Red	Rouge clair
 	Lighten	Éclaircir
 	Lightness	Luminosité
 	Limit Color Guide to Library	Limiter le guide des couleurs à la bibliothèque
@@ -1979,6 +1980,8 @@ font-technology	Variable	Variables
 	Name:	Nom :
 	Navigate	Naviguer
 	Navigator	Navigation
+	Navigator Panel Options	Options du panneau Navigation
+	Draw Dashed Lines as Solid Lines	Dessiner les pointillés en traits pleins
 	Needs the desktop app	Nécessite l’application de bureau
 	Neutral Gradients	Dégradés neutres
 	New	Nouveau

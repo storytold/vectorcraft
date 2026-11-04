@@ -1604,6 +1604,7 @@ font-technology	Variable	Değişken
 	Ligatures are off while the text is tracked.	Metin izlenirken bitişik harfler kapalıdır.
 	Light	Işık
 	Light Blue	Açık Mavi
+	Light Red	Açık Kırmızı
 	Lighten	hafifletmek
 	Lightness	hafiflik
 	Limit Color Guide to Library	Renk Kılavuzunu Kitaplıkla Sınırlandır
@@ -1815,6 +1816,8 @@ font-technology	Variable	Değişken
 	Name:	İsim:
 	Navigate	Gezin
 	Navigator	Gezgin
+	Navigator Panel Options	Gezgin Paneli Seçenekleri
+	Draw Dashed Lines as Solid Lines	Kesikli Çizgileri Düz Çizgi Olarak Çiz
 	Needs the desktop app	Masaüstü uygulaması gerekiyor
 	Neutral Gradients	Nötr Degradeler
 	New	Yeni

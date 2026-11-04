@@ -2051,6 +2051,7 @@ digits	Hindi	Hindi
 	Ligatures are off while the text is tracked.	Chữ ghép tắt khi văn bản được giãn chữ.
 	Light	Sáng
 	Light Blue	Xanh lam nhạt
+	Light Red	Đỏ nhạt
 	Light Direction	Hướng ánh sáng
 	Light Gray	Xám nhạt
 	Light Intensity	Cường độ ánh sáng
@@ -2315,6 +2316,8 @@ digits	Hindi	Hindi
 	Name:	Tên:
 	Navigate	Dẫn hướng
 	Navigator	Bộ dẫn hướng
+	Navigator Panel Options	Tùy chọn bảng bộ dẫn hướng
+	Draw Dashed Lines as Solid Lines	Vẽ đường nét đứt thành đường liền
 	Needs the desktop app	Cần ứng dụng máy tính để bàn
 	Neutral Gradients	Chuyển sắc trung tính
 	New	Mới

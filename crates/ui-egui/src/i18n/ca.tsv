@@ -2166,6 +2166,7 @@ digits	Malayalam	Malaiàlam
 	Light	Clar
 	Light behind the object	Llum darrere de l’objecte
 	Light Blue	Blau clar
+	Light Red	Vermell clar
 	Light Direction	Direcció de la llum
 	Light Gray	Gris clar
 	Light Intensity	Intensitat de la llum
@@ -2495,6 +2496,8 @@ digits	Malayalam	Malaiàlam
 	Names the script builds as it runs: {count}	Noms que l’script crea mentre s’executa: {count}
 	Navigate	Navega
 	Navigator	Navegador
+	Navigator Panel Options	Opcions del panell Navegador
+	Draw Dashed Lines as Solid Lines	Dibuixa les línies discontínues com a contínues
 	Needs a choice	Necessita una tria
 	Needs a key	Necessita una clau
 	Needs Attention Only	Només necessita atenció

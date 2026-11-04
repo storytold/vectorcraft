@@ -640,6 +640,8 @@
 	Update Changed Links	Opdatér ændrede links
 	Magic Wand	Magisk tryllestav
 	Navigator	Navigator
+	Navigator Panel Options	Indstillinger for navigatorpanelet
+	Draw Dashed Lines as Solid Lines	Tegn stiplede linjer som hele linjer
 	Pattern Options	Mønsterindstillinger
 	Properties	Egenskaber
 	Separations Preview	Separationsforhåndsvisning
@@ -2214,6 +2216,7 @@ digits	Malayalam	Malayalam
 	“{file}” is protected by a password.	»{file}« er beskyttet med en adgangskode.
 	Dim Images to:	Nedton billeder til:
 	Light Blue	Lyseblå
+	Light Red	Lys rød
 	Layers Panel Options	Indstillinger for lagpanelet
 	Row Size:	Rækkestørrelse:
 	Show Layers Only	Vis kun lag

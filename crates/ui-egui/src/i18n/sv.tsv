@@ -1708,6 +1708,7 @@ font-technology	Variable	Variabla
 	Ligatures are off while the text is tracked.	Ligaturer är avstängda när texten har spärrning.
 	Light	Ljus
 	Light Blue	Ljusblå
+	Light Red	Ljusröd
 	Lighten	Ljusare
 	Lightness	Ljushet
 	Limit Color Guide to Library	Begränsa färgguiden till bibliotek
@@ -1926,6 +1927,8 @@ font-technology	Variable	Variabla
 	Name:	Namn:
 	Navigate	Navigera
 	Navigator	Navigator
+	Navigator Panel Options	Alternativ för panelen Navigator
+	Draw Dashed Lines as Solid Lines	Rita streckade linjer som heldragna linjer
 	Needs the desktop app	Kräver skrivbordsappen
 	Neutral Gradients	Neutrala gradienter
 	New	Nytt

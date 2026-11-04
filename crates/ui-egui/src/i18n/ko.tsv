@@ -685,6 +685,8 @@ digits	Malayalam	말라얄람어
 	Links	링크
 	Magic Wand	마술봉
 	Navigator	내비게이터
+	Navigator Panel Options	내비게이터 패널 옵션
+	Draw Dashed Lines as Solid Lines	점선을 실선으로 그리기
 	Pattern Options	패턴 옵션
 	Properties	속성
 	Separations Preview	분판 미리 보기
@@ -3605,6 +3607,7 @@ file-filter	Templates	템플릿
 	Left-Justified Tab	왼쪽 정렬 탭
 	Letter	레터
 	Light Blue	연한 파랑
+	Light Red	연한 빨강
 	Lightness	명도
 	Link	링크
 	Low	낮음

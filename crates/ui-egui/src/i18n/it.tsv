@@ -1796,6 +1796,7 @@ file-filter	Templates	Modelli
 	Ligatures are off while the text is tracked.	Le legature sono disattivate quando al testo è applicata una spaziatura caratteri.
 	Light	Chiaro
 	Light Blue	Azzurro
+	Light Red	Rosso chiaro
 	Lighten	Schiarisci
 	Lightness	Luminosità
 	Limit Color Guide to Library	Limita guida colori alla libreria
@@ -2014,6 +2015,8 @@ file-filter	Templates	Modelli
 	Name:	Nome:
 	Navigate	Naviga
 	Navigator	Navigatore
+	Navigator Panel Options	Opzioni pannello Navigatore
+	Draw Dashed Lines as Solid Lines	Disegna le linee tratteggiate come linee continue
 	Needs the desktop app	Richiede l'app desktop
 	Neutral Gradients	Sfumature neutre
 	New	Nuovo

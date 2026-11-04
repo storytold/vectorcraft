@@ -97,6 +97,13 @@ impl Renderer {
         chars: Option<(&Arc<TextGeom>, usize)>,
         bounds: Rect,
     ) {
+        // A stroke drawn without its dashes is a copy, not the document's stroke: its outline is
+        // made here and not kept with the document's outlines.
+        let drawn = f.stroke(st);
+        let (st, chars) = match &drawn {
+            std::borrow::Cow::Owned(solid) => (solid, None),
+            std::borrow::Cow::Borrowed(st) => (*st, chars),
+        };
         let pieces = effects::stroke::stroke_pieces(bp, st);
         // The line and its heads overlap: they take the opacity once, in one layer, instead of
         // each folding it into its paint.

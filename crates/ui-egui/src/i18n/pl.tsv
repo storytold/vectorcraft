@@ -639,6 +639,8 @@
 	Update Changed Links	Aktualizuj zmienione łącza
 	Magic Wand	Różdżka
 	Navigator	Nawigator
+	Navigator Panel Options	Opcje panelu Nawigator
+	Draw Dashed Lines as Solid Lines	Rysuj linie przerywane jako ciągłe
 	Pattern Options	Opcje wzorka
 	Properties	Właściwości
 	Separations Preview	Podgląd rozbarwień
@@ -2341,6 +2343,7 @@ digits	Malayalam	Malajalam
 	“{file}” is protected by a password.	Plik „{file}” jest chroniony hasłem.
 	Dim Images to:	Przyciemnij obrazy do:
 	Light Blue	Jasnoniebieski
+	Light Red	Jasnoczerwony
 	Layers Panel Options	Opcje panelu Warstwy
 	Row Size:	Rozmiar wiersza:
 	Show Layers Only	Pokaż tylko warstwy

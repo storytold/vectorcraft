@@ -1652,6 +1652,7 @@ font-technology	Variable	Μεταβλητές
 	Libraries	Βιβλιοθήκες
 	Light	Ανοιχτό
 	Light Blue	Ανοιχτό μπλε
+	Light Red	Ανοιχτό κόκκινο
 	Lighten	Φώτισμα
 	Lightness	Φωτεινότητα
 	Line	Γραμμή
@@ -1696,6 +1697,8 @@ font-technology	Variable	Μεταβλητές
 	Name	Όνομα
 	Name:	Όνομα:
 	Navigator	Πλοήγηση
+	Navigator Panel Options	Επιλογές πίνακα πλοήγησης
+	Draw Dashed Lines as Solid Lines	Σχεδίαση διακεκομμένων γραμμών ως συνεχών
 	New	Νέο
 	Scatter:	Διασπορά:
 	Rotation:	Περιστροφή:

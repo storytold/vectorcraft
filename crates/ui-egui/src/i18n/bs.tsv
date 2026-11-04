@@ -683,6 +683,8 @@
 	Update Changed Links	Ažuriraj promijenjene veze
 	Magic Wand	Čarobni štapić
 	Navigator	Navigator
+	Navigator Panel Options	Opcije panela navigatora
+	Draw Dashed Lines as Solid Lines	Crtaj isprekidane linije kao pune
 	Pattern Options	Opcije uzorka
 	Properties	Svojstva
 	Separations Preview	Pregled separacija
@@ -2396,6 +2398,7 @@ digits	Malayalam	Malajalam
 	“{file}” is protected by a password.	„{file}” je zaštićen lozinkom.
 	Dim Images to:	Zatamni slike na:
 	Light Blue	Svijetloplava
+	Light Red	Svijetlocrvena
 	Layers Panel Options	Opcije panela slojeva
 	Row Size:	Veličina reda:
 	Show Layers Only	Prikaži samo slojeve

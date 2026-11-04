@@ -1292,6 +1292,43 @@ fn invalid_dash_pattern_strokes_solid() {
     }
 }
 
+/// With `solid_dashes` a dashed stroke draws as the same stroke without dashes, on its own and as
+/// the silhouette of a drop shadow; without it the dashes stay.
+#[test]
+fn solid_dashes_draw_dashed_strokes_as_solid_lines() {
+    let line = |dash: bool, shadow: bool| {
+        let mut d = Document::new(100.0, 100.0);
+        let mut bp = BezPath::new();
+        bp.move_to((10.0, 50.0));
+        bp.line_to((90.0, 50.0));
+        let id = d.alloc_id();
+        let mut n = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&bp), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 6.0));
+        let st = n.appearance.stroke_mut().unwrap();
+        st.dash = dash.then(|| vectorcraft_doc::Dash { pattern: vec![8.0, 8.0], ..Default::default() });
+        if shadow {
+            let params = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+            st.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params, visible: true });
+        }
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        d
+    };
+    let opts = |solid_dashes: bool| RenderOptions { background: Some([255, 255, 255, 255]), solid_dashes, ..Default::default() };
+    let draw = |d: &Document, solid: bool| Renderer::new().render(d, 100, 100, Affine::IDENTITY, &opts(solid));
+    for shadow in [false, true] {
+        let solid = draw(&line(false, shadow), false);
+        assert_ne!(draw(&line(true, shadow), false).pixels, solid.pixels, "the dashes show without the option (shadow: {shadow})");
+        assert_eq!(draw(&line(true, shadow), true).pixels, solid.pixels, "the dashes go with the option (shadow: {shadow})");
+        assert_eq!(draw(&line(false, shadow), true).pixels, solid.pixels, "a solid stroke is unchanged (shadow: {shadow})");
+    }
+    // One renderer that draws the shadow both ways makes its raster again for each setting.
+    let (dashed, mut r) = (line(true, true), Renderer::new());
+    let fresh = |solid: bool| draw(&dashed, solid).pixels;
+    for solid in [false, true, false] {
+        assert_eq!(r.render(&dashed, 100, 100, Affine::IDENTITY, &opts(solid)).pixels, fresh(solid), "reused renderer, solid: {solid}");
+    }
+}
+
 /// An image that can't be decoded is counted on the thread that tried to decode it: an export
 /// compares [`decode_failures`] before and after it draws, so another thread's failure meanwhile is
 /// not its own.

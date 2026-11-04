@@ -868,6 +868,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open the Layers panel's Panel Options: dialog `layersPanelOptions`, fields layersOnly, locateSelected (Locate Selected Objects, off by default: when the last selected object changes outside the panel, on the canvas or by a command, the panel opens the layers and groups around it and scrolls to its row, as after layer.locate, without highlighting the row; when Show Layers Only, a search or the filter leaves the object without a row, the panel opens no rows for it and scrolls as with the option off; a change made during a drag is located when the drag ends), rowSize (small|medium|large|other), otherSize (12–100 pt), thumbLayers, thumbGroups, thumbObjects; OK applies them (kept with the UI state)",
     ),
     (
+        "ui.navigatorPanelOptions",
+        "Panel Options…",
+        "",
+        "{color?: #rrggbb or a preset name (Light Red, the default, then the layer colors such as \"Light Blue\"), solidDashes?: bool (Draw Dashed Lines as Solid Lines, off by default: the Navigator's thumbnail draws dashed strokes without their dashes; the canvas, printing and exports keep them)} set the Navigator panel's options, the color its view box is drawn in and solid dashes (kept with the UI state) → {color, solidDashes}; with neither, open its Panel Options (dialog `navigatorPanelOptions`, fields color, solidDashes; OK sets them); an error for a value that is not a color or not true or false, which changes nothing",
+    ),
+    (
         "ui.layersExpand",
         "Expand Layers Panel Rows",
         "",
