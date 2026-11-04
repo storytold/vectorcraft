@@ -98,6 +98,65 @@ fn a_long_stroke_draws_the_same_pixels_outlined_near_the_view() {
     }
 }
 
+/// A zigzag of 3,000 anchors 8 pt apart between y = 60 and y = 550, through the bottom of a view
+/// on y = 0.
+fn tall_zigzag() -> BezPath {
+    let mut bp = BezPath::new();
+    let at = |i: usize| Point::new(i as f64 * 8.0, if i.is_multiple_of(2) { 60.0 } else { 550.0 });
+    bp.move_to(at(0));
+    for i in 1..3000 {
+        bp.line_to(at(i));
+    }
+    bp
+}
+
+#[test]
+fn a_long_stroke_under_a_wide_blur_draws_the_same_pixels_while_dragging_on_threads() {
+    // While dragging on threads, a drop shadow this large is drawn through a filter layer whose
+    // offscreen reaches 602 px past the view: the parts of the stroke that far away feed the blur.
+    let mut d = Document::new(1000.0, 1000.0);
+    let shadow = serde_json::json!({"x": 0, "y": 0, "blur": 400, "opacity": 100, "mode": "normal"});
+    let look = Appearance { items: vec![AppearanceItem::Stroke(stroke(20.0, LineJoin::Round, LineCap::Butt))], ..Default::default() };
+    let n = Node::path(d.alloc_id(), PathData::from_bezpath(&tall_zigzag()), look);
+    // The shadow is the group's: the path itself draws as a plain path.
+    let mut g = Node::group(d.alloc_id(), vec![n.into()]);
+    g.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: shadow, visible: true });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    let at = Point::new(12_000.0, 0.0);
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), dragging: true, ..Default::default() };
+    let draw = |crops: bool| {
+        CROP_STROKES.with(|c| c.set(crops));
+        let mut r = Renderer::new();
+        r.threads = 2;
+        let img = r.render(&d, SIZE, SIZE, view_at(at), &opts);
+        CROP_STROKES.with(|c| c.set(true));
+        (img, r.strokes.values().any(|e| e.crop.is_some()))
+    };
+    let ((near, cropped), (all, _)) = (draw(true), draw(false));
+    assert!(cropped, "outlined near the view");
+    assert!(all.pixel(100, 0)[0] < 250, "the shadow shows above the stroke: {:?}", all.pixel(100, 0));
+    assert!(near.pixels == all.pixels, "the same pixels as the whole outline");
+}
+
+#[test]
+fn a_member_below_the_view_casts_its_wide_shadow_while_dragging_on_threads() {
+    // A 400 pt shadow of a group whose only member, a rectangle, lies 50 pt below the view.
+    let mut d = Document::new(1000.0, 1000.0);
+    let shadow = serde_json::json!({"x": 0, "y": 0, "blur": 400, "opacity": 100, "mode": "normal"});
+    let look = Appearance { items: vec![AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(Color::BLACK)))], ..Default::default() };
+    let n = Node::path(d.alloc_id(), PathData::from_bezpath(&Rect::new(-1000.0, 150.0, 1000.0, 550.0).to_path(0.1)), look);
+    let mut g = Node::group(d.alloc_id(), vec![n.into()]);
+    g.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: shadow, visible: true });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), dragging: true, ..Default::default() };
+    let mut r = Renderer::new();
+    r.threads = 2;
+    let img = r.render(&d, SIZE, SIZE, view_at(Point::ZERO), &opts);
+    assert!(img.pixel(100, 199)[0] < 200, "the shadow shows at the bottom of the view: {:?}", img.pixel(100, 199));
+}
+
 #[test]
 fn a_long_stroke_is_outlined_near_the_view_only() {
     let d = doc(&zigzag(), stroke(6.0, LineJoin::Miter, LineCap::Square));
