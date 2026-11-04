@@ -291,6 +291,33 @@ fn perceptual_spot_gradients_mixed_with_other_inks_export_as_device_n_shadings()
 }
 
 #[test]
+fn perceptual_spot_gradients_with_rgb_stops_in_a_cmyk_document_export_as_device_n_shadings() {
+    let (mut s, id) = setup();
+    run(&mut s, "paint.editGradient", json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "color": "#00ff00"}], "method": "perceptual"}));
+    assert!(gradient(&s, id).gradient.stops.iter().any(|st| matches!(st.color, Color::Rgb { .. })), "an RGB stop");
+    let (pdf, _) = pdf_of(&s);
+    assert!(pdf.contains("/Subtype/Image"), "an image in an RGB document");
+    // A CMYK document, or a conversion to a CMYK destination, writes the RGB stop in CMYK: a
+    // DeviceN shading, not an image.
+    let mut cmyk = doc(&s).clone();
+    cmyk.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let plain = vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() };
+    let mut converted = plain.clone();
+    converted.settings.output = vectorcraft_pdf::OutputSettings {
+        conversion: vectorcraft_pdf::ColorConversion::Destination,
+        destination: vectorcraft_pdf::DOCUMENT_CMYK.into(),
+        ..Default::default()
+    };
+    for (what, d, opts) in [("CMYK document", &cmyk, &plain), ("CMYK destination", doc(&s), &converted)] {
+        let r = vectorcraft_pdf::export_with_report(d, opts).unwrap();
+        let pdf = String::from_utf8_lossy(&r.bytes);
+        assert!(!pdf.contains("/Subtype/Image"), "{what}: no image");
+        assert!(pdf.contains("/ShadingType 2") && pdf.contains("/Ink]/DeviceCMYK"), "{what}: a DeviceN shading with Ink");
+        assert!(!r.warnings.iter().any(|w| w.contains("spot")), "{what}: {:?}", r.warnings);
+    }
+}
+
+#[test]
 fn spot_gradients_drawn_as_images_warn() {
     let (mut s, _) = setup();
     let spot_warning = |w: &[String]| w.iter().any(|w| w.contains("spot colors in gradients exported as images"));
@@ -320,4 +347,20 @@ fn spot_gradients_drawn_as_images_warn() {
     let (pdf, warnings) = pdf_of(&s);
     assert!(pdf.contains("/Subtype/Image") && !pdf.contains("/Separation"), "a process Perceptual gradient");
     assert!(!spot_warning(&warnings), "{warnings:?}");
+}
+
+#[test]
+fn freeform_gradients_without_points_warn_about_spot_stops() {
+    let (mut s, id) = setup();
+    run(&mut s, "paint.editGradient", with(ink_to_white(100.0), json!({"kind": "freeform"})));
+    // A freeform field with no points of its own: the colors come from the stops, the first
+    // linked to the spot swatch.
+    let mut g = gradient(&s, id);
+    g.freeform = Some(vectorcraft_color::Freeform::default());
+    g.gradient.stops[0].swatch = Some("Ink".into());
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    d.node_mut(id).unwrap().appearance.set_fill(Paint::Gradient(Box::new(g)));
+    let (pdf, warnings) = pdf_of(&s);
+    assert!(pdf.contains("/Subtype/Image"), "an image");
+    assert!(warnings.iter().any(|w| w.contains("spot colors in gradients exported as images")), "{warnings:?}");
 }

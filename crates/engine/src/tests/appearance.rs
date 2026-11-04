@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
-use vectorcraft_doc::{AppearanceItem, Node};
+use vectorcraft_doc::{AppearanceItem, FillLayer, Node};
 
 use crate::*;
 
@@ -288,8 +288,8 @@ fn add_fill_and_stroke_copy_the_top_ones() {
     assert_eq!(node(&s, id).appearance.items.len(), 3);
 }
 
-/// With a fill row active, Add New Fill puts a copy of that row right above it and makes the copy
-/// the active row; the rows above it stay where they are.
+/// With a fill row active, Add New Fill puts a fill with that row's paint right above it and makes
+/// the new fill the active row; the rows above it stay where they are.
 #[test]
 fn add_fill_copies_the_active_fill_row_right_above_it() {
     let mut s = session();
@@ -323,8 +323,60 @@ fn add_fill_copies_the_active_fill_row_right_above_it() {
     assert_eq!(s.appearance_item(), Some(0));
 }
 
+/// With a fill row active, Add New Fill given `id` alone also puts a copy of the top fill on top,
+/// and the active row stays.
+#[test]
+fn add_fill_with_id_leaves_the_active_fill_row_alone() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 2, "color": "#0000ff"})); // [red, Stroke, blue]
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "appearance.addFill", json!({"id": id.0}));
+    let n = node(&s, id);
+    assert_eq!(n.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "stroke", "fill", "fill"]);
+    assert_eq!(fill_paint(&n, 0).color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(fill_paint(&n, 3).color().unwrap().to_hex(), "#0000ff");
+    assert_eq!(s.appearance_item(), Some(0));
+}
+
+/// Add New Stroke copies the top stroke's weight but makes the new stroke at least 1 pt.
+#[test]
+fn add_stroke_is_at_least_one_point() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "stroke.set", json!({"weight": 0.5}));
+    run(&mut s, "appearance.addStroke", json!({})); // [Fill, Stroke, Stroke]
+    let n = node(&s, id);
+    assert_eq!(stroke(&n, 1).width, 0.5);
+    assert_eq!(stroke(&n, 2).width, 1.0);
+}
+
+/// The new fill above the active fill row takes only the row's paint: the row's opacity, blend
+/// mode, visibility, overprint and effects are not copied (Duplicate Item copies those).
+#[test]
+fn add_fill_takes_only_the_active_fill_rows_paint() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "opacity": 40, "blend": "multiply", "visible": false}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen", "item": 0}));
+    run(&mut s, "object.setOverprint", json!({"fill": true, "item": 0}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "appearance.addFill", json!({}));
+    let n = node(&s, id);
+    assert_eq!(n.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "fill", "stroke"]);
+    let (AppearanceItem::Fill(row), AppearanceItem::Fill(copy)) = (&n.appearance.items[0], &n.appearance.items[1]) else {
+        panic!("the first two rows are not fills")
+    };
+    assert_eq!((row.opacity, row.blend, row.visible, row.overprint), (0.4, BlendMode::Multiply, false, true));
+    assert_eq!(row.effects.len(), 1);
+    assert_eq!(copy, &FillLayer::new(row.paint.clone()));
+}
+
 /// In a mixed selection the active fill row goes above itself in the first object; an object that
-/// doesn't share that row gets a copy of its top fill on top, as without an active row.
+/// doesn't share that row gets a fill with its top fill's paint on top, as without an active row.
 #[test]
 fn add_fill_above_an_unshared_active_row_tops_the_other_objects() {
     let mut s = session();
@@ -461,6 +513,45 @@ fn reduce_to_basic_keeps_the_active_row_of_the_first_selected_object() {
     run(&mut s, "appearance.reduceToBasic", json!({}));
     assert_eq!(fill_paint(&node(&s, b), 0).color().unwrap().to_hex(), "#00ff00");
     assert_eq!(fill_paint(&node(&s, a), 0).color().unwrap().to_hex(), "#0000ff");
+}
+
+/// Three objects with equal stacks, the third's lower fill changed; the lower, green fill row of
+/// the first is active, selected a, b, c.
+fn three_with_one_changed(s: &mut Session) -> [NodeId; 3] {
+    let ids = [rect(s, 50.0), rect(s, 200.0), rect(s, 300.0)];
+    run(s, "select.set", json!({"ids": ids.map(|id| id.0)}));
+    run(s, "appearance.addFill", json!({}));
+    run(s, "appearance.setItem", json!({"index": 0, "color": "#00ff00"}));
+    run(s, "appearance.setItem", json!({"index": 2, "color": "#ff0000"})); // [Fill green, Stroke, Fill red]
+    run(s, "appearance.setItem", json!({"index": 0, "color": "#0000ff", "ids": [ids[2].0]}));
+    run(s, "appearance.setActiveItem", json!({"index": 0}));
+    ids
+}
+
+/// The active row is matched in each other object on its own: one object without an equal row
+/// does not stop another that has one from keeping it.
+#[test]
+fn reduce_to_basic_keeps_the_active_row_in_each_object_that_has_it() {
+    let mut s = session();
+    let [a, b, c] = three_with_one_changed(&mut s);
+    run(&mut s, "appearance.reduceToBasic", json!({}));
+    assert_eq!(fill_paint(&node(&s, a), 0).color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(fill_paint(&node(&s, b), 0).color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(fill_paint(&node(&s, c), 0).color().unwrap().to_hex(), "#ff0000");
+}
+
+/// Add New Fill puts its copy of the active row right above that row in each object that has an
+/// equal row, even when another selected object has none.
+#[test]
+fn add_fill_copies_the_active_row_in_each_object_that_has_it() {
+    let mut s = session();
+    let [a, b, _] = three_with_one_changed(&mut s);
+    run(&mut s, "appearance.addFill", json!({}));
+    for id in [a, b] {
+        let n = node(&s, id);
+        assert_eq!(fill_paint(&n, 1).color().unwrap().to_hex(), "#00ff00", "{:?}", n.appearance);
+        assert_eq!(fill_paint(&n, 3).color().unwrap().to_hex(), "#ff0000", "{:?}", n.appearance);
+    }
 }
 
 /// b `[Fill red, Fill white, Stroke]` above a `[Fill white, Stroke]`, selected b first: b's rows 1

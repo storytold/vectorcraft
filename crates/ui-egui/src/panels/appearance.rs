@@ -1213,6 +1213,13 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                         }
                         return;
                     }
+                    // A plug-in's color is the color button its dialog shows.
+                    if manifest.and_then(|m| m.param(key)).is_some_and(|p| matches!(p.spec, vectorcraft_plugins::manifest::ParamSpec::Color { .. })) {
+                        if let Some(c) = crate::dialogs::plugin_color_button(ui, ("fx-color", item, k, key.as_str()), v) {
+                            change = Some((key.clone(), c));
+                        }
+                        return;
+                    }
                     // Only our own effects show a `mode` parameter as the blend mode dropdown; a plug-in's `mode` stays a plain field.
                     if built_in && let Some(cur) = widgets::blend_param(key, v) {
                         if let Some(m) = widgets::blend_param_dropdown(ui, ("fx-blend", item, k, key.as_str()), cur) {

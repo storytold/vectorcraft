@@ -58,7 +58,12 @@ fn idle_control_socket_releases_its_worker() {
 fn idle_expiry_closes_without_writing_a_line() {
     let (mut client, done, worker) = socket_fixture(short_timeouts(), |_, _| panic!("no request expected"));
     let mut got = Vec::new();
-    client.read_to_end(&mut got).unwrap();
+    match client.read_to_end(&mut got) {
+        // On Windows the server's close can reach the client as a reset.
+        Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => {}
+        Ok(_) => {}
+        Err(e) => panic!("reading the idle connection: {e}"),
+    }
     assert_eq!(String::from_utf8_lossy(&got), "", "the app wrote to an idle connection");
     expect_socket_deadline(client, done, worker);
 }

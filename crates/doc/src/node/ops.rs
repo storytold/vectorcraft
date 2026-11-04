@@ -212,7 +212,10 @@ impl Node {
     /// [`Node::reach_bounds`] with symbol instances measured by their symbol's art box from
     /// `symbols`. An instance that only moves its art is measured as the art's visual box moved,
     /// and any other instance is measured as its geometric box ([`Node::geometric_bounds_with`])
-    /// grown by the farthest a stroke in the art can reach.
+    /// grown by the farthest a stroke in the art can reach. For an instance placed through 9-slice
+    /// guides, that box also holds the art box placed by each cell's map
+    /// ([`crate::NineSliceMap::placement_bounds`]). An instance whose art holds an instance of a
+    /// symbol with 9-slice guides at any depth is measured as its art placed by its transform.
     pub fn reach_bounds_with(&self, symbols: &SymbolBoxes) -> Option<Rect> {
         symbols.quickly(|| self.reach(Some(symbols)))
     }
@@ -367,9 +370,14 @@ impl Node {
                     Some((_, art)) if moves_only(*xf) => xf.transform_rect_bbox(art.visual),
                     Some((s, art)) => {
                         let placed = xf.transform_rect_bbox(art.geometric);
-                        match s.placed_visual(symbol, *xf) {
+                        match s.placed_visual(symbol, *xf).or_else(|| s.sliced_visual(symbol, *xf)) {
                             Some(v) => v.union(placed),
-                            None => placed.inflate(art.reach, art.reach),
+                            // Art placed through 9-slice guides can draw outside `placed`.
+                            None => s
+                                .document()
+                                .symbol_slice_map_of(symbol, art.geometric, *xf)
+                                .map_or(placed, |m| m.placement_bounds(art.geometric).union(placed))
+                                .inflate(art.reach, art.reach),
                         }
                     }
                     None => xf.transform_rect_bbox(SYMBOL_SQUARE),

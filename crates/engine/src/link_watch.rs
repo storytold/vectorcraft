@@ -17,7 +17,8 @@
 //! update, or answering No, leaves the link modified until the file changes again.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 
 use serde_json::{Value, json};
 
@@ -27,8 +28,21 @@ use crate::{Result, Session};
 pub type Stamp = (u64, u128);
 
 /// Stamps of a document's linked files taken on a worker thread: (document uid, [(file,
-/// object ids, stamp)]).
-pub type LinkScan = Arc<Mutex<Option<(u64, Vec<(String, Vec<u64>, Option<Stamp>)>)>>>;
+/// object ids, stamp)]), the condition the worker signals when it ends, and whether it has.
+pub type LinkScan = Arc<(Mutex<Option<(u64, Vec<(String, Vec<u64>, Option<Stamp>)>)>>, Condvar, AtomicBool)>;
+
+/// Held by a look's worker: marks the look as ended and wakes [`Session::wait_link_scan`] when
+/// dropped, whether the worker returned or unwound.
+struct Ended(LinkScan);
+
+impl Drop for Ended {
+    fn drop(&mut self) {
+        let (done, finished, ended) = &*self.0;
+        let _held = done.lock().unwrap_or_else(PoisonError::into_inner);
+        ended.store(true, Ordering::SeqCst);
+        finished.notify_all();
+    }
+}
 
 /// The stamp of the linked file stored as `path` in the document saved at `doc_path`; `None` when
 /// there is no file, its path isn't followed ([`crate::cmd::fileio::document_path`]) or
@@ -79,12 +93,14 @@ impl Session {
         let out = slot.clone();
         let scope = crate::file_access::ScopeHandle::capture();
         let spawned = std::thread::Builder::new().name("link-watch".into()).spawn(move || {
+            // Marks the look as ended when the worker returns or unwinds.
+            let _ended = Ended(out.clone());
             let stamps = scope.run(|| {
                 crate::file_access::confine(crate::file_access::current().or(opened_by).as_ref(), || {
                     files.into_iter().map(|(p, ids)| (p.clone(), ids, stamp(&p, doc_path.as_deref()))).collect()
                 })
             });
-            *out.lock().unwrap_or_else(PoisonError::into_inner) = Some((uid, stamps));
+            *out.0.lock().unwrap_or_else(PoisonError::into_inner) = Some((uid, stamps));
         });
         if spawned.is_ok() {
             self.link_scan = Some(slot);
@@ -94,9 +110,19 @@ impl Session {
     /// Apply a finished look (`None` while there is none, or it is still running): see
     /// [`Session::apply_link_stamps`].
     pub fn poll_link_scan(&mut self) -> Option<Result<Value>> {
-        let (uid, stamps) = self.link_scan.as_ref()?.lock().unwrap_or_else(PoisonError::into_inner).take()?;
+        let (uid, stamps) = self.link_scan.as_ref()?.0.lock().unwrap_or_else(PoisonError::into_inner).take()?;
         self.link_scan = None;
         Some(self.apply_link_stamps(uid, stamps, false))
+    }
+
+    /// Block until the look in flight has ended (at once when none is running), so that the next
+    /// [`Session::poll_link_scan`] applies its stamps. A look whose worker stopped without stamps
+    /// ends too, and the poll then returns `None`. For tests that drive the look step by step.
+    pub fn wait_link_scan(&self) {
+        let Some(scan) = &self.link_scan else { return };
+        let (done, finished, ended) = &**scan;
+        let guard = done.lock().unwrap_or_else(PoisonError::into_inner);
+        drop(finished.wait_while(guard, |stamps| stamps.is_none() && !ended.load(Ordering::SeqCst)).unwrap_or_else(PoisonError::into_inner));
     }
 
     /// Compare the stamps of document `uid`'s linked files with the ones last seen and act on

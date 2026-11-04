@@ -7,6 +7,7 @@ mod color;
 mod document;
 mod pathtools;
 mod pen;
+mod select;
 mod typetools;
 
 use super::CommandSpec;
@@ -19,6 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(document::specs());
     v.extend(pathtools::specs());
     v.extend(pen::specs());
+    v.extend(select::specs());
     v.extend(typetools::specs());
     v
 }

@@ -80,7 +80,7 @@ pub(super) fn copy_rect(app: &mut VectorcraftApp) {
     run(app, "edit.copy", json!({}));
 }
 
-fn written(board: &Rc<RefCell<Board>>) -> Vec<&'static str> {
+pub(super) fn written(board: &Rc<RefCell<Board>>) -> Vec<&'static str> {
     board.borrow().flavours.iter().map(|f| f.mime).collect()
 }
 
@@ -90,7 +90,7 @@ pub(super) fn pasted(app: &VectorcraftApp) -> Vec<Node> {
     st.selection.objects.iter().map(|id| st.doc.node(*id).unwrap().clone()).collect()
 }
 
-fn count(app: &VectorcraftApp) -> usize {
+pub(super) fn count(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().doc.layers[0].children().unwrap().len()
 }
 
@@ -152,7 +152,7 @@ pub(crate) fn blue_png() -> Vec<u8> {
 
 /// One headless frame of app logic (shortcuts too, from the second frame on) delivering `events`,
 /// in the test's one context (in a new one the app starts its fonts over).
-fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+pub(super) fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
     thread_local! {
         static CTX: egui::Context = egui::Context::default();
     }
@@ -175,7 +175,7 @@ fn app_with_worker() -> (VectorcraftApp, Rc<RefCell<Board>>) {
 
 /// [`app_with_worker`], its worker busy with a job labeled `label` (none: another Copy's formats)
 /// until the sender is dropped, or for 10 s.
-fn app_with_busy_worker(label: &str) -> (VectorcraftApp, Rc<RefCell<Board>>, Sender<()>) {
+pub(super) fn app_with_busy_worker(label: &str) -> (VectorcraftApp, Rc<RefCell<Board>>, Sender<()>) {
     let (mut app, board) = app_with_worker();
     let hold = hold_worker(&mut app, label);
     (app, board, hold)

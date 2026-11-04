@@ -1075,3 +1075,22 @@ fn many_lines_stay_quick() {
     assert!(faces.len() > 500, "{}", faces.len());
     assert!(started.elapsed().as_secs_f64() < 5.0, "{:?}", started.elapsed());
 }
+
+#[test]
+fn holes_touching_at_a_point_stay_holes() {
+    // Two small circles inside a big one, touching each other at (30,85): the big circle's face
+    // has both as holes, and every face and region is one of the three.
+    let circle = |cx: f64, cy: f64, r: f64| Shape::new(shapes::ellipse(Rect::new(cx - r, cy - r, cx + r, cy + r)), FillRule::EvenOdd, 0);
+    let closed = [circle(25.0, 85.0, 5.0), circle(30.0, 80.0, 20.0), circle(35.0, 85.0, 5.0)];
+    let (big, small) = (400.0 * std::f64::consts::PI, 25.0 * std::f64::consts::PI);
+    let (faces, _) = live_paint(&closed);
+    let regions = crate::regions(&closed);
+    for found in [&faces, &regions] {
+        let mut sizes: Vec<(Vec<usize>, f64)> = found.iter().map(|r| (r.sources.clone(), area(r))).collect();
+        sizes.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(sizes.iter().map(|s| s.0.clone()).collect::<Vec<_>>(), [vec![0, 1], vec![1], vec![1, 2]], "{sizes:?}");
+        for ((_, a), want) in sizes.iter().zip([small, big - 2.0 * small, small]) {
+            assert!((a - want).abs() < 0.5, "{a} vs {want}: {sizes:?}");
+        }
+    }
+}

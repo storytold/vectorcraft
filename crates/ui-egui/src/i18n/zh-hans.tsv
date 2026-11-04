@@ -798,6 +798,11 @@
 	Double-click to edit the characters' paint	双击以编辑字符的上色
 	Click to edit	单击以编辑
 	Double-click to edit	双击以编辑
+	Alternates for Current Selection	当前所选字符的替代字
+	Select a character with the Type tool to see its alternates.	使用文字工具选择一个字符以查看其替代字。
+	The selected character's font is not available.	所选字符的字体不可用。
+	No alternates for the selected character.	所选字符没有替代字。
+	Double-click to replace	双击以替换
 	Double-click to insert	双击以插入
 	Double-click to rename	双击以重命名
 	Double-click to target the contents	双击以指定内容
@@ -1599,6 +1604,10 @@ file-filter	Templates	模板
 	Join Tool	连接工具
 	Justification…	对齐设置…
 	Justify all lines	全部两端对齐
+	Align Top	顶对齐
+	Align Center	垂直居中对齐
+	Align Bottom	底对齐
+	Justify Vertically	垂直两端对齐
 	Justify with last line aligned center	两端对齐，末行居中
 	Justify with last line aligned left	两端对齐，末行左对齐
 	Justify with last line aligned right	两端对齐，末行右对齐
@@ -1679,6 +1688,7 @@ file-filter	Templates	模板
 	Ligatures are off while the text is tracked.	设置字距时连字会关闭。
 	Light	浅色
 	Light Blue	浅蓝色
+	Light Red	浅红色
 	Lighten	变亮
 	Lightness	亮度
 	Limit Color Guide to Library	将色彩参考限制于库
@@ -1897,6 +1907,8 @@ file-filter	Templates	模板
 	Name:	名称：
 	Navigate	导航
 	Navigator	导航器
+	Navigator Panel Options	导航器面板选项
+	Draw Dashed Lines as Solid Lines	将虚线绘制为实线
 	Needs the desktop app	需要桌面应用
 	Neutral Gradients	中性渐变
 	New	新建
@@ -3630,6 +3642,12 @@ digits	Malayalam	马拉雅拉姆数字
 	Scrub Numeric Fields by Dragging	拖动以调整数值字段
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} 中有 {n} 个文件{note}。要显示打包文件夹吗？
 @plural	{n} linked file not found|{n} linked files not found	找不到 {n} 个链接文件
+@msgplural	{n} linked file not found|{n} linked files not found	找不到 {n} 个链接文件
+@msg	fonts not copied: {fonts}	未复制的字体：{fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(找不到 {n} 个链接文件)
+@msg	(fonts not copied: {fonts})	(未复制的字体：{fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	未复制的字体：{fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	自存储此文档后，有 {n} 个链接图像已更改。要显示新版本吗？
 @plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	另有 {n} 条规则：导出时会全部写出。
@@ -4028,6 +4046,7 @@ imageTrace	Outline	轮廓
 @msg	`{key}` must be one of {_1}	`{key}` 必须是 {_1} 之一
 @msg	unknown preference `{key}`	未知首选项 `{key}`
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	数据恢复没有可保存副本的位置：请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	数据恢复无法将副本保存到 {path}：{e}
 @msg	`{area}` is no recovery area name	`{area}` 不是恢复区域名称
 @msg	`{name}` is no recovery entry name	`{name}` 不是恢复条目名称
 @msg	no clock to keep a heartbeat by	没有可用于维持心跳的时钟
@@ -5418,6 +5437,10 @@ lighting	Light	光源
 	Movie Clip	影片剪辑
 @msg	name is empty	名称为空
 @msg	an action is already recording	已在记录动作
+@msg	an action is already playing	已在播放动作
+@msg	the action stopped playing: its document is no longer active	动作已停止播放：其文档不再是现用文档
+@msg	speed must be accelerated, step or pause	speed 必须为 accelerated、step 或 pause
+@msg	seconds must be a whole number from 1 to 60	seconds 必须为 1 到 60 之间的整数
 @msg	no such function key	没有此功能键
 @msg	no such color	没有此颜色
 @msg	{_1} cannot be used on Windows	{_1} 在 Windows 上不能使用
@@ -5597,6 +5620,11 @@ axis	Y Axis	Y 轴
 	Set Options	组选项
 	Action Options…	动作选项…
 	Action Options	动作选项
+	Playback Options…	播放选项…
+	Playback Options	播放选项
+	Accelerated	加速
+	Step by Step	逐步
+	Pause For	暂停
 	Rename Action	重命名动作
 	New Action…	新建动作…
 	New Action	新建动作
@@ -6093,6 +6121,11 @@ breakText	Glyphs	字形
 	Export All Open Documents as SVG	将所有打开的文档导出为 SVG
 @msgplural	Exported {n} document|Exported {n} documents	已导出 {n} 个文档
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	已导出 {n} 个文档; 未写入 {title}：{error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	批量描摹文件夹
+@msgplural	Traced {n} image|Traced {n} images	已描摹 {n} 个图像
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} 个图像无法描摹
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	已描摹 {n} 个图像; 无法描摹：{failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	符号类型:
 	Dynamic Symbol	动态符号
@@ -6144,3 +6177,13 @@ breakText	Glyphs	字形
 	Spike	尖峰
 	Skip Spaces	跳过空格
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	图稿太大，无法作为图片复制：其他应用不会获得它的 PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	按画板选择
+	Select by Artboards…	按画板选择…
+	Selection Tools	选择工具
+	Search artboards	搜索画板
+	Fully Inside	完全在内
+	Fully Outside	完全在外
+	No artboards match.	没有匹配的画板。
+	Chosen: {n} of {total}	已选：{n} / {total}

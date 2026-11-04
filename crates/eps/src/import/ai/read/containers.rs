@@ -183,10 +183,12 @@ impl<'a> Reader<'a> {
         // The compound path's paint is its last path's (a gradient's instance wraps only
         // that one); the last painted one, should the last have none.
         let shown = kids.iter().rev().find(|k| !k.appearance.items.is_empty()).or(kids.last())?;
-        let (appearance, opacity, blend, rule) = (shown.appearance.clone(), shown.opacity, shown.blend, path_rule(shown));
+        let (appearance, opacity, blend, shape, rule) =
+            (shown.appearance.clone(), shown.opacity, shown.blend, shown.knockout_shape, path_rule(shown));
         for k in &mut kids {
             k.opacity = 1.0;
             k.blend = BlendMode::Normal;
+            k.knockout_shape = false;
             k.visible = true;
             k.locked = false;
         }
@@ -194,6 +196,7 @@ impl<'a> Reader<'a> {
         n.appearance = appearance;
         n.opacity = opacity;
         n.blend = blend;
+        n.knockout_shape = shape;
         Some(n)
     }
 
@@ -234,6 +237,7 @@ impl<'a> Reader<'a> {
         self.pending_unread_stroke = false;
         let mut f = self.close("LB", |k| matches!(k, Kind::Layer(_)))?;
         let state = self.layer_state.take();
+        self.container_undo = None;
         // An `Xy` right after the layer's last mesh or blend, then `LB`: the layer's, not theirs.
         if let (Some(_), Some(before)) = (state, self.mesh_undo.take())
             && let Some(mesh) = f.children.last_mut().filter(|n| matches!(n.kind, NodeKind::Mesh(_) | NodeKind::Blend { .. }))
@@ -251,8 +255,8 @@ impl<'a> Reader<'a> {
         layer.visible = a.visible;
         layer.locked = a.locked;
         // The layer's own opacity, blend and knockout, written after its art (#2003).
-        if let Some((opacity, blend, isolate, knockout)) = state {
-            (layer.opacity, layer.blend, layer.isolate, layer.knockout) = (opacity, blend, isolate, knockout);
+        if let Some((opacity, blend, isolate, knockout, shape)) = state {
+            (layer.opacity, layer.blend, layer.isolate, layer.knockout, layer.knockout_shape) = (opacity, blend, isolate, knockout, shape);
         }
         match self.frames.last_mut() {
             Some(parent) => {

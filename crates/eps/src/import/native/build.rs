@@ -76,12 +76,96 @@ pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64) -> Result<
     };
     let in_units = |r: Option<Rect>, k: f64| k.is_finite() && k > 1.0 && fits(r, k) && !fits(r, 1.0);
     let scale = [unit, structure.canvas_scale].into_iter().find(|&k| in_units(board, k) || (!fits(board, 1.0) && in_units(art, k)));
+    let styles = structure.styles_read;
     let (mut doc, notes) = build_from(structure, data, None, Page::Artboard, false, false, 1.0)?;
     if let Some(k) = scale {
-        // The graphic styles here are all the file's, drawn in its units too.
-        scale_document(&mut doc, k, true);
+        // The graphic styles read from the file are drawn in its units too.
+        scale_document(&mut doc, k, styles);
+        relayout_wrapped(&mut doc);
     }
     Ok((doc, notes))
+}
+
+/// A document read from the editing copy and its notes, or why it can't be read.
+pub(super) type Built = Result<(Document, Vec<String>), String>;
+
+/// [`build`] of a `.ai` without importing its PDF part, whose pages (each its trim box in points,
+/// width and height) are `pages` and are in units of `unit` points: the document read from
+/// `structure` (the editing copy `data` read) with nothing compared with the pages, when the file's
+/// text document makes the type of every text object (at least one shows, and none is type that a
+/// look draws), no object is unread or has another placement or drawn art that the page would
+/// choose, and its artboards are the pages, one for one and of their size, in points or in the pages'
+/// units ([`page_scale_alone`]). The document is drawn at that scale. Else `Err(structure)`, for
+/// [`build_from`] with the page.
+pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f64, f64)], unit: f64) -> Result<Built, Box<Structure>> {
+    let Some(scale) = page_scale_alone(&structure, pages, unit).filter(|_| nothing_waits_on_page(&structure) && type_all_made(&structure, data))
+    else {
+        return Err(Box::new(structure));
+    };
+    let styles = structure.styles_read;
+    let built = build_from(structure, data, None, Page::Artboard, false, false, 1.0).map(|(mut doc, notes)| {
+        if scale != 1.0 {
+            // The graphic styles read from the file are drawn in its units too.
+            scale_document(&mut doc, scale, styles);
+            relayout_wrapped(&mut doc);
+        }
+        (doc, notes)
+    });
+    Ok(built)
+}
+
+/// Is nothing in `structure` waiting on the page: no object unread (the page's art takes its
+/// place), no placed file with another placement, no live envelope with the drawn art it replaced
+/// (the comparison with the page chooses between them)?
+fn nothing_waits_on_page(structure: &Structure) -> bool {
+    structure.unread.is_empty()
+        && structure.unread_elsewhere.is_empty()
+        && structure.placed_elsewhere.is_empty()
+        && structure.envelopes_drawn.is_empty()
+}
+
+/// Does the text document of `data` (read as `structure`) make the type of every text object, those
+/// that don't show included, with at least one that shows, and none of them type that a look draws?
+fn type_all_made(structure: &Structure, data: &[u8]) -> bool {
+    let mut infos = vec![];
+    collect_slots(&structure.doc.layers, true, &mut infos);
+    if !infos.iter().any(|i| i.shown) || infos.iter().any(|i| i.look.is_some()) {
+        return false;
+    }
+    let frames = ai::text_frames(data);
+    for info in &mut infos {
+        info.art_path = info.story.and_then(|s| frames.get(&(s, info.frame))).map(|p| PathData::from_bezpath(&(structure.to_doc * p.clone())));
+    }
+    let Some(texts) = Texts::read(data) else { return false };
+    let mut read: std::collections::BTreeMap<u32, Option<Arc<Story>>> = Default::default();
+    let stories: Vec<Option<Arc<Story>>> = infos
+        .iter()
+        .map(|i| {
+            let n = i.story?;
+            read.entry(n).or_insert_with(|| texts.story(n as usize).map(Arc::new)).clone()
+        })
+        .collect();
+    // A slot without its story is made from nothing; past the text `build_from` reads, nothing is
+    // made either: it refuses the file.
+    if stories.iter().any(Option::is_none) || stories.iter().flatten().map(|s| s.len()).sum::<usize>() > MAX_TEXT {
+        return false;
+    }
+    let template = structure.template.map(|t| ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0));
+    make_slots(&infos, &stories, template, structure.to_doc, &mut vec![]).iter().all(Option::is_some)
+}
+
+/// The scale at which the artboards of `structure` are the pages `pages` (each its width and height
+/// in points), one for one and in order, each within half a point: 1 when they are in points, else
+/// `unit` (the pages' `UserUnit`) when they are in those units, as [`page_scale`] finds it with the
+/// page. `None` when they aren't the pages, and for a file that declares a large canvas scale (a
+/// `.ai` saved without its PDF part reads one at that scale, [`super::ai_alone`]).
+fn page_scale_alone(structure: &Structure, pages: &[(f64, f64)], unit: f64) -> Option<f64> {
+    let boards = &structure.doc.artboards;
+    if boards.is_empty() || boards.len() != pages.len() || structure.canvas_scale != 1.0 {
+        return None;
+    }
+    let fits = |k: f64| boards.iter().zip(pages).all(|(b, (w, h))| (b.rect.width() - w / k).abs() <= 0.5 && (b.rect.height() - h / k).abs() <= 0.5);
+    [1.0, unit].into_iter().find(|&k| k.is_finite() && k >= 1.0 && fits(k))
 }
 
 /// [`build`] from `structure`, the editing copy `data` already read.

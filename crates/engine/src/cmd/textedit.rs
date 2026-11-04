@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\" (#rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_range_style
         ),
@@ -52,6 +52,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id, start: byte (a character of it), dx?: pt, dy?: pt, hScale?: %, vScale?: %, rotation?: deg} change one character (a ligature, one glyph for several characters, as a whole) as a Touch Type tool drag does, as one undo step: dx moves it along its line in reading order by changing the kerning of the character before it on the line and its own kerning, and the characters after it stay where they are (an error for the first logical character of a line or at a reading-direction boundary; supported in either reading direction; limited to what kerning from -1000 to 10000 can give); dy raises it (baseline shift, up from its line whatever its rotation, also for the first character of a line and a right-to-left character); dx and dy are document points; hScale (including the object transform), vScale and rotation set its scales and rotation as text.setRangeStyle does. The kerning of the two characters also keeps the character and the ones after it where they were along the line when the font kerned them with their neighbors; a wider or narrower character moves the ones after it by the change in its width → {id, start, end} (the character's bytes)",
             has_doc,
             touch_type
+        ),
+        cmd!(
+            "text.setGlyphAlternate",
+            "Glyphs",
+            [],
+            None,
+            "{id, start: byte (a character of it), gid: glyph id|null} draw that one character with another glyph of its font as one undo step, what a double-click in the Glyphs panel's Show › Alternates for Current Selection does: gid is one of the glyphs text.glyphAlternates lists for it; its own default glyph, or null, puts the default glyph back. The text keeps the character, and its other attributes do not change. The choice is saved with the character's style and names the face it was made in (PostScript name and version): set in another font or version, or after the font goes missing, the character takes its default glyph; typed characters take their default glyphs. Choosing the glyph the character already draws is not an edit. An error when the character's font is not available, the glyph is not one of its alternates, or the character's style does not draw it (All Caps, Small Caps, another numeral system) → {id, start, end (the character's bytes), gid (the glyph drawn)}",
+            has_doc,
+            set_glyph_alternate
+        ),
+        cmd!(
+            query "text.glyphAlternates",
+            "Glyphs",
+            [],
+            None,
+            "{id, start: byte (a character of it)} the alternate glyphs of that character in its font, what the Glyphs panel's Show › Alternates for Current Selection lists: from the font's OpenType GSUB table, the glyphs that single and alternate substitutions put in place of the character's default glyph, `aalt` first, then `salt`, `ss01` to `ss20`, `swsh`, `cv01` to `cv99`, `hist`, `jalt`, `nalt`, `ornm` and `titl`, each glyph once, the default glyph only when `aalt` lists it → {char, font: family, style: style, default: glyph id, chosen: glyph id (the glyph drawn now), alternates: [{gid, feature}]} (empty when the font has none for it; an error when the character's font is not available)",
+            has_doc,
+            glyph_alternates
         ),
         cmd!(
             query "text.getRange",
@@ -930,8 +948,8 @@ impl CharChange {
 
 /// Type › Enable Missing Glyph Protection: after a font change, the characters of `runs` their new
 /// font has no glyph for, but their font `before` the change had, keep that font: its family,
-/// style, version and Variable Font settings.
-pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>) {
+/// style, version and Variable Font settings. Returns the byte ranges that kept their font, in order.
+pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>) -> Vec<(usize, usize)> {
     fn chars(runs: &[TextRun]) -> impl Iterator<Item = (usize, char, &CharStyle)> {
         runs.iter()
             .scan(0, |at, r| {
@@ -963,6 +981,7 @@ pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>
             _ => keep.push((at, end, old)),
         }
     }
+    let kept = keep.iter().map(|(a, b, _)| (*a, *b)).collect();
     for (a, b, old) in keep {
         edit::style_range(runs, a, b, |st| {
             st.font_family.clone_from(&old.font_family);
@@ -971,6 +990,30 @@ pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>
             st.font_axes.clone_from(&old.font_axes);
         });
     }
+    kept
+}
+
+/// The runs of `runs` from byte `a` to `b`, leaving out the ranges `kept` (in order) that Missing
+/// Glyph Protection gave their earlier font: the characters a font command set its font on.
+pub(crate) fn unprotected_runs(runs: &[TextRun], a: usize, b: usize, kept: &[(usize, usize)]) -> Vec<TextRun> {
+    let mut out = vec![];
+    let mut at = a;
+    for &(k0, k1) in kept {
+        if k1 <= at {
+            continue;
+        }
+        if k0 >= b {
+            break;
+        }
+        if k0 > at {
+            out.extend(edit::slice_runs(runs, at, k0));
+        }
+        at = k1;
+    }
+    if at < b {
+        out.extend(edit::slice_runs(runs, at, b));
+    }
+    out
 }
 
 fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1021,12 +1064,10 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
             }
             let before = protect.then(|| t.runs.clone());
             edit::style_range(&mut t.runs, a, b, |st| change.apply(st));
-            if let Some(before) = before {
-                protect_missing_glyphs(&before, &mut t.runs);
-            }
+            let kept = before.map(|before| protect_missing_glyphs(&before, &mut t.runs)).unwrap_or_default();
             if sets_font {
-                // Empty text has one run, which the empty range styles.
-                let styled = if a == b { t.runs.clone() } else { edit::slice_runs(&t.runs, a, b) };
+                // Empty text has one run, which the empty range styles. Characters that kept their font aren't the command's.
+                let styled = if a == b { t.runs.clone() } else { unprotected_runs(&t.runs, a, b, &kept) };
                 set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
             }
             refresh_bounds(t);
@@ -1083,6 +1124,144 @@ pub fn effective_kerning(db: &vectorcraft_text::FontDb, t: &TextObject, lay: &ve
     };
     let em = owner.and_then(|g| glyph_em(db, t, g)).unwrap_or(0.0);
     if em > 0.0 { drawn_gap(original).zip(drawn_gap(&base)).map_or(0.0, |(a, b)| (a - b) * 1000.0 / em) } else { 0.0 }
+}
+
+/// The character at byte `start` of `p` in text object `t`, its bytes and its font's face. An error
+/// when there is no character there, it is an inline graphic, or its font is not available.
+fn glyph_target(t: &TextObject, p: &Value, c: &str) -> Result<(char, std::ops::Range<usize>, std::sync::Arc<vectorcraft_text::FontFace>)> {
+    check_numbers(p, &["start"], c)?;
+    let start = byte_param(p, "start").ok_or_else(|| bad(c, "missing `start` (the byte offset of a character)"))?;
+    let mut at = 0;
+    for run in &t.runs {
+        let end = at + run.text.len();
+        if (at..end).contains(&start) {
+            let ch = run.text.get(start - at..).and_then(|s| s.chars().next()).ok_or_else(|| bad(c, format!("no character at byte {start}")))?;
+            if run.inline.is_some() {
+                return Err(bad(c, "an inline graphic has no glyphs"));
+            }
+            let db = vectorcraft_text::FontDb::global();
+            let face = db.style_face(&run.style).filter(|_| db.has_family(&run.style.font_family));
+            let face = face.ok_or_else(|| bad(c, format!("the font {} is not available", run.style.font_family)))?;
+            return Ok((ch, start..start + ch.len_utf8(), face));
+        }
+        at = end;
+    }
+    Err(bad(c, format!("no character at byte {start}")))
+}
+
+fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.setGlyphAlternate";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let gid = match p.get("gid") {
+        None => return Err(bad(C, "missing `gid` (a glyph id, or null for the default glyph)")),
+        Some(Value::Null) => None,
+        Some(v) => Some(v.as_u64().and_then(|g| u32::try_from(g).ok()).ok_or_else(|| bad(C, format!("`gid` must be a glyph id, not {v}")))?),
+    };
+    let t = text_ref(s, id)?;
+    let (ch, bytes, face) = glyph_target(&t, p, C)?;
+    let default = face.glyph_for(ch);
+    let holder = t
+        .runs
+        .iter()
+        .scan(0, |at, r| {
+            let start = *at;
+            *at += r.text.len();
+            Some((start..*at, r))
+        })
+        .find(|(bytes_of_run, _)| bytes_of_run.contains(&bytes.start));
+    let styled =
+        holder.as_ref().is_some_and(|(_, r)| r.style.all_caps || (r.style.small_caps.is_some() && ch.is_lowercase()) || r.style.digits.map(ch) != ch);
+    // The glyph the character is drawn with when it holds no choice, drawn alone in its face: a
+    // feature of its style (`salt`, a stylistic set) can draw another glyph than the default one.
+    // The default glyph is then kept as a choice, so that it is drawn. A character that is not laid
+    // out (overflowing text) is shaped alone in its style and writing direction. A character that starts a longer
+    // grapheme (a letter and its combining marks) is drawn in the grapheme's cluster, and is shaped
+    // with the grapheme. Of a cluster of several glyphs (a mark, a vowel sign drawn before the
+    // letter), the character's glyph is its default glyph or one of its alternates.
+    let plain = t.plain_text();
+    let grapheme = plain.get(bytes.start..edit::next_cluster(&plain, bytes.start).max(bytes.end)).map_or_else(|| ch.to_string(), str::to_owned);
+    let listed = face.alternates(ch);
+    let own_glyph = |lay: &vectorcraft_text::TextLayout, at: usize| {
+        let cluster: Vec<u32> = lay
+            .glyphs
+            .iter()
+            .filter(|g| g.byte == at && [bytes.len(), grapheme.len()].contains(&g.len) && g.font_id == face.id())
+            .map(|g| g.gid)
+            .collect();
+        match cluster[..] {
+            [one] => Some(one),
+            _ => cluster.into_iter().find(|&g| g == default || listed.iter().any(|a| a.gid == g)),
+        }
+    };
+    let alone_in_face = |lay: &vectorcraft_text::TextLayout| {
+        let found = lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len));
+        found.map(|_| own_glyph(lay, bytes.start))
+    };
+    let unchosen = match holder.as_ref().filter(|_| !styled) {
+        None => None,
+        Some((_, run)) => {
+            let mut probe = t.clone();
+            edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = None);
+            let db = vectorcraft_text::FontDb::global();
+            alone_in_face(&vectorcraft_text::layout(db, &probe)).unwrap_or_else(|| {
+                let st = CharStyle { glyph_alternate: None, ..run.style.clone() };
+                let mut single = TextObject::point(Point::ZERO, &grapheme, st);
+                single.vertical = t.vertical;
+                own_glyph(&vectorcraft_text::layout(db, &single), 0)
+            })
+        }
+    };
+    let substituted = unchosen.is_some_and(|g| g != default);
+    let choice = match gid.filter(|g| *g != default || substituted) {
+        None => None,
+        Some(g) if g == default || face.alternates(ch).iter().any(|a| a.gid == g) => Some(face.choice(ch, g)),
+        Some(g) => return Err(bad(C, format!("glyph {g} is not an alternate of {ch} in {} {}", face.family, face.style))),
+    };
+    let drawn = choice.as_ref().map_or(unchosen.unwrap_or(default), |c| c.gid);
+    // The run holding the character. The request changes nothing when the choice is the one the
+    // character's run holds and that run holds the character alone; otherwise the edit splits the
+    // run, so that the following text does not take the character into a ligature.
+    let held = holder.as_ref().filter(|(bytes_of_run, _)| bytes_of_run.start == bytes.start).and_then(|(_, r)| r.style.glyph_alternate.clone());
+    let alone = holder.as_ref().is_some_and(|(bytes_of_run, _)| *bytes_of_run == bytes);
+    // A choice that the character's style keeps from being drawn (All Caps, Small Caps, another
+    // numeral system) is an error, not an edit that leaves the page as it was. The style decides
+    // for a character outside its frame too; one that is laid out is checked in the layout.
+    if let Some(c) = &choice {
+        let shown = || {
+            let mut probe = t.clone();
+            edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = Some(c.clone()));
+            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe);
+            lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len)).map(|g| g.gid)
+        };
+        if styled || shown().is_some_and(|g| g != c.gid) {
+            return Err(bad(
+                C,
+                format!("glyph {} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)", c.gid),
+            ));
+        }
+    }
+    if held == choice && (choice.is_none() || alone) {
+        return Ok(json!({"id": id.0, "start": bytes.start, "end": bytes.end, "gid": drawn}));
+    }
+    s.edit("Glyphs", |d, _| {
+        let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
+        edit::style_range(&mut t.runs, bytes.start, bytes.end, |st| st.glyph_alternate = choice.clone());
+        refresh_bounds(t);
+        Ok(())
+    })?;
+    Ok(json!({"id": id.0, "start": bytes.start, "end": bytes.end, "gid": drawn}))
+}
+
+fn glyph_alternates(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.glyphAlternates";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let t = text_ref(s, id)?;
+    let (ch, bytes, face) = glyph_target(&t, p, C)?;
+    let default = face.glyph_for(ch);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let chosen = lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len)).map_or(default, |g| g.gid);
+    let alternates: Vec<Value> = face.alternates(ch).iter().map(|a| json!({"gid": a.gid, "feature": String::from_utf8_lossy(&a.feature)})).collect();
+    Ok(json!({"char": ch.to_string(), "font": face.family, "style": face.style, "default": default, "chosen": chosen, "alternates": alternates}))
 }
 
 fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1330,6 +1509,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     super::paint::check_keep_model(p, C)?;
     check_numbers(p, &["size"], C)?;
     check_switches(p, &["vertical", "placeholder"], C)?;
+    super::color_param(p, "color", C)?;
     let style = super::create::new_type_style(s, p);
     let text = str_param(p, "text").unwrap_or("").to_string();
     let start = match point_param(p, "at") {

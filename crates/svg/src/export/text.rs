@@ -83,9 +83,12 @@ impl Writer<'_> {
         let t = &*heights;
         let inline = t.runs.iter().any(|r| r.inline.is_some());
         // Ruby is written as outlines with its base text: a reader's <text> can't place it. So are
-        // small capitals, superscript and subscript and tab leaders, which SVG text doesn't draw (#3869).
-        let unwritable = t.runs.iter().any(|r| r.style.small_caps.is_some() || r.style.position != vectorcraft_doc::CharPosition::Normal)
-            || std::iter::once(&t.para).chain(&t.paras).any(|p| p.tabs.iter().any(|tab| !tab.leader.is_empty()));
+        // small capitals, superscript and subscript and tab leaders, which SVG text doesn't draw (#3869),
+        // and a glyph chosen for a character, which a reader's <text> draws with the default glyph.
+        let unwritable =
+            t.runs.iter().any(|r| {
+                r.style.small_caps.is_some() || r.style.position != vectorcraft_doc::CharPosition::Normal || r.style.glyph_alternate.is_some()
+            }) || std::iter::once(&t.para).chain(&t.paras).any(|p| p.tabs.iter().any(|tab| !tab.leader.is_empty()));
         let outlined =
             self.opts.outline_text || t.vertical || !t.ruby.is_empty() || (inline && matches!(t.kind, TextKind::OnPath { .. })) || unwritable;
         let chars = |w: &mut Self, n: &Node| if outlined { w.text_outlines(n, t) } else { w.text(n, t) };

@@ -99,7 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Slice Options…",
             ["Object", "Slice"],
             None,
-            "{kind?: \"image\"|\"noImage\"|\"htmlText\" (object slices of type only), name?, url?, target?, message?, alt?: (image), text?: cell text; HTML allowed (noImage), background?: \"\"|\"matte\"|\"#rrggbb\", hAlign?: \"default\"|\"left\"|\"center\"|\"right\", vAlign?: \"default\"|\"top\"|\"middle\"|\"baseline\"|\"bottom\"} set the selected slices' options as one undo step; no options: read them → the first slice's {kind, name, url, target, message, alt, text, background, hAlign, vAlign, htmlText: whether HTML Text applies}",
+            "{kind?: \"image\"|\"noImage\"|\"htmlText\" (object slices of type only), name?, url?, target?, message?, alt?: (image), text?: cell text; HTML allowed (noImage), background?: \"\"|\"matte\"|\"#rrggbb\" (#rrggbbaa and #rgba are refused), hAlign?: \"default\"|\"left\"|\"center\"|\"right\", vAlign?: \"default\"|\"top\"|\"middle\"|\"baseline\"|\"bottom\"} set the selected slices' options as one undo step; no options: read them → the first slice's {kind, name, url, target, message, alt, text, background, hAlign, vAlign, htmlText: whether HTML Text applies}",
             slices_targeted,
             options
         ),
@@ -513,6 +513,7 @@ impl Edits {
                 "" | "none" => Ok(String::new()),
                 "matte" => Ok("matte".to_string()),
                 _ => vectorcraft_color::Color::from_hex(&b)
+                    .filter(|_| !super::hex_with_alpha(&b))
                     .map(|c| c.to_hex())
                     .ok_or_else(|| bad(C, "`background` must be \"\", \"matte\" or #rrggbb")),
             })

@@ -240,6 +240,22 @@ fn a_percentage_in_a_size_field_scales_the_size_it_shows() {
     }
 }
 
+/// A percentage with a thousands comma in W or H (`1,000%`) is refused and leaves the size as it
+/// was, rather than read as `1.000%`; a decimal comma (`250,5%`) still reads as a share.
+#[test]
+fn a_thousands_comma_in_a_percentage_is_refused_in_a_size_field() {
+    let surfaces: [(&str, Draw); 3] =
+        [("Transform panel", transform::show), ("Properties", properties::transform_section), ("Control bar", crate::chrome::control_bar)];
+    for (name, draw) in surfaces {
+        let mut app = rect_app();
+        set_field(&mut app, draw, "100 pt", "1,000%", End::Enter(Modifiers::NONE));
+        assert_eq!(size(&app), (100.0, 50.0), "{name}, 1,000%");
+        let mut app = rect_app();
+        set_field(&mut app, draw, "100 pt", "250,5%", End::Enter(Modifiers::NONE));
+        assert_eq!(size(&app), (251.0, 50.0), "{name}, 250,5%");
+    }
+}
+
 /// A length field of the New Document dialog keeps the focus on Ctrl/Cmd+Enter, and the dialog
 /// creates no document.
 #[test]

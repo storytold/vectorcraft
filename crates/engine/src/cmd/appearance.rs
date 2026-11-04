@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Fill",
             ["Window", "Appearance"],
             Some("Cmd+/"),
-            "{ids?|id?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack, on an image right below its Contents row (a copy of its top fill; type without one: its characters' fill; else the default fill). With a fill row active (appearance.setActiveItem), no `ids` and no `target: \"contents\"`, the new fill is a copy of that row, right above it, and becomes the active row",
+            "{ids?|id?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack, on an image right below its Contents row, with its top fill's paint (type without one: its characters' fill; else the default fill). With a fill row active (appearance.setActiveItem), no `ids`, no `id` and no `target: \"contents\"`, the new fill takes that row's paint, goes right above it, and becomes the active row; appearance.duplicateItem copies a whole row",
             has_doc,
             |s, p| add_item(s, p, true)
         ),
@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Stroke",
             ["Window", "Appearance"],
             Some("Cmd+Alt+/"),
-            "{ids?|id?, target?} add a stroke on top of each selected object's own stack, on an image right below its Contents row (a copy of its top stroke, else the default stroke)",
+            "{ids?|id?, target?} add a stroke on top of each selected object's own stack, on an image right below its Contents row, with its top stroke's paint (else the default stroke) and that stroke's weight when it has paint, at least 1 pt",
             has_doc,
             |s, p| add_item(s, p, false)
         ),
@@ -357,11 +357,23 @@ pub(crate) fn appearances_differ(d: &vectorcraft_doc::Document, ids: &[NodeId]) 
 
 /// Indices `idx` of the first target's items (aligned with `aligned`) in each of `ids`: the first
 /// target's own, and in each other one the items equal to them there (see [`SharedStack`]), each
-/// index on its own: one the targets don't share is left out of the others (never taken as the
-/// same index there). Not aligned, or one target: the same indices in each.
+/// index and each target on its own: an index a target doesn't share with the first is left out
+/// of that target (never taken as the same index there), whatever the other targets have. Not
+/// aligned, or one target: the same indices in each.
 pub(crate) fn items_per_target(d: &vectorcraft_doc::Document, ids: &[NodeId], idx: &[usize], aligned: bool) -> Vec<Vec<usize>> {
-    match shared_stack(d, ids).filter(|_| aligned) {
-        Some(sh) => (0..ids.len()).map(|k| if k == 0 { idx.to_vec() } else { idx.iter().filter_map(|i| sh.item_in(*i, k)).collect() }).collect(),
+    let aps: Option<Vec<&Appearance>> = ids.iter().map(|id| d.node(*id).map(|n| &*n.appearance)).collect();
+    match aps.filter(|aps| aligned && aps.len() >= 2) {
+        Some(aps) => aps
+            .iter()
+            .enumerate()
+            .map(|(k, ap)| match aps.first() {
+                Some(first) if k > 0 => {
+                    let sh = SharedStack::of(&[*first, *ap]);
+                    idx.iter().filter_map(|i| sh.item_in(*i, 1)).collect()
+                }
+                _ => idx.to_vec(),
+            })
+            .collect(),
         None => vec![idx.to_vec(); ids.len()],
     }
 }
@@ -507,8 +519,8 @@ fn set_active_item(s: &mut Session, p: &Value) -> Result<Value> {
 fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
     let ids = require_targets(s, p, if fill { "appearance.addFill" } else { "appearance.addStroke" })?;
     let defaults = s.paint.clone();
-    // The panel's active Fill row, when the new fill goes on the selection: the new fill is a copy
-    // of that row, right above it in each target that has it (others get a copy of their top fill).
+    // The panel's active Fill row, when the new fill goes on the selection: the new fill takes that
+    // row's paint, right above it in each target that has it (others take their top fill's paint).
     // Where the new item went in on the active item's object, when it is an image.
     let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
     // The active row is a row of the active object's stack, which need not come first in `ids`
@@ -547,8 +559,9 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
                     }
                     continue;
                 }
-                // A copy of the top fill (stroke); without one, type's characters' and otherwise the
-                // default paint, so a new fill on a group or type shows.
+                // The top fill's (stroke's) paint; without one, type's characters' and otherwise the
+                // default paint, so a new fill on a group or type shows. A new stroke takes the top
+                // stroke's weight when that stroke has paint, at least 1 pt.
                 let paint = match (n.appearance.paint_at(None, fill), &n.kind) {
                     (Some(p), _) => p.clone(),
                     (None, NodeKind::Text(_)) => super::paint::proxy_paint(n, !fill, None),

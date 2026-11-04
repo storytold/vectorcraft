@@ -690,6 +690,40 @@ fn command_drag_stops_at_zero_and_keeps_the_spacing() {
     assert!(moved_all(&[], 0, 10.0).is_none());
 }
 
+/// A drag that leaves the stops where they were records no undo step: a Ctrl-drag (Command on
+/// macOS) to the left while the leftmost stop is at 0, and a plain drag that takes a stop away and
+/// releases it where it started. The dragged stop is still selected.
+#[test]
+fn a_drag_that_moves_no_stop_records_no_undo_step() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    app.session.execute("text.tabs.set", &json!({"stops": [{"position": 0}, {"position": 20}]})).unwrap();
+    let ctx = egui::Context::default();
+    let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+    let before = app.session.active().unwrap().history.undo.len();
+    command_drag_on_ruler(&ctx, &mut app, 20.0, 5.0);
+    assert_eq!(positions(&app), [0.0, 20.0]);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before, "Ctrl-drag");
+    assert_eq!(pstate::<usize>(&ctx, "tabs-sel"), 1);
+    set_pstate(&ctx, "tabs-sel", 0usize);
+    let labels = ruler_frame(&ctx, &mut app, vec![], false);
+    let [(zero, a), (next, b), ..] = &labels[..] else { panic!("ruler labels {labels:?}") };
+    assert_eq!(zero, "0");
+    let per = next.parse::<f64>().unwrap() * app.session.general_unit().points();
+    let x = |pt: f64| egui::pos2(a.x - 2.0 + (pt / per) as f32 * (b.x - a.x), a.y + 15.0);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    ruler_frame(&ctx, &mut app, vec![egui::Event::PointerMoved(x(20.0)), button(x(20.0), true)], false);
+    for pt in [40.0, 60.0, 30.0, 20.0] {
+        ruler_frame(&ctx, &mut app, vec![egui::Event::PointerMoved(x(pt))], false);
+    }
+    ruler_frame(&ctx, &mut app, vec![button(x(20.0), false)], false);
+    ruler_frame(&ctx, &mut app, vec![], false);
+    assert_eq!(positions(&app), [0.0, 20.0]);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before, "plain drag");
+    assert_eq!(pstate::<usize>(&ctx, "tabs-sel"), 1);
+}
+
 /// A Ctrl-drag (Command on macOS) that would put a stop past 100,000 pt stops when the rightmost
 /// stop reaches 100,000 pt, so the stops move and keep their spacing.
 #[test]

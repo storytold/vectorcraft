@@ -165,18 +165,18 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
 /// of its art, which it carries: its layers and hidden objects as they were, and the art outside
 /// its artboard (its PDF part has only what is on the artboards), as an EPS of the editor is read.
 /// Anything else as it was. `unit`: the size in points of a unit of the PDF part's user space (its
-/// first page's `UserUnit`) → (document, warnings, whether its layers were read). `private`: the
-/// editor's copy ([`editing_copy`]).
+/// first page's `UserUnit`) → (document, warnings, whether its layers were read). `layers`: the
+/// editor's copy ([`editing_copy`]), as far as it was decoded and read.
 fn through_editing_data(
-    private: Option<&[u8]>,
+    layers: Option<vectorcraft_eps::AiLayers>,
     opts: &LoadOptions,
     doc: Document,
     warnings: Vec<String>,
     unit: f64,
 ) -> (Document, Vec<String>, bool) {
-    let Some(private) = private else { return (doc, warnings, false) };
+    let Some(layers) = layers else { return (doc, warnings, false) };
     let outlined = opts.text_as == vectorcraft_pdf::TextAs::Outlines;
-    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai(private, doc, warnings, outlined, opts.trust_editing_data, unit);
+    let (doc, mut warnings, read) = vectorcraft_eps::layered_ai_from(layers, doc, warnings, outlined, opts.trust_editing_data, unit);
     // The layers weren't read (or couldn't be): the notes of reading the PDF part still hold.
     if !read {
         return (doc, warnings, false);
@@ -214,6 +214,14 @@ fn editing_copy_alone(private: &[u8]) -> Result<(Document, Vec<String>)> {
 /// layers and the editing data on?
 fn reads_editing_copy(opts: &LoadOptions) -> bool {
     opts.pages.is_none() && opts.layers && opts.editing_data
+}
+
+/// May a file opened with `opts` open from the editor's own copy of its art without its PDF part
+/// being imported ([`vectorcraft_eps::ai_layers_alone`]): it reads the editor's copy, on the pages'
+/// trim boxes (the crop box asked for, as a file with the editor's copy opens on them), with its
+/// type as text?
+fn reads_layers_alone(opts: &LoadOptions) -> bool {
+    reads_editing_copy(opts) && opts.crop == vectorcraft_pdf::CropTo::Crop && opts.text_as != vectorcraft_pdf::TextAs::Outlines
 }
 
 /// The editor's own copy of its art that `opened` carries (as [`vectorcraft_pdf::illustrator_data`]
@@ -365,41 +373,68 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 Ok(o) => super::pdfimport::import(bytes, o, opts, format.id != "pdf"),
                 Err(e) => Err(err(e)),
             };
-            let read = restore_or_import(editing, || match imported() {
-                Ok(r) => {
-                    // The editor's copy, read once the import is done with the pages.
-                    let private = opened.as_ref().ok().and_then(|o| editing_copy(o, opts));
-                    // Pages of text alone: the editing copy alone where it reads, as for a file
-                    // saved without its PDF part (#1387: else the page, which is the art). So too
-                    // pages that draw nothing at all: there is no page art to check the layers
-                    // against, and the empty page would lose all of it.
-                    // A page is empty only when nothing on it was skipped (an image that can't be
-                    // decoded draws nothing either): its notes are at most the page's own.
-                    let empty = draws_nothing(&r.document) && r.warnings.iter().all(|w| is_page_note(w));
-                    let alone = (r.only_text || empty)
-                        .then(|| private.as_deref().map(editing_copy_alone))
-                        .flatten()
-                        .and_then(|read| read.ok())
-                        .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts));
-                    let (doc, warnings, read) = match alone {
-                        Some((doc, warnings)) => (doc, warnings, true),
-                        None => through_editing_data(private.as_deref(), opts, r.document, r.warnings, r.user_unit),
-                    };
-                    editing_data = read;
-                    Ok((doc, warnings))
+            let read = restore_or_import(editing, || {
+                // Type all from the text document and nothing that needs the PDF part: the layers
+                // alone, the PDF part not imported. Else what was read of the layers is kept for
+                // reading them with the PDF part.
+                let mut layers = None;
+                if let Some((o, private)) = opened.as_ref().ok().filter(|_| reads_layers_alone(opts)).and_then(|o| Some((o, editing_copy(o, opts)?)))
+                {
+                    let pages = o.trim_pages();
+                    match vectorcraft_eps::ai_layers_alone(&private, &pages.sizes, pages.user_unit) {
+                        Ok((mut doc, warnings)) => {
+                            doc.setup.bleed = pages.bleed;
+                            editing_data = true;
+                            return Ok((doc, warnings));
+                        }
+                        Err(read) => layers = Some(read),
+                    }
                 }
-                // Saved without its PDF part: the editing copy is all the file has (`pages` that
-                // name every page read it as the whole file).
-                Err(e) if is_placeholder(&e) => opened
-                    .as_ref()
-                    .ok()
-                    .and_then(|o| from_editing_data_alone(o, opts))
-                    .unwrap_or(Err(e))
-                    .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts))
-                    .inspect(|_| editing_data = true),
-                // A PDF part that can't be read (a stream the import refuses): the editing copy
-                // alone where it reads, else the error.
-                Err(e) => without_pdf_part(bytes, opts, &e).inspect(|_| editing_data = true).ok_or(e),
+                match imported() {
+                    Ok(r) => {
+                        // The editor's copy, read once the import is done with the pages, unless
+                        // its layers were read before it.
+                        let private = layers.is_none().then(|| opened.as_ref().ok().and_then(|o| editing_copy(o, opts))).flatten();
+                        // Pages of text alone: the editing copy alone where it reads, as for a file
+                        // saved without its PDF part (#1387: else the page, which is the art). So too
+                        // pages that draw nothing at all: there is no page art to check the layers
+                        // against, and the empty page would lose all of it.
+                        // A page is empty only when nothing on it was skipped (an image that can't be
+                        // decoded draws nothing either): its notes are at most the page's own.
+                        let empty = draws_nothing(&r.document) && r.warnings.iter().all(|w| is_page_note(w));
+                        let copy_alone = || match &private {
+                            Some(private) => Some(editing_copy_alone(private)),
+                            None if layers.is_some() => opened.as_ref().ok().and_then(|o| editing_copy(o, opts)).map(|p| editing_copy_alone(&p)),
+                            None => None,
+                        };
+                        let alone = (r.only_text || empty)
+                            .then(copy_alone)
+                            .flatten()
+                            .and_then(|read| read.ok())
+                            .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts));
+                        let (doc, warnings, read) = match alone {
+                            Some((doc, warnings)) => (doc, warnings, true),
+                            None => {
+                                let layers = layers.or_else(|| private.as_deref().map(vectorcraft_eps::AiLayers::decode));
+                                through_editing_data(layers, opts, r.document, r.warnings, r.user_unit)
+                            }
+                        };
+                        editing_data = read;
+                        Ok((doc, warnings))
+                    }
+                    // Saved without its PDF part: the editing copy is all the file has (`pages` that
+                    // name every page read it as the whole file).
+                    Err(e) if is_placeholder(&e) => opened
+                        .as_ref()
+                        .ok()
+                        .and_then(|o| from_editing_data_alone(o, opts))
+                        .unwrap_or(Err(e))
+                        .map(|(doc, warnings)| outlined_if_asked(doc, warnings, opts))
+                        .inspect(|_| editing_data = true),
+                    // A PDF part that can't be read (a stream the import refuses): the editing copy
+                    // alone where it reads, else the error.
+                    Err(e) => without_pdf_part(bytes, opts, &e).inspect(|_| editing_data = true).ok_or(e),
+                }
             })?;
             // The File Info of a file read from its pages or its editing copy.
             if !read.2 {

@@ -155,6 +155,31 @@ pub(super) fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> 
     text_edit(ui, d, key, width).changed()
 }
 
+/// A parameter value that is a color object (`{"model": "cmyk", …}`, as Document Color Mode or an
+/// imported file stores an effect's color), read as a color. `None` for any other value.
+pub(super) fn color_object(v: &Value) -> Option<vectorcraft_doc::color::Color> {
+    v.is_object().then(|| serde_json::from_value(v.clone()).ok()).flatten()
+}
+
+/// [`text`] for a color parameter `key`: a color object ([`color_object`]) shows as its hex and
+/// stays as it is until the text is edited; any other value that isn't text shows dimmed.
+pub(super) fn color_text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> bool {
+    let Some(v) = d.fields.get(key).cloned() else { return text(ui, d, key, width) };
+    if let Some(c) = color_object(&v) {
+        d.fields.insert(key.into(), json!(c.to_hex()));
+        let changed = text(ui, d, key, width);
+        if !changed {
+            d.fields.insert(key.into(), v);
+        }
+        return changed;
+    }
+    if v.is_string() {
+        return text(ui, d, key, width);
+    }
+    crate::widgets::dim_label(ui, &v.to_string());
+    false
+}
+
 /// [`text`] for a row whose visible meaning is not the immediately preceding label widget
 /// (Export for Screens' Range field follows its radio buttons): screen readers name the field
 /// `name`, already translated. The pending label is still consumed, so it cannot name a later
@@ -432,9 +457,19 @@ pub(super) fn param_fields(
                             changed = true;
                         }
                     }
-                    other => {
-                        ui.label(egui::RichText::new(other.to_string()).color(t.text_dim).size(11.0));
-                    }
+                    // A color object shows as its hex; typing in the field stores the typed text.
+                    other => match color_object(&other) {
+                        Some(c) => {
+                            let mut s = c.to_hex();
+                            if ui.add(egui::TextEdit::singleline(&mut s).desired_width(140.0)).changed() {
+                                d.fields.insert(k.clone(), json!(s));
+                                changed = true;
+                            }
+                        }
+                        None => {
+                            ui.label(egui::RichText::new(other.to_string()).color(t.text_dim).size(11.0));
+                        }
+                    },
                 }
             });
             ui.end_row();
@@ -598,7 +633,19 @@ fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, cur: &
             let typed = crate::widgets::text_field_named(ui, ("plugin-list", k), Some(label), Some(&number_list_text(cur)), 160.0, 1);
             (typed.and_then(|text| read_number_list(&text, spec)), false)
         }
+        ParamSpec::Color { .. } => (plugin_color_button(ui, ("plugin-color", k), cur), false),
     }
+}
+
+/// A plug-in `color` parameter's button, showing `cur` (a color object or hex) and opening the color
+/// picker → the color picked, as the color object the plug-in gets: the picker's display sRGB in the
+/// working RGB space, so the color shows as it was picked whatever the working profile.
+pub(crate) fn plugin_color_button(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, cur: &Value) -> Option<Value> {
+    let [r, g, b, _] = vectorcraft_plugins::manifest::color_value(cur).unwrap_or_default().to_rgba8(1.0);
+    let mut rgb = [r, g, b];
+    let changed = ui.push_id(id, |ui| ui.color_edit_button_srgb(&mut rgb).changed()).inner;
+    let picked = || crate::screen_color::sampled(&vectorcraft_color::cms::active(), rgb.map(|v| f32::from(v) / 255.0));
+    changed.then(|| serde_json::to_value(picked()).unwrap_or_default())
 }
 
 /// A `numberList` value as its field shows it: "45, 135".
@@ -755,7 +802,8 @@ pub(super) fn slider_rail_named(
     range: std::ops::RangeInclusive<f64>,
     track: &dyn Fn(f32) -> egui::Color32,
 ) {
-    let shown = crate::widgets::SliderValue::number(d.f64(key, 0.0), range.clone());
+    // Whole numbers, as a drag sets them.
+    let shown = crate::widgets::SliderValue { decimals: Some(0), ..crate::widgets::SliderValue::number(d.f64(key, 0.0), range.clone()) };
     slider_rail_valued(ui, d, key, name, range, Some(shown), track);
 }
 
@@ -778,8 +826,9 @@ pub(super) fn slider_rail_valued(
     let units = shown.as_ref().map(|s| s.range.clone());
     let (dragged, _, keyed) =
         crate::widgets::color_slider_stepped(ui, ("dlg-slider", key), name, shown, ((v - min) / (max - min)) as f32, SLIDER_WIDTH, track);
-    let keyed =
-        keyed.zip(units).map(|(k, u)| if u == range { k } else { (min + (k - u.start()) / (u.end() - u.start()) * (max - min)).clamp(min, max) });
+    // Not clamped to the rail: a screen reader's set value can reach a number past it that the
+    // field holds.
+    let keyed = keyed.zip(units).map(|(k, u)| if u == range { k } else { min + (k - u.start()) / (u.end() - u.start()) * (max - min) });
     if let Some(n) = dragged.map(|x| (min + x as f64 * (max - min)).round()).or(keyed).filter(|n| *n != held) {
         d.fields.insert(key.into(), json!(n));
     }

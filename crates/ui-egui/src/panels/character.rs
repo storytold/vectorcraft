@@ -316,6 +316,14 @@ fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
     Some((value, true))
 }
 
+/// The check marks of the Kerning menu's Auto and Optical entries for the selection's kerning
+/// `mode` (Optical on, manual value). A manual value checks neither, as it sets the spacing even
+/// with Optical on. A selection that mixes modes checks neither, and the menu still lists both.
+fn kerning_methods(mode: Option<(bool, Option<f64>)>) -> (Option<bool>, Option<bool>) {
+    let (automatic, optical) = mode.map_or((false, false), |(optical, manual)| (!optical && manual.is_none(), optical && manual.is_none()));
+    (Some(automatic), Some(optical))
+}
+
 /// The faces Type › Bold and Type › Italic switch to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Face {
@@ -542,9 +550,6 @@ fn text_copy(app: &mut VectorcraftApp) -> bool {
     app.session.set_tool_option("copy", &runs);
     *CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()) = Some(runs.clone());
     let text = r["text"].as_str().unwrap_or("").to_string();
-    if let Some(ctx) = CTX.get() {
-        ctx.copy_text(text.clone());
-    }
     *CLIP.lock().unwrap_or_else(|e| e.into_inner()) = text.clone();
     if let Ok(parsed_runs) = serde_json::from_value::<Vec<vectorcraft_doc::TextRun>>(runs)
         && !parsed_runs.is_empty()
@@ -552,7 +557,19 @@ fn text_copy(app: &mut VectorcraftApp) -> bool {
         let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "", vectorcraft_doc::CharStyle::default());
         t.runs = parsed_runs;
         let node = vectorcraft_doc::Node::new(vectorcraft_doc::NodeId(1), vectorcraft_doc::NodeKind::Text(Box::new(t)));
-        app.session.clipboard.nodes = vec![node];
+        let Ok(st) = app.session.doc() else { return false };
+        let clip = vectorcraft_engine::cmd::clipboard::Clipboard::from_node(st, node);
+        app.session.clipboard = clip;
+        // The desktop clipboard must own the same styled art as the internal clipboard. An egui
+        // plain-text copy would replace its formats, so let the publisher provide both text and
+        // rich art. Paste on the canvas can then keep the runs after Type editing ends.
+        if app.services.system_clipboard.is_some() {
+            app.publish_clipboard();
+            return true;
+        }
+    }
+    if let Some(ctx) = app.ui_ctx.clone().or_else(|| CTX.get().cloned()) {
+        ctx.copy_text(text);
     }
     true
 }
@@ -756,8 +773,7 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             let caret = text_editing(app).is_some_and(|(_, a, b)| a == b);
             let at_caret = if caret { caret_kerning(app, ui) } else { None };
             let kerning = at_caret.map(|(v, _)| v).or_else(|| mode.map(|(_, manual)| manual.unwrap_or(0.0)));
-            let automatic = mode.map(|(optical, manual)| !optical && manual.is_none());
-            let optical = mode.map(|(optical, _)| optical);
+            let (automatic, optical) = kerning_methods(mode);
             match widgets::spin_kerning(
                 ui,
                 "ch-kern",

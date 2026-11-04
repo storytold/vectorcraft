@@ -221,6 +221,16 @@ fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_p
     read_opened(bytes, opts, reader, &original)
 }
 
+/// How many times each buffer's pages have been imported, by its address (tests).
+#[cfg(any(test, feature = "read-count"))]
+static IMPORTS: std::sync::Mutex<std::collections::BTreeMap<usize, usize>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// How many times the pages of `bytes`, at its address, have been imported on any thread (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn imports_of(bytes: &[u8]) -> usize {
+    IMPORTS.lock().ok().and_then(|i| i.get(&(bytes.as_ptr() as usize)).copied()).unwrap_or(0)
+}
+
 /// [`read_with_reader_options`] of `original`, the PDF `bytes` read with `reader`.
 fn read_opened(
     bytes: &[u8],
@@ -228,6 +238,11 @@ fn read_opened(
     reader: &craft_pdf::OpenOptions,
     original: &craft_pdf::syntax::Pdf,
 ) -> Result<ImportReport, PdfError> {
+    #[cfg(any(test, feature = "read-count"))]
+    if let Ok(mut imports) = IMPORTS.lock() {
+        let n = imports.entry(bytes.as_ptr() as usize).or_default();
+        *n = n.saturating_add(1);
+    }
     let picked = crate::pages::picked(opts, original.pages().len())?;
     let mut ocgs = Ocgs::read(original);
     let route = opts.layers && !ocgs.list.is_empty();

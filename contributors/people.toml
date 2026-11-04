@@ -201,3 +201,11 @@ sync_github_name = false
 
 [people.FrancoJacquet]
 real_name = "Franco Jacquet"
+
+[people.FractalEncrypt]
+sync_github_name = true
+
+[people.sadkotheguest]
+real_name = "Alexander Buraga"
+display_name = "Alexander Buraga"
+sync_github_name = false

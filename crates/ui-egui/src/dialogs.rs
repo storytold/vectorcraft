@@ -9,6 +9,7 @@
 mod about;
 pub mod action_batch;
 pub mod action_new;
+pub mod action_playback;
 pub mod action_set_options;
 pub mod artboard_options;
 pub mod blend_options;
@@ -63,6 +64,7 @@ pub mod live_paint_selection;
 pub mod missing_fonts;
 pub mod missing_links;
 pub(crate) mod modal;
+pub mod navigator_panel_options;
 pub mod new_brush;
 pub mod new_color_group;
 mod new_document;
@@ -140,7 +142,7 @@ pub(crate) use export_for_screens::{
     import_presets as screen_import_presets, open_assets as open_export_for_screens_assets, preset_list as screen_preset_list,
     saved_options as screen_saved_options, saved_rows as screen_saved_rows,
 };
-pub(crate) use form::{humanize, number_list_text, read_number_list, unit_suffix};
+pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
 pub(crate) use new_document::preset_name;
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
 pub use png_options::open as open_raster_options;
@@ -364,6 +366,7 @@ registry! {
     ActionBatch: [action_batch::KIND] => action_batch::SPEC,
     ActionSetOptions: [action_set_options::KIND] => action_set_options::SPEC,
     ActionNew: [action_new::KIND] => action_new::SPEC,
+    ActionPlayback: [action_playback::KIND] => action_playback::SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
@@ -405,6 +408,7 @@ registry! {
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
+    NavigatorPanelOptions: [navigator_panel_options::KIND] => navigator_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
@@ -412,6 +416,7 @@ registry! {
     NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
     SwatchLegend: [crate::addons::color::legend::KIND] => crate::addons::color::legend::SPEC,
     TextTweaker: [crate::addons::typetools::KIND] => crate::addons::typetools::SPEC,
+    SelectByArtboards: [crate::addons::select::KIND] => crate::addons::select::SPEC,
     ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE, crate::addons::arrange::OPACITY, crate::addons::arrange::SORT] => crate::addons::arrange::SPEC,
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
 }

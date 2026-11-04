@@ -841,6 +841,11 @@ font-technology	Variable	Променливи
 	Double-click to edit the characters' paint	Двойно щракване за редактиране на оцветяването на знаците
 	Click to edit	Щракнете за редактиране
 	Double-click to edit	Двойно щракване за редактиране
+	Alternates for Current Selection	Алтернативи за текущата селекция
+	Select a character with the Type tool to see its alternates.	Изберете знак с инструмента „Текст“, за да видите алтернативите му.
+	The selected character's font is not available.	Шрифтът на избрания знак не е наличен.
+	No alternates for the selected character.	Няма алтернативи за избрания знак.
+	Double-click to replace	Двойно щракване за замяна
 	Double-click to insert	Двойно щракване за вмъкване
 	Double-click to rename	Двойно щракване за преименуване
 	Double-click to target the contents	Двойно щракване за насочване към съдържанието
@@ -1597,6 +1602,10 @@ font-technology	Variable	Променливи
 	Join Tool	Инструмент „Свързване“
 	Justification…	Подравняване…
 	Justify all lines	Двустранно подравняване на всички редове
+	Align Top	Подравняване горе
+	Align Center	Подравняване в средата
+	Align Bottom	Подравняване долу
+	Justify Vertically	Двустранно вертикално подравняване
 	Justify with last line aligned center	Двустранно подравняване с центриран последен ред
 	Justify with last line aligned left	Двустранно подравняване с ляво подравнен последен ред
 	Justify with last line aligned right	Двустранно подравняване с дясно подравнен последен ред
@@ -1702,6 +1711,7 @@ font-technology	Variable	Променливи
 	Ligatures are off while the text is tracked.	Лигатурите са изключени, докато текстът е с проследяване.
 	Light	Светло
 	Light Blue	Светлосиньо
+	Light Red	Светлочервено
 	Lighten	Изсветляване
 	Lightness	Светлина
 	Limit Color Guide to Library	Ограничаване на цветния справочник до библиотека
@@ -1920,6 +1930,8 @@ font-technology	Variable	Променливи
 	Name:	Име:
 	Navigate	Навигация
 	Navigator	Навигатор
+	Navigator Panel Options	Опции за панела „Навигатор“
+	Draw Dashed Lines as Solid Lines	Изчертаване на прекъснатите линии като плътни
 	Needs the desktop app	Изисква десктоп приложение
 	Neutral Gradients	Неутрални градиенти
 	New	Нов
@@ -3666,6 +3678,12 @@ digits	Malayalam	Малаялам
 	Scrub Numeric Fields by Dragging	Плъзгане на числени полета чрез влачене
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} файл в {folder} {note}. Показване на папката на пакета?|{n} файла в {folder} {note}. Показване на папката на пакета?
 @plural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени
+@msgplural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени
+@msg	fonts not copied: {fonts}	некопирани шрифтове: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} свързан файл не е намерен)|({n} свързани файла не са намерени)
+@msg	(fonts not copied: {fonts})	(некопирани шрифтове: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	некопирани шрифтове: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} свързано изображение е променено след запазването на този документ. Показване на новата версия?|{n} свързани изображения са променени след запазването на този документ. Показване на новите версии?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} свързано изображение е променено на диска. Показване на новата версия?|{n} свързани изображения са променени на диска. Показване на новите версии?
@@ -5495,6 +5513,10 @@ theme	Appearance	Външен вид
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
 @msg	an action is already recording	вече се записва действие
+@msg	an action is already playing	вече се възпроизвежда действие
+@msg	the action stopped playing: its document is no longer active	действието спря: документът му вече не е активен
+@msg	speed must be accelerated, step or pause	speed трябва да е accelerated, step или pause
+@msg	seconds must be a whole number from 1 to 60	seconds трябва да е цяло число от 1 до 60
 @msg	no such function key	няма такъв функционален клавиш
 @msg	no such color	няма такъв цвят
 @msg	{_1} cannot be used on Windows	{_1} не може да се използва в Windows
@@ -5645,6 +5667,11 @@ axis	Y Axis	Y ос
 	Set Options	Опции на набора
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
+	Playback Options…	Опции за възпроизвеждане…
+	Playback Options	Опции за възпроизвеждане
+	Accelerated	Ускорено
+	Step by Step	Стъпка по стъпка
+	Pause For	Пауза за
 	Rename Action	Преименуване на действие
 	New Action…	Ново действие…
 	New Action	Ново действие
@@ -6104,6 +6131,11 @@ breakText	Glyphs	Глифи
 	Export All Open Documents as SVG	Експортиране на всички отворени документи като SVG
 @msgplural	Exported {n} document|Exported {n} documents	Експортиран е {n} документ|Експортирани са {n} документа
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Експортиран е {n} документ; {title} не беше записан: {error}|Експортирани са {n} документа; {title} не беше записан: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Пакетно трасиране на папка
+@msgplural	Traced {n} image|Traced {n} images	Трасирано е {n} изображение|Трасирани са {n} изображения
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} изображение не можа да бъде трасирано|{n} изображения не можаха да бъдат трасирани
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Трасирано е {n} изображение; нетрасирани: {failed}|Трасирани са {n} изображения; нетрасирани: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Тип на символа:
 	Dynamic Symbol	Динамичен символ
@@ -6155,3 +6187,13 @@ breakText	Glyphs	Глифи
 	Spike	Връх
 	Skip Spaces	Пропускане на интервалите
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графиката е твърде голяма, за да се копира като изображение: другите приложения не получават PNG от нея
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Избиране по работни области
+	Select by Artboards…	Избиране по работни области…
+	Selection Tools	Инструменти за избиране
+	Search artboards	Търсене в работните области
+	Fully Inside	Изцяло вътре
+	Fully Outside	Изцяло извън
+	No artboards match.	Няма съвпадащи работни области.
+	Chosen: {n} of {total}	Избрани: {n} от {total}

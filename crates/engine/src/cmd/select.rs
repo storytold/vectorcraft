@@ -98,7 +98,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select by Color",
             [],
             None,
-            "{fill?: colour, stroke?: colour (as paint.setFill's color; at least one)} select the objects whose fill (and stroke) reads as that colour in #rrggbb, as document.inspect reports colours, whatever its swatch or tint; with both, the objects that match both. No object needs to be selected first; Select > Reselect repeats it → {count}",
+            "{fill?: colour, stroke?: colour (as paint.setFill's color, #rrggbbaa and #rgba refused; at least one)} select the objects whose fill (and stroke) reads as that colour in #rrggbb, as document.inspect reports colours, whatever its swatch or tint; with both, the objects that match both. No object needs to be selected first; Select > Reselect repeats it → {count}",
             has_doc,
             select_color
         ),
@@ -321,19 +321,17 @@ fn all_on_artboard(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let i = p.get("artboard").and_then(Value::as_u64).map_or(0, index);
     let r = st.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| bad("select.allOnArtboard", "no such artboard"))?;
-    // Symbol instances are measured by their art.
     let symbols = st.doc.symbol_boxes();
-    let ids: Vec<NodeId> = selectable(&st.doc, st.isolation)
-        .into_iter()
-        .filter(|id| {
-            st.doc
-                .node(*id)
-                .and_then(|n| n.geometric_bounds_with(&symbols))
-                .is_some_and(|b| b.intersect(r).area() > 0.0 || vectorcraft_doc::artboard_holds(r, b.center()))
-        })
-        .collect();
+    let ids: Vec<NodeId> =
+        selectable(&st.doc, st.isolation).into_iter().filter(|id| st.doc.node(*id).is_some_and(|n| on_artboard(n, &symbols, r))).collect();
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
     ok()
+}
+
+/// Is `n` on the artboard at `r`, as All on Active Artboard takes it: its geometric bounds (a
+/// symbol instance's measured by its art) overlap the artboard, or its center is on it.
+pub(crate) fn on_artboard(n: &Node, symbols: &vectorcraft_doc::SymbolBoxes, r: vectorcraft_geom::Rect) -> bool {
+    n.geometric_bounds_with(symbols).is_some_and(|b| b.intersect(r).area() > 0.0 || vectorcraft_doc::artboard_holds(r, b.center()))
 }
 
 fn none(s: &mut Session, _: &Value) -> Result<Value> {
@@ -819,8 +817,16 @@ fn same_attribute(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn same_layers(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc()?;
-    // The layers or sublayers the selected objects are on (art in their sublayers too).
-    let layers: BTreeSet<NodeId> = st.selection.objects.iter().filter_map(|id| st.doc.layer_containing(*id)).collect();
+    // The layers or sublayers the selected objects are on (art in their sublayers too). A selected
+    // object that `is_selectable` does not accept adds no layer.
+    let locks = st.doc.locked_artboards();
+    let layers: BTreeSet<NodeId> = st
+        .selection
+        .objects
+        .iter()
+        .filter(|id| is_selectable(&st.doc, st.isolation, &locks, **id))
+        .filter_map(|id| st.doc.layer_containing(*id))
+        .collect();
     let mut on = BTreeSet::new();
     for l in layers.iter().filter_map(|l| st.doc.node(*l)) {
         l.walk(&mut |n| {

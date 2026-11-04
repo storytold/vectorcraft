@@ -240,8 +240,18 @@ fn global_edit_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             crate::menus::invoke(app, "select.globalEdit", json!({}));
         }
         let options = widgets::icon_button_enabled(ui, "chevron-down", tl!("Global Edit Options"), false, !on, 20.0);
-        egui::Popup::menu(&options).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| global_edit_options(app, ui));
+        egui::Popup::menu(&options)
+            .open_memory(global_edit_options_open(&options, on))
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| global_edit_options(app, ui));
     });
+}
+
+/// The open state for a Global Edit Options dropdown's popup: a click on the button toggles the
+/// popup, and the popup is closed while Global Edit is on, including when Global Edit starts with
+/// the popup open.
+pub(crate) fn global_edit_options_open(options: &egui::Response, on: bool) -> Option<egui::SetOpenCommand> {
+    if on { Some(egui::SetOpenCommand::Bool(false)) } else { options.clicked().then_some(egui::SetOpenCommand::Toggle) }
 }
 
 /// The Global Edit Options: what else similar objects must share (Match), where they may lie (On
@@ -994,7 +1004,8 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     super::character::variable_font(app, ui, &s, w - 4.0);
     super::character::metrics_grid(app, ui, "props-char", &s, w, false);
     section_header(ui, tl!("Paragraph"));
-    // As in the Paragraph panel: the seven alignments and Hyphenate (#775); the rest is there.
+    // As in the Paragraph panel: the seven alignments and Hyphenate (#775), and area type's
+    // vertical alignment (#3759); the rest is there.
     if let Some((_, para)) = super::character::text_style(app) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
@@ -1003,9 +1014,18 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.ui.open_panel = Some("paragraph".into());
             }
         });
+        // Area type: its vertical alignment in the frame (#3759).
+        if vertical_align::shown(app).is_some() {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 3.0;
+                vertical_align::buttons(app, ui, 24.0);
+            });
+        }
         super::paragraph::hyphenate_check(app, ui, &para);
     }
 }
+
+pub(crate) mod vertical_align;
 
 #[cfg(test)]
 mod tests;

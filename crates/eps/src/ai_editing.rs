@@ -24,9 +24,9 @@
 //!   dictionary's `/Recorded` part and the canvas size as its `AIDocumentCanvasSize`, on `%_`
 //!   lines.
 //! - Layers: `%AI5_BeginLayer`, `visible preview unlocked printing dimmed 0 1 colorIndex r g b 0
-//!   dimPercent 0 Lb` (14 operands; a color that isn't one of the preset layer colors has the
-//!   index -1), `(name) Ln`, the layer's name as an XML id in an `/ArtDictionary`, its art and
-//!   sublayers, `LB`, `%AI5_EndLayer--`.
+//!   dimPercent clipping Lb` (14 operands; a color that isn't one of the preset layer colors has the
+//!   index -1; `clipping` is 1 for a clipping layer), `(name) Ln`, the layer's name as an XML id in an
+//!   `/ArtDictionary`, its art and sublayers, `LB`, `%AI5_EndLayer--`.
 //! - Colors: `g` gray, `k` CMYK, `c m y k r g b Xa` RGB (Lab is written as RGB); a spot color
 //!   `c m y k (name) tint x` (CMYK) or `c m y k r g b|L a b (name) tint 1|2 Xx` (RGB or Lab); a
 //!   global process color `… (name) tint model Xk`; Registration `1 1 1 1 ([Registration]) tint
@@ -34,18 +34,31 @@
 //! - State before each object: locked `A`, hidden `Xw` (`1` or `0`). An object's name follows it as
 //!   an `/ArtDictionary` whose `AI10_ArtUID` is the name as an XML id. Guides are `(N) *`, the
 //!   path, `(N) *` (`(n) *` when closed).
+//! - Transparency: `mode opacity isolate knockout shape Xy` (the blending mode's number, Knockout
+//!   Group 0 off, 1 on, 2 neutral), written when it changes: in a path's paint after its colors,
+//!   before a guide, and after a group's end (`U` or `Q`) followed by `0 0 Xd` and `6 () XW`; a
+//!   group without transparency of its own ends `9 () XW`. A layer's comes after its art: `Xy`,
+//!   `0 0 Xd`, `7 () XW`, before `LB`.
+//! - Compound paths: `*u`, the subpaths, `*U` (§5.3.5). Clipping groups: `q`, the art, the clipping
+//!   path last with `h` (or `H` when open) and `W` before its painting operator, `Q` (§5.6.2); a
+//!   clipping layer's clipping path is written the same way, last in the layer.
+//! - Opacity masks: an `AI9_Mask` entry in the object's `/ArtDictionary`, a `/Mask` dictionary
+//!   holding the mask's art between `X=` and `X+` on `%_` lines, `(Art) ,`, and `Clipping`,
+//!   `Inverted`, `Disabled` and `Linked` as `/Bool` entries.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
 //! artboards together are centered; each artboard's `RulerOrigin` is its top-left corner there, and
 //! `%AI3_TemplateBox` holds the canvas's center in art space. What the form above can't hold is written as plain filled and stroked paths, each such
 //! loss a warning: type as its outlines and its inline graphics' art, gradients as their average color, pattern fills as their
-//! tiles cut to the shape, clipping groups and clipping layers as their art cut to the clipping
-//! path (the clipping path's fill cut too, its stroke not), images as their outlines filled with
+//! tiles cut to the shape, clipping groups and clipping layers whose clipping object isn't a path,
+//! and the clipping groups inside them, as their art cut to that object (its fill cut too, its
+//! stroke not), images as their outlines filled with
 //! their average color, symbols and live objects as their art (symbol art past
 //! [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects in all left out), strokes a plain line can't draw
 //! as their filled outlines, several fills or strokes as a group of a path for each, gradient and
-//! pattern swatches, transparency and live effects other than geometry effects left out.
+//! pattern swatches, the opacity and blending modes of single fills and strokes, opacity masks on
+//! layers and opacity masks nested too deep, and live effects other than geometry effects left out.
 //!
 //! The data streams hold the program compressed with Zstandard after `%AI24_ZStandard_Data`, with
 //! the version numbers of the newest files users sent ([`private_data`]).
