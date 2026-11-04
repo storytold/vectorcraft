@@ -1,7 +1,7 @@
 use serde_json::json;
 use vectorcraft_engine::Session;
 
-use super::{click, row_clicked, row_double_clicked, shown};
+use super::{choose_shown, click, row_clicked, row_double_clicked, shown};
 use crate::tests_labels::painted_text;
 use crate::{VectorcraftApp, menus};
 
@@ -15,6 +15,16 @@ fn the_search_filters_artboards_by_name_ignoring_case() {
     assert_eq!(shown(&n, ""), vec![0, 1, 2, 3]);
     assert_eq!(shown(&n, "  COVER "), vec![0, 2]);
     assert_eq!(shown(&n, "zzz"), Vec::<usize>::new());
+}
+
+#[test]
+fn select_all_and_none_act_on_the_rows_shown() {
+    // Board 4 is chosen but hidden by the search: neither button touches it.
+    let mut c = vec![1, 4];
+    choose_shown(&mut c, &[0, 1, 2], true);
+    assert_eq!(c, vec![0, 1, 2, 4]);
+    choose_shown(&mut c, &[0, 1, 2], false);
+    assert_eq!(c, vec![4]);
 }
 
 #[test]
@@ -54,7 +64,7 @@ fn select_by_artboards_lists_the_artboards_and_selects_on_ok() {
     assert_eq!(d.kind, super::KIND);
     assert_eq!(d.fields["artboards"], json!([0]), "the active artboard is chosen");
     let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    for s in ["Select by Artboards", "Artboard 1", "Banner", "100 × 100 pt", "200 × 50 pt", "1 of 2 chosen", "Overlapping", "Select All", "None"] {
+    for s in ["Select by Artboards", "Artboard 1", "Banner", "100 × 100 pt", "200 × 50 pt", "Chosen: 1 of 2", "Overlapping", "Select All", "None"] {
         assert!(shown.contains(s), "{s} in {shown}");
     }
     let d = app.ui.dialog.as_mut().unwrap();

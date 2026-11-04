@@ -135,21 +135,31 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         if widgets::flat_button_fit(ui, "Select All", 70.0).clicked() {
-            picked.extend(rows.iter().copied());
-            picked.sort_unstable();
-            picked.dedup();
+            choose_shown(&mut picked, &rows, true);
         }
         if widgets::flat_button_fit(ui, "None", 50.0).clicked() {
-            picked.clear();
+            choose_shown(&mut picked, &rows, false);
         }
         // Rows hidden by the search stay chosen: the count says how many are.
-        let count = crate::i18n::tn(picked.len() as u64, "{n} of {total} chosen", "{n} of {total} chosen");
-        ui.label(egui::RichText::new(crate::i18n::fmt(&count, &[("total", &boards.len().to_string())])).color(t.text_dim));
+        let count = crate::i18n::fmt(tl!("Chosen: {n} of {total}"), &[("n", &picked.len().to_string()), ("total", &boards.len().to_string())]);
+        ui.label(egui::RichText::new(count).color(t.text_dim));
     });
     d.fields.insert("artboards".into(), json!(picked));
     ui.add_space(6.0);
     form::choice(ui, d, "relation", tl!("Select:"), (LABEL_W, 160.0), &RELATIONS);
     false
+}
+
+/// Select All (`on`) or None: choose every row `shown`, or none of them. Rows the search hides
+/// keep their state.
+pub(crate) fn choose_shown(chosen: &mut Vec<usize>, shown: &[usize], on: bool) {
+    if on {
+        chosen.extend(shown.iter().copied());
+        chosen.sort_unstable();
+        chosen.dedup();
+    } else {
+        chosen.retain(|i| !shown.contains(i));
+    }
 }
 
 /// A click on row `i` of the rows `shown`, with modifier keys `m`: [`click`] on dialog `d`'s

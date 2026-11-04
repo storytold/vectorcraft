@@ -6330,3 +6330,13 @@ breakText	Glyphs	Glyphes
 	Spike	Pointe
 	Skip Spaces	Ignorer les espaces
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	L’illustration est trop grande pour être copiée en tant qu’image : les autres applications n’en reçoivent pas de PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Sélectionner par plans de travail
+	Select by Artboards…	Sélectionner par plans de travail…
+	Selection Tools	Outils de sélection
+	Search artboards	Rechercher des plans de travail
+	Fully Inside	Entièrement à l’intérieur
+	Fully Outside	Entièrement à l’extérieur
+	No artboards match.	Aucun plan de travail ne correspond.
+	Chosen: {n} of {total}	Choisis : {n} sur {total}

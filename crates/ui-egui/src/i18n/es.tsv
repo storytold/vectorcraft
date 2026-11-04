@@ -6277,3 +6277,13 @@ breakText	Glyphs	Glifos
 	Spike	Pico
 	Skip Spaces	Omitir espacios
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	La ilustración es demasiado grande para copiarla como imagen: las demás aplicaciones no reciben un PNG de ella
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Seleccionar por mesas de trabajo
+	Select by Artboards…	Seleccionar por mesas de trabajo…
+	Selection Tools	Herramientas de selección
+	Search artboards	Buscar mesas de trabajo
+	Fully Inside	Totalmente dentro
+	Fully Outside	Totalmente fuera
+	No artboards match.	Ninguna mesa de trabajo coincide.
+	Chosen: {n} of {total}	Elegidas: {n} de {total}

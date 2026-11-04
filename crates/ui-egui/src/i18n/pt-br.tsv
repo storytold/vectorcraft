@@ -6408,3 +6408,13 @@ swatch	Yellow Green	Verde-amarelado
 	Spike	Pico
 	Skip Spaces	Ignorar espaços
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	A arte é grande demais para ser copiada como imagem: outros aplicativos não recebem um PNG dela
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Selecionar por mesas de trabalho
+	Select by Artboards…	Selecionar por mesas de trabalho…
+	Selection Tools	Ferramentas de seleção
+	Search artboards	Pesquisar mesas de trabalho
+	Fully Inside	Totalmente dentro
+	Fully Outside	Totalmente fora
+	No artboards match.	Nenhuma mesa de trabalho corresponde.
+	Chosen: {n} of {total}	Escolhidas: {n} de {total}

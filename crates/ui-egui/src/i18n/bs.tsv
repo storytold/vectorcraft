@@ -6221,3 +6221,13 @@ shape	Open	Otvoren
 	Spike	Šiljak
 	Skip Spaces	Preskoči razmake
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika je prevelika da bi se kopirala kao slika: druge aplikacije ne dobijaju njen PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Odabir po radnim pločama
+	Select by Artboards…	Odabir po radnim pločama…
+	Selection Tools	Alati za odabir
+	Search artboards	Pretraži radne ploče
+	Fully Inside	Potpuno unutra
+	Fully Outside	Potpuno vani
+	No artboards match.	Nijedna radna ploča ne odgovara.
+	Chosen: {n} of {total}	Odabrano: {n} od {total}

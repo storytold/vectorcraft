@@ -5921,3 +5921,13 @@ breakText	Glyphs	Glyphen
 	Spike	Spitze
 	Skip Spaces	Leerzeichen überspringen
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Das Bildmaterial ist zu groß, um es als Bild zu kopieren: Andere Apps erhalten kein PNG davon
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Nach Zeichenflächen auswählen
+	Select by Artboards…	Nach Zeichenflächen auswählen…
+	Selection Tools	Auswahlwerkzeuge
+	Search artboards	Zeichenflächen suchen
+	Fully Inside	Vollständig innen
+	Fully Outside	Vollständig außen
+	No artboards match.	Keine Zeichenfläche passt.
+	Chosen: {n} of {total}	Gewählt: {n} von {total}

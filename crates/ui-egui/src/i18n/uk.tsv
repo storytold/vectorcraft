@@ -5935,3 +5935,13 @@ breakText	Glyphs	Гліфи
 	Spike	Пік
 	Skip Spaces	Пропускати пробіли
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графіка завелика, щоб скопіювати її як зображення: інші програми не отримають її PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Виділити за монтажними областями
+	Select by Artboards…	Виділити за монтажними областями…
+	Selection Tools	Інструменти виділення
+	Search artboards	Пошук монтажних областей
+	Fully Inside	Повністю всередині
+	Fully Outside	Повністю зовні
+	No artboards match.	Немає відповідних монтажних областей.
+	Chosen: {n} of {total}	Вибрано: {n} з {total}

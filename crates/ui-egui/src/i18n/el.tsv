@@ -6287,3 +6287,13 @@ breakText	Glyphs	Γλύφοι
 	Spike	Αιχμή
 	Skip Spaces	Παράλειψη κενών
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Το γραφικό είναι πολύ μεγάλο για αντιγραφή ως εικόνα: οι άλλες εφαρμογές δεν λαμβάνουν PNG του
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Επιλογή κατά πίνακες σχεδίασης
+	Select by Artboards…	Επιλογή κατά πίνακες σχεδίασης…
+	Selection Tools	Εργαλεία επιλογής
+	Search artboards	Αναζήτηση πινάκων σχεδίασης
+	Fully Inside	Πλήρως εντός
+	Fully Outside	Πλήρως εκτός
+	No artboards match.	Κανένας πίνακας σχεδίασης δεν ταιριάζει.
+	Chosen: {n} of {total}	Επιλεγμένοι: {n} από {total}
