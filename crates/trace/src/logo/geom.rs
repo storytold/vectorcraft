@@ -2,6 +2,7 @@
 
 use kurbo::Vec2;
 use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
 use vectorcraft_geom::Point;
 
 /// One cubic Bézier segment: start, two handles, end.
@@ -315,13 +316,38 @@ pub(crate) fn sample_cubics(cs: &[Cubic], spacing: f64) -> Vec<Point> {
     out
 }
 
+/// Multiply-and-rotate hasher for the small integer cell keys of [`all_within`]. The grid is only ever looked up, never
+/// iterated, so the hash cannot change a result; std's SipHash took about a quarter of the time of a noisy trace.
+#[derive(Default)]
+struct CellHasher(u64);
+
+impl CellHasher {
+    fn add(&mut self, word: u64) {
+        self.0 = (self.0.rotate_left(5) ^ word).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+}
+
+impl Hasher for CellHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        bytes.iter().for_each(|&b| self.add(u64::from(b)));
+    }
+
+    fn write_i64(&mut self, word: i64) {
+        self.add(word as u64);
+    }
+
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
 /// True when every point of `a` has a point of `b` within `lim`.
 pub(crate) fn all_within(a: &[Point], b: &[Point], lim: f64) -> bool {
     if lim.is_nan() || lim <= 0.0 {
         return false;
     }
     let key = |p: Point| ((p.x / lim).floor() as i64, (p.y / lim).floor() as i64);
-    let mut grid: HashMap<(i64, i64), Vec<Point>> = HashMap::new();
+    let mut grid: HashMap<(i64, i64), Vec<Point>, BuildHasherDefault<CellHasher>> = HashMap::default();
     for &q in b {
         grid.entry(key(q)).or_default().push(q);
     }
@@ -425,5 +451,31 @@ mod tests {
         assert!(all_within(&a, &b, 0.5));
         assert!(!all_within(&a, &b, 0.1));
         assert!(!all_within(&a, &b, 0.0));
+    }
+
+    #[test]
+    fn within_agrees_with_a_brute_force_search() {
+        let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+        let mut rand = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 11) as f64 / (1u64 << 53) as f64
+        };
+        for round in 0..60 {
+            // Negative and large coordinates, clustered and sparse clouds.
+            let spread = [3.0, 40.0, 1.0e5][round % 3];
+            let cloud = |n: usize, rand: &mut dyn FnMut() -> f64| -> Vec<Point> {
+                (0..n).map(|_| Point::new((rand() - 0.5) * spread, (rand() - 0.5) * spread)).collect()
+            };
+            let a = cloud(1 + round % 7, &mut rand);
+            let mut b = cloud(200, &mut rand);
+            b.extend(a.iter().map(|p| Point::new(p.x + (rand() - 0.5) * 0.3, p.y + (rand() - 0.5) * 0.3)));
+            for lim in [0.05, 0.2, 1.5, 30.0] {
+                let brute = a.iter().all(|&p| b.iter().any(|q| q.distance(p) <= lim));
+                assert_eq!(all_within(&a, &b, lim), brute, "round {round}, lim {lim}");
+                assert_eq!(all_within(&b, &a, lim), b.iter().all(|&p| a.iter().any(|q| q.distance(p) <= lim)), "round {round}, lim {lim}");
+            }
+        }
     }
 }
