@@ -315,6 +315,17 @@ fn perceptual_spot_gradients_with_rgb_stops_in_a_cmyk_document_export_as_device_
         assert!(pdf.contains("/ShadingType 2") && pdf.contains("/Ink]/DeviceCMYK"), "{what}: a DeviceN shading with Ink");
         assert!(!r.warnings.iter().any(|w| w.contains("spot")), "{what}: {:?}", r.warnings);
     }
+    // A conversion to an RGB destination keeps the RGB stop in RGB, in a CMYK document too: an
+    // image, with the spot warning.
+    let mut to_rgb = plain.clone();
+    to_rgb.settings.output = vectorcraft_pdf::OutputSettings {
+        conversion: vectorcraft_pdf::ColorConversion::Destination,
+        destination: vectorcraft_color::cms::SRGB.into(),
+        ..Default::default()
+    };
+    let r = vectorcraft_pdf::export_with_report(&cmyk, &to_rgb).unwrap();
+    assert!(String::from_utf8_lossy(&r.bytes).contains("/Subtype/Image"), "RGB destination: an image");
+    assert!(r.warnings.iter().any(|w| w.contains("spot")), "RGB destination: {:?}", r.warnings);
 }
 
 #[test]
