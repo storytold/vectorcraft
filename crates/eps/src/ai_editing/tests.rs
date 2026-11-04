@@ -602,8 +602,8 @@ fn hidden_layers_open_hidden() {
     assert!(text.contains("%AI5_NumLayers: 3\n%AI5_OpenViewLayers: 776\n"), "{text}");
 }
 
-/// A 200 × 100 document of what the data holds as plain paths: a gradient fill, a compound path,
-/// an image, type and a symbol instance.
+/// A 200 × 100 document of a gradient fill and a compound path, and what the data holds as plain
+/// paths: an image, type and a symbol instance.
 fn unsupported() -> Document {
     let mut doc = Document::new(200.0, 100.0);
     let layer = doc.layers[0].id;
@@ -665,7 +665,7 @@ fn paths(nodes: &[Arc<Node>], out: &mut Vec<Node>) {
 fn art_the_slice_does_not_cover_is_written_as_plain_paths() {
     let doc = unsupported();
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    for w in [writer::GRADIENTS, writer::IMAGES, writer::TYPE, writer::LIVE] {
+    for w in [writer::IMAGES, writer::TYPE, writer::LIVE] {
         assert!(out.warnings.iter().any(|x| x == w), "{w}: {:?}", out.warnings);
     }
     let back = read_back(&doc);
@@ -683,8 +683,10 @@ fn art_the_slice_does_not_cover_is_written_as_plain_paths() {
     let mut all = vec![];
     paths(layer, &mut all);
     assert!(all.iter().all(|n| matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })));
-    // The gradient as its average color.
-    assert_eq!(paint(back.layers[0].children().unwrap()[0].appearance.items[0].paint()), paint(&solid(Color::rgb(0.5, 0.5, 0.5))));
+    // The gradient as a gradient, drawing as it did.
+    let bounds = Rect::new(10.0, 10.0, 30.0, 30.0);
+    let original = doc.layers[0].children().unwrap()[0].appearance.items[0].paint();
+    assert_eq!(drawn(&back, layer[0].appearance.items[0].paint(), bounds), drawn(&doc, original, bounds));
     // The image's outline filled with its pixels' average.
     assert_eq!(paint(layer[2].appearance.items[0].paint()), paint(&solid(Color::rgb(0.5, 0.0, 0.5))));
     assert_eq!(layer[2].visual_bounds().map(|b| (r3(b.x0), r3(b.y0), r3(b.x1), r3(b.y1))), Some((r3(100.0), r3(10.0), r3(120.0), r3(20.0))));
@@ -937,19 +939,24 @@ fn a_group_fill_in_a_pattern_tile_is_written() {
     doc.insert(Some(layer), usize::MAX, filled).unwrap();
     let back = read_back(&doc);
     let mut all = vec![];
-    paths(back.layers[0].children().unwrap(), &mut all);
+    paths(&back.pattern("Dots").unwrap().art, &mut all);
     let red = paint(&solid(Color::rgb(1.0, 0.0, 0.0)));
-    assert!(all.iter().any(|p| p.appearance.items.iter().any(|i| paint(i.paint()) == red)), "the tiles keep their group's fill");
+    assert!(all.iter().any(|p| p.appearance.items.iter().any(|i| paint(i.paint()) == red)), "the tile keeps its group's fill");
 }
 
-/// A pattern fill that would place more tiles than a fill places is written as the shape filled
-/// gray, as a pattern that isn't found is, instead of as nothing.
+/// A pattern fill written as its tiles (its tiles aren't a grid) that would place more tiles than
+/// a fill places is written as the shape filled gray, as a pattern that isn't found is, instead of
+/// as nothing.
 #[test]
 fn a_pattern_fill_of_too_many_tiles_is_written_gray() {
     let mut doc = Document::new(1200.0, 1200.0);
     let layer = doc.layers[0].id;
     let dot = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 0.5, 0.5)), Appearance::basic(solid(Color::BLACK), Paint::None, 0.0));
-    let tiny = vectorcraft_doc::PatternDef { tile: Rect::new(0.0, 0.0, 1.0, 1.0), ..vectorcraft_doc::PatternDef::new("Tiny", vec![Arc::new(dot)]) };
+    let tiny = vectorcraft_doc::PatternDef {
+        tile: Rect::new(0.0, 0.0, 1.0, 1.0),
+        tile_type: vectorcraft_doc::TileType::BrickByRow { offset: 0.5 },
+        ..vectorcraft_doc::PatternDef::new("Tiny", vec![Arc::new(dot)])
+    };
     doc.patterns.push(tiny);
     let filled = Node::path(
         doc.alloc_id(),
@@ -1386,11 +1393,9 @@ fn a_clipping_paths_other_paint_keeps_its_opacity() {
     let mut doc = Document::new(200.0, 100.0);
     let layer = doc.layers[0].id;
     let mut clip = clipping(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)));
-    let g = Gradient::new(
-        GradientKind::Linear,
-        vec![GradientStop::new(0.0, Color::rgb(1.0, 1.0, 1.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 0.0))],
-    );
-    clip.appearance = Appearance::basic(Paint::Gradient(Box::new(GradientPaint::new(g))), Paint::None, 0.0).into();
+    // Two fills: a path paints one.
+    let fills = [Color::rgb(0.5, 0.5, 0.5), Color::rgb(1.0, 0.0, 0.0)].map(|c| AppearanceItem::Fill(FillLayer::new(solid(c))));
+    clip.appearance = Appearance { items: fills.to_vec(), ..Appearance::default() }.into();
     clip.opacity = 0.5;
     let inside = square(&mut doc, Rect::new(0.0, 0.0, 40.0, 20.0), Color::rgb(0.0, 0.0, 1.0));
     let g = group(&mut doc, vec![clip, inside], true);
@@ -1409,21 +1414,42 @@ fn a_clipping_paths_other_paint_keeps_its_opacity() {
     let out = export_ai_editing(&masked, &opts()).unwrap();
     assert!(out.warnings.iter().any(|w| w == writer::CLIP_PAINT_MASKS), "{:?}", out.warnings);
     // Two fills at the clipping path's 50% are a group at 50% of the two at 100%, as the canvas
-    // draws them together.
-    let mut two = doc.clone();
-    if let Some(c) = Arc::make_mut(&mut two.layers[0]).children_mut()
-        && let Some(NodeKind::Group { children, .. }) = c.first_mut().map(|g| &mut Arc::make_mut(g).kind)
-    {
-        let clip = Arc::make_mut(&mut children[0]);
-        let mut items = clip.appearance.items.clone();
-        items.push(AppearanceItem::Fill(FillLayer::new(solid(Color::rgb(1.0, 0.0, 0.0)))));
-        clip.appearance = Appearance { items, ..Appearance::default() }.into();
-    }
-    let back = read_back(&two);
+    // draws them together, under the art.
+    let back = read_back(&doc);
     let NodeKind::Group { children, clip: true } = &back.layers[0].children().unwrap()[0].kind else { panic!("a clipping group") };
     let fills = &children[1];
     assert!(matches!(fills.kind, NodeKind::Group { clip: false, .. }) && fills.opacity == 0.5, "{fills:?}");
     assert_eq!(fills.children().unwrap().iter().map(|c| c.opacity).collect::<Vec<_>>(), [1.0, 1.0]);
+    let colors: Vec<String> = fills.children().unwrap().iter().map(|c| paint(c.appearance.items[0].paint())).collect();
+    assert_eq!(colors, [paint(&solid(Color::rgb(0.5, 0.5, 0.5))), paint(&solid(Color::rgb(1.0, 0.0, 0.0)))]);
+    assert!(matches!(children[2].kind, NodeKind::Path { .. }) && children.len() == 3, "the art over the fills");
+    // One fill a path can't paint (a brick pattern, written as its tiles) is written under the art
+    // at the clipping path's opacity.
+    let mut brick = doc.clone();
+    let dot = square(&mut brick, Rect::new(0.0, 0.0, 2.0, 2.0), Color::rgb(1.0, 0.0, 0.0));
+    brick.patterns.push(vectorcraft_doc::PatternDef {
+        tile: Rect::new(0.0, 0.0, 4.0, 4.0),
+        tile_type: vectorcraft_doc::TileType::BrickByRow { offset: 0.5 },
+        ..vectorcraft_doc::PatternDef::new("Brick", vec![Arc::new(dot)])
+    });
+    if let Some(c) = Arc::make_mut(&mut brick.layers[0]).children_mut()
+        && let Some(NodeKind::Group { children, .. }) = c.first_mut().map(|g| &mut Arc::make_mut(g).kind)
+    {
+        let fill = Paint::Pattern { pattern: "Brick".into(), xf: Affine::IDENTITY };
+        Arc::make_mut(&mut children[0]).appearance = Appearance::basic(fill, Paint::None, 0.0).into();
+    }
+    let out = export_ai_editing(&brick, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PATTERNS) && out.warnings.iter().any(|w| w == writer::CLIP_PAINT), "{:?}", out.warnings);
+    let back = read_back(&brick);
+    let NodeKind::Group { children, clip: true } = &back.layers[0].children().unwrap()[0].kind else { panic!("a clipping group") };
+    assert_eq!(children.len(), 3, "the clipping path, its fill, the art");
+    assert_eq!(children[1].opacity, 0.5);
+    let mut tiles = vec![];
+    paths(std::slice::from_ref(&children[1]), &mut tiles);
+    let painted: Vec<&Node> = tiles.iter().filter(|t| !t.appearance.items.is_empty()).collect();
+    let red = paint(&solid(Color::rgb(1.0, 0.0, 0.0)));
+    assert!(!painted.is_empty() && painted.iter().all(|t| t.opacity == 1.0 && paint(t.appearance.items[0].paint()) == red), "{painted:?}");
+    assert_eq!(paint(children[2].appearance.items[0].paint()), paint(&solid(Color::rgb(0.0, 0.0, 1.0))), "the art over the fill");
     // A locked clipping path's fill is locked too, the art it clips not.
     let mut locked = doc.clone();
     if let Some(c) = Arc::make_mut(&mut locked.layers[0]).children_mut()
@@ -1434,12 +1460,6 @@ fn a_clipping_paths_other_paint_keeps_its_opacity() {
     let back = read_back(&locked);
     let NodeKind::Group { children, clip: true } = &back.layers[0].children().unwrap()[0].kind else { panic!("a clipping group") };
     assert_eq!(children.iter().map(|c| c.locked).collect::<Vec<_>>(), [true, true, false]);
-    let back = read_back(&doc);
-    let NodeKind::Group { children, clip: true } = &back.layers[0].children().unwrap()[0].kind else { panic!("a clipping group") };
-    // The clipping path, its fill as a path under the art, the art.
-    let fill = &children[1];
-    assert!(matches!(fill.kind, NodeKind::Path { clipping: false, .. }));
-    assert_eq!((fill.opacity, paint(fill.appearance.items[0].paint())), (0.5, paint(&solid(Color::rgb(0.5, 0.5, 0.5)))));
 }
 
 /// A clipping path's stroke that a plain line can't draw goes over the clipped art, its fill under it.
@@ -1448,14 +1468,10 @@ fn a_clipping_paths_other_stroke_goes_over_the_art() {
     let mut doc = Document::new(200.0, 100.0);
     let layer = doc.layers[0].id;
     let mut clip = clipping(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)));
-    let g = Gradient::new(
-        GradientKind::Linear,
-        vec![GradientStop::new(0.0, Color::rgb(1.0, 1.0, 1.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 0.0))],
-    );
     let mut stroke = StrokeLayer::new(solid(Color::rgb(1.0, 0.0, 0.0)), 4.0);
     stroke.dash = Some(Dash { pattern: vec![2.0, 2.0], offset: 0.0, align_corners: true });
     clip.appearance = Appearance {
-        items: vec![AppearanceItem::Fill(FillLayer::new(Paint::Gradient(Box::new(GradientPaint::new(g))))), AppearanceItem::Stroke(stroke)],
+        items: vec![AppearanceItem::Fill(FillLayer::new(solid(Color::rgb(0.5, 0.5, 0.5)))), AppearanceItem::Stroke(stroke)],
         ..Appearance::default()
     }
     .into();
@@ -1465,7 +1481,7 @@ fn a_clipping_paths_other_stroke_goes_over_the_art() {
     let back = read_back(&doc);
     let NodeKind::Group { children, clip: true } = &back.layers[0].children().unwrap()[0].kind else { panic!("a clipping group") };
     let colors: Vec<String> = children.iter().skip(1).map(|c| paint(c.appearance.items.first().map_or(&Paint::None, |i| i.paint()))).collect();
-    // The fill (its average) under the blue art, the red stroke's dots over it.
+    // The fill under the blue art, the red stroke's dots over it.
     assert_eq!(colors.first(), Some(&paint(&solid(Color::rgb(0.5, 0.5, 0.5)))), "{colors:?}");
     assert_eq!(colors.get(1), Some(&paint(&solid(Color::rgb(0.0, 0.0, 1.0)))), "{colors:?}");
     assert!(colors.len() > 2 && colors.iter().skip(2).all(|c| *c == paint(&solid(Color::rgb(1.0, 0.0, 0.0)))), "{colors:?}");
@@ -1691,4 +1707,774 @@ fn transparency_of_single_fills_and_layer_masks_is_reported_left_out() {
     doc.insert(Some(layer), usize::MAX, g).unwrap();
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.iter().any(|x| x == writer::ITEM_TRANSPARENCY), "{:?}", out.warnings);
+}
+
+// ---------- gradients and patterns ----------
+
+const INK: Color = Color::Cmyk { c: 0.0, m: 0.6, y: 1.0, k: 0.0 };
+
+/// A gradient of `kind` through `stops` (offset, color, opacity, midpoint).
+fn ramp(kind: GradientKind, stops: &[(f32, Color, f32, f32)]) -> Gradient {
+    let stops =
+        stops.iter().map(|&(offset, color, opacity, midpoint)| GradientStop { opacity, midpoint, ..GradientStop::new(offset, color) }).collect();
+    Gradient::new(kind, stops)
+}
+
+/// The three-stop linear gradient of the `Sunset` swatch: its middle stop half opaque, its first
+/// midpoint at 30%.
+fn sunset() -> Gradient {
+    ramp(
+        GradientKind::Linear,
+        &[(0.0, Color::rgb(1.0, 0.0, 0.0), 1.0, 0.3), (0.4, Color::rgb(0.0, 1.0, 0.0), 0.5, 0.5), (1.0, Color::rgb(0.0, 0.0, 1.0), 1.0, 0.5)],
+    )
+}
+
+fn gradient_paint(g: Gradient, geom: Option<vectorcraft_color::gradient::GradientGeom>, swatch: Option<&str>) -> Paint {
+    Paint::Gradient(Box::new(GradientPaint { geom, swatch: swatch.map(Into::into), ..GradientPaint::new(g) }))
+}
+
+fn painted(doc: &mut Document, path: PathData, items: Vec<AppearanceItem>) -> Node {
+    Node::path(doc.alloc_id(), path, Appearance { items, ..Appearance::default() })
+}
+
+/// A 300 × 200 document of gradients and patterns. Swatches: the linear gradient `Sunset`, the radial
+/// gradient `Glow` that nothing uses, the spot color `Ink`, the pattern `Dots` (a 10-point grid tile of
+/// a red square and a circle filled with a gradient) and `Checks`, which nothing uses. Art, bottom
+/// first: a rectangle filled with `Sunset`
+/// placed at 30° over part of it and stroked black; an ellipse filled with a radial gradient half as
+/// high as wide whose focal point is off its center; a rectangle filled yellow and stroked with a
+/// gradient; one filled and stroked with gradients; an even-odd compound path filled with a
+/// gradient; an open path filled with a gradient; a rectangle filled with a gradient of a gray, a
+/// CMYK color and `Ink` at 70%; a rectangle filled with `Dots` turned, scaled and moved; and a
+/// rectangle stroked 8 points with `Dots`.
+fn gradients_and_patterns() -> Document {
+    use vectorcraft_color::gradient::GradientGeom;
+    let mut doc = Document::new(300.0, 200.0);
+    let glow = ramp(GradientKind::Radial, &[(0.0, Color::rgb(1.0, 1.0, 1.0), 1.0, 0.5), (1.0, Color::rgb(0.1, 0.2, 0.8), 1.0, 0.5)]);
+    let two = ramp(GradientKind::Linear, &[(0.0, Color::rgb(1.0, 1.0, 0.0), 1.0, 0.5), (1.0, Color::rgb(0.0, 0.0, 0.0), 1.0, 0.5)]);
+    // The pattern art.
+    let red = square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), Color::rgb(1.0, 0.0, 0.0));
+    let ball = painted(
+        &mut doc,
+        shapes::ellipse(Rect::new(5.0, 5.0, 9.0, 9.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(two.clone(), None, None)))],
+    );
+    let mut dots = vectorcraft_doc::PatternDef::new("Dots", vec![Arc::new(red), Arc::new(ball)]);
+    dots.tile = Rect::new(0.0, 0.0, 10.0, 10.0);
+    let check = square(&mut doc, Rect::new(0.0, 0.0, 5.0, 5.0), Color::BLACK);
+    let mut checks = vectorcraft_doc::PatternDef::new("Checks", vec![Arc::new(check)]);
+    checks.tile = Rect::new(0.0, 0.0, 10.0, 10.0);
+    doc.patterns.extend([dots, checks]);
+    let swatch = |name: &str, paint: Paint, spot: bool| Swatch { name: name.into(), paint, global: spot, spot };
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().filter(|s| matches!(s.paint, Paint::None)).cloned().collect();
+    swatches.extend([
+        swatch("Sunset", gradient_paint(sunset(), None, None), false),
+        swatch("Glow", gradient_paint(glow.clone(), None, None), false),
+        swatch("Ink", solid(INK), true),
+        swatch("Dots", Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, false),
+        swatch("Checks", Paint::Pattern { pattern: "Checks".into(), xf: Affine::IDENTITY }, false),
+    ]);
+    doc.swatches = swatches.into();
+    doc.swatch_groups = Default::default();
+    let layer = doc.layers[0].id;
+    let fill = |p: Paint| AppearanceItem::Fill(FillLayer::new(p));
+    let stroke = |p: Paint, w: f64| AppearanceItem::Stroke(StrokeLayer::new(p, w));
+    let placed = GradientGeom { start: (20.0, 40.0).into(), end: (60.0, 17.0).into(), aspect: 1.0, focal: None };
+    let mut oval = GradientGeom { start: (140.0, 30.0).into(), end: (180.0, 30.0).into(), aspect: 0.5, focal: None };
+    oval.set_focal(Some((150.0, 25.0).into()));
+    let mut nodes = vec![
+        painted(
+            &mut doc,
+            shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 50.0)),
+            vec![fill(gradient_paint(sunset(), Some(placed), Some("Sunset"))), stroke(solid(Color::BLACK), 2.0)],
+        ),
+        painted(&mut doc, shapes::ellipse(Rect::new(100.0, 10.0, 180.0, 50.0)), vec![fill(gradient_paint(glow.clone(), Some(oval), None))]),
+        painted(
+            &mut doc,
+            shapes::rectangle(Rect::new(190.0, 10.0, 280.0, 50.0)),
+            vec![fill(solid(Color::rgb(1.0, 1.0, 0.0))), stroke(gradient_paint(two.clone(), None, None), 6.0)],
+        ),
+        painted(
+            &mut doc,
+            shapes::rectangle(Rect::new(10.0, 70.0, 90.0, 110.0)),
+            vec![fill(gradient_paint(sunset(), None, Some("Sunset"))), stroke(gradient_paint(two.clone(), None, None), 6.0)],
+        ),
+    ];
+    let outer = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(100.0, 70.0, 180.0, 110.0)), Appearance::default());
+    let hole = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(120.0, 80.0, 160.0, 100.0)), Appearance::default());
+    let mut ring = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(hole)], rule: FillRule::EvenOdd });
+    ring.appearance = Appearance { items: vec![fill(gradient_paint(two.clone(), None, None))], ..Appearance::default() }.into();
+    nodes.push(ring);
+    let mut open = shapes::line((190.0, 110.0).into(), (280.0, 70.0).into());
+    if let Some(sp) = open.subpaths.first_mut() {
+        sp.anchors.push(vectorcraft_geom::Anchor::corner((200.0, 70.0).into()));
+        sp.closed = false;
+    }
+    nodes.push(painted(&mut doc, open, vec![fill(gradient_paint(two, None, None))]));
+    let mixed = ramp(
+        GradientKind::Linear,
+        &[(0.0, Color::gray(0.2), 1.0, 0.5), (0.5, Color::cmyk(1.0, 0.0, 0.0, 0.0), 1.0, 0.5), (1.0, INK.tinted(0.7), 1.0, 0.5)],
+    );
+    let mut mixed_paint = gradient_paint(mixed, None, None);
+    if let Paint::Gradient(g) = &mut mixed_paint
+        && let Some(s) = g.gradient.stops.last_mut()
+    {
+        s.set_color(INK.tinted(0.7), Some(("Ink".into(), 0.7)));
+    }
+    nodes.push(painted(&mut doc, shapes::rectangle(Rect::new(10.0, 130.0, 90.0, 170.0)), vec![fill(mixed_paint)]));
+    let turned = Affine::translate((103.0, 127.0)) * Affine::rotate(30f64.to_radians()) * Affine::scale(0.5);
+    nodes.push(painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(100.0, 130.0, 180.0, 170.0)),
+        vec![fill(Paint::Pattern { pattern: "Dots".into(), xf: turned })],
+    ));
+    nodes.push(painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(195.0, 135.0, 235.0, 165.0)),
+        vec![stroke(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, 8.0)],
+    ));
+    for n in nodes {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    doc
+}
+
+/// A gradient paint's swatch link in `doc`: the gradient swatch it names, `-` for none, and
+/// `not a gradient swatch: name` when it names a swatch of other paint. A link that names no swatch
+/// of `doc` at all is `-` too: the reader links every gradient instance to its definition's name,
+/// and a definition of a gradient that isn't a swatch has a name no swatch has.
+fn link(doc: &Document, swatch: &Option<String>) -> String {
+    match swatch.as_deref().map(|s| (s, doc.swatch(s))) {
+        Some((s, Some(w))) if matches!(w.paint, Paint::Gradient(_)) => s.to_string(),
+        Some((s, Some(_))) => format!("not a gradient swatch: {s}"),
+        Some((_, None)) | None => "-".into(),
+    }
+}
+
+/// Paint `p` as it draws on `bounds`: a gradient by its kind, stops (place, color, opacity,
+/// midpoint, link) and its parameter at the corners, edge midpoints and center of `bounds`; a
+/// pattern by its name and matrix.
+fn drawn(doc: &Document, p: &Paint, bounds: Rect) -> String {
+    match p {
+        Paint::Gradient(g) => {
+            let geom = g.resolve(bounds);
+            let stops: Vec<String> = g
+                .gradient
+                .stops
+                .iter()
+                .map(|s| {
+                    format!(
+                        "{} {} {} {} {:?}",
+                        r3(f64::from(s.offset)),
+                        color(&s.color),
+                        r3(f64::from(s.opacity)),
+                        r3(f64::from(s.midpoint)),
+                        s.swatch
+                    )
+                })
+                .collect();
+            let (x, y) = ([bounds.x0, bounds.center().x, bounds.x1], [bounds.y0, bounds.center().y, bounds.y1]);
+            let at: Vec<String> =
+                x.iter().flat_map(|x| y.iter().map(move |y| (*x, *y))).map(|(x, y)| r3(geom.param_at(g.gradient.kind, (x, y).into()))).collect();
+            format!("{:?} [{}] link={} at {}", g.gradient.kind, stops.join(", "), link(doc, &g.swatch), at.join(" "))
+        }
+        Paint::Pattern { pattern, xf } => format!("pattern {pattern} {:?}", xf.as_coeffs().map(r3)),
+        other => paint(other),
+    }
+}
+
+/// What each object of `nodes` draws: its kind, bounds and paint.
+fn paints_of(doc: &Document, nodes: &[Arc<Node>], depth: usize, out: &mut Vec<String>) {
+    for n in nodes {
+        let bounds = n.geometric_bounds().unwrap_or(Rect::ZERO);
+        let mut s = format!("{depth} {} {:?}", n.kind_label(), [bounds.x0, bounds.y0, bounds.x1, bounds.y1].map(r3));
+        // Items that paint nothing aren't written.
+        for it in n.appearance.items.iter().filter(|i| !i.paint().is_none()) {
+            s += &match it {
+                AppearanceItem::Fill(f) => format!(" fill({})", drawn(doc, &f.paint, bounds)),
+                AppearanceItem::Stroke(st) => format!(" stroke({} w={})", drawn(doc, &st.paint, st.paint_bounds(bounds)), r3(st.width)),
+            };
+        }
+        out.push(s);
+        // A compound path's paint is its own, not its members'.
+        if !matches!(n.kind, NodeKind::Compound { .. }) {
+            paints_of(doc, n.children().map(Vec::as_slice).unwrap_or_default(), depth + 1, out);
+        }
+    }
+}
+
+/// What `doc`'s art, patterns and gradient and pattern swatches draw.
+fn gradient_looks(doc: &Document) -> Vec<String> {
+    let mut out = vec![];
+    paints_of(doc, &doc.layers, 0, &mut out);
+    for p in doc.patterns.iter() {
+        out.push(format!("pattern {} tile {:?}", p.name, [p.tile.x0, p.tile.y0, p.tile.x1, p.tile.y1].map(r3)));
+        paints_of(doc, &p.art, 1, &mut out);
+    }
+    for s in doc.swatches_iter() {
+        match &s.paint {
+            Paint::Gradient(g) => {
+                out.push(format!("swatch {} {}", s.name, drawn(doc, &Paint::Gradient(Box::new(GradientPaint::new(g.gradient.clone()))), Rect::ZERO)))
+            }
+            Paint::Pattern { pattern, .. } => out.push(format!("swatch {} pattern {pattern}", s.name)),
+            _ => {}
+        }
+    }
+    out
+}
+
+#[test]
+fn gradients_and_patterns_are_read_back() {
+    let doc = gradients_and_patterns();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    same_lines(&gradient_looks(&read_back(&doc)), &gradient_looks(&doc));
+}
+
+#[test]
+fn gradients_and_patterns_write_the_same_bytes_again() {
+    let doc = gradients_and_patterns();
+    let first = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(first.program, export_ai_editing(&doc, &opts()).unwrap().program);
+    let again = export_ai_editing(&read_back(&doc), &opts()).unwrap();
+    same_lines(
+        &String::from_utf8(again.program).unwrap().lines().map(str::to_string).collect::<Vec<_>>(),
+        &String::from_utf8(first.program).unwrap().lines().map(str::to_string).collect::<Vec<_>>(),
+    );
+}
+
+#[test]
+fn gradients_and_patterns_are_written_in_their_forms() {
+    let text = program(&gradients_and_patterns());
+    // The gradients the art uses, then the one only the palette uses; then the patterns.
+    let setup = text.split("%%BeginSetup\n").nth(1).and_then(|s| s.split("%AI5_BeginPalette").next()).unwrap();
+    let markers: Vec<&str> = setup.lines().filter(|l| l.starts_with("%AI") || l.ends_with(" Bn")).collect();
+    assert_eq!(
+        markers,
+        [
+            "4 Bn",
+            "%AI5_BeginGradient: (Sunset)",
+            "%AI5_EndGradient",
+            "%AI5_BeginGradient: (Gradient)",
+            "%AI5_EndGradient",
+            "%AI5_BeginGradient: (Gradient 2)",
+            "%AI5_EndGradient",
+            "%AI5_BeginGradient: (Gradient 3)",
+            "%AI5_EndGradient",
+            "%AI5_Begin_NonPrinting",
+            "1 Bn",
+            "%AI5_BeginGradient: (Glow)",
+            "%AI5_EndGradient",
+            "%AI5_End_NonPrinting--",
+            "%AI3_BeginPattern: (Dots)",
+            "%AI3_EndPattern",
+            "%AI5_Begin_NonPrinting",
+            "%AI3_BeginPattern: (Checks)",
+            "%AI3_EndPattern",
+            "%AI5_End_NonPrinting--",
+        ]
+    );
+    // A linear gradient's stops from the last; RGB with its CMYK equivalent, style 2, opacity, 6,
+    // midpoint, place on the ramp.
+    assert!(text.contains("(Sunset) 0 3 Bd\n[\n%_"), "{setup}");
+    assert!(
+        setup.contains(" 0 0 1 2 1 6 50 100 Bs\n") && setup.contains(" 0 1 0 2 0.5 6 50 40 Bs\n") && setup.contains(" 1 0 0 2 1 6 30 0 Bs\n"),
+        "{setup}"
+    );
+    // Gray, CMYK, and a spot color at 70%.
+    assert!(
+        setup.contains("%_0.8 0 1 6 50 0 Bs\n%_1 0 0 0 1 1 6 50 50 Bs\n")
+            || setup.contains("(Ink) 0.3 3 1 6 50 100 Bs\n%_1 0 0 0 1 1 6 50 50 Bs\n%_0.8 0 1 6 50 0 Bs\n"),
+        "{setup}"
+    );
+    // The tile in the pattern's space, y up, the art on `%_` lines.
+    assert!(setup.contains("%AI3_BeginPattern: (Dots)\n(Dots) 0 -10 10 0\n%_"), "{setup}");
+    assert!(!setup.contains("%_E\n") && setup.contains("\nE\n%AI3_EndPattern\n"), "{setup}");
+    // The swatches.
+    assert!(text.contains("Bb\n2 (Sunset) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Sunset) Pc\n"), "{text}");
+    assert!(text.contains("Bb\n0 0 0 0 Bh\n2 (Glow) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Glow) Pc\n"), "{text}");
+    assert!(text.contains("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Dots) Pc\n"), "{text}");
+    // The instances: the stroked rectangle's fill placed at 29.9° from 0.15 of the rectangle's extent
+    // that way, 0.52 of it long, with `Xm`, caps and a `Bm` for each pair of stops, `b` and `2 BB`; the
+    // stroke's `1 Bb`; the radial's focal point and `Bm`.
+    let art = text.split("%AI5_BeginLayer").nth(1).unwrap();
+    assert!(art.contains("Bb\n1 (Sunset) 0.1529 0 29.8989 0.5167 1 0 0 1 0 0 1 Bg\n") && art.contains(" Xm\n"), "{art}");
+    let sunset_instance = art.split("Bb\n1 (Sunset)").nth(1).unwrap();
+    let ops: Vec<&str> = sunset_instance.lines().take(7).map(|l| l.rsplit(' ').next().unwrap_or(l)).collect();
+    assert_eq!(ops, ["Bg", "Xm", "Bc", "Bm", "Bm", "Bc", "b"], "{sunset_instance}");
+    assert!(sunset_instance.contains("\nb\n2 BB\n"), "{sunset_instance}");
+    assert!(art.contains("1 Bb\n1 (Gradient 2) "), "{art}");
+    assert!(art.contains("2 BB\n1 Bb\n"), "fill and stroke: {art}");
+    // The radial (40 wide, 20 high) as the unit circle through its matrix: the focal point 10 right of
+    // the center and 5 up, at 45° and 0.35 of the radius on that circle.
+    assert!(art.contains("Bb\n10 5 45 0.3536 Bh\n1 (Gradient) 0 0 0 1 40 0 0 20 0 0 1 Bg\n40 0 0 -20 140 -30 Bm\nf\n0 BB\n"), "{art}");
+    // The tile's box first in a pattern's definition.
+    assert!(setup.contains("(Dots) 0 -10 10 0\n%_0 A\n%_0 Xw\n%_0 XR\n%_0 0 m\n"), "{setup}");
+    assert!(setup.contains("%_n\n%_/ArtDictionary :\n%_1 /Bool (AIPattern_Editor_Backing_Tile_Rect) ,\n%_;\n%_\n"), "{setup}");
+    assert!(art.contains("F\n0 BB\n"), "the open path: {art}");
+    assert!(art.contains(" p\n") && art.contains(" P\n"), "{art}");
+}
+
+/// A clipping path filled with a gradient keeps it: the reader reads it as the clipping path and
+/// its fill as a path of its own under the art.
+#[test]
+fn a_clipping_path_keeps_its_gradient() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut clip = clipping(&mut doc, shapes::ellipse(Rect::new(10.0, 10.0, 90.0, 60.0)));
+    clip.appearance = Appearance::basic(gradient_paint(sunset(), None, None), Paint::None, 0.0).into();
+    let inside = square(&mut doc, Rect::new(0.0, 0.0, 50.0, 40.0), Color::rgb(0.0, 0.0, 1.0));
+    let g = group(&mut doc, vec![clip, inside], true);
+    doc.insert(Some(layer), usize::MAX, g).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::CLIP_PAINT), "{:?}", out.warnings);
+    let text = program(&doc);
+    assert!(text.contains("h\nW\nBb\n0 (Gradient) "), "{text}");
+    let back = read_back(&doc);
+    let NodeKind::Group { children, clip: true } = &back.layers[0].children().unwrap()[0].kind else { panic!("a clipping group") };
+    let fill = &children[1];
+    let bounds = Rect::new(10.0, 10.0, 90.0, 60.0);
+    let want = drawn(&doc, &gradient_paint(sunset(), None, None), bounds);
+    assert_eq!(drawn(&back, fill.appearance.items[0].paint(), bounds), want);
+}
+
+#[test]
+fn freeform_gradients_are_written_as_their_average_color() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let g = ramp(GradientKind::Freeform, &[(0.0, Color::rgb(1.0, 1.0, 1.0), 1.0, 0.5), (1.0, Color::rgb(0.0, 0.0, 0.0), 1.0, 0.5)]);
+    let n = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(g, None, None)))],
+    );
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::GRADIENTS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(paint(back.layers[0].children().unwrap()[0].appearance.items[0].paint()), paint(&solid(Color::rgb(0.5, 0.5, 0.5))));
+}
+
+/// A gradient that dithers or mixes perceptually is written as a classic one; a stop linked to a
+/// global process color is written as its color; each with a warning.
+#[test]
+fn gradient_options_and_links_the_data_cant_hold_are_reported() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut g = sunset();
+    g.dither = true;
+    let n = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(g, None, None)))],
+    );
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::GRADIENT_MIX]);
+    // A swatch of such a gradient that nothing uses.
+    let mut swatch_only = Document::new(200.0, 100.0);
+    let mut dithered = sunset();
+    dithered.dither = true;
+    let mut swatches: Vec<Swatch> = swatch_only.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Dithered".into(), paint: gradient_paint(dithered, None, None), global: false, spot: false });
+    swatch_only.swatches = swatches.into();
+    let out = export_ai_editing(&swatch_only, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::GRADIENT_MIX), "{:?}", out.warnings);
+    // A gradient along a stroke: the stroke's outline in its average color.
+    let mut along = Document::new(200.0, 100.0);
+    let layer = along.layers[0].id;
+    let mut st = StrokeLayer::new(gradient_paint(sunset(), None, None), 4.0);
+    st.gradient_mode = vectorcraft_doc::StrokeGradientMode::Along;
+    let n = painted(&mut along, shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), vec![AppearanceItem::Stroke(st)]);
+    along.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&along, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::GRADIENTS), "{:?}", out.warnings);
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Brand".into(), paint: solid(BRAND), global: true, spot: false });
+    doc.swatches = swatches.into();
+    let mut g = sunset();
+    g.method = vectorcraft_color::gradient::GradientMethod::Perceptual;
+    if let Some(s) = g.stops.first_mut() {
+        s.set_color(BRAND, Some(("Brand".into(), 1.0)));
+    }
+    let n = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(g, None, None)))],
+    );
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::GRADIENT_MIX, writer::STOP_LINKS]);
+    let back = read_back(&doc);
+    let Paint::Gradient(g) = back.layers[0].children().unwrap()[0].appearance.items[0].paint() else { panic!("a gradient") };
+    assert_eq!((color(&g.gradient.stops[0].color), g.gradient.stops[0].swatch.as_deref()), (color(&BRAND), None));
+}
+
+/// A pattern whose art reaches past its tile is written as its tiles cut to the shape: a definition
+/// would cut its art off at the tile's edge.
+#[test]
+fn a_pattern_whose_art_reaches_past_its_tile_is_written_as_its_tiles() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let big = square(&mut doc, Rect::new(-2.0, -2.0, 6.0, 6.0), Color::rgb(1.0, 0.0, 0.0));
+    let mut over = vectorcraft_doc::PatternDef::new("Over", vec![Arc::new(big)]);
+    over.tile = Rect::new(0.0, 0.0, 10.0, 10.0);
+    doc.patterns.push(over);
+    let n = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(20.0, 20.0, 60.0, 60.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: "Over".into(), xf: Affine::IDENTITY }))],
+    );
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PATTERNS), "{:?}", out.warnings);
+    assert!(!program(&doc).contains("%AI3_BeginPattern"));
+}
+
+/// A pattern fill in another pattern's tile is written there as its tiles cut to the shape; the
+/// outer pattern is defined and fills the shape.
+#[test]
+fn a_pattern_fill_in_a_pattern_tile_is_written_as_its_tiles() {
+    let mut doc = gradients_and_patterns();
+    let layer = doc.layers[0].id;
+    let inner = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(2.0, 2.0, 18.0, 18.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }))],
+    );
+    let mut nest = vectorcraft_doc::PatternDef::new("Nest", vec![Arc::new(inner)]);
+    nest.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    doc.patterns.push(nest);
+    let n = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(250.0, 130.0, 290.0, 170.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: "Nest".into(), xf: Affine::IDENTITY }))],
+    );
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PATTERNS), "{:?}", out.warnings);
+    let text = program(&doc);
+    assert!(text.contains("%AI3_BeginPattern: (Nest)") && text.contains("%AI3_BeginPattern: (Dots)"));
+    let back = read_back(&doc);
+    let filled = back.layers[0].children().unwrap().last().unwrap();
+    assert!(matches!(filled.appearance.items[0].paint(), Paint::Pattern { pattern, .. } if pattern == "Nest"));
+    // Nest's tile: the dots' tiles (a red square, a gradient circle) cut to its square.
+    let mut all = vec![];
+    paths(&back.pattern("Nest").unwrap().art, &mut all);
+    assert!(all.len() > 2, "{}", all.len());
+    assert!(all.iter().all(|p| !matches!(p.appearance.items[0].paint(), Paint::Pattern { .. })));
+    assert!(all.iter().any(|p| paint(p.appearance.items[0].paint()) == paint(&solid(Color::rgb(1.0, 0.0, 0.0)))));
+}
+
+/// A 200 × 100 document with one object of `items` on `path`, and only the None swatch.
+fn one_object(path: PathData, items: Vec<AppearanceItem>) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.swatches = doc.swatches.iter().filter(|s| matches!(s.paint, Paint::None)).cloned().collect::<Vec<_>>().into();
+    doc.swatch_groups = Default::default();
+    let layer = doc.layers[0].id;
+    let n = painted(&mut doc, path, items);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    doc
+}
+
+/// What `doc`'s art draws (a palette of only the None swatch reads back as the default swatches).
+fn art_looks(doc: &Document) -> Vec<String> {
+    let mut out = vec![];
+    paints_of(doc, &doc.layers, 0, &mut out);
+    out
+}
+
+fn swatches_plus(doc: &mut Document, more: Vec<Swatch>) {
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.extend(more);
+    doc.swatches = swatches.into();
+}
+
+/// `Bg` places each gradient on its path: a radial one 30 right of and 10 above the middle of a
+/// 120 × 60 rectangle, 20 in radius, by its unit circle's matrix, its center's place as fractions of
+/// the bounds and its radius as a multiple of √((1.5² + 2²) / 2) (the center's distances to the
+/// right side and to the bottom in that circle's units); and a linear one at −45° on a triangle,
+/// from a quarter of the triangle's extent that way, half of it long. In a pattern's tile the same
+/// two are placed mirrored top to bottom: the radial's center 10 below the middle, its radius a
+/// multiple of √((1.5² + 1²) / 2), and the linear one at 45°.
+#[test]
+fn bg_places_gradients_on_their_paths() {
+    use vectorcraft_color::gradient::GradientGeom;
+    let radial = ramp(GradientKind::Radial, &[(0.0, Color::rgb(1.0, 1.0, 1.0), 1.0, 0.5), (1.0, Color::rgb(0.0, 0.0, 1.0), 1.0, 0.5)]);
+    let off_center = GradientGeom { start: (90.0, 20.0).into(), end: (110.0, 20.0).into(), aspect: 1.0, focal: None };
+    let fill = |p: Paint| AppearanceItem::Fill(FillLayer::new(p));
+    let mut doc = one_object(shapes::rectangle(Rect::new(0.0, 0.0, 120.0, 60.0)), vec![fill(gradient_paint(radial.clone(), Some(off_center), None))]);
+    let layer = doc.layers[0].id;
+    let mut triangle = shapes::line((130.0, 10.0).into(), (190.0, 10.0).into());
+    if let Some(sp) = triangle.subpaths.first_mut() {
+        sp.anchors.push(vectorcraft_geom::Anchor::corner((130.0, 40.0).into()));
+        sp.closed = true;
+    }
+    let turned = GradientGeom { start: (145.0, 10.0).into(), end: (160.0, 25.0).into(), aspect: 1.0, focal: None };
+    let n = painted(&mut doc, triangle.clone(), vec![fill(gradient_paint(sunset(), Some(turned), None))]);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let in_tile = painted(&mut doc, shapes::rectangle(Rect::new(0.0, 0.0, 120.0, 60.0)), vec![fill(gradient_paint(radial, Some(off_center), None))]);
+    let slant = painted(&mut doc, triangle, vec![fill(gradient_paint(sunset(), Some(turned), None))]);
+    let mut tile = vectorcraft_doc::PatternDef::new("Tile", vec![Arc::new(in_tile), Arc::new(slant)]);
+    tile.tile = Rect::new(0.0, 0.0, 200.0, 60.0);
+    doc.patterns.push(tile);
+    swatches_plus(
+        &mut doc,
+        vec![Swatch { name: "Tile".into(), paint: Paint::Pattern { pattern: "Tile".into(), xf: Affine::IDENTITY }, global: false, spot: false }],
+    );
+    let n = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(130.0, 50.0, 190.0, 90.0)),
+        vec![fill(Paint::Pattern { pattern: "Tile".into(), xf: Affine::IDENTITY })],
+    );
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let text = program(&doc);
+    let art = text.split("%AI5_BeginLayer").nth(1).unwrap();
+    assert!(art.contains("Bb\n0 0 0 0 Bh\n1 (Gradient) 0.25 -0.1667 0 0.5657 20 0 0 20 0 0 1 Bg\n"), "{art}");
+    assert!(art.contains("Bb\n1 (Gradient 2) 0.25 0 -45 0.5 1 0 0 1 0 0 1 Bg\n"), "{art}");
+    let setup = text.split("%AI3_BeginPattern: (Tile)").nth(1).unwrap();
+    assert!(setup.contains("%_Bb\n%_0 0 0 0 Bh\n%_1 (Gradient) 0.25 0.1667 0 0.7845 20 0 0 20 0 0 1 Bg\n"), "{setup}");
+    assert!(setup.contains("%_Bb\n%_1 (Gradient 2) 0.25 0 45 0.5 1 0 0 1 0 0 1 Bg\n"), "{setup}");
+    same_lines(&gradient_looks(&read_back(&doc)), &gradient_looks(&doc));
+}
+
+/// A definition of a gradient that isn't a swatch takes a name that no swatch and no pattern has,
+/// so that its instances don't read back linked to another swatch.
+#[test]
+fn gradient_definitions_skip_the_names_of_swatches_and_patterns() {
+    let mut doc = gradients_and_patterns();
+    let check = square(&mut doc, Rect::new(0.0, 0.0, 5.0, 5.0), Color::BLACK);
+    let mut taken = vectorcraft_doc::PatternDef::new("Gradient 2", vec![Arc::new(check)]);
+    taken.tile = Rect::new(0.0, 0.0, 10.0, 10.0);
+    doc.patterns.push(taken);
+    swatches_plus(
+        &mut doc,
+        vec![
+            Swatch { name: "Gradient".into(), paint: solid(Color::rgb(0.0, 0.5, 0.0)), global: false, spot: false },
+            Swatch {
+                name: "Gradient 2".into(),
+                paint: Paint::Pattern { pattern: "Gradient 2".into(), xf: Affine::IDENTITY },
+                global: false,
+                spot: false,
+            },
+        ],
+    );
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let text = program(&doc);
+    let names: Vec<&str> = text.lines().filter_map(|l| l.strip_prefix("%AI5_BeginGradient: ")).collect();
+    assert_eq!(names, ["(Sunset)", "(Gradient 3)", "(Gradient 4)", "(Gradient 5)", "(Glow)"]);
+    same_lines(&gradient_looks(&read_back(&doc)), &gradient_looks(&doc));
+}
+
+/// A hard edge: a linear gradient whose stops all lie at one place is written from its last stop,
+/// and reads back with each stop on its side.
+#[test]
+fn a_linear_gradient_with_every_stop_at_one_place_keeps_its_sides() {
+    let edge = ramp(GradientKind::Linear, &[(0.3, Color::rgb(1.0, 0.0, 0.0), 1.0, 0.4), (0.3, Color::rgb(0.0, 0.0, 1.0), 1.0, 0.7)]);
+    let doc = one_object(
+        shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 50.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(edge, None, None)))],
+    );
+    let text = program(&doc);
+    let (blue, red) = (text.find(" 0 0 1 2 1 6 70 30 Bs\n").unwrap(), text.find(" 1 0 0 2 1 6 40 30 Bs\n").unwrap());
+    assert!(blue < red, "{text}");
+    same_lines(&art_looks(&read_back(&doc)), &art_looks(&doc));
+}
+
+/// Gradients without stops or with more than 256, without a ramp's length or flattened to a line
+/// are written as their average color with a warning that says so, not the one for freeform
+/// gradients.
+#[test]
+fn gradients_that_cant_be_placed_are_reported_as_such() {
+    use vectorcraft_color::gradient::GradientGeom;
+    let point = GradientGeom { start: (20.0, 20.0).into(), end: (20.0, 20.0).into(), aspect: 1.0, focal: None };
+    let flat = GradientGeom { start: (20.0, 20.0).into(), end: (40.0, 20.0).into(), aspect: 0.0, focal: None };
+    let radial = ramp(GradientKind::Radial, &[(0.0, Color::rgb(1.0, 1.0, 1.0), 1.0, 0.5), (1.0, Color::rgb(0.0, 0.0, 0.0), 1.0, 0.5)]);
+    // More stops than the `.ai` reader reads.
+    let many: Vec<(f32, Color, f32, f32)> = (0..257).map(|i| (i as f32 / 256.0, Color::gray(i as f32 / 256.0), 1.0, 0.5)).collect();
+    for p in [
+        gradient_paint(sunset(), Some(point), None),
+        gradient_paint(radial, Some(flat), None),
+        gradient_paint(Gradient::new(GradientKind::Linear, vec![]), None, None),
+        gradient_paint(ramp(GradientKind::Linear, &many), None, None),
+    ] {
+        let doc = one_object(shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 50.0)), vec![AppearanceItem::Fill(FillLayer::new(p.clone()))]);
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(out.warnings, [writer::GRADIENT_SHAPES], "{p:?}");
+        let back = read_back(&doc);
+        assert!(matches!(back.layers[0].children().unwrap()[0].appearance.items[0].paint(), Paint::Solid { .. }), "{p:?}");
+    }
+}
+
+/// A gradient across a stroke is written as the stroke's outline in its average color, with the
+/// warning.
+#[test]
+fn a_gradient_across_a_stroke_is_its_average_color() {
+    let mut st = StrokeLayer::new(gradient_paint(sunset(), None, None), 4.0);
+    st.gradient_mode = vectorcraft_doc::StrokeGradientMode::Across;
+    let doc = one_object(shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 50.0)), vec![AppearanceItem::Stroke(st)]);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::GRADIENTS), "{:?}", out.warnings);
+    assert!(!program(&doc).contains("Bb\n"));
+    let mut all = vec![];
+    paths(read_back(&doc).layers[0].children().unwrap(), &mut all);
+    assert!(!all.is_empty() && all.iter().all(|p| p.appearance.items.iter().all(|i| matches!(i.paint(), Paint::Solid { .. }))), "{all:?}");
+}
+
+/// Patterns whose tiles are hexagons or bricks are written as their tiles cut to the shape, with the
+/// warning, and aren't defined.
+#[test]
+fn hex_and_brick_patterns_are_written_as_their_tiles() {
+    for tile_type in [
+        vectorcraft_doc::TileType::HexByRow,
+        vectorcraft_doc::TileType::HexByColumn,
+        vectorcraft_doc::TileType::BrickByRow { offset: 0.5 },
+        vectorcraft_doc::TileType::BrickByColumn { offset: 0.5 },
+    ] {
+        let mut doc = one_object(
+            shapes::rectangle(Rect::new(20.0, 20.0, 60.0, 60.0)),
+            vec![AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: "Cells".into(), xf: Affine::IDENTITY }))],
+        );
+        let dot = square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), Color::rgb(1.0, 0.0, 0.0));
+        doc.patterns.push(vectorcraft_doc::PatternDef {
+            tile: Rect::new(0.0, 0.0, 10.0, 10.0),
+            tile_type,
+            ..vectorcraft_doc::PatternDef::new("Cells", vec![Arc::new(dot)])
+        });
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::PATTERNS), "{tile_type:?}: {:?}", out.warnings);
+        assert!(!program(&doc).contains("%AI3_BeginPattern"), "{tile_type:?}");
+        let mut all = vec![];
+        paths(read_back(&doc).layers[0].children().unwrap(), &mut all);
+        let red = paint(&solid(Color::rgb(1.0, 0.0, 0.0)));
+        assert!(all.iter().any(|p| p.appearance.items.iter().any(|i| paint(i.paint()) == red)), "{tile_type:?}");
+    }
+}
+
+/// An open path filled and stroked with gradients: the fill's instance ends `1 BB`, the stroke's
+/// `1 Bb` follows, and the open path's `B` ends `1 BB`.
+#[test]
+fn an_open_path_keeps_its_gradient_fill_and_stroke() {
+    let two = ramp(GradientKind::Linear, &[(0.0, Color::rgb(1.0, 1.0, 0.0), 1.0, 0.5), (1.0, Color::rgb(0.0, 0.0, 0.0), 1.0, 0.5)]);
+    let mut open = shapes::line((20.0, 80.0).into(), (100.0, 20.0).into());
+    if let Some(sp) = open.subpaths.first_mut() {
+        sp.anchors.push(vectorcraft_geom::Anchor::corner((150.0, 70.0).into()));
+        sp.closed = false;
+    }
+    let doc = one_object(
+        open,
+        vec![
+            AppearanceItem::Fill(FillLayer::new(gradient_paint(sunset(), None, None))),
+            AppearanceItem::Stroke(StrokeLayer::new(gradient_paint(two, None, None), 3.0)),
+        ],
+    );
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let text = program(&doc);
+    assert!(text.contains("\n1 BB\n1 Bb\n1 (Gradient 2) ") && text.contains("\nB\n1 BB\n"), "{text}");
+    same_lines(&art_looks(&read_back(&doc)), &art_looks(&doc));
+}
+
+/// A clipping path stroked with a gradient keeps it.
+#[test]
+fn a_clipping_path_keeps_its_gradient_stroke() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut clip = clipping(&mut doc, shapes::ellipse(Rect::new(10.0, 10.0, 90.0, 60.0)));
+    clip.appearance = Appearance::basic(Paint::None, gradient_paint(sunset(), None, None), 3.0).into();
+    let inside = square(&mut doc, Rect::new(0.0, 0.0, 50.0, 40.0), Color::rgb(0.0, 0.0, 1.0));
+    let g = group(&mut doc, vec![clip, inside], true);
+    doc.insert(Some(layer), usize::MAX, g).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let text = program(&doc);
+    assert!(text.contains("h\nW\n1 Bb\n0 (Gradient) "), "{text}");
+    let back = read_back(&doc);
+    let mut want = vec![];
+    paints_of(&doc, doc.layers[0].children().unwrap(), 0, &mut want);
+    let mut got = vec![];
+    paints_of(&back, back.layers[0].children().unwrap(), 0, &mut got);
+    let strokes = |v: &[String]| {
+        v.iter().filter(|l| l.contains(" stroke(Linear")).map(|l| l.split(" stroke(").nth(1).unwrap_or_default().to_string()).collect::<Vec<_>>()
+    };
+    assert_eq!(strokes(&got), strokes(&want), "{got:#?}");
+}
+
+/// In a CMYK document the gradient's CMYK stops are written as CMYK and read back the same.
+#[test]
+fn a_cmyk_documents_gradients_keep_their_stops() {
+    let cmyk = ramp(GradientKind::Linear, &[(0.0, Color::cmyk(0.0, 0.6, 1.0, 0.0), 1.0, 0.5), (1.0, Color::cmyk(1.0, 0.0, 0.0, 0.2), 0.5, 0.25)]);
+    let mut doc = one_object(
+        shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 50.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(cmyk, None, None)))],
+    );
+    doc.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let text = program(&doc);
+    assert!(text.contains("%AI9_ColorModel: 2\n"), "{text}");
+    assert!(text.contains("%_1 0 0 0.2 1 0.5 6 25 100 Bs\n%_0 0.6 1 0 1 1 6 50 0 Bs\n"), "{text}");
+    same_lines(&art_looks(&read_back(&doc)), &art_looks(&doc));
+}
+
+/// A compound path's gradient instance is on its last subpath only.
+#[test]
+fn a_compound_paths_gradient_is_on_its_last_subpath() {
+    let text = program(&gradients_and_patterns());
+    let compound = text.split("*u\n").nth(1).and_then(|s| s.split("*U\n").next()).unwrap();
+    assert_eq!(compound.matches("Bb\n").count(), 1, "{compound}");
+    let last_subpath = compound.rfind(" m\n").unwrap();
+    assert!(compound.find("Bb\n").unwrap() > last_subpath, "{compound}");
+    assert_eq!(compound.matches(" m\n").count(), 2, "{compound}");
+}
+
+/// Freeform gradient swatches and swatches of patterns that can't be defined are left out with the
+/// warning; a color group counts only the swatches written.
+#[test]
+fn swatches_the_data_cant_hold_are_left_out() {
+    let mut doc = gradients_and_patterns();
+    let dot = square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), Color::rgb(1.0, 0.0, 0.0));
+    doc.patterns.push(vectorcraft_doc::PatternDef {
+        tile: Rect::new(0.0, 0.0, 10.0, 10.0),
+        tile_type: vectorcraft_doc::TileType::BrickByRow { offset: 0.5 },
+        ..vectorcraft_doc::PatternDef::new("Brick", vec![Arc::new(dot)])
+    });
+    let free = ramp(GradientKind::Freeform, &[(0.0, Color::rgb(1.0, 1.0, 1.0), 1.0, 0.5), (1.0, Color::rgb(0.0, 0.0, 0.0), 1.0, 0.5)]);
+    let swatch = |name: &str, paint: Paint| Swatch { name: name.into(), paint, global: false, spot: false };
+    doc.swatch_groups = vec![SwatchGroup {
+        name: "Mixed".into(),
+        swatches: vec![
+            swatch("Free", gradient_paint(free.clone(), None, None)),
+            swatch("Dawn", gradient_paint(sunset(), None, None)),
+            swatch("Brick", Paint::Pattern { pattern: "Brick".into(), xf: Affine::IDENTITY }),
+            swatch("Dots 2", Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }),
+        ],
+    }]
+    .into();
+    swatches_plus(&mut doc, vec![swatch("Free 2", gradient_paint(free, None, None))]);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::SWATCHES], "{:?}", out.warnings);
+    let text = program(&doc);
+    assert!(text.contains("0 (Mixed) 2 Pg\n"), "{text}");
+    for name in ["(Free) Pc", "(Free 2) Pc", "(Brick) Pc", "%AI3_BeginPattern: (Brick)"] {
+        assert!(!text.contains(name), "{name}");
+    }
+    let back = read_back(&doc);
+    let group = back.swatch_groups.iter().find(|g| g.name == "Mixed").unwrap();
+    assert_eq!(group.swatches.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Dawn", "Dots 2"]);
+}
+
+/// A pattern swatch that moves, turns or scales its pattern is written with its pattern, and the
+/// placement is reported left out.
+#[test]
+fn a_pattern_swatchs_own_placement_is_reported_left_out() {
+    let mut doc = gradients_and_patterns();
+    let moved = Paint::Pattern { pattern: "Dots".into(), xf: Affine::scale(2.0) };
+    swatches_plus(&mut doc, vec![Swatch { name: "Big Dots".into(), paint: moved, global: false, spot: false }]);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::SWATCH_PLACEMENT]);
+    assert!(program(&doc).contains("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Big Dots) Pc\n"));
 }

@@ -652,3 +652,201 @@ fn transparency_clipping_and_opacity_masks_come_back_from_the_editing_copy() {
     let kinds = see_through_outline(&legacy.doc);
     assert!(kinds.iter().any(|l| l.contains(" compound ")) && kinds.iter().any(|l| l.contains("group clip=true")), "{kinds:#?}");
 }
+
+/// The paths and compound paths of `doc`'s art and of its patterns' tiles with their geometric
+/// bounds (rounded) and fills and strokes, one line each, then its gradient and pattern swatches: a
+/// gradient by its kind, its swatch link (`-` when it names no gradient swatch of `doc`), its stops
+/// (place, color, opacity, midpoint, swatch link and tint) and the gradient's place at the corners and
+/// center of the paint's bounds (rounded to hundredths); a pattern by its name and placement.
+fn paint_outline(doc: &vectorcraft_doc::Document) -> Vec<String> {
+    use std::sync::Arc;
+    use vectorcraft_color::Paint;
+    use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
+    let link = |name: &Option<String>| match name.as_deref().and_then(|n| doc.swatch(n)) {
+        Some(sw) if matches!(sw.paint, Paint::Gradient(_)) => sw.name.clone(),
+        _ => "-".into(),
+    };
+    let drawn = |p: &Paint, b: vectorcraft_geom::Rect| match p {
+        Paint::Gradient(g) => {
+            let geom = g.resolve(b);
+            let at: Vec<f64> = [(b.x0, b.y0), (b.x1, b.y0), (b.x0, b.y1), (b.x1, b.y1), (b.center().x, b.center().y)]
+                .map(|(x, y)| (geom.param_at(g.gradient.kind, (x, y).into()) * 100.0).round() / 100.0)
+                .to_vec();
+            let stops: Vec<String> = g
+                .gradient
+                .stops
+                .iter()
+                .map(|s| {
+                    let rgb = s.color.to_rgb().map(|v| (v * 100.0).round());
+                    format!("{:.3} {rgb:?} {:.2} mid {:.2} {:?} {:.2}", s.offset, s.opacity, s.midpoint, s.swatch, s.tint)
+                })
+                .collect();
+            format!("{:?} link {} {stops:?} {at:?}", g.gradient.kind, link(&g.swatch))
+        }
+        Paint::Pattern { pattern, xf } => format!("pattern {pattern} {:?}", xf.as_coeffs().map(|v| (v * 1000.0).round() / 1000.0)),
+        Paint::Solid { color, .. } => format!("{:?}", color.to_rgb().map(|v| (v * 100.0).round())),
+        Paint::None => "none".into(),
+    };
+    // A compound path's paint is its own: its members' paint isn't drawn (Release gives them the
+    // compound path's), so a compound path's line lists only its members' bounds.
+    fn walk(nodes: &[Arc<Node>], f: &mut dyn FnMut(&Node)) {
+        for n in nodes {
+            f(n);
+            if !matches!(n.kind, NodeKind::Compound { .. }) {
+                walk(n.children().map(Vec::as_slice).unwrap_or_default(), f);
+            }
+        }
+    }
+    let bounds = |n: &Node| n.geometric_bounds().map(|b| [b.x0, b.y0, b.x1, b.y1].map(|v| v.round() as i64));
+    let lines = |nodes: &[Arc<Node>]| {
+        let mut lines = vec![];
+        walk(nodes, &mut |n| {
+            if !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
+                return;
+            }
+            let Some(b) = n.geometric_bounds() else { return };
+            let kind = match n.children() {
+                Some(members) => format!("compound of {:?}", members.iter().map(|m| bounds(m)).collect::<Vec<_>>()),
+                None => "path".into(),
+            };
+            let mut line = format!("{kind} {:?}", [b.x0, b.y0, b.x1, b.y1].map(|v| v.round() as i64));
+            for it in n.appearance.items.iter().filter(|i| !i.paint().is_none()) {
+                line += &match it {
+                    AppearanceItem::Fill(f) => format!(" fill {}", drawn(&f.paint, b)),
+                    AppearanceItem::Stroke(st) => format!(" stroke {} {}", st.width, drawn(&st.paint, st.paint_bounds(b))),
+                };
+            }
+            lines.push(line);
+        });
+        lines
+    };
+    let mut out = lines(&doc.layers);
+    for p in doc.patterns.iter() {
+        out.push(format!("pattern {} tile {:?}", p.name, [p.tile.x0, p.tile.y0, p.tile.x1, p.tile.y1]));
+        out.extend(lines(&p.art));
+    }
+    for sw in doc.swatches_iter() {
+        match &sw.paint {
+            // A gradient swatch reads back linked to itself.
+            Paint::Gradient(g) => {
+                let own = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(g.gradient.clone())));
+                out.push(format!("swatch {} {}", sw.name, drawn(&own, vectorcraft_geom::Rect::ZERO)));
+            }
+            Paint::Pattern { pattern, .. } => out.push(format!("swatch {} pattern {pattern}", sw.name)),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// A document of two artboards (the art on the first): a rectangle filled with a linear gradient of
+/// three stops placed across part of it, an ellipse filled with an elliptical radial gradient whose
+/// focal point is off its center, a rectangle stroked with a gradient, rectangles filled and
+/// stroked with the pattern `Dots`, one of them turned, an even-odd compound path filled with a
+/// gradient of a gray, a CMYK color and the spot color `Ink` at 70%, and the gradient swatch `Dawn`.
+fn gradient_session() -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 200, "artboards": 2})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let rect = |s: &mut Session, x: f64, y: f64, w: f64, h: f64| {
+        id(s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap())
+    };
+    let three = json!({"kind": "linear", "stops": [
+        {"offset": 0, "color": "#ff0000", "midpoint": 0.3},
+        {"offset": 0.4, "color": "#00ff00", "opacity": 0.5},
+        {"offset": 1, "color": "#0000ff"}
+    ], "start": [20, 40], "end": [60, 17]});
+    let a = rect(&mut s, 10.0, 10.0, 80.0, 40.0);
+    s.execute("paint.setFill", &json!({"ids": [a], "gradient": three})).unwrap();
+    let e = id(s.execute("shape.ellipse", &json!({"x": 100, "y": 10, "width": 80, "height": 40})).unwrap());
+    let glow = json!({"kind": "radial", "stops": [{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#1a33cc"}],
+        "start": [140, 30], "end": [180, 30], "aspect": 50, "focal": [150, 25]});
+    s.execute("paint.setFill", &json!({"ids": [e], "gradient": glow})).unwrap();
+    let c = rect(&mut s, 190.0, 10.0, 90.0, 40.0);
+    let two = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#000000"}]});
+    s.execute("paint.setStroke", &json!({"ids": [c], "gradient": two, "width": 6})).unwrap();
+    let tile = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"ids": [tile], "color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [tile], "none": true})).unwrap();
+    s.execute("object.pattern.make", &json!({"ids": [tile], "name": "Dots", "edit": false})).unwrap();
+    let p = rect(&mut s, 10.0, 70.0, 80.0, 40.0);
+    s.execute("paint.setFill", &json!({"ids": [p], "swatch": "Dots"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [p], "swatch": "Dots", "width": 4})).unwrap();
+    let turned = rect(&mut s, 100.0, 70.0, 80.0, 40.0);
+    s.execute("paint.setFill", &json!({"ids": [turned], "swatch": "Dots"})).unwrap();
+    // Turned 30° and scaled to half about (140, 90).
+    let (c, k) = (30f64.to_radians().cos() * 0.5, 30f64.to_radians().sin() * 0.5);
+    let m = [c, k, -k, c, 140.0 - 140.0 * c + 90.0 * k, 90.0 - 140.0 * k - 90.0 * c];
+    s.execute("pattern.transform", &json!({"ids": [turned], "matrix": m})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": "#ff9900", "spot": true})).unwrap();
+    let outer = rect(&mut s, 190.0, 70.0, 90.0, 40.0);
+    let hole = rect(&mut s, 210.0, 80.0, 40.0, 20.0);
+    let ring = id(s.execute("object.compoundPath.make", &json!({"ids": [outer, hole]})).unwrap());
+    let mixed = json!({"kind": "linear", "stops": [
+        {"offset": 0, "color": {"gray": 0.8}},
+        {"offset": 0.5, "color": {"c": 1, "m": 0, "y": 0, "k": 0}, "midpoint": 0.7},
+        {"offset": 1, "swatch": "Ink", "tint": 70}
+    ]});
+    s.execute("paint.setFill", &json!({"ids": [ring], "gradient": mixed})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [ring], "none": true})).unwrap();
+    let dawn = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#ffcc00"}, {"offset": 1, "color": "#cc3300"}]});
+    s.execute("swatch.new", &json!({"name": "Dawn", "gradient": dawn})).unwrap();
+    s
+}
+
+/// Gradients and patterns come back from the editing copy for other apps alone (the native
+/// document left out), with every save option that writes the copy; where the file has PDF pages,
+/// the reader takes the copy only when it draws as its page does. The version 7 `.ai` keeps each
+/// gradient.
+#[test]
+fn gradients_and_patterns_come_back_from_the_editing_copy() {
+    let mut s = gradient_session();
+    let before = (*s.doc().unwrap().doc).clone();
+    let want = paint_outline(&before);
+    assert!(want.iter().filter(|l| l.starts_with("path") && l.contains("pattern Dots")).count() == 2, "{want:#?}");
+    assert!(want.iter().any(|l| l.starts_with("compound") && l.contains("Ink") && l.contains(") 0.70")), "{want:#?}");
+    assert!(want.iter().any(|l| l.contains("mid 0.30")) && want.iter().any(|l| l.starts_with("swatch Dawn")), "{want:#?}");
+    for opts in [
+        json!({"format": "ai"}),
+        json!({"format": "ai", "compress": false}),
+        json!({"format": "ai", "embedProfiles": false}),
+        json!({"format": "ai", "includeLinked": true}),
+        json!({"format": "ai", "range": "all"}),
+        json!({"format": "ai", "pdfCompatible": false}),
+    ] {
+        let r = s.execute("document.export", &opts).unwrap();
+        assert!(!r["warnings"].to_string().contains("gradient") && !r["warnings"].to_string().contains("pattern"), "{r}");
+        let copy = editing_copy(&b64(&r));
+        assert_eq!(paint_outline(&copy), want, "{opts}");
+    }
+    let path = tmp("gradients.ai");
+    let r = s.execute("document.save", &json!({"path": path, "separateArtboards": true})).unwrap();
+    let files: Vec<String> = r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap().to_string()).collect();
+    assert_eq!(files.len(), 3, "{r}");
+    for f in files.iter().filter(|f| !f.ends_with("-2.ai")) {
+        assert_eq!(paint_outline(&editing_copy(&std::fs::read(f).unwrap())), want, "{f}");
+    }
+    let r = s.execute("document.export", &json!({"format": "ai", "aiVersion": 7})).unwrap();
+    let legacy = load::load_with("art.ai", &b64(&r), &LoadOptions::default()).unwrap();
+    // Each gradient the art paints with, by its kind and its stops' places and colors to 5% (version
+    // 7 writes a gradient stroke as its filled outline, so the objects differ, and a spot color's
+    // tint through its CMYK equivalent, 2% off here).
+    let gradients = |doc: &vectorcraft_doc::Document| {
+        let mut all = std::collections::BTreeSet::new();
+        doc.walk(|node| {
+            for it in node.appearance.items.iter() {
+                if let vectorcraft_color::Paint::Gradient(g) = it.paint() {
+                    let stops: Vec<String> = g
+                        .gradient
+                        .stops
+                        .iter()
+                        .map(|s| format!("{:.3} {:?}", s.offset, s.color.to_rgb().map(|v| (v * 20.0).round() * 5.0)))
+                        .collect();
+                    all.insert(format!("{:?} {stops:?}", g.gradient.kind));
+                }
+            }
+        });
+        all
+    };
+    assert_eq!(gradients(&legacy.doc), gradients(&before));
+}

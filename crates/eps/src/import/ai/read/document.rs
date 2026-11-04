@@ -495,9 +495,20 @@ fn text_wrap(o: &Obj, scale: f64) -> Option<TextWrap> {
 }
 
 impl<'a> Reader<'a> {
-    /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`), and the
-    /// opacity mask it may carry.
+    /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`), the opacity
+    /// mask it may carry, and in a pattern's definition the mark of the tile's box
+    /// (`AIPattern_Editor_Backing_Tile_Rect`), which leaves that box out of the art.
     pub(super) fn art_dictionary(&mut self, o: &Obj) {
+        // The unpainted box that a pattern's definition marks as its tile's box isn't art.
+        if self.pattern.is_some()
+            && o.nums("AIPattern_Editor_Backing_Tile_Rect").first().copied() == Some(1.0)
+            && self.after_object
+            && let Some(f) = self.frames.last_mut()
+            && f.children.last().is_some_and(|n| matches!(n.kind, NodeKind::Path { .. }) && n.appearance.items.iter().all(|i| i.paint().is_none()))
+        {
+            f.children.pop();
+            return;
+        }
         self.constraint_art(o);
         // A blend's key object or spine.
         if let Some(kind) = o.text("ShapeBlendPathType")
