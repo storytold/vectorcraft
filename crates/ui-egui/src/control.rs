@@ -267,8 +267,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 return err("conflict: requested native document is not active");
             }
             if let Some(expected) = p.get("expected") {
-                if req.method != "engine.execute" || id != "object.setProps" {
-                    return err("capability: conditional execution supports object.setProps only");
+                let snapshot = id == "file.saveCopy" && p.pointer("/params/path").is_none();
+                if req.method != "engine.execute" || !(id == "object.setProps" || snapshot) {
+                    return err("capability: conditional execution supports object.setProps and byte-only file.saveCopy");
                 }
                 let (Some(document), Some(revision)) =
                     (expected.get("document").and_then(Value::as_u64), expected.get("revision").and_then(Value::as_u64))

@@ -68,11 +68,14 @@ fn craftlink_no_path_snapshot_returns_native_bytes_without_save_dialog() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     app.run("file.new", json!({})).unwrap();
     let path = app.session.active().unwrap().path.clone();
-    let result = input_request(&mut app, "engine.execute", json!({"command":"file.saveCopy","params":{}}));
+    let state = app.session.active().unwrap();
+    let expected = json!({"document":state.uid,"revision":state.revision});
+    let result = input_request(&mut app, "engine.execute", json!({"command":"file.saveCopy","params":{},"expected":expected}));
     assert_eq!(result["ok"], true);
     assert!(result["result"]["dataBase64"].as_str().is_some_and(|s| !s.is_empty()));
     assert!(app.ui.dialog.is_none());
     assert_eq!(app.session.active().unwrap().path, path);
+    assert_eq!(app.session.active().unwrap().revision, expected["revision"].as_u64().unwrap());
 }
 
 #[test]

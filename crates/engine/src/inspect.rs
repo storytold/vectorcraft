@@ -269,7 +269,7 @@ fn document_base(s: &Session) -> Value {
     let d = &st.doc;
     json!({
         "uid": st.uid,
-        "capabilities": {"conditionalExecute":1,"documentChangeEvents":1,"conditionalCommands":["object.setProps"],"documentRouting":"active-only"},
+        "capabilities": {"conditionalExecute":1,"documentChangeEvents":1,"conditionalCommands":["object.setProps","file.saveCopy:no-path"],"documentRouting":"active-only"},
         "title": st.title(),
         // The File Info title (`file.info`), where `title` comes from the file name once the document has one.
         "fileInfoTitle": d.title,
