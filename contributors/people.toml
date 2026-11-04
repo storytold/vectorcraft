@@ -201,3 +201,6 @@ sync_github_name = false
 
 [people.FrancoJacquet]
 real_name = "Franco Jacquet"
+
+[people.FractalEncrypt]
+sync_github_name = true
