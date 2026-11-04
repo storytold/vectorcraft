@@ -1,5 +1,5 @@
-//! `cargo run --release -p vectorcraft-engine --example anchor_bench` — wall time of the engine
-//! steps of editing anchors with Direct Selection, on three synthetic documents: one closed path of
+//! `cargo run --release -p vectorcraft-engine --example anchor_bench` prints the wall time of the
+//! engine steps of editing anchors with Direct Selection, on three synthetic documents: one closed path of
 //! 50,000 anchors, 2,000 closed paths of 50 anchors each, and one open path of 200,000 anchors.
 //! `ITERS` sets the runs per step (default 7); each row is the median in ms.
 // Example (dev tool): unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
