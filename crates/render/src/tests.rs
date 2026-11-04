@@ -19,6 +19,7 @@ pub(super) mod fontchange;
 mod freeform;
 mod fxzoom;
 mod isolation;
+mod keptpath;
 mod knockout;
 mod layeropts;
 mod longstroke;
