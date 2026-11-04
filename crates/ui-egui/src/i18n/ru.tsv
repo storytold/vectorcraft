@@ -5200,6 +5200,9 @@ lighting	Light	Свет
 	Movie Clip	Видеоклип
 @msg	name is empty	имя пустое
 @msg	an action is already recording	действие уже записывается
+@msg	an action is already playing	действие уже воспроизводится
+@msg	speed must be accelerated, step or pause	speed должен быть accelerated, step или pause
+@msg	seconds must be a whole number from 1 to 60	seconds должно быть целым числом от 1 до 60
 @msg	no such function key	такой функциональной клавиши нет
 @msg	no such color	такого цвета нет
 @msg	{_1} cannot be used on Windows	Сочетание {_1} нельзя использовать в Windows
@@ -5377,6 +5380,11 @@ axis	Y Axis	Ось Y
 	Set Options	Параметры набора
 	Action Options…	Параметры действия…
 	Action Options	Параметры действия
+	Playback Options…	Параметры воспроизведения…
+	Playback Options	Параметры воспроизведения
+	Accelerated	Ускоренно
+	Step by Step	Пошагово
+	Pause For	Пауза
 	Rename Action	Переименовать действие
 	New Action…	Новое действие…
 	New Action	Новое действие

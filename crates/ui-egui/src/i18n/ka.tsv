@@ -5300,6 +5300,9 @@ imageTrace	Outline	კონტური
 	Movie Clip	ანიმაციური კლიპი
 @msg	name is empty	სახელი ცარიელია
 @msg	an action is already recording	მოქმედება უკვე იწერება
+@msg	an action is already playing	მოქმედება უკვე სრულდება
+@msg	speed must be accelerated, step or pause	speed უნდა იყოს accelerated, step ან pause
+@msg	seconds must be a whole number from 1 to 60	seconds უნდა იყოს მთელი რიცხვი 1-დან 60-მდე
 @msg	no such function key	ასეთი ფუნქციური კლავიში არ არის
 @msg	no such color	ასეთი ფერი არ არის
 @msg	{_1} cannot be used on Windows	{_1} ვერ გამოიყენება Windows-ში
@@ -5688,6 +5691,11 @@ axis	Y Axis	Y ღერძი
 	Set Options	ნაკრების პარამეტრები
 	Action Options…	მოქმედების პარამეტრები…
 	Action Options	მოქმედების პარამეტრები
+	Playback Options…	შესრულების პარამეტრები…
+	Playback Options	შესრულების პარამეტრები
+	Accelerated	დაჩქარებული
+	Step by Step	ნაბიჯ-ნაბიჯ
+	Pause For	პაუზა
 	Rename Action	მოქმედების სახელის შეცვლა
 	New Action…	ახალი მოქმედება…
 	New Action	ახალი მოქმედება

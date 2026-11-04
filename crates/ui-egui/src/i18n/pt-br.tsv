@@ -5507,6 +5507,9 @@ mark-style	Japanese	Japonesas
 # Symbol Options › Export Type
 @msg	name is empty	o nome está vazio
 @msg	an action is already recording	uma ação já está sendo gravada
+@msg	an action is already playing	uma ação já está sendo reproduzida
+@msg	speed must be accelerated, step or pause	speed deve ser accelerated, step ou pause
+@msg	seconds must be a whole number from 1 to 60	seconds deve ser um número inteiro de 1 a 60
 @msg	no such function key	tecla de função inexistente
 @msg	no such color	cor inexistente
 @msg	{_1} cannot be used on Windows	{_1} não pode ser usado no Windows
@@ -5681,6 +5684,11 @@ axis	Y Axis	Eixo Y
 	Set Options	Opções do Conjunto
 	Action Options…	Opções da Ação…
 	Action Options	Opções da Ação
+	Playback Options…	Opções de Reprodução…
+	Playback Options	Opções de Reprodução
+	Accelerated	Acelerada
+	Step by Step	Passo a Passo
+	Pause For	Pausar Por
 	Rename Action	Renomear Ação
 	New Action…	Nova Ação…
 	New Action	Nova Ação

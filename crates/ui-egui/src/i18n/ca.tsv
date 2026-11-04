@@ -3791,6 +3791,11 @@ digits	Malayalam	Malaiàlam
 	Set Options	Defineix les opcions
 	Action Options…	Opcions de l’acció…
 	Action Options	Opcions de l’acció
+	Playback Options…	Opcions de reproducció…
+	Playback Options	Opcions de reproducció
+	Accelerated	Accelerada
+	Step by Step	Pas a pas
+	Pause For	Pausa de
 	Rename Action	Canvia el nom de l’acció
 	New Action…	Acció nova…
 	New Action	Acció nova
@@ -5187,6 +5192,9 @@ digits	Malayalam	Malaiàlam
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	Els fitxers PSD multicanal no es poden llegir: deseu-los en mode RGB, CMYK o escala de grisos
 @msg	name is empty	el nom és buit
 @msg	an action is already recording	ja s’està enregistrant una acció
+@msg	an action is already playing	ja s’està reproduint una acció
+@msg	speed must be accelerated, step or pause	speed ha de ser accelerated, step o pause
+@msg	seconds must be a whole number from 1 to 60	seconds ha de ser un nombre enter de l’1 al 60
 @msg	no such function key	no existeix aquesta tecla de funció
 @msg	no such color	no existeix aquest color
 @msg	{_1} cannot be used on Windows	{_1} no es pot fer servir al Windows

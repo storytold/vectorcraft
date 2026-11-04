@@ -5502,6 +5502,9 @@ theme	Appearance	Външен вид
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
 @msg	an action is already recording	вече се записва действие
+@msg	an action is already playing	вече се възпроизвежда действие
+@msg	speed must be accelerated, step or pause	speed трябва да е accelerated, step или pause
+@msg	seconds must be a whole number from 1 to 60	seconds трябва да е цяло число от 1 до 60
 @msg	no such function key	няма такъв функционален клавиш
 @msg	no such color	няма такъв цвят
 @msg	{_1} cannot be used on Windows	{_1} не може да се използва в Windows
@@ -5652,6 +5655,11 @@ axis	Y Axis	Y ос
 	Set Options	Опции на набора
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
+	Playback Options…	Опции за възпроизвеждане…
+	Playback Options	Опции за възпроизвеждане
+	Accelerated	Ускорено
+	Step by Step	Стъпка по стъпка
+	Pause For	Пауза за
 	Rename Action	Преименуване на действие
 	New Action…	Ново действие…
 	New Action	Ново действие

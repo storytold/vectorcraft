@@ -5387,6 +5387,9 @@ swatch	Bright Violet	Kraftig violet
 	Movie Clip	Filmklip
 @msg	name is empty	navnet er tomt
 @msg	an action is already recording	en handling optages allerede
+@msg	an action is already playing	en handling afspilles allerede
+@msg	speed must be accelerated, step or pause	speed skal være accelerated, step eller pause
+@msg	seconds must be a whole number from 1 to 60	seconds skal være et heltal fra 1 til 60
 @msg	no such function key	ingen sådan funktionstast
 @msg	no such color	ingen sådan farve
 @msg	{_1} cannot be used on Windows	{_1} kan ikke bruges i Windows
@@ -5669,6 +5672,11 @@ axis	Y Axis	Y-akse
 	Set Options	Indstillinger for sæt
 	Action Options…	Indstillinger for handling…
 	Action Options	Indstillinger for handling
+	Playback Options…	Afspilningsindstillinger…
+	Playback Options	Afspilningsindstillinger
+	Accelerated	Accelereret
+	Step by Step	Trin for trin
+	Pause For	Pause på
 	Rename Action	Omdøb handling
 	New Action…	Ny handling…
 	New Action	Ny handling

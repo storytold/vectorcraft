@@ -5555,6 +5555,9 @@ mark-style	Japanese	Japanilainen
 	Movie Clip	Elokuvaleike
 @msg	name is empty	nimi on tyhjä
 @msg	an action is already recording	toimintoa nauhoitetaan jo
+@msg	an action is already playing	toimintoa toistetaan jo
+@msg	speed must be accelerated, step or pause	speed on oltava accelerated, step tai pause
+@msg	seconds must be a whole number from 1 to 60	seconds on oltava kokonaisluku 1:stä 60:een
 @msg	no such function key	toimintonäppäintä ei ole
 @msg	no such color	väriä ei ole
 @msg	{_1} cannot be used on Windows	{_1} ei ole käytettävissä Windowsissa
@@ -5796,6 +5799,11 @@ axis	Y Axis	Y-akseli
 	Set Options	Sarjan asetukset
 	Action Options…	Toiminnon asetukset…
 	Action Options	Toiminnon asetukset
+	Playback Options…	Toistoasetukset…
+	Playback Options	Toistoasetukset
+	Accelerated	Nopeutettu
+	Step by Step	Vaihe kerrallaan
+	Pause For	Tauko
 	Rename Action	Nimeä toiminto uudelleen
 	New Action…	Uusi toiminto…
 	New Action	Uusi toiminto

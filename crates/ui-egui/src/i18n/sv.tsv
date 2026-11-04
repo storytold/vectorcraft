@@ -5547,6 +5547,9 @@ theme	Appearance	Utseende
 	Movie Clip	Filmklipp
 @msg	name is empty	namnet är tomt
 @msg	an action is already recording	en åtgärd spelas redan in
+@msg	an action is already playing	en åtgärd spelas redan upp
+@msg	speed must be accelerated, step or pause	speed måste vara accelerated, step eller pause
+@msg	seconds must be a whole number from 1 to 60	seconds måste vara ett heltal från 1 till 60
 @msg	no such function key	funktionstangenten finns inte
 @msg	no such color	färgen finns inte
 @msg	{_1} cannot be used on Windows	{_1} kan inte användas i Windows
@@ -5789,6 +5792,11 @@ axis	Y Axis	Y-axel
 	Set Options	Alternativ för uppsättning
 	Action Options…	Alternativ för åtgärd…
 	Action Options	Alternativ för åtgärd
+	Playback Options…	Uppspelningsalternativ…
+	Playback Options	Uppspelningsalternativ
+	Accelerated	Accelererad
+	Step by Step	Steg för steg
+	Pause For	Paus i
 	Rename Action	Byt namn på åtgärd
 	New Action…	Ny åtgärd…
 	New Action	Ny åtgärd

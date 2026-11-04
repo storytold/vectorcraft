@@ -5575,6 +5575,9 @@ imageTrace	Outline	Körvonal
 	Movie Clip	Mozgóklip
 @msg	name is empty	a név üres
 @msg	an action is already recording	már folyik egy művelet felvétele
+@msg	an action is already playing	már folyik egy művelet lejátszása
+@msg	speed must be accelerated, step or pause	a speed értéke accelerated, step vagy pause lehet
+@msg	seconds must be a whole number from 1 to 60	a seconds értéke 1 és 60 közötti egész szám lehet
 @msg	no such function key	nincs ilyen funkcióbillentyű
 @msg	no such color	nincs ilyen szín
 @msg	{_1} cannot be used on Windows	A(z) {_1} nem használható Windows rendszeren
@@ -5749,6 +5752,11 @@ axis	Y Axis	Y tengely
 	Set Options	Készlet beállításai
 	Action Options…	Művelet beállításai…
 	Action Options	Művelet beállításai
+	Playback Options…	Lejátszási beállítások…
+	Playback Options	Lejátszási beállítások
+	Accelerated	Gyorsított
+	Step by Step	Lépésenként
+	Pause For	Szünet
 	Rename Action	Művelet átnevezése
 	New Action…	Új művelet…
 	New Action	Új művelet

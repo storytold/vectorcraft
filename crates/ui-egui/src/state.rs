@@ -496,6 +496,12 @@ pub struct UiState {
     /// adds a new action, as after Begin Recording.
     #[serde(skip)]
     pub recording_into: Option<u64>,
+    /// How actions play (Actions panel menu › Playback Options…), kept with the UI preferences.
+    #[serde(default, deserialize_with = "crate::panels::actions::deserialize_playback")]
+    pub action_playback: crate::panels::actions::PlaybackOptions,
+    /// The playback at Step by Step or Pause For in progress, if any. Not saved.
+    #[serde(skip)]
+    pub action_playing: Option<crate::panels::actions::Playing>,
     /// Keyboard shortcut overrides: command id, `tool:<id>` or `panel:<id>` → chord ("" = none),
     /// stored in the form every earlier version reads.
     #[serde(default, with = "crate::keymap::stored")]
@@ -970,6 +976,8 @@ impl Default for UiState {
             action_sets_selected: vec![],
             recording: None,
             recording_into: None,
+            action_playback: Default::default(),
+            action_playing: None,
             shortcut_overrides: Default::default(),
             shortcut_set: default_shortcut_set(),
             workspace: default_workspace(),

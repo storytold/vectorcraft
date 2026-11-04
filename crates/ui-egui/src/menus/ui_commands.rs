@@ -1239,7 +1239,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::PLAY_ACTION,
         "Play Action",
         "",
-        "{action: name, set?: name} play the Actions panel's action named action as one undoable batch; set names the set to look in (default: every set). A name no action has, or one that more than one action in the sets looked in has, is an error and nothing plays → what command.batch returns",
+        "{action: name, set?: name} play the Actions panel's action named action at the speed ui.action.playbackOptions sets; set names the set to look in (default: every set). Accelerated plays it as one undoable batch → what command.batch returns. Step by Step and Pause For play its first step now and the others one at a time, each its own undo step, until the last or ui.action.stop → {results: [the first step's result], pending: the steps left}. A name no action has, or one that more than one action in the sets looked in has, or an action played while another is still playing step by step or with pauses, is an error and nothing plays",
+    ),
+    (
+        crate::panels::actions::PLAYBACK_OPTIONS,
+        "Playback Options",
+        "",
+        "{speed?: accelerated|step|pause, seconds?: 1-60} set how the Actions panel plays actions: accelerated (the default) plays every step at once, step plays one step at a time and draws the window after each, and pause waits seconds (a whole number, 1 to 60, VectorCraft's own range) between steps. A param left out keeps its value; the setting is kept with the UI preferences. Any other speed or seconds is an error and changes nothing. The panel menu's Playback Options… (dialog `actionPlayback` with speed and seconds) runs this on OK → {speed, seconds}",
     ),
     (
         crate::panels::actions::START_RECORDING,
@@ -1251,7 +1257,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::STOP_RECORDING,
         "Stop Playing/Recording",
         "",
-        "{} end the Actions panel's recording and keep its steps, in the action ui.action.new made for it, else in a new action after the last action of its set, as the panel's Stop Playing/Recording button does. With nothing recording it changes nothing → {stopped}",
+        "{} end the Actions panel's recording and keep its steps, in the action ui.action.new made for it, else in a new action after the last action of its set, as the panel's Stop Playing/Recording button does. It also ends an action playing step by step or with pauses: the steps played stay and the rest do not run. With nothing recording or playing it changes nothing → {stopped}",
     ),
     (
         "ui.batchDialog",

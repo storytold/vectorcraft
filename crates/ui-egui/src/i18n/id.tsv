@@ -5387,6 +5387,9 @@ swatch	Bright Violet	Violet cerah
 	Movie Clip	Klip film
 @msg	name is empty	nama kosong
 @msg	an action is already recording	sebuah tindakan sedang direkam
+@msg	an action is already playing	sebuah tindakan sedang diputar
+@msg	speed must be accelerated, step or pause	speed harus accelerated, step, atau pause
+@msg	seconds must be a whole number from 1 to 60	seconds harus bilangan bulat dari 1 sampai 60
 @msg	no such function key	tidak ada tombol fungsi seperti itu
 @msg	no such color	tidak ada warna seperti itu
 @msg	{_1} cannot be used on Windows	{_1} tidak dapat digunakan di Windows
@@ -5669,6 +5672,11 @@ axis	Y Axis	Sumbu Y
 	Set Options	Opsi set
 	Action Options…	Opsi tindakan…
 	Action Options	Opsi tindakan
+	Playback Options…	Opsi pemutaran…
+	Playback Options	Opsi pemutaran
+	Accelerated	Dipercepat
+	Step by Step	Langkah demi langkah
+	Pause For	Jeda selama
 	Rename Action	Ganti nama tindakan
 	New Action…	Tindakan baru…
 	New Action	Tindakan baru

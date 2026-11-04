@@ -5395,6 +5395,9 @@ swatch	Bright Violet	Felviolet
 	Movie Clip	Filmclip
 @msg	name is empty	naam is leeg
 @msg	an action is already recording	er wordt al een actie opgenomen
+@msg	an action is already playing	er wordt al een actie afgespeeld
+@msg	speed must be accelerated, step or pause	speed moet accelerated, step of pause zijn
+@msg	seconds must be a whole number from 1 to 60	seconds moet een geheel getal van 1 tot 60 zijn
 @msg	no such function key	functietoets bestaat niet
 @msg	no such color	kleur bestaat niet
 @msg	{_1} cannot be used on Windows	{_1} kan niet worden gebruikt in Windows
@@ -5713,6 +5716,11 @@ axis	Y Axis	Y-as
 	Set Options	Setopties
 	Action Options…	Actieopties…
 	Action Options	Actieopties
+	Playback Options…	Afspeelopties…
+	Playback Options	Afspeelopties
+	Accelerated	Versneld
+	Step by Step	Stap voor stap
+	Pause For	Pauzeren
 	Rename Action	Actie hernoemen
 	New Action…	Nieuwe actie…
 	New Action	Nieuwe actie

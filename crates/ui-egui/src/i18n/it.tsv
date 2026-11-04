@@ -5205,6 +5205,9 @@ lighting	Light	Luce
 	Movie Clip	Clip filmato
 @msg	name is empty	il nome è vuoto
 @msg	an action is already recording	è già in corso la registrazione di un’azione
+@msg	an action is already playing	è già in corso la riproduzione di un’azione
+@msg	speed must be accelerated, step or pause	speed deve essere accelerated, step o pause
+@msg	seconds must be a whole number from 1 to 60	seconds deve essere un numero intero da 1 a 60
 @msg	no such function key	tasto funzione inesistente
 @msg	no such color	colore inesistente
 @msg	{_1} cannot be used on Windows	{_1} non può essere usato su Windows
@@ -5382,6 +5385,11 @@ axis	Y Axis	Asse Y
 	Set Options	Opzioni set
 	Action Options…	Opzioni azione…
 	Action Options	Opzioni azione
+	Playback Options…	Opzioni di riproduzione…
+	Playback Options	Opzioni di riproduzione
+	Accelerated	Accelerata
+	Step by Step	Passo per passo
+	Pause For	Pausa di
 	Rename Action	Rinomina azione
 	New Action…	Nuova azione…
 	New Action	Nuova azione

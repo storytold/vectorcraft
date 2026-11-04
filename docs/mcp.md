@@ -1848,12 +1848,24 @@ already walks Image Trace. Short agent entry points:
   a text field has the keyboard, or while a tool is busy. Editing command shortcuts (`shortcuts.set`, Keyboard Shortcuts), loading preferences and
   `ui.actionSet.load` preserve action function keys. When several actions have the same key, the first in panel order
   plays. A stored key reserved on the current platform does not play an action.
-- Actions: `ui.action.play {action, set?}` plays the action named `action` as one undoable batch; `set` names the set
-  to look in (default: every set), and a `set` that is not a string is an error. A name that no action has, or that
-  more than one action in the sets looked in has, or whose every step is excluded, is an error, and then nothing plays.
+- Actions: `ui.action.play {action, set?}` plays the action named `action` at the speed `ui.action.playbackOptions`
+  sets; `set` names the set to look in (default: every set), and a `set` that is not a string is an error. At
+  Accelerated it plays the action as one undoable batch and returns what `command.batch` returns. At Step by Step and
+  Pause For it plays the first step at once and returns `{results: [the first step's result], pending}`, where
+  `pending` counts the steps still to play; the app plays them one at a time, each as its own undo step. A name that no
+  action has, or that more than one action in the sets looked in has, or whose every step is excluded, is an error, and
+  then nothing plays. So is an action played while another is still playing at Step by Step or Pause For.
+- Actions: `ui.action.playbackOptions {speed?, seconds?}` sets how the Actions panel plays actions and returns
+  `{speed, seconds}`. `speed` is `accelerated` (the default: every step at once), `step` (one step at a time, with the
+  window drawn after each step before the next runs) or `pause` (a pause of `seconds` between steps). `seconds` is a
+  whole number from 1 to 60, VectorCraft's own range, and stays set while another speed is chosen. A param left out
+  keeps its value. Any other `speed` or `seconds` is an error, and then nothing changes. The setting is kept with the UI
+  preferences. The panel menu's Playback Options… opens the `actionPlayback` dialog (`speed`, `seconds`), whose OK runs
+  this. Batch… (`action.batch`) plays every step at once whatever the setting.
 - Actions: `ui.action.stop {}` ends the recording in progress and keeps its steps, in the action `ui.action.new` made
-  for it, else in a new action after the last action of its set, and returns `{stopped}`. With nothing recording it
-  changes nothing. The panel's Stop Playing/Recording button runs this.
+  for it, else in a new action after the last action of its set, and returns `{stopped}`. It also ends an action
+  playing at Step by Step or Pause For: the steps already played stay, and the rest do not play. With nothing
+  recording or playing it changes nothing. The panel's Stop Playing/Recording button runs this.
 - Action sets: `ui.actionSet.delete {sets?: [index], ids?: [id]}` deletes the Actions panel's sets at these indexes
   (0 is the top set) with their actions, by default the current set, and returns `{deleted}`. An index past the last
   set is an error, and then no set is deleted. `ids` holds the panel's own set ids, which its question passes: the

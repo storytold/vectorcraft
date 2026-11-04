@@ -5506,6 +5506,9 @@ mark-style	Japanese	Japanski
 	Movie Clip	Filmski klip
 @msg	name is empty	naziv je prazan
 @msg	an action is already recording	akcija se već snima
+@msg	an action is already playing	akcija se već reproducira
+@msg	speed must be accelerated, step or pause	speed mora biti accelerated, step ili pause
+@msg	seconds must be a whole number from 1 to 60	seconds mora biti cijeli broj od 1 do 60
 @msg	no such function key	nema takve funkcijske tipke
 @msg	no such color	nema takve boje
 @msg	{_1} cannot be used on Windows	{_1} se ne može koristiti na Windowsu
@@ -5675,6 +5678,11 @@ axis	Y Axis	Y osa
 	Set Options	Opcije skupa
 	Action Options…	Opcije akcije…
 	Action Options	Opcije akcije
+	Playback Options…	Opcije reprodukcije…
+	Playback Options	Opcije reprodukcije
+	Accelerated	Ubrzano
+	Step by Step	Korak po korak
+	Pause For	Pauza od
 	Rename Action	Preimenuj akciju
 	New Action…	Nova akcija…
 	New Action	Nova akcija

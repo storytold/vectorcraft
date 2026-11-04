@@ -5425,6 +5425,9 @@ lighting	Light	光源
 	Movie Clip	影片剪辑
 @msg	name is empty	名称为空
 @msg	an action is already recording	已在记录动作
+@msg	an action is already playing	已在播放动作
+@msg	speed must be accelerated, step or pause	speed 必须为 accelerated、step 或 pause
+@msg	seconds must be a whole number from 1 to 60	seconds 必须为 1 到 60 之间的整数
 @msg	no such function key	没有此功能键
 @msg	no such color	没有此颜色
 @msg	{_1} cannot be used on Windows	{_1} 在 Windows 上不能使用
@@ -5604,6 +5607,11 @@ axis	Y Axis	Y 轴
 	Set Options	组选项
 	Action Options…	动作选项…
 	Action Options	动作选项
+	Playback Options…	播放选项…
+	Playback Options	播放选项
+	Accelerated	加速
+	Step by Step	逐步
+	Pause For	暂停
 	Rename Action	重命名动作
 	New Action…	新建动作…
 	New Action	新建动作
