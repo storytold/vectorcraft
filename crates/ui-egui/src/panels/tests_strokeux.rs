@@ -243,3 +243,57 @@ fn a_spinner_step_from_a_weight_shown_as_a_preset_moves_past_it() {
     }
     assert_eq!(app.session.shown_stroke().unwrap().width, 1.0);
 }
+
+/// With objects of different weights selected the Weight field is blank, and its spinner steps
+/// from 0.25 pt as Illustrator does: up gives 0.5 pt and down gives 0 pt, for all of them.
+#[test]
+fn the_spinner_of_a_blank_weight_steps_from_a_quarter_point() {
+    use super::tests_appearance::frame_raw;
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    for (up, after) in [(true, 0.5), (false, 0.0)] {
+        let mut app = app_with_rect();
+        let a = app.session.active().unwrap().selection.objects[0];
+        let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+        run(&mut app, "stroke.set", json!({"ids": [b], "weight": 3}));
+        run(&mut app, "select.set", json!({ "ids": [a.0, b] }));
+        let t = texts(&ctx, &mut app, stroke::show);
+        let r = text_rect(&t, "Weight:");
+        let sp = ctx.global_style().spacing.item_spacing.x;
+        let pos = egui::pos2(r.right() + sp + 8.0, r.center().y + if up { -5.0 } else { 5.0 });
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        for event in [egui::Event::PointerMoved(pos), button(true), button(false)] {
+            frame_raw(&ctx, &mut app, egui::RawInput { events: vec![event], ..Default::default() }, stroke::show);
+        }
+        for id in [a.0, b] {
+            run(&mut app, "select.set", json!({ "ids": [id] }));
+            assert_eq!(app.session.shown_stroke().unwrap().width, after, "object {id}, up: {up}");
+        }
+    }
+}
+
+/// ↑/↓ in the focused blank Weight field step from 0.25 pt too, for every selected object.
+#[test]
+fn the_arrow_keys_in_a_blank_weight_step_from_a_quarter_point() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    for (key, after) in [(egui::Key::ArrowUp, 0.5), (egui::Key::ArrowDown, 0.0)] {
+        let mut app = app_with_rect();
+        let a = app.session.active().unwrap().selection.objects[0];
+        let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+        run(&mut app, "stroke.set", json!({"ids": [b], "weight": 3}));
+        run(&mut app, "select.set", json!({ "ids": [a.0, b] }));
+        let t = texts(&ctx, &mut app, stroke::show);
+        let r = text_rect(&t, "Weight:");
+        let sp = ctx.global_style().spacing.item_spacing.x;
+        // The blank field, right of the 16 px spinner.
+        click(&ctx, &mut app, egui::pos2(r.right() + 2.0 * sp + 16.0 + 30.0, r.center().y), stroke::show);
+        let press = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        frame_events(&ctx, &mut app, vec![press], stroke::show);
+        for id in [a.0, b] {
+            run(&mut app, "select.set", json!({ "ids": [id] }));
+            assert_eq!(app.session.shown_stroke().unwrap().width, after, "object {id}, {key:?}");
+        }
+    }
+}
