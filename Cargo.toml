@@ -25,10 +25,10 @@ craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.
 # The shared controls, now including the cloud Open and Save pages, the share dialog, the account
 # badge and the presence row. One revision of this crate in the graph, always: collabcraft's share
 # backend pins the same one, and two revisions are two different `ShareBackend` traits.
-craft-ui = { git = "https://github.com/wdunn001/craft-libs", rev = "6f0a6d2", features = ["serde", "cloud"] }
+craft-ui = { git = "https://github.com/wdunn001/craft-libs", rev = "1a3cbfd724bf28ccbe51a1f45f19022f131f15bb", features = ["serde", "cloud"] }
 # The vendor-neutral cloud vocabulary (a file entry, a capability, a share). Types and contracts
 # only: the crate opens no socket and names no provider, so this builds for the web too.
-craft-cloud = { git = "https://github.com/wdunn001/craft-libs", rev = "6f0a6d2" }
+craft-cloud = { git = "https://github.com/wdunn001/craft-libs", rev = "1a3cbfd724bf28ccbe51a1f45f19022f131f15bb" }
 # How this app reaches CollabCraft, which is the single place a storage provider is configured.
 # No provider credential, no provider URL and no provider protocol live in VectorCraft.
 craft-cloud-client = { git = "https://github.com/wdunn001/collab-craft", rev = "f895a6f" }
