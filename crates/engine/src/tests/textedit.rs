@@ -2677,6 +2677,39 @@ fn the_ligature_of_a_consonant_after_its_vowel_sign_is_reported() {
     assert_eq!(r["gid"], json!(g('N')), "the ligature is drawn for Ka");
 }
 
+/// Ka, the halant, Ka again and the vowel sign I are one cluster: the vowel sign drawn first, the
+/// first Ka's half form, which the font lists as an alternate of Ka, then the second Ka's default
+/// glyph. The glyph reported for the first Ka is its half form, the first of its glyphs in the
+/// cluster, not the second Ka's default glyph. The font also lists the vowel sign's glyph as an
+/// alternate of Ka; drawn for the vowel sign, it is not reported for Ka.
+#[test]
+fn the_first_of_a_characters_glyphs_in_its_cluster_is_reported() {
+    use vectorcraft_text::test_fonts::{CONJUNCT_FAMILY, conjunct_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(conjunct_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{94D}क\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": CONJUNCT_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('i'), 0, 12), (g('k'), 0, 12), (g('K'), 0, 12)], "the vowel sign, the half form, then the second Ka");
+
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('k')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('k')), "the half form is drawn for the first Ka");
+
+    let text = "क\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 200, "text": text, "size": 20, "font": CONJUNCT_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('i'), 0, 6), (g('K'), 0, 6)], "the vowel sign, then Ka");
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('K')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('K')), "Ka's default glyph, not the vowel sign's");
+}
+
 /// A character that overflows its area is shaped with its grapheme: the nukta after Ka makes the
 /// font's `nukt` ligature, which `salt` does not change, so `gid: null` reports the ligature as it
 /// does for the laid-out text.
