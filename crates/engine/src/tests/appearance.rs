@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
-use vectorcraft_doc::{AppearanceItem, Node};
+use vectorcraft_doc::{AppearanceItem, FillLayer, Node};
 
 use crate::*;
 
@@ -288,8 +288,8 @@ fn add_fill_and_stroke_copy_the_top_ones() {
     assert_eq!(node(&s, id).appearance.items.len(), 3);
 }
 
-/// With a fill row active, Add New Fill puts a copy of that row right above it and makes the copy
-/// the active row; the rows above it stay where they are.
+/// With a fill row active, Add New Fill puts a fill with that row's paint right above it and makes
+/// the new fill the active row; the rows above it stay where they are.
 #[test]
 fn add_fill_copies_the_active_fill_row_right_above_it() {
     let mut s = session();
@@ -323,10 +323,10 @@ fn add_fill_copies_the_active_fill_row_right_above_it() {
     assert_eq!(s.appearance_item(), Some(0));
 }
 
-/// The copy of the active fill row keeps the row's opacity, blend mode, visibility, overprint and
-/// effects as well as its paint.
+/// The new fill above the active fill row takes only the row's paint: the row's opacity, blend
+/// mode, visibility, overprint and effects are not copied (Duplicate Item copies those).
 #[test]
-fn add_fill_copies_the_whole_active_fill_row() {
+fn add_fill_takes_only_the_active_fill_rows_paint() {
     let mut s = session();
     let id = rect(&mut s, 100.0);
     run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
@@ -340,13 +340,13 @@ fn add_fill_copies_the_whole_active_fill_row() {
     let (AppearanceItem::Fill(row), AppearanceItem::Fill(copy)) = (&n.appearance.items[0], &n.appearance.items[1]) else {
         panic!("the first two rows are not fills")
     };
-    assert_eq!((copy.opacity, copy.blend, copy.visible, copy.overprint), (0.4, BlendMode::Multiply, false, true));
-    assert_eq!(copy.effects.len(), 1);
-    assert_eq!(copy, row);
+    assert_eq!((row.opacity, row.blend, row.visible, row.overprint), (0.4, BlendMode::Multiply, false, true));
+    assert_eq!(row.effects.len(), 1);
+    assert_eq!(copy, &FillLayer::new(row.paint.clone()));
 }
 
 /// In a mixed selection the active fill row goes above itself in the first object; an object that
-/// doesn't share that row gets a copy of its top fill on top, as without an active row.
+/// doesn't share that row gets a fill with its top fill's paint on top, as without an active row.
 #[test]
 fn add_fill_above_an_unshared_active_row_tops_the_other_objects() {
     let mut s = session();

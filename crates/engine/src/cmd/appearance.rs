@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Fill",
             ["Window", "Appearance"],
             Some("Cmd+/"),
-            "{ids?|id?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack, on an image right below its Contents row (a copy of its top fill; type without one: its characters' fill; else the default fill). With a fill row active (appearance.setActiveItem), no `ids` and no `target: \"contents\"`, the new fill is a copy of that row, right above it, and becomes the active row",
+            "{ids?|id?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack, on an image right below its Contents row, with its top fill's paint (type without one: its characters' fill; else the default fill). With a fill row active (appearance.setActiveItem), no `ids` and no `target: \"contents\"`, the new fill takes that row's paint, goes right above it, and becomes the active row; appearance.duplicateItem copies a whole row",
             has_doc,
             |s, p| add_item(s, p, true)
         ),
@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Stroke",
             ["Window", "Appearance"],
             Some("Cmd+Alt+/"),
-            "{ids?|id?, target?} add a stroke on top of each selected object's own stack, on an image right below its Contents row (a copy of its top stroke, else the default stroke)",
+            "{ids?|id?, target?} add a stroke on top of each selected object's own stack, on an image right below its Contents row, with its top stroke's paint and weight (else the default stroke)",
             has_doc,
             |s, p| add_item(s, p, false)
         ),
@@ -519,8 +519,8 @@ fn set_active_item(s: &mut Session, p: &Value) -> Result<Value> {
 fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
     let ids = require_targets(s, p, if fill { "appearance.addFill" } else { "appearance.addStroke" })?;
     let defaults = s.paint.clone();
-    // The panel's active Fill row, when the new fill goes on the selection: the new fill is a copy
-    // of that row, right above it in each target that has it (others get a copy of their top fill).
+    // The panel's active Fill row, when the new fill goes on the selection: the new fill takes that
+    // row's paint, right above it in each target that has it (others take their top fill's paint).
     // Where the new item went in on the active item's object, when it is an image.
     let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
     // The active row is a row of the active object's stack, which need not come first in `ids`
@@ -551,9 +551,9 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
         for (id, row) in ids.iter().zip(&per) {
             if let Some(n) = d.node_mut(*id) {
                 if let Some(i) = n.appearance.item_of_kind(*row, true)
-                    && let Some(row) = n.appearance.fill_at(Some(i)).cloned()
+                    && let Some(paint) = n.appearance.paint_at(Some(i), true).cloned()
                 {
-                    n.appearance.insert_item(i + 1, AppearanceItem::Fill(row));
+                    n.appearance.insert_item(i + 1, AppearanceItem::Fill(FillLayer::new(paint)));
                     if active == Some(*id) {
                         above = Some(i + 1);
                     }
