@@ -2078,6 +2078,23 @@ fn screen_readers_set_a_dialog_slider_number() {
     assert_eq!(scale(&app), 250.0, "within the range screen readers get");
     f.run(&mut app, vec![set(400.0)]);
     assert_eq!(scale(&app), 250.0, "past 250%, the range's end now");
+    // The same for a Move slider in millimeters, whose rail ends at 1000 pt: with the field at
+    // 1200 pt, 400 mm sets about 1134 pt.
+    app.ui.dialog = None;
+    app.run("document.setUnits", json!({"units": "millimeters"})).unwrap();
+    crate::menus::invoke(&mut app, "object.transformEach", json!({}));
+    app.ui.dialog.as_mut().expect("Transform Each is open").fields.insert("moveH".into(), json!(1200));
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let mut horizontal = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider && n.label() == Some("Horizontal:"));
+    let (node, _) = horizontal.nth(1).expect("the Move slider named Horizontal:");
+    let request =
+        ActionRequest { action: Action::SetValue, target_node: *node, target_tree: TreeId::ROOT, data: Some(ActionData::NumericValue(400.0)) };
+    f.run(&mut app, vec![egui::Event::AccessKitActionRequest(request)]);
+    let moved = app.ui.dialog.as_ref().expect("Transform Each is open").f64("moveH", f64::NAN);
+    assert!((moved - 400.0 * 72.0 / 25.4).abs() < 1e-6, "{moved} pt");
 }
 
 #[test]
