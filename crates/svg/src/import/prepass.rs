@@ -5,6 +5,8 @@ use super::{
     symbol_units, vector_effect,
 };
 
+mod id_styles;
+
 /// What usvg would lose, found in the XML before it runs ([`prepass`]).
 #[derive(Default)]
 pub(super) struct Found {
@@ -31,6 +33,8 @@ pub(super) struct Found {
     /// Ids of the `<circle>` and `<ellipse>` elements, which come back as the ellipse VectorCraft
     /// draws ([`drawn_ellipse`](super::convert::drawn_ellipse)).
     pub(super) ellipses: HashSet<String>,
+    /// The text importer reads styles from this SVG before tracking IDs are added.
+    pub(super) text_source: Option<String>,
     pub(super) warnings: Vec<String>,
 }
 
@@ -38,6 +42,8 @@ pub(super) struct Found {
 #[derive(Default)]
 pub(crate) struct Edits {
     list: Vec<(std::ops::Range<usize>, String)>,
+    /// These edits assign tracking IDs.
+    id_edits: Vec<(std::ops::Range<usize>, String)>,
     /// The ids made up so far, by element.
     ids: HashMap<roxmltree::NodeId, String>,
     /// The numbers `n` of the `{MADE_UP_ID}n` the file names (as an element's id, in a style
@@ -70,7 +76,13 @@ impl Edits {
         }
         let id = format!("{MADE_UP_ID}{}", self.next);
         self.next += 1;
-        self.set(svg, n, "id", &id);
+        match n.attributes().find(|a| a.name() == "id" && a.namespace().is_none()) {
+            Some(a) => self.id_edits.push((a.range_value(), id.clone())),
+            None => {
+                let at = tag_name_end(svg, n);
+                self.id_edits.push((at..at, format!(" id=\"{id}\"")));
+            }
+        }
         self.ids.insert(n.id(), id.clone());
         id
     }
@@ -98,6 +110,7 @@ impl Edits {
     /// `svg` with the edits made; overlapping ones and ranges off character boundaries are
     /// skipped.
     fn apply(mut self, svg: &str) -> Cow<'_, str> {
+        self.list.append(&mut self.id_edits);
         for (at, has_style, decls) in std::mem::take(&mut self.styles).into_values() {
             self.insert(at, if has_style { decls } else { format!(" style=\"{}\"", decls.strip_prefix(';').unwrap_or(&decls)) });
         }
@@ -149,7 +162,7 @@ fn named_made_up_ids(xml: &roxmltree::Document) -> HashSet<usize> {
 /// * so do objects with attributes in other applications' namespaces ([`foreign`]);
 /// * so do `<circle>` and `<ellipse>` elements, recorded: usvg makes their arcs into a varying
 ///   number of curves, and they come back as the ellipse VectorCraft draws (not in a file whose
-///   style sheet has an `[id` selector);
+///   style sheet has an attribute selector);
 /// * linked files are read ([`files`]);
 /// * percentage lengths in a `<symbol>` with a `viewBox` become numbers ([`symbol_units`]);
 /// * what style sheet rules with a `:not()` set goes in `style` attributes ([`not_rules`]).
@@ -157,15 +170,21 @@ fn named_made_up_ids(xml: &roxmltree::Document) -> HashSet<usize> {
 /// Whether each is there at all is read from `markers`: `svg` with its data URLs left out
 /// ([`depth::prescan`]), so an embedded picture isn't searched a dozen times. The edits are made
 /// in `svg` itself.
-pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
+pub(super) fn prepass<'s>(
+    svg: &'s str,
+    markers: &str,
+    xml: &roxmltree::Document,
+    opts: &ImportOptions,
+) -> Result<(Cow<'s, str>, Found), crate::SvgError> {
     let mut found = Found::default();
     // (`:` for prefixed elements such as `<svg:image>`.)
     let css_transform = has_css_transform(markers);
     let not = markers.contains(":not(");
     let events = SVG_EVENTS.iter().any(|e| markers.contains(e));
     let foreign_attrs = markers.contains("xmlns:") && has_foreign_attributes(xml);
-    // An id would change what a style sheet's `[id]` selector matches: such files keep usvg's curves.
-    let ellipses = !markers.contains("[id") && ["<circle", ":circle", "<ellipse", ":ellipse"].iter().any(|t| markers.contains(t));
+    let attribute_selectors =
+        xml.descendants().filter(|n| n.is_element() && n.tag_name().name() == "style").filter_map(|n| n.text()).any(|text| text.contains('['));
+    let ellipses = !attribute_selectors && ["<circle", ":circle", "<ellipse", ":ellipse"].iter().any(|t| markers.contains(t));
     if !css_transform
         && !not
         && !events
@@ -175,7 +194,7 @@ pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document
             .iter()
             .any(|t| markers.contains(t))
     {
-        return (svg.into(), found);
+        return Ok((svg.into(), found));
     }
     let mut edits = Edits::default();
     let elements = || xml.descendants().filter(|n| n.is_element());
@@ -244,7 +263,14 @@ pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document
     if css_transform {
         edits.list.extend(css_transform::rewrites(svg, xml));
     }
-    (edits.apply(svg), found)
+    if attribute_selectors && !edits.ids.is_empty() {
+        if elements().any(|n| matches!(n.tag_name().name(), "text" | "flowRoot")) {
+            let text_edits = Edits { list: edits.list.clone(), styles: edits.styles.clone(), ..Default::default() };
+            found.text_source = Some(text_edits.apply(svg).into_owned());
+        }
+        id_styles::preserve_matches(svg, xml, &mut edits, &mut found.warnings)?;
+    }
+    Ok((edits.apply(svg), found))
 }
 
 /// Is there a `transform` CSS declaration in `markers` (`transform` followed by `:`)?

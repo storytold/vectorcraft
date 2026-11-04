@@ -1301,6 +1301,7 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
     };
     let art = Node::group(NodeId(0), [instance("plain"), instance("brushed"), painted("plain"), painted("brushed")].map(std::sync::Arc::new).into());
     let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::None, ..Default::default() }) };
+    store(&mut doc, std::slice::from_ref(&b));
     let out = stroke_pieces(&doc, &b, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0));
     assert!(!out.is_empty());
     for piece in &out {
@@ -1313,6 +1314,46 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
         let fills: Vec<Paint> =
             children.iter().filter(|c| c.path_data().is_some()).filter_map(|c| c.appearance.fill().map(|f| f.paint.clone())).collect();
         assert_eq!(fills, [Paint::Pattern { pattern: "plain".into(), xf: vectorcraft_geom::Affine::IDENTITY }, Paint::None]);
+    }
+}
+
+/// A symbol instance at the root of an opacity mask is filtered like one among the children: when
+/// its symbol draws a brushed stroke the mask goes (it would run the brush again from inside the
+/// mask, without end), and a mask whose root symbol is plain stays.
+#[test]
+fn pieces_leave_out_a_mask_whose_root_draws_a_brushed_stroke() {
+    use vectorcraft_doc::{OpacityMask, Symbol};
+    let mut doc = Document::new(100.0, 100.0);
+    let mut brushed = rect_art(10.0, 4.0);
+    brushed.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("s".into()), ..stroke(1.0) }));
+    // A brush the library lacks draws a plain stroke: its mask stays.
+    let mut unresolved = rect_art(10.0, 4.0);
+    unresolved.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("missing".into()), ..stroke(1.0) }));
+    for (name, art) in [("plain", rect_art(10.0, 4.0)), ("brushed", brushed), ("unresolved", unresolved)] {
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: std::sync::Arc::new(art) });
+    }
+    let instance = |symbol: &str| Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let masked = |symbol: &str| {
+        let mut n = rect_art(10.0, 4.0);
+        n.extras_mut().mask = Some(Box::new(OpacityMask::new(instance(symbol), true)));
+        n
+    };
+    let art = Node::group(NodeId(0), [masked("plain"), masked("brushed"), masked("unresolved")].map(std::sync::Arc::new).into());
+    let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::None, ..Default::default() }) };
+    store(&mut doc, std::slice::from_ref(&b));
+    let out = stroke_pieces(&doc, &b, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0));
+    assert!(!out.is_empty());
+    for piece in &out {
+        let roots: Vec<Option<&str>> = piece
+            .children()
+            .unwrap()
+            .iter()
+            .map(|c| match c.extras().mask.as_ref().map(|m| &m.art.kind) {
+                Some(NodeKind::SymbolInstance { symbol, .. }) => Some(symbol.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(roots, [Some("plain"), None, Some("unresolved")], "the plain and unresolved masks stay and the brushed one goes");
     }
 }
 

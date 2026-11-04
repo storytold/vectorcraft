@@ -420,7 +420,10 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
 /// font; PDF, EPS, SVG, EMF, WMF and the raster formats: type that doesn't fit its frame).
 pub fn encode_with_warnings(doc: &Document, format: &str, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
     let f = super::writable(C, Some(format), None)?;
-    encode_all(doc, f.id, p)?.single(f)
+    let enc = encode_all(doc, f.id, p)?;
+    // The error for a version 7 .ai of several artboards names the legacy .ai.
+    let legacy = f.id == "ai" && super::legacy_ai::wanted(C, f, p)?;
+    enc.single(&if legacy { super::legacy_ai::named(f) } else { *f })
 }
 
 /// [`encode`], with every file the export writes.

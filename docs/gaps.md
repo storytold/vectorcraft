@@ -1,10 +1,19 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (G5: dynamic symbols, #4938; estimate 15–26 → 14–24 h) · **Target:** Adobe Illustrator 2026 (30.x; G12: Units › East Asian Type acts, with Q and Ha units; estimate unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
-**Feature evidence last updated:** 2026-10-22.
+Creating a gradient from solid or empty paint uses the document's color model for its default stops, including drawing its vector with the Gradient tool. Explicit `keepModel: true` retains RGB defaults, and existing gradients keep their own colors. Scores and estimates are unchanged.
+
+The closed font-family fields in Character, Properties and Control now accept the
+mouse wheel for selected text (#5253). Each effective notch applies one family and
+adds one undo step; the list follows saved font filters, ignores search text, and
+stops at its ends. These interaction details
+are VectorCraft's choices. Scores and estimates are unchanged.
+
+**Feature evidence last updated:** 2026-11-02.
+**Feature evidence last updated:** 2026-11-03.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
 
@@ -19,6 +28,8 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
+| 2026-11-02 | minor | Font-family fields step selected text with the mouse wheel (#5253); no scored gap or estimate reassessed. |
 | 2026-10-24 | minor | G12: General › Corner Radius is the Rounded Rectangle tool's radius, a change while the tool is active reaches it, and the radius ↑/↓ set while drawing (or a Tool Options value) becomes the preference, within 0–1296 pt (#394, `crates/engine/src/tests/constrain_tools.rs`); no entry closed, estimate unchanged. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-3; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-2; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
@@ -77,7 +88,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 - **Done:** Distance Guides ([public page](https://helpx.adobe.com/illustrator/desktop/measure-and-align/grids-and-guides/use-distance-guides-for-accurate-placement.html)): with Smart Guides on and something selected, the Selection tool with Alt/Option held over another object shows the horizontal and vertical distances between them, and over an empty part of an artboard the selection's distances from its four edges, labelled in the General unit; Preferences › Smart Guides › Invoke Distance Guides turns them off. Hover only, as documented: not while moving or nudging. No entry closed; estimates unchanged.
 
-- **Done (part of #4028):** Recolor Artwork › Assign: double-clicking a row's new color opens the Color Picker, as the [public page](https://helpx.adobe.com/illustrator/desktop/manage-colors/modify-colors/assign-new-colors-to-selected-artwork.html) describes ("double-click it and select a color in the Color Picker"). OK sets the row's new color in the model it was picked in, so a CMYK mix is no longer a hex value converted back; Cancel leaves the row. A Lab new color is kept, but can't be typed yet: the picker's Lab fields work in RGB, as for fill and stroke. **Missing:** Lab entry in the picker, swatch libraries in the picker and the row's right-click menu (Pick from Swatches, Limit to Library).
+- **Done (part of #4028):** Recolor Artwork › Assign: double-clicking a row's new color opens the Color Picker, as the [public page](https://helpx.adobe.com/illustrator/desktop/manage-colors/modify-colors/assign-new-colors-to-selected-artwork.html) describes. OK sets the row's new color in the model it was picked in, so a CMYK mix is no longer a hex value converted back; Cancel leaves the row. A Lab new color is kept, but can't be typed yet: the picker's Lab fields work in RGB, as for fill and stroke. **Missing:** Lab entry in the picker, swatch libraries in the picker and the row's right-click menu (Pick from Swatches, Limit to Library).
 
 - **Done (#3416):** Recolor Artwork Edit chips scroll to the last color while the heading, color wheel and actions stay visible. Screen resize and UI scaling, Preview, Confirm, Cancel, Undo and #1733 wheel drags are covered in `tests/recolor.rs`. No gap entry closed; estimates unchanged.
 
@@ -132,7 +143,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done (#1251):** Eyedropper source reads are independent of locks and isolation, including Shift/Shift+Alt and gradient stops. Source and selection preservation, unchanged Alt reverse/selection restrictions, hidden art and Undo/Redo have regression coverage. This addresses the reported behavior, with no new full-parity measurement.
 - **Done (#1253):** adding paint to an unpainted zero-width stroke restores the existing 1 pt default, including new-art defaults and Swap Fill/Stroke. The real Eyedropper inheritance sequence, targeted appearance items, preserved widths and Undo/Redo have regression coverage.
 - **Done:** a busy cursor while a file opens off the UI thread or a labelled background save or export runs (`Cursor::Busy` in `crates/tools/src/cursors.toml`). Heavy synchronous effect previews remain open.
-- **Done:** Average and Join in one step, with a corner or smooth choice for the joined anchor: Object › Path › Average & Join… (`path.averageJoin {to: "corner"|"smooth"}`, Cmd+Alt+Shift+J, Ctrl+Alt+Shift+J on Windows) moves the two direct-selected open path ends, or the nearest ends of two selected open paths (both ends of one, closing it), to their midpoint and joins them there in one undo step. The public [Default keyboard shortcuts](https://helpx.adobe.com/illustrator/using/default-keyboard-shortcuts.html) page lists the shortcut as "Create corner or smooth join" ("Select the paths" on Windows, "Select the anchor point" on macOS). The dialog (Points: Corner / Smooth) opens on Corner and then on the choice confirmed last in the session: VectorCraft's reading, as the page doesn't say. Inside the estimate below.
+- **Done:** Average and Join in one step, with a corner or smooth choice for the joined anchor: Object › Path › Average & Join… (`path.averageJoin {to: "corner"|"smooth"}`, Cmd+Alt+Shift+J, Ctrl+Alt+Shift+J on Windows) moves the two direct-selected open path ends, or the nearest ends of two selected open paths (both ends of one, closing it), to their midpoint and joins them there in one undo step. The public [Default keyboard shortcuts](https://helpx.adobe.com/illustrator/using/default-keyboard-shortcuts.html) page lists the shortcut as "Create corner or smooth join", with the paths selected on Windows and the anchor point selected on macOS. The dialog (Points: Corner / Smooth) opens on Corner and then on the choice confirmed last in the session: VectorCraft's reading, as the page doesn't say. Inside the estimate below.
 - **Implemented (#1760):** Effect › Warp has a shared style selector with original previews, orientation buttons and percent sliders. Existing effects retain their stack slot and target. Focused checks passed and original captures were reviewed; optional Properties integration and remembered defaults remain outside this change.
 - **Done (#2120):** Smart Guides line extension: dragging the end of a straight segment with Direct Selection or Curvature, the point snaps to the segment's own direction at any angle and the guide runs along it from the other end. Inside the estimate below.
 - **Done (#1692):** Tab in the Color Picker moves through one color model's fields before the next. Completed upstream before the layout change (#2008).
@@ -376,7 +387,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   own pixels until a document takes them in; estimate unchanged.
 - **Missing:** CJK vertical
   composition (mojikumi sets and dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
-  features beyond bidi and digit types (Character Direction, kashidas, composers), spell check with an open dictionary,
+  features beyond bidi, digit types, Character Direction and Kashidas (Middle Eastern composers, a split caret), spell check with an open dictionary,
   Touch Type, Retype, Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
   Itemized in [type-parity.md](type-parity.md).
 - **Impact:** professional typography and Japanese/Chinese publishing.
@@ -416,13 +427,16 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   the other Units preferences. The model stays in points; any length field reads `13q` or `13h` (`Ha`, `H`) with or
   without a space. Not done: no field shows in it (it waits for a source). Tests `east_asian_*` and `q_and_ha_*` in
   `crates/doc` and `crates/engine`. Estimate unchanged.
-- **Audited (2026-10-30, #394):** every Preferences dialog option but the four below is read by shipped code,
+- **Audited (2026-10-30, #394):** every Preferences dialog option but four is read by shipped code,
   by its field or its key; Highlight Alternate Glyphs (the canvas's render options), Real-time Drawing and Editing
   (tool previews wait for the commit), Show Tool Tips, Anti-aliased Artwork, Use Precise Cursors and Devices ›
-  Enable Touch Workspace and Touch Gestures included.
-- **Missing:** 4 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
-  User Interface › Open Documents As Tabs (off would open documents in floating windows; one window per
-  document is G7), Hyphenation › Default Language (hyphenation is English-only, with no per-language
+  Enable Touch Workspace and Touch Gestures included. One of the four, Open Documents As Tabs, acts now (below);
+  the other three are listed under Missing.
+- **Done:** User Interface › Open Documents As Tabs: with the box cleared, each document opened or created
+  afterwards opens in a floating window of its own (G7's Float in Window); documents already open stay where they
+  are. Estimate unchanged.
+- **Missing:** 3 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
+  Hyphenation › Default Language (hyphenation is English-only, with no per-language
   dictionaries), Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to
   disk), and Clipboard Handling › Legacy vector clipboard with its Preserve Paths / Preserve Appearance and
   Overprints choice (Illustrator's own clipboard flavour, which has no public specification). Also Properties
@@ -587,12 +601,15 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done:** View › Rulers › Change to Global / Artboard Rulers (`view.globalRulers`, Cmd+Alt+R): artboard rulers, a new document's, count from the active artboard, each artboard with its own zero point; rulers, X/Y fields and guide readouts follow the mode, which is saved with the document. Estimate unchanged.
 - **Done (#2849):** View › Rulers › Show Video Rulers (`view.videoRulers`): the rulers show and count the active artboard in video pixels from its top-left corner, a pixel as many points wide as the artboard's Video Ruler Pixel Aspect Ratio and one point tall ([public source](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/set-video-display-options-for-artboards.html)); Hide Video Rulers returns them to the General unit and the ruler origin. Shift-snapping a new guide to ruler ticks still uses the General unit's ticks. Estimate unchanged.
 - **Partial:** custom toolbars (#1759): Window › Toolbars › New Toolbar makes them, kept with the workspace they
-  were made in; Manage Toolbars (rename, copy, delete) is missing. Inside the estimate below.
+  were made in, and Window › Toolbars › Manage Toolbars renames, copies and deletes them; docking them is missing.
+  Inside the estimate below.
 - **Done (#1753):** a saved workspace keeps the width of the dock column.
 - **Done (#4135):** floating panels open in OS windows of their own on the desktop, so they can sit on another monitor; on the web and on Wayland they float inside the window.
 - **Done:** View › New View… and Edit Views… ([public source](https://helpx.adobe.com/illustrator/using/viewing-artwork.html)): a document keeps up to 25 named views (zoom, centre and rotation), saved with the file; every one is listed by name at the bottom of the View menu (`view.goto1`–`view.goto25`), and choosing one changes the current window to it. Edit Views… lists them to rename or delete, applied together on OK as one undo step (`view.saved.edit {edits}`); a file's views are checked when it opens. Estimate unchanged.
 - **Done:** Window › Arrange › Tile (`window.arrange.tile`) shows every open document in its own pane, edge to edge in the document area, and Consolidate All Windows (`window.arrange.consolidateAllWindows`) goes back to one document under its tab, on the desktop and the web. Estimate unchanged.
-- **Missing:** multiple windows and the rest of Window › Arrange (Cascade, Float in Window, Float All in Windows).
+- **Done:** Window › Arrange › Float in Window (`window.arrange.floatInWindow`), Float All in Windows (`window.arrange.floatAllInWindows`) and Cascade (`window.arrange.cascade`) move documents out of the tab strip into floating windows of their own, OS windows on the desktop and windows inside the app's window on the web and on Wayland; Cascade stacks them from the upper left to the lower right. Consolidate All Windows brings them back under the tabs. Estimate unchanged.
+- **Done:** a document tab dragged off the tab strip floats its document in a window under the pointer, and a document window dragged by its title bar (an OS window by the tab at its top) onto the tab strip goes back under the tabs. Estimate unchanged.
+- **Done (#4116):** Window › New Window (`window.newWindow`) opens another view of the current document, with its own zoom, center, rotation, artboard and Outline or Preview, as a tab titled with the view's number ("Name:2"); Tile, Cascade, Float in Window, Float All in Windows and Consolidate All Windows arrange each view as they arrange a document. Closing a view leaves the document open until its last view closes. Estimate unchanged.
 - **Estimate:** 15–25 h.
 
 ## G6 Automation and scripting
@@ -606,6 +623,18 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G15 Performance budgets and a GPU renderer
 
+- **Improved (2026-11-02):** the renderer keeps a compound path's assembled path with the node, as it keeps a plain
+  path's, instead of assembling its members again in every frame; the path is assembled into a buffer sized up front.
+  Unused geometry entries are dropped after a few frames however few there are (before, only past 1,024 entries), so
+  the copies a drag makes in every frame no longer stay alive with all their members
+  (`crates/render/src/tests/memory.rs`, `crates/doc/src/node/tests.rs`). Not timed; `vectorcraft-cli perf` not rerun.
+- **Improved (2026-11-02):** a click or hover culls paths and compound paths by the box of their control points
+  (grown by their strokes' reach) instead of measuring along their curves, and tests a compound path's outline and
+  fill against only the members whose control box, grown by the tolerance, holds the point; painted strokes are
+  still measured along the whole compound path. The same objects are hit (`crates/doc/src/hit/tests.rs`: a
+  2,000-member compound path against the whole-path test for both fill rules, Outline view and Object Selection by
+  Path Only; wide strokes past the control points). A 20,000-member compound path went from about 18 ms to about
+  1 ms a click in a debug test build (one run, not idle); `vectorcraft-cli perf` not rerun.
 - **Improved (#1257):** Craquelure, Mosaic Tiles and Stained Glass reuse squared distances during nearest-cell searches, with the original distance ordering retained near rounding/tie boundaries. A brute-force boundary regression and full-viewport pixel comparisons agree with the old result. `texture_drag_perf` reproduces a moved CMYK rounded rectangle at 190.07% and DPI 1.5; timings from a busy development machine are supporting evidence, with idle Windows drag QA still pending.
 - **Missing:** an idle-machine run of `vectorcraft-cli perf` at 50k paths (2026-10-11 at 25k paths, every budget
   met, 400% zoom 12.3 ms against 16 ms, measured; runs of 0.10.0 on Linux with 4 logical CPUs, reported in #1172
@@ -704,6 +733,9 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-02 | minor | G15: the renderer keeps a compound path's assembled path between frames and drops unused geometry entries after a few frames however few there are. Estimate unchanged. |
+| 2026-11-02 | minor | G15: hit testing culls paths and compound paths by their control points' box and tests a compound path's outline and fill against only its members near the click; the same objects are hit. Estimate unchanged. |
+| 2026-11-03 | minor | Symbol editing shows draggable 9-slice guides within the artwork (#5280). Guides outside the artwork remain unsupported. The G5 estimate remains 14–24 h. |
 | 2026-10-31 | minor | G12: Units › East Asian Type acts (#394): Q and Ha (a quarter of a millimetre each) are units that preference offers; 4 Preferences options remain stored but not acted on. Estimate unchanged. |
 | 2026-11-01 | minor | G5: dynamic symbols (#4938): Symbol Options › Symbol Type, per-instance fill, stroke, opacity and blend for objects of a dynamic symbol's art that stay linked (redefining keeps them, Break Link bakes them, Reset and Static drop them; `symbol.instance.setAppearance`, `symbol.instance.reset`; `crates/engine/src/tests/dynamic_symbols.rs`); on-canvas Direct Selection of the parts and `.ai` round trip remain. Estimate 15–26 → 14–24 h. |
 | 2026-11-01 | minor | G13: Artboard background colors in output (#4937): raster exports (a transparent background too), PDF, SVG and EPS pages, `.ai` files' PDF pages, Export for Screens and print (and its preview) draw each artboard's color behind its art, inside the artboard and in the color's own model; Export for Screens has Include Artboard Fill beside Include Bleed (on by default, remembered; `includeArtboardFill`, also on `document.export` and `file.print`); editing data keeps the color as the artboard's, and Export for Screens' document rows keep it too; estimate unchanged. |

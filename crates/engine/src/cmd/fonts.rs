@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Font",
             [],
             None,
-            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style); the type in the art of the symbols in scope changes too (all of the document's, or those the selected instances show, so every instance of them follows); text that is hidden or locked, in a hidden or locked group or layer (or group of a symbol's art), or on a locked artboard keeps its font → {runs, skipped?: the text objects left in the font, warning?: text (some text was left in its font, or the style set isn't available: its type is drawn in the family's closest style)}",
+            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style); the type in the art of the symbols in scope changes too (all of the document's, or those the selected instances show, so every instance of them follows); text that is hidden or locked, in a hidden or locked group or layer (or group of a symbol's art), or on a locked artboard keeps its font; when no run changes (text already set in the new font, or none to change), the document and its undo history stay as they are → {runs: the runs changed, skipped?: the text objects left in the font, warning?: text (some text was left in its font, or the style set isn't available: its type is drawn in the family's closest style)}",
             has_doc,
             replace
         ),
@@ -574,6 +574,16 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     let matches = |st: &vectorcraft_doc::CharStyle| {
         st.font_family.eq_ignore_ascii_case(&ff) && fs.as_ref().is_none_or(|x| st.font_style.eq_ignore_ascii_case(x))
     };
+    // The style a matching run is set in after the change, or `None` when the run doesn't match or
+    // is already set in that family and style with no version or Variable Font settings.
+    let new_style = |st: &vectorcraft_doc::CharStyle| {
+        if !matches(st) {
+            return None;
+        }
+        // An explicit style, else the closest the new family has to the old one.
+        let style = ts.clone().or_else(|| db.face(&tf, &st.font_style).map(|f| f.style.clone())).unwrap_or_else(|| st.font_style.clone());
+        (st.font_family != tf || st.font_style != style || st.font_version.is_some() || !st.font_axes.is_empty()).then_some(style)
+    };
     // Only text the Selection tool can reach changes: not hidden or locked, in a hidden or locked
     // group or layer, or on a locked artboard. The text left in the font is counted. The type in
     // the art of the symbols in scope (all of them, or those the selection shows) changes too,
@@ -589,54 +599,59 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
         (None, BTreeSet::new())
     };
     let uses = |t: &TextObject| t.runs.iter().any(|r| matches(&r.style));
-    let (ids, skipped) = {
+    // Whether a run of `t` changes.
+    let changes = |t: &TextObject| t.runs.iter().any(|r| new_style(&r.style).is_some());
+    let (ids, skipped, in_symbols) = {
         let d = &s.doc()?.doc;
         let editable = d.editable();
         let (ids, other): (Vec<NodeId>, Vec<NodeId>) = scope(s, selection_only)?.into_iter().partition(|id| editable(*id));
         let mut skipped = other.into_iter().filter(|id| text(d, *id).is_some_and(uses)).count();
-        skipped += symbol_texts(d, symbols.as_ref()).into_iter().filter(|(t, open)| !open && uses(t)).count();
+        let texts = symbol_texts(d, symbols.as_ref());
+        skipped += texts.iter().filter(|(t, open)| !open && uses(t)).count();
         if !closed.is_empty() {
             skipped += symbol_texts(d, Some(&closed)).into_iter().filter(|(t, _)| uses(t)).count();
         }
-        (ids, skipped)
+        // The text that changes: when none does, the document and its undo history stay as they are.
+        let ids: Vec<NodeId> = ids.into_iter().filter(|id| text(d, *id).is_some_and(changes)).collect();
+        let in_symbols = texts.iter().any(|(t, open)| *open && changes(t));
+        (ids, skipped, in_symbols)
     };
     // The fonts the replaced runs are set in, for the warning.
     let mut set = BTreeSet::new();
-    let n = s.edit("Replace Font", |d, _| {
-        let mut n = 0;
-        let mut replace_in = |t: &mut TextObject| {
-            let mut changed = false;
-            for r in &mut t.runs {
-                if matches(&r.style) {
-                    // An explicit style, else the closest the new family has to the old one.
-                    let style = ts
-                        .clone()
-                        .or_else(|| db.face(&tf, &r.style.font_style).map(|f| f.style.clone()))
-                        .unwrap_or_else(|| r.style.font_style.clone());
-                    r.style.font_family = tf.clone();
-                    r.style.font_style = style;
-                    // Another font: none of the old one's versions or Variable Font settings.
-                    r.style.font_version = None;
-                    r.style.font_axes.clear();
-                    set.insert(font_of(&r.style));
-                    changed = true;
-                    n += 1;
+    let n = if ids.is_empty() && !in_symbols {
+        0
+    } else {
+        s.edit("Replace Font", |d, _| {
+            let mut n = 0;
+            let mut replace_in = |t: &mut TextObject| {
+                let mut changed = false;
+                for r in &mut t.runs {
+                    if let Some(style) = new_style(&r.style) {
+                        r.style.font_family = tf.clone();
+                        r.style.font_style = style;
+                        // Another font: none of the old one's versions or Variable Font settings.
+                        r.style.font_version = None;
+                        r.style.font_axes.clear();
+                        set.insert(font_of(&r.style));
+                        changed = true;
+                        n += 1;
+                    }
+                }
+                if changed {
+                    vectorcraft_text::edit::normalize(&mut t.runs);
+                    refresh_bounds(t);
+                }
+            };
+            for id in &ids {
+                if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
+                    replace_in(t);
                 }
             }
-            if changed {
-                vectorcraft_text::edit::normalize(&mut t.runs);
-                refresh_bounds(t);
-            }
-        };
-        for id in &ids {
-            if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
-                replace_in(t);
-            }
-        }
-        edit_symbol_texts(d, symbols.as_ref(), &|t, open| open && uses(t), &mut replace_in);
-        drop(replace_in);
-        Ok(n)
-    })?;
+            edit_symbol_texts(d, symbols.as_ref(), &|t, open| open && changes(t), &mut replace_in);
+            drop(replace_in);
+            Ok(n)
+        })?
+    };
     let mut out = json!({ "runs": n });
     let mut warnings = Vec::new();
     if skipped > 0 {
@@ -912,6 +927,71 @@ mod tests {
         // A plain replacement carries no warning.
         let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Inter"}})).unwrap();
         assert_eq!(r, json!({"runs": 2}));
+    }
+
+    /// Replace Font adds no undo step when no run changes: only locked text uses the font, no text
+    /// uses it, or the text is already set in the new font and style.
+    #[test]
+    fn replace_font_that_changes_nothing_adds_no_undo_step() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let serif = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap();
+        let sans = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "Sans", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [serif]})).unwrap();
+        s.execute("object.lock", &json!({})).unwrap();
+        let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+        let before = steps(&s);
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Serif 4"}, "to": {"family": "Source Sans 3"}})).unwrap();
+        assert_eq!(r, json!({"runs": 0, "skipped": 1, "warning": REPLACE_SKIPPED}));
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Nothing Uses This"}, "to": {"family": "Source Sans 3"}})).unwrap();
+        assert_eq!(r, json!({"runs": 0}));
+        let style = text(&s.doc().unwrap().doc, NodeId(sans)).unwrap().runs[0].style.font_style.clone();
+        let r =
+            s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Source Sans 3", "style": style}})).unwrap();
+        assert_eq!(r, json!({"runs": 0}));
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Source Sans 3"}})).unwrap();
+        assert_eq!(r, json!({"runs": 0}));
+        assert_eq!(steps(&s), before);
+        // A change is still one step.
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Inter"}})).unwrap();
+        assert_eq!(r, json!({"runs": 1}));
+        assert_eq!(steps(&s), before + 1);
+        assert_eq!(text_family(&s, sans), "Inter");
+    }
+
+    /// Change and Change All add no undo step when the type in a symbol's art already has the new
+    /// font, and a change to that type is still one step.
+    #[test]
+    fn replace_font_in_symbols_that_changes_nothing_adds_no_undo_step() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Sans", "font": "Source Sans 3"})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [id]})).unwrap();
+        let mut on_layers = 0;
+        s.doc().unwrap().doc.walk(|n| on_layers += usize::from(matches!(n.kind, NodeKind::Text(_))));
+        assert_eq!(on_layers, 0, "the type is only in the symbol");
+        let family = |s: &Session| symbol_texts(&s.doc().unwrap().doc, None)[0].0.runs[0].style.font_family.clone();
+        let style = symbol_texts(&s.doc().unwrap().doc, None)[0].0.runs[0].style.font_style.clone();
+        let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+        let before = steps(&s);
+        // New Symbol selects the instance: Change (the selection) and Change All.
+        for selection_only in [true, false] {
+            for to in [json!({"family": "Source Sans 3"}), json!({"family": "Source Sans 3", "style": style})] {
+                let p = json!({"from": {"family": "Source Sans 3"}, "to": to, "selectionOnly": selection_only});
+                assert_eq!(s.execute("text.replaceFont", &p).unwrap(), json!({"runs": 0}), "{p}");
+            }
+        }
+        assert_eq!(steps(&s), before);
+        // A change is still one step, with the instance selected and without.
+        let r =
+            s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Inter"}, "selectionOnly": true})).unwrap();
+        assert_eq!(r, json!({"runs": 1}));
+        assert_eq!(steps(&s), before + 1);
+        assert_eq!(family(&s), "Inter");
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Inter"}, "to": {"family": "Source Serif 4"}})).unwrap();
+        assert_eq!(r, json!({"runs": 1}));
+        assert_eq!(steps(&s), before + 2);
+        assert_eq!(family(&s), "Source Serif 4");
     }
 
     /// The fonts of the symbols' art: Find Font lists them, and Change All replaces them, leaving

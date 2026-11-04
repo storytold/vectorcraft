@@ -1185,6 +1185,7 @@ font-technology	Variable	Variabla
 	Flip Row Order	Vänd radordning
 	Flip Vertical	Vänd lodrätt
 	Float in Window	Gör flytande i fönster
+	Float All in Windows	Gör alla flytande i fönster
 	Focal Fill	Fokal fyllning
 	Focal Stroke	Fokal kontur
 	Folder	Mapp
@@ -1667,6 +1668,8 @@ font-technology	Variable	Variabla
 	Large Thumbnail View	Stor miniatyrvy
 	Large Thumbnails	Stora miniatyrer
 	Lasso Tool	Lassoverktyg
+	Enclosing Lasso Tool	Omslutande lassoverktyg
+	Enclosing Lasso	Omslutande lasso
 	Last Effect: {name}	Senaste effekten: {name}
 	Last Effect: {}	Senaste effekten: {}
 	Last Effect…	Senaste effekten…
@@ -1804,6 +1807,7 @@ font-technology	Variable	Variabla
 	Manually	Manuellt
 	Mark as trapped	Märk som överfyllt
 	Mark Older Files as [Converted] When Opened	Märk äldre filer som [Konverterad] när de öppnas
+	Use System Defaults for Edit Original	Använd systemets standardinställningar för Redigera original
 	Marker…	Markör…
 	Marks	Märken
 	Marks and Bleed	Märken och utfall
@@ -1866,6 +1870,7 @@ font-technology	Variable	Variabla
 	Modify	Ändra
 	Mojikumi	Mojikumi
 	Insert Kashidas	Infoga kashidor
+	Kashidas	Kashidor
 	Long	Lång
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-uppsättning
@@ -2041,6 +2046,11 @@ font-technology	Variable	Variabla
 	New Toolbar	Nytt verktygsfält
 	Show Toolbar	Visa verktygsfält
 	List Toolbars	Lista verktygsfält
+	Manage Toolbars…	Hantera verktygsfält…
+	Manage Toolbars	Hantera verktygsfält
+	Rename Toolbar	Byt namn på verktygsfält
+	Duplicate Toolbar	Duplicera verktygsfält
+	Delete Toolbar	Radera verktygsfält
 	New {kind} Style…	Ny {kind}stil…
 	New…	Ny…
 	Next	Nästa
@@ -2645,6 +2655,8 @@ digits	Malayalam	Malayalam
 	Replace Spine	Ersätt ryggrad
 	Replace Symbol	Ersätt symbol
 	Replace With Font	Ersätt med typsnitt
+	Replace With Font From	Ersätt med typsnitt från
+	System	System
 	Replaces the saved preset of that name.	Ersätter den sparade förinställningen med samma namn.
 	Replace…	Ersätt…
 	Require a password to open the document	Kräv lösenord för att öppna dokumentet
@@ -3495,6 +3507,7 @@ digits	Malayalam	Malayalam
 	Use Artboards	Använd ritytor
 	Use Black Point Compensation	Använd svartpunktskompensering
 	Use Compression	Använd komprimering
+	Include Editing Data for Other Apps	Inkludera redigeringsdata för andra appar
 	Use document bleed settings	Använd dokumentets inställningar för utfall
 	Use Even-Odd Fill Rule	Använd fyllningsregeln jämn-udda
 	Use Japanese Crop Marks	Använd japanska beskärningsmärken
@@ -3900,7 +3913,7 @@ axis	Both	Båda
 @msg	Save for Web: the image is empty	Spara för webb: bilden är tom
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Spara skriver {_1}, inte {_2}: använd document.export för andra format
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Spara skriver {_1}, inte {_2}: använd file.saveAsTemplate för att skriva det
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 skriver äldre .ai-filer; en .ait-mall är alltid PDF-kompatibel
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 skriver äldre .ai-filer, inte .ait-mallar
 @msg	Saved recovery data for {title}	Sparade återställningsdata för {title}
 @msg	Saved to User Defined: {_1}	Sparat i Användardefinierat: {_1}
 @msg	Saved {path}	Sparade {path}
@@ -5518,6 +5531,11 @@ theme	Appearance	Utseende
 	Export Type:	Exporttyp:
 	Movie Clip	Filmklipp
 @msg	name is empty	namnet är tomt
+@msg	an action is already recording	en åtgärd spelas redan in
+@msg	no such function key	funktionstangenten finns inte
+@msg	no such color	färgen finns inte
+@msg	{_1} cannot be used on Windows	{_1} kan inte användas i Windows
+@msg	more than one action is named “{_1}”	fler än en åtgärd heter ”{_1}”
 @msg	no symbol named `{n}`	ingen symbol med namnet `{n}`
 	Angular	Vinkelmått
 	Away from the Line	Bort från linjen
@@ -5756,6 +5774,13 @@ axis	Y Axis	Y-axel
 	Action Options…	Alternativ för åtgärd…
 	Action Options	Alternativ för åtgärd
 	Rename Action	Byt namn på åtgärd
+	New Action…	Ny åtgärd…
+	New Action	Ny åtgärd
+	Create New Action	Skapa ny åtgärd
+	Play Action	Spela upp åtgärd
+	Action Set:	Åtgärdsuppsättning:
+	Function Key:	Funktionstangent:
+	Record	Spela in
 	Create New Set	Skapa ny uppsättning
 	Stop Global Edit	Avsluta global redigering
 	Global Edit Options	Alternativ för global redigering
@@ -6054,6 +6079,11 @@ shape	Open	Öppen
 	Horizontal Scale	Horisontell skala
 	Vertical Scale	Vertikal skala
 @msg	{label} must be a number from {min} to {max}	{label} måste vara ett tal från {min} till {max}
+	Character Color	Teckenfärg
+	OpenType Features	OpenType-funktioner
+	Stylistic Sets	Stilistiska uppsättningar
+@msg	features lists at most {max} tags	features får innehålla högst {max} taggar
+@msg	unknown OpenType feature `{t}`	okänd OpenType-funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} måste vara ett tal över 0 och högst {max}
 @msg	no character style `{name}`	Teckenformatet `{name}` hittades inte
 
@@ -6202,6 +6232,7 @@ breakText	Glyphs	Glyfer
 	Gap 5	Mellanrum 5
 
 @msg	{_1}: they came in as the page's art	{_1}: de importerades som sidans bild
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekt som ritades annorlunda än filens egen sida importerades som sidans bild: {_1}
 
 @msg	You must choose a side pattern.	Du måste välja ett sidomönster.
 @msg	invalid pattern tile choice	ogiltigt val av mönsterplatta
@@ -6307,3 +6338,14 @@ breakText	Glyphs	Glyfer
 # The strings the report listed as missing for sv.
 	Font Size:	Teckenstorlek:
 digits	Hindi	Hindi
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Textverktyg
+	Text Tweaker…	Textjustering…
+	Text Tweaker	Textjustering
+	Attribute:	Attribut:
+	From:	Från:
+	To:	Till:
+	Bow	Båge
+	Spike	Spets
+	Skip Spaces	Hoppa över mellanslag
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Teckningen är för stor för att kopieras som en bild: andra appar får ingen PNG av den

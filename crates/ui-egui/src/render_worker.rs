@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use vectorcraft_doc::Document;
+use vectorcraft_engine::file_access::ScopeHandle;
 use vectorcraft_geom::Affine;
 use vectorcraft_render::{RenderOptions, Rendered, Renderer};
 
@@ -19,6 +20,9 @@ pub struct Job {
     pub h: u32,
     pub view: Affine,
     pub opts: RenderOptions,
+    /// The automation roots in force where the job was made: the render reads linked files under
+    /// them, as it would on that thread.
+    pub scope: ScopeHandle,
 }
 
 pub struct Done {
@@ -56,7 +60,7 @@ impl Worker {
                         job = newer;
                     }
                     let t0 = crate::now_ms();
-                    let img = r.render(&job.doc, job.w, job.h, job.view, &job.opts);
+                    let img = job.scope.clone().run(|| r.render(&job.doc, job.w, job.h, job.view, &job.opts));
                     if done_tx.send(Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: crate::now_ms() - t0, moved: r.stats.moved }).is_err()
                     {
                         break;

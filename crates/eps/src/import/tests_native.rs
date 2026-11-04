@@ -824,6 +824,215 @@ fn top_level_placed_file_without_page_art_falls_back() {
     assert!(notes.iter().any(|n| n.contains("page art wasn't found")), "{notes:?}");
 }
 
+const BLACK: &str = "0 0 0 1";
+const YELLOW: &str = "0 0 1 0";
+const PAGE_CYAN: [f32; 4] = [1.0, 0.0, 0.0, 0.0];
+const PAGE_YELLOW: [f32; 4] = [0.0, 0.0, 1.0, 0.0];
+
+/// A square of 16 points at (`x`, 10) in the format's operators, painted in CMYK `cmyk`.
+fn square_16(x: u32, cmyk: &str) -> String {
+    format!("{cmyk} k\n{x} 10 m\n{} 10 L\n{} 26 L\n{x} 26 L\nf", x + 16, x + 16)
+}
+
+/// A 100 × 100 page with a square of 16 points at each (`x`, `y`, CMYK) of `squares`: at `y` 74
+/// where [`square_16`] puts the layers' squares.
+fn page_16(squares: &[(f64, f64, [f32; 4])]) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    for (i, (x, y, [c, m, ye, k])) in squares.iter().enumerate() {
+        let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(*x, *y, x + 16.0, y + 16.0));
+        let paint = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(*c, *m, *ye, *k));
+        let item = vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint));
+        let n = Node::path(d.alloc_id(), path, vectorcraft_doc::Appearance { items: vec![item], ..Default::default() });
+        d.insert(Some(layer), i, n).unwrap();
+    }
+    d
+}
+
+/// Three squares on two layers, the middle one black in the layers and cyan on the page.
+fn middle_differs() -> (String, Document) {
+    let front = format!("{}\n{}", square_16(40, BLACK), square_16(76, YELLOW));
+    let art = native(&(layer("Back", true, &square_16(4, YELLOW)) + &layer("Front", true, &front)));
+    (art, page_16(&[(4.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_CYAN), (76.0, 74.0, PAGE_YELLOW)]))
+}
+
+#[test]
+fn an_object_that_draws_differently_comes_in_as_the_page_art() {
+    let (art, page) = middle_differs();
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    assert_eq!(names(&doc), ["Back", "Front"]);
+    assert_eq!(kinds(&doc.layers[0]), ["path"]);
+    assert_eq!(kinds(&doc.layers[1]), ["group[1]", "path"]);
+    replacement_is_cyan(&doc, 1, 0);
+    let note = "objects that drew differently from the file's own page came in as its art: Front (1)";
+    assert!(notes.iter().any(|n| n == note && crate::is_loss(n)), "{notes:?}");
+    assert!(!notes.iter().any(|n| n.contains("weren't read")), "{notes:?}");
+}
+
+#[test]
+fn two_differing_objects_on_different_layers_are_both_replaced() {
+    let back = format!("{}\n{}", square_16(4, BLACK), square_16(28, YELLOW));
+    let front = format!("{}\n{}", square_16(52, YELLOW), square_16(76, BLACK));
+    let art = native(&(layer("Back", true, &back) + &layer("Front", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_CYAN), (28.0, 74.0, PAGE_YELLOW), (52.0, 74.0, PAGE_YELLOW), (76.0, 74.0, PAGE_CYAN)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    assert_eq!(names(&doc), ["Back", "Front"]);
+    assert_eq!(kinds(&doc.layers[0]), ["group[1]", "path"]);
+    assert_eq!(kinds(&doc.layers[1]), ["path", "group[1]"]);
+    replacement_is_cyan(&doc, 0, 0);
+    replacement_is_cyan(&doc, 1, 1);
+    let note = "objects that drew differently from the file's own page came in as its art: Back (1), Front (1)";
+    assert!(notes.iter().any(|n| n == note), "{notes:?}");
+}
+
+/// The text wrap options of a 2-point offset, for the object before them.
+const WRAP_OPTIONS: &str = "%_/ArtDictionary :\n%_0 /Bool (AI11TextWrapInvert) ,\n%_2 /Real (AI11TextWrapOffset) ,\n%_;\n%_\n";
+
+#[test]
+fn a_differing_wrap_object_keeps_its_wrap_options() {
+    let front = format!("{}\n{WRAP_OPTIONS}{}", square_16(40, BLACK), square_16(76, YELLOW));
+    let art = native(&(layer("Back", true, &square_16(4, YELLOW)) + &layer("Front", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_CYAN), (76.0, 74.0, PAGE_YELLOW)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    assert_eq!(kinds(&doc.layers[1]), ["group[1]", "path"]);
+    replacement_is_cyan(&doc, 1, 0);
+    let group = &doc.layers[1].children().unwrap()[0];
+    assert_eq!(group.extras().wrap, Some(vectorcraft_doc::TextWrap { offset: 2.0, invert: false }));
+}
+
+#[test]
+fn a_differing_group_holding_a_wrap_object_still_falls_back() {
+    let group = os1_group(&format!("{}\n{WRAP_OPTIONS}", square_16(40, BLACK)));
+    let front = format!("{group}\n{}", square_16(76, YELLOW));
+    let art = native(&(layer("Back", true, &square_16(4, YELLOW)) + &layer("Front", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_CYAN), (76.0, 74.0, PAGE_YELLOW)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(!notes.iter().any(|n| n.starts_with("objects that drew")), "{notes:?}");
+}
+
+#[test]
+fn a_page_that_differs_everywhere_still_comes_in_as_its_pdf_part() {
+    let front = format!("{}\n{}", square_16(40, BLACK), square_16(76, BLACK));
+    let art = native(&(layer("Back", true, &square_16(4, BLACK)) + &layer("Front", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_CYAN), (40.0, 74.0, PAGE_CYAN), (76.0, 74.0, PAGE_CYAN)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(notes.iter().any(|n| n.contains("weren't read") && n.contains("differs from the page's")), "{notes:?}");
+    assert!(!notes.iter().any(|n| n.starts_with("objects that drew")), "{notes:?}");
+}
+
+#[test]
+fn a_page_object_outside_every_layer_object_still_falls_back() {
+    let front = format!("{}\n{}", square_16(40, YELLOW), square_16(76, YELLOW));
+    let art = native(&(layer("Back", true, &square_16(4, YELLOW)) + &layer("Front", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_YELLOW), (76.0, 74.0, PAGE_YELLOW), (40.0, 20.0, PAGE_CYAN)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(notes.iter().any(|n| n.contains("differs from the page's")), "{notes:?}");
+}
+
+#[test]
+fn a_differing_object_with_live_art_inside_falls_back() {
+    // The group reaches over the square between its own two.
+    let group = os1_group(&format!("{}\n{}", square_16(4, BLACK), square_16(40, YELLOW)));
+    let front = format!("{group}\n{}\n{}", square_16(22, YELLOW), square_16(76, YELLOW));
+    let art = native(&layer("Front", true, &front));
+    let page = page_16(&[(4.0, 74.0, PAGE_CYAN), (22.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_YELLOW), (76.0, 74.0, PAGE_YELLOW)]);
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(notes.iter().any(|n| n.contains("differs from the page's")), "{notes:?}");
+}
+
+#[test]
+fn trusted_editing_data_keeps_a_differing_object() {
+    let (art, page) = middle_differs();
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, true, 1.0);
+    assert!(read, "{notes:?}");
+    assert_eq!(names(&doc), ["Back", "Front"]);
+    assert_eq!(kinds(&doc.layers[1]), ["path", "path"]);
+    assert!(notes.iter().any(|n| n.ends_with("they come from its editing data all the same")), "{notes:?}");
+    assert!(!notes.iter().any(|n| n.starts_with("objects that drew")), "{notes:?}");
+}
+
+#[test]
+fn a_differing_object_on_an_unnamed_layer_is_counted_under_its_panel_name() {
+    let front = format!("{}\n{}", square_16(40, BLACK), square_16(76, YELLOW));
+    let art = native(&(layer("Back", true, &square_16(4, YELLOW)) + &layer("", true, &front)));
+    let page = page_16(&[(4.0, 74.0, PAGE_YELLOW), (40.0, 74.0, PAGE_CYAN), (76.0, 74.0, PAGE_YELLOW)]);
+    let (_, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    let note = "objects that drew differently from the file's own page came in as its art: <Layer> (1)";
+    assert!(notes.iter().any(|n| n == note), "{notes:?}");
+}
+
+#[test]
+fn at_most_64_differing_objects_come_in_as_the_page_art() {
+    // 130 squares of 4 points, the first `black` of them black in the layers and cyan on the page.
+    let grid = |black: usize| {
+        let at = |i: usize| (4 + 7 * (i % 13) as u32, 4 + 7 * (i / 13) as u32);
+        let art: String = (0..130)
+            .map(|i| {
+                let (x, y) = at(i);
+                if i < black { format!("{BLACK} k\n{}", square_path(x, y)) } else { square(x, y) }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut page = Document::new(100.0, 100.0);
+        let layer_id = page.layers[0].id;
+        for i in 0..130 {
+            let (x, y) = at(i);
+            let (x, y) = (f64::from(x), 96.0 - f64::from(y));
+            let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, y, x + 4.0, y + 4.0));
+            let color =
+                if i < black { vectorcraft_color::Color::cmyk(1.0, 0.0, 0.0, 0.0) } else { vectorcraft_color::Color::cmyk(0.0, 0.0, 1.0, 0.0) };
+            let item = vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(color)));
+            let n = Node::path(page.alloc_id(), path, vectorcraft_doc::Appearance { items: vec![item], ..Default::default() });
+            page.insert(Some(layer_id), i, n).unwrap();
+        }
+        crate::layered_ai(&private(&native(&layer("Grid", true, &art))), page, vec![], false, false, 1.0)
+    };
+    let (_, notes, read) = grid(64);
+    assert!(read, "{notes:?}");
+    let note = "objects that drew differently from the file's own page came in as its art: Grid (64)";
+    assert!(notes.iter().any(|n| n == note), "{notes:?}");
+    let (doc, notes, read) = grid(65);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(!notes.iter().any(|n| n.starts_with("objects that drew")), "{notes:?}");
+}
+
+#[test]
+fn a_differing_object_under_the_type_of_a_text_object_that_stays_falls_back() {
+    // A black rectangle under area type whose frame reaches past it; the page draws the rectangle
+    // cyan, with the type on it.
+    let big = format!("{BLACK} k\n10 2 m\n60 2 L\n60 40 L\n10 40 L\nf");
+    let doc = document_of(&[area_frame(34.0, 26.0, 95.0, 38.0)], &[story("Hi\\r", &[0], "/0 0", "/1 8.0")]);
+    let art = native_with_text(&(layer("Art", true, &format!("{big}\n{}", frame_object(0, 0))) + &layer("Top", true, &square_16(76, YELLOW))), &doc);
+    let mut page = page_16(&[(76.0, 74.0, PAGE_YELLOW)]);
+    let layer_id = page.layers[0].id;
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 60.0, 60.0, 98.0));
+    let paint = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    let item = vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint));
+    let square = Node::path(page.alloc_id(), path, vectorcraft_doc::Appearance { items: vec![item], ..Default::default() });
+    page.insert(Some(layer_id), 0, square).unwrap();
+    let style = vectorcraft_doc::CharStyle { size: 8.0, ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(34.0, 69.0), "Hi", style);
+    let text = Node::new(page.alloc_id(), NodeKind::Text(Box::new(text)));
+    page.insert(Some(layer_id), 1, text).unwrap();
+    let (doc, notes, read) = crate::layered_ai(&private(&art), page, vec![], false, false, 1.0);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+    assert!(!notes.iter().any(|n| n.starts_with("objects that drew")), "{notes:?}");
+}
+
 #[test]
 fn unread_object_on_second_artboard_takes_second_page_art() {
     let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
@@ -2175,6 +2384,286 @@ fn type_of_the_page_with_the_letters_of_two_made_types_where_it_lies_is_their_ty
     assert!(!r.warnings.iter().any(|w| w.contains("doesn't draw") || w.contains("with another's")), "{:?}", r.warnings);
 }
 
+/// A box from (`x0`, `y0`) to (`x1`, `y1`) in the format's operators, filled yellow.
+fn filled_box(x0: u32, y0: u32, x1: u32, y1: u32) -> String {
+    format!("0 0 1 0 k\n{x0} {y0} m\n{x1} {y0} L\n{x1} {y1} L\n{x0} {y1} L\nf\n")
+}
+
+/// The type in a drawn look (`1 /FreeUndo`): a story of another text document.
+const LOOK_TYPE: &str = "/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n";
+
+/// The text of each text object in `n`, and whether it is in a group whose box is `around`.
+fn texts_in(n: &Node, around: (f64, f64), out: &mut Vec<(String, bool)>) {
+    for c in n.children().into_iter().flatten() {
+        match &c.kind {
+            NodeKind::Text(t) => {
+                let inside = n.visual_bounds().is_some_and(|b| (b.x0 - around.0).abs() < 0.5 && (b.y0 - around.1).abs() < 7.0);
+                out.push((t.plain_text(), inside));
+            }
+            _ => texts_in(c, around, out),
+        }
+    }
+}
+
+#[test]
+fn a_copy_that_a_layers_look_draws_takes_the_pages_type_of_that_copy() {
+    // GUARDS: type in a copy that a layer's or group's look draws had no text object, so the page's
+    // type was dealt by painting order into other groups, and the copy had none.
+    // The look: a group with a copy of a box and its type, 50 to the right of the box itself.
+    let look = format!("0 Ae\nu\nu\n{LOOK_TYPE}{}U\nU\n", filled_box(60, 10, 90, 20));
+    let original = format!("0 Ae\nu\n{}{}U\n", text_object(0), filled_box(10, 10, 40, 20));
+    let art = native(&(layer("Art", true, &format!("{look}{original}")) + &layer("Words", true, &text_object(1))));
+    let page = "0 0 1 0 setcmykcolor 60 10 moveto 90 10 lineto 90 20 lineto 60 20 lineto closepath fill \
+        10 10 moveto 40 10 lineto 40 20 lineto 10 20 lineto closepath fill \
+        0 0 0 1 setcmykcolor /Helvetica findfont 6 scalefont setfont 61 12 moveto (Copy) show 11 12 moveto (Box) show 10 80 moveto (Other) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+    // Art y 10..20 is 80..90 down the page.
+    let mut texts = vec![];
+    texts_in(&r.document.layers[0], (60.0, 80.0), &mut texts);
+    assert_eq!(texts, [("Copy".to_string(), true), ("Box".to_string(), false)], "{:?}", r.warnings);
+    assert_eq!(text_of(&r.document.layers[1]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Other"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("order the page paints")), "{:?}", r.warnings);
+}
+
+/// A `.ai` whose page (its PDF part) has a yellow box from (10, 70) to (50, 90), and the type
+/// `text` at (12, 84) when there is one.
+fn pdf_box_with_type(text: Option<&str>) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    let layer_id = d.layers[0].id;
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 70.0, 50.0, 90.0));
+    let paint = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 0.0, 1.0, 0.0));
+    let item = vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint));
+    let square = Node::path(d.alloc_id(), path, vectorcraft_doc::Appearance { items: vec![item], ..Default::default() });
+    d.insert(Some(layer_id), 0, square).unwrap();
+    if let Some(text) = text {
+        let style = vectorcraft_doc::CharStyle { size: 6.0, ..Default::default() };
+        let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(12.0, 84.0), text, style);
+        let id = d.alloc_id();
+        d.insert(Some(layer_id), 1, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
+    }
+    d
+}
+
+#[test]
+fn a_copy_that_a_look_draws_in_an_ai_file_takes_the_type_of_its_pdf_part() {
+    let look = format!("0 Ae\nu\nu\n{LOOK_TYPE}{}U\nU\n", filled_box(10, 10, 50, 30));
+    let art = native(&layer("Art", true, &look));
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf_box_with_type(Some("Copy")), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    let mut texts = vec![];
+    texts_in(&d.layers[0], (10.0, 70.0), &mut texts);
+    assert_eq!(texts, [("Copy".to_string(), true)], "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("left out") || w.contains("order the page paints")), "{w:?}");
+    // With its type asked for as outlines, the copy has no type to hold, and the layers still come in.
+    let (d, w, read) = crate::layered_ai(&private(&art), pdf_box_with_type(None), vec![], true, false, 1.0);
+    assert!(read, "{w:?}");
+    assert!(all_texts(&d).is_empty(), "{w:?}");
+}
+
+#[test]
+fn the_pages_type_beside_a_copys_art_goes_by_painting_order() {
+    // The copy's box is that of its art: type beside it, not in it, goes to the other layer's text
+    // object, by painting order.
+    let look = format!("0 Ae\nu\nu\n{LOOK_TYPE}{}U\nU\n", filled_box(10, 10, 50, 30));
+    let art = native(&(layer("Art", true, &look) + &layer("Words", true, "/AI11Text :\n0 /FreeUndo ,\n;\n")));
+    let page = "0 0 1 0 setcmykcolor 10 10 moveto 50 10 lineto 50 30 lineto 10 30 lineto closepath fill \
+        0 0 0 1 setcmykcolor /Helvetica findfont 6 scalefont setfont 70 15 moveto (Beside) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+    assert!(text_of(&r.document.layers[0]).is_empty() && all_texts(&r.document) == ["Beside"], "{:?}", r.warnings);
+    assert_eq!(text_of(&r.document.layers[1]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Beside"], "{:?}", r.warnings);
+}
+
+#[test]
+fn a_copy_in_the_place_of_made_type_with_its_words_takes_none_of_it() {
+    // A copy that a layer's look draws where made type draws, and the page's type there once, with
+    // the made type's words: that type is the made type as the page draws it, not the copy's.
+    let doc = text_document(&[("Other\r", 0, (8201.5, 8231.5), (0.0, 0.0), 0.0)]);
+    let look = format!("0 Ae\nu\nu\n{LOOK_TYPE}{}U\nU\n", filled_box(56, 4, 100, 30));
+    let art = native_with_text(&(layer("Art", true, &look) + &layer("Words", true, &text_object(0))), &doc);
+    let page = "0 0 1 0 setcmykcolor 56 4 moveto 100 4 lineto 100 30 lineto 56 30 lineto closepath fill \
+        0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 60 10 moveto (Other) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+    assert_eq!(all_texts(&r.document), ["Other"], "{:?}", r.warnings);
+    assert_eq!(text_of(&r.document.layers[1]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Other"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("left out")), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_text_object_beside_a_copys_type_keeps_the_pages_type() {
+    // A group with type that a look draws and a text object of its own whose story isn't read: the
+    // page's type there goes to both by painting order, and to the text object when there is only
+    // one.
+    let group = format!("u\n{LOOK_TYPE}/AI11Text :\n0 /FreeUndo ,\n;\n{}U\n", filled_box(10, 10, 50, 30));
+    let art = native(&layer("Art", true, &group));
+    let page = "0 0 1 0 setcmykcolor 10 10 moveto 50 10 lineto 50 30 lineto 10 30 lineto closepath fill \
+        0 0 0 1 setcmykcolor /Helvetica findfont 6 scalefont setfont 12 22 moveto (Copy) show 12 15 moveto (Own) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let mut texts = vec![];
+    texts_in(&r.document.layers[0], (10.0, 70.0), &mut texts);
+    assert_eq!(texts, [("Copy".to_string(), true), ("Own".to_string(), true)], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("left out") || w.contains("order the page paints")), "{:?}", r.warnings);
+    let page = page.replace("12 22 moveto (Copy) show ", "");
+    let r = import(&eps(&page, &art)).unwrap();
+    let group = &r.document.layers[0].children().unwrap()[0];
+    assert_eq!(kinds(group), ["text", "path"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("left out") || w.contains("order the page paints")), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_copy_takes_no_more_of_the_pages_type_than_it_has_text_objects() {
+    // A copy with one text object, and a text object on another layer over it: the page's type there
+    // goes one to each, by painting order.
+    let look = format!("0 Ae\nu\nu\n{LOOK_TYPE}{}U\nU\n", filled_box(10, 10, 50, 30));
+    let art = native(&(layer("Art", true, &look) + &layer("Words", true, "/AI11Text :\n0 /FreeUndo ,\n;\n")));
+    let page = "0 0 1 0 setcmykcolor 10 10 moveto 50 10 lineto 50 30 lineto 10 30 lineto closepath fill \
+        0 0 0 1 setcmykcolor /Helvetica findfont 6 scalefont setfont 12 22 moveto (Copy) show 12 15 moveto (Over) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+    let mut texts = vec![];
+    texts_in(&r.document.layers[0], (10.0, 70.0), &mut texts);
+    assert_eq!(texts, [("Copy".to_string(), true)], "{:?}", r.warnings);
+    assert_eq!(text_of(&r.document.layers[1]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Over"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("left out") || w.contains("order the page paints")), "{:?}", r.warnings);
+    // With the other layer below, the page paints its type first.
+    let art = native(&(layer("Words", true, "/AI11Text :\n0 /FreeUndo ,\n;\n") + &layer("Art", true, &look)));
+    let page = page.replace("(Copy) show 12 15 moveto (Over)", "(Over) show 12 15 moveto (Copy)");
+    let r = import(&eps(&page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Words", "Art"], "{:?}", r.warnings);
+    let mut texts = vec![];
+    texts_in(&r.document.layers[1], (10.0, 70.0), &mut texts);
+    assert_eq!(texts, [("Copy".to_string(), true)], "{:?}", r.warnings);
+    assert_eq!(text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Over"], "{:?}", r.warnings);
+    // With a layer below and one above, the copy's type is the middle one.
+    let words = |name: &str| layer(name, true, "/AI11Text :\n0 /FreeUndo ,\n;\n");
+    let art = native(&(words("Below") + &layer("Art", true, &look) + &words("Above")));
+    let page = page.replace("12 15 moveto (Copy) show", "12 15 moveto (Copy) show 12 12 moveto (Top) show");
+    let r = import(&eps(&page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Below", "Art", "Above"], "{:?}", r.warnings);
+    let mut texts = vec![];
+    texts_in(&r.document.layers[1], (10.0, 70.0), &mut texts);
+    assert_eq!(texts, [("Copy".to_string(), true)], "{:?}", r.warnings);
+    let of = |l: usize| text_of(&r.document.layers[l]).iter().map(|t| t.plain_text()).collect::<Vec<_>>();
+    assert_eq!((of(0), of(2)), (vec!["Over".to_string()], vec!["Top".to_string()]), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_copy_takes_all_its_lines_when_every_other_text_object_is_made() {
+    // The page draws the copy's type as two text objects (two lines); the text object on the other
+    // layer is made from the text document.
+    let doc = text_document(&[("Other\r", 0, (8201.5, 8231.5), (0.0, 0.0), 0.0)]);
+    let look = format!("0 Ae\nu\nu\n{LOOK_TYPE}{}U\nU\n", filled_box(10, 40, 50, 70));
+    let art = native_with_text(&(layer("Art", true, &look) + &layer("Words", true, &text_object(0))), &doc);
+    let page = "0 0 1 0 setcmykcolor 10 40 moveto 50 40 lineto 50 70 lineto 10 70 lineto closepath fill \
+        0 0 0 1 setcmykcolor /Helvetica findfont 6 scalefont setfont 12 60 moveto (One) show 12 50 moveto (Two) show \
+        /Helvetica findfont 14 scalefont setfont 60 10 moveto (Other) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+    let mut texts = vec![];
+    // Art y 40..70 is 30..60 down the page.
+    texts_in(&r.document.layers[0], (10.0, 30.0), &mut texts);
+    assert_eq!(texts, [("One".to_string(), true), ("Two".to_string(), true)], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("left out")), "{:?}", r.warnings);
+    // The same with a text object elsewhere whose story isn't read, and its type on the page.
+    let art = native(&(layer("Art", true, &look) + &layer("Words", true, "/AI11Text :\n0 /FreeUndo ,\n;\n")));
+    let r = import(&eps(page, &art)).unwrap();
+    let mut texts = vec![];
+    texts_in(&r.document.layers[0], (10.0, 30.0), &mut texts);
+    assert_eq!(texts, [("One".to_string(), true), ("Two".to_string(), true)], "{:?}", r.warnings);
+    assert_eq!(text_of(&r.document.layers[1]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Other"], "{:?}", r.warnings);
+}
+
+#[test]
+fn copies_in_the_same_place_take_the_pages_type_by_painting_order() {
+    let copy = format!("u\n{LOOK_TYPE}{}U\n", filled_box(10, 10, 50, 30));
+    let art = native(&layer("Art", true, &format!("0 Ae\nu\n{copy}{copy}U\n")));
+    let page = "0 0 1 0 setcmykcolor 10 10 moveto 50 10 lineto 50 30 lineto 10 30 lineto closepath fill \
+        0 0 0 1 setcmykcolor /Helvetica findfont 6 scalefont setfont 12 22 moveto (One) show 12 15 moveto (Two) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let look = &r.document.layers[0].children().unwrap()[0];
+    let texts: Vec<Vec<String>> = look.children().unwrap().iter().map(|g| text_of(g).iter().map(|t| t.plain_text()).collect()).collect();
+    assert_eq!(texts, [["One"], ["Two"]], "{:?}", r.warnings);
+}
+
+#[test]
+fn overlapping_copies_that_a_look_draws_each_take_their_own_type() {
+    // Two copies whose boxes overlap (10..50 and 30..60 across), and a third that draws only type,
+    // in a group with a box of its own (10..90 across, 60..80 up).
+    let a = format!("u\n{LOOK_TYPE}{}U\n", filled_box(10, 10, 50, 30));
+    let b = format!("u\n{LOOK_TYPE}{}U\n", filled_box(30, 10, 60, 30));
+    let only_type = format!("u\n{}u\n{LOOK_TYPE}U\nU\n", filled_box(10, 60, 90, 80));
+    let art = native(&layer("Art", true, &format!("0 Ae\nu\n{a}{b}{only_type}U\n")));
+    let page = "0 0 1 0 setcmykcolor 10 10 moveto 50 10 lineto 50 30 lineto 10 30 lineto closepath fill \
+        30 10 moveto 60 10 lineto 60 30 lineto 30 30 lineto closepath fill \
+        10 60 moveto 90 60 lineto 90 80 lineto 10 80 lineto closepath fill \
+        0 0 0 1 setcmykcolor /Helvetica findfont 6 scalefont setfont 12 15 moveto (Aye) show 34 15 moveto (Bee) show 20 70 moveto (Sea) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    // Art x 10 and 30 at y 10..30 are 70..90 down the page; the third copy's type is alone in its
+    // group, at x 20 and about 26 down.
+    for (around, text) in [((10.0, 70.0), "Aye"), ((30.0, 70.0), "Bee"), ((20.0, 26.0), "Sea")] {
+        let mut texts = vec![];
+        texts_in(&r.document.layers[0], around, &mut texts);
+        let inside: Vec<&str> = texts.iter().filter(|(_, i)| *i).map(|(t, _)| t.as_str()).collect();
+        assert_eq!(inside, [text], "{texts:?} {:?}", r.warnings);
+    }
+    assert!(!r.warnings.iter().any(|w| w.contains("left out") || w.contains("order the page paints")), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_copy_over_made_type_takes_the_pages_type_with_other_words() {
+    // Made type at (60, 10), and a copy that a layer's look draws over it, whose type has other words.
+    let doc = text_document(&[("Other\r", 0, (8201.5, 8231.5), (0.0, 0.0), 0.0)]);
+    let look = format!("0 Ae\nu\nu\n{LOOK_TYPE}{}U\nU\n", filled_box(56, 4, 100, 30));
+    let art = native_with_text(&(layer("Art", true, &look) + &layer("Words", true, &text_object(0))), &doc);
+    let page = "0 0 1 0 setcmykcolor 56 4 moveto 100 4 lineto 100 30 lineto 56 30 lineto closepath fill \
+        0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 60 10 moveto (Other) show 60 12 moveto (Copy) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+    let mut texts = vec![];
+    // Art y 4..30 is 70..96 down the page.
+    texts_in(&r.document.layers[0], (56.0, 70.0), &mut texts);
+    assert_eq!(texts, [("Copy".to_string(), true)], "{:?}", r.warnings);
+    assert_eq!(text_of(&r.document.layers[1]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Other"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("left out")), "{:?}", r.warnings);
+}
+
+#[test]
+fn copies_that_a_groups_look_draws_take_the_pages_type_beside_made_type() {
+    // A group whose style isn't read keeps its drawn look: the box and a copy of it 50 down and to
+    // the left, each with its type. The group itself follows on `%_` lines. Type on another layer
+    // is made from the text document.
+    let doc = text_document(&[("Box\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Other\r", 0, (8201.5, 8231.5), (0.0, 0.0), 0.0)]);
+    let look = format!("0 Ae\nu\nu\n{LOOK_TYPE}{}U\nu\n{LOOK_TYPE}{}U\nU\n", filled_box(54, 56, 100, 80), filled_box(4, 6, 50, 30));
+    let own: String = format!("u\n{}{}U\n", text_object(0), filled_box(54, 56, 100, 80)).lines().map(|l| format!("%_{l}\n")).collect();
+    let art = native_with_text(&(layer("Art", true, &format!("{look}{own}1 (Shadow) XW\n")) + &layer("Words", true, &text_object(1))), &doc);
+    let page = "0 0 1 0 setcmykcolor 54 56 moveto 100 56 lineto 100 80 lineto 54 80 lineto closepath fill \
+        4 6 moveto 50 6 lineto 50 30 lineto 4 30 lineto closepath fill \
+        0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Box) show 8.5 11.5 moveto (Box) show 60 10 moveto (Other) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Words"], "{:?}", r.warnings);
+    // Art y 6..30 is 70..94 down the page; y 56..80 is 20..44.
+    let mut texts = vec![];
+    texts_in(&r.document.layers[0], (4.0, 70.0), &mut texts);
+    assert_eq!(texts, [("Box".to_string(), false), ("Box".to_string(), true)], "{:?}", r.warnings);
+    let mut texts = vec![];
+    texts_in(&r.document.layers[0], (54.0, 20.0), &mut texts);
+    assert_eq!(texts, [("Box".to_string(), true), ("Box".to_string(), false)], "{:?}", r.warnings);
+    assert_eq!(text_of(&r.document.layers[1]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Other"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("left out") || w.contains("order the page paints")), "{:?}", r.warnings);
+    // Without a page, the copies have no type to take, and their text objects aren't ones that
+    // couldn't be read.
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    let mut texts = vec![];
+    texts_in(&d.layers[0], (4.0, 70.0), &mut texts);
+    assert!(texts.is_empty(), "{texts:?} {notes:?}");
+    assert_eq!(text_of(&d.layers[1]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Other"], "{notes:?}");
+    assert!(!notes.iter().any(|n| n.contains("left out")), "{notes:?}");
+}
+
 /// The file's text document is trusted where the page has type where it lays type out, whatever
 /// letters that type has: the type is the text document's, and the difference is noted as type.
 /// The page's type with other words is left out, with a note that is a loss.
@@ -3456,6 +3945,59 @@ fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
     let page = "0 0 1 0 setcmykcolor 54 56 moveto 100 56 lineto 100 80 lineto 54 80 lineto closepath fill";
     let r = import(&eps(page, &art)).unwrap();
     assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    check(&r.document, &r.warnings);
+}
+
+/// An art style section with style `Add`: Effect › Pathfinder › Add in the object's chain, over a
+/// fill and stroke that paint nothing.
+fn pathfinder_add_style() -> String {
+    let basic = |name: &str, body: &str| {
+        format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n")
+    };
+    let compound = |name: &str, kids: &[String]| format!("/CompoundFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+    let add = basic(
+        "Adobe Pathfinder",
+        "0 /Bool (RemovePoints) ,\n0.5 /Real (Mix) ,\n1 /Bool (ConvertCustom) ,\n0 /Int (Command) ,\n1 /Real (TrapMaxTint) ,\n1 /Real (TrapAspect) ,\n\
+         0.4 /Real (TrapTint) ,\n0.25 /Real (TrapThickness) ,\n0 /Bool (TrapReverse) ,\n10 /Real (Precision) ,\n0 /Bool (TrapConvertCustom) ,\n\
+         0.05 /Real (TrapTintTolerance) ,\n1 /Bool (ExtractUnpainted) ,\n",
+    );
+    let stack = compound(
+        "Stack Style Filter",
+        &[
+            basic("Stroke Style Filter", "/StrokeStyle : 0 1 0 0 0 Xy\n0 0 Xd\n/Def ;\n (StrokeStyle) ,\n"),
+            basic("Conduit Filter", ""),
+            basic("Fill Style Filter", "/FillStyle : 0 1 0 0 0 Xy\n0 0 Xd\n/Def ;\n (FillStyle) ,\n"),
+        ],
+    );
+    format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Add) /Name ,\n/ActiveStyle :\n{}%AI9_EndArtStyles\n", compound("Chain Style Filter", &[add, stack]))
+}
+
+#[test]
+fn type_in_a_group_with_a_pathfinder_effect_stays_type() {
+    // GUARDS: the group's style was not read, and the group came in as its drawn look, the type's
+    // outlines and the square, which can't be retyped.
+    let doc = text_document(&[("Hi\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    // The look: the square, and the area round where the type lies (its anchor is at (58.5, 61.5)),
+    // in the square's yellow.
+    let drawing = "0 0 1 0 k\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let look = format!("u\n{}\n{drawing}\nU\n9 () XW\n", square(10, 10));
+    let own: String = format!("0 Ae\nu\n{}{}\nU\n", text_object(0), square(10, 10)).lines().map(|l| format!("%_{l}\n")).collect();
+    let art = native_with_text(&(pathfinder_add_style() + &layer("Art", true, &format!("{look}{own}1 (Add) XW\n"))), &doc);
+    let check = |d: &Document, notes: &[String]| {
+        assert_eq!(kinds(&d.layers[0]), ["group[2]"], "{notes:?}");
+        let group = &d.layers[0].children().unwrap()[0];
+        let mut kinds = kinds(group);
+        kinds.sort_unstable();
+        assert_eq!(kinds, ["path", "text"], "{notes:?}");
+        assert_eq!(text_of(group).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"]);
+        let effects: Vec<_> = group.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(effects, ["pathfinder.add"], "{notes:?}");
+        assert!(!notes.iter().any(|w| w.contains("drawn look")), "{notes:?}");
+    };
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    check(&d, &notes);
+    let page = format!("{}\n0 0 1 0 setcmykcolor 54 56 moveto 100 56 lineto 100 80 lineto 54 80 lineto closepath fill", page_square(10, 10));
+    let r = import(&eps(&page, &art)).unwrap();
     check(&r.document, &r.warnings);
 }
 

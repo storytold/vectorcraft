@@ -1148,6 +1148,37 @@ fn character_direction_is_a_character_attribute_saved_only_when_set() {
     assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style).get("charDirection"), Some(&serde_json::Value::Null));
 }
 
+/// The Character-menu switch is on for new and old text, and changing a selected range leaves
+/// its neighbors alone. The paragraph's Insert Kashidas length is a separate setting.
+#[test]
+fn character_kashidas_default_on_and_round_trip_by_range() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "كتب محمد"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert!(runs(&s)[0].style.kashidas);
+    let old = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(old.get("kashidas").is_none());
+    assert!(serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().kashidas);
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 6, "kashidas": false})).unwrap();
+    assert_eq!(runs(&s).iter().map(|r| r.style.kashidas).collect::<Vec<_>>(), [true, false, true]);
+    let err = s.execute("text.setRangeStyle", &json!({"id": id, "kashidas": "off"})).unwrap_err().to_string();
+    assert!(err.contains("kashidas"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.kashidas));
+    s.execute("edit.redo", &json!({})).unwrap();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(), [true, false, true]);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"kashidas": true})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.kashidas));
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style)["kashidas"], true);
+}
+
 /// Proportional Metrics (#966): a character attribute, saved only when on.
 #[test]
 fn proportional_metrics_is_a_character_attribute_saved_only_when_on() {

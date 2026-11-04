@@ -51,8 +51,8 @@ mod tool;
 use plain::char_range_to_bytes;
 use plain::common_affixes;
 pub use plain::step_key;
-pub(crate) use ports::port_at;
 pub use ports::{PORT_RISE_PX, PORTS_MAX, Port, PortMarks, PortState, port_centre, port_states, ported, ports_shown, push_port, thread_ports};
+pub(crate) use ports::{port_at, port_near};
 
 /// Which of the Type tools this is.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -189,6 +189,8 @@ pub struct TypeTool {
     snap: DrawSnap,
     /// The press landed in the edited text: dragging selects.
     selecting: bool,
+    /// This saves the edit target, caret, and anchor until the press ends.
+    before_press: Option<BeforePress>,
     /// Click counting for double/triple click (position of the last click, count).
     clicks: (Option<Point>, u8),
     /// Styled copy of the last copied range (pasting the same plain text keeps its styles).
@@ -206,6 +208,13 @@ pub struct TypeTool {
     /// The state at the start of each `command.batch` still running, innermost last.
     batches: Vec<HistoryState>,
     cache: Mutex<Option<CachedLayout>>,
+}
+
+struct BeforePress {
+    editing: Option<NodeId>,
+    fresh: Option<NodeId>,
+    caret: usize,
+    anchor: usize,
 }
 
 impl TypeTool {

@@ -5,6 +5,7 @@ use super::ruby::ruby_layout;
 use super::vertical::{EM_CENTER, QUARTER_TURN, align_vertically, finish_bounds};
 use super::{
     Affine, BezPath, CharStyle, Ctx, FontDb, LayoutOptions, OtFeatures, Point, Rect, Shape, TextKind, TextLayout, TextObject, VerticalAlign,
+    keep_lone_ligature_carets,
 };
 
 /// Lay out a text object into text-space glyph outlines (default [`LayoutOptions`]).
@@ -326,6 +327,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         cx.out.vertical = true;
         cx.out.line_xf = line_xf;
     }
+    keep_lone_ligature_carets(&mut cx.out.glyphs);
     finish_bounds(&mut cx.out);
     cx.out
 }

@@ -121,6 +121,10 @@ pub(crate) fn slot_frame(name: Option<&str>) -> usize {
     name.and_then(|n| n.strip_prefix(TEXT_SLOT)).and_then(|rest| rest.split_once(':')).and_then(|(_, f)| f.parse().ok()).unwrap_or(0)
 }
 
+/// The name of the text slot for type that a look draws (`1 /FreeUndo`): [`TEXT_SLOT`] with no
+/// story, as [`slot_of`] reads it.
+pub(crate) const LOOK_SLOT: &str = "\u{0}text:look";
+
 /// The artboards (names, and rects in art space) of the editing data `data` that [`read`] can't
 /// read as a whole, as far as it gets: where to put the pages of its PDF part instead, and what to
 /// call them (#1068).
@@ -661,11 +665,15 @@ impl<'a> Reader<'a> {
         // of a default swatch of that name when the file has no palette of its own (a reserved name
         // in brackets, such as `[None]`, keeps its swatch).
         let mut defined = std::collections::HashSet::new();
+        // The swatch names there are, looked up rather than scanned for each name a file defines
+        // (`Document::swatch` also knows the registration colour).
+        let mut have: std::collections::HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).collect();
+        have.insert(vectorcraft_color::swatch::REGISTRATION.to_string());
         let colors = self.spots.iter().chain(&self.stop_spots).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
         for (n, spot) in colors {
             let first = defined.insert(n.name.clone());
             let swatch = Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot };
-            if doc.swatch(&n.name).is_none() {
+            if have.insert(n.name.clone()) {
                 doc.swatches.push(swatch);
             } else if first
                 && !own_palette
@@ -679,7 +687,7 @@ impl<'a> Reader<'a> {
             doc.metadata.author = author;
         }
         for name in doc.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>() {
-            if doc.swatch(&name).is_none() {
+            if have.insert(name.clone()) {
                 doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
             }
         }
@@ -719,6 +727,7 @@ impl<'a> Reader<'a> {
             placed_elsewhere: self.placed_elsewhere,
             envelopes_drawn: self.envelopes_drawn,
             styles_read,
+            canvas_scale: self.canvas_scale,
             warnings,
         })
     }

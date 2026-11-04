@@ -1179,6 +1179,7 @@ font-technology	Variable	Değişken
 	Flip Row Order	Satır Sırasını Çevir
 	Flip Vertical	Dikey Çevir
 	Float in Window	Pencerede Yüzer Yap
+	Float All in Windows	Tümünü Pencerelerde Yüzer Yap
 	Focal Fill	Odak Dolgusu
 	Focal Stroke	Odak Konturu
 	Folder	Klasör
@@ -1549,6 +1550,8 @@ font-technology	Variable	Değişken
 	Large Thumbnail View	Büyük Küçük Resim Görünümü
 	Large Thumbnails	Büyük Küçük Resimler
 	Lasso Tool	Kement Aracı
+	Enclosing Lasso Tool	Çevreleyen Kement Aracı
+	Enclosing Lasso	Çevreleyen Kement
 	Last Effect: {name}	Son Etki: {name}
 	Last Effect: {}	Son Etki: {}
 	Last Effect…	Son Etki…
@@ -1698,6 +1701,7 @@ font-technology	Variable	Değişken
 	Manually	Manuel olarak
 	Mark as trapped	Sıkışmış olarak işaretle
 	Mark Older Files as [Converted] When Opened	Eski Dosyaları Açıldığında [Dönüştürülmüş] Olarak İşaretle
+	Use System Defaults for Edit Original	Orijinali Düzenle için Sistem Varsayılanlarını Kullan
 	Marker…	işaretleyici…
 	Marks	İşaretler
 	Marks and Bleed	İşaretler ve Taşma Payı
@@ -1914,6 +1918,11 @@ font-technology	Variable	Değişken
 	New Toolbar	Yeni Araç Çubuğu
 	Show Toolbar	Araç Çubuğunu Göster
 	List Toolbars	Araç Çubuklarını Listele
+	Manage Toolbars…	Araç Çubuklarını Yönet…
+	Manage Toolbars	Araç Çubuklarını Yönet
+	Rename Toolbar	Araç Çubuğunu Yeniden Adlandır
+	Duplicate Toolbar	Araç Çubuğunu Çoğalt
+	Delete Toolbar	Araç Çubuğunu Sil
 	New {kind} Style…	Yeni {kind} Stili…
 	New…	Yeni…
 	Next	Sonraki
@@ -2516,6 +2525,8 @@ digits	Malayalam	Malayalam
 	Replace Spine	Omurgayı Değiştir
 	Replace Symbol	Sembolü Değiştir
 	Replace With Font	Yazı Tipiyle Değiştir
+	Replace With Font From	Değiştirilecek Yazı Tipi Kaynağı
+	System	Sistem
 	Replaces the saved preset of that name.	Bu adın kayıtlı ön ayarını değiştirir.
 	Replace…	Değiştir…
 	Require a password to open the document	Belgeyi açmak için parola gerektir
@@ -3386,6 +3397,7 @@ digits	Malayalam	Malayalam
 	Use Artboards	Çalışma Yüzeylerini Kullan
 	Use Black Point Compensation	Siyah Nokta Telafisi Kullan
 	Use Compression	Sıkıştırmayı Kullan
+	Include Editing Data for Other Apps	Diğer Uygulamalar İçin Düzenleme Verilerini Ekle
 	Use document bleed settings	Belge taşma payı ayarlarını kullan
 	Use Even-Odd Fill Rule	Çift-Tek Doldurma Kuralını Kullan
 	Use Japanese Crop Marks	Japonca Kırpma İşaretlerini Kullan
@@ -5228,6 +5240,11 @@ theme	Appearance	Görünüm
 	Export Type:	İhracat Türü:
 	Movie Clip	Film Klibi
 @msg	name is empty	isim boş
+@msg	an action is already recording	zaten bir eylem kaydediliyor
+@msg	no such function key	öyle bir işlev tuşu yok
+@msg	no such color	öyle bir renk yok
+@msg	{_1} cannot be used on Windows	{_1} Windows'ta kullanılamaz
+@msg	more than one action is named “{_1}”	birden fazla eylemin adı “{_1}”
 @msg	no symbol named `{n}`	`{n}` adında bir sembol yok
 	Artboard Options: edit with the Artboard tool	Çalışma Yüzeyi Seçenekleri: Çalışma Yüzeyi aracıyla düzenleme
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	bu henüz açılamayan bir PostScript dosyasıdır (eski bir formatta kaydedilmiş veya PDF uyumluluğu olmayan bir .ai veya bir EPS dosyası): PDF, PDF uyumlu .ai veya SVG olarak kaydedin
@@ -5391,7 +5408,7 @@ theme	Appearance	Görünüm
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	{MAX_CSV_ROWS} veri setinden fazla: Veri Kümelerini İçe Aktar en fazla {MAX_CSV_ROWS} tane okur
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	{MAX_CSV_COLS} değişkenden fazla: Veri Kümelerini İçe Aktar en fazla {MAX_CSV_COLS} tane okur
 @msg	x and y must be finite	x ve y sonlu olmalıdır
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 eski .ai dosyalarını yazar; bir .ait şablonu her zaman PDF uyumludur
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 eski .ai dosyalarını yazar, .ait şablonlarını yazmaz
 @msg	Edit Original opens image and document files only; “{name}” is not one	Özgünü Düzenle yalnızca görüntü ve belge dosyalarını açar; “{name}” bunlardan biri değil
 @msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	düzenleme verileri {w} × {h} pt boyutunda bir sayfa içindir, dosyanın {pw} × {ph} pt sayfası için değil
 @msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	düzenleme verileri {w} × {h} pt boyutunda bir sayfa içindir, dosyanın {scale} ölçeğindeki {pw} × {ph} pt sayfası
@@ -5514,6 +5531,7 @@ theme	Appearance	Görünüm
 	Highlight:	Vurgu:
 	In Merge Mode, Clicking Stroke Splits the Path	Birleştirme modunda kontura tıklamak yolu böler
 	Insert Kashidas	Keşide Ekle
+	Kashidas	Keşide
 	Load Variable Library…	Değişken Kitaplığı Yükle…
 	Save Variable Library…	Değişken Kitaplığını Kaydet…
 @msg	a variable library holds text variables, and the document has none	değişken kitaplığı metin değişkenleri içerir ve belgede hiç metin değişkeni yok
@@ -5690,6 +5708,13 @@ axis	Y Axis	Y ekseni
 	Action Options…	Eylem Seçenekleri…
 	Action Options	Eylem Seçenekleri
 	Rename Action	Eylemi Yeniden Adlandır
+	New Action…	Yeni Eylem…
+	New Action	Yeni Eylem
+	Create New Action	Yeni Eylem Oluştur
+	Play Action	Eylemi Oynat
+	Action Set:	Eylem Seti:
+	Function Key:	İşlev Tuşu:
+	Record	Kayıt
 	Create New Set	Yeni Set Oluştur
 	Stop Global Edit	Genel Düzenlemeyi Durdur
 	Global Edit Options	Genel Düzenleme Seçenekleri
@@ -5959,6 +5984,11 @@ anchor	Points:	Noktalar:
 	Horizontal Scale	Yatay Ölçek
 	Vertical Scale	Dikey Ölçek
 @msg	{label} must be a number from {min} to {max}	{label} {min} ile {max} arasında bir sayı olmalıdır
+	Character Color	Karakter Rengi
+	OpenType Features	OpenType Özellikleri
+	Stylistic Sets	Stilistik Setler
+@msg	features lists at most {max} tags	features en fazla {max} etiket içerebilir
+@msg	unknown OpenType feature `{t}`	bilinmeyen OpenType özelliği `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0'ın üzerinde ve en fazla {max} olan bir sayı olmalıdır
 @msg	no character style `{name}`	`{name}` karakter stili bulunamadı
 
@@ -6107,6 +6137,7 @@ breakText	Glyphs	Glifler
 	Gap 5	Boşluk 5
 
 @msg	{_1}: they came in as the page's art	{_1}: sayfanın çizimi olarak içe aktarıldılar
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	dosyanın kendi sayfasından farklı çizilen nesneler sayfanın çizimi olarak içe aktarıldı: {_1}
 
 @msg	You must choose a side pattern.	Bir yan desen seçmelisiniz.
 @msg	invalid pattern tile choice	geçersiz desen döşemesi seçimi
@@ -6208,3 +6239,14 @@ breakText	Glyphs	Glifler
 	Create Swatch Legend	Renk Örneği Açıklaması Oluştur
 	Create Swatch Legend…	Renk Örneği Açıklaması Oluştur…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Metin Araçları
+	Text Tweaker…	Metin Ayarlayıcı…
+	Text Tweaker	Metin Ayarlayıcı
+	Attribute:	Öznitelik:
+	From:	Başlangıç:
+	To:	Bitiş:
+	Bow	Yay
+	Spike	Sivri Uç
+	Skip Spaces	Boşlukları Atla
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Çizim, resim olarak kopyalanamayacak kadar büyük: diğer uygulamalar bunun PNG'sini almaz

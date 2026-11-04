@@ -662,8 +662,12 @@ fn has_text_slot(node: &Node) -> bool {
     !slots.is_empty()
 }
 
-/// The source text inside an envelope options dictionary, carried through its containing metadata.
+/// The source text inside an envelope options dictionary, carried through its containing metadata
+/// (not type that a look draws, which isn't the envelope's source text).
 fn envelope_text_slots(node: &Node, out: &mut Vec<Node>) {
+    if super::is_look_slot(node.name.as_deref()) {
+        return;
+    }
     if slot_of(node.name.as_deref()).is_some() {
         out.push(node.clone());
     } else if let Some(children) = node.children() {

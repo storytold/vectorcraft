@@ -43,6 +43,9 @@ pub struct LoadOptions {
     /// (default; the `embeddedFonts` param, and Preferences › File Handling › Use fonts embedded in
     /// imported PDFs for opens and places that give none).
     pub embedded_fonts: bool,
+    /// A PDF or `.ai` saved with Preserve Editing opens from the VectorCraft document it carries;
+    /// off, it opens as another app would open it, from the editing copy of its art or its pages.
+    pub native: bool,
 }
 
 impl Default for LoadOptions {
@@ -59,6 +62,7 @@ impl Default for LoadOptions {
             editing_data: true,
             trust_editing_data: false,
             embedded_fonts: true,
+            native: true,
         }
     }
 }
@@ -100,14 +104,14 @@ impl LoadOptions {
             None => true,
             Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "embeddedFonts must be true or false"))?,
         };
-        Ok(Self { pages, crop, password, color_mode, grays, text_as, layers, dxf, editing_data, trust_editing_data, embedded_fonts })
+        Ok(Self { pages, crop, password, color_mode, grays, text_as, layers, dxf, editing_data, trust_editing_data, embedded_fonts, native: true })
     }
 
     /// Does the document read only part of the file, or read it differently (a page range, another
-    /// box, a password, without its hidden layers)? Writing it back would lose the rest, so Save
-    /// doesn't (it asks for a name).
+    /// box, a password, without its hidden layers, without the VectorCraft document it carries)?
+    /// Writing it back would lose the rest, so Save doesn't (it asks for a name).
     pub fn is_partial(&self) -> bool {
-        self.pages.is_some() || self.crop != CropTo::default() || self.password.is_some() || !self.layers
+        self.pages.is_some() || self.crop != CropTo::default() || self.password.is_some() || !self.layers || !self.native
     }
 
     /// The PDF import options: `pages` resolved against the file's page count. A PDF-compatible

@@ -15,15 +15,20 @@ pub(super) fn without_ids(n: &Node) -> Node {
     n
 }
 
-/// `base`, or `base 2`, `base 3`… : the first that isn't `taken`.
-pub(super) fn unique_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
-    let mut name = base.to_string();
-    let mut k = 2;
-    while taken(&name) {
-        name = format!("{base} {k}");
-        k += 1;
+/// `base`, or `base 2`, `base 3`… : the first that isn't `taken`. `next` keeps where each base's
+/// suffixes go on from, so names sharing a base take linear work in all.
+pub(super) fn unique_name(base: &str, next: &mut HashMap<String, usize>, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
     }
-    name
+    let k = next.entry(base.to_string()).or_insert(2);
+    loop {
+        let name = format!("{base} {k}");
+        *k += 1;
+        if !taken(&name) {
+            return name;
+        }
+    }
 }
 
 /// The stops our export added for midpoints (`data-vc-midpoint`), by gradient id: for each stop,

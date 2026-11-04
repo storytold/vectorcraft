@@ -192,14 +192,23 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
         "canvasRect": app.canvas_rect.map(|c| json!([c.left(), c.top(), c.width(), c.height()])),
         // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
-        // each one's document index and rect. Canvas coordinates map to the current document's
-        // pane, inside its rulers and scroll bars (`canvasRect`).
+        // each one's document index, view number (Window › New Window) and rect. Canvas
+        // coordinates map to the current window's pane, inside its rulers and scroll bars
+        // (`canvasRect`).
         "tiled": app.ui.tiled,
-        "panes": app.canvas.panes.last.iter().map(|(i, c)| json!({
-            "document": i,
+        "panes": app.canvas.panes.last.iter().map(|(w, c)| json!({
+            "document": w.0,
+            "view": w.1,
             "rect": [c.left(), c.top(), c.width(), c.height()],
-            "active": app.session.active_index() == Some(*i),
+            "active": crate::doc_windows::current(app) == Some(*w),
         })).collect::<Vec<_>>(),
+        // Window › Arrange › Float in Window: the floating windows' documents, by index. While the
+        // current one floats, `canvasRect` is in its window's coordinates.
+        "floating": crate::doc_windows::floating_windows(app).iter().map(|w| w.0).collect::<Vec<_>>(),
+        // Window › New Window: every window, as [document index, view number], in tab order, and
+        // the current one.
+        "windows": crate::doc_windows::windows(app),
+        "currentWindow": crate::doc_windows::current(app),
         "window": [r.width(), r.height()],
         "documents": app.session.documents().iter().map(|d| json!({"title": d.title(), "dirty": d.is_dirty()})).collect::<Vec<_>>(),
         "activeDocument": app.session.active_index(),
@@ -267,7 +276,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),
         "ui.contextMenu.list" => ok(serde_json::to_value(crate::menus::context_entries(app)).unwrap_or_default()),
         "ui.tool.select" => wrap(app.run("tool.select", json!({"tool": s("tool").unwrap_or("")}))),
-        "ui.tool.list" => ok(serde_json::to_value(vectorcraft_tools::TOOL_GROUPS).unwrap_or_default()),
+        "ui.tool.list" => {
+            let groups: Vec<_> = vectorcraft_tools::TOOL_GROUPS.iter().chain(vectorcraft_tools::addons::GROUPS).copied().collect();
+            ok(serde_json::to_value(groups).unwrap_or_default())
+        }
         "ui.pointer" => pointer_events(app, ctx, req),
         "ui.key" => {
             let Some(k) = s("key").and_then(key_from) else { return err("unknown or missing `key`") };

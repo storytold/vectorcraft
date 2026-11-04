@@ -52,9 +52,13 @@
 //!   lines and `1 (style) XW`: the drawn look is kept, named after the object.
 //! - Patterns: `%AI3_BeginPattern: (name)`, `(name) llx lly urx ury` (the tile, in the pattern's
 //!   space, y up), the tile's art (on `%_` lines in newer files), `E`, `%AI3_EndPattern`; each is
-//!   read by a reader of its own and becomes a pattern swatch. A fill or stroke with one:
+//!   read by a reader of its own and becomes a pattern swatch. In the version 7 form (§3.4) a list
+//!   of layers follows the tile, `[ (colors) @ (tile) & … ] E`, each layer's tile read from its
+//!   string with the colors' state (`_ &`: the tile's box filled). A fill or stroke with one:
 //!   `(name) x y scaleX scaleY angle reflect axis shear shearAxis [matrix] p` (`P`), the matrix
-//!   taking the pattern's space to art space (the other operands are what it is made of).
+//!   taking the pattern's space to art space (the other operands are what it is made of). With a
+//!   pattern defined in the version 7 form, the other operands are applied in order (§5.4.1) before
+//!   the initial matrix.
 //!
 //! - Type in the legacy format (version 7 specification §15): `type To` … `TO`, read by
 //!   [`legacy_text`].
@@ -155,6 +159,8 @@ pub struct Structure {
     pub envelopes_drawn: Vec<(NodeId, Node)>,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
+    /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
+    pub canvas_scale: f64,
     pub warnings: Vec<String>,
 }
 
@@ -321,12 +327,17 @@ struct Reader<'a> {
     /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one, `None`
     /// when the declared factor is not applied ([`read`]).
     large_canvas: Option<f64>,
+    /// The declared `%AI24_LargeCanvasScale` (1 without one), applied or not.
+    canvas_scale: f64,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
     ruler_units: Option<u8>,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
     pattern: Option<PatternHead>,
     /// The tile (y down) of each pattern read, by name.
     pattern_tiles: HashMap<String, Rect>,
+    /// The patterns read from a definition in the version 7 form, whose fills apply their other
+    /// operands before the matrix (see [`Reader::pattern_paint`]).
+    v7_patterns: HashSet<String>,
     /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
     text: Option<legacy_text::LegacyText>,
     type_state: legacy_text::TypeState,
@@ -341,6 +352,11 @@ struct Reader<'a> {
 fn marker(c: &str) -> &str {
     let word = c.split(|ch: char| ch == ':' || ch.is_whitespace()).next().unwrap_or(c);
     word.strip_prefix("AI").map(|r| r.trim_start_matches(|ch: char| ch.is_ascii_digit())).and_then(|r| r.strip_prefix('_')).unwrap_or(word)
+}
+
+/// Is `name` that of a text slot for type that a look draws ([`document::LOOK_SLOT`])?
+pub(crate) fn is_look_slot(name: Option<&str>) -> bool {
+    name == Some(document::LOOK_SLOT)
 }
 
 impl<'a> Reader<'a> {
@@ -428,9 +444,11 @@ impl<'a> Reader<'a> {
             art_size: None,
             template_center: None,
             large_canvas: None,
+            canvas_scale: 1.0,
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),
+            v7_patterns: HashSet::new(),
             text: None,
             type_state: legacy_text::TypeState::default(),
             graph: None,
