@@ -82,6 +82,25 @@ fn an_illustrator_ai_file_opens_from_its_editing_data() {
     assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
 }
 
+/// Opening a `.ai` or a PDF whose PDF part reads, or a `.ai` saved without PDF compatibility,
+/// reads and checks the file once, on any thread, for the document it may carry, its pages, its
+/// editing data and its File Info, with pages picked or not.
+#[test]
+fn an_ai_or_pdf_file_is_read_once_when_it_opens() {
+    let ai_file = ai::ai(&compressed(&ai::sample_data()), ai::page_pdf());
+    let pdf_file = pdf_with(&[PdfPage::new(100.0, 100.0, "0 0 1 rg 10 10 50 50 re f")], &[], None);
+    let placeholder = ai::ai(&compressed(&ai::sample_data()), PLACEHOLDER);
+    for (name, file) in [("art.ai", &ai_file), ("art.pdf", &pdf_file), ("placeholder.ai", &placeholder)] {
+        for opts in [LoadOptions::default(), LoadOptions { pages: Some("1".into()), ..Default::default() }] {
+            let before = vectorcraft_pdf::reads_of(file);
+            let loaded = load_with(name, file, &opts).unwrap();
+            assert_eq!(vectorcraft_pdf::reads_of(file) - before, 1, "{name}, pages {:?}", opts.pages);
+            let editing_data = name == "placeholder.ai" || (name == "art.ai" && opts.pages.is_none());
+            assert_eq!(loaded.editing_data, editing_data, "{name}, pages {:?}", opts.pages);
+        }
+    }
+}
+
 #[test]
 fn an_ai_file_opens_with_its_artboard_options_raster_settings_and_author() {
     let document = "%_/Document :\n%_/Dictionary :\n%_/Dictionary :\n%_150 /Int (dpi.) ,\n%_1 /Bool (mask) ,\n%_; (AI Auto Rasterize) ,\n\
