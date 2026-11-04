@@ -1321,6 +1321,12 @@ fn solid_dashes_draw_dashed_strokes_as_solid_lines() {
         assert_eq!(draw(&line(true, shadow), true).pixels, solid.pixels, "the dashes go with the option (shadow: {shadow})");
         assert_eq!(draw(&line(false, shadow), true).pixels, solid.pixels, "a solid stroke is unchanged (shadow: {shadow})");
     }
+    // One renderer that draws the shadow both ways makes its raster again for each setting.
+    let (dashed, mut r) = (line(true, true), Renderer::new());
+    let fresh = |solid: bool| draw(&dashed, solid).pixels;
+    for solid in [false, true, false] {
+        assert_eq!(r.render(&dashed, 100, 100, Affine::IDENTITY, &opts(solid)).pixels, fresh(solid), "reused renderer, solid: {solid}");
+    }
 }
 
 /// An image that can't be decoded is counted on the thread that tried to decode it: an export

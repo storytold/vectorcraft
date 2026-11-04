@@ -382,7 +382,7 @@ impl Renderer {
     }
 
     /// The inputs a raster of `n`'s content, which reads `reads`, is drawn with in frame `f`: the
-    /// color settings, the edge smoothing, the document's raster effects resolution (which a
+    /// color settings, the edge smoothing, whether dashed strokes draw as solid lines, the document's raster effects resolution (which a
     /// Rasterize or De-Interlace anywhere in the content follows), the knockout `n` inherits and,
     /// while `n` holds the isolated group, isolation mode; the pattern definitions, symbols and
     /// brush library it reads; for images and placed documents their pixels and files, the
@@ -398,6 +398,8 @@ impl Renderer {
         (doc.cms, f.opts.anti_alias.threshold(), self.knockout, f.doc.raster_effects_ppi.to_bits()).hash(&mut h);
         // Cached effects on containers can include paths made into guides.
         f.opts.hide_guides.hash(&mut h);
+        // Cached effects can include dashed strokes drawn as solid lines.
+        f.opts.solid_dashes.hash(&mut h);
         if let Some((isolated, path)) = self.isolation_path(f)
             && n.id != isolated
             && path.contains(&n.id)
