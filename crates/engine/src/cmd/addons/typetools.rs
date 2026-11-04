@@ -89,12 +89,6 @@ fn text_tweaker(s: &mut Session, p: &Value) -> Result<Value> {
     let mut rng = Rng::new(whole_or(p, "seed", 0, C)?);
     let skip = switch_or(p, "skipSpaces", true, C)?;
     let setup = s.doc()?.doc.setup.clone();
-    // A range given as anything but whole bytes is refused, not read as all of the text.
-    for k in ["start", "end"] {
-        if p.get(k).is_some_and(|v| !v.is_null() && v.as_u64().is_none()) {
-            return Err(bad(C, format!("`{k}` must be a whole number of bytes")));
-        }
-    }
     // At a caret, all of the object's text.
     let ranges = type_ranges(s, p, C, |text, _| Some((0, text.len())))?;
     // Each object's changed characters: (byte, its change), worked out before the edit.

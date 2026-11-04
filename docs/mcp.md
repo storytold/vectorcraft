@@ -1208,8 +1208,8 @@ and `amount` in `color.harmony`; `angle` in `paint.editGradient` and in the `gra
 swatch refuses a `tint` that is not a number with `` stop 0: `tint` must be a number ``.
 
 A byte offset must be a whole number of at least 0. `at` in `text.startList`, and `start` and `end` in
-`text.editRange`, `text.getRange`, `text.setRangeStyle` and the `type.step`, `type.size.*`, `type.resetTracking` and
-`type.resetHorizontalScale` commands given an `id`, refuse a negative or fractional number with
+`text.editRange`, `text.getRange`, `text.setRangeStyle` and the `type.step`, `type.size.*`, `type.resetTracking`,
+`type.resetHorizontalScale` and `addon.type.textTweaker` commands given an `id`, refuse a negative or fractional number with
 `` `at` must be a whole number ``, naming the key, and change nothing. `2.0` is read as `2`, and a null as the key left out.
 
 A step can use an earlier step's result, in `run` as in the `command_batch` tool. A parameter string that is exactly
