@@ -17,17 +17,29 @@ pub const REVOLVE: &str = "threeD.revolve";
 /// thousands of faces took gigabytes; past this the source path is drawn.
 const MAX_PAINT_COPIES: usize = 256 << 20;
 
-/// About the bytes one copy of `paint` takes.
-fn paint_bytes(paint: &Paint) -> usize {
+/// About the bytes one copy of `paint` takes, with the strings it owns (swatch and pattern names).
+pub(crate) fn paint_bytes(paint: &Paint) -> usize {
     use std::mem::size_of;
     use vectorcraft_doc::color::{FreeformPoint, GradientStop};
     let own = size_of::<Paint>();
-    let Paint::Gradient(g) = paint else { return own };
+    let name = |s: &Option<String>| s.as_ref().map_or(0, String::len);
+    let g = match paint {
+        Paint::Solid { swatch, .. } => return own + name(swatch),
+        Paint::Pattern { pattern, .. } => return own + pattern.len(),
+        Paint::Gradient(g) => g,
+        _ => return own,
+    };
     let freeform = g
         .freeform
         .as_ref()
         .map_or(0, |f| f.points.len() * size_of::<FreeformPoint>() + f.lines.iter().map(|l| l.len() * size_of::<usize>()).sum::<usize>());
-    own + size_of::<vectorcraft_doc::color::GradientPaint>() + g.gradient.stops.len() * size_of::<GradientStop>() + freeform
+    let stops: usize = g.gradient.stops.iter().map(|s| size_of::<GradientStop>() + name(&s.swatch)).sum();
+    own + size_of::<vectorcraft_doc::color::GradientPaint>() + name(&g.swatch) + stops + freeform
+}
+
+/// Whether `copies` copies of `paint` stay within [`MAX_PAINT_COPIES`].
+pub(crate) fn paint_copies_fit(copies: usize, paint: &Paint) -> bool {
+    copies.saturating_mul(paint_bytes(paint)) <= MAX_PAINT_COPIES
 }
 
 fn visible(fx: &[Effect]) -> bool {
@@ -112,7 +124,7 @@ fn surface(
     let colored = options.light_color != [1.0; 3] || options.lights.is_some();
     let faces = vectorcraft_three_d::revolve(path, b, options).ok()?;
     // A face's fill, its shadow and their seam strokes: up to four copies of the paint.
-    if faces.len().saturating_mul(4).saturating_mul(paint_bytes(&paint)) > MAX_PAINT_COPIES {
+    if !paint_copies_fit(faces.len().saturating_mul(4), &paint) {
         return None;
     }
     // Visibility is an expansion option, never a change to live geometry or export baking.
