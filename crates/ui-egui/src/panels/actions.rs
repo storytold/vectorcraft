@@ -553,10 +553,11 @@ pub fn action_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 /// The command that plays an action by its name ([`play_action`]).
 pub const PLAY_ACTION: &str = "ui.action.play";
 
-/// `ui.action.play {action, set?}`: plays the action named `action` as one undoable batch, as
-/// Play Current Selection does. `set` names the set to look in (default: every set); a `set` that
-/// is not a string is an error. A name that no action has is an error, and so is a name that more
-/// than one action in the sets looked in has: then nothing plays. → what `command.batch` returns
+/// `ui.action.play {action, set?}`: plays the action named `action` at the Playback Options speed,
+/// as Play Current Selection does ([`play`]). `set` names the set to look in (default: every set); a
+/// `set` that is not a string is an error. A name that no action has is an error, and so is a name
+/// that more than one action in the sets looked in has: then nothing plays. → what [`play`] returns:
+/// at Accelerated, what `command.batch` returns; at Step by Step and Pause For, {results, pending}
 pub fn play_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let name = p.get("action").and_then(Value::as_str).ok_or("no such action")?;
     let in_set = match p.get("set") {
