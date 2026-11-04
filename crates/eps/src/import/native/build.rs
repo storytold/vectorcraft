@@ -1,4 +1,6 @@
-use super::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, compare, difference};
+use super::compare::{
+    MAX_DIFFERENCE, MAX_PAGES_COMPARED, MAX_PIXELS_COMPARED, MAX_SOLID_DIFFERENCE, PageView, compare, comparison_samples, difference, pixels_compared,
+};
 use super::plan::{made_only, make_slots, plan, readable_all};
 use super::slots::{
     ART_LEFT_OUT, Content, DREW_DIFFERENTLY, MAX_PAIRS, MAX_SLOTS, MAX_TEXT, OUTLINE_REACH, SlotInfo, TEXT_LEFT_OUT, TYPE_LEFT_OUT, collect_slots,
@@ -32,6 +34,10 @@ pub(super) struct Frame<'a> {
     pub(super) whole: bool,
     /// The PDF page areas and their moves into the editing document.
     pub(super) pages: Vec<(Rect, Affine)>,
+    /// The pages after the first that show artboards of the layers' document, each with that
+    /// artboard (as many as [`MAX_PIXELS_COMPARED`] allows): the layers are compared with them as
+    /// with the first.
+    pub(super) more: Vec<(Rect, Rect)>,
 }
 
 /// The document of the editing copy `data`, with the text (and strokes round it) of `visible`, the
@@ -211,6 +217,9 @@ pub(super) fn build_from(
                 Arc::make_mut(n).transform(shift, PAGE_MOVE);
             }
         }
+        // Pages cropped to the art are copies of the first, and a PDF saved with some of the
+        // artboards can hold any of them.
+        let more = more_pages(boards.filter(|b| !cropped && b.len() == doc.artboards.len()), &pages, comparison_samples(visible));
         // An EPS saved as its artboard has the art outside it left out of its page.
         let artboard_page =
             artboard.is_some_and(|a| [a.x0 - art_box.x0, a.y0 - art_box.y0, a.x1 - art_box.x1, a.y1 - art_box.y1].iter().all(|d| d.abs() <= 1.0));
@@ -224,7 +233,7 @@ pub(super) fn build_from(
             }
             drop_guides_off_boards(&mut doc);
         }
-        frame = Some(Frame { page: visible, page_rect, rect, whole, pages: page_moves });
+        frame = Some(Frame { page: visible, page_rect, rect, whole, pages: page_moves, more });
     }
     let mut infos = vec![];
     collect_slots(&doc.layers, true, &mut infos);
@@ -326,7 +335,8 @@ pub(super) fn build_from(
                 Ok(note) => {
                     let closer = other.and_then(|mut other| {
                         let unseen = prune_unseen(&frame, &mut view, &mut other, reflow);
-                        let closer = view.difference(&other, frame.rect, reflow).any < view.difference(&doc, frame.rect, reflow).any;
+                        let closer = view.difference_on_every_page(&other, frame.rect, reflow).any
+                            < view.difference_on_every_page(&doc, frame.rect, reflow).any;
                         closer.then(|| compare(&frame, &mut view, &other, reflow).ok()).flatten().map(|note| (other, unseen, note))
                     });
                     match closer {
@@ -801,7 +811,11 @@ fn closer_first(
     reflow: bool,
 ) -> Vec<(Document, usize)> {
     match other {
-        Some(other) if view.difference(&other.0, frame.rect, reflow).any < view.difference(&doc.0, frame.rect, reflow).any => vec![other, doc],
+        Some(other)
+            if view.difference_on_every_page(&other.0, frame.rect, reflow).any < view.difference_on_every_page(&doc.0, frame.rect, reflow).any =>
+        {
+            vec![other, doc]
+        }
         Some(other) => vec![doc, other],
         None => vec![doc],
     }
@@ -847,13 +861,14 @@ fn keep_differing(
 
     // Where only spread edges or type differ, or only the art around the page, no object is
     // replaced.
-    let (diff, regions) = view.solid_regions(doc, frame.rect, reflow)?;
+    let (diff, regions) = view.solid_regions_on_every_page(doc, reflow)?;
     if diff.solid <= MAX_SOLID_DIFFERENCE {
         return None;
     }
     let mut objects = vec![];
     top_level(&doc.layers, "", &mut objects);
-    objects.retain(|(_, _, b)| !b.intersect(frame.rect).is_zero_area());
+    let pages = view.regions(frame.rect);
+    objects.retain(|(_, _, b)| pages.iter().any(|page| !b.intersect(*page).is_zero_area()));
     if regions.len().saturating_mul(objects.len()) > MAX_PATCH_PAIRS {
         return None;
     }
@@ -1200,6 +1215,32 @@ fn shown_artboard(doc: &Document, visible: &Document, page: Page, page_rect: Rec
     best.map_or(0, |(i, _)| i)
 }
 
+/// The pages after the first, each with the artboard it shows ([`page_boards`]), as [`Frame::more`]
+/// holds them: none when the pages don't show the artboards. They stop before the page that would
+/// take the pixels the comparisons draw (`samples`, [`comparison_samples`]), the first page's
+/// included, past [`MAX_PIXELS_COMPARED`], and after [`MAX_PAGES_COMPARED`] pages.
+fn more_pages(boards: Option<&[vectorcraft_doc::Artboard]>, pages: &[Rect], samples: u32) -> Vec<(Rect, Rect)> {
+    let Some(boards) = boards else { return vec![] };
+    let mut left = MAX_PIXELS_COMPARED;
+    pages
+        .iter()
+        .zip(boards)
+        .map_while(|(page, board)| {
+            left = left.checked_sub(pixels_compared(*page, samples))?;
+            Some((*page, board.rect))
+        })
+        .take(MAX_PAGES_COMPARED)
+        .skip(1)
+        .collect()
+}
+
+/// The artboards (or other areas) of `pages` that `bounds` lies on, with `margin` (points) round it:
+/// the pages whose drawings taking it out can change.
+fn pages_touched(bounds: Rect, pages: &[Rect], margin: f64) -> Vec<usize> {
+    let b = bounds.inflate(margin, margin);
+    pages.iter().enumerate().filter(|(_, p)| !b.intersect(**p).is_zero_area()).map(|(i, _)| i).collect()
+}
+
 /// The artboards of the layers' document (`boards`) that the pages show, one a page from the
 /// first page's (`first`), when they are the pages' sizes: every artboard, or those of a PDF saved
 /// with some of them (`first` after the first artboard).
@@ -1310,35 +1351,51 @@ fn take_out(nodes: &mut Vec<Arc<Node>>, id: NodeId, hide: bool) -> bool {
     nodes.iter_mut().any(|n| !matches!(n.kind, NodeKind::Compound { .. }) && Arc::make_mut(n).children_mut().is_some_and(|c| take_out(c, id, hide)))
 }
 
-/// The text objects made from the file's text document that show and print on the page's area,
-/// where the page has no type to match them, and that the layers look no worse without, are not
-/// drawn by the app that wrote the file (which paints every shown text object; it keeps the type
-/// of what was turned to outlines): they are taken out. How many. `reflow`: the type is all laid
-/// out again from the text document (see [`compare`]).
+/// The text objects made from the file's text document that show and print on a page's area (the
+/// frame's first page or another one, [`Frame::more`]), where the page has no type to match them, and
+/// that the layers look no worse without on every page they lie on, are not drawn by the app that
+/// wrote the file (which paints every shown text object; it keeps the type of what was turned to
+/// outlines): they are taken out. How many. `reflow`: the type is all laid out again from the text
+/// document (see [`compare`]).
 pub(super) fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Document, reflow: bool) -> usize {
     let mut found = vec![];
     unmark(&mut doc.layers, true, true, &mut found);
-    let rect = frame.rect;
     if found.is_empty() || found.len() > MAX_WEIGHED {
         return 0;
     }
-    let with = view.difference(doc, rect, reflow).weighed(reflow);
-    // Taking a text object out changes only what is drawn in its box. When the art would still
-    // differ from the page by more than `compare` allows with every candidate gone, the layers
-    // aren't used whatever is pruned: don't draw them again for each one (#758).
+    let pages = view.regions(frame.rect);
+    // Taking a text object out changes only what is drawn in its box. When the art on a page would
+    // still differ from it by more than `compare` allows with every candidate gone, pruning doesn't
+    // make that page pass: the objects on it aren't drawn again one by one (#758).
     let margin = OUTLINE_REACH + 1.0;
-    let boxes: f64 = found.iter().filter_map(|(_, b)| *b).map(|b| b.inflate(margin, margin).intersect(rect).area().max(0.0)).sum();
-    if with - boxes / rect.area().max(1e-9) > MAX_DIFFERENCE {
-        return 0;
-    }
+    let hopeless: Vec<bool> = view
+        .differences(doc, frame.rect, reflow)
+        .iter()
+        .zip(&pages)
+        .map(|(with, rect)| {
+            let boxes: f64 = found.iter().filter_map(|(_, b)| *b).map(|b| b.inflate(margin, margin).intersect(*rect).area().max(0.0)).sum();
+            with.weighed(reflow) - boxes / rect.area().max(1e-9) > MAX_DIFFERENCE
+        })
+        .collect();
     // Weighed by colour, not only lightness: a text object's red stroke over a dark red one is no
-    // less there for being about as light (#1102).
-    let mut with = view.colour_difference(doc, rect);
+    // less there for being about as light (#1102). The view keeps each page's drawing and share: a
+    // removal has only the pages in `on` drawn again.
     let mut removed = 0;
     for (id, bounds) in found {
         // A removal before it can have let its area type flow differently.
         let bounds = if removed > 0 { doc.node(id).and_then(|n| n.visual_bounds()) } else { bounds };
-        if bounds.is_none_or(|b| b.intersect(rect).is_zero_area()) {
+        let Some(b) = bounds else { continue };
+        let mut lies = pages_touched(b, &pages, 0.0);
+        if lies.is_empty() {
+            continue;
+        }
+        // The pages its strokes and effects can reach past its box are drawn again too.
+        let mut on = pages_touched(b, &pages, margin);
+        // Area type that flows around it can reach other pages: they are all weighed.
+        if has_wraps(doc) {
+            (lies, on) = ((0..pages.len()).collect(), (0..pages.len()).collect());
+        }
+        if lies.iter().any(|i| hopeless.get(*i).copied().unwrap_or(true)) {
             continue;
         }
         let mut without = doc.clone();
@@ -1347,11 +1404,12 @@ pub(super) fn prune_unseen(frame: &Frame<'_>, view: &mut PageView, doc: &mut Doc
         }
         // Area type that wrapped around the text object flows without it.
         relayout_wrapped(&mut without);
-        let d = view.colour_difference(&without, rect);
-        if d - with <= UNSEEN_MARGIN {
+        let shares = view.weigh_without(doc, &without, &on);
+        if shares.len() == on.len() && shares.iter().all(|(_, before, after)| after - before <= UNSEEN_MARGIN) {
             take_out(&mut doc.layers, id, false);
             relayout_wrapped(doc);
-            with = d;
+            // Only the pages in `on` can draw differently (every page when type wraps).
+            view.adopt(doc);
             removed += 1;
         }
     }
@@ -1363,6 +1421,42 @@ mod candidate_tests {
     use super::*;
 
     use vectorcraft_doc::{ImageBlob, ImageObject};
+
+    /// The pages compared stop where their drawings would take more than the pixels allowed.
+    #[test]
+    fn the_pages_compared_stop_at_the_pixel_bound() {
+        let pages: Vec<Rect> = (0..1000).map(|i| Rect::new(f64::from(i) * 700.0, 0.0, f64::from(i) * 700.0 + 612.0, 792.0)).collect();
+        let doc = Document::new(612.0, 792.0);
+        let boards: Vec<vectorcraft_doc::Artboard> = pages
+            .iter()
+            .map(|page| {
+                let mut board = doc.artboards[0].clone();
+                board.rect = *page;
+                board
+            })
+            .collect();
+        let more = more_pages(Some(&boards), &pages, 1);
+        let each = pixels_compared(pages[0], 1);
+        assert_eq!(more.len() + 1, (MAX_PIXELS_COMPARED / each) as usize);
+        assert!(more.len() >= 64, "{}", more.len());
+        assert_eq!(more_pages(Some(&boards[..3]), &pages[..3], 1).len(), 2);
+        // Pages drawn with 4 × 4 samples a pixel take 16 times the pixels.
+        assert_eq!(more_pages(Some(&boards), &pages, 4).len() + 1, (MAX_PIXELS_COMPARED / (each * 16)) as usize);
+        // Tiny pages stop at the page count.
+        let tiny: Vec<Rect> = (0..1000).map(|i| Rect::new(f64::from(i) * 2.0, 0.0, f64::from(i) * 2.0 + 1.0, 1.0)).collect();
+        let tiny_boards: Vec<vectorcraft_doc::Artboard> =
+            boards.iter().zip(&tiny).map(|(b, r)| vectorcraft_doc::Artboard { rect: *r, ..b.clone() }).collect();
+        assert_eq!(more_pages(Some(&tiny_boards), &tiny, 1).len() + 1, MAX_PAGES_COMPARED);
+    }
+
+    /// The pages a box touches with a margin round it include those it only comes near.
+    #[test]
+    fn the_pages_within_reach_of_a_box_count_as_touched() {
+        let pages = [Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(110.0, 0.0, 210.0, 100.0)];
+        let near_the_second = Rect::new(60.0, 40.0, 106.0, 60.0);
+        assert_eq!(pages_touched(near_the_second, &pages, 0.0), vec![0]);
+        assert_eq!(pages_touched(near_the_second, &pages, OUTLINE_REACH + 1.0), vec![0, 1]);
+    }
 
     /// Layers read in the units of a page scaled up to points take their wrap offsets with their art,
     /// within ±1000 points.
@@ -1504,7 +1598,7 @@ mod candidate_tests {
         page.insert(Some(page.layers[0].id), 0, image).unwrap();
 
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let kinds = replace_unread(
             &mut doc,
             &frame,
@@ -1546,8 +1640,14 @@ mod candidate_tests {
             page.insert(Some(page.layers[0].id), page.layers[0].children().unwrap().len(), art).unwrap();
         }
         let (first, second) = (Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(100.0, 0.0, 200.0, 100.0));
-        let frame =
-            Frame { page: &page, page_rect: first, rect: first, whole: false, pages: vec![(first, Affine::IDENTITY), (second, Affine::IDENTITY)] };
+        let frame = Frame {
+            page: &page,
+            page_rect: first,
+            rect: first,
+            whole: false,
+            pages: vec![(first, Affine::IDENTITY), (second, Affine::IDENTITY)],
+            more: vec![],
+        };
         let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new(), &mut BTreeSet::new());
         assert_eq!(result.unwrap_err(), "an unread object lies on more than one artboard");
     }
@@ -1572,7 +1672,7 @@ mod candidate_tests {
         );
         page.insert(Some(page.layers[0].id), 0, art).unwrap();
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new(), &mut BTreeSet::new());
         assert_eq!(result.unwrap_err(), "an unread object lies on an artboard that has no page");
 
@@ -1603,7 +1703,7 @@ mod candidate_tests {
         );
         page.insert(Some(page.layers[0].id), 0, art).unwrap();
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let result = replace_unread(
             &mut doc,
             &frame,
@@ -1641,7 +1741,7 @@ mod candidate_tests {
             page.insert(Some(page.layers[0].id), page.layers[0].children().unwrap().len(), art).unwrap();
         }
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let kinds = replace_unread(
             &mut doc,
             &frame,
@@ -1682,7 +1782,7 @@ mod candidate_tests {
             page.insert(Some(page.layers[0].id), page.layers[0].children().unwrap().len(), art).unwrap();
         }
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let result = replace_unread(&mut doc, &frame, &[(id, vec!["placed files".into()])], &[], &BTreeSet::new(), &mut BTreeSet::new());
         assert_eq!(result.unwrap_err(), "an unread object's appearance is not identifiable in the page art");
     }
@@ -1712,7 +1812,7 @@ mod candidate_tests {
             page.insert(Some(page.layers[0].id), page.layers[0].children().unwrap().len(), art).unwrap();
         }
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let unread = [(first, vec!["placed files".into()]), (second, vec!["placed files".into()])];
         let mut one_box_doc = doc.clone();
         let kinds = replace_unread(&mut doc, &frame, &unread, &[(second, Rect::new(50.0, 50.0, 60.0, 60.0))], &BTreeSet::new(), &mut BTreeSet::new())
@@ -1756,7 +1856,7 @@ mod candidate_tests {
             page.insert(Some(page.layers[0].id), page.layers[0].children().unwrap().len(), art).unwrap();
         }
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let unread = [(id, vec!["placed files".into()])];
         let mut shown: Vec<Vec<Arc<Node>>> = nodes.iter().map(|n| vec![Arc::clone(n)]).collect();
         let taken = take_unread_type(&doc, Some(&frame), &unread, &[(id, Rect::new(50.0, 50.0, 60.0, 60.0))], &mut shown);

@@ -772,9 +772,14 @@ layer, even where the page doesn't draw it. A file whose editing data can't be d
 pattern fills, placed files or anything else the reader doesn't read on a layer that shows, or whose layers look
 different from its page, opens as before: an EPS as its printed page, a `.ai` file from its PDF content (where plain
 groups open ungrouped), with a warning saying why. Layers look different when they draw an object the page doesn't (or
-miss one it draws), and, for an EPS whose page is the box of its art, when they print art outside it. A file whose
-editing data is for a page of another size opens the same way, and its warning gives both sizes in points, with the
-scale of the editing data's page to the file's page (1:10 for a tenth of its size) when their sides are in proportion.
+miss one it draws), and, for an EPS whose page is the box of its art, when they print art outside it. When the PDF
+content of a `.ai` has a page for each artboard, the layers are compared with each page on its artboard, until the
+pages compared take 8,388,608 pixels at the comparison's scale (about 67 letter-size pages, or 4 when the PDF content
+is only images) or number 128; when it has pages for some of the artboards, or its pages are cropped to the art, they
+are compared with the first page only. An artboard, or the page of an EPS's editing data, whose sides are within half
+a point of its page's is compared on an area of the page's size. A file whose editing data is for a page of another
+size opens the same way, and its warning gives both sizes in points, with the scale of the editing data's page to the
+file's page (1:10 for a tenth of its size) when their sides are in proportion.
 With `textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines. A PDF
 saved with Illustrator's editing data holds it in `AIPDFPrivateData` streams and opens from it as a `.ai` file does.
 

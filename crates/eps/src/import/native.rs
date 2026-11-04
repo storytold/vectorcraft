@@ -91,7 +91,7 @@ mod tests {
         ring(&mut layers, Some(MADE), red, 6.0, square);
         ring(&mut layers, Some(MADE), red, 2.0, Rect::new(40.0, 40.0, 60.0, 60.0));
         let rect = page.artboards[0].rect;
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let mut view = PageView::new(&frame);
         assert_eq!(prune_unseen(&frame, &mut view, &mut layers, false), 1, "only the ring the page doesn't draw");
         let widths: Vec<f64> = layers.layers[0].children().unwrap().iter().filter_map(|n| n.appearance.stroke().map(|s| s.width)).collect();
@@ -193,15 +193,15 @@ mod tests {
         let a = comparison_render(&mut renderer, &page, rect, 0.4, 1);
         let b = comparison_render(&mut vectorcraft_render::Renderer::new(), &vector, rect, 0.4, 1);
         assert!(compared(&a, &b, &[], &[]).solid > MAX_SOLID_DIFFERENCE, "the old point sampling falsely refused this page");
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let mut view = PageView::new(&frame);
         assert!(compare(&frame, &mut view, &vector, false).is_ok());
         assert!(compare(&frame, &mut view, &Document::new(1000.0, 500.0), false).is_err(), "missing artwork remains an error");
         let shifted = Rect::new(0.0, 0.0, 500.0, 500.0);
-        assert!(view.difference(&vector, shifted, false).any > MAX_DIFFERENCE, "wrong framing remains an error");
+        assert!(view.difference_on_every_page(&vector, shifted, false).any > MAX_DIFFERENCE, "wrong framing remains an error");
     }
 
-    /// The boxes `solid_regions` gives for a page of images are in the page's points: the
+    /// The boxes `solid_regions_on_every_page` gives for a page of images are in the page's points: the
     /// comparison is drawn at a multiple of the scale and resized, and the two sizes round
     /// differently on the short side, so a box at the far edge does not drift out of the object
     /// that makes it.
@@ -218,7 +218,7 @@ mod tests {
         }
     }
 
-    /// The boxes `solid_regions` gives for a `width` × `height` page that is one image of a black
+    /// The boxes `solid_regions_on_every_page` gives for a `width` × `height` page that is one image of a black
     /// `object`, compared with layers that hold nothing.
     fn raster_page_regions(object: Rect, width: f64, height: f64) -> Vec<Rect> {
         use vectorcraft_color::{Color, Paint};
@@ -256,9 +256,9 @@ mod tests {
         );
         page.insert(Some(page.layers[0].id), usize::MAX, image).unwrap();
         assert_eq!(comparison_samples(&page), 4);
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let mut view = PageView::new(&frame);
-        let (_, regions) = view.solid_regions(&Document::new(width, height), rect, false).unwrap();
+        let (_, regions) = view.solid_regions_on_every_page(&Document::new(width, height), false).unwrap();
         assert!(!regions.is_empty());
         regions
     }
