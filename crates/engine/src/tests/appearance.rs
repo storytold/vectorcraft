@@ -323,6 +323,28 @@ fn add_fill_copies_the_active_fill_row_right_above_it() {
     assert_eq!(s.appearance_item(), Some(0));
 }
 
+/// The copy of the active fill row keeps the row's opacity, blend mode, visibility, overprint and
+/// effects as well as its paint.
+#[test]
+fn add_fill_copies_the_whole_active_fill_row() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "opacity": 40, "blend": "multiply", "visible": false}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen", "item": 0}));
+    run(&mut s, "object.setOverprint", json!({"fill": true, "item": 0}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "appearance.addFill", json!({}));
+    let n = node(&s, id);
+    assert_eq!(n.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "fill", "stroke"]);
+    let (AppearanceItem::Fill(row), AppearanceItem::Fill(copy)) = (&n.appearance.items[0], &n.appearance.items[1]) else {
+        panic!("the first two rows are not fills")
+    };
+    assert_eq!((copy.opacity, copy.blend, copy.visible, copy.overprint), (0.4, BlendMode::Multiply, false, true));
+    assert_eq!(copy.effects.len(), 1);
+    assert_eq!(copy, row);
+}
+
 /// In a mixed selection the active fill row goes above itself in the first object; an object that
 /// doesn't share that row gets a copy of its top fill on top, as without an active row.
 #[test]

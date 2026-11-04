@@ -551,9 +551,9 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
         for (id, row) in ids.iter().zip(&per) {
             if let Some(n) = d.node_mut(*id) {
                 if let Some(i) = n.appearance.item_of_kind(*row, true)
-                    && let Some(paint) = n.appearance.paint_at(Some(i), true).cloned()
+                    && let Some(row) = n.appearance.fill_at(Some(i)).cloned()
                 {
-                    n.appearance.insert_item(i + 1, AppearanceItem::Fill(FillLayer::new(paint)));
+                    n.appearance.insert_item(i + 1, AppearanceItem::Fill(row));
                     if active == Some(*id) {
                         above = Some(i + 1);
                     }
