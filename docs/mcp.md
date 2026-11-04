@@ -1490,6 +1490,11 @@ template layer, on a locked artboard while nothing is isolated, or outside the i
 such as a symbol instance just placed, is not passed over for being on a locked artboard while it stays selected. When
 the selection holds no other object, they return the error "nothing selected".
 
+`select.object.allOnSameLayers` selects the objects on the layers and sublayers of the selected objects that can be
+selected. A selected object that is hidden or locked, inside a hidden or locked group or layer, on a template layer, on
+a locked artboard while nothing is isolated, or outside the isolated group adds no layer. When the selection holds no
+other object, the command clears the selection.
+
 ## Shaper Groups
 
 `shaper.releaseSource {source, group?}` takes the original shape `source` out of its Shaper Group: the shape becomes a
