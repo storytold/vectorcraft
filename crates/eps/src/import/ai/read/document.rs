@@ -1,3 +1,4 @@
+use super::super::brush;
 use super::art::{element_name, join_and, sane};
 use super::containers::drop_commented_copies;
 use super::ops::appearance_from_art_style;
@@ -171,29 +172,85 @@ fn artboard_array(data: &[u8]) -> Option<&[u8]> {
 pub struct PaletteSwatches {
     pub swatches: Vec<Swatch>,
     pub groups: Vec<vectorcraft_color::swatch::SwatchGroup>,
-    /// The patterns the editing data defines that the given patterns lack and a swatch paints with.
+    /// The patterns the editing data defines that a swatch paints with, named apart from the given
+    /// patterns ([`beside`]).
     pub patterns: Vec<PatternDef>,
     /// The image blobs the art of `patterns` shows, by key.
     pub images: std::collections::BTreeMap<String, ImageBlob>,
 }
 
+/// The editing data's patterns `defined`, for a document that has the patterns `have` (those of a
+/// file's PDF part or page): each keeps its name, except one whose name a pattern of `have` already
+/// has (the PDF part names its tilings `Pattern 1`, `Pattern 2` and so on), which takes a free
+/// variant (`Pattern 1 2`). The art of each pattern paints with the names they got. Also the names
+/// changed, old to new. The same `defined` and `have` always give the same names.
+fn beside(mut defined: Vec<PatternDef>, have: &[PatternDef]) -> (Vec<PatternDef>, std::collections::BTreeMap<String, String>) {
+    let mut renamed = std::collections::BTreeMap::new();
+    let mut taken: std::collections::BTreeSet<String> = have.iter().chain(&defined).map(|p| p.name.clone()).collect();
+    let tries = taken.len() + 2;
+    for d in &mut defined {
+        if !have.iter().any(|p| p.name == d.name) {
+            continue;
+        }
+        let Some(name) = (2..=tries).map(|i| format!("{} {i}", d.name)).find(|n| !taken.contains(n)) else { continue };
+        taken.insert(name.clone());
+        renamed.insert(std::mem::replace(&mut d.name, name.clone()), name);
+    }
+    if !renamed.is_empty() {
+        for d in &mut defined {
+            for a in &mut d.art {
+                repoint(Arc::make_mut(a), &renamed);
+            }
+        }
+    }
+    (defined, renamed)
+}
+
+/// `n` and what it holds painting with the patterns `renamed` renames (old to new) by their new names.
+fn repoint(n: &mut Node, renamed: &std::collections::BTreeMap<String, String>) {
+    for p in vectorcraft_doc::swatches::node_paints_mut(n) {
+        if let Paint::Pattern { pattern, .. } = p
+            && let Some(new) = renamed.get(pattern)
+        {
+            pattern.clone_from(new);
+        }
+    }
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        repoint(Arc::make_mut(&mut mask.art), renamed);
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children {
+            repoint(Arc::make_mut(c), renamed);
+        }
+    }
+}
+
 /// The swatches and color groups of the palette of the editing data `data`, for a file whose
 /// layers aren't read: the swatches its PDF part has are the defaults (#4036). They come as
 /// [`read`] makes them, with pattern swatches only for the patterns in `patterns` and those the
-/// editing data defines; `None` when the palette is empty or reading stops before it.
+/// editing data defines, which are named apart from `patterns` ([`beside`]); `None` when the
+/// palette is empty or reading stops before it.
 pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> {
     let mut r = Reader::new(data);
     // The palette, the gradients and the patterns it names come before the art, so an error in the
     // art leaves them read.
     let _ = r.run();
+    let (defined, renamed) = beside(std::mem::take(&mut r.doc.patterns), patterns);
     let mut known = patterns.to_vec();
-    let defined = std::mem::take(&mut r.doc.patterns);
-    known.extend(defined.iter().filter(|d| !patterns.iter().any(|p| p.name == d.name)).cloned());
-    let (swatches, groups) = r.palette_swatches(&known)?;
+    known.extend(defined.iter().cloned());
+    let (mut swatches, mut groups) = r.palette_swatches(&known)?;
+    // A swatch of a pattern the editing data defines paints with that pattern, under the name it got.
+    for s in swatches.iter_mut().chain(groups.iter_mut().flat_map(|g| &mut g.swatches)) {
+        if let Paint::Pattern { pattern, .. } = &mut s.paint
+            && let Some(new) = renamed.get(pattern)
+        {
+            pattern.clone_from(new);
+        }
+    }
     let painted = |name: &str| {
         swatches.iter().chain(groups.iter().flat_map(|g| &g.swatches)).any(|s| matches!(&s.paint, Paint::Pattern { pattern, .. } if pattern == name))
     };
-    let added: Vec<PatternDef> = defined.into_iter().filter(|d| !patterns.iter().any(|p| p.name == d.name) && painted(&d.name)).collect();
+    let added: Vec<PatternDef> = defined.into_iter().filter(|d| painted(&d.name)).collect();
     let mut shown = Document::new(1.0, 1.0);
     shown.patterns.clone_from(&added);
     let mut images = std::collections::BTreeMap::new();
@@ -203,6 +260,61 @@ pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> 
         }
     });
     Some(PaletteSwatches { swatches, groups, patterns: added, images })
+}
+
+/// The brushes of a `.ai` file's editing data, as [`brushes`] reads them.
+pub struct Brushes {
+    pub brushes: Vec<vectorcraft_brush::Brush>,
+    /// The patterns the editing data defines that the brushes' art paints with, named apart from
+    /// the given patterns ([`beside`]).
+    pub patterns: Vec<PatternDef>,
+    /// The image blobs the art of `patterns` shows, by key.
+    pub images: std::collections::BTreeMap<String, ImageBlob>,
+    /// The note for the brushes left out.
+    pub note: Option<String>,
+}
+
+/// The brushes of the editing data `data`, for a file whose layers aren't read (a brush library
+/// has none), as [`read`] makes them, with the patterns of the editing data their art paints with,
+/// named apart from `patterns` ([`beside`]) as [`palette`] names them. `None` when the file has no
+/// brush objects or reading stops before them.
+pub fn brushes(data: &[u8], patterns: &[PatternDef]) -> Option<Brushes> {
+    // Brush objects are plug-in objects: data without one isn't read again.
+    memchr::memmem::find(data, b"BeginPluginObject")?;
+    let mut r = Reader::new(data);
+    // The brushes come before the art, so an error in the art leaves them read.
+    let _ = r.run();
+    let (mut lib, unread) = r.brush_library()?;
+    let (defined, renamed) = beside(std::mem::take(&mut r.doc.patterns), patterns);
+    if !renamed.is_empty() {
+        for a in lib.iter_mut().flat_map(|b| b.art_mut()) {
+            repoint(a, &renamed);
+        }
+    }
+    // The patterns the brushes' art paints with, and those their art paints with, and so on.
+    let mut stack: Vec<&vectorcraft_doc::Node> = lib.iter().flat_map(|b| b.art()).collect();
+    let mut used = std::collections::BTreeSet::new();
+    while let Some(n) = stack.pop() {
+        stack.extend(n.children().into_iter().flatten().chain(n.extras().mask.as_ref().map(|m| &m.art)).map(|c| &**c));
+        for p in vectorcraft_doc::swatches::node_paints(n) {
+            if let Paint::Pattern { pattern, .. } = p
+                && used.insert(pattern.clone())
+                && let Some(d) = defined.iter().find(|d| &d.name == pattern)
+            {
+                stack.extend(d.art.iter().map(|a| &**a));
+            }
+        }
+    }
+    let added: Vec<PatternDef> = defined.into_iter().filter(|d| used.contains(&d.name)).collect();
+    let mut shown = Document::new(1.0, 1.0);
+    shown.patterns.clone_from(&added);
+    let mut images = std::collections::BTreeMap::new();
+    shown.visit_images(|_, im| {
+        if let Some(blob) = r.doc.images.get(&im.key) {
+            images.insert(im.key.clone(), blob.clone());
+        }
+    });
+    Some(Brushes { brushes: lib, patterns: added, images, note: (unread > 0).then(|| brush::left_out_note(unread)) })
 }
 
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
@@ -538,6 +650,17 @@ impl<'a> Reader<'a> {
         Some((swatches, groups))
     }
 
+    /// The brushes read ([`brush::finish_brushes`]) and how many weren't; `None` when the file has
+    /// no brush objects (the document keeps the default brushes).
+    fn brush_library(&mut self) -> Option<(Vec<vectorcraft_brush::Brush>, usize)> {
+        if !self.brush_objects {
+            return None;
+        }
+        let drafts = std::mem::take(&mut self.brush_drafts);
+        let (lib, left_out) = brush::finish_brushes(drafts, &self.brush_art, self.brush_order.as_deref());
+        Some((lib, left_out + self.brushes_unread))
+    }
+
     /// The graphic styles of the style list, in its order: each listed name the art styles define with
     /// an appearance [`appearance_from_art_style`] reads, once (a name listed again, empty or not
     /// defined is left out), with ids from 1. Also the id of each kept name.
@@ -691,6 +814,7 @@ impl<'a> Reader<'a> {
                 doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
             }
         }
+        let brushes = self.brush_library();
         // The file's graphic styles in place of the defaults, and the objects linked to them.
         let (styles, ids) = self.graphic_styles();
         let styles_read = !styles.is_empty();
@@ -702,6 +826,12 @@ impl<'a> Reader<'a> {
             doc.graphic_styles = styles.into();
         }
         let mut warnings = self.warnings;
+        if let Some((lib, unread)) = brushes {
+            vectorcraft_brush::store(&mut doc, &lib);
+            if unread > 0 {
+                warnings.push(brush::left_out_note(unread));
+            }
+        }
         if self.drawn_looks > 0 {
             warnings.push(format!(
                 "objects with several fills or strokes, effects or brushes came in as their drawn look ({}): their appearance isn't editable yet",

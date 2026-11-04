@@ -70,6 +70,9 @@
 //! - Swatches: the palette (`%AI5_BeginPalette`), read by [`super::palette`], replaces the
 //!   default swatches.
 //!
+//! - Brushes: the brush plug-in objects and their art sections (`%AI8_BeginBrushPattern`), read by
+//!   [`super::brush`], replace the default brushes when the file has any.
+//!
 //! - Graphic styles: the style list (`%AI9_BeginArtStyleList`), one `(name)` per style in the
 //!   panel's order, each the name of an art style. The listed styles whose appearance reads
 //!   ([`appearance_from_art_style`](ops::appearance_from_art_style)) replace the default graphic
@@ -77,7 +80,7 @@
 //!   style's appearance and transparency is linked to it. A `1` naming a style the list doesn't
 //!   have is the object's own appearance, not a link.
 //!
-//! Sections the reader doesn't need (brushes, symbols, styles, filters) are skipped;
+//! Sections the reader doesn't need (symbols, styles, filters) are skipped;
 //! type, symbols, fills with a pattern it can't read, placed files without a preview and operators
 //! it doesn't know are errors. So is data that ends inside a layer, a group or a compound path.
 
@@ -114,7 +117,7 @@ mod types;
 
 pub(crate) use art::join_and;
 use art::preview_png;
-pub use document::{PaletteSwatches, VariableRead, artboards, palette, variables};
+pub use document::{Brushes, PaletteSwatches, VariableRead, artboards, brushes, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
 use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster};
@@ -341,6 +344,18 @@ struct Reader<'a> {
     /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
     text: Option<legacy_text::LegacyText>,
     type_state: legacy_text::TypeState,
+    /// The file has brush objects (the brush manager's order or a brush).
+    brush_objects: bool,
+    /// The brush manager's order.
+    brush_order: Option<Vec<(super::brush::Tool, String)>>,
+    /// The brushes read, in the order of their objects.
+    brush_drafts: Vec<super::brush::BrushDraft>,
+    /// The art of the brushes (`%AI8_BeginBrushPattern`), by name.
+    brush_art: HashMap<String, Node>,
+    /// The brush art sections read so far, repeated names included.
+    brush_art_sections: usize,
+    /// Brush objects that weren't read.
+    brushes_unread: usize,
     /// The graph being read (see [`Reader::graph_record`]).
     graph: Option<Graph>,
     /// The multi-layer mask being read (`Mb` … `MB`), which goes on past a layer's end.
@@ -451,6 +466,12 @@ impl<'a> Reader<'a> {
             v7_patterns: HashSet::new(),
             text: None,
             type_state: legacy_text::TypeState::default(),
+            brush_objects: false,
+            brush_order: None,
+            brush_drafts: Vec::new(),
+            brush_art: HashMap::new(),
+            brush_art_sections: 0,
+            brushes_unread: 0,
             graph: None,
             multi_mask: None,
         }

@@ -37,7 +37,9 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illus
         Err(why) => {
             let mut v = visible;
             if let Ok(data) = &data {
+                let have = v.document.patterns.len();
                 use_palette(data, &mut v.document);
+                use_brushes(data, &mut v.document, have, &mut v.warnings);
                 use_variables(data, &mut v.document, &mut v.warnings);
             }
             if tree.is_empty() {
@@ -97,8 +99,9 @@ fn layer_tree(nodes: &[Arc<Node>]) -> Vec<Arc<Node>> {
 /// notes, or a note saying why the layers weren't read when the editing data can't be decompressed
 /// or its layers can't be read. The flag returned is `true` when the document is the one read from
 /// the layers; else the document is `visible`, its pages moved by `place_pages` when the editing
-/// data was decompressed but its layers can't be read, and its swatches and variables those of the
-/// editing data's palette ([`use_palette`]) and variable library ([`use_variables`]) when it was
+/// data was decompressed but its layers can't be read, and its swatches, brushes and variables those
+/// of the editing data's palette ([`use_palette`]), brushes ([`use_brushes`]) and variable library
+/// ([`use_variables`]) when it was
 /// decompressed. `outlined`: the PDF part's type was read as
 /// outlines (a file whose type shows then comes in as its PDF part).
 /// `trust`: layers that draw differently from the PDF part are used all the same, with a warning.
@@ -117,15 +120,19 @@ pub fn layered_ai(private: &[u8], visible: Document, warnings: Vec<String>, outl
     };
     if !has_layers(&data) {
         let (mut visible, mut warnings) = (visible, warnings);
+        let have = visible.patterns.len();
         use_palette(&data, &mut visible);
+        use_brushes(&data, &mut visible, have, &mut warnings);
         use_variables(&data, &mut visible, &mut warnings);
         return (visible, warnings, false);
     }
     // The PDF part, its pages placed and named as the editing data's artboards are, when the
     // layers can't be used (`why`).
-    let from_pdf_part = |mut visible: Document, warnings: Vec<String>, why: &str| {
+    let from_pdf_part = |mut visible: Document, mut warnings: Vec<String>, why: &str| {
         place_pages(&ai::artboards(&data), &mut visible, unit);
+        let have = visible.patterns.len();
         use_palette(&data, &mut visible);
+        use_brushes(&data, &mut visible, have, &mut warnings);
         let mut all = unread(warnings, why);
         use_variables(&data, &mut visible, &mut all);
         (visible, all, false)
@@ -161,8 +168,9 @@ fn use_variables(data: &[u8], doc: &mut Document, warnings: &mut Vec<String>) {
 /// `doc` (a `.ai` read as its PDF part, in place of its layers) with the swatches and color groups
 /// of the palette of its editing data `data` in place of the default ones, as [`build`] gives a
 /// document read from the layers. The spot and pattern swatches of the PDF part's art that the
-/// palette doesn't have follow the palette's swatches. The patterns that the editing data defines and
-/// the PDF part lacks come in for the palette's pattern swatches, with the images they show. Left as
+/// palette doesn't have follow the palette's swatches. The patterns that the editing data defines come
+/// in for the palette's pattern swatches, with the images they show; one whose name a pattern of
+/// the PDF part already has takes a free variant of it ([`ai::palette`]). Left as
 /// it is when the palette is empty.
 fn use_palette(data: &[u8], doc: &mut Document) {
     let Some(ai::PaletteSwatches { swatches, groups, patterns, images }) = ai::palette(data, &doc.patterns) else { return };
@@ -179,6 +187,29 @@ fn use_palette(data: &[u8], doc: &mut Document) {
     let mut swatches = swatches;
     swatches.extend(art);
     (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
+}
+
+/// `doc` (a file read as its page or PDF part, in place of its layers) with the brushes of its
+/// editing data `data` in place of the default ones, as [`build`] gives a document read from the
+/// layers, the patterns of the editing data their art paints with (named apart from the first
+/// `have` patterns of `doc`, those of the page or PDF part, as [`use_palette`] names them, which
+/// may have added some of them already), and the note for the brushes left out added to
+/// `warnings`. Left as it is when the editing data has no brushes.
+fn use_brushes(data: &[u8], doc: &mut Document, have: usize, warnings: &mut Vec<String>) {
+    let page = doc.patterns.get(..have).unwrap_or(&doc.patterns);
+    let Some(ai::Brushes { brushes, patterns, images, note }) = ai::brushes(data, page) else { return };
+    for (key, blob) in images {
+        doc.images.entry(key).or_insert(blob);
+    }
+    for mut p in patterns {
+        if doc.pattern(&p.name).is_some() {
+            continue;
+        }
+        p.art = p.art.iter().map(|n| Arc::new(doc.reid(n))).collect();
+        doc.patterns.push(p);
+    }
+    vectorcraft_brush::store(doc, &brushes);
+    warnings.extend(note.filter(|n| !warnings.contains(n)));
 }
 
 /// The pages of `doc` (a `.ai` read as its PDF part: a page per artboard, in a row) named as
