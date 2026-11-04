@@ -107,3 +107,22 @@ fn bad_params_are_errors_and_leave_the_selection() {
         assert_eq!(s.doc().unwrap().selection.objects, vec![a], "{p}");
     }
 }
+
+#[test]
+fn a_symbol_instance_is_measured_by_its_art() {
+    // The symbol's art, (100, 60) to (140, 80), drawn 50 pt up and left: (50, 10) to (90, 30), on
+    // the 200 × 120 artboard, while the 20 × 20 square around the instance's origin lies off it.
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><defs><symbol id="Far"><rect x="100" y="60" width="40" height="20" fill="#f00"/></symbol></defs><use href="#Far" x="-50" y="-50"/></svg>"##;
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "far.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+    let mut instance = None;
+    s.doc().unwrap().doc.walk(|n| {
+        if matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. }) {
+            instance = Some(n.id);
+        }
+    });
+    let instance = instance.unwrap();
+    assert_eq!(pick(&mut s, json!({"artboards": [0]})), vec![instance]);
+    assert_eq!(pick(&mut s, json!({"artboards": [0], "relation": "inside"})), vec![instance]);
+    assert_eq!(pick(&mut s, json!({"artboards": [0], "relation": "outside"})), vec![]);
+}
