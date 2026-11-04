@@ -123,8 +123,9 @@ pub fn color_slider_valued(
 /// and ↓ lower it to the next whole number, Shift with an arrow, Page Up and Page Down add or take
 /// ten, and Home and End set the start and the end of `shown`'s range. Screen readers' increment
 /// and decrement actions step the number as → and ← do, and their set-value action sets it within
-/// the range, rounded to [`SliderValue::decimals`] (a value that is not a finite number leaves it
-/// as it is). A number past the range steps from the range's nearer end, and no step goes past
+/// the range they get (the range, extended to a number past its end), rounded to
+/// [`SliderValue::decimals`] (a value that is not a finite number leaves it as it is). A number
+/// past the range steps from the range's nearer end, and no step goes past
 /// either end. With `shown` `None` (a blank field), or
 /// in a disabled `ui`, the keys and actions leave the rail as it is. Returns the new value from 0
 /// to 1 that a click or a drag gives, its phase, and the number in `shown`'s units that a key or
@@ -247,7 +248,7 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
     ui.input(|i| {
         let n = i.num_accesskit_action_requests(id, Action::Increment) as f64 - i.num_accesskit_action_requests(id, Action::Decrement) as f64;
         v = by(v, n).clamp(lo, hi);
-        // The last set-value request this frame, within the range, which also replaces a number past it.
+        // The last set-value request this frame.
         let set = i
             .accesskit_action_requests(id, Action::SetValue)
             .filter_map(|request| match request.data {
@@ -259,7 +260,8 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
         if let Some(value) = set {
             // The number the field would show, as `SliderValue::field` reads it.
             let shown = s.decimals.map_or(value, |d| field_text(value, "", d).parse().unwrap_or(value));
-            v = shown.clamp(lo, hi);
+            // The range screen readers get (`slider_info`), which takes in a number past the rail.
+            v = shown.clamp(lo.min(s.value), hi.max(s.value));
             end = true;
             exact = true;
         }

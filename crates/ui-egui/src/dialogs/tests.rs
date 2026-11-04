@@ -2018,9 +2018,10 @@ fn the_blob_brush_tip_preview_is_a_named_slider_with_arrow_keys() {
 /// Screen readers can set the Blob Brush tip preview's Angle to a number: the slider offers the
 /// set-value action, a fraction rounds to the whole degrees the field shows, a number past -180° to
 /// 180° sets the nearer end, the last request in a frame wins, and a value that is not a finite
-/// number leaves the Angle as it is.
+/// number leaves the Angle as it is. On a field past its rail's end, a set value can go as far as
+/// the field's number.
 #[test]
-fn screen_readers_set_the_blob_brush_angle() {
+fn screen_readers_set_a_dialog_slider_number() {
     use egui::accesskit::{Action, ActionData, ActionRequest, TreeId};
     let mut app = app();
     app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
@@ -2055,6 +2056,28 @@ fn screen_readers_set_the_blob_brush_angle() {
     assert_eq!(angle(&app), -90.0, "not a number");
     f.run(&mut app, vec![set(30.0), set(f64::INFINITY)]);
     assert_eq!(angle(&app), -90.0, "the last request is not a finite number");
+    // A field past its rail's end extends the range screen readers get, and a set value can go
+    // that far: Transform Each's Horizontal Scale at 300% on a rail that ends at 200%.
+    app.ui.dialog = None;
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    crate::menus::invoke(&mut app, "object.transformEach", json!({}));
+    app.ui.dialog.as_mut().expect("Transform Each is open").fields.insert("scaleH".into(), json!(300));
+    let scale = |app: &VectorcraftApp| app.ui.dialog.as_ref().expect("Transform Each is open").f64("scaleH", f64::NAN);
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (node, ..) = slider_node(&out, "Horizontal:");
+    let set = |value: f64| {
+        egui::Event::AccessKitActionRequest(ActionRequest {
+            action: Action::SetValue,
+            target_node: node,
+            target_tree: TreeId::ROOT,
+            data: Some(ActionData::NumericValue(value)),
+        })
+    };
+    f.run(&mut app, vec![set(250.0)]);
+    assert_eq!(scale(&app), 250.0, "within the range screen readers get");
+    f.run(&mut app, vec![set(400.0)]);
+    assert_eq!(scale(&app), 250.0, "past 250%, the range's end now");
 }
 
 #[test]
