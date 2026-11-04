@@ -2025,6 +2025,30 @@ fn select_same_font_takes_its_reference_from_the_type_on_a_selected_layer() {
     }
 }
 
+/// A selected layer that holds the isolated group gives the type inside that group as the
+/// reference of the font Same commands, and not the type on the layer outside it.
+#[test]
+fn select_same_font_takes_its_reference_from_the_isolated_group_on_a_selected_layer() {
+    let mut s = session();
+    let typed =
+        |s: &mut Session, y: f64, font: &str| id_of(&s.execute("text.create", &json!({"x": 0, "y": y, "text": "type", "font": font})).unwrap());
+    let l2 = id_of(&s.execute("layer.new", &json!({"top": true})).unwrap());
+    let outside = typed(&mut s, 20.0, "Arial");
+    let courier = typed(&mut s, 60.0, "Courier");
+    let other_courier = typed(&mut s, 100.0, "Courier");
+    sel(&mut s, &[courier, other_courier]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    sel(&mut s, &[l2]);
+    assert_eq!(s.execute("select.same.fontFamily", &json!({})).unwrap()["count"], 2);
+    let mut got = selected(&s);
+    got.sort();
+    let mut want = vec![courier, other_courier];
+    want.sort();
+    assert_eq!(got, want);
+    assert!(!got.contains(&outside));
+}
+
 /// Select › Same › Text Fill & Stroke Color selects the type with characters whose fill and stroke
 /// both match the first character of the selected type: the same fill with another stroke, or the
 /// same stroke with another fill, is left out, and in type with several runs one run has to match
