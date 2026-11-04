@@ -6220,6 +6220,11 @@ breakText	Glyphs	Glifák
 	Malayalam	Malajálam
 	Odia	Odia
 	Urdu	Urdu
+	Sanskrit	Szanszkrit
+	Nepali	Nepáli
+	Assamese	Asszámi
+	Konkani	Konkani
+	Sindhi	Szindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} és újabb (verzió: {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Az összes megnyitott dokumentum exportálása PDF-ként

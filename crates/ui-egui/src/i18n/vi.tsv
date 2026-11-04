@@ -5837,6 +5837,11 @@ breakText	Glyphs	Glyph
 	Malayalam	Tiếng Malayalam
 	Odia	Tiếng Odia
 	Urdu	Tiếng Urdu
+	Sanskrit	Tiếng Phạn
+	Nepali	Tiếng Nepal
+	Assamese	Tiếng Assam
+	Konkani	Tiếng Konkani
+	Sindhi	Tiếng Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} trở lên (phiên bản {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Xuất tất cả tài liệu đang mở dưới dạng PDF
