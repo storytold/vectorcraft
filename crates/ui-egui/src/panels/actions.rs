@@ -294,7 +294,7 @@ pub struct Playing {
     /// The options the action started playing with.
     options: PlaybackOptions,
     /// With Pause For, when the next step runs (seconds on the app's clock); none until the frame
-    /// after the first step, which starts the first pause.
+    /// after each step, which starts the pause before the next one.
     next_at: Option<f64>,
     /// With Step by Step, set until the first frame after the first step: that frame draws the
     /// first step's result and runs no step, since Play in the panel can run after the canvas drew.
@@ -310,8 +310,8 @@ fn active_doc(app: &VectorcraftApp) -> Option<u64> {
 
 /// Runs the next step of the paced playback in progress when it is due at `now` (seconds on the
 /// app's clock): with Step by Step at each call after the first, so each frame runs one step and the
-/// frame after Play draws the first step; with Pause For once the pause after the step before has
-/// passed. A step that fails ends the playback and shows its error. When a step is due and the active
+/// frame after Play draws the first step; with Pause For once the pause has passed, which starts in
+/// the frame after the step before, so a slow step or a late frame does not shorten it. A step that fails ends the playback and shows its error. When a step is due and the active
 /// document is not the one that was active after the last step (another document was made active,
 /// or that one was closed), the playback ends with a status and the rest do not run. → the seconds
 /// until the window should draw again while playback goes on
@@ -327,8 +327,6 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
         if now < due {
             return Some(due - now);
         }
-        // The next pause starts when this step runs.
-        playing.next_at = Some(now + pause);
     }
     if playing.doc != doc {
         app.ui.action_playing = None;
@@ -352,7 +350,9 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     let playing = app.ui.action_playing.as_mut()?;
     // A step of the action may open, close or switch documents itself.
     playing.doc = doc;
-    Some(if playing.options.speed == PlaybackSpeed::Pause { pause } else { 0.0 })
+    // With Pause For, the next frame starts the next pause.
+    playing.next_at = None;
+    Some(0.0)
 }
 
 /// The command behind Playback Options… ([`playback_options`]).
@@ -2948,13 +2948,29 @@ mod tests {
         assert_eq!(tick_playback(&mut app, 10.0), Some(2.0), "the pause starts in the frame after the first step");
         assert_eq!(tick_playback(&mut app, 11.5), Some(0.5));
         assert_eq!(x(&app), 1.0, "nothing runs before the pause has passed");
-        assert_eq!(tick_playback(&mut app, 12.0), Some(2.0));
+        assert_eq!(tick_playback(&mut app, 12.0), Some(0.0), "the next frame comes promptly");
         assert_eq!(x(&app), 3.0, "the second step runs after 2 s");
+        assert_eq!(tick_playback(&mut app, 12.0), Some(2.0), "and starts the next pause");
         assert!(tick_playback(&mut app, 13.9).is_some_and(|wait| (wait - 0.1).abs() < 1e-9));
         assert_eq!(x(&app), 3.0);
         assert_eq!(tick_playback(&mut app, 14.0), None);
         assert_eq!(x(&app), 7.0, "the third step runs 2 s after the second");
         assert!(app.ui.action_playing.is_none());
+    }
+
+    #[test]
+    fn pause_for_starts_each_pause_in_the_frame_after_the_step() {
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 2})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.0), Some(2.0));
+        assert!(tick_playback(&mut app, 2.0).is_some());
+        assert_eq!(x(&app), 3.0, "the second step runs");
+        // The next frame comes later than the pause, for example after a slow step.
+        assert_eq!(tick_playback(&mut app, 9.0), Some(2.0), "the pause starts in this frame");
+        assert_eq!(x(&app), 3.0, "no step runs without a pause before it");
+        assert_eq!(tick_playback(&mut app, 11.0), None);
+        assert_eq!(x(&app), 7.0, "the third step runs 2 s after the frame that started the pause");
     }
 
     #[test]
@@ -3009,11 +3025,12 @@ mod tests {
         app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
         assert_eq!(tick_playback(&mut app, 0.5), Some(0.5), "nothing ends before the next step is due");
         app.run("document.activate", json!({"index": 0})).unwrap();
-        assert_eq!(tick_playback(&mut app, 1.0), Some(1.0));
+        assert_eq!(tick_playback(&mut app, 1.0), Some(0.0));
         assert_eq!(x(&app), 3.0, "the document is active again when the step is due, so it runs");
         app.run("document.activate", json!({"index": 1})).unwrap();
         let other = app.session.active().unwrap().doc.clone();
-        assert_eq!(tick_playback(&mut app, 5.0), None, "the playback ends");
+        assert_eq!(tick_playback(&mut app, 5.0), Some(1.0), "the next pause starts");
+        assert_eq!(tick_playback(&mut app, 6.0), None, "the playback ends");
         assert!(app.ui.action_playing.is_none());
         assert_eq!(app.ui.status, "the action stopped playing: its document is no longer active");
         assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &other), "no step ran in the other document");
