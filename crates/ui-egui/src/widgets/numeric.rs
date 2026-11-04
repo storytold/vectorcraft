@@ -511,15 +511,15 @@ fn bounded_field_reading(
 /// may follow any operand: `45*2°`, `50% / 2`. With `parentheses` (Kerning, which shows its
 /// automatic value as `(12)`), one pair of parentheses around the whole text is dropped first, so
 /// `(12)` reads as 12. Any other parentheses are refused: `(10+5)*2` reads as nothing, not as
-/// `10+5*2`.
+/// `10+5*2`. A decimal comma is read ([`decimal_point`]) after the suffix, `%`, `°` and that pair
+/// are dropped, so `(1,000)` and `1,000%` are refused as thousands rather than read as 1.
 pub(super) fn field_number(buf: &str, suffix: &str, parentheses: bool) -> Option<f64> {
     let suffix = suffix.trim();
-    let buf = decimal_point(buf);
     let bare = if suffix.is_empty() { buf.to_string() } else { buf.replace(suffix, "") };
     let bare = bare.replace(['%', '°'], "");
     let bare = bare.trim();
     let bare = if parentheses { bare.strip_prefix('(').and_then(|b| b.strip_suffix(')')).unwrap_or(bare) } else { bare };
-    vectorcraft_doc::parse_number(bare)
+    vectorcraft_doc::parse_number(&decimal_point(bare))
 }
 
 /// The text [`plain_field`] shows for `value`: at most `decimals` places, without trailing zeros,
