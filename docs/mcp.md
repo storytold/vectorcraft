@@ -918,8 +918,11 @@ SVG and PDF exports write such a fill as an image at the Document Raster Effects
 ```
 
 Method (the Gradient panel's menu): `classic` (the default) mixes the colours between stops in display RGB,
-`perceptual` mixes a linear or radial gradient's colours in OKLab so the steps look even. SVG and PDF exports write a
+`perceptual` mixes a linear or radial gradient's colours in OKLab so the steps look even. SVG exports write a
 Perceptual gradient as an image at the Document Raster Effects resolution (a dithered Perceptual fill with its noise).
+PDF exports write it the same way, except for a gradient with spot color stops whose other stops are all paper white,
+CMYK or gray, that is not a dithered fill and whose curve does not have too many stops. PDF writes tints of one spot
+ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK or gray inks as a DeviceN shading.
 `paint.setFill`/`paint.setStroke` take it in `gradient` too:
 
 ```json
