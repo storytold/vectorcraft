@@ -1344,6 +1344,100 @@ fn an_ai_file_without_layers_keeps_the_patterns_of_its_palette() {
     assert!(keys.iter().all(|k| d.images.contains_key(k)), "{keys:?}");
 }
 
+/// A brush library (brush objects and their art, no layers) comes in as its PDF part with the
+/// library's brushes in place of the default ones: Other Library lists them.
+#[test]
+fn an_ai_brush_library_without_layers_keeps_its_brushes() {
+    let order = "%AI8_BeginPluginObject\n(Adobe Brush Manager Order)\n(Adobe Brush Manager Order)\n\
+                 ( Adobe Scatter Brush Tool/ Spray/ Adobe Calli) -\n(graphic Brush Tool/ Nib/) .\n%AI8_EndPluginObject\n";
+    let nib = "%AI8_BeginPluginObject\n(Adobe Calligraphic Brush Tool)\n(Nib)\n(1 2 6 40 60 -30 10 1 0 2 0) .\n%AI8_EndPluginObject\n";
+    let spray = "%AI8_BeginPluginObject\n(Adobe Scatter Brush Tool)\n(Spray)\n(2 /Dot art/ 5 1 0 0 / 0 0.5 1.5 1 ) -\n\
+                 (1.2 2 0 -0.25 0.25 2 -45 30 1 1 0) .\n%AI8_EndPluginObject\n";
+    // The art is filled with a pattern no swatch paints with: it comes in with the brush.
+    let dots = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n";
+    let dot = "%AI8_BeginBrushPattern\n(Dot art)\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n0 0 m\n4 0 L\n4 4 L\nf\n%AI8_EndBrushPattern\n";
+    let library =
+        format!("%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 0 0\n%%BeginSetup\n{dots}{dot}{order}{nib}{spray}%%EndSetup\n%%PageTrailer\n%%Trailer\n");
+    let (d, warnings, read) = crate::layered_ai(&private(&library), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    let lib = vectorcraft_brush::library(&d);
+    assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Spray", "Nib"], "{warnings:?}");
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(d.pattern("Dots").is_some_and(|p| !p.art.is_empty()), "the pattern the brush's art paints with");
+}
+
+/// A PDF part whose tiling has the name of a pattern its editing data defines (the PDF part names
+/// its tilings `Pattern 1`, `Pattern 2` and so on): the editing data's pattern comes in under a free
+/// variant of the name, and the palette's swatch and the brush's art paint with it, not with the
+/// tiling.
+#[test]
+fn an_ai_file_without_layers_keeps_its_patterns_apart_from_the_pdf_parts_tilings() {
+    let dots = "%AI3_BeginPattern: (Pattern 1)\n(Pattern 1) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n";
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n(Pattern 1) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Dots)\nPc\nPB\n%AI5_EndPalette\n";
+    let order = "%AI8_BeginPluginObject\n(Adobe Brush Manager Order)\n(Adobe Brush Manager Order)\n( Adobe Scatter Brush Tool/ Spray/) .\n%AI8_EndPluginObject\n";
+    let spray = "%AI8_BeginPluginObject\n(Adobe Scatter Brush Tool)\n(Spray)\n(2 /Dot art/ 5 1 0 0 / 0 0.5 1.5 1 ) -\n\
+                 (1.2 2 0 -0.25 0.25 2 -45 30 1 1 0) .\n%AI8_EndPluginObject\n";
+    let dot = "%AI8_BeginBrushPattern\n(Dot art)\n(Pattern 1) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n0 0 m\n4 0 L\n4 4 L\nf\n%AI8_EndBrushPattern\n";
+    let part = || {
+        let mut part = pdf_part(10.0, 86.0);
+        let id = part.alloc_id();
+        let square = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 9.0, 9.0));
+        let tiling = std::sync::Arc::new(Node::path(id, square, vectorcraft_doc::Appearance::default()));
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, 9.0, 9.0);
+        part.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Pattern 1", vec![tiling]) });
+        part
+    };
+    let width = |d: &Document, name: &str| d.pattern(name).map(|p| p.tile.width());
+    let swatch_pattern = |d: &Document| match d.swatch("Dots").map(|s| &s.paint) {
+        Some(vectorcraft_color::Paint::Pattern { pattern, .. }) => Some(pattern.clone()),
+        _ => None,
+    };
+    fn painted(n: &Node, out: &mut Vec<String>) {
+        for p in vectorcraft_doc::swatches::node_paints(n) {
+            if let vectorcraft_color::Paint::Pattern { pattern, .. } = p {
+                out.push(pattern.clone());
+            }
+        }
+        for c in n.children().into_iter().flatten() {
+            painted(c, out);
+        }
+    }
+    let brushed = |d: &Document| {
+        let mut out = vec![];
+        for b in vectorcraft_brush::library(d) {
+            for a in b.art() {
+                painted(a, &mut out);
+            }
+        }
+        out
+    };
+
+    // The palette alone.
+    let art = native(&format!("{dots}{palette}"));
+    let (d, warnings, read) = crate::layered_ai(&private(&art), part(), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    assert_eq!(width(&d, "Pattern 1"), Some(9.0), "the PDF part's tiling stays");
+    assert_eq!(swatch_pattern(&d).as_deref(), Some("Pattern 1 2"), "{warnings:?}");
+    assert_eq!(width(&d, "Pattern 1 2"), Some(4.0));
+
+    // A brush library: the brush's art paints with the editing data's pattern.
+    let library = format!("%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 0 0\n%%BeginSetup\n{dots}{dot}{order}{spray}%%EndSetup\n%%PageTrailer\n%%Trailer\n");
+    let (d, warnings, read) = crate::layered_ai(&private(&library), part(), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    assert_eq!(brushed(&d), ["Pattern 1 2"], "{warnings:?}");
+    assert_eq!(width(&d, "Pattern 1"), Some(9.0));
+    assert_eq!(width(&d, "Pattern 1 2"), Some(4.0));
+
+    // Both: the palette's swatch and the brush paint with the one pattern, added once.
+    let both =
+        format!("%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 0 0\n%%BeginSetup\n{dots}{palette}{dot}{order}{spray}%%EndSetup\n%%PageTrailer\n%%Trailer\n");
+    let (d, warnings, _) = crate::layered_ai(&private(&both), part(), vec![], false, true, 1.0);
+    assert_eq!(swatch_pattern(&d).as_deref(), Some("Pattern 1 2"), "{warnings:?}");
+    assert_eq!(brushed(&d), ["Pattern 1 2"], "{warnings:?}");
+    let names: Vec<&str> = d.patterns.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["Pattern 1", "Pattern 1 2"]);
+}
+
 /// A `.ai` that comes in as its PDF part, whose layers can't be used or that has none, gets the
 /// variables, data sets, active data set and lock of its editing data's variable library, and so
 /// does an EPS that comes in as its page.
