@@ -254,8 +254,10 @@ const PNG_WINDOW_AND_STEP: u64 = (32 << 10) + (8 << 10);
 
 /// The most memory `r` takes in its buffers to read its image a row at a time: the stream buffer
 /// holds the rows already read up to [`PNG_KEPT_ROWS`] or four rows, whichever is more, the previous
-/// and current rows, and [`PNG_WINDOW_AND_STEP`], and may have up to twice that reserved; a copy of
-/// a stored row and the row given out come on top. `None` when a row given out doesn't fit memory.
+/// and current rows, and [`PNG_WINDOW_AND_STEP`]. The buffer grows by doubling its reservation,
+/// and while it grows its old reservation and the new one, up to twice the size it holds, are both
+/// allocated: three times that size at most. A copy of a stored row and the row given out come on
+/// top. `None` when a row given out doesn't fit memory.
 fn png_row_scratch(r: &png::Reader<std::io::Cursor<&[u8]>>) -> Option<u64> {
     let info = r.info();
     // A filter byte and the row's samples, in whole bytes.
@@ -263,7 +265,7 @@ fn png_row_scratch(r: &png::Reader<std::io::Cursor<&[u8]>>) -> Option<u64> {
     let out = u64::try_from(r.output_line_size(info.width)?).ok()?;
     let kept = (stored * 4).next_multiple_of(64).max(PNG_KEPT_ROWS);
     let stream = kept + stored * 2 + PNG_WINDOW_AND_STEP;
-    Some(stream * 2 + stored + out)
+    Some(stream * 3 + stored + out)
 }
 
 /// The largest size of at most `w`×`h` pixels, keeping their proportions, whose pixels take at most
