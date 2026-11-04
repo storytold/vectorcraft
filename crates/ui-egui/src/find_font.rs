@@ -164,17 +164,21 @@ fn can_replace_in(family: &str, is_installed: impl Fn(&str) -> bool, list: &[Str
 /// its closest style. System chooses [`system_family`].
 fn set_source(app: &VectorcraftApp, d: &mut Dialog, source: &str, used: &[Value]) {
     d.fields.insert("replaceFrom".into(), json!(source));
-    d.fields.insert("rows".into(), rows_json(&replacement_rows(app, source, used)));
-    let families = replacement_families(app, source, used);
-    if can_replace(d, families.as_deref()) {
+    let rows = replacement_rows(app, source, used);
+    d.fields.insert("rows".into(), rows_json(&rows));
+    // The chosen font stays only when the new list has that family and style; otherwise the family
+    // and the style both come from a row the list shows, so Change replaces with what is listed.
+    let (family, style) = (d.str("family"), d.str("style"));
+    if rows.iter().any(|r| r.family.eq_ignore_ascii_case(&family) && r.style.eq_ignore_ascii_case(&style) && installed(&r.family)) {
         return;
     }
-    let family = match families {
-        Some(l) => l.into_iter().find(|f| installed(f)),
-        None => Some(system_family()),
-    };
-    d.fields.insert("family".into(), json!(family.unwrap_or_default()));
-    d.fields.insert("style".into(), json!(""));
+    let system = if source == "system" { system_family() } else { String::new() };
+    let pick = rows
+        .iter()
+        .find(|r| !system.is_empty() && r.family.eq_ignore_ascii_case(&system) && r.style.is_empty())
+        .or_else(|| rows.iter().find(|r| installed(&r.family)));
+    d.fields.insert("family".into(), json!(pick.map(|r| r.family.clone()).unwrap_or_default()));
+    d.fields.insert("style".into(), json!(pick.map(|r| r.style.clone()).unwrap_or_default()));
 }
 
 fn fonts(app: &mut VectorcraftApp) -> Vec<Value> {
@@ -182,8 +186,20 @@ fn fonts(app: &mut VectorcraftApp) -> Vec<Value> {
 }
 
 pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
+    if let Some(ctx) = app.ui_ctx.clone() {
+        clear_search(&ctx);
+    }
     app.ui.dialog = None;
     Ok(Value::Null)
+}
+
+/// Forget the replacement search: the next open starts with an empty one.
+fn clear_search(ctx: &egui::Context) {
+    let (source_key, query_id) = (egui::Id::unique("ff-search-source"), egui::Id::unique("ff-search"));
+    ctx.data_mut(|m| {
+        m.remove::<String>(source_key);
+        m.remove::<String>(query_id);
+    });
 }
 
 /// Replace the selected document font with the chosen one (`all`: everywhere, else the selection).
@@ -337,10 +353,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         app.ui.dialog = None;
         // The next open starts with an empty search.
-        ctx.data_mut(|m| {
-            m.remove::<String>(source_key);
-            m.remove::<String>(query_id);
-        });
+        clear_search(ctx);
     } else if app.ui.dialog.is_some() {
         app.ui.dialog = Some(d);
     }
@@ -517,6 +530,36 @@ mod tests {
             app.session.execute("text.create", &json!({"x": 10, "y": 10.0 + i as f64 * 20.0, "text": "Hi", "font": family})).unwrap();
         }
         app
+    }
+
+    /// A new source picks the family and the style from a row its list shows, so Change replaces with
+    /// what is listed rather than a closest style of its own choosing.
+    #[test]
+    fn a_new_source_picks_a_row_its_list_shows() {
+        let mut app = two_font_document();
+        let used = fonts(&mut app);
+        let mut d = Dialog::new("findFont", json!({"family": "Inter", "style": "", "selected": 0, "replaceFrom": "system"}));
+        set_source(&app, &mut d, "document", &used);
+        assert_eq!((d.str("family").as_str(), d.str("style").as_str()), ("Inter", "Regular"), "the document's own row");
+        d.fields.insert("family".into(), json!("Inter"));
+        d.fields.insert("style".into(), json!("Black Wide"));
+        set_source(&app, &mut d, "document", &used);
+        assert_eq!((d.str("family").as_str(), d.str("style").as_str()), ("Inter", "Regular"), "a pair the list lacks gives way");
+    }
+
+    /// Confirming the dialog with Enter forgets the replacement search, as Done and Escape do.
+    #[test]
+    fn confirming_the_dialog_clears_the_replacement_search() {
+        let mut app = two_font_document();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.ui_ctx = Some(ctx.clone());
+        open(&mut app);
+        let query_id = egui::Id::unique("ff-search");
+        ctx.data_mut(|m| m.insert_temp(query_id, "times".to_string()));
+        confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none(), "the dialog closes");
+        assert_eq!(ctx.data(|m| m.get_temp::<String>(query_id)), None, "the search text is gone");
     }
 
     /// The rows follow a replacement: Change All in the Document source leaves the list showing the
