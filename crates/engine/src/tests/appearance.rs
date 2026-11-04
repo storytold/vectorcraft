@@ -463,6 +463,45 @@ fn reduce_to_basic_keeps_the_active_row_of_the_first_selected_object() {
     assert_eq!(fill_paint(&node(&s, a), 0).color().unwrap().to_hex(), "#0000ff");
 }
 
+/// Three objects with equal stacks, the third's lower fill changed; the lower, green fill row of
+/// the first is active, selected a, b, c.
+fn three_with_one_changed(s: &mut Session) -> [NodeId; 3] {
+    let ids = [rect(s, 50.0), rect(s, 200.0), rect(s, 300.0)];
+    run(s, "select.set", json!({"ids": ids.map(|id| id.0)}));
+    run(s, "appearance.addFill", json!({}));
+    run(s, "appearance.setItem", json!({"index": 0, "color": "#00ff00"}));
+    run(s, "appearance.setItem", json!({"index": 2, "color": "#ff0000"})); // [Fill green, Stroke, Fill red]
+    run(s, "appearance.setItem", json!({"index": 0, "color": "#0000ff", "ids": [ids[2].0]}));
+    run(s, "appearance.setActiveItem", json!({"index": 0}));
+    ids
+}
+
+/// The active row is matched in each other object on its own: one object without an equal row
+/// does not stop another that has one from keeping it.
+#[test]
+fn reduce_to_basic_keeps_the_active_row_in_each_object_that_has_it() {
+    let mut s = session();
+    let [a, b, c] = three_with_one_changed(&mut s);
+    run(&mut s, "appearance.reduceToBasic", json!({}));
+    assert_eq!(fill_paint(&node(&s, a), 0).color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(fill_paint(&node(&s, b), 0).color().unwrap().to_hex(), "#00ff00");
+    assert_eq!(fill_paint(&node(&s, c), 0).color().unwrap().to_hex(), "#ff0000");
+}
+
+/// Add New Fill puts its copy of the active row right above that row in each object that has an
+/// equal row, even when another selected object has none.
+#[test]
+fn add_fill_copies_the_active_row_in_each_object_that_has_it() {
+    let mut s = session();
+    let [a, b, _] = three_with_one_changed(&mut s);
+    run(&mut s, "appearance.addFill", json!({}));
+    for id in [a, b] {
+        let n = node(&s, id);
+        assert_eq!(fill_paint(&n, 1).color().unwrap().to_hex(), "#00ff00", "{:?}", n.appearance);
+        assert_eq!(fill_paint(&n, 3).color().unwrap().to_hex(), "#ff0000", "{:?}", n.appearance);
+    }
+}
+
 /// b `[Fill red, Fill white, Stroke]` above a `[Fill white, Stroke]`, selected b first: b's rows 1
 /// and 2 equal a's rows 0 and 1.
 fn reversed_pair(s: &mut Session) -> (NodeId, NodeId) {
