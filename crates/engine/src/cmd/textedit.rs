@@ -930,8 +930,8 @@ impl CharChange {
 
 /// Type › Enable Missing Glyph Protection: after a font change, the characters of `runs` their new
 /// font has no glyph for, but their font `before` the change had, keep that font: its family,
-/// style, version and Variable Font settings.
-pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>) {
+/// style, version and Variable Font settings. Returns the byte ranges that kept their font, in order.
+pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>) -> Vec<(usize, usize)> {
     fn chars(runs: &[TextRun]) -> impl Iterator<Item = (usize, char, &CharStyle)> {
         runs.iter()
             .scan(0, |at, r| {
@@ -963,6 +963,7 @@ pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>
             _ => keep.push((at, end, old)),
         }
     }
+    let kept = keep.iter().map(|(a, b, _)| (*a, *b)).collect();
     for (a, b, old) in keep {
         edit::style_range(runs, a, b, |st| {
             st.font_family.clone_from(&old.font_family);
@@ -971,6 +972,30 @@ pub(crate) fn protect_missing_glyphs(before: &[TextRun], runs: &mut Vec<TextRun>
             st.font_axes.clone_from(&old.font_axes);
         });
     }
+    kept
+}
+
+/// The runs of `runs` from byte `a` to `b`, leaving out the ranges `kept` (in order) that Missing
+/// Glyph Protection gave their earlier font: the characters a font command set its font on.
+pub(crate) fn unprotected_runs(runs: &[TextRun], a: usize, b: usize, kept: &[(usize, usize)]) -> Vec<TextRun> {
+    let mut out = vec![];
+    let mut at = a;
+    for &(k0, k1) in kept {
+        if k1 <= at {
+            continue;
+        }
+        if k0 >= b {
+            break;
+        }
+        if k0 > at {
+            out.extend(edit::slice_runs(runs, at, k0));
+        }
+        at = k1;
+    }
+    if at < b {
+        out.extend(edit::slice_runs(runs, at, b));
+    }
+    out
 }
 
 fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1021,12 +1046,10 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
             }
             let before = protect.then(|| t.runs.clone());
             edit::style_range(&mut t.runs, a, b, |st| change.apply(st));
-            if let Some(before) = before {
-                protect_missing_glyphs(&before, &mut t.runs);
-            }
+            let kept = before.map(|before| protect_missing_glyphs(&before, &mut t.runs)).unwrap_or_default();
             if sets_font {
-                // Empty text has one run, which the empty range styles.
-                let styled = if a == b { t.runs.clone() } else { edit::slice_runs(&t.runs, a, b) };
+                // Empty text has one run, which the empty range styles. Characters that kept their font aren't the command's.
+                let styled = if a == b { t.runs.clone() } else { unprotected_runs(&t.runs, a, b, &kept) };
                 set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
             }
             refresh_bounds(t);
