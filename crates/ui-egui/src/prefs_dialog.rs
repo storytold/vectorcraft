@@ -17,7 +17,7 @@ pub const UI_FIELDS: &[(&str, &str, &str)] = &[
     ("__smartGuides", "Smart Guides", "Smart Guides (View → Smart Guides)"),
     ("__snapToGrid", "Guides & Grid", "Snap to Grid"),
     ("__taskBar", "General", "Enable Contextual Task Bar"),
-    ("__showDiscordButton", "General", "Show the Discord button in the title bar"),
+    ("__showDiscordButton", "General", "Show the Discord button in the title bar and on Home"),
 ];
 
 /// Whether User Interface shows VectorCraft Title Bar on Every Desktop (`appTitleBar`): Linux and the
