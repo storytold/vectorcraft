@@ -245,8 +245,9 @@ fn global_edit_row(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The Global Edit Options: what else similar objects must share (Match), where they may lie (On
-/// Artboards) and how many objects that takes now.
-fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// Artboards) and how many objects that takes now. The Control bar's Global Edit Options dropdown
+/// shows them too.
+pub(crate) fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.set_min_width(220.0);
     let o = app.session.global_edit_options.clone();
     let set = |app: &mut VectorcraftApp, p: serde_json::Value| crate::menus::invoke(app, "select.globalEditOptions", p);
