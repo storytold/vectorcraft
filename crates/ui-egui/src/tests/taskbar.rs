@@ -1,7 +1,7 @@
 //! The Contextual Task Bar's actions for each kind of selection: open paths offer Join and Edit
 //! Path, compound paths and clipping masks their Release, images selected with vector art Make
-//! Clipping Mask, type converts between point and area type, and a basic shape shows its
-//! properties in place of Lock.
+//! Clipping Mask, type converts between point and area type, type on a path opens its options, and
+//! a basic shape shows its properties in place of Lock.
 
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
 use serde_json::json;
@@ -163,6 +163,25 @@ fn type_converts_between_point_and_area_type() {
     assert!(has(&texts, "Convert To Point Type") && !has(&texts, "Convert To Area Type"), "{texts:?}");
     click(&mut app, "Convert To Point Type");
     assert!(matches!(text_kind(&app), TextKind::Point));
+}
+
+#[test]
+fn type_on_a_path_offers_its_options() {
+    let mut app = app();
+    let path = id(app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap());
+    let t = id(app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along", "at": [200, 160]})).unwrap());
+    assert!(matches!(kind(&app, t), NodeKind::Text(ref t) if matches!(t.kind, TextKind::OnPath { .. })));
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    select(&mut app, &[t]);
+    // A non-default effect, so the dialog shows the selected type's options rather than defaults.
+    app.run("type.pathOptions", json!({"effect": "skew"})).unwrap();
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Create Outlines") && has(&texts, "Type on a Path Options"), "{texts:?}");
+    assert!(!has(&texts, "Convert To Area Type") && !has(&texts, "Convert To Point Type"), "{texts:?}");
+    click(&mut app, "Type on a Path Options");
+    let d = app.ui.dialog.as_ref().expect("the options dialog opens");
+    assert_eq!(d.str("__command"), "type.pathOptions");
+    assert_eq!(d.fields.get("effect"), Some(&json!("skew")));
 }
 
 /// The path's anchors (its first subpath).
