@@ -14,7 +14,10 @@ so a guard may reject conservatively.
 {"method":"engine.execute","params":{"command":"object.setProps","params":{"ids":[4],"name":"Linked","opacity":60},"expected":{"document":1,"revision":7}}}
 ```
 
-Optional `expected` is supported only for synchronous `object.setProps`. Wrong or
+Optional `expected` is supported for synchronous `object.setProps` and the
+read-only, no-path `file.saveCopy` snapshot. Byte snapshots use the existing
+engine serializer, return native data without a Save dialog and keep the native
+revision/path/dirty state. Other conditional commands are unsupported. Wrong or
 stale UID/revision, a different explicit `document`, a closed source or a pending
 interaction fails before normal app dispatch. Unsupported conditional commands
 and malformed tokens fail explicitly. Existing unguarded command callers retain
@@ -48,6 +51,23 @@ and SDK [#455](https://github.com/storytold/craft-libs/pull/455) retain guest ma
 and `link.call`/`link.exec` permission gates. Native preconditions grant no plugin
 permissions. No new broker, installer, plugin ABI or renderer is introduced here.
 
-Focused native checks and the real two-candidate consumer reproduction are
-recorded with the feature PR. Full workspace CI and non-Windows runtime must not
-be inferred from those results. No binary redistribution is included.
+Verified on Windows: four engine invalidation tests, four UI guard/snapshot
+tests and 26 native auth/control socket tests passed on the isolated auth
+composition. The exact publication branch also compiles its native bin/tests.
+The engine without default features compiled for wasm32-unknown-unknown.
+
+The actual VectorCraft/FigCraft candidate consumer passed ten checks: unsaved
+name/opacity in both directions with unchanged native files, duplicate delivery,
+native and managed undo/redo, stale native write refusal, missing/wrong auth,
+broker interruption recovery, same-port app reopen and standalone save. A single
+sample measured 78.56 ms VectorCraft -> FigCraft and 61.63 ms reverse. These are
+small-document observations, not percentiles. The native save/reopen test uses
+existing `app.save {wait:true}` because background-save acknowledgement alone
+does not mean the file has reached disk.
+
+Strict library Clippy stopped at unchanged upstream `drop_non_drop` findings in
+`cmd/addons/cleanup/text.rs:958` and `cmd/fonts.rs:626`. The same focused check
+with only that lint allowed passed; no upstream file or lint policy was changed.
+Full workspace CI and non-Windows runtime were not executed. Reproducer and
+attributed auth test patch belong to the source-only CraftLink consumer. No
+binary redistribution is included.
