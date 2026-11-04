@@ -1995,6 +1995,36 @@ fn select_same_font_skips_type_that_cannot_be_selected() {
     assert_eq!(selected(&s), vec![g]);
 }
 
+/// A selected layer gives the type on it that can be selected as the reference of the font Same
+/// commands: a hidden or locked layer gives none.
+#[test]
+fn select_same_font_takes_its_reference_from_the_type_on_a_selected_layer() {
+    let mut s = session();
+    let typed =
+        |s: &mut Session, y: f64, font: &str| id_of(&s.execute("text.create", &json!({"x": 0, "y": y, "text": "type", "font": font})).unwrap());
+    let arial = typed(&mut s, 20.0, "Arial");
+    let courier = typed(&mut s, 60.0, "Courier");
+    let l2 = id_of(&s.execute("layer.new", &json!({"top": true})).unwrap());
+    let on_layer = typed(&mut s, 100.0, "Courier");
+    sel(&mut s, &[l2]);
+    assert_eq!(s.execute("select.same.fontFamily", &json!({})).unwrap()["count"], 2);
+    let mut got = selected(&s);
+    got.sort();
+    let mut want = vec![courier, on_layer];
+    want.sort();
+    assert_eq!(got, want);
+    assert!(!selected(&s).contains(&arial));
+    for (off, on) in [
+        (json!({"id": l2.0, "visible": false}), json!({"id": l2.0, "visible": true})),
+        (json!({"id": l2.0, "locked": true}), json!({"id": l2.0, "locked": false})),
+    ] {
+        s.execute("layer.setProps", &off).unwrap();
+        sel(&mut s, &[l2]);
+        assert!(s.execute("select.same.fontFamily", &json!({})).is_err(), "{off}");
+        s.execute("layer.setProps", &on).unwrap();
+    }
+}
+
 /// Select › Same › Text Fill & Stroke Color selects the type with characters whose fill and stroke
 /// both match the first character of the selected type: the same fill with another stroke, or the
 /// same stroke with another fill, is left out, and in type with several runs one run has to match
