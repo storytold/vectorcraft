@@ -6026,6 +6026,7 @@ breakText	Glyphs	Глифи
 	Gap 5	Разстояние 5
 
 @msg	{_1}: they came in as the page's art	{_1}: те са внесени като изображението от страницата
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	обектите, изобразени различно от собствената страница на файла, са внесени като изображението от страницата: {_1}
 
 @msg	You must choose a side pattern.	Трябва да изберете страничен шаблон.
 @msg	invalid pattern tile choice	невалиден избор на плочка за шаблон

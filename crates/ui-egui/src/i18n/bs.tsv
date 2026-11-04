@@ -6060,6 +6060,7 @@ shape	Open	Otvoren
 @msg	the paths have nothing to merge there	putanje tu nemaju šta spojiti
 @msg	the path is locked or hidden	putanja je zaključana ili skrivena
 @msg	{_1}: they came in as the page's art	{_1}: uvezeni su kao ilustracija stranice
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekti koji su se iscrtali drugačije od vlastite stranice datoteke uvezeni su kao ilustracija stranice: {_1}
 
 @msg	You must choose a side pattern.	Morate odabrati bočni uzorak.
 @msg	invalid pattern tile choice	nevažeći izbor pločice uzorka

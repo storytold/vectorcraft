@@ -5755,6 +5755,7 @@ breakText	Glyphs	글리프
 	Gap 5	간격 5
 
 @msg	{_1}: they came in as the page's art	{_1}: 페이지의 아트로 가져왔습니다
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	파일 자체 페이지와 다르게 그려진 오브젝트를 페이지의 아트로 가져왔습니다: {_1}
 
 @msg	You must choose a side pattern.	측면 패턴을 선택해야 합니다.
 @msg	invalid pattern tile choice	잘못된 패턴 타일 선택
