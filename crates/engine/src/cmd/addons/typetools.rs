@@ -89,29 +89,58 @@ fn text_tweaker(s: &mut Session, p: &Value) -> Result<Value> {
     let mut rng = Rng::new(whole_or(p, "seed", 0, C)?);
     let skip = switch_or(p, "skipSpaces", true, C)?;
     let setup = s.doc()?.doc.setup.clone();
+    // A range given as anything but whole bytes is refused, not read as all of the text.
+    for k in ["start", "end"] {
+        if p.get(k).is_some_and(|v| !v.is_null() && v.as_u64().is_none()) {
+            return Err(bad(C, format!("`{k}` must be a whole number of bytes")));
+        }
+    }
     // At a caret, all of the object's text.
     let ranges = type_ranges(s, p, C, |text, _| Some((0, text.len())))?;
     // Each object's changed characters: (byte, its change), worked out before the edit.
     let mut plans: Vec<(NodeId, Vec<(usize, CharChange)>)> = vec![];
-    let mut count = 0;
+    let (mut seen, mut count) = (0, 0);
     for (id, a, b, _) in ranges {
         let t = text_ref(s, id)?;
         let text = t.plain_text();
         let chars: Vec<usize> =
             text.char_indices().filter(|&(i, c)| (a..b).contains(&i) && !(skip && (c.is_whitespace() || c.is_control()))).map(|(i, _)| i).collect();
-        count += chars.len();
-        if count > MAX_CHARS {
+        seen += chars.len();
+        if seen > MAX_CHARS {
             return Err(bad(C, format!("too many characters: at most {MAX_CHARS}")));
         }
+        // Each run's end byte, to find the style a character has now.
+        let ends: Vec<usize> = t
+            .runs
+            .iter()
+            .scan(0, |off, r| {
+                *off += r.text.len();
+                Some(*off)
+            })
+            .collect();
         let n = chars.len();
         let mut changes = Vec::with_capacity(n);
+        let mut run = 0;
         for (i, at) in chars.into_iter().enumerate() {
             let random = if shape == "random" { unit(&mut rng) } else { 0.0 };
             let value = from + (to - from) * amount(shape, i, n, random);
             let mut change = CharChange::parse(&json!({ key: value }), C, &setup)?;
             change.localize(&t, C)?;
+            while ends.get(run).is_some_and(|&e| e <= at) {
+                run += 1;
+            }
+            // A character that already has the value is left out, so a run that changes nothing
+            // makes no step.
+            if let Some(r) = t.runs.get(run) {
+                let mut style = r.style.clone();
+                change.apply(&mut style);
+                if style == r.style {
+                    continue;
+                }
+            }
             changes.push((at, change));
         }
+        count += changes.len();
         if !changes.is_empty() {
             plans.push((id, changes));
         }
