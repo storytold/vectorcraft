@@ -69,16 +69,64 @@ pub(super) struct SlotInfo {
     pub(super) shown: bool,
     /// Its own frame or path, where the file places it ([`ai::text_frames`]).
     pub(super) art_path: Option<PathData>,
+    /// For type that a layer's or group's look draws ([`ai::is_look_slot`]): the box of the group
+    /// it is in, the copy of the art that the look draws (that of the group around it when it draws
+    /// nothing but type).
+    pub(super) look: Option<Rect>,
+    /// The group it is in.
+    pub(super) group: Option<NodeId>,
 }
 
 /// The text slots of the layers and objects, in order.
 pub(super) fn collect_slots(nodes: &[Arc<Node>], shown: bool, out: &mut Vec<SlotInfo>) {
+    slots_in(nodes, shown, &mut vec![], &mut Default::default(), out);
+}
+
+/// [`collect_slots`] for `nodes` in the innermost of `groups`. The boxes of groups are measured
+/// only for type that looks draw, once each (`boxes`).
+fn slots_in<'a>(
+    nodes: &'a [Arc<Node>],
+    shown: bool,
+    groups: &mut Vec<&'a Node>,
+    boxes: &mut std::collections::HashMap<NodeId, Option<Rect>>,
+    out: &mut Vec<SlotInfo>,
+) {
     for n in nodes {
         let shown = shown && n.visible;
         if let Some(story) = slot_of(n.name.as_deref()) {
-            out.push(SlotInfo { story, frame: ai::slot_frame(n.name.as_deref()), shown, art_path: None });
+            // A group with nothing to draw but type is in the box of the group around it.
+            let look = ai::is_look_slot(n.name.as_deref())
+                .then(|| groups.iter().rev().find_map(|g| *boxes.entry(g.id).or_insert_with(|| g.visual_bounds())).unwrap_or(Rect::ZERO));
+            let group = groups.last().map(|g| g.id);
+            out.push(SlotInfo { story, frame: ai::slot_frame(n.name.as_deref()), shown, art_path: None, look, group });
         } else if let Some(c) = n.children().filter(|_| !matches!(n.kind, NodeKind::Compound { .. })) {
-            collect_slots(c, shown, out);
+            groups.push(n);
+            slots_in(c, shown, groups, boxes, out);
+            groups.pop();
+        }
+    }
+}
+
+/// Past the limits on matching the page's type (`pieces` text objects) with the text slots `infos` of
+/// `layers`, the slots of type that looks draw go: their copies' type is matched like any other of
+/// the page's type. They also go when the page's type comes in as outlines (`outlined`), which leaves
+/// them no type to hold.
+pub(super) fn limit_look_slots(layers: &mut Vec<Arc<Node>>, infos: &mut Vec<SlotInfo>, pieces: usize, outlined: bool) {
+    let looks = infos.iter().filter(|i| i.look.is_some()).count();
+    if looks > 0 && (outlined || looks > MAX_SLOTS || infos.len().saturating_mul(pieces) > MAX_PAIRS) {
+        drop_look_type_slots(layers);
+        infos.retain(|i| i.look.is_none());
+    }
+}
+
+/// Remove the text slots of type that looks draw ([`ai::is_look_slot`]) from `nodes` and their groups.
+fn drop_look_type_slots(nodes: &mut Vec<Arc<Node>>) {
+    nodes.retain(|n| !ai::is_look_slot(n.name.as_deref()));
+    for n in nodes.iter_mut() {
+        if n.children().is_some_and(|c| !c.is_empty())
+            && let Some(c) = Arc::make_mut(n).children_mut()
+        {
+            drop_look_type_slots(c);
         }
     }
 }
@@ -517,6 +565,41 @@ pub(super) fn extent(parts: &[Arc<Node>]) -> Option<Rect> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Past the limits, the slots of type that looks draw go, in groups too, and other slots stay.
+    #[test]
+    fn look_type_slots_are_dropped_from_groups() {
+        let mut doc = Document::new(100.0, 100.0);
+        let mut slot = |name: &str| {
+            let mut n = Node::group(doc.alloc_id(), vec![]);
+            n.name = Some(name.into());
+            Arc::new(n)
+        };
+        let (look, own) = (slot("\u{0}text:look"), slot("\u{0}text0:0"));
+        let inner = Arc::new(Node::group(NodeId(90), vec![look.clone(), own.clone()]));
+        let mut nodes = vec![look, inner];
+        let collected = |nodes: &[Arc<Node>]| {
+            let mut infos = vec![];
+            collect_slots(nodes, true, &mut infos);
+            infos
+        };
+        let stories = |infos: &[SlotInfo]| infos.iter().map(|i| (i.story, i.look.is_some())).collect::<Vec<_>>();
+        // Within the limits, they stay.
+        let mut infos = collected(&nodes);
+        limit_look_slots(&mut nodes, &mut infos, 10, false);
+        assert_eq!(stories(&infos), [(None, true), (None, true), (Some(0), false)]);
+        assert_eq!(stories(&collected(&nodes)), stories(&infos));
+        // Three slots and a third of `MAX_PAIRS` pieces of the page's type, and more, are past them.
+        let mut past = nodes.clone();
+        let mut past_infos = collected(&past);
+        limit_look_slots(&mut past, &mut past_infos, MAX_PAIRS / 3 + 1, false);
+        assert_eq!(stories(&past_infos), [(Some(0), false)]);
+        assert_eq!(stories(&collected(&past)), stories(&past_infos));
+        // With the page's type as outlines, they go within the limits too.
+        limit_look_slots(&mut nodes, &mut infos, 10, true);
+        assert_eq!(stories(&infos), [(Some(0), false)]);
+        assert_eq!(stories(&collected(&nodes)), stories(&infos));
+    }
 
     /// A text slot that is a wrap object, filled with the page's type in two parts, stays one
     /// wrap object: a group of the parts.

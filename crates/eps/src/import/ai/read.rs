@@ -354,6 +354,11 @@ fn marker(c: &str) -> &str {
     word.strip_prefix("AI").map(|r| r.trim_start_matches(|ch: char| ch.is_ascii_digit())).and_then(|r| r.strip_prefix('_')).unwrap_or(word)
 }
 
+/// Is `name` that of a text slot for type that a look draws ([`document::LOOK_SLOT`])?
+pub(crate) fn is_look_slot(name: Option<&str>) -> bool {
+    name == Some(document::LOOK_SLOT)
+}
+
 impl<'a> Reader<'a> {
     fn new(data: &'a [u8]) -> Self {
         let mut doc = Document::new(1.0, 1.0);

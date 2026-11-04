@@ -2250,6 +2250,33 @@ fn text_objects_are_slots_named_after_their_story() {
     let r = read_ok(&layer(&format!("{look}{own}1 (Style) XW\n")));
     let a = art(&r.doc);
     assert_eq!((a.len(), a[0].children().map(Vec::len), slot_of(a[1].name.as_deref())), (2, Some(1), Some(Some(7))));
+    // The type of the look in a group of it is the object's too.
+    let nested = look.replacen("u\n", "u\nu\n", 1).replacen("U\n", "U\nU\n", 1);
+    let r = read_ok(&layer(&format!("{nested}{own}1 (Style) XW\n")));
+    let mut slots = vec![];
+    r.doc.walk(|n| {
+        if let Some(story) = slot_of(n.name.as_deref()) {
+            slots.push(story);
+        }
+    });
+    assert_eq!(slots, [Some(7)]);
+    // Whatever comes of the object's style, the type of its look is the object's.
+    for marker in ["1 () XW", "2 (Style) XW"] {
+        let r = read_ok(&layer(&format!("{look}{own}{marker}\n")));
+        let mut looks = 0;
+        r.doc.walk(|n| looks += usize::from(super::is_look_slot(n.name.as_deref())));
+        assert_eq!(looks, 0, "{marker}");
+    }
+    // In the look of a group, the type is that of a copy the look draws: a slot without a story.
+    let group = "u\n%_/AI11Text :\n%_0 /FreeUndo ,\n%_0 /FrameIndex ,\n%_7 /StoryIndex ,\n%_;\n%_U\n";
+    let r = read_ok(&layer(&format!("{look}{group}1 (Style) XW\n")));
+    let mut slots = vec![];
+    r.doc.walk(|n| {
+        if slot_of(n.name.as_deref()).is_some() {
+            slots.push(n.name.clone());
+        }
+    });
+    assert!(slots.len() == 1 && slots.iter().all(|n| super::is_look_slot(n.as_deref())), "{slots:?}");
 }
 
 /// A file in the legacy format (version 7) whose layer holds `art`, crop marks 0 0 200 100.
