@@ -92,8 +92,9 @@ pub(crate) fn thumb_options() -> vectorcraft_render::RenderOptions {
 
 /// Has `n` at most `nodes` objects inside it, and at most `anchors` anchors in its paths and the
 /// paths inside it, the frames of area type and the paths of type on a path included (counting
-/// stops at either limit)?
-fn small_node(n: &Node, nodes: usize, anchors: usize) -> bool {
+/// stops at either limit)? With `masks`, the art of the opacity masks that are not disabled, and
+/// the objects and anchors inside it, count as well.
+fn small_node(n: &Node, nodes: usize, anchors: usize, masks: bool) -> bool {
     fn own_anchors(n: &Node) -> usize {
         match &n.kind {
             NodeKind::Text(t) => match &t.kind {
@@ -103,22 +104,23 @@ fn small_node(n: &Node, nodes: usize, anchors: usize) -> bool {
             _ => n.path_data().map_or(0, PathData::anchor_count),
         }
     }
-    fn count(n: &Node, nodes: &mut usize, anchors: &mut usize) -> bool {
+    fn count(n: &Node, nodes: &mut usize, anchors: &mut usize, masks: bool) -> bool {
         let Some(left) = anchors.checked_sub(own_anchors(n)) else { return false };
         *anchors = left;
-        for c in n.children().into_iter().flatten() {
+        let mask = n.extras().mask.as_deref().filter(|m| masks && !m.disabled).map(|m| &m.art);
+        for c in n.children().into_iter().flatten().chain(mask) {
             if *nodes == 0 {
                 return false;
             }
             *nodes -= 1;
-            if !count(c, nodes, anchors) {
+            if !count(c, nodes, anchors, masks) {
                 return false;
             }
         }
         true
     }
     let (mut nodes, mut anchors) = (nodes, anchors);
-    count(n, &mut nodes, &mut anchors)
+    count(n, &mut nodes, &mut anchors, masks)
 }
 
 /// The thumbnail of `n` (`px` pixels square) as `r` renders it, on the UI thread or the worker.
@@ -205,7 +207,12 @@ impl Thumbs {
             self.spent = (pass, 0.0, 0);
         }
         let in_budget = self.spent.1 < THUMB_BUDGET_MS && self.spent.2 < THUMB_BUDGET_COUNT;
-        let light = light.unwrap_or_else(|| small_node(n, LIGHT_THUMB_NODES, LIGHT_THUMB_ANCHORS)) && in_budget;
+        // A row drawn before is light when its last thumbnail was quick to render, unless its
+        // object now has more anchors than the limit.
+        let light = match light {
+            Some(quick) => quick && small_node(n, usize::MAX, LIGHT_THUMB_ANCHORS, true),
+            None => small_node(n, LIGHT_THUMB_NODES, LIGHT_THUMB_ANCHORS, true),
+        } && in_budget;
         if !light && let Some(w) = &self.worker {
             let (doc, node) = (src.doc.clone(), n.clone());
             let job: ThumbJob = (key, Arc::downgrade(n), px);
@@ -256,7 +263,7 @@ pub(crate) fn real_thumb(ui: &Ui, src: &ThumbSource, n: &Arc<Node>, r: egui::Rec
 /// more than [`LIGHT_THUMB_ANCHORS`] anchors paints nothing, since this runs on every frame and
 /// measuring its bounds takes time in proportion to its anchor count.
 pub(super) fn thumb(ui: &Ui, n: &Node, r: egui::Rect) {
-    if !small_node(n, usize::MAX, LIGHT_THUMB_ANCHORS) {
+    if !small_node(n, usize::MAX, LIGHT_THUMB_ANCHORS, false) {
         return;
     }
     let Some(b) = n.visual_bounds() else { return };
@@ -285,7 +292,7 @@ pub(super) fn thumb(ui: &Ui, n: &Node, r: egui::Rect) {
 #[cfg(test)]
 mod tests {
     use vectorcraft_color::{Color, Paint};
-    use vectorcraft_doc::{Appearance, CharStyle, LayerColor, NodeKind, TextKind, TextObject};
+    use vectorcraft_doc::{Appearance, CharStyle, LayerColor, NodeKind, OpacityMask, TextKind, TextObject};
     use vectorcraft_geom::{Point, SubPath};
 
     use super::*;
@@ -323,7 +330,27 @@ mod tests {
     }
 
     fn small(n: &Node) -> bool {
-        small_node(n, LIGHT_THUMB_NODES, LIGHT_THUMB_ANCHORS)
+        small_node(n, LIGHT_THUMB_NODES, LIGHT_THUMB_ANCHORS, true)
+    }
+
+    /// `n` with an opacity mask of `art`, disabled or not.
+    fn masked(mut n: Node, art: Node, disabled: bool) -> Node {
+        let mut m = OpacityMask::new(art, true);
+        m.disabled = disabled;
+        n.extras_mut().mask = Some(Box::new(m));
+        n
+    }
+
+    #[test]
+    fn the_anchors_of_an_opacity_mask_count_unless_it_is_disabled() {
+        let long = || path(2, LIGHT_THUMB_ANCHORS + 1);
+        assert!(!small(&masked(rect(1), long(), false)), "a small object with a long mask");
+        assert!(small(&masked(rect(1), long(), true)), "a small object with a long mask that is disabled");
+        let inner = Node::group(NodeId(3), vec![Arc::new(long())]);
+        assert!(!small(&masked(rect(1), inner, false)), "a mask holding a long path");
+        let child = Node::group(NodeId(1), vec![Arc::new(masked(rect(4), long(), false))]);
+        assert!(!small(&child), "a group holding an object with a long mask");
+        assert!(small_node(&masked(rect(1), long(), false), usize::MAX, LIGHT_THUMB_ANCHORS, false), "masks left out");
     }
 
     #[test]
@@ -406,5 +433,23 @@ mod tests {
         assert!(thumbs.texture(&ctx, &src, &n, 24).is_some());
         assert_eq!(thumbs.renders, 1);
         assert!(thumbs.pending.is_empty());
+    }
+
+    #[test]
+    fn a_row_whose_object_becomes_a_long_path_is_drawn_again_on_the_worker() {
+        let ctx = egui::Context::default();
+        let Some(worker) = ThumbWorker::start(&ctx, "test") else { return };
+        let mut thumbs = Thumbs { worker: Some(worker), worker_started: true, ..Default::default() };
+        let (doc, n) = doc_with(|id| path(id.0, 50_000));
+        let key = (1, n.id);
+        // The row's last thumbnail showed a small object and took no time to render.
+        let before = Arc::new(rect(n.id.0));
+        thumbs.upload(&ctx, key, Arc::downgrade(&before), 24, None, 0.0);
+        let src = ThumbSource { uid: 1, revision: 2, doc: &doc, busy: false };
+        // The document reached this revision long before now, so it has settled.
+        thumbs.settle.settled(&ctx, 1, 2, f64::NEG_INFINITY);
+        thumbs.texture(&ctx, &src, &n, 24);
+        assert_eq!(thumbs.renders, 0, "not made on this thread");
+        assert!(thumbs.pending.contains_key(&key), "sent to the worker");
     }
 }
