@@ -506,6 +506,20 @@ fn a_recovery_folder_that_cannot_be_written_is_refused() {
             assert!(a.ui.status.starts_with("Data Recovery can't keep copies in "), "{}", a.ui.status);
         }
         let _ = std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755));
+        // A folder that can be written but not listed: the recovery store lists its folders.
+        let unlisted = dir.join("unlisted");
+        std::fs::create_dir(&unlisted).unwrap();
+        std::fs::set_permissions(&unlisted, std::fs::Permissions::from_mode(0o333)).unwrap();
+        // An account that may list anyway (root) has nothing to refuse.
+        if std::fs::read_dir(&unlisted).is_err() {
+            let answer = unlisted.to_string_lossy().into_owned();
+            a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
+            a.ui.status.clear();
+            choose_recovery_folder(&mut a, &mut d);
+            assert_eq!(d.str("recoveryFolder"), "kept");
+            assert!(a.ui.status.starts_with("Data Recovery can't keep copies in "), "{}", a.ui.status);
+        }
+        let _ = std::fs::set_permissions(&unlisted, std::fs::Permissions::from_mode(0o755));
     }
     let _ = std::fs::remove_dir_all(&dir);
 }

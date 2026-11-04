@@ -427,17 +427,18 @@ fn choose_recovery_folder(app: &mut VectorcraftApp, d: &mut Dialog) {
     }
 }
 
-/// `Ok` when `path` is a folder that a folder can be created in, as the recovery store makes its
-/// own there: an empty folder is made there and removed. A folder that can't be removed again is
-/// an error too.
+/// `Ok` when `path` is a folder that can be listed and that a folder can be created in, as the
+/// recovery store lists its folders there and makes its own: the folder is listed, and an empty
+/// folder is made there and removed. A folder that can't be removed again is an error too.
 fn writable_folder(path: &str) -> Result<(), String> {
     let dir = std::path::Path::new(path);
     if !dir.is_dir() {
         return Err(format!("{path} is not a folder"));
     }
+    let refused = |e: std::io::Error| format!("Data Recovery can't keep copies in {path}: {e}");
+    std::fs::read_dir(dir).map_err(refused)?;
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |t| t.as_nanos());
     let check = dir.join(format!(".vectorcraft-write-check-{}-{nanos}", std::process::id()));
-    let refused = |e: std::io::Error| format!("Data Recovery can't keep copies in {path}: {e}");
     std::fs::create_dir(&check).map_err(refused)?;
     std::fs::remove_dir(&check).map_err(refused)
 }
