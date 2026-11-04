@@ -3788,6 +3788,12 @@ digits	Malayalam	Малаялам
 	Scrub Numeric Fields by Dragging	Изменять числовые поля перетаскиванием
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?
 @plural	{n} linked file not found|{n} linked files not found	Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}
+@msg	fonts not copied: {fonts}	шрифты не скопированы: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Не найдено связанных файлов: {n})|(Не найдено связанных файлов: {n})|(Не найдено связанных файлов: {n})
+@msg	(fonts not copied: {fonts})	(шрифты не скопированы: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	шрифты не скопированы: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} связанное изображение изменилось с момента сохранения этого документа. Показать новую версию?|{n} связанных изображения изменились с момента сохранения этого документа. Показать новые версии?|{n} связанных изображений изменились с момента сохранения этого документа. Показать новые версии?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} связанное изображение изменилось на диске. Показать новую версию?|{n} связанных изображения изменились на диске. Показать новые версии?|{n} связанных изображений изменились на диске. Показать новые версии?

@@ -2522,6 +2522,12 @@ digits	Malayalam	Malajálamské
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} soubor v {folder} {note}. Zobrazit složku balíčku?|{n} soubory v {folder} {note}. Zobrazit složku balíčku?|{n} souborů v {folder} {note}. Zobrazit složku balíčku?
 @plural	{n} linked file not found|{n} linked files not found	Nenalezen {n} propojený soubor|Nenalezeny {n} propojené soubory|Nenalezeno {n} propojených souborů
 	fonts not copied: {fonts}	nezkopírovaná písma: {fonts}
+@msgplural	{n} linked file not found|{n} linked files not found	Nenalezen {n} propojený soubor|Nenalezeny {n} propojené soubory|Nenalezeno {n} propojených souborů
+@msg	fonts not copied: {fonts}	nezkopírovaná písma: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Nenalezen {n} propojený soubor)|(Nenalezeny {n} propojené soubory)|(Nenalezeno {n} propojených souborů)
+@msg	(fonts not copied: {fonts})	(nezkopírovaná písma: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	Built-in presets are read-only: New… starts an editable copy.	Vestavěná přednastavení jsou jen pro čtení: Nový… vytvoří kopii, kterou lze upravit.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na pracovní ploše odpovídá {real} {unit} ve scéně.
 	Grid Color & Opacity	Barva a krytí mřížky

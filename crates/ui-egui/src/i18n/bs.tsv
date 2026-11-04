@@ -2491,6 +2491,12 @@ digits	Malayalam	Malajalam
 	Save the document first?	Prvo sačuvati dokument?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Datoteka u {folder}: {n} {note}. Prikazati folder paketa?|Datoteka u {folder}: {n} {note}. Prikazati folder paketa?|Datoteka u {folder}: {n} {note}. Prikazati folder paketa?
 @plural	{n} linked file not found|{n} linked files not found	Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}
+@msg	fonts not copied: {fonts}	fontovi nisu kopirani: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Povezanih datoteka nije pronađeno: {n})|(Povezanih datoteka nije pronađeno: {n})|(Povezanih datoteka nije pronađeno: {n})
+@msg	(fonts not copied: {fonts})	(fontovi nisu kopirani: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	fontovi nisu kopirani: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Ugrađeni predlošci su samo za čitanje: Novo… započinje kopiju koja se može uređivati.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na radnoj ploči predstavlja {real} {unit} u sceni.

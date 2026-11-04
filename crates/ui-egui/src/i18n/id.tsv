@@ -2309,6 +2309,12 @@ digits	Malayalam	Malayalam
 	Save the document first?	Simpan dokumen terlebih dahulu?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} file dalam {folder} {note}. Tampilkan folder paket?
 @plural	{n} linked file not found|{n} linked files not found	{n} file tertaut tidak ditemukan
+@msgplural	{n} linked file not found|{n} linked files not found	{n} file tertaut tidak ditemukan
+@msg	fonts not copied: {fonts}	font tidak disalin: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} file tertaut tidak ditemukan)
+@msg	(fonts not copied: {fonts})	(font tidak disalin: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	font tidak disalin: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Preset bawaan bersifat hanya-baca: Baru… memulai salinan yang dapat diedit.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} pada artboard mewakili {real} {unit} dalam scene.
