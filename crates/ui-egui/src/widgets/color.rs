@@ -249,14 +249,10 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
         let n = i.num_accesskit_action_requests(id, Action::Increment) as f64 - i.num_accesskit_action_requests(id, Action::Decrement) as f64;
         v = by(v, n).clamp(lo, hi);
         // The last set-value request this frame.
-        let set = i
-            .accesskit_action_requests(id, Action::SetValue)
-            .filter_map(|request| match request.data {
-                Some(ActionData::NumericValue(value)) => Some(value),
-                _ => None,
-            })
-            .last()
-            .filter(|value| value.is_finite());
+        let set = i.accesskit_action_requests(id, Action::SetValue).last().and_then(|request| match request.data {
+            Some(ActionData::NumericValue(value)) if value.is_finite() => Some(value),
+            _ => None,
+        });
         if let Some(value) = set {
             // The number the field would show, as `SliderValue::field` reads it.
             let shown = s.decimals.map_or(value, |d| field_text(value, "", d).parse().unwrap_or(value));

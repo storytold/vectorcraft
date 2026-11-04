@@ -2056,6 +2056,9 @@ fn screen_readers_set_a_dialog_slider_number() {
     assert_eq!(angle(&app), -90.0, "not a number");
     f.run(&mut app, vec![set(30.0), set(f64::INFINITY)]);
     assert_eq!(angle(&app), -90.0, "the last request is not a finite number");
+    let empty = ActionRequest { action: Action::SetValue, target_node: node, target_tree: TreeId::ROOT, data: None };
+    f.run(&mut app, vec![set(30.0), egui::Event::AccessKitActionRequest(empty)]);
+    assert_eq!(angle(&app), -90.0, "the last request has no number");
     // A field past its rail's end extends the range screen readers get, and a set value can go
     // that far: Transform Each's Horizontal Scale at 300% on a rail that ends at 200%.
     app.ui.dialog = None;
