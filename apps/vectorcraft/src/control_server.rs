@@ -152,6 +152,7 @@ fn spawn_connection(
 
 fn serve_socket(stream: TcpStream, timeouts: ConnectionTimeouts, handle: impl FnMut(String, Value) -> Option<Value>) {
     let Ok(read) = stream.try_clone() else { return };
+    let closer = stream.try_clone().ok();
     let read = DeadlineReader::new(read, timeouts.idle, timeouts.line);
     // Replies reach the writer in [`REPLY_CHUNK`] pieces ([`write_line`]), so checking the remaining
     // budget costs one socket option call per piece, not one per JSON token.
@@ -166,6 +167,33 @@ fn serve_socket(stream: TcpStream, timeouts: ConnectionTimeouts, handle: impl Fn
         },
         DeadlineWriter::begin_reply,
     );
+    if let Some(s) = closer {
+        close_gracefully(s);
+    }
+}
+
+/// How long [`close_gracefully`] waits for the peer to close its side.
+const CLOSE_DRAIN: Duration = Duration::from_secs(1);
+
+/// The most [`close_gracefully`] reads from a peer that keeps sending.
+const MAX_DRAIN: usize = 1 << 20;
+
+/// Ends a connection: no more replies (the peer reads them all, then end of stream), then what the
+/// peer still sends is read and dropped until it closes too, for at most [`CLOSE_DRAIN`] and
+/// [`MAX_DRAIN`] bytes. On Windows, dropping a socket with unread input resets the connection, and
+/// the reset can discard replies the peer has not read yet.
+fn close_gracefully(mut s: TcpStream) {
+    // Each step is best effort: a peer that is already gone needs none of them.
+    let _ = s.shutdown(std::net::Shutdown::Write);
+    let _ = s.set_read_timeout(Some(CLOSE_DRAIN));
+    let deadline = std::time::Instant::now() + CLOSE_DRAIN;
+    let (mut buf, mut left) = ([0u8; 4096], MAX_DRAIN);
+    while left > 0 && std::time::Instant::now() < deadline {
+        match s.read(&mut buf) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => left = left.saturating_sub(n),
+        }
+    }
 }
 
 /// One parsed line.
