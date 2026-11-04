@@ -337,7 +337,7 @@ fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool)
 /// object inside two selected objects is given twice. The walk stops when `f` returns false.
 fn each_selected_text(s: &Session, mut f: impl FnMut(NodeId) -> bool) {
     fn inside(n: &Node, f: &mut impl FnMut(NodeId) -> bool) -> bool {
-        if !n.visible || n.locked {
+        if !n.visible || n.locked || n.is_template() {
             return true;
         }
         if matches!(n.kind, NodeKind::Text(_)) && !f(n.id) {
