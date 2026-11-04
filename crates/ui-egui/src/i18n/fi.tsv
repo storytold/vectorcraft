@@ -1322,6 +1322,9 @@ lighting	Light	Valo
 	Zoom Tool	Zoomaustyökalu
 	Action {n}	Toiminto {n}
 	Begin Recording	Aloita tallennus
+	Exclude from playback	Jätä pois toistosta
+	Include in playback	Sisällytä toistoon
+	Include Action Steps	Sisällytä toiminnon vaiheet
 	Center on Artboard	Keskitä piirtoalustalle
 	Default Actions	Oletustoiminnot
 	▾ Default Actions	▾ Oletustoiminnot
@@ -5508,6 +5511,10 @@ mark-style	Japanese	Japanilainen
 @msg	the Simplify slider is not open	Yksinkertaista-liukusäädin ei ole auki
 @msg	the Smooth slider is not open	Tasoita-liukusäädin ei ole auki
 @msg	the action has no steps	toiminnossa ei ole vaiheita
+@msg	the action has no included steps	toiminnossa ei ole sisällytettyjä vaiheita
+@msg	no such action step	toiminnon vaihetta ei ole
+@msg	included must be true or false	included on oltava true tai false
+@msg	others must be true or false	others on oltava true tai false
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	tiedoston tasoja ei luettu ({_1}): se tuodaan sivunaan yhdelle tasolle
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	tiedoston tasoja ei luettu sen muokkaustiedoista ({_1}): ne tulevat sen PDF-osasta
 @msg	the screen color sampler is already open	värin poiminta näytöltä on jo auki

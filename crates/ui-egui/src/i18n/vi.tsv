@@ -320,6 +320,9 @@ font-technology	Variable	Biến thiên
 	Batch	Hàng loạt
 	Bearing	Hướng
 	Begin Recording	Bắt đầu ghi
+	Exclude from playback	Loại khỏi phát lại
+	Include in playback	Đưa vào phát lại
+	Include Action Steps	Đưa các bước hành động vào
 	Begin Undo Group	Bắt đầu nhóm hoàn tác
 	Bend:	Uốn cong:
 	Best	Tốt nhất
@@ -5144,6 +5147,10 @@ theme	Appearance	Giao diện
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	không có gì trong tập dữ liệu {name} được áp dụng: không có đối tượng nào được gắn với biến số mà tập dữ liệu có giá trị
 @msg	no bound object reports a value (locked objects and embedded images report none)	không có đối tượng được gắn nào báo cáo giá trị (đối tượng bị khóa và hình ảnh nhúng không báo cáo giá trị nào)
 @msg	the action has no steps	hành động không có bước nào
+@msg	the action has no included steps	hành động không có bước nào được đưa vào
+@msg	no such action step	không có bước hành động như vậy
+@msg	included must be true or false	included phải là true hoặc false
+@msg	others must be true or false	others phải là true hoặc false
 
 # User Interface › Accent Color
 	Accent Color	Màu nhấn

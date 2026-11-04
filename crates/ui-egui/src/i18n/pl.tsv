@@ -1263,6 +1263,9 @@ lighting	Light	Światło
 	Zoom Tool	Narzędzie Lupka
 	Action {n}	Operacja {n}
 	Begin Recording	Rozpocznij nagrywanie
+	Exclude from playback	Wyklucz z odtwarzania
+	Include in playback	Uwzględnij w odtwarzaniu
+	Include Action Steps	Uwzględnij kroki operacji
 	Center on Artboard	Wyśrodkuj na obszarze kompozycji
 	Default Actions	Operacje domyślne
 	Duplicate and Offset 10 pt	Powiel i odsuń o 10 pt
@@ -5403,6 +5406,10 @@ mark-style	Japanese	Japońskie
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	z zestawu danych {name} nic nie zastosowano: żaden obiekt nie jest powiązany ze zmienną, dla której ma on wartość
 @msg	no bound object reports a value (locked objects and embedded images report none)	żaden powiązany obiekt nie zwraca wartości (zablokowane obiekty i osadzone obrazy nie zwracają żadnej)
 @msg	the action has no steps	operacja nie ma kroków
+@msg	the action has no included steps	operacja nie ma uwzględnionych kroków
+@msg	no such action step	brak takiego kroku operacji
+@msg	included must be true or false	included musi mieć wartość true lub false
+@msg	others must be true or false	others musi mieć wartość true lub false
 
 # User Interface › Accent Color
 	Accent Color	Kolor akcentu

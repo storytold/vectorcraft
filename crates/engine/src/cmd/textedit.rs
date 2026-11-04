@@ -351,6 +351,8 @@ pub(crate) struct CharChange {
     stroke: Option<Paint>,
     /// Weight (`strokeWidth`), cap, join, miter limit and dashes of the character stroke.
     stroke_opts: StrokeChange,
+    /// Document points per text-space point for a stroke edit.
+    stroke_scale: Option<f64>,
     underline: Option<bool>,
     strikethrough: Option<bool>,
     all_caps: Option<bool>,
@@ -641,6 +643,7 @@ impl CharChange {
             fill: paint_param(p, "fill", cmd)?,
             stroke: paint_param(p, "stroke", cmd)?,
             stroke_opts,
+            stroke_scale: None,
             underline: flag("underline"),
             strikethrough: flag("strikethrough"),
             all_caps: flag("allCaps"),
@@ -723,6 +726,7 @@ impl CharChange {
         self.tcy_up_down = self.tcy_up_down.map(|v| local_type_value(t, v, (-1296.0, 1296.0), false, cmd)).transpose()?;
         self.tcy_left_right = self.tcy_left_right.map(|v| local_type_value(t, v, (-1296.0, 1296.0), false, cmd)).transpose()?;
         self.h_scale = self.h_scale.map(|v| local_type_value(t, v, (1.0, 10000.0), true, cmd)).transpose()?;
+        self.stroke_scale = Some(vectorcraft_doc::Scaling::factor(t.xf).filter(|k| k.is_finite() && *k > 1e-12).unwrap_or(1.0));
         Ok(())
     }
 
@@ -809,10 +813,13 @@ impl CharChange {
             st.fill = v.clone();
         }
         if let Some(v) = &self.stroke {
+            if !v.is_none() {
+                super::gradient::run_stroke_weight(st);
+            }
             st.stroke = v.clone();
         }
         if !self.stroke_opts.is_empty() {
-            self.stroke_opts.apply_char(st);
+            self.stroke_opts.apply_char_scaled(st, self.stroke_scale.unwrap_or(1.0));
         }
         if let Some(v) = self.underline {
             st.underline = v;

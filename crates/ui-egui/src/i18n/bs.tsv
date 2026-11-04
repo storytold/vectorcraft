@@ -1325,6 +1325,9 @@ lighting	Light	Svjetlo
 	Zoom Tool	Alat za zumiranje
 	Action {n}	Akcija {n}
 	Begin Recording	Započni snimanje
+	Exclude from playback	Isključi iz reprodukcije
+	Include in playback	Uključi u reprodukciju
+	Include Action Steps	Uključi korake akcije
 	Center on Artboard	Centriraj na radnoj ploči
 	Default Actions	Zadane akcije
 	▾ Default Actions	▾ Zadane akcije
@@ -5469,6 +5472,10 @@ mark-style	Japanese	Japanski
 @msg	open a document with data sets	otvorite dokument sa skupovima podataka
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ništa iz skupa podataka {name} nije primijenjeno: nijedan objekat nije vezan za varijablu za koju ima vrijednost
 @msg	the action has no steps	akcija nema koraka
+@msg	the action has no included steps	akcija nema uključenih koraka
+@msg	no such action step	nema takvog koraka akcije
+@msg	included must be true or false	included mora biti true ili false
+@msg	others must be true or false	others mora biti true ili false
 	Accent Color	Boja naglaska
 	Amber	Jantar
 	Coral	Koralna

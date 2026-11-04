@@ -289,6 +289,9 @@ font-technology	Variable	Варіативні
 	Basic Latin	Основна латиниця
 	Batch	Пакет
 	Begin Recording	Почати запис
+	Exclude from playback	Виключити з відтворення
+	Include in playback	Включити до відтворення
+	Include Action Steps	Включити кроки дії
 	Bend:	Вигин:
 	Bevel Join	Скошене з’єднання
 	Bitmap	Растрове зображення
@@ -5143,6 +5146,10 @@ lighting	Light	Світло
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	з набору даних {name} нічого не застосовано: жоден об’єкт не прив’язано до змінної, для якої в ньому є значення
 @msg	no bound object reports a value (locked objects and embedded images report none)	жоден прив’язаний об’єкт не повідомляє значення (заблоковані об’єкти та вбудовані зображення не повідомляють значень)
 @msg	the action has no steps	у дії немає кроків
+@msg	the action has no included steps	у дії немає включених кроків
+@msg	no such action step	такого кроку дії немає
+@msg	included must be true or false	included має бути true або false
+@msg	others must be true or false	others має бути true або false
 
 # User Interface › Accent Color
 	Accent Color	Колір акценту

@@ -1259,6 +1259,9 @@ lighting	Light	Cahaya
 	Zoom Tool	Alat zoom
 	Action {n}	Aksi {n}
 	Begin Recording	Mulai merekam
+	Exclude from playback	Kecualikan dari pemutaran
+	Include in playback	Sertakan dalam pemutaran
+	Include Action Steps	Sertakan langkah aksi
 	Center on Artboard	Pusatkan di artboard
 	Default Actions	Aksi default
 	▾ Default Actions	▾ Aksi default
@@ -5206,6 +5209,10 @@ mark-style	Japanese	Jepang
 @msg	choose a source folder	pilih folder sumber
 @msg	open a document with data sets	buka dokumen dengan himpunan data
 @msg	the action has no steps	action tidak memiliki langkah
+@msg	the action has no included steps	aksi tidak memiliki langkah yang disertakan
+@msg	no such action step	tidak ada langkah aksi seperti itu
+@msg	included must be true or false	included harus true atau false
+@msg	others must be true or false	others harus true atau false
 	Registration:	Registrasi:
 	By Layer	Per lapisan
 	By Object	Per objek

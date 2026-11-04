@@ -107,7 +107,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill Color",
             ["Select", "Same"],
             None,
-            "{} the objects filled with the first selected object's fill colour (any tint of its global or spot swatch, the same tint with prefs selectSameTintPercent); a member path of a compound path selected first compares as its compound path, except in isolation mode inside that compound path; from a Live Paint face, the faces of its Live Paint group only, and from any other object, no Live Paint face",
+            "{} the objects filled with the first selected object's fill colour (any tint of its global or spot swatch, the same tint with prefs selectSameTintPercent); a member path of a compound path selected first compares as its compound path, except in isolation mode inside that compound path; from a Live Paint face, the faces of its Live Paint group only, and from any other object, no Live Paint face; every select.same command that compares with the first selected object passes over a selected object that is hidden or locked, on a template layer or outside the isolated group",
             has_selection,
             |s, _| {
                 let tint = s.prefs.select_same_tint_percent;
@@ -686,12 +686,21 @@ fn paint_reported(d: &Document, n: &Node) -> bool {
 }
 
 /// The object Select > Same compares the others with, and whether isolation mode is inside a
-/// compound path. The object is the first selected one, or its compound path when it is a member
-/// of one; in isolation mode inside a compound path it is the member path itself.
+/// compound path. The object is the first selected one that [`is_selectable`] accepts (none that is
+/// hidden, locked, on a hidden, locked or template layer, or outside the isolated group), or its
+/// compound path when it is a member of one; in isolation mode inside a compound path it is the
+/// member path itself.
 fn same_reference<'a>(st: &'a DocState, cmd: &str) -> Result<(&'a Node, bool)> {
     let compound = |n: &Node| matches!(n.kind, NodeKind::Compound { .. });
     let members = st.isolation.and_then(|i| st.doc.ancestry(i)).is_some_and(|a| a.iter().any(|i| st.doc.node(*i).is_some_and(compound)));
-    let first = st.selection.objects.first().and_then(|id| st.doc.node(*id)).ok_or_else(|| bad(cmd, "nothing selected"))?;
+    let locks = st.doc.locked_artboards();
+    let first = st
+        .selection
+        .objects
+        .iter()
+        .find(|id| is_selectable(&st.doc, st.isolation, &locks, **id))
+        .and_then(|id| st.doc.node(*id))
+        .ok_or_else(|| bad(cmd, "nothing selected"))?;
     let refn = match st.doc.parent_of(first.id).and_then(|p| st.doc.node(p)) {
         Some(p) if !members && compound(p) => p,
         _ => first,

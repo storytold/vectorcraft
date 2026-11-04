@@ -295,6 +295,9 @@ font-technology	Variable	Variabili
 	Basic Latin	Latino di base
 	Batch	Elaborazione batch
 	Begin Recording	Avvia registrazione
+	Exclude from playback	Escludi dall'esecuzione
+	Include in playback	Includi nell'esecuzione
+	Include Action Steps	Includi passaggi azione
 	Bend:	Curvatura:
 	Bevel Join	Unione smussata
 	Bitmap	Bitmap
@@ -5163,6 +5166,10 @@ lighting	Light	Luce
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	non è stato applicato nulla del set di dati {name}: nessun oggetto è associato a una variabile per cui ha un valore
 @msg	no bound object reports a value (locked objects and embedded images report none)	nessun oggetto associato restituisce un valore (gli oggetti bloccati e le immagini incorporate non ne restituiscono)
 @msg	the action has no steps	l'azione non ha passaggi
+@msg	the action has no included steps	l'azione non ha passaggi inclusi
+@msg	no such action step	passaggio dell'azione inesistente
+@msg	included must be true or false	included deve essere true o false
+@msg	others must be true or false	others deve essere true o false
 
 # User Interface › Accent Color
 	Accent Color	Colore di risalto
