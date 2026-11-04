@@ -253,8 +253,8 @@ pub(crate) fn real_thumb(ui: &Ui, src: &ThumbSource, n: &Arc<Node>, r: egui::Rec
 }
 
 /// Tiny vector thumbnail painted with egui (fallback when rendering isn't possible). A node with
-/// more than [`LIGHT_THUMB_ANCHORS`] anchors paints nothing: measuring its bounds takes about as
-/// long as rendering it.
+/// more than [`LIGHT_THUMB_ANCHORS`] anchors paints nothing, since this runs on every frame and
+/// measuring its bounds takes time in proportion to its anchor count.
 pub(super) fn thumb(ui: &Ui, n: &Node, r: egui::Rect) {
     if !small_node(n, usize::MAX, LIGHT_THUMB_ANCHORS) {
         return;
