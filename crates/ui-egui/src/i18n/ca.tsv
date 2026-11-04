@@ -5054,6 +5054,7 @@ digits	Malayalam	Malaiàlam
 @msg	Create Outlines: select text objects	Crea contorns: seleccioneu objectes de text
 @msg	damaged	malmès
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	La recuperació de dades no té cap lloc on guardar còpies: configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	La recuperació de dades no pot guardar còpies a {path}: {e}
 @msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	les dades que llegeix el programa estan malmeses o tallades, o el programa demana una posició en un fitxer que no en té
 @msg	decimals must be {_1}–{_2} (got {_3})	els decimals han de ser {_1}–{_2} (rebut {_3})
 @msg	Dimension point is outside the canvas	El punt de dimensió és fora del llenç
