@@ -17,7 +17,7 @@ use super::scan::{file_face_names, is_font_file};
 use super::traits::faces_published;
 #[cfg(not(target_arch = "wasm32"))]
 use super::traits::{Alias, FaceStyle};
-use super::{Arc, AtomicU64, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, PathBuf, RwLock, StringId};
+use super::{Arc, AtomicU64, CjkPreference, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, PathBuf, RwLock, StringId};
 #[cfg(not(target_arch = "wasm32"))]
 use super::{ScanStamp, modified};
 
@@ -69,7 +69,30 @@ impl FontDb {
             #[cfg(not(target_arch = "wasm32"))]
             stamp: Mutex::new(None),
             instances: Mutex::new(Instances::default()),
+            cjk: RwLock::new(CjkPreference::default()),
         }
+    }
+
+    /// Ask Han ideographs to be drawn with `preference`'s script. The interface calls this with the
+    /// resolved language, on the first frame and again when Preferences changes it; a database that
+    /// is never told keeps the order it had (`CjkPreference::Unspecified`).
+    pub fn set_cjk_preference(&self, preference: CjkPreference) {
+        // Only a real change invalidates the render caches: the frame loop sets this every frame,
+        // and bumping the generation each time would throw the cache away every frame.
+        let changed = {
+            let mut slot = self.cjk.write().unwrap_or_else(|e| e.into_inner());
+            let changed = *slot != preference;
+            *slot = preference;
+            changed
+        };
+        if changed {
+            self.generation.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// The Han script in force ([`FontDb::set_cjk_preference`]).
+    pub fn cjk_preference(&self) -> CjkPreference {
+        *self.cjk.read().unwrap_or_else(|e| e.into_inner())
     }
 
     /// Enable or disable the lazy system-font fallback for characters the loaded fonts lack
