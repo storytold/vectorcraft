@@ -5021,6 +5021,11 @@ command also accepts that object form. The query (and every reply) of `text.area
 `document.inspect` (and `document.node {summary: true}`) reports `overflow` for area type and type on a path (text past
 the end of the path), and `fit` and `fitScale` for area type.
 
+Given for several area types (`ids`, or a selection of several), `text.areaOptions` changes only the options given on
+each one: each frame keeps its other options (it used to take the first frame's), and `fitMinPercent` alone changes only
+the frames that already shrink text to fit. Options that change nothing (the vertical alignment already set, say) add
+no undo step and keep redo.
+
 Text that doesn't fit is drawn up to the last line that does, so a one-line headline in a frame lower than its line
 draws nothing. The commands that make type or change what it holds say so in their own reply: `text.create`,
 `text.createInPath`, `text.setText` and `text.setStyle` add `overflow: [id…]` (the area type and type on a path among
