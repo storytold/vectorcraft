@@ -665,6 +665,35 @@ fn plugin_integer_field_with_small_bounds_keeps_numeric_editing() {
     }
 }
 
+/// A plug-in's `color` parameter shows as a color button filled with its value, whether the value
+/// is a color object or a hex string.
+#[test]
+fn plugin_color_parameter_shows_a_color_button() {
+    fn filled(shape: &egui::Shape, c: egui::Color32) -> bool {
+        match shape {
+            egui::Shape::Rect(r) => r.fill == c,
+            egui::Shape::Vec(shapes) => shapes.iter().any(|s| filled(s, c)),
+            _ => false,
+        }
+    }
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let m = vectorcraft_plugins::Manifest::parse(
+        br##"{"id":"test.grid","name":"Grid","kind":"filter","params":{"line":{"type":"color","default":"#000000"}}}"##,
+    )
+    .unwrap();
+    let want = egui::Color32::from_rgb(0x3a, 0x7b, 0xd5);
+    for cur in [json!({"model": "rgb", "r": 0x3a as f32 / 255.0, "g": 0x7b as f32 / 255.0, "b": 0xd5 as f32 / 255.0}), json!("#3a7bd5")] {
+        let mut d = Dialog::new(plugin::KIND, json!({ "line": cur }));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            form::schema_rows(ui, &mut d, &m);
+        });
+        out.textures_delta.clear();
+        assert!(out.shapes.iter().any(|s| filled(&s.shape, want)), "{cur}");
+    }
+}
+
 #[test]
 fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
     let mut app = app();

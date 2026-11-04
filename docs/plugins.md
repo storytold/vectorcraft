@@ -25,7 +25,7 @@ This page is the contract for plug-in authors and the reference for the host (`c
 |---|---|---|
 | `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, size, source}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
-| `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`). One undo step; the result is selected. |
+| `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`). One undo step; the result is selected, except the objects it locked or made guides. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. |
 | `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have. |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder. |
@@ -40,8 +40,8 @@ its extensions that no built-in format has; `selectedOnly` hands it the selectio
 
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
-parameters gets a dialog generated from its schema (numbers, whole numbers, checkboxes, dropdowns, text and lists
-of numbers, labelled, explained and sorted into sections as its manifest says) with a live preview; without
+parameters gets a dialog generated from its schema (numbers, whole numbers, checkboxes, dropdowns, text, lists
+of numbers and colors, labelled, explained and sorted into sections as its manifest says) with a live preview; without
 parameters it runs at once. Parameters too many for the window's height scroll inside the dialog, which keeps its
 heading and buttons in view. Exporters are formats of **File › Export › Export As**, where Use
 Artboards is greyed out (the plug-in writes the whole document); one with parameters asks for them in a dialog of the
@@ -168,8 +168,12 @@ pointers are offsets into the module's memory.
   `int`, `bool` and `choice` there are `string` (`{"type": "string", "default": "", "maxLength": 256}`: a text field;
   longer text is cut to `maxLength`, at most 4,096 characters) and `numberList` (`{"type": "numberList", "min": 0,
   "max": 360, "default": [45, 135], "minItems": 1, "maxItems": 16}`: numbers typed separated by commas or spaces,
-  each clamped to `min..max`; a list of too few or too many is an error, and `maxItems` is at most 256). A plug-in
-  declares up to 256 parameters, at most 64 of them outside groups.
+  each clamped to `min..max`; a list of too few or too many is an error, and `maxItems` is at most 256) and `color`
+  (`{"type": "color", "default": "#3a7bd5"}`: a color button that opens a color picker; the default, black when left
+  out, and a value given to `plugin.run` may be a color object as paints hold one or a hex string, and the plug-in
+  always gets a color object, its components clamped, such as `{"model": "rgb", "r": 0.23, "g": 0.48, "b": 0.84}`; the
+  picker gives RGB). Hosts from before `color` refuse a manifest that uses it. A plug-in declares up to 256
+  parameters, at most 64 of them outside groups.
 
 Each parameter may also say how dialogs show it. Hosts from before these keys ignore them, so a plug-in that
 declares them still installs there:
@@ -278,6 +282,9 @@ For an **object filter**, the output is the new state of the input objects:
   strokes, full opacity.
 - Input objects missing from the output are deleted. The order of the input objects themselves doesn't change.
 - `type` turns a path into a compound path (one member per subpath) or back; `name: ""` clears the name.
+- `guide: true` makes the object a guide, as View › Guides › Make Guides does (a compound path's members become
+  guide paths), and `guide: false` a plain path again; `locked: true` locks it and `locked: false` unlocks it. Objects
+  the run locked or made guides are left out of the selection that follows. Hosts from before these keys ignore them.
 - A `path` returned as it was keeps a live shape live (a rectangle keeps its corner widgets); a changed one makes it a
   plain path.
 
