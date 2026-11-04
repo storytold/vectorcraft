@@ -28,10 +28,12 @@ pub fn open_on_missing(app: &mut VectorcraftApp) {
 fn open_at(app: &mut VectorcraftApp, selected: usize) {
     let used = fonts(app);
     let source = "system";
-    let rows = rows_json(&replacement_rows(app, source, &used));
+    let rows = replacement_rows(app, source, &used);
+    let family = system_family();
+    let style = rows.iter().find(|r| r.family.eq_ignore_ascii_case(&family)).map(|r| r.style.clone()).unwrap_or_default();
     app.ui.dialog = Some(Dialog::new(
         "findFont",
-        json!({ "selected": selected, "family": system_family(), "style": "", "selectionOnly": false, "replaceFrom": source, "rows": rows }),
+        json!({ "selected": selected, "family": family, "style": style, "selectionOnly": false, "replaceFrom": source, "rows": rows_json(&rows) }),
     ));
 }
 
@@ -122,13 +124,24 @@ fn replacement_rows(app: &VectorcraftApp, source: &str, used: &[Value]) -> Vec<R
     rows
 }
 
-/// Add `family` to `rows`: its closest style, then every style it has.
+/// Add `family` to `rows`: each style once, the closest style first, every row naming its style.
 fn push_family(rows: &mut Vec<Row>, db: &vectorcraft_text::FontDb, family: &str) {
     if family.is_empty() {
         return;
     }
-    rows.push(Row { family: family.to_string(), style: String::new() });
-    for style in db.styles(family) {
+    let mut styles = db.styles(family);
+    // The face a style-less request picks comes first, by its own name, not again without one.
+    if let Some(closest) = db.face(family, "").map(|f| f.style.clone())
+        && let Some(i) = styles.iter().position(|s| s.eq_ignore_ascii_case(&closest))
+    {
+        let style = styles.remove(i);
+        styles.insert(0, style);
+    }
+    if styles.is_empty() {
+        rows.push(Row { family: family.to_string(), style: String::new() });
+        return;
+    }
+    for style in styles {
         rows.push(Row { family: family.to_string(), style });
     }
 }
@@ -173,10 +186,8 @@ fn set_source(app: &VectorcraftApp, d: &mut Dialog, source: &str, used: &[Value]
         return;
     }
     let system = if source == "system" { system_family() } else { String::new() };
-    let pick = rows
-        .iter()
-        .find(|r| !system.is_empty() && r.family.eq_ignore_ascii_case(&system) && r.style.is_empty())
-        .or_else(|| rows.iter().find(|r| installed(&r.family)));
+    let pick =
+        rows.iter().find(|r| !system.is_empty() && r.family.eq_ignore_ascii_case(&system)).or_else(|| rows.iter().find(|r| installed(&r.family)));
     d.fields.insert("family".into(), json!(pick.map(|r| r.family.clone()).unwrap_or_default()));
     d.fields.insert("style".into(), json!(pick.map(|r| r.style.clone()).unwrap_or_default()));
 }
@@ -280,7 +291,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 m.insert_temp(query_id, String::new());
             });
         }
-        let query = widgets::search_field(ui, query_id, tl!("Search Fonts")).to_lowercase();
+        let query = widgets::search_field(ui, query_id, tl!("Search")).to_lowercase();
         let shown: Vec<&(String, String)> = rows.iter().filter(|(f, s)| row_matches(f, s, &query)).collect();
         let mut picked: Option<(String, String, bool)> = None;
         // Ten rows at a time, whichever height the rows get from the style.
@@ -677,14 +688,23 @@ mod tests {
             [Row { family: "Inter".into(), style: "Regular".into() }, Row { family: "Source Serif 4".into(), style: "Regular".into() }],
             "one row per family and style the document uses"
         );
+        let db = vectorcraft_text::FontDb::global();
+        let closest = db.face("Inter", "").expect("Inter is installed").style.clone();
         let recent = replacement_rows(&app, "recent", &used);
-        assert_eq!(recent.first(), Some(&Row { family: "Inter".into(), style: String::new() }), "the closest style comes first");
+        assert_eq!(recent.first(), Some(&Row { family: "Inter".into(), style: closest.clone() }), "the closest style comes first, by name");
         assert!(recent.iter().all(|r| r.family == "Inter"), "{recent:?}");
+        assert_eq!(recent.len(), db.styles("Inter").len(), "each style once, the closest not repeated");
+        assert!(recent.iter().all(|r| !r.style.is_empty()), "every row names its style: {recent:?}");
         let system = replacement_rows(&app, "system", &used);
         assert!(system.iter().any(|r| r.family == "Source Sans 3" && r.style == "Regular"), "{system:?}");
         assert!(!system.iter().any(|r| r.family.starts_with('.')), "the font menu's hidden families stay out");
-        let menu = vectorcraft_text::FontDb::global().menu_family_list();
-        assert_eq!(system.iter().filter(|r| r.style.is_empty()).count(), menu.len(), "one closest-style row per family");
+        assert!(system.iter().all(|r| !r.style.is_empty()), "no nameless rows: {system:?}");
+        let menu = db.menu_family_list();
+        let listed: std::collections::BTreeSet<&str> = system.iter().map(|r| r.family.as_str()).collect();
+        assert_eq!(listed.len(), menu.len(), "every family the font menu shows is listed");
+        let mut unique = system.clone();
+        unique.dedup();
+        assert_eq!(unique.len(), system.len(), "no family and style is listed twice");
         // The dialog stores the rows when it opens and when the source changes, and a picked row
         // sets both fields Change then uses.
         open(&mut app);
@@ -814,7 +834,7 @@ mod tests {
         set_source(&app, &mut d, "recent", &used);
         assert_eq!(d.str("family"), "");
         set_source(&app, &mut d, "system", &used);
-        assert_eq!((d.str("family").as_str(), d.str("style").as_str()), ("Source Sans 3", ""));
+        assert_eq!((d.str("family").as_str(), d.str("style").as_str()), ("Source Sans 3", "Regular"), "the family's first listed style");
         assert!(can_replace(&d, None));
     }
 
