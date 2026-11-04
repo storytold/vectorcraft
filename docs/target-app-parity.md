@@ -1,8 +1,10 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (ligature contour-point carets; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
+
+Ligature caret stops use a font's GDEF contour-point positions in horizontal and vertical text. They use unhinted outlines at the default variation location; invalid point indices use the existing evenly divided fallback. Scores and estimates are unchanged.
 
 Creating a gradient from solid or empty paint uses the document's color model for its default stops, including drawing its vector with the Gradient tool. Explicit `keepModel: true` retains RGB defaults, and existing gradients keep their own colors. Scores and estimates are unchanged.
 
@@ -21,6 +23,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Ligature caret stops use GDEF contour-point positions in horizontal and vertical type at the font's default variation location; invalid point indices keep the evenly divided fallback. Scores and estimates unchanged. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-11-03 | minor | Type Tools add-on: Text Tweaker (a VectorCraft addition, #4924): evidence added; scores unchanged. |
 | 2026-11-03 | minor | Transform previews valid typed values while numeric fields remain focused. Effect dialogs use the object, group, or layer targeted in Appearance. |
@@ -775,7 +778,7 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
     While a drag rotates the view, a dial at the center of the canvas shows the angle.
   - **Editing type:** double-clicking type with a selection tool (Selection or Direct Selection) switches to the Type tool with the caret where it was clicked; pressing Escape finishes editing and switches back to the selection tool used before double-clicking it (when in isolation mode, the first Escape exits text editing while preserving isolation mode, and a second Escape exits isolation).
     While a Type tool edits type, a click that lands on no type ends the editing without making new type, and that tool stays active; the next click makes new type (#2871, #2854).
-    Inside a ligature (one glyph for several characters, such as fi), the Type tool's caret, clicks, arrow keys and selection stop between its characters, at the font's ligature carets ([OpenType GDEF ligature caret list](https://learn.microsoft.com/en-us/typography/opentype/spec/gdef)) or, when the font does not list one valid caret for each stop, at the glyph's width divided equally.
+    Inside a ligature (one glyph for several characters, such as fi), the Type tool's caret, clicks, arrow keys and selection stop between its characters, at the font's ligature carets ([OpenType GDEF ligature caret list](https://learn.microsoft.com/en-us/typography/opentype/spec/gdef)) or, when the font does not list one valid caret for each stop, at the glyph's width divided equally. Contour-point carets use the font's unhinted outline at its default variation location; pixel-size device adjustments are not applied.
     Duplicate Artboards, the Artboard tool's Alt-drag and Paste give the new artboard an id that no other artboard has, also when an artboard's id is the largest possible value (#1718). Deleting the copy or the original then leaves the other's guides.
   - **Touch Type:** a click with the Touch Type tool (Shift+T) selects one character and shows a box around it. Dragging the box or its lower-left handle moves the character. The upper-left handle scales it vertically, the lower-right handle scales it horizontally, the upper-right handle scales it proportionally, and the upper-middle handle rotates it. Each drag is one undo step that sets the character's kerning, baseline shift, scales or rotation, and the type stays editable (`text.touchType`; behavior reference: [Touch Type tool](https://web.archive.org/web/20261007185617/https://helpx.adobe.com/illustrator/using/tool-techniques/touch-type-tool.html), [Add text with the Type, Area Type, and Touch Type tools](https://web.archive.org/web/20260926095922/https://helpx.adobe.com/illustrator/desktop/design-with-text/add-manage-text/add-text-illustrator-text-tools.html)).
     Composition's leading-space reduction stays along the line when a character rotates. An opening bracket trimmed by Line-end Punctuation Half Width Mojikumi keeps that placement under Character Rotation; its turning point follows the composition adjustment, and removing the rotation keeps the trim. Scores and estimates are unchanged.
