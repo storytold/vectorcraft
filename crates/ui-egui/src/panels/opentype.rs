@@ -156,10 +156,13 @@ fn set(app: &mut VectorcraftApp, f: OtFeatures) {
 /// Send `tags` as the `key` param (`features` or `featureChanges`) for the Type tool's range or
 /// caret, or else for the selected type.
 fn run_features(app: &mut VectorcraftApp, key: &str, tags: Vec<String>) {
-    let (cmd, mut p) = match text_editing(app) {
-        Some((id, a, b)) if b > a => ("text.setRangeStyle", json!({ "id": id.0, "start": a, "end": b })),
-        Some((id, _, _)) => ("text.setRangeStyle", json!({ "id": id.0 })),
-        None => ("text.setStyle", json!({})),
+    // After Select All in threaded text: every frame of the story.
+    let story = super::character::text_story(app).and_then(|story| story.first().copied());
+    let (cmd, mut p) = match (text_editing(app), story) {
+        (Some(_), Some(first)) => ("text.setRangeStyle", json!({ "id": first.0, "story": true })),
+        (Some((id, a, b)), None) if b > a => ("text.setRangeStyle", json!({ "id": id.0, "start": a, "end": b })),
+        (Some((id, _, _)), None) => ("text.setRangeStyle", json!({ "id": id.0 })),
+        (None, _) => ("text.setStyle", json!({})),
     };
     p[key] = json!(tags);
     if let Err(e) = app.run(cmd, p) {

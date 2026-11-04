@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Text",
             [],
             None,
-            "{id, start: byte, end: byte, insert?: string, runs?: [{text, style}]} replace bytes start..end of the plain text (inserted text takes the replaced text's style unless styled `runs` are given) → {id, caret}",
+            "{id, start: byte, end: byte, insert?: string, runs?: [{text, style}], clear?: [id…] (other type objects whose whole text goes in the same edit, as when typing replaces a threaded story that Select All selected)} replace bytes start..end of the plain text (inserted text takes the replaced text's style unless styled `runs` are given) → {id, caret}",
             has_doc,
             edit_range
         ),
@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_range_style
         ),
@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Get Text Range",
             [],
             None,
-            "{id, start?, end?, effective?: bool = false} → {text, runs: [{text, style}], length}; effective uses document-point size/leading/baseline shift and transformed horizontal scale; default returns stored local styles for rich-text copying",
+            "{id, start?, end?, effective?: bool = false, story?: bool = false (the whole text of the threaded story `id` is a frame of, its frames in thread order; no `start` or `end`)} → {text, runs: [{text, style}], length}; effective uses document-point size/leading/baseline shift and transformed horizontal scale; default returns stored local styles for rich-text copying",
             has_doc,
             get_range
         ),
@@ -253,7 +253,16 @@ fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => Some(serde_json::from_value(v.clone()).map_err(|e| bad(C, format!("bad `runs`: {e}")))?),
     };
     let insert = str_param(p, "insert").unwrap_or("").to_string();
+    let clear = clear_param(s, p, id, C)?;
     let caret = s.edit("Typing", |d, _| {
+        for other in &clear {
+            let t = text_mut(d, *other).ok_or(EngineError::NoNode(*other))?;
+            let len = edit::runs_len(&t.runs);
+            t.splice_paras(0, len, "");
+            edit::replace_range(&mut t.runs, 0, len, "");
+            t.ruby_after_replace(0, len, 0);
+            refresh_bounds(t);
+        }
         let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
         // Paragraph styles follow the edit: a split paragraph's new one continues its style, a
         // merge keeps the first paragraph's.
@@ -272,6 +281,30 @@ fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(caret)
     })?;
     Ok(json!({"id": id.0, "caret": caret}))
+}
+
+/// The `clear` param of `text.editRange`: other type objects whose text the edit removes, each
+/// once. An error when it is not a list of ids of type objects other than `id`.
+fn clear_param(s: &Session, p: &Value, id: NodeId, c: &str) -> Result<Vec<NodeId>> {
+    let ids = match p.get("clear") {
+        None | Some(Value::Null) => return Ok(vec![]),
+        Some(Value::Array(ids)) => ids,
+        Some(v) => return Err(bad(c, format!("`clear` must be a list of type object ids, not {v}"))),
+    };
+    let mut out = vec![];
+    for v in ids {
+        let other = v.as_u64().map(NodeId).ok_or_else(|| bad(c, format!("`clear` must be a list of type object ids, not {v}")))?;
+        if other == id {
+            return Err(bad(c, "`clear` must not list `id`"));
+        }
+        if !matches!(s.doc()?.doc.node(other).map(|n| &n.kind), Some(NodeKind::Text(_))) {
+            return Err(bad(c, format!("`clear` must list type objects; {} is not one", other.0)));
+        }
+        if !out.contains(&other) {
+            out.push(other);
+        }
+    }
+    Ok(out)
 }
 
 fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
@@ -306,6 +339,9 @@ fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn get_range(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("text.getRange", "missing `id`"))?;
+    if switch_or(p, "story", false, "text.getRange")? {
+        return get_story(s, p, id);
+    }
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
     let (a, b) = range_of(p, len, "text.getRange")?;
@@ -316,6 +352,31 @@ fn get_range(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+    Ok(json!({"text": text, "runs": runs, "length": len}))
+}
+
+/// `text.getRange {id, story: true}`: the whole text of the story `id` is a frame of, its thread's
+/// frames in order (`id` alone when it is in no thread).
+fn get_story(s: &mut Session, p: &Value, id: NodeId) -> Result<Value> {
+    const C: &str = "text.getRange";
+    if ["start", "end"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
+        return Err(bad(C, "`story` takes the whole story: give no `start` or `end`"));
+    }
+    let effective = switch_or(p, "effective", false, C)?;
+    let story = super::threads::story_of(&s.doc()?.doc, id);
+    let frames = if story.is_empty() { vec![id] } else { story };
+    let mut runs = vec![];
+    for f in frames {
+        let t = text_ref(s, f)?;
+        for mut run in edit::slice_runs(&t.runs, 0, edit::runs_len(&t.runs)) {
+            if effective {
+                run.style = t.effective_char_style(&run.style).ok_or_else(|| bad(C, "text transform is collapsed or unrepresentable"))?;
+            }
+            runs.push(run);
+        }
+    }
+    let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+    let len = text.len();
     Ok(json!({"text": text, "runs": runs, "length": len}))
 }
 
@@ -913,37 +974,56 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
             _ => return Err(bad(C, "missing `id`: give one, or select one type object")),
         },
     };
-    let mut change = CharChange::parse(p, C, &s.doc()?.doc.setup)?;
-    super::paint::check_keep_model(p, C)?;
-    change.store_colors(s, p);
-    if change.is_empty() {
-        return Err(bad(C, "nothing to change"));
+    let story = switch_or(p, "story", false, C)?;
+    if story && ["start", "end"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
+        return Err(bad(C, "`story` styles the whole story: give no `start` or `end`"));
     }
-    let protect = s.prefs.missing_glyph_protection && (change.font.is_some() || change.style.is_some());
-    let t = text_ref(s, id)?;
-    change.localize(&t, C)?;
-    let (a, b) = range_of(p, edit::runs_len(&t.runs), C)?;
+    let frames = match super::threads::story_of(&s.doc()?.doc, id) {
+        all if story && !all.is_empty() => all,
+        _ => vec![id],
+    };
+    // Each frame's change (sizes are in its own text space) and range.
+    let mut parts = Vec::with_capacity(frames.len());
+    for f in frames {
+        let mut change = CharChange::parse(p, C, &s.doc()?.doc.setup)?;
+        super::paint::check_keep_model(p, C)?;
+        change.store_colors(s, p);
+        if change.is_empty() {
+            return Err(bad(C, "nothing to change"));
+        }
+        let t = text_ref(s, f)?;
+        change.localize(&t, C)?;
+        let (a, b) = if story { (0, edit::runs_len(&t.runs)) } else { range_of(p, edit::runs_len(&t.runs), C)? };
+        parts.push((f, change, a, b));
+    }
+    let sets_font = parts.first().is_some_and(|(_, change, _, _)| change.font.is_some() || change.style.is_some());
+    let protect = s.prefs.missing_glyph_protection && sets_font;
     // The fonts the styled characters are set in, for the warning.
     let mut set = std::collections::BTreeSet::new();
-    let sets_font = change.font.is_some() || change.style.is_some();
     let n = s.edit("Character", |d, _| {
-        let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
-        if a == b && !t.plain_text().is_empty() {
-            // An empty range inside text styles nothing (Illustrator keeps it for the next typing).
-            return Ok(t.runs.len());
+        let mut n = 0;
+        for (f, change, a, b) in &parts {
+            let (a, b) = (*a, *b);
+            let t = text_mut(d, *f).ok_or(EngineError::NoNode(*f))?;
+            if a == b && !t.plain_text().is_empty() {
+                // An empty range inside text styles nothing (Illustrator keeps it for the next typing).
+                n = if *f == id { t.runs.len() } else { n };
+                continue;
+            }
+            let before = protect.then(|| t.runs.clone());
+            edit::style_range(&mut t.runs, a, b, |st| change.apply(st));
+            if let Some(before) = before {
+                protect_missing_glyphs(&before, &mut t.runs);
+            }
+            if sets_font {
+                // Empty text has one run, which the empty range styles.
+                let styled = if a == b { t.runs.clone() } else { edit::slice_runs(&t.runs, a, b) };
+                set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
+            }
+            refresh_bounds(t);
+            n = if *f == id { t.runs.len() } else { n };
         }
-        let before = protect.then(|| t.runs.clone());
-        edit::style_range(&mut t.runs, a, b, |st| change.apply(st));
-        if let Some(before) = before {
-            protect_missing_glyphs(&before, &mut t.runs);
-        }
-        if sets_font {
-            // Empty text has one run, which the empty range styles.
-            let styled = if a == b { t.runs.clone() } else { edit::slice_runs(&t.runs, a, b) };
-            set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
-        }
-        refresh_bounds(t);
-        Ok(t.runs.len())
+        Ok(n)
     })?;
     let mut out = json!({"id": id.0, "runs": n});
     if let Some(w) = super::fonts::set_font_warning(set) {
@@ -1317,8 +1397,20 @@ pub(crate) fn editing_range(s: &mut Session) -> Result<Option<(NodeId, usize, us
     Ok(Some((id, at("start"), at("end"))))
 }
 
+/// The frames of the story whose whole text the Type tool has selected after Select All in a
+/// frame of threaded text, in thread order; empty when its selection is in one type object.
+pub(crate) fn editing_story(s: &Session) -> Vec<NodeId> {
+    let o = s.tool_options();
+    let Some(id) = o.get("editing").and_then(Value::as_u64).map(NodeId) else { return vec![] };
+    if !o.get("story").and_then(Value::as_array).is_some_and(|ids| !ids.is_empty()) {
+        return vec![];
+    }
+    s.active().map(|st| super::threads::story_of(&st.doc, id)).unwrap_or_default()
+}
+
 /// The text ranges a type shortcut changes: the range of `id`, else all the text of the type
-/// objects in `ids`, else the text the Type tool has selected, else all the text of every selected
+/// objects in `ids`, else the text the Type tool has selected (all the text of every frame of the
+/// story after Select All in threaded text, [`editing_story`]), else all the text of every selected
 /// type object. At a caret, `at_caret` gives the range from the plain text and the caret's byte
 /// (None: nothing changes there). Each range comes with whether it came from a caret.
 pub(crate) fn type_ranges(
@@ -1336,7 +1428,10 @@ pub(crate) fn type_ranges(
         Some(id) => vec![(id, Some(range_of(p, edit::runs_len(&text_ref(s, id)?.runs), c)?))],
         None => {
             let editing = editing_range(s)?.filter(|_| p.get("ids").filter(|v| !v.is_null()).is_none());
+            let story = if editing.is_some() { editing_story(s) } else { vec![] };
             match editing {
+                // Select All in threaded text: every frame's text.
+                Some(_) if !story.is_empty() => story.into_iter().map(|id| (id, None)).collect(),
                 Some((id, a, b)) => vec![(id, Some((a.min(b), a.max(b))))],
                 None => super::typecmd::text_targets(s, p, c)?.into_iter().map(|id| (id, None)).collect(),
             }

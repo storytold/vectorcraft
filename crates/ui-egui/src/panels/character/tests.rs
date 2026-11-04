@@ -1171,3 +1171,45 @@ fn snap_to_glyph_options_show_from_the_menu_and_set_the_options() {
     toggle(&mut app, "Hide Snap to Glyph Options");
     assert!(!section(&mut app).iter().any(|(t, _)| t == "Proximity Guides"));
 }
+
+/// After Select All in a frame of threaded text, the Character and Paragraph panels and Copy act on
+/// the text of every frame of the story.
+#[test]
+fn select_all_in_threaded_text_formats_and_copies_the_whole_story() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+    let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+    let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": b, "anchor": 0, "caret": 0}));
+    app.run("select.all", json!({})).unwrap();
+    assert_eq!(text_story(&app), Some(vec![NodeId(a), NodeId(b)]));
+    let frame = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("not text"),
+    };
+    format(&mut app, json!({"size": 9}));
+    crate::panels::paragraph::run_on_paragraphs(&mut app, "text.setFormat", json!({"spaceBefore": 4})).unwrap();
+    for id in [a, b] {
+        let t = frame(&app, id);
+        assert!(t.runs.iter().all(|r| (r.style.size - 9.0).abs() < 1e-9), "every character of frame {id} is 9 pt");
+        assert!((t.para_at(0).space_before - 4.0).abs() < 1e-9, "frame {id}'s paragraphs take the space");
+    }
+    assert!(intercept_text_command(&mut app, "edit.copy").is_some());
+    let copied: Vec<String> = app
+        .session
+        .clipboard
+        .nodes
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some(t.plain_text()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(copied, [story]);
+}

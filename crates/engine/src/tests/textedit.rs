@@ -1496,6 +1496,128 @@ fn select_all_and_cut_like_ui() {
     assert_eq!(s.execute("select.all", &json!({})).unwrap(), json!({"count": 2}));
 }
 
+/// A story threaded from area type `a` into frame `b`, with the Type tool editing `b` at its start.
+fn threaded_story_edited_in_its_second_frame() -> (Session, NodeId, NodeId, String) {
+    let mut s = session();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+    let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let (a, b) = (NodeId(a), NodeId(b));
+    assert!(!obj(&s, a).plain_text().is_empty() && !obj(&s, b).plain_text().is_empty(), "the story runs through both frames");
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    assert!(s.tool_wants_text());
+    (s, a, b, story)
+}
+
+#[test]
+fn select_all_in_a_threaded_frame_selects_the_whole_story() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    let a_len = obj(&s, a).plain_text().len();
+    let o = s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(o, json!({"editing": a.0, "start": 0, "end": a_len, "story": [a.0, b.0]}));
+    assert_eq!(s.doc().unwrap().selection.objects, [a], "the first frame, which the tool edits, is selected");
+    // Copy takes the whole story.
+    let r = s.execute("text.getRange", &json!({"id": o["editing"], "story": true})).unwrap();
+    assert_eq!(r["text"], json!(story));
+    assert_eq!(r["length"], json!(story.len()));
+    // The selection is highlighted in both frames.
+    let v = ViewInfo::default();
+    let in_b = |o: &vectorcraft_tools::Overlay| matches!(o, vectorcraft_tools::Overlay::Highlight { quad, color: [60, 120, 255, 90] } if quad.iter().all(|p| p.x > 190.0));
+    assert!(s.overlays(v).iter().any(in_b), "the text of the second frame is highlighted");
+    // A fill reaches the text of both frames, as one undo step.
+    let steps = undo_labels(&s).len();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1);
+    let red = obj(&s, a).runs[0].style.fill.clone();
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.fill == red), "every character of frame {} is filled", id.0);
+    }
+    // So do a baseline shift step (Alt+Shift+Up) and a size step.
+    key(&mut s, ToolKey::Up, Mods { alt: true, shift: true, ..Mods::default() });
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.baseline_shift > 0.0), "every character of frame {} is raised", id.0);
+    }
+    let size = obj(&s, b).runs[0].style.size;
+    s.execute("type.step", &json!({"attribute": "size", "by": 1})).unwrap();
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.size > size), "every character of frame {} is larger", id.0);
+    }
+}
+
+#[test]
+fn select_all_edits_the_first_frame_that_holds_text() {
+    let mut s = session();
+    // The first frame is too short for a line: the story starts in the second.
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One two three", "size": 12, "area": {"width": 150, "height": 4}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let (a, b) = (NodeId(a), NodeId(b));
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), "One two three".to_string()));
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    let o = s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(o, json!({"editing": b.0, "start": 0, "end": 13, "story": [a.0, b.0]}));
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), String::new()));
+}
+
+#[test]
+fn the_eyedropper_styles_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+    let source = s.execute("text.create", &json!({"x": 400, "y": 250, "text": "Big", "size": 30})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("appearance.copyFrom", &json!({"source": source})).unwrap();
+    assert_eq!(r, json!({"ids": [a.0, b.0]}));
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| (r.style.size - 30.0).abs() < 1e-9), "every character of frame {} takes the size", id.0);
+    }
+}
+
+#[test]
+fn typing_over_the_whole_story_replaces_every_frames_text_in_one_step() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), String::new()));
+    s.tool_text("New", ViewInfo::default()).unwrap();
+    key(&mut s, ToolKey::Escape, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), ("New".to_string(), String::new()));
+    assert_eq!(undo_labels(&s).len(), steps + 1, "the delete and the typing are one step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+    assert!(!obj(&s, b).plain_text().is_empty());
+}
+
+#[test]
+fn select_all_in_one_frame_selects_only_its_text_once_the_caret_moves() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let a_len = obj(&s, a).plain_text().len();
+    // Shift+Left ends the story selection: the selection is the first frame's text but its last
+    // character, and Delete removes only that.
+    key(&mut s, ToolKey::Left, Mods { shift: true, ..Mods::default() });
+    assert!(s.tool_options().get("story").is_none());
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story[a_len - 1..]);
+    assert!(s.execute("text.getRange", &json!({"id": a.0, "story": true, "start": 0})).is_err(), "`story` takes no range");
+    assert!(s.execute("text.editRange", &json!({"id": a.0, "start": 0, "end": 0, "clear": [a.0]})).is_err());
+    assert!(s.execute("text.editRange", &json!({"id": a.0, "start": 0, "end": 0, "clear": "x"})).is_err());
+}
+
 #[test]
 fn a_frame_dragged_with_the_type_tools_is_the_dragged_rectangle() {
     for tool in ["type", "verticalType"] {

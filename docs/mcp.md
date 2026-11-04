@@ -1179,7 +1179,7 @@ These commands refuse a string, a number or another value that is not true or fa
 `clockwise` in `shape.spiral`; `closed` in `shape.arc` and `path.create`; `vertical` and `placeholder` in `text.create`
 and `text.createInPath`; `underline`, `strikethrough`, `allCaps`, `proportionalMetrics`, `tateChuYoko`, `standardVerticalRoman` and `noBreak`
 in `text.setRangeStyle` and `text.setFormat`, which also checks `hyphenate`, `hyphenateCapitalized` and
-`romanHangingPunctuation`; `effective` in `text.getRange`; `on` in `type.opticalMarginAlignment`, `type.systemLayout`
+`romanHangingPunctuation`; `effective` and `story` in `text.getRange`; `story` in `text.setRangeStyle`; `on` in `type.opticalMarginAlignment`, `type.systemLayout`
 and `type.fractionalWidths`; `remove` and `overhang` in `type.ruby`; `expandInstances` in `symbol.delete`; `alt` in
 `symbol.spray` and `symbol.adjust`; `spot` and `global` in `swatch.new` and `swatch.edit`; `unlink` in
 `swatch.delete`; `fromArtwork`, `toGlobal` and `includeTints` in `swatch.newGroup`; `global` and `selection` in
@@ -4881,7 +4881,13 @@ While the Type tool edits text (a click into type, `pointer_gesture` with `"tool
 `press_key {key: "A", mods: {cmd: true}}`) selects all of that text instead of the art, as in the reference app, and
 returns `{editing, start, end}` (the text's id and the selected byte range, which `text.getRange` and
 `text.setRangeStyle` take); the art selection stays as it is. Without text being edited it selects every object and
-returns `{count}`. Text in threaded frames is selected one frame at a time.
+returns `{count}`. In a frame of threaded text, `select.all` selects the whole story: the Type tool then edits the
+thread's first frame that holds text (which is selected when it was not) with the text of every frame selected, and the reply adds
+`story`, the frames in thread order. `text.getRange {id, story: true}` returns the story's text and runs, which Copy
+and Cut take. Typing, Delete and Cut replace the whole story as one undo step (`text.editRange` with `clear`, the other
+frames whose text goes), and a fill, stroke, `type.step` or Character or Paragraph panel change applies to the text of
+every frame (the Character panel sends `text.setRangeStyle {id, story: true}`, which styles every frame's text in one
+undo step). A caret move or a click ends the story selection.
 
 ```json
 {"name":"press_key","arguments":{"key":"A","mods":{"cmd":true}}}

@@ -1087,15 +1087,25 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         s.eyedropper_sample = Some(node);
     }
     let range = range.filter(|(id, _, _)| targets.contains(id));
+    // The highlighted characters' type objects and ranges: after Select All in threaded text, all
+    // the text of every frame of the story.
+    let story = super::textedit::editing_story(s);
+    let ranges: Vec<(NodeId, Option<(usize, usize)>)> = match range {
+        Some((id, _, _)) if story.contains(&id) => story.iter().map(|f| (*f, None)).collect(),
+        Some((id, start, end)) => vec![(id, Some((start, end)))],
+        None => vec![],
+    };
     // Character styles cannot represent object transparency. Refuse before even changing
     // paint defaults; applying it to the object would also alter the unselected characters.
-    if let Some((id, _, _)) = range.filter(|_| attrs.appearance.transparency) {
-        let target = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
-        if picked.opacity != 1.0 || picked.blend != BlendMode::Normal || target.opacity != 1.0 || target.blend != BlendMode::Normal {
-            return Err(bad(
-                C,
-                "object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object",
-            ));
+    if attrs.appearance.transparency {
+        for (id, _) in &ranges {
+            let target = s.doc()?.doc.node(*id).ok_or(EngineError::NoNode(*id))?;
+            if picked.opacity != 1.0 || picked.blend != BlendMode::Normal || target.opacity != 1.0 || target.blend != BlendMode::Normal {
+                return Err(bad(
+                    C,
+                    "object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object",
+                ));
+            }
         }
     }
     if !reverse {
@@ -1104,19 +1114,23 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     if targets.is_empty() || attrs.is_empty() {
         return Ok(json!({ "ids": [] }));
     }
-    if let Some((id, start, end)) = range {
+    if !ranges.is_empty() {
+        let ids: Vec<NodeId> = ranges.iter().map(|(f, _)| *f).collect();
         let before = s.doc()?.doc.clone();
         super::overprint::edit_counted(s, "Eyedropper", |d| {
-            let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
-            let placed = picked.placed(Some(t.local_bounds()));
-            vectorcraft_text::edit::style_range(&mut t.runs, start, end, |st| picked.run(st, &placed, &attrs));
-            if let Some((_, para)) = picked.text.as_ref().filter(|_| attrs.paragraph) {
-                t.edit_paras(Some(t.paragraphs_in(start, end)), |p| *p = para.clone());
+            for &(id, range) in &ranges {
+                let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+                let (start, end) = range.unwrap_or((0, vectorcraft_text::edit::runs_len(&t.runs)));
+                let placed = picked.placed(Some(t.local_bounds()));
+                vectorcraft_text::edit::style_range(&mut t.runs, start, end, |st| picked.run(st, &placed, &attrs));
+                if let Some((_, para)) = picked.text.as_ref().filter(|_| attrs.paragraph) {
+                    t.edit_paras(Some(t.paragraphs_in(start, end)), |p| *p = para.clone());
+                }
+                super::typecmd::refresh_bounds(t);
             }
-            super::typecmd::refresh_bounds(t);
-            Ok(count_changed(d, &before, &[id]))
+            Ok(count_changed(d, &before, &ids))
         })?;
-        return Ok(json!({ "ids": [id.0] }));
+        return Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }));
     }
     // When every target comes out as it was, the document and its undo history stay as they are.
     let before = s.doc()?.doc.clone();
