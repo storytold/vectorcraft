@@ -337,7 +337,8 @@ impl Hasher for CellHasher {
     }
 
     fn finish(&self) -> u64 {
-        self.0
+        // The table picks its bucket from the low bits, which a product leaves weak: bring the strong high bits down.
+        self.0.rotate_left(26)
     }
 }
 
@@ -477,5 +478,15 @@ mod tests {
                 assert_eq!(all_within(&b, &a, lim), b.iter().all(|&p| a.iter().any(|q| q.distance(p) <= lim)), "round {round}, lim {lim}");
             }
         }
+    }
+
+    #[test]
+    fn cell_hasher_spreads_keys_whose_low_bits_are_zero() {
+        use std::hash::BuildHasher;
+        // Cell indices that are all multiples of 1024 (pixel-exact points with a power-of-two limit).
+        let build = BuildHasherDefault::<CellHasher>::default();
+        let buckets: std::collections::HashSet<u64> =
+            (0..64i64).flat_map(|i| (0..64i64).map(move |j| (i << 10, j << 10))).map(|k| build.hash_one(k) & 1023).collect();
+        assert!(buckets.len() > 600, "{} of 1024 buckets used", buckets.len());
     }
 }
