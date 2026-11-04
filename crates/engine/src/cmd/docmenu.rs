@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbol Instance",
             ["Select", "Same"],
             None,
-            "{} select the instances of the symbol of the first selected object that can be selected; objects that are hidden or locked, inside a hidden or locked object or layer, on a template layer, on a locked artboard while nothing is isolated, or outside the isolated group or layer are passed over → {count}",
+            "{} select the instances of the symbol of the first selected object that can be selected, including a group member selected on its own; when that object is not a symbol instance, such as a group, nothing is selected; objects that are hidden or locked, inside a hidden or locked object or layer, on a template layer, on a locked artboard while nothing is isolated (new art while it stays selected excepted), or outside the isolated group or layer are passed over → {count}",
             has_selection,
             |s, _| same(s, "select.same.symbolInstance", |a, b| match (&a.kind, &b.kind) {
                 (NodeKind::SymbolInstance { symbol: x, .. }, NodeKind::SymbolInstance { symbol: y, .. }) => x == y,
