@@ -113,6 +113,12 @@ pub(crate) fn import_command(f: &Flavour, center: Option<[f64; 2]>) -> (&'static
 }
 
 impl VectorcraftApp {
+    /// A Type paste may reuse its saved styled runs only while our desktop copy still owns the
+    /// clipboard. Pending formats also belong to that copy; web hosts have no ownership service.
+    pub(crate) fn type_paste_has_our_clipboard(&mut self) -> bool {
+        self.clipboard_publishing.pending || self.services.system_clipboard.as_mut().is_none_or(|cb| cb.holds_ours())
+    }
+
     /// After Copy or Cut: offer the copied objects to other apps. With the system clipboard
     /// service, the background worker makes the formats from a copy of the clipboard
     /// ([`background::run`]) and they are written when they are ready. While the worker has a
