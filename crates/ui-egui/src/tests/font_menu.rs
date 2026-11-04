@@ -206,6 +206,9 @@ fn a_press_outside_the_menu_ends_the_preview_at_once() {
 /// A document with point type in Inter, selected; its id.
 fn selected_inter(app: &mut VectorcraftApp) -> u64 {
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    // These tests exercise font picking, including system fonts without Latin glyphs. Missing
+    // glyph protection would intentionally keep the sample text in its previous font.
+    app.run("prefs.set", json!({"key": "missingGlyphProtection", "value": false})).unwrap();
     let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Gagaku", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
     app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
     if !crate::panel_docking::showing(&app.ui, "character") {

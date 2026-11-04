@@ -2,7 +2,8 @@ use super::{Value, VectorcraftApp, View, ViewInfo, panels};
 
 impl VectorcraftApp {
     /// Keep `views` aligned with the session's documents (a new one starts at its saved view, and
-    /// opens in a floating window while Open Documents As Tabs is cleared).
+    /// opens in a floating window while Open Documents As Tabs is cleared). The views Window › New
+    /// Window opened go with their documents.
     pub fn sync_views(&mut self) {
         let docs = self.session.documents();
         self.views.truncate(docs.len());
@@ -10,6 +11,7 @@ impl VectorcraftApp {
         for (view, doc) in self.views.iter_mut().zip(docs) {
             view.artboard = view.artboard.min(doc.doc.artboards.len().saturating_sub(1));
         }
+        crate::doc_windows::retain_views(self);
         crate::doc_windows::opened(self);
         // Undo can remove the Artboard tool's active or additionally selected boards. Repair only
         // invalid indices: valid multiselection, drag state and tool options must survive history.

@@ -79,6 +79,23 @@ fn saved_scheme_accent_and_canvas_color_show_from_the_first_frame() {
     }
 }
 
+/// A Render Threads change made after the preferences were applied, and before the first UI pass
+/// applies them again, still restarts the canvas renderer.
+#[test]
+fn reapply_restarts_the_renderer_after_a_render_threads_change() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    apply_runtime(&mut app, &ctx);
+    app.canvas.worker_started = true;
+    // The automatic count as an explicit value: the process-wide count other tests read stays the same.
+    let threads = vectorcraft_render::default_threads();
+    app.run("prefs.set", json!({"key": "renderThreads", "value": threads})).unwrap();
+    reapply(&mut app, &ctx);
+    let restarted = !app.canvas.worker_started;
+    app.run("prefs.set", json!({"key": "renderThreads", "value": -1})).unwrap();
+    assert!(restarted, "the canvas renderer kept its old thread count");
+}
+
 fn app() -> VectorcraftApp {
     VectorcraftApp::new(Session::new(), Services::default())
 }
@@ -390,4 +407,19 @@ fn hyphenation_exceptions_dialog_ok_reaches_the_hyphenator() {
     assert_eq!(vectorcraft_text::hyphenation_exceptions(), "typography, hap-pen");
     assert!(vectorcraft_text::hyphen::hyphen_points("typography").is_empty());
     assert_eq!(vectorcraft_text::hyphen::hyphen_points("happen"), vec![3]);
+}
+
+/// #5236: File Handling › Use System Defaults for Edit Original is a checkbox, on by default, and
+/// OK saves it off.
+#[test]
+fn use_system_defaults_for_edit_original_is_a_checkbox() {
+    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    assert!(a.session.prefs.edit_original_system_defaults, "on by default");
+    open(&mut a, Some("File Handling"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Use System Defaults for Edit Original"), "{text}");
+    assert!(a.ui.dialog.as_ref().unwrap().bool("editOriginalSystemDefaults"));
+    a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalSystemDefaults".into(), json!(false));
+    confirm(&mut a).unwrap();
+    assert!(!a.session.prefs.edit_original_system_defaults);
 }

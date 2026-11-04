@@ -49,6 +49,8 @@ fn save_doc(app: &mut VectorcraftApp, path: &Path, font: &str, link: bool) {
     if link {
         std::fs::remove_file(&pic).unwrap();
     }
+    // Opened afresh by `open`: an open file would only come to the front (#3455).
+    app.run("file.close", json!({})).unwrap();
 }
 
 fn open(app: &mut VectorcraftApp, path: &Path) {
@@ -135,6 +137,8 @@ fn find_fonts_opens_find_font_on_the_missing_font() {
     app.run("text.create", json!({"x": 10, "y": 80, "text": "Gone", "font": "Zz Missing Family"})).unwrap();
     let doc = root.join("doc.vectorcraft");
     app.run("document.save", json!({"path": doc.to_string_lossy()})).unwrap();
+    // Opened afresh: an open file would only come to the front (#5369).
+    app.run("file.close", json!({})).unwrap();
     open(&mut app, &doc);
     assert_eq!(kind(&app), Some(KIND));
     app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
@@ -223,6 +227,7 @@ fn one_dialog_at_a_time_document_by_document() {
     super::super::cancel(&mut app);
     assert!(app.ui.dialog.is_none());
     // A document closed before its turn is passed over.
+    app.run("file.closeAll", json!({})).unwrap();
     open(&mut app, &a);
     open(&mut app, &b);
     let index = app.session.documents().iter().rposition(|d| d.path.as_deref() == Some(&*a.to_string_lossy())).unwrap();
@@ -295,6 +300,24 @@ fn a_search_folder_that_fails_is_not_tried_again() {
     assert_eq!(super::super::confirm(&mut app).err().as_deref(), Some("choose the font files to add"));
 }
 
+/// Opening a file that is already open only brings its tab to the front: Missing Fonts, closed
+/// once, is not asked again (#5369).
+#[test]
+fn reopening_an_open_document_does_not_ask_about_its_fonts_again() {
+    let root = folder("reopen");
+    let mut app = app_for(&root);
+    let doc = root.join("doc.vectorcraft");
+    save_doc(&mut app, &doc, "No Such Font Family", false);
+    open(&mut app, &doc);
+    assert_eq!(kind(&app), Some(KIND));
+    super::super::cancel(&mut app);
+    app.run("file.new", json!({})).unwrap();
+    open(&mut app, &doc);
+    frame(&mut app);
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(0)));
+    assert_eq!(kind(&app), None);
+}
+
 /// A placed document that Links › Edit Original opens asks about its fonts, as File › Open does.
 #[test]
 fn edit_original_asks_about_the_placed_documents_fonts() {
@@ -302,7 +325,6 @@ fn edit_original_asks_about_the_placed_documents_fonts() {
     let mut app = app_for(&root);
     let badge = root.join("badge.vectorcraft");
     save_doc(&mut app, &badge, "Badge Missing Family", false);
-    app.session.execute("file.close", &json!({})).unwrap();
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("file.place", json!({"path": badge.to_string_lossy(), "link": true})).unwrap();
     let tabs = app.session.documents().len();

@@ -230,6 +230,48 @@ fn curves_and_a_circle_crossed_by_a_line() {
     assert_eq!(edges.iter().filter(|e| e.key == 0).count(), 2, "two arcs");
 }
 
+/// Coincident curved boundaries retain the fill coverage of the regions they separate.
+#[test]
+fn coincident_curves_keep_their_source_faces() {
+    fn check(diameter: f64, offset: f64, rule: FillRule, reverse: bool, swap: bool) {
+        let mut ring = circle(0.5 * diameter, 0.5 * diameter, 0.5 * diameter, 0);
+        let mut hole = circle(0.5 * diameter, 0.5 * diameter, 0.3 * diameter, 1).path;
+        hole.reverse();
+        ring.path.subpaths.extend(hole.subpaths);
+        ring.rule = rule;
+        let mut disk = circle(0.5 * diameter + offset, 0.5 * diameter, 0.3 * diameter, 1);
+        disk.rule = rule;
+        if reverse {
+            ring.path.reverse();
+            disk.path.reverse();
+        }
+        let shapes = if swap { vec![disk, ring] } else { vec![ring, disk] };
+        let (faces, _) = live_paint(&shapes);
+        let label = format!("diameter={diameter}, offset={offset}, rule={rule:?}, reverse={reverse}, swap={swap}");
+        for (x, source) in [(0.1 * diameter, usize::from(swap)), (0.5 * diameter, usize::from(!swap))] {
+            let covering = at(&faces, x, 0.5 * diameter);
+            assert_eq!(covering.len(), 1, "{label}: {covering:?}");
+            assert_eq!(covering[0].sources, [source], "{label}");
+        }
+        if offset == 0.0 {
+            assert_eq!(faces.len(), 2, "{label}");
+            let ring_face = at(&faces, 0.1 * diameter, 0.5 * diameter)[0];
+            assert_eq!(ring_face.path.subpaths.len(), 2, "{label}: the ring keeps its hole");
+        }
+    }
+    for diameter in [1.0, 0.5, 2.0, 100.0] {
+        for offset in [0.0, 0.025, -0.025] {
+            for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+                for reverse in [false, true] {
+                    for swap in [false, true] {
+                        check(diameter, offset, rule, reverse, swap);
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn a_line_ending_on_an_edge_splits_the_shape() {
     let s = [line((90.0, 20.0), (70.0, 10.0), 0), rect(80.0, 10.0, 90.0, 50.0, 1)];

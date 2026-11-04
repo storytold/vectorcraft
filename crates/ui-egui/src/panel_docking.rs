@@ -339,10 +339,11 @@ fn show_panel(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String>
     if !layout.contains(&panel.to_string()) && !app.ui.docking_hidden.contains_key(panel) && crate::panels::library_panel::parse(panel).is_some() {
         return crate::panels::library_panel::float(app, panel);
     }
-    if app.ui.docking_hidden.contains_key(panel) {
-        return restore_hidden_group(app, panel);
-    }
-    let value = shared_command(app, "window.panel.activate", &json!({"panel": panel}))?;
+    let value = if app.ui.docking_hidden.contains_key(panel) {
+        restore_hidden_group(app, panel)?
+    } else {
+        shared_command(app, "window.panel.activate", &json!({"panel": panel}))?
+    };
     let layout = layout_of(&app.ui);
     Ok(match floating_window(&layout, panel) {
         Some(window) => json!({"floating": window_panels(window)}),
@@ -1122,8 +1123,15 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         .input_blocked(modal)
         .auto_collapse_iconic(app.session.prefs.auto_collapse_icon_panels);
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some(hook) = app.services.native_input_hook.clone() {
-        dock = dock.native_input_hook(move |_, raw| hook(raw));
+    {
+        crate::font_menu::ensure_native_wheel_layers(ui.ctx());
+        let hook = app.services.native_input_hook.clone();
+        dock = dock.native_input_hook(move |ctx, raw| {
+            if let Some(hook) = &hook {
+                hook(raw);
+            }
+            crate::font_menu::take_raw_wheel(ctx, raw);
+        });
     }
     // Tab and Shift+Tab (`window.dock`, `window.panels`) and the full screen modes hide the panels;
     // the canvas stays.

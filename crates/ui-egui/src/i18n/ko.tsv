@@ -64,6 +64,7 @@ digits	Malayalam	말라얄람어
 	Join Our Discord	Discord 참여하기
 	Line-end Punctuation Half Width	줄 끝 문장 부호 반각
 	Insert Kashidas	카시다 삽입
+	Kashidas	카시다
 	Long	길게
 	Stylistic	스타일
 	Mojikumi Set	모지쿠미 세트
@@ -650,6 +651,11 @@ digits	Malayalam	말라얄람어
 	New Toolbar	새 도구 막대
 	Show Toolbar	도구 막대 표시
 	List Toolbars	도구 막대 목록
+	Manage Toolbars…	도구 막대 관리…
+	Manage Toolbars	도구 막대 관리
+	Rename Toolbar	도구 막대 이름 바꾸기
+	Duplicate Toolbar	도구 막대 복제
+	Delete Toolbar	도구 막대 삭제
 	Manage Workspaces…	작업 영역 관리…
 	Control	컨트롤
 	Contextual Task Bar	상황별 작업 표시줄
@@ -679,6 +685,8 @@ digits	Malayalam	말라얄람어
 	Links	링크
 	Magic Wand	마술봉
 	Navigator	내비게이터
+	Navigator Panel Options	내비게이터 패널 옵션
+	Draw Dashed Lines as Solid Lines	점선을 실선으로 그리기
 	Pattern Options	패턴 옵션
 	Properties	속성
 	Separations Preview	분판 미리 보기
@@ -1019,6 +1027,9 @@ digits	Malayalam	말라얄람어
 	Baseline Shift	기준선 이동
 	Batch	일괄 처리
 	Begin Recording	기록 시작
+	Exclude from playback	재생에서 제외
+	Include in playback	재생에 포함
+	Include Action Steps	액션 단계 포함
 	Bend:	구부리기:
 	Bevel Join	베벨 조인
 	Bitmap	비트맵
@@ -1981,6 +1992,8 @@ digits	Malayalam	말라얄람어
 	Large	크게
 	Large Tabs	큰 탭
 	Lasso Tool	올가미 도구
+	Enclosing Lasso Tool	둘러싸기 올가미 도구
+	Enclosing Lasso	둘러싸기 올가미
 	Last Effect: {name}	마지막 효과: {name}
 	Last Page	마지막 페이지
 	Layer Options…	레이어 옵션…
@@ -2084,6 +2097,7 @@ digits	Malayalam	말라얄람어
 	Manage Workspaces	작업 영역 관리
 	Manually	수동
 	Mark Older Files as [Converted] When Opened	열 때 이전 파일을 [Converted]로 표시
+	Use System Defaults for Edit Original	원본 편집에 시스템 기본값 사용
 	Mark as trapped	트래핑됨으로 표시
 	Marks	표시
 	Match User Interface Brightness	사용자 인터페이스 밝기에 맞춤
@@ -3260,6 +3274,7 @@ mark-style	Japanese	일본식
 	Use Artboards	아트보드 사용
 	Use Black Point Compensation	블랙 포인트 보정 사용
 	Use Compression	압축 사용
+	Include Editing Data for Other Apps	다른 앱용 편집 데이터 포함
 	Use Even-Odd Fill Rule	짝홀 칠 규칙 사용
 	Use Japanese Crop Marks	일본식 자르기 표시 사용
 	Use Low Resolution Proxy for Linked EPS	연결된 EPS에 저해상도 프록시 사용
@@ -3592,6 +3607,7 @@ file-filter	Templates	템플릿
 	Left-Justified Tab	왼쪽 정렬 탭
 	Letter	레터
 	Light Blue	연한 파랑
+	Light Red	연한 빨강
 	Lightness	명도
 	Link	링크
 	Low	낮음
@@ -4076,7 +4092,7 @@ theme	Appearance	외관
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: 여기에는 파일 시스템이 없습니다(열려면 dataBase64를 전달하고, dataBase64를 얻으려면 경로를 생략하세요)
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	저장은 {_2}이(가) 아닌 {_1}(으)로 기록합니다. 다른 형식은 document.export를 사용하세요
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	저장은 {_2}이(가) 아닌 {_1}(으)로 기록합니다. 이 형식으로 기록하려면 file.saveAsTemplate를 사용하세요
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7은(는) 레거시 .ai 파일을 기록합니다. .ait 템플릿은 항상 PDF 호환입니다
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7은(는) 레거시 .ai 파일을 기록하며 .ait 템플릿은 기록하지 않습니다
 @msg	no changes since the last save	마지막 저장 이후 변경 내용이 없습니다
 @msg	unknown format `{f}` (Save writes {_1})	알 수 없는 형식 `{f}`(저장은 {_1}(으)로 기록)
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`는 SVG 옵션 개체여야 합니다(document.formats 참조)
@@ -4300,6 +4316,7 @@ theme	Appearance	외관
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	표시되는 글꼴의 한 줄보다 낮은 프레임의 영역 문자는 프레임을 더 높였습니다({_1}). 그렇지 않으면 문자가 표시되지 않습니다
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	그레이디언트 “{name}”이(가) 파일에 정의되어 있지 않아 단색으로 대체했습니다
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft에서 아직 읽을 수 없는 브러시는 브러시 패널에서 제외되었습니다({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	칠이나 선이 여러 개인 개체, 효과, 브러시가 있는 개체는 그려진 모양({_1})으로 가져왔습니다: 모양새는 아직 편집할 수 없습니다
 @msg	patterns nested too deeply are filled with mid-grey	너무 깊게 중첩된 패턴은 중간 회색으로 채웁니다
 @msg	shadings of an unknown type were left out	알 수 없는 종류의 셰이딩은 제외했습니다
@@ -5114,6 +5131,10 @@ lighting	Light	광원
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	데이터 세트 {name}에서 적용된 항목이 없습니다: 값이 있는 변수에 연결된 개체가 없습니다
 @msg	no bound object reports a value (locked objects and embedded images report none)	값을 보고하는 연결된 개체가 없습니다(잠긴 개체와 포함된 이미지는 값을 보고하지 않습니다)
 @msg	the action has no steps	액션에 단계가 없습니다
+@msg	the action has no included steps	액션에 포함된 단계가 없습니다
+@msg	no such action step	해당 액션 단계가 없습니다
+@msg	included must be true or false	included의 값은 true 또는 false여야 합니다
+@msg	others must be true or false	others의 값은 true 또는 false여야 합니다
 
 # User Interface › Accent Color
 	Accent Color	강조 색상
@@ -5140,6 +5161,11 @@ lighting	Light	광원
 	Export Type:	내보내기 유형:
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
+@msg	an action is already recording	이미 액션을 기록하고 있습니다
+@msg	no such function key	해당 기능 키가 없습니다
+@msg	no such color	해당 색상이 없습니다
+@msg	{_1} cannot be used on Windows	{_1}은(는) Windows에서 사용할 수 없습니다
+@msg	more than one action is named “{_1}”	“{_1}”(이)라는 이름의 액션이 둘 이상 있습니다
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
 	Smudge Stick…	문지르기 막대…
 	Smudge Stick	문지르기 막대
@@ -5222,6 +5248,7 @@ lighting	Light	광원
 	Effect Gallery	효과 갤러리
 	Filters	필터
 	Select artwork to apply effects	효과를 적용할 그래픽을 선택하세요
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	파일의 변수 바인딩 일부를 읽지 못했습니다(건너뛴 바인딩: {_1}). 해당 오브젝트는 변수에 바인딩되지 않습니다
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	파일의 변수 라이브러리를 일부만 읽었습니다(건너뛴 항목: {_1}). 나머지는 변수 패널에 표시됩니다
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	파일의 변수 라이브러리를 읽을 수 없습니다. 변수 패널에 표시되지 않습니다
 @msg	a variable of unknown kind can't be bound to objects	종류를 알 수 없는 변수는 개체에 바인딩할 수 없습니다
@@ -5313,6 +5340,13 @@ axis	Y Axis	Y축
 	Action Options…	액션 옵션…
 	Action Options	액션 옵션
 	Rename Action	액션 이름 바꾸기
+	New Action…	새 액션…
+	New Action	새 액션
+	Create New Action	새 액션 만들기
+	Play Action	액션 재생
+	Action Set:	액션 세트:
+	Function Key:	기능 키:
+	Record	기록
 	Create New Set	새 세트 만들기
 	Stop Global Edit	전체 편집 중지
 	Global Edit Options	전체 편집 옵션
@@ -5588,6 +5622,7 @@ anchor	Points:	포인트:
 	Character Color	문자 색상
 	OpenType Features	OpenType 기능
 	Stylistic Sets	스타일 세트
+	Set {n}	세트 {n}
 @msg	features lists at most {max} tags	features에는 태그를 최대 {max}개까지 지정할 수 있습니다
 @msg	unknown OpenType feature `{t}`	알 수 없는 OpenType 기능 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label}은(는) 0 초과 {max} 이하의 숫자여야 합니다
@@ -5739,6 +5774,7 @@ breakText	Glyphs	글리프
 	Gap 5	간격 5
 
 @msg	{_1}: they came in as the page's art	{_1}: 페이지의 아트로 가져왔습니다
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	파일 자체 페이지와 다르게 그려진 오브젝트를 페이지의 아트로 가져왔습니다: {_1}
 
 @msg	You must choose a side pattern.	측면 패턴을 선택해야 합니다.
 @msg	invalid pattern tile choice	잘못된 패턴 타일 선택
@@ -5840,3 +5876,14 @@ breakText	Glyphs	글리프
 	Create Swatch Legend	견본 범례 만들기
 	Create Swatch Legend…	견본 범례 만들기…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	텍스트 도구
+	Text Tweaker…	텍스트 조정…
+	Text Tweaker	텍스트 조정
+	Attribute:	속성:
+	From:	시작:
+	To:	끝:
+	Bow	활 모양
+	Spike	뾰족한 모양
+	Skip Spaces	공백 건너뛰기
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	아트워크가 너무 커서 이미지로 복사할 수 없습니다: 다른 앱에는 PNG가 전달되지 않습니다

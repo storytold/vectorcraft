@@ -556,6 +556,19 @@ fn multiple_runs_and_styles() {
 }
 
 #[test]
+fn many_paragraphs_of_their_own_runs_lay_out_in_linear_time() {
+    // 20,000 one-letter paragraphs, each a run of its own: every paragraph looking through every
+    // run would be 400 million steps.
+    let n = 20_000;
+    let mut t = point("", style(10.0));
+    t.runs = (0..n).map(|i| TextRun { text: "a\n".into(), style: style(if i % 2 == 0 { 10.0 } else { 11.0 }), inline: None }).collect();
+    let start = std::time::Instant::now();
+    let l = layout(db(), &t);
+    assert!(start.elapsed() < std::time::Duration::from_secs(60), "{:?}", start.elapsed());
+    assert!(l.glyphs.iter().any(|g| g.run == n - 1));
+}
+
+#[test]
 fn layout_is_fast() {
     let text: String = LOREM.chars().cycle().take(1000).collect();
     let t = area(&text, style(12.0), Rect::new(0.0, 0.0, 300.0, 2000.0), Justify::JustifyLeft);

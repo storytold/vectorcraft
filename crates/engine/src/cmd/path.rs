@@ -112,7 +112,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Anchor Points",
             [],
             None,
-            "{to: \"corner\"|\"smooth\"} convert the direct-selected anchors (all anchors of fully selected paths, every point of a selected blend's spine) as one undo step: corner retracts both handles, smooth pulls handles in line with the neighbours (smooth anchors keep theirs)",
+            "{to: \"corner\"|\"smooth\"} convert the direct-selected anchors (all anchors of fully selected paths, every point of a selected blend's spine; a spine from Replace Spine changes only its handles, its points and the keys' spread along it staying as they are) as one undo step: corner retracts both handles, smooth pulls handles in line with the neighbours (smooth anchors keep theirs)",
             has_selection,
             convert_anchors
         ),
@@ -1155,11 +1155,7 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        for id in &blends {
-            let Some(NodeKind::Blend { children, spec }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            let Some((mut path, anchors)) = vectorcraft_doc::live::pin_spine(children, spec) else { continue };
-            let pinned = path.clone();
-            let Some(sp) = path.subpaths.first_mut() else { continue };
+        let convert = |sp: &mut SubPath| {
             for ai in 0..sp.anchors.len() {
                 if smooth {
                     sp.smooth_anchor(ai);
@@ -1167,6 +1163,21 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                     a.retract();
                 }
             }
+        };
+        for id in &blends {
+            let Some(NodeKind::Blend { children, spec }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            // A spine from Replace Spine keeps its points and its keys spread along it: only the
+            // handles change, and the keys are not pinned to points.
+            if vectorcraft_doc::live::blend_spine(children, spec).is_some_and(|(_, anchors)| anchors.is_none()) {
+                if let Some(sp) = spec.spine.as_mut().and_then(|p| p.subpaths.first_mut()) {
+                    convert(sp);
+                }
+                continue;
+            }
+            let Some((mut path, anchors)) = vectorcraft_doc::live::pin_spine(children, spec) else { continue };
+            let pinned = path.clone();
+            let Some(sp) = path.subpaths.first_mut() else { continue };
+            convert(sp);
             // A spine the conversion leaves as it was stays as the blend has it.
             if path != pinned {
                 spec.key_anchors = anchors.iter().map(|a| u32::try_from(*a).unwrap_or(u32::MAX)).collect();

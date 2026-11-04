@@ -240,13 +240,24 @@ fn global_edit_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             crate::menus::invoke(app, "select.globalEdit", json!({}));
         }
         let options = widgets::icon_button_enabled(ui, "chevron-down", tl!("Global Edit Options"), false, !on, 20.0);
-        egui::Popup::menu(&options).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| global_edit_options(app, ui));
+        egui::Popup::menu(&options)
+            .open_memory(global_edit_options_open(&options, on))
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| global_edit_options(app, ui));
     });
 }
 
+/// The open state for a Global Edit Options dropdown's popup: a click on the button toggles the
+/// popup, and the popup is closed while Global Edit is on, including when Global Edit starts with
+/// the popup open.
+pub(crate) fn global_edit_options_open(options: &egui::Response, on: bool) -> Option<egui::SetOpenCommand> {
+    if on { Some(egui::SetOpenCommand::Bool(false)) } else { options.clicked().then_some(egui::SetOpenCommand::Toggle) }
+}
+
 /// The Global Edit Options: what else similar objects must share (Match), where they may lie (On
-/// Artboards) and how many objects that takes now.
-fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// Artboards) and how many objects that takes now. The Control bar's Global Edit Options dropdown
+/// shows them too.
+pub(crate) fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.set_min_width(220.0);
     let o = app.session.global_edit_options.clone();
     let set = |app: &mut VectorcraftApp, p: serde_json::Value| crate::menus::invoke(app, "select.globalEditOptions", p);

@@ -286,7 +286,7 @@ mod tests {
 
     /// Change All leaves locked text in its font, and the status bar says so.
     #[test]
-    fn change_all_says_when_locked_text_keeps_its_font() {
+    fn change_all_clears_the_skip_warning_after_unlocking_text() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Missing Family"})).unwrap();
@@ -298,6 +298,16 @@ mod tests {
         assert_eq!(r["runs"], 0, "{r}");
         assert_eq!(fonts(&mut app)[0]["family"], "Missing Family");
         assert_eq!(app.ui.status, "some text is hidden or locked, so its font wasn't replaced");
+        app.run("object.unlockAll", json!({})).unwrap();
+        assert_eq!(app.ui.status, "some text is hidden or locked, so its font wasn't replaced");
+        let r = change(&mut app, &d, &from, true).unwrap();
+        assert_eq!(r["runs"], 1, "{r}");
+        assert!(r.get("warning").is_none(), "{r}");
+        assert_eq!(app.ui.status, "");
+        app.ui.status = "Saved another document".into();
+        let r = app.run("text.replaceFont", json!({"from": {"family": "Missing Family"}, "to": {"family": "Source Sans 3"}})).unwrap();
+        assert_eq!(r["runs"], 0, "{r}");
+        assert_eq!(app.ui.status, "Saved another document");
     }
 
     #[test]

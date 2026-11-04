@@ -927,6 +927,7 @@ pub(crate) fn with_export_preset(s: &Session, cmd: &str, settings: &mut Map<Stri
 /// so do different files that would share a name, with or without the `name` pattern. The reply's
 /// `warnings` lists every warning the encoders give for the files, each once.
 pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
+    check_passwords(p)?;
     let o = ScreenParams::of(p)?;
     let rows = rows_of(s, p, o.preset.as_deref())?;
     o.one_source()?;
@@ -1280,15 +1281,43 @@ fn remember(s: &mut Session, p: &Value) {
 /// The PDF passwords an export may be given (`security` of a PDF row or of `settings.pdf`).
 const PASSWORD_KEYS: [&str; 2] = ["openPassword", "permissionsPassword"];
 
+/// Left where [`remove_passwords`] took a password out: an export of these settings is refused
+/// until a password is given again ([`check_passwords`]), rather than written unprotected.
+const PASSWORD_REQUIRED: &str = "passwordRequired";
+
 /// `settings` without the PDF passwords anywhere in them: settings kept in the document (which
 /// native saves write) or in the preferences hold the export's choices, never its secrets, as
-/// the PDF settings themselves are saved without them.
+/// the PDF settings themselves are saved without them. Where one was given, [`PASSWORD_REQUIRED`]
+/// says so.
 fn remove_passwords(settings: &mut Map<String, Value>) {
+    let mut removed = false;
     for key in PASSWORD_KEYS {
-        settings.remove(key);
+        removed |= settings.remove(key).is_some_and(|v| v.as_str().is_none_or(|p| !p.is_empty()));
+    }
+    if removed {
+        settings.insert(PASSWORD_REQUIRED.into(), Value::Bool(true));
     }
     for v in settings.values_mut() {
         remove_passwords_in(v);
+    }
+}
+
+/// Refuse export params `v` that hold settings whose PDF passwords were left out
+/// ([`PASSWORD_REQUIRED`]) without a password given again.
+fn check_passwords(v: &Value) -> Result<()> {
+    match v {
+        Value::Object(m) => {
+            let given = PASSWORD_KEYS.iter().any(|k| m.get(*k).and_then(Value::as_str).is_some_and(|p| !p.is_empty()));
+            if m.get(PASSWORD_REQUIRED) == Some(&Value::Bool(true)) && !given {
+                return Err(bad(
+                    C,
+                    "the PDF security settings were saved without their passwords: give openPassword or permissionsPassword again, or security without passwordRequired to export unprotected",
+                ));
+            }
+            m.values().try_for_each(check_passwords)
+        }
+        Value::Array(items) => items.iter().try_for_each(check_passwords),
+        _ => Ok(()),
     }
 }
 
@@ -1376,5 +1405,6 @@ mod tests {
         assert!(!kept.to_string().contains("Password"), "{kept}");
         assert_eq!(kept["formats"][0]["security"]["printing"], "low");
         assert_eq!(kept["settings"]["pdf"]["security"]["copy"], false);
+        assert_eq!(kept["formats"][0]["security"]["passwordRequired"], true);
     }
 }

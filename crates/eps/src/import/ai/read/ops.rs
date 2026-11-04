@@ -82,6 +82,14 @@ impl<'a> Reader<'a> {
             // highlight `-- -- angle length Bh`): a NaN keeps the other operands where they are.
             "--" => return self.push(V::Num(f64::NAN)),
             "[" => {
+                // Drop marks that operators have taken off, so `marks` is the open nesting.
+                while self.marks.last().is_some_and(|&m| !matches!(self.stack.get(m), Some(V::Mark))) {
+                    self.marks.pop();
+                }
+                // Arrays nest as deep as their `[`s; dropping a deeper one would overflow the stack.
+                if self.marks.len() >= MAX_DEPTH {
+                    return Err("its objects are nested too deeply".into());
+                }
                 self.marks.push(self.stack.len());
                 return self.push(V::Mark);
             }
@@ -588,6 +596,18 @@ impl<'a> Reader<'a> {
         {
             self.looks.insert(look.id);
         }
+        // The type that a text object's look draws is the object's own, whatever comes of its style.
+        if after
+            && let Some(f) = self.frames.last_mut()
+            && let [.., look, object] = f.children.as_mut_slice()
+            && slot_of(object.name.as_deref()).is_some()
+            && !super::is_look_slot(object.name.as_deref())
+            && self.hidden_ids.contains(&object.id)
+            && self.hidden_ids.contains(&look.id) == hidden
+            && matches!(look.kind, NodeKind::Group { clip: false, .. })
+        {
+            strip_look_type(look);
+        }
         if code != 1.0 || style.is_empty() || !after {
             return;
         }
@@ -879,6 +899,16 @@ fn with_look(layer: &mut AppearanceItem, look: &crate::import::ai::style::ItemLo
     match layer {
         AppearanceItem::Fill(f) => (f.visible, f.opacity, f.blend, f.effects) = (look.visible, look.opacity, look.blend, look.effects.clone()),
         AppearanceItem::Stroke(s) => (s.visible, s.opacity, s.blend, s.effects) = (look.visible, look.opacity, look.blend, look.effects.clone()),
+    }
+}
+
+/// Remove from `n` the text slots of the type its look draws ([`super::is_look_slot`]), in its groups too.
+fn strip_look_type(n: &mut Node) {
+    if let Some(children) = n.children_mut() {
+        children.retain(|c| !super::is_look_slot(c.name.as_deref()));
+        for c in children.iter_mut().filter(|c| c.children().is_some_and(|k| !k.is_empty())) {
+            strip_look_type(Arc::make_mut(c));
+        }
     }
 }
 

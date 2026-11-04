@@ -141,7 +141,15 @@ fn shared_styles<T: PartialEq>(
             let para = t.plain_text().get(..a).map_or(0, |s| s.bytes().filter(|&c| c == b'\n').count());
             return f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
         }
-        each_paragraph_run(t, Some((a, b)), |para, style, inline| acc.add(f(t, para, style, inline)));
+        match text_story(app) {
+            // After Select All in threaded text: all the text of every frame of the story.
+            Some(story) => {
+                for t in story.into_iter().filter_map(text) {
+                    each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
+                }
+            }
+            None => each_paragraph_run(t, Some((a, b)), |para, style, inline| acc.add(f(t, para, style, inline))),
+        }
     } else {
         for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
             n.walk(&mut |c| {
@@ -227,6 +235,9 @@ pub(crate) fn format(app: &mut VectorcraftApp, p: Value) {
 /// `text.setFormat` on the selected text objects.
 pub(crate) fn run_format(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
     let Some((id, a, b)) = text_editing(app) else { return app.run("text.setFormat", p) };
+    if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
+        return story_style(app, first, p);
+    }
     end_typing(app);
     p["id"] = json!(id.0);
     if b > a {
@@ -303,6 +314,14 @@ fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
     let value = value.round();
     ui.ctx().data_mut(|d| d.insert_temp(slot, (key, value)));
     Some((value, true))
+}
+
+/// The check marks of the Kerning menu's Auto and Optical entries for the selection's kerning
+/// `mode` (Optical on, manual value). A selection that mixes modes checks neither, and the menu
+/// still lists both.
+fn kerning_methods(mode: Option<(bool, Option<f64>)>) -> (Option<bool>, Option<bool>) {
+    let (automatic, optical) = mode.map_or((false, false), |(optical, manual)| (!optical && manual.is_none(), optical));
+    (Some(automatic), Some(optical))
 }
 
 /// The faces Type › Bold and Type › Italic switch to.
@@ -451,6 +470,10 @@ pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String
 /// nothing is selected). Does nothing unless the Type tool edits text.
 pub(crate) fn range_style(app: &mut VectorcraftApp, p: Value) {
     let Some((id, a, b)) = text_editing(app) else { return };
+    if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
+        story_style(app, first, p).ok();
+        return;
+    }
     end_typing(app);
     let mut q = p;
     q["id"] = json!(id.0);
@@ -475,6 +498,31 @@ pub(crate) fn text_editing(app: &VectorcraftApp) -> Option<(NodeId, usize, usize
     Some((id, g("start"), g("end")))
 }
 
+/// The frames of the threaded story whose whole text the Type tool has selected after Select All,
+/// in thread order; `None` when its selection is in one type object.
+pub(crate) fn text_story(app: &VectorcraftApp) -> Option<Vec<NodeId>> {
+    let o = app.session.tool_options();
+    let st = app.session.active()?;
+    let ids: Vec<NodeId> = o
+        .get("story")?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_u64)
+        .map(NodeId)
+        .filter(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))))
+        .collect();
+    (ids.len() >= 2).then_some(ids)
+}
+
+/// `text.setRangeStyle` with `p` on all the text of every frame of the story that `first` is a
+/// frame of, as one undo step.
+fn story_style(app: &mut VectorcraftApp, first: NodeId, mut p: Value) -> Result<Value, String> {
+    end_typing(app);
+    p["id"] = json!(first.0);
+    p["story"] = json!(true);
+    app.run("text.setRangeStyle", p)
+}
+
 /// Close the Type tool's typing session (one undo step) before another command edits the text.
 pub(crate) fn end_typing(app: &mut VectorcraftApp) {
     if app.session.tool_options().get("typing").and_then(Value::as_bool) == Some(true) {
@@ -495,7 +543,9 @@ fn text_copy(app: &mut VectorcraftApp) -> bool {
     if a == b {
         return false;
     }
-    let Ok(r) = app.session.execute("text.getRange", &json!({"id": id.0, "start": a, "end": b})) else { return false };
+    // After Select All in threaded text: the whole story.
+    let range = if text_story(app).is_some() { json!({"id": id.0, "story": true}) } else { json!({"id": id.0, "start": a, "end": b}) };
+    let Ok(r) = app.session.execute("text.getRange", &range) else { return false };
     let runs = r["runs"].clone();
     app.session.set_tool_option("copy", &runs);
     *CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()) = Some(runs.clone());
@@ -714,8 +764,7 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             let caret = text_editing(app).is_some_and(|(_, a, b)| a == b);
             let at_caret = if caret { caret_kerning(app, ui) } else { None };
             let kerning = at_caret.map(|(v, _)| v).or_else(|| mode.map(|(_, manual)| manual.unwrap_or(0.0)));
-            let automatic = mode.map(|(optical, manual)| !optical && manual.is_none());
-            let optical = mode.map(|(optical, _)| optical);
+            let (automatic, optical) = kerning_methods(mode);
             match widgets::spin_kerning(
                 ui,
                 "ch-kern",
@@ -893,7 +942,11 @@ fn axes_cmd(app: &mut VectorcraftApp, axes: Value, phase: widgets::Live) {
         Some((id, a, b)) => {
             end_typing(app);
             let mut q = json!({"id": id.0, "fontAxes": axes});
-            if b > a {
+            // After Select All in threaded text: every frame of the story.
+            if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
+                q["id"] = json!(first.0);
+                q["story"] = json!(true);
+            } else if b > a {
                 q["start"] = json!(a);
                 q["end"] = json!(b);
             }
@@ -1237,6 +1290,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_enabled_ui(has, |ui| {
             ui.menu_button(format!("   {}", tl!("Character Direction")), |ui| char_direction_items(app, ui));
         });
+        // A mixed selection is unchecked; choosing it enables kashidas for the whole range.
+        let kashidas = shared(app, |s| s.kashidas) == Some(true);
+        let selected_characters = text_editing(app).is_none_or(|(_, start, end)| end > start);
+        if menu_item(ui, tl!("Kashidas"), has && selected_characters, kashidas) {
+            format(app, json!({"kashidas": !kashidas}));
+        }
         ui.separator();
     }
     // No Break: the selected characters stay on one line.
@@ -1290,7 +1349,7 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
 /// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the Default character direction,
-/// the Default digits and the Em Box font height reference, whether or not Show East Asian
+/// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
 /// Options, Show Indic Options and Show Font Height Options are on.
 fn reset_panel(app: &mut VectorcraftApp) {
     let d = CharStyle::default();
@@ -1302,7 +1361,7 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
             "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right,
-            "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default",
+            "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
             "digits": d.digits, "fontHeightReference": d.font_height_reference
         }),
     );

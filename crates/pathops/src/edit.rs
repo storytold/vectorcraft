@@ -3,7 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use kurbo::{CubicBez, ParamCurveArclen, Point, Rect, Vec2};
+use kurbo::{CubicBez, ParamCurve, PathSeg, Point, Rect, Vec2};
+use vectorcraft_geom::path::measured_arclen;
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
 use crate::boolean::{Seg, segs_to_subpath};
@@ -115,7 +116,8 @@ fn simplify_run(run: &[Seg], opts: &SimplifyOptions) -> Vec<Seg> {
         }
         let mut pts = Vec::new();
         for (k, s) in piece.iter().enumerate() {
-            let len = s.c.arclen(1e-6);
+            // Guarded: kurbo subdivides without end on huge finite coordinates.
+            let len = measured_arclen(&PathSeg::Cubic(s.c), 1e-6);
             let m = ((len / (tol * 0.5)).ceil() as usize).clamp(4, 256);
             sample(&s.c, m, &mut pts, k == 0);
         }
@@ -454,7 +456,7 @@ fn seam_error(original: &SubPath, before: &SubPath, fit: &SubPath, tol: f64) -> 
         let mut pts = Vec::new();
         for j in (0..sp.segment_count()).filter(|&j| !seam_only || is_seam(j)) {
             let c = sp.segment(j);
-            let m = ((c.arclen(1e-6) / (tol.max(1e-6) * 0.5)).ceil() as usize).clamp(4, 256);
+            let m = ((measured_arclen(&PathSeg::Cubic(c), 1e-6) / (tol.max(1e-6) * 0.5)).ceil() as usize).clamp(4, 256);
             sample(&c, m, &mut pts, true);
         }
         pts
@@ -626,9 +628,32 @@ fn golden_min(f: impl Fn(f64) -> (CubicBez, f64, usize), mut a: f64, mut b: f64)
 pub fn add_anchor_points(path: &PathData) -> PathData {
     let mut out = path.clone();
     for sp in &mut out.subpaths {
-        for seg in (0..sp.segment_count()).rev() {
-            sp.insert_anchor(seg, 0.5);
+        let n = sp.segment_count();
+        if n == 0 {
+            continue;
         }
+        // Built in one pass (inserting into the middle of the vector shifts the rest each time):
+        // anchor k lands at 2k and the new anchor of segment k at 2k + 1.
+        let mut v = Vec::with_capacity(sp.anchors.len() * 2);
+        for (k, a) in sp.anchors.iter().enumerate() {
+            v.push(*a);
+            if k < n {
+                v.push(*a);
+            }
+        }
+        for seg in 0..n {
+            let c = sp.segment(seg);
+            let (l, r) = (c.subsegment(0.0..0.5), c.subsegment(0.5..1.0));
+            if sp.segment_is_line(seg) {
+                v[2 * seg + 1] = Anchor::corner(l.p3);
+            } else {
+                let at = (2 * seg + 2) % v.len();
+                v[2 * seg].h_out = l.p1;
+                v[at].h_in = r.p2;
+                v[2 * seg + 1] = Anchor { p: l.p3, h_in: l.p2, h_out: r.p1, kind: AnchorKind::Smooth };
+            }
+        }
+        sp.anchors = v;
     }
     out
 }

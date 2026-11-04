@@ -448,9 +448,15 @@ pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
         y1 = y1.max(a.y.max(c.y));
     }
     let gap = gap.max((y1 - y0) / 400.0).max(1e-6);
-    let mut y = (y0 / gap).floor() * gap + gap * 0.5;
+    let start = (y0 / gap).floor() * gap + gap * 0.5;
     let mut xs: Vec<f64> = vec![];
-    while y < y1 {
+    // Counted, not summed: far from the origin `y + gap` can round back to `y`. The gap is at least
+    // a 400th of the height, so 402 lines cover it.
+    for i in 0..402u32 {
+        let y = start + f64::from(i) * gap;
+        if y.partial_cmp(&y1) != Some(std::cmp::Ordering::Less) {
+            break;
+        }
         xs.clear();
         for (a, c) in &edges {
             if (a.y <= y) != (c.y <= y) {
@@ -462,7 +468,6 @@ pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
             out.move_to(unrot(Point::new(pair[0], y)));
             out.line_to(unrot(Point::new(pair[1], y)));
         }
-        y += gap;
     }
     out
 }

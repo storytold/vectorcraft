@@ -603,6 +603,11 @@
 	New Toolbar	Nowy pasek narzędzi
 	Show Toolbar	Pokaż pasek narzędzi
 	List Toolbars	Lista pasków narzędzi
+	Manage Toolbars…	Zarządzaj paskami narzędzi…
+	Manage Toolbars	Zarządzaj paskami narzędzi
+	Rename Toolbar	Zmień nazwę paska narzędzi
+	Duplicate Toolbar	Powiel pasek narzędzi
+	Delete Toolbar	Usuń pasek narzędzi
 	Manage Workspaces…	Zarządzaj obszarami roboczymi…
 	Control	Sterowanie
 	Contextual Task Bar	Kontekstowy pasek zadań
@@ -634,6 +639,8 @@
 	Update Changed Links	Aktualizuj zmienione łącza
 	Magic Wand	Różdżka
 	Navigator	Nawigator
+	Navigator Panel Options	Opcje panelu Nawigator
+	Draw Dashed Lines as Solid Lines	Rysuj linie przerywane jako ciągłe
 	Pattern Options	Opcje wzorka
 	Properties	Właściwości
 	Separations Preview	Podgląd rozbarwień
@@ -1190,6 +1197,8 @@ lighting	Light	Światło
 	Hand Tool	Narzędzie Rączka
 	Join Tool	Narzędzie Łączenie
 	Lasso Tool	Narzędzie Lasso
+	Enclosing Lasso Tool	Narzędzie lassa obejmującego
+	Enclosing Lasso	Lasso obejmujące
 	Line Cut Tool	Narzędzie Cięcie linią
 	Line Graph Tool	Narzędzie Wykres liniowy
 	Line Segment Tool	Narzędzie Odcinek
@@ -1256,6 +1265,9 @@ lighting	Light	Światło
 	Zoom Tool	Narzędzie Lupka
 	Action {n}	Operacja {n}
 	Begin Recording	Rozpocznij nagrywanie
+	Exclude from playback	Wyklucz z odtwarzania
+	Include in playback	Uwzględnij w odtwarzaniu
+	Include Action Steps	Uwzględnij kroki operacji
 	Center on Artboard	Wyśrodkuj na obszarze kompozycji
 	Default Actions	Operacje domyślne
 	Duplicate and Offset 10 pt	Powiel i odsuń o 10 pt
@@ -1774,6 +1786,7 @@ digits	Malayalam	Malajalam
 	Left-to-Right Paragraph Direction	Kierunek akapitu od lewej do prawej
 	Line-end Punctuation Half Width	Interpunkcja na końcu wiersza o połowie szerokości
 	Insert Kashidas	Wstaw kaszidy
+	Kashidas	Kaszidy
 	Long	Długi
 	Stylistic	Stylistyczny
 	Mojikumi Set	Zestaw mojikumi
@@ -2330,6 +2343,7 @@ digits	Malayalam	Malajalam
 	“{file}” is protected by a password.	Plik „{file}” jest chroniony hasłem.
 	Dim Images to:	Przyciemnij obrazy do:
 	Light Blue	Jasnoniebieski
+	Light Red	Jasnoczerwony
 	Layers Panel Options	Opcje panelu Warstwy
 	Row Size:	Rozmiar wiersza:
 	Show Layers Only	Pokaż tylko warstwy
@@ -3464,6 +3478,7 @@ theme	Appearance	Wygląd
 	List Preferences	Wyświetl preferencje
 	Manually	Ręcznie
 	Mark Older Files as [Converted] When Opened	Oznaczaj starsze pliki jako [Przekonwertowane] przy otwieraniu
+	Use System Defaults for Edit Original	Używaj ustawień domyślnych systemu dla polecenia Edytuj oryginał
 	Match User Interface Brightness	Dopasuj do jasności interfejsu
 	Light Gray	Jasnoszary
 	Medium Gray	Średnio szary
@@ -3531,6 +3546,7 @@ theme	Appearance	Wygląd
 	Type Object Selection by Path Only	Zaznaczanie obiektów tekstowych tylko po ścieżce
 	UI Scaling	Skalowanie interfejsu
 	Use Compression	Używaj kompresji
+	Include Editing Data for Other Apps	Dołącz dane edycji dla innych aplikacji
 	Use Japanese Crop Marks	Używaj japońskich znaczników przycięcia
 	Use Low Resolution Proxy for Linked EPS	Używaj podglądu niskiej rozdzielczości dla połączonych EPS
 	Use Precise Cursors	Używaj precyzyjnych kursorów
@@ -4123,7 +4139,7 @@ imageTrace	Outline	Kontur
 @msg	Save for Web: the image is empty	Zapisz dla Internetu: obraz jest pusty
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Zapis tworzy {_1}, nie {_2}: dla innych formatów użyj document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Zapis tworzy {_1}, nie {_2}: aby go zapisać, użyj file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 zapisuje starsze pliki .ai; szablon .ait jest zawsze zgodny z PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 zapisuje starsze pliki .ai, a nie szablony .ait
 @msg	Saved recovery data for {title}	Zapisano dane odzyskiwania dla {title}
 @msg	Saved to User Defined: {_1}	Zapisano w zdefiniowanych przez użytkownika: {_1}
 @msg	Saved {path}	Zapisano {path}
@@ -4767,6 +4783,7 @@ imageTrace	Outline	Kontur
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	zawiera {_1}, czego VectorCraft jeszcze z niego nie odczytuje
 @msg	its objects are nested too deeply	jego obiekty są zagnieżdżone zbyt głęboko
 @msg	its section ending with `%{end}` doesn't end	jego sekcja kończąca się na `%{end}` nie ma końca
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	pędzle, których VectorCraft jeszcze nie odczytuje, pominięto w panelu Pędzle ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	obiekty z kilkoma wypełnieniami lub obrysami, efektami albo pędzlami wczytano jako ich narysowany wygląd ({_1}): ich wyglądu nie można jeszcze edytować
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradient „{name}” nie jest zdefiniowany w pliku: zastąpiono go jednolitym kolorem
 @msg	an image VectorCraft can't read was left out	pominięto obraz, którego VectorCraft nie potrafi odczytać
@@ -5393,6 +5410,10 @@ mark-style	Japanese	Japońskie
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	z zestawu danych {name} nic nie zastosowano: żaden obiekt nie jest powiązany ze zmienną, dla której ma on wartość
 @msg	no bound object reports a value (locked objects and embedded images report none)	żaden powiązany obiekt nie zwraca wartości (zablokowane obiekty i osadzone obrazy nie zwracają żadnej)
 @msg	the action has no steps	operacja nie ma kroków
+@msg	the action has no included steps	operacja nie ma uwzględnionych kroków
+@msg	no such action step	brak takiego kroku operacji
+@msg	included must be true or false	included musi mieć wartość true lub false
+@msg	others must be true or false	others musi mieć wartość true lub false
 
 # User Interface › Accent Color
 	Accent Color	Kolor akcentu
@@ -5419,6 +5440,11 @@ mark-style	Japanese	Japońskie
 	Export Type:	Typ eksportu:
 	Movie Clip	Klip filmowy
 @msg	name is empty	nazwa jest pusta
+@msg	an action is already recording	operacja jest już nagrywana
+@msg	no such function key	brak takiego klawisza funkcyjnego
+@msg	no such color	brak takiego koloru
+@msg	{_1} cannot be used on Windows	Skrótu {_1} nie można używać w systemie Windows
+@msg	more than one action is named “{_1}”	więcej niż jedna operacja nazywa się „{_1}”
 @msg	no symbol named `{n}`	brak symbolu o nazwie `{n}`
 	Smudge Stick…	Rozmazywacz…
 	Smudge Stick	Rozmazywacz
@@ -5500,6 +5526,7 @@ mark-style	Japanese	Japońskie
 	Effect Gallery	Galeria efektów
 	Filters	Filtry
 	Select artwork to apply effects	Wybierz grafikę, aby zastosować efekty
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	nie wszystkie powiązania zmiennych pliku zostały wczytane (pominięte powiązania: {_1}): te obiekty nie są powiązane ze swoimi zmiennymi
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	biblioteka zmiennych pliku została wczytana tylko częściowo (pominięte wpisy: {_1}): panel Zmienne wyświetla resztę
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	nie udało się wczytać biblioteki zmiennych pliku: panel Zmienne jej nie wyświetla
 @msg	a variable of unknown kind can't be bound to objects	zmiennej nieznanego rodzaju nie można powiązać z obiektami
@@ -5589,6 +5616,13 @@ axis	Y Axis	Oś Y
 	Action Options…	Opcje operacji…
 	Action Options	Opcje operacji
 	Rename Action	Zmień nazwę operacji
+	New Action…	Nowa operacja…
+	New Action	Nowa operacja
+	Create New Action	Utwórz nową operację
+	Play Action	Odtwórz operację
+	Action Set:	Zestaw operacji:
+	Function Key:	Klawisz funkcyjny:
+	Record	Nagraj
 	Create New Set	Utwórz nowy zestaw
 	Stop Global Edit	Zakończ edycję globalną
 	Global Edit Options	Opcje edycji globalnej
@@ -5862,6 +5896,7 @@ anchor	Points:	Punkty:
 	Character Color	Kolor znaków
 	OpenType Features	Funkcje OpenType
 	Stylistic Sets	Zestawy stylistyczne
+	Set {n}	Zestaw {n}
 @msg	features lists at most {max} tags	features może zawierać najwyżej {max} znaczników
 @msg	unknown OpenType feature `{t}`	nieznana funkcja OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musi być liczbą większą od 0 i nie większą niż {max}
@@ -6013,6 +6048,7 @@ breakText	Glyphs	Glify
 	Gap 5	Odstęp 5
 
 @msg	{_1}: they came in as the page's art	{_1}: zaimportowano je jako grafikę strony
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	obiekty rysowane inaczej niż własna strona pliku zaimportowano jako grafikę strony: {_1}
 
 @msg	You must choose a side pattern.	Musisz wybrać wzór boczny.
 @msg	invalid pattern tile choice	nieprawidłowy wybór kafelka wzoru
@@ -6114,3 +6150,14 @@ breakText	Glyphs	Glify
 	Create Swatch Legend	Utwórz legendę próbek
 	Create Swatch Legend…	Utwórz legendę próbek…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Narzędzia tekstu
+	Text Tweaker…	Strojenie tekstu…
+	Text Tweaker	Strojenie tekstu
+	Attribute:	Atrybut:
+	From:	Od:
+	To:	Do:
+	Bow	Łuk
+	Spike	Szpic
+	Skip Spaces	Pomiń spacje
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika jest zbyt duża, aby skopiować ją jako obraz: inne aplikacje nie otrzymają jej w formacie PNG

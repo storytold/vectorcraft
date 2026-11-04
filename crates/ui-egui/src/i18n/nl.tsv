@@ -617,6 +617,11 @@
 	New Toolbar	Nieuwe werkbalk
 	Show Toolbar	Werkbalk tonen
 	List Toolbars	Lijst met werkbalken
+	Manage Toolbars…	Werkbalken beheren…
+	Manage Toolbars	Werkbalken beheren
+	Rename Toolbar	Werkbalk hernoemen
+	Duplicate Toolbar	Werkbalk dupliceren
+	Delete Toolbar	Werkbalk verwijderen
 	Manage Workspaces…	Werkruimten beheren…
 	Control	Bediening
 	Contextual Task Bar	Contextuele taakbalk
@@ -649,6 +654,8 @@
 	Update Changed Links	Gewijzigde koppelingen bijwerken
 	Magic Wand	Magische toverstaf
 	Navigator	Navigator
+	Navigator Panel Options	Opties voor het paneel Navigator
+	Draw Dashed Lines as Solid Lines	Streepjeslijnen als doorgetrokken lijnen tekenen
 	Pattern Options	Patroonopties
 	Properties	Eigenschappen
 	Separations Preview	Scheidingsvoorbeeld
@@ -1193,6 +1200,8 @@ lighting	Light	Licht
 	Hand	Hand
 	Join Tool	Samenvoegen-gereedschap
 	Lasso Tool	Lasso-gereedschap
+	Enclosing Lasso Tool	Omsluitend lassogereedschap
+	Enclosing Lasso	Omsluitende lasso
 	Lasso	Lasso
 	Line Cut Tool	Lijnknip-gereedschap
 	Line Graph Tool	Lijndiagram-gereedschap
@@ -1266,6 +1275,9 @@ lighting	Light	Licht
 	Zoom Tool	Zoom-gereedschap
 	Action {n}	Actie {n}
 	Begin Recording	Opname starten
+	Exclude from playback	Uitsluiten van afspelen
+	Include in playback	Insluiten bij afspelen
+	Include Action Steps	Actiestappen insluiten
 	Center on Artboard	Centreren op tekengebied
 	Default Actions	Standaardacties
 	▾ Default Actions	▾ Standaardacties
@@ -1660,6 +1672,7 @@ digits	Malayalam	Malayalam
 	Select text to set its OpenType features.	Selecteer tekst om de OpenType-functies in te stellen.
 	Standard Ligatures	Standaardligaturen
 	Stylistic Alternates	Stilistische alternatieven
+	Set {n}	Set {n}
 	Swash	Swash
 	Tabular Lining	Tabulaire lining
 	Tabular Oldstyle	Tabulaire oldstyle
@@ -1674,6 +1687,7 @@ digits	Malayalam	Malayalam
 	Left-to-Right Paragraph Direction	Alinearichting van links naar rechts
 	Line-end Punctuation Half Width	Leestekens op regeleinde op halve breedte
 	Insert Kashidas	Kashida's invoegen
+	Kashidas	Kashida's
 	Long	Lang
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-set
@@ -2216,6 +2230,7 @@ digits	Malayalam	Malayalam
 	“{file}” is protected by a password.	„{file}” is beveiligd met een wachtwoord.
 	Dim Images to:	Afbeeldingen dimmen tot:
 	Light Blue	Lichtblauw
+	Light Red	Lichtrood
 	Layers Panel Options	Opties voor het paneel Lagen
 	Row Size:	Rijgrootte:
 	Show Layers Only	Alleen lagen weergeven
@@ -3342,6 +3357,7 @@ theme	Appearance	Vormgeving
 	List Preferences	Voorkeuren weergeven
 	Manually	Handmatig
 	Mark Older Files as [Converted] When Opened	Oudere bestanden bij het openen markeren als [geconverteerd]
+	Use System Defaults for Edit Original	Systeemstandaarden gebruiken voor Origineel bewerken
 	Match User Interface Brightness	Aanpassen aan helderheid van gebruikersinterface
 	Light Gray	Lichtgrijs
 	Medium Gray	Middelgrijs
@@ -3409,6 +3425,7 @@ theme	Appearance	Vormgeving
 	Type Object Selection by Path Only	Tekstobjecten alleen via hun pad selecteren
 	UI Scaling	UI-schaling
 	Use Compression	Compressie gebruiken
+	Include Editing Data for Other Apps	Bewerkingsgegevens voor andere apps opnemen
 	Use Japanese Crop Marks	Japanse aftekenlijnen gebruiken
 	Use Low Resolution Proxy for Linked EPS	Proxy met lage resolutie gebruiken voor gekoppelde EPS
 	Use Precise Cursors	Nauwkeurige cursors gebruiken
@@ -4585,6 +4602,7 @@ imageTrace	Outline	Contour
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	het bevat {_1}, wat VectorCraft er nog niet uit leest
 @msg	its objects are nested too deeply	de objecten ervan zijn te diep genest
 @msg	its section ending with `%{end}` doesn't end	zijn sectie die op `%{end}` eindigt, eindigt niet
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	penselen die VectorCraft nog niet kan lezen, zijn weggelaten uit het deelvenster Penselen ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objecten met meerdere vullingen of lijnen, effecten of penselen zijn als hun getekende uiterlijk binnengekomen ({_1}): hun vormgeving is nog niet bewerkbaar
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	verloop „{name}” is niet gedefinieerd in het bestand: er is een effen kleur voor gebruikt
 @msg	an image VectorCraft can't read was left out	een afbeelding die VectorCraft niet kan lezen, is weggelaten
@@ -5204,6 +5222,10 @@ mark-style	Japanese	Japans
 @msg	choose a source folder	kies een bronmap
 @msg	open a document with data sets	open een document met gegevenssets
 @msg	the action has no steps	de actie heeft geen stappen
+@msg	the action has no included steps	de actie heeft geen ingesloten stappen
+@msg	no such action step	actiestap bestaat niet
+@msg	included must be true or false	included moet true of false zijn
+@msg	others must be true or false	others moet true of false zijn
 	Registration:	Passermarkering:
 	By Layer	Per laag
 	By Object	Per object
@@ -5232,6 +5254,7 @@ mark-style	Japanese	Japans
 	Path Length	Padlengte
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	de lagen van het bestand zijn niet ingelezen ({_1}): het komt binnen als zijn pagina, in één laag
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	de lagen van het bestand zijn niet ingelezen uit de bewerkingsgegevens ({_1}): ze komen uit het PDF-gedeelte
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	niet alle variabelekoppelingen van het bestand zijn ingelezen (overgeslagen koppelingen: {_1}): die objecten zijn niet aan hun variabelen gekoppeld
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	de variabelenbibliotheek van het bestand is slechts gedeeltelijk ingelezen (overgeslagen items: {_1}): het Variabelen-paneel toont de rest
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	de variabelenbibliotheek van het bestand kan niet worden ingelezen: het Variabelen-paneel toont die niet
 @msg	a variable of unknown kind can't be bound to objects	een variabele van onbekend type kan niet aan objecten worden gekoppeld
@@ -5367,6 +5390,11 @@ swatch	Bright Violet	Felviolet
 	Export Type:	Exporttype:
 	Movie Clip	Filmclip
 @msg	name is empty	naam is leeg
+@msg	an action is already recording	er wordt al een actie opgenomen
+@msg	no such function key	functietoets bestaat niet
+@msg	no such color	kleur bestaat niet
+@msg	{_1} cannot be used on Windows	{_1} kan niet worden gebruikt in Windows
+@msg	more than one action is named “{_1}”	meer dan één actie heet „{_1}”
 @msg	no symbol named `{n}`	geen symbool met de naam `{n}`
 	Remove Color Profile…	Kleurprofiel verwijderen…
 	Color wheel	Kleurenwiel
@@ -5682,6 +5710,13 @@ axis	Y Axis	Y-as
 	Action Options…	Actieopties…
 	Action Options	Actieopties
 	Rename Action	Actie hernoemen
+	New Action…	Nieuwe actie…
+	New Action	Nieuwe actie
+	Create New Action	Nieuwe actie maken
+	Play Action	Actie afspelen
+	Action Set:	Actieset:
+	Function Key:	Functietoets:
+	Record	Opnemen
 	Create New Set	Nieuwe set maken
 	Stop Global Edit	Globale bewerking stoppen
 	Global Edit Options	Opties voor globale bewerking
@@ -6070,6 +6105,7 @@ breakText	Glyphs	Glyphs
 	Gap 5	Tussenruimte 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ze zijn geïmporteerd als pagina-afbeelding
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objecten die anders werden getekend dan de eigen pagina van het bestand, zijn geïmporteerd als pagina-afbeelding: {_1}
 
 @msg	You must choose a side pattern.	Kies een zijpatroon.
 @msg	invalid pattern tile choice	ongeldige keuze voor patroontegel
@@ -6171,3 +6207,14 @@ breakText	Glyphs	Glyphs
 	Create Swatch Legend	Stalenlegenda maken
 	Create Swatch Legend…	Stalenlegenda maken…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Teksthulpmiddelen
+	Text Tweaker…	Tekst bijstellen…
+	Text Tweaker	Tekst bijstellen
+	Attribute:	Kenmerk:
+	From:	Van:
+	To:	Tot:
+	Bow	Boog
+	Spike	Piek
+	Skip Spaces	Spaties overslaan
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Het illustratiewerk is te groot om als afbeelding te kopiëren: andere apps krijgen er geen PNG van

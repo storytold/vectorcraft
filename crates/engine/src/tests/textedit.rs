@@ -627,6 +627,33 @@ fn touch_type_moves_one_character_in_centered_and_right_aligned_lines() {
     }
 }
 
+#[test]
+fn touch_type_centered_ltr_scale_keeps_the_expected_width_change() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 200, "y": 100, "text": "Type", "size": 40, "justify": "center"})).unwrap()["id"].as_u64().unwrap(),
+    );
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "hScale": 150})).unwrap();
+    let after = glyph_pens(&s, id);
+    let previous = moved_by(&before, &after, 0).0;
+    let following = moved_by(&before, &after, 2).0;
+    assert!(previous < -1.0, "centered line shifts left: {previous}");
+    assert!(following > 1.0, "the wider character shifts following text right: {following}");
+    assert!((following + previous).abs() < 0.1, "width growth is shared around the center: {previous}, {following}");
+}
+
+#[test]
+fn touch_type_refuses_horizontal_move_across_a_direction_boundary() {
+    let mut s = session();
+    let id = text(&mut s, "abc אבג");
+    let before = obj(&s, id);
+    let result = s.execute("text.touchType", &json!({"id": id.0, "start": 4, "dx": 5}));
+    assert!(result.is_err(), "a mixed-direction boundary has no safe preceding glyph for kerning");
+    assert_eq!(obj(&s, id), before, "a refused move leaves the text unchanged");
+    s.execute("text.touchType", &json!({"id": id.0, "start": 4, "dy": 3})).unwrap();
+}
+
 /// `dy` moves a rotated character that many document points up from its line, also in type
 /// scaled unevenly.
 #[test]
@@ -746,15 +773,15 @@ fn touch_type_raises_a_rotated_character_on_a_skewed_path() {
     assert!(((x * x + y * y).sqrt() - 10.0).abs() < 1e-6, "({x}, {y})");
 }
 
-/// A right-to-left character moves only up and down.
+/// A right-to-left character can move along its line and up from it.
 #[test]
-fn touch_type_moves_a_right_to_left_character_only_up_and_down() {
+fn touch_type_moves_a_right_to_left_character_along_its_line_and_up() {
     let mut s = session();
     let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "אבג", "size": 40})).unwrap()["id"].as_u64().unwrap());
-    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 2, "dx": 5})).is_err());
     let before = glyph_pens(&s, id);
-    s.execute("text.touchType", &json!({"id": id.0, "start": 2, "dy": 3})).unwrap();
-    let (_, up) = moved_by(&before, &glyph_pens(&s, id), 2);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 2, "dx": 5, "dy": 3})).unwrap();
+    let (along, up) = moved_by(&before, &glyph_pens(&s, id), 2);
+    assert!((along + 5.0).abs() < 1e-9, "{along}");
     assert!((up + 3.0).abs() < 1e-9, "{up}");
 }
 
@@ -860,6 +887,137 @@ fn type_tool_typing_is_one_undo_step() {
     assert_eq!(obj(&s, id).plain_text(), "Hello world");
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(obj(&s, id).plain_text(), "");
+}
+
+#[test]
+fn dropped_type_press_restores_the_original_text_and_selection() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 500})).unwrap();
+    let first = text(&mut s, "First text");
+    let second = NodeId(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Second text", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    let at = |s: &Session, id: NodeId| {
+        let target = obj(s, id);
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+        let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+        target.xf * a.midpoint(b)
+    };
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let a = at(&s, first);
+    click(&mut s, a.x + 0.1, a.y);
+    assert!(s.tool_wants_text());
+    s.select(|_, selection| selection.guides.push(0)).unwrap();
+    let before = s.doc().unwrap().selection.clone();
+    let b = at(&s, second);
+    s.pointer(&PointerEvent::new(PointerKind::Down, b.x + 0.1, b.y), v).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![second]);
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection, before);
+    assert!(s.tool_wants_text());
+    s.tool_text("!", v).unwrap();
+    assert!(obj(&s, first).plain_text().contains('!'));
+    assert_eq!(obj(&s, second).plain_text(), "Second text");
+}
+
+#[test]
+fn dropped_type_press_restores_the_active_layer_without_a_prior_selection() {
+    let mut s = session();
+    let original_layer = s.doc().unwrap().doc.layers[0].id;
+    let other_layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let text_id = text(&mut s, "Other layer text");
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.active_mut().unwrap().active_layer = Some(original_layer);
+    let target = obj(&s, text_id);
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+    let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+    let at = target.xf * a.midpoint(b);
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y), v).unwrap();
+    assert_eq!(s.doc().unwrap().active_layer, Some(other_layer));
+    s.drop_tool_press(v).unwrap();
+    assert!(s.doc().unwrap().selection.objects.is_empty());
+    assert_eq!(s.doc().unwrap().active_layer, Some(original_layer));
+}
+
+#[test]
+fn dropped_type_press_after_document_switch_keeps_the_new_document_selection() {
+    let mut s = session();
+    let first = text(&mut s, "First document");
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let second = text(&mut s, "Second document");
+    let selected = s.doc().unwrap().selection.clone();
+    let active_layer = s.doc().unwrap().active_layer;
+    assert_eq!(selected.objects, vec![second]);
+
+    assert!(s.set_active(0));
+    let target = obj(&s, first);
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+    let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+    let at = target.xf * a.midpoint(b);
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y), v).unwrap();
+
+    assert!(s.set_active(1));
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection, selected);
+    assert_eq!(s.doc().unwrap().active_layer, active_layer);
+}
+
+#[test]
+fn dropped_type_press_keeps_new_text_selected_on_a_locked_artboard() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    let second = text(&mut s, "Second text");
+    let first = NodeId(s.execute("text.create", &json!({"x": 1050, "y": 100, "text": "First text", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![first]);
+    assert!(s.doc().unwrap().selection.new_art.contains(&first));
+    let at = |s: &Session, id: NodeId| {
+        let target = obj(s, id);
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+        let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+        target.xf * a.midpoint(b)
+    };
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let a = at(&s, first);
+    click(&mut s, a.x + 0.1, a.y);
+    let before = s.doc().unwrap().selection.clone();
+    let b = at(&s, second);
+    s.pointer(&PointerEvent::new(PointerKind::Down, b.x + 0.1, b.y), v).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection, before);
+    assert!(s.tool_wants_text());
+}
+
+#[test]
+fn dropped_lent_selection_press_keeps_type_editing() {
+    let mut s = session();
+    let first = text(&mut s, "First text");
+    let second = NodeId(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Second text", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    let point = |s: &Session, id: NodeId| {
+        let target = obj(s, id);
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+        let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+        target.xf * a.midpoint(b)
+    };
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let a = point(&s, first);
+    click(&mut s, a.x + 0.1, a.y);
+    assert!(s.tool_wants_text());
+    let b = point(&s, second);
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, b.x + 0.1, b.y).with_mods(cmd), v).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![second]);
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![first]);
+    assert!(s.tool_wants_text());
+    s.tool_text("!", v).unwrap();
+    assert!(obj(&s, first).plain_text().contains('!'));
+    assert_eq!(obj(&s, second).plain_text(), "Second text");
 }
 
 #[test]
@@ -1040,6 +1198,33 @@ fn start_list_command_removes_the_typed_characters_and_starts_the_list() {
     assert_eq!(undo_labels(&s).len(), steps + 1, "only text.create's step");
     assert!(s.execute("text.startList", &json!({"id": id.0, "at": "3"})).is_err(), "`at` is a number");
     assert!(s.execute("text.startList", &json!({"at": 3})).is_err(), "id required");
+}
+
+/// A byte offset given as a negative or fractional number is an error, not the end of the text
+/// (`at`) or its start or end (`start`, `end`), and the text is left as it was. Null keeps the default.
+#[test]
+fn byte_offsets_that_are_not_whole_numbers_are_refused() {
+    let mut s = session();
+    let id = text(&mut s, "x\n# ");
+    for at in [json!(-1), json!(1.5)] {
+        let e = s.execute("text.startList", &json!({"id": id.0, "at": at})).unwrap_err().to_string();
+        assert!(e.contains("`at`"), "{e}");
+    }
+    assert_eq!(obj(&s, id).plain_text(), "x\n# ", "no list was started");
+    assert_eq!(s.execute("text.startList", &json!({"id": id.0, "at": null})).unwrap()["started"], json!(true));
+    let id = text(&mut s, "Hello");
+    for (cmd, p, key) in [
+        ("text.getRange", json!({"id": id.0, "start": -1, "end": 2}), "start"),
+        ("text.getRange", json!({"id": id.0, "start": 1, "end": 2.5}), "end"),
+        ("text.editRange", json!({"id": id.0, "start": 1.5, "end": 2, "insert": "!"}), "start"),
+        ("text.editRange", json!({"id": id.0, "start": 1, "end": -2, "insert": "!"}), "end"),
+        ("text.setRangeStyle", json!({"id": id.0, "start": 0.5, "size": 30}), "start"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{key}`")), "{cmd} {p}: {e}");
+    }
+    assert_eq!(obj(&s, id).plain_text(), "Hello");
+    assert_eq!(s.execute("text.getRange", &json!({"id": id.0, "start": 1.0, "end": null})).unwrap()["text"], json!("ello"));
 }
 
 /// #1881: a Cmd/Ctrl drag while typing (the Selection tool lent to the Type tool) moves the type
@@ -1338,6 +1523,128 @@ fn select_all_and_cut_like_ui() {
     assert_eq!(s.execute("select.all", &json!({})).unwrap(), json!({"count": 2}));
 }
 
+/// A story threaded from area type `a` into frame `b`, with the Type tool editing `b` at its start.
+fn threaded_story_edited_in_its_second_frame() -> (Session, NodeId, NodeId, String) {
+    let mut s = session();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+    let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let (a, b) = (NodeId(a), NodeId(b));
+    assert!(!obj(&s, a).plain_text().is_empty() && !obj(&s, b).plain_text().is_empty(), "the story runs through both frames");
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    assert!(s.tool_wants_text());
+    (s, a, b, story)
+}
+
+#[test]
+fn select_all_in_a_threaded_frame_selects_the_whole_story() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    let a_len = obj(&s, a).plain_text().len();
+    let o = s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(o, json!({"editing": a.0, "start": 0, "end": a_len, "story": [a.0, b.0]}));
+    assert_eq!(s.doc().unwrap().selection.objects, [a], "the first frame, which the tool edits, is selected");
+    // Copy takes the whole story.
+    let r = s.execute("text.getRange", &json!({"id": o["editing"], "story": true})).unwrap();
+    assert_eq!(r["text"], json!(story));
+    assert_eq!(r["length"], json!(story.len()));
+    // The selection is highlighted in both frames.
+    let v = ViewInfo::default();
+    let in_b = |o: &vectorcraft_tools::Overlay| matches!(o, vectorcraft_tools::Overlay::Highlight { quad, color: [60, 120, 255, 90] } if quad.iter().all(|p| p.x > 190.0));
+    assert!(s.overlays(v).iter().any(in_b), "the text of the second frame is highlighted");
+    // A fill reaches the text of both frames, as one undo step.
+    let steps = undo_labels(&s).len();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1);
+    let red = obj(&s, a).runs[0].style.fill.clone();
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.fill == red), "every character of frame {} is filled", id.0);
+    }
+    // So do a baseline shift step (Alt+Shift+Up) and a size step.
+    key(&mut s, ToolKey::Up, Mods { alt: true, shift: true, ..Mods::default() });
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.baseline_shift > 0.0), "every character of frame {} is raised", id.0);
+    }
+    let size = obj(&s, b).runs[0].style.size;
+    s.execute("type.step", &json!({"attribute": "size", "by": 1})).unwrap();
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.size > size), "every character of frame {} is larger", id.0);
+    }
+}
+
+#[test]
+fn select_all_edits_the_first_frame_that_holds_text() {
+    let mut s = session();
+    // The first frame is too short for a line: the story starts in the second.
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One two three", "size": 12, "area": {"width": 150, "height": 4}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let (a, b) = (NodeId(a), NodeId(b));
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), "One two three".to_string()));
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    let o = s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(o, json!({"editing": b.0, "start": 0, "end": 13, "story": [a.0, b.0]}));
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), String::new()));
+}
+
+#[test]
+fn the_eyedropper_styles_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+    let source = s.execute("text.create", &json!({"x": 400, "y": 250, "text": "Big", "size": 30})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("appearance.copyFrom", &json!({"source": source})).unwrap();
+    assert_eq!(r, json!({"ids": [a.0, b.0]}));
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| (r.style.size - 30.0).abs() < 1e-9), "every character of frame {} takes the size", id.0);
+    }
+}
+
+#[test]
+fn typing_over_the_whole_story_replaces_every_frames_text_in_one_step() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), String::new()));
+    s.tool_text("New", ViewInfo::default()).unwrap();
+    key(&mut s, ToolKey::Escape, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), ("New".to_string(), String::new()));
+    assert_eq!(undo_labels(&s).len(), steps + 1, "the delete and the typing are one step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+    assert!(!obj(&s, b).plain_text().is_empty());
+}
+
+#[test]
+fn select_all_in_one_frame_selects_only_its_text_once_the_caret_moves() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let a_len = obj(&s, a).plain_text().len();
+    // Shift+Left ends the story selection: the selection is the first frame's text but its last
+    // character, and Delete removes only that.
+    key(&mut s, ToolKey::Left, Mods { shift: true, ..Mods::default() });
+    assert!(s.tool_options().get("story").is_none());
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story[a_len - 1..]);
+    assert!(s.execute("text.getRange", &json!({"id": a.0, "story": true, "start": 0})).is_err(), "`story` takes no range");
+    assert!(s.execute("text.editRange", &json!({"id": a.0, "start": 0, "end": 0, "clear": [a.0]})).is_err());
+    assert!(s.execute("text.editRange", &json!({"id": a.0, "start": 0, "end": 0, "clear": "x"})).is_err());
+}
+
 #[test]
 fn a_frame_dragged_with_the_type_tools_is_the_dragged_rectangle() {
     for tool in ["type", "verticalType"] {
@@ -1566,6 +1873,141 @@ fn rtl_edit_commands_and_undo_preserve_logical_source_and_style_ranges() {
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(obj(&s, id).plain_text(), "שלום Rust 123");
+}
+
+#[test]
+fn touch_type_rtl_move_keeps_neighbors_and_undo_restores_the_original() {
+    use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
+
+    // Repeated registration of this synthetic face is harmless in the shared database.
+    vectorcraft_text::FontDb::global().add_font(right_to_left_optical_font().unwrap());
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 300, "y": 250, "text": "אבא", "size": 100, "font": RIGHT_TO_LEFT_OPTICAL_FAMILY})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let original = obj(&s, id);
+    let before = glyph_pens(&s, id);
+    assert_eq!(before.len(), 3);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 2, "dx": 5, "dy": 3})).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 2), (-5.0, -3.0)), "{:?}", moved_by(&before, &after, 2));
+    for byte in [0, 4] {
+        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+    }
+    assert_eq!(obj(&s, id).plain_text(), original.plain_text());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id), original);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(near(moved_by(&before, &glyph_pens(&s, id), 2), (-5.0, -3.0)));
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dx": 5})).is_err());
+}
+
+#[test]
+fn touch_type_rtl_move_keeps_rotated_font_placement() {
+    use vectorcraft_text::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
+    vectorcraft_text::FontDb::global().add_font(pair_kerning_font().unwrap());
+    let mut s = session();
+    // An explicit RTL override gives the existing synthetic S/S positioning pair RTL order.
+    let id =
+        NodeId(
+            s.execute("text.create", &json!({"x": 300, "y": 250, "text": "\u{202e}SSS\u{202c}", "size": 100, "font": PAIR_KERNING_FAMILY})).unwrap()
+                ["id"]
+                .as_u64()
+                .unwrap(),
+        );
+    s.execute("text.touchType", &json!({"id": id.0, "start": 4, "rotation": 90})).unwrap();
+    let original = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &original);
+    let glyph = lay.glyphs.iter().find(|g| g.byte == 4).unwrap();
+    assert!(glyph.rtl && glyph.width_start.abs() > 0.1, "fixture needs RTL font x-placement");
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 4, "dx": 5, "dy": 3})).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 4), (-5.0, -3.0)), "{:?}", moved_by(&before, &after, 4));
+    for byte in [3, 5] {
+        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id), original);
+}
+
+#[test]
+fn touch_type_rtl_moves_rotated_characters_in_aligned_and_transformed_text() {
+    use vectorcraft_geom::{Affine, Vec2};
+    use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
+
+    vectorcraft_text::FontDb::global().add_font(right_to_left_optical_font().unwrap());
+    let matrices =
+        [Affine::IDENTITY, Affine::scale_non_uniform(2.0, 0.5), Affine::new([1.0, 0.25, 0.4, 1.2, 0.0, 0.0]), Affine::scale_non_uniform(-1.0, 1.0)];
+    for justify in ["auto", "left", "center", "right"] {
+        for rotation in [0.0, 90.0, -90.0] {
+            for matrix in matrices {
+                for (kerning, start) in [("auto", 2), ("optical", 2), ("auto", 4), ("optical", 4)] {
+                    let case = format!("{justify}, {rotation} degrees, {matrix:?}, {kerning}, byte {start}");
+                    let mut s = session();
+                    let r = s
+                        .execute(
+                            "text.create",
+                            &json!({"x": 300, "y": 250, "text": "אבא", "size": 100, "font": RIGHT_TO_LEFT_OPTICAL_FAMILY, "justify": justify}),
+                        )
+                        .unwrap();
+                    let id = NodeId(r["id"].as_u64().unwrap());
+                    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": kerning})).unwrap();
+                    s.execute("object.transform", &json!({"ids": [id.0], "matrix": matrix.as_coeffs()})).unwrap();
+                    s.execute("text.touchType", &json!({"id": id.0, "start": start, "rotation": rotation})).unwrap();
+                    let original = obj(&s, id);
+                    let before = glyph_pens(&s, id);
+                    let linear = |v: Vec2| original.xf * (Point::ZERO + v) - original.xf * Point::ZERO;
+                    let expected = linear(Vec2::new(-1.0, 0.0)).normalize() * 5.0 + linear(Vec2::new(0.0, -1.0)).normalize() * 3.0;
+                    s.execute("text.touchType", &json!({"id": id.0, "start": start, "dx": 5, "dy": 3})).unwrap();
+                    let after = glyph_pens(&s, id);
+                    assert!(
+                        near(moved_by(&before, &after, start), (expected.x, expected.y)),
+                        "{case}: {:?}, expected {expected:?}",
+                        moved_by(&before, &after, start)
+                    );
+                    for byte in [0, 2, 4].into_iter().filter(|byte| *byte != start) {
+                        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "{case}, neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+                    }
+                    let changed = obj(&s, id);
+                    let reopened: TextObject = serde_json::from_value(serde_json::to_value(&changed).unwrap()).unwrap();
+                    assert_eq!(
+                        serde_json::to_value(&changed).unwrap(),
+                        serde_json::to_value(&reopened).unwrap(),
+                        "{case}: stored attributes round trip"
+                    );
+                    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &reopened);
+                    for g in &layout.glyphs {
+                        let expected = after.iter().find(|(byte, _)| *byte == g.byte).unwrap().1;
+                        assert!(
+                            (reopened.xf * (g.xf * Point::ZERO) - expected).hypot() < 1e-6,
+                            "{case}: reopened character {} keeps its place",
+                            g.byte
+                        );
+                    }
+                    s.execute("edit.undo", &json!({})).unwrap();
+                    assert_eq!(obj(&s, id), original, "{case}: Undo restores every attribute");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn touch_type_optical_spacing_does_not_shorten_a_baseline_nudge() {
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 300, "y": 250, "text": "AVA", "size": 100, "font": "Source Sans 3"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": 3})).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 1), (0.0, -3.0)), "{:?}", moved_by(&before, &after, 1));
+    for byte in [0, 2] {
+        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+    }
 }
 
 #[test]

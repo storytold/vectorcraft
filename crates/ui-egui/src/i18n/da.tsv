@@ -603,6 +603,11 @@
 	New Toolbar	Ny værktøjslinje
 	Show Toolbar	Vis værktøjslinje
 	List Toolbars	Liste over værktøjslinjer
+	Manage Toolbars…	Administrér værktøjslinjer…
+	Manage Toolbars	Administrér værktøjslinjer
+	Rename Toolbar	Omdøb værktøjslinje
+	Duplicate Toolbar	Duplikér værktøjslinje
+	Delete Toolbar	Slet værktøjslinje
 	Manage Workspaces…	Administrér arbejdsområder…
 	Control	Kontrol
 	Contextual Task Bar	Kontekstuel opgavelinje
@@ -635,6 +640,8 @@
 	Update Changed Links	Opdatér ændrede links
 	Magic Wand	Magisk tryllestav
 	Navigator	Navigator
+	Navigator Panel Options	Indstillinger for navigatorpanelet
+	Draw Dashed Lines as Solid Lines	Tegn stiplede linjer som hele linjer
 	Pattern Options	Mønsterindstillinger
 	Properties	Egenskaber
 	Separations Preview	Separationsforhåndsvisning
@@ -1179,6 +1186,8 @@ lighting	Light	Lys
 	Hand	Hånd
 	Join Tool	Sammenføjningsværktøj
 	Lasso Tool	Lassoværktøj
+	Enclosing Lasso Tool	Omsluttende lassoværktøj
+	Enclosing Lasso	Omsluttende lasso
 	Lasso	Lasso
 	Line Cut Tool	Linjeskæringsværktøj
 	Line Graph Tool	Linjediagramværktøj
@@ -1252,6 +1261,9 @@ lighting	Light	Lys
 	Zoom Tool	Zoomværktøj
 	Action {n}	Handling {n}
 	Begin Recording	Start optagelse
+	Exclude from playback	Udelad fra afspilning
+	Include in playback	Medtag i afspilning
+	Include Action Steps	Medtag handlingstrin
 	Center on Artboard	Centrér på tegnebræt
 	Default Actions	Standardhandlinger
 	▾ Default Actions	▾ Standardhandlinger
@@ -1646,6 +1658,7 @@ digits	Malayalam	Malayalam
 	Select text to set its OpenType features.	Markér tekst for at angive dens OpenType-funktioner.
 	Standard Ligatures	Standardligaturer
 	Stylistic Alternates	Stilistiske alternativer
+	Set {n}	Sæt {n}
 	Swash	Sving
 	Tabular Lining	Tabulære versalcifre
 	Tabular Oldstyle	Tabulære mediævalcifre
@@ -1660,6 +1673,7 @@ digits	Malayalam	Malayalam
 	Left-to-Right Paragraph Direction	Afsnitsretning fra venstre mod højre
 	Line-end Punctuation Half Width	Skilletegn i halv bredde ved linjeslut
 	Insert Kashidas	Indsæt kashidaer
+	Kashidas	Kashidaer
 	Long	Lang
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
@@ -2202,6 +2216,7 @@ digits	Malayalam	Malayalam
 	“{file}” is protected by a password.	»{file}« er beskyttet med en adgangskode.
 	Dim Images to:	Nedton billeder til:
 	Light Blue	Lyseblå
+	Light Red	Lys rød
 	Layers Panel Options	Indstillinger for lagpanelet
 	Row Size:	Rækkestørrelse:
 	Show Layers Only	Vis kun lag
@@ -3328,6 +3343,7 @@ theme	Appearance	Udseende
 	List Preferences	Oplist indstillinger
 	Manually	Manuelt
 	Mark Older Files as [Converted] When Opened	Markér ældre filer som [konverteret] ved åbning
+	Use System Defaults for Edit Original	Anvend systemets standarder til Redigér original
 	Match User Interface Brightness	Match lysstyrken i brugergrænsefladen
 	Light Gray	Lysegrå
 	Medium Gray	Mellemgrå
@@ -3395,6 +3411,7 @@ theme	Appearance	Udseende
 	Type Object Selection by Path Only	Markering af tekstobjekter udelukkende via kurve
 	UI Scaling	UI-skalering
 	Use Compression	Anvend komprimering
+	Include Editing Data for Other Apps	Medtag redigeringsdata til andre apps
 	Use Japanese Crop Marks	Anvend japanske beskæringsmærker
 	Use Low Resolution Proxy for Linked EPS	Anvend proxy med lav opløsning til koblede EPS-filer
 	Use Precise Cursors	Anvend præcise markører
@@ -4573,6 +4590,7 @@ imageTrace	Outline	Kontur
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	den har {_1}, hvilket VectorCraft endnu ikke læser fra den
 @msg	its objects are nested too deeply	dens objekter er indlejret for dybt
 @msg	its section ending with `%{end}` doesn't end	dens sektion, der ender med `%{end}`, ender ikke
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	pensler, som VectorCraft endnu ikke kan læse, blev udeladt af panelet Pensler ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekter med flere fyld eller streger, effekter eller pensler kom ind, som de er tegnet ({_1}): deres udseende er endnu ikke redigerbart
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten »{name}« er ikke defineret i filen: der bruges en flad farve i stedet
 @msg	an image VectorCraft can't read was left out	et billede, som VectorCraft ikke kan læse, blev udeladt
@@ -5196,6 +5214,10 @@ mark-style	Japanese	Japansk
 @msg	choose a source folder	vælg en kildemappe
 @msg	open a document with data sets	åbn et dokument med datasæt
 @msg	the action has no steps	handlingen har ingen trin
+@msg	the action has no included steps	handlingen har ingen medtagne trin
+@msg	no such action step	intet sådant handlingstrin
+@msg	included must be true or false	included skal være true eller false
+@msg	others must be true or false	others skal være true eller false
 	Registration:	Passning:
 	By Layer	Efter lag
 	By Object	Efter objekt
@@ -5224,6 +5246,7 @@ mark-style	Japanese	Japansk
 	Path Length	Stilængde
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	filens lag blev ikke læst ({_1}): den kommer ind som sin side, i ét lag
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	filens lag blev ikke læst fra dens redigeringsdata ({_1}): de kommer fra dens PDF-del
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	ikke alle filens variabelbindinger blev læst (udeladte bindinger: {_1}): de objekter er ikke bundet til deres variabler
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	filens variabelbibliotek blev kun delvist læst (udeladte poster: {_1}): variabelpanelet viser resten
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	filens variabelbibliotek kunne ikke læses: variabelpanelet viser det ikke
 @msg	a variable of unknown kind can't be bound to objects	en variabel af ukendt type kan ikke bindes til objekter
@@ -5359,6 +5382,11 @@ swatch	Bright Violet	Kraftig violet
 	Export Type:	Eksporttype:
 	Movie Clip	Filmklip
 @msg	name is empty	navnet er tomt
+@msg	an action is already recording	en handling optages allerede
+@msg	no such function key	ingen sådan funktionstast
+@msg	no such color	ingen sådan farve
+@msg	{_1} cannot be used on Windows	{_1} kan ikke bruges i Windows
+@msg	more than one action is named “{_1}”	mere end én handling hedder »{_1}«
 @msg	no symbol named `{n}`	intet symbol med navnet `{n}`
 	Remove Color Profile…	Fjern farveprofil…
 	Color wheel	Farvehjul
@@ -5638,6 +5666,13 @@ axis	Y Axis	Y-akse
 	Action Options…	Indstillinger for handling…
 	Action Options	Indstillinger for handling
 	Rename Action	Omdøb handling
+	New Action…	Ny handling…
+	New Action	Ny handling
+	Create New Action	Opret ny handling
+	Play Action	Afspil handling
+	Action Set:	Handlingssæt:
+	Function Key:	Funktionstast:
+	Record	Optag
 	Create New Set	Opret nyt sæt
 	Stop Global Edit	Stop global redigering
 	Global Edit Options	Indstillinger for global redigering
@@ -6026,6 +6061,7 @@ breakText	Glyphs	Glyffer
 	Gap 5	Mellemrum 5
 
 @msg	{_1}: they came in as the page's art	{_1}: de blev importeret som sidens grafik
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekter, der blev tegnet anderledes end filens egen side, blev importeret som sidens grafik: {_1}
 
 @msg	You must choose a side pattern.	Du skal vælge et sidemønster.
 @msg	invalid pattern tile choice	ugyldigt valg af mønsterflise
@@ -6127,3 +6163,14 @@ breakText	Glyphs	Glyffer
 	Create Swatch Legend	Opret farveprøveforklaring
 	Create Swatch Legend…	Opret farveprøveforklaring…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Tekstværktøjer
+	Text Tweaker…	Tekstjustering…
+	Text Tweaker	Tekstjustering
+	Attribute:	Attribut:
+	From:	Fra:
+	To:	Til:
+	Bow	Bue
+	Spike	Spids
+	Skip Spaces	Spring mellemrum over
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafikken er for stor til at blive kopieret som et billede: andre programmer får ingen PNG af den

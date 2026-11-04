@@ -135,6 +135,28 @@ fn isolation_button(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// The size of the Control bar's Global Edit Options button.
+const GLOBAL_EDIT_OPTIONS_WIDTH: f32 = 24.0;
+
+/// The Control bar's Global Edit Options dropdown, shown while `select.globalEdit` can run. The help
+/// page places the options in the Control panel as well as in Properties
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html>).
+/// It opens the Properties panel's Global Edit Options, which set the same session options, and is
+/// off and closed while Global Edit is on, as that panel's dropdown is. It sits after Recolor
+/// Artwork, ahead of the X/Y/W/H fields that the bar leaves out when it runs short of room, and is
+/// left out only when no room is left for it.
+fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if !crate::menus::enabled(app, "select.globalEdit") || ui.available_width() < GLOBAL_EDIT_OPTIONS_WIDTH {
+        return;
+    }
+    let on = app.session.active().is_some_and(|d| d.global_edit.is_some());
+    let options = widgets::icon_button_enabled(ui, "chevron-down", tl!("Global Edit Options"), false, !on, GLOBAL_EDIT_OPTIONS_WIDTH);
+    egui::Popup::menu(&options)
+        .open_memory(crate::panels::properties::global_edit_options_open(&options, on))
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| crate::panels::properties::global_edit_options(app, ui));
+}
+
 /// The room the Control bar's inline X/Y/W/H fields need; with less, only the Transform link shows.
 const INLINE_TRANSFORM_WIDTH: f32 = 440.0;
 
@@ -237,6 +259,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, 24.0).clicked() {
                         crate::menus::invoke(app, "ui.recolorDialog", json!({}));
                     }
+                    global_edit_options(app, ui);
                 }
                 ui.separator();
                 crate::panels::character::control_bar(app, ui);

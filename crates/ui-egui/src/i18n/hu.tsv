@@ -398,6 +398,9 @@ font-technology	Variable	Változó
 	Batch	Kötegelt feldolgozás
 	Bearing	Irány
 	Begin Recording	Felvétel indítása
+	Exclude from playback	Kizárás a lejátszásból
+	Include in playback	Bevonás a lejátszásba
+	Include Action Steps	Műveletlépések bevonása
 	Begin Undo Group	Visszavonási csoport kezdete
 	Bend:	Hajlítás mértéke:
 	Best	Legjobb
@@ -2156,6 +2159,8 @@ file-filter	Templates	Sablonok
 	Largest:	Legnagyobb:
 	Lasso	Lasszó
 	Lasso Tool	Lasszó
+	Enclosing Lasso Tool	Körülzáró lasszó
+	Enclosing Lasso	Körülzáró lasszó
 	Last	Utolsó
 	Last commit	Utolsó commit
 	Last Effect: {name}	Legutóbbi effektus: {name}
@@ -2218,6 +2223,7 @@ file-filter	Templates	Sablonok
 	Ligatures are off while the text is tracked.	Ha a szövegnek betűköze van, a ligatúrák ki vannak kapcsolva.
 	Light	Fény
 	Light Blue	Világoskék
+	Light Red	Világospiros
 	Light Direction	Fény iránya
 	Light Gray	Világosszürke
 	Light Intensity	Fény erőssége
@@ -2351,6 +2357,7 @@ file-filter	Templates	Sablonok
 	Manually	Kézzel
 	Mark as trapped	Megjelölés csapdázottként
 	Mark Older Files as [Converted] When Opened	Régebbi fájlok megjelölése [Átalakítva] címkével megnyitáskor
+	Use System Defaults for Edit Original	Rendszer alapértelmezéseinek használata az Eredeti szerkesztéséhez
 	Marker…	Jelölő…
 	Marks	Jelek
 	Marks and Bleed	Jelek és kifutó
@@ -2437,6 +2444,7 @@ file-filter	Templates	Sablonok
 	Modify	Módosítás
 	Mojikumi	Mojikumi
 	Insert Kashidas	Kasidák beszúrása
+	Kashidas	Kasidák
 	Long	Hosszú
 	Stylistic	Stilisztikai
 	Mojikumi Set	Mojikumi-készlet
@@ -2498,6 +2506,8 @@ file-filter	Templates	Sablonok
 	Name:	Név:
 	Navigate	Navigálás
 	Navigator	Navigátor
+	Navigator Panel Options	Navigátor panel beállításai
+	Draw Dashed Lines as Solid Lines	Szaggatott vonalak rajzolása folytonosként
 	Needs the desktop app	Az asztali alkalmazás kell hozzá
 	Negative	Negatív
 	Neutral Gradients	Semleges színátmenetek
@@ -2558,6 +2568,11 @@ file-filter	Templates	Sablonok
 	New Toolbar	Új eszköztár
 	Show Toolbar	Eszköztár megjelenítése
 	List Toolbars	Eszköztárak listája
+	Manage Toolbars…	Eszköztárak kezelése…
+	Manage Toolbars	Eszköztárak kezelése
+	Rename Toolbar	Eszköztár átnevezése
+	Duplicate Toolbar	Eszköztár kettőzése
+	Delete Toolbar	Eszköztár törlése
 	New {kind} Style…	Új stílus: {kind}…
 	New…	Új…
 	Next	Következő
@@ -4289,6 +4304,7 @@ mark-style	Japanese	Japán
 	Use Artboards	Rajztáblák használata
 	Use Black Point Compensation	Feketepont-kompenzáció használata
 	Use Compression	Tömörítés használata
+	Include Editing Data for Other Apps	Szerkesztési adatok hozzáadása más alkalmazásokhoz
 	Use Default	Alapértelmezett használata
 	Use document bleed settings	A dokumentum kifutóbeállításainak használata
 	Use Even-Odd Fill Rule	Páros-páratlan kitöltési szabály
@@ -5022,6 +5038,7 @@ imageTrace	Outline	Körvonal
 @msg	object {0} cannot have children	ennek az objektumnak nem lehetnek gyermekei: {0}
 @msg	object {id} is not a path	az objektum nem útvonal: {id}
 @msg	object {id} is not a selected top-level object	az objektum nem kijelölt legfelső szintű objektum: {id}
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	a VectorCraft által még nem olvasható ecsetek kimaradtak az Ecsetek panelről ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	a több kitöltésű vagy körvonalú, effektusos vagy ecsetes objektumok a megrajzolt kinézetükkel kerültek be ({_1}): a megjelenésük még nem szerkeszthető
 @msg	Offset Path: select paths	Útvonal eltolása: jelölj ki útvonalakat
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Útvonal eltolása: az eltolás után semmi sem marad a kijelölt útvonalakból (a befelé eltolás nagyobb az alakzatoknál)
@@ -5099,7 +5116,7 @@ imageTrace	Outline	Körvonal
 @msg	Save for Web: the image is empty	Mentés webre: a kép üres
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	a Mentés ezt írja: {_1}, ezt nem: {_2}; más formátumhoz használd a document.export parancsot
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	a Mentés ezt írja: {_1}, ezt nem: {_2}; ennek írásához használd a file.saveAsTemplate parancsot
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	az aiVersion 7 régi .ai fájlokat ír; egy .ait sablon mindig PDF-kompatibilis
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	az aiVersion 7 régi .ai fájlokat ír, nem .ait sablonokat
 @msg	saved panel layout is invalid; reset the workspace first	a mentett panelelrendezés érvénytelen; előbb állítsd vissza a munkaterületet
 @msg	Saved recovery data for {title}	Helyreállítási adatok mentve: {title}
 @msg	Saved to User Defined: {_1}	Mentve a felhasználóiak közé: {_1}
@@ -5524,6 +5541,10 @@ imageTrace	Outline	Körvonal
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ebből az adatkészletből semmi sem lett alkalmazva: {name}; egyetlen objektum sincs olyan változóhoz kötve, amelynek értéke van benne
 @msg	no bound object reports a value (locked objects and embedded images report none)	egyetlen kötött objektum sem ad értéket (a zárolt objektumok és a beágyazott képek nem adnak értéket)
 @msg	the action has no steps	a műveletnek nincsenek lépései
+@msg	the action has no included steps	a műveletnek nincsenek bevont lépései
+@msg	no such action step	nincs ilyen műveletlépés
+@msg	included must be true or false	included: true vagy false kell
+@msg	others must be true or false	others: true vagy false kell
 
 # User Interface › Accent Color
 	Accent Color	Kiemelőszín
@@ -5549,6 +5570,11 @@ imageTrace	Outline	Körvonal
 	Export Type:	Exportálás típusa:
 	Movie Clip	Mozgóklip
 @msg	name is empty	a név üres
+@msg	an action is already recording	már folyik egy művelet felvétele
+@msg	no such function key	nincs ilyen funkcióbillentyű
+@msg	no such color	nincs ilyen szín
+@msg	{_1} cannot be used on Windows	A(z) {_1} nem használható Windows rendszeren
+@msg	more than one action is named “{_1}”	több művelet neve is „{_1}”
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
 	Smudge Stick…	Elmosó rúd…
 	Smudge Stick	Elmosó rúd
@@ -5630,6 +5656,7 @@ imageTrace	Outline	Körvonal
 	Effect Gallery	Effektusgaléria
 	Filters	Szűrők
 	Select artwork to apply effects	Válasszon ki grafikát az effektusok alkalmazásához
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	a fájl változókötései közül nem mindegyik lett beolvasva (kihagyott kötések: {_1}): ezek az objektumok nincsenek a változóikhoz kötve
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	a fájl változókönyvtára csak részben lett beolvasva (kihagyott bejegyzések: {_1}): a Változók panel a többit listázza
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	a fájl változókönyvtárát nem sikerült beolvasni: a Változók panel nem listázza
 @msg	a variable of unknown kind can't be bound to objects	ismeretlen típusú változó nem köthető objektumokhoz
@@ -5719,6 +5746,13 @@ axis	Y Axis	Y tengely
 	Action Options…	Művelet beállításai…
 	Action Options	Művelet beállításai
 	Rename Action	Művelet átnevezése
+	New Action…	Új művelet…
+	New Action	Új művelet
+	Create New Action	Új művelet létrehozása
+	Play Action	Művelet lejátszása
+	Action Set:	Műveletkészlet:
+	Function Key:	Funkcióbillentyű:
+	Record	Felvétel
 	Create New Set	Új készlet létrehozása
 	Stop Global Edit	Globális szerkesztés befejezése
 	Global Edit Options	Globális szerkesztés beállításai
@@ -5992,6 +6026,7 @@ anchor	Points:	Pontok:
 	Character Color	Karakterszín
 	OpenType Features	OpenType-funkciók
 	Stylistic Sets	Stíluskészletek
+	Set {n}	{n}. készlet
 @msg	features lists at most {max} tags	a features legfeljebb {max} címkét tartalmazhat
 @msg	unknown OpenType feature `{t}`	ismeretlen OpenType-funkció: `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0-nál nagyobb és legfeljebb {max} értékű szám kell legyen
@@ -6142,6 +6177,7 @@ breakText	Glyphs	Glifák
 	Gap 5	Hézag 5
 
 @msg	{_1}: they came in as the page's art	{_1}: az oldal rajzaként lettek importálva
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	a fájl saját oldalától eltérően rajzolt objektumok az oldal rajzaként lettek importálva: {_1}
 
 @msg	You must choose a side pattern.	Válasszon oldalsó mintát.
 @msg	invalid pattern tile choice	érvénytelen mintacsempe-választás
@@ -6243,3 +6279,14 @@ breakText	Glyphs	Glifák
 	Create Swatch Legend	Színmintajelmagyarázat létrehozása
 	Create Swatch Legend…	Színmintajelmagyarázat létrehozása…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Szövegeszközök
+	Text Tweaker…	Szöveghangoló…
+	Text Tweaker	Szöveghangoló
+	Attribute:	Jellemző:
+	From:	Ettől:
+	To:	Eddig:
+	Bow	Ív
+	Spike	Csúcs
+	Skip Spaces	Szóközök kihagyása
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	A grafika túl nagy ahhoz, hogy képként másolható legyen: más alkalmazások nem kapnak róla PNG-t

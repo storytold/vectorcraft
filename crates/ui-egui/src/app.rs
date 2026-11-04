@@ -350,6 +350,7 @@ impl VectorcraftApp {
         }
         crate::keymap::note_os(ctx);
         shortcut_editor::sync(&self.ui);
+        crate::panels::actions::sync_function_keys(&self.ui);
         prefs_dialog::apply_runtime(self, ctx);
         // The OS title bar (and the taskbar / Alt-Tab entry) follows the active file; with the
         // system title bar this is where the document name lives, as the in-app mark is hidden.
@@ -443,10 +444,10 @@ impl VectorcraftApp {
         if !canvas::tiled_area(self, ui) {
             if floats {
                 let rect = ui.available_rect_before_wrap();
-                if let Some(i) = crate::doc_windows::tab_document(self)
-                    && canvas::pane(self, ui, i, rect)
+                if let Some(w) = crate::doc_windows::tab_window(self)
+                    && canvas::pane(self, ui, w, rect)
                 {
-                    chrome::show_document(self, i);
+                    crate::doc_windows::show_window(self, w);
                 }
             } else {
                 canvas::show(self, ui);

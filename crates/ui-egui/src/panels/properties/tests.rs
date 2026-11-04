@@ -135,6 +135,40 @@ fn start_global_edit_quick_action_and_escape() {
     assert!(!tall(&mut app, vec![]).iter().any(|(t, _)| t == "Start Global Edit"), "type has no Global Edit");
 }
 
+/// The Quick Actions' Global Edit Options close when Global Edit starts while they are open, and
+/// stay closed once it stops.
+#[test]
+fn global_edit_starting_closes_the_quick_action_options() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap()["id"].clone();
+    app.run("shape.rectangle", json!({"x": 200, "y": 20, "width": 40, "height": 40})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 700.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| global_edit_row(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+    let results = |nodes: &Nodes| nodes.iter().any(|(_, n)| n.label().or(n.value()).is_some_and(|t| t.starts_with("Result")));
+    let nodes = frame(&mut app, vec![]);
+    let b = nodes.iter().find(|(_, n)| n.label() == Some("Global Edit Options")).and_then(|(_, n)| n.bounds()).unwrap_or_else(|| panic!("{nodes:?}"));
+    let at = Pos2::new(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+    let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, vec![Event::PointerMoved(at), press(true)]);
+    frame(&mut app, vec![press(false)]);
+    assert!(results(&frame(&mut app, vec![])), "the options open");
+    app.run("select.globalEdit", json!({})).unwrap();
+    assert!(!results(&frame(&mut app, vec![])), "Global Edit starting closes the open options");
+    app.run("select.globalEdit", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    assert!(!results(&frame(&mut app, vec![])), "the options stay closed once Global Edit stops");
+}
+
 /// The options' Results count is found once per document revision, options and selected
 /// object, not every frame; another selected object or other options find it again.
 #[test]

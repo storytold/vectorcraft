@@ -77,6 +77,7 @@ impl Session {
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,
+            batch_paint_docs: Vec::new(),
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
@@ -93,6 +94,7 @@ impl Session {
             plane_widget_press: false,
             pointer_held: false,
             press_options: None,
+            press_type_selection: None,
             press_point: None,
             ruler_guide: None,
             port_marks: Default::default(),
@@ -142,6 +144,7 @@ impl Session {
         if self.active.is_none() {
             return;
         }
+        self.press_type_selection = None;
         let view = self.last_view;
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
@@ -156,6 +159,12 @@ impl Session {
         self.tool = self.make_tool(self.tool.id());
         self.tool_resets = self.tool_resets.wrapping_add(1);
         self.tool_set_since_reset = false;
+    }
+
+    /// Finish the tool's pending work and give it fresh state, as a switch to another document
+    /// does, while the current document stays the same (a switch to another view of it).
+    pub fn reset_tool(&mut self) {
+        self.reset_tool_for_doc_switch();
     }
 
     pub fn set_active(&mut self, index: usize) -> bool {

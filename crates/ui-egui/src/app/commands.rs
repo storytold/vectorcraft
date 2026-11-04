@@ -188,6 +188,12 @@ impl VectorcraftApp {
                     r.insert(0, font.to_string());
                     r.truncate(MAX_RECENT_FONTS);
                 }
+                if id == "text.replaceFont"
+                    && v.get("warning").is_none()
+                    && self.ui.status.starts_with("some text is hidden or locked, so its font wasn't replaced")
+                {
+                    self.ui.status.clear();
+                }
                 // A command's warning (Rasterize's when an image couldn't be decoded) shows in the
                 // status bar, as a tool preview's does.
                 if let Some(w) = v.get("warning").and_then(Value::as_str) {

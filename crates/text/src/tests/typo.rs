@@ -172,6 +172,10 @@ fn optical_pair_after_separate_combining_mark_uses_base_outline() {
 
 #[test]
 fn optical_pair_after_rtl_separate_mark_uses_base_outline() {
+    if db().face("Noto Sans Arabic", "Regular").is_none_or(|f| f.family != "Noto Sans Arabic") {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
     let st = CharStyle { font_family: "Noto Sans Arabic".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
     let shaped = |text: &str, manual: bool| {
         let mut style = st.clone();
@@ -1727,6 +1731,28 @@ fn proportional_metrics_set_full_width_glyphs_on_their_proportional_widths() {
     assert!((none.glyphs[0].advance - 20.0).abs() < 0.01 && (half.glyphs[0].advance - 10.0).abs() < 0.01, "{:?}", adv(&half));
     let moved = x0(&half)[1] - x0(&none)[1];
     assert!((moved - 10.0).abs() < 0.01, "〙's empty half goes past the line's end: あ moved {moved}");
+}
+
+#[test]
+fn mojikumi_trim_keeps_a_rotated_opening_bracket_on_its_line() {
+    use vectorcraft_doc::Mojikumi;
+    if db().face("Shippori Mincho", "Regular").is_none_or(|f| f.family != "Shippori Mincho") {
+        eprintln!("skipped: Shippori Mincho is not in CRAFT_FONTS_DIR");
+        return;
+    }
+    let lay = |rotation, mojikumi| {
+        let st = CharStyle { font_family: "Shippori Mincho".into(), size: 20.0, rotation, ..Default::default() };
+        let mut t = area("「あ", st, Rect::new(0.0, 0.0, 200.0, 200.0), Justify::Left);
+        t.para.mojikumi = mojikumi;
+        layout(db(), &t)
+    };
+    for rotation in [0.0, 45.0, 90.0, -90.0] {
+        let (plain, trimmed) = (lay(rotation, Mojikumi::None), lay(rotation, Mojikumi::LineEndHalf));
+        let (a, b) = (&plain.glyphs[0], &trimmed.glyphs[0]);
+        assert!((a.advance - 20.0).abs() < 0.01 && (b.advance - 10.0).abs() < 0.01, "full-width bracket fixture");
+        let shift = b.xf * Point::ZERO - a.xf * Point::ZERO;
+        assert!((shift.x + 10.0).abs() < 0.01 && shift.y.abs() < 0.01, "{rotation} degrees: {shift:?}");
+    }
 }
 
 /// The arrows pass a Thai consonant with its vowel and tone marks whole (น้ำ: no, mai tho, sara am),

@@ -282,6 +282,9 @@ font-technology	Variable	Променливи
 	Basic Latin	Основни латински
 	Batch	Пакет
 	Begin Recording	Начало на запис
+	Exclude from playback	Изключване от изпълнението
+	Include in playback	Включване в изпълнението
+	Include Action Steps	Включване на стъпки от действие
 	Bend:	Извиване:
 	Bevel Join	Заоблено съединение
 	Bitmap	Битова мащабна графика
@@ -1662,6 +1665,8 @@ font-technology	Variable	Променливи
 	Large Thumbnail View	Изглед с големи миниатюри
 	Large Thumbnails	Големи миниатюри
 	Lasso Tool	Инструмент „Ласо“
+	Enclosing Lasso Tool	Инструмент „Обхващащо ласо“
+	Enclosing Lasso	Обхващащо ласо
 	Last Effect: {name}	Посл. ефект: {name}
 	Last Effect: {}	Посл. ефект: {}
 	Last Effect…	Посл. ефект…
@@ -1697,6 +1702,7 @@ font-technology	Variable	Променливи
 	Ligatures are off while the text is tracked.	Лигатурите са изключени, докато текстът е с проследяване.
 	Light	Светло
 	Light Blue	Светлосиньо
+	Light Red	Светлочервено
 	Lighten	Изсветляване
 	Lightness	Светлина
 	Limit Color Guide to Library	Ограничаване на цветния справочник до библиотека
@@ -1799,6 +1805,7 @@ font-technology	Variable	Променливи
 	Manually	Ръчно
 	Mark as trapped	Маркиране като прехванато
 	Mark Older Files as [Converted] When Opened	Маркиране на по-стари файлове като [Конвертирани] при отваряне
+	Use System Defaults for Edit Original	Системни настройки по подразбиране за „Редактиране на оригинал“
 	Marker…	Маркер…
 	Marks	Маркери
 	Marks and Bleed	Маркери и изтичане
@@ -1861,6 +1868,7 @@ font-technology	Variable	Променливи
 	Modify	Модифициране
 	Mojikumi	Моджикуми
 	Insert Kashidas	Вмъкване на кашиди
+	Kashidas	Кашиди
 	Long	Дълго
 	Stylistic	Стилистично
 	Mojikumi Set	Набор Mojikumi
@@ -1913,6 +1921,8 @@ font-technology	Variable	Променливи
 	Name:	Име:
 	Navigate	Навигация
 	Navigator	Навигатор
+	Navigator Panel Options	Опции за панела „Навигатор“
+	Draw Dashed Lines as Solid Lines	Изчертаване на прекъснатите линии като плътни
 	Needs the desktop app	Изисква десктоп приложение
 	Neutral Gradients	Неутрални градиенти
 	New	Нов
@@ -2036,6 +2046,11 @@ font-technology	Variable	Променливи
 	New Toolbar	Нова лента с инструменти
 	Show Toolbar	Показване на лента с инструменти
 	List Toolbars	Списък на лентите с инструменти
+	Manage Toolbars…	Управление на лентите с инструменти…
+	Manage Toolbars	Управление на лентите с инструменти
+	Rename Toolbar	Преименуване на лентата с инструменти
+	Duplicate Toolbar	Дублиране на лентата с инструменти
+	Delete Toolbar	Изтриване на лентата с инструменти
 	New {kind} Style…	Нов стил ({kind})…
 	New…	Нов…
 	Next	Следващ
@@ -3226,6 +3241,7 @@ digits	Malayalam	Малаялам
 	Swap start and end arrowheads	Размяна на началната и крайната стрелка
 	Swap the selected object for the file, keeping its place and transform	Замяна на избрания обект с файла, като се запазват мястото и трансформациите му
 	Stylistic Alternates	Стилистични алтернативи
+	Set {n}	Набор {n}
 	Swash	Декоративен елемент
 	Swatch Conflict	Конфликт на образци
 	Swatch Conflicts	Конфликти на образци
@@ -3492,6 +3508,7 @@ digits	Malayalam	Малаялам
 	Use Artboards	Използване на работните области
 	Use Black Point Compensation	Използване на компенсация на черната точка
 	Use Compression	Използване на компресия
+	Include Editing Data for Other Apps	Включване на данни за редактиране за други приложения
 	Use document bleed settings	Използване на настройките за изтичане на документа
 	Use Even-Odd Fill Rule	Използване на правило за запълване четно-нечетно
 	Use Japanese Crop Marks	Използване на японски марки за изрязване
@@ -4486,6 +4503,7 @@ axis	Both	И двете
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	той съдържа {_1}, който VectorCraft все още не може да разчете
 @msg	its objects are nested too deeply	обектите му са вложени твърде дълбоко
 @msg	its section ending with `%{end}` doesn't end	разделът му, завършващ на `%{end}`, няма край
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	четките, които VectorCraft все още не може да прочете, бяха пропуснати от панела „Четки“ ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	обектите с множество запълвания или щрихове, ефекти или четки се появиха във вид на изрисувания си изглед ({_1}): тяхната поява все още не подлежи на редактиране
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиентът „{name}“ не е дефиниран във файла: заменен е с обикновен цвят
 @msg	an image VectorCraft can't read was left out	изображение, което VectorCraft не може да разчете, беше пропуснато
@@ -5434,6 +5452,10 @@ theme	Appearance	Външен вид
 @msg	choose a source folder	изберете изходна папка
 @msg	open a document with data sets	отворете документ с набори от данни
 @msg	the action has no steps	действието няма стъпки
+@msg	the action has no included steps	действието няма включени стъпки
+@msg	no such action step	няма такава стъпка от действие
+@msg	included must be true or false	included трябва да бъде true или false
+@msg	others must be true or false	others трябва да бъде true или false
 	Registration:	Регистрация:
 # Layers panel filters (Filter Layers Panel Rows) and Color Panel Options
 	By Layer	По слой
@@ -5475,6 +5497,11 @@ theme	Appearance	Външен вид
 	Export Type:	Тип на експортиране:
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
+@msg	an action is already recording	вече се записва действие
+@msg	no such function key	няма такъв функционален клавиш
+@msg	no such color	няма такъв цвят
+@msg	{_1} cannot be used on Windows	{_1} не може да се използва в Windows
+@msg	more than one action is named “{_1}”	повече от едно действие се казва „{_1}“
 @msg	no symbol named `{n}`	няма символ с име `{n}`
 	Smudge Stick…	Размазваща пръчка…
 	Smudge Stick	Размазваща пръчка
@@ -5537,6 +5564,7 @@ theme	Appearance	Външен вид
 	Effect Gallery	Галерия с ефекти
 	Filters	Филтри
 	Select artwork to apply effects	Изберете графика, за да приложите ефекти
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	не всички връзки на променливите във файла бяха прочетени (пропуснати връзки: {_1}): тези обекти не са свързани със своите променливи
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	библиотеката с променливи на файла беше прочетена частично (пропуснати записи: {_1}): панелът „Променливи“ показва останалите
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	библиотеката с променливи на файла не можа да бъде прочетена: панелът „Променливи“ не я показва
 @msg	a variable of unknown kind can't be bound to objects	променлива от неизвестен вид не може да бъде свързана с обекти
@@ -5621,6 +5649,13 @@ axis	Y Axis	Y ос
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
 	Rename Action	Преименуване на действие
+	New Action…	Ново действие…
+	New Action	Ново действие
+	Create New Action	Създаване на ново действие
+	Play Action	Изпълнение на действие
+	Action Set:	Набор от действия:
+	Function Key:	Функционален клавиш:
+	Record	Запис
 	Create New Set	Създаване на нов набор
 	Stop Global Edit	Край на глобалното редактиране
 	Global Edit Options	Опции за глобално редактиране
@@ -6010,6 +6045,7 @@ breakText	Glyphs	Глифи
 	Gap 5	Разстояние 5
 
 @msg	{_1}: they came in as the page's art	{_1}: те са внесени като изображението от страницата
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	обектите, изобразени различно от собствената страница на файла, са внесени като изображението от страницата: {_1}
 
 @msg	You must choose a side pattern.	Трябва да изберете страничен шаблон.
 @msg	invalid pattern tile choice	невалиден избор на плочка за шаблон
@@ -6111,3 +6147,14 @@ breakText	Glyphs	Глифи
 	Create Swatch Legend	Създаване на легенда на образците
 	Create Swatch Legend…	Създаване на легенда на образците…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Инструменти за текст
+	Text Tweaker…	Настройка на текста…
+	Text Tweaker	Настройка на текста
+	Attribute:	Атрибут:
+	From:	От:
+	To:	До:
+	Bow	Дъга
+	Spike	Връх
+	Skip Spaces	Пропускане на интервалите
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Графиката е твърде голяма, за да се копира като изображение: другите приложения не получават PNG от нея
