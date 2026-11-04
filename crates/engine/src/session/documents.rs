@@ -77,6 +77,7 @@ impl Session {
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,
+            batch_paint_docs: Vec::new(),
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,

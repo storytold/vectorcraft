@@ -155,6 +155,31 @@ pub(super) fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> 
     text_edit(ui, d, key, width).changed()
 }
 
+/// A parameter value that is a color object (`{"model": "cmyk", …}`, as Document Color Mode or an
+/// imported file stores an effect's color), read as a color. `None` for any other value.
+pub(super) fn color_object(v: &Value) -> Option<vectorcraft_doc::color::Color> {
+    v.is_object().then(|| serde_json::from_value(v.clone()).ok()).flatten()
+}
+
+/// [`text`] for a color parameter `key`: a color object ([`color_object`]) shows as its hex and
+/// stays as it is until the text is edited; any other value that isn't text shows dimmed.
+pub(super) fn color_text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> bool {
+    let Some(v) = d.fields.get(key).cloned() else { return text(ui, d, key, width) };
+    if let Some(c) = color_object(&v) {
+        d.fields.insert(key.into(), json!(c.to_hex()));
+        let changed = text(ui, d, key, width);
+        if !changed {
+            d.fields.insert(key.into(), v);
+        }
+        return changed;
+    }
+    if v.is_string() {
+        return text(ui, d, key, width);
+    }
+    crate::widgets::dim_label(ui, &v.to_string());
+    false
+}
+
 /// [`text`] for a row whose visible meaning is not the immediately preceding label widget
 /// (Export for Screens' Range field follows its radio buttons): screen readers name the field
 /// `name`, already translated. The pending label is still consumed, so it cannot name a later
@@ -432,9 +457,19 @@ pub(super) fn param_fields(
                             changed = true;
                         }
                     }
-                    other => {
-                        ui.label(egui::RichText::new(other.to_string()).color(t.text_dim).size(11.0));
-                    }
+                    // A color object shows as its hex; typing in the field stores the typed text.
+                    other => match color_object(&other) {
+                        Some(c) => {
+                            let mut s = c.to_hex();
+                            if ui.add(egui::TextEdit::singleline(&mut s).desired_width(140.0)).changed() {
+                                d.fields.insert(k.clone(), json!(s));
+                                changed = true;
+                            }
+                        }
+                        None => {
+                            ui.label(egui::RichText::new(other.to_string()).color(t.text_dim).size(11.0));
+                        }
+                    },
                 }
             });
             ui.end_row();

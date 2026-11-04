@@ -218,6 +218,19 @@ fn live_previews_remember_only_the_committed_colour() {
 }
 
 #[test]
+fn ordinary_preview_keeps_paint_changed_during_the_interaction() {
+    let mut s = session();
+    rect(&mut s);
+    s.begin_interaction("Move").unwrap();
+    s.preview("paint.setFill", &json!({"color": "#123456"})).unwrap();
+    let paint = s.paint.clone();
+    s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 0]})).unwrap();
+    assert_eq!(s.paint, paint);
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint, paint);
+}
+
+#[test]
 fn focus_false_keeps_the_active_proxy() {
     let mut s = session();
     let id = rect(&mut s);
