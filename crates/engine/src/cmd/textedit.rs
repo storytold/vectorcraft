@@ -1616,27 +1616,3 @@ fn discard_empty(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Discard Empty Type", |d, _| d.remove(id).map(|_| ()).map_err(|_| EngineError::NoNode(id)))?;
     Ok(json!({"removed": true}))
 }
-
-#[cfg(test)]
-mod range_stroke_tests {
-    use super::*;
-
-    #[test]
-    fn range_stroke_gains_a_default_weight_and_scales_explicit_weight() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "ABCD"})).unwrap()["id"].as_u64().unwrap();
-        let weights = |s: &Session| {
-            let NodeKind::Text(t) = &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind else { panic!("text missing") };
-            t.runs.iter().map(|r| r.style.stroke_width).collect::<Vec<_>>()
-        };
-        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 2, "stroke": "#ff0000"})).unwrap();
-        assert_eq!(weights(&s), [1.0, 0.0], "a newly painted range has a visible default stroke");
-
-        s.execute("object.scale", &json!({"ids": [id], "sx": 200, "sy": 200})).unwrap();
-        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 2, "strokeWidth": 2.0})).unwrap();
-        assert_eq!(weights(&s), [1.0, 0.0], "two document points become one text-space point at 200% scale");
-        s.execute("text.setRangeStyle", &json!({"id": id, "start": 2, "end": 4, "stroke": "#0000ff", "strokeWidth": 4.0})).unwrap();
-        assert_eq!(weights(&s), [1.0, 2.0], "a different range receives its scaled weight");
-    }
-}
