@@ -234,7 +234,8 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
     if pending > 0 {
         let hold = options.speed == PlaybackSpeed::Step;
         let doc = active_doc(app);
-        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None, hold, doc });
+        let played_in = app.tick_iteration.filter(|&t| t == app.host_iteration);
+        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None, hold, doc, played_in });
         if let Some(ctx) = &app.ui_ctx {
             ctx.request_repaint();
         }
@@ -304,6 +305,12 @@ pub struct Playing {
     /// The [`uid`](vectorcraft_engine::DocState::uid) of the document that was active after the
     /// last step played, if any.
     doc: Option<u64>,
+    /// The host iteration in which Play ran the first step, when that iteration's [`tick`] had
+    /// already begun (a control request, or the UI pass after it): the pause before the second step
+    /// starts in a later iteration.
+    ///
+    /// [`tick`]: VectorcraftApp::tick
+    played_in: Option<u64>,
 }
 
 fn active_doc(app: &VectorcraftApp) -> Option<u64> {
@@ -327,6 +334,9 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     }
     let pause = f64::from(playing.options.seconds);
     if playing.options.speed == PlaybackSpeed::Pause {
+        if playing.next_at.is_none() && playing.played_in == Some(app.host_iteration) {
+            return Some(0.0);
+        }
         let due = *playing.next_at.get_or_insert(now + pause);
         if now < due {
             return Some(due - now);
@@ -3091,6 +3101,63 @@ mod tests {
         assert_eq!(app.run(STOP_RECORDING, json!({})).unwrap(), json!({"stopped": false}));
         play(&mut app, 0, 0).unwrap();
         assert_eq!(x(&app), 2.0, "an action plays again after Stop");
+    }
+
+    #[test]
+    fn control_requests_come_before_the_step_that_is_due() {
+        let ctx = egui::Context::default();
+        // One host iteration's `tick` at `now`.
+        let tick = |app: &mut VectorcraftApp, now: f64| {
+            app.now_override = Some(now);
+            app.begin_host_iteration();
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
+            out.textures_delta.clear();
+        };
+        // The same, with `method` and `params` queued on the control channel → its reply.
+        let iteration =
+            |app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<crate::control::ControlRequest>, now: f64, method: &str, params: Value| {
+                let (req, reply) = crate::control::ControlRequest::new(method, params);
+                tx.send(req).unwrap();
+                tick(app, now);
+                reply.try_recv().unwrap()
+            };
+        // Stop: the step that is due does not run.
+        let (app, x) = app_with_three_moves();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut app = app.with_control(rx);
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.0), Some(1.0));
+        let r = iteration(&mut app, &tx, 5.0, "engine.execute", json!({"command": STOP_RECORDING}));
+        assert_eq!(r["result"], json!({"stopped": true}), "{r}");
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(x(&app), 1.0, "the step that was due did not run");
+        // A switch to another document: the playback ends, and the step does not run in the first one.
+        let (app, x) = app_with_three_moves();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut app = app.with_control(rx);
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.0), Some(1.0));
+        let r = iteration(&mut app, &tx, 5.0, "engine.execute", json!({"command": "file.new", "params": {"width": 50, "height": 50}}));
+        assert_eq!(r["ok"], true, "{r}");
+        assert!(app.ui.action_playing.is_none(), "the playback ends in the same iteration");
+        assert_eq!(app.ui.status, "the action stopped playing: its document is no longer active");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(x(&app), 1.0, "the step that was due did not run in the first document");
+        // Play: the pause after the first step starts in the next iteration.
+        let (app, x) = app_with_three_moves();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut app = app.with_control(rx);
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        let r = iteration(&mut app, &tx, 0.0, "engine.execute", json!({"command": PLAY_ACTION, "params": {"action": "Three Moves"}}));
+        assert_eq!(r["result"]["pending"], json!(2), "{r}");
+        assert_eq!(x(&app), 1.0);
+        tick(&mut app, 0.5);
+        tick(&mut app, 1.0);
+        assert_eq!(x(&app), 1.0, "the pause started at 0.5");
+        tick(&mut app, 1.5);
+        assert_eq!(x(&app), 3.0);
     }
 
     #[test]

@@ -348,10 +348,6 @@ impl VectorcraftApp {
             // The timer and heartbeat run in an idle window too.
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
-        // An action playing at Step by Step or Pause For runs its next step when it is due.
-        if let Some(wait) = crate::panels::actions::tick_playback(self, now) {
-            ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
-        }
         crate::keymap::note_os(ctx);
         shortcut_editor::sync(&self.ui);
         crate::panels::actions::sync_function_keys(&self.ui);
@@ -374,6 +370,12 @@ impl VectorcraftApp {
         }
         self.flush_clipboard_out(ctx);
         self.drain_inbox();
+        // An action playing at Step by Step or Pause For runs its next step when it is due, after
+        // the control requests and opened files above: a Stop or a document switch they bring
+        // comes first.
+        if let Some(wait) = crate::panels::actions::tick_playback(self, now) {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        }
         if self.viewport_hidden(ctx) && (self.needs_hidden_paint() || (!dialog_was_open && self.ui.dialog.is_some())) {
             // A plain repaint runs only logic in a hidden window: the ui that applies injected
             // input, shows a queued dialog or issues a capture needs this command. egui-winit
