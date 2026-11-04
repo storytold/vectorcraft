@@ -27,6 +27,7 @@ const MAX_AVERAGED_PIXELS: u64 = 1 << 24;
 pub(super) const TYPE: &str = "type is written as its outlines in the editing data for other apps";
 pub(super) const GRADIENTS: &str = "gradients are written as their average color in the editing data for other apps";
 const PATTERNS: &str = "pattern fills are written as their tiles cut to the shape in the editing data for other apps";
+pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fill places are written filled gray in the editing data for other apps";
 pub(super) const CLIPPING: &str =
     "clipping groups and clipping layers are written as their art cut to the clipping path in the editing data for other apps";
 pub(super) const IMAGES: &str = "images are written as their outlines filled with their average color in the editing data for other apps";
@@ -457,6 +458,13 @@ impl<'a> Writer<'a> {
                     return self.path_object(path, rule, Some(&flat), None);
                 };
                 let tiles = def.instances_in(*xf, path.to_bezpath().bounding_box());
+                // More tiles than a fill places come back as none: the shape is filled gray, as a
+                // pattern that isn't found is.
+                if tiles.is_empty() && !def.art.is_empty() {
+                    self.warn(PATTERN_TILES);
+                    let flat = FillLayer { paint: Paint::solid(Color::gray(0.5)), ..f.clone() };
+                    return self.path_object(path, rule, Some(&flat), None);
+                }
                 let outer = self.clip.clone();
                 let region = self.cut(path, rule);
                 self.clip = Some(region);

@@ -366,7 +366,9 @@ fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64))
         s.push_str("/RealPoint\n%_ (RulerOrigin) ,\n%_");
         let par = ab.video_ruler_pixel_aspect_ratio;
         ps::push_num(s, if par.is_finite() && par > 0.0 { par } else { 1.0 });
-        let _ = writeln!(s, " /Real (PAR) ,\n%_0 /Int (DisplayMark) ,\n%_{} /Bool (IsArtboardSelected) ,", u8::from(i == 0));
+        // Display marks: 1 the center mark, 2 cross hairs, 4 video safe areas.
+        let mark = u8::from(ab.show_center_mark) | u8::from(ab.show_cross_hairs) << 1 | u8::from(ab.show_video_safe_areas) << 2;
+        let _ = writeln!(s, " /Real (PAR) ,\n%_{mark} /Int (DisplayMark) ,\n%_{} /Bool (IsArtboardSelected) ,", u8::from(i == 0));
         let _ = writeln!(s, "%_{} /UnicodeString (Name) ,\n%_; ,", ps::bytes(ab.name.as_bytes()));
     }
     s.push_str("%_; (ArtboardArray) ,\n");

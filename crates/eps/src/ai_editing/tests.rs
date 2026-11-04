@@ -949,6 +949,42 @@ fn a_group_fill_in_a_pattern_tile_is_written() {
     assert!(all.iter().any(|p| p.appearance.items.iter().any(|i| paint(i.paint()) == red)), "the tiles keep their group's fill");
 }
 
+/// A pattern fill that would place more tiles than a fill places is written as the shape filled
+/// gray, as a pattern that isn't found is, instead of as nothing.
+#[test]
+fn a_pattern_fill_of_too_many_tiles_is_written_gray() {
+    let mut doc = Document::new(1200.0, 1200.0);
+    let layer = doc.layers[0].id;
+    let dot = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 0.5, 0.5)), Appearance::basic(solid(Color::BLACK), Paint::None, 0.0));
+    let tiny = vectorcraft_doc::PatternDef { tile: Rect::new(0.0, 0.0, 1.0, 1.0), ..vectorcraft_doc::PatternDef::new("Tiny", vec![Arc::new(dot)]) };
+    doc.patterns.push(tiny);
+    let filled = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(100.0, 100.0, 1100.0, 1100.0)),
+        Appearance::basic(Paint::Pattern { pattern: "Tiny".into(), xf: Affine::IDENTITY }, Paint::None, 0.0),
+    );
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    let back = read_back(&doc);
+    let mut all = vec![];
+    paths(back.layers[0].children().unwrap(), &mut all);
+    let gray = paint(&solid(Color::gray(0.5)));
+    assert!(all.iter().any(|p| p.appearance.items.iter().any(|i| paint(i.paint()) == gray)), "{}", all.len());
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::PATTERN_TILES), "{:?}", out.warnings);
+}
+
+/// An artboard's center mark, cross hairs and video safe areas are written as the bits of its
+/// `DisplayMark` and read back.
+#[test]
+fn artboard_display_marks_are_written() {
+    let mut doc = Document::new(200.0, 100.0);
+    (doc.artboards[0].show_center_mark, doc.artboards[0].show_video_safe_areas) = (true, true);
+    assert!(program(&doc).contains("%_5 /Int (DisplayMark) ,\n"));
+    let back = read_back(&doc);
+    let ab = &back.artboards[0];
+    assert!(ab.show_center_mark && !ab.show_cross_hairs && ab.show_video_safe_areas);
+}
+
 #[test]
 fn effects_on_a_fill_are_reported_left_out() {
     let mut doc = Document::new(200.0, 100.0);
