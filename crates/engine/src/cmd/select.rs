@@ -819,8 +819,16 @@ fn same_attribute(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn same_layers(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc()?;
-    // The layers or sublayers the selected objects are on (art in their sublayers too).
-    let layers: BTreeSet<NodeId> = st.selection.objects.iter().filter_map(|id| st.doc.layer_containing(*id)).collect();
+    // The layers or sublayers the selected objects are on (art in their sublayers too). A selected
+    // object that `is_selectable` does not accept adds no layer.
+    let locks = st.doc.locked_artboards();
+    let layers: BTreeSet<NodeId> = st
+        .selection
+        .objects
+        .iter()
+        .filter(|id| is_selectable(&st.doc, st.isolation, &locks, **id))
+        .filter_map(|id| st.doc.layer_containing(*id))
+        .collect();
     let mut on = BTreeSet::new();
     for l in layers.iter().filter_map(|l| st.doc.node(*l)) {
         l.walk(&mut |n| {
