@@ -121,6 +121,10 @@ pub(crate) fn slot_frame(name: Option<&str>) -> usize {
     name.and_then(|n| n.strip_prefix(TEXT_SLOT)).and_then(|rest| rest.split_once(':')).and_then(|(_, f)| f.parse().ok()).unwrap_or(0)
 }
 
+/// The name of the text slot for type that a look draws (`1 /FreeUndo`): [`TEXT_SLOT`] with no
+/// story, as [`slot_of`] reads it.
+pub(crate) const LOOK_SLOT: &str = "\u{0}text:look";
+
 /// The artboards (names, and rects in art space) of the editing data `data` that [`read`] can't
 /// read as a whole, as far as it gets: where to put the pages of its PDF part instead, and what to
 /// call them (#1068).

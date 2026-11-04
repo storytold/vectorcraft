@@ -228,6 +228,7 @@ pub(super) fn build_from(
     }
     let mut infos = vec![];
     collect_slots(&doc.layers, true, &mut infos);
+    super::slots::limit_look_slots(&mut doc.layers, &mut infos, shown.len(), outlined);
     // Each text object's own frame or path, by its story and frame.
     let frames = ai::text_frames(data);
     for info in &mut infos {
@@ -959,8 +960,9 @@ fn slot_content(
         return Ok((made_only(infos, made, [own, pages[1]], notes), true));
     }
     // The page's type is matched with every text object whose type isn't made, and weighed against
-    // where every made one draws: that has its limits.
-    let open = made.iter().filter(|m| m.is_none()).count();
+    // where every made one draws: that has its limits (the slots of type that looks draw are within
+    // them, see `build_from`).
+    let open = infos.iter().zip(&made).filter(|(i, m)| i.look.is_none() && m.is_none()).count();
     if open > MAX_SLOTS || infos.len().saturating_mul(pages[0].len()) > MAX_PAIRS {
         return Err("it has too many text objects".into());
     }
