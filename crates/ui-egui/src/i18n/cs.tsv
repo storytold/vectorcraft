@@ -5592,6 +5592,10 @@ mark-style	Japanese	Japonské
 	Movie Clip	Filmový klip
 @msg	name is empty	název je prázdný
 @msg	an action is already recording	akce se už zaznamenává
+@msg	an action is already playing	akce se už přehrává
+@msg	the action stopped playing: its document is no longer active	přehrávání akce se zastavilo: její dokument už není aktivní
+@msg	speed must be accelerated, step or pause	speed musí být accelerated, step nebo pause
+@msg	seconds must be a whole number from 1 to 60	seconds musí být celé číslo od 1 do 60
 @msg	no such function key	taková funkční klávesa neexistuje
 @msg	no such color	taková barva neexistuje
 @msg	{_1} cannot be used on Windows	Zkratku {_1} nelze ve Windows použít
@@ -5766,6 +5770,11 @@ axis	Y Axis	osa Y
 	Set Options	Možnosti sady
 	Action Options…	Možnosti akce…
 	Action Options	Možnosti akce
+	Playback Options…	Možnosti přehrávání…
+	Playback Options	Možnosti přehrávání
+	Accelerated	Zrychleně
+	Step by Step	Krok za krokem
+	Pause For	Pozastavit na
 	Rename Action	Přejmenovat akci
 	New Action…	Nová akce…
 	New Action	Nová akce

@@ -5243,6 +5243,10 @@ lighting	Light	光源
 	Movie Clip	影片片段
 @msg	name is empty	名稱為空
 @msg	an action is already recording	已在錄製動作
+@msg	an action is already playing	已在播放動作
+@msg	the action stopped playing: its document is no longer active	動作已停止播放：其文件不再是作用中文件
+@msg	speed must be accelerated, step or pause	speed 必須為 accelerated、step 或 pause
+@msg	seconds must be a whole number from 1 to 60	seconds 必須為 1 到 60 之間的整數
 @msg	no such function key	沒有這個功能鍵
 @msg	no such color	沒有這個顏色
 @msg	{_1} cannot be used on Windows	{_1} 無法在 Windows 上使用
@@ -5400,6 +5404,11 @@ axis	Y Axis	Y 軸
 	Set Options	組選項
 	Action Options…	動作選項…
 	Action Options	動作選項
+	Playback Options…	播放選項…
+	Playback Options	播放選項
+	Accelerated	加速
+	Step by Step	逐步
+	Pause For	暫停
 	Rename Action	重新命名動作
 	New Action…	新增動作…
 	New Action	新增動作

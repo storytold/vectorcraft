@@ -5186,6 +5186,10 @@ theme	Appearance	Giao diện
 	Movie Clip	Clip phim
 @msg	name is empty	tên trống
 @msg	an action is already recording	đang ghi một hành động
+@msg	an action is already playing	đang phát một hành động
+@msg	the action stopped playing: its document is no longer active	hành động đã dừng phát: tài liệu của nó không còn hoạt động
+@msg	speed must be accelerated, step or pause	speed phải là accelerated, step hoặc pause
+@msg	seconds must be a whole number from 1 to 60	seconds phải là số nguyên từ 1 đến 60
 @msg	no such function key	không có phím chức năng như vậy
 @msg	no such color	không có màu như vậy
 @msg	{_1} cannot be used on Windows	không thể dùng {_1} trên Windows
@@ -5363,6 +5367,11 @@ axis	Y Axis	Trục Y
 	Set Options	Tùy chọn bộ
 	Action Options…	Tùy chọn hành động…
 	Action Options	Tùy chọn hành động
+	Playback Options…	Tùy chọn phát lại…
+	Playback Options	Tùy chọn phát lại
+	Accelerated	Tăng tốc
+	Step by Step	Từng bước
+	Pause For	Tạm dừng
 	Rename Action	Đổi tên hành động
 	New Action…	Hành động mới…
 	New Action	Hành động mới

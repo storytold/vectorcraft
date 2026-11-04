@@ -5170,6 +5170,10 @@ effect	Soft	Weich
 	Movie Clip	Movieclip
 @msg	name is empty	Name ist leer
 @msg	an action is already recording	eine Aktion wird bereits aufgezeichnet
+@msg	an action is already playing	eine Aktion wird bereits abgespielt
+@msg	the action stopped playing: its document is no longer active	die Aktion wurde angehalten: ihr Dokument ist nicht mehr aktiv
+@msg	speed must be accelerated, step or pause	speed muss accelerated, step oder pause sein
+@msg	seconds must be a whole number from 1 to 60	seconds muss eine ganze Zahl von 1 bis 60 sein
 @msg	no such function key	keine solche Funktionstaste
 @msg	no such color	keine solche Farbe
 @msg	{_1} cannot be used on Windows	{_1} kann unter Windows nicht verwendet werden
@@ -5348,6 +5352,11 @@ axis	Y Axis	Y-Achse
 	Set Options	Satzoptionen
 	Action Options…	Aktionsoptionen…
 	Action Options	Aktionsoptionen
+	Playback Options…	Wiedergabeoptionen…
+	Playback Options	Wiedergabeoptionen
+	Accelerated	Beschleunigt
+	Step by Step	Schrittweise
+	Pause For	Pause von
 	Rename Action	Aktion umbenennen
 	New Action…	Neue Aktion…
 	New Action	Neue Aktion

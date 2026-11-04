@@ -5533,6 +5533,10 @@ mark-style	Japanese	Japonesas
 	Movie Clip	Clip de película
 @msg	name is empty	el nombre está vacío
 @msg	an action is already recording	ya se está grabando una acción
+@msg	an action is already playing	ya se está reproduciendo una acción
+@msg	the action stopped playing: its document is no longer active	la acción se detuvo: su documento ya no es el activo
+@msg	speed must be accelerated, step or pause	speed debe ser accelerated, step o pause
+@msg	seconds must be a whole number from 1 to 60	seconds debe ser un número entero de 1 a 60
 @msg	no such function key	no existe esa tecla de función
 @msg	no such color	no existe ese color
 @msg	{_1} cannot be used on Windows	{_1} no se puede usar en Windows
@@ -5707,6 +5711,11 @@ axis	Y Axis	Eje Y
 	Set Options	Opciones de conjunto
 	Action Options…	Opciones de acción…
 	Action Options	Opciones de acción
+	Playback Options…	Opciones de reproducción…
+	Playback Options	Opciones de reproducción
+	Accelerated	Acelerada
+	Step by Step	Paso a paso
+	Pause For	Pausa de
 	Rename Action	Cambiar nombre de acción
 	New Action…	Nueva acción…
 	New Action	Nueva acción

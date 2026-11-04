@@ -5185,6 +5185,10 @@ lighting	Light	Світло
 	Movie Clip	Кліп
 @msg	name is empty	ім’я порожнє
 @msg	an action is already recording	дія вже записується
+@msg	an action is already playing	дія вже відтворюється
+@msg	the action stopped playing: its document is no longer active	відтворення дії зупинено: її документ більше не активний
+@msg	speed must be accelerated, step or pause	speed має бути accelerated, step або pause
+@msg	seconds must be a whole number from 1 to 60	seconds має бути цілим числом від 1 до 60
 @msg	no such function key	такої функціональної клавіші немає
 @msg	no such color	такого кольору немає
 @msg	{_1} cannot be used on Windows	Сполучення {_1} не можна використовувати у Windows
@@ -5362,6 +5366,11 @@ axis	Y Axis	Вісь Y
 	Set Options	Параметри набору
 	Action Options…	Параметри дії…
 	Action Options	Параметри дії
+	Playback Options…	Параметри відтворення…
+	Playback Options	Параметри відтворення
+	Accelerated	Прискорено
+	Step by Step	Покроково
+	Pause For	Пауза
 	Rename Action	Перейменувати дію
 	New Action…	Нова дія…
 	New Action	Нова дія

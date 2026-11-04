@@ -5445,6 +5445,10 @@ mark-style	Japanese	Japońskie
 	Movie Clip	Klip filmowy
 @msg	name is empty	nazwa jest pusta
 @msg	an action is already recording	operacja jest już nagrywana
+@msg	an action is already playing	operacja jest już odtwarzana
+@msg	the action stopped playing: its document is no longer active	odtwarzanie operacji zatrzymano: jej dokument nie jest już aktywny
+@msg	speed must be accelerated, step or pause	speed musi mieć wartość accelerated, step lub pause
+@msg	seconds must be a whole number from 1 to 60	seconds musi być liczbą całkowitą od 1 do 60
 @msg	no such function key	brak takiego klawisza funkcyjnego
 @msg	no such color	brak takiego koloru
 @msg	{_1} cannot be used on Windows	Skrótu {_1} nie można używać w systemie Windows
@@ -5619,6 +5623,11 @@ axis	Y Axis	Oś Y
 	Set Options	Opcje zestawu
 	Action Options…	Opcje operacji…
 	Action Options	Opcje operacji
+	Playback Options…	Opcje odtwarzania…
+	Playback Options	Opcje odtwarzania
+	Accelerated	Przyspieszone
+	Step by Step	Krok po kroku
+	Pause For	Pauza
 	Rename Action	Zmień nazwę operacji
 	New Action…	Nowa operacja…
 	New Action	Nowa operacja

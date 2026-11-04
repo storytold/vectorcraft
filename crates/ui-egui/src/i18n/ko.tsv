@@ -5166,6 +5166,10 @@ lighting	Light	광원
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
 @msg	an action is already recording	이미 액션을 기록하고 있습니다
+@msg	an action is already playing	이미 액션을 재생하고 있습니다
+@msg	the action stopped playing: its document is no longer active	액션 재생이 중지되었습니다: 해당 문서가 더 이상 활성 상태가 아닙니다
+@msg	speed must be accelerated, step or pause	speed는 accelerated, step 또는 pause여야 합니다
+@msg	seconds must be a whole number from 1 to 60	seconds는 1에서 60 사이의 정수여야 합니다
 @msg	no such function key	해당 기능 키가 없습니다
 @msg	no such color	해당 색상이 없습니다
 @msg	{_1} cannot be used on Windows	{_1}은(는) Windows에서 사용할 수 없습니다
@@ -5343,6 +5347,11 @@ axis	Y Axis	Y축
 	Set Options	세트 옵션
 	Action Options…	액션 옵션…
 	Action Options	액션 옵션
+	Playback Options…	재생 옵션…
+	Playback Options	재생 옵션
+	Accelerated	가속
+	Step by Step	단계별
+	Pause For	일시 정지
 	Rename Action	액션 이름 바꾸기
 	New Action…	새 액션…
 	New Action	새 액션

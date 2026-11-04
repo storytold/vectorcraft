@@ -61,12 +61,18 @@ impl Action {
         }
     }
 
+    /// The included steps as `command.batch` takes them. A recorded `command.batch` step (an action
+    /// played, or a panel operation that runs as one batch, while recording) gives its own steps,
+    /// since batches do not nest.
     pub(crate) fn included_commands(&self) -> Vec<Value> {
         self.steps
             .iter()
             .enumerate()
             .filter(|(i, _)| !self.excluded_steps.contains(i))
-            .map(|(_, (command, params))| json!({"command": command, "params": params}))
+            .flat_map(|(_, (command, params))| match params.get("commands").and_then(Value::as_array) {
+                Some(steps) if command == "command.batch" => steps.clone(),
+                _ => vec![json!({"command": command, "params": params})],
+            })
             .collect()
     }
 }
@@ -203,14 +209,212 @@ pub fn default_sets() -> Vec<ActionSet> {
     )]
 }
 
-/// Run an action as a single undoable batch.
+/// Plays an action at the speed [`UiState::action_playback`](crate::UiState::action_playback) sets.
+/// Accelerated runs every included step at once as a single undoable batch → what `command.batch`
+/// returns. Step by Step and Pause For run the first step now, each as its own undo step, and leave
+/// the rest to [`tick_playback`] → {results: [the first step's result], pending: the steps left}.
+/// While a paced playback is in progress, another action does not play.
 pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, String> {
     let Some(a) = app.ui.action_sets.get(set).and_then(|s| s.actions.get(idx)).cloned() else { return Err("no such action".into()) };
     let commands = a.included_commands();
     if commands.is_empty() {
         return Err("the action has no included steps".into());
     }
-    app.run("command.batch", json!({"label": a.name, "commands": commands}))
+    if app.ui.action_playing.is_some() {
+        return Err("an action is already playing".into());
+    }
+    let options = app.ui.action_playback;
+    if options.speed == PlaybackSpeed::Accelerated {
+        return app.run("command.batch", json!({"label": a.name, "commands": commands}));
+    }
+    let mut steps: std::collections::VecDeque<Value> = commands.into();
+    let Some(first) = steps.pop_front() else { return Err("the action has no included steps".into()) };
+    let result = play_step(app, &a.name, first)?;
+    let pending = steps.len();
+    if pending > 0 {
+        let hold = options.speed == PlaybackSpeed::Step;
+        let doc = active_doc(app);
+        let played_in = app.tick_iteration.filter(|&t| t == app.host_iteration);
+        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None, hold, doc, played_in });
+        if let Some(ctx) = &app.ui_ctx {
+            ctx.request_repaint();
+        }
+    }
+    Ok(json!({"results": [result], "pending": pending}))
+}
+
+/// Runs one step of a paced playback as its own undo step, named `label` → the step's result.
+fn play_step(app: &mut VectorcraftApp, label: &str, step: Value) -> Result<Value, String> {
+    let r = app.run("command.batch", json!({"label": label, "commands": [step]}))?;
+    Ok(r.get("results").and_then(|r| r.get(0)).cloned().unwrap_or(Value::Null))
+}
+
+/// The speed actions play at (Actions panel menu › Playback Options…).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PlaybackSpeed {
+    /// Every included step at once.
+    #[default]
+    Accelerated,
+    /// One step at a time, with the window drawn after each step before the next step runs.
+    Step,
+    /// [`PlaybackOptions::seconds`] between steps.
+    Pause,
+}
+
+/// The pause between steps that Pause For takes, in whole seconds: VectorCraft's own range.
+pub const PAUSE_SECONDS: std::ops::RangeInclusive<u32> = 1..=60;
+
+/// How actions play, kept with the UI preferences.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaybackOptions {
+    pub speed: PlaybackSpeed,
+    /// The pause between steps with [`PlaybackSpeed::Pause`], within [`PAUSE_SECONDS`]. It is kept
+    /// while another speed is chosen.
+    pub seconds: u32,
+}
+
+impl Default for PlaybackOptions {
+    fn default() -> Self {
+        Self { speed: PlaybackSpeed::Accelerated, seconds: *PAUSE_SECONDS.start() }
+    }
+}
+
+/// Reads saved [`PlaybackOptions`]: a value that is not a valid one loads as the default.
+pub fn deserialize_playback<'de, D: serde::Deserializer<'de>>(d: D) -> Result<PlaybackOptions, D::Error> {
+    let v = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(serde_json::from_value::<PlaybackOptions>(v).ok().filter(|o| PAUSE_SECONDS.contains(&o.seconds)).unwrap_or_default())
+}
+
+/// A paced playback in progress: the steps still to run.
+#[derive(Clone, Debug)]
+pub struct Playing {
+    /// The action's name, which names each step's undo step.
+    label: String,
+    steps: std::collections::VecDeque<Value>,
+    /// The options the action started playing with.
+    options: PlaybackOptions,
+    /// With Pause For, when the next step runs (seconds on the app's clock); none until the frame
+    /// after each step, which starts the pause before the next one.
+    next_at: Option<f64>,
+    /// With Step by Step, set after each step until the window shows a frame drawn after it
+    /// ([`playback_drawn`]): no step runs while it is set, so the window shows each step's result
+    /// before the next one runs, also when Play in the panel ran after the canvas drew and while the
+    /// window is minimized or covered.
+    hold: bool,
+    /// The [`uid`](vectorcraft_engine::DocState::uid) of the document that was active after the
+    /// last step played, if any.
+    doc: Option<u64>,
+    /// The host iteration in which Play ran the first step, when that iteration's [`tick`] had
+    /// already begun (a control request, or the UI pass after it): the pause before the second step
+    /// starts in a later iteration.
+    ///
+    /// [`tick`]: VectorcraftApp::tick
+    played_in: Option<u64>,
+}
+
+fn active_doc(app: &VectorcraftApp) -> Option<u64> {
+    app.session.active().map(|d| d.uid)
+}
+
+/// Runs the next step of the paced playback in progress when it is due at `now` (seconds on the
+/// app's clock): with Step by Step once the window has shown a frame drawn after the step before
+/// ([`playback_drawn`]), so it shows each step before the next one runs; with Pause For once
+/// the pause has passed, which starts in the frame after the step before, so a slow step or a late
+/// frame does not shorten it. A step that fails ends the playback and shows its error. When a step
+/// is due and the active document is not the one that was active after the last step (another
+/// document was made active, or that one was closed), the playback ends with a status and the rest
+/// do not run. → the seconds until the window should draw again while playback goes on (none while
+/// Step by Step waits for a UI pass, which asks for the next frame itself)
+pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
+    let doc = active_doc(app);
+    let playing = app.ui.action_playing.as_mut()?;
+    if playing.hold {
+        return None;
+    }
+    let pause = f64::from(playing.options.seconds);
+    if playing.options.speed == PlaybackSpeed::Pause {
+        if playing.next_at.is_none() && playing.played_in == Some(app.host_iteration) {
+            return Some(0.0);
+        }
+        let due = *playing.next_at.get_or_insert(now + pause);
+        if now < due {
+            return Some(due - now);
+        }
+    }
+    if playing.doc != doc {
+        app.ui.action_playing = None;
+        app.status("the action stopped playing: its document is no longer active");
+        return None;
+    }
+    let Some(step) = playing.steps.pop_front() else {
+        app.ui.action_playing = None;
+        return None;
+    };
+    let label = playing.label.clone();
+    if playing.steps.is_empty() {
+        app.ui.action_playing = None;
+    }
+    if let Err(e) = play_step(app, &label, step) {
+        app.ui.action_playing = None;
+        app.status(e);
+        return None;
+    }
+    let doc = active_doc(app);
+    let playing = app.ui.action_playing.as_mut()?;
+    // A step of the action may open, close or switch documents itself.
+    playing.doc = doc;
+    // With Pause For, the next frame starts the next pause.
+    playing.next_at = None;
+    playing.hold = playing.options.speed == PlaybackSpeed::Step;
+    Some(0.0)
+}
+
+/// Whether a Step by Step playback waits for a frame that shows its last step ([`playback_drawn`]).
+pub fn playback_held(app: &VectorcraftApp) -> bool {
+    app.ui.action_playing.as_ref().is_some_and(|p| p.hold)
+}
+
+/// Called after a UI pass that the window shows, when [`playback_held`] was true as the pass began:
+/// the Step by Step playback runs its next step in the frame after this one, which it asks for.
+pub fn playback_drawn(app: &mut VectorcraftApp) {
+    if let Some(playing) = app.ui.action_playing.as_mut().filter(|p| p.hold) {
+        playing.hold = false;
+        if let Some(ctx) = &app.ui_ctx {
+            ctx.request_repaint();
+        }
+    }
+}
+
+/// The command behind Playback Options… ([`playback_options`]).
+pub const PLAYBACK_OPTIONS: &str = "ui.action.playbackOptions";
+
+/// `ui.action.playbackOptions {speed?, seconds?}`: sets how actions play. `speed` is
+/// `accelerated` (every step at once, the default), `step` (one step at a time, the window drawn
+/// after each) or `pause` (`seconds` between steps); `seconds` is a whole number in
+/// [`PAUSE_SECONDS`]. A param left out keeps its value. Any other value is an error, and then
+/// nothing changes. An action already playing keeps its speed. → {speed, seconds}
+pub fn playback_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let current = app.ui.action_playback;
+    let speed = match p.get("speed") {
+        None => current.speed,
+        Some(v) => match v.as_str() {
+            Some("accelerated") => PlaybackSpeed::Accelerated,
+            Some("step") => PlaybackSpeed::Step,
+            Some("pause") => PlaybackSpeed::Pause,
+            _ => return Err("speed must be accelerated, step or pause".into()),
+        },
+    };
+    let seconds = match p.get("seconds") {
+        None => current.seconds,
+        Some(v) => v
+            .as_u64()
+            .and_then(|s| u32::try_from(s).ok())
+            .filter(|s| PAUSE_SECONDS.contains(s))
+            .ok_or("seconds must be a whole number from 1 to 60")?,
+    };
+    app.ui.action_playback = PlaybackOptions { speed, seconds };
+    Ok(json!({"speed": speed, "seconds": seconds}))
 }
 
 /// The command behind the Actions panel's set, action and step checkmarks.
@@ -380,10 +584,11 @@ pub fn action_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 /// The command that plays an action by its name ([`play_action`]).
 pub const PLAY_ACTION: &str = "ui.action.play";
 
-/// `ui.action.play {action, set?}`: plays the action named `action` as one undoable batch, as
-/// Play Current Selection does. `set` names the set to look in (default: every set); a `set` that
-/// is not a string is an error. A name that no action has is an error, and so is a name that more
-/// than one action in the sets looked in has: then nothing plays. → what `command.batch` returns
+/// `ui.action.play {action, set?}`: plays the action named `action` at the Playback Options speed,
+/// as Play Current Selection does ([`play`]). `set` names the set to look in (default: every set); a
+/// `set` that is not a string is an error. A name that no action has is an error, and so is a name
+/// that more than one action in the sets looked in has: then nothing plays. → what [`play`] returns:
+/// at Accelerated, what `command.batch` returns; at Step by Step and Pause For, {results, pending}
 pub fn play_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let name = p.get("action").and_then(Value::as_str).ok_or("no such action")?;
     let in_set = match p.get("set") {
@@ -444,11 +649,14 @@ pub fn record(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 
 /// `ui.action.stop {}`: ends the recording in progress and keeps its steps, in the action New
 /// Action made for it, else in a new action after the last action of its set, as the bottom bar's
-/// Stop Playing/Recording does. With nothing recording it changes nothing. → {stopped}
+/// Stop Playing/Recording does. It also ends a playback at Step by Step or Pause For: the steps
+/// already played stay, and the rest do not run. With nothing recording or playing it changes
+/// nothing. → {stopped}
 pub fn stop(app: &mut VectorcraftApp, _: &Value) -> Result<Value, String> {
-    let stopped = app.ui.recording.is_some();
+    let playing = app.ui.action_playing.take().is_some();
+    let recording = app.ui.recording.is_some();
     stop_recording(app);
-    Ok(json!({ "stopped": stopped }))
+    Ok(json!({ "stopped": recording || playing }))
 }
 
 /// The command that `chord` runs under `km`, pressed once or pressed twice.
@@ -800,6 +1008,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         && let Some((s, a)) = selected
     {
         crate::dialogs::action_set_options::open_action(app, s, a);
+    }
+    if widgets::menu_item(ui, tl!("Playback Options…"), true, false) {
+        crate::dialogs::action_playback::open(app);
     }
     ui.separator();
     // As commands, so a file dialog shown off the UI thread saves or loads when it answers.
@@ -2661,5 +2872,403 @@ mod tests {
             crate::keymap::lookup(&crate::keymap::keymap_with(&ui.shortcut_overrides), &shift_f12.chord().unwrap()).is_some(),
             "the command keeps its shortcut"
         );
+    }
+
+    /// A document with one rectangle selected and the set "Moves" with one action that moves it
+    /// right three times, by 1, 2 and 4 pt → (the app, the rectangle's left edge as it moves).
+    fn app_with_three_moves() -> (VectorcraftApp, impl Fn(&VectorcraftApp) -> f64) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let id = vectorcraft_doc::NodeId(
+            app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap(),
+        );
+        app.run("select.set", json!({"ids": [id.0]})).unwrap();
+        let step = |dx: u32| ("object.move".to_string(), json!({"dx": dx, "dy": 0}));
+        app.ui.action_sets = vec![ActionSet::new("Moves", vec![Action::new("Three Moves", vec![step(1), step(2), step(4)])])];
+        let x = move |app: &VectorcraftApp| app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0 - 10.0;
+        (app, x)
+    }
+
+    fn undo_steps(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().history.undo.len()
+    }
+
+    /// One frame of a shown window at `now`: the logic pass, then a UI pass that draws → what the
+    /// logic pass's [`tick_playback`] returns.
+    fn frame(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
+        let wait = tick_playback(app, now);
+        playback_drawn(app);
+        wait
+    }
+
+    /// Draws frames until the playback in progress ends (at most 20).
+    fn play_out(app: &mut VectorcraftApp) {
+        for _ in 0..20 {
+            if app.ui.action_playing.is_none() {
+                return;
+            }
+            frame(app, 0.0);
+        }
+        panic!("the playback did not end");
+    }
+
+    #[test]
+    fn playback_options_sets_each_speed_and_refuses_bad_values() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        assert_eq!(app.ui.action_playback, PlaybackOptions { speed: PlaybackSpeed::Accelerated, seconds: 1 }, "Accelerated is the default");
+        assert_eq!(app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap(), json!({"speed": "step", "seconds": 1}));
+        assert_eq!(app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 2})).unwrap(), json!({"speed": "pause", "seconds": 2}));
+        assert_eq!(
+            app.run(PLAYBACK_OPTIONS, json!({"speed": "accelerated"})).unwrap(),
+            json!({"speed": "accelerated", "seconds": 2}),
+            "seconds kept"
+        );
+        assert_eq!(app.run(PLAYBACK_OPTIONS, json!({"seconds": 60})).unwrap(), json!({"speed": "accelerated", "seconds": 60}), "speed kept");
+        let kept = app.ui.action_playback;
+        for bad in [json!({"speed": "fast"}), json!({"speed": null}), json!({"speed": 1})] {
+            assert_eq!(app.run(PLAYBACK_OPTIONS, bad.clone()).unwrap_err(), "speed must be accelerated, step or pause", "{bad}");
+        }
+        for bad in [json!(0), json!(61), json!(2.5), json!(-1), json!("2"), json!(null)] {
+            let p = json!({"speed": "pause", "seconds": bad});
+            assert_eq!(app.run(PLAYBACK_OPTIONS, p).unwrap_err(), "seconds must be a whole number from 1 to 60", "{bad}");
+        }
+        assert_eq!(app.ui.action_playback, kept, "a refused value changes nothing");
+        // Kept with the UI preferences; a saved value that is not valid loads as the default.
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 5})).unwrap();
+        let mut saved = serde_json::to_value(&app.ui).unwrap();
+        let ui = serde_json::from_value::<crate::UiState>(saved.clone()).unwrap();
+        assert_eq!(ui.action_playback, PlaybackOptions { speed: PlaybackSpeed::Pause, seconds: 5 });
+        for bad in [json!({"speed": "pause", "seconds": 0}), json!({"speed": "slow", "seconds": 5}), json!("step")] {
+            saved["action_playback"] = bad;
+            assert_eq!(serde_json::from_value::<crate::UiState>(saved.clone()).unwrap().action_playback, PlaybackOptions::default());
+        }
+    }
+
+    #[test]
+    fn the_playback_options_dialog_sets_the_speed_and_pause() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step", "seconds": 3})).unwrap();
+        crate::dialogs::action_playback::open(&mut app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!((d.kind.as_str(), d.str("speed"), d.fields["seconds"].clone()), ("actionPlayback", "step".to_string(), json!(3)));
+        d.fields.insert("speed".into(), json!("pause"));
+        d.fields.insert("seconds".into(), json!(4));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(app.ui.action_playback, PlaybackOptions { speed: PlaybackSpeed::Pause, seconds: 4 });
+    }
+
+    #[test]
+    fn accelerated_playback_plays_every_step_as_one_undo_step() {
+        let (mut app, x) = app_with_three_moves();
+        let before = undo_steps(&app);
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(x(&app), 7.0);
+        assert_eq!(undo_steps(&app), before + 1);
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(tick_playback(&mut app, 0.0), None, "nothing waits for a frame");
+    }
+
+    #[test]
+    fn step_by_step_plays_one_step_per_frame_and_redraws_between_steps() {
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        let before = undo_steps(&app);
+        assert_eq!(play(&mut app, 0, 0).unwrap()["pending"], json!(2));
+        assert_eq!(x(&app), 1.0, "the first step runs at once");
+        assert_eq!(frame(&mut app, 0.0), None, "the frame after Play draws the first step");
+        assert_eq!(x(&app), 1.0, "and runs no step, even when Play ran after the canvas drew");
+        assert_eq!(frame(&mut app, 0.0), Some(0.0), "the window draws again before the next step");
+        assert_eq!(x(&app), 3.0, "one more step in this frame");
+        assert_eq!(frame(&mut app, 0.0), None, "the last step ends the playback");
+        assert_eq!(x(&app), 7.0);
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(frame(&mut app, 0.0), None);
+        assert_eq!(x(&app), 7.0);
+        assert_eq!(undo_steps(&app), before + 3, "each step is its own undo step");
+        assert_eq!(app.session.active().unwrap().history.undo.last().unwrap().label, "Three Moves");
+    }
+
+    #[test]
+    fn step_by_step_runs_no_step_until_the_window_draws_the_one_before() {
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        // A hidden window runs logic passes only, which draw nothing.
+        for _ in 0..3 {
+            assert_eq!(tick_playback(&mut app, 0.0), None, "no step runs and no frame is asked for");
+        }
+        assert_eq!(x(&app), 1.0);
+        playback_drawn(&mut app);
+        assert_eq!(tick_playback(&mut app, 0.0), Some(0.0));
+        assert_eq!(x(&app), 3.0, "the step after a drawn frame runs");
+        for _ in 0..3 {
+            assert_eq!(tick_playback(&mut app, 0.0), None);
+        }
+        assert_eq!(x(&app), 3.0, "the next step waits until the window draws this one");
+        playback_drawn(&mut app);
+        assert_eq!(tick_playback(&mut app, 0.0), None, "the last step ends the playback");
+        assert_eq!(x(&app), 7.0);
+    }
+
+    #[test]
+    fn step_by_step_waits_while_the_window_is_hidden() {
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        let ctx = egui::Context::default();
+        // One host iteration: `tick`, then a UI pass, in a shown or an occluded window.
+        let frame = |app: &mut VectorcraftApp, hidden: bool| {
+            let mut raw =
+                egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0))), ..Default::default() };
+            if hidden {
+                raw.viewports.entry(egui::ViewportId::ROOT).or_default().occluded = Some(true);
+            }
+            app.begin_host_iteration();
+            let mut out = ctx.run_ui(raw, |ui| {
+                app.tick(ui.ctx());
+                app.ui(ui);
+            });
+            out.textures_delta.clear();
+        };
+        // Fonts install on the first pass and are ready on the second.
+        frame(&mut app, false);
+        frame(&mut app, false);
+        play(&mut app, 0, 0).unwrap();
+        for _ in 0..3 {
+            frame(&mut app, true);
+        }
+        assert_eq!(x(&app), 1.0, "no step runs while the window is hidden, even in a UI pass");
+        frame(&mut app, false);
+        assert_eq!(x(&app), 1.0, "the shown frame draws the first step");
+        frame(&mut app, true);
+        assert_eq!(x(&app), 3.0, "the first step was shown, so the second runs");
+        for _ in 0..3 {
+            frame(&mut app, true);
+        }
+        assert_eq!(x(&app), 3.0, "the third step waits until the window shows the second");
+        frame(&mut app, false);
+        assert_eq!(x(&app), 3.0, "the shown frame draws the second step");
+        frame(&mut app, false);
+        assert_eq!(x(&app), 7.0);
+        assert!(app.ui.action_playing.is_none());
+    }
+
+    #[test]
+    fn pause_for_waits_the_seconds_between_steps() {
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 2})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(x(&app), 1.0);
+        assert_eq!(tick_playback(&mut app, 10.0), Some(2.0), "the pause starts in the frame after the first step");
+        assert_eq!(tick_playback(&mut app, 11.5), Some(0.5));
+        assert_eq!(x(&app), 1.0, "nothing runs before the pause has passed");
+        assert_eq!(tick_playback(&mut app, 12.0), Some(0.0), "the next frame comes promptly");
+        assert_eq!(x(&app), 3.0, "the second step runs after 2 s");
+        assert_eq!(tick_playback(&mut app, 12.0), Some(2.0), "and starts the next pause");
+        assert!(tick_playback(&mut app, 13.9).is_some_and(|wait| (wait - 0.1).abs() < 1e-9));
+        assert_eq!(x(&app), 3.0);
+        assert_eq!(tick_playback(&mut app, 14.0), None);
+        assert_eq!(x(&app), 7.0, "the third step runs 2 s after the second");
+        assert!(app.ui.action_playing.is_none());
+    }
+
+    #[test]
+    fn pause_for_starts_each_pause_in_the_frame_after_the_step() {
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 2})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.0), Some(2.0));
+        assert!(tick_playback(&mut app, 2.0).is_some());
+        assert_eq!(x(&app), 3.0, "the second step runs");
+        // The next frame comes later than the pause, for example after a slow step.
+        assert_eq!(tick_playback(&mut app, 9.0), Some(2.0), "the pause starts in this frame");
+        assert_eq!(x(&app), 3.0, "no step runs without a pause before it");
+        assert_eq!(tick_playback(&mut app, 11.0), None);
+        assert_eq!(x(&app), 7.0, "the third step runs 2 s after the frame that started the pause");
+    }
+
+    #[test]
+    fn stop_ends_a_paced_playback_and_another_action_waits_for_it() {
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(play(&mut app, 0, 0).unwrap_err(), "an action is already playing");
+        assert_eq!(app.run(PLAY_ACTION, json!({"action": "Three Moves"})).unwrap_err(), "an action is already playing");
+        assert_eq!(x(&app), 1.0);
+        assert_eq!(app.run(STOP_RECORDING, json!({})).unwrap(), json!({"stopped": true}));
+        assert_eq!(tick_playback(&mut app, 100.0), None);
+        assert_eq!(x(&app), 1.0, "the steps after Stop do not run; the one played stays");
+        assert_eq!(app.run(STOP_RECORDING, json!({})).unwrap(), json!({"stopped": false}));
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(x(&app), 2.0, "an action plays again after Stop");
+    }
+
+    #[test]
+    fn control_requests_come_before_the_step_that_is_due() {
+        let ctx = egui::Context::default();
+        // One host iteration's `tick` at `now`.
+        let tick = |app: &mut VectorcraftApp, now: f64| {
+            app.now_override = Some(now);
+            app.begin_host_iteration();
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
+            out.textures_delta.clear();
+        };
+        // The same, with `method` and `params` queued on the control channel → its reply.
+        let iteration =
+            |app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<crate::control::ControlRequest>, now: f64, method: &str, params: Value| {
+                let (req, reply) = crate::control::ControlRequest::new(method, params);
+                tx.send(req).unwrap();
+                tick(app, now);
+                reply.try_recv().unwrap()
+            };
+        // Stop: the step that is due does not run.
+        let (app, x) = app_with_three_moves();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut app = app.with_control(rx);
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.0), Some(1.0));
+        let r = iteration(&mut app, &tx, 5.0, "engine.execute", json!({"command": STOP_RECORDING}));
+        assert_eq!(r["result"], json!({"stopped": true}), "{r}");
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(x(&app), 1.0, "the step that was due did not run");
+        // A switch to another document: the playback ends, and the step does not run in the first one.
+        let (app, x) = app_with_three_moves();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut app = app.with_control(rx);
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.0), Some(1.0));
+        let r = iteration(&mut app, &tx, 5.0, "engine.execute", json!({"command": "file.new", "params": {"width": 50, "height": 50}}));
+        assert_eq!(r["ok"], true, "{r}");
+        assert!(app.ui.action_playing.is_none(), "the playback ends in the same iteration");
+        assert_eq!(app.ui.status, "the action stopped playing: its document is no longer active");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(x(&app), 1.0, "the step that was due did not run in the first document");
+        // Play: the pause after the first step starts in the next iteration.
+        let (app, x) = app_with_three_moves();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut app = app.with_control(rx);
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        let r = iteration(&mut app, &tx, 0.0, "engine.execute", json!({"command": PLAY_ACTION, "params": {"action": "Three Moves"}}));
+        assert_eq!(r["result"]["pending"], json!(2), "{r}");
+        assert_eq!(x(&app), 1.0);
+        tick(&mut app, 0.5);
+        tick(&mut app, 1.0);
+        assert_eq!(x(&app), 1.0, "the pause started at 0.5");
+        tick(&mut app, 1.5);
+        assert_eq!(x(&app), 3.0);
+    }
+
+    #[test]
+    fn an_action_recorded_while_another_plays_plays_its_steps() {
+        let (mut app, x) = app_with_three_moves();
+        // Accelerated: the recording gets the played action as one batch step.
+        app.run(START_RECORDING, json!({"set": 0})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions[1].steps.iter().map(|s| s.0.as_str()).collect::<Vec<_>>(), ["command.batch"]);
+        assert_eq!(x(&app), 7.0);
+        play(&mut app, 0, 1).unwrap();
+        assert_eq!(x(&app), 14.0, "the batch step plays its moves");
+        // Step by Step: recording begins after the first step, and gets each later step as a batch.
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        app.run(START_RECORDING, json!({"set": 0})).unwrap();
+        play_out(&mut app);
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert_eq!(x(&app), 21.0);
+        assert_eq!(app.ui.action_sets[0].actions[2].steps.len(), 2);
+        play(&mut app, 0, 2).unwrap();
+        play_out(&mut app);
+        assert_eq!(x(&app), 27.0, "paced: the recorded batches play the second and third moves");
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "accelerated"})).unwrap();
+        play(&mut app, 0, 2).unwrap();
+        assert_eq!(x(&app), 33.0, "accelerated: the recorded batches play inside the action's batch");
+    }
+
+    #[test]
+    fn a_paced_playback_ends_when_another_document_becomes_active() {
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.0), Some(1.0));
+        app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.5), Some(0.5), "nothing ends before the next step is due");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(tick_playback(&mut app, 1.0), Some(0.0));
+        assert_eq!(x(&app), 3.0, "the document is active again when the step is due, so it runs");
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let other = app.session.active().unwrap().doc.clone();
+        assert_eq!(tick_playback(&mut app, 5.0), Some(1.0), "the next pause starts");
+        assert_eq!(tick_playback(&mut app, 6.0), None, "the playback ends");
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(app.ui.status, "the action stopped playing: its document is no longer active");
+        assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &other), "no step ran in the other document");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(tick_playback(&mut app, 10.0), None);
+        assert_eq!(x(&app), 3.0, "the rest of the steps do not run in the first document either");
+        // A step that makes another document active itself does not end the playback.
+        app.ui.action_sets[0].actions[0].steps.insert(0, ("document.activate".into(), json!({"index": 0})));
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        app.ui.status.clear();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(frame(&mut app, 0.0), None);
+        play_out(&mut app);
+        assert_ne!(app.ui.status, "the action stopped playing: its document is no longer active");
+        assert_eq!(x(&app), 10.0, "the moves after the step ran in the document it made active");
+    }
+
+    #[test]
+    fn closing_the_playing_document_ends_a_paced_playback() {
+        let stopped = "the action stopped playing: its document is no longer active";
+        // File › Close with `p`, answering Don't Save for the modified document.
+        let close = |app: &mut VectorcraftApp, p: Value| {
+            assert_eq!(app.run("file.close", p).unwrap(), json!({"pending": crate::unsaved::KIND}));
+            app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+            crate::unsaved::confirm(app).unwrap();
+        };
+        // Step by Step, the only document closed: no document is active when the next step is due.
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(x(&app), 1.0);
+        close(&mut app, json!({}));
+        assert!(app.session.active().is_none());
+        assert_eq!(frame(&mut app, 0.0), None, "the frame after Play draws");
+        assert_eq!(frame(&mut app, 0.0), None, "the next step is due, and the playback ends");
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(app.ui.status, stopped);
+        // Pause For, another document left active: no later step runs in it.
+        let (mut app, x) = app_with_three_moves();
+        app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
+        let other = app.session.active().unwrap().doc.clone();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(x(&app), 1.0);
+        assert_eq!(tick_playback(&mut app, 0.0), Some(1.0));
+        close(&mut app, json!({"index": 0}));
+        assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &other));
+        assert_eq!(tick_playback(&mut app, 1.0), None, "the playback ends when the next step is due");
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(app.ui.status, stopped);
+        assert_eq!(tick_playback(&mut app, 10.0), None);
+        assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &other), "no step ran in the document left open");
+    }
+
+    #[test]
+    fn a_failing_step_ends_a_paced_playback_with_its_error() {
+        let (mut app, x) = app_with_three_moves();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        app.ui.action_sets[0].actions[0].steps[1] = ("no.such.command".into(), json!({}));
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(frame(&mut app, 0.0), None, "the frame after Play draws the first step");
+        assert_eq!(frame(&mut app, 0.0), None);
+        assert!(app.ui.action_playing.is_none());
+        assert!(!app.ui.status.is_empty(), "the step's error shows");
+        assert_eq!(frame(&mut app, 0.0), None);
+        assert_eq!(x(&app), 1.0, "the step after the failing one does not run");
     }
 }

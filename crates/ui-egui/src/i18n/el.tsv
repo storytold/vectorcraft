@@ -5543,6 +5543,10 @@ effect	Points	Σημεία
 	Movie Clip	Κλιπ ταινίας
 @msg	name is empty	το όνομα είναι κενό
 @msg	an action is already recording	μια ενέργεια καταγράφεται ήδη
+@msg	an action is already playing	μια ενέργεια αναπαράγεται ήδη
+@msg	the action stopped playing: its document is no longer active	η αναπαραγωγή της ενέργειας σταμάτησε: το έγγραφό της δεν είναι πλέον ενεργό
+@msg	speed must be accelerated, step or pause	το speed πρέπει να είναι accelerated, step ή pause
+@msg	seconds must be a whole number from 1 to 60	το seconds πρέπει να είναι ακέραιος από 1 έως 60
 @msg	no such function key	δεν υπάρχει τέτοιο πλήκτρο λειτουργίας
 @msg	no such color	δεν υπάρχει τέτοιο χρώμα
 @msg	{_1} cannot be used on Windows	Το {_1} δεν μπορεί να χρησιμοποιηθεί στα Windows
@@ -5717,6 +5721,11 @@ axis	Y Axis	Άξονας Y
 	Set Options	Επιλογές συνόλου
 	Action Options…	Επιλογές ενέργειας…
 	Action Options	Επιλογές ενέργειας
+	Playback Options…	Επιλογές αναπαραγωγής…
+	Playback Options	Επιλογές αναπαραγωγής
+	Accelerated	Επιταχυμένα
+	Step by Step	Βήμα προς βήμα
+	Pause For	Παύση για
 	Rename Action	Μετονομασία ενέργειας
 	New Action…	Νέα ενέργεια…
 	New Action	Νέα ενέργεια
