@@ -282,6 +282,9 @@ font-technology	Variable	Променливи
 	Basic Latin	Основни латински
 	Batch	Пакет
 	Begin Recording	Начало на запис
+	Exclude from playback	Изключване от изпълнението
+	Include in playback	Включване в изпълнението
+	Include Action Steps	Включване на стъпки от действие
 	Bend:	Извиване:
 	Bevel Join	Заоблено съединение
 	Bitmap	Битова мащабна графика
@@ -5444,6 +5447,10 @@ theme	Appearance	Външен вид
 @msg	choose a source folder	изберете изходна папка
 @msg	open a document with data sets	отворете документ с набори от данни
 @msg	the action has no steps	действието няма стъпки
+@msg	the action has no included steps	действието няма включени стъпки
+@msg	no such action step	няма такава стъпка от действие
+@msg	included must be true or false	included трябва да бъде true или false
+@msg	others must be true or false	others трябва да бъде true или false
 	Registration:	Регистрация:
 # Layers panel filters (Filter Layers Panel Rows) and Color Panel Options
 	By Layer	По слой

@@ -273,6 +273,9 @@ font-technology	Variable	Μεταβλητές
 	Basic Latin	Βασικά λατινικά
 	Batch	Μαζική επεξεργασία
 	Begin Recording	Έναρξη καταγραφής
+	Exclude from playback	Εξαίρεση από την αναπαραγωγή
+	Include in playback	Συμπερίληψη στην αναπαραγωγή
+	Include Action Steps	Συμπερίληψη βημάτων ενέργειας
 	Bend:	Καμπυλότητα:
 	Bevel Join	Λοξότμητη ένωση
 	Bitmap	Ασπρόμαυρο bitmap
@@ -5496,6 +5499,10 @@ effect	Points	Σημεία
 @msg	the Simplify slider is not open	ο ρυθμιστής Απλοποίησης δεν είναι ανοιχτός
 @msg	the Smooth slider is not open	ο ρυθμιστής Εξομάλυνσης δεν είναι ανοιχτός
 @msg	the action has no steps	η ενέργεια δεν έχει βήματα
+@msg	the action has no included steps	η ενέργεια δεν έχει βήματα που συμπεριλαμβάνονται
+@msg	no such action step	δεν υπάρχει τέτοιο βήμα ενέργειας
+@msg	included must be true or false	Το included πρέπει να είναι true ή false
+@msg	others must be true or false	Το others πρέπει να είναι true ή false
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	τα επίπεδα του αρχείου δεν διαβάστηκαν ({_1}): εισάγεται ως η σελίδα του, σε ένα επίπεδο
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	τα επίπεδα του αρχείου δεν διαβάστηκαν από τα δεδομένα επεξεργασίας του ({_1}): προέρχονται από το τμήμα PDF του
 @msg	the screen color sampler is already open	η δειγματοληψία χρώματος από την οθόνη είναι ήδη ανοιχτή

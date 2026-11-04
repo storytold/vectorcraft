@@ -284,6 +284,9 @@ font-technology	Variable	Variabla
 	Basic Latin	Grundläggande latin
 	Batch	Batch
 	Begin Recording	Börja spela in
+	Exclude from playback	Uteslut från uppspelning
+	Include in playback	Ta med i uppspelning
+	Include Action Steps	Ta med åtgärdssteg
 	Bend:	Böjning:
 	Bevel Join	Fasad fog
 	Bitmap	Bitmapp
@@ -5500,6 +5503,10 @@ theme	Appearance	Utseende
 @msg	the Simplify slider is not open	Förenkla-reglaget är inte öppet
 @msg	the Smooth slider is not open	Jämna ut-reglaget är inte öppet
 @msg	the action has no steps	åtgärden har inga steg
+@msg	the action has no included steps	åtgärden har inga medtagna steg
+@msg	no such action step	åtgärdssteget finns inte
+@msg	included must be true or false	included måste vara true eller false
+@msg	others must be true or false	others måste vara true eller false
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	filens lager lästes inte ({_1}): den hämtas in som en sida, i ett enda lager
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	filens lager lästes inte från dess redigeringsdata ({_1}): de kommer från dess PDF-del
 @msg	the screen color sampler is already open	färghämtningen från skärmen är redan öppen

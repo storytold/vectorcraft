@@ -1035,6 +1035,9 @@ digits	Malayalam	マラヤーラム数字
 	Baseline Shift	ベースラインシフト
 	Batch	バッチ
 	Begin Recording	記録を開始
+	Exclude from playback	再生から除外
+	Include in playback	再生に含める
+	Include Action Steps	アクションステップを含める
 	Bend:	カーブ:
 	Bevel Join	ベベル結合
 	Bitmap	ビットマップ
@@ -5206,6 +5209,10 @@ lighting	Light	ライト
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	データセット {name} から何も適用されませんでした: 値のある変数にバインドされたオブジェクトがありません
 @msg	no bound object reports a value (locked objects and embedded images report none)	値を返すバインドされたオブジェクトがありません (ロックされたオブジェクトと埋め込み画像は値を返しません)
 @msg	the action has no steps	アクションにステップがありません
+@msg	the action has no included steps	アクションに含まれるステップがありません
+@msg	no such action step	指定されたアクションステップが見つかりません
+@msg	included must be true or false	included には true または false を指定してください
+@msg	others must be true or false	others には true または false を指定してください
 
 # User Interface › Accent Color
 	Accent Color	アクセントカラー

@@ -1348,6 +1348,9 @@ lighting	Light	Světlo
 # Panels
 	Action {n}	Akce {n}
 	Begin Recording	Zahájit záznam
+	Exclude from playback	Vyloučit z přehrávání
+	Include in playback	Zahrnout do přehrávání
+	Include Action Steps	Zahrnout kroky akce
 	Center on Artboard	Vystředit na pracovní ploše
 	Default Actions	Výchozí akce
 	▾ Default Actions	▾ Výchozí akce
@@ -5551,6 +5554,10 @@ mark-style	Japanese	Japonské
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ze sady dat {name} se nic nepoužilo: žádný objekt není svázán s proměnnou, pro kterou má hodnotu
 @msg	no bound object reports a value (locked objects and embedded images report none)	žádný svázaný objekt nevrací hodnotu (zamčené objekty a vložené obrazy žádnou nevracejí)
 @msg	the action has no steps	akce nemá žádné kroky
+@msg	the action has no included steps	akce nemá žádné zahrnuté kroky
+@msg	no such action step	takový krok akce neexistuje
+@msg	included must be true or false	included musí být true nebo false
+@msg	others must be true or false	others musí být true nebo false
 
 # User Interface › Accent Color
 	Accent Color	Barva zvýraznění

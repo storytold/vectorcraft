@@ -437,6 +437,9 @@
 	Bearing	Orientació
 	Before Last:	Abans de l’últim:
 	Begin Recording	Comença a enregistrar
+	Exclude from playback	Exclou de la reproducció
+	Include in playback	Inclou a la reproducció
+	Include Action Steps	Inclou passos de l’acció
 	Begin Undo Group	Inicia el grup de desfets
 	Bend:	Corba:
 	Best	Millor
@@ -5513,6 +5516,10 @@ digits	Malayalam	Malaiàlam
 @msg	that document is no longer open	aquest document ja no està obert
 @msg	The 3D surface is too complex; simplify the shape	La superfície 3D és massa complexa; simplifica la forma
 @msg	the action has no steps	l’acció no té cap pas
+@msg	the action has no included steps	l’acció no té cap pas inclòs
+@msg	no such action step	no existeix aquest pas d’acció
+@msg	included must be true or false	included ha de ser true o false
+@msg	others must be true or false	others ha de ser true o false
 @msg	the art could not be sampled	no s’ha pogut mostrejar la il·lustració
 @msg	the art has no bounds	la il·lustració no té límits
 @msg	the art is too light for any dots	la il·lustració és massa clara per a cap punt

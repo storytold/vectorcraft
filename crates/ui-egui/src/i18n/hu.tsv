@@ -398,6 +398,9 @@ font-technology	Variable	Változó
 	Batch	Kötegelt feldolgozás
 	Bearing	Irány
 	Begin Recording	Felvétel indítása
+	Exclude from playback	Kizárás a lejátszásból
+	Include in playback	Bevonás a lejátszásba
+	Include Action Steps	Műveletlépések bevonása
 	Begin Undo Group	Visszavonási csoport kezdete
 	Bend:	Hajlítás mértéke:
 	Best	Legjobb
@@ -5534,6 +5537,10 @@ imageTrace	Outline	Körvonal
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ebből az adatkészletből semmi sem lett alkalmazva: {name}; egyetlen objektum sincs olyan változóhoz kötve, amelynek értéke van benne
 @msg	no bound object reports a value (locked objects and embedded images report none)	egyetlen kötött objektum sem ad értéket (a zárolt objektumok és a beágyazott képek nem adnak értéket)
 @msg	the action has no steps	a műveletnek nincsenek lépései
+@msg	the action has no included steps	a műveletnek nincsenek bevont lépései
+@msg	no such action step	nincs ilyen műveletlépés
+@msg	included must be true or false	included: true vagy false kell
+@msg	others must be true or false	others: true vagy false kell
 
 # User Interface › Accent Color
 	Accent Color	Kiemelőszín

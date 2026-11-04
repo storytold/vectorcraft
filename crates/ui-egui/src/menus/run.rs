@@ -820,6 +820,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         }
         "ui.packageDialog" => crate::dialogs::package::open(app),
         crate::panels::actions::RENAME_ACTION => crate::panels::actions::rename_action(app, p),
+        crate::panels::actions::INCLUDE_STEPS => crate::panels::actions::include_steps(app, p),
         crate::panels::actions::NEW_ACTION => crate::panels::actions::new_action(app, p),
         crate::panels::actions::ACTION_OPTIONS => crate::panels::actions::action_options(app, p),
         crate::panels::actions::PLAY_ACTION => crate::panels::actions::play_action(app, p),
