@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Document Tools add-on: Batch Trace Folder, #4921; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (New Document's units belong to the chosen preset; Recent and Saved cards keep their own units; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
@@ -23,6 +23,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen preset, as the public page lists the pane's options for the selected preset; the chosen card shows them, every other Recent and Saved card keeps the units its document or preset was made in, and the built-in tabs still follow the chosen units (#2078). Scores and estimates unchanged. |
 | 2026-11-04 | minor | Document Tools add-on (a VectorCraft addition): Batch Trace Folder under Object › Plug-ins (`addon.document.batchTraceFolder`, #4921); evidence added; scores unchanged. |
 | 2026-11-04 | minor | Object › Expand turns selected symbol instances into their art as Break Link places it, one level deep, with the Expand dialog's Fill and Stroke reaching that art. Scores and estimates unchanged. |
 | 2026-11-03 | minor | The OpenType panel offers the selected font's stylistic sets by custom or numbered name, and allows several to be active. Scores and estimates unchanged. |
