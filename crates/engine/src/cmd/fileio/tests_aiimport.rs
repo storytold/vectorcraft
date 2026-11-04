@@ -1221,10 +1221,16 @@ fn half_outlined_line(y: f64, rest: &str, mode: u8) -> String {
 /// text document (a line starting at (14, 65)), then `more` of a story the text document doesn't
 /// have. Without `story` the file has no text document.
 fn half_outlined_ai(story: Option<&str>, more: usize, type_content: &str) -> Vec<u8> {
+    half_outlined_ai_on(story, more, type_content, "", |page| page)
+}
+
+/// [`half_outlined_ai`] with the editing data's comments `head` before its art, whose page is
+/// `page_of` the 200 × 100 pt page it draws on (other boxes, more entries).
+fn half_outlined_ai_on(story: Option<&str>, more: usize, type_content: &str, head: &str, page_of: impl FnOnce(PdfPage) -> PdfPage) -> Vec<u8> {
     let text = |story: u32| format!("/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n{story} /StoryIndex ,\n;\n");
     let texts: String = std::iter::once(text(0)).chain((0..more).map(|_| text(99))).collect();
     let mut body =
-        format!("%AI3_TemplateBox: 100 50 100 50\n{}", ai::layer("Art", &format!("0.5 g\n{}f\n{texts}", ai::rect(120.0, 20.0, 160.0, 60.0))));
+        format!("{head}%AI3_TemplateBox: 100 50 100 50\n{}", ai::layer("Art", &format!("0.5 g\n{}f\n{texts}", ai::rect(120.0, 20.0, 160.0, 60.0))));
     if let Some(story) = story {
         // The story's one line starts at the canvas center (8191.5, the template box's center) moved
         // to (14, 65): its y runs down the page.
@@ -1255,7 +1261,7 @@ fn half_outlined_ai(story: Option<&str>, more: usize, type_content: &str) -> Vec
     };
     let cmap = "begincmap\n1 begincodespacerange\n<00> <FF>\nendcodespacerange\n1 beginbfchar\n<41> <FFFD>\nendbfchar\nendcmap\n";
     pdf_with(
-        &[page],
+        &[page_of(page)],
         &[&format!("<< /Length {} >>\nstream\n{data}\nendstream", data.len()), &format!("<< /Length {} >>\nstream\n{cmap}endstream", cmap.len())],
         None,
     )
@@ -1287,6 +1293,12 @@ fn texts(s: &Session) -> Vec<String> {
 /// (art x 10 to 90 and 110 to 190, y 10 to 90), then a band across the first frame (y 30 to 70),
 /// made a wrap object with no offset when `wrap` is set.
 fn wrapped_thread_ai(wrap: bool) -> Vec<u8> {
+    ai::ai(&wrapped_thread_data(wrap.then_some(0.0)), PLACEHOLDER)
+}
+
+/// The editing data of [`wrapped_thread_ai`], compressed, with the band a wrap object of `offset`
+/// when one is given.
+fn wrapped_thread_data(offset: Option<f64>) -> Vec<u8> {
     // The template box is centred at (100, 50), the canvas centre 8191.5: y runs down the canvas.
     let canvas = |x: f64, y: f64| (x + 8091.5, 8241.5 - y);
     let rect = |x0: f64, y0: f64, x1: f64, y1: f64| {
@@ -1306,14 +1318,47 @@ fn wrapped_thread_ai(wrap: bool) -> Vec<u8> {
     );
     let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
     let frame = |f: u32| format!("/AI11Text :\n0 /FreeUndo ,\n{f} /FrameIndex ,\n0 /StoryIndex ,\n;\n");
-    let dict = if wrap { "%_/ArtDictionary :\n%_0 /Real (AI11TextWrapOffset) ,\n%_0 /Bool (AI11TextWrapInvert) ,\n%_;\n%_\n" } else { "" };
+    let dict = offset
+        .map(|o| format!("%_/ArtDictionary :\n%_{o} /Real (AI11TextWrapOffset) ,\n%_0 /Bool (AI11TextWrapInvert) ,\n%_;\n%_\n"))
+        .unwrap_or_default();
     let art = format!("{}{}0.5 g\n{}f\n{dict}", frame(0), frame(1), ai::rect(10.0, 30.0, 90.0, 70.0));
     let body = format!(
         "%AI3_TemplateBox: 100 50 100 50\n{}%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n",
         ai::layer("Art", &art),
         lines.join("\n")
     );
-    ai::ai(&compressed(ai::editing_data(200.0, 100.0, &body).as_bytes()), PLACEHOLDER)
+    compressed(ai::editing_data(200.0, 100.0, &body).as_bytes())
+}
+
+/// The wrap offset of the first frame of `doc`'s threaded type, as its text resolves it.
+fn first_frame_wrap_offset(doc: &vectorcraft_doc::Document) -> f64 {
+    match &doc.node(doc.text_threads[0][0]).unwrap().kind {
+        NodeKind::Text(t) => t.wrap[0].wrap.offset,
+        _ => panic!("area type"),
+    }
+}
+
+/// A `.ai` in units of 10 points whose threaded area type flows around a wrap object of a 2 unit
+/// offset opens with the type flowing round it 20 pt off, its PDF part read or not, and when its
+/// PDF part can't be read. The default graphic styles of a file without its own aren't scaled.
+#[test]
+fn wrapped_type_in_units_of_ten_points_flows_round_the_wrap_at_its_size_in_points() {
+    let private = wrapped_thread_data(Some(2.0));
+    let page = "0.5 g 10 30 80 40 re f";
+    let refused = ai::ai_with_entries_and_content(&private, page, "/UserUnit 10", REFUSED_CONTENT);
+    // On the trim boxes the PDF part is imported, and the refused stream stops it.
+    let trim = LoadOptions { crop: vectorcraft_pdf::CropTo::Trim, ..Default::default() };
+    let files = [(ai::ai_with(&private, page, "/UserUnit 10"), LoadOptions::default()), (refused, trim)];
+    for (file, opts) in &files {
+        let loaded = load_with("thread.ai", file, opts).unwrap();
+        assert!(loaded.editing_data, "{:?}", loaded.warnings);
+        assert!((first_frame_wrap_offset(&loaded.doc) - 20.0).abs() < 0.01, "{:?}", loaded.warnings);
+    }
+    let loaded = load_with("thread.ai", &files[1].0, &files[1].1).unwrap();
+    assert!(loaded.warnings.iter().any(|w| w.starts_with("the PDF part couldn't be read")), "{:?}", loaded.warnings);
+    // The file has no graphic styles of its own: the default ones aren't scaled either way.
+    let read = load_with("thread.ai", &files[0].0, &files[0].1).unwrap();
+    assert_eq!(loaded.doc.graphic_styles, read.doc.graphic_styles);
 }
 
 /// Threaded area type below a wrap object flows around it when the file opens: the text the wrap
@@ -1356,6 +1401,77 @@ fn type_from_the_text_document_opens_without_the_pdf_parts_note_on_outlines() {
     assert_eq!(texts(&s), ["first draft", "notes"], "{r}");
     assert_eq!(outlines_notes(&r), Vec::<String>::new(), "{r}");
     assert!(!r["warnings"].as_array().unwrap().contains(&without_outlines_note(1)), "{r}");
+}
+
+/// A `.ai` whose text document makes all of its type, with nothing unread, opens from its layers
+/// without its PDF part being imported: a page that draws more than the layers isn't compared with
+/// them. On its trim box it takes the pages' bleed, and pages in units of 10 points draw it ten
+/// times as large, as when its PDF part is imported. With type the text document can't make,
+/// editing data on a large canvas, its type asked for as outlines, another box or pages picked, the
+/// PDF part is imported as before.
+#[test]
+fn type_all_from_the_text_document_opens_without_importing_the_pdf_part() {
+    let line = half_outlined_line(65.0, "rst draft", 0);
+    // The page draws a red square the layers don't have.
+    let differs = half_outlined_ai(Some("first draft"), 0, &format!("{line} 1 0 0 rg 20 20 30 30 re f"));
+    let mut s = Session::new();
+    let before = vectorcraft_pdf::imports_of(&differs);
+    let loaded = load_with("draft.ai", &differs, &LoadOptions::default()).unwrap();
+    assert_eq!(vectorcraft_pdf::imports_of(&differs), before, "{:?}", loaded.warnings);
+    assert!(loaded.editing_data, "{:?}", loaded.warnings);
+    assert!(!loaded.warnings.iter().any(|w| w.contains("differently")), "{:?}", loaded.warnings);
+    let r = open(&mut s, "draft.ai", &differs, json!({})).unwrap();
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
+    assert_eq!(texts(&s), ["first draft"], "{r}");
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 2, "the square and the type, without the page's red square: {r}");
+    // A 10 pt bleed round the trim box, the art drawn in the trim box.
+    let bled = half_outlined_ai_on(Some("first draft"), 0, &line, "", |p| PdfPage {
+        media: [0.0, 0.0, 220.0, 120.0],
+        bleed: Some([0.0, 0.0, 220.0, 120.0]),
+        trim: Some([10.0, 10.0, 210.0, 110.0]),
+        content: format!("1 0 0 1 10 10 cm {}", p.content),
+        ..p
+    });
+    let before = vectorcraft_pdf::imports_of(&bled);
+    let loaded = load_with("bled.ai", &bled, &LoadOptions::default()).unwrap();
+    assert_eq!(vectorcraft_pdf::imports_of(&bled), before);
+    assert_eq!(loaded.doc.setup.bleed, [10.0; 4]);
+    // Pages of 10 pt units.
+    let large = half_outlined_ai_on(Some("first draft"), 0, &line, "", |p| PdfPage { entries: format!("{} /UserUnit 10", p.entries), ..p });
+    let before = vectorcraft_pdf::imports_of(&large);
+    let loaded = load_with("large.ai", &large, &LoadOptions::default()).unwrap();
+    assert_eq!(vectorcraft_pdf::imports_of(&large), before);
+    let board = loaded.doc.artboards[0].rect;
+    assert!((board.width() - 2000.0).abs() < 0.01 && (board.height() - 1000.0).abs() < 0.01, "{board:?}");
+    // Opened on the trim boxes with the PDF part imported and compared, as before, both files have
+    // the same artboards and bleed.
+    for file in [&bled, &large] {
+        let alone = load_with("draft.ai", file, &LoadOptions::default()).unwrap();
+        let compared = load_with("draft.ai", file, &LoadOptions { crop: vectorcraft_pdf::CropTo::Trim, ..Default::default() }).unwrap();
+        assert!(compared.editing_data, "{:?}", compared.warnings);
+        let boards = |d: &vectorcraft_doc::Document| d.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+        assert_eq!(boards(&alone.doc), boards(&compared.doc));
+        assert_eq!(alone.doc.setup.bleed, compared.doc.setup.bleed);
+        assert_eq!(names(&alone.doc.layers), names(&compared.doc.layers));
+        // The file has no graphic styles of its own: the default ones aren't scaled.
+        assert_eq!(alone.doc.graphic_styles, compared.doc.graphic_styles);
+    }
+    // The PDF part is imported, once.
+    let unmade = half_outlined_ai(Some("first draft"), 1, &line);
+    // Editing data on a large canvas reads at its own scale when the file has no PDF part.
+    let canvas = half_outlined_ai_on(Some("first draft"), 0, &line, "%AI24_LargeCanvasScale: 2\n", |p| p);
+    let cases = [
+        (&unmade, LoadOptions::default()),
+        (&canvas, LoadOptions::default()),
+        (&differs, LoadOptions { text_as: vectorcraft_pdf::TextAs::Outlines, ..Default::default() }),
+        (&differs, LoadOptions { crop: vectorcraft_pdf::CropTo::Trim, ..Default::default() }),
+        (&differs, LoadOptions { pages: Some("1".into()), ..Default::default() }),
+    ];
+    for (file, opts) in cases {
+        let before = vectorcraft_pdf::imports_of(file);
+        load_with("draft.ai", file, &opts).unwrap();
+        assert_eq!(vectorcraft_pdf::imports_of(file) - before, 1, "{opts:?}");
+    }
 }
 
 /// A text object that takes the page's type lacks the glyphs next to it that the page kept as
