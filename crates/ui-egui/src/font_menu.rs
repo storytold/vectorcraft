@@ -1214,6 +1214,12 @@ fn font_command(app: &VectorcraftApp, family: &str, style: Option<&str>) -> (&'s
     if let Some(s) = style {
         p["style"] = json!(s);
     }
+    // After Select All in threaded text: every frame of the story.
+    if let Some(first) = crate::panels::character::text_story(app).and_then(|story| story.first().copied()) {
+        p["id"] = json!(first.0);
+        p["story"] = json!(true);
+        return ("text.setRangeStyle", p);
+    }
     match crate::panels::character::text_editing(app) {
         Some((id, a, b)) => {
             p["id"] = json!(id.0);

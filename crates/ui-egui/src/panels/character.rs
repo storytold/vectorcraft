@@ -141,7 +141,15 @@ fn shared_styles<T: PartialEq>(
             let para = t.plain_text().get(..a).map_or(0, |s| s.bytes().filter(|&c| c == b'\n').count());
             return f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
         }
-        each_paragraph_run(t, Some((a, b)), |para, style, inline| acc.add(f(t, para, style, inline)));
+        match text_story(app) {
+            // After Select All in threaded text: all the text of every frame of the story.
+            Some(story) => {
+                for t in story.into_iter().filter_map(text) {
+                    each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
+                }
+            }
+            None => each_paragraph_run(t, Some((a, b)), |para, style, inline| acc.add(f(t, para, style, inline))),
+        }
     } else {
         for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
             n.walk(&mut |c| {
@@ -227,6 +235,9 @@ pub(crate) fn format(app: &mut VectorcraftApp, p: Value) {
 /// `text.setFormat` on the selected text objects.
 pub(crate) fn run_format(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
     let Some((id, a, b)) = text_editing(app) else { return app.run("text.setFormat", p) };
+    if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
+        return story_style(app, first, p);
+    }
     end_typing(app);
     p["id"] = json!(id.0);
     if b > a {
@@ -451,6 +462,10 @@ pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String
 /// nothing is selected). Does nothing unless the Type tool edits text.
 pub(crate) fn range_style(app: &mut VectorcraftApp, p: Value) {
     let Some((id, a, b)) = text_editing(app) else { return };
+    if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
+        story_style(app, first, p).ok();
+        return;
+    }
     end_typing(app);
     let mut q = p;
     q["id"] = json!(id.0);
@@ -475,6 +490,31 @@ pub(crate) fn text_editing(app: &VectorcraftApp) -> Option<(NodeId, usize, usize
     Some((id, g("start"), g("end")))
 }
 
+/// The frames of the threaded story whose whole text the Type tool has selected after Select All,
+/// in thread order; `None` when its selection is in one type object.
+pub(crate) fn text_story(app: &VectorcraftApp) -> Option<Vec<NodeId>> {
+    let o = app.session.tool_options();
+    let st = app.session.active()?;
+    let ids: Vec<NodeId> = o
+        .get("story")?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_u64)
+        .map(NodeId)
+        .filter(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))))
+        .collect();
+    (ids.len() >= 2).then_some(ids)
+}
+
+/// `text.setRangeStyle` with `p` on all the text of every frame of the story that `first` is a
+/// frame of, as one undo step.
+fn story_style(app: &mut VectorcraftApp, first: NodeId, mut p: Value) -> Result<Value, String> {
+    end_typing(app);
+    p["id"] = json!(first.0);
+    p["story"] = json!(true);
+    app.run("text.setRangeStyle", p)
+}
+
 /// Close the Type tool's typing session (one undo step) before another command edits the text.
 pub(crate) fn end_typing(app: &mut VectorcraftApp) {
     if app.session.tool_options().get("typing").and_then(Value::as_bool) == Some(true) {
@@ -495,7 +535,9 @@ fn text_copy(app: &mut VectorcraftApp) -> bool {
     if a == b {
         return false;
     }
-    let Ok(r) = app.session.execute("text.getRange", &json!({"id": id.0, "start": a, "end": b})) else { return false };
+    // After Select All in threaded text: the whole story.
+    let range = if text_story(app).is_some() { json!({"id": id.0, "story": true}) } else { json!({"id": id.0, "start": a, "end": b}) };
+    let Ok(r) = app.session.execute("text.getRange", &range) else { return false };
     let runs = r["runs"].clone();
     app.session.set_tool_option("copy", &runs);
     *CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()) = Some(runs.clone());
@@ -893,7 +935,11 @@ fn axes_cmd(app: &mut VectorcraftApp, axes: Value, phase: widgets::Live) {
         Some((id, a, b)) => {
             end_typing(app);
             let mut q = json!({"id": id.0, "fontAxes": axes});
-            if b > a {
+            // After Select All in threaded text: every frame of the story.
+            if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
+                q["id"] = json!(first.0);
+                q["story"] = json!(true);
+            } else if b > a {
                 q["start"] = json!(a);
                 q["end"] = json!(b);
             }

@@ -87,7 +87,11 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let mut targets = json!({});
     if let Some((id, a, b)) = crate::panels::character::text_editing(app) {
         crate::panels::character::end_typing(app);
-        targets = json!({"ids": [id.0], "start": a, "end": b});
+        targets = match crate::panels::character::text_story(app) {
+            // After Select All in threaded text: every paragraph of every frame.
+            Some(story) => json!({"ids": story.iter().map(|f| f.0).collect::<Vec<_>>()}),
+            None => json!({"ids": [id.0], "start": a, "end": b}),
+        };
     }
     let mut values = Map::new();
     for (_, prefix, _) in ROWS {

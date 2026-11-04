@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "All",
             ["Select"],
             Some("Cmd+A"),
-            "{} → {count}; while the Type tool edits text, all of that text instead → {editing, start, end} (byte offsets)",
+            "{} → {count}; while the Type tool edits text, all of that text instead → {editing, start, end} (byte offsets); in a frame of threaded text, the whole story: the tool edits the thread's first frame that holds text (selected when it was not) with the text of every frame selected → {editing, start, end, story: [id…] (the frames in thread order)}",
             has_doc,
             all
         ),
@@ -271,6 +271,31 @@ fn all(s: &mut Session, _: &Value) -> Result<Value> {
     // While the Type tool edits text, Select All takes all of that text and leaves the art
     // selection as it is (Illustrator: text cursor in a text object).
     if s.tool_wants_text() {
+        // In a frame of threaded text, the whole story: the tool edits its first frame that holds
+        // text with every frame's text selected, and that frame is selected when it was not.
+        let editing = s.tool_options()["editing"].as_u64().map(NodeId);
+        let story = match editing {
+            Some(id) => super::threads::story_of(&s.doc()?.doc, id),
+            None => vec![],
+        };
+        if let Some(&first) = story.first() {
+            let d = &s.doc()?.doc;
+            let holds_text = |f: &NodeId| matches!(d.node(*f).map(|n| &n.kind), Some(NodeKind::Text(t)) if t.runs.iter().any(|r| !r.text.is_empty()));
+            let first = story.iter().copied().find(holds_text).unwrap_or(first);
+            super::textedit::editing_range(s)?;
+            let ids: Vec<u64> = story.iter().map(|id| id.0).collect();
+            s.set_tool_option("selectAll", &json!({ "story": ids, "editing": first.0 }));
+            let st = s.doc()?;
+            let selected = std::iter::successors(Some(first), |c| st.doc.parent_of(*c)).any(|c| st.selection.contains(c));
+            if !selected {
+                s.select(|_, sel| sel.set([first]))?;
+            }
+            let end = match s.doc()?.doc.node(first).map(|n| &n.kind) {
+                Some(NodeKind::Text(t)) => t.plain_text().len(),
+                _ => 0,
+            };
+            return Ok(json!({ "editing": first.0, "start": 0, "end": end, "story": ids }));
+        }
         s.set_tool_option("selectAll", &json!(true));
         let editing = s.tool_options()["editing"].clone();
         let id = editing.as_u64().map(NodeId);

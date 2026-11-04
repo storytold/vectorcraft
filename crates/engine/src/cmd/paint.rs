@@ -433,29 +433,36 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
         && let Some((id, a, b)) = super::textedit::editing_range(s)?
         && a != b
     {
+        // After Select All in threaded text, every frame's text takes it.
+        let story = super::textedit::editing_story(s);
+        let ranges: Vec<(NodeId, usize, usize)> =
+            if story.is_empty() { vec![(id, a, b)] } else { story.iter().map(|f| (*f, 0, usize::MAX)).collect() };
+        let ids: Vec<NodeId> = ranges.iter().map(|(f, _, _)| *f).collect();
         // When the type comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
         super::overprint::edit_counted(s, if fill { "Fill Color" } else { "Stroke Color" }, |d| {
-            let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
-            let (xf, lb) = (t.xf, t.local_bounds());
-            vectorcraft_text::edit::style_range(&mut t.runs, a, b, |st| {
-                if fill {
-                    st.fill = place_run_paint(&paint, p, xf, lb);
-                } else {
-                    if !paint.is_none() {
-                        run_stroke_weight(st);
+            for &(id, a, b) in &ranges {
+                let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+                let (xf, lb) = (t.xf, t.local_bounds());
+                vectorcraft_text::edit::style_range(&mut t.runs, a, b, |st| {
+                    if fill {
+                        st.fill = place_run_paint(&paint, p, xf, lb);
+                    } else {
+                        if !paint.is_none() {
+                            run_stroke_weight(st);
+                        }
+                        st.stroke = place_run_paint(&paint, p, xf, vectorcraft_doc::appearance::stroke_paint_bounds(lb, st.stroke_width));
                     }
-                    st.stroke = place_run_paint(&paint, p, xf, vectorcraft_doc::appearance::stroke_paint_bounds(lb, st.stroke_width));
-                }
-            });
-            super::typecmd::refresh_bounds(t);
-            Ok(super::appearance::count_changed(d, &before, &[id]))
+                });
+                super::typecmd::refresh_bounds(t);
+            }
+            Ok(super::appearance::count_changed(d, &before, &ids))
         })?;
         if focus {
             s.fill_active = fill;
         }
         s.remember_paint(&paint);
-        return Ok(json!({"objects": 1}));
+        return Ok(json!({"objects": ids.len()}));
     }
     // Resolve the requested targets before mutating defaults or the active proxy.
     let item = item_target(s, p, cmd)?.of_kind(s, fill);
