@@ -51,14 +51,14 @@ const fn spec(id: &'static str, label: &'static str, menu: &'static [&'static st
 }
 
 macro_rules! style_cmds {
-    ($kind:expr, $p:literal, $menu:literal, $what:literal) => {
+    ($kind:expr, $p:literal, $menu:literal, $what:literal, $bounds:literal) => {
         vec![
             spec(concat!($p, ".list"), concat!($what, " Styles"), &[], "{} → {styles: [{name, attrs, uses}]}", |s, _| list(s, $kind), false),
             spec(
                 concat!($p, ".new"),
                 concat!("New ", $what, " Style"),
                 &["Window", "Type", $menu],
-                "{name? (trimmed, as rename trims `to`), attrs?: {…} (default: selected text), id?, start?: byte, end?: byte} → {name}; a nonempty character range samples its first selected character; start alone keeps insertion affinity; paragraph styles sample start",
+                concat!("{name? (trimmed, as rename trims `to`), attrs?: {…} (default: selected text), id?, start?: byte, end?: byte} → {name}; a nonempty character range samples its first selected character; start alone keeps insertion affinity; paragraph styles sample start", $bounds),
                 |s, p| new(s, p, $kind),
                 true,
             ),
@@ -82,7 +82,7 @@ macro_rules! style_cmds {
                 concat!($p, ".setAttrs"),
                 concat!($what, " Style Options"),
                 &[],
-                "{name, attrs: {…}} replace the style's attributes; users keep their overrides",
+                concat!("{name, attrs: {…}} replace the style's attributes; users keep their overrides", $bounds),
                 |s, p| set_attrs(s, p, $kind),
                 true,
             ),
@@ -116,16 +116,22 @@ macro_rules! style_cmds {
 }
 
 pub fn specs() -> Vec<CommandSpec> {
-    let mut v = style_cmds!(Kind::Char, "charStyle", "Character Styles", "Character");
+    let mut v = style_cmds!(
+        Kind::Char,
+        "charStyle",
+        "Character Styles",
+        "Character",
+        "; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt"
+    );
     v.push(spec(
         "charStyle.edit",
         "Edit Character Style",
         &[],
-        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides",
+        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt",
         |s, p| edit_style(s, p, Kind::Char),
         true,
     ));
-    v.extend(style_cmds!(Kind::Para, "paraStyle", "Paragraph Styles", "Paragraph"));
+    v.extend(style_cmds!(Kind::Para, "paraStyle", "Paragraph Styles", "Paragraph", ""));
     v
 }
 
@@ -494,6 +500,22 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                 Kind::Char => {
                     let mut st = with_attrs(&CharStyle::default(), m, &c)?;
                     let changed = |key: &str| m.contains_key(key) && kept.and_then(|k| k.get(key)) != m.get(key);
+                    for (key, value, lo, hi) in
+                        [("size", st.size, 0.1, 1296.0), ("h_scale", st.h_scale, 1.0, 10000.0), ("v_scale", st.v_scale, 1.0, 10000.0)]
+                    {
+                        if changed(key) && !(lo..=hi).contains(&value) {
+                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
+                        }
+                    }
+                    if changed("leading") && st.leading.is_some_and(|value| !(0.1..=5000.0).contains(&value)) {
+                        return Err(bad(&c, "`leading` must be from 0.1 to 5000, or null for Auto"));
+                    }
+                    let shift_max = 1296.0;
+                    for (key, value) in [("baseline_shift", st.baseline_shift), ("tcyUpDown", st.tcy_up_down), ("tcyLeftRight", st.tcy_left_right)] {
+                        if changed(key) && !(-shift_max..=shift_max).contains(&value) {
+                            return Err(bad(&c, format!("`{key}` must be from {} to {shift_max}", -shift_max)));
+                        }
+                    }
                     // A language of the list, stored as its tag (as text.setFormat takes it).
                     if let Some(l) = &st.language
                         && kept.and_then(|k| k.get("language")) != m.get("language")

@@ -295,6 +295,9 @@ font-technology	Variable	Variabili
 	Basic Latin	Latino di base
 	Batch	Elaborazione batch
 	Begin Recording	Avvia registrazione
+	Exclude from playback	Escludi dall'esecuzione
+	Include in playback	Includi nell'esecuzione
+	Include Action Steps	Includi passaggi azione
 	Bend:	Curvatura:
 	Bevel Join	Unione smussata
 	Bitmap	Bitmap
@@ -1671,6 +1674,10 @@ file-filter	Templates	Modelli
 	Join Tool	Strumento Unisci
 	Justification…	Giustificazione…
 	Justify all lines	Giustifica tutte le righe
+	Align Top	Allinea in alto
+	Align Center	Allinea al centro verticalmente
+	Align Bottom	Allinea in basso
+	Justify Vertically	Giustifica verticalmente
 	Justify with last line aligned center	Giustifica con l'ultima riga centrata
 	Justify with last line aligned left	Giustifica con l'ultima riga allineata a sinistra
 	Justify with last line aligned right	Giustifica con l'ultima riga allineata a destra
@@ -1793,6 +1800,7 @@ file-filter	Templates	Modelli
 	Ligatures are off while the text is tracked.	Le legature sono disattivate quando al testo è applicata una spaziatura caratteri.
 	Light	Chiaro
 	Light Blue	Azzurro
+	Light Red	Rosso chiaro
 	Lighten	Schiarisci
 	Lightness	Luminosità
 	Limit Color Guide to Library	Limita guida colori alla libreria
@@ -2011,6 +2019,8 @@ file-filter	Templates	Modelli
 	Name:	Nome:
 	Navigate	Naviga
 	Navigator	Navigatore
+	Navigator Panel Options	Opzioni pannello Navigatore
+	Draw Dashed Lines as Solid Lines	Disegna le linee tratteggiate come linee continue
 	Needs the desktop app	Richiede l'app desktop
 	Neutral Gradients	Sfumature neutre
 	New	Nuovo
@@ -2136,6 +2146,11 @@ file-filter	Templates	Modelli
 	New Toolbar	Nuova barra degli strumenti
 	Show Toolbar	Mostra barra degli strumenti
 	List Toolbars	Elenco barre degli strumenti
+	Manage Toolbars…	Gestisci barre degli strumenti…
+	Manage Toolbars	Gestisci barre degli strumenti
+	Rename Toolbar	Rinomina barra degli strumenti
+	Duplicate Toolbar	Duplica barra degli strumenti
+	Delete Toolbar	Elimina barra degli strumenti
 	New {kind} Style…	Nuovo stile {kind}…
 	New…	Nuovo…
 	Next	Successivo
@@ -3617,6 +3632,7 @@ digits	Malayalam	Malayalam
 	Use Artboards	Usa tavole da disegno
 	Use Black Point Compensation	Usa compensazione punto nero
 	Use Compression	Usa compressione
+	Include Editing Data for Other Apps	Includi dati di modifica per altre app
 	Use document bleed settings	Usa impostazioni abbondanza del documento
 	Use Even-Odd Fill Rule	Usa regola di riempimento pari-dispari
 	Use Japanese Crop Marks	Usa segni di ritaglio giapponesi
@@ -4038,7 +4054,7 @@ axis	Both	Entrambi
 @msg	Save for Web: the image is empty	Salva per il web: l'immagine è vuota
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Salva scrive {_1}, non {_2}: usa document.export per gli altri formati
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Salva scrive {_1}, non {_2}: usa file.saveAsTemplate per scriverlo
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 scrive file .ai tradizionali; un modello .ait è sempre compatibile PDF
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 scrive file .ai tradizionali, non modelli .ait
 @msg	Saved recovery data for {title}	Dati di recupero salvati per {title}
 @msg	Saved to User Defined: {_1}	Salvato in Definito dall'utente: {_1}
 @msg	Saved {path}	Salvato {path}
@@ -4681,6 +4697,7 @@ axis	Both	Entrambi
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	contengono {_1}, che VectorCraft non vi legge ancora
 @msg	its objects are nested too deeply	i loro oggetti sono annidati troppo in profondità
 @msg	its section ending with `%{end}` doesn't end	la loro sezione che termina con `%{end}` non termina
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	i pennelli che VectorCraft non sa ancora leggere sono stati esclusi dal pannello Pennelli ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	gli oggetti con più riempimenti o tratti, effetti o pennelli sono stati importati come appaiono disegnati ({_1}): il loro aspetto non è ancora modificabile
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	la sfumatura “{name}” non è definita nel file: la sostituisce un colore pieno
 @msg	an image VectorCraft can't read was left out	un'immagine che VectorCraft non può leggere è stata omessa
@@ -5157,6 +5174,10 @@ lighting	Light	Luce
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	non è stato applicato nulla del set di dati {name}: nessun oggetto è associato a una variabile per cui ha un valore
 @msg	no bound object reports a value (locked objects and embedded images report none)	nessun oggetto associato restituisce un valore (gli oggetti bloccati e le immagini incorporate non ne restituiscono)
 @msg	the action has no steps	l'azione non ha passaggi
+@msg	the action has no included steps	l'azione non ha passaggi inclusi
+@msg	no such action step	passaggio dell'azione inesistente
+@msg	included must be true or false	included deve essere true o false
+@msg	others must be true or false	others deve essere true o false
 
 # User Interface › Accent Color
 	Accent Color	Colore di risalto
@@ -5184,6 +5205,10 @@ lighting	Light	Luce
 	Movie Clip	Clip filmato
 @msg	name is empty	il nome è vuoto
 @msg	an action is already recording	è già in corso la registrazione di un’azione
+@msg	an action is already playing	è già in corso la riproduzione di un’azione
+@msg	the action stopped playing: its document is no longer active	la riproduzione dell’azione si è interrotta: il suo documento non è più attivo
+@msg	speed must be accelerated, step or pause	speed deve essere accelerated, step o pause
+@msg	seconds must be a whole number from 1 to 60	seconds deve essere un numero intero da 1 a 60
 @msg	no such function key	tasto funzione inesistente
 @msg	no such color	colore inesistente
 @msg	{_1} cannot be used on Windows	{_1} non può essere usato su Windows
@@ -5270,6 +5295,7 @@ lighting	Light	Luce
 	Effect Gallery	Galleria effetti
 	Filters	Filtri
 	Select artwork to apply effects	Seleziona la grafica a cui applicare gli effetti
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	non tutti i collegamenti delle variabili del file sono stati letti (collegamenti saltati: {_1}): quegli oggetti non sono collegati alle loro variabili
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	la libreria di variabili del file è stata letta solo in parte (voci saltate: {_1}): il pannello Variabili elenca il resto
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	impossibile leggere la libreria di variabili del file: il pannello Variabili non la elenca
 @msg	a variable of unknown kind can't be bound to objects	una variabile di tipo sconosciuto non può essere associata a oggetti
@@ -5363,6 +5389,11 @@ axis	Y Axis	Asse Y
 	Set Options	Opzioni set
 	Action Options…	Opzioni azione…
 	Action Options	Opzioni azione
+	Playback Options…	Opzioni di riproduzione…
+	Playback Options	Opzioni di riproduzione
+	Accelerated	Accelerata
+	Step by Step	Passo per passo
+	Pause For	Pausa di
 	Rename Action	Rinomina azione
 	New Action…	Nuova azione…
 	New Action	Nuova azione
@@ -5646,6 +5677,7 @@ anchor	Points:	Punti:
 	Character Color	Colore carattere
 	OpenType Features	Funzioni OpenType
 	Stylistic Sets	Set stilistici
+	Set {n}	Set {n}
 @msg	features lists at most {max} tags	features contiene al massimo {max} tag
 @msg	unknown OpenType feature `{t}`	funzione OpenType sconosciuta `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve essere un numero maggiore di 0 e al massimo {max}
@@ -5797,6 +5829,7 @@ breakText	Glyphs	Glifi
 	Gap 5	Spazio 5
 
 @msg	{_1}: they came in as the page's art	{_1}: sono stati importati come elementi grafici della pagina
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	gli oggetti disegnati in modo diverso dalla pagina del file stesso sono stati importati come elementi grafici della pagina: {_1}
 
 @msg	You must choose a side pattern.	Devi scegliere un motivo laterale.
 @msg	invalid pattern tile choice	scelta della tessera motivo non valida
@@ -5858,6 +5891,11 @@ breakText	Glyphs	Glifi
 	Export All Open Documents as SVG	Esporta tutti i documenti aperti come SVG
 @msgplural	Exported {n} document|Exported {n} documents	Esportato {n} documento|Esportati {n} documenti
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Esportato {n} documento; {title} non è stato scritto: {error}|Esportati {n} documenti; {title} non è stato scritto: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Ricalca cartella in batch
+@msgplural	Traced {n} image|Traced {n} images	Ricalcata {n} immagine|Ricalcate {n} immagini
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	Impossibile ricalcare {n} immagine|Impossibile ricalcare {n} immagini
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Ricalcata {n} immagine; non ricalcate: {failed}|Ricalcate {n} immagini; non ricalcate: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Tipo di simbolo:
 	Dynamic Symbol	Simbolo dinamico

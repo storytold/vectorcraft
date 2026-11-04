@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, method?: classic|perceptual (as paint.editGradient; default classic), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), dither?: bool (linear and radial fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear or radial `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white) → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, method?: classic|perceptual (as paint.editGradient; default classic), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), dither?: bool (linear and radial fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear or radial `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white) → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -433,29 +433,36 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
         && let Some((id, a, b)) = super::textedit::editing_range(s)?
         && a != b
     {
+        // After Select All in threaded text, every frame's text takes it.
+        let story = super::textedit::editing_story(s);
+        let ranges: Vec<(NodeId, usize, usize)> =
+            if story.is_empty() { vec![(id, a, b)] } else { story.iter().map(|f| (*f, 0, usize::MAX)).collect() };
+        let ids: Vec<NodeId> = ranges.iter().map(|(f, _, _)| *f).collect();
         // When the type comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
         super::overprint::edit_counted(s, if fill { "Fill Color" } else { "Stroke Color" }, |d| {
-            let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
-            let (xf, lb) = (t.xf, t.local_bounds());
-            vectorcraft_text::edit::style_range(&mut t.runs, a, b, |st| {
-                if fill {
-                    st.fill = place_run_paint(&paint, p, xf, lb);
-                } else {
-                    if !paint.is_none() {
-                        run_stroke_weight(st);
+            for &(id, a, b) in &ranges {
+                let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+                let (xf, lb) = (t.xf, t.local_bounds());
+                vectorcraft_text::edit::style_range(&mut t.runs, a, b, |st| {
+                    if fill {
+                        st.fill = place_run_paint(&paint, p, xf, lb);
+                    } else {
+                        if !paint.is_none() {
+                            run_stroke_weight(st);
+                        }
+                        st.stroke = place_run_paint(&paint, p, xf, vectorcraft_doc::appearance::stroke_paint_bounds(lb, st.stroke_width));
                     }
-                    st.stroke = place_run_paint(&paint, p, xf, vectorcraft_doc::appearance::stroke_paint_bounds(lb, st.stroke_width));
-                }
-            });
-            super::typecmd::refresh_bounds(t);
-            Ok(super::appearance::count_changed(d, &before, &[id]))
+                });
+                super::typecmd::refresh_bounds(t);
+            }
+            Ok(super::appearance::count_changed(d, &before, &ids))
         })?;
         if focus {
             s.fill_active = fill;
         }
         s.remember_paint(&paint);
-        return Ok(json!({"objects": 1}));
+        return Ok(json!({"objects": ids.len()}));
     }
     // Resolve the requested targets before mutating defaults or the active proxy.
     let item = item_target(s, p, cmd)?.of_kind(s, fill);

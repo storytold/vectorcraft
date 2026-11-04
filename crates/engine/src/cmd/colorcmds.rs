@@ -116,7 +116,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Color Guide",
             [],
             None,
-            "{color, rule: complementary|complementary2|splitComplementary|leftComplement|rightComplement|analogous|analogous2|monochromatic|shades|triad|triad2|triad3|tetrad|tetrad2|tetrad3|compound|compound2|highContrast|highContrast2|highContrast3|pentagram (or its label), steps?: 1..20 (4), variation?: \"tintsShades\"|\"warmCool\"|\"vividMuted\", amount?: 0..100 (50; how far the outermost steps go), limitTo?: swatch library id or name; or \"document\" (the document's swatches): every colour snaps to its nearest colour there (ΔE 2000)} the Color Guide for a base colour → {rule, colors: [\"#rrggbb\", the base first], grid: [per colour, 2·steps+1 variations from shades/cool/muted to tints/warm/vivid with the colour itself in the centre]}",
+            "{color (#rrggbbaa and #rgba are refused), rule: complementary|complementary2|splitComplementary|leftComplement|rightComplement|analogous|analogous2|monochromatic|shades|triad|triad2|triad3|tetrad|tetrad2|tetrad3|compound|compound2|highContrast|highContrast2|highContrast3|pentagram (or its label), steps?: 1..20 (4), variation?: \"tintsShades\"|\"warmCool\"|\"vividMuted\", amount?: 0..100 (50; how far the outermost steps go), limitTo?: swatch library id or name; or \"document\" (the document's swatches): every colour snaps to its nearest colour there (ΔE 2000)} the Color Guide for a base colour → {rule, colors: [\"#rrggbb\", the base first], grid: [per colour, 2·steps+1 variations from shades/cool/muted to tints/warm/vivid with the colour itself in the centre]}",
             always,
             harmony
         ),

@@ -454,13 +454,7 @@ fn bounded_field(
     let armed = take_armed_focus(ui, &id);
     let id = id_with(ui.scope_id(), id);
     let show = |value: f64| field_text(value, suffix, decimals);
-    // The suffix (and %, °) may follow any operand: `45*2°`, `50% / 2`.
-    let read = |buf: &str| {
-        let suffix = suffix.trim();
-        let buf = decimal_point(buf);
-        let bare = if suffix.is_empty() { buf.to_string() } else { buf.replace(suffix, "") };
-        vectorcraft_doc::parse_number(&bare.replace(['%', '°', '(', ')'], ""))
-    };
+    let read = |buf: &str| field_number(buf, suffix, parentheses);
     let shown = value.map(|v| if parentheses { format!("({})", show(v)) } else { show(v) }).unwrap_or_default();
     take_dialog_focus(ui, id, &shown);
     if armed {
@@ -489,6 +483,21 @@ fn bounded_field(
     } else {
         None
     }
+}
+
+/// The number text typed into a [`bounded_field`] with `suffix` reads as. The suffix, `%` and `°`
+/// may follow any operand: `45*2°`, `50% / 2`. With `parentheses` (Kerning, which shows its
+/// automatic value as `(12)`), one pair of parentheses around the whole text is dropped first, so
+/// `(12)` reads as 12. Any other parentheses are refused: `(10+5)*2` reads as nothing, not as
+/// `10+5*2`.
+pub(super) fn field_number(buf: &str, suffix: &str, parentheses: bool) -> Option<f64> {
+    let suffix = suffix.trim();
+    let buf = decimal_point(buf);
+    let bare = if suffix.is_empty() { buf.to_string() } else { buf.replace(suffix, "") };
+    let bare = bare.replace(['%', '°'], "");
+    let bare = bare.trim();
+    let bare = if parentheses { bare.strip_prefix('(').and_then(|b| b.strip_suffix(')')).unwrap_or(bare) } else { bare };
+    vectorcraft_doc::parse_number(bare)
 }
 
 /// The text [`plain_field`] shows for `value`: at most `decimals` places, without trailing zeros,

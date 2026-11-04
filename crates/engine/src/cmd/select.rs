@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "All",
             ["Select"],
             Some("Cmd+A"),
-            "{} → {count}; while the Type tool edits text, all of that text instead → {editing, start, end} (byte offsets)",
+            "{} → {count}; while the Type tool edits text, all of that text instead → {editing, start, end} (byte offsets); in a frame of threaded text, the whole story: the tool edits the thread's first frame that holds text (selected when it was not) with the text of every frame selected → {editing, start, end, story: [id…] (the frames in thread order)}",
             has_doc,
             all
         ),
@@ -98,7 +98,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select by Color",
             [],
             None,
-            "{fill?: colour, stroke?: colour (as paint.setFill's color; at least one)} select the objects whose fill (and stroke) reads as that colour in #rrggbb, as document.inspect reports colours, whatever its swatch or tint; with both, the objects that match both. No object needs to be selected first; Select > Reselect repeats it → {count}",
+            "{fill?: colour, stroke?: colour (as paint.setFill's color, #rrggbbaa and #rgba refused; at least one)} select the objects whose fill (and stroke) reads as that colour in #rrggbb, as document.inspect reports colours, whatever its swatch or tint; with both, the objects that match both. No object needs to be selected first; Select > Reselect repeats it → {count}",
             has_doc,
             select_color
         ),
@@ -107,7 +107,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill Color",
             ["Select", "Same"],
             None,
-            "{} the objects filled with the first selected object's fill colour (any tint of its global or spot swatch, the same tint with prefs selectSameTintPercent); a member path of a compound path selected first compares as its compound path, except in isolation mode inside that compound path; from a Live Paint face, the faces of its Live Paint group only, and from any other object, no Live Paint face",
+            "{} the objects filled with the first selected object's fill colour (any tint of its global or spot swatch, the same tint with prefs selectSameTintPercent); a member path of a compound path selected first compares as its compound path, except in isolation mode inside that compound path; from a Live Paint face, the faces of its Live Paint group only, and from any other object, no Live Paint face; every select.same command that compares with the first selected object passes over a selected object that is hidden or locked, on a template layer or outside the isolated group",
             has_selection,
             |s, _| {
                 let tint = s.prefs.select_same_tint_percent;
@@ -267,10 +267,41 @@ pub(crate) fn is_selectable(d: &Document, iso: Option<NodeId>, locks: &LockedArt
     }
 }
 
+/// The first selected object, in selection order, that [`is_selectable`] accepts.
+pub(crate) fn first_selectable(st: &DocState) -> Option<&Node> {
+    let locks = st.doc.locked_artboards();
+    st.selection.objects.iter().find(|id| is_selectable(&st.doc, st.isolation, &locks, **id)).and_then(|id| st.doc.node(*id))
+}
+
 fn all(s: &mut Session, _: &Value) -> Result<Value> {
     // While the Type tool edits text, Select All takes all of that text and leaves the art
     // selection as it is (Illustrator: text cursor in a text object).
     if s.tool_wants_text() {
+        // In a frame of threaded text, the whole story: the tool edits its first frame that holds
+        // text with every frame's text selected, and that frame is selected when it was not.
+        let editing = s.tool_options()["editing"].as_u64().map(NodeId);
+        let story = match editing {
+            Some(id) => super::threads::story_of(&s.doc()?.doc, id),
+            None => vec![],
+        };
+        if let Some(&first) = story.first() {
+            let d = &s.doc()?.doc;
+            let holds_text = |f: &NodeId| matches!(d.node(*f).map(|n| &n.kind), Some(NodeKind::Text(t)) if t.runs.iter().any(|r| !r.text.is_empty()));
+            let first = story.iter().copied().find(holds_text).unwrap_or(first);
+            super::textedit::editing_range(s)?;
+            let ids: Vec<u64> = story.iter().map(|id| id.0).collect();
+            s.set_tool_option("selectAll", &json!({ "story": ids, "editing": first.0 }));
+            let st = s.doc()?;
+            let selected = std::iter::successors(Some(first), |c| st.doc.parent_of(*c)).any(|c| st.selection.contains(c));
+            if !selected {
+                s.select(|_, sel| sel.set([first]))?;
+            }
+            let end = match s.doc()?.doc.node(first).map(|n| &n.kind) {
+                Some(NodeKind::Text(t)) => t.plain_text().len(),
+                _ => 0,
+            };
+            return Ok(json!({ "editing": first.0, "start": 0, "end": end, "story": ids }));
+        }
         s.set_tool_option("selectAll", &json!(true));
         let editing = s.tool_options()["editing"].clone();
         let id = editing.as_u64().map(NodeId);
@@ -686,12 +717,14 @@ fn paint_reported(d: &Document, n: &Node) -> bool {
 }
 
 /// The object Select > Same compares the others with, and whether isolation mode is inside a
-/// compound path. The object is the first selected one, or its compound path when it is a member
-/// of one; in isolation mode inside a compound path it is the member path itself.
+/// compound path. The object is the first selected one that [`is_selectable`] accepts (none that is
+/// hidden, locked, on a hidden, locked or template layer, or outside the isolated group), or its
+/// compound path when it is a member of one; in isolation mode inside a compound path it is the
+/// member path itself.
 fn same_reference<'a>(st: &'a DocState, cmd: &str) -> Result<(&'a Node, bool)> {
     let compound = |n: &Node| matches!(n.kind, NodeKind::Compound { .. });
     let members = st.isolation.and_then(|i| st.doc.ancestry(i)).is_some_and(|a| a.iter().any(|i| st.doc.node(*i).is_some_and(compound)));
-    let first = st.selection.objects.first().and_then(|id| st.doc.node(*id)).ok_or_else(|| bad(cmd, "nothing selected"))?;
+    let first = first_selectable(st).ok_or_else(|| bad(cmd, "nothing selected"))?;
     let refn = match st.doc.parent_of(first.id).and_then(|p| st.doc.node(p)) {
         Some(p) if !members && compound(p) => p,
         _ => first,

@@ -270,6 +270,9 @@ font-technology	Variable	Variabel
 	Basic Latin	Lateinisch (Basis)
 	Batch	Stapelverarbeitung
 	Begin Recording	Aufzeichnung beginnen
+	Exclude from playback	Von der Wiedergabe ausschließen
+	Include in playback	In die Wiedergabe einbeziehen
+	Include Action Steps	Aktionsschritte einbeziehen
 	Bend:	Biegung:
 	Bevel Join	Abgeflachte Ecke
 	Bitmap	Bitmap
@@ -1639,6 +1642,10 @@ file-filter	Templates	Vorlagen
 	Join Tool	Zusammenfügen-Werkzeug
 	Justification…	Abstände…
 	Justify all lines	Blocksatz, alle Zeilen
+	Align Top	Oben ausrichten
+	Align Center	Mittig ausrichten
+	Align Bottom	Unten ausrichten
+	Justify Vertically	Vertikaler Blocksatz
 	Justify with last line aligned center	Blocksatz, letzte Zeile zentriert
 	Justify with last line aligned left	Blocksatz, letzte Zeile linksbündig
 	Justify with last line aligned right	Blocksatz, letzte Zeile rechtsbündig
@@ -1761,6 +1768,7 @@ file-filter	Templates	Vorlagen
 	Ligatures are off while the text is tracked.	Ligaturen sind aus, solange für den Text eine Laufweite eingestellt ist.
 	Light	Hell
 	Light Blue	Hellblau
+	Light Red	Hellrot
 	Lighten	Aufhellen
 	Lightness	Helligkeit
 	Limit Color Guide to Library	Farbhilfe auf Bibliothek beschränken
@@ -1979,6 +1987,8 @@ file-filter	Templates	Vorlagen
 	Name:	Name:
 	Navigate	Navigieren
 	Navigator	Navigator
+	Navigator Panel Options	Optionen für das Navigatorbedienfeld
+	Draw Dashed Lines as Solid Lines	Gestrichelte Linien als durchgezogene Linien zeichnen
 	Needs the desktop app	Erfordert die Desktop-App
 	Neutral Gradients	Neutrale Verläufe
 	New	Neu
@@ -2060,6 +2070,11 @@ file-filter	Templates	Vorlagen
 	New Toolbar	Neue Werkzeugleiste
 	Show Toolbar	Werkzeugleiste einblenden
 	List Toolbars	Werkzeugleisten auflisten
+	Manage Toolbars…	Werkzeugleisten verwalten…
+	Manage Toolbars	Werkzeugleisten verwalten
+	Rename Toolbar	Werkzeugleiste umbenennen
+	Duplicate Toolbar	Werkzeugleiste duplizieren
+	Delete Toolbar	Werkzeugleiste löschen
 	New {kind} Style…	Neues {kind}format…
 	New…	Neu…
 	Next	Weiter
@@ -3524,6 +3539,7 @@ effect	Points	Punkte
 	Use Artboards	Zeichenflächen verwenden
 	Use Black Point Compensation	Tiefenkompensierung verwenden
 	Use Compression	Komprimierung verwenden
+	Include Editing Data for Other Apps	Bearbeitungsdaten für andere Apps einschließen
 	Use document bleed settings	Anschnitteinstellungen des Dokuments verwenden
 	Use Even-Odd Fill Rule	Gerade-Ungerade-Füllregel verwenden
 	Use Japanese Crop Marks	Japanische Schnittmarken verwenden
@@ -3911,7 +3927,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Save for Web: the image is empty	Für Web speichern: Das Bild ist leer
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	„Speichern“ schreibt {_1}, nicht {_2}: Verwenden Sie document.export für andere Formate
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	„Speichern“ schreibt {_1}, nicht {_2}: Verwenden Sie dafür file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 schreibt ältere .ai-Dateien; eine .ait-Vorlage ist immer PDF-kompatibel
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 schreibt ältere .ai-Dateien, keine .ait-Vorlagen
 @msg	Saved recovery data for {title}	Wiederherstellungsdaten für {title} gespeichert
 @msg	Saved to User Defined: {_1}	In „Benutzerdefiniert“ gespeichert: {_1}
 @msg	Saved {path}	{path} gespeichert
@@ -4555,6 +4571,7 @@ theme	Appearance	Erscheinungsbild
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	es enthält {_1}, was VectorCraft daraus noch nicht liest
 @msg	its objects are nested too deeply	seine Objekte sind zu tief verschachtelt
 @msg	its section ending with `%{end}` doesn't end	sein Abschnitt, der mit `%{end}` enden soll, endet nicht
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	Pinsel, die VectorCraft noch nicht lesen kann, wurden im Bedienfeld „Pinsel“ ausgelassen ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	Objekte mit mehreren Flächen oder Konturen, Effekten oder Pinseln wurden so übernommen, wie sie gezeichnet aussehen ({_1}): Ihr Aussehen ist noch nicht bearbeitbar
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	der Verlauf „{name}“ ist in der Datei nicht definiert: Eine einfache Farbe steht an seiner Stelle
 @msg	an image VectorCraft can't read was left out	ein Bild, das VectorCraft nicht lesen kann, wurde ausgelassen
@@ -5122,6 +5139,10 @@ effect	Soft	Weich
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	aus dem Datensatz {name} wurde nichts angewendet: kein Objekt ist an eine Variable gebunden, für die er einen Wert hat
 @msg	no bound object reports a value (locked objects and embedded images report none)	kein gebundenes Objekt liefert einen Wert (gesperrte Objekte und eingebettete Bilder liefern keinen)
 @msg	the action has no steps	die Aktion hat keine Schritte
+@msg	the action has no included steps	die Aktion hat keine einbezogenen Schritte
+@msg	no such action step	kein solcher Aktionsschritt
+@msg	included must be true or false	included muss true oder false sein
+@msg	others must be true or false	others muss true oder false sein
 
 # User Interface › Accent Color
 	Accent Color	Akzentfarbe
@@ -5149,6 +5170,10 @@ effect	Soft	Weich
 	Movie Clip	Movieclip
 @msg	name is empty	Name ist leer
 @msg	an action is already recording	eine Aktion wird bereits aufgezeichnet
+@msg	an action is already playing	eine Aktion wird bereits abgespielt
+@msg	the action stopped playing: its document is no longer active	die Aktion wurde angehalten: ihr Dokument ist nicht mehr aktiv
+@msg	speed must be accelerated, step or pause	speed muss accelerated, step oder pause sein
+@msg	seconds must be a whole number from 1 to 60	seconds muss eine ganze Zahl von 1 bis 60 sein
 @msg	no such function key	keine solche Funktionstaste
 @msg	no such color	keine solche Farbe
 @msg	{_1} cannot be used on Windows	{_1} kann unter Windows nicht verwendet werden
@@ -5236,6 +5261,7 @@ effect	Soft	Weich
 	Effect Gallery	Effekt-Galerie
 	Filters	Filter
 	Select artwork to apply effects	Wählen Sie Grafik aus, um Effekte anzuwenden
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	nicht alle Variablenbindungen der Datei wurden gelesen (übersprungene Bindungen: {_1}): Diese Objekte sind nicht an ihre Variablen gebunden
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	die Variablenbibliothek der Datei wurde nur teilweise gelesen (übersprungene Einträge: {_1}): Das Bedienfeld „Variablen“ listet den Rest auf
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	die Variablenbibliothek der Datei konnte nicht gelesen werden: Das Bedienfeld „Variablen“ listet sie nicht auf
 @msg	a variable of unknown kind can't be bound to objects	eine Variable unbekannter Art kann nicht an Objekte gebunden werden
@@ -5329,6 +5355,11 @@ axis	Y Axis	Y-Achse
 	Set Options	Satzoptionen
 	Action Options…	Aktionsoptionen…
 	Action Options	Aktionsoptionen
+	Playback Options…	Wiedergabeoptionen…
+	Playback Options	Wiedergabeoptionen
+	Accelerated	Beschleunigt
+	Step by Step	Schrittweise
+	Pause For	Pause von
 	Rename Action	Aktion umbenennen
 	New Action…	Neue Aktion…
 	New Action	Neue Aktion
@@ -5612,6 +5643,7 @@ anchor	Points:	Punkte:
 	Character Color	Zeichenfarbe
 	OpenType Features	OpenType-Funktionen
 	Stylistic Sets	Stilsätze
+	Set {n}	Satz {n}
 @msg	features lists at most {max} tags	features enthält höchstens {max} Tags
 @msg	unknown OpenType feature `{t}`	unbekannte OpenType-Funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} muss eine Zahl über 0 und höchstens {max} sein
@@ -5763,6 +5795,7 @@ breakText	Glyphs	Glyphen
 	Gap 5	Lücke 5
 
 @msg	{_1}: they came in as the page's art	{_1}: sie wurden als Seitengrafik importiert
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	Objekte, die anders als die eigene Seite der Datei gezeichnet wurden, wurden als Seitengrafik importiert: {_1}
 
 @msg	You must choose a side pattern.	Sie müssen ein Seitenmuster auswählen.
 @msg	invalid pattern tile choice	ungültige Auswahl einer Musterkachel
@@ -5824,6 +5857,11 @@ breakText	Glyphs	Glyphen
 	Export All Open Documents as SVG	Alle geöffneten Dokumente als SVG exportieren
 @msgplural	Exported {n} document|Exported {n} documents	{n} Dokument exportiert|{n} Dokumente exportiert
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} Dokument exportiert; {title} wurde nicht geschrieben: {error}|{n} Dokumente exportiert; {title} wurde nicht geschrieben: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Ordner stapelweise nachzeichnen
+@msgplural	Traced {n} image|Traced {n} images	{n} Bild nachgezeichnet|{n} Bilder nachgezeichnet
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} Bild konnte nicht nachgezeichnet werden|{n} Bilder konnten nicht nachgezeichnet werden
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} Bild nachgezeichnet; nicht nachgezeichnet: {failed}|{n} Bilder nachgezeichnet; nicht nachgezeichnet: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symboltyp:
 	Dynamic Symbol	Dynamisches Symbol

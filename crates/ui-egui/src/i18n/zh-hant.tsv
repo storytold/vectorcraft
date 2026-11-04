@@ -254,6 +254,9 @@ font-technology	Variable	可變
 	Basic Latin	基本拉丁文
 	Batch	批次
 	Begin Recording	開始錄製
+	Exclude from playback	從播放中排除
+	Include in playback	包含在播放中
+	Include Action Steps	包含動作步驟
 	Bend:	彎曲：
 	Bevel Join	斜角
 	Bitmap	點陣圖
@@ -1635,6 +1638,10 @@ file-filter	Templates	範本
 	Join Tool	連接工具
 	Justification…	對齊設定…
 	Justify all lines	兩端對齊所有行
+	Align Top	靠上對齊
+	Align Center	垂直置中對齊
+	Align Bottom	靠下對齊
+	Justify Vertically	垂直齊行
 	Justify with last line aligned center	兩端對齊，最後一行置中
 	Justify with last line aligned left	兩端對齊，最後一行靠左
 	Justify with last line aligned right	兩端對齊，最後一行靠右
@@ -2000,6 +2007,7 @@ file-filter	Templates	範本
 @msg	graphs come in as plain art, without their data or settings	圖表以一般圖稿匯入，不保留其資料與設定
 @msg	an image whose data is cut short was left out	已略過資料不完整的影像
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	檔案中未定義漸層「{name}」：已改用單色替代
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft 尚無法讀取的筆刷未加入「筆刷」面板 ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	具有多個填色或筆畫、效果或筆刷的物件已依其繪製外觀匯入 ({_1})：其外觀目前尚無法編輯
 @msg	patterns nested too deeply are filled with mid-grey	巢狀層級過深的圖樣以中灰色填滿
 @msg	shadings of an unknown type were left out	已略過類型未知的著色
@@ -2046,6 +2054,7 @@ file-filter	Templates	範本
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	其上的圖稿與頁面的圖稿有 {_1}% 不同：仍從其編輯資料匯入
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	未讀取檔案的圖層 ({_1})：檔案以其頁面匯入，位於單一圖層中
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	未從檔案的編輯資料讀取圖層 ({_1})：圖層來自其 PDF 部分
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	未讀取檔案的全部變數繫結 (略過的繫結：{_1})：這些物件未繫結至其變數
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	只讀取了檔案的部分變數資料庫 (略過的項目：{_1})：「變數」面板會列出其餘部分
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	無法讀取檔案的變數資料庫：「變數」面板不會列出它
 @msg	a variable of unknown kind can't be bound to objects	種類不明的變數無法繫結至物件
@@ -2494,9 +2503,13 @@ file-filter	Templates	範本
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	資料集 {name} 未套用任何內容：沒有物件綁定到該資料集中有值的變數
 @msg	no bound object reports a value (locked objects and embedded images report none)	沒有綁定的物件回報值 (鎖定的物件和內嵌的影像不回報值)
 @msg	the action has no steps	動作沒有步驟
+@msg	the action has no included steps	動作沒有包含的步驟
+@msg	no such action step	沒有這個動作步驟
+@msg	included must be true or false	included 必須是 true 或 false
+@msg	others must be true or false	others 必須是 true 或 false
 @msg	cancelled; nothing was changed	已取消；未做任何變更
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	「儲存」會寫入 {_1}，而非 {_2}：若要寫入該格式，請使用 file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 會寫入舊版 .ai 檔案；.ait 範本一律與 PDF 相容
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 會寫入舊版 .ai 檔案，不會寫入 .ait 範本
 @msg	a mask has more than one art block	遮色片含有多個圖稿區塊
 @msg	mask art ends outside a mask dictionary	遮色片圖稿在遮色片字典之外結束
 @msg	`{key}` must be a #rrggbb color	`{key}` 必須是 #rrggbb 格式的顏色
@@ -2628,6 +2641,7 @@ file-filter	Templates	範本
 	Ligatures are off while the text is tracked.	文字套用字距時，連字功能會關閉。
 	Light	淺色
 	Light Blue	淺藍色
+	Light Red	淺紅色
 	Lighten	變亮
 	Lightness	亮度
 	Limit Color Guide to Library	將色彩參考限制於資料庫
@@ -2858,6 +2872,8 @@ file-filter	Templates	範本
 	Name:	名稱：
 	Navigate	導覽
 	Navigator	導覽器
+	Navigator Panel Options	導覽器面板選項
+	Draw Dashed Lines as Solid Lines	將虛線繪製為實線
 	Needs the desktop app	需要桌面版應用程式
 	Neutral Gradients	中性漸層
 	New	新增
@@ -2983,6 +2999,11 @@ file-filter	Templates	範本
 	New Toolbar	新增工具列
 	Show Toolbar	顯示工具列
 	List Toolbars	列出工具列
+	Manage Toolbars…	管理工具列…
+	Manage Toolbars	管理工具列
+	Rename Toolbar	重新命名工具列
+	Duplicate Toolbar	製作工具列複本
+	Delete Toolbar	刪除工具列
 	New {kind} Style…	新增{kind}樣式…
 	New…	新增…
 	Next	下一個
@@ -4474,6 +4495,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Use Artboards	使用工作區域
 	Use Black Point Compensation	使用黑點補償
 	Use Compression	使用壓縮
+	Include Editing Data for Other Apps	包含供其他應用程式使用的編輯資料
 	Use document bleed settings	使用文件的出血設定
 	Use Even-Odd Fill Rule	使用奇偶填色規則
 	Use Japanese Crop Marks	使用日式裁切標記
@@ -5221,6 +5243,10 @@ lighting	Light	光源
 	Movie Clip	影片片段
 @msg	name is empty	名稱為空
 @msg	an action is already recording	已在錄製動作
+@msg	an action is already playing	已在播放動作
+@msg	the action stopped playing: its document is no longer active	動作已停止播放：其文件不再是作用中文件
+@msg	speed must be accelerated, step or pause	speed 必須為 accelerated、step 或 pause
+@msg	seconds must be a whole number from 1 to 60	seconds 必須為 1 到 60 之間的整數
 @msg	no such function key	沒有這個功能鍵
 @msg	no such color	沒有這個顏色
 @msg	{_1} cannot be used on Windows	{_1} 無法在 Windows 上使用
@@ -5381,6 +5407,11 @@ axis	Y Axis	Y 軸
 	Set Options	組選項
 	Action Options…	動作選項…
 	Action Options	動作選項
+	Playback Options…	播放選項…
+	Playback Options	播放選項
+	Accelerated	加速
+	Step by Step	逐步
+	Pause For	暫停
 	Rename Action	重新命名動作
 	New Action…	新增動作…
 	New Action	新增動作
@@ -5664,6 +5695,7 @@ anchor	Points:	點：
 	Character Color	字元顏色
 	OpenType Features	OpenType 功能
 	Stylistic Sets	風格集
+	Set {n}	風格集 {n}
 @msg	features lists at most {max} tags	features 最多包含 {max} 個標籤
 @msg	unknown OpenType feature `{t}`	未知的 OpenType 功能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必須是大於 0 且不超過 {max} 的數字
@@ -5815,6 +5847,7 @@ breakText	Glyphs	字符
 	Gap 5	間隙 5
 
 @msg	{_1}: they came in as the page's art	{_1}：已作為頁面圖稿匯入
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	與檔案本身頁面繪製不同的物件已作為頁面圖稿匯入：{_1}
 
 @msg	You must choose a side pattern.	必須選擇側邊圖樣。
 @msg	invalid pattern tile choice	圖樣拼塊選項無效
@@ -5876,6 +5909,11 @@ breakText	Glyphs	字符
 	Export All Open Documents as SVG	將所有開啟的文件匯出為 SVG
 @msgplural	Exported {n} document|Exported {n} documents	已匯出 {n} 份文件
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	已匯出 {n} 份文件; 未寫入 {title}：{error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	批次描圖資料夾
+@msgplural	Traced {n} image|Traced {n} images	已描圖 {n} 個影像
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} 個影像無法描圖
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	已描圖 {n} 個影像; 無法描圖：{failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	符號類型:
 	Dynamic Symbol	動態符號

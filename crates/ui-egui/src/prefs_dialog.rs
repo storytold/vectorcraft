@@ -109,6 +109,12 @@ fn canvas_color(key: &str) -> Option<egui::Color32> {
 
 /// Per frame: push UI-side preferences into egui / the renderer when they change.
 pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    apply(app, ctx, false);
+}
+
+/// [`apply_runtime`]; with `force`, the preferences are pushed into `ctx` even when nothing changed
+/// since the last push.
+fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, force: bool) {
     let p = &app.session.prefs;
     if let Some(b) = Brightness::parse(&p.ui_brightness)
         && b != app.ui.brightness
@@ -127,7 +133,7 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
     };
     let id = applied_id();
     let prev: Option<Applied> = ctx.data(|d| d.get_temp::<Option<Applied>>(id)).flatten();
-    if prev != Some(want) {
+    if force || prev != Some(want) {
         theme::apply_with(ctx, want.brightness, want.accent, want.scheme);
         // General › Show Tool Tips: off, no button or field shows its tool tip (they never come
         // due), whichever widget asks for one.
@@ -165,11 +171,11 @@ fn applied_id() -> egui::Id {
     egui::Id::unique("dc-applied-prefs")
 }
 
-/// [`apply_runtime`] with nothing recorded as applied, so the theme (brightness, accent, color
-/// scheme and canvas color) and the other UI-side preferences are pushed into `ctx` again.
+/// [`apply_runtime`] even when nothing changed, so the theme (brightness, accent, color scheme and
+/// canvas color) and the other UI-side preferences are pushed into `ctx` again. The record of what
+/// was last applied stays, so a Render Threads change since then still restarts the renderer.
 pub(crate) fn reapply(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    ctx.data_mut(|d| d.remove::<Option<Applied>>(applied_id()));
-    apply_runtime(app, ctx);
+    apply(app, ctx, true);
 }
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {

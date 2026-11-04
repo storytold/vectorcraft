@@ -290,6 +290,30 @@ fn ai_export_public_aliases_preserve_missing_placed_links() {
     }
 }
 
+/// The `.ai` editing copy for other apps draws a missing placed file as its preview, with the
+/// pages or without them, and says so.
+#[test]
+fn ai_editing_copy_warns_about_missing_placed_files() {
+    let dir = Folder::new("placed-ai-editing-copy-missing");
+    let src = dir.file("logo.vectorcraft");
+    star_source(&src, "placed-ai-editing-copy-missing-unique");
+    let mut s = session();
+    place(&mut s, &src);
+    let parent = dir.file("parent.vectorcraft");
+    save(&mut s, &parent);
+    std::fs::remove_file(&src).unwrap();
+    open(&mut s, &parent);
+    let doc = &s.doc().unwrap().doc;
+    let (_, missing) = cmd::place::document::full_documents(doc);
+    assert!(!missing.is_empty());
+    for compatible in [true, false] {
+        let enc = cmd::fileio::encode_all(doc, "ai", &json!({"pdfCompatible": compatible})).unwrap();
+        for w in &missing {
+            assert!(enc.warnings.contains(w), "pdfCompatible {compatible}: {w:?} not in {:?}", enc.warnings);
+        }
+    }
+}
+
 /// Include Linked Files must retain relinkable objects when only their previews are available.
 #[test]
 fn native_included_links_keep_missing_placed_documents_editable() {
@@ -825,6 +849,24 @@ fn expand_turns_a_placed_document_into_editable_art_with_its_resources() {
     assert!(near(centre_colour(&vectorcraft_format::load(&saved).unwrap()), BLUE), "saved with its resources");
     let info = s.execute("object.expand.info", &json!({})).unwrap();
     assert_eq!(info["object"], false, "nothing left to expand: {info}");
+}
+
+/// Expand also expands a placed document in the art of a selected symbol instance, in the same
+/// command.
+#[test]
+fn expand_expands_a_placed_document_in_a_symbol_instances_art() {
+    let dir = Folder::new("placed-expand-symbol");
+    let src = dir.file("badge.vectorcraft");
+    star_source(&src, "star");
+    let mut s = session();
+    let id = place(&mut s, &src);
+    s.select(|_, sel| sel.set([id])).unwrap();
+    let inst = NodeId(s.execute("symbol.new", &json!({"name": "Badge"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.expand", &json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let mut placed = 0;
+    doc.node(inst).unwrap().walk(&mut |c| placed += usize::from(matches!(c.kind, NodeKind::PlacedDocument(_))));
+    assert_eq!(placed, 0, "the placed document in the art is expanded");
 }
 
 #[test]

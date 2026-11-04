@@ -540,7 +540,7 @@ impl<'a> Reader<'a> {
     /// the drawn steps stay, without the blend's own art drawn over them (see [`super::blend`]).
     pub(super) fn end_blend(&mut self) {
         let Some((_, hex)) = self.blend_record.take() else { return };
-        let ids = crate::import::ai::blend::hex_bytes(&hex).as_deref().and_then(crate::import::ai::blend::record_ids);
+        let record = crate::import::ai::blend::hex_bytes(&hex).as_deref().and_then(crate::import::ai::blend::record);
         let roles = &self.blend_roles;
         let Some(f) = self.frames.last_mut() else { return };
         let n = f.children.len();
@@ -558,7 +558,7 @@ impl<'a> Reader<'a> {
             return;
         }
         let mut budget = self.blend_budget;
-        let live = ids.and_then(|ids| crate::import::ai::blend::live_blend(edit, steps, &ids, roles, &mut budget));
+        let live = record.and_then(|record| crate::import::ai::blend::live_blend(edit, steps, &record, roles, &mut budget));
         self.blend_budget = budget;
         let Some(mut steps) = f.children.pop() else { return };
         let Some(_edit) = f.children.pop() else { return };
@@ -662,8 +662,12 @@ fn has_text_slot(node: &Node) -> bool {
     !slots.is_empty()
 }
 
-/// The source text inside an envelope options dictionary, carried through its containing metadata.
+/// The source text inside an envelope options dictionary, carried through its containing metadata
+/// (not type that a look draws, which isn't the envelope's source text).
 fn envelope_text_slots(node: &Node, out: &mut Vec<Node>) {
+    if super::is_look_slot(node.name.as_deref()) {
+        return;
+    }
     if slot_of(node.name.as_deref()).is_some() {
         out.push(node.clone());
     } else if let Some(children) = node.children() {

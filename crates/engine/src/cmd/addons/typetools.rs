@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Text Tweaker",
         ["Object", "Plug-ins", "Type Tools"],
         None,
-        "{attribute?: \"size\" (pt 0.1..1296) | \"baselineShift\" (pt −1296..1296) | \"rotation\" (° −360..360) | \"hScale\" (% 1..10000) | \"vScale\" (% 1..10000) | \"tracking\" (1/1000 em −1000..10000) | \"leading\" (pt 0.1..5000) | \"strokeWidth\" (pt 0..1000) (\"size\"), from?: the first character's value, to?: the last character's value (each in the attribute's units and range; defaults: size 12 → 36, baselineShift 0 → 12, rotation 0 → 30, hScale and vScale 100 → 150, tracking 0 → 200, leading 12 → 36, strokeWidth 0 → 2), shape?: \"straight\" (an even ramp) | \"ease\" (slow at both ends) | \"bow\" (from at both ends, rising smoothly to `to` in the middle) | \"spike\" (from at both ends, straight up to `to` in the middle) | \"random\" (each character anywhere from `from` to `to`) (\"straight\"), seed?: whole number (0; random: the same seed and text give the same values), skipSpaces?: true (spaces and line breaks keep their values and don't count), id?, start?: byte, end?: byte, ids?: [id…] (instead of id)} give the characters one character attribute letter by letter, from `from` to `to` along the shape, as the Character panel sets it, as one undo step; the text stays live and editable. The range of `id`, else the type objects in `ids`, else the text the Type tool has selected (at a caret: all its text), else every selected type object; each object gets its own ramp. Stroke weight only shows on characters with a stroke → {count (characters changed), ids}",
+        "{attribute?: \"size\" (pt 0.1..1296) | \"baselineShift\" (pt −1296..1296) | \"rotation\" (° −360..360) | \"hScale\" (% 1..10000) | \"vScale\" (% 1..10000) | \"tracking\" (1/1000 em −1000..10000) | \"leading\" (pt 0.1..5000) | \"strokeWidth\" (pt 0..1000) (\"size\"), from?: the first character's value, to?: the last character's value (each in the attribute's units and range; defaults: size 12 → 36, baselineShift 0 → 12, rotation 0 → 30, hScale and vScale 100 → 150, tracking 0 → 200, leading 12 → 36, strokeWidth 0 → 2), shape?: \"straight\" (an even ramp) | \"ease\" (slow at both ends) | \"bow\" (from at both ends, rising smoothly to `to` in the middle) | \"spike\" (from at both ends, straight up to `to` in the middle) | \"random\" (each character anywhere from `from` to `to`) (\"straight\"), seed?: whole number (0; random: the same seed and text give the same values), skipSpaces?: true (spaces and line breaks keep their values and don't count), id?, start?: byte, end?: byte (range endpoints inside a character round down to its start), ids?: [id…] (instead of id)} give the characters one character attribute letter by letter, from `from` to `to` along the shape, as the Character panel sets it, as one undo step; the text stays live and editable. The range of `id`, else the type objects in `ids`, else the text the Type tool has selected (at a caret: all its text), else every selected type object; each object gets its own ramp. Stroke weight only shows on characters with a stroke → {count (characters changed), ids}",
         has_selection,
         text_tweaker
     )]
@@ -93,25 +93,49 @@ fn text_tweaker(s: &mut Session, p: &Value) -> Result<Value> {
     let ranges = type_ranges(s, p, C, |text, _| Some((0, text.len())))?;
     // Each object's changed characters: (byte, its change), worked out before the edit.
     let mut plans: Vec<(NodeId, Vec<(usize, CharChange)>)> = vec![];
-    let mut count = 0;
+    let (mut seen, mut count) = (0, 0);
     for (id, a, b, _) in ranges {
         let t = text_ref(s, id)?;
         let text = t.plain_text();
+        let (a, b) = (edit::floor_char(&text, a), edit::floor_char(&text, b));
         let chars: Vec<usize> =
             text.char_indices().filter(|&(i, c)| (a..b).contains(&i) && !(skip && (c.is_whitespace() || c.is_control()))).map(|(i, _)| i).collect();
-        count += chars.len();
-        if count > MAX_CHARS {
+        seen += chars.len();
+        if seen > MAX_CHARS {
             return Err(bad(C, format!("too many characters: at most {MAX_CHARS}")));
         }
+        // Each run's end byte, to find the style a character has now.
+        let ends: Vec<usize> = t
+            .runs
+            .iter()
+            .scan(0, |off, r| {
+                *off += r.text.len();
+                Some(*off)
+            })
+            .collect();
         let n = chars.len();
         let mut changes = Vec::with_capacity(n);
+        let mut run = 0;
         for (i, at) in chars.into_iter().enumerate() {
             let random = if shape == "random" { unit(&mut rng) } else { 0.0 };
             let value = from + (to - from) * amount(shape, i, n, random);
             let mut change = CharChange::parse(&json!({ key: value }), C, &setup)?;
             change.localize(&t, C)?;
+            while ends.get(run).is_some_and(|&e| e <= at) {
+                run += 1;
+            }
+            // A character that already has the value is left out, so a run that changes nothing
+            // makes no step.
+            if let Some(r) = t.runs.get(run) {
+                let mut style = r.style.clone();
+                change.apply(&mut style);
+                if style == r.style {
+                    continue;
+                }
+            }
             changes.push((at, change));
         }
+        count += changes.len();
         if !changes.is_empty() {
             plans.push((id, changes));
         }

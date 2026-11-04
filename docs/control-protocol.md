@@ -320,6 +320,7 @@ The User Defined libraries are `window.userBrushLibrary1`…`10` in Window → B
 Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) opens the `tileEdgeColor` dialog (field
 `color`: `#rrggbb` or a preset name such as "Light Blue"); `ui.dialog.confirm` sets the preference
 `patternTileEdgeColor` (`prefs.set`), the colour pattern editing mode draws the tile edge and the swatch bounds in.
+A `color` with an alpha part (`#rrggbbaa` or `#rgba`) is an error, and the preference does not change.
 
 Window title bar: on Windows and Linux the window has no OS decorations and the app bar is the title bar. Its
 caption buttons (Minimize, Maximize/Restore, Close) sit at the bar's right end, 46 pt each; they are window chrome,
@@ -381,6 +382,16 @@ it. `window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.insp
 two-column flag, top-left corner, the groups torn off it). They are kept with the workspace they were made in:
 switching workspaces shows that workspace's toolbars, Reset Workspace keeps them, and New Workspace starts the new
 workspace with a copy of them.
+
+Manage Toolbars: Window › Toolbars › Manage Toolbars… (or Manage Toolbars… in the drawer's ☰ menu,
+`window.toolbar.manage`) lists these toolbars. A new name typed for the selected toolbar renames it at Enter, when
+the text box loses focus, or at OK (`window.toolbar.rename {name, to}`; the name must not be empty, longer than 200
+characters or another toolbar's, whatever the case). The + button copies the selected toolbar with its tools as
+"`name` Copy", shown a little below it and below earlier copies (`window.toolbar.duplicate {name}`), and with none
+selected it makes a blank toolbar called "Toolbar N" (`window.toolbar.duplicate {}`). The trash can deletes the
+selected toolbar and the groups torn off it (`window.toolbar.delete {name}`). Renaming or deleting a toolbar closes
+the drawer and a group's flyout open on it; a new name that changes only the case leaves them open. Each change is
+kept with the current workspace.
 
 The Contextual Task Bar: its handle (the grip at its left end) drags it anywhere on the canvas, which always holds
 it whole, also when the window shrinks. Unpinned, the bar keeps that offset as it follows the selection, until
@@ -445,7 +456,9 @@ changed since); its preview greys the art and paints the highlighted objects or 
 
 Expand: Object → Expand… (`ui.expandDialog`, or `object.expand` without params from the menus, palette and shortcuts)
 opens the `expand` dialog for the selection. Fields: `object`, `fill`, `stroke` (all on; `__object`, `__fill`,
-`__stroke` say which the selection has something for, as `object.expand.info` does, and the others are disabled),
+`__stroke` say which the selection has something for, as `object.expand.info` does, and the others are disabled;
+`__fill_symbol`, `__stroke_symbol` and `__gradient_symbol` say that only the art of symbol instances holds it, and
+those options are enabled only while `object` is on),
 `gradient` (`objects` or `mesh`) and `steps` (1–1000, default 255), which are enabled when `fill` is on and
 `__gradient` says the selection has a gradient fill (`object.expand.info`'s `gradient`). `ui.dialog.confirm` runs `object.expand` with them as
 one undo step. While the selection has an appearance Expand Appearance expands (effects, several fills or strokes, a

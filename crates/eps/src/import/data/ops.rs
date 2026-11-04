@@ -7,6 +7,8 @@ use super::{
 
 /// Most bytes one filter or image reads.
 pub(super) const MAX_DATA: usize = 1 << 28;
+/// The longest chain of filters over one pending file (real programs stack two or three).
+const MAX_FILTER_CHAIN: usize = 64;
 
 /// Most pixels an image may have.
 const MAX_PIXELS: usize = 1 << 26;
@@ -294,7 +296,16 @@ impl Interp<'_> {
                 let pending = match &*f.borrow() {
                     Stream::Current => Some((vec![], None)),
                     Stream::Buf { .. } if running => Some((vec![], Some(f.clone()))),
-                    Stream::Pending { chain, from } => Some((chain.clone(), from.clone())),
+                    Stream::Pending { chain, from } => {
+                        // Cloning the chain copies each filter's delimiter: bound and charge it.
+                        if chain.len() >= MAX_FILTER_CHAIN {
+                            return Err(PsError::Limit("too many filters over one file"));
+                        }
+                        let copied = chain.iter().map(|c| c.sub.1.len() + 1).sum::<usize>();
+                        self.alloc(copied)?;
+                        self.spend((copied / 256) as u64)?;
+                        Some((chain.clone(), from.clone()))
+                    }
                     Stream::Buf { .. } => None,
                 };
                 match pending {

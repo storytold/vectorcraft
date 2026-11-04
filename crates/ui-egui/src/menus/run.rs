@@ -544,7 +544,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             }
             None => Err("brightness must be dark|mediumDark|mediumLight|light".into()),
         },
-        "window.newWindow" => Err("New Window isn't available yet: a document opens in one window".into()),
+        "window.newWindow" => crate::doc_windows::new_window(app),
         "window.arrange.cascade" => crate::doc_windows::cascade(app),
         "window.arrange.tile" => crate::canvas::tile(app),
         "window.arrange.floatInWindow" => crate::doc_windows::float_in_window(app, p),
@@ -566,6 +566,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         crate::addons::arrange::ZOOM => crate::addons::arrange::zoom(app),
         crate::addons::document::SAVE_COPY => crate::addons::document::save_copy(app, p),
         crate::addons::document::EXPORT_ALL => crate::addons::document::export_all(app, p),
+        crate::addons::document::BATCH_TRACE => crate::addons::document::batch_trace(app, p),
         "tool.setOption" => app.session.set_tool_option_cmd(p),
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
@@ -609,10 +610,15 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         // Closing asks Save / Don't Save / Cancel for modified documents first (`unsaved`).
-        "file.close" => {
-            let i = p.get("index").and_then(Value::as_u64).map(|i| i as usize).or(app.session.active_index())?;
-            crate::unsaved::close(app, i)
-        }
+        // Without an `index`, the current window closes: one of several views of a document closes
+        // without closing the document (Window › New Window).
+        "file.close" => match p.get("index").and_then(Value::as_u64).map(|i| i as usize) {
+            Some(i) => crate::unsaved::close(app, i),
+            None => {
+                app.session.active_index()?;
+                crate::doc_windows::close_current(app)
+            }
+        },
         "file.closeAll" => crate::unsaved::close_all(app, "closeAll"),
         "app.quit" => crate::unsaved::close_all(app, "quit"),
         "ui.swatchOptions" => match s("name") {
@@ -689,6 +695,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.newLayer" => crate::dialogs::layer_options::open_new(app, p),
         "ui.newArtboard" => crate::dialogs::artboard_options::open_new(app),
         "ui.layersPanelOptions" => crate::dialogs::layers_panel_options::open(app),
+        "ui.navigatorPanelOptions" => crate::panels::navigator::set_options(app, p),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),
         "ui.layersFilter" => crate::panels::layers::set_filter(app, p),
         "ui.flattenTransparencyDialog" => {
@@ -815,9 +822,12 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         }
         "ui.packageDialog" => crate::dialogs::package::open(app),
         crate::panels::actions::RENAME_ACTION => crate::panels::actions::rename_action(app, p),
+        crate::panels::actions::INCLUDE_STEPS => crate::panels::actions::include_steps(app, p),
         crate::panels::actions::NEW_ACTION => crate::panels::actions::new_action(app, p),
         crate::panels::actions::ACTION_OPTIONS => crate::panels::actions::action_options(app, p),
         crate::panels::actions::PLAY_ACTION => crate::panels::actions::play_action(app, p),
+        crate::panels::actions::PLAYBACK_OPTIONS => crate::panels::actions::playback_options(app, p),
+        crate::panels::actions::START_RECORDING => crate::panels::actions::record(app, p),
         crate::panels::actions::STOP_RECORDING => crate::panels::actions::stop(app, p),
         "ui.batchDialog" => {
             let set = p.get("set").and_then(Value::as_u64).unwrap_or(0) as usize;

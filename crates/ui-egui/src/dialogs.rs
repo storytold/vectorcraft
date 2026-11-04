@@ -9,6 +9,7 @@
 mod about;
 pub mod action_batch;
 pub mod action_new;
+pub mod action_playback;
 pub mod action_set_options;
 pub mod artboard_options;
 pub mod blend_options;
@@ -63,6 +64,7 @@ pub mod live_paint_selection;
 pub mod missing_fonts;
 pub mod missing_links;
 pub(crate) mod modal;
+pub mod navigator_panel_options;
 pub mod new_brush;
 pub mod new_color_group;
 mod new_document;
@@ -298,6 +300,7 @@ registry! {
     Shortcuts: ["shortcuts"] => DialogSpec::window(crate::shortcut_editor::show, |app, _| crate::shortcut_editor::confirm(app)),
     Workspaces: ["newWorkspace", "manageWorkspaces"] => DialogSpec::window(crate::workspaces::show, |app, _| crate::workspaces::confirm(app)),
     NewToolbar: [crate::custom_toolbars::KIND] => DialogSpec::window(crate::custom_toolbars::show_dialog, |app, _| crate::custom_toolbars::confirm(app)),
+    ManageToolbars: [crate::custom_toolbars::MANAGE] => DialogSpec::window(crate::custom_toolbars::show_manage, |app, _| crate::custom_toolbars::confirm_manage(app)),
     FindFont: ["findFont"] => DialogSpec::window(crate::find_font::show, |app, _| crate::find_font::confirm(app)),
     SwatchOptions: [swatch_options::KIND] => swatch_options::SPEC,
     Confirm: [confirm::KIND] => confirm::SPEC,
@@ -363,6 +366,7 @@ registry! {
     ActionBatch: [action_batch::KIND] => action_batch::SPEC,
     ActionSetOptions: [action_set_options::KIND] => action_set_options::SPEC,
     ActionNew: [action_new::KIND] => action_new::SPEC,
+    ActionPlayback: [action_playback::KIND] => action_playback::SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
@@ -404,6 +408,7 @@ registry! {
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
+    NavigatorPanelOptions: [navigator_panel_options::KIND] => navigator_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
@@ -452,13 +457,18 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 
 /// Set `field` of `d` to `value` for `ui.dialog.set`, as the dialog's own control for it does: a
 /// Pattern Brush Options corner tile set this way is saved by OK, as one chosen from its menu is,
-/// and an Edit Data Set field set this way is no longer the row's empty text value.
+/// an Edit Data Set field set this way is no longer the row's empty text value, and a Layer
+/// Options setting set this way for several rows is sent to every row (Template also sets Lock
+/// and Dim Images, as its checkbox does).
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
     }
     if d.kind == variables::KIND {
         variables::note_set(d, &field);
+    }
+    if d.kind == layer_options::KIND {
+        layer_options::note_set(d, &field, &value);
     }
     d.fields.insert(field, value);
 }

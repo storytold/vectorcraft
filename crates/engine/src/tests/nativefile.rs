@@ -186,6 +186,40 @@ fn newer_keys_and_legacy_profiles_survive_open_and_save() {
     assert_eq!(v2["document"]["unknown"]["colorProfiles"]["rgb"], "sRGB IEC61966-2.1");
 }
 
+/// A version 1 document saved before VectorCraft 0.21.0 turned its Twist effects counterclockwise
+/// for a positive angle. It opens with the angles negated, so its art turns as it did; saved
+/// again it is a version 2 document, and saved for an older file version it is version 1 again.
+#[test]
+fn a_version_1_documents_twist_turns_as_it_was_saved() {
+    use vectorcraft_doc::{Appearance, Document, Effect, Node};
+    use vectorcraft_geom::{PathData, Point, Rect, SubPath};
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let right = PathData::single(SubPath::polyline(&[Point::new(55.0, 50.0), Point::new(56.0, 50.0)], false));
+    let mut a = Appearance::default_art();
+    a.effects.push(Effect { id: "distort.twist".into(), params: json!({"angle": 45}), visible: true });
+    d.insert(Some(l), 0, Node::path(id, right.clone(), a)).unwrap();
+    let mut j = json_of(&vectorcraft_format::save(&d, false));
+    j["document"]["version"] = json!(1);
+    j["generator"] = json!("VectorCraft 0.20.0");
+    let mut s = Session::new();
+    open(&mut s, "old.vectorcraft", &serde_json::to_vec(&j).unwrap());
+    let doc = &s.doc().unwrap().doc;
+    let n = doc.layers[0].children().and_then(|c| c.first()).cloned().unwrap();
+    let turned = vectorcraft_render::effects::apply_geometry(&n.appearance.effects, &right, Rect::new(0.0, 0.0, 100.0, 100.0));
+    // Counterclockwise on the page takes a point right of the center up (y runs down).
+    let p = turned.subpaths[0].anchors[0].p;
+    assert!(p.y < 49.5, "{p:?}");
+    let again = json_of(&saved(&mut s, json!({})));
+    assert_eq!(again["document"]["version"], 2);
+    assert!(again.to_string().contains(r#""angle":-45.0"#), "{again}");
+    // Saved for an older file version, it is version 1 with its angle as 0.20.0 saved it.
+    let older = json_of(&saved(&mut s, json!({"version": 3})));
+    assert_eq!(older["document"]["version"], 1);
+    assert!(older.to_string().contains(r#""angle":45.0"#), "{older}");
+}
+
 /// A save records the date the document was made in, so the same commands twice gave different
 /// bytes (#2880). A pinned date makes them identical — `file.new {created}` here, and
 /// `SOURCE_DATE_EPOCH` for an export that takes no date param.

@@ -461,24 +461,13 @@ pub(crate) fn windows_candidates(
 }
 
 /// The paths PhotoCraft's installer registers under App Paths, for the current user and then for
-/// everyone (`reg query`, so no extra dependency; a hidden console window).
+/// everyone.
 #[cfg(windows)]
 fn registered_photocraft() -> Vec<std::path::PathBuf> {
-    use std::os::windows::process::CommandExt as _;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    // reg.exe by its full path, so nothing named `reg` in the app's folder or on PATH runs instead.
-    let root = std::env::var_os("SystemRoot").map(std::path::PathBuf::from).unwrap_or_else(|| r"C:\Windows".into());
-    ["HKCU", "HKLM"]
+    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+    [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE]
         .into_iter()
-        .filter_map(|hive| {
-            let key = format!(r"{hive}\Software\Microsoft\Windows\CurrentVersion\App Paths\photocraft.exe");
-            let out = std::process::Command::new(root.join("System32").join("reg.exe"))
-                .args(["query", &key, "/ve"])
-                .creation_flags(CREATE_NO_WINDOW)
-                .output()
-                .ok()?;
-            registered_path(&String::from_utf8_lossy(&out.stdout))
-        })
+        .filter_map(|hive| registry_default_path(hive, r"Software\Microsoft\Windows\CurrentVersion\App Paths\photocraft.exe"))
         .collect()
 }
 
@@ -487,11 +476,35 @@ fn registered_photocraft() -> Vec<std::path::PathBuf> {
     Vec::new()
 }
 
-/// The path in `reg query … /ve` output like
-/// `    (Default)    REG_SZ    C:\Program Files\ArtCraft\PhotoCraft\photocraft.exe`.
+/// The default `REG_SZ` value of `subkey` under `hive` as a path ([`registered_path`]), or `None`
+/// when the key or the value is missing. The value is read as UTF-16, so a folder name in any
+/// script comes back as stored.
+#[cfg(windows)]
+#[allow(unsafe_code)]
+fn registry_default_path(hive: windows::Win32::System::Registry::HKEY, subkey: &str) -> Option<std::path::PathBuf> {
+    use windows::Win32::System::Registry::{RRF_RT_REG_SZ, RegGetValueW};
+    use windows::core::PCWSTR;
+    let subkey: Vec<u16> = subkey.encode_utf16().chain([0]).collect();
+    let mut size = 0u32;
+    // SAFETY: `subkey` is a NUL-terminated UTF-16 string that outlives the call, a null value name
+    // reads the default value, and with no buffer the call only writes the value's size to `size`.
+    unsafe { RegGetValueW(hive, PCWSTR(subkey.as_ptr()), PCWSTR::null(), RRF_RT_REG_SZ, None, None, Some(&mut size)) }.ok().ok()?;
+    let mut value = vec![0u16; (size as usize).div_ceil(2)];
+    let mut size = u32::try_from(value.len() * 2).ok()?;
+    // SAFETY: as above, and `value` holds the `size` bytes the call may write.
+    unsafe { RegGetValueW(hive, PCWSTR(subkey.as_ptr()), PCWSTR::null(), RRF_RT_REG_SZ, None, Some(value.as_mut_ptr().cast()), Some(&mut size)) }
+        .ok()
+        .ok()?;
+    registered_path(&value)
+}
+
+/// The path in a registry string value read as UTF-16, up to its first NUL, without surrounding
+/// spaces or quotes, like `C:\Program Files\ArtCraft\PhotoCraft\photocraft.exe`.
 #[cfg_attr(not(any(windows, test)), allow(dead_code))]
-pub(crate) fn registered_path(text: &str) -> Option<std::path::PathBuf> {
-    text.lines().find_map(|l| l.split_once("REG_SZ")).map(|(_, v)| v.trim().trim_matches('"')).filter(|v| !v.is_empty()).map(std::path::PathBuf::from)
+pub(crate) fn registered_path(value: &[u16]) -> Option<std::path::PathBuf> {
+    let end = value.iter().position(|&c| c == 0).unwrap_or(value.len());
+    let text = String::from_utf16(&value[..end]).ok()?;
+    Some(text.trim().trim_matches('"')).filter(|v| !v.is_empty()).map(std::path::PathBuf::from)
 }
 
 /// Is `app` an application Edit Original may start: an `.app` bundle on macOS, an `.exe` on
@@ -616,17 +629,37 @@ mod open_with_tests {
         );
     }
 
-    /// The registered path is read from `reg query … /ve` output, spaces and quotes included;
-    /// no value, no path.
+    /// The registered path is read from the UTF-16 value up to its NUL, spaces, quotes and
+    /// characters outside ASCII included; an empty value or one that is not UTF-16 gives no path.
     #[test]
-    fn the_registered_path_is_read_from_reg_query() {
-        let out = "\r\nHKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\photocraft.exe\r\n    (Default)    REG_SZ    C:\\Program Files\\ArtCraft\\PhotoCraft\\photocraft.exe\r\n";
-        assert_eq!(registered_path(out), Some(std::path::PathBuf::from(r"C:\Program Files\ArtCraft\PhotoCraft\photocraft.exe")));
+    fn the_registered_path_is_read_from_the_utf16_value() {
+        let wide = |s: &str| s.encode_utf16().chain([0, 0]).collect::<Vec<u16>>();
         assert_eq!(
-            registered_path("    (Standard)    REG_SZ    \"C:\\A B\\photocraft.exe\""),
-            Some(std::path::PathBuf::from(r"C:\A B\photocraft.exe"))
+            registered_path(&wide(r"C:\Program Files\ArtCraft\PhotoCraft\photocraft.exe")),
+            Some(std::path::PathBuf::from(r"C:\Program Files\ArtCraft\PhotoCraft\photocraft.exe"))
         );
-        assert_eq!(registered_path("ERROR: The system was unable to find the specified registry key or value."), None);
-        assert_eq!(registered_path("    (Default)    REG_SZ    "), None);
+        assert_eq!(
+            registered_path(&wide(" \"C:\\Prögram Fïles\\Тест\\写真\\photocraft.exe\" ")),
+            Some(std::path::PathBuf::from(r"C:\Prögram Fïles\Тест\写真\photocraft.exe"))
+        );
+        assert_eq!(registered_path(&wide("")), None);
+        assert_eq!(registered_path(&[0xD800, 0]), None);
+    }
+
+    /// On Windows a registered path with characters outside the console's code page is read as
+    /// stored, from a scratch key under the current user's hive.
+    #[cfg(windows)]
+    #[test]
+    fn a_registered_path_outside_ascii_is_read_as_stored() {
+        let key = format!(r"Software\VectorCraftTest-app-paths-{}", std::process::id());
+        let path = r"C:\Prögram Fïles\Тест\写真\photocraft.exe";
+        let reg = std::env::var_os("SystemRoot").map(std::path::PathBuf::from).unwrap_or_else(|| r"C:\Windows".into()).join(r"System32\reg.exe");
+        let full = format!(r"HKCU\{key}");
+        let added = std::process::Command::new(&reg).args(["add", &full, "/ve", "/t", "REG_SZ", "/d", path, "/f"]).output().unwrap();
+        assert!(added.status.success(), "{added:?}");
+        let read = super::registry_default_path(windows::Win32::System::Registry::HKEY_CURRENT_USER, &key);
+        let _ = std::process::Command::new(&reg).args(["delete", &full, "/f"]).output();
+        assert_eq!(read, Some(std::path::PathBuf::from(path)));
+        assert_eq!(super::registry_default_path(windows::Win32::System::Registry::HKEY_CURRENT_USER, &key), None, "deleted");
     }
 }
