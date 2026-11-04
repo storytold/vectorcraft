@@ -26,7 +26,7 @@ pub(crate) fn keep_marked_text(app: &mut VectorcraftApp) {
     app.ime_discard = true;
     if app.session.tool_composing() {
         // Errors are already reported by the engine's interaction.
-        let _ = app.session.tool_text(&m, app.view_info());
+        let _ = app.session.tool_typed_text(&m, app.view_info());
     }
 }
 
@@ -228,7 +228,7 @@ fn apply_type_event(
         Seq::Text(t) if !app.session.tool_composing() && !shortcut_mods => {
             let target_before = crate::ime::target(&mut app.session, view);
             let before = crate::ime::stamp(&mut app.session, view);
-            let r = app.session.tool_text(&t, view);
+            let r = app.session.tool_typed_text(&t, view);
             if r.is_ok() {
                 crate::ime::note_application_edit(app, ctx, view, target_before, before);
             }
@@ -275,7 +275,7 @@ fn apply_type_event(
             // A document edit since the composition means this commit starts a fresh typing
             // session: that reset is application-side, so it cannot earn `InputMethod`.
             let verbatim = app.session.tool_ime_session_matches(view) && app.session.tool_text_is_verbatim(&t, view);
-            let r = app.session.tool_text(&t, view);
+            let r = app.session.tool_typed_text(&t, view);
             if r.is_ok() {
                 if verbatim {
                     crate::ime::note_ime_apply(app, ctx, view, target_before, before);

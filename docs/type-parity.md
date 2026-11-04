@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (OpenType panel lists font-defined stylistic sets; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Typographer's Quotes sets a lone typed `”` as the opening quote where one opens, for the macOS Serbian Cyrillic layout, which has no straight quote, #5247; previously minor: OpenType panel lists font-defined stylistic sets; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -77,6 +77,7 @@ Character Styles menu New/Redefine and footer New capture the first selected cha
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | Typographer's Quotes: a lone typed `”` (U+201D) is set like a straight `"` where a quote opens (at the start, after a space), taking the document's opening quote, and stays `”` where one closes: the macOS Serbian Cyrillic layout has no straight quote and types `”` on Shift+2, which now gives „…” (#5247). `“ „` and the single quotes `‘ ’ ‚` stay as typed (that layout's apostrophe key types `’`, and `’90s` keeps its apostrophe); pasted text keeps its quotes; with the option off `”` stays as typed. Evidence: `docsetup::a_typed_closing_double_quote_opens_where_a_quote_opens`; scores unchanged |
 | 2026-11-03 | minor | The OpenType panel lists the selected font's available Stylistic Sets with its custom names or numbered labels; sets can be combined and deselected. Scores and estimates unchanged. |
 | 2026-11-03 | minor | Character-menu Kashidas controls selected characters separately from the paragraph's Insert Kashidas length. Existing text allows Kashidas by default; scores and estimates unchanged. |
 | 2026-11-03 | minor | Type on a Path Options has a Preview checkbox: the type follows the fields while it is on, Cancel restores it, OK is one undo step (#5360, as public tutorials of the dialog show); scores and estimates unchanged. |
