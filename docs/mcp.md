@@ -5264,7 +5264,9 @@ Neither value turns `tateChuYoko` on. Both are 0 by default and saved only when 
 them. A value that is not a number is refused with `` `tcyUpDown` must be a number ``, and one outside the range with
 `` `tcyUpDown` must be from -1296 to 1296 ``, naming the key. One undo step. `ui.tateChuYokoSettings` opens the
 Tate-chu-yoko Settings dialog (the menu item shows with Show East Asian Options) on the values the selected characters
-share, a blank field where they differ; OK sends the values that changed.
+share, a blank field where they differ; OK sends the values that changed and leaves a blank field's value alone. OK
+with a field that is not a length returns `Up/Down must be a number` or `Left/Right must be a number` and keeps the
+dialog open.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":4,"tateChuYoko":true,"tcyUpDown":2,"tcyLeftRight":-1}}}
