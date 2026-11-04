@@ -464,8 +464,11 @@ impl Tool for EyedropperTool {
         };
         let Some((src, _)) = source else {
             // Empty artboard: the colour under the cursor is the paper. A gradient stop still
-            // waits for an object, and Alt has nothing to paint onto.
-            if stop.is_some() || ev.mods.alt || !cx.doc.artboards.iter().any(|a| a.rect.contains(ev.pos)) {
+            // waits for an object, Alt has nothing to paint onto, and hidden art still occupies
+            // its bounds (a click there is a miss, not the paper showing through).
+            let on_art = cx.doc.artboards.iter().any(|a| a.rect.contains(ev.pos));
+            let covered = cx.doc.layers.iter().any(|layer| layer.geometric_bounds().is_some_and(|r| r.contains(ev.pos)));
+            if stop.is_some() || ev.mods.alt || !on_art || covered {
                 return vec![];
             }
             return vec![Action::Exec("paint.sampleColor".into(), json!({ "color": color_json(&cx.doc.setup.paper()) }))];
