@@ -559,8 +559,9 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
                     }
                     continue;
                 }
-                // A copy of the top fill (stroke); without one, type's characters' and otherwise the
-                // default paint, so a new fill on a group or type shows.
+                // The top fill's (stroke's) paint; without one, type's characters' and otherwise the
+                // default paint, so a new fill on a group or type shows. A new stroke takes the top
+                // stroke's weight when that stroke has paint, at least 1 pt.
                 let paint = match (n.appearance.paint_at(None, fill), &n.kind) {
                     (Some(p), _) => p.clone(),
                     (None, NodeKind::Text(_)) => super::paint::proxy_paint(n, !fill, None),
