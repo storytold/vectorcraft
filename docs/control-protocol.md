@@ -320,6 +320,7 @@ The User Defined libraries are `window.userBrushLibrary1`…`10` in Window → B
 Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) opens the `tileEdgeColor` dialog (field
 `color`: `#rrggbb` or a preset name such as "Light Blue"); `ui.dialog.confirm` sets the preference
 `patternTileEdgeColor` (`prefs.set`), the colour pattern editing mode draws the tile edge and the swatch bounds in.
+A `color` with an alpha part (`#rrggbbaa` or `#rgba`) is an error, and the preference does not change.
 
 Window title bar: on Windows and Linux the window has no OS decorations and the app bar is the title bar. Its
 caption buttons (Minimize, Maximize/Restore, Close) sit at the bar's right end, 46 pt each; they are window chrome,
