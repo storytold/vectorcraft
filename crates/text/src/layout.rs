@@ -6,8 +6,8 @@ use kurbo::{Affine, BezPath, ParamCurve, PathEl, Point, Rect, Shape, Vec2};
 use unicode_bidi::{BidiInfo, Level};
 use vectorcraft_doc::text::Kashida;
 use vectorcraft_doc::{
-    Burasagari, CharStyle, HyphenationOptions, InlineArt, Justify, Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect,
-    RubyAlign, RubyPosition, SingleWordJustify, TextKind, TextObject,
+    Burasagari, CharStyle, HyphenationOptions, InlineArt, Justify, Kinsoku, KinsokuShoriType, LeadingModel, Mojikumi, ParaDirection, ParaStyle,
+    PathAlign, PathEffect, RubyAlign, RubyPosition, SingleWordJustify, TextKind, TextObject,
 };
 use vectorcraft_geom::{ArcPath, PathData};
 

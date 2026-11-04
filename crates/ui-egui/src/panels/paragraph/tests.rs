@@ -106,6 +106,32 @@ fn paragraph_mixed_kinsoku_and_mojikumi_show_blank_dropdowns() {
     assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf));
 }
 
+/// Kinsoku Shori Type: the menu's item sets the type of the paragraphs the Type tool's selection
+/// touches in one undo step, and none is checked while the selected paragraphs differ.
+#[test]
+fn kinsoku_shori_type_sets_the_selected_paragraphs_in_one_undo_step() {
+    let (mut app, id) = editing_text("あ\nい\n");
+    app.session.prefs.show_east_asian_options = true;
+    let types = |app: &VectorcraftApp| {
+        let node = app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        (text.para_at(0).kinsoku_type, text.para_at(1).kinsoku_type)
+    };
+    select_range(&mut app, 0, 3);
+    let history = app.session.active().unwrap().history.undo.len();
+    set_kinsoku_type(&mut app, "pushInFirst");
+    assert_eq!(types(&app), (KinsokuShoriType::PushInFirst, KinsokuShoriType::PushOutOnly));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(shared_para(&app, |p| p.kinsoku_type), None, "mixed: no item checked");
+    set_kinsoku_type(&mut app, "pushOutFirst");
+    assert_eq!(types(&app), (KinsokuShoriType::PushOutFirst, KinsokuShoriType::PushOutFirst));
+    assert_eq!(shared_para(&app, |p| p.kinsoku_type), Some(KinsokuShoriType::PushOutFirst));
+    app.run("edit.undo", json!({})).unwrap();
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(types(&app), (KinsokuShoriType::PushOutOnly, KinsokuShoriType::PushOutOnly));
+}
+
 #[test]
 fn paragraph_mixed_indent_fields_show_blank() {
     let (mut app, id) = editing_text("A\nB\n");

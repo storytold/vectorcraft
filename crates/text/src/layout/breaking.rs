@@ -1,7 +1,8 @@
 use super::region::Region;
+use super::vertical::stands_upright;
 use super::{
-    Affine, BezPath, Breakpoint, Burasagari, EPS, FirstBaseline, FontDb, HyphenationOptions, Kinsoku, LeadingModel, SGlyph, hyphen_glyph,
-    hyphen_points_with, no_line_end, no_line_start, soft_line_start,
+    Affine, BezPath, Breakpoint, Burasagari, EPS, FirstBaseline, FontDb, HyphenationOptions, Kinsoku, KinsokuShoriType, LeadingModel, SGlyph,
+    hyphen_glyph, hyphen_points_with, is_cjk, no_line_end, no_line_start, soft_line_start,
 };
 
 /// Vertical metrics of a line: (ascent, descent, leading, cap height, x height).
@@ -268,7 +269,10 @@ pub(super) fn word_width(g: &[SGlyph], i: usize) -> f64 {
 /// `hyphenate` holds the paragraph's Hyphenation options and the Hyphenation Zone in force when
 /// the line may hyphenate a word; a line whose text before the overflowing word already ends
 /// within the zone breaks before that word. A tab is as wide as it is set: up to its next stop
-/// (`tabs`), with the line's content starting `x_start` from the tab origin.
+/// (`tabs`), with the line's content starting `x_start` from the tab origin. Where kinsoku alone
+/// keeps the line from breaking before the character that overflows, `kinsoku_type` decides
+/// whether the line pushes characters in ([`push_in`]) or out; `hanging` is true when Optical
+/// Margin Alignment or Roman Hanging Punctuation is on, and `vertical` in vertical type.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn break_line(
     text: &str,
@@ -280,6 +284,9 @@ pub(super) fn break_line(
     hyphenate: Option<(&HyphenationOptions, f64)>,
     burasagari: Burasagari,
     kinsoku: Kinsoku,
+    kinsoku_type: KinsokuShoriType,
+    hanging: bool,
+    vertical: bool,
 ) -> (usize, bool) {
     if !width.is_finite() {
         if let Some(pos) = g[i..].iter().position(|gl| gl.ch == '\u{2028}') {
@@ -327,6 +334,11 @@ pub(super) fn break_line(
                 while g.get(end).is_some_and(SGlyph::is_space) {
                     end += 1;
                 }
+                return (end, false);
+            }
+            if let Some(end) =
+                push_in(g, i, j, cluster_end, x + cluster_width, width, last_break.map(|b| b.0), kinsoku, kinsoku_type, hanging, vertical)
+            {
                 return (end, false);
             }
             break;
@@ -489,6 +501,137 @@ fn kinsoku_between(before: char, after: Option<char>, kinsoku: Kinsoku) -> bool 
         Kinsoku::Hard => !no_line_end(before) && after.is_none_or(|c| !no_line_start(c)),
         Kinsoku::Soft => !no_line_end(before) && after.is_none_or(|c| !no_line_start(c) || soft_line_start(c)),
     }
+}
+
+/// The share of an em by which a push-in ([`push_in`]) may close each gap next to a CJK character
+/// on the line, measured on the character before the gap.
+pub(super) const PUSH_IN_SQUEEZE: f64 = 0.1;
+
+/// The most glyphs after the overflowing cluster a push-in ([`push_in`]) takes onto the line; a
+/// longer run of characters kinsoku keeps together pushes out.
+const PUSH_IN_RUN: usize = 16;
+
+/// Kinsoku Shori Type: the end of the line from `i` that overflows `width` at the cluster
+/// `j..cluster_end` (the line is `x` wide through it) when the line pushes in, or None when it
+/// pushes out. A line pushes in only where kinsoku rules out the break before `j`: a character
+/// that may not end a line comes before it (an opening bracket or quotation mark, Latin ones
+/// included), or one that may not start a line comes at `j`. It then takes the characters up to
+/// the next break kinsoku allows (not at a soft hyphen), and the spaces after it, when closing
+/// its gaps next to CJK characters, each by up to [`PUSH_IN_SQUEEZE`] of an em of the character
+/// before it, makes room for them. Push In First tries this before it pushes out. Push Out First
+/// tries it only when pushing out, to the line's last allowed break `pushed_out`, would leave the
+/// line short by more than an em of the character before `j`. Push Out Only never pushes in, and
+/// neither does a line holding a tab or right-to-left text, nor one where the characters taken in
+/// reach a space after a character that may not end a line. With `hanging` (Optical Margin
+/// Alignment or Roman Hanging Punctuation), the gaps that hanging punctuation keeps open are not
+/// counted. `vertical`: the line is a column of vertical type ([`squeeze_em`]).
+#[allow(clippy::too_many_arguments)]
+fn push_in(
+    g: &[SGlyph],
+    i: usize,
+    j: usize,
+    cluster_end: usize,
+    x: f64,
+    width: f64,
+    pushed_out: Option<usize>,
+    kinsoku: Kinsoku,
+    kinsoku_type: KinsokuShoriType,
+    hanging: bool,
+    vertical: bool,
+) -> Option<usize> {
+    if kinsoku == Kinsoku::None || kinsoku_type == KinsokuShoriType::PushOutOnly {
+        return None;
+    }
+    let before = g.get(j.checked_sub(1)?)?;
+    if before.len == 0 || g.get(j)?.no_break || splits_no_break(g, j) || kinsoku_allows(g, j - 1, kinsoku) {
+        return None;
+    }
+    let allowed = |k: usize| {
+        k >= g.len()
+            || (g[k].byte != g[k - 1].byte
+                && kinsoku_allows(g, k - 1, kinsoku)
+                && (g[k].is_space() || (g[k - 1].break_after() && !g[k - 1].is_soft_hyphen())))
+    };
+    let (mut end, mut x) = (cluster_end, x);
+    while !allowed(end) {
+        let gl = &g[end];
+        // A space here follows a character kinsoku keeps off a line's end: the line pushes out.
+        if gl.is_space() || gl.ch == '\t' || gl.ch == '\u{2028}' || gl.no_break || end - cluster_end >= PUSH_IN_RUN {
+            return None;
+        }
+        x += gl.adv;
+        end += 1;
+    }
+    // A tab's width depends on where it falls; a line with one (other than a list marker's)
+    // pushes out.
+    if g[i..end].iter().any(|h| h.ch == '\t' && h.len > 0) {
+        return None;
+    }
+    // With `hanging`, punctuation keeps the gap after a mark that may hang at the line's start,
+    // and the gap before one that may hang at its end ([`optical_hangs`]): those gaps are not
+    // counted.
+    let mut last = end;
+    while last > i && g[last - 1].is_space() {
+        last -= 1;
+    }
+    // A line holding right-to-left text is reordered before it is drawn, and justification closes
+    // the gaps between its glyphs in that order: it pushes out.
+    if g[i..last].iter().any(|h| h.len > 0 && h.level.is_rtl()) {
+        return None;
+    }
+    let punct = |k: usize| g.get(k).is_some_and(optical_punct);
+    let quote = |k: usize| g.get(k).is_some_and(|h| is_quote(h.ch));
+    let may_hang = |a: usize| {
+        hanging
+            && ((a == i && punct(i))
+                || (a == i + 1 && punct(i) && quote(i + 1))
+                || (a + 2 == last && punct(last - 1))
+                || (a + 3 == last && punct(last - 2) && quote(last - 1)))
+    };
+    let room: f64 = (i..end - 1).filter(|&a| closes(g, a) && !may_hang(a)).map(|a| PUSH_IN_SQUEEZE * squeeze_em(&g[a], vertical)).sum();
+    if x - width > room + EPS {
+        return None;
+    }
+    if kinsoku_type == KinsokuShoriType::PushOutFirst {
+        let mut kept = pushed_out.filter(|&b| b > i).unwrap_or(i);
+        while kept > i && g[kept - 1].is_space() {
+            kept -= 1;
+        }
+        let short = width - g[i..kept].iter().map(|h| h.adv).sum::<f64>();
+        if short <= squeeze_em(before, vertical) + EPS {
+            return None;
+        }
+    }
+    while g.get(end).is_some_and(SGlyph::is_space) {
+        end += 1;
+    }
+    if g.get(end).is_some_and(|h| h.ch == '\u{2028}') {
+        end += 1;
+    }
+    Some(end)
+}
+
+/// May a push-in close the gap after glyph `a`? A gap between two characters, at least one of them
+/// CJK, outside a tate-chu-yoko block, a list marker and a shaped cluster, and not next to a space,
+/// a tab or an inline graphic before it.
+fn closes(g: &[SGlyph], a: usize) -> bool {
+    let (Some(p), Some(n)) = (g.get(a), g.get(a + 1)) else { return false };
+    p.len > 0
+        && p.byte != n.byte
+        && p.inline.is_none()
+        && !p.is_space()
+        && !n.is_space()
+        && p.ch != '\t'
+        && !n.continues_tcy()
+        && (is_cjk(p.ch) || is_cjk(n.ch))
+}
+
+/// The em a push-in measures in, along the line: `g`'s em at its Horizontal Scale, as Mojikumi's
+/// spacing is, or at its Vertical Scale when it stands upright in vertical type and the font's
+/// vertical metrics set its length down the column ([`super::vertical::upright_cell`]).
+pub(super) fn squeeze_em(g: &SGlyph, vertical: bool) -> f64 {
+    let down_the_column = vertical && stands_upright(g) && g.face.vertical_glyph(g.gid).is_some();
+    g.face.units_per_em() * if down_the_column { g.sy } else { g.sx }
 }
 
 #[cfg(test)]
