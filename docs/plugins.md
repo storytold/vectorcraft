@@ -5,7 +5,7 @@ arbitrary machine code and cannot work in the browser build. Instead, plug-ins a
 run in a sandbox. One `.wasm` file works on macOS, Windows, Linux and the web. The design follows PhotoCraft's
 plug-in API (same sandbox, same manifest and parameter schema), extended for vector documents.
 
-There are three kinds of plug-in:
+There are four kinds of plug-in:
 
 - **Object filters** read the selected paths and compound paths (geometry, fills, strokes, gradients, opacity)
   and return the objects to keep, change or add. A run is one undo step. Use them for recolouring, path
@@ -15,6 +15,8 @@ There are three kinds of plug-in:
 - **Exporters** write the whole document in a file format of their own, for pen plotters, cutting machines,
   laser cutters and the like. File › Export › Export As lists them after the built-in formats, and the host writes the
   bytes they return: a plug-in still never touches a file.
+- **Tools** register a sandboxed pointer tool in the toolbar. ABI v1 currently supports the `ellipse`
+  group: an installed tool appears beside Ellipse and disappears when its plug-in is removed.
 
 This page is the contract for plug-in authors and the reference for the host (`crates/plugins`, the
 `plugin.*` commands in `crates/engine/src/cmd/plugin.rs`).
@@ -48,6 +50,10 @@ Artboards is greyed out (the plug-in writes the whole document); one with parame
 same kind once the file is picked, and its Export button writes the file. **File › Open** of a `.wasm` file installs
 a plug-in too (on the web this is how plug-ins get in). A heavy filter asks before it is installed, and runs in the
 background ([below](#heavy-filters)).
+
+Tool plug-ins appear in the Ellipse tool group as soon as they are installed. Select one, then press and
+drag a circle. The plug-in receives compact circle context and returns ordinary VectorCraft tool
+actions, so its edits stay previews and become one undo step through the engine.
 
 **Preference folder.** Edit › Preferences › Plug-ins & Scratch Disks › *Additional Plug-ins Folder*: when set, every
 `*.wasm` in that folder (not recursive) is installed at startup and whenever the preference changes (desktop builds;
@@ -131,6 +137,9 @@ pointers are offsets into the module's memory.
 | `vc_alloc` | `(size) -> ptr` | A block of `size` bytes the host may write, or `0` on failure. Never freed: each run gets a fresh instance. |
 | `vc_run` | `(input, input_len, params, params_len) -> i64` | Runs the plug-in on the input JSON with the parameters JSON; returns `(len << 32) \| ptr` of the output JSON, or a negative error code. |
 
+Tool plug-ins use the same exports. Their host calls `vc_run` with `{}` as the parameters and puts the
+event, saved state and circle context in the input JSON.
+
 ### Manifest
 
 ```json
@@ -154,8 +163,10 @@ pointers are offsets into the module's memory.
 - `id`: 1–64 characters from `A-Z a-z 0-9 . _ -` (reverse-DNS recommended). Installing a module with the same id
   replaces the old one. A live effect's effect id is `plugin.<id>`.
 - `name`: the menu label, or an exporter's format name in Export As (1–64 printable characters). `kind`: `"filter"`
-  (object filter), `"effect"` (live effect) or `"exporter"`. Exporters came after the first ABI v1 hosts, which refuse
-  the kind when the plug-in is installed.
+  (object filter), `"effect"` (live effect), `"exporter"`, or `"tool"`.
+- `toolGroup` (tools only, required): `ellipse` in ABI v1.
+- `icon` (tools only): a 1–64 character icon name of lower-case letters, digits and `-`; defaults to
+  `tool-ellipse`. Only tools declare `toolGroup` or `icon`.
 - `budget` (filters only): `"light"` (the default) or `"heavy"`, for work that takes minutes ([heavy
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
 - `extensions` (exporters only, and required): 1–8 file extensions, lower-case letters and digits without the dot
@@ -174,6 +185,64 @@ pointers are offsets into the module's memory.
   always gets a color object, its components clamped, such as `{"model": "rgb", "r": 0.23, "g": 0.48, "b": 0.84}`; the
   picker gives RGB). Hosts from before `color` refuse a manifest that uses it. A plug-in declares up to 256
   parameters, at most 64 of them outside groups.
+
+#### Tool events
+
+A tool manifest example:
+
+```json
+{
+  "id": "org.example.tangent",
+  "name": "Tangent Circle",
+  "version": "1.0.0",
+  "kind": "tool",
+  "toolGroup": "ellipse",
+  "icon": "tool-ellipse",
+  "author": "Example",
+  "description": "Snap a circle into external tangency with two neighboring circles."
+}
+```
+
+Each call receives one JSON object:
+
+```json
+{
+  "event": {"kind": "down", "pos": [100, 80], "mods": {"shift": false}},
+  "state": null,
+  "selection": [12],
+  "circles": [
+    {"id": 12, "center": [100, 80], "radius": 24},
+    {"id": 18, "center": [170, 80], "radius": 30}
+  ],
+  "zoom": 1.0,
+  "tolerance": 4.0
+}
+```
+
+Circles are visible, unlocked, non-guide, non-clipping circles in paint order. `state` is what the
+previous return saved, or `null`. Events are `down`, `drag`, `up`, `move` and `doubleClick`.
+
+The return may carry at most 64 actions and 64 guides:
+
+```json
+{
+  "state": {"pressed": true},
+  "actions": [
+    {"type": "exec", "command": "select.set", "params": {"ids": [12]}},
+    {"type": "begin", "label": "Move"},
+    {"type": "preview", "command": "object.transform", "params": {"matrix": [1,0,0,1,5,0]}},
+    {"type": "commit"}
+  ],
+  "guides": [
+    {"type": "line", "a": [100, 80], "b": [124, 80]},
+    {"type": "label", "p": [112, 76], "text": "tangent"}
+  ]
+}
+```
+
+Actions are `exec`, `begin`, `preview`, `commit`, `cancel`, `dialog` and `switchTool`. The engine
+validates command names and parameters. Coordinates must be finite, labels at most 64 characters,
+and state at most 1 MiB. An `error` string is shown in the status bar.
 
 Each parameter may also say how dialogs show it. Hosts from before these keys ignore them, so a plug-in that
 declares them still installs there:

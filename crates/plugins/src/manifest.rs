@@ -33,6 +33,8 @@ pub enum Kind {
     /// An exporter: writes the document in a file format of its own, whose extensions the manifest
     /// lists (File › Export › Export As, `document.export`; see [`crate::export`]).
     Exporter,
+    /// A sandboxed tool registered in the tools catalogue (`toolGroup` names its toolbar group).
+    Tool,
 }
 
 impl Kind {
@@ -41,6 +43,7 @@ impl Kind {
             Kind::Filter => "filter",
             Kind::Effect => "effect",
             Kind::Exporter => "exporter",
+            Kind::Tool => "tool",
         }
     }
 }
@@ -238,6 +241,11 @@ pub struct Manifest {
     /// How much a run may compute: only a filter may be [`Budget::Heavy`].
     #[serde(default, skip_serializing_if = "Budget::is_light")]
     pub budget: Budget,
+    /// A tool's toolbar group and icon. Other kinds leave both out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_group: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 impl Manifest {
@@ -247,7 +255,10 @@ impl Manifest {
             return Err(Error::Manifest(format!("manifest is {} bytes (limit {MAX_MANIFEST_BYTES})", bytes.len())));
         }
         let text = std::str::from_utf8(bytes).map_err(|_| Error::Manifest("manifest is not UTF-8".into()))?;
-        let man: Manifest = serde_json::from_str(text).map_err(|e| Error::Manifest(format!("manifest: {e}")))?;
+        let mut man: Manifest = serde_json::from_str(text).map_err(|e| Error::Manifest(format!("manifest: {e}")))?;
+        if man.kind == Kind::Tool && man.icon.is_none() {
+            man.icon = Some("tool-ellipse".into());
+        }
         man.validate()?;
         Ok(man)
     }
@@ -264,6 +275,8 @@ impl Manifest {
             params: Vec::new(),
             extensions: Vec::new(),
             budget: Budget::Light,
+            tool_group: None,
+            icon: None,
         }
     }
 
@@ -289,6 +302,20 @@ impl Manifest {
             (Budget::Heavy, Kind::Exporter) => {
                 return Err(Error::Manifest("an exporter always gets an export's budget: leave `budget` out".into()));
             }
+            (Budget::Heavy, Kind::Tool) => {
+                return Err(Error::Manifest("only a filter may ask for a heavy budget".into()));
+            }
+        }
+        match (self.kind, self.tool_group.as_deref(), self.icon.as_deref()) {
+            (Kind::Tool, Some("ellipse"), Some(icon))
+                if !icon.is_empty() && icon.len() <= 64 && icon.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') => {}
+            (Kind::Tool, Some(_), _) => return Err(Error::Manifest("unknown `toolGroup`: use `ellipse`".into())),
+            (Kind::Tool, None, _) => return Err(Error::Manifest("a tool declares `toolGroup`".into())),
+            (_, None, None) => {}
+            (_, _, _) => return Err(Error::Manifest("only a tool declares `toolGroup` or `icon`".into())),
+        }
+        if self.kind == Kind::Tool && format!("plugin.{}", self.id).len() > 64 {
+            return Err(Error::Manifest("a tool's `plugin.<id>` is longer than 64 characters".into()));
         }
         for (i, (k, p)) in self.params.iter().enumerate() {
             if !valid_key(k) {
@@ -560,6 +587,26 @@ mod tests {
             r#"{"id":"a","name":"x","kind":"exporter","extensions":["a","b","c","d","e","f","g","h","i"]}"#,
             r#"{"id":"a","name":"x","kind":"filter","extensions":["plt"]}"#,
             r#"{"id":"a","name":"x","kind":"effect","extensions":["plt"]}"#,
+        ] {
+            assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_tool_names_its_toolbar_group_and_icon() {
+        let m = Manifest::parse(br#"{"id":"org.example.tangent","name":"Tangent Circle","kind":"tool","toolGroup":"ellipse"}"#).unwrap();
+        assert_eq!(m.kind.name(), "tool");
+        assert!(m.extensions.is_empty());
+        let v = serde_json::to_value(&m).unwrap();
+        assert_eq!(v["toolGroup"], "ellipse");
+        assert_eq!(v["icon"], "tool-ellipse");
+        for bad in [
+            r#"{"id":"a","name":"x","kind":"tool"}"#,
+            r#"{"id":"a","name":"x","kind":"tool","toolGroup":"shapes"}"#,
+            r#"{"id":"a","name":"x","kind":"tool","toolGroup":"ellipse","icon":"../../bad"}"#,
+            r#"{"id":"a","name":"x","kind":"tool","toolGroup":"ellipse","icon":""}"#,
+            r#"{"id":"a","name":"x","kind":"filter","toolGroup":"ellipse"}"#,
+            r#"{"id":"a","name":"x","kind":"filter","icon":"tool-ellipse"}"#,
         ] {
             assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
         }

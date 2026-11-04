@@ -31,6 +31,7 @@ pub mod manifest;
 pub mod objects;
 pub mod registry;
 mod runtime;
+pub mod tool;
 pub mod wat;
 
 pub use dialog::ParamUi;

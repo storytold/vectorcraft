@@ -456,6 +456,25 @@ fn groups() -> &'static [Heading] {
     })
 }
 
+/// [`groups`] with installed Ellipse tool plug-ins appended to the group that holds Ellipse.
+fn groups_with_plugins() -> Vec<(&'static str, Vec<Vec<&'static ToolInfo>>)> {
+    let mut out: Vec<(&'static str, Vec<Vec<&'static ToolInfo>>)> =
+        groups().iter().map(|(h, gs)| (*h, gs.iter().map(|g| g.iter().collect()).collect())).collect();
+    for tool in vectorcraft_tools::catalog::plugin_tools() {
+        if vectorcraft_tools::catalog::plugin_group(tool.id) != Some("ellipse") {
+            continue;
+        }
+        if let Some((_, groups)) = out.iter_mut().find(|(_, groups)| groups.iter().any(|g| g.iter().any(|t| t.id == "ellipse"))) {
+            if let Some(group) = groups.iter_mut().find(|g| g.iter().any(|t| t.id == "ellipse")) {
+                group.push(tool);
+            }
+        } else {
+            out.push(("Shapes", vec![vec![tool]]));
+        }
+    }
+    out
+}
+
 /// The All Tools drawer beside the toolbar, its top by the ••• button (higher when that would put
 /// it past the window's bottom), while `tools_drawer` is on.
 pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -526,7 +545,7 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
             egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).auto_shrink([false, true]).show(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                 let inner = ui.available_width() - 10.0;
-                for (cat, gs) in groups() {
+                for (cat, gs) in groups_with_plugins() {
                     ui.add_space(6.0);
                     ui.label(egui::RichText::new(format!("{}:", tl!(cat))).size(12.0).color(t.text_strong));
                     ui.add_space(4.0);
@@ -534,7 +553,7 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         // A flyout group: its tools framed together, as one toolbar button holds them.
                         egui::Frame::NONE.stroke(Stroke::new(1.0, t.divider)).corner_radius(2.0).show(ui, |ui| {
                             ui.set_width(inner);
-                            for tool in g.iter() {
+                            for tool in g {
                                 if row(ui, &t, tool, tool.id == active, in_toolbar.contains(tool.id)) {
                                     picked = Some(tool.id);
                                 }

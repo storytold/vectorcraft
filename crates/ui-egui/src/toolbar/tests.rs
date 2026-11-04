@@ -109,6 +109,24 @@ fn saved_flyout_choices_must_still_belong_to_the_slot() {
     }
 }
 
+#[test]
+fn tool_plugin_appears_beside_ellipse() {
+    use vectorcraft_plugins::{Limits, Plugin, registry, wat as tpl};
+    let manifest = r#"{"id":"test.ui.tangent","name":"Tangent Circle","version":"1","kind":"tool","toolGroup":"ellipse"}"#;
+    let bytes = wat::parse_str(tpl::returning(manifest, "{}")).unwrap();
+    registry::install(Plugin::load(&bytes, Limits::default()).unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let all = slots(&app);
+    let ellipse = all.iter().position(|(_, tools)| tools.contains(&"ellipse")).expect("the Ellipse slot");
+    let tools = &all[ellipse].1;
+    assert_eq!(tools.get(..2), Some(&["ellipse", "plugin.test.ui.tangent"][..]), "{tools:?}");
+    assert_eq!(tool_info("plugin.test.ui.tangent").map(|t| t.label), Some("Tangent Circle"));
+    registry::remove("test.ui.tangent");
+    let after = slots(&app);
+    assert!(after.iter().flat_map(|(_, tools)| tools).all(|id| *id != "plugin.test.ui.tangent"));
+}
+
 /// Screen readers name each tool button by its tool tip and say which tool is active, and name
 /// the title bar's column toggle and grip and the paint buttons under the tools.
 #[test]
