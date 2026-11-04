@@ -2049,6 +2049,41 @@ fn select_same_font_takes_its_reference_from_the_isolated_group_on_a_selected_la
     assert!(!got.contains(&outside));
 }
 
+/// A template sublayer inside a selected sublayer of the isolated layer gives no type for the
+/// reference of the font Same commands, so the reference is the first type that can be selected.
+#[test]
+fn select_same_font_ignores_type_on_a_template_sublayer_inside_the_isolated_layer() {
+    let mut s = session();
+    let typed =
+        |s: &mut Session, y: f64, font: &str| id_of(&s.execute("text.create", &json!({"x": 0, "y": y, "text": "type", "font": font})).unwrap());
+    let l2 = id_of(&s.execute("layer.new", &json!({"top": true})).unwrap());
+    let sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": l2.0})).unwrap());
+    let template = id_of(&s.execute("layer.newSublayer", &json!({"parent": sub.0, "bottom": true})).unwrap());
+    s.execute("layer.setCurrent", &json!({"id": template.0})).unwrap();
+    let on_template = typed(&mut s, 20.0, "Arial");
+    s.execute("layer.setProps", &json!({"id": template.0, "template": true})).unwrap();
+    s.execute("layer.setProps", &json!({"id": template.0, "locked": false})).unwrap();
+    assert!(s.doc().unwrap().doc.node(template).is_some_and(|n| n.is_template() && !n.locked));
+    s.execute("layer.setCurrent", &json!({"id": sub.0})).unwrap();
+    let courier = typed(&mut s, 60.0, "Courier");
+    let other_courier = typed(&mut s, 100.0, "Courier");
+    let arial = typed(&mut s, 140.0, "Arial");
+    let doc = &s.doc().unwrap().doc;
+    let order: Vec<NodeId> = doc.node(sub).unwrap().children().unwrap().iter().map(|c| c.id).collect();
+    assert_eq!(order, vec![template, courier, other_courier, arial]);
+    assert!(doc.ancestry(on_template).unwrap().contains(&template), "{:?}", doc.ancestry(on_template));
+    s.execute("object.isolate", &json!({"id": l2.0})).unwrap();
+    sel(&mut s, &[sub]);
+    assert_eq!(s.doc().unwrap().isolation, Some(l2));
+    assert_eq!(s.execute("select.same.fontFamily", &json!({})).unwrap()["count"], 2);
+    let mut got = selected(&s);
+    got.sort();
+    let mut want = vec![courier, other_courier];
+    want.sort();
+    assert_eq!(got, want);
+    assert!(!got.contains(&arial) && !got.contains(&on_template));
+}
+
 /// Select › Same › Symbol Instance takes its reference from the first selected object that can be
 /// selected: an instance that is hidden, locked, on a template layer or outside the isolated group
 /// is passed over.
