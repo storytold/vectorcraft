@@ -447,7 +447,7 @@ fn recovery_folder_has_a_choose_button_with_a_folder_picker() {
     assert!(text.contains("Data Recovery") && !text.contains("Choose…"), "{text}");
 }
 
-/// Choose… puts the folder picked into the Folder field, and OK saves it; a cancelled picker
+/// Choose… puts the folder picked into the Folder field, and OK saves it; a canceled picker
 /// leaves the field as it was.
 #[test]
 fn a_chosen_recovery_folder_fills_the_field_and_cancel_keeps_it() {
@@ -471,7 +471,7 @@ fn a_chosen_recovery_folder_fills_the_field_and_cancel_keeps_it() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// A picked folder that no file can be created in is refused: the field keeps its value and the
+/// A picked folder that no folder can be created in is refused: the field keeps its value and the
 /// status bar says why.
 #[test]
 fn a_recovery_folder_that_cannot_be_written_is_refused() {
@@ -497,7 +497,7 @@ fn a_recovery_folder_that_cannot_be_written_is_refused() {
         std::fs::create_dir(&locked).unwrap();
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
         // An account that may write anyway (root) has nothing to refuse.
-        if std::fs::write(locked.join("probe"), b"").is_err() {
+        if std::fs::create_dir(locked.join("probe")).is_err() {
             let answer = locked.to_string_lossy().into_owned();
             a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
             a.ui.status.clear();
@@ -507,5 +507,28 @@ fn a_recovery_folder_that_cannot_be_written_is_refused() {
         }
         let _ = std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755));
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The recovery folder is an app preference: a folder picked off the UI thread (Linux) fills the
+/// open dialog's field even when the active document closed while the picker was open.
+#[test]
+fn a_chosen_recovery_folder_fills_the_field_after_the_active_document_closes() {
+    let dir = temp_folder("recovery-closed");
+    let picked = dir.to_string_lossy().into_owned();
+    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    let (shown, _) = crate::tests_picks::off_the_ui_thread(&mut a.services);
+    a.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    open(&mut a, Some("File Handling"));
+    let mut d = a.ui.dialog.take().unwrap();
+    choose_recovery_folder(&mut a, &mut d);
+    a.ui.dialog = Some(d);
+    assert!(matches!(shown.requests().as_slice(), [crate::picks::PickRequest::Folder]));
+    a.session.execute("file.close", &json!({})).unwrap();
+    a.sync_views();
+    assert!(a.session.documents().is_empty());
+    shown.answer(&[&picked]);
+    crate::picks::poll(&mut a, &egui::Context::default());
+    assert_eq!(a.ui.dialog.as_ref().unwrap().str("recoveryFolder"), picked, "{}", a.ui.status);
     let _ = std::fs::remove_dir_all(&dir);
 }

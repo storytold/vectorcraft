@@ -411,11 +411,12 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
     }
 }
 
-/// Data Recovery › Choose…: the folder picked becomes the Folder field's value when files can be
+/// Data Recovery › Choose…: the folder picked becomes the Folder field's value when a folder can be
 /// made in it. Otherwise the status bar says why and the field keeps its value, as it does when
-/// the picker is cancelled.
+/// the picker is canceled. The answer fills the field even when the active document closed while
+/// the picker was open.
 fn choose_recovery_folder(app: &mut VectorcraftApp, d: &mut Dialog) {
-    let r = crate::picks::in_dialog(app, d, |app, d| {
+    let r = crate::picks::in_app_dialog(app, d, |app, d| {
         let Some(path) = crate::picks::folder(app) else { return Ok(()) };
         writable_folder(&path)?;
         d.fields.insert("recoveryFolder".into(), json!(path));
@@ -426,7 +427,9 @@ fn choose_recovery_folder(app: &mut VectorcraftApp, d: &mut Dialog) {
     }
 }
 
-/// `Ok` when `path` is a folder that a file can be created in: a file is made there and removed.
+/// `Ok` when `path` is a folder that a folder can be created in, as the recovery store makes its
+/// own there: an empty folder is made there and removed. A folder that can't be removed again is
+/// an error too.
 fn writable_folder(path: &str) -> Result<(), String> {
     let dir = std::path::Path::new(path);
     if !dir.is_dir() {
@@ -434,15 +437,9 @@ fn writable_folder(path: &str) -> Result<(), String> {
     }
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |t| t.as_nanos());
     let check = dir.join(format!(".vectorcraft-write-check-{}-{nanos}", std::process::id()));
-    match std::fs::OpenOptions::new().write(true).create_new(true).open(&check) {
-        Ok(f) => {
-            drop(f);
-            // Best effort: the empty file is all there is to remove.
-            let _ = std::fs::remove_file(&check);
-            Ok(())
-        }
-        Err(e) => Err(format!("Data Recovery can't keep copies in {path}: {e}")),
-    }
+    let refused = |e: std::io::Error| format!("Data Recovery can't keep copies in {path}: {e}");
+    std::fs::create_dir(&check).map_err(refused)?;
+    std::fs::remove_dir(&check).map_err(refused)
 }
 
 /// Is one of the dialog's Units (General, Stroke, Type, East Asian Type) Picas?
