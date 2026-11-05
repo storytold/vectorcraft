@@ -608,7 +608,9 @@ impl<'a> Reader<'a> {
         node.opacity = gs.opacity;
         node.blend = gs.blend;
         node.extras_mut().mask = mask.map(Box::new);
-        self.add(node, hidden)
+        self.add(node, hidden)?;
+        self.image_tail = self.after_object;
+        Ok(())
     }
 
     /// `~`: the placed file read since `%AI5_BeginPlace` becomes a linked image in its place that
@@ -791,13 +793,17 @@ pub(super) fn preview_png(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
 }
 
 /// A placed file's path relative to the document's folder (`/` separators): its relative `folder`
-/// (`src/`, `..\art`) followed by its file `name`. `None` when the folder is empty, absolute, or
-/// holds control characters, or when there is no name.
+/// (`src/`, `..\art`) followed by its file `name`; the name alone when the folder is empty (the
+/// document's own folder). `None` when the folder is absolute or holds control characters, or
+/// when there is no name.
 pub(super) fn relative_path(folder: &str, name: &str) -> Option<String> {
     let folder = folder.replace('\\', "/");
     let absolute = folder.starts_with('/') || folder.as_bytes().get(1) == Some(&b':') || folder.contains("://");
-    if folder.is_empty() || absolute || name.is_empty() || folder.chars().chain(name.chars()).any(char::is_control) {
+    if absolute || name.is_empty() || folder.chars().chain(name.chars()).any(char::is_control) {
         return None;
+    }
+    if folder.is_empty() {
+        return Some(name.to_string());
     }
     Some(format!("{}/{name}", folder.trim_end_matches('/')))
 }

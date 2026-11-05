@@ -538,7 +538,13 @@ impl<'a> Reader<'a> {
     /// The state block of a layer whose art ended (`Xy`, `Xd`, `XW`, then `LB`) is read at the
     /// `LB`, and can have the stroke style between its `Xy` and `Xd`: that keeps the layer's state,
     /// and what a mesh or blend before it had (`mesh_undo`).
+    /// After an image, the operators that end its raster (`XH`, `Xr` and the `N` after
+    /// `%AI5_EndRaster`) keep it the object its name and opacity mask go to.
     fn state_block_continues(&mut self, w: &str) {
+        if self.image_tail && matches!(w, "XH" | "XT" | "Xr" | "N") {
+            return;
+        }
+        self.image_tail = false;
         // An object's tags (`XT`) follow it one after another, and an image's follow the `XH` that
         // ends its data.
         if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH") {

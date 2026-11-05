@@ -67,8 +67,12 @@ private editing data. VectorCraft:
   clipping layers clipped by a path or compound path, linear and radial gradients on fills and strokes (with their
   stops' opacity, midpoints and spot colors, elliptical radials and focal points) and gradient swatches, and
   patterns whose tiles make a grid and hold their art within the tile, with no pattern fill in that art, as
-  pattern definitions with their fills, strokes and swatches. Type, other patterns, images, symbols, other clipping
-  objects and live objects are written as plain filled and stroked paths, and freeform gradients, gradients along
+  pattern definitions with their fills, strokes and swatches. Embedded images are written with their pixels (gray,
+  RGB or CMYK ink amounts, and their alpha channel) and linked images as placed files with their path, their folder
+  relative to the document's and a preview; images that can't be decoded or have more than 33,554,432 pixels are
+  written as their outlines filled mid gray, images of 16 bits a channel at 8 bits, and linked images in opacity
+  masks and pattern tiles as embedded images, each with a warning. Type, other patterns, symbols, other clipping
+  objects and live objects (placed documents included) are written as plain filled and stroked paths, and freeform gradients, gradients along
   or across a stroke and gradients without stops, with more than 256 stops or without extent as their average
   color, each with a warning. Gradients that dither or mix their colors perceptually are written as classic
   gradients, and gradient stops linked to global process colors as their colors, each with a warning. The opacity

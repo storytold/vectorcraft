@@ -3325,6 +3325,42 @@ proptest! {
         survive("hostile .ai patterns", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose images (binary samples with an alpha channel, the operators that end a raster,
+    /// then a name and an opacity mask) and placed file (an empty relative folder, a preview) are
+    /// damaged or hostile, bytes of the samples included.
+    #[test]
+    fn ai_images_and_placed_files_never_panic(
+        cut in 0usize..3_000,
+        edits in prop::collection::vec((0usize..3_000, prop::sample::select(vec![b'0', b'1', b'9', b' ', b'\r', b'\n', b'(', b')', b'[', b']', b'%', b'_', b'N', b'X', b'~', 0u8, 255u8])), 0..12),
+    ) {
+        use vectorcraft_testkit::ai;
+        let raster = "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n[10 0 0 10 20 -30] 2 1 0 Xh\n[10 0 0 10 20 -30] 0 0 2 1 2 1 8 3 1 17 1 0 4 4 0 0\n%%BeginData: 10\nXI\n@@%%EndData\nXH\n\
+                      %AI17_Begin_Content_if_version_gt:24 17\n72 72 Xr\n%AI17_End_Versioned_Content\n%AI5_EndRaster\nN\n\
+                      %_/ArtDictionary :\n%_/Mask :\n%_X=\n%_0 g\n%_0 0 m\n%_5 0 l\n%_5 -5 l\n%_f\n%_X+\n%_ (Art) ,\n%_; (AI9_Mask) ,\n%_/XMLUID : (Photo) ; (AI10_ArtUID) ,\n%_;\n%_\n";
+        let place = "%AI5_BeginPlace\n%%FileType: 1\n[1 0 0 -1 -8000 8000] 8000 8000 8002 8001 4 4 0\n(/tmp/p.png)`\n%%IncludeFile:/tmp/p.png\n\
+                     %AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n()\n%AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n\
+                     %AI17_Begin_Content_if_version_gt:24 5\n%AI26_BeginPlacedObjectPreview\n2 1 8 32 17 @@\n%AI26_EndPlacedObjectPreview\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace\n";
+        let text = ai::editing_data(100.0, 100.0, &ai::layer("L", &format!("{raster}{place}")));
+        let samples: &[u8] = &[255, 0, 0, 0, 0, 255, 128, 0];
+        let preview: &[u8] = &[255, 255, 0, 0, 0, 0, 0, 0];
+        let mut data = Vec::new();
+        for (i, part) in text.split("@@").enumerate() {
+            if i > 0 {
+                data.extend_from_slice(if i == 1 { samples } else { preview });
+            }
+            data.extend_from_slice(part.as_bytes());
+        }
+        for &(i, b) in &edits {
+            let n = data.len();
+            if n > 0 {
+                data[i % n] = b;
+            }
+        }
+        data.truncate(cut.min(data.len()));
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &ruzstd::encoding::compress_to_vec(data.as_slice(), ruzstd::encoding::CompressionLevel::Fastest)].concat();
+        survive("hostile .ai images and placed files", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose variable library is damaged or hostile: the library is counted for the warning
     /// whether the layers are read or not (an inserted `Z` can make an operator the reader doesn't
     /// handle, and then the layers aren't read).

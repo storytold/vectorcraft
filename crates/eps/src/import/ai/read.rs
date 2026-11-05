@@ -274,6 +274,9 @@ struct Reader<'a> {
     place: Option<Place>,
     /// The last object read is the last child of the innermost frame, and nothing started since.
     after_object: bool,
+    /// The last object read is an image, and only the operators that end its raster (`XH`, `Xr`,
+    /// `N`) came since: its name and opacity mask still follow.
+    image_tail: bool,
     nodes: usize,
     /// What layers that show have that this reader doesn't read (errors).
     unsupported: BTreeSet<String>,
@@ -460,6 +463,7 @@ impl<'a> Reader<'a> {
             place: None,
             foreign_data: None,
             after_object: false,
+            image_tail: false,
             nodes: 0,
             unsupported: BTreeSet::new(),
             unknown: BTreeSet::new(),

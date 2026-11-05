@@ -602,8 +602,8 @@ fn hidden_layers_open_hidden() {
     assert!(text.contains("%AI5_NumLayers: 3\n%AI5_OpenViewLayers: 776\n"), "{text}");
 }
 
-/// A 200 × 100 document of a gradient fill and a compound path, and what the data holds as plain
-/// paths: an image, type and a symbol instance.
+/// A 200 × 100 document of a gradient fill, a compound path and an image, and what the data holds
+/// as plain paths: type and a symbol instance.
 fn unsupported() -> Document {
     let mut doc = Document::new(200.0, 100.0);
     let layer = doc.layers[0].id;
@@ -665,7 +665,7 @@ fn paths(nodes: &[Arc<Node>], out: &mut Vec<Node>) {
 fn art_the_slice_does_not_cover_is_written_as_plain_paths() {
     let doc = unsupported();
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    for w in [writer::IMAGES, writer::TYPE, writer::LIVE] {
+    for w in [writer::TYPE, writer::LIVE] {
         assert!(out.warnings.iter().any(|x| x == w), "{w}: {:?}", out.warnings);
     }
     let back = read_back(&doc);
@@ -676,19 +676,19 @@ fn art_the_slice_does_not_cover_is_written_as_plain_paths() {
             NodeKind::Path { .. } => "path",
             NodeKind::Group { .. } => "group",
             NodeKind::Compound { .. } => "compound",
+            NodeKind::Image(_) => "image",
             _ => "other",
         })
         .collect();
-    assert_eq!(kinds, ["path", "compound", "path", "group", "group"]);
+    assert_eq!(kinds, ["path", "compound", "image", "group", "group"]);
     let mut all = vec![];
-    paths(layer, &mut all);
+    paths(&layer[3..], &mut all);
     assert!(all.iter().all(|n| matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })));
     // The gradient as a gradient, drawing as it did.
     let bounds = Rect::new(10.0, 10.0, 30.0, 30.0);
     let original = doc.layers[0].children().unwrap()[0].appearance.items[0].paint();
     assert_eq!(drawn(&back, layer[0].appearance.items[0].paint(), bounds), drawn(&doc, original, bounds));
-    // The image's outline filled with its pixels' average.
-    assert_eq!(paint(layer[2].appearance.items[0].paint()), paint(&solid(Color::rgb(0.5, 0.0, 0.5))));
+    // The image as an image.
     assert_eq!(layer[2].visual_bounds().map(|b| (r3(b.x0), r3(b.y0), r3(b.x1), r3(b.y1))), Some((r3(100.0), r3(10.0), r3(120.0), r3(20.0))));
 }
 
@@ -916,11 +916,10 @@ fn an_adjusted_image_in_a_symbol_is_written_in_its_adjusted_color() {
     let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Picture".into(), xf: Affine::translate((50.0, 20.0)) });
     doc.insert(Some(layer), usize::MAX, instance).unwrap();
     let back = read_back(&doc);
-    let mut all = vec![];
-    paths(back.layers[0].children().unwrap(), &mut all);
-    let fill = paint(all[0].appearance.items[0].paint());
-    assert_ne!(fill, paint(&solid(Color::gray(0.5))), "the adjusted image is found");
-    assert_ne!(fill, paint(&solid(Color::rgb(0.0, 0.0, 0.0))), "the image is adjusted");
+    let mut found = vec![];
+    pictures(&back, &back.layers, "", &mut found);
+    assert_eq!(found.len(), 1, "the adjusted image is found");
+    assert!(!found[0].ends_with("rgba [0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]"), "the image is adjusted: {found:?}");
 }
 
 #[test]
@@ -1017,26 +1016,15 @@ fn effects_on_a_fill_are_reported_left_out() {
 }
 
 #[test]
-fn images_too_large_to_average_are_mid_gray() {
+fn images_of_more_pixels_than_the_reader_reads_are_mid_gray() {
     let mut png = vec![];
-    image::GrayImage::new(5000, 4000).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
-    assert_eq!(image_average_of(&png), paint(&solid(Color::gray(0.5))));
-    let mut small = vec![];
-    image::GrayImage::new(50, 40).write_to(&mut std::io::Cursor::new(&mut small), image::ImageFormat::Png).unwrap();
-    assert_eq!(image_average_of(&small), paint(&solid(Color::rgb(0.0, 0.0, 0.0))));
-}
-
-/// The fill an image of `png` is written with, as the reader reads it.
-fn image_average_of(png: &[u8]) -> String {
+    image::GrayImage::new(6000, 6000).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
     let mut doc = Document::new(200.0, 100.0);
     let layer = doc.layers[0].id;
-    let blob = ImageBlob::new("image/png", png.to_vec());
-    let key = blob.content_key();
-    doc.images.insert(key.clone(), blob);
-    let im = ImageObject { key, width: 10, height: 10, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
-    let im = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im)));
+    let im = image_node(&mut doc, ImageBlob::png(png), (10, 10), Affine::IDENTITY, None);
     doc.insert(Some(layer), usize::MAX, im).unwrap();
-    paint(read_back(&doc).layers[0].children().unwrap()[0].appearance.items[0].paint())
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::IMAGES]);
+    assert_eq!(paint(read_back(&doc).layers[0].children().unwrap()[0].appearance.items[0].paint()), paint(&solid(Color::gray(0.5))));
 }
 
 #[test]
@@ -2477,4 +2465,530 @@ fn a_pattern_swatchs_own_placement_is_reported_left_out() {
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert_eq!(out.warnings, [writer::SWATCH_PLACEMENT]);
     assert!(program(&doc).contains("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Big Dots) Pc\n"));
+}
+
+// ---------- images and placed files ----------
+
+/// `img` as PNG bytes.
+fn png_of(img: image::DynamicImage) -> Vec<u8> {
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    png
+}
+
+/// An image object of `blob`'s pixels (`w` × `h`) placed by `xf`, its blob kept in `doc`.
+fn image_node(doc: &mut Document, blob: ImageBlob, (w, h): (u32, u32), xf: Affine, link: Option<vectorcraft_doc::LinkInfo>) -> Node {
+    let key = blob.content_key();
+    doc.images.insert(key.clone(), blob);
+    let im = ImageObject { key, width: w, height: h, xf, link, placement: Default::default(), pixels: None };
+    Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im)))
+}
+
+/// A 3 × 2 RGB image, every pixel a different color.
+fn rgb_png() -> Vec<u8> {
+    let px = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [0, 255, 255], [12, 34, 56]];
+    png_of(image::DynamicImage::ImageRgb8(image::RgbImage::from_fn(3, 2, |x, y| image::Rgb(px[(y * 3 + x) as usize]))))
+}
+
+/// A 200 × 100 document of images: on a layer `Pictures`, an RGB image `Photo` turned, scaled and
+/// moved, at half opacity in Multiply; a locked RGBA image whose pixels are see-through in part; a
+/// hidden gray image; a CMYK image; a clipping group of the RGB image cut by a rectangle; a square
+/// whose opacity mask is a gray image. On a layer `Links`, a linked image in a folder next to the
+/// document's.
+fn images_doc() -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let turned = Affine::translate((40.0, 30.0)) * Affine::rotate(0.5) * Affine::scale_non_uniform(8.0, 6.0);
+    let mut photo = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), turned, None);
+    photo.name = Some("Photo".into());
+    photo.opacity = 0.5;
+    photo.blend = BlendMode::Multiply;
+    doc.insert(Some(layer), usize::MAX, photo).unwrap();
+    let alpha = [0, 128, 255, 200];
+    let rgba = image::RgbaImage::from_fn(2, 2, |x, y| image::Rgba([200, 100, (x * 50) as u8, alpha[(y * 2 + x) as usize]]));
+    let mut see = image_node(&mut doc, ImageBlob::png(png_of(rgba.into())), (2, 2), Affine::new([10.0, 0.0, 0.0, 10.0, 60.0, 10.0]), None);
+    see.locked = true;
+    doc.insert(Some(layer), usize::MAX, see).unwrap();
+    let gray = image::GrayImage::from_fn(4, 1, |x, _| image::Luma([(x * 60) as u8]));
+    let mut gray = image_node(&mut doc, ImageBlob::png(png_of(gray.into())), (4, 1), Affine::new([5.0, 0.0, 0.0, 5.0, 90.0, 60.0]), None);
+    gray.visible = false;
+    doc.insert(Some(layer), usize::MAX, gray).unwrap();
+    let inks = vectorcraft_doc::cmyk::Inks::new(2, 1, vec![255, 0, 0, 0, 10, 20, 30, 40]).unwrap();
+    let cmyk = image_node(&mut doc, ImageBlob::cmyk_tiff(&inks).unwrap(), (2, 1), Affine::new([10.0, 0.0, 0.0, 10.0, 120.0, 10.0]), None);
+    doc.insert(Some(layer), usize::MAX, cmyk).unwrap();
+    let clip = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(150.0, 10.0, 170.0, 25.0)), Appearance::default());
+    let inside = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::new([10.0, 0.0, 0.0, 10.0, 145.0, 5.0]), None);
+    let group = Node::new(doc.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(inside)], clip: true });
+    doc.insert(Some(layer), usize::MAX, group).unwrap();
+    let ramp = image::GrayImage::from_fn(3, 3, |x, y| image::Luma([(x * 100 + y * 20) as u8]));
+    let mask_art = image_node(&mut doc, ImageBlob::png(png_of(ramp.into())), (3, 3), Affine::new([10.0, 0.0, 0.0, 10.0, 10.0, 60.0]), None);
+    let mut square = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(10.0, 60.0, 40.0, 90.0)),
+        Appearance::basic(solid(Color::rgb(0.0, 0.5, 1.0)), Paint::None, 0.0),
+    );
+    // A mask's art is read into a group.
+    let mask_art = Node::group(doc.alloc_id(), vec![Arc::new(mask_art)]);
+    square.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, false)));
+    doc.insert(Some(layer), usize::MAX, square).unwrap();
+    let links = Node::layer(doc.alloc_id(), "Links", LayerColor::Preset(1));
+    let links_id = links.id;
+    doc.layers.push(Arc::new(links));
+    let pic = image::RgbaImage::from_fn(3, 3, |x, y| image::Rgba([(x * 80) as u8, (y * 80) as u8, 30, 255]));
+    let mut link = vectorcraft_doc::LinkInfo::new("/Users/someone/Job (1)/art/pic.png");
+    link.relative = Some("art/pic.png".into());
+    let placed = image_node(&mut doc, ImageBlob::png(png_of(pic.into())), (3, 3), Affine::new([4.0, 1.0, -1.0, 4.0, 60.0, 50.0]), Some(link));
+    doc.insert(Some(links_id), usize::MAX, placed).unwrap();
+    doc
+}
+
+/// Each image in `nodes` (opacity masks' art included), in order: where it is, its state, size,
+/// placement, link and pixels (RGBA, or a CMYK image's ink amounts).
+fn pictures(doc: &Document, nodes: &[Arc<Node>], path: &str, out: &mut Vec<String>) {
+    for (i, n) in nodes.iter().enumerate() {
+        let at = format!("{path}/{i}");
+        if let NodeKind::Image(im) = &n.kind {
+            let blob = doc.image_blob(im).unwrap();
+            let pixels = match blob.cmyk() {
+                Some(inks) if blob.is_cmyk() => format!("cmyk {:?}", inks.data),
+                _ => format!("rgba {:?}", image::load_from_memory(&blob.bytes).unwrap().to_rgba8().into_raw()),
+            };
+            let xf: Vec<String> = im.xf.as_coeffs().iter().map(|v| r3(*v)).collect();
+            let link = im.link.as_ref().map(|l| (l.path.clone(), l.relative.clone()));
+            out.push(format!(
+                "{at} {:?} shown={} locked={} opacity={} {:?} {}x{} [{}] {link:?} {pixels}",
+                n.name,
+                n.visible,
+                n.locked,
+                r3(f64::from(n.opacity)),
+                n.blend,
+                im.width,
+                im.height,
+                xf.join(" ")
+            ));
+        }
+        if let Some(m) = &n.extras().mask {
+            pictures(doc, std::slice::from_ref(&m.art), &format!("{at}/mask"), out);
+        }
+        if let Some(c) = n.children() {
+            pictures(doc, c, &at, out);
+        }
+    }
+}
+
+fn images_of(doc: &Document) -> Vec<String> {
+    let mut out = vec![];
+    pictures(doc, &doc.layers, "", &mut out);
+    out
+}
+
+#[test]
+fn images_come_back_with_their_pixels_and_places() {
+    let doc = images_doc();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let want = images_of(&doc);
+    let got = images_of(&back);
+    assert_eq!(want.len(), 7);
+    for (g, w) in got.iter().zip(&want) {
+        assert_eq!(g, w);
+    }
+    assert_eq!(got.len(), want.len(), "{got:?}");
+    // The clipping group and the masked square are there as themselves.
+    assert_eq!(lines(&back).len(), lines(&doc).len(), "{:?}", lines(&back));
+}
+
+#[test]
+fn images_are_written_again_as_the_same_bytes() {
+    let mut doc = images_doc();
+    // The default swatches' RGB colors come back a ten-thousandth off in their CMYK equivalents.
+    doc.swatches.retain(|s| matches!(s.paint, Paint::None));
+    doc.swatches.push(Swatch { name: "Gold".into(), paint: solid(GOLD), global: false, spot: false });
+    doc.swatch_groups = Default::default();
+    let first = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(first.program, export_ai_editing(&doc, &opts()).unwrap().program);
+    let again = export_ai_editing(&read_back(&doc), &opts()).unwrap().program;
+    for (a, b) in shown(&again).lines().zip(shown(&first.program).lines()) {
+        assert_eq!(a, b);
+    }
+    assert_eq!(again, first.program);
+}
+
+/// The program of `doc` with LF line ends, and each image's samples (from after `XI` and its line
+/// end to `%%EndData`, a `%_` before it kept) and each preview's rows (from after `32 17 ` to the
+/// line end before `%AI26_EndPlacedObjectPreview`) shown as `<n bytes>`.
+fn program_shown(doc: &Document) -> String {
+    shown(&export_ai_editing(doc, &opts()).unwrap().program)
+}
+
+/// Program `p` as [`program_shown`] shows it.
+fn shown(p: &[u8]) -> String {
+    let find = |from: usize, what: &[u8]| p.get(from..).and_then(|r| r.windows(what.len()).position(|w| w == what)).map(|i| i + from);
+    let mut out = Vec::new();
+    let mut at = 0;
+    loop {
+        let xi = find(at, b"\r\nXI\r\n").map(|i| (i + 6, b"%%EndData".as_slice()));
+        let pv = find(at, b" 32 17 ").map(|i| (i + 7, b"\r\n%AI26_EndPlacedObjectPreview".as_slice()));
+        let Some((start, end)) = [xi, pv].into_iter().flatten().min_by_key(|(s, _)| *s) else { break };
+        let mut stop = find(start, end).unwrap();
+        if end.starts_with(b"%%") && p.get(stop - 2..stop) == Some(b"%_") {
+            stop -= 2;
+        }
+        out.extend_from_slice(&p[at..start]);
+        out.extend_from_slice(format!("<{} bytes>", stop - start).as_bytes());
+        at = stop;
+    }
+    out.extend_from_slice(&p[at..]);
+    String::from_utf8(out).unwrap().replace("\r\n", "\n")
+}
+
+#[test]
+fn an_image_is_a_raster_with_binary_samples() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let im = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::new([10.0, 0.0, 0.0, 10.0, 20.0, 30.0]), None);
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    let p = export_ai_editing(&doc, &opts()).unwrap().program;
+    // `XI`, CR LF and the 18 samples, which are counted, follow the count's line.
+    let at = p.windows(17).position(|w| w == b"%%BeginData: 22\r\n").unwrap();
+    let samples: Vec<u8> = vec![255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0, 0, 255, 255, 12, 34, 56];
+    let mut want = b"XI\r\n".to_vec();
+    want.extend_from_slice(&samples);
+    want.extend_from_slice(b"%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\r\n");
+    assert_eq!(p.get(at + 17..at + 17 + want.len()), Some(want.as_slice()));
+    let text = program_shown(&doc);
+    // Art space is y up from the artboard's top-left corner, the pixels' rows run downwards.
+    assert!(
+        text.contains(
+            "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n[10 0 0 10 20 -30] 3 2 0 Xh\n[10 0 0 10 20 -30] 0 0 3 2 3 2 8 3 0 1 1 0 4 4 0 0\n"
+        ),
+        "{text}"
+    );
+}
+
+#[test]
+fn see_through_gray_and_cmyk_images_have_their_flags() {
+    let doc = images_doc();
+    let text = program_shown(&doc);
+    // RGBA: the alpha channel follows the color samples, which the count doesn't take in.
+    assert!(text.contains(" 0 0 2 2 2 2 8 3 1 17 1 0 4 4 0 0\n%%BeginData: 16\nXI\n<16 bytes>%%EndData\n"), "{text}");
+    assert!(text.contains("/DeviceGray XN\n"), "{text}");
+    assert!(text.contains(" 0 0 4 1 4 1 8 1 0 0 1 0 4 4 0 0\n"), "{text}");
+    assert!(text.contains("/DeviceCMYK XN\n"), "{text}");
+    assert!(text.contains(" 0 0 2 1 2 1 8 4 0 2 1 0 4 4 0 0\n%%BeginData: 12\nXI\n<8 bytes>%%EndData\n"), "{text}");
+    // In an opacity mask: on `%_` lines but for `XI` and its samples.
+    assert!(text.contains("%_%%BeginData: 13\nXI\n<9 bytes>%_%%EndData\n%_XH\n%_%AI5_EndRaster\n%_N\n"), "{text}");
+}
+
+#[test]
+fn a_linked_image_is_a_placed_file_with_a_preview() {
+    let doc = images_doc();
+    let text = program_shown(&doc);
+    let begin = text.find("%AI5_BeginPlace\n").unwrap();
+    let place = &text[begin..text[begin..].find("%AI5_EndPlace\n").unwrap() + begin];
+    let lines: Vec<&str> = place.lines().collect();
+    assert_eq!(lines[1], "%%FileType: 1");
+    assert!(lines[2].ends_with("] 8091 8141 8094 8144 4 4 0"), "{place}");
+    assert_eq!(lines[3], "(/Users/someone/Job \\(1\\)/art/pic.png)`");
+    assert_eq!(lines[4], "%%IncludeFile:/Users/someone/Job (1)/art/pic.png");
+    assert_eq!(
+        &lines[5..10],
+        [
+            "%AI17_Begin_Content_if_version_gt:24 12",
+            "%AI28_BeginPlacedRelativePath",
+            "(art/)",
+            "%AI28_EndPlacedRelativePath",
+            "%AI17_Alternate_Content"
+        ]
+    );
+    assert_eq!(&lines[11..13], ["%AI17_Begin_Content_if_version_gt:24 5", "%AI26_BeginPlacedObjectPreview"]);
+    // 3 × 3 pixels of premultiplied ARGB.
+    assert_eq!(lines[13], "3 3 12 32 17 <36 bytes>");
+    assert_eq!(&lines[14..], ["%AI26_EndPlacedObjectPreview", "%AI17_End_Versioned_Content", "~"]);
+}
+
+/// The relative folder goes with the path's file name, so a relative path to a file of another
+/// name isn't written.
+#[test]
+fn a_relative_path_to_a_file_of_another_name_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut link = vectorcraft_doc::LinkInfo::new("/old/original.png");
+    link.relative = Some("assets/current.png".into());
+    let im = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::scale(10.0), Some(link));
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    assert!(!program_shown(&doc).contains("%AI28_BeginPlacedRelativePath"));
+    let back = read_back(&doc);
+    let NodeKind::Image(im) = &back.layers[0].children().unwrap()[0].kind else { panic!("not an image") };
+    let link = im.link.as_ref().unwrap();
+    assert_eq!((link.path.as_str(), link.relative.as_deref()), ("/old/original.png", None));
+    // Names that differ only in letter case keep the folder where file names ignore case.
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut link = vectorcraft_doc::LinkInfo::new("C:\\Job\\art\\PHOTO.PNG");
+    link.relative = Some("art/photo.png".into());
+    let im = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::scale(10.0), Some(link));
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    let kept = program_shown(&doc).contains("%AI28_BeginPlacedRelativePath\n(art/)\n");
+    assert_eq!(kept, cfg!(any(windows, target_os = "macos")));
+    // A relative path with `\` separators keeps its folder.
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut link = vectorcraft_doc::LinkInfo::new("C:\\Job\\art\\photo.png");
+    link.relative = Some("art\\photo.png".into());
+    let im = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::scale(10.0), Some(link));
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    assert!(program_shown(&doc).contains("%AI28_BeginPlacedRelativePath\n(art/)\n"));
+}
+
+#[test]
+fn a_large_linked_image_has_a_smaller_preview_over_its_pixels() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let big = image::RgbaImage::from_fn(1024, 512, |x, y| image::Rgba([(x / 4) as u8, (y / 2) as u8, 0, 255]));
+    let xf = Affine::new([0.1, 0.0, 0.0, 0.1, 20.0, 30.0]);
+    let im = image_node(&mut doc, ImageBlob::png(png_of(big.into())), (1024, 512), xf, Some(vectorcraft_doc::LinkInfo::new("/tmp/big.png")));
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    assert!(program_shown(&doc).contains("\n256 128 1024 32 17 <131072 bytes>\n"));
+    let back = read_back(&doc);
+    let NodeKind::Image(im) = &back.layers[0].children().unwrap()[0].kind else { panic!("not an image") };
+    assert_eq!((im.width, im.height), (256, 128));
+    let bounds = im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, 256.0, 128.0));
+    assert_eq!((r3(bounds.x0), r3(bounds.y0), r3(bounds.x1), r3(bounds.y1)), (r3(20.0), r3(30.0), r3(122.4), r3(81.2)));
+    assert_eq!(im.link.as_ref().map(|l| l.path.as_str()), Some("/tmp/big.png"));
+}
+
+/// Samples that hold the bytes of `%%EndData` without a line end after them are read whole.
+#[test]
+fn samples_holding_the_end_marker_are_read_whole() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    // The color samples end `%%En` and the alpha channel starts `dData`.
+    let rgb = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, b'%'], *b"%En"];
+    let alpha = *b"dData";
+    let img = image::RgbaImage::from_fn(5, 1, |x, _| {
+        let [r, g, b] = rgb[x as usize];
+        image::Rgba([r, g, b, alpha[x as usize]])
+    });
+    let im = image_node(&mut doc, ImageBlob::png(png_of(img.into())), (5, 1), Affine::scale(10.0), None);
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    // The alpha channel holds the marker, a line end and the operator that follows the samples.
+    let alpha = *b"%%EndData\r\nXH\r\nZZ";
+    let img = image::RgbaImage::from_fn(17, 1, |x, _| image::Rgba([x as u8, 9, 9, alpha[x as usize]]));
+    let marked = ImageBlob::png(png_of(img.into()));
+    let im = image_node(&mut doc, marked.clone(), (17, 1), Affine::translate((0.0, 20.0)), None);
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    // The same image as an opacity mask's art, on `%_` lines.
+    let art = image_node(&mut doc, marked, (17, 1), Affine::translate((0.0, 40.0)), None);
+    let mut square =
+        Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 40.0, 17.0, 41.0)), Appearance::basic(solid(Color::BLACK), Paint::None, 0.0));
+    square.extras_mut().mask = Some(Box::new(OpacityMask::new(Node::group(doc.alloc_id(), vec![Arc::new(art)]), false)));
+    doc.insert(Some(layer), usize::MAX, square).unwrap();
+    let back = read_back(&doc);
+    assert_eq!(images_of(&back), images_of(&doc));
+}
+
+/// A preview scaled down mixes no color from pixels that don't show.
+#[test]
+fn a_smaller_preview_takes_no_color_from_see_through_pixels() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let half = image::RgbaImage::from_fn(511, 3, |x, _| if x % 2 == 0 { image::Rgba([255, 0, 0, 0]) } else { image::Rgba([0, 0, 255, 255]) });
+    let im = image_node(
+        &mut doc,
+        ImageBlob::png(png_of(half.into())),
+        (511, 3),
+        Affine::scale(0.2),
+        Some(vectorcraft_doc::LinkInfo::new("/tmp/half.png")),
+    );
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    let back = read_back(&doc);
+    let NodeKind::Image(im) = &back.layers[0].children().unwrap()[0].kind else { panic!("not an image") };
+    assert_eq!(im.width, 256);
+    let px = image::load_from_memory(&back.image_blob(im).unwrap().bytes).unwrap().to_rgba8();
+    assert!(px.pixels().all(|p| p.0[0] == 0), "{:?}", px.pixels().take(4).collect::<Vec<_>>());
+    assert!(px.pixels().filter(|p| p.0[3] > 0).count() > 400);
+}
+
+#[test]
+fn linked_images_in_masks_and_tiles_are_embedded() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let link = Some(vectorcraft_doc::LinkInfo::new("/tmp/ramp.png"));
+    let art = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::scale(10.0), link);
+    let mut square =
+        Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 20.0)), Appearance::basic(solid(Color::BLACK), Paint::None, 0.0));
+    square.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    doc.insert(Some(layer), usize::MAX, square).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::LINKS_EMBEDDED]);
+    let text = program_shown(&doc);
+    assert!(!text.contains("BeginPlace") && text.contains("%_%AI5_BeginRaster"), "{text}");
+}
+
+/// An image in an opacity mask's art inside a pattern's tile is hidden once: its samples end
+/// `%_%%EndData`.
+#[test]
+fn an_image_in_a_mask_in_a_pattern_tile_ends_its_samples_once() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let art = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::scale(10.0), None);
+    let mut square =
+        Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 20.0)), Appearance::basic(solid(Color::BLACK), Paint::None, 0.0));
+    square.extras_mut().mask = Some(Box::new(OpacityMask::new(Node::group(doc.alloc_id(), vec![Arc::new(art)]), false)));
+    doc.patterns.push(vectorcraft_doc::PatternDef::new("Masked", vec![Arc::new(square)]));
+    let filled = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(40.0, 40.0, 100.0, 80.0)),
+        Appearance::basic(Paint::Pattern { pattern: "Masked".into(), xf: Affine::IDENTITY }, Paint::None, 0.0),
+    );
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    let text = program_shown(&doc);
+    assert!(text.contains("XI\n<18 bytes>%_%%EndData\n%_XH\n"), "{text}");
+    assert!(!text.contains("%_%_%%EndData"), "{text}");
+}
+
+#[test]
+fn an_image_in_art_cut_to_a_clipping_object_is_clipped_by_that_region() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    // Type clips: its art is cut to the glyphs' region, which can't cut an image.
+    let ring = Node::new(
+        doc.alloc_id(),
+        NodeKind::Compound {
+            children: vec![
+                Arc::new(Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), Appearance::default())),
+                Arc::new(Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), Appearance::default())),
+            ],
+            rule: FillRule::EvenOdd,
+        },
+    );
+    let ring = Node::new(doc.alloc_id(), NodeKind::Group { children: vec![Arc::new(ring)], clip: false });
+    let im = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::scale(20.0), None);
+    let group = Node::new(doc.alloc_id(), NodeKind::Group { children: vec![Arc::new(ring), Arc::new(im)], clip: true });
+    doc.insert(Some(layer), usize::MAX, group).unwrap();
+    let back = read_back(&doc);
+    let mut found = vec![];
+    pictures(&back, &back.layers, "", &mut found);
+    assert_eq!(found.len(), 1, "{:?}", lines(&back));
+    let text = program_shown(&doc);
+    let at = text.find("%AI5_EndRaster\nN\n").unwrap();
+    assert!(text[at..].contains("h\nW\nn\n") && text[..at].contains("q\n"), "{text}");
+    // The ring's two subpaths clip as one compound path, not as one cut by the other.
+    let tail = &text[at..];
+    assert!(tail.contains("0 XR\n*u\n") && tail.contains("h\nW\nn\n*U\n"), "{text}");
+    fn clipping(nodes: &[Arc<Node>], out: &mut Vec<usize>) {
+        for n in nodes {
+            if let NodeKind::Group { children, clip: true } = &n.kind {
+                out.extend(children.first().map(|c| match &c.kind {
+                    NodeKind::Path { path, .. } => path.subpaths.len(),
+                    NodeKind::Compound { children, .. } => children.len(),
+                    _ => 0,
+                }));
+            }
+            clipping(n.children().map(Vec::as_slice).unwrap_or_default(), out);
+        }
+    }
+    let mut subpaths = vec![];
+    clipping(&back.layers, &mut subpaths);
+    assert_eq!(subpaths, [2], "{:?}", lines(&back));
+}
+
+/// Art cut to a region with nothing left in it (two clipping objects that don't overlap) leaves the
+/// image out.
+#[test]
+fn an_image_cut_to_nothing_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let boxed = |doc: &mut Document, r: Rect| {
+        let p = Node::path(doc.alloc_id(), shapes::rectangle(r), Appearance::default());
+        Arc::new(Node::new(doc.alloc_id(), NodeKind::Group { children: vec![Arc::new(p)], clip: false }))
+    };
+    let im = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::scale(20.0), None);
+    let far = boxed(&mut doc, Rect::new(50.0, 0.0, 60.0, 10.0));
+    let inner = Node::new(doc.alloc_id(), NodeKind::Group { children: vec![far, Arc::new(im)], clip: true });
+    let near = boxed(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0));
+    let outer = Node::new(doc.alloc_id(), NodeKind::Group { children: vec![near, Arc::new(inner)], clip: true });
+    doc.insert(Some(layer), usize::MAX, outer).unwrap();
+    assert!(!program_shown(&doc).contains("%AI5_BeginRaster"));
+}
+
+#[test]
+fn images_that_cant_be_decoded_are_mid_gray_boxes() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let im = image_node(&mut doc, ImageBlob::png(b"not an image".to_vec()), (2, 1), Affine::scale(10.0), None);
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::IMAGES]);
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert_eq!(paint(n.appearance.items[0].paint()), paint(&solid(Color::gray(0.5))));
+}
+
+#[test]
+fn sixteen_bit_images_are_written_at_eight_bits() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let deep = image::ImageBuffer::<image::Rgb<u16>, Vec<u16>>::from_fn(2, 1, |x, _| image::Rgb([65535 * x as u16, 257 * 10, 0]));
+    let im = image_node(&mut doc, ImageBlob::png(png_of(image::DynamicImage::ImageRgb16(deep))), (2, 1), Affine::scale(10.0), None);
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::IMAGE_DEPTH]);
+    let back = read_back(&doc);
+    let mut found = vec![];
+    pictures(&back, &back.layers, "", &mut found);
+    assert!(found[0].ends_with("rgba [0, 10, 0, 255, 255, 10, 0, 255]"), "{found:?}");
+}
+
+/// A little-endian, uncompressed CMYK TIFF of 16 bits a sample, `w` × 1 pixels, each pixel's inks
+/// `inks[x]`.
+fn cmyk16_tiff(inks: &[[u16; 4]]) -> Vec<u8> {
+    let w = inks.len() as u32;
+    let data: Vec<u8> = inks.iter().flatten().flat_map(|v| v.to_le_bytes()).collect();
+    // Tags: width, height, bits (an offset), compression, photometric, strip offset, samples, rows,
+    // strip bytes, planar configuration.
+    let bits_at = 8 + 2 + 12 * 10 + 4;
+    let data_at = bits_at + 8;
+    let entries: [(u16, u16, u32, u32); 10] = [
+        (256, 4, 1, w),
+        (257, 4, 1, 1),
+        (258, 3, 4, bits_at),
+        (259, 3, 1, 1),
+        (262, 3, 1, 5),
+        (273, 4, 1, data_at),
+        (277, 3, 1, 4),
+        (278, 4, 1, 1),
+        (279, 4, 1, data.len() as u32),
+        (284, 3, 1, 1),
+    ];
+    let mut out = b"II*\0".to_vec();
+    out.extend_from_slice(&8u32.to_le_bytes());
+    out.extend_from_slice(&10u16.to_le_bytes());
+    for (tag, kind, count, value) in entries {
+        out.extend_from_slice(&tag.to_le_bytes());
+        out.extend_from_slice(&kind.to_le_bytes());
+        out.extend_from_slice(&count.to_le_bytes());
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+    out.extend_from_slice(&0u32.to_le_bytes());
+    for _ in 0..4 {
+        out.extend_from_slice(&16u16.to_le_bytes());
+    }
+    out.extend_from_slice(&data);
+    out
+}
+
+#[test]
+fn sixteen_bit_cmyk_images_are_written_at_eight_bits() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let blob = ImageBlob::new("image/tiff", cmyk16_tiff(&[[65535, 0, 0, 0], [0, 0x8000, 0, 0x1234]]));
+    assert!(blob.is_cmyk() && blob.is_cmyk16());
+    let im = image_node(&mut doc, blob, (2, 1), Affine::scale(10.0), None);
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::IMAGE_DEPTH]);
+    assert!(program_shown(&doc).contains("/DeviceCMYK XN\n"));
 }
