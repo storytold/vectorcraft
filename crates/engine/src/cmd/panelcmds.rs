@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert to Text",
             [],
             None,
-            "{ids?|id?, start?: byte, end?: byte} (Type › Bullets and Numbering › Convert to Text: the paragraphs of the selected type, or of `ids`, or those a start/end range touches) the marker of each list paragraph becomes characters of its text: the bullet, or the number and its period as the paragraph showed it, then a tab, at the start of the paragraph in the marker's font, size and color; the list is turned off. When the marker's tab went to the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, which keeps the text after the tab where it started; when it went to a tab stop and a stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker and that place, the paragraph gets a left-aligned stop without a leader where the marker's tab ended, in place of any stop there and of those right, center and decimal stops before it (past the left indent only in a paragraph with no tab of its own). In threaded type the numbers are those counted through the story's frames, and a paragraph that continues into a later frame is converted where its text starts. An empty list paragraph has no marker and only leaves the list. A paragraph with no direction set gets the direction it ran in when the characters would change it (a letter or roman numeral before right-to-left text). With the Every-line Composer, a paragraph with a tab is broken line by line, so a converted paragraph can break its lines at other places. While the Type tool edits, its typing ends first and its anchor and caret move past the characters inserted at or before them; in threaded type, when the caret's character moved to another frame, the tool edits that frame, which becomes the selection when it was not selected. One undo step → {ids, converted: paragraphs, inserted: [{id, at: byte before the change, length: bytes}]}",
+            "{ids?|id?, start?: byte, end?: byte} (Type › Bullets and Numbering › Convert to Text: the paragraphs of the selected type, or of `ids`, or those a start/end range touches; after Select All in a frame of threaded text, without `ids`, `id` or a range, every paragraph of the story's frames that are neither locked nor hidden; while the story is selected, its locked and hidden frames are not converted even when named) the marker of each list paragraph becomes characters of its text: the bullet, or the number and its period as the paragraph showed it, then a tab, at the start of the paragraph in the marker's font, size and color; the list is turned off. When the marker's tab went to the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, which keeps the text after the tab where it started; when it went to a tab stop and a stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker and that place, the paragraph gets a left-aligned stop without a leader where the marker's tab ended, in place of any stop there and of those right, center and decimal stops before it (past the left indent only in a paragraph with no tab of its own). In threaded type the numbers are those counted through the story's frames, and a paragraph that continues into a later frame is converted where its text starts. An empty list paragraph has no marker and only leaves the list. A paragraph with no direction set gets the direction it ran in when the characters would change it (a letter or roman numeral before right-to-left text). With the Every-line Composer, a paragraph with a tab is broken line by line, so a converted paragraph can break its lines at other places. While the Type tool edits, its typing ends first and its anchor and caret move past the characters inserted at or before them (a whole story that Select All selected stays selected when the call converts all of it); in threaded type, when the caret's character moved to another frame, the tool edits that frame, which becomes the selection when it was not selected. One undo step → {ids, converted: paragraphs, inserted: [{id, at: byte before the change, length: bytes}]}",
             has_doc,
             convert_list_to_text
         ),
@@ -876,8 +876,20 @@ fn move_editing_selection(
 fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.convertListToText";
     use vectorcraft_doc::text::ParaList;
-    let ids = super::typecmd::text_targets(s, p, C)?;
     let range = super::typecmd::TextRange::parse(p, C)?;
+    // After Select All in a frame of threaded text, a call that names no type and no range takes
+    // every paragraph of the story's editable frames; its locked and hidden frames stay as they are
+    // whichever way they are named.
+    let full = super::textedit::editing_story(s);
+    let story: Vec<NodeId> = full.iter().copied().filter(|f| s.doc().is_ok_and(|st| st.doc.is_editable(*f))).collect();
+    let named = ["ids", "id"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null()));
+    let ids = if !story.is_empty() && !named && range.is_none() {
+        story.clone()
+    } else {
+        super::typecmd::text_targets(s, p, C)?.into_iter().filter(|id| !full.contains(id) || story.contains(id)).collect()
+    };
+    // Converting the whole story leaves it selected.
+    let whole_story = !story.is_empty() && range.is_none() && story.iter().all(|f| ids.contains(f));
     let editing = match super::textedit::editing_range(s)? {
         Some((id, _, _)) => {
             let options = s.tool_options();
@@ -1058,7 +1070,8 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
             }
             Ok(())
         })?;
-        if let Some(editing) = editing {
+        // A whole story selected by Select All stays selected, with the characters inserted.
+        if let Some(editing) = editing.filter(|_| !whole_story) {
             move_editing_selection(s, editing, &story_before, &insertions)?;
         }
     }
