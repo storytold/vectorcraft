@@ -206,7 +206,7 @@ pub(crate) struct MoveSnap {
     copy_targets: Option<Targets>,
     copy_points: Option<Targets>,
     /// With Smart Guides on, the ruler guides View › Snap to Point still pulls the grabbed point
-    /// onto (#1534); `points` holds them with Smart Guides off.
+    /// onto (#1534), and lines the bounds up with (#5746); `points` holds them with Smart Guides off.
     rulers: Option<Targets>,
 }
 
@@ -245,6 +245,8 @@ impl MoveSnap {
             d = q - start;
             guides = ov;
         }
+        // The axes (x, y) Smart Guides already put in line with other art.
+        let mut taken = [false; 2];
         if let (Some(t), Some(b)) = (targets, self.bounds) {
             // The point the selection was grabbed by, near another object's anchor or centre,
             // lands on it, rather than the bounds lining up a little beside it (#955).
@@ -252,18 +254,26 @@ impl MoveSnap {
                 let (q, ov) = t.snap_point(start + d, cx.snap_tol());
                 d = q - start;
                 guides = ov;
+                taken = [true; 2];
             } else {
-                let (adj, ov) = t.snap_rect(b + d, cx.snap_tol());
+                let (adj, ov, axes) = t.snap_rects_axes(&[b + d], cx.snap_tol());
                 d += adj;
                 guides = ov;
+                taken = axes;
             }
         }
-        // A ruler guide within reach of the grabbed point wins over lining the bounds up.
+        // A ruler guide within reach of the grabbed point wins over lining the bounds up; on an
+        // axis without one that Smart Guides left free, the bounds line up with the ruler guides
+        // (#5746), alongside the Smart Guides.
         if let Some(t) = &self.rulers {
-            let (q, ov) = t.snap_point(start + d, cx.tol(cx.snap_tolerance));
-            if q != start + d {
-                d = q - start;
-                guides = ov;
+            let (adj, ov, held) = t.snap_moved_to_rulers(start + d, self.bounds.map(|b| b + d), cx.tol(cx.snap_tolerance), taken);
+            if adj != Vec2::ZERO {
+                d += adj;
+                if held {
+                    guides = ov;
+                } else {
+                    guides.extend(ov);
+                }
             }
         }
         if cx.snap_to_pixel
