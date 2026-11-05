@@ -20,7 +20,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Set Corners",
             [],
             None,
-            "{ids?: [id…] (the selection), anchors?: [index…] (of each path's outline with no corners cut; else its direct-selected anchors, or all of them), items?: [{id, anchors?}…] (instead of ids: each path with its own anchors), radius: pt 0..1000000 (drawn no larger than fits), kind?: \"round\"|\"invertedRound\"|\"chamfer\" (each corner's own), every?: \"all\"|\"odd\"|\"even\" (default all: of those anchors, only the odd- or even-numbered ones, counting each path's anchors from 1)} cut live corners at the anchors that can have one, as one undo step → {ids, corners (how many)}",
+            "{ids?: [id…] (the selection), anchors?: [index…] (of each path's outline with no corners cut; else its direct-selected anchors, or all of them), items?: [{id, anchors?}…] (instead of ids: each path with its own anchors), radius: pt 0..1000000 (drawn no larger than fits), kind?: \"round\"|\"invertedRound\"|\"chamfer\" (each corner's own), every?: \"all\"|\"odd\"|\"even\" (default all: of those anchors, only the odd- or even-numbered ones, counting each path's anchors from 1), minAngle?: degrees 0..180 (default 0), maxAngle?: degrees 0..180 (default 180; of those anchors, only the corners whose sides meet at an angle in this range: small for a sharp spike, near 180 for a shallow bend)} cut live corners at the anchors that can have one, as one undo step → {ids, corners (how many)}",
             has_doc,
             corner_set
         ),
@@ -84,19 +84,74 @@ impl Every {
         }
     }
 
-    /// The error when none of the chosen corners is one it takes.
-    fn none(self) -> &'static str {
+    /// Where the corners it takes are, for an error: "" for all of them.
+    fn at(self) -> &'static str {
         match self {
-            Self::All => "choose anchors where two sides meet at an angle: only those take a corner",
-            Self::Odd => "none of the chosen corners is at an odd-numbered anchor (the 1st, 3rd, 5th…)",
-            Self::Even => "none of the chosen corners is at an even-numbered anchor (the 2nd, 4th, 6th…)",
+            Self::All => "",
+            Self::Odd => " at an odd-numbered anchor (the 1st, 3rd, 5th…)",
+            Self::Even => " at an even-numbered anchor (the 2nd, 4th, 6th…)",
+        }
+    }
+}
+
+/// How far (degrees) past the ends of the angle range a corner's angle may be, so that a typed 90
+/// takes a rectangle's corners whatever the rounding.
+const ANGLE_SLACK: f64 = 1e-6;
+/// The error when no anchor named is a corner at all.
+const NO_CORNER: &str = "choose anchors where two sides meet at an angle: only those take a corner";
+
+/// Which of the chosen corners `cornerSet` takes: by their number (`every`) and by the angle their
+/// sides meet at (`minAngle`..`maxAngle`, degrees).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Pick {
+    every: Every,
+    min_angle: f64,
+    max_angle: f64,
+}
+
+impl Pick {
+    /// Every chosen corner.
+    const ALL: Self = Self { every: Every::All, min_angle: 0.0, max_angle: 180.0 };
+
+    /// The `every`, `minAngle` and `maxAngle` of `p`.
+    fn of(p: &Value, cmd: &str) -> Result<Self> {
+        let every = Every::of(p, cmd)?;
+        let angle = |key: &str, default: f64| -> Result<f64> {
+            let a = number_or(p, key, default, cmd)?;
+            if !(a.is_finite() && (0.0..=180.0).contains(&a)) {
+                return Err(bad(cmd, format!("`{key}` must be from 0 to 180 degrees, not {a}")));
+            }
+            Ok(a)
+        };
+        let (min_angle, max_angle) = (angle("minAngle", 0.0)?, angle("maxAngle", 180.0)?);
+        if min_angle > max_angle {
+            return Err(bad(cmd, format!("`minAngle` ({min_angle}°) can't be more than `maxAngle` ({max_angle}°)")));
+        }
+        Ok(Self { every, min_angle, max_angle })
+    }
+
+    /// Does it take corner `index` of `lc`?
+    fn takes(&self, lc: &LiveCorners, index: usize) -> bool {
+        self.every.takes(index)
+            && lc.corner(index).is_some_and(|c| (self.min_angle - ANGLE_SLACK..=self.max_angle + ANGLE_SLACK).contains(&c.angle_deg()))
+    }
+
+    /// The error when it takes none of the chosen corners.
+    fn none(&self) -> String {
+        let at = self.every.at();
+        if self.min_angle > 0.0 || self.max_angle < 180.0 {
+            format!("none of the chosen corners{at} has an angle from {}° to {}°", self.min_angle, self.max_angle)
+        } else if at.is_empty() {
+            NO_CORNER.into()
+        } else {
+            format!("none of the chosen corners is{at}")
         }
     }
 }
 
 /// The corners a request names: each path with the corners (anchor indices of its uncut outline)
-/// that `every` takes.
-fn named_corners(s: &Session, p: &Value, cmd: &str, every: Every) -> Result<Vec<(NodeId, BTreeSet<usize>)>> {
+/// that `pick` takes.
+fn named_corners(s: &Session, p: &Value, cmd: &str, pick: Pick) -> Result<Vec<(NodeId, BTreeSet<usize>)>> {
     let shared = anchors_param(p, cmd)?;
     // Each path with its own `anchors`, or sharing the request's.
     let mut own: Vec<Option<BTreeSet<usize>>> = vec![];
@@ -130,13 +185,13 @@ fn named_corners(s: &Session, p: &Value, cmd: &str, every: Every) -> Result<Vec<
             None => st.selection.partial(*id).filter(|a| !a.is_empty()).map_or_else(|| lc.all(), |a| lc.corners_of(a)),
         };
         chosen |= !corners.is_empty();
-        let corners: BTreeSet<usize> = corners.into_iter().filter(|k| every.takes(*k)).collect();
+        let corners: BTreeSet<usize> = corners.into_iter().filter(|k| pick.takes(&lc, *k)).collect();
         if !corners.is_empty() {
             out.push((*id, corners));
         }
     }
     if out.is_empty() {
-        return Err(bad(cmd, if chosen { every.none() } else { Every::All.none() }));
+        return Err(bad(cmd, if chosen { pick.none() } else { NO_CORNER.into() }));
     }
     Ok(out)
 }
@@ -181,12 +236,12 @@ fn corner_set(s: &mut Session, p: &Value) -> Result<Value> {
                 .map_err(|_| bad(C, format!("`kind` must be \"round\", \"invertedRound\" or \"chamfer\", not {v}")))
         })
         .transpose()?;
-    let every = Every::of(p, C)?;
-    let corners = named_corners(s, p, C, every)?;
+    let pick = Pick::of(p, C)?;
+    let corners = named_corners(s, p, C, pick)?;
     edit_corners(s, "Set Corners", corners, radius, kind)
 }
 
 fn corner_remove(s: &mut Session, p: &Value) -> Result<Value> {
-    let corners = named_corners(s, p, "addon.pathtools.cornerRemove", Every::All)?;
+    let corners = named_corners(s, p, "addon.pathtools.cornerRemove", Pick::ALL)?;
     edit_corners(s, "Remove Corners", corners, 0.0, Some(CornerKind::Round))
 }
