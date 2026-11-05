@@ -454,6 +454,46 @@ fn a_gradient_stop_naming_a_process_colour_leaves_its_swatch_process() {
 const DOTS: &str = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 8 8\n%_0 A\n%_0 Xw\n%_0 Ae\n%_u\n%_0 O\n%_0 8 m\n%_8 8 L\n%_8 0 L\n%_0 0 L\n%_0 8 L\n%_n\n\
                     %_0 R\n%_0 0 0 1 K\n%_1 J 0 j 2 w 4 M []0 d\n%_4 4 m\n%_4 4 L\n%_S\n%_U\n%_/ArtDictionary :\n%_;\n%_\n%_9 () XW\nE\n%AI3_EndPattern\n";
 
+/// An unpainted box that a pattern's definition marks as its tile's box isn't art; a painted one
+/// with the mark stays.
+#[test]
+fn a_patterns_marked_tile_box_is_not_art() {
+    let mark = "%_/ArtDictionary :\n%_1 /Bool (AIPattern_Editor_Backing_Tile_Rect) ,\n%_;\n%_\n";
+    let def = |paint: &str, op: &str| {
+        format!(
+            "%AI3_BeginPattern: (Box)\n(Box) 0 0 8 8\n%_0 A\n%_0 Xw\n%_{paint}0 XR\n%_0 8 m\n%_8 8 L\n%_8 0 L\n%_0 0 L\n%_0 8 L\n%_{op}\n{mark}\
+             %_0 0 0 1 k\n%_2 2 m\n%_6 2 L\n%_6 6 L\n%_2 6 L\n%_f\nE\n%AI3_EndPattern\n"
+        )
+    };
+    let layer = format!(
+        "%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n(Box) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\nLB\n%AI5_EndLayer--\n",
+        rect_path(10.0, 20.0, 70.0, 80.0)
+    );
+    let s = read_ok(&format!("{}{layer}", def("", "n")));
+    let art = &s.doc.pattern("Box").unwrap().art;
+    assert_eq!(art.len(), 1, "the square only");
+    assert_eq!(art[0].geometric_bounds(), Some(Rect::new(2.0, -6.0, 6.0, -2.0)));
+    let s = read_ok(&format!("{}{layer}", def("1 0 0 0 k\n%_", "f")));
+    assert_eq!(s.doc.pattern("Box").unwrap().art.len(), 2, "a painted box is art");
+    // The mark after a group or a compound path of an unpainted box leaves it in the art.
+    for (open, close, kind) in [("u", "U", "group"), ("*u", "*U", "compound path")] {
+        let def = format!(
+            "%AI3_BeginPattern: (Box)\n(Box) 0 0 8 8\n%_0 A\n%_0 Xw\n%_{open}\n%_0 8 m\n%_8 8 L\n%_8 0 L\n%_0 0 L\n%_0 8 L\n%_n\n%_{close}\n{mark}\
+             %_0 0 0 1 k\n%_2 2 m\n%_6 2 L\n%_6 6 L\n%_2 6 L\n%_f\nE\n%AI3_EndPattern\n"
+        );
+        let s = read_ok(&format!("{def}{layer}"));
+        assert_eq!(s.doc.pattern("Box").unwrap().art.len(), 2, "after a {kind}");
+    }
+    // Outside a pattern's definition the mark leaves the box in the art.
+    let marked = format!(
+        "%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n0 XR\n{}n\n{mark}0 0 0 1 k\n{}f\nLB\n%AI5_EndLayer--\n",
+        rect_path(10.0, 20.0, 70.0, 80.0),
+        rect_path(20.0, 30.0, 40.0, 50.0)
+    );
+    let s = read_ok(&marked);
+    assert_eq!(s.doc.layers[0].children().unwrap().len(), 2, "outside a pattern");
+}
+
 /// Patterns are read into pattern swatches, and `p` fills with one (#1025): the art keeps its
 /// layers, the fill places the tiles by its matrix.
 #[test]
