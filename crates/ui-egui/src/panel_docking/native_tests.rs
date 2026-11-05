@@ -719,6 +719,7 @@ fn a_raised_overlay_blocks_the_next_font_wheel_event() {
             modifiers: Default::default(),
             source: egui::MouseWheelSource::Unknown,
         },
+        Event::PointerGone,
     ]);
     h.frame(vec![]);
     let order = h.host.borrow().child_layer_order.get(&viewport).cloned().expect("child layer order");
@@ -733,6 +734,7 @@ fn a_raised_overlay_blocks_the_next_font_wheel_event() {
         "the raised overlay must receive the wheel event"
     );
     assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+    assert_eq!(h.ctx.input_for(viewport, |input| input.pointer.latest_pos()), None);
 }
 
 #[test]
@@ -830,6 +832,7 @@ fn wheel_events_on_both_sides_of_an_overlay_are_checked_separately() {
     h.frame(vec![]);
     h.frame(vec![]);
     assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), before);
+    assert_eq!(h.ctx.input_for(viewport, |input| input.pointer.latest_pos()), Some(clear));
 }
 
 #[test]

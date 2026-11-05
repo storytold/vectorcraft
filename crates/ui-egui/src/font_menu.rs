@@ -515,6 +515,7 @@ impl egui::Plugin for WheelLayerSnapshot {
             }
         }
         if fields.replay.len() > replayed {
+            fields.replay.push(fields.pointer.map_or(egui::Event::PointerGone, egui::Event::PointerMoved));
             ctx.request_repaint();
         }
         ctx.data_mut(|d| d.insert_temp(key, fields));
