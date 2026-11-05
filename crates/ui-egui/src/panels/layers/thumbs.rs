@@ -76,8 +76,24 @@ const LIGHT_THUMB_MS: f64 = 4.0;
 const LIGHT_THUMB_NODES: usize = 200;
 
 /// A node whose paths have more anchors than this in all has its first thumbnail made on the
-/// worker.
+/// worker. Type's glyphs, mesh points and image pixels count against it too, each as the anchors
+/// that take about as long to render: [`GLYPH_ANCHORS`], [`MESH_POINT_ANCHORS`] and
+/// [`IMAGE_PIXELS_PER_ANCHOR`].
 const LIGHT_THUMB_ANCHORS: usize = 2_000;
+
+/// Anchors one glyph of type counts as.
+const GLYPH_ANCHORS: usize = 4;
+
+/// Anchors one point of a gradient mesh counts as.
+const MESH_POINT_ANCHORS: usize = 1;
+
+/// Pixels of an image that count as one anchor.
+const IMAGE_PIXELS_PER_ANCHOR: usize = 100;
+
+/// The most symbols and placed documents counted inside one another: a node holding them deeper
+/// (a symbol whose art holds an instance of itself, for one) has its first thumbnail made on the
+/// worker.
+const MAX_THUMB_NESTING: usize = 8;
 
 /// At most this long (ms) and this many thumbnails are rendered on the UI thread in a pass; the
 /// rest go to the worker, or wait for the next pass where there is none.
@@ -93,8 +109,40 @@ pub(crate) fn thumb_options() -> vectorcraft_render::RenderOptions {
 /// Has `n` at most `nodes` objects inside it, and at most `anchors` anchors in its paths and the
 /// paths inside it, the frames of area type and the paths of type on a path included (counting
 /// stops at either limit)? With `masks`, the art of the opacity masks that are not disabled, and
-/// the objects and anchors inside it, count as well.
-fn small_node(n: &Node, nodes: usize, anchors: usize, masks: bool) -> bool {
+/// the objects and anchors inside it, count as well. With `doc` (the document `n` is in), type's
+/// glyphs, mesh points and image pixels count as anchors too ([`LIGHT_THUMB_ANCHORS`]), and a
+/// symbol instance and a placed document count the objects and anchors of the art they show: the
+/// symbol's art in `doc`, and the placed file's art when it has been read (a placed document whose
+/// file has not been read, or art nested deeper than [`MAX_THUMB_NESTING`], is not small).
+fn small_node(n: &Node, nodes: usize, anchors: usize, masks: bool, doc: Option<&Document>) -> bool {
+    /// What may still be counted.
+    struct Left {
+        nodes: usize,
+        anchors: usize,
+        masks: bool,
+    }
+    impl Left {
+        /// Count `anchors` more: false past the limit.
+        fn take(&mut self, anchors: usize) -> bool {
+            match self.anchors.checked_sub(anchors) {
+                Some(left) => {
+                    self.anchors = left;
+                    true
+                }
+                None => false,
+            }
+        }
+        /// Count one more object: false past the limit.
+        fn object(&mut self) -> bool {
+            match self.nodes.checked_sub(1) {
+                Some(left) => {
+                    self.nodes = left;
+                    true
+                }
+                None => false,
+            }
+        }
+    }
     fn own_anchors(n: &Node) -> usize {
         match &n.kind {
             NodeKind::Text(t) => match &t.kind {
@@ -104,23 +152,41 @@ fn small_node(n: &Node, nodes: usize, anchors: usize, masks: bool) -> bool {
             _ => n.path_data().map_or(0, PathData::anchor_count),
         }
     }
-    fn count(n: &Node, nodes: &mut usize, anchors: &mut usize, masks: bool) -> bool {
-        let Some(left) = anchors.checked_sub(own_anchors(n)) else { return false };
-        *anchors = left;
-        let mask = n.extras().mask.as_deref().filter(|m| masks && !m.disabled).map(|m| &m.art);
-        for c in n.children().into_iter().flatten().chain(mask) {
-            if *nodes == 0 {
-                return false;
-            }
-            *nodes -= 1;
-            if !count(c, nodes, anchors, masks) {
-                return false;
-            }
-        }
-        true
+    /// Count `art`, drawn in place of an object (`doc` its document), one level deeper.
+    fn inside(art: &Node, doc: &Document, left: &mut Left, depth: usize) -> bool {
+        depth < MAX_THUMB_NESTING && left.object() && count(art, Some(doc), left, depth + 1)
     }
-    let (mut nodes, mut anchors) = (nodes, anchors);
-    count(n, &mut nodes, &mut anchors, masks)
+    /// Count symbol `name` of `doc` (one that doesn't exist draws nothing).
+    fn symbol(name: &str, doc: &Document, left: &mut Left, depth: usize) -> bool {
+        doc.symbols.iter().find(|s| s.name == name).is_none_or(|s| inside(&s.art, doc, left, depth))
+    }
+    /// Count what `n` draws besides its children.
+    fn own(n: &Node, doc: Option<&Document>, left: &mut Left, depth: usize) -> bool {
+        if !left.take(own_anchors(n)) {
+            return false;
+        }
+        let Some(doc) = doc else { return true };
+        match &n.kind {
+            // Glyphs are counted only up to one past what the anchors left allow.
+            NodeKind::Text(t) => t.runs.iter().all(|r| {
+                let glyphs = r.text.chars().take(left.anchors / GLYPH_ANCHORS + 1).count();
+                left.take(glyphs.saturating_mul(GLYPH_ANCHORS)) && r.inline.as_ref().is_none_or(|a| symbol(&a.symbol, doc, left, depth))
+            }),
+            NodeKind::SymbolInstance { symbol: name, .. } => symbol(name, doc, left, depth),
+            NodeKind::Mesh(m) => left.take(m.points.len().saturating_mul(MESH_POINT_ANCHORS)),
+            NodeKind::Image(im) => left.take((im.width as usize).saturating_mul(im.height as usize) / IMAGE_PIXELS_PER_ANCHOR),
+            NodeKind::PlacedDocument(p) => vectorcraft_doc::placed_document::read_cached(p).is_some_and(|e| inside(&e.art, &e.doc, left, depth)),
+            _ => true,
+        }
+    }
+    fn count(n: &Node, doc: Option<&Document>, left: &mut Left, depth: usize) -> bool {
+        if !own(n, doc, left, depth) {
+            return false;
+        }
+        let mask = n.extras().mask.as_deref().filter(|m| left.masks && !m.disabled).map(|m| &m.art);
+        n.children().into_iter().flatten().chain(mask).all(|c| left.object() && count(c, doc, left, depth))
+    }
+    count(n, doc, &mut Left { nodes, anchors, masks }, 0)
 }
 
 /// The thumbnail of `n` (`px` pixels square) as `r` renders it, on the UI thread or the worker.
@@ -209,9 +275,10 @@ impl Thumbs {
         let in_budget = self.spent.1 < THUMB_BUDGET_MS && self.spent.2 < THUMB_BUDGET_COUNT;
         // A row drawn before is light when its last thumbnail was quick to render, unless its
         // object now has more anchors than the limit.
+        let doc = Some(src.doc.as_ref());
         let light = match light {
-            Some(quick) => quick && small_node(n, usize::MAX, LIGHT_THUMB_ANCHORS, true),
-            None => small_node(n, LIGHT_THUMB_NODES, LIGHT_THUMB_ANCHORS, true),
+            Some(quick) => quick && small_node(n, usize::MAX, LIGHT_THUMB_ANCHORS, true, doc),
+            None => small_node(n, LIGHT_THUMB_NODES, LIGHT_THUMB_ANCHORS, true, doc),
         } && in_budget;
         if !light && let Some(w) = &self.worker {
             let (doc, node) = (src.doc.clone(), n.clone());
@@ -263,7 +330,7 @@ pub(crate) fn real_thumb(ui: &Ui, src: &ThumbSource, n: &Arc<Node>, r: egui::Rec
 /// more than [`LIGHT_THUMB_ANCHORS`] anchors paints nothing, since this runs on every frame and
 /// measuring its bounds takes time in proportion to its anchor count.
 pub(super) fn thumb(ui: &Ui, n: &Node, r: egui::Rect) {
-    if !small_node(n, usize::MAX, LIGHT_THUMB_ANCHORS, false) {
+    if !small_node(n, usize::MAX, LIGHT_THUMB_ANCHORS, false, None) {
         return;
     }
     let Some(b) = n.visual_bounds() else { return };
@@ -293,7 +360,7 @@ pub(super) fn thumb(ui: &Ui, n: &Node, r: egui::Rect) {
 mod tests {
     use vectorcraft_color::{Color, Paint};
     use vectorcraft_doc::{Appearance, CharStyle, LayerColor, NodeKind, OpacityMask, TextKind, TextObject};
-    use vectorcraft_geom::{Point, SubPath};
+    use vectorcraft_geom::{Affine, Point, SubPath};
 
     use super::*;
 
@@ -330,7 +397,12 @@ mod tests {
     }
 
     fn small(n: &Node) -> bool {
-        small_node(n, LIGHT_THUMB_NODES, LIGHT_THUMB_ANCHORS, true)
+        small_node(n, LIGHT_THUMB_NODES, LIGHT_THUMB_ANCHORS, true, None)
+    }
+
+    /// Is `n`, an object of `doc`, small?
+    fn small_in(doc: &Document, n: &Node) -> bool {
+        small_node(n, LIGHT_THUMB_NODES, LIGHT_THUMB_ANCHORS, true, Some(doc))
     }
 
     /// `n` with an opacity mask of `art`, disabled or not.
@@ -350,7 +422,7 @@ mod tests {
         assert!(!small(&masked(rect(1), inner, false)), "a mask holding a long path");
         let child = Node::group(NodeId(1), vec![Arc::new(masked(rect(4), long(), false))]);
         assert!(!small(&child), "a group holding an object with a long mask");
-        assert!(small_node(&masked(rect(1), long(), false), usize::MAX, LIGHT_THUMB_ANCHORS, false), "masks left out");
+        assert!(small_node(&masked(rect(1), long(), false), usize::MAX, LIGHT_THUMB_ANCHORS, false, None), "masks left out");
     }
 
     #[test]
@@ -371,6 +443,124 @@ mod tests {
         assert!(!small(&path_type(1, LIGHT_THUMB_ANCHORS + 1)), "type on a long path");
         let both = Node::group(NodeId(1), vec![Arc::new(path(2, LIGHT_THUMB_ANCHORS / 2)), Arc::new(area_type(3, LIGHT_THUMB_ANCHORS / 2 + 1))]);
         assert!(!small(&both), "a path and an area frame whose anchors together pass the limit");
+    }
+
+    /// Point type `id` of `glyphs` glyphs.
+    fn glyphs(id: u64, glyphs: usize) -> Node {
+        let t = TextObject::point(Point::ZERO, &"a".repeat(glyphs), CharStyle::default());
+        Node::new(NodeId(id), NodeKind::Text(Box::new(t)))
+    }
+
+    /// A gradient mesh `id` of `rows` x `rows` patches.
+    fn mesh(id: u64, rows: u32) -> Node {
+        let m = vectorcraft_doc::GradientMesh::from_surface(rows, rows, &|u, v| Point::new(u * 100.0, v * 100.0), &|_, _| Color::BLACK);
+        Node::new(NodeId(id), NodeKind::Mesh(m))
+    }
+
+    /// An image `id` of `w` x `h` pixels.
+    fn image(id: u64, w: u32, h: u32) -> Node {
+        let im = vectorcraft_doc::ImageObject {
+            key: "im".into(),
+            width: w,
+            height: h,
+            xf: Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        Node::new(NodeId(id), NodeKind::Image(Box::new(im)))
+    }
+
+    /// An instance `id` of symbol `name`.
+    fn instance(id: u64, name: &str) -> Node {
+        Node::new(NodeId(id), NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::IDENTITY })
+    }
+
+    /// A document whose symbol `name` is `art`.
+    fn with_symbol(name: &str, art: Node) -> Document {
+        let mut doc = Document::new(200.0, 200.0);
+        doc.symbols.push(vectorcraft_doc::Symbol { name: name.into(), art: Arc::new(art), dynamic: false });
+        doc
+    }
+
+    /// A placed document `id` showing file `key`, read already when `art` is given.
+    fn placed(id: u64, key: &str, art: Option<Node>) -> Node {
+        let p = vectorcraft_doc::PlacedDocument {
+            link: vectorcraft_doc::LinkInfo::new("/art/placed.vectorcraft"),
+            key: key.into(),
+            bounding: false,
+            page_box: Default::default(),
+            width: 100.0,
+            height: 100.0,
+            xf: Affine::IDENTITY,
+            placement: Default::default(),
+        };
+        if let Some(art) = art {
+            let frame = vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 100.0);
+            vectorcraft_doc::placed_document::prime(&p, Arc::new(key.as_bytes().to_vec()), (Document::new(100.0, 100.0), art, frame));
+        }
+        Node::new(NodeId(id), NodeKind::PlacedDocument(Box::new(p)))
+    }
+
+    #[test]
+    fn type_meshes_and_images_count_their_work_as_anchors() {
+        let doc = Document::new(200.0, 200.0);
+        let limit = LIGHT_THUMB_ANCHORS / GLYPH_ANCHORS;
+        assert!(small_in(&doc, &glyphs(1, limit)), "type of as many glyphs as the limit");
+        assert!(!small_in(&doc, &glyphs(1, limit + 1)), "type of more glyphs");
+        assert!(!small_in(&doc, &glyphs(1, 5_000)), "long type");
+        let beside = Node::group(NodeId(1), vec![Arc::new(glyphs(2, limit / 2)), Arc::new(path(3, LIGHT_THUMB_ANCHORS / 2 + 1))]);
+        assert!(!small_in(&doc, &beside), "type and a path that together pass the limit");
+        // (rows + 1)² points: 1,936 and 2,025.
+        assert!(small_in(&doc, &mesh(1, 43)), "a small mesh");
+        assert!(!small_in(&doc, &mesh(1, 44)), "a mesh of more points");
+        let px = (LIGHT_THUMB_ANCHORS * IMAGE_PIXELS_PER_ANCHOR) as u32;
+        assert!(small_in(&doc, &image(1, px / 100, 100)), "an image of as many pixels as the limit");
+        assert!(!small_in(&doc, &image(1, px / 100, 101)), "a larger image");
+        assert!(!small_in(&doc, &image(1, 4_000, 3_000)), "a photo");
+        // Without the document only paths and frames count, as the painted thumbnail needs.
+        assert!(small(&glyphs(1, 5_000)) && small(&mesh(1, 100)) && small(&image(1, 4_000, 3_000)));
+    }
+
+    #[test]
+    fn a_symbol_instance_and_a_placed_document_count_the_art_they_show() {
+        let doc = with_symbol("Long", path(10, LIGHT_THUMB_ANCHORS + 1));
+        assert!(!small_in(&doc, &instance(1, "Long")), "an instance of a symbol of a long path");
+        assert!(small(&instance(1, "Long")), "without the document");
+        assert!(small_in(&doc, &instance(1, "Missing")), "an instance of a symbol that doesn't exist");
+        let doc = with_symbol("Short", path(10, LIGHT_THUMB_ANCHORS));
+        assert!(small_in(&doc, &instance(1, "Short")), "an instance of a symbol of a path at the limit");
+        let two = Node::group(NodeId(1), vec![Arc::new(instance(2, "Short")), Arc::new(instance(3, "Short"))]);
+        assert!(!small_in(&doc, &two), "two instances whose art together passes the limit");
+        let many = with_symbol("Group", Node::group(NodeId(10), (0..LIGHT_THUMB_NODES).map(|i| Arc::new(rect(i as u64 + 11))).collect()));
+        assert!(!small_in(&many, &instance(1, "Group")), "a symbol of more objects than the limit");
+        // Inline graphics in type draw their symbol too.
+        let mut t = TextObject::point(Point::ZERO, "a", CharStyle::default());
+        t.runs[0].inline = Some(vectorcraft_doc::InlineArt { symbol: "Long".into(), scale: 1.0, baseline_shift: 0.0, bounds: None });
+        let long = with_symbol("Long", path(10, LIGHT_THUMB_ANCHORS + 1));
+        assert!(!small_in(&long, &Node::new(NodeId(1), NodeKind::Text(Box::new(t)))), "type showing a long symbol inline");
+
+        let doc = Document::new(200.0, 200.0);
+        assert!(small_in(&doc, &placed(1, "thumbs-small-placed", Some(path(10, LIGHT_THUMB_ANCHORS)))), "a placed file of a short path");
+        assert!(!small_in(&doc, &placed(1, "thumbs-long-placed", Some(path(10, LIGHT_THUMB_ANCHORS + 1)))), "a placed file of a long path");
+        assert!(!small_in(&doc, &placed(1, "thumbs-unread-placed", None)), "a placed file not read yet");
+    }
+
+    #[test]
+    fn a_symbol_that_holds_itself_is_not_small_and_is_counted_to_an_end() {
+        let doc = with_symbol("Loop", Node::group(NodeId(10), vec![Arc::new(rect(11)), Arc::new(instance(12, "Loop"))]));
+        assert!(!small_in(&doc, &instance(1, "Loop")));
+        assert!(!small_node(&instance(1, "Loop"), usize::MAX, usize::MAX, true, Some(&doc)), "without limits on objects and anchors");
+        // Nested as deep as counted, the art is small.
+        let mut doc = with_symbol("S0", rect(10));
+        for i in 1..MAX_THUMB_NESTING {
+            let art = Node::group(NodeId(10 + i as u64), vec![Arc::new(instance(100 + i as u64, &format!("S{}", i - 1)))]);
+            doc.symbols.push(vectorcraft_doc::Symbol { name: format!("S{i}"), art: Arc::new(art), dynamic: false });
+        }
+        assert!(small_in(&doc, &instance(1, &format!("S{}", MAX_THUMB_NESTING - 1))), "symbols as deep as counted");
+        let art = Node::group(NodeId(9), vec![Arc::new(instance(99, &format!("S{}", MAX_THUMB_NESTING - 1)))]);
+        doc.symbols.push(vectorcraft_doc::Symbol { name: "Deeper".into(), art: Arc::new(art), dynamic: false });
+        assert!(!small_in(&doc, &instance(1, "Deeper")), "one level deeper");
     }
 
     #[test]
@@ -433,6 +623,28 @@ mod tests {
         assert!(thumbs.texture(&ctx, &src, &n, 24).is_some());
         assert_eq!(thumbs.renders, 1);
         assert!(thumbs.pending.is_empty());
+    }
+
+    #[test]
+    fn an_instance_of_a_long_symbols_thumbnail_is_made_on_the_worker_and_matches_one_made_here() {
+        let ctx = egui::Context::default();
+        let Some(worker) = ThumbWorker::start(&ctx, "test") else { return };
+        let mut thumbs = Thumbs { worker: Some(worker), worker_started: true, ..Default::default() };
+        let mut doc = with_symbol("Long", path(900, 50_000));
+        let layer = doc.layers.first().map(|l| l.id);
+        let id = doc.alloc_id();
+        doc.insert(layer, usize::MAX, instance(id.0, "Long")).unwrap();
+        let doc = Arc::new(doc);
+        let n = node_arc(&doc, id).unwrap();
+        let src = ThumbSource { uid: 1, revision: 1, doc: &doc, busy: false };
+        assert!(thumbs.texture(&ctx, &src, &n, 24).is_none(), "nothing is shown until it is made");
+        assert_eq!(thumbs.renders, 0, "not made on this thread");
+        assert!(thumbs.pending.contains_key(&(1, n.id)), "sent to the worker");
+        let done = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the worker finishes it");
+        let there = done.img.as_ref().expect("the worker draws the symbol");
+        let here = render_thumb(&mut vectorcraft_render::Renderer::new(), &doc, &n, 24).expect("this thread draws the symbol");
+        assert!(here.pixels.chunks(4).any(|p| p[3] > 0), "the thumbnail shows the symbol's art");
+        assert_eq!((there.width, there.height, &there.pixels), (here.width, here.height, &here.pixels), "the same pixels");
     }
 
     #[test]
