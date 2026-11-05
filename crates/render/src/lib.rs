@@ -74,6 +74,9 @@ pub struct Renderer {
     /// Expanded stroke outlines keyed by ([`Self::stroke_owner`], stroke layer address, width bits,
     /// tolerance level): panning re-renders reuse them instead of re-expanding every stroke.
     strokes: PtrMap<StrokeKey, StrokeEntry>,
+    /// The key in `strokes` of the latest outline of each stroke of an object, under its
+    /// [`frame::MovedKey`]: a moved copy of the object draws that outline moved ([`Self::moved_outline`]).
+    moved_strokes: PtrMap<frame::MovedKey, StrokeKey>,
     /// Expanded character stroke outlines, with the glyph geometry kept in `texts` they belong to,
     /// keyed by ([`Self::stroke_owner`] of that geometry, run, width bits, tolerance level): type
     /// that doesn't change draws them again instead of expanding its strokes in every frame. Within

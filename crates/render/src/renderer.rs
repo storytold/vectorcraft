@@ -18,6 +18,9 @@ use super::{
     group, ink, kurbo, live, lru, peniko, proof, vello_cpu,
 };
 
+#[cfg(test)]
+pub(crate) use paint::{STROKES_OUTLINED, offset_between};
+
 mod images;
 mod nodes;
 mod paint;
@@ -38,6 +41,7 @@ impl Renderer {
             symbols: vec![],
             plugin_revision: 0,
             strokes: PtrMap::default(),
+            moved_strokes: PtrMap::default(),
             char_strokes: FrameCache::new(lru::CHAR_STROKE_BUDGET, 0),
             cur: None,
             made_again: false,
@@ -186,6 +190,8 @@ impl Renderer {
         self.kept.retain(|_, e| g - e.stamp <= 3 || geom.get(&(Arc::as_ptr(&e.node) as usize)).is_some_and(|k| Arc::ptr_eq(&k.node, &e.node)));
         if self.strokes.len() > 1024 {
             self.strokes.retain(|_, e| g - e.stamp <= 3);
+            let strokes = &self.strokes;
+            self.moved_strokes.retain(|_, k| strokes.contains_key(k));
         }
         if self.stroke_slices.len() > 256 {
             self.stroke_slices.retain(|_, e| g - e.stamp <= 3);

@@ -43,13 +43,25 @@ pub fn is_length(id: &str, key: &str, relative: bool) -> bool {
 }
 
 /// The range in points that distance parameter `key` of effect `id` is kept within, as its
-/// parameter documentation gives it (`{maxRadius: pt 4..127 (8), …}`); `None` when it gives none.
+/// parameter documentation gives it (`{edgeWidth: pt 1..14 (2), …}`); `None` when it gives none.
 pub fn length_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    documented_range(id, key, "pt")
+}
+
+/// The range of parameter `key` of effect `id` when it is a size in pixels of the Document Raster
+/// Effects resolution (`{maxRadius: px 4..127 (8), …}`), which no unit setting changes and which
+/// stays in pixels when the resolution does; `None` for other parameters.
+pub fn raster_px_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    documented_range(id, key, "px")
+}
+
+/// The range parameter `key` of effect `id` is documented with in `unit` (`key: unit lo..hi`).
+fn documented_range(id: &str, key: &str, unit: &str) -> Option<std::ops::RangeInclusive<f64>> {
     let doc = catalog_index().get(id)?.params;
     let starts = |at: usize| doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| c == '{' || c == ' ');
     let rest = doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
         let rest = doc.get(at + key.len()..)?;
-        rest.strip_prefix(": pt ").or_else(|| rest.strip_prefix("?: pt "))
+        rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?.strip_prefix(unit)?.strip_prefix(' ')
     })?;
     let (lo, hi) = rest.split_whitespace().next()?.split_once("..")?;
     let (lo, hi) = (lo.parse::<f64>().ok()?, hi.trim_end_matches(',').parse::<f64>().ok()?);
@@ -81,7 +93,6 @@ fn lengths_of(id: &str) -> Lengths {
         "brushStrokes.spatter" => always(&["sprayRadius"]),
         "brushStrokes.sprayedStrokes" => always(&["strokeLength", "sprayRadius"]),
         "brushStrokes.sumiE" => always(&["strokeWidth"]),
-        "pixelate.colorHalftone" => always(&["maxRadius"]),
         "pixelate.crystallize" | "pixelate.pointillize" => always(&["cellSize"]),
         "texture.craquelure" => always(&["crackSpacing"]),
         "texture.mosaicTiles" => always(&["tileSize"]),
@@ -633,7 +644,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "pixelate.colorHalftone",
             "Color Halftone…",
             PIXELATE,
-            "{maxRadius: pt 4..127 (8; the radius of a dot at full strength, which fills its square cell), channel1: screen angle deg -360..360 (108), channel2: deg (162), channel3: deg (90), channel4: deg (45)} screens each colour channel (red, green, blue: channels 1 to 3; in CMYK documents cyan, magenta, yellow, black: 1 to 4) at its angle into dots whose area follows the channel's mean over their cell",
+            "{maxRadius: px 4..127 (8; the radius of a dot at full strength, which fills its square cell, in pixels of the Document Raster Effects resolution), channel1: screen angle deg -360..360 (108), channel2: deg (162), channel3: deg (90), channel4: deg (45)} screens each colour channel (red, green, blue: channels 1 to 3; in CMYK documents cyan, magenta, yellow, black: 1 to 4) at its angle into dots whose area follows the channel's mean over their cell",
             json!({"maxRadius": 8.0, "channel1": 108.0, "channel2": 162.0, "channel3": 90.0, "channel4": 45.0}),
         ),
         r(

@@ -6342,3 +6342,7 @@ breakText	Glyphs	Glyphes
 	Fully Outside	Entièrement à l’extérieur
 	No artboards match.	Aucun plan de travail ne correspond.
 	Chosen: {n} of {total}	Choisis : {n} sur {total}
+	Set Corners…	Définir les angles…
+	All Anchors	Tous les points d’ancrage
+	Odd-Numbered Anchors	Points d’ancrage impairs
+	Even-Numbered Anchors	Points d’ancrage pairs

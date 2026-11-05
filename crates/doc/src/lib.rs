@@ -16,6 +16,7 @@ pub mod corners;
 pub mod depth;
 pub mod dimension;
 pub mod graph;
+mod halftone_radii;
 pub mod hit;
 mod id_index;
 pub mod inks;

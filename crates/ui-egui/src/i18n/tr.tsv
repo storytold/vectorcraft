@@ -6304,3 +6304,7 @@ breakText	Glyphs	Glifler
 	Fully Outside	Tamamen dışarıda
 	No artboards match.	Eşleşen çalışma yüzeyi yok.
 	Chosen: {n} of {total}	Seçilen: {n}/{total}
+	Set Corners…	Köşeleri Ayarla…
+	All Anchors	Tüm Çapalar
+	Odd-Numbered Anchors	Tek Numaralı Çapalar
+	Even-Numbered Anchors	Çift Numaralı Çapalar

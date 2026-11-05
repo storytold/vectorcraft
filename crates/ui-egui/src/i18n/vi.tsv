@@ -5948,3 +5948,7 @@ breakText	Glyphs	Glyph
 	Fully Outside	Hoàn toàn bên ngoài
 	No artboards match.	Không có bảng vẽ nào khớp.
 	Chosen: {n} of {total}	Đã chọn: {n} trên {total}
+	Set Corners…	Đặt góc…
+	All Anchors	Tất cả điểm neo
+	Odd-Numbered Anchors	Điểm neo số lẻ
+	Even-Numbered Anchors	Điểm neo số chẵn

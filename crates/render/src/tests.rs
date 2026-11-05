@@ -24,6 +24,7 @@ mod knockout;
 mod layeropts;
 mod longstroke;
 mod memory;
+mod movedstroke;
 mod objectfx;
 mod placed_document;
 mod rasterize;

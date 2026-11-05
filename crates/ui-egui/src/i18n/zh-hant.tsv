@@ -5985,3 +5985,7 @@ breakText	Glyphs	字符
 	Fully Outside	完全在外
 	No artboards match.	沒有符合的工作區域。
 	Chosen: {n} of {total}	已選：{n} / {total}
+	Set Corners…	設定轉角…
+	All Anchors	所有錨點
+	Odd-Numbered Anchors	奇數錨點
+	Even-Numbered Anchors	偶數錨點

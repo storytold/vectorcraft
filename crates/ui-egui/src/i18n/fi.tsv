@@ -6382,3 +6382,7 @@ breakText	Glyphs	Merkit
 	Fully Outside	Kokonaan ulkona
 	No artboards match.	Mikään piirtoalusta ei vastaa hakua.
 	Chosen: {n} of {total}	Valittu: {n}/{total}
+	Set Corners…	Aseta kulmat…
+	All Anchors	Kaikki ankkurit
+	Odd-Numbered Anchors	Parittomat ankkurit
+	Even-Numbered Anchors	Parilliset ankkurit

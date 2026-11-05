@@ -70,12 +70,12 @@ pub(super) fn hard_edged(chain: &[&RasterFx], px: f64) -> bool {
     matches!(chain.first(), Some(RasterFx::Rasterize(r)) if !r.anti_alias && r.cell(72.0) >= px)
 }
 
-/// How far (document units) from a pixel the content deciding it after `fx` lies; `None` when
-/// anywhere in the object.
-pub(super) fn looks_around(fx: &RasterFx) -> Option<f64> {
+/// How far (document units) from a pixel the content deciding it after `fx` lies, with the
+/// document's raster grid lines `line` apart; `None` when anywhere in the object.
+pub(super) fn looks_around(fx: &RasterFx, line: f64) -> Option<f64> {
     match fx {
         RasterFx::Feather { radius } | RasterFx::GaussianBlur { radius } => Some(1.5 * radius),
-        RasterFx::Pixel(p) => p.reach(),
+        RasterFx::Pixel(p) => p.reach(line),
         RasterFx::Rasterize(r) => Some(r.reach()),
         _ => Some(0.0),
     }

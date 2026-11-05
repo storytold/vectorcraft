@@ -6299,3 +6299,7 @@ breakText	Glyphs	Γλύφοι
 	Fully Outside	Πλήρως εκτός
 	No artboards match.	Κανένας πίνακας σχεδίασης δεν ταιριάζει.
 	Chosen: {n} of {total}	Επιλεγμένοι: {n} από {total}
+	Set Corners…	Ορισμός γωνιών…
+	All Anchors	Όλα τα σημεία αγκύρωσης
+	Odd-Numbered Anchors	Μονά σημεία αγκύρωσης
+	Even-Numbered Anchors	Ζυγά σημεία αγκύρωσης
