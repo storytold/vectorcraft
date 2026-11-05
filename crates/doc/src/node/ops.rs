@@ -606,6 +606,25 @@ impl Node {
         }
     }
 
+    /// The paint behind the Fill (or Stroke) proxy, the one [`Node::proxy_paint`] gives, without its
+    /// map and box: the object is not measured, so a long path costs no more than a short one.
+    pub fn proxy_paint_only(&self, stroke: bool, item: Option<usize>) -> Option<&vectorcraft_color::Paint> {
+        let item = self.appearance.item_of_kind(item, !stroke);
+        if item.is_none()
+            && !stroke
+            && let Some(c) = self.extras().colorize.as_deref()
+        {
+            return Some(c);
+        }
+        if item.is_none()
+            && let NodeKind::Text(t) = &self.kind
+        {
+            let st = &t.runs.first()?.style;
+            return Some(if stroke { &st.stroke } else { &st.fill });
+        }
+        if stroke { self.appearance.stroke_at(item).map(|s| &s.paint) } else { self.appearance.fill_at(item).map(|f| &f.paint) }
+    }
+
     /// The gradient behind the Fill (or Stroke) proxy and its placement in document coordinates
     /// (see [`Node::proxy_paint`]): what the gradient annotator shows and edits.
     pub fn proxy_gradient(&self, stroke: bool, item: Option<usize>) -> Option<(&vectorcraft_color::GradientPaint, vectorcraft_color::GradientGeom)> {
