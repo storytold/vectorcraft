@@ -95,6 +95,12 @@ const IMAGE_PIXELS_PER_ANCHOR: usize = 100;
 /// worker.
 const MAX_THUMB_NESTING: usize = 8;
 
+/// The most steps counting a node takes: each object, subpath, text run and symbol looked at is
+/// one step, and so is every 64 bytes of a symbol or placed file name looked up. A node that
+/// needs more has its thumbnail made on the worker, and the painted thumbnail draws nothing for
+/// it. A row drawn before counts at most this many objects too.
+const THUMB_COUNT_STEPS: usize = 20_000;
+
 /// At most this long (ms) and this many thumbnails are rendered on the UI thread in a pass; the
 /// rest go to the worker, or wait for the next pass where there is none.
 const THUMB_BUDGET_MS: f64 = 8.0;
@@ -113,12 +119,19 @@ pub(crate) fn thumb_options() -> vectorcraft_render::RenderOptions {
 /// glyphs, mesh points and image pixels count as anchors too ([`LIGHT_THUMB_ANCHORS`]), and a
 /// symbol instance and a placed document count the objects and anchors of the art they show: the
 /// symbol's art in `doc`, and the placed file's art when it has been read (a placed document whose
-/// file has not been read, or art nested deeper than [`MAX_THUMB_NESTING`], is not small).
+/// file has not been read, or art nested deeper than [`MAX_THUMB_NESTING`], is not small). A node
+/// that takes more than [`THUMB_COUNT_STEPS`] steps to count is not small.
 fn small_node(n: &Node, nodes: usize, anchors: usize, masks: bool, doc: Option<&Document>) -> bool {
+    weigh(n, nodes, anchors, masks, doc).0
+}
+
+/// [`small_node`], and the steps counting took.
+fn weigh(n: &Node, nodes: usize, anchors: usize, masks: bool, doc: Option<&Document>) -> (bool, usize) {
     /// What may still be counted.
     struct Left {
         nodes: usize,
         anchors: usize,
+        steps: usize,
         masks: bool,
     }
     impl Left {
@@ -132,6 +145,20 @@ fn small_node(n: &Node, nodes: usize, anchors: usize, masks: bool, doc: Option<&
                 None => false,
             }
         }
+        /// Take `steps` more: false past the limit.
+        fn step(&mut self, steps: usize) -> bool {
+            match self.steps.checked_sub(steps) {
+                Some(left) => {
+                    self.steps = left;
+                    true
+                }
+                None => false,
+            }
+        }
+        /// Look up `name`: false past the step limit.
+        fn look_up(&mut self, name: &str) -> bool {
+            self.step(1 + name.len() / 64)
+        }
         /// Count one more object: false past the limit.
         fn object(&mut self) -> bool {
             match self.nodes.checked_sub(1) {
@@ -142,14 +169,9 @@ fn small_node(n: &Node, nodes: usize, anchors: usize, masks: bool, doc: Option<&
                 None => false,
             }
         }
-    }
-    fn own_anchors(n: &Node) -> usize {
-        match &n.kind {
-            NodeKind::Text(t) => match &t.kind {
-                TextKind::Area { frame: p } | TextKind::OnPath { path: p, .. } => p.anchor_count(),
-                TextKind::Point => 0,
-            },
-            _ => n.path_data().map_or(0, PathData::anchor_count),
+        /// Count the anchors of `p`, a step for each subpath.
+        fn path(&mut self, p: &PathData) -> bool {
+            p.subpaths.iter().all(|s| self.step(1) && self.take(s.anchors.len()))
         }
     }
     /// Count `art`, drawn in place of an object (`doc` its document), one level deeper.
@@ -158,11 +180,26 @@ fn small_node(n: &Node, nodes: usize, anchors: usize, masks: bool, doc: Option<&
     }
     /// Count symbol `name` of `doc` (one that doesn't exist draws nothing).
     fn symbol(name: &str, doc: &Document, left: &mut Left, depth: usize) -> bool {
-        doc.symbols.iter().find(|s| s.name == name).is_none_or(|s| inside(&s.art, doc, left, depth))
+        for s in &doc.symbols {
+            if !left.look_up(name) {
+                return false;
+            }
+            if s.name == name {
+                return inside(&s.art, doc, left, depth);
+            }
+        }
+        true
     }
     /// Count what `n` draws besides its children.
     fn own(n: &Node, doc: Option<&Document>, left: &mut Left, depth: usize) -> bool {
-        if !left.take(own_anchors(n)) {
+        let path = match &n.kind {
+            NodeKind::Text(t) => match &t.kind {
+                TextKind::Area { frame: p } | TextKind::OnPath { path: p, .. } => Some(p),
+                TextKind::Point => None,
+            },
+            _ => n.path_data(),
+        };
+        if !path.is_none_or(|p| left.path(p)) {
             return false;
         }
         let Some(doc) = doc else { return true };
@@ -170,23 +207,38 @@ fn small_node(n: &Node, nodes: usize, anchors: usize, masks: bool, doc: Option<&
             // Glyphs are counted only up to one past what the anchors left allow.
             NodeKind::Text(t) => t.runs.iter().all(|r| {
                 let glyphs = r.text.chars().take(left.anchors / GLYPH_ANCHORS + 1).count();
-                left.take(glyphs.saturating_mul(GLYPH_ANCHORS)) && r.inline.as_ref().is_none_or(|a| symbol(&a.symbol, doc, left, depth))
+                left.step(1)
+                    && left.take(glyphs.saturating_mul(GLYPH_ANCHORS))
+                    && r.inline.as_ref().is_none_or(|a| symbol(&a.symbol, doc, left, depth))
             }),
             NodeKind::SymbolInstance { symbol: name, .. } => symbol(name, doc, left, depth),
             NodeKind::Mesh(m) => left.take(m.points.len().saturating_mul(MESH_POINT_ANCHORS)),
             NodeKind::Image(im) => left.take((im.width as usize).saturating_mul(im.height as usize) / IMAGE_PIXELS_PER_ANCHOR),
-            NodeKind::PlacedDocument(p) => vectorcraft_doc::placed_document::read_cached(p).is_some_and(|e| inside(&e.art, &e.doc, left, depth)),
+            NodeKind::PlacedDocument(p) => {
+                left.look_up(&p.key) && vectorcraft_doc::placed_document::read_cached(p).is_some_and(|e| inside(&e.art, &e.doc, left, depth))
+            }
             _ => true,
         }
     }
     fn count(n: &Node, doc: Option<&Document>, left: &mut Left, depth: usize) -> bool {
-        if !own(n, doc, left, depth) {
+        if !(left.step(1) && own(n, doc, left, depth)) {
             return false;
         }
         let mask = n.extras().mask.as_deref().filter(|m| left.masks && !m.disabled).map(|m| &m.art);
         n.children().into_iter().flatten().chain(mask).all(|c| left.object() && count(c, doc, left, depth))
     }
-    count(n, doc, &mut Left { nodes, anchors, masks }, 0)
+    let mut left = Left { nodes, anchors, steps: THUMB_COUNT_STEPS, masks };
+    let small = count(n, doc, &mut left, 0);
+    (small, THUMB_COUNT_STEPS - left.steps)
+}
+
+/// Is row `n` (an object of `doc`) light enough to make its thumbnail on the UI thread? `quick`:
+/// whether its last thumbnail was quick to render, if it has one.
+fn light_row(n: &Node, quick: Option<bool>, doc: &Document) -> bool {
+    match quick {
+        Some(quick) => quick && small_node(n, THUMB_COUNT_STEPS, LIGHT_THUMB_ANCHORS, true, Some(doc)),
+        None => small_node(n, LIGHT_THUMB_NODES, LIGHT_THUMB_ANCHORS, true, Some(doc)),
+    }
 }
 
 /// The thumbnail of `n` (`px` pixels square) as `r` renders it, on the UI thread or the worker.
@@ -275,11 +327,7 @@ impl Thumbs {
         let in_budget = self.spent.1 < THUMB_BUDGET_MS && self.spent.2 < THUMB_BUDGET_COUNT;
         // A row drawn before is light when its last thumbnail was quick to render, unless its
         // object now has more anchors than the limit.
-        let doc = Some(src.doc.as_ref());
-        let light = match light {
-            Some(quick) => quick && small_node(n, usize::MAX, LIGHT_THUMB_ANCHORS, true, doc),
-            None => small_node(n, LIGHT_THUMB_NODES, LIGHT_THUMB_ANCHORS, true, doc),
-        } && in_budget;
+        let light = light_row(n, light, src.doc) && in_budget;
         if !light && let Some(w) = &self.worker {
             let (doc, node) = (src.doc.clone(), n.clone());
             let job: ThumbJob = (key, Arc::downgrade(n), px);
@@ -327,7 +375,8 @@ pub(crate) fn real_thumb(ui: &Ui, src: &ThumbSource, n: &Arc<Node>, r: egui::Rec
 }
 
 /// Tiny vector thumbnail painted with egui (fallback when rendering isn't possible). A node with
-/// more than [`LIGHT_THUMB_ANCHORS`] anchors paints nothing, since this runs on every frame and
+/// more than [`LIGHT_THUMB_ANCHORS`] anchors, or that takes more than [`THUMB_COUNT_STEPS`] steps
+/// to count, paints nothing, since this runs on every frame and
 /// measuring its bounds takes time in proportion to its anchor count.
 pub(super) fn thumb(ui: &Ui, n: &Node, r: egui::Rect) {
     if !small_node(n, usize::MAX, LIGHT_THUMB_ANCHORS, false, None) {
@@ -561,6 +610,61 @@ mod tests {
         let art = Node::group(NodeId(9), vec![Arc::new(instance(99, &format!("S{}", MAX_THUMB_NESTING - 1)))]);
         doc.symbols.push(vectorcraft_doc::Symbol { name: "Deeper".into(), art: Arc::new(art), dynamic: false });
         assert!(!small_in(&doc, &instance(1, "Deeper")), "one level deeper");
+    }
+
+    /// A document of symbols `L0` to `L{levels}`: `L0` is an empty group, and each one above it a
+    /// group of `fan` instances of the one below.
+    fn fan_out(levels: usize, fan: usize) -> Document {
+        let mut doc = with_symbol("L0", Node::group(NodeId(10), vec![]));
+        let mut id = 100;
+        for level in 1..=levels {
+            let below = format!("L{}", level - 1);
+            let kids = (0..fan)
+                .map(|_| {
+                    id += 1;
+                    Arc::new(instance(id, &below))
+                })
+                .collect();
+            id += 1;
+            doc.symbols.push(vectorcraft_doc::Symbol { name: format!("L{level}"), art: Arc::new(Node::group(NodeId(id), kids)), dynamic: false });
+        }
+        doc
+    }
+
+    #[test]
+    fn symbols_that_each_hold_many_instances_are_counted_within_the_step_limit() {
+        // 40 instances on each of 4 levels: 40⁴ (2,560,000) empty groups, and no anchors.
+        let doc = fan_out(4, 40);
+        let top = instance(1, "L4");
+        assert!(!light_row(&top, Some(true), &doc), "a row drawn before, quick to render");
+        assert!(!light_row(&top, None, &doc), "a row not drawn yet");
+        let (small, steps) = weigh(&top, THUMB_COUNT_STEPS, usize::MAX, true, Some(&doc));
+        assert!(!small && steps <= THUMB_COUNT_STEPS, "{steps} steps");
+        let (small, steps) = weigh(&top, usize::MAX, usize::MAX, true, Some(&doc));
+        assert!(!small && steps <= THUMB_COUNT_STEPS, "{steps} steps without a limit on objects");
+        // 5 instances on each of 3 levels stay light once drawn quickly.
+        let doc = fan_out(3, 5);
+        assert!(light_row(&instance(1, "L3"), Some(true), &doc));
+        assert!(!light_row(&instance(1, "L3"), Some(false), &doc), "drawn slowly");
+    }
+
+    #[test]
+    fn empty_subpaths_text_runs_and_symbol_lookups_take_steps() {
+        let doc = Document::new(200.0, 200.0);
+        let style = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+        let empty = Node::path(NodeId(1), PathData::new(vec![SubPath::default(); THUMB_COUNT_STEPS]), style.clone());
+        assert!(!small_in(&doc, &empty), "a path of many empty subpaths");
+        let fewer = Node::path(NodeId(1), PathData::new(vec![SubPath::default(); 100]), style);
+        assert!(small_in(&doc, &fewer), "a path of a few");
+        let mut t = TextObject::point(Point::ZERO, "", CharStyle::default());
+        t.runs = vec![vectorcraft_doc::TextRun::new("", CharStyle::default()); THUMB_COUNT_STEPS];
+        assert!(!small_in(&doc, &Node::new(NodeId(2), NodeKind::Text(Box::new(t)))), "type of many empty runs");
+        let mut doc = with_symbol("S", rect(10));
+        for i in 0..THUMB_COUNT_STEPS {
+            doc.symbols.push(vectorcraft_doc::Symbol { name: format!("Other {i}"), art: Arc::new(rect(11)), dynamic: false });
+        }
+        assert!(small_in(&doc, &instance(1, "S")), "the first of many symbols");
+        assert!(!small_in(&doc, &instance(1, &format!("Other {}", THUMB_COUNT_STEPS - 1))), "the last of many symbols");
     }
 
     #[test]
