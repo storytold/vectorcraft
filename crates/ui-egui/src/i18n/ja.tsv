@@ -6031,3 +6031,7 @@ breakText	Glyphs	字形
 	Fully Outside	完全に外側
 	No artboards match.	一致するアートボードはありません。
 	Chosen: {n} of {total}	選択中: {n} / {total}
+	Set Corners…	コーナーを設定…
+	All Anchors	すべてのアンカー
+	Odd-Numbered Anchors	奇数番目のアンカー
+	Even-Numbered Anchors	偶数番目のアンカー

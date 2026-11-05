@@ -6330,3 +6330,7 @@ breakText	Glyphs	Glifák
 	Fully Outside	Teljesen kívül
 	No artboards match.	Nincs egyező rajztábla.
 	Chosen: {n} of {total}	Kiválasztva: {n} / {total}
+	Set Corners…	Sarkok beállítása…
+	All Anchors	Összes horgonypont
+	Odd-Numbered Anchors	Páratlan horgonypontok
+	Even-Numbered Anchors	Páros horgonypontok

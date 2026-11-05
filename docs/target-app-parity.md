@@ -23,6 +23,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | Path Precision Tools add-on (a VectorCraft addition): Set Corners… and `addon.pathtools.cornerSet` `every` round all, the odd-numbered or the even-numbered anchors of each path (#5546); evidence added; scores unchanged. |
 | 2026-11-04 | minor | Transform Each's Scale has the documented Relative and Absolute radio buttons (`object.transformEach` `relative`: percentages of each object's size, or the width and height it becomes, measured on each object's own bounds) and the link that keeps the two scales in proportion; the panel lists Scale, Move, Rotate, the Options in two columns, the Reference Point and Preview (level with Copy, Cancel and OK) in the documented order. Scores and estimates unchanged. |
 | 2026-11-05 | minor | PDF import: a DeviceN gradient of a spot ink over process plates keeps the ink and the plates, and PDF export writes it as a DeviceN shading again (#3235); scores unchanged |
 | 2026-11-05 | minor | Optical kerning moves each pair part of the way toward the font's own stem spacing, with a minimum gap and tighter limits, and leaves ideographs, kana, fullwidth forms and dashes on the font's spacing, so text is no longer squeezed (#5336). Scores and estimates unchanged. |
@@ -1473,6 +1474,8 @@ shows an anchor that can take a corner, a click cuts one with the tool's radius 
 drag sizes it (Shift: whole values), a cut corner's marker selects it and loads its values, resizes it, and removes it
 at 0 or on a double-click, a corner never grows past what fits, and an Alt-marquee cuts every eligible anchor inside. A
 Corners section in the Anchor Inspector sets the radius and kind, counts the selected corners and applies to them.
+Set Corners… (in the submenu and the Corners section) sets the radius and kind with Preview, on all the chosen anchors
+or only the odd- or even-numbered ones (`every`, #5546).
 Slide Anchor Along Path drags an anchor along its curve, the two segments beside it refitted by the keep-shape kernel
 (Shift: where the tangent is a multiple of 45°). Commands `addon.pathtools.cornerSet`, `cornerRemove` and `slideAnchor`,
 each one undo step; `vectorcraft_pathops::addons::pathtools::slide_anchor`. Tests: `addons::pathtools` in

@@ -6187,3 +6187,7 @@ breakText	Glyphs	字形
 	Fully Outside	完全在外
 	No artboards match.	没有匹配的画板。
 	Chosen: {n} of {total}	已选：{n} / {total}
+	Set Corners…	设置转角…
+	All Anchors	所有锚点
+	Odd-Numbered Anchors	奇数锚点
+	Even-Numbered Anchors	偶数锚点

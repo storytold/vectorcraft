@@ -567,6 +567,93 @@ fn corner_commands_refuse_bad_params() {
     }
 }
 
+/// A closed five-pointed star about (200, 150): its points at the even indices 0, 2… (the odd
+/// numbers counting from 1), its inner corners at the odd ones.
+fn star_path(s: &mut Session) -> NodeId {
+    let pts: Vec<(f64, f64)> = (0..10)
+        .map(|i| {
+            let (r, a) = (if i % 2 == 0 { 100.0 } else { 40.0 }, std::f64::consts::PI * f64::from(i) / 5.0);
+            (200.0 + r * a.sin(), 150.0 - r * a.cos())
+        })
+        .collect();
+    line(s, &pts, true)
+}
+
+/// The cut corners of `id`: anchor indices of its uncut outline with a radius drawn.
+fn cut(s: &Session, id: NodeId) -> Vec<usize> {
+    let lc = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap();
+    (0..lc.base.anchor_count()).filter(|k| lc.drawn_radius(*k) > 0.0).collect()
+}
+
+#[test]
+fn corner_set_every_takes_the_odd_or_even_numbered_anchors_of_each_path() {
+    let mut s = session();
+    let star = star_path(&mut s);
+    // An open zig-zag: its ends (1st and 5th) take no corner but still count.
+    let zig = line(&mut s, &[(10.0, 250.0), (30.0, 210.0), (50.0, 250.0), (70.0, 210.0), (90.0, 250.0)], false);
+    select(&mut s, &[star, zig]);
+    let n = steps(&s);
+    // Odd: the 1st, 3rd, 5th… of each path, as one step.
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"radius": 4, "every": "odd"})).unwrap();
+    assert_eq!((r["corners"].clone(), steps(&s)), (json!(6), n + 1));
+    assert_eq!((cut(&s, star), cut(&s, zig)), (vec![0, 2, 4, 6, 8], vec![2]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((cut(&s, star), cut(&s, zig), steps(&s)), (vec![], vec![], n));
+    // Even: the 2nd, 4th, 6th….
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"radius": 4, "every": "even"})).unwrap();
+    assert_eq!((r["corners"].clone(), steps(&s)), (json!(7), n + 1));
+    assert_eq!((cut(&s, star), cut(&s, zig)), (vec![1, 3, 5, 7, 9], vec![1, 3]));
+    // "all" (and no `every`) is every chosen corner, as before.
+    s.execute("addon.pathtools.cornerSet", &json!({"ids": [zig.0], "radius": 4, "every": "all"})).unwrap();
+    assert_eq!(cut(&s, zig), vec![1, 2, 3]);
+}
+
+#[test]
+fn corner_set_every_filters_the_named_and_direct_selected_anchors() {
+    let mut s = session();
+    let star = star_path(&mut s);
+    // Of the named anchors, only the even-numbered ones (indices 1 and 3); numbers stay the path's.
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"ids": [star.0], "anchors": [1, 2, 3, 4], "radius": 3, "every": "even"})).unwrap();
+    assert_eq!(r["corners"], json!(2));
+    assert_eq!(cut(&s, star), vec![1, 3]);
+    // Per path through `items`.
+    s.execute("addon.pathtools.cornerSet", &json!({"items": [{"id": star.0, "anchors": [5, 6, 7]}], "radius": 3, "every": "odd"})).unwrap();
+    assert_eq!(cut(&s, star), vec![1, 3, 6]);
+    // Of the direct-selected anchors.
+    s.execute("addon.pathtools.cornerRemove", &json!({"ids": [star.0]})).unwrap();
+    select_anchors(&mut s, star, &[7, 8, 9]);
+    s.execute("addon.pathtools.cornerSet", &json!({"radius": 3, "every": "odd"})).unwrap();
+    assert_eq!(cut(&s, star), vec![8]);
+}
+
+#[test]
+fn corner_set_every_refuses_bad_values_and_says_when_nothing_is_left() {
+    let mut s = session();
+    let zig = line(&mut s, &[(10.0, 250.0), (30.0, 210.0), (50.0, 250.0), (70.0, 210.0)], false);
+    select(&mut s, &[zig]);
+    let i = zig.0;
+    refuses(
+        &mut s,
+        "addon.pathtools.cornerSet",
+        &[
+            json!({"ids": [i], "radius": 5, "every": "third"}),
+            json!({"ids": [i], "radius": 5, "every": "Odd"}),
+            json!({"ids": [i], "radius": 5, "every": 2}),
+            json!({"ids": [i], "radius": 5, "every": true}),
+            json!({"ids": [i], "anchors": [1], "radius": 5, "every": "odd"}),
+            json!({"ids": [i], "anchors": [0, 1], "radius": 5, "every": "odd"}),
+        ],
+    );
+    let e = s.execute("addon.pathtools.cornerSet", &json!({"ids": [i], "radius": 5, "every": "third"})).unwrap_err().to_string();
+    assert!(e.contains("`every` must be \"all\", \"odd\" or \"even\""), "{e}");
+    // The 2nd anchor is a corner, but not an odd-numbered one.
+    let e = s.execute("addon.pathtools.cornerSet", &json!({"ids": [i], "anchors": [1], "radius": 5, "every": "odd"})).unwrap_err().to_string();
+    assert!(e.contains("odd-numbered"), "{e}");
+    // An open end is no corner at all, whatever `every` says.
+    let e = s.execute("addon.pathtools.cornerSet", &json!({"ids": [i], "anchors": [0], "radius": 5, "every": "odd"})).unwrap_err().to_string();
+    assert!(e.contains("two sides meet"), "{e}");
+}
+
 #[test]
 fn the_corner_tool_clicks_drags_and_removes_in_one_step_each() {
     let mut s = session();

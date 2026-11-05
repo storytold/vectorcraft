@@ -6197,3 +6197,7 @@ breakText	Glyphs	Глифи
 	Fully Outside	Изцяло извън
 	No artboards match.	Няма съвпадащи работни области.
 	Chosen: {n} of {total}	Избрани: {n} от {total}
+	Set Corners…	Задаване на ъгли…
+	All Anchors	Всички опорни точки
+	Odd-Numbered Anchors	Нечетни опорни точки
+	Even-Numbered Anchors	Четни опорни точки
