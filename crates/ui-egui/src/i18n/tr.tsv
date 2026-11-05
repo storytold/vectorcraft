@@ -3779,6 +3779,7 @@ axis	Both	Her İkisi
 @msg	Create from Selection: the selection has no area	Seçimden Oluştur: Seçimin alanı yok
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Veri Kurtarma'nın kopyaları saklayacak yeri yoktur: Tercihleri ayarlayın → Dosya İşleme → Veri Kurtarma → Klasör (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Veri Kurtarma kopyaları {path} konumunda saklayamıyor: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Eklentiler {path} konumundan yüklenemiyor: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	kesilecek bağlantı noktalarını doğrudan seçin (açık yolların bitiş noktalarını değil)
 @msg	Divide Objects Below: select a path	Aşağıdaki Nesneleri Böl: bir yol seçin
 @msg	Divide Objects Below: select exactly one path	Aşağıdaki Nesneleri Böl: tam olarak bir yol seçin
@@ -6295,6 +6296,10 @@ breakText	Glyphs	Glifler
 	Bow	Yay
 	Spike	Sivri Uç
 	Skip Spaces	Boşlukları Atla
+	Release Type on a Path…	Yoldaki Metni Ayır…
+	Release Type on a Path	Yoldaki Metni Ayır
+	Text and Path	Metin ve yol
+	Path Only	Yalnızca yol
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Çizim, resim olarak kopyalanamayacak kadar büyük: diğer uygulamalar bunun PNG'sini almaz
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6306,3 +6311,9 @@ breakText	Glyphs	Glifler
 	Fully Outside	Tamamen dışarıda
 	No artboards match.	Eşleşen çalışma yüzeyi yok.
 	Chosen: {n} of {total}	Seçilen: {n}/{total}
+	Set Corners…	Köşeleri Ayarla…
+	All Anchors	Tüm Çapalar
+	Odd-Numbered Anchors	Tek Numaralı Çapalar
+	Even-Numbered Anchors	Çift Numaralı Çapalar
+	Minimum angle	En Küçük Açı
+	Maximum angle	En Büyük Açı

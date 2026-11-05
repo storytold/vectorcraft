@@ -6205,6 +6205,10 @@ breakText	Glyphs	Glif
 	Bow	Busur
 	Spike	Puncak
 	Skip Spaces	Lewati Spasi
+	Release Type on a Path…	Lepaskan Teks pada Jalur…
+	Release Type on a Path	Lepaskan Teks pada Jalur
+	Text and Path	Teks dan jalur
+	Path Only	Hanya jalur
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Gambar terlalu besar untuk disalin sebagai gambar: aplikasi lain tidak mendapatkan PNG darinya
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6216,3 +6220,9 @@ breakText	Glyphs	Glif
 	Fully Outside	Sepenuhnya di luar
 	No artboards match.	Tidak ada artboard yang cocok.
 	Chosen: {n} of {total}	Dipilih: {n} dari {total}
+	Set Corners…	Atur sudut…
+	All Anchors	Semua jangkar
+	Odd-Numbered Anchors	Jangkar bernomor ganjil
+	Even-Numbered Anchors	Jangkar bernomor genap
+	Minimum angle	Sudut minimum
+	Maximum angle	Sudut maksimum

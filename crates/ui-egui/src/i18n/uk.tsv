@@ -4010,6 +4010,7 @@ axis	Both	Обидві
 @msg	Create from Selection: the selection has no area	Створення з виділення: виділення немає області
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Відновлення даних ніде зберігати копії: задайте Установки → Робота з файлами → Відновлення даних → Папка (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Відновлення даних не може зберігати копії в {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Не вдається завантажити модулі з {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	виділіть прямим виділенням опорні точки для розрізу (не кінцеві точки відкритих контурів)
 @msg	Divide Objects Below: select a path	Поділ об’єктів нижче: виділіть контур
 @msg	Divide Objects Below: select exactly one path	Поділ об’єктів нижче: виділіть рівно один контур
@@ -5938,6 +5939,10 @@ breakText	Glyphs	Гліфи
 	Bow	Дуга
 	Spike	Пік
 	Skip Spaces	Пропускати пробіли
+	Release Type on a Path…	Звільнити текст за контуром…
+	Release Type on a Path	Звільнити текст за контуром
+	Text and Path	Текст і контур
+	Path Only	Лише контур
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графіка завелика, щоб скопіювати її як зображення: інші програми не отримають її PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -5949,3 +5954,9 @@ breakText	Glyphs	Гліфи
 	Fully Outside	Повністю зовні
 	No artboards match.	Немає відповідних монтажних областей.
 	Chosen: {n} of {total}	Вибрано: {n} з {total}
+	Set Corners…	Задати кути…
+	All Anchors	Усі опорні точки
+	Odd-Numbered Anchors	Непарні опорні точки
+	Even-Numbered Anchors	Парні опорні точки
+	Minimum angle	Мінімальний кут
+	Maximum angle	Максимальний кут

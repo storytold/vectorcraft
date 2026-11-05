@@ -70,7 +70,11 @@ impl Renderer {
         }
         let fits = full.area() <= PIXEL_BUDGET;
         // Device pixels from a pixel to the content deciding it (`None`: anywhere).
-        let margin = chain.iter().try_fold(2.0, |m, fx| looks_around(fx).map(|d| m + d / f.px));
+        // De-Interlace's field lines and Color Halftone's pixels: the rows of the document's
+        // raster grid (1 to 2400 ppi).
+        let ppi = doc_raster_ppi(f.doc);
+        let line = 72.0 / ppi;
+        let margin = chain.iter().try_fold(2.0, |m, fx| looks_around(fx, line).map(|d| m + d / f.px));
         let linear = linear_key(f.view);
         let key = content.cache.map(|slot| (content.node as *const Node as usize, slot, f.ink));
         // Made again at this zoom and rotation (after a pan), a raster cropped to the view covers a
@@ -104,13 +108,14 @@ impl Renderer {
             Ink::Display | Ink::RichBlack if f.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => effects::pixel::Channels::Cmyk,
             _ => effects::pixel::Channels::Rgb,
         };
-        // De-Interlace's field lines: the rows of the document's raster grid (1 to 2400 ppi).
-        let ppi = doc_raster_ppi(f.doc);
         // What the content reads (as the raster kept for it found it, else found now), with the
-        // channels the effects run on and, under De-Interlace or Rasterize, the resolution.
+        // channels the effects run on and, under De-Interlace, Color Halftone (its dots are sized
+        // in the grid's pixels) or Rasterize, the resolution.
         let inputs = key.map(|key| {
             let reads = self.pixel_fx.get(&key).filter(|e| e.node.is(content.node)).map_or_else(|| Reads::of(content.node), |e| e.inputs.reads);
-            let interlaced = chain.iter().any(|fx| matches!(fx, RasterFx::Pixel(PixelFx::DeInterlace { .. }) | RasterFx::Rasterize(_)));
+            let interlaced = chain
+                .iter()
+                .any(|fx| matches!(fx, RasterFx::Pixel(PixelFx::DeInterlace { .. } | PixelFx::ColorHalftone { .. }) | RasterFx::Rasterize(_)));
             self.raster_inputs(f, content.node, reads).with((std::mem::discriminant(&channels), interlaced.then_some(ppi.to_bits())))
         });
         let interacting = f.opts.interacting;
@@ -156,7 +161,6 @@ impl Renderer {
         let to_doc = view.inverse();
         let px = f.px / k;
         let frame = Frame { mt: false, view, visible: to_doc.transform_rect_bbox(Rect::new(0.0, 0.0, w, h)), px, ..*f };
-        let line = 72.0 / ppi;
         let (before, decoded) = (self.stats.moved, crate::paint::decode_failures());
         let outer_image_left_out = self.image_left_out.replace(false);
         let pattern_images_left_out = crate::pattern::images_left_out();

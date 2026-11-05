@@ -41,6 +41,7 @@ mod cut;
 mod dashalign;
 mod distort;
 mod docsetup;
+mod document_move;
 mod draw2;
 mod dynamic_symbols;
 mod editcolors;

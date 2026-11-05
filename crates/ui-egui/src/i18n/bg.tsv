@@ -6189,6 +6189,10 @@ breakText	Glyphs	Глифи
 	Bow	Дъга
 	Spike	Връх
 	Skip Spaces	Пропускане на интервалите
+	Release Type on a Path…	Освобождаване на текст по пътя…
+	Release Type on a Path	Освобождаване на текст по пътя
+	Text and Path	Текст и път
+	Path Only	Само път
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графиката е твърде голяма, за да се копира като изображение: другите приложения не получават PNG от нея
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6200,3 +6204,9 @@ breakText	Glyphs	Глифи
 	Fully Outside	Изцяло извън
 	No artboards match.	Няма съвпадащи работни области.
 	Chosen: {n} of {total}	Избрани: {n} от {total}
+	Set Corners…	Задаване на ъгли…
+	All Anchors	Всички опорни точки
+	Odd-Numbered Anchors	Нечетни опорни точки
+	Even-Numbered Anchors	Четни опорни точки
+	Minimum angle	Минимален ъгъл
+	Maximum angle	Максимален ъгъл

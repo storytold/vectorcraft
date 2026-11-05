@@ -4047,6 +4047,7 @@ imageTrace	Outline	轮廓
 @msg	unknown preference `{key}`	未知首选项 `{key}`
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	数据恢复没有可保存副本的位置：请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	数据恢复无法将副本保存到 {path}：{e}
+@msg	Plug-ins can't be loaded from {path}: {e}	无法从 {path} 载入增效工具：{e}
 @msg	`{area}` is no recovery area name	`{area}` 不是恢复区域名称
 @msg	`{name}` is no recovery entry name	`{name}` 不是恢复条目名称
 @msg	no clock to keep a heartbeat by	没有可用于维持心跳的时钟
@@ -6179,6 +6180,10 @@ breakText	Glyphs	字形
 	Bow	弓形
 	Spike	尖峰
 	Skip Spaces	跳过空格
+	Release Type on a Path…	释放路径文字…
+	Release Type on a Path	释放路径文字
+	Text and Path	文字和路径
+	Path Only	仅路径
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	图稿太大，无法作为图片复制：其他应用不会获得它的 PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6190,3 +6195,9 @@ breakText	Glyphs	字形
 	Fully Outside	完全在外
 	No artboards match.	没有匹配的画板。
 	Chosen: {n} of {total}	已选：{n} / {total}
+	Set Corners…	设置转角…
+	All Anchors	所有锚点
+	Odd-Numbered Anchors	奇数锚点
+	Even-Numbered Anchors	偶数锚点
+	Minimum angle	最小角度
+	Maximum angle	最大角度

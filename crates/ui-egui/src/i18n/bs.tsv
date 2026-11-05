@@ -6220,6 +6220,11 @@ shape	Open	Otvoren
 	Bow	Luk
 	Spike	Šiljak
 	Skip Spaces	Preskoči razmake
+	Release Type on a Path…	Oslobodi tekst na putanji…
+	Release Type on a Path	Oslobodi tekst na putanji
+	Text and Path	Tekst i putanja
+	Path Only	Samo putanja
+	Text Only	Samo tekst
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika je prevelika da bi se kopirala kao slika: druge aplikacije ne dobijaju njen PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6231,3 +6236,9 @@ shape	Open	Otvoren
 	Fully Outside	Potpuno vani
 	No artboards match.	Nijedna radna ploča ne odgovara.
 	Chosen: {n} of {total}	Odabrano: {n} od {total}
+	Set Corners…	Postavi uglove…
+	All Anchors	Sva sidra
+	Odd-Numbered Anchors	Neparna sidra
+	Even-Numbered Anchors	Parna sidra
+	Minimum angle	Najmanji ugao
+	Maximum angle	Najveći ugao

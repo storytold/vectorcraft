@@ -1933,6 +1933,7 @@ file-filter	Templates	範本
 @msg	unknown preference `{key}`	未知的偏好設定 `{key}`
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	「資料復原」沒有可存放拷貝的位置：請設定「偏好設定 → 檔案處理 → 資料復原 → 資料夾」 (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	「資料復原」無法將拷貝存放到 {path}：{e}
+@msg	Plug-ins can't be loaded from {path}: {e}	無法從 {path} 載入增效模組：{e}
 @msg	`{area}` is no recovery area name	`{area}` 不是復原區域名稱
 @msg	`{name}` is no recovery entry name	`{name}` 不是復原項目名稱
 @msg	no clock to keep a heartbeat by	沒有可用來維持心跳的時鐘
@@ -5976,6 +5977,10 @@ breakText	Glyphs	字符
 	Bow	弓形
 	Spike	尖峰
 	Skip Spaces	略過空格
+	Release Type on a Path…	釋放路徑文字…
+	Release Type on a Path	釋放路徑文字
+	Text and Path	文字和路徑
+	Path Only	僅路徑
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	圖稿太大，無法作為圖片複製：其他應用程式不會取得它的 PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -5987,3 +5992,9 @@ breakText	Glyphs	字符
 	Fully Outside	完全在外
 	No artboards match.	沒有符合的工作區域。
 	Chosen: {n} of {total}	已選：{n} / {total}
+	Set Corners…	設定轉角…
+	All Anchors	所有錨點
+	Odd-Numbered Anchors	奇數錨點
+	Even-Numbered Anchors	偶數錨點
+	Minimum angle	最小角度
+	Maximum angle	最大角度

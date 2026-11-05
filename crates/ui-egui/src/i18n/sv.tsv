@@ -3895,6 +3895,7 @@ axis	Both	Båda
 @msg	Create from Selection: the selection has no area	Skapa från markering: markeringen har ingen area
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Dataåterställning har ingenstans att spara kopior: ange Inställningar → Filhantering → Dataåterställning → Mapp (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Dataåterställning kan inte spara kopior i {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Det går inte att läsa in plugin-program från {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	direktmarkera ankarpunkter att klippa vid (inte slutpunkterna på öppna banor)
 @msg	Divide Objects Below: select a path	Dela objekt under: markera en bana
 @msg	Divide Objects Below: select exactly one path	Dela objekt under: markera exakt en bana
@@ -6394,6 +6395,10 @@ digits	Hindi	Hindi
 	Bow	Båge
 	Spike	Spets
 	Skip Spaces	Hoppa över mellanslag
+	Release Type on a Path…	Släpp text på bana…
+	Release Type on a Path	Släpp text på bana
+	Text and Path	Text och bana
+	Path Only	Endast bana
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Teckningen är för stor för att kopieras som en bild: andra appar får ingen PNG av den
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6405,3 +6410,9 @@ digits	Hindi	Hindi
 	Fully Outside	Helt utanför
 	No artboards match.	Ingen rityta matchar.
 	Chosen: {n} of {total}	Valda: {n} av {total}
+	Set Corners…	Ange hörn…
+	All Anchors	Alla ankare
+	Odd-Numbered Anchors	Udda ankare
+	Even-Numbered Anchors	Jämna ankare
+	Minimum angle	Minsta vinkel
+	Maximum angle	Största vinkel

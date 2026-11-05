@@ -3974,6 +3974,7 @@ axis	Both	Les deux
 @msg	Create from Selection: the selection has no area	Créer d’après la sélection : la sélection n’a pas de surface
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	La récupération des données n’a aucun emplacement où conserver les copies : définissez Préférences → Gestion des fichiers → Récupération des données → Dossier (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	La récupération des données ne peut pas conserver de copies dans {path} ({e})
+@msg	Plug-ins can't be loaded from {path}: {e}	Impossible de charger les plug-ins depuis {path} ({e})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	sélectionnez avec l’outil Sélection directe les points d’ancrage où couper (pas les extrémités des tracés ouverts)
 @msg	Divide Objects Below: select a path	Diviser les objets inférieurs : sélectionnez un tracé
 @msg	Divide Objects Below: select exactly one path	Diviser les objets inférieurs : sélectionnez exactement un tracé
@@ -6333,6 +6334,10 @@ breakText	Glyphs	Glyphes
 	Bow	Arc
 	Spike	Pointe
 	Skip Spaces	Ignorer les espaces
+	Release Type on a Path…	Libérer le texte curviligne…
+	Release Type on a Path	Libérer le texte curviligne
+	Text and Path	Texte et tracé
+	Path Only	Tracé uniquement
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	L’illustration est trop grande pour être copiée en tant qu’image : les autres applications n’en reçoivent pas de PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6344,3 +6349,9 @@ breakText	Glyphs	Glyphes
 	Fully Outside	Entièrement à l’extérieur
 	No artboards match.	Aucun plan de travail ne correspond.
 	Chosen: {n} of {total}	Choisis : {n} sur {total}
+	Set Corners…	Définir les angles…
+	All Anchors	Tous les points d’ancrage
+	Odd-Numbered Anchors	Points d’ancrage impairs
+	Even-Numbered Anchors	Points d’ancrage pairs
+	Minimum angle	Angle minimal
+	Maximum angle	Angle maximal

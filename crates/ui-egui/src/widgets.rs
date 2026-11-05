@@ -441,9 +441,9 @@ mod step_to_multiple_tests {
 mod decimal_point_tests {
     use super::*;
 
-    /// A decimal comma reads as a point, in a length, with arithmetic and in a percentage; text
-    /// with a point keeps its commas and is refused as before, and so does a thousands comma
-    /// (#3837).
+    /// A decimal comma reads as a point, in a length, with arithmetic and in a percentage, next to
+    /// numbers written with a point too (#5684); a number with both separators is refused, and so
+    /// is a thousands comma (#3837).
     #[test]
     fn a_decimal_comma_reads_as_a_point() {
         let mm = |s: &str| Unit::Millimeters.parse(&decimal_point(s)).map(|pt| Unit::Millimeters.from_pt(pt));
@@ -459,6 +459,15 @@ mod decimal_point_tests {
         for (text, want) in [("0,125", 0.125), ("1,25", 1.25), ("1,0000", 1.0), ("1,500+2", 3.5)] {
             let got = mm(text).unwrap_or(f64::NAN);
             assert!((got - want).abs() < 1e-9, "{text} is a decimal: {got}");
+        }
+        // Each number reads its own separator: a comma typed after a value shown with a point
+        // (#5684). A number with both separators is refused.
+        for (text, want) in [("100,5-20", 80.5), ("100-0,5", 99.5), ("10,5*2", 21.0), ("100.5 mm-0,5", 100.0), ("0,5+100.25", 100.75)] {
+            let got = mm(text).unwrap_or(f64::NAN);
+            assert!((got - want).abs() < 1e-9, "{text}: {got}");
+        }
+        for both in ["1.234,5", "1,234.5", "1.5,5-2"] {
+            assert_eq!(mm(both), None, "{both}: a point and a comma in one number");
         }
         assert_eq!(share_of("12,5%", 200.0), Some(25.0));
         assert_eq!(share_of("1,000%", 200.0), None, "1,000% reads as thousands: refused, not 1%");
