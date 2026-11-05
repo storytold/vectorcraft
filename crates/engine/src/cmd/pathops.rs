@@ -770,7 +770,14 @@ fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
                 let Some((path, rule)) = node_path(l) else { continue };
                 paths = true;
                 let base = if matches!(l.kind, NodeKind::Compound { .. }) && path.is_closed() { po::normalize(&path, rule) } else { path };
-                let off = po::offset_path(&base, delta, join, miter);
+                let off = match po::try_offset_path(&base, delta, join, miter) {
+                    Ok(p) => p,
+                    Err(po::PathOpsError::NonFinite) => continue,
+                    Err(po::PathOpsError::TooComplex) => {
+                        return Err(EngineError::Other("Offset Path: the path is too complex to offset".into()));
+                    }
+                    Err(e) => return Err(EngineError::Other(format!("Offset Path: {e}"))),
+                };
                 if off.is_empty() {
                     continue;
                 }
