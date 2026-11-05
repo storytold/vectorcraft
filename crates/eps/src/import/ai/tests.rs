@@ -605,6 +605,36 @@ fn a_gradient_stop_naming_a_process_colour_leaves_its_swatch_process() {
     assert!(near(sw.paint.color()), "{sw:?}");
 }
 
+/// A gradient whose name in the file is shown as the name of a color a later gradient's stop names
+/// is numbered: the color keeps its swatch.
+#[test]
+fn a_gradient_shown_as_a_stops_color_name_is_numbered() {
+    let first = "%AI5_BeginGradient: (Test Cyan\\n1)\n(Test Cyan\\n1) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let brand = "%AI5_BeginGradient: (Brand)\n(Brand) 0 2 Bd\n[\n\
+                 %_0.93 0.1 0 0 (Test Cyan) 0 0 5 1 6 50 0 Bs\n%_0 0 0 0 1 0 0 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let art_ = format!("Bb\n1 (Test Cyan\\n1) 0 0 0 10 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&format!("{first}{brand}{}", layer(&art_))).doc;
+    let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!("{:?}", fill(&art(&doc)[0])) };
+    assert_eq!(g.swatch.as_deref(), Some("Test Cyan 2"));
+    let sw = doc.swatch("Test Cyan").unwrap();
+    assert!(matches!(sw.paint, Paint::Solid { .. }) && sw.global, "{sw:?}");
+}
+
+/// A gradient whose name has no newline keeps it when a gradient shown as that name is defined
+/// first: the one shown up to its newline is numbered.
+#[test]
+fn a_gradient_name_without_a_newline_is_kept_whichever_comes_first() {
+    let gradient = |name: &str| format!("%AI5_BeginGradient: ({name})\n({name}) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n");
+    let filled = |name: &str| format!("Bb\n1 ({name}) 0 0 0 10 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&format!("{}{}{}", gradient("Sky\\n1"), gradient("Sky"), layer(&format!("{}{}", filled("Sky\\n1"), filled("Sky"))))).doc;
+    let links: Vec<_> = art(&doc).iter().map(|n| if let Paint::Gradient(g) = fill(n) { g.swatch.clone() } else { None }).collect();
+    assert_eq!(links, [Some("Sky 2".to_string()), Some("Sky".to_string())]);
+    // A gradient without stops isn't kept, and its name stays free.
+    let empty = "%AI5_BeginGradient: (Sky)\n(Sky) 0 0 Bd\n[\nBD\n%AI5_EndGradient\n";
+    let doc = read_ok(&format!("{empty}{}{}", gradient("Sky\\n1"), layer(&filled("Sky\\n1")))).doc;
+    assert!(matches!(fill(&art(&doc)[0]), Paint::Gradient(g) if g.swatch.as_deref() == Some("Sky")));
+}
+
 /// A pattern's definition (`%AI3_BeginPattern`): its name and tile (8 points square here, y up),
 /// then its art on `%_` lines (a group of the tile's unpainted box and a dot, a round-capped
 /// stroke of no length), `E`.
@@ -686,6 +716,116 @@ fn patterns_are_pattern_swatches_and_fill_with_them() {
     let Some(Paint::Pattern { xf, .. }) = paving.appearance.stroke().map(|st| st.paint.clone()) else { panic!() };
     assert_eq!(xf * Point::ZERO, Point::new(10.0, 64.0));
     assert!(s.warnings.is_empty(), "{:?}", s.warnings);
+}
+
+/// A pattern's name in the file is shown up to its newline (AI7 spec §4): two patterns named
+/// `Dots` apart from what follows the newline are "Dots" and "Dots 2", each fill paints with its
+/// own, and one defined again under its name in the file replaces the first.
+#[test]
+fn pattern_names_are_shown_up_to_their_newline() {
+    let def = |name: &str, tile: u32| DOTS.replace("(Dots)", &format!("({name})")).replace("0 0 8 8\n", &format!("0 0 {tile} {tile}\n"));
+    let filled = |name: &str| format!("({name}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(10.0, 20.0, 70.0, 80.0));
+    let body = format!(
+        "{}{}{}{}",
+        def("Dots\\n1", 8),
+        def("Dots\\n2", 8),
+        def("Dots\\n2", 9),
+        layer(&format!("{}{}", filled("Dots\\n2"), filled("Dots\\n1")))
+    );
+    let s = read_ok(&body);
+    let doc = &s.doc;
+    let tiles: Vec<_> = doc.patterns.iter().map(|p| (p.name.as_str(), p.tile.width())).collect();
+    assert_eq!(tiles, [("Dots", 8.0), ("Dots 2", 9.0)]);
+    for name in ["Dots", "Dots 2"] {
+        assert!(matches!(&doc.swatch(name).unwrap().paint, Paint::Pattern { pattern, .. } if pattern == name), "{name}");
+    }
+    let fills: Vec<_> = art(doc).iter().map(|n| if let Paint::Pattern { pattern, .. } = fill(n) { pattern } else { String::new() }).collect();
+    assert_eq!(fills, ["Dots 2", "Dots"]);
+    assert!(s.warnings.is_empty(), "{:?}", s.warnings);
+    // Without a palette (or with an empty one) the document keeps its default swatches, and a named
+    // color the art uses has its swatch: a pattern takes none of their names.
+    let empty = "%AI5_BeginPalette\n0 0 Pb\nPB\n%AI5_EndPalette\n";
+    let ink = format!("0 1 1 0 (Ink) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    for palette in ["", empty] {
+        let body =
+            format!("{}{}{palette}{}", def("Black\\n1", 8), def("Ink\\n1", 8), layer(&format!("{}{}{ink}", filled("Black\\n1"), filled("Ink\\n1"))));
+        let doc = read_ok(&body).doc;
+        for (solid, pattern) in [("Black", "Black 2"), ("Ink", "Ink 2")] {
+            assert!(matches!(&doc.swatch(pattern).unwrap().paint, Paint::Pattern { pattern: p, .. } if p == pattern), "{palette:?}");
+            assert!(matches!(doc.swatch(solid).unwrap().paint, Paint::Solid { .. }), "{palette:?}");
+        }
+        let fills: Vec<_> = art(&doc).iter().map(|n| fill(n)).collect();
+        assert!(matches!(&fills[..2], [Paint::Pattern { pattern: a, .. }, Paint::Pattern { pattern: b, .. }] if a == "Black 2" && b == "Ink 2"));
+    }
+    // Nor the name of a custom color the program of an EPS gives, or None's.
+    let ps = b"%!PS-Adobe-3.0\n%%CMYKCustomColor: 0 0 1 0 (Outer Ink)\n%%EndComments\n";
+    let data = stream(&format!("{}{}{}", def("Outer Ink\\n1", 8), def("[None]\\n1", 8), layer(&filled("Outer Ink\\n1"))));
+    let doc = super::read_beside(data.as_bytes(), true, ps).unwrap().doc;
+    assert_eq!(doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Outer Ink 2", "[None] 2"]);
+    assert!(matches!(doc.swatch("Outer Ink").unwrap().paint, Paint::Solid { .. }));
+    assert!(matches!(fill(&art(&doc)[0]), Paint::Pattern { pattern, .. } if pattern == "Outer Ink 2"));
+}
+
+/// A pattern shown as the name of one of the document's other swatches is numbered: a swatch or a
+/// color group of the palette the reader keeps (under any version's prefix, a swatch it names by
+/// its values too), Registration, and a custom color of the editing data's own header. A pattern
+/// whose name has no newline keeps it, whichever is defined first. The default swatches go when a
+/// palette replaces them, and their names are free then; a palette only in versioned content that
+/// isn't read replaces nothing.
+#[test]
+fn pattern_names_are_numbered_around_the_documents_swatches() {
+    let def = |name: &str| DOTS.replace("(Dots)", &format!("({name})"));
+    let palette = "%AI12_BeginPalette\n0 0 Pb\n0 0 0 0.5 k\n(Mist)\nPc\n1 (Greys) 1 Pg\n0 0 0 0.2 k\nPc\nPB\n%AI12_EndPalette\n";
+    let header = "%%CMYKCustomColor: 0 0 1 0 (Head Ink)\n";
+    let doc = |defs: &[&str], palette: &str| {
+        let body = format!("{}{palette}{}", defs.iter().map(|n| def(n)).collect::<String>(), layer(""));
+        read(stream_with_header(header, &body).as_bytes()).unwrap().doc
+    };
+    let names = |d: &Document| d.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
+    let d = doc(&["Mist\\n1", "Greys\\n1", "[Registration]\\n1", "Head Ink\\n1", "Red\\n1", "Sky\\n1", "Sky"], palette);
+    let generated = d.swatch_groups[0].swatches[0].name.clone();
+    let all: Vec<&str> = d.swatches_iter().map(|s| s.name.as_str()).collect();
+    assert!(d.swatch("Mist").is_some() && d.swatch("Head Ink").is_some(), "{all:?}");
+    assert!(matches!(&d.swatch("Red").unwrap().paint, Paint::Pattern { pattern, .. } if pattern == "Red"), "{all:?}");
+    assert_eq!(names(&d), ["Mist 2", "Greys 2", "[Registration] 2", "Head Ink 2", "Red", "Sky 2", "Sky"]);
+    let d = doc(&[&format!("{generated}\\n1")], palette);
+    assert_eq!(names(&d), [format!("{generated} 2")]);
+    // Without a palette the default swatches stay, and so they do when the only palette is in
+    // versioned content that isn't read.
+    let versioned = format!("%AI17_Begin_Content_if_version_gt:17 1\n%AI17_Alternate_Content\n{palette}%AI17_End_Versioned_Content\n");
+    for palette in ["", &versioned] {
+        let d = doc(&["Red\\n1"], palette);
+        assert!(matches!(d.swatch("Red").unwrap().paint, Paint::Solid { .. }), "{palette:?}");
+        assert_eq!(names(&d), ["Red 2"], "{palette:?}");
+    }
+    // A pattern and a color in versioned content that isn't read take no name.
+    let unread = format!(
+        "%AI17_Begin_Content_if_version_gt:17 1\n%AI17_Alternate_Content\n{}{}%AI17_End_Versioned_Content\n",
+        def("Sky"),
+        layer("0 1 1 0 (Sea) 0 x\n")
+    );
+    let d = doc(&["Sky\\n1", "Sea\\n1"], &unread);
+    assert_eq!(names(&d), ["Sky", "Sea"]);
+    // Nor does a color of a palette that a later one replaces, or of a palette's alternate.
+    let replaced = "%AI5_BeginPalette\n0 0 Pb\n0 1 1 0 (Sky) 0 x\n(Sky)\nPc\nPB\n%AI5_EndPalette\n\
+                    %AI5_BeginPalette\n0 0 Pb\n%AI17_Begin_Content_if_version_gt:17 1\n0 0 0 1 k\n(Ink)\nPc\n\
+                    %AI17_Alternate_Content\n0 1 0 0 (Sea) 0 x\n(Sea)\nPc\n%AI17_End_Versioned_Content\nPB\n%AI5_EndPalette\n";
+    let d = doc(&["Sky\\n1", "Sea\\n1"], replaced);
+    assert_eq!(names(&d), ["Sky", "Sea"]);
+    // Versioned content that doesn't end is read whole, its colors too.
+    let unended = format!("%AI17_Begin_Content_if_version_gt:17 1\n%AI17_Alternate_Content\n{}", layer("0 1 1 0 (Sea) 0 x\n"));
+    let d = doc(&["Sea\\n1"], &unended);
+    assert_eq!(names(&d), ["Sea 2"]);
+}
+
+/// A palette's pattern swatch named by its pattern takes the name the pattern is shown with.
+#[test]
+fn a_palette_pattern_swatch_takes_its_patterns_shown_name() {
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n(Dots\\n1) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\nPc\nPB\n%AI5_EndPalette\n";
+    let doc = read_ok(&format!("{}{palette}{}", DOTS.replace("(Dots)", "(Dots\\n1)"), layer(""))).doc;
+    let names: Vec<&str> = doc.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["[None]", "Dots"]);
+    assert!(matches!(&doc.swatch("Dots").unwrap().paint, Paint::Pattern { pattern, .. } if pattern == "Dots"));
 }
 
 /// Where a definition draws its tile doesn't move the fill: the tile's lower left is the pattern's
@@ -855,6 +995,17 @@ fn a_version_7_patterns_underbar_fills_the_tile_box() {
     assert!(def.art[1].appearance.stroke().is_some());
 }
 
+/// A version 7 pattern shown as the name of a custom color its own layer strings use is numbered:
+/// the color keeps its swatch.
+#[test]
+fn a_version_7_pattern_shown_as_its_colors_name_is_numbered() {
+    let layers = "(0 O 0 R 0 0 0 1 \\(Ink\\) 0 x) @ (2 2 m 9 2 L 9 9 L f) &\n";
+    let s = pattern_read7(&pattern7("Ink\\n1", layers), &pattern_layer7("Art", ""));
+    assert_eq!(s.doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Ink 2"]);
+    assert!(matches!(&s.doc.swatch("Ink 2").unwrap().paint, Paint::Pattern { pattern, .. } if pattern == "Ink 2"));
+    assert!(matches!(s.doc.swatch("Ink").unwrap().paint, Paint::Solid { .. }));
+}
+
 /// A layer's strings are read with their escapes undone: `\r`, `\n`, an octal tab, a backslash at
 /// a line's end, and escaped parentheses around a custom color's name.
 #[test]
@@ -993,6 +1144,20 @@ fn a_style_pattern_fill_is_placed_as_a_direct_one() {
         let (got, want) = (xf(&styled).as_coeffs(), xf(&direct).as_coeffs());
         assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-9), "{name}: {got:?} {want:?}");
     }
+}
+
+/// An art style's pattern fill paints with the pattern under the name it is shown with.
+#[test]
+fn a_style_pattern_fill_paints_with_the_shown_name() {
+    let look = "0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nU\n";
+    let own = "%_/AI11Text :\n%_0 /FreeUndo ,\n%_0 /FrameIndex ,\n%_0 /StoryIndex ,\n%_;\n";
+    let defs = format!("{}{}", pattern7("Grid", "(0 g) @ _ &\n"), pattern7("Grid\\n1", "(0 g) @ _ &\n"));
+    let s = read_ok(&format!("{}{defs}{}", tiled_style("Grid\\n1", "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]"), layer(&format!("{look}{own}1 (Tiled) XW\n"))));
+    let pattern = |n: &Node| match fill(n) {
+        Paint::Pattern { pattern, .. } => pattern,
+        p => panic!("{p:?} {:?} {:?}", s.unread, s.warnings),
+    };
+    assert_eq!(pattern(&art(&s.doc)[0]), "Grid 2");
 }
 
 #[test]

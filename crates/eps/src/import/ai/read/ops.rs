@@ -5,8 +5,8 @@ use super::types::{
     line_width,
 };
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
-    Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
+    Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
 };
 
 impl<'a> Reader<'a> {
@@ -157,6 +157,7 @@ impl<'a> Reader<'a> {
                 "Bs" => d.stop(&vals, &mut self.stop_spots),
                 "BD" => {
                     if let Some((name, g)) = self.gradient_def.take().and_then(GradientDef::finish) {
+                        self.global_names.define(Global::Gradient, &name);
                         self.gradients.insert(name, g);
                     }
                 }
@@ -478,7 +479,7 @@ impl<'a> Reader<'a> {
             self.unread_pattern(w);
             return;
         };
-        let p = Paint::Pattern { pattern: name.unwrap_or_default(), xf };
+        let p = Paint::Pattern { pattern: name.as_deref().map(|n| self.global_names.get(Global::Pattern, n).to_string()).unwrap_or_default(), xf };
         if w == "p" {
             self.pending_unread_fill = false;
             self.gs.fill = p;
@@ -707,7 +708,13 @@ impl<'a> Reader<'a> {
                 object,
                 look,
                 st,
-                &StylePaints { gradients: &self.gradients, patterns: &self.pattern_tiles, v7_patterns: &self.v7_patterns, space },
+                &StylePaints {
+                    gradients: &self.gradients,
+                    patterns: &self.pattern_tiles,
+                    names: &self.global_names,
+                    v7_patterns: &self.v7_patterns,
+                    space,
+                },
             )
         }) {
             // Strokes and effects at the document's scale, as the art (a Large Canvas copy's is scaled up).
@@ -841,11 +848,12 @@ fn pattern_controls(n: &[f64]) -> Option<Affine> {
     xf.as_coeffs().iter().all(|v| v.is_finite()).then_some(xf)
 }
 
-/// What a style's fills paint with: the file's gradients and pattern tiles, the patterns defined in
-/// the version 7 form, and art space → the document.
+/// What a style's fills paint with: the file's gradients and pattern tiles with the names they get
+/// in the document, the patterns defined in the version 7 form, and art space → the document.
 struct StylePaints<'a> {
     gradients: &'a HashMap<String, Gradient>,
     patterns: &'a HashMap<String, Rect>,
+    names: &'a ShownNames,
     v7_patterns: &'a HashSet<String>,
     space: Affine,
 }
@@ -915,7 +923,8 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
         let mut layer = match item {
             StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
             StyleItem::Gradient { name, angle } => {
-                let paint = match (name.as_ref().and_then(|n| placed.get(n)), gradients, own_gradient) {
+                // The drawn look's gradients are keyed by the names they got in the document.
+                let paint = match (name.as_ref().and_then(|n| placed.get(paints.names.get(Global::Gradient, n))), gradients, own_gradient) {
                     // Other objects than type: the object's own, as they always were.
                     (_, 1, Some(own)) if !slot => own.paint.clone(),
                     (Some(p), ..) => p.clone(),
@@ -930,7 +939,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                 };
                 AppearanceItem::Fill(FillLayer::new(paint))
             }
-            StyleItem::Pattern { name, matrix, controls } => match placed.get(&format!("{PATTERN_KEY}{name}")) {
+            StyleItem::Pattern { name, matrix, controls } => match placed.get(&format!("{PATTERN_KEY}{}", paints.names.get(Global::Pattern, name))) {
                 Some(p) => AppearanceItem::Fill(FillLayer::new(p.clone())),
                 None => {
                     let tile = paints.patterns.get(name).copied()?;
@@ -939,7 +948,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                         matrix = Some(matrix.unwrap_or(Affine::IDENTITY) * pattern_controls(controls)?);
                     }
                     let xf = pattern_xf(paints.space, matrix, tile)?;
-                    AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: name.clone(), xf }))
+                    AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: paints.names.get(Global::Pattern, name).to_string(), xf }))
                 }
             },
             StyleItem::Stroke { .. } => stroke_layer(item)?,
