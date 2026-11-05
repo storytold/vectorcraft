@@ -3,7 +3,7 @@
 //! offset, with the pixels a new renderer draws. A change other than a move outlines the stroke
 //! and makes the slices again.
 
-use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_color::{Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeGradientMode, StrokeLayer,
     WidthProfile,
@@ -353,6 +353,17 @@ fn gradient_cases() -> Vec<(String, (Document, NodeId), Point)> {
         out.push((format!("a short closed path, {mode:?}"), doc(&ring(40, 80.0), only()), Point::new(80.0, 0.0)));
         out.push((format!("a long open path, {mode:?}"), doc(&zigzag(3000), only()), Point::new(12_000.0, 15.0)));
         out.push((format!("a long closed path, {mode:?}"), doc(&ring(4000, 5000.0), only()), Point::new(0.0, 5000.0)));
+        // A placed gradient, whose start and end a move moves too.
+        let mut st = gradient_stroke(12.0, mode);
+        if let Paint::Gradient(g) = &mut st.paint {
+            g.geom = Some(GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(140.0, 30.0), aspect: 1.0, focal: None });
+            g.angle = 12.0;
+        }
+        out.push((
+            format!("a short open path with a placed gradient, {mode:?}"),
+            doc(&zigzag(20), vec![AppearanceItem::Stroke(st)]),
+            Point::new(70.0, 15.0),
+        ));
     }
     out
 }

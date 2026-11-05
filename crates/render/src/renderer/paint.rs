@@ -395,11 +395,12 @@ impl Renderer {
 
     /// The slices of stroke `st` of `node` along `bp` (filled with `rule`), made from the latest
     /// slices kept under `mk` ([`MovedSliceKey`]) when those were made along their object's own
-    /// path, their object is `node` changed, its stroke there is `st` and its fill rule `rule`, and
-    /// `bp` is its path moved (to within rounding): the node they were made from, those slices,
-    /// and the offset from that node to `bp`, which the slices are drawn moved by. The anchors of
-    /// the two objects are compared first ([`anchors_moved`]), and the earlier path is made again
-    /// from its object only when they match. `None` when there are no such slices.
+    /// path, their object is `node` changed, its stroke there differs from `st` at most in where
+    /// its gradient is placed, its fill rule is `rule`, and `bp` is its path moved (to within
+    /// rounding): the node they were made from, those slices, and the offset from that node to
+    /// `bp`, which the slices are drawn moved by. The anchors of the two objects are compared first
+    /// ([`anchors_moved`]), and the earlier path is made again from its object only when they
+    /// match. `None` when there are no such slices.
     fn moved_slices(
         &self,
         mk: MovedSliceKey,
@@ -415,7 +416,17 @@ impl Renderer {
         let Some(AppearanceItem::Stroke(old)) = e.made.appearance.items.get(mk.1) else {
             return None;
         };
-        if !std::ptr::eq(old, st) && old != st {
+        // The slices take only the gradient's stops and kind, not where it is placed, which a move
+        // moves too.
+        let unplaced = |s: &StrokeLayer| {
+            let mut s = s.clone();
+            if let vectorcraft_color::Paint::Gradient(g) = &mut s.paint {
+                g.geom = None;
+                g.angle = 0.0;
+            }
+            s
+        };
+        if !std::ptr::eq(old, st) && unplaced(old) != unplaced(st) {
             return None;
         }
         if !anchors_moved(&e.made, node) {
