@@ -208,15 +208,25 @@ impl VectorcraftApp {
             let formats = r.and_then(|_| made.try_recv().map_err(|e| e.to_string()));
             let written = formats.and_then(|(f, warnings)| {
                 let Some(cb) = app.services.system_clipboard.as_mut() else { return Ok(warnings) };
+                let before_write = Held::now(cb.as_mut());
                 // Nothing copied elsewhere since the Copy or Cut.
-                let current = before.as_ref().is_some_and(|b| *b == Held::now(cb.as_mut()));
+                let current = before.as_ref() == Some(&before_write);
                 if let Err(e) = cb.write(&f) {
                     // Another app may hold the clipboard open. It keeps what it held (or what the
                     // failed write left), and a paste into text takes this copy's text until
                     // something else is copied.
                     let held = Held::now(cb.as_mut());
                     let text = f.iter().find(|t| t.mime == TEXT).map(|t| String::from_utf8_lossy(&t.data).into_owned());
-                    app.clipboard_publishing.unwritten = text.filter(|_| current).map(|text| (held, text));
+                    // A change during the write is the failed write emptying the clipboard and
+                    // writing some of the formats, or another app's copy: the clipboard then holds
+                    // nothing to paste, this copy's text, or no text and one of this copy's
+                    // formats only after the former.
+                    let left_by_write = held == before_write
+                        || match cb.read(&[TEXT]) {
+                            Some(now) => text.as_deref().is_some_and(|ours| now.data == ours.as_bytes()),
+                            None => !cb.has(&PASTE_ORDER) || f.iter().any(|ours| cb.read(&[ours.mime]).is_some_and(|now| now.data == ours.data)),
+                        };
+                    app.clipboard_publishing.unwritten = text.filter(|_| current && left_by_write).map(|text| (held, text));
                     return Err(e);
                 }
                 Ok(warnings)
