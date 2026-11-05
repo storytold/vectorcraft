@@ -83,3 +83,27 @@ with only that lint allowed passed; no upstream file or lint policy was changed.
 Full workspace CI and non-Windows runtime were not executed. Reproducer and
 attributed auth test patch belong to the source-only CraftLink consumer. No
 binary redistribution is included.
+
+## NATIVE.2 verification — 2026-11-05
+
+Reconciled upstream `7436b4be5` by merge, preserving both ROADMAP entries and all
+native changes. Six engine change-feed tests, six UI routing/precondition tests,
+26 authenticated candidate socket tests, source-only native bin/tests check,
+engine WASM and 28-crate layering passed. The two unchanged Clippy findings above
+remain (`cleanup/text.rs` now line 1007); the diagnostic check allowing only that
+lint passed. No source lint policy changed.
+
+The consumer's real two-app smoke passed 13 checks, adding background links in
+both apps with foreground tabs unchanged, projection while an unrelated native
+drag stays pending, target/guard mismatch refusal and a 25-sample native pointer
+drag producing one invalidation and one undo step. Native undo/redo restored
+geometry. Single-run samples: 70.73/63.03 ms unsaved forward/reverse;
+72.95/79.87 ms background reverse/forward; 31.67 ms drag and observation.
+The earlier smoke tool-ID typo and auth fixture compile correction are retained
+in the consumer verification record. Five consumer subprocess regressions passed.
+
+This remains a narrow bridge, not transform interchange or preview streaming.
+Transient target interaction/revision refusal retry still needs broker hardening;
+multiple instances of the same product and non-Windows runtime are unverified.
+Authentication still belongs to #4623 and is composed only for tests. Exact pins,
+reproducer and licensing remain in the existing CraftLink consumer PR #3.
