@@ -21,7 +21,9 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
         // Area Type Options: a Row Gutter still as it opened, on rows without a gutter of their own,
         // follows the Gutter as it is changed.
         let linked = d.fields.get("__rowGutterLinked").is_some() && d.fields.get("__rowGutterLinked") == d.fields.get("rowGutter");
-        form::param_fields(ui, d, &|k| lengths.contains(&k), &|k| choices(&command, k), &rank, app.session.general_unit());
+        let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
+        let choices = |k: &str| rasterize_color_models(&command, k, cmyk).or_else(|| choices(&command, k));
+        form::param_fields(ui, d, &|k| lengths.contains(&k), &choices, &rank, app.session.general_unit());
         if linked
             && d.fields.get("rowGutter") == d.fields.get("__rowGutterLinked")
             && let Some(g) = d.fields.get("gutter").cloned()
@@ -61,12 +63,12 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 
 /// Does this dialog show a Preview checkbox? Grid Repeat Options does: the public page for the
 /// grid options lists one, and the radial and mirror pages do not. Type on a Path Options does
-/// too (#5360), as public tutorials of the dialog show. (Cancel rolls a preview back whichever
-/// dialog started it.)
+/// too (#5360), as public tutorials of the dialog show, and Type Tools › Release Type on a Path
+/// works the same way (#5532). (Cancel rolls a preview back whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
         "object.repeat.options" => d.fields.contains_key("gridType"),
-        "type.pathOptions" => true,
+        "type.pathOptions" | crate::addons::typetools::RELEASE => true,
         _ => false,
     }
 }
@@ -114,6 +116,7 @@ fn order(command: &str) -> &'static [&'static str] {
         // The public Trap options' order.
         "object.pathfinder.trap" => &["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"],
         "addon.color.printFixes" => &["inkLimit", "excludePureBlack", "removeWhiteOverprint", "overprintBlack", "textOnly", "fill", "stroke"],
+        crate::addons::typetools::RELEASE => &["mode", "keepOriginal"],
         _ => &[],
     }
 }
@@ -123,6 +126,7 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
     match (command, key) {
         ("type.pathOptions", "effect") => Some(crate::menus::PATH_EFFECTS),
         ("type.pathOptions", "alignToPath") => Some(PATH_ALIGN),
+        (crate::addons::typetools::RELEASE, "mode") => Some(crate::addons::typetools::RELEASE_MODES),
         ("text.areaOptions", "fit") => Some(AREA_FIT),
         ("text.areaOptions", "firstBaseline") => Some(FIRST_BASELINE),
         ("text.areaOptions", "verticalAlign") => Some(VERTICAL_ALIGN),
@@ -135,6 +139,19 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
         _ => None,
     }
 }
+
+/// Object › Rasterize › Color Model: the values `object.rasterize` takes, the document's own
+/// colour model first (#5660).
+fn rasterize_color_models(command: &str, key: &str, cmyk: bool) -> Option<form::Choices> {
+    match (command, key) {
+        ("object.rasterize", "colorModel") => Some(if cmyk { RASTERIZE_CMYK } else { RASTERIZE_RGB }),
+        _ => None,
+    }
+}
+
+/// Object › Rasterize › Color Model in an RGB and in a CMYK document.
+const RASTERIZE_RGB: form::Choices = &[("RGB", "rgb"), ("Grayscale", "grayscale"), ("Bitmap", "bitmap")];
+const RASTERIZE_CMYK: form::Choices = &[("CMYK", "cmyk"), ("Grayscale", "grayscale"), ("Bitmap", "bitmap")];
 
 /// Type on a Path Options › Align to Path.
 const PATH_ALIGN: form::Choices = &[("Ascender", "ascender"), ("Descender", "descender"), ("Center", "center"), ("Baseline", "baseline")];
@@ -283,6 +300,61 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
         assert_eq!(t.area.flow, vectorcraft_doc::TextFlow::Rows);
+    }
+
+    /// Object › Rasterize › Color Model is a dropdown of the models `object.rasterize` takes, the
+    /// document's own first (#5660): every value runs, and picking Grayscale rasterizes in grays.
+    #[test]
+    fn rasterize_color_model_is_a_dropdown_of_the_models_the_command_takes() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+        for (mode, own) in [("rgb", "RGB"), ("cmyk", "CMYK")] {
+            let models = rasterize_color_models("object.rasterize", "colorModel", mode == "cmyk").unwrap();
+            assert_eq!(models.first(), Some(&(own, mode)), "the document's own model first");
+            for (_, value) in models {
+                let mut s = Session::new();
+                s.execute("file.new", &json!({"width": 100, "height": 100, "colorMode": mode})).unwrap();
+                s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+                s.execute("object.rasterize", &json!({"ppi": 72, "colorModel": value})).unwrap_or_else(|e| panic!("{mode} {value}: {e}"));
+            }
+        }
+        assert!(rasterize_color_models("object.rasterize", "background", false).is_none());
+        assert!(rasterize_color_models("document.rasterEffectsSettings", "colorModel", false).is_none());
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"color": "#ff0000", "ids": [id]})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        crate::menus::invoke(&mut app, "object.rasterize", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("colorModel"), "rgb");
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                crate::dialogs::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(5);
+        assert!(h.query_by_role_and_label(Role::TextInput, "Color Model:").is_none(), "not a text field");
+        h.get_by_role_and_label(Role::ComboBox, "Color Model:").click();
+        h.run_steps(3);
+        h.get_by_label("Grayscale").click();
+        h.run_steps(3);
+        assert_eq!(h.state().ui.dialog.as_ref().unwrap().str("colorModel"), "grayscale");
+        let app = h.state_mut();
+        crate::dialogs::confirm(app).unwrap();
+        let st = app.session.active().unwrap();
+        let key = st.selection.objects.iter().find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
+            Some(NodeKind::Image(i)) => Some(i.key.clone()),
+            _ => None,
+        });
+        let img = image::load_from_memory(&st.doc.images[&key.expect("the rectangle became an image")].bytes).unwrap().to_rgba8();
+        let p = img.get_pixel(img.width() / 2, img.height() / 2).0;
+        assert!(p[0] == p[1] && p[1] == p[2] && p[0] < 128, "red in grayscale: {p:?}");
     }
 
     /// Graph Type › Value Axis is a dropdown of the values `graph.setType` takes, and OK puts the

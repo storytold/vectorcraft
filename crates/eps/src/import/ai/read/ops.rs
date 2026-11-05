@@ -1,9 +1,12 @@
 use super::containers::close;
 use super::document::slot_of;
-use super::types::{BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, Place, line_width};
+use super::types::{
+    BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, MAX_TAG_TEXT, MAX_TAGS, Place, URL_TAG,
+    line_width,
+};
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
-    Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
+    Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
 };
 
 impl<'a> Reader<'a> {
@@ -73,6 +76,36 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// `/identifier (string) XT` (version 7 specification §7): a tag on the object before it. The
+    /// `AdobeURL` tag sets the object's URL, and every other tag is added to the object's data in
+    /// order, up to [`MAX_TAGS`]. A tag with no object before it, with an empty identifier, or with
+    /// an identifier or string longer than [`MAX_TAG_TEXT`] bytes is ignored, and so are tags in a
+    /// pattern's or brush's art, which is not an object of the document. A clipping path's tags are
+    /// its own, not those of the copy that paints its fill.
+    fn object_tag(&mut self, vals: &[V], hidden: bool) {
+        let [.., V::Name(id), V::Str(value)] = vals else {
+            self.note_unknown("XT", hidden);
+            return;
+        };
+        if id.is_empty() || id.len() > MAX_TAG_TEXT || value.len() > MAX_TAG_TEXT || !self.after_object || self.pattern.is_some() {
+            return;
+        }
+        let (id, value) = (id.clone(), obj::text(value));
+        let Some(kids) = self.frames.last_mut().map(|f| &mut f.children) else { return };
+        let Some(mut at) = kids.len().checked_sub(1) else { return };
+        if at > 0 && kids.get(at).is_some_and(|n| self.clip_fills.contains(&n.id)) {
+            at -= 1;
+        }
+        let Some(n) = kids.get_mut(at) else { return };
+        n.edit_attrs(|a| {
+            if id == URL_TAG {
+                a.url = value;
+            } else if a.data.len() < MAX_TAGS {
+                a.data.push((id, value));
+            }
+        });
+    }
+
     pub(super) fn op(&mut self, w: &str, hidden: bool) -> Result<(), String> {
         if self.blend_record.is_some() {
             self.end_blend();
@@ -124,6 +157,7 @@ impl<'a> Reader<'a> {
                 "Bs" => d.stop(&vals, &mut self.stop_spots),
                 "BD" => {
                     if let Some((name, g)) = self.gradient_def.take().and_then(GradientDef::finish) {
+                        self.global_names.define(Global::Gradient, &name);
                         self.gradients.insert(name, g);
                     }
                 }
@@ -211,6 +245,12 @@ impl<'a> Reader<'a> {
                 Some(0.0) => self.gs.show_center = None,
                 _ => {}
             },
+            // Object tags (§7): `/identifier (string) XT` after the object it tags. The state written
+            // after a group or a mesh is still theirs after its tags.
+            "XT" => {
+                self.object_tag(&vals, hidden);
+                (self.group_ended, self.mesh_ended) = (group_ended, mesh_ended);
+            }
             "w" => {
                 if let Some(v) = Self::nums(&vals).last().filter(|v| v.is_finite() && **v >= 0.0) {
                     self.gs.width = *v;
@@ -256,18 +296,13 @@ impl<'a> Reader<'a> {
             "Xd" if group_ended => {
                 let gs = self.gs.clone();
                 if let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::Group { .. })) {
-                    (n.opacity, n.blend, n.isolate, n.knockout) = (gs.opacity, gs.blend, gs.isolate, gs.knockout);
+                    (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) =
+                        (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
                 }
             }
             "Xw" => self.gs.hidden = Self::nums(&vals).last() == Some(&1.0),
             "A" => self.gs.locked = Self::nums(&vals).last() == Some(&1.0),
-            "XW" => {
-                // An object's own state block ends `6 () XW`: an `Xy` after a mesh's end was the mesh's.
-                if Self::nums(&vals).last() == Some(&6.0) && self.mesh_undo.take().is_some() {
-                    self.layer_state = None;
-                }
-                self.style_marker(&vals, hidden)
-            }
+            "XW" => self.state_marker(&vals, hidden),
             // Gradients.
             "Bd" => self.gradient_def = GradientDef::begin(&vals),
             "Bs" | "BD" => {}
@@ -322,21 +357,29 @@ impl<'a> Reader<'a> {
             "Tp" => self.begin_text_path(&vals),
             "TP" => self.end_text_path(),
             "TO" => self.end_text(hidden)?,
-            "Tx" | "Tj" | "TX" => self.text_body(w, &vals),
+            // `(text) justified TS`, special characters (§22.6): the reader adds its characters like `Tx`.
+            "Tx" | "Tj" | "TX" | "TS" => self.text_body(w, &vals),
             "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" | "TC" | "TW" | "Tq" | "Th" => self.text_attr(w, &vals),
             // Attributes the reader doesn't keep (kerning pairs, Far-Eastern type) and final-form
             // positions (§15.3).
             "Tk" | "TK" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TV" | "Tv" | "Ty" | "TY" | "TG" | "Tg" | "Tu" | "Xu" => {}
+            // `TM` (pop text matrix) and `Te` (end render), listed in §22.6, keep nothing either; the
+            // reader takes `Te` with any number of operands.
+            "TM" | "Te" => {}
             // The hyphenation language and tab rulers, which the reader doesn't keep either (§22): `XL`,
             // `Xb`/`XB` a tab definition (and the `Xe` tab descriptions between them).
             "XL" | "Xb" | "XB" | "Xe" => {}
             "TE" => self.te(&vals),
+            "TZ" => self.tz(&vals),
             // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).
             "XI" if self.raster.is_some() => {
                 if let Some(r) = self.raster.as_mut() {
                     r.operands = Some(vals);
                 }
             }
+            // A linked image (§8.2, §8.3): `(path) modified XG` names the file of the `XF` image after
+            // it, which has `XI`'s operands and no samples.
+            "XG" | "XF" => self.image_link_op(w, vals, hidden)?,
             // A plugin group ends; a blend's record follows on `%` lines.
             "XP" => {
                 let name = vals.iter().find_map(V::text).unwrap_or_default();
@@ -436,7 +479,7 @@ impl<'a> Reader<'a> {
             self.unread_pattern(w);
             return;
         };
-        let p = Paint::Pattern { pattern: name.unwrap_or_default(), xf };
+        let p = Paint::Pattern { pattern: name.as_deref().map(|n| self.global_names.get(Global::Pattern, n).to_string()).unwrap_or_default(), xf };
         if w == "p" {
             self.pending_unread_fill = false;
             self.gs.fill = p;
@@ -501,15 +544,51 @@ impl<'a> Reader<'a> {
     /// The state block of a layer whose art ended (`Xy`, `Xd`, `XW`, then `LB`) is read at the
     /// `LB`, and can have the stroke style between its `Xy` and `Xd`: that keeps the layer's state,
     /// and what a mesh or blend before it had (`mesh_undo`).
+    /// After an image, the operators that end its raster (`XH`, `Xr` and the `N` after
+    /// `%AI5_EndRaster`) keep it the object its name and opacity mask go to.
     fn state_block_continues(&mut self, w: &str) {
-        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB") {
+        if self.image_tail && matches!(w, "XH" | "XT" | "Xr" | "N") {
+            return;
+        }
+        self.image_tail = false;
+        // An object's tags (`XT`) follow it one after another, and an image's follow the `XH` that
+        // ends its data.
+        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH") {
             return;
         }
         self.after_object = false;
         if !matches!(w, "J" | "j" | "w" | "M" | "d" | "XR") {
             self.layer_state = None;
             self.mesh_undo = None;
+            self.container_undo = None;
         }
+    }
+
+    /// `n (style) XW`: the end of a state block, or a style marker ([`Self::style_marker`]).
+    fn state_marker(&mut self, vals: &[V], hidden: bool) {
+        let code = Self::nums(vals).last().copied();
+        // An object's own state block ends `6 () XW`: an `Xy` after a mesh's end was the mesh's.
+        if code == Some(6.0) && self.mesh_undo.take().is_some() {
+            self.layer_state = None;
+        }
+        match code {
+            Some(6.0) => self.container_undo = None,
+            Some(7.0) => self.layer_state_block(),
+            _ => {}
+        }
+        self.style_marker(vals, hidden)
+    }
+
+    /// `7 () XW` ends a layer's own state block (after its art, before `LB`): an `Xy` that went to
+    /// the layer's last group or compound path, right after its end, was the layer's.
+    fn layer_state_block(&mut self) {
+        let Some(before) = self.container_undo.take() else { return };
+        let gs = &self.gs;
+        let state = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
+        let Some(Frame { kind: Kind::Layer(_), children, .. }) = self.frames.last_mut() else { return };
+        let Some(n) = children.last_mut().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) else { return };
+        (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = before;
+        self.layer_state = Some(state);
     }
 
     /// `mode opacity isolate knockout shape Xy`; after a group's end, the group's too, and right
@@ -537,20 +616,18 @@ impl<'a> Reader<'a> {
             let before = (n.opacity, n.blend, n.isolate, n.knockout);
             (n.opacity, n.blend, n.isolate, n.knockout) = (gs.opacity, gs.blend, gs.isolate, gs.knockout);
             self.mesh_undo = Some(before);
-            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
-        } else if self.last_object().is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
-            if let Some(n) = self.last_object() {
-                n.opacity = gs.opacity;
-                n.blend = gs.blend;
-                n.isolate = gs.isolate;
-                n.knockout = gs.knockout;
-            }
+            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape));
+        } else if let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
+            let before = (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape);
+            (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
+            // The layer's instead when the layer's `7 () XW` follows (`layer_state_block`).
+            self.container_undo = in_layer.then_some(before);
             self.layer_state = None;
         } else {
             // After a layer's art and before its `LB`: the layer's own state (#2003). Kept until
             // an operator that isn't part of the state block (or the `LB` that takes it) says the
             // art moves on, so a path's state before its paint isn't read as its layer's.
-            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout));
+            self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape));
         }
         self.note_state();
     }
@@ -631,7 +708,13 @@ impl<'a> Reader<'a> {
                 object,
                 look,
                 st,
-                &StylePaints { gradients: &self.gradients, patterns: &self.pattern_tiles, v7_patterns: &self.v7_patterns, space },
+                &StylePaints {
+                    gradients: &self.gradients,
+                    patterns: &self.pattern_tiles,
+                    names: &self.global_names,
+                    v7_patterns: &self.v7_patterns,
+                    space,
+                },
             )
         }) {
             // Strokes and effects at the document's scale, as the art (a Large Canvas copy's is scaled up).
@@ -693,6 +776,23 @@ impl<'a> Reader<'a> {
         look.name = object.name.clone().or(look.name.take());
         look.visible = object.visible;
         look.locked = object.locked;
+        // The object's note, Show Center, URL and data (object tags) stay with the look that stands
+        // for it, in place of the look's own where the object has them.
+        if let Some(a) = object.extras().attrs.as_deref().cloned() {
+            look.edit_attrs(|l| {
+                if a.show_center.is_some() {
+                    l.show_center = a.show_center;
+                }
+                if !a.url.is_empty() {
+                    l.url = a.url;
+                }
+                if !a.note.is_empty() {
+                    l.note = a.note;
+                }
+                let room = MAX_TAGS.saturating_sub(l.data.len());
+                l.data.extend(a.data.into_iter().take(room));
+            });
+        }
         if !hidden {
             self.drawn_looks += 1;
         }
@@ -748,11 +848,12 @@ fn pattern_controls(n: &[f64]) -> Option<Affine> {
     xf.as_coeffs().iter().all(|v| v.is_finite()).then_some(xf)
 }
 
-/// What a style's fills paint with: the file's gradients and pattern tiles, the patterns defined in
-/// the version 7 form, and art space → the document.
+/// What a style's fills paint with: the file's gradients and pattern tiles with the names they get
+/// in the document, the patterns defined in the version 7 form, and art space → the document.
 struct StylePaints<'a> {
     gradients: &'a HashMap<String, Gradient>,
     patterns: &'a HashMap<String, Rect>,
+    names: &'a ShownNames,
     v7_patterns: &'a HashSet<String>,
     space: Affine,
 }
@@ -822,7 +923,8 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
         let mut layer = match item {
             StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
             StyleItem::Gradient { name, angle } => {
-                let paint = match (name.as_ref().and_then(|n| placed.get(n)), gradients, own_gradient) {
+                // The drawn look's gradients are keyed by the names they got in the document.
+                let paint = match (name.as_ref().and_then(|n| placed.get(paints.names.get(Global::Gradient, n))), gradients, own_gradient) {
                     // Other objects than type: the object's own, as they always were.
                     (_, 1, Some(own)) if !slot => own.paint.clone(),
                     (Some(p), ..) => p.clone(),
@@ -837,7 +939,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                 };
                 AppearanceItem::Fill(FillLayer::new(paint))
             }
-            StyleItem::Pattern { name, matrix, controls } => match placed.get(&format!("{PATTERN_KEY}{name}")) {
+            StyleItem::Pattern { name, matrix, controls } => match placed.get(&format!("{PATTERN_KEY}{}", paints.names.get(Global::Pattern, name))) {
                 Some(p) => AppearanceItem::Fill(FillLayer::new(p.clone())),
                 None => {
                     let tile = paints.patterns.get(name).copied()?;
@@ -846,7 +948,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                         matrix = Some(matrix.unwrap_or(Affine::IDENTITY) * pattern_controls(controls)?);
                     }
                     let xf = pattern_xf(paints.space, matrix, tile)?;
-                    AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: name.clone(), xf }))
+                    AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: paints.names.get(Global::Pattern, name).to_string(), xf }))
                 }
             },
             StyleItem::Stroke { .. } => stroke_layer(item)?,

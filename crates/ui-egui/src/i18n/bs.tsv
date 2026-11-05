@@ -683,6 +683,8 @@
 	Update Changed Links	Ažuriraj promijenjene veze
 	Magic Wand	Čarobni štapić
 	Navigator	Navigator
+	Navigator Panel Options	Opcije panela navigatora
+	Draw Dashed Lines as Solid Lines	Crtaj isprekidane linije kao pune
 	Pattern Options	Opcije uzorka
 	Properties	Svojstva
 	Separations Preview	Pregled separacija
@@ -948,6 +950,10 @@ lighting	Light	Svjetlo
 	Home	Početna
 	Import Keyboard Shortcuts…	Uvezi prečice na tastaturi…
 	Justify all lines	Obostrano poravnaj sve redove
+	Align Top	Poravnaj gore
+	Align Center	Poravnaj u sredinu
+	Align Bottom	Poravnaj dolje
+	Justify Vertically	Obostrano poravnaj okomito
 	Justify with last line aligned left	Obostrano s posljednjim redom lijevo
 	Keyboard Shortcut Conflicts	Konflikti prečica na tastaturi
 	Keyboard Shortcut Set	Skup prečica na tastaturi
@@ -1541,6 +1547,11 @@ digits	Malayalam	Malajalam
 	Save Transparency Flattener Preset…	Sačuvaj predložak spljoštavanja prozirnosti…
 	Basic Latin	Osnovna latinica
 	Currency & Symbols	Valuta i simboli
+	Alternates for Current Selection	Alternative za trenutni odabir
+	Select a character with the Type tool to see its alternates.	Odaberite znak alatom za tekst da vidite njegove alternative.
+	The selected character's font is not available.	Font odabranog znaka nije dostupan.
+	No alternates for the selected character.	Nema alternativa za odabrani znak.
+	Double-click to replace	Dvostruki klik za zamjenu
 	Double-click to insert	Dvostruki klik za umetanje
 	Entire Font	Cijeli font
 	glyph {id}	glif {id}
@@ -1816,6 +1827,7 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Odaberite tekst da postavite njegove OpenType mogućnosti.
 	Standard Ligatures	Standardne ligature
 	Stylistic Alternates	Stilske alternative
+	Set {n}	Skup {n}
 	Swash	Ukrasni potez
 	Tabular Lining	Tabelarne brojke
 	Tabular Oldstyle	Tabelarne stare brojke
@@ -2395,6 +2407,7 @@ digits	Malayalam	Malajalam
 	“{file}” is protected by a password.	„{file}” je zaštićen lozinkom.
 	Dim Images to:	Zatamni slike na:
 	Light Blue	Svijetloplava
+	Light Red	Svijetlocrvena
 	Layers Panel Options	Opcije panela slojeva
 	Row Size:	Veličina reda:
 	Show Layers Only	Prikaži samo slojeve
@@ -2483,6 +2496,12 @@ digits	Malayalam	Malajalam
 	Save the document first?	Prvo sačuvati dokument?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Datoteka u {folder}: {n} {note}. Prikazati folder paketa?|Datoteka u {folder}: {n} {note}. Prikazati folder paketa?|Datoteka u {folder}: {n} {note}. Prikazati folder paketa?
 @plural	{n} linked file not found|{n} linked files not found	Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}
+@msg	fonts not copied: {fonts}	fontovi nisu kopirani: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Povezanih datoteka nije pronađeno: {n})|(Povezanih datoteka nije pronađeno: {n})|(Povezanih datoteka nije pronađeno: {n})
+@msg	(fonts not copied: {fonts})	(fontovi nisu kopirani: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	fontovi nisu kopirani: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Ugrađeni predlošci su samo za čitanje: Novo… započinje kopiju koja se može uređivati.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na radnoj ploči predstavlja {real} {unit} u sceni.
@@ -4898,11 +4917,15 @@ imageTrace	Outline	Obris
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	sadrži {_1}, što VectorCraft još ne čita iz nje
 @msg	its objects are nested too deeply	njeni objekti su previše duboko ugniježđeni
 @msg	its section ending with `%{end}` doesn't end	njen odjeljak koji završava s `%{end}` ne završava
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	četkice koje VectorCraft još ne može pročitati izostavljene su iz panela Četkice ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekti s više ispuna ili poteza, efekata ili četkica stigli su kao njihov iscrtani izgled ({_1}): njihov izgled se još ne može uređivati
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradijent „{name}” nije definisan u datoteci: umjesto njega koristi se obična boja
 @msg	an image VectorCraft can't read was left out	izostavljena je slika koju VectorCraft ne može pročitati
 @msg	an image whose data is cut short was left out	izostavljena je slika čiji su podaci skraćeni
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	povezane slike prikazuju pregled niske rezolucije sačuvan u datoteci dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
+@msg	linked type areas past VectorCraft's limits were left out	povezana područja teksta izvan ograničenja programa VectorCraft su izostavljena
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst korišten kao maska u povezanim područjima, omotanom tekstu ili složenoj putanji ne odsijeca
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	povezane slike bez pregleda u datoteci prikazuju čuvar mjesta dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	tekst u području u okvirima prekratkim za red fonta u kojem se prikazuje dobio je više okvire ({_1}): inače se tekst ne bi prikazao
 @msg	its editing data doesn't say where its art is	njeni podaci za uređivanje ne govore gdje joj je crtež
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ova datoteka je sačuvana bez PDF kompatibilnosti, a njeni podaci za uređivanje se ne mogu pročitati ({why})
@@ -5497,6 +5520,10 @@ mark-style	Japanese	Japanski
 	Movie Clip	Filmski klip
 @msg	name is empty	naziv je prazan
 @msg	an action is already recording	akcija se već snima
+@msg	an action is already playing	akcija se već reproducira
+@msg	the action stopped playing: its document is no longer active	reprodukcija akcije je zaustavljena: njen dokument više nije aktivan
+@msg	speed must be accelerated, step or pause	speed mora biti accelerated, step ili pause
+@msg	seconds must be a whole number from 1 to 60	seconds mora biti cijeli broj od 1 do 60
 @msg	no such function key	nema takve funkcijske tipke
 @msg	no such color	nema takve boje
 @msg	{_1} cannot be used on Windows	{_1} se ne može koristiti na Windowsu
@@ -5580,6 +5607,7 @@ mark-style	Japanese	Japanski
 	Effect Gallery	Galerija efekata
 	Filters	Filteri
 	Select artwork to apply effects	Odaberite crtež za primjenu efekata
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	nisu pročitane sve veze varijabli datoteke (preskočene veze: {_1}): ti objekti nisu vezani za svoje varijable
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	biblioteka varijabli datoteke je djelimično pročitana (preskočeni unosi: {_1}): panel Varijable navodi ostalo
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	biblioteku varijabli datoteke nije bilo moguće pročitati: panel Varijable je ne navodi
 @msg	a variable of unknown kind can't be bound to objects	varijabla nepoznate vrste ne može se povezati s objektima
@@ -5665,6 +5693,11 @@ axis	Y Axis	Y osa
 	Set Options	Opcije skupa
 	Action Options…	Opcije akcije…
 	Action Options	Opcije akcije
+	Playback Options…	Opcije reprodukcije…
+	Playback Options	Opcije reprodukcije
+	Accelerated	Ubrzano
+	Step by Step	Korak po korak
+	Pause For	Pauza od
 	Rename Action	Preimenuj akciju
 	New Action…	Nova akcija…
 	New Action	Nova akcija
@@ -6135,6 +6168,11 @@ shape	Open	Otvoren
 	Export All Open Documents as SVG	Izvezi sve otvorene dokumente kao SVG
 @msgplural	Exported {n} document|Exported {n} documents	Izvezen je {n} dokument|Izvezena su {n} dokumenta|Izvezeno je {n} dokumenata
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Izvezen je {n} dokument; {title} nije zapisan: {error}|Izvezena su {n} dokumenta; {title} nije zapisan: {error}|Izvezeno je {n} dokumenata; {title} nije zapisan: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Paketno praćenje foldera
+@msgplural	Traced {n} image|Traced {n} images	Praćena je {n} slika|Praćene su {n} slike|Praćeno je {n} slika
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} slika nije mogla biti praćena|{n} slike nisu mogle biti praćene|{n} slika nije moglo biti praćeno
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Praćena je {n} slika; nije praćeno: {failed}|Praćene su {n} slike; nije praćeno: {failed}|Praćeno je {n} slika; nije praćeno: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Vrsta simbola:
 	Dynamic Symbol	Dinamički simbol
@@ -6185,4 +6223,55 @@ shape	Open	Otvoren
 	Bow	Luk
 	Spike	Šiljak
 	Skip Spaces	Preskoči razmake
+	Release Type on a Path…	Oslobodi tekst na putanji…
+	Release Type on a Path	Oslobodi tekst na putanji
+	Text and Path	Tekst i putanja
+	Path Only	Samo putanja
+	Text Only	Samo tekst
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika je prevelika da bi se kopirala kao slika: druge aplikacije ne dobijaju njen PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Odabir po radnim pločama
+	Select by Artboards…	Odabir po radnim pločama…
+	Selection Tools	Alati za odabir
+	Search artboards	Pretraži radne ploče
+	Fully Inside	Potpuno unutra
+	Fully Outside	Potpuno vani
+	No artboards match.	Nijedna radna ploča ne odgovara.
+	Chosen: {n} of {total}	Odabrano: {n} od {total}
+
+# Contour add-on
+	Contour	Kontura
+	Contour Tool	Alat kontura
+	Sharp	Oštro
+	Bake	Proširi
+	Turn the Contour into plain paths	Pretvori konturu u obične putanje
+	Set Corners…	Postavi uglove…
+	All Anchors	Sva sidra
+	Odd-Numbered Anchors	Neparna sidra
+	Even-Numbered Anchors	Parna sidra
+	Minimum angle	Najmanji ugao
+	Maximum angle	Najveći ugao
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Odaberi povezane
+	Select Embedded	Odaberi ugrađene
+	Select Missing	Odaberi nedostajuće
+	Select Modified	Odaberi izmijenjene
+	Select by Link Status	Odabir po statusu veze
+	Select by Link Status…	Odabir po statusu veze…
+	Search images	Pretraži slike
+	No images match.	Nijedna slika ne odgovara.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Odabrana je {n} povezana slika|Odabrane su {n} povezane slike|Odabrano je {n} povezanih slika
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Odabrana je {n} ugrađena slika|Odabrane su {n} ugrađene slike|Odabrano je {n} ugrađenih slika
+@msgplural	Selected {n} missing image|Selected {n} missing images	Odabrana je {n} nedostajuća slika|Odabrane su {n} nedostajuće slike|Odabrano je {n} nedostajućih slika
+@msgplural	Selected {n} modified image|Selected {n} modified images	Odabrana je {n} izmijenjena slika|Odabrane su {n} izmijenjene slike|Odabrano je {n} izmijenjenih slika
+@msgplural	Selected {n} image|Selected {n} images	Odabrana je {n} slika|Odabrane su {n} slike|Odabrano je {n} slika
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; još {n} je skrivena ili zaključana|{selected}; još {n} su skrivene ili zaključane|{selected}; još {n} je skriveno ili zaključano
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; još {n} je na sloju predloška|{selected}; još {n} su na slojevima predloška|{selected}; još {n} je na slojevima predloška
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; još {n} je izvan izolirane grupe|{selected}; još {n} su izvan izolirane grupe|{selected}; još {n} je izvan izolirane grupe
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; još {n} se sada ne može odabrati|{selected}; još {n} se sada ne mogu odabrati|{selected}; još {n} se sada ne može odabrati
+
+# Compound Shapes add-on
+	Compound Shapes	Složeni oblici
+	Shape Mode Buttons Make Compound Shapes	Tasteri načina oblika prave složene oblike

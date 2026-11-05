@@ -861,9 +861,22 @@ impl Session {
 
     /// End the Type tool's text editing before a command saves the art of an editing layer (pattern
     /// editing's Done, Stop Editing Opacity Mask): point type its click placed that is still empty is
-    /// discarded first, so it is not saved into the pattern tile or the mask.
+    /// discarded first, so it is not saved into the pattern tile or the mask. A selection tool that a
+    /// Cmd press lent is given back first, so the Type tool behind it ends its edit too; a drag of the
+    /// lent tool is kept as its own step, as its release would keep it.
     pub(crate) fn end_text_edit(&mut self) {
-        if self.in_tool_actions || !self.tool.wants_text() {
+        if self.in_tool_actions {
+            return;
+        }
+        if self.lender.is_some() {
+            if let Err(e) = self.apply_actions(vec![Action::Commit]) {
+                log::warn!("keeping the lent tool's drag before ending the text edit: {e}");
+            }
+            if let Err(e) = self.give_back_tool(self.last_view) {
+                log::warn!("giving back the lent tool before ending the text edit: {e}");
+            }
+        }
+        if !self.tool.wants_text() {
             return;
         }
         let acts = self.with_tool_cx(self.last_view, |t, cx| t.deactivate(cx));

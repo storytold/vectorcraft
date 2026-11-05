@@ -320,6 +320,7 @@ The User Defined libraries are `window.userBrushLibrary1`…`10` in Window → B
 Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) opens the `tileEdgeColor` dialog (field
 `color`: `#rrggbb` or a preset name such as "Light Blue"); `ui.dialog.confirm` sets the preference
 `patternTileEdgeColor` (`prefs.set`), the colour pattern editing mode draws the tile edge and the swatch bounds in.
+A `color` with an alpha part (`#rrggbbaa` or `#rgba`) is an error, and the preference does not change.
 
 Window title bar: on Windows and Linux the window has no OS decorations and the app bar is the title bar. Its
 caption buttons (Minimize, Maximize/Restore, Close) sit at the bar's right end, 46 pt each; they are window chrome,
@@ -401,6 +402,12 @@ Bar Position (`window.taskBar.reset`), which unpins it and puts it back under th
 Panel. As in Illustrator, neither the position nor the pin is saved: each launch starts with the bar under the
 selection.
 
+The Compound Shapes add-on's setting, `window.pathfinder.compoundShapes` (omitted params toggle; checked while on; kept with the
+preferences; off by default), swaps what a click and an Alt-click do on the Pathfinder panel's Shape Mode buttons: on, a click makes a
+compound shape (`object.compoundShape.make`) and Alt-click gives the permanent Pathfinder result. Selected members of a compound
+shape always take the clicked mode (`object.compoundShape.setMode`). Its submenu, Object › Plug-ins › Compound Shapes, also lists
+Make, Release and Expand Compound Shape.
+
 The Free Transform widget: while the Free Transform tool (E) is active, a small box at the canvas's top left holds
 Constrain over the tool's three modes, Free Transform, Perspective Distort and Free Distort. The buttons set the tool's
 options, as `tool.setOption {key: "mode", value: "free"|"perspective"|"distort"}` and `{key: "constrain", value}` do:
@@ -455,7 +462,9 @@ changed since); its preview greys the art and paints the highlighted objects or 
 
 Expand: Object → Expand… (`ui.expandDialog`, or `object.expand` without params from the menus, palette and shortcuts)
 opens the `expand` dialog for the selection. Fields: `object`, `fill`, `stroke` (all on; `__object`, `__fill`,
-`__stroke` say which the selection has something for, as `object.expand.info` does, and the others are disabled),
+`__stroke` say which the selection has something for, as `object.expand.info` does, and the others are disabled;
+`__fill_symbol`, `__stroke_symbol` and `__gradient_symbol` say that only the art of symbol instances holds it, and
+those options are enabled only while `object` is on),
 `gradient` (`objects` or `mesh`) and `steps` (1–1000, default 255), which are enabled when `fill` is on and
 `__gradient` says the selection has a gradient fill (`object.expand.info`'s `gradient`). `ui.dialog.confirm` runs `object.expand` with them as
 one undo step. While the selection has an appearance Expand Appearance expands (effects, several fills or strokes, a
@@ -481,14 +490,15 @@ equivalents); `ui.dialog.confirm` runs `swatch.spotOptions {useLab}` as one undo
 Scale options: `ui.menuDialog {command}` opens the dialog a command's menu item opens (`object.scale` → `scale`,
 `object.transformEach` → `transformEach`, also Move, Rotate, Reflect, Shear and the Path dialogs). The Scale dialog
 (`scale`) and Object → Transform → Transform Each… (dialog `transformEach`: `scaleH`,
-`scaleV` %, `moveH`, `moveV` pt, `rotate` °, `reflectX`, `reflectY`, `random`, `reference` 0–8, `copy`, `preview`)
+`scaleV` %, and `absH`, `absV` pt, the width and height each object becomes with `relative` false, absent while they
+read "Mixed"; `moveH`, `moveV` pt, `rotate` °, `reflectX`, `reflectY`, `random`, `reference` 0–8, `copy`, `preview`)
 have the fields `corners` (Scale Corners) and `strokes` (Scale Strokes & Effects). They start from the preferences
 `scaleCorners` and `scaleStrokes`, and `ui.dialog.confirm` keeps them as the preferences (`prefs.set`) before running
 `object.scale` / `object.transformEach` with them. The Transform panel's checkboxes and flyout item and the Properties
 panel's checkbox set the same preferences through `prefs.set`. Transform Each opens on the values it was last
-confirmed with (scale, move, rotate, reflect, random, reference, `objects` and `preview`; never `copy`), kept with the
-UI state (#1732). Its Copy button, left of Cancel, sets `copy: true` and confirms; `ui.dialog.set {field: "copy",
-value: true}` then `ui.dialog.confirm` does the same.
+confirmed with (scale, Relative or Absolute, the link between the two scales, move, rotate, reflect, random,
+reference, `objects` and `preview`; never `copy`), kept with the UI state (#1732). Its Copy button, left of Cancel,
+sets `copy: true` and confirms; `ui.dialog.set {field: "copy", value: true}` then `ui.dialog.confirm` does the same.
 
 Use Preview Bounds: the Align panel flyout's Use Preview Bounds item shows and toggles the `usePreviewBounds`
 preference (`prefs.set`); while it is on, the bounding box and the Transform panel, Properties and Control bar
@@ -520,7 +530,8 @@ opens the `perspectivePlane` dialog (fields `plane`: left, right or ground; `loc
 normal; `objects`: none, move or copy). `ui.dialog.confirm` runs `perspective.plane.move` with them.
 
 Units: dialog distance fields (Move's `dx`/`dy`, shape sizes, Offset Path's `offset`, Split Into Grid's gutters and totals,
-Artboard Options' sizes, effects' distances, `transformEach`'s `moveH`/`moveV`, New Document's `width`/`height`, the
+Artboard Options' sizes, effects' distances, `transformEach`'s `moveH`/`moveV` and its Absolute `scaleH`/`scaleV`, New
+Document's `width`/`height`, the
 length preferences in `preferences`) show in the General unit (the active document's units, or `unitsGeneral` without a
 document). Through `ui.dialog.set` a number is in points and a string may carry its unit (`"10 mm"`; a bare number in a
 string is points). The `preferences` dialog's `unitsGeneral` starts as the active document's units, and OK sets them.
@@ -856,7 +867,7 @@ events take `pressure` (0..1, default 1): it is the Liquify intensity while Use 
 
 Freehand Tool Options: double-clicking the Pencil, Paintbrush, Smooth, Blob Brush or Eraser tool
 (`tool.options {tool: "pencil"}`) opens a `freehandOptions` dialog. Its fields are `tool` and the options the tool
-keeps: `fidelity` (pt; Pencil, Paintbrush, Smooth, Blob Brush), `fill` (Pencil, Paintbrush), `keepSelected` (Pencil,
+keeps: `fidelity` (screen pixels for the Pencil and Paintbrush, the same at any zoom; pt for Smooth and Blob Brush), `fill` (Pencil, Paintbrush), `keepSelected` (Pencil,
 Paintbrush, Blob Brush; on by default for the Pencil and Paintbrush and off for the Blob Brush, and while it is off
 the path a stroke draws, continues or merges into is not selected afterwards), `mergeOnlySelection` (Blob Brush;
 off by default, and while it is on a stroke merges only with selected blobs), `closeWithin` and `editWithin`

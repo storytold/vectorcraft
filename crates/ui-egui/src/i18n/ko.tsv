@@ -685,6 +685,8 @@ digits	Malayalam	말라얄람어
 	Links	링크
 	Magic Wand	마술봉
 	Navigator	내비게이터
+	Navigator Panel Options	내비게이터 패널 옵션
+	Draw Dashed Lines as Solid Lines	점선을 실선으로 그리기
 	Pattern Options	패턴 옵션
 	Properties	속성
 	Separations Preview	분판 미리 보기
@@ -1407,6 +1409,11 @@ digits	Malayalam	말라얄람어
 	Double-click to edit the characters' paint	더블클릭하여 문자의 색 편집
 	Click to edit	클릭하여 편집
 	Double-click to edit	더블클릭하여 편집
+	Alternates for Current Selection	현재 선택 항목의 대체 글리프
+	Select a character with the Type tool to see its alternates.	문자 도구로 문자를 선택하면 대체 글리프가 표시됩니다.
+	The selected character's font is not available.	선택한 문자의 글꼴을 사용할 수 없습니다.
+	No alternates for the selected character.	선택한 문자의 대체 글리프가 없습니다.
+	Double-click to replace	더블클릭하여 바꾸기
 	Double-click to insert	더블클릭하여 삽입
 	Double-click to rename	더블클릭하여 이름 변경
 	Double-click to target the contents	더블클릭하여 내용 선택
@@ -3375,6 +3382,12 @@ mark-style	Japanese	일본식
 	to	~
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder}에 파일 {n}개 {note}. 패키지 폴더를 표시하시겠습니까?
 @plural	{n} linked file not found|{n} linked files not found	연결된 파일 {n}개를 찾을 수 없습니다
+@msgplural	{n} linked file not found|{n} linked files not found	연결된 파일 {n}개를 찾을 수 없습니다
+@msg	fonts not copied: {fonts}	복사되지 않은 글꼴: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(연결된 파일 {n}개를 찾을 수 없습니다)
+@msg	(fonts not copied: {fonts})	(복사되지 않은 글꼴: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	복사되지 않은 글꼴: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	이 문서를 저장한 이후 연결된 이미지 {n}개가 변경되었습니다. 새 버전을 표시하시겠습니까?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	연결된 이미지 {n}개가 디스크에서 변경되었습니다. 새 버전을 표시하시겠습니까?
@@ -3584,6 +3597,10 @@ file-filter	Templates	템플릿
 	Installed plug-in {}	플러그인 {}을(를) 설치했습니다
 	Internal CSS	내부 CSS
 	Justify all lines	모든 줄 양끝 맞춤
+	Align Top	위쪽 정렬
+	Align Center	세로 가운데 정렬
+	Align Bottom	아래쪽 정렬
+	Justify Vertically	세로 양끝 맞춤
 	Justify with last line aligned center	마지막 줄 가운데 정렬 양끝 맞춤
 	Justify with last line aligned left	마지막 줄 왼쪽 정렬 양끝 맞춤
 	Justify with last line aligned right	마지막 줄 오른쪽 정렬 양끝 맞춤
@@ -3605,6 +3622,7 @@ file-filter	Templates	템플릿
 	Left-Justified Tab	왼쪽 정렬 탭
 	Letter	레터
 	Light Blue	연한 파랑
+	Light Red	연한 빨강
 	Lightness	명도
 	Link	링크
 	Low	낮음
@@ -4229,6 +4247,8 @@ theme	Appearance	외관
 @msg	`{key}` must be one of {_1}	`{key}`은(는) {_1} 중 하나여야 합니다
 @msg	unknown preference `{key}`	알 수 없는 환경 설정 `{key}`
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	데이터 복구에 복사본을 보관할 곳이 없습니다. 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
+@msg	Data Recovery can't keep copies in {path}: {e}	데이터 복구가 {path}에 복사본을 보관할 수 없습니다: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	{path}에서 플러그인을 불러올 수 없습니다: {e}
 @msg	`{area}` is no recovery area name	`{area}`은(는) 복구 영역 이름이 아닙니다
 @msg	`{name}` is no recovery entry name	`{name}`은(는) 복구 항목 이름이 아닙니다
 @msg	no clock to keep a heartbeat by	하트비트를 유지할 시계가 없습니다
@@ -4311,8 +4331,12 @@ theme	Appearance	외관
 @msg	graphs come in as plain art, without their data or settings	그래프는 데이터와 설정 없이 일반 아트로 가져왔습니다
 @msg	an image whose data is cut short was left out	데이터가 잘린 이미지는 제외했습니다
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
+@msg	linked type areas past VectorCraft's limits were left out	VectorCraft 한도를 넘는 연결된 문자 영역은 제외되었습니다
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	연결된 영역, 문자 감싸기 또는 컴파운드 패스에서 마스크로 사용된 문자는 클리핑하지 않습니다
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	파일에 미리 보기가 없는 연결된 그림은 해당 파일을 찾을 때까지 자리 표시자로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	표시되는 글꼴의 한 줄보다 낮은 프레임의 영역 문자는 프레임을 더 높였습니다({_1}). 그렇지 않으면 문자가 표시되지 않습니다
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	그레이디언트 “{name}”이(가) 파일에 정의되어 있지 않아 단색으로 대체했습니다
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft에서 아직 읽을 수 없는 브러시는 브러시 패널에서 제외되었습니다({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	칠이나 선이 여러 개인 개체, 효과, 브러시가 있는 개체는 그려진 모양({_1})으로 가져왔습니다: 모양새는 아직 편집할 수 없습니다
 @msg	patterns nested too deeply are filled with mid-grey	너무 깊게 중첩된 패턴은 중간 회색으로 채웁니다
 @msg	shadings of an unknown type were left out	알 수 없는 종류의 셰이딩은 제외했습니다
@@ -5158,6 +5182,10 @@ lighting	Light	광원
 	Movie Clip	무비 클립
 @msg	name is empty	이름이 비어 있습니다
 @msg	an action is already recording	이미 액션을 기록하고 있습니다
+@msg	an action is already playing	이미 액션을 재생하고 있습니다
+@msg	the action stopped playing: its document is no longer active	액션 재생이 중지되었습니다: 해당 문서가 더 이상 활성 상태가 아닙니다
+@msg	speed must be accelerated, step or pause	speed는 accelerated, step 또는 pause여야 합니다
+@msg	seconds must be a whole number from 1 to 60	seconds는 1에서 60 사이의 정수여야 합니다
 @msg	no such function key	해당 기능 키가 없습니다
 @msg	no such color	해당 색상이 없습니다
 @msg	{_1} cannot be used on Windows	{_1}은(는) Windows에서 사용할 수 없습니다
@@ -5244,6 +5272,7 @@ lighting	Light	광원
 	Effect Gallery	효과 갤러리
 	Filters	필터
 	Select artwork to apply effects	효과를 적용할 그래픽을 선택하세요
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	파일의 변수 바인딩 일부를 읽지 못했습니다(건너뛴 바인딩: {_1}). 해당 오브젝트는 변수에 바인딩되지 않습니다
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	파일의 변수 라이브러리를 일부만 읽었습니다(건너뛴 항목: {_1}). 나머지는 변수 패널에 표시됩니다
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	파일의 변수 라이브러리를 읽을 수 없습니다. 변수 패널에 표시되지 않습니다
 @msg	a variable of unknown kind can't be bound to objects	종류를 알 수 없는 변수는 개체에 바인딩할 수 없습니다
@@ -5334,6 +5363,11 @@ axis	Y Axis	Y축
 	Set Options	세트 옵션
 	Action Options…	액션 옵션…
 	Action Options	액션 옵션
+	Playback Options…	재생 옵션…
+	Playback Options	재생 옵션
+	Accelerated	가속
+	Step by Step	단계별
+	Pause For	일시 정지
 	Rename Action	액션 이름 바꾸기
 	New Action…	새 액션…
 	New Action	새 액션
@@ -5617,6 +5651,7 @@ anchor	Points:	포인트:
 	Character Color	문자 색상
 	OpenType Features	OpenType 기능
 	Stylistic Sets	스타일 세트
+	Set {n}	세트 {n}
 @msg	features lists at most {max} tags	features에는 태그를 최대 {max}개까지 지정할 수 있습니다
 @msg	unknown OpenType feature `{t}`	알 수 없는 OpenType 기능 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label}은(는) 0 초과 {max} 이하의 숫자여야 합니다
@@ -5830,6 +5865,11 @@ breakText	Glyphs	글리프
 	Export All Open Documents as SVG	열린 모든 문서를 SVG로 내보내기
 @msgplural	Exported {n} document|Exported {n} documents	문서 {n}개를 내보냈습니다
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	문서 {n}개를 내보냈습니다; {title}을(를) 쓰지 못했습니다: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	폴더 일괄 추적
+@msgplural	Traced {n} image|Traced {n} images	이미지 {n}개를 추적했습니다
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	이미지 {n}개를 추적하지 못했습니다
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	이미지 {n}개를 추적했습니다; 추적하지 못한 이미지: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	심볼 유형:
 	Dynamic Symbol	동적 심볼
@@ -5880,4 +5920,54 @@ breakText	Glyphs	글리프
 	Bow	활 모양
 	Spike	뾰족한 모양
 	Skip Spaces	공백 건너뛰기
+	Release Type on a Path…	패스 위 문자 해제…
+	Release Type on a Path	패스 위 문자 해제
+	Text and Path	문자와 패스
+	Path Only	패스만
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	아트워크가 너무 커서 이미지로 복사할 수 없습니다: 다른 앱에는 PNG가 전달되지 않습니다
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	아트보드로 선택
+	Select by Artboards…	아트보드로 선택…
+	Selection Tools	선택 도구
+	Search artboards	아트보드 검색
+	Fully Inside	완전히 안쪽
+	Fully Outside	완전히 바깥쪽
+	No artboards match.	일치하는 아트보드가 없습니다.
+	Chosen: {n} of {total}	선택됨: {n} / {total}
+
+# Contour add-on
+	Contour	윤곽
+	Contour Tool	윤곽 도구
+	Sharp	뾰족하게
+	Bake	확장
+	Turn the Contour into plain paths	윤곽을 일반 패스로 바꿉니다
+	Set Corners…	모퉁이 설정…
+	All Anchors	모든 앵커
+	Odd-Numbered Anchors	홀수 번째 앵커
+	Even-Numbered Anchors	짝수 번째 앵커
+	Minimum angle	최소 각도
+	Maximum angle	최대 각도
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	연결됨 선택
+	Select Embedded	포함됨 선택
+	Select Missing	없는 이미지 선택
+	Select Modified	수정된 이미지 선택
+	Select by Link Status	링크 상태로 선택
+	Select by Link Status…	링크 상태로 선택…
+	Search images	이미지 검색
+	No images match.	일치하는 이미지가 없습니다.
+@msgplural	Selected {n} linked image|Selected {n} linked images	연결된 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	포함된 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} missing image|Selected {n} missing images	없는 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} modified image|Selected {n} modified images	수정된 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} image|Selected {n} images	이미지 {n}개를 선택했습니다
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}. {n}개는 숨겨졌거나 잠겨 있습니다
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}. {n}개는 템플릿 레이어에 있습니다
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}. {n}개는 격리된 그룹 밖에 있습니다
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}. {n}개는 지금 선택할 수 없습니다
+
+# Compound Shapes add-on
+	Compound Shapes	컴파운드 모양
+	Shape Mode Buttons Make Compound Shapes	모양 모드 버튼으로 컴파운드 모양 만들기

@@ -12,7 +12,7 @@ use super::{
 /// Fit a freehand polyline: drop jitter, build a spline through the samples (sharp turns stay
 /// corners) and simplify it to `tol`.
 fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
-    let min = (tol * 0.3).max(vectorcraft_tools::draw2::MIN_FIDELITY * 0.3);
+    let min = (tol * 0.3).max(vectorcraft_tools::draw2::MIN_FIT_TOLERANCE * 0.3);
     let (Some(&p0), Some(&pn)) = (pts.first(), pts.last()) else { return SubPath::new(vec![], closed) };
     let mut kept: Vec<Point> = vec![p0];
     for &p in pts.iter().skip(1) {
@@ -150,7 +150,7 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let pen = PenRecord::of_samples(&samples);
     let mut pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
-    let tol = number_or(p, "fidelity", 1.5, C)?.clamp(vectorcraft_tools::draw2::MIN_FIDELITY, 100.0);
+    let tol = number_or(p, "fidelity", 1.5, C)?.clamp(vectorcraft_tools::draw2::MIN_FIT_TOLERANCE, 100.0);
     // The tolerance the stroke is fitted at; with `fit: false` it is not fitted.
     let fit_tol = switch_or(p, "fit", true, C)?.then_some(tol);
     let closed = switch_or(p, "closed", false, C)?;

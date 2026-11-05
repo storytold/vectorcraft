@@ -69,12 +69,9 @@ fn ask(app: &mut VectorcraftApp, i: usize, then: &str) -> Result<Value, String> 
     Ok(json!({ "pending": KIND }))
 }
 
-/// Close document `i` through the engine command, keeping `views` aligned with the documents.
+/// Close document `i` through the engine command; [`VectorcraftApp::sync_views`] drops its view.
 fn close_now(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
     let r = app.session.execute("file.close", &json!({ "index": i })).map_err(|e| e.to_string())?;
-    if i < app.views.len() {
-        app.views.remove(i);
-    }
     app.sync_views();
     if app.session.tool_id() == "artboard"
         && let Some(n) = app.session.active().map(|d| d.doc.artboards.len())

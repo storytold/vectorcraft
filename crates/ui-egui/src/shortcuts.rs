@@ -219,8 +219,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         presentation_keys(app, ctx, escape_pair);
         return;
     }
-    // Escape that cancels a ruler-origin drag or floating Tools move skips the tool and later Escape actions.
-    let escape_ended_gesture = crate::canvas::ruler_origin_dragging(ctx) || crate::tools_float::escape_cancelled_move(ctx);
+    // Escape that cancels a ruler-origin drag or floating Tools move skips the tool and later Escape actions,
+    // and so do its repeats while it is held.
+    let escape_ended_gesture = escape_ended_gesture(ctx);
     let escape_held_by_drag = crate::canvas::dragging(ctx) || escape_ended_gesture;
     let typing = ctx.egui_wants_keyboard_input();
     // Escape closes Edit Toolbar's drawer first (egui drops a drag from it on Escape already).
@@ -349,10 +350,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let row_key = |chord: &craft_keymap::Chord| {
         rows_keys && chord.is_plain() && !chord.mods.shift && matches!(chord.key, craft_keymap::Key::Delete | craft_keymap::Key::Backspace)
     };
+    // An Escape that ended a ruler-origin drag or floating Tools move runs no command bound to it.
+    let gesture_escape = |chord: &craft_keymap::Chord| escape_ended_gesture && chord.is_plain() && chord.key == craft_keymap::Key::Escape;
     let hits = dispatch(app, ctx, |hit| {
         let chord = &hit.trigger.chord;
         let shifted_punctuation = chord.mods.shift && chord.key.name().chars().all(|c| !c.is_alphanumeric());
-        !(chord.is_plain() && types_text(chord.key) && !shifted_punctuation || row_key(chord))
+        !(chord.is_plain() && types_text(chord.key) && !shifted_punctuation || row_key(chord) || gesture_escape(chord))
     });
     let ran = !hits.is_empty();
     for c in hits {
@@ -366,6 +369,33 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     nudge_and_clear(app, ctx, rows_keys);
     single_key_shortcuts(app, ctx);
+}
+
+/// The key of the mark that the Escape held down ended a ruler-origin drag or a floating Tools move.
+fn escape_ended_gesture_id() -> egui::Id {
+    egui::Id::unique("escape-ended-gesture")
+}
+
+/// Does this frame's Escape end a ruler-origin drag or a floating Tools move? The repeats of an
+/// Escape that ended one do too, up to the frame that releases Escape or presses it again.
+fn escape_ended_gesture(ctx: &egui::Context) -> bool {
+    let (down, pressed, repeated) = ctx.input(|i| {
+        let escape =
+            |repeat: bool| i.events.iter().any(|e| matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, repeat: r, .. } if *r == repeat));
+        (i.key_down(Key::Escape), escape(false), escape(true))
+    });
+    if crate::canvas::ruler_origin_dragging(ctx) || crate::tools_float::escape_cancelled_move(ctx) {
+        if down {
+            ctx.data_mut(|d| d.insert_temp(escape_ended_gesture_id(), true));
+        }
+        return true;
+    }
+    // A release in the same frame as a repeat still holds that repeat back.
+    let held = (down || repeated) && !pressed && ctx.data(|d| d.get_temp::<bool>(escape_ended_gesture_id())).is_some();
+    if !(held && down) {
+        ctx.data_mut(|d| d.remove::<bool>(escape_ended_gesture_id()));
+    }
+    held
 }
 
 fn remember_escape_pair(ctx: &egui::Context, key: Key, escape_pair: Option<bool>) {
@@ -901,7 +931,7 @@ fn latin(text: &str, physical: Option<Key>) -> String {
 /// types at most one text. A text takes the press after it only when every later text in the same
 /// run of alternating texts and presses has a press after it too; otherwise the text after that
 /// press takes it as the press before it, and this text has none.
-fn typing_presses(events: &[egui::Event]) -> Vec<Option<usize>> {
+pub(crate) fn typing_presses(events: &[egui::Event]) -> Vec<Option<usize>> {
     let is_press = |k: usize| matches!(events.get(k), Some(egui::Event::Key { key, pressed: true, .. }) if !is_modifier(*key));
     let is_text = |k: usize| matches!(events.get(k), Some(egui::Event::Text(_)));
     // Whether the run of alternating texts and presses that starts with the text at `j` ends

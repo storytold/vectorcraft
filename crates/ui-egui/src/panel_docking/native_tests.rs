@@ -29,6 +29,14 @@ struct Window {
 
 struct Host {
     windows: HashMap<ViewportId, Window>,
+    child_overlay: Option<(ViewportId, Rect)>,
+    child_transparent_overlay: Option<(ViewportId, Rect)>,
+    child_transition_overlay: Option<(ViewportId, Rect, bool)>,
+    child_empty_overlay: Option<(ViewportId, Rect)>,
+    child_pass_through_overlay: Option<(ViewportId, Rect)>,
+    child_raise_overlay: Option<(ViewportId, Rect, bool)>,
+    child_raise_layer: Option<(ViewportId, egui::LayerId)>,
+    child_layer_order: HashMap<ViewportId, Vec<egui::LayerId>>,
     /// The window with the keyboard.
     focus: ViewportId,
     time: f64,
@@ -87,7 +95,69 @@ impl Host {
                 ..Default::default()
             }
         };
-        let mut full = ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui));
+        let child_overlay = host.borrow().child_overlay.filter(|(viewport, _)| *viewport == id).map(|(_, rect)| rect);
+        let child_transparent_overlay = host.borrow().child_transparent_overlay.filter(|(viewport, _)| *viewport == id).map(|(_, rect)| rect);
+        let child_transition_overlay =
+            host.borrow().child_transition_overlay.filter(|(viewport, _, _)| *viewport == id).map(|(_, rect, painted)| (rect, painted));
+        let child_empty_overlay = host.borrow().child_empty_overlay.filter(|(viewport, _)| *viewport == id).map(|(_, rect)| rect);
+        let child_pass_through_overlay = host.borrow().child_pass_through_overlay.filter(|(viewport, _)| *viewport == id).map(|(_, rect)| rect);
+        let child_raise_overlay = host.borrow().child_raise_overlay.filter(|(viewport, _, _)| *viewport == id).map(|(_, rect, raise)| (rect, raise));
+        let child_raise_layer = host.borrow().child_raise_layer.filter(|(viewport, _)| *viewport == id).map(|(_, layer)| layer);
+        let mut layer_order = Vec::new();
+        let mut full = ctx.run_ui(input, |ui| {
+            layer_order = ui.ctx().memory(|memory| memory.layer_ids().collect());
+            if let Some((rect, _)) = child_raise_overlay {
+                egui::Area::new(egui::Id::unique("Child raised overlay")).order(egui::Order::Background).fixed_pos(rect.min).show(ui.ctx(), |ui| {
+                    ui.allocate_space(rect.size());
+                });
+            }
+            (viewport.viewport_ui_cb)(ui);
+            if let Some(layer) = child_raise_layer {
+                ui.ctx().move_to_top(layer);
+            }
+            if child_raise_overlay.is_some_and(|(_, raise)| raise) {
+                ui.ctx().move_to_top(egui::LayerId::new(egui::Order::Background, egui::Id::unique("Child raised overlay")));
+            }
+            if let Some(rect) = child_overlay {
+                egui::Window::new("Child overlay").fixed_pos(rect.min).fixed_size(rect.size()).show(ui.ctx(), |ui| {
+                    ui.label("Child overlay");
+                });
+            }
+            if let Some(rect) = child_transparent_overlay {
+                egui::Area::new(egui::Id::unique("Child transparent overlay")).order(egui::Order::Foreground).fixed_pos(rect.min).show(
+                    ui.ctx(),
+                    |ui| {
+                        ui.allocate_space(rect.size());
+                    },
+                );
+            }
+            if let Some((rect, painted)) = child_transition_overlay {
+                egui::Area::new(egui::Id::unique("Child transition overlay")).order(egui::Order::Foreground).fixed_pos(rect.min).show(
+                    ui.ctx(),
+                    |ui| {
+                        ui.allocate_space(rect.size());
+                        if painted {
+                            ui.label("Child transition overlay");
+                        }
+                    },
+                );
+            }
+            if let Some(rect) = child_empty_overlay {
+                egui::Area::new(egui::Id::unique("Child empty overlay")).order(egui::Order::Foreground).fixed_pos(rect.min).show(ui.ctx(), |ui| {
+                    ui.set_min_size(rect.size());
+                });
+            }
+            if let Some(rect) = child_pass_through_overlay {
+                egui::Area::new(egui::Id::unique("Child pass-through overlay"))
+                    .order(egui::Order::Foreground)
+                    .fixed_pos(rect.min)
+                    .interactable(false)
+                    .show(ui.ctx(), |ui| {
+                        let (paint, _) = ui.allocate_exact_size(rect.size(), egui::Sense::hover());
+                        ui.painter().rect_filled(paint, 0.0, egui::Color32::TRANSPARENT);
+                    });
+            }
+        });
         full.textures_delta.clear();
         fn texts(s: &egui::Shape, out: &mut Vec<(String, Rect)>) {
             match s {
@@ -99,6 +169,7 @@ impl Host {
         let mut shown = Vec::new();
         full.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
         let mut host = host.borrow_mut();
+        host.child_layer_order.insert(id, layer_order);
         if let Some(window) = host.windows.get_mut(&id) {
             window.texts = shown;
         }
@@ -110,18 +181,32 @@ struct Harness {
     app: VectorcraftApp,
     ctx: egui::Context,
     host: Rc<RefCell<Host>>,
+    root_overlay: Option<Rect>,
 }
 
 impl Harness {
     fn new() -> Self {
-        let host = Rc::new(RefCell::new(Host { windows: HashMap::new(), focus: ViewportId::ROOT, time: 0.0, commands: Vec::new() }));
+        let host = Rc::new(RefCell::new(Host {
+            windows: HashMap::new(),
+            child_overlay: None,
+            child_transparent_overlay: None,
+            child_transition_overlay: None,
+            child_empty_overlay: None,
+            child_pass_through_overlay: None,
+            child_raise_overlay: None,
+            child_raise_layer: None,
+            child_layer_order: HashMap::new(),
+            focus: ViewportId::ROOT,
+            time: 0.0,
+            commands: Vec::new(),
+        }));
         let shared = host.clone();
         egui::Context::set_immediate_viewport_renderer(move |ctx, viewport| Host::render(&shared, ctx, viewport));
         let ctx = egui::Context::default();
         ctx.set_embed_viewports(false);
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let mut h = Self { app, ctx, host };
+        let mut h = Self { app, ctx, host, root_overlay: None };
         h.frames(3);
         h
     }
@@ -135,9 +220,15 @@ impl Harness {
         let mut input = egui::RawInput { time: Some(time), events, screen_rect: Some(SCREEN), viewports, focused, ..Default::default() };
         self.app.raw_input_hook(&self.ctx, &mut input);
         let app = &mut self.app;
+        let root_overlay = self.root_overlay;
         let mut full = self.ctx.run_ui(input, |ui| {
             app.logic(ui.ctx());
             app.ui(ui);
+            if let Some(rect) = root_overlay {
+                egui::Window::new("Root overlay").fixed_pos(rect.min).fixed_size(rect.size()).show(ui.ctx(), |ui| {
+                    ui.label("Root overlay");
+                });
+            }
         });
         full.textures_delta.clear();
         self.host.borrow_mut().apply(&full);
@@ -305,6 +396,84 @@ fn a_modal_blocks_native_windows_and_takes_the_keyboard_from_them() {
     assert_eq!(h.app.session.tool_id(), "pen", "the window takes keys again once the modal closes");
 }
 
+/// The level and visibility a palette window takes under a dialog or a menu, and otherwise: a
+/// palette stays out of the way of anything drawn in the main window.
+#[test]
+fn a_palette_window_keeps_out_of_the_way_of_the_main_windows_dialog_and_menus() {
+    use egui::WindowLevel;
+    assert_eq!(palette_window_state(true, true, true), (WindowLevel::Normal, false), "hidden under a dialog, even in a menu");
+    assert_eq!(palette_window_state(true, false, true), (WindowLevel::Normal, false), "hidden under a dialog");
+    assert_eq!(palette_window_state(false, true, true), (WindowLevel::Normal, false), "hidden under a menu: it is drawn in the main window");
+    assert_eq!(palette_window_state(false, false, true), (WindowLevel::AlwaysOnTop, true), "its palette level while the app is active");
+    let inactive = palette_window_state(false, false, false);
+    assert!(inactive.1, "shown while the app is inactive");
+    assert_ne!(inactive.0, WindowLevel::AlwaysOnTop, "and not above other applications' windows: {:?}", inactive.0);
+}
+
+/// With a menu of the in-window menu bar open, the palettes take the normal level (still shown):
+/// the menu is drawn in the main window, or it would open under them.
+#[test]
+fn a_menu_of_the_menu_bar_lowers_the_palette_windows() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().commands.clear();
+    let layout = layout_of(&h.app.ui);
+    h.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("menu-bar-open"), true));
+    assert!(crate::menus::menu_open(&h.ctx), "the menu bar's state says a menu is open");
+    palette_window_levels(&h.ctx, &layout, false, crate::menus::menu_open(&h.ctx));
+    h.frames(1);
+    let commands: Vec<(egui::ViewportId, ViewportCommand)> = h.host.borrow().commands.clone();
+    let levels: Vec<egui::WindowLevel> = commands
+        .iter()
+        .filter_map(|(id, command)| match command {
+            ViewportCommand::WindowLevel(level) if *id == viewport => Some(*level),
+            _ => None,
+        })
+        .collect();
+    assert!(levels.contains(&egui::WindowLevel::Normal), "the palette drops its topmost level under the menu: {levels:?}");
+    assert!(
+        commands.iter().any(|(id, command)| *id == viewport && matches!(command, ViewportCommand::Visible(false))),
+        "and is hidden until the menu closes"
+    );
+}
+/// A modal dialog is drawn in the main window, so the palettes' OS windows leave their topmost
+/// level while it is open and take it back after, or the dialog would be covered by them.
+#[test]
+fn a_modal_lowers_the_native_palette_windows() {
+    let mut h = Harness::new();
+    let viewport = h.float("swatches");
+    let levels = |h: &Harness| -> Vec<egui::WindowLevel> {
+        h.host
+            .borrow()
+            .commands
+            .iter()
+            .filter_map(|(id, command)| match command {
+                ViewportCommand::WindowLevel(level) if *id == viewport => Some(*level),
+                _ => None,
+            })
+            .collect()
+    };
+    let hidden = |h: &Harness| -> Vec<bool> {
+        h.host
+            .borrow()
+            .commands
+            .iter()
+            .filter_map(|(id, command)| match command {
+                ViewportCommand::Visible(visible) if *id == viewport => Some(*visible),
+                _ => None,
+            })
+            .collect()
+    };
+    h.app.ui.about = true;
+    h.frames(4);
+    assert!(levels(&h).contains(&egui::WindowLevel::Normal), "the palette leaves AlwaysOnTop under the modal: {:?}", levels(&h));
+    assert_eq!(hidden(&h), [false], "and is hidden, so a click cannot bring it up over the dialog: {:?}", hidden(&h));
+    h.app.ui.about = false;
+    h.frames(4);
+    assert!(levels(&h).contains(&egui::WindowLevel::AlwaysOnTop), "and takes its palette level back: {:?}", levels(&h));
+    assert_eq!(hidden(&h), [false, true], "shown again with the dialog gone: {:?}", hidden(&h));
+}
+
 #[test]
 fn a_file_dropped_on_a_native_window_opens() {
     let mut h = Harness::new();
@@ -398,4 +567,599 @@ fn ui_docking_leaves_out_the_controls_of_os_windows() {
     let swatches = |hit: &Value| hit["hit"].as_object().is_some_and(|o| o.values().any(|v| v == "swatches"));
     assert!(!hits.iter().any(swatches), "none of the OS window's: {hits:?}");
     assert!(report["layout"]["floating"][0]["native"].is_array(), "its place is the window's native rect");
+}
+
+#[test]
+fn wheel_over_a_floating_character_font_field_changes_the_font() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    h.root_overlay = Some(field.expand(10.0));
+    h.frames(2);
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    h.frames(2);
+    let fonts = h.app.run("text.fonts", json!({})).unwrap();
+    assert_ne!(fonts[0]["family"], "Source Sans 3", "{fonts}");
+
+    h.host.borrow_mut().child_overlay = Some((viewport, field.expand(10.0)));
+    h.frames(2);
+    let covered = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), covered);
+
+    h.host.borrow_mut().child_overlay = None;
+    h.frame(vec![]);
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), covered);
+
+    h.host.borrow_mut().child_transparent_overlay = Some((viewport, field.expand(10.0)));
+    h.frames(2);
+    let covered = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), covered);
+
+    h.host.borrow_mut().child_transparent_overlay = None;
+    h.host.borrow_mut().child_pass_through_overlay = Some((viewport, field.expand(10.0)));
+    h.frames(2);
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), covered);
+}
+
+#[test]
+fn a_modal_blocks_font_wheel_input_in_a_floating_panel() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.app.ui.about = true;
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+    h.app.ui.about = false;
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn wheel_stays_under_an_overlay_that_stops_painting() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    h.host.borrow_mut().child_transition_overlay = Some((viewport, field.expand(10.0), true));
+    h.frames(2);
+    let covered = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().child_transition_overlay = Some((viewport, field.expand(10.0), false));
+    h.frame(vec![]);
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), covered);
+}
+
+#[test]
+fn wheel_stays_under_an_empty_interactive_overlay() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    h.host.borrow_mut().child_empty_overlay = Some((viewport, field.expand(10.0)));
+    h.frames(2);
+    let covered = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), covered);
+}
+
+#[test]
+fn a_raised_overlay_blocks_the_next_font_wheel_event() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), false));
+    h.frames(2);
+    let field_layer = crate::font_menu::wheel_field_layer_for_test(&h.ctx, viewport, pointer).expect("the font field layer");
+    h.host.borrow_mut().child_raise_layer = Some((viewport, field_layer));
+    h.frame(vec![]);
+    h.host.borrow_mut().child_raise_layer = None;
+    let overlay_layer = egui::LayerId::new(egui::Order::Background, egui::Id::unique("Child raised overlay"));
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), true));
+    h.frame(vec![]);
+    let order = h.host.borrow().child_layer_order.get(&viewport).cloned().expect("child layer order");
+    let field_index = order.iter().position(|layer| *layer == field_layer).expect("font field in layer order");
+    let overlay_index = order.iter().position(|layer| *layer == overlay_layer).unwrap_or_else(|| panic!("overlay absent from {order:?}"));
+    assert!(field_index > overlay_index, "the font field must start above the overlay: {order:?}");
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), false));
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+        Event::PointerGone,
+    ]);
+    h.frame(vec![]);
+    let order = h.host.borrow().child_layer_order.get(&viewport).cloned().expect("child layer order");
+    let field_index = order.iter().position(|layer| *layer == field_layer).expect("font field in layer order");
+    let overlay_index = order.iter().position(|layer| *layer == overlay_layer).unwrap_or_else(|| panic!("overlay absent from {order:?}"));
+    assert!(overlay_index > field_index, "the overlay must finish above the font field: {order:?}");
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.ctx.input_for(viewport, |input| input.raw.events.iter().any(|event| matches!(event, Event::MouseWheel { .. }))),
+        "the raised overlay must receive the wheel event"
+    );
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+    assert_eq!(h.ctx.input_for(viewport, |input| input.pointer.latest_pos()), None);
+}
+
+#[test]
+fn an_overlay_raised_with_the_wheel_event_does_not_change_the_font() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), false));
+    h.frames(2);
+    let field_layer = crate::font_menu::wheel_field_layer_for_test(&h.ctx, viewport, pointer).expect("the font field layer");
+    h.host.borrow_mut().child_raise_layer = Some((viewport, field_layer));
+    h.frame(vec![]);
+    h.host.borrow_mut().child_raise_layer = None;
+    h.frame(vec![]);
+    let overlay_layer = egui::LayerId::new(egui::Order::Background, egui::Id::unique("Child raised overlay"));
+    let order = h.host.borrow().child_layer_order.get(&viewport).cloned().expect("child layer order");
+    let field_index = order.iter().position(|layer| *layer == field_layer).expect("font field in layer order");
+    let overlay_index = order.iter().position(|layer| *layer == overlay_layer).expect("overlay in layer order");
+    assert!(field_index > overlay_index, "the font field must be above the overlay before the wheel event: {order:?}");
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), true));
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.ctx.input_for(viewport, |input| input.raw.events.iter().any(|event| matches!(event, Event::MouseWheel { .. }))),
+        "the raised overlay must receive the wheel event"
+    );
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn a_closed_overlay_does_not_replay_its_wheel_into_the_panel() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), false));
+    h.frames(2);
+    let field_layer = crate::font_menu::wheel_field_layer_for_test(&h.ctx, viewport, pointer).expect("the font field layer");
+    h.host.borrow_mut().child_raise_layer = Some((viewport, field_layer));
+    h.frame(vec![]);
+    h.host.borrow_mut().child_raise_layer = None;
+    h.frame(vec![]);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, field.expand(10.0), true));
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    h.host.borrow_mut().child_raise_overlay = None;
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        !h.ctx.input_for(viewport, |input| input.raw.events.iter().any(|event| matches!(event, Event::MouseWheel { .. }))),
+        "a closed overlay cannot receive a later wheel event"
+    );
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn a_wheel_before_opening_a_floating_font_menu_changes_the_font() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+        Event::PointerButton { pos: pointer, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() },
+        Event::PointerButton { pos: pointer, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() },
+    ]);
+    h.frames(3);
+    assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn a_delayed_wheel_does_not_change_a_font_field_that_moved() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    crate::font_menu::offset_wheel_fields_for_test(&h.ctx, viewport, vec2(300.0, 0.0));
+    h.frame(vec![]);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn wheel_events_on_both_sides_of_an_overlay_are_checked_separately() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let covered = pos2(field.min.x + 4.0, field.center().y);
+    let clear = pos2(field.max.x - 4.0, field.center().y);
+    let overlay = Rect::from_min_max(field.min - vec2(2.0, 2.0), pos2(field.center().x, field.max.y + 2.0));
+    assert!(covered.x < overlay.max.x && clear.x > overlay.max.x);
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, overlay, false));
+    h.frames(2);
+    let field_layer = crate::font_menu::wheel_field_layer_for_test(&h.ctx, viewport, clear).expect("the font field layer");
+    h.host.borrow_mut().child_raise_layer = Some((viewport, field_layer));
+    h.frame(vec![]);
+    h.host.borrow_mut().child_raise_layer = None;
+    h.frame(vec![]);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, overlay, true));
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(covered),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+        Event::PointerMoved(clear),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), before);
+    assert_eq!(h.ctx.input_for(viewport, |input| input.pointer.latest_pos()), Some(clear));
+}
+
+#[test]
+fn leaving_a_floating_font_field_resets_queued_fractional_wheel_input() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let inside = pos2(field.min.x + 4.0, field.center().y);
+    let outside = pos2(field.max.x + 500.0, field.center().y);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(inside),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -0.6),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+        Event::PointerMoved(outside),
+    ]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(inside),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -0.6),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn a_floating_wheel_turn_precedes_a_pointer_leave_in_the_menu_order() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    h.app.ui.recent_fonts = ["Source Sans 3", "Source Serif 4", "Inter"].map(str::to_string).into();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let inside = pos2(field.min.x + 4.0, field.center().y);
+    let outside = pos2(field.max.x + 500.0, field.center().y);
+    let wheel = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: vec2(0.0, -1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(inside), wheel.clone()]);
+    h.frame(vec![]);
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap()[0]["family"], "Source Serif 4");
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([wheel, Event::PointerMoved(outside)]);
+    h.frame(vec![]);
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap()[0]["family"], "Inter");
+}
+
+#[test]
+fn moving_under_an_overlay_resets_queued_fractional_font_wheel_input() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let covered = pos2(field.min.x + 4.0, field.center().y);
+    let clear = pos2(field.max.x - 4.0, field.center().y);
+    let overlay = Rect::from_min_max(field.min - vec2(2.0, 2.0), pos2(field.center().x, field.max.y + 2.0));
+    h.host.borrow_mut().child_raise_overlay = Some((viewport, overlay, true));
+    h.frames(2);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(clear),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -0.6),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+        Event::PointerMoved(covered),
+        Event::PointerMoved(clear),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -0.6),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn wheel_without_a_move_uses_the_floating_viewports_pointer() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.push(Event::PointerMoved(pointer));
+    h.frame(vec![Event::PointerMoved(pos2(1200.0, 800.0))]);
+    h.app.run("text.create", json!({"x": 30, "y": 90, "text": "New", "font": "Source Sans 3"})).unwrap();
+    h.frames(2);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.push(Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: vec2(0.0, -1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    });
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), before);
 }

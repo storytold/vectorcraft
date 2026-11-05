@@ -276,6 +276,14 @@ pub(crate) fn mark_continued(doc: &mut Document) {
     }
 }
 
+/// The frames of the thread that `id` is a frame of, in thread order, each area type or type on a
+/// path; empty when `id` is in no thread or the thread has fewer than two such frames.
+pub(crate) fn story_of(d: &Document, id: NodeId) -> Vec<NodeId> {
+    let Some(thread) = d.text_threads.iter().find(|t| t.contains(&id)) else { return vec![] };
+    let frames: Vec<NodeId> = thread.iter().copied().filter(|f| text_of(d, *f).is_some()).collect();
+    if frames.len() >= 2 && frames.contains(&id) { frames } else { vec![] }
+}
+
 /// `ids` followed by the other frames of the threads they are in, each once, in thread order.
 pub(crate) fn with_threads(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     let mut out = ids.to_vec();

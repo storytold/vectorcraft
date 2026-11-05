@@ -1,7 +1,7 @@
 use super::dynamic::{fit_overrides, type_id, type_param};
 use super::{
     Affine, AppearanceItem, Arc, CURRENT_SYMBOL, Color, Document, EngineError, FillLayer, HALF, Node, NodeId, NodeKind, Paint, Point, Result,
-    SIZES_KEY, Session, Symbol, SymbolExportType, SymbolNineSlice, SymbolRegistration, Value, Vec2, bad, brush, color_value, ids_json, json,
+    SIZES_KEY, Session, Symbol, SymbolExportType, SymbolNineSlice, SymbolRegistration, Value, Vec2, bad, brush, color_param, ids_json, json,
     name_param, number_or, ok, remove_each, roots, selection_art, separate, set_unknown, str_param, switch_or,
 };
 
@@ -347,10 +347,8 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return None };
     let sym = d.symbols.iter().find(|s| &s.name == symbol)?;
     let mut art = if own { vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst) } else { (*sym.art).clone() };
-    if let Some(f) = inst.appearance.fill()
-        && let Some(c) = f.paint.color()
-    {
-        brush::tint_node(&mut art, &c, f.opacity);
+    if let Some((color, amount)) = brush::stain(inst) {
+        brush::tint_node(&mut art, &color, amount);
     }
     let art = d.place_symbol_art(symbol, &art, *xf)?;
     let mut art = d.reid(&art);
@@ -412,7 +410,64 @@ fn break_links(d: &mut Document, ids: &[NodeId], own: bool) -> Result<Vec<NodeId
     Ok(out)
 }
 
-/// How many objects [`break_links`] may make at once.
+/// Object › Expand: the symbol instances under `roots` of `d` ([`expandable_instances`]) replaced
+/// by their art, as Break Link places it, each keeping the instance's id and place. The instances
+/// that art holds stay instances. A hidden or locked instance's art stays hidden or locked. When
+/// the instances together would make more than [`MAX_EXPAND_NODES`] objects, all of them stay
+/// instances. Returns whether any instance was expanded.
+pub(crate) fn expand_instances_under(d: &mut Document, roots: &[NodeId]) -> Result<bool> {
+    let ids = expandable_instances(d, roots);
+    let total = ids.iter().filter_map(|id| d.node(*id)).fold(0u64, |sum, n| sum.saturating_add(expanded_bound(d, n, true)));
+    if total > MAX_EXPAND_NODES as u64 {
+        return Ok(false);
+    }
+    let mut any = false;
+    for id in ids {
+        let Some(inst) = d.node(id).cloned() else { continue };
+        let Some(mut art) = expanded_instance(d, &inst, true) else { continue };
+        let (par, idx, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
+        art.id = id;
+        art.visible &= inst.visible;
+        art.locked |= inst.locked;
+        d.remove(id)?;
+        d.insert(par, idx, art)?;
+        any = true;
+    }
+    Ok(any)
+}
+
+/// The symbol instances under `roots` of `d` that Object › Expand turns into their art: those
+/// without effects (Expand Appearance bakes the others), with no effects on their fills and
+/// strokes, not in perspective, and whose symbol `d` holds. The instances in blends, repeats and
+/// Intertwine groups are left to Expand, which turns those into plain groups.
+pub(crate) fn expandable_instances(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+    fn collect(d: &Document, n: &Node, out: &mut Vec<NodeId>) {
+        match &n.kind {
+            NodeKind::SymbolInstance { symbol, .. } => {
+                if n.appearance.effects.is_empty()
+                    && n.appearance.items.iter().all(|i| i.effects().is_empty())
+                    && n.projection().is_none()
+                    && d.symbols.iter().any(|s| &s.name == symbol)
+                {
+                    out.push(n.id);
+                }
+            }
+            NodeKind::Blend { .. } | NodeKind::Repeat(_) | NodeKind::Intertwine { .. } => {}
+            _ => {
+                for c in n.children().into_iter().flatten() {
+                    collect(d, c, out);
+                }
+            }
+        }
+    }
+    let mut out = vec![];
+    for n in roots.iter().filter_map(|r| d.node(*r)) {
+        collect(d, n, &mut out);
+    }
+    out
+}
+
+/// How many objects [`break_links`] and [`expand_instances_under`] may make at once.
 const MAX_EXPAND_NODES: usize = 1_000_000;
 
 pub(super) fn selected_instances(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
@@ -777,7 +832,7 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     let intensity = number_or(p, "intensity", 5.0, C)?.clamp(1.0, 10.0) / 10.0;
     let alt = switch_or(p, "alt", false, C)?;
     let st = s.doc()?;
-    let color = match p.get("color").and_then(color_value) {
+    let color = match color_param(p, "color", C)? {
         Some(c) => crate::cmd::paint::new_color(s, p, c),
         None => s.paint.fill.color().unwrap_or(Color::BLACK),
     };

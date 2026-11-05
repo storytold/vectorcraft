@@ -1200,6 +1200,33 @@ fn start_list_command_removes_the_typed_characters_and_starts_the_list() {
     assert!(s.execute("text.startList", &json!({"at": 3})).is_err(), "id required");
 }
 
+/// A byte offset given as a negative or fractional number is an error, not the end of the text
+/// (`at`) or its start or end (`start`, `end`), and the text is left as it was. Null keeps the default.
+#[test]
+fn byte_offsets_that_are_not_whole_numbers_are_refused() {
+    let mut s = session();
+    let id = text(&mut s, "x\n# ");
+    for at in [json!(-1), json!(1.5)] {
+        let e = s.execute("text.startList", &json!({"id": id.0, "at": at})).unwrap_err().to_string();
+        assert!(e.contains("`at`"), "{e}");
+    }
+    assert_eq!(obj(&s, id).plain_text(), "x\n# ", "no list was started");
+    assert_eq!(s.execute("text.startList", &json!({"id": id.0, "at": null})).unwrap()["started"], json!(true));
+    let id = text(&mut s, "Hello");
+    for (cmd, p, key) in [
+        ("text.getRange", json!({"id": id.0, "start": -1, "end": 2}), "start"),
+        ("text.getRange", json!({"id": id.0, "start": 1, "end": 2.5}), "end"),
+        ("text.editRange", json!({"id": id.0, "start": 1.5, "end": 2, "insert": "!"}), "start"),
+        ("text.editRange", json!({"id": id.0, "start": 1, "end": -2, "insert": "!"}), "end"),
+        ("text.setRangeStyle", json!({"id": id.0, "start": 0.5, "size": 30}), "start"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{key}`")), "{cmd} {p}: {e}");
+    }
+    assert_eq!(obj(&s, id).plain_text(), "Hello");
+    assert_eq!(s.execute("text.getRange", &json!({"id": id.0, "start": 1.0, "end": null})).unwrap()["text"], json!("ello"));
+}
+
 /// #1881: a Cmd/Ctrl drag while typing (the Selection tool lent to the Type tool) moves the type
 /// and keeps what was typed, and typing goes on after it.
 #[test]
@@ -1494,6 +1521,295 @@ fn select_all_and_cut_like_ui() {
     key(&mut s, ToolKey::Escape, Mods::default());
     assert!(!s.tool_wants_text());
     assert_eq!(s.execute("select.all", &json!({})).unwrap(), json!({"count": 2}));
+}
+
+/// A story threaded from area type `a` into frame `b`, with the Type tool editing `b` at its start.
+fn threaded_story_edited_in_its_second_frame() -> (Session, NodeId, NodeId, String) {
+    let mut s = session();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+    let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let (a, b) = (NodeId(a), NodeId(b));
+    assert!(!obj(&s, a).plain_text().is_empty() && !obj(&s, b).plain_text().is_empty(), "the story runs through both frames");
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    assert!(s.tool_wants_text());
+    (s, a, b, story)
+}
+
+#[test]
+fn select_all_in_a_threaded_frame_selects_the_whole_story() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    let a_len = obj(&s, a).plain_text().len();
+    let o = s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(o, json!({"editing": a.0, "start": 0, "end": a_len, "story": [a.0, b.0]}));
+    assert_eq!(s.doc().unwrap().selection.objects, [a], "the first frame, which the tool edits, is selected");
+    // Copy takes the whole story.
+    let r = s.execute("text.getRange", &json!({"id": o["editing"], "story": true})).unwrap();
+    assert_eq!(r["text"], json!(story));
+    assert_eq!(r["length"], json!(story.len()));
+    // The selection is highlighted in both frames.
+    let v = ViewInfo::default();
+    let in_b = |o: &vectorcraft_tools::Overlay| matches!(o, vectorcraft_tools::Overlay::Highlight { quad, color: [60, 120, 255, 90] } if quad.iter().all(|p| p.x > 190.0));
+    assert!(s.overlays(v).iter().any(in_b), "the text of the second frame is highlighted");
+    // A fill reaches the text of both frames, as one undo step.
+    let steps = undo_labels(&s).len();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1);
+    let red = obj(&s, a).runs[0].style.fill.clone();
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.fill == red), "every character of frame {} is filled", id.0);
+    }
+    // So do a baseline shift step (Alt+Shift+Up) and a size step.
+    key(&mut s, ToolKey::Up, Mods { alt: true, shift: true, ..Mods::default() });
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.baseline_shift > 0.0), "every character of frame {} is raised", id.0);
+    }
+    let size = obj(&s, b).runs[0].style.size;
+    s.execute("type.step", &json!({"attribute": "size", "by": 1})).unwrap();
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.size > size), "every character of frame {} is larger", id.0);
+    }
+}
+
+#[test]
+fn select_all_edits_the_first_frame_that_holds_text() {
+    let mut s = session();
+    // The first frame is too short for a line: the story starts in the second.
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One two three", "size": 12, "area": {"width": 150, "height": 4}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let (a, b) = (NodeId(a), NodeId(b));
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), "One two three".to_string()));
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    let o = s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(o, json!({"editing": b.0, "start": 0, "end": 13, "story": [a.0, b.0]}));
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), String::new()));
+}
+
+#[test]
+fn the_eyedropper_styles_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+    let source = s.execute("text.create", &json!({"x": 400, "y": 250, "text": "Big", "size": 30})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("appearance.copyFrom", &json!({"source": source})).unwrap();
+    assert_eq!(r, json!({"ids": [a.0, b.0]}));
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| (r.style.size - 30.0).abs() < 1e-9), "every character of frame {} takes the size", id.0);
+    }
+}
+
+#[test]
+fn typing_over_the_whole_story_replaces_every_frames_text_in_one_step() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), String::new()));
+    s.tool_text("New", ViewInfo::default()).unwrap();
+    key(&mut s, ToolKey::Escape, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), ("New".to_string(), String::new()));
+    assert_eq!(undo_labels(&s).len(), steps + 1, "the delete and the typing are one step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+    assert!(!obj(&s, b).plain_text().is_empty());
+}
+
+#[test]
+fn select_all_in_one_frame_selects_only_its_text_once_the_caret_moves() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let a_len = obj(&s, a).plain_text().len();
+    // Shift+Left ends the story selection: the selection is the first frame's text but its last
+    // character, and Delete removes only that.
+    key(&mut s, ToolKey::Left, Mods { shift: true, ..Mods::default() });
+    assert!(s.tool_options().get("story").is_none());
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story[a_len - 1..]);
+    assert!(s.execute("text.getRange", &json!({"id": a.0, "story": true, "start": 0})).is_err(), "`story` takes no range");
+    assert!(s.execute("text.editRange", &json!({"id": a.0, "start": 0, "end": 0, "clear": [a.0]})).is_err());
+    assert!(s.execute("text.editRange", &json!({"id": a.0, "start": 0, "end": 0, "clear": "x"})).is_err());
+}
+
+/// A story of bulleted paragraphs threaded from area type `a` into frame `b`, each frame holding
+/// paragraph returns, with the Type tool editing `b` at its start.
+fn threaded_list_edited_in_its_second_frame() -> (Session, NodeId, NodeId, String) {
+    let mut s = session();
+    let story = "Alpha beta.\n".repeat(12);
+    let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 300})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "bullet"})).unwrap();
+    let (a, b) = (NodeId(a), NodeId(b));
+    for id in [a, b] {
+        let t = obj(&s, id);
+        assert!(t.plain_text().contains('\n'), "frame {} holds paragraph returns", id.0);
+        assert!((0..t.paragraph_count()).all(|k| t.para_at(k).list.is_some()), "frame {} is a list", id.0);
+    }
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    (s, a, b, story)
+}
+
+#[test]
+fn remove_breaks_takes_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    let joined = format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text());
+    assert_eq!(joined, story.trim_end_matches('\n').replace('\n', " "), "every frame's returns go, each between words as a space");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+    assert!(obj(&s, a).plain_text().contains('\n') && obj(&s, b).plain_text().contains('\n'));
+}
+
+#[test]
+fn remove_breaks_on_a_selected_threaded_story_puts_a_space_between_its_frames() {
+    let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
+    assert!(obj(&s, a).plain_text().ends_with('\n'), "the first frame ends with a paragraph return");
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    let joined = format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text());
+    assert_eq!(joined, story.trim_end_matches('\n').replace('\n', " "), "the return at the end of the first frame becomes a space");
+}
+
+#[test]
+fn remove_breaks_in_one_frames_selection_leaves_the_other_frames() {
+    let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+    let (in_a, b_len) = (obj(&s, a).plain_text(), obj(&s, b).plain_text().len());
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": b_len}));
+    s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    assert_eq!(obj(&s, a).plain_text(), in_a, "the first frame keeps its returns");
+    assert!(!obj(&s, b).plain_text().contains('\n'), "the edited frame's returns go");
+}
+
+#[test]
+fn convert_to_text_takes_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("text.convertListToText", &json!({})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    for id in [a, b] {
+        let t = obj(&s, id);
+        assert!((0..t.paragraph_count()).all(|k| t.para_at(k).list.is_none()), "frame {} leaves its list", id.0);
+        assert!(t.plain_text().contains("\u{2022}\t"), "frame {} holds its bullets as characters", id.0);
+    }
+    assert!(s.tool_options().get("story").is_some(), "the whole story stays selected");
+    s.execute("edit.undo", &json!({})).unwrap();
+    for id in [a, b] {
+        let t = obj(&s, id);
+        assert!((0..t.paragraph_count()).all(|k| t.para_at(k).list.is_some()), "frame {} is a list again", id.0);
+    }
+}
+
+#[test]
+fn convert_to_text_of_the_whole_story_leaves_a_locked_frame() {
+    // Over MCP without ids, and as the Paragraph panel sends it, with every frame of the story.
+    for named in [false, true] {
+        let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+        s.execute("object.lock", &json!({"ids": [b.0]})).unwrap();
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        s.set_tool_option("textSelection", &json!({"editing": a.0, "anchor": 0, "caret": 0}));
+        assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+        // The first frame ends with a paragraph return, so the paragraph that starts the locked
+        // frame takes in the first frame's empty last part and starts its text there.
+        let in_a = obj(&s, a).plain_text();
+        assert!(in_a.ends_with('\n'));
+        let own = in_a.split('\n').filter(|piece| !piece.is_empty()).count();
+        let p = if named { json!({"ids": [a.0, b.0]}) } else { json!({}) };
+        let r = s.execute("text.convertListToText", &p).unwrap();
+        assert_eq!(r["ids"], json!([a.0]), "only the editable frame is changed (ids named: {named})");
+        assert_eq!(r["converted"], json!(own), "only the paragraphs whose text starts in the editable frame convert");
+        assert!(r["inserted"].as_array().unwrap().iter().all(|i| i["id"] == json!(a.0)));
+        let (ta, tb) = (obj(&s, a), obj(&s, b));
+        assert!(ta.plain_text().contains("\u{2022}\t"), "the editable frame is converted");
+        let markers = ta.plain_text().matches("\u{2022}\t").count() + tb.plain_text().matches("\u{2022}\t").count();
+        assert_eq!(markers, own, "the locked frame's first paragraph keeps its list");
+        // The converted text is longer, so the story flows on into the locked frame; its own
+        // paragraphs stay a list.
+        let last = tb.paragraph_count() - 2;
+        assert!(tb.para_at(last).list.is_some(), "the locked frame's paragraphs stay a list (ids named: {named})");
+        assert!(!tb.plain_text().ends_with("\u{2022}\tAlpha beta.\n"));
+        assert!(s.tool_options().get("story").is_some(), "the whole story stays selected");
+    }
+}
+
+#[test]
+fn convert_to_text_of_the_whole_story_leaves_a_paragraph_that_starts_in_a_locked_frame() {
+    for named in [false, true] {
+        let mut s = session();
+        let story = format!("Alpha beta.\nAlpha beta.\n{}end.\nAlpha beta.\nAlpha beta.\n", "Gamma delta ".repeat(40));
+        let a = NodeId(
+            s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        let b = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 900})).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [a.0, b.0], "list": "bullet"})).unwrap();
+        let in_a = obj(&s, a).plain_text();
+        assert!(!in_a.ends_with('\n') && !obj(&s, b).plain_text().starts_with('\n'), "a paragraph runs on from the first frame into the second");
+        s.execute("object.lock", &json!({"ids": [a.0]})).unwrap();
+        s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+        assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+        let p = if named { json!({"ids": [a.0, b.0]}) } else { json!({}) };
+        let r = s.execute("text.convertListToText", &p).unwrap();
+        assert_eq!(r["ids"], json!([b.0]), "only the editable frame is changed (ids named: {named})");
+        // The two paragraphs that start in the editable frame, and the empty one that ends the story.
+        assert_eq!(r["converted"], json!(3), "only the paragraphs that start in the editable frame convert");
+        let (ta, tb) = (obj(&s, a), obj(&s, b));
+        assert_eq!(ta.plain_text(), in_a, "the locked frame's text is as it was");
+        assert!((0..ta.paragraph_count()).all(|k| ta.para_at(k).list.is_some()), "the locked frame stays a list");
+        assert!(tb.para_at(0).list.is_some(), "the paragraph the locked frame starts stays a list");
+        assert!(!tb.plain_text().starts_with('\u{2022}'));
+        assert_eq!(tb.plain_text().matches("\u{2022}\t").count(), 2);
+    }
+}
+
+#[test]
+fn convert_to_text_of_named_frames_ends_the_story_selection() {
+    let (mut s, _, b, _) = threaded_list_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("text.convertListToText", &json!({"ids": [b.0]})).unwrap();
+    assert!(obj(&s, b).plain_text().contains("\u{2022}\t"));
+    assert!(s.tool_options().get("story").is_none(), "the Type tool's selection moves past the characters inserted");
+}
+
+#[test]
+fn convert_to_text_in_one_frame_leaves_the_other_frames() {
+    let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+    let in_a = obj(&s, a).plain_text();
+    s.execute("text.convertListToText", &json!({})).unwrap();
+    let (ta, tb) = (obj(&s, a), obj(&s, b));
+    assert_eq!(ta.plain_text(), in_a, "the first frame's text is as it was");
+    assert!(ta.para_at(0).list.is_some(), "the first frame stays a list");
+    assert!((0..tb.paragraph_count()).all(|k| tb.para_at(k).list.is_none()), "the edited frame leaves its list");
+    assert!(tb.plain_text().contains("\u{2022}\t"), "the edited frame holds its bullets as characters");
 }
 
 #[test]
@@ -2144,4 +2460,546 @@ fn a_family_without_its_style_takes_its_closest_style() {
     s.execute("text.setStyle", &json!({"ids": [set.0], "style": "W6"})).unwrap();
     s.execute("text.setStyle", &json!({"ids": [set.0], "font": FAMILY})).unwrap();
     assert_eq!(style(&s, set), "W6", "a style the family has is kept");
+}
+
+/// The Glyphs panel's Show › Alternates for Current Selection: `text.glyphAlternates` lists a
+/// character's alternates and `text.setGlyphAlternate` draws one of them, a glyph no character maps
+/// to, in place of that character alone, as one undo step that native files keep.
+#[test]
+fn a_glyph_alternate_replaces_one_character_through_undo_and_reopen() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xaay", "size": 20, "font": alternates_family(true)})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "underline": true})).unwrap();
+    let gids = |t: &TextObject| vectorcraft_text::layout(db, t).glyphs.iter().map(|g| g.gid).collect::<Vec<_>>();
+    assert_eq!(gids(&obj(&s, id)), [g('x'), g('a'), g('a'), g('y')]);
+
+    let listed = s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 2})).unwrap();
+    assert_eq!((listed["char"].clone(), listed["default"].clone(), listed["chosen"].clone()), (json!("a"), json!(g('a')), json!(g('a'))));
+    assert_eq!(listed["alternates"][1], json!({"gid": u1, "feature": "aalt"}));
+    assert_eq!(listed["font"], json!(alternates_family(true)));
+
+    // Create Outlines, undone at once: the bounds of the outlines.
+    let outlines = |s: &mut Session| {
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        let group = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        let d = &s.doc().unwrap().doc;
+        let bounds: Vec<kurbo::Rect> = d.node(NodeId(group)).unwrap().children().unwrap().iter().filter_map(|c| c.geometric_bounds()).collect();
+        s.execute("edit.undo", &json!({})).unwrap();
+        bounds
+    };
+    let default = outlines(&mut s);
+
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 2, "gid": u1})).unwrap();
+    assert_eq!(r, json!({"id": id.0, "start": 2, "end": 3, "gid": u1}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(undo_labels(&s).last().map(String::as_str), Some("Glyphs"));
+    let t = obj(&s, id);
+    assert_eq!(t.plain_text(), "xaay", "the text keeps the character");
+    assert!(t.runs.iter().all(|r| r.style.underline), "its other attributes are kept");
+    assert_eq!(gids(&t), [g('x'), g('a'), u1, g('y')], "the second a alone");
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 2})).unwrap()["chosen"], json!(u1));
+
+    assert_ne!(outlines(&mut s), default, "Create Outlines draws the chosen glyph");
+
+    // Native files keep the choice.
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    let opened = vectorcraft_format::load(&bytes).unwrap();
+    let NodeKind::Text(reopened) = &opened.node(id).unwrap().kind else { panic!("text missing") };
+    assert_eq!(gids(reopened), [g('x'), g('a'), u1, g('y')], "reopened");
+    // A font that is not installed draws the fallback font's default glyph.
+    let mut missing = (**reopened).clone();
+    for r in &mut missing.runs {
+        r.style.font_family = "No Such Font Family".into();
+    }
+    let fallback = db.face("No Such Font Family", "Regular").expect("the fallback face");
+    assert_eq!(gids(&missing)[2], fallback.glyph_for('a'), "a missing font: the default glyph");
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(gids(&obj(&s, id)), [g('x'), g('a'), g('a'), g('y')], "undone");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(gids(&obj(&s, id)), [g('x'), g('a'), u1, g('y')], "redone");
+
+    // The default glyph puts the character back, as null does.
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 2, "gid": g('a')})).unwrap();
+    assert_eq!(r["gid"], json!(g('a')));
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.glyph_alternate.is_none()));
+    s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": u1})).unwrap();
+    s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(gids(&obj(&s, id)), [g('x'), g('a'), g('a'), g('y')]);
+
+    let err = |s: &mut Session, p: Value| s.execute("text.setGlyphAlternate", &p).unwrap_err().to_string();
+    assert!(err(&mut s, json!({"id": id.0, "start": 2, "gid": g('z')})).contains("is not an alternate"));
+    assert!(err(&mut s, json!({"id": id.0, "start": 3, "gid": u1})).contains("is not an alternate"), "y has none");
+    assert!(err(&mut s, json!({"id": id.0, "start": 4, "gid": u1})).contains("no character at byte 4"));
+    assert!(err(&mut s, json!({"id": id.0, "start": 2})).contains("missing `gid`"));
+    assert!(err(&mut s, json!({"id": id.0, "start": 2, "gid": -1})).contains("must be a glyph id"));
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 2, "end": 3, "font": "No Such Font Family"})).unwrap();
+    assert!(err(&mut s, json!({"id": id.0, "start": 2, "gid": u1})).contains("is not available"));
+    assert!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 2})).unwrap_err().to_string().contains("is not available"));
+}
+
+/// The glyph already drawn, chosen again, and null for a character drawn with its default glyph
+/// leave the document and its undo history as they are. An empty run before the character does
+/// not stand in for the character's own choice.
+#[test]
+fn a_glyph_alternate_already_drawn_is_not_an_edit() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let mut s = session();
+    let create = |s: &mut Session, y: f64| {
+        let r = s.execute("text.create", &json!({"x": 100, "y": y, "text": "xaay", "size": 20, "font": alternates_family(true)})).unwrap();
+        NodeId(r["id"].as_u64().unwrap())
+    };
+    let id = create(&mut s, 100.0);
+    s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 2, "gid": u1})).unwrap();
+    let state = |s: &Session| (s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision);
+    let before = state(&s);
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 2, "gid": u1})).unwrap();
+    assert_eq!(r, json!({"id": id.0, "start": 2, "end": 3, "gid": u1}));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(r, json!({"id": id.0, "start": 1, "end": 2, "gid": face.glyph_for('a')}));
+    assert_eq!(state(&s), before, "no edit");
+
+    // An empty run that holds the choice, as a file may have, right before the first a.
+    let other = create(&mut s, 150.0);
+    let mut runs = obj(&s, other).runs;
+    let mut empty = vectorcraft_doc::TextRun { text: String::new(), ..runs[0].clone() };
+    empty.style.glyph_alternate = Some(face.choice('a', u1));
+    runs = vec![
+        vectorcraft_doc::TextRun { text: "x".into(), ..runs[0].clone() },
+        empty,
+        vectorcraft_doc::TextRun { text: "aay".into(), ..runs[0].clone() },
+    ];
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let Some(NodeKind::Text(text)) = doc.node_mut(other).map(|n| &mut n.kind) else { panic!("text") };
+    text.runs = runs;
+    s.execute("text.setGlyphAlternate", &json!({"id": other.0, "start": 1, "gid": u1})).unwrap();
+    let gids: Vec<u32> = vectorcraft_text::layout(db, &obj(&s, other)).glyphs.iter().map(|g| g.gid).collect();
+    assert_eq!(gids[1], u1, "the a takes the choice: {gids:?}");
+
+    // A run that holds the choice and goes on past its first character, as a file may have: the
+    // request splits it, so the character is shaped alone.
+    let shared = create(&mut s, 200.0);
+    let mut runs = obj(&s, shared).runs;
+    let mut chosen = vectorcraft_doc::TextRun { text: "aay".into(), ..runs[0].clone() };
+    chosen.style.glyph_alternate = Some(face.choice('a', u1));
+    runs = vec![vectorcraft_doc::TextRun { text: "x".into(), ..runs[0].clone() }, chosen];
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let Some(NodeKind::Text(text)) = doc.node_mut(shared).map(|n| &mut n.kind) else { panic!("text") };
+    text.runs = runs;
+    let before = state(&s);
+    s.execute("text.setGlyphAlternate", &json!({"id": shared.0, "start": 1, "gid": u1})).unwrap();
+    assert_eq!(state(&s).0, before.0 + 1, "an edit");
+    let texts: Vec<String> = obj(&s, shared).runs.iter().map(|r| r.text.clone()).collect();
+    assert_eq!(texts, ["x", "a", "ay"]);
+}
+
+/// A glyph the character's style keeps from being drawn (here All Caps draws the a as A) is an
+/// error, and the document and its undo history are left as they were.
+#[test]
+fn a_glyph_alternate_that_the_style_does_not_draw_is_an_error() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let _fonts = crate::adding_fonts();
+    vectorcraft_text::FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+    let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xaay", "size": 20, "font": alternates_family(true)})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "allCaps": true})).unwrap();
+    let state = |s: &Session| (s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision);
+    let before = state(&s);
+    let err = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": u1})).unwrap_err();
+    assert!(err.to_string().contains("is not drawn"), "{err}");
+    assert_eq!(state(&s), before, "no edit");
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.glyph_alternate.is_none()));
+}
+
+/// With a style feature that draws another glyph (`salt` draws the a as b), choosing the default
+/// glyph draws it, and `gid: null` takes the choice away and reports the glyph the feature draws.
+#[test]
+fn the_default_glyph_chosen_under_a_substituting_feature_is_drawn() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xaay", "size": 20, "font": alternates_family(true)})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "features": ["salt"]})).unwrap();
+    let gids = |s: &Session| vectorcraft_text::layout(db, &obj(s, id)).glyphs.iter().map(|g| g.gid).collect::<Vec<_>>();
+    assert_eq!(gids(&s), [g('x'), g('b'), g('b'), g('y')], "salt draws each a as b");
+
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": g('a')})).unwrap();
+    assert_eq!(r["gid"], json!(g('a')));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(gids(&s), [g('x'), g('a'), g('b'), g('y')], "the first a draws its default glyph");
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 1})).unwrap()["chosen"], json!(g('a')));
+
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the glyph salt draws");
+    assert_eq!(gids(&s), [g('x'), g('b'), g('b'), g('y')]);
+
+    // A character that overflows its area is not laid out: the choice is kept for when it is.
+    let area = json!({"x": 0, "y": 300, "text": "xa", "size": 20, "font": alternates_family(true), "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": 2, "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 1, "gid": g('a')})).unwrap();
+    let held: Vec<_> = obj(&s, boxed).runs.iter().filter_map(|r| r.style.glyph_alternate.as_ref().map(|c| c.gid)).collect();
+    assert_eq!(held, [g('a')], "the default glyph is kept as the choice");
+}
+
+/// A character followed by a combining mark is drawn in one cluster with the mark: with `salt`,
+/// `gid: null` reports the glyph the feature draws, also when the text overflows, and choosing the
+/// default glyph draws it.
+#[test]
+fn the_glyph_drawn_for_a_character_with_a_combining_mark_is_reported() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let text = "xa\u{331}y";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": alternates_family(true)})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    let lay = vectorcraft_text::layout(db, &obj(&s, id));
+    let at = lay.glyphs.iter().find(|gl| gl.byte == 1).expect("the a is laid out");
+    assert_eq!((at.gid, at.len), (g('b'), 3), "salt draws the a as b, in one cluster with its mark");
+
+    let state = |s: &Session| (s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision);
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the glyph salt draws");
+    let undo = state(&s).0;
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": g('a')})).unwrap();
+    assert_eq!(r["gid"], json!(g('a')));
+    assert_eq!(state(&s).0, undo + 1, "one undo step");
+    let lay = vectorcraft_text::layout(db, &obj(&s, id));
+    assert_eq!(lay.glyphs.iter().find(|gl| gl.byte == 1).map(|gl| gl.gid), Some(g('a')), "the a draws its default glyph");
+
+    let area = json!({"x": 0, "y": 300, "text": "xa\u{331}", "size": 20, "font": alternates_family(true), "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": 4, "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the overflowing a is shaped with its mark");
+}
+
+/// Vertical type draws `vert` glyphs (the test font's `vert` draws ！ as I). A character of
+/// vertical type that overflows its area is shaped as vertical type, so choosing its default glyph
+/// keeps the choice.
+#[test]
+fn the_default_glyph_chosen_in_overflowing_vertical_type_is_kept() {
+    use vectorcraft_text::test_fonts::{VERTICAL_PUNCTUATION_FAMILY, vertical_punctuation_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(vertical_punctuation_font(true).expect("the test font builds"));
+    let face = db.face(VERTICAL_PUNCTUATION_FAMILY, "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let text = |area: Value| json!({"x": 0, "y": 0, "text": "！！", "size": 20, "font": VERTICAL_PUNCTUATION_FAMILY, "vertical": true, "area": area});
+    let open = NodeId(s.execute("text.create", &text(json!({"width": 200, "height": 200}))).unwrap()["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, open)).glyphs.iter().map(|g| g.gid).collect();
+    assert_eq!(gids, [g('I'), g('I')], "vert draws each ！ as I");
+
+    let boxed = NodeId(s.execute("text.create", &text(json!({"width": 4, "height": 4}))).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 0, "gid": g('！')})).unwrap();
+    assert_eq!(r["gid"], json!(g('！')));
+    let held: Vec<_> = obj(&s, boxed).runs.iter().filter_map(|r| r.style.glyph_alternate.as_ref().map(|c| c.gid)).collect();
+    assert_eq!(held, [g('！')], "the default glyph is kept as the choice");
+}
+
+/// A character that overflows its area reports as `chosen` the glyph it is drawn with when it is
+/// shaped alone: the glyph `salt` draws, a chosen default glyph, and the `vert` glyph of vertical
+/// type.
+#[test]
+fn the_glyph_query_shapes_an_overflowing_character() {
+    use vectorcraft_text::test_fonts::{VERTICAL_PUNCTUATION_FAMILY, alternates_family, alternates_font, vertical_punctuation_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    db.add_font(vertical_punctuation_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let chosen = |s: &mut Session, id: NodeId, start: usize| {
+        s.execute("text.glyphAlternates", &json!({"id": id.0, "start": start})).unwrap()["chosen"].clone()
+    };
+
+    let area = json!({"x": 0, "y": 300, "text": "xa", "size": 20, "font": alternates_family(true), "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": 2, "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    assert_eq!(chosen(&mut s, boxed, 1), json!(g('b')), "the glyph salt draws");
+    s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 1, "gid": g('a')})).unwrap();
+    assert_eq!(chosen(&mut s, boxed, 1), json!(g('a')), "the chosen default glyph");
+
+    let vface = db.face(VERTICAL_PUNCTUATION_FAMILY, "Regular").expect("the test face");
+    let text =
+        json!({"x": 0, "y": 0, "text": "！！", "size": 20, "font": VERTICAL_PUNCTUATION_FAMILY, "vertical": true, "area": {"width": 4, "height": 4}});
+    let vertical = NodeId(s.execute("text.create", &text).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, vertical)).glyphs.is_empty(), "the text overflows");
+    assert_eq!(chosen(&mut s, vertical, 0), json!(vface.glyph_for('I')), "vert draws ！ as I");
+}
+
+/// A parenthesis set right to left is drawn mirrored: in a paragraph whose direction is right to
+/// left, and after Hebrew in a paragraph of automatic direction, but not when its character
+/// direction is left to right. When it overflows its area, the glyph query shapes it in the same
+/// direction and reports the glyph the text draws when it fits.
+#[test]
+fn the_glyph_query_shapes_an_overflowing_character_in_its_paragraph_direction() {
+    let db = vectorcraft_text::FontDb::global();
+    let face = db.face("Source Sans 3", "Regular").expect("the bundled face");
+    let mut s = session();
+    let create = |s: &mut Session, text: &str, rtl: bool, char_ltr: bool, height: f64| {
+        let spec = json!({"x": 0, "y": 0, "text": text, "size": 20, "font": "Source Sans 3", "area": {"width": 200, "height": height}});
+        let id = NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap());
+        if rtl {
+            s.execute("text.setFormat", &json!({"ids": [id.0], "direction": "rightToLeft", "start": 2, "end": 3})).unwrap();
+        }
+        if char_ltr {
+            s.execute("text.setFormat", &json!({"ids": [id.0], "charDirection": "leftToRight", "start": 2, "end": 3})).unwrap();
+        }
+        id
+    };
+    for (text, rtl, char_ltr, at, drawn) in [("a\n(", true, false, 2, ')'), ("a\n\u{5D0}(", false, false, 4, ')'), ("a\n(", true, true, 2, '(')] {
+        let open = create(&mut s, text, rtl, char_ltr, 200.0);
+        let lay = vectorcraft_text::layout(db, &obj(&s, open));
+        assert_eq!(lay.glyphs.iter().find(|g| g.byte == at).map(|g| g.gid), Some(face.glyph_for(drawn)), "{text:?}: the parenthesis drawn");
+
+        let boxed = create(&mut s, text, rtl, char_ltr, 30.0);
+        let lay = vectorcraft_text::layout(db, &obj(&s, boxed));
+        assert!(lay.glyphs.iter().all(|g| g.byte < 2), "{text:?}: the second paragraph overflows");
+        let r = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": at})).unwrap();
+        assert_eq!(r["chosen"], json!(face.glyph_for(drawn)), "{text:?}: the glyph drawn when it fits");
+    }
+}
+
+/// A vowel sign drawn before its consonant (Devanagari Ka with the vowel sign I) is in the
+/// consonant's cluster, drawn first: with `salt`, the glyph reported for the consonant is the one
+/// the feature draws, not the vowel sign's, and the default glyph chosen for it is drawn.
+#[test]
+fn the_glyph_of_a_consonant_after_its_vowel_sign_is_reported() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": MATRA_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    let gids = |s: &Session| vectorcraft_text::layout(db, &obj(s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect::<Vec<_>>();
+    assert_eq!(gids(&s), [(g('i'), 0, 6), (g('b'), 0, 6)], "the vowel sign is drawn first, in the cluster of Ka as salt draws it");
+
+    let query = s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(g('b')), "the glyph salt draws for Ka");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": g('a')})).unwrap();
+    assert_eq!(r["gid"], json!(g('a')));
+    assert!(gids(&s).iter().any(|&(gl, byte, _)| (gl, byte) == (g('a'), 0)), "Ka draws its default glyph: {:?}", gids(&s));
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('a')));
+}
+
+/// Ka with a nukta and the vowel sign I is one cluster: the vowel sign drawn first, then the
+/// ligature of Ka and the nukta, which is neither Ka's default glyph nor one of its alternates. The
+/// glyph reported for Ka is the ligature, not the vowel sign.
+#[test]
+fn the_ligature_of_a_consonant_after_its_vowel_sign_is_reported() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93C}\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": MATRA_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('i'), 0, 9), (g('N'), 0, 9)], "the vowel sign is drawn first, then the ligature");
+
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('N')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('N')), "the ligature is drawn for Ka");
+}
+
+/// Ka, the halant, Ka again and the vowel sign I are one cluster: the vowel sign drawn first, the
+/// first Ka's half form, which the font lists as an alternate of Ka, then the second Ka's default
+/// glyph. The glyph reported for the first Ka is its half form, the first of its glyphs in the
+/// cluster, not the second Ka's default glyph. The font also lists the vowel sign's glyph as an
+/// alternate of Ka; drawn for the vowel sign, it is not reported for Ka.
+#[test]
+fn the_first_of_a_characters_glyphs_in_its_cluster_is_reported() {
+    use vectorcraft_text::test_fonts::{CONJUNCT_FAMILY, conjunct_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(conjunct_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{94D}क\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": CONJUNCT_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('i'), 0, 12), (g('k'), 0, 12), (g('K'), 0, 12)], "the vowel sign, the half form, then the second Ka");
+
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('k')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('k')), "the half form is drawn for the first Ka");
+
+    let text = "क\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 200, "text": text, "size": 20, "font": CONJUNCT_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('i'), 0, 6), (g('K'), 0, 6)], "the vowel sign, then Ka");
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('K')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('K')), "Ka's default glyph, not the vowel sign's");
+}
+
+/// A character that overflows its area is shaped with its grapheme: the nukta after Ka makes the
+/// font's `nukt` ligature, which `salt` does not change, so `gid: null` reports the ligature as it
+/// does for the laid-out text.
+#[test]
+fn the_glyph_of_an_overflowing_character_is_shaped_with_its_grapheme() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93C}";
+    let point = json!({"x": 100, "y": 100, "text": text, "size": 20, "font": MATRA_FAMILY});
+    let id = NodeId(s.execute("text.create", &point).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('N'), 0, 6)], "Ka and the nukta make the ligature");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('N')));
+
+    let area = json!({"x": 0, "y": 300, "text": text, "size": 20, "font": MATRA_FAMILY, "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('N')), "the overflowing Ka is shaped with its nukta");
+}
+
+/// A grapheme whose characters have different styles is shaped in those styles when it overflows:
+/// a nukta of another size does not make the `nukt` ligature with Ka, so `gid: null` reports the
+/// glyph `salt` draws for Ka, as it does for the laid-out text.
+#[test]
+fn an_overflowing_grapheme_keeps_the_styles_of_its_characters() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93C}";
+    let styled = |s: &mut Session, area: Option<Value>| {
+        let mut spec = json!({"x": 0, "y": 300, "text": text, "size": 20, "font": MATRA_FAMILY});
+        if let Some(area) = area {
+            spec["area"] = area;
+        }
+        let id = NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap());
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 3, "end": text.len(), "size": 30})).unwrap();
+        id
+    };
+    let open = styled(&mut s, None);
+    let lay = vectorcraft_text::layout(db, &obj(&s, open));
+    assert_eq!(lay.glyphs.iter().find(|gl| gl.byte == 0).map(|gl| gl.gid), Some(g('b')), "the nukta of another size makes no ligature");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": open.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')));
+
+    let boxed = styled(&mut s, Some(json!({"width": 200, "height": 4})));
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the overflowing Ka is shaped apart from the nukta of another size");
+}
+
+#[test]
+fn glyph_alternates_query_reports_the_fallback_glyph_that_is_drawn() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let requested = db.face(alternates_family(true), "Regular").expect("the test face");
+    let fallback = db.face("Inter", "Regular").expect("the bundled fallback face");
+    let ch = 'Ƃ';
+    assert_eq!(requested.glyph_for(ch), 0);
+    assert_ne!(fallback.glyph_for(ch), 0);
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 0, "y": 0, "text": ch.to_string(), "font": alternates_family(true)})).unwrap()["id"].as_u64().unwrap(),
+    );
+    let glyph = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.remove(0);
+    assert_ne!(glyph.font_id, requested.id());
+    assert_ne!(glyph.gid, 0);
+    let query = s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(glyph.gid), "the query reports the visible fallback glyph");
+    assert!(query["alternates"].as_array().unwrap().is_empty());
+
+    let area = json!({"x": 0, "y": 300, "text": ch.to_string(), "font": alternates_family(true), "area": {"width": 200, "height": 2}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let query = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(glyph.gid), "an overflowing character reports the fallback glyph it is drawn with");
+}
+
+/// A fallback face draws Ka with the vowel sign I in one cluster, the vowel sign first. The glyph
+/// reported for Ka is the fallback face's glyph for Ka, laid out or overflowing, not the vowel
+/// sign's.
+#[test]
+fn the_fallback_glyph_of_a_consonant_after_its_vowel_sign_is_reported() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, alternates_family, alternates_font, matra_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    db.add_font(matra_font().expect("the test font builds"));
+    let requested = db.face(alternates_family(true), "Regular").expect("the test face");
+    let text = "क\u{93F}";
+    assert_eq!(requested.glyph_for('क'), 0);
+    let mut s = session();
+    let create = |s: &mut Session, height: f64| {
+        let spec = json!({"x": 0, "y": 0, "text": text, "font": alternates_family(true), "area": {"width": 200, "height": height}});
+        NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap())
+    };
+    let open = create(&mut s, 200.0);
+    let glyphs = vectorcraft_text::layout(db, &obj(&s, open)).glyphs;
+    let fallback = db.face_by_id(glyphs[0].font_id).expect("the fallback face");
+    assert_ne!(fallback.id(), requested.id());
+    let ka = fallback.glyph_for('क');
+    let drawn: Vec<_> = glyphs.iter().map(|g| (g.gid, g.byte)).collect();
+    // A face may draw the vowel sign with a glyph other than its own, so only its place is checked.
+    let sign_first = matches!(drawn[..], [(sign, 0), (k, 0)] if sign != 0 && sign != ka && k == ka);
+    assert!(sign_first, "the vowel sign is drawn first, in Ka's cluster ({} or {MATRA_FAMILY}): {drawn:?}", fallback.family);
+    let query = s.execute("text.glyphAlternates", &json!({"id": open.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(ka), "the fallback face's glyph for Ka");
+
+    let boxed = create(&mut s, 2.0);
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let query = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(ka), "an overflowing Ka reports the fallback face's glyph for Ka");
 }

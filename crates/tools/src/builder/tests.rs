@@ -364,6 +364,30 @@ fn shape_builder_keeps_a_line_under_an_edge_in_front_and_alt_click_there_takes_t
 }
 
 #[test]
+fn shape_builder_alt_click_on_coincident_lines_takes_the_front_one() {
+    // Two lines from (0, 50) to (200, 50), crossed by a line at x = 100: each keeps its own
+    // pieces, and a hit where they lie on each other takes the piece of the line in front.
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut s = Selection::default();
+    let line = |a: (f64, f64), b: (f64, f64)| PathData::new(vec![SubPath::polyline(&[Point::new(a.0, a.1), Point::new(b.0, b.1)], false)]);
+    let paths = [line((0.0, 50.0), (200.0, 50.0)), line((0.0, 50.0), (200.0, 50.0)), line((100.0, 0.0), (100.0, 100.0))];
+    for (k, path) in paths.into_iter().enumerate() {
+        let id = d.alloc_id();
+        d.insert(Some(l), k, Node::path(id, path, Appearance::default_art())).unwrap();
+        s.add(id);
+    }
+    let map = map_of(&d, &s);
+    for key in [0, 1] {
+        assert_eq!(map.lines.iter().filter(|(piece, _)| piece.key == key).count(), 2, "line {key}: {:?}", map.lines);
+    }
+    for x in [50.0, 150.0] {
+        let Some(Hit::Line(i)) = map.hit(Point::new(x, 51.0), Some(4.0)) else { panic!("no line hit at {x}") };
+        assert_eq!(map.lines.get(i).map(|(piece, _)| piece.key), Some(1), "at {x}");
+    }
+}
+
+#[test]
 fn shape_builder_erase_drag_across_an_overlap_narrower_than_twice_the_tolerance_touches_it() {
     let (d, s) = sliver_rects();
     let map = map_of(&d, &s);

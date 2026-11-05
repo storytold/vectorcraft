@@ -11,7 +11,7 @@ use vectorcraft_geom::Vec2;
 
 use super::edit::selected_roots;
 use super::pathops::Beside;
-use super::select::{is_selectable, selectable_ids, walk_selectable};
+use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
 use super::{
     CommandSpec, EngineError, Point, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ok,
     str_param,
@@ -19,14 +19,18 @@ use super::{
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("select.same.symbolInstance", "Symbol Instance", ["Select", "Same"], None, "{} → {count}", has_selection, |s, _| same(
-            s,
+        cmd!(
             "select.same.symbolInstance",
-            |a, b| match (&a.kind, &b.kind) {
+            "Symbol Instance",
+            ["Select", "Same"],
+            None,
+            "{} select the instances of the symbol of the first selected object that can be selected, including a group member selected on its own; when that object is not a symbol instance, such as a group, nothing is selected; objects that are hidden or locked, inside a hidden or locked object or layer, on a template layer, on a locked artboard while nothing is isolated (new art while it stays selected excepted), or outside the isolated group or layer are passed over → {count}",
+            has_selection,
+            |s, _| same(s, "select.same.symbolInstance", |a, b| match (&a.kind, &b.kind) {
                 (NodeKind::SymbolInstance { symbol: x, .. }, NodeKind::SymbolInstance { symbol: y, .. }) => x == y,
                 _ => false,
-            }
-        )),
+            })
+        ),
         cmd!(
             "select.same.linkBlockSeries",
             "Link Block Series",
@@ -252,7 +256,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Color Mode",
             ["File", "Document Color Mode"],
             None,
-            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every color of the art (opacity masks included), symbols, graph designs, pattern tiles, graphic styles, brushes and swatches through the color settings; swatch links kept; Gray colors stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB grays separate through the CMYK profile like any color, into four-color grays and a rich black) | \"black\" (to CMYK, RGB grays with R = G = B go on the black plate only, K = their gray value)} → {changed: how many colors of the art, symbols, graph designs and pattern tiles changed; the colors of graphic styles and brushes are not counted}",
+            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every color of the art (opacity masks, effect colors and graphs' series and label paints included), symbols, graph designs, pattern tiles, graphic styles (their effect colors included), brushes, swatches and the paints new art takes through the color settings, together in one undo step (Undo restores their original values; Redo reapplies the conversion); swatch links kept; Gray colors stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB grays separate through the CMYK profile like any color, into four-color grays and a rich black) | \"black\" (to CMYK, RGB grays with R = G = B go on the black plate only, K = their gray value)} → {changed: how many colors of the art, symbols, graph designs and pattern tiles changed; the colors of graphic styles and brushes are not counted}",
             has_doc,
             super::colormgmt::convert_mode
         ),
@@ -297,9 +301,9 @@ fn finish_same(s: &mut Session, cmd: &str, ids: Vec<NodeId>) -> Result<Value> {
     Ok(json!({ "count": st.selection.objects.len() }))
 }
 
+/// The objects `eq` matches with the [`first_selectable`] selected object.
 fn same(s: &mut Session, cmd: &str, eq: fn(&Node, &Node) -> bool) -> Result<Value> {
-    let st = s.doc()?;
-    let r = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().ok_or_else(|| bad(cmd, "nothing selected"))?;
+    let r = first_selectable(s.doc()?).cloned().ok_or_else(|| bad(cmd, "nothing selected"))?;
     let ids = candidates(s, |n| eq(n, &r))?;
     finish_same(s, cmd, ids)
 }
@@ -333,7 +337,7 @@ fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool)
 /// object inside two selected objects is given twice. The walk stops when `f` returns false.
 fn each_selected_text(s: &Session, mut f: impl FnMut(NodeId) -> bool) {
     fn inside(n: &Node, f: &mut impl FnMut(NodeId) -> bool) -> bool {
-        if !n.visible || n.locked {
+        if !n.visible || n.locked || n.is_template() {
             return true;
         }
         if matches!(n.kind, NodeKind::Text(_)) && !f(n.id) {

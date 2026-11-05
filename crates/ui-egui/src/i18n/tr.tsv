@@ -835,6 +835,11 @@ font-technology	Variable	Değişken
 	Double-click to edit the characters' paint	Karakterlerin boyasını düzenlemek için çift tıklayın
 	Click to edit	Düzenlemek için tıklayın
 	Double-click to edit	Düzenlemek için çift tıklayın
+	Alternates for Current Selection	Geçerli Seçim için Alternatifler
+	Select a character with the Type tool to see its alternates.	Alternatiflerini görmek için Yazım aracıyla bir karakter seçin.
+	The selected character's font is not available.	Seçili karakterin yazı tipi kullanılamıyor.
+	No alternates for the selected character.	Seçili karakter için alternatif yok.
+	Double-click to replace	Değiştirmek için çift tıklayın
 	Double-click to insert	Eklemek için çift tıklayın
 	Double-click to rename	Yeniden adlandırmak için çift tıklayın
 	Double-click to target the contents	İçeriği hedeflemek için çift tıklayın
@@ -1485,6 +1490,10 @@ font-technology	Variable	Değişken
 	Join Tool	Birleştirme Aracı
 	Justification…	İki Yana Yaslama…
 	Justify all lines	Tüm satırları iki yana yasla
+	Align Top	Üste hizala
+	Align Center	Dikey ortala
+	Align Bottom	Alta hizala
+	Justify Vertically	Dikey olarak iki yana yasla
 	Justify with last line aligned center	Son satıra hizalanmış merkeze yasla
 	Justify with last line aligned left	Son satırı sola hizalanmış şekilde iki yana yasla
 	Justify with last line aligned right	Son satırı sağa hizalayarak yasla
@@ -1604,6 +1613,7 @@ font-technology	Variable	Değişken
 	Ligatures are off while the text is tracked.	Metin izlenirken bitişik harfler kapalıdır.
 	Light	Işık
 	Light Blue	Açık Mavi
+	Light Red	Açık Kırmızı
 	Lighten	hafifletmek
 	Lightness	hafiflik
 	Limit Color Guide to Library	Renk Kılavuzunu Kitaplıkla Sınırlandır
@@ -1815,6 +1825,8 @@ font-technology	Variable	Değişken
 	Name:	İsim:
 	Navigate	Gezin
 	Navigator	Gezgin
+	Navigator Panel Options	Gezgin Paneli Seçenekleri
+	Draw Dashed Lines as Solid Lines	Kesikli Çizgileri Düz Çizgi Olarak Çiz
 	Needs the desktop app	Masaüstü uygulaması gerekiyor
 	Neutral Gradients	Nötr Degradeler
 	New	Yeni
@@ -3559,6 +3571,12 @@ digits	Malayalam	Malayalam
 	Scrub Numeric Fields by Dragging	Sayısal Alanları Sürükleyerek Fırçalayın
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} içinde {n} dosya {note}. Paket klasörü gösterilsin mi?
 @plural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı
+@msgplural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı
+@msg	fonts not copied: {fonts}	kopyalanmayan yazı tipleri: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} bağlantılı dosya bulunamadı)
+@msg	(fonts not copied: {fonts})	(kopyalanmayan yazı tipleri: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	kopyalanmayan yazı tipleri: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} bağlantılı görsel bu belgenin kaydedilmesinden bu yana değiştirildi. Yeni sürümler gösterilsin mi?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} bağlantılı görsel diskte değiştirildi. Yeni sürümler gösterilsin mi?
@@ -3760,6 +3778,8 @@ axis	Both	Her İkisi
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Kılavuzlardan Oluşturun: kılavuzlar {MAX_PIECES} dilimlerinden daha fazlasını oluşturur
 @msg	Create from Selection: the selection has no area	Seçimden Oluştur: Seçimin alanı yok
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Veri Kurtarma'nın kopyaları saklayacak yeri yoktur: Tercihleri ayarlayın → Dosya İşleme → Veri Kurtarma → Klasör (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	Veri Kurtarma kopyaları {path} konumunda saklayamıyor: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Eklentiler {path} konumundan yüklenemiyor: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	kesilecek bağlantı noktalarını doğrudan seçin (açık yolların bitiş noktalarını değil)
 @msg	Divide Objects Below: select a path	Aşağıdaki Nesneleri Böl: bir yol seçin
 @msg	Divide Objects Below: select exactly one path	Aşağıdaki Nesneleri Böl: tam olarak bir yol seçin
@@ -4384,12 +4404,16 @@ axis	Both	Her İkisi
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	VectorCraft'ın henüz okumadığı {_1} var
 @msg	its objects are nested too deeply	nesneleri çok derin bir şekilde iç içe geçmiş
 @msg	its section ending with `%{end}` doesn't end	`%{end}` ile biten bölümü bitmiyor
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft'ın henüz okuyamadığı fırçalar Fırçalar panelinin dışında bırakıldı ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	çeşitli dolgulara veya konturlara, efektlere veya fırçalara sahip nesneler çizilmiş görünümleri olarak geldi ({_1}): görünümleri henüz düzenlenemez
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	“{name}” degradesi dosyada tanımlı değil: onun yerine düz bir renk geliyor
 @msg	an image VectorCraft can't read was left out	VectorCraft'ın okuyamadığı bir resim dışarıda bırakıldı
 @msg	graphs come in as plain art, without their data or settings	grafikler, verileri ve ayarları olmadan düz çizim olarak içe aktarılır
 @msg	an image whose data is cut short was left out	verileri kısa kesilen bir resim dışarıda bırakıldı
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	bağlantılı resimler, dosyaları bulunana kadar dosyaya kaydedilen düşük çözünürlüklü önizlemeyi gösterir: bunları Bağlantılar panelinde yeniden bağlayın
+@msg	linked type areas past VectorCraft's limits were left out	VectorCraft sınırlarını aşan bağlantılı metin alanları dışarıda bırakıldı
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	bağlantılı alanlarda, kaydırılan metinde veya bileşik yolda maske olarak kullanılan metin kırpmaz
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	dosyada önizlemesi olmayan bağlantılı resimler, dosyaları bulunana kadar bir yer tutucu gösterir: bunları Bağlantılar panelinde yeniden bağlayın
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	çerçevelerdeki alan türü, daha uzun çerçevelerde gösterdiği yazı tipinin bir satırı için çok kısa ({_1}): bunların türü aksi halde gösterilmez
 @msg	its editing data doesn't say where its art is	düzenleme verileri sanatın nerede olduğunu söylemiyor
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	bu dosya PDF uyumluluğu olmadan kaydedildi ve düzenleme verileri okunamıyor ({why})
@@ -5248,6 +5272,10 @@ theme	Appearance	Görünüm
 	Movie Clip	Film Klibi
 @msg	name is empty	isim boş
 @msg	an action is already recording	zaten bir eylem kaydediliyor
+@msg	an action is already playing	zaten bir eylem oynatılıyor
+@msg	the action stopped playing: its document is no longer active	eylemin oynatılması durdu: belgesi artık etkin değil
+@msg	speed must be accelerated, step or pause	speed accelerated, step veya pause olmalıdır
+@msg	seconds must be a whole number from 1 to 60	seconds 1 ile 60 arasında bir tam sayı olmalıdır
 @msg	no such function key	öyle bir işlev tuşu yok
 @msg	no such color	öyle bir renk yok
 @msg	{_1} cannot be used on Windows	{_1} Windows'ta kullanılamaz
@@ -5435,6 +5463,7 @@ theme	Appearance	Görünüm
 @msg	its zlib compression is damaged	zlib sıkıştırması hasarlı
 @msg	its Zstandard compression is damaged	Zstandard sıkıştırması hasarlı
 @msg	it decompresses to more than {_1} MB	açıldığında {_1} MB'tan fazla alan kaplıyor
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	dosyanın değişken bağlantılarının tümü okunmadı (atlanan bağlantılar: {_1}): bu nesneler değişkenlerine bağlı değil
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	dosyanın değişken kitaplığı yalnızca kısmen okundu (atlanan girdiler: {_1}): Değişkenler paneli kalanları listeliyor
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	dosyanın değişken kitaplığı okunamadı: Değişkenler paneli onu listelemiyor
 @msg	a variable of unknown kind can't be bound to objects	türü bilinmeyen bir değişken nesnelere bağlanamaz
@@ -5714,6 +5743,11 @@ axis	Y Axis	Y ekseni
 	Set Options	Set Seçenekleri
 	Action Options…	Eylem Seçenekleri…
 	Action Options	Eylem Seçenekleri
+	Playback Options…	Oynatma Seçenekleri…
+	Playback Options	Oynatma Seçenekleri
+	Accelerated	Hızlandırılmış
+	Step by Step	Adım Adım
+	Pause For	Duraklat
 	Rename Action	Eylemi Yeniden Adlandır
 	New Action…	Yeni Eylem…
 	New Action	Yeni Eylem
@@ -5994,6 +6028,7 @@ anchor	Points:	Noktalar:
 	Character Color	Karakter Rengi
 	OpenType Features	OpenType Özellikleri
 	Stylistic Sets	Stilistik Setler
+	Set {n}	Set {n}
 @msg	features lists at most {max} tags	features en fazla {max} etiket içerebilir
 @msg	unknown OpenType feature `{t}`	bilinmeyen OpenType özelliği `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0'ın üzerinde ve en fazla {max} olan bir sayı olmalıdır
@@ -6206,6 +6241,11 @@ breakText	Glyphs	Glifler
 	Export All Open Documents as SVG	Tüm Açık Belgeleri SVG Olarak Dışa Aktar
 @msgplural	Exported {n} document|Exported {n} documents	{n} belge dışa aktarıldı
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} belge dışa aktarıldı; {title} yazılamadı: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Klasörü Toplu İzle
+@msgplural	Traced {n} image|Traced {n} images	{n} resim izlendi
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} resim izlenemedi
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} resim izlendi; izlenemeyen: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Sembol Türü:
 	Dynamic Symbol	Dinamik Sembol
@@ -6256,4 +6296,54 @@ breakText	Glyphs	Glifler
 	Bow	Yay
 	Spike	Sivri Uç
 	Skip Spaces	Boşlukları Atla
+	Release Type on a Path…	Yoldaki Metni Ayır…
+	Release Type on a Path	Yoldaki Metni Ayır
+	Text and Path	Metin ve yol
+	Path Only	Yalnızca yol
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Çizim, resim olarak kopyalanamayacak kadar büyük: diğer uygulamalar bunun PNG'sini almaz
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Çalışma Yüzeylerine Göre Seç
+	Select by Artboards…	Çalışma Yüzeylerine Göre Seç…
+	Selection Tools	Seçim Araçları
+	Search artboards	Çalışma yüzeylerinde ara
+	Fully Inside	Tamamen içeride
+	Fully Outside	Tamamen dışarıda
+	No artboards match.	Eşleşen çalışma yüzeyi yok.
+	Chosen: {n} of {total}	Seçilen: {n}/{total}
+
+# Contour add-on
+	Contour	Dış Hat
+	Contour Tool	Dış Hat Aracı
+	Sharp	Keskin
+	Bake	Genişlet
+	Turn the Contour into plain paths	Dış hattı sade yollara dönüştürür
+	Set Corners…	Köşeleri Ayarla…
+	All Anchors	Tüm Çapalar
+	Odd-Numbered Anchors	Tek Numaralı Çapalar
+	Even-Numbered Anchors	Çift Numaralı Çapalar
+	Minimum angle	En Küçük Açı
+	Maximum angle	En Büyük Açı
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Bağlantılıları Seç
+	Select Embedded	Gömülüleri Seç
+	Select Missing	Eksikleri Seç
+	Select Modified	Değiştirilenleri Seç
+	Select by Link Status	Bağlantı Durumuna Göre Seç
+	Select by Link Status…	Bağlantı Durumuna Göre Seç…
+	Search images	Görüntülerde ara
+	No images match.	Eşleşen görüntü yok.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} bağlantılı görüntü seçildi
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} gömülü görüntü seçildi
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} eksik görüntü seçildi
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} değiştirilmiş görüntü seçildi
+@msgplural	Selected {n} image|Selected {n} images	{n} görüntü seçildi
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} tane daha gizli veya kilitli
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} tane daha şablon katmanında
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} tane daha izole grubun dışında
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} tane daha şu anda seçilemiyor
+
+# Compound Shapes add-on
+	Compound Shapes	Bileşik Şekiller
+	Shape Mode Buttons Make Compound Shapes	Şekil Modu Düğmeleri Bileşik Şekiller Yapar

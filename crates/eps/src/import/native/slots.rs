@@ -242,6 +242,25 @@ fn see_through(n: &Node) -> bool {
     n.opacity < 1.0 || n.blend != BlendMode::Normal || n.isolate
 }
 
+/// What a text slot became in [`fill_slots`]: the text objects among it, those in groups included,
+/// and the objects that took its place.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct Filled {
+    pub text: Vec<NodeId>,
+    pub objects: Vec<NodeId>,
+}
+
+/// The ids of the text objects in `nodes` and in their groups, into `out`.
+fn text_ids(nodes: &[Arc<Node>], out: &mut Vec<NodeId>) {
+    for n in nodes {
+        match n.children() {
+            _ if matches!(n.kind, NodeKind::Text(_)) => out.push(n.id),
+            Some(c) => text_ids(c, out),
+            None => {}
+        }
+    }
+}
+
 /// Replace the text slots in `nodes` with what `content` has for each, in order (a slot given none is
 /// left out): the page's type takes its place as it is, made type keeps the slot's name. Made type
 /// takes the slot's opacity, blend mode, isolation and knockout. The page's type takes them too when
@@ -249,7 +268,9 @@ fn see_through(n: &Node) -> bool {
 /// combined with that of the objects around `nodes`; otherwise they keep their own. Where the slot has
 /// transparency and the type comes with other art that has none of its own, a group of them takes the
 /// slot's instead. `round` has the opacity and blend mode of each object around `nodes`, which the page
-/// can have folded into its type. `empty` counts those left out.
+/// can have folded into its type. `empty` counts those left out. `filled` gets what each slot
+/// became, by the slot's id.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn fill_slots(
     doc: &mut Document,
     nodes: &mut Vec<Arc<Node>>,
@@ -258,11 +279,13 @@ pub(super) fn fill_slots(
     empty: &mut usize,
     made: &mut Vec<(u32, usize, NodeId)>,
     round: &mut Vec<(f32, BlendMode)>,
+    filled: &mut std::collections::HashMap<NodeId, Filled>,
 ) {
     let mut i = 0;
     while i < nodes.len() {
         let Some(n) = nodes.get(i) else { break };
         if let Some(story) = slot_of(n.name.as_deref()) {
+            let slot = n.id;
             let visible = n.visible;
             let name = names.get(&n.id);
             let frame = ai::slot_frame(n.name.as_deref());
@@ -290,6 +313,8 @@ pub(super) fn fill_slots(
                             p
                         })
                         .collect();
+                    let mut text = vec![];
+                    text_ids(&parts, &mut text);
                     // When the page draws each of them with no transparency, the slot's, or the slot's
                     // combined with that of the objects around it, the slot's takes its place: on the one
                     // part, or on a group of several when the slot has transparency. Otherwise every part
@@ -335,6 +360,7 @@ pub(super) fn fill_slots(
                     {
                         Arc::make_mut(p).extras_mut().graphic_style = linked;
                     }
+                    filled.insert(slot, Filled { text, objects: parts.iter().map(|p| p.id).collect() });
                     let n = parts.len();
                     nodes.splice(i..=i, parts);
                     i += n;
@@ -342,6 +368,7 @@ pub(super) fn fill_slots(
                 }
                 Some(Content::Made(mut text, _, seen)) => {
                     text.id = doc.alloc_id();
+                    filled.insert(slot, Filled { text: vec![text.id], objects: vec![text.id] });
                     if let Some(story) = story {
                         made.push((story, frame, text.id));
                     }
@@ -392,7 +419,7 @@ pub(super) fn fill_slots(
                 && let Some(c) = nodes.get_mut(i).map(Arc::make_mut).and_then(Node::children_mut)
             {
                 round.push(state);
-                fill_slots(doc, c, content, names, empty, made, round);
+                fill_slots(doc, c, content, names, empty, made, round, filled);
                 round.pop();
             }
             i += 1;
@@ -617,12 +644,36 @@ mod tests {
         let parts = vec![part(&mut doc, 10.0), part(&mut doc, 60.0)];
         let mut nodes = vec![Arc::new(slot)];
         let mut content = vec![Content::Page(parts)].into_iter();
-        let (mut empty, mut made) = (0, vec![]);
-        fill_slots(&mut doc, &mut nodes, &mut content, &Default::default(), &mut empty, &mut made, &mut vec![]);
+        let (mut empty, mut made, mut filled) = (0, vec![], std::collections::HashMap::new());
+        let slot = nodes[0].id;
+        fill_slots(&mut doc, &mut nodes, &mut content, &Default::default(), &mut empty, &mut made, &mut vec![], &mut filled);
         assert_eq!(nodes.len(), 1);
         assert_eq!(nodes[0].extras().wrap, Some(wrap));
         let NodeKind::Group { children, .. } = &nodes[0].kind else { panic!("a group: {:?}", nodes[0].kind) };
         assert_eq!(children.len(), 2);
         assert!(children.iter().all(|c| c.extras().wrap.is_none() && matches!(c.kind, NodeKind::Text(_))));
+        // The slot became the group, which holds its two text objects.
+        assert_eq!(filled.get(&slot), Some(&Filled { text: children.iter().map(|c| c.id).collect(), objects: vec![nodes[0].id] }));
+    }
+
+    /// A slot filled with the page's type in a group and a stroke beside it became both of them, and
+    /// the text object in the group.
+    #[test]
+    fn a_slot_filled_from_the_page_records_its_objects_and_its_type() {
+        let mut doc = Document::new(100.0, 100.0);
+        let mut slot = Node::group(doc.alloc_id(), vec![]);
+        slot.name = Some("\u{0}text0:0".into());
+        let t = vectorcraft_doc::TextObject::point(Point::new(10.0, 50.0), "Part", Default::default());
+        let text = Arc::new(Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t))));
+        let group = Arc::new(Node::group(doc.alloc_id(), vec![text]));
+        let stroke = Arc::new(Node::path(doc.alloc_id(), PathData::default(), Default::default()));
+        let mut nodes = vec![Arc::new(slot)];
+        let slot = nodes[0].id;
+        let mut content = vec![Content::Page(vec![group, stroke])].into_iter();
+        let (mut empty, mut made, mut filled) = (0, vec![], std::collections::HashMap::new());
+        fill_slots(&mut doc, &mut nodes, &mut content, &Default::default(), &mut empty, &mut made, &mut vec![], &mut filled);
+        assert_eq!(nodes.len(), 2);
+        let inner = nodes[0].children().unwrap()[0].id;
+        assert_eq!(filled.get(&slot), Some(&Filled { text: vec![inner], objects: vec![nodes[0].id, nodes[1].id] }));
     }
 }

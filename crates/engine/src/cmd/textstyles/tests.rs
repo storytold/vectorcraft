@@ -1,5 +1,42 @@
 use super::*;
 
+#[test]
+fn captured_character_style_excludes_a_one_character_glyph_choice() {
+    let style = CharStyle {
+        glyph_alternate: Some(vectorcraft_doc::GlyphChoice { ch: 'a', gid: 42, font: "Test-Regular".into(), version: "1".into() }),
+        ..Default::default()
+    };
+    assert!(!char_attrs(&style).contains_key("glyphAlternate"));
+    assert!(style.glyph_alternate.is_some(), "the selected text keeps its direct glyph choice");
+}
+
+#[test]
+fn character_style_edit_keeps_a_linked_runs_glyph_choice() {
+    let (mut s, id) = session_with_text("Styled");
+    s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"size": 24}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Body", "id": id})).unwrap();
+    let choice = vectorcraft_doc::GlyphChoice { ch: 'S', gid: 42, font: "Test-Regular".into(), version: "1".into() };
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(NodeId(id)).map(|n| &mut n.kind) {
+        t.runs[0].style.glyph_alternate = Some(choice.clone());
+    }
+    s.execute("charStyle.edit", &json!({"name": "Body", "to": "Body", "attrs": {"size": 18}})).unwrap();
+    let run = &runs(&s, id)[0];
+    assert_eq!((run.style.style_name.as_deref(), run.style.size), (Some("Body"), 18.0));
+    assert_eq!(run.style.glyph_alternate, Some(choice), "the style edit keeps the run's own glyph choice");
+}
+
+/// A glyph choice given to a character style is an error, not a value the style drops.
+#[test]
+fn character_style_attributes_refuse_a_glyph_choice() {
+    let (mut s, _) = session_with_text("Styled");
+    let choice = json!({"ch": "S", "gid": 42, "font": "Test-Regular", "version": "1"});
+    let err = s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"size": 24, "glyphAlternate": choice}})).unwrap_err();
+    assert!(err.to_string().contains("glyphAlternate"), "{err}");
+    s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"size": 24}})).unwrap();
+    let err = s.execute("charStyle.edit", &json!({"name": "Body", "to": "Body", "attrs": {"glyphAlternate": choice}})).unwrap_err();
+    assert!(err.to_string().contains("glyphAlternate"), "{err}");
+}
+
 fn session_with_text(text: &str) -> (Session, u64) {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
@@ -333,6 +370,54 @@ fn character_style_color_and_features_are_checked() {
     }
     assert_eq!(s.doc().unwrap().doc, before);
     assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn character_style_dimensions_are_checked_before_a_definition_changes() {
+    let (mut s, _) = session_with_text("Text");
+    s.execute("charStyle.new", &json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for attrs in [
+        json!({"size": 0.0}),
+        json!({"size": 1296.1}),
+        json!({"leading": 0.0}),
+        json!({"leading": 5000.1}),
+        json!({"h_scale": 0.0}),
+        json!({"h_scale": 0.9}),
+        json!({"h_scale": 10000.1}),
+        json!({"v_scale": 0.0}),
+        json!({"v_scale": 0.9}),
+        json!({"v_scale": 10000.1}),
+        json!({"baseline_shift": -1296.1}),
+        json!({"baseline_shift": 1296.1}),
+        json!({"tcyUpDown": 1296.1}),
+        json!({"tcyLeftRight": -1296.1}),
+    ] {
+        let key = attrs.as_object().unwrap().keys().next().unwrap();
+        for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
+            let params = match cmd {
+                "charStyle.edit" => json!({"name": "Body", "to": "Body", "attrs": attrs}),
+                "charStyle.new" => json!({"name": "Other", "attrs": attrs}),
+                _ => json!({"name": "Body", "attrs": attrs}),
+            };
+            let error = s.execute(cmd, &params).unwrap_err().to_string();
+            assert!(error.contains(&format!("`{key}`")), "{cmd} {attrs}: {error}");
+        }
+    }
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+
+    s.execute(
+        "charStyle.setAttrs",
+        &json!({"name": "Body", "attrs": {
+            "size": 1296.0, "leading": 5000.0,
+            "h_scale": 1.0, "v_scale": 10000.0,
+            "baseline_shift": -1296.0,
+            "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0
+        }}),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -776,7 +861,8 @@ fn para_style_redefined_to_the_defaults_updates_its_paragraphs() {
 }
 
 /// The same for character styles: Auto kerning and the Roman baseline alignment, which the
-/// run's JSON leaves out, are captured and reach the style's users.
+/// run's JSON leaves out, are captured and reach the style's users. A glyph choice belongs to
+/// one character, so it is not a reusable style attribute.
 #[test]
 fn char_style_redefined_to_the_defaults_updates_its_text() {
     use vectorcraft_doc::CharAlign;
@@ -794,9 +880,11 @@ fn char_style_redefined_to_the_defaults_updates_its_text() {
     s.execute("text.setFormat", &json!({"ids": [source], "kerning": "auto", "charAlign": "romanBaseline"})).unwrap();
     s.execute("charStyle.redefine", &json!({"name": "Body", "id": source})).unwrap();
     assert_eq!((kerning(&s), aligns(&s)), ([None, None, Some(60.0)], [CharAlign::RomanBaseline; 3]));
-    assert_eq!(defined(&s, 0), settable::<CharStyle>(), "Redefine captures every attribute");
+    let mut reusable = settable::<CharStyle>();
+    reusable.remove("glyphAlternate");
+    assert_eq!(defined(&s, 0), reusable, "Redefine captures every reusable attribute");
     s.execute("charStyle.new", &json!({"name": "Copy", "id": local})).unwrap();
-    assert_eq!(defined(&s, 1), settable::<CharStyle>(), "New captures every attribute");
+    assert_eq!(defined(&s, 1), reusable, "New captures every reusable attribute");
     s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"kerning": 10, "charAlign": "emBoxTop"}})).unwrap();
     assert_eq!((kerning(&s), aligns(&s)), ([Some(10.0), Some(10.0), Some(60.0)], [CharAlign::EmBoxTop; 3]));
     s.execute("charStyle.setAttrs", &json!({"name": "Body", "attrs": {"charAlign": "romanBaseline"}})).unwrap();
