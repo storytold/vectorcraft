@@ -105,6 +105,7 @@ impl VectorcraftApp {
             pending_url: None,
             control_rx: None,
             deferred_control: None,
+            synthetic_dropped_before: 0,
             pending_screenshots: vec![],
             queued_screenshots: vec![],
             screenshot_token: 0,

@@ -142,6 +142,62 @@ fn a_given_up_pointer_does_not_hold_back_later_requests() {
     assert!(up_reply.try_recv().is_err(), "the given-up pointer request did not run");
 }
 
+/// A `ui.pointer` release sent after a `ui.key` fails when the key's batch is discarded because a
+/// dialog opened before a UI pass took it, whether the release was waiting for the key
+/// (`waiting`) or still on the channel. A release made after the discard runs.
+fn a_release_after_a_discarded_key(waiting: bool) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("tool.select", json!({"tool": "arc"})).unwrap();
+    let ctx = egui::Context::default();
+    control(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]}));
+    let (key, _key_reply) = ControlRequest::new("ui.key", json!({"key": "c"}));
+    let (up, up_reply) = ControlRequest::new("ui.pointer", json!({"events": [{"kind": "up", "x": 200, "y": 180}]}));
+    tx.send(key).unwrap();
+    let mut up = Some(up);
+    if waiting {
+        tx.send(up.take().unwrap()).unwrap();
+    }
+    // The first frame queues the key; the second injects it.
+    for _ in 0..2 {
+        let mut raw = egui::RawInput::default();
+        app.raw_input_hook(&ctx, &mut raw);
+        app.drain_control(&ctx);
+        assert!(up_reply.try_recv().is_err(), "the release waits for the key");
+    }
+    assert!(app.synthetic_injected, "the key is in the frame's input");
+    if let Some(up) = up {
+        tx.send(up).unwrap();
+    }
+    // A dialog opens before a UI pass takes the key, so the next frame discards it.
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    let mut raw = egui::RawInput::default();
+    app.raw_input_hook(&ctx, &mut raw);
+    // A release made after the key was discarded, queued behind the first one, runs.
+    let (later, later_reply) = ControlRequest::new("ui.pointer", json!({"events": [{"kind": "up", "x": 200, "y": 180}]}));
+    tx.send(later).unwrap();
+    app.drain_control(&ctx);
+    let r = up_reply.try_recv().expect("the release was answered");
+    assert_eq!(r["ok"], false, "{r}");
+    let r = later_reply.try_recv().expect("the later release was answered");
+    assert_eq!(r["ok"], true, "{r}");
+    let document = app.session.active().unwrap();
+    let arc = *document.selection.objects.last().expect("the arc drawn on the later release");
+    let closed = document.doc.node(arc).unwrap().path_data().unwrap().subpaths[0].closed;
+    assert!(!closed, "the discarded C did not reach the Arc tool");
+}
+
+#[test]
+fn a_waiting_pointer_release_fails_when_the_key_before_it_is_discarded() {
+    a_release_after_a_discarded_key(true);
+}
+
+#[test]
+fn a_queued_pointer_release_fails_when_the_key_before_it_is_discarded() {
+    a_release_after_a_discarded_key(false);
+}
+
 #[test]
 fn a_drag_holds_its_modifiers_from_the_press_to_the_release() {
     let (mut app, _) = one_square();
