@@ -179,6 +179,61 @@ fn a_path_changed_otherwise_outlines_its_stroke_again() {
     }
 }
 
+/// Checks that each case, drawn once and then changed by `change` (given the point the view is
+/// centered on), is drawn with one new outline and the pixels of a new renderer.
+fn outlined_again(change: impl Fn(&mut Node, Point)) {
+    for (what, (mut d, id), at) in cases() {
+        let mut r = Renderer::new();
+        render(&mut r, &d, at);
+        assert_eq!(after(&mut r, &mut d, id, at, |n| change(n, at)), 1, "{what}");
+    }
+}
+
+/// Applies `change` to every stroke of `n`.
+fn restroke(n: &mut Node, change: impl Fn(&mut StrokeLayer)) {
+    for i in n.appearance.items.iter_mut() {
+        if let AppearanceItem::Stroke(s) = i {
+            change(s);
+        }
+    }
+}
+
+#[test]
+fn a_sheared_path_outlines_its_stroke_again() {
+    // Sheared about the view's center, stroke weights kept.
+    outlined_again(|n, at| n.transform(Affine::translate(at.to_vec2()) * Affine::skew(0.001, 0.0) * Affine::translate(-at.to_vec2()), false));
+}
+
+#[test]
+fn another_stroke_width_outlines_the_stroke_again() {
+    outlined_again(|n, _| restroke(n, |s| s.width += 1.0));
+}
+
+#[test]
+fn another_cap_outlines_the_stroke_again() {
+    outlined_again(|n, _| restroke(n, |s| s.cap = if s.cap == LineCap::Round { LineCap::Butt } else { LineCap::Round }));
+}
+
+#[test]
+fn another_dash_pattern_outlines_the_stroke_again() {
+    outlined_again(|n, _| {
+        restroke(n, |s| match &mut s.dash {
+            Some(d) => d.pattern[0] += 4.0,
+            None => s.dash = Some(Dash { pattern: vec![9.0, 5.0], offset: 0.0, align_corners: false }),
+        })
+    });
+}
+
+#[test]
+fn another_width_profile_outlines_the_stroke_again() {
+    outlined_again(|n, _| {
+        restroke(n, |s| match &mut s.profile {
+            Some(p) => p.points[1].1 = 0.5,
+            None => s.profile = Some(WidthProfile { points: vec![(0.0, 1.0, 1.0), (1.0, 0.25, 0.25)] }),
+        })
+    });
+}
+
 #[test]
 fn a_small_edit_far_from_the_origin_is_not_taken_for_a_move() {
     let far = Affine::translate((1e9, -1e9));
