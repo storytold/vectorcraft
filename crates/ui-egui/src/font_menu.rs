@@ -452,6 +452,13 @@ struct QueuedWheel {
     positions_after: Vec<egui::Pos2>,
 }
 
+#[derive(Clone)]
+struct ReplayWheel {
+    target: egui::LayerId,
+    position: egui::Pos2,
+    event: egui::Event,
+}
+
 #[derive(Clone, Default)]
 struct WheelFields {
     pass: u64,
@@ -462,7 +469,7 @@ struct WheelFields {
     fields: Vec<WheelField>,
     pending: HashMap<egui::Id, Vec<WheelInput>>,
     queued: Vec<QueuedWheel>,
-    replay: Vec<egui::Event>,
+    replay: Vec<ReplayWheel>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -505,8 +512,9 @@ impl egui::Plugin for WheelLayerSnapshot {
             let id = event.field.with("wheel");
             if !active {
                 ctx.data_mut(|d| d.remove::<f32>(id));
-                fields.replay.push(egui::Event::PointerMoved(event.position));
-                fields.replay.push(event.event);
+                if let Some(target) = ctx.layer_id_at(event.position) {
+                    fields.replay.push(ReplayWheel { target, position: event.position, event: event.event });
+                }
             } else {
                 let notches = ctx.data(|d| d.get_temp::<f32>(id)).unwrap_or(0.0) + event.amount;
                 let whole = notches.trunc();
@@ -521,7 +529,6 @@ impl egui::Plugin for WheelLayerSnapshot {
             }
         }
         if fields.replay.len() > replayed {
-            fields.replay.push(fields.pointer.map_or(egui::Event::PointerGone, egui::Event::PointerMoved));
             ctx.request_repaint();
         }
         ctx.data_mut(|d| d.insert_temp(key, fields));
@@ -796,7 +803,21 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
         true
     });
     if !fields.replay.is_empty() {
-        raw.events.splice(0..0, std::mem::take(&mut fields.replay));
+        let mut replay = Vec::new();
+        for wheel in std::mem::take(&mut fields.replay) {
+            #[cfg(not(target_arch = "wasm32"))]
+            let target_still_visible = native_layers.as_ref().is_some_and(|layers| (layers.0)(wheel.position) == Some(wheel.target));
+            #[cfg(target_arch = "wasm32")]
+            let target_still_visible = false;
+            if target_still_visible {
+                replay.push(egui::Event::PointerMoved(wheel.position));
+                replay.push(wheel.event);
+            }
+        }
+        if !replay.is_empty() {
+            replay.push(pointer.map_or(egui::Event::PointerGone, egui::Event::PointerMoved));
+            raw.events.splice(0..0, replay);
+        }
     }
     fields.pointer = pointer;
     ctx.data_mut(|d| d.insert_temp(key, fields));
