@@ -100,7 +100,11 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     let shape_tool = vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id());
     // A shape tool drawing a shape shows none of this; adjusting a widget, it shows the widgets.
     let drawing = shape_tool && app.session.tool_busy() && !app.session.tool_transforming();
-    let show_box = (app.session.tool_id() == "selection" || (shape_tool && !app.session.tool_busy()))
+    // Cmd held lends the Selection tool to a press (Direct Selection's included, #3901): its box
+    // shows while the key is down, where its handles take that press.
+    let held = super::drag::mods(p.ctx().input(|i| i.modifiers), false);
+    let lends_selection = !app.session.tool_busy() && app.session.lent_tool_id(&held) == Some("selection");
+    let show_box = (app.session.tool_id() == "selection" || lends_selection || (shape_tool && !app.session.tool_busy()))
         && (!app.session.tool_transforming() || moved.is_some())
         && app.ui.view.bounding_box
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
