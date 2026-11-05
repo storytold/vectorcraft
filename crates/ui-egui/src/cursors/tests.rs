@@ -472,9 +472,10 @@ fn wayland_windows_paint_the_glyphs() {
 
 #[test]
 fn macos_windows_paint_the_glyphs_only_with_the_focus() {
-    assert!(paint_glyphs(true, true), "macOS with the focus");
-    assert!(!paint_glyphs(true, false), "macOS without the focus: the system pointer shows (#2020)");
-    assert!(paint_glyphs(false, true) && paint_glyphs(false, false), "Wayland, the web: painted with the focus or without");
+    assert!(paint_glyphs(true, true, false), "macOS with the focus");
+    assert!(!paint_glyphs(true, false, false), "macOS without the focus: the system pointer shows (#2020)");
+    assert!(paint_glyphs(false, true, false) && paint_glyphs(false, false, false), "Wayland, the web: painted with the focus or without");
+    assert!(!paint_glyphs(false, true, true), "without a cursor theme, use the system pointer alone");
 }
 
 #[test]
