@@ -2793,4 +2793,10 @@ fn glyph_alternates_query_reports_the_fallback_glyph_that_is_drawn() {
     let query = s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap();
     assert_eq!(query["chosen"], json!(glyph.gid), "the query reports the visible fallback glyph");
     assert!(query["alternates"].as_array().unwrap().is_empty());
+
+    let area = json!({"x": 0, "y": 300, "text": ch.to_string(), "font": alternates_family(true), "area": {"width": 200, "height": 2}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let query = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(glyph.gid), "an overflowing character reports the fallback glyph it is drawn with");
 }
