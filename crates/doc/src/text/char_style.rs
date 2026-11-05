@@ -143,10 +143,35 @@ pub struct CharStyle {
     pub no_break: bool,
     /// Language (Character panel): the BCP 47 tag of one of [`crate::setup::LANGUAGES`] these
     /// characters are shaped in, so that the font uses that language's forms (OpenType `locl`).
-    /// `None`: the default language, English: USA, shaped without a language. New type takes the
-    /// document's language (Document Setup). Saved only when set.
+    /// `None`: the default language, English: USA, shaped without a language, which is what text
+    /// saved without one reads as. A tag the list doesn't have, from a file, is kept and has no
+    /// hyphenation. New type takes the document's language (Document Setup), else the default
+    /// language of Preferences › Hyphenation. Saved only when set. Each run hyphenates in its own
+    /// language (`vectorcraft_text::hyphen`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+    /// Another glyph of the font for the run's first character (Glyphs panel › Show › Alternates
+    /// for Current Selection). The text keeps the character; layout draws the chosen glyph while
+    /// the run starts with that character and is set in the face the choice names, and the
+    /// default glyph otherwise. Saved only when set.
+    #[serde(default, rename = "glyphAlternate", skip_serializing_if = "Option::is_none")]
+    pub glyph_alternate: Option<GlyphChoice>,
+}
+
+/// A glyph chosen for one character ([`CharStyle::glyph_alternate`]): the glyph id and the face it
+/// belongs to, named by its PostScript name and version string, so that a glyph id is never used
+/// in another font or another version of the font.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct GlyphChoice {
+    /// The character the glyph is drawn for.
+    pub ch: char,
+    /// The glyph id in the face.
+    pub gid: u32,
+    /// The face's PostScript name (`SourceSans3-Regular`).
+    pub font: String,
+    /// The face's version string (`Version 3.052`); empty when it has none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub version: String,
 }
 
 /// What a character's font size measures ([`CharStyle::font_height_reference`]): the em square
@@ -420,6 +445,7 @@ impl Default for CharStyle {
             font_height_reference: FontHeightReference::EmBox,
             no_break: false,
             language: None,
+            glyph_alternate: None,
         }
     }
 }

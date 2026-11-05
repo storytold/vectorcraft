@@ -49,13 +49,16 @@ pub(crate) fn subpath(s: &mut String, xf: Affine, sp: &SubPath) {
     }
 }
 
-/// A guide (§6): for each subpath, `(N) *`, its points, `(N) *`; with `closing`, a closed
-/// subpath ends `(n) *` (the painting operator that closes it first).
-pub(crate) fn guide(s: &mut String, xf: Affine, path: &PathData, closing: bool) {
+/// A guide (§6): for each subpath, `(N) *`, its points, `(N) *`. In `editing` data (see
+/// [`crate::ai_editing`]) a subpath is its points and `(N) *` alone, `(n) *` when closed (the
+/// painting operator that closes it first).
+pub(crate) fn guide(s: &mut String, xf: Affine, path: &PathData, editing: bool) {
     for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
-        s.push_str("(N) *\n");
+        if !editing {
+            s.push_str("(N) *\n");
+        }
         subpath(s, xf, sp);
-        s.push_str(if closing && sp.closed { "(n) *\n" } else { "(N) *\n" });
+        s.push_str(if editing && sp.closed { "(n) *\n" } else { "(N) *\n" });
     }
 }
 

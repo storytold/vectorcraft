@@ -1,8 +1,16 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (OpenType panel offers font-defined Stylistic Sets; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Layers panel: a layer whose Layer Options › Print is off shows its name italic, #5739; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
+
+Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
+
+**PR #3273 revision — 2026-11-04:** Thin curved stroke coverage ported to the current raster-only cache, cropped-long-stroke and effect paths with guarded flattening; vector export geometry unchanged. Scores and estimates unchanged.
+
+Group Selection keeps an already selected component selected during a drag; a completed click still adds its next enclosing group. The current Direct Selection click/release machinery is shared, preserving compound-member picks, Shift deselection, isolation and masked-art dragging. Outline Stroke continues to preserve all original fills, including open contours; the change does not remove fills. Regressions: `group_selection_distinguishes_selected_leaf_drags_from_clicks` and `outline_fill_and_stroke_move_independently_with_group_selection` cover tool events, independent component movement and Undo/Redo. Scores and estimates unchanged.
+
+**PR #3272 revision — 2026-11-04:** Group Selection component drags defer ancestor selection until a completed click, using current Direct Selection release handling; original Outline Stroke fills and newer selection behavior retained. Scores and estimates unchanged.
 
 Creating a gradient from solid or empty paint uses the document's color model for its default stops, including drawing its vector with the Gradient tool. Explicit `keepModel: true` retains RGB defaults, and existing gradients keep their own colors. Scores and estimates are unchanged.
 
@@ -28,6 +36,13 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Selection Tools add-on: Select Linked, Embedded, Missing and Modified select the images and placed documents with that link status (Object › Plug-ins › Selection Tools and the Links panel menu; Shift adds), and Select by Link Status… lists them by name, status and format to pick from, optionally zooming to them; what is hidden, locked, on a template layer or outside the isolated group is left out and the status bar says how many (#5526, a VectorCraft addition); scores and estimates unchanged (estimated). |
+| 2026-11-05 | minor | Layers panel: a layer whose Layer Options › Print is off shows its name italic, as the reference application shows non-printing layers, and keeps it while the row is dragged (#5739); scores and estimates unchanged. |
+| 2026-11-04 | minor | M7: Find Font's Replace With Font lists family and style rows with a search, and the list and the document's font list scroll on their own (#4972); scores and estimates unchanged. |
+| 2026-11-04 | minor | Selection Tools add-on: Select by Artboards selects the objects overlapping, fully inside or fully outside several chosen artboards, from a dialog that lists, searches and multi-selects the artboards and fits one in the window on double-click (#5525, #5548, #5549, a VectorCraft addition); scores and estimates unchanged. |
+| 2026-11-04 | minor | M4: raster/PSD exports default to document resolution; CLI run/convert expose --ppi, matching the engine and MCP precedence. Scores and hours unchanged. |
+| 2026-11-05 | minor | Panels: a floating panel window hides under a modal dialog and drops out of the top level under an open menu, so neither the Colour Picker or Recolor Artwork nor the menu bar is covered, and it comes back at its palette level after (#5238); scores and estimates unchanged. |
+| 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen preset; Recent and Saved cards keep the units their document or preset was made in, and the built-in tabs still follow the chosen units (#2078). Scores and estimates unchanged. |
 | 2026-11-03 | minor | M1: Enclosing Lasso provides whole-object enclosure selection as an add-on with no default shortcut or Basic toolbar slot; estimates unchanged. |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-10-30 | minor | M4: G9: `.ai`/EPS editing data: a blend takes the transparency (opacity, blend mode, knockout) in its state block after its record, so its steps knock each other out as the page draws them; a user's file comes in 0.6% from its page instead of 1.3%. Scores and estimates unchanged. |
@@ -158,6 +173,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen preset; Recent and Saved cards keep their own units; scores and estimates unchanged. |
 | 2026-11-03 | minor | M7: the OpenType panel offers the selected font's available Stylistic Sets with custom or numbered names; estimates unchanged. |
 | 2026-11-03 | minor | M1: Enclosing Lasso adds freehand whole-object selection under Object › Plug-ins; estimates unchanged. |
 | 2026-11-02 | minor | Font-family fields in Character, Properties and Control step selected text with the wheel (#5253), with one undo step per notch; scores and estimates unchanged. |

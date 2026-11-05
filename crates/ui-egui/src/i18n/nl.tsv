@@ -1495,6 +1495,11 @@ digits	Malayalam	Malayalam
 	Save Transparency Flattener Preset…	Voorinstelling voor transparantieafvlakking opslaan…
 	Basic Latin	Basic Latin
 	Currency & Symbols	Valuta & symbolen
+	Alternates for Current Selection	Alternatieven voor huidige selectie
+	Select a character with the Type tool to see its alternates.	Selecteer een teken met het Type-gereedschap om de alternatieven te zien.
+	The selected character's font is not available.	Het lettertype van het geselecteerde teken is niet beschikbaar.
+	No alternates for the selected character.	Geen alternatieven voor het geselecteerde teken.
+	Double-click to replace	Dubbelklik om te vervangen
 	Double-click to insert	Dubbelklik om in te voegen
 	Entire Font	Volledig lettertype
 	glyph {id}	glyph {id}
@@ -2323,6 +2328,12 @@ digits	Malayalam	Malayalam
 	Save the document first?	Wil je het document eerst opslaan?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} bestand in {folder} {note}. De pakketmap openen?|{n} bestanden in {folder} {note}. De pakketmap openen?
 @plural	{n} linked file not found|{n} linked files not found	{n} gekoppeld bestand niet gevonden|{n} gekoppelde bestanden niet gevonden
+@msgplural	{n} linked file not found|{n} linked files not found	{n} gekoppeld bestand niet gevonden|{n} gekoppelde bestanden niet gevonden
+@msg	fonts not copied: {fonts}	niet gekopieerde lettertypen: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} gekoppeld bestand niet gevonden)|({n} gekoppelde bestanden niet gevonden)
+@msg	(fonts not copied: {fonts})	(niet gekopieerde lettertypen: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	niet gekopieerde lettertypen: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Ingebouwde voorinstellingen zijn alleen-lezen: Nieuw… start een bewerkbare kopie.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} op het tekenbord staat voor {real} {unit} in de scène.
@@ -4612,6 +4623,9 @@ imageTrace	Outline	Contour
 @msg	an image VectorCraft can't read was left out	een afbeelding die VectorCraft niet kan lezen, is weggelaten
 @msg	an image whose data is cut short was left out	een afbeelding waarvan de gegevens zijn afgekapt, is weggelaten
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gekoppelde afbeeldingen tonen het in het bestand opgeslagen voorbeeld met lage resolutie totdat hun bestanden zijn gevonden: koppel ze opnieuw in het paneel Koppelingen
+@msg	linked type areas past VectorCraft's limits were left out	gekoppelde tekstvlakken buiten de limieten van VectorCraft zijn weggelaten
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst die als masker wordt gebruikt in gekoppelde vlakken, tekstomloop of een samengesteld pad knipt niet uit
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	gekoppelde afbeeldingen zonder voorbeeld in het bestand tonen een tijdelijke aanduiding totdat hun bestanden zijn gevonden: koppel ze opnieuw in het paneel Koppelingen
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	vlaktekst in kaders die te kort zijn voor één regel van het lettertype waarin de tekst wordt weergegeven, heeft hogere kaders gekregen ({_1}): anders zou de tekst niet zichtbaar zijn
 @msg	its editing data doesn't say where its art is	zijn bewerkingsgegevens zeggen niet waar de illustratie zich bevindt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	dit bestand is opgeslagen zonder PDF-compatibiliteit en de bewerkingsgegevens kunnen niet worden gelezen ({why})
@@ -5999,6 +6013,9 @@ anchor	Points:	Punten:
 	Find Nearest Swatch…	Dichtstbijzijnde staal zoeken…
 	Find Nearest Swatch	Dichtstbijzijnde staal zoeken
 	Apply Nearest Swatch	Dichtstbijzijnde staal toepassen
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Vulling op streek toepassen
+	Apply Stroke to Fill	Streek op vulling toepassen
 	Select objects to find the swatches nearest their colors.	Selecteer objecten om de stalen te vinden die het dichtst bij hun kleuren liggen.
 @msg	select objects or give `color`	selecteer objecten of geef `color` op
 @msg	`color` is not a colour	`color` is geen kleur
@@ -6235,4 +6252,54 @@ breakText	Glyphs	Glyphs
 	Bow	Boog
 	Spike	Piek
 	Skip Spaces	Spaties overslaan
+	Release Type on a Path…	Tekst op pad vrijgeven…
+	Release Type on a Path	Tekst op pad vrijgeven
+	Text and Path	Tekst en pad
+	Path Only	Alleen pad
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Het illustratiewerk is te groot om als afbeelding te kopiëren: andere apps krijgen er geen PNG van
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Selecteren op tekengebieden
+	Select by Artboards…	Selecteren op tekengebieden…
+	Selection Tools	Selectiegereedschappen
+	Search artboards	Tekengebieden zoeken
+	Fully Inside	Volledig binnen
+	Fully Outside	Volledig buiten
+	No artboards match.	Geen tekengebied komt overeen.
+	Chosen: {n} of {total}	Gekozen: {n} van {total}
+
+# Contour add-on
+	Contour	Omtrek
+	Contour Tool	Omtrek-gereedschap
+	Sharp	Scherp
+	Bake	Uitbreiden
+	Turn the Contour into plain paths	Zet de omtrek om in gewone paden
+	Set Corners…	Hoeken instellen…
+	All Anchors	Alle ankerpunten
+	Odd-Numbered Anchors	Oneven ankerpunten
+	Even-Numbered Anchors	Even ankerpunten
+	Minimum angle	Minimale hoek
+	Maximum angle	Maximale hoek
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Gekoppelde selecteren
+	Select Embedded	Ingesloten selecteren
+	Select Missing	Ontbrekende selecteren
+	Select Modified	Gewijzigde selecteren
+	Select by Link Status	Selecteren op koppelingsstatus
+	Select by Link Status…	Selecteren op koppelingsstatus…
+	Search images	Afbeeldingen zoeken
+	No images match.	Geen afbeelding komt overeen.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} gekoppelde afbeelding geselecteerd|{n} gekoppelde afbeeldingen geselecteerd
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} ingesloten afbeelding geselecteerd|{n} ingesloten afbeeldingen geselecteerd
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} ontbrekende afbeelding geselecteerd|{n} ontbrekende afbeeldingen geselecteerd
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} gewijzigde afbeelding geselecteerd|{n} gewijzigde afbeeldingen geselecteerd
+@msgplural	Selected {n} image|Selected {n} images	{n} afbeelding geselecteerd|{n} afbeeldingen geselecteerd
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; nog {n} is verborgen of vergrendeld|{selected}; nog {n} zijn verborgen of vergrendeld
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; nog {n} staat op een sjabloonlaag|{selected}; nog {n} staan op sjabloonlagen
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; nog {n} staat buiten de geïsoleerde groep|{selected}; nog {n} staan buiten de geïsoleerde groep
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; nog {n} kan nu niet worden geselecteerd|{selected}; nog {n} kunnen nu niet worden geselecteerd
+
+# Compound Shapes add-on
+	Compound Shapes	Samengestelde vormen
+	Shape Mode Buttons Make Compound Shapes	Vormmodus-knoppen maken samengestelde vormen

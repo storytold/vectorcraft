@@ -213,7 +213,8 @@ fn rgb_cmyk_converts_a_shared_swatch_once() {
     assert_eq!(stroke, Paint::Solid { color: new.tinted(0.5), swatch: Some("Shared".into()), tint: 0.5 });
 }
 
-/// A spot color stays a spot color: its Lab definition, its link and its own plate are kept.
+/// A spot color defined in Lab stays a spot color: its Lab definition, its link and its own
+/// plate are kept.
 #[test]
 fn rgb_cmyk_keeps_a_spot_color() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -226,6 +227,34 @@ fn rgb_cmyk_keeps_a_spot_color() {
     assert_eq!(fill_of(&s, spot), old_fill);
     let plates = s.execute("color.plates", &json!({})).unwrap();
     assert!(plates["plates"].as_array().unwrap().iter().any(|p| p["name"] == "Spot Lab"), "{plates}");
+}
+
+/// A spot color defined in RGB stays a spot color with its own plate, and its definition
+/// converts like any other swatch: the fill that uses it and a 40% tint stroke both take the
+/// converted definition.
+#[test]
+fn rgb_cmyk_converts_an_rgb_spot_definition() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Spot RGB", "color": Color::rgb(0.812_345, 0.234_567, 0.456_789), "global": true})).unwrap();
+    s.execute("swatch.setSpot", &json!({"name": "Spot RGB"})).unwrap();
+    let filled = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#000000"));
+    s.execute("paint.setFill", &json!({"ids": [filled.0], "swatch": "Spot RGB"})).unwrap();
+    let stroked = rect(&mut s, 20.0, 0.0, 10.0, 10.0, json!("#000000"));
+    s.execute("paint.setStroke", &json!({"ids": [stroked.0], "swatch": "Spot RGB", "tint": 40})).unwrap();
+    let swatch = |s: &Session| s.doc().unwrap().doc.swatch("Spot RGB").unwrap().clone();
+    let old = swatch(&s).paint.color().unwrap();
+    s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    let sw = swatch(&s);
+    assert!(sw.spot);
+    let new = sw.paint.color().unwrap();
+    assert!(matches!(new, Color::Cmyk { .. }), "{new:?}");
+    assert_eq!(new, to_cmyk(old));
+    assert_eq!(fill_of(&s, filled), Paint::Solid { color: new, swatch: Some("Spot RGB".into()), tint: 1.0 });
+    let stroke = s.doc().unwrap().doc.node(stroked).unwrap().appearance.stroke_paint();
+    assert_eq!(stroke, Paint::Solid { color: new.tinted(0.4), swatch: Some("Spot RGB".into()), tint: 0.4 });
+    let plates = s.execute("color.plates", &json!({})).unwrap();
+    assert!(plates["plates"].as_array().unwrap().iter().any(|p| p["name"] == "Spot RGB" && p["spot"] == true), "{plates}");
 }
 
 #[test]

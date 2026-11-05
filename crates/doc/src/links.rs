@@ -46,10 +46,26 @@ impl LinkInfo {
         Self { path: path.into(), ..Self::default() }
     }
 
-    /// The file name: the path's last component, whichever system's separators it uses.
+    /// The file name: the path's last component, whichever system's separators it uses
+    /// ([`path_separators`]).
     pub fn name(&self) -> &str {
-        self.path.rsplit(['/', '\\']).next().unwrap_or(&self.path)
+        self.path.rsplit(path_separators(&self.path)).next().unwrap_or(&self.path)
     }
+
+    /// The folder the file is in: the path without its name and the separators before it.
+    pub fn folder(&self) -> &str {
+        let folder = self.path.get(..self.path.len().saturating_sub(self.name().len())).unwrap_or_default();
+        folder.trim_end_matches(path_separators(&self.path))
+    }
+}
+
+/// The characters that separate the folders of `path`. A path with a colon and no `/` or `\` is a
+/// classic Mac OS path (`Disk:Folder:file.tif`, as older documents store links), whose folders are
+/// separated by colons. Any other path is separated by `/` and `\`: its file name may hold a colon
+/// (`/Users/a/x:y.png`) and never holds a `/` or `\`.
+pub fn path_separators(path: &str) -> &'static [char] {
+    const SLASHES: &[char] = &['/', '\\'];
+    if path.contains(':') && !path.contains(SLASHES) { &[':'] } else { SLASHES }
 }
 
 impl From<&str> for LinkInfo {
@@ -164,6 +180,24 @@ impl ImageBlob {
     pub fn is_proxy(&self) -> bool {
         self.proxy.as_ref().is_some_and(|p| Arc::ptr_eq(p, &self.bytes))
     }
+}
+
+/// The side of [`missing_placeholder`]'s image, in pixels.
+pub const MISSING_SIDE: u32 = 64;
+
+/// What a linked image shows when an importer has no pixels for it (its file is missing or isn't
+/// in the data): a light tile, crossed out, [`MISSING_SIDE`] pixels a side, as a PNG. `None` when
+/// it can't be encoded.
+pub fn missing_placeholder() -> Option<Vec<u8>> {
+    let last = MISSING_SIDE - 1;
+    let img = image::RgbaImage::from_fn(MISSING_SIDE, MISSING_SIDE, |x, y| {
+        let edge = x == 0 || y == 0 || x == last || y == last;
+        let cross = x.abs_diff(y) <= 1 || (x + y).abs_diff(last) <= 1;
+        image::Rgba(if edge || cross { [200, 60, 60, 255] } else { [236, 236, 236, 255] })
+    });
+    let mut png = Vec::new();
+    img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+    Some(png)
 }
 
 /// `bytes` decoded and shrunk to fit [`PROXY_SIZE`] as a PNG; `None` when small enough already or
@@ -446,6 +480,12 @@ mod tests {
     }
 
     #[test]
+    fn the_placeholder_is_a_png() {
+        let png = missing_placeholder().unwrap();
+        assert_eq!(image::load_from_memory(&png).unwrap().width(), MISSING_SIDE);
+    }
+
+    #[test]
     fn a_path_string_from_older_files_reads_as_a_link() {
         let old: ImageObject = serde_json::from_str(r#"{"key":"k","width":2,"height":1,"xf":[1,0,0,1,0,0],"link":"C:\\art\\photo.png"}"#).unwrap();
         let link = old.link.unwrap();
@@ -458,6 +498,35 @@ mod tests {
         // Written as an object, with only what is known.
         let v = serde_json::to_value(&new).unwrap();
         assert_eq!(v["link"], serde_json::json!({"path": "/a/b.png", "size": 9, "page": 2}));
+    }
+
+    /// A classic Mac OS path is named by its last colon-separated component, and its folder is
+    /// what comes before; other paths keep their `/` and `\` separators, and a name never holds
+    /// one.
+    #[test]
+    fn a_classic_mac_path_is_named_by_its_last_component() {
+        let parts = |path: &str| {
+            let l = LinkInfo::new(path);
+            (l.name().to_string(), l.folder().to_string())
+        };
+        assert_eq!(parts("Macintosh HD:Images:photo.tif"), ("photo.tif".into(), "Macintosh HD:Images".into()));
+        assert_eq!(parts("Disk:photo.tif"), ("photo.tif".into(), "Disk".into()));
+        assert_eq!(parts("Disk:Art/2024:a\\b.tif"), ("b.tif".into(), "Disk:Art/2024:a".into()));
+        assert_eq!(parts("Disk:Images:../other.png"), ("other.png".into(), "Disk:Images:..".into()), "a name reaches no other folder");
+        assert_eq!(parts("C:\\art\\photo.png"), ("photo.png".into(), "C:\\art".into()));
+        assert_eq!(parts("c:/art/photo.png"), ("photo.png".into(), "c:/art".into()));
+        assert_eq!(parts("/Users/a/x:y.png"), ("x:y.png".into(), "/Users/a".into()), "a POSIX name may hold a colon");
+        assert_eq!(parts("./art/x:y.png"), ("x:y.png".into(), "./art".into()));
+        assert_eq!(parts("..\\art\\x:y.png"), ("x:y.png".into(), "..\\art".into()));
+        assert_eq!(parts("\\\\?\\C:\\art\\photo.png"), ("photo.png".into(), "\\\\?\\C:\\art".into()));
+        assert_eq!(parts("file:///art/photo.png"), ("photo.png".into(), "file:///art".into()));
+        assert_eq!(parts("file:/art/photo.png"), ("photo.png".into(), "file:/art".into()));
+        assert_eq!(parts("assets/icon:dark.png"), ("icon:dark.png".into(), "assets".into()), "a relative path with slashes");
+        assert_eq!(parts(":Images:photo.tif"), ("photo.tif".into(), ":Images".into()), "a classic path relative to its folder");
+        assert_eq!(parts("/Users/a//photo.png").1, "/Users/a", "repeated separators");
+        assert_eq!(parts("photo.png"), ("photo.png".into(), String::new()));
+        assert_eq!(parts("C:photo.png"), ("photo.png".into(), "C".into()), "a drive-relative path has the same shape");
+        assert_eq!(LinkInfo::new("Macintosh HD:Images:photo.tif").path, "Macintosh HD:Images:photo.tif", "the stored path is kept");
     }
 
     #[test]

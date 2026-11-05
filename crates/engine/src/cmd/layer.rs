@@ -945,9 +945,17 @@ pub(crate) fn empty_artboards(d: &Document) -> Vec<usize> {
     empty
 }
 
+/// Is [`empty_artboards`] of `d` not empty? A document with one artboard keeps it, so there is
+/// nothing to delete; with two or more, any unlocked artboard without art settles it (when every
+/// artboard is empty, all but artboard 1 go). [`Document::any_artboard_without_art`] finds an
+/// artboard away from every path without measuring along the paths.
+fn any_empty_artboards(d: &Document) -> bool {
+    d.artboards.len() > 1 && d.any_artboard_without_art(d.artboards.iter().filter(|a| !a.locked).map(|a| a.rect))
+}
+
 fn has_empty_artboards(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
-    if empty_artboards(&st.doc).is_empty() { Err("no empty artboards to delete".into()) } else { Ok(()) }
+    if any_empty_artboards(&st.doc) { Ok(()) } else { Err("no empty artboards to delete".into()) }
 }
 
 fn artboard_delete_empty(s: &mut Session, _: &Value) -> Result<Value> {
@@ -1163,4 +1171,152 @@ fn artboard_fit_sel(s: &mut Session, p: &Value) -> Result<Value> {
     let i = if p.get("index").is_none() { 0 } else { super::panelcmds::artboard_index(&st.doc, p, "artboard.fitToSelection")? };
     let b = st.doc.bounds_of(&st.selection.objects, true).ok_or_else(|| EngineError::Other("no selection bounds".into()))?;
     s.execute("artboard.setProps", &json!({"index": i, "x": b.x0, "y": b.y0, "width": b.width(), "height": b.height()}))
+}
+
+#[cfg(test)]
+mod tests {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, AppearanceItem, LineCap, LineJoin, StrokeAlign, StrokeLayer, SymbolBoxes};
+
+    use super::*;
+
+    /// Does art lie on `rect`, measuring every object's visual bounds: the rule of
+    /// [`Document::artboard_has_art`] with no quick box in front of it.
+    fn measured_has_art(d: &Document, rect: Rect) -> bool {
+        let rect = rect.inflate(1e-6, 1e-6);
+        fn meets(b: Option<Rect>, r: Rect) -> bool {
+            b.is_some_and(|b| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1)
+        }
+        fn has(c: &Node, s: &SymbolBoxes, rect: Rect) -> bool {
+            match &c.kind {
+                NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
+                    let Some((clip, rest)) = children.split_first() else { return false };
+                    let paint = clip.clip_paint();
+                    if (paint.fill.is_some() || paint.stroke.is_some()) && meets(clip.visual_bounds_with(s), rect) {
+                        return true;
+                    }
+                    let Some(b) = c.visual_bounds_with(s).filter(|b| meets(Some(*b), rect)) else { return false };
+                    let inside = Rect::new(b.x0.max(rect.x0), b.y0.max(rect.y0), b.x1.min(rect.x1), b.y1.min(rect.y1));
+                    rest.iter().any(|m| has(m, s, inside))
+                }
+                NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => children.iter().any(|m| has(m, s, rect)),
+                NodeKind::Path { guide: true, .. } => false,
+                _ => meets(c.visual_bounds_with(s), rect),
+            }
+        }
+        let symbols = d.symbol_boxes();
+        d.layers.iter().any(|l| has(l, &symbols, rect))
+    }
+
+    /// Would Delete Empty Artboards delete something, by [`measured_has_art`] of each artboard:
+    /// the unlocked artboards without art, less artboard 1 when that is every artboard.
+    fn measured_any_empty(d: &Document) -> bool {
+        let mut empty: Vec<usize> =
+            d.artboards.iter().enumerate().filter(|(_, a)| !a.locked && !measured_has_art(d, a.rect)).map(|(i, _)| i).collect();
+        if empty.len() == d.artboards.len() {
+            empty.retain(|&i| i != 0);
+        }
+        !empty.is_empty()
+    }
+
+    /// On documents made from a fixed seed (one to five artboards placed anywhere, overlapping
+    /// some of the time, some locked; rectangles, long curved paths and symbol instances, some
+    /// with wide strokes reaching past their shape, some grouped or clipped), the menu's check
+    /// [`any_empty_artboards`] gives the same answer as `!empty_artboards(d).is_empty()` and as
+    /// measuring every object against every artboard, and both answers come up.
+    #[test]
+    fn the_empty_artboard_check_matches_measuring_every_artboard() {
+        let mut seed: u64 = 0x0a2d_5eed_e4b7;
+        let mut next = |n: u64| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 33) % n
+        };
+        let (mut enabled, mut disabled_with_art) = (0, 0);
+        for _ in 0..120 {
+            let mut s = Session::new();
+            s.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+            for _ in 0..next(5) {
+                let (x, y) = (next(1400) as f64 - 100.0, next(800) as f64 - 100.0);
+                s.execute("artboard.new", &json!({"x": x, "y": y, "width": 20 + next(300), "height": 20 + next(200)})).unwrap();
+            }
+            let artboards = s.doc().unwrap().doc.artboards.len();
+            for i in 0..artboards {
+                if next(5) == 0 {
+                    s.execute("artboard.setProps", &json!({"index": i, "locked": true})).unwrap();
+                }
+            }
+            let mut symbol = false;
+            let mut ids = vec![];
+            for _ in 0..next(6) {
+                let id = match next(4) {
+                    0 => {
+                        let (segments, span) = (20 + next(80), 10 + next(700));
+                        let (x, y) = (next(1400) as i64 - 100, next(800) as i64 - 100);
+                        let mut pt = || format!("{} {}", x + next(span) as i64, y + next(span) as i64);
+                        let mut d = format!("M {}", pt());
+                        for _ in 0..segments {
+                            d += &format!(" C {} {} {}", pt(), pt(), pt());
+                        }
+                        s.execute("path.create", &json!({"d": d})).unwrap()["id"].as_u64().unwrap()
+                    }
+                    1 => {
+                        let (x, y) = (next(1400) as f64 - 100.0, next(800) as f64 - 100.0);
+                        if !symbol {
+                            let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 5 + next(60), "height": 5 + next(60)})).unwrap();
+                            s.execute("symbol.new", &json!({"name": "Mark", "ids": [r["id"]]})).unwrap();
+                            s.execute("object.delete", &json!({"ids": [r["id"]]})).ok();
+                            symbol = true;
+                        }
+                        s.execute("symbol.place", &json!({"name": "Mark", "x": x, "y": y})).unwrap()["id"].as_u64().unwrap()
+                    }
+                    _ => {
+                        let (x, y) = (next(1400) as f64 - 100.0, next(800) as f64 - 100.0);
+                        let r = json!({"x": x, "y": y, "width": 1 + next(150), "height": 1 + next(150)});
+                        s.execute("shape.rectangle", &r).unwrap()["id"].as_u64().unwrap()
+                    }
+                };
+                if next(2) == 0 {
+                    let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 1.0 + next(120) as f64);
+                    st.join = [LineJoin::Miter, LineJoin::Round, LineJoin::Bevel][next(3) as usize];
+                    st.cap = [LineCap::Butt, LineCap::Round, LineCap::Square][next(3) as usize];
+                    st.align = [StrokeAlign::Center, StrokeAlign::Inside, StrokeAlign::Outside][next(3) as usize];
+                    st.miter_limit = 1.0 + next(20) as f64;
+                    let look = Appearance { items: vec![AppearanceItem::Stroke(st)], ..Appearance::default() };
+                    s.edit("Strokes", |d, _| {
+                        d.node_mut(NodeId(id)).unwrap().appearance = look.into();
+                        Ok(())
+                    })
+                    .unwrap();
+                }
+                ids.push(id);
+            }
+            if ids.len() > 1 {
+                match next(3) {
+                    0 => {
+                        s.execute("select.set", &json!({"ids": ids})).unwrap();
+                        s.execute("object.group", &json!({})).unwrap();
+                    }
+                    1 => {
+                        let (x, y) = (next(1400) as f64 - 100.0, next(800) as f64 - 100.0);
+                        let clip = json!({"x": x, "y": y, "width": 1 + next(400), "height": 1 + next(300)});
+                        let clip = s.execute("shape.rectangle", &clip).unwrap()["id"].as_u64().unwrap();
+                        let members: Vec<u64> = ids.iter().copied().chain([clip]).collect();
+                        s.execute("select.set", &json!({"ids": members})).unwrap();
+                        s.execute("object.clippingMask.make", &json!({})).unwrap();
+                    }
+                    _ => {}
+                }
+            }
+            let d = &s.doc().unwrap().doc;
+            let measured = measured_any_empty(d);
+            let at = || d.artboards.iter().map(|a| (a.rect, a.locked)).collect::<Vec<_>>();
+            assert_eq!(any_empty_artboards(d), measured, "{:?}", at());
+            assert_eq!(!empty_artboards(d).is_empty(), measured, "{:?}", at());
+            enabled += usize::from(measured);
+            let several = d.artboards.len() > 1 && !ids.is_empty();
+            disabled_with_art += usize::from(several && !measured);
+        }
+        assert!(enabled > 15 && enabled < 105, "both answers come up: {enabled} of 120 enabled");
+        assert!(disabled_with_art > 3, "documents with several artboards and art come up disabled: {disabled_with_art}");
+    }
 }

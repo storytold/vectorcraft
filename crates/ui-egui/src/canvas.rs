@@ -17,6 +17,7 @@ use crate::{CacheKey, VectorcraftApp, now_ms, widgets};
 
 mod artboards;
 mod context;
+mod contour_bar;
 mod cursor;
 mod drag;
 mod fill;
@@ -361,6 +362,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         task_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {
+        contour_bar::contour_bar(app, ui, &xf);
+    }
+    if app.ui.screen_mode < 3 {
         crate::free_transform::show(app, ui, xf.rect);
     }
     artboard_name_editor(app, ui, &xf);
@@ -401,6 +405,11 @@ fn canvas_cursor(app: &mut VectorcraftApp, ui: &Ui, view_info: vectorcraft_engin
     let space = ui.input(|i| i.key_down(egui::Key::Space));
     let drag = ui.data(|d| d.get_temp::<Drag>(drag_id()));
     let panning = matches!(drag, Some(Drag::Pan { .. }));
+    let tool_holds = drag.is_some_and(drag::tool_holds);
+    // A tool that holds the press (Pencil, a brush, a shape) keeps Space out of the way: the drag
+    // began before Space went down, so Space pans nothing, and the hand would promise a pan the
+    // drag does not do.
+    let space = space && !tool_holds;
     // A zoom drag keeps its cursor when Space is pressed (with or without Shift) or Cmd is let go.
     let zoom_drag = matches!(drag, Some(Drag::ZoomBox { .. } | Drag::ZoomScrub { .. }));
     let zooming = zoom_drag || if space { m.command } else { app.session.tool_id() == "zoom" };
@@ -420,8 +429,15 @@ fn canvas_cursor(app: &mut VectorcraftApp, ui: &Ui, view_info: vectorcraft_engin
     } else {
         None
     };
+    // Cmd borrows a selection tool only at pointer-down. Pressed during another tool's drag, it
+    // cannot change the owner, so do not preview the borrowed tool's cursor. A drag that started
+    // with a borrowed selection tool keeps its Command modifier and cursor.
+    let mut cursor_mods = mods(m, space);
+    if tool_holds && !vectorcraft_tools::catalog::is_selection_tool(app.session.tool_id()) {
+        cursor_mods.cmd = false;
+    }
     // In Presentation Mode the pointer is the default one, with no tool cursor.
-    let tool_cursor = (app.ui.screen_mode < 3).then(|| view_cursor.or_else(|| hover_cursor(app, mods(m, space), view_info, hover_still)));
+    let tool_cursor = (app.ui.screen_mode < 3).then(|| view_cursor.or_else(|| hover_cursor(app, cursor_mods, view_info, hover_still)));
     let cur = if let Some(c) = tool_cursor.flatten() {
         let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("tool-cursor")));
         // The loaded place cursor carries the file's thumbnail.
@@ -448,11 +464,12 @@ fn canvas_cursor(app: &mut VectorcraftApp, ui: &Ui, view_info: vectorcraft_engin
             }
             Some(hp)
                 if custom
-                    && crate::cursors::paint_glyphs(crate::cursors::HIDES_ONLY_WHEN_KEY, ui.input(|i| i.focused))
+                    && crate::cursors::paint_glyphs(crate::cursors::HIDES_ONLY_WHEN_KEY, ui.input(|i| i.focused), app.services.no_cursor_theme)
                     && crate::cursors::paint(&painter, c, hp, 1.0 / ui_scale) =>
             {
-                // No cursor theme (Wayland): the glyph is painted, the system pointer stays (#2450).
-                if crate::cursors::hide_system_pointer(app.services.no_cursor_theme) { egui::CursorIcon::None } else { cursor_icon(c) }
+                // The painted glyph stands in for the hidden system pointer. Without a cursor theme
+                // (Wayland) none is painted: the system pointer can't be hidden there (#2450).
+                egui::CursorIcon::None
             }
             _ => cursor_icon(c),
         }

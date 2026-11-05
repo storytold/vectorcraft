@@ -2,7 +2,7 @@
 //! visual bounds and the clicks of a stroke take in its alignment, its width profile, miter spikes
 //! up to the miter limit, projecting caps and arrowheads.
 
-use vectorcraft_geom::bez::{CORNER_COS, kink, segments, subpaths, tangent, unit};
+use vectorcraft_geom::bez::{CORNER_COS, has_length, kink, segments, subpaths, tangent, unit};
 use vectorcraft_geom::hit::fill_contains;
 use vectorcraft_geom::kurbo::{ParamCurveArclen, ParamCurveNearest};
 use vectorcraft_geom::{BezPath, FillRule, ParamCurve, PathSeg, Point, Rect, Shape, Vec2};
@@ -16,12 +16,7 @@ const ARCLEN_ACCURACY: f64 = 1e-3;
 /// The segments of a subpath that have length (zero-length ones, all of whose points coincide,
 /// have no direction).
 fn drawn(els: &[vectorcraft_geom::PathEl]) -> Vec<PathSeg> {
-    let moves = |s: &PathSeg| match s {
-        PathSeg::Line(l) => l.p1 != l.p0,
-        PathSeg::Quad(q) => q.p1 != q.p0 || q.p2 != q.p0,
-        PathSeg::Cubic(c) => c.p1 != c.p0 || c.p2 != c.p0 || c.p3 != c.p0,
-    };
-    segments(els).into_iter().filter(moves).collect()
+    segments(els).into_iter().filter(has_length).collect()
 }
 
 /// The open subpath ends of `segs`: (point, unit direction out of the path) at its start and end.
@@ -166,6 +161,47 @@ impl StrokeLayer {
         out.union(bounds.inflate(side_max, side_max))
     }
 
+    /// The tip of the miter spike this stroke paints where segment `b` follows segment `a` in a
+    /// subpath of its path (`closed`: a closed one), both with length ([`has_length`]), or `None`
+    /// when the join is not a miter, the path does not turn there or the miter limit bevels it.
+    pub fn miter_tip(&self, closed: bool, a: &PathSeg, b: &PathSeg) -> Option<Point> {
+        let side = self.side_reach(closed);
+        if self.join != LineJoin::Miter || side <= 0.0 {
+            return None;
+        }
+        miter(a.end(), tangent(a, 1.0), tangent(b, 0.0), side, self.miter_limit).map(|[_, tip, _]| tip)
+    }
+
+    /// [`Self::bounds_on`] with the miter spikes' tips taken from `tips`, the box of the tips of
+    /// every joint of `bp` ([`Self::miter_tip`]) or `None` when there are none, instead of measured
+    /// along `bp`. It measures the projecting caps and arrowheads as [`Self::bounds_on`] does.
+    pub fn bounds_with_tips(&self, bp: &BezPath, bounds: Rect, tips: Option<Rect>) -> Rect {
+        let els = bp.elements();
+        let mut out = tips.map_or(bounds, |t| bounds.union(t));
+        let mut side_max: f64 = 0.0;
+        // Dashes put a cap on every dash: projecting ones reach a corner's diagonal anywhere.
+        let capped_dashes = self.cap == LineCap::Square && self.dash.as_ref().is_some_and(Dash::is_dashed);
+        for (r, closed) in subpaths(bp) {
+            let side = self.side_reach(closed);
+            side_max = side_max.max(if capped_dashes { side * std::f64::consts::SQRT_2 } else { side });
+            if side <= 0.0 {
+                continue;
+            }
+            if self.cap == LineCap::Square && !closed {
+                let segs = drawn(&els[r]);
+                for (at, dir) in ends(&segs).into_iter().flatten() {
+                    let n = Vec2::new(-dir.y, dir.x) * side;
+                    out = out.union_pt(at + dir * side + n).union_pt(at + dir * side - n);
+                }
+            }
+        }
+        for (at, _, end) in head_ends(self, bp) {
+            let r = self.head_reach(end);
+            out = out.union(Rect::from_center_size(at, (2.0 * r, 2.0 * r)));
+        }
+        out.union(bounds.inflate(side_max, side_max))
+    }
+
     /// Does this stroke along `bp` (filled with `rule`) paint within `tol` of `p`? Inside and
     /// outside strokes of closed paths count on their own side only (and within `tol` of the
     /// path); a width profile counts at its width where `p` is nearest.
@@ -271,13 +307,21 @@ impl Appearance {
     pub fn stroked_bounds(&self, bounds: Rect, bp: impl FnOnce() -> BezPath) -> Rect {
         let mut path = Some(bp);
         let mut shape = None;
+        self.stroked_bounds_by(bounds, |s| {
+            let bp: &BezPath = shape.get_or_insert_with(|| path.take().map(|f| f()).unwrap_or_default());
+            s.bounds_on(bp, bounds)
+        })
+    }
+
+    /// [`Self::stroked_bounds`] with the box of each visible stroke that needs the path's shape
+    /// (miter spikes, projecting caps, arrowheads or an alignment) given by `shaped`.
+    pub fn stroked_bounds_by(&self, bounds: Rect, mut shaped: impl FnMut(&StrokeLayer) -> Rect) -> Rect {
         self.painted_strokes().fold(bounds, |acc, s| {
             if !s.needs_shape() {
                 let o = s.side_reach(false);
                 return acc.union(bounds.inflate(o, o));
             }
-            let bp: &BezPath = shape.get_or_insert_with(|| path.take().map(|f| f()).unwrap_or_default());
-            acc.union(s.bounds_on(bp, bounds))
+            acc.union(shaped(s))
         })
     }
 

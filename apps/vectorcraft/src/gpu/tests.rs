@@ -366,14 +366,19 @@ fn gpus_without_pci_ids_are_told_apart_by_name() {
 fn a_first_frame_that_never_reaches_the_screen_hangs_its_adapter() {
     let s = Duration::from_secs;
     // The second frame began: the first was presented.
-    assert_eq!(first_frame(2, s(60), false), FirstFrame::Shown);
-    // Still drawing (or presenting) the first frame: waited for, then given up on (#964).
-    for frames in [0, 1] {
-        assert_eq!(first_frame(frames, s(3), false), FirstFrame::Wait);
-        assert_eq!(first_frame(frames, FIRST_FRAME_TIMEOUT, false), FirstFrame::Hung);
-    }
+    assert_eq!(first_frame(2, s(60), Some(s(1)), false), FirstFrame::Shown);
+    // The first frame built and not yet presented: waited for, then given up on (#964), counting
+    // from when its UI pass ended.
+    assert_eq!(first_frame(1, s(3), Some(s(1)), false), FirstFrame::Wait);
+    assert_eq!(first_frame(1, FIRST_FRAME_TIMEOUT, Some(FIRST_FRAME_TIMEOUT), false), FirstFrame::Hung);
+    assert_eq!(first_frame(1, s(45), Some(s(5)), false), FirstFrame::Wait, "a first frame built slowly gets its full time to show");
+    assert_eq!(first_frame(1, FIRST_FRAME_TIMEOUT, None, false), FirstFrame::Hung);
+    // The first frame still being built: the app's work, not the adapter's (#5160).
+    assert_eq!(first_frame(0, s(3), None, false), FirstFrame::Wait);
+    assert_eq!(first_frame(0, FIRST_FRAME_TIMEOUT, None, false), FirstFrame::Busy);
+    assert_eq!(first_frame(0, s(600), None, false), FirstFrame::Busy, "never a restart without an adapter");
     // A window minimized at the start may not draw again until restored.
-    assert_eq!(first_frame(1, s(60), true), FirstFrame::Shown);
+    assert_eq!(first_frame(1, s(60), Some(s(60)), true), FirstFrame::Shown);
     // A hung adapter is left out once, like one that failed.
     let skip = vec!["Dx12:10de:28a0".to_string()];
     assert_eq!(restart_without(true, 1, Some("Dx12:10de:28a0"), &skip), None);

@@ -181,7 +181,8 @@ pub(crate) fn can_load(app: &VectorcraftApp) -> bool {
 /// the file's text `data`, and adds its set after the others, with its actions. A set with the
 /// same name as one in the panel gets the next free number (`Print 2`). Loaded actions keep their
 /// function keys. The current set and the other sets stay as they are →
-/// `{set: index, name, actions: n}`.
+/// `{set: index, name, actions: n}`. Where the host can read part of a file (the desktop), a file
+/// larger than 8 MiB is refused after its first 8 MiB and one byte are read.
 pub fn load_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (text, stem) = match p.get("data") {
         Some(Value::String(data)) => {
@@ -200,7 +201,12 @@ pub fn load_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
                     crate::picks::open(app, &pick).ok_or("cancelled")?
                 }
             };
-            let bytes = app.services.read.as_ref().ok_or("no file reader")?(&path)?;
+            // One byte past the limit tells a larger file apart without reading all of it.
+            let bytes = match (&app.services.read_head, &app.services.read) {
+                (Some(read_head), _) => read_head(&path, MAX_SET_FILE + 1)?,
+                (None, Some(read)) => read(&path)?,
+                (None, None) => return Err("no file reader".into()),
+            };
             if bytes.len() > MAX_SET_FILE {
                 return Err("the action set file is larger than 8 MiB".into());
             }

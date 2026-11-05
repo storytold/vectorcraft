@@ -1225,6 +1225,32 @@ fn place_and_break_link_round_trip_geometry() {
 }
 
 #[test]
+fn hidden_instance_fill_does_not_tint_expanded_symbol_art() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        let mut s = session();
+        let source = rect(&mut s, 100.0, 50.0, 80.0, 40.0);
+        s.execute("paint.setFill", &json!({"ids": [source.0], "color": "#0000ff"})).unwrap();
+        let inst = NodeId(s.execute("symbol.new", &json!({"name": "Blue Box"})).unwrap()["id"].as_u64().unwrap());
+        s.execute("appearance.addFill", &json!({"ids": [inst.0]})).unwrap();
+        let fill = node(&s, inst).appearance.items.len() - 1;
+        s.execute("appearance.setItem", &json!({"ids": [inst.0], "index": fill, "color": "#ff0000"})).unwrap();
+        let center = |s: &Session| {
+            let doc = s.doc().unwrap().doc.clone();
+            vectorcraft_render::Renderer::new().render_region(&doc, Rect::new(0.0, 0.0, 400.0, 300.0), 1.0, true).pixel(140, 70)
+        };
+        let tinted = center(&s);
+        assert!(tinted[0] > tinted[2], "the visible instance fill tints the symbol: {tinted:?}");
+        s.execute("appearance.setItem", &json!({"ids": [inst.0], "index": fill, "visible": false})).unwrap();
+        let original = center(&s);
+        assert!(original[2] > original[0], "hiding the fill restores the blue symbol: {original:?}");
+
+        let params = if command == "symbol.breakLink" { json!({"ids": [inst.0]}) } else { json!({"object": true, "fill": false, "stroke": false}) };
+        s.execute(command, &params).unwrap();
+        assert_eq!(center(&s), original, "{command} must keep the untinted colors");
+    }
+}
+
+#[test]
 fn break_link_then_update_redefines_all_instances() {
     let mut s = session();
     let (inst, name, _) = make_symbol(&mut s);

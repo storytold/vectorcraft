@@ -28,7 +28,7 @@ pub use status_bar::status_bar;
 #[cfg(test)]
 use status_bar::{StatusReadoutWidths, status_readouts};
 #[cfg(test)]
-use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_title};
+use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_drop, tab_groups, tab_title};
 pub use tabs::{doc_tabs, isolation_bar, step_document};
 pub(crate) use tabs::{document_window_title, show_document, window_tab};
 

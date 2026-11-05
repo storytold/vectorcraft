@@ -419,6 +419,18 @@ fn group_with_only_placed_file_without_preview_uses_page_art() {
     assert!(notes.iter().any(|n| n.contains("placed files (1)")), "{notes:?}");
 }
 
+/// A linked image whose pixels the editing data doesn't keep (`XF`) shows a placeholder where the
+/// PDF part draws the image: the layers are compared with the PDF part there, and the file comes in
+/// as its PDF part when they differ.
+#[test]
+fn a_linked_image_without_pixels_is_compared_with_the_pdf_part() {
+    let linked = "%AI5_File:\n%AI5_BeginRaster\n(photo.tif) 0 XG\n[ 10 0 0 10 50 54 ] 0 0 4 4 4 4 8 3 0 0 0 0 XF\n%AI5_EndRaster";
+    let art = native(&(layer("Live", true, &square(10, 10)) + &layer("Linked", true, linked)));
+    let (doc, notes, read) = crate::layered_ai(&private(&art), pdf_two_squares(), vec![], false, false, 1.0);
+    assert!(!read, "{notes:?}");
+    assert_eq!(names(&doc), ["Layer 1"]);
+}
+
 #[test]
 fn top_level_pattern_uses_page_art_beside_live_path() {
     let body = format!("(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}\n{}", square_path(50, 10), square(70, 10));
@@ -2165,6 +2177,56 @@ fn an_ai_file_read_as_its_pdf_part_keeps_its_artboard_layout() {
     assert!((moved[1] - vectorcraft_geom::Point::new(100.0, 1600.0)).hypot() < 1e-6, "the second's art goes with its page: {moved:?}");
 }
 
+/// A `.ai` read as its PDF part opens on the page of the artboard its editing data names as the
+/// active one (`CropAreaActive`), also when the reading stops before the artboards.
+#[test]
+fn an_ai_file_read_as_its_pdf_part_keeps_its_active_artboard() {
+    let board = |x0: i32| {
+        format!(
+            "%_/Dictionary :\n%_{x0} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            x0 + 100
+        )
+    };
+    // `before` in the document's data, before the artboards; an operator this doesn't know, so the
+    // layers aren't read.
+    let unread = |before: &str, active: &str| {
+        let boards = format!(
+            "%_/Document :\n%_/Dictionary :\n{before}%_/Array :\n{}{}%_; (ArtboardArray) ,\n{active}%_; /NotRecorded ,\n%_;\n",
+            board(0),
+            board(120)
+        );
+        native(&(boards + &layer("Art", true, &(square(10, 10) + "\n1 Zz"))))
+    };
+    let mut pdf = pdf_part(10.0, 10.0);
+    let mut page = pdf.artboards[0].clone();
+    (page.id, page.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    pdf.artboards.push(page);
+    let opened = |before: &str, active: &str| {
+        let (d, w, read) = crate::layered_ai(&private(&unread(before, active)), pdf.clone(), vec![], false, false, 1.0);
+        assert!(!read && w.iter().any(|w| w.contains("layers weren't read")), "{w:?}");
+        d.opened_artboard
+    };
+    let stops = "%_/Array :\n%_/Dictionary :\nLB\n";
+    // Another entry, a dictionary of its own, between the array and the entry.
+    let between = "%_/Dictionary :\n%_1 /Int (Other) ,\n%_; (Inner) ,\n%_1 /Int (CropAreaActive) ,\n";
+    for before in ["", stops] {
+        assert_eq!(opened(before, "%_1 /Int (CropAreaActive) ,\n"), Some(2), "{before}");
+        assert_eq!(opened(before, between), Some(2), "{before}");
+        assert_eq!(opened(before, "%_0 /Int (CropAreaActive) ,\n"), None, "{before}");
+        assert_eq!(opened(before, ""), None, "{before}");
+        // A `CropAreaActive` of a dictionary inside the holder is not the holder's.
+        assert_eq!(opened(before, "%_/Dictionary :\n%_1 /Int (CropAreaActive) ,\n%_; (Inner) ,\n"), None, "{before}");
+    }
+    // The entry before the array, after what stops the reading.
+    assert_eq!(opened(&format!("{stops}%_; ,\n%_; (Art) ,\n%_1 /Int (CropAreaActive) ,\n"), ""), Some(2));
+    // What stops the reading between the array and the entry.
+    assert_eq!(opened("", "%_/Dictionary :\nLB\n%_; (Inner) ,\n%_1 /Int (CropAreaActive) ,\n"), Some(2));
+    // Lines ended by carriage returns.
+    let (d, ..) =
+        crate::layered_ai(&private(&unread(stops, "%_1 /Int (CropAreaActive) ,\n").replace('\n', "\r")), pdf.clone(), vec![], false, false, 1.0);
+    assert_eq!(d.opened_artboard, Some(2));
+}
+
 #[test]
 fn art_moved_with_its_page_moves_its_pattern_tile() {
     // Two 100-point artboards, the second 50 below the first; an operator this doesn't know, so
@@ -2356,6 +2418,53 @@ fn type_from_the_text_document_takes_its_character_styles_attributes() {
     assert_eq!(style(0), (solid(Color::rgb(0.0, 0.0, 0.0)), Some(18.0)), "the normal style's");
     assert_eq!(style(1), (solid(Color::rgb(1.0, 0.0, 0.0)), Some(18.0)), "its style's colour, the leading of the one it's based on");
     assert_eq!(style(2), (solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), Some(18.0)), "the run's own colour");
+}
+
+/// A story with no runs, and a run or paragraph that names no style, is set in `[Normal Character
+/// Style]` and `[Normal Paragraph Style]` before the text document's base attributes. A Large
+/// Canvas copy (1:10) writes the styles at the art's scale (1.2 for 12 points, 0.6 for a 6-point
+/// indent) and the base attributes at the page's, so the type comes in at 12 points with a 6-point
+/// indent.
+#[test]
+fn a_story_without_runs_takes_the_normal_styles() {
+    let own_style = "/5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >>";
+    let doc = text_document(&[("Plain\r", 0, (8191.5, 8191.5), (0.0, 0.0), 0.0), ("Runs\r", 0, (8191.5, 8190.5), (0.0, -1.0), 0.0)])
+        // The first story has no runs.
+        .replacen(&format!("/6 << /0 [ << /0 << /0 << /0 () {own_style} >> >> /1 6 >> ] >> "), "", 1)
+        .replacen("/5 << /0 [ << /0 << /0 << /0 () /5 << /0 0 >> /6 0 >> >> /1 6 >> ] >> ", "", 1)
+        // The second story's runs name no style.
+        .replacen(own_style, "/6 << /0 0 >>", 1)
+        .replacen("/5 << /0 0 >> /6 0", "/5 << /0 0 >>", 1)
+        // The document's base attributes: 12 points, white, a 60-point indent, hyphenated.
+        .replacen("/2 << /1 12.0 >>", "/2 << /1 12.0 /53 << /99 /SimplePaint /0 << /0 0 /1 [ 1.0 1.0 ] >> >> >> /3 << /1 60.0 /9 true >>", 1)
+        // The normal styles: 1.2 art units, blue; a 0.6 art unit indent, not hyphenated.
+        .replacen(
+            "/0 << /1 <<",
+            "/0 << /5 << /0 [ << /0 << /0 ([Normal Character Style]) /6 << /0 0 /1 1.2 \
+             /53 << /99 /SimplePaint /0 << /0 1 /1 [ 1.0 0.0 0.0 1.0 ] >> >> >> >> >> ] >> \
+             /6 << /0 [ << /0 << /0 ([Normal Paragraph Style]) /5 << /1 0.6 /9 false >> >> >> ] >> /1 <<",
+            1,
+        );
+    assert!(!doc.contains("/1 14.0") && !doc.contains("/6 0 "), "{doc}");
+    // A 10 × 10 unit copy of the page's 100 × 100 points, its template box centered at (5, 5).
+    let art = native_with_text(
+        &(layer("Back", true, "0 0 1 0 k\n5 5 m\n5.4 5 L\n5.4 5.4 L\n5 5.4 L\nf") + &layer("Spare", false, &(text_object(0) + &text_object(1)))),
+        &doc,
+    )
+    .replace("0 0 100 100", "0 0 10 10")
+    .replace("%AI3_TemplateBox: 50 50 50 50\n", "%AI3_TemplateBox: 5 5 5 5\n%AI24_LargeCanvasScale: 10\n");
+    let r = import(&eps(&page_square(50, 50), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Back", "Spare"], "{:?}", r.warnings);
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Plain", "Runs"], "{:?}", r.warnings);
+    let [.., e, f] = texts[0].xf.as_coeffs();
+    assert!((e - 50.0).abs() < 1e-6 && (f - 50.0).abs() < 1e-6, "{:?}", texts[0].xf);
+    for t in texts {
+        let style = &t.runs[0].style;
+        assert!((style.size - 12.0).abs() < 1e-9, "{}: {}", t.plain_text(), style.size);
+        assert_eq!(style.fill, vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)), "{}", t.plain_text());
+        assert!((t.para.first_line_indent - 6.0).abs() < 1e-9 && !t.para.hyphenate, "{}: {:?}", t.plain_text(), t.para);
+    }
 }
 
 #[test]

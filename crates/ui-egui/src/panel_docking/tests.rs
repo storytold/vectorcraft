@@ -161,6 +161,25 @@ fn a_tab_dragged_out_floats_and_comes_back_where_it_was_after_its_window_closes(
     assert!(h.tab("layers").is_some());
 }
 
+#[test]
+fn thumbnail_work_is_needed_only_while_layers_or_links_can_be_seen() {
+    let mut h = Harness::new();
+    h.app.run("window.panel", json!({"panel": "layers"})).unwrap();
+    assert!(thumbnail_panel_showing(&h.app.ui));
+    h.app.ui.dock = false;
+    assert!(!thumbnail_panel_showing(&h.app.ui), "Tab hides every panel");
+    h.app.ui.dock = true;
+    h.app.ui.screen_mode = 3;
+    assert!(!thumbnail_panel_showing(&h.app.ui), "presentation mode hides panels");
+    h.app.ui.screen_mode = 0;
+    h.app.run("window.panel.float", json!({"panel": "layers"})).unwrap();
+    assert!(thumbnail_panel_showing(&h.app.ui), "a floating Layers panel still needs thumbnails");
+    h.app.run("window.panel", json!({"panel": "layers", "toggle": true})).unwrap();
+    assert!(!thumbnail_panel_showing(&h.app.ui));
+    h.app.run("window.panel", json!({"panel": "links"})).unwrap();
+    assert!(thumbnail_panel_showing(&h.app.ui), "the Links flyout also uses row thumbnails");
+}
+
 /// A Character field shortcut with the Character panel in front of its floating window brings
 /// that window forward and leaves the panel showing.
 #[test]

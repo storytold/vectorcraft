@@ -7,11 +7,25 @@ pub use kurbo::{Cap, Join};
 
 use linesweeper::topology::{ContourIdx, Contours};
 
+use crate::PathOpsError;
 use crate::boolean::{Arrangement, DEFAULT_PRECISION, Tidy, all_contours_to_path, contours_to_path, fill_bezpath, normalize_bez};
 use crate::edit::remove_redundant_points;
 
 /// Flattening/fit tolerance handed to kurbo's stroker.
 const STROKE_TOL: f64 = 1e-3;
+
+/// Most overlapping segment pairs allowed for planar arrangement in offset path: 524,288 (1 << 19).
+///
+/// Rationale:
+/// - The global boolean sweep cap is `MAX_SEGMENT_PAIRS = 1 << 22` (4,194,304 pairs).
+/// - An offset operation decomposes paths into outer rings, inner/fill boundaries, and open
+///   subpath strokes. When applied to multi-copy transformations (e.g. 25–50 copies in #4145),
+///   these parallel strokes create dense self- and cross-intersections where pairwise bounding-box
+///   overlaps scale quadratically with the number of segments.
+/// - At 1 << 19 (524,288 segment pairs), the planar sweep memory usage is bounded to tens of MBs
+///   and completes within ~100 ms on typical CPUs, preventing exponential allocation spikes and
+///   application hangs while still generously accommodating legitimate complex artwork.
+pub const MAX_OFFSET_SEGMENT_PAIRS: usize = 1 << 19;
 
 /// Drop collinear and coincident spine vertices before stroking (#3446). Uses `tol` only for
 /// redundancy; does not simplify or refit the spine.
@@ -92,13 +106,23 @@ pub fn stroke_region(outlines: &[BezPath]) -> PathData {
     normalize_bez(&all, FillRule::NonZero).map(|c| all_contours_to_path(&c, &tidy)).unwrap_or_default()
 }
 
-/// Object → Path → Offset Path. Positive `delta` grows the filled area, negative insets it.
-/// Closed subpaths are treated as a non-zero filled region; open subpaths are outlined with a
-/// stroke of width `2|delta|` (butt caps). An open subpath whose last anchor sits on its first is
-/// offset as a closed one.
-pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> PathData {
-    if !delta.is_finite() || path.is_empty() {
-        return PathData::default();
+/// Validate that all anchor coordinates and control handles of `path` are finite.
+fn path_is_finite(path: &PathData) -> bool {
+    path.subpaths.iter().all(|sp| {
+        sp.anchors.iter().all(|a| {
+            a.p.x.is_finite() && a.p.y.is_finite() && a.h_in.x.is_finite() && a.h_in.y.is_finite() && a.h_out.x.is_finite() && a.h_out.y.is_finite()
+        })
+    })
+}
+
+/// Fallible [`offset_path`] that returns an error when the input is non-finite or exceeds
+/// the complexity bound ([`MAX_OFFSET_SEGMENT_PAIRS`]), or when planar arrangement fails.
+pub fn try_offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> Result<PathData, PathOpsError> {
+    if !delta.is_finite() || !path_is_finite(path) {
+        return Err(PathOpsError::NonFinite);
+    }
+    if path.is_empty() {
+        return Ok(PathData::default());
     }
     let subpaths: Vec<SubPath> = path.subpaths.iter().map(close_if_ends_meet).collect();
     let closed = PathData::new(subpaths.iter().filter(|s| s.closed && s.anchors.len() > 1).cloned().collect());
@@ -111,9 +135,10 @@ pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) ->
     } else {
         BezPath::new()
     };
-    let Ok(arr) = Arrangement::new(vec![(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)]) else {
-        return PathData::default();
-    };
+    let arr = Arrangement::new_budgeted(
+        vec![(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)],
+        MAX_OFFSET_SEGMENT_PAIRS,
+    )?;
     let c = if delta >= 0.0 { arr.contours(|m| m[0] || m[1] || m[2]) } else { arr.contours(|m| m[0] && !m[1]) };
     // When `d` exceeds a curvature radius the stroker's inner offset inverts and its loops cancel
     // winding, leaving faces uncovered that are really within `d` of the path. Every face of the
@@ -124,10 +149,25 @@ pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) ->
     let spurious: Vec<bool> =
         c.contours().map(|k| k.outer == drop_outer && deep_point(&k.path).is_some_and(|p| any_within(&src, p, d * (1.0 - 1e-4) - 1e-6))).collect();
     if !spurious.contains(&true) {
-        return all_contours_to_path(&c, &Tidy::free(DEFAULT_PRECISION));
+        return Ok(all_contours_to_path(&c, &Tidy::free(DEFAULT_PRECISION)));
     }
     let keep = (0..spurious.len()).filter(|&i| !has_marked_ancestor(&c, i, &spurious)).map(ContourIdx);
-    contours_to_path(&c, keep, &Tidy::free(DEFAULT_PRECISION))
+    Ok(contours_to_path(&c, keep, &Tidy::free(DEFAULT_PRECISION)))
+}
+
+/// Object → Path → Offset Path. Positive `delta` grows the filled area, negative insets it.
+/// Closed subpaths are treated as a non-zero filled region; open subpaths are outlined with a
+/// stroke of width `2|delta|` (butt caps). An open subpath whose last anchor sits on its first is
+/// offset as a closed one.
+///
+/// If planar arrangement exceeds complexity or encounters a degenerate arrangement error,
+/// gracefully preserves `path` unchanged to prevent rendering crashes or disappearing artwork (#4145).
+/// Non-finite input returns an empty path.
+pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> PathData {
+    try_offset_path(path, delta, join, miter_limit).unwrap_or_else(|e| match e {
+        PathOpsError::NonFinite => PathData::default(),
+        _ => path.clone(),
+    })
 }
 
 /// An open subpath of three or more anchors whose last anchor lies within 1e-6 of its first (the
@@ -441,5 +481,46 @@ mod tests {
         let arc_compact = stroke_bez(&arc_bez, width, cap, join, miter);
         let arc_raw = stroke_bez_without_spine_compact(&arc_bez, width, cap, join, miter);
         assert!(outline_max_deviation(&arc_compact, &arc_raw) <= 1e-3, "curved spine compaction must not refit the stroke outline");
+    }
+
+    #[test]
+    fn offset_path_recovers_gracefully_when_complexity_exceeds_budget() {
+        // Issue #4145: dense overlapping geometry must not hang or panic; if complexity passes
+        // the offset cap, try_offset_path reports PathOpsError::TooComplex and offset_path
+        // preserves the input path unchanged.
+        let mut bp = BezPath::new();
+        for i in 0..300 {
+            let offset = i as f64 * 0.1;
+            let rect = kurbo::Rect::new(offset, offset, offset + 100.0, offset + 100.0);
+            bp.extend(rect.to_path(0.1).iter());
+        }
+        let path = PathData::from_bezpath(&bp);
+        assert_eq!(try_offset_path(&path, 5.0, Join::Round, 4.0), Err(PathOpsError::TooComplex));
+        let res = offset_path(&path, 5.0, Join::Round, 4.0);
+        assert_eq!(res, path);
+    }
+
+    #[test]
+    fn offset_path_returns_empty_on_non_finite() {
+        let rect = kurbo::Rect::new(0.0, 0.0, 100.0, 100.0);
+        let path = PathData::from_bezpath(&rect.to_path(0.1));
+        assert_eq!(try_offset_path(&path, f64::NAN, Join::Round, 4.0), Err(PathOpsError::NonFinite));
+        assert_eq!(try_offset_path(&path, f64::INFINITY, Join::Round, 4.0), Err(PathOpsError::NonFinite));
+        assert!(offset_path(&path, f64::NAN, Join::Round, 4.0).is_empty());
+        assert!(offset_path(&path, f64::INFINITY, Join::Round, 4.0).is_empty());
+
+        // Even with dense overlapping geometry, non-finite points return NonFinite error and empty rather than fallback.
+        let mut bp = BezPath::new();
+        for i in 0..300 {
+            let offset = i as f64 * 0.1;
+            let rect = kurbo::Rect::new(offset, offset, offset + 100.0, offset + 100.0);
+            bp.extend(rect.to_path(0.1).iter());
+        }
+        let mut dense_non_finite = PathData::from_bezpath(&bp);
+        dense_non_finite
+            .subpaths
+            .push(SubPath::polyline(&[vectorcraft_geom::Point::new(f64::NAN, 0.0), vectorcraft_geom::Point::new(10.0, 10.0)], true));
+        assert_eq!(try_offset_path(&dense_non_finite, 5.0, Join::Round, 4.0), Err(PathOpsError::NonFinite));
+        assert!(offset_path(&dense_non_finite, 5.0, Join::Round, 4.0).is_empty());
     }
 }

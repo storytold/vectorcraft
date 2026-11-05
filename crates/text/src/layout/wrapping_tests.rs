@@ -39,6 +39,7 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             no_break: false,
             vertical_roman: false,
             cursive: false,
+            hyphenates: true,
         })
         .collect()
 }

@@ -814,6 +814,11 @@ font-technology	Variable	Μεταβλητές
 	Double-click to edit the characters' paint	Διπλό κλικ για επεξεργασία του χρωματισμού χαρακτήρων
 	Click to edit	Κλικ για επεξεργασία
 	Double-click to edit	Διπλό κλικ για επεξεργασία
+	Alternates for Current Selection	Εναλλακτικοί για την τρέχουσα επιλογή
+	Select a character with the Type tool to see its alternates.	Επιλέξτε έναν χαρακτήρα με το εργαλείο κειμένου για να δείτε τους εναλλακτικούς του.
+	The selected character's font is not available.	Η γραμματοσειρά του επιλεγμένου χαρακτήρα δεν είναι διαθέσιμη.
+	No alternates for the selected character.	Δεν υπάρχουν εναλλακτικοί για τον επιλεγμένο χαρακτήρα.
+	Double-click to replace	Διπλό κλικ για αντικατάσταση
 	Double-click to insert	Διπλό κλικ για εισαγωγή
 	Double-click to rename	Διπλό κλικ για μετονομασία
 	Double-click to target the contents	Διπλό κλικ για επιλογή του περιεχομένου ως στόχου
@@ -2178,6 +2183,8 @@ axis	Both	Και τα δύο
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Δημιουργία από οδηγούς: οι οδηγοί σχηματίζουν περισσότερες από {MAX_PIECES} τομές
 @msg	Create from Selection: the selection has no area	Δημιουργία από επιλογή: η επιλογή δεν έχει επιφάνεια
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Η ανάκτηση δεδομένων δεν διαθέτει θέση αποθήκευσης αντιγράφων: ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	Η ανάκτηση δεδομένων δεν μπορεί να αποθηκεύσει αντίγραφα στο {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Δεν είναι δυνατή η φόρτωση πρόσθετων από το {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	Επιλέξτε άμεσα τα σημεία αγκύρωσης όπου θα γίνει η αποκοπή (όχι τα τελικά σημεία ανοιχτών διαδρομών)
 @msg	Divide Objects Below: select a path	Διαίρεση αντικειμένων από κάτω: επιλέξτε μια διαδρομή
 @msg	Divide Objects Below: select exactly one path	Διαίρεση αντικειμένων από κάτω: επιλέξτε ακριβώς μία διαδρομή
@@ -3994,6 +4001,12 @@ digits	Malayalam	Μαλαγιάλαμ
 	Scrub Numeric Fields by Dragging	Ρύθμιση αριθμητικών πεδίων με σύρσιμο
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} αρχείο στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;|{n} αρχεία στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;
 @plural	{n} linked file not found|{n} linked files not found	Δεν βρέθηκε {n} συνδεδεμένο αρχείο|Δεν βρέθηκαν {n} συνδεδεμένα αρχεία
+@msgplural	{n} linked file not found|{n} linked files not found	Δεν βρέθηκε {n} συνδεδεμένο αρχείο|Δεν βρέθηκαν {n} συνδεδεμένα αρχεία
+@msg	fonts not copied: {fonts}	γραμματοσειρές που δεν αντιγράφηκαν: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Δεν βρέθηκε {n} συνδεδεμένο αρχείο)|(Δεν βρέθηκαν {n} συνδεδεμένα αρχεία)
+@msg	(fonts not copied: {fonts})	(γραμματοσειρές που δεν αντιγράφηκαν: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	γραμματοσειρές που δεν αντιγράφηκαν: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} συνδεδεμένη εικόνα άλλαξε μετά την αποθήκευση του εγγράφου. Να εμφανιστεί η νέα έκδοση;|{n} συνδεδεμένες εικόνες άλλαξαν μετά την αποθήκευση του εγγράφου. Να εμφανιστούν οι νέες εκδόσεις;
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} συνδεδεμένη εικόνα άλλαξε στον δίσκο. Να εμφανιστεί η νέα έκδοση;|{n} συνδεδεμένες εικόνες άλλαξαν στον δίσκο. Να εμφανιστούν οι νέες εκδόσεις;
@@ -4611,6 +4624,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	graphs come in as plain art, without their data or settings	τα γραφήματα εισάγονται ως απλή γραφική, χωρίς τα δεδομένα και τις ρυθμίσεις τους
 @msg	an image whose data is cut short was left out	παραλείφθηκε εικόνα με περικομμένα δεδομένα
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες εμφανίζουν την προεπισκόπηση χαμηλής ανάλυσης που έχει αποθηκευτεί, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
+@msg	linked type areas past VectorCraft's limits were left out	οι συνδεδεμένες περιοχές κειμένου πέρα από τα όρια του VectorCraft παραλείφθηκαν
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	το κείμενο που χρησιμοποιείται ως μάσκα σε συνδεδεμένες περιοχές, σε κείμενο με αναδίπλωση ή σε σύνθετη διαδρομή δεν αποκόπτει
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες χωρίς προεπισκόπηση στο αρχείο εμφανίζουν ένα σύμβολο κράτησης θέσης, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	οι περιοχές κειμένου με πλαίσια πολύ μικρά για μία γραμμή της γραμματοσειράς τους απέκτησαν μεγαλύτερο ύψος ({_1}), διαφορετικά το κείμενο δεν θα εμφανιζόταν
 @msg	its editing data doesn't say where its art is	τα δεδομένα επεξεργασίας του δεν προσδιορίζουν τη θέση του σχεδίου
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	το αρχείο αποθηκεύτηκε χωρίς συμβατότητα PDF και τα δεδομένα επεξεργασίας του δεν μπορούν να διαβαστούν ({why})
@@ -6038,6 +6054,9 @@ anchor	Points:	Σημεία:
 	Find Nearest Swatch…	Εύρεση πλησιέστερου δείγματος χρώματος…
 	Find Nearest Swatch	Εύρεση πλησιέστερου δείγματος χρώματος
 	Apply Nearest Swatch	Εφαρμογή πλησιέστερου δείγματος χρώματος
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Εφαρμογή γεμίσματος στο περίγραμμα
+	Apply Stroke to Fill	Εφαρμογή περιγράμματος στο γέμισμα
 	Select objects to find the swatches nearest their colors.	Επιλέξτε αντικείμενα για να βρείτε τα δείγματα χρωμάτων που πλησιάζουν περισσότερο τα χρώματά τους.
 @msg	select objects or give `color`	επιλέξτε αντικείμενα ή δώστε `color`
 @msg	`color` is not a colour	το `color` δεν είναι χρώμα
@@ -6275,4 +6294,54 @@ breakText	Glyphs	Γλύφοι
 	Bow	Τόξο
 	Spike	Αιχμή
 	Skip Spaces	Παράλειψη κενών
+	Release Type on a Path…	Αποδέσμευση κειμένου σε διαδρομή…
+	Release Type on a Path	Αποδέσμευση κειμένου σε διαδρομή
+	Text and Path	Κείμενο και διαδρομή
+	Path Only	Μόνο διαδρομή
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Το γραφικό είναι πολύ μεγάλο για αντιγραφή ως εικόνα: οι άλλες εφαρμογές δεν λαμβάνουν PNG του
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Επιλογή κατά πίνακες σχεδίασης
+	Select by Artboards…	Επιλογή κατά πίνακες σχεδίασης…
+	Selection Tools	Εργαλεία επιλογής
+	Search artboards	Αναζήτηση πινάκων σχεδίασης
+	Fully Inside	Πλήρως εντός
+	Fully Outside	Πλήρως εκτός
+	No artboards match.	Κανένας πίνακας σχεδίασης δεν ταιριάζει.
+	Chosen: {n} of {total}	Επιλεγμένοι: {n} από {total}
+
+# Contour add-on
+	Contour	Παράλληλο περίγραμμα
+	Contour Tool	Εργαλείο παράλληλου περιγράμματος
+	Sharp	Οξεία
+	Bake	Επέκταση
+	Turn the Contour into plain paths	Μετατρέπει το παράλληλο περίγραμμα σε απλές διαδρομές
+	Set Corners…	Ορισμός γωνιών…
+	All Anchors	Όλα τα σημεία αγκύρωσης
+	Odd-Numbered Anchors	Μονά σημεία αγκύρωσης
+	Even-Numbered Anchors	Ζυγά σημεία αγκύρωσης
+	Minimum angle	Ελάχιστη γωνία
+	Maximum angle	Μέγιστη γωνία
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Επιλογή συνδεδεμένων
+	Select Embedded	Επιλογή ενσωματωμένων
+	Select Missing	Επιλογή όσων λείπουν
+	Select Modified	Επιλογή τροποποιημένων
+	Select by Link Status	Επιλογή κατά κατάσταση σύνδεσης
+	Select by Link Status…	Επιλογή κατά κατάσταση σύνδεσης…
+	Search images	Αναζήτηση εικόνων
+	No images match.	Καμία εικόνα δεν ταιριάζει.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Επιλέχθηκε {n} συνδεδεμένη εικόνα|Επιλέχθηκαν {n} συνδεδεμένες εικόνες
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Επιλέχθηκε {n} ενσωματωμένη εικόνα|Επιλέχθηκαν {n} ενσωματωμένες εικόνες
+@msgplural	Selected {n} missing image|Selected {n} missing images	Επιλέχθηκε {n} εικόνα που λείπει|Επιλέχθηκαν {n} εικόνες που λείπουν
+@msgplural	Selected {n} modified image|Selected {n} modified images	Επιλέχθηκε {n} τροποποιημένη εικόνα|Επιλέχθηκαν {n} τροποποιημένες εικόνες
+@msgplural	Selected {n} image|Selected {n} images	Επιλέχθηκε {n} εικόνα|Επιλέχθηκαν {n} εικόνες
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}· {n} ακόμη είναι κρυφή ή κλειδωμένη|{selected}· {n} ακόμη είναι κρυφές ή κλειδωμένες
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}· {n} ακόμη είναι σε επίπεδο προτύπου|{selected}· {n} ακόμη είναι σε επίπεδα προτύπου
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}· {n} ακόμη είναι εκτός της απομονωμένης ομάδας|{selected}· {n} ακόμη είναι εκτός της απομονωμένης ομάδας
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}· {n} ακόμη δεν μπορεί να επιλεγεί τώρα|{selected}· {n} ακόμη δεν μπορούν να επιλεγούν τώρα
+
+# Compound Shapes add-on
+	Compound Shapes	Σύνθετα σχήματα
+	Shape Mode Buttons Make Compound Shapes	Τα κουμπιά λειτουργιών σχημάτων δημιουργούν σύνθετα σχήματα

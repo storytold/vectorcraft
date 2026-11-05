@@ -854,6 +854,11 @@ font-technology	Variable	Вариативные
 	Double-click to edit the characters' paint	Дважды щёлкните, чтобы редактировать заливку символов
 	Click to edit	Щёлкните, чтобы редактировать
 	Double-click to edit	Дважды щёлкните, чтобы редактировать
+	Alternates for Current Selection	Альтернативы для текущего выделения
+	Select a character with the Type tool to see its alternates.	Выделите символ инструментом «Текст», чтобы увидеть его альтернативы.
+	The selected character's font is not available.	Шрифт выделенного символа недоступен.
+	No alternates for the selected character.	У выделенного символа нет альтернатив.
+	Double-click to replace	Дважды щёлкните для замены
 	Double-click to insert	Дважды щёлкните для вставки
 	Double-click to rename	Дважды щёлкните для переименования
 	Double-click to target the contents	Дважды щёлкните, чтобы выбрать содержимое как объект
@@ -3788,6 +3793,12 @@ digits	Malayalam	Малаялам
 	Scrub Numeric Fields by Dragging	Изменять числовые поля перетаскиванием
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?
 @plural	{n} linked file not found|{n} linked files not found	Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}
+@msg	fonts not copied: {fonts}	шрифты не скопированы: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Не найдено связанных файлов: {n})|(Не найдено связанных файлов: {n})|(Не найдено связанных файлов: {n})
+@msg	(fonts not copied: {fonts})	(шрифты не скопированы: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	шрифты не скопированы: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} связанное изображение изменилось с момента сохранения этого документа. Показать новую версию?|{n} связанных изображения изменились с момента сохранения этого документа. Показать новые версии?|{n} связанных изображений изменились с момента сохранения этого документа. Показать новые версии?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} связанное изображение изменилось на диске. Показать новую версию?|{n} связанных изображения изменились на диске. Показать новые версии?|{n} связанных изображений изменились на диске. Показать новые версии?
@@ -4009,6 +4020,8 @@ axis	Both	Оба
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Создание из направляющих: направляющие образуют более {MAX_PIECES} фрагментов
 @msg	Create from Selection: the selection has no area	Создание из выделения: у выделения нет области
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Восстановлению данных негде хранить копии: задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	Восстановление данных не может хранить копии в {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Не удается загрузить модули из {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	выделите прямым выделением опорные точки для разреза (не конечные точки открытых контуров)
 @msg	Divide Objects Below: select a path	Разделение объектов ниже: выделите контур
 @msg	Divide Objects Below: select exactly one path	Разделение объектов ниже: выделите ровно один контур
@@ -4699,6 +4712,9 @@ axis	Both	Оба
 @msg	graphs come in as plain art, without their data or settings	диаграммы импортируются как обычная графика, без их данных и настроек
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	связанные изображения показываются как сохранённый в файле просмотр низкого разрешения, пока их файлы не найдены: восстановите связи на панели «Связи»
+@msg	linked type areas past VectorCraft's limits were left out	связанные текстовые области за пределами ограничений VectorCraft пропущены
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, используемый как маска в связанных областях, обтекающем тексте или составном контуре, не обрезает
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	связанные изображения без просмотра в файле показываются как заполнитель, пока их файлы не найдены: восстановите связи на панели «Связи»
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в области в рамках, слишком низких для строки шрифта, которым он отображается, получил более высокие рамки ({_1}): иначе он не был бы виден
 @msg	its editing data doesn't say where its art is	в его данных редактирования не указано, где находится графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	этот файл сохранён без совместимости с PDF, и его данные редактирования не удаётся прочитать ({why})
@@ -6064,6 +6080,9 @@ anchor	Points:	Точки:
 	Find Nearest Swatch…	Найти ближайший образец…
 	Find Nearest Swatch	Найти ближайший образец
 	Apply Nearest Swatch	Применить ближайший образец
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Применить заливку к обводке
+	Apply Stroke to Fill	Применить обводку к заливке
 	Select objects to find the swatches nearest their colors.	Выделите объекты, чтобы найти образцы, ближайшие к их цветам.
 @msg	select objects or give `color`	выделите объекты или укажите `color`
 @msg	`color` is not a colour	`color` не является цветом
@@ -6412,4 +6431,54 @@ shape	Open	Открытый
 	Bow	Дуга
 	Spike	Пик
 	Skip Spaces	Пропускать пробелы
+	Release Type on a Path…	Освободить текст по контуру…
+	Release Type on a Path	Освободить текст по контуру
+	Text and Path	Текст и контур
+	Path Only	Только контур
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графика слишком велика для копирования в виде изображения: другие приложения не получат её PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Выделить по монтажным областям
+	Select by Artboards…	Выделить по монтажным областям…
+	Selection Tools	Инструменты выделения
+	Search artboards	Поиск монтажных областей
+	Fully Inside	Полностью внутри
+	Fully Outside	Полностью снаружи
+	No artboards match.	Нет подходящих монтажных областей.
+	Chosen: {n} of {total}	Выбрано: {n} из {total}
+
+# Contour add-on
+	Contour	Эквидистанта
+	Contour Tool	Инструмент «Эквидистанта»
+	Sharp	Острый
+	Bake	Разобрать
+	Turn the Contour into plain paths	Преобразует эквидистанту в обычные контуры
+	Set Corners…	Задать углы…
+	All Anchors	Все опорные точки
+	Odd-Numbered Anchors	Нечётные опорные точки
+	Even-Numbered Anchors	Чётные опорные точки
+	Minimum angle	Минимальный угол
+	Maximum angle	Максимальный угол
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Выделить связанные
+	Select Embedded	Выделить внедрённые
+	Select Missing	Выделить отсутствующие
+	Select Modified	Выделить изменённые
+	Select by Link Status	Выделить по состоянию связи
+	Select by Link Status…	Выделить по состоянию связи…
+	Search images	Поиск изображений
+	No images match.	Нет подходящих изображений.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Выделено {n} связанное изображение|Выделено {n} связанных изображения|Выделено {n} связанных изображений
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Выделено {n} внедрённое изображение|Выделено {n} внедрённых изображения|Выделено {n} внедрённых изображений
+@msgplural	Selected {n} missing image|Selected {n} missing images	Выделено {n} отсутствующее изображение|Выделено {n} отсутствующих изображения|Выделено {n} отсутствующих изображений
+@msgplural	Selected {n} modified image|Selected {n} modified images	Выделено {n} изменённое изображение|Выделено {n} изменённых изображения|Выделено {n} изменённых изображений
+@msgplural	Selected {n} image|Selected {n} images	Выделено {n} изображение|Выделено {n} изображения|Выделено {n} изображений
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; ещё {n} скрыто или заблокировано|{selected}; ещё {n} скрыты или заблокированы|{selected}; ещё {n} скрыты или заблокированы
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; ещё {n} на слое-шаблоне|{selected}; ещё {n} на слоях-шаблонах|{selected}; ещё {n} на слоях-шаблонах
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; ещё {n} вне изолированной группы|{selected}; ещё {n} вне изолированной группы|{selected}; ещё {n} вне изолированной группы
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; ещё {n} сейчас нельзя выделить|{selected}; ещё {n} сейчас нельзя выделить|{selected}; ещё {n} сейчас нельзя выделить
+
+# Compound Shapes add-on
+	Compound Shapes	Составные фигуры
+	Shape Mode Buttons Make Compound Shapes	Кнопки режимов фигур создают составные фигуры

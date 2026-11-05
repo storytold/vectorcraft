@@ -157,8 +157,27 @@ fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
         .show(|ui| crate::panels::properties::global_edit_options(app, ui));
 }
 
-/// The room the Control bar's inline X/Y/W/H fields need; with less, only the Transform link shows.
-const INLINE_TRANSFORM_WIDTH: f32 = 440.0;
+/// The width of each of the Control bar's inline X/Y/W/H fields.
+const INLINE_FIELD_WIDTH: f32 = 80.0;
+
+/// The keys and labels of the Control bar's inline X/Y/W/H fields, in their order.
+const INLINE_FIELDS: [(&str, &str); 4] = [("x", "X:"), ("y", "Y:"), ("width", "W:"), ("height", "H:")];
+
+/// The label of an inline X/Y/W/H field.
+fn inline_label(t: &Tokens, lbl: &str) -> egui::RichText {
+    egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim)
+}
+
+/// The room the Control bar's inline X/Y/W/H fields take: their labels as drawn in the current
+/// language, the four fields, the W/H link and the item spacing ahead of each of them. With less,
+/// only the Transform link shows.
+fn inline_transform_width(ui: &Ui, t: &Tokens) -> f32 {
+    let measure = |text: egui::WidgetText| text.into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Body).size().x;
+    let labels: f32 = INLINE_FIELDS.iter().map(|(_, lbl)| measure(inline_label(t, lbl).into())).sum();
+    let fields = INLINE_FIELD_WIDTH * INLINE_FIELDS.len() as f32;
+    let items = 2 * INLINE_FIELDS.len() + 1;
+    labels + fields + crate::panels::transform::CONSTRAIN_LINK_SIZE + ui.spacing().item_spacing.x * items as f32
+}
 
 /// The Control bar (Window → Control), context-sensitive like Illustrator's.
 pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -184,9 +203,9 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let Some(st) = app.session.active() else { return };
                 let sel = st.selection.objects.clone();
                 let units = app.session.general_unit();
-                let first = sel.first().and_then(|id| st.doc.node(*id)).cloned();
+                let first = sel.first().and_then(|id| st.doc.node(*id));
                 let anchors = anchor_controls(app);
-                let label = match &first {
+                let label = match first {
                     _ if app.session.tool_id() == "artboard" => tl!("Artboard"),
                     Some(_) if sel.len() == 1 && anchors != AnchorControls::None => {
                         tl!("Anchor Point")
@@ -203,6 +222,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                     _ => tl!(crate::panels::appearance::object_label(app)),
                 };
+                let has_first = first.is_some();
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
                 // With the Artboard tool in use, the bar shows the active artboard's controls in place
                 // of the object controls.
@@ -219,7 +239,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 crate::toolbar::control_bar_options(app, ui);
                 crate::dialogs::envelope::control_bar(app, ui);
                 crate::panels::symbols::control_bar(app, ui);
-                let opacity = if first.is_some() { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
+                let opacity = if has_first { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
                 if !image {
                     let shown_stroke = crate::panels::current_stroke(app);
                     let mixed = crate::panels::stroke_mixed(app, ui.ctx());
@@ -290,28 +310,24 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 crate::panels::transform::link(app, ui);
                 // The bounding box, rotated with rotated objects: its centre and its own sides.
                 if let Some(b) = app.selection_box()
-                    && ui.available_width() >= INLINE_TRANSFORM_WIDTH
+                    && ui.available_width() >= inline_transform_width(ui, &t)
                 {
                     let c = b.center();
                     let origin = app.ruler_origin();
                     let link = crate::panels::transform::proportional(app, ui);
                     let copy = crate::panels::transform::alt_enter_copies(app, ui);
-                    for (k, lbl, v, offset) in [
-                        ("x", "X:", c.x, origin.x),
-                        ("y", "Y:", c.y, origin.y),
-                        ("width", "W:", b.rect.width(), 0.0),
-                        ("height", "H:", b.rect.height(), 0.0),
-                    ] {
+                    let values = [(c.x, origin.x), (c.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
+                    for ((k, lbl), (v, offset)) in INLINE_FIELDS.into_iter().zip(values) {
                         // The W/H link sits between W and H.
                         if k == "height" {
                             crate::panels::transform::constrain_link(app, ui);
                         }
-                        widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
+                        widgets::field_label(ui, inline_label(&t, lbl));
                         let (id, shown) = (("cb", k), Some(v - offset));
                         let set = if matches!(k, "width" | "height") {
-                            widgets::size_field(ui, id, shown, units, 80.0)
+                            widgets::size_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
                         } else {
-                            widgets::num_field(ui, id, shown, units, 80.0)
+                            widgets::num_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
                         };
                         if let Some(nv) = set {
                             app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link, "copy": copy})).ok();
