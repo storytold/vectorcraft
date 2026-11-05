@@ -22,6 +22,15 @@ pub(super) struct Board {
     ours: bool,
     /// How many times the app wrote it.
     writes: usize,
+    /// Another app has the clipboard open: the app's writes fail and change nothing, and reads
+    /// find nothing.
+    locked: bool,
+    /// Raised by every write and every copy elsewhere.
+    changes: u64,
+    /// The platform has no change count.
+    uncounted: bool,
+    /// The app's writes empty the clipboard and then fail.
+    partial: bool,
 }
 
 struct Fake(Rc<RefCell<Board>>);
@@ -29,6 +38,9 @@ struct Fake(Rc<RefCell<Board>>);
 impl Fake {
     fn find(&self, mimes: &[&'static str]) -> Option<Flavour> {
         let b = self.0.borrow();
+        if b.locked {
+            return None;
+        }
         let matches = |m: &str, f: &Flavour| f.mime == m || (m == BITMAP && f.mime.starts_with("image/") && f.mime != SVG);
         mimes.iter().find_map(|m| b.flavours.iter().find(|f| matches(m, f)).cloned())
     }
@@ -37,8 +49,20 @@ impl Fake {
 impl SystemClipboard for Fake {
     fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
         let mut b = self.0.borrow_mut();
-        *b = Board { flavours: flavours.to_vec(), ours: true, writes: b.writes + 1 };
+        if b.locked {
+            return Err("another app has the clipboard open".into());
+        }
+        if b.partial {
+            b.flavours.clear();
+            b.changes += 1;
+            return Err("a format could not be written".into());
+        }
+        *b = Board { flavours: flavours.to_vec(), ours: true, writes: b.writes + 1, changes: b.changes + 1, ..std::mem::take(&mut *b) };
         Ok(())
+    }
+    fn change_count(&mut self) -> Option<u64> {
+        let b = self.0.borrow();
+        (!b.uncounted).then_some(b.changes)
     }
     fn holds_ours(&mut self) -> bool {
         self.0.borrow().ours
@@ -66,7 +90,22 @@ pub(super) fn app() -> (VectorcraftApp, Rc<RefCell<Board>>) {
 pub(super) fn copy_elsewhere(board: &Rc<RefCell<Board>>, flavours: Vec<(&'static str, Vec<u8>)>) {
     let flavours = flavours.into_iter().map(|(mime, data)| Flavour { mime, data }).collect();
     let mut b = board.borrow_mut();
-    *b = Board { flavours, ours: false, writes: b.writes };
+    *b = Board { flavours, ours: false, changes: b.changes + 1, ..std::mem::take(&mut *b) };
+}
+
+/// Another app opens the clipboard (`true`) or closes it.
+pub(super) fn lock(board: &Rc<RefCell<Board>>, locked: bool) {
+    board.borrow_mut().locked = locked;
+}
+
+/// The fake clipboard reports no change count, as on platforms that have none.
+pub(super) fn without_change_count(board: &Rc<RefCell<Board>>) {
+    board.borrow_mut().uncounted = true;
+}
+
+/// The app's writes empty the clipboard and then fail, as when one format can't be written.
+pub(super) fn fail_writes_after_emptying(board: &Rc<RefCell<Board>>) {
+    board.borrow_mut().partial = true;
 }
 
 pub(super) fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
