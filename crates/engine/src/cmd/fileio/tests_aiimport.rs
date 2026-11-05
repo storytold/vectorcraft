@@ -125,6 +125,30 @@ fn an_ai_file_opens_with_its_artboard_options_raster_settings_and_author() {
 }
 
 #[test]
+fn an_ai_file_opens_with_its_active_artboard() {
+    let board = |x: i32, name: &str| {
+        format!(
+            "%_/Dictionary :\n%_{x} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_({name}) /UnicodeString (Name) ,\n%_; ,\n",
+            x + 200
+        )
+    };
+    let document = format!(
+        "%_/Document :\n%_/Dictionary :\n%_/Array :\n{}{}%_; (ArtboardArray) ,\n%_1 /Int (CropAreaActive) ,\n%_; /NotRecorded ,\n%_;\n",
+        board(0, "One"),
+        board(300, "Two")
+    );
+    let data = ai::sample_data();
+    let at = data.windows(15).position(|w| w == b"%AI5_BeginLayer").unwrap();
+    let data = [&data[..at], document.as_bytes(), &data[at..]].concat();
+    let mut s = Session::new();
+    let r = open(&mut s, "art.ai", &ai::ai(&compressed(&data), PLACEHOLDER), json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let names: Vec<&str> = d.artboards.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(names, ["One", "Two"], "{r}");
+    assert_eq!(d.opened_artboard, Some(d.artboards[1].id), "{r}");
+}
+
+#[test]
 fn an_ai_unread_group_keeps_its_layers_and_live_neighbor() {
     let live = format!("0 0 1 0 k\n{}f", ai::rect(10.0, 10.0, 14.0, 14.0));
     let unread = format!("u\n0 0 1 0 k\n{}f\nZZ\nU\n{}", ai::rect(50.0, 10.0, 54.0, 14.0), ai::named("Unread"));

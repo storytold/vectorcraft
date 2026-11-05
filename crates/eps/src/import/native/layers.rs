@@ -142,7 +142,8 @@ pub fn layered_ai_from(
     // The PDF part, its pages placed and named as the editing data's artboards are, when the
     // layers can't be used (`why`).
     let from_pdf_part = |mut visible: Document, mut warnings: Vec<String>, why: &str| {
-        place_pages(&ai::artboards(&data), &mut visible, unit);
+        let (boards, active) = ai::artboards(&data);
+        place_pages(&boards, active, &mut visible, unit);
         let have = visible.patterns.len();
         use_palette(&data, &mut visible);
         use_brushes(&data, &mut visible, have, &mut warnings);
@@ -278,10 +279,11 @@ fn use_brushes(data: &[u8], doc: &mut Document, have: usize, warnings: &mut Vec<
 /// The pages of `doc` (a `.ai` read as its PDF part: a page per artboard, in a row) named as
 /// `boards` (the artboards of its editing data, in art space) name them, and moved, with the art on
 /// each, to where they are, so the artboards keep their names and layout when the layers can't be
-/// read (#1068). Left as they are unless there are as many artboards as pages, each the size of its
-/// page in points, or, when `unit` is above 1, each the size of its page in units of `unit` points:
-/// then the layout is drawn `unit` times as large.
-fn place_pages(boards: &[(String, Rect)], doc: &mut Document, unit: f64) {
+/// read (#1068); the page of the artboard at `active` (the active one) is the active artboard. Left
+/// as they are unless there are as many artboards as pages, each the size of its page in points,
+/// or, when `unit` is above 1, each the size of its page in units of `unit` points: then the layout
+/// is drawn `unit` times as large.
+fn place_pages(boards: &[(String, Rect)], active: Option<usize>, doc: &mut Document, unit: f64) {
     if boards.is_empty() || boards.len() != doc.artboards.len() {
         return;
     }
@@ -301,6 +303,7 @@ fn place_pages(boards: &[(String, Rect)], doc: &mut Document, unit: f64) {
     for ((name, _), a) in boards.iter().zip(&mut doc.artboards) {
         a.name.clone_from(name);
     }
+    doc.opened_artboard = active.filter(|i| *i > 0).and_then(|i| doc.artboards.get(i)).map(|a| a.id);
     let [(_, first), _, ..] = boards else { return };
     // Art space (y up) → the document, the first artboard's top left at the origin, as `read` has it,
     // `k` points a unit.
