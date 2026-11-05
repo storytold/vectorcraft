@@ -24,6 +24,7 @@ pub use paint::{decode_failures, image_decodes, reduced_size};
 mod pattern;
 pub mod placed_document;
 pub mod proof;
+mod stroke;
 
 use std::collections::HashMap;
 use std::sync::Arc;
