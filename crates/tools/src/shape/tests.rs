@@ -166,15 +166,16 @@ fn a_star_drag_holds_the_inner_radius_it_shows_when_ctrl_goes_down() {
     close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 170.0, 50.0).with_mods(ctrl))), (120.0, 40.0 * straight));
 
     // Escape with the key held, then a new press and the key before the first move: the next star
-    // holds what it shows, not the canceled radius.
+    // has the ratio from before the canceled drag and holds the inner radius it shows, not the
+    // canceled one.
     let mut t = ShapeTool::new("star");
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 50.0));
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 50.0).with_mods(ctrl));
     assert_eq!(t.key(&cx, ToolKey::Escape, ctrl), vec![Action::Cancel]);
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
-    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 50.0).with_mods(ctrl))), (10.0, 2.5));
-    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 70.0, 50.0).with_mods(ctrl))), (20.0, 2.5));
+    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 50.0).with_mods(ctrl))), (10.0, 5.0));
+    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 70.0, 50.0).with_mods(ctrl))), (20.0, 5.0));
 
     // Ctrl/Cmd pressed inside the drag threshold, where no star is shown yet.
     let mut t = ShapeTool::new("star");
@@ -299,6 +300,81 @@ fn rounded_rectangle_radius_is_clamped_to_its_range() {
     let a = t.key(&cx, ToolKey::Up, Mods::default());
     assert!(matches!(&a[0], Action::Preview(_, v) if v["radius"] == json!(MAX_CORNER_RADIUS)), "{a:?}");
     assert_eq!(t.options()["cornerRadius"], json!(MAX_CORNER_RADIUS));
+}
+
+/// Escape during a polygon, star or rounded rectangle drag puts back the side count, point count
+/// or corner radius its arrows changed, for the next drag and the tool's options; a drag that is
+/// let go keeps them.
+#[test]
+fn escape_puts_back_the_options_a_drag_changed() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    for (id, field) in [("polygon", "sides"), ("star", "points"), ("roundedRectangle", "radius")] {
+        let mut t = ShapeTool::new(id);
+        let value = |a: Vec<Action>| match a.last() {
+            Some(Action::Preview(_, v)) => v[field].clone(),
+            _ => panic!("{id}: {a:?}"),
+        };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        let before = value(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0)));
+        let options = t.options();
+        t.key(&cx, ToolKey::Up, Mods::default());
+        let changed = value(t.key(&cx, ToolKey::Up, Mods::default()));
+        assert_ne!(changed, before, "{id}: the arrows change the option");
+        assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{id}");
+        assert_eq!(t.options(), options, "{id}: the tool's options");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        assert_eq!(value(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))), before, "{id}: the next drag");
+        // A drag that is let go keeps what its arrows changed.
+        t.key(&cx, ToolKey::Up, Mods::default());
+        t.key(&cx, ToolKey::Up, Mods::default());
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 60.0, 40.0)), vec![Action::Commit]);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        assert_eq!(value(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))), changed, "{id}: a finished drag keeps it");
+        t.key(&cx, ToolKey::Down, Mods::default());
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        let kept = t.options();
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        // Escape puts back only what this drag changed.
+        assert_eq!(value(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))), changed, "{id}: only this drag");
+        assert_ne!(kept, options, "{id}");
+    }
+}
+
+/// Ctrl/Cmd changes a star's inner-to-outer ratio as it is dragged out; Escape puts it back, and
+/// an option set during the drag stays.
+#[test]
+fn escape_puts_back_the_star_ratio_and_keeps_an_option_set_during_the_drag() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    let ctrl = Mods { cmd: true, ..Default::default() };
+    let mut t = ShapeTool::new("star");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 50.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 50.0).with_mods(ctrl));
+    assert!((t.star_ratio - 0.25).abs() < 1e-9, "{}", t.star_ratio);
+    t.key(&cx, ToolKey::Escape, ctrl);
+    assert_eq!(t.star_ratio, 0.5);
+
+    // Options set with `tool.setOption` during the drag stay; the arrows' change goes back.
+    for (id, key, set) in [("polygon", "sides", json!(9)), ("star", "points", json!(8)), ("roundedRectangle", "cornerRadius", json!(30.0))] {
+        let mut t = ShapeTool::new(id);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+        t.key(&cx, ToolKey::Up, Mods::default());
+        t.set_option(key, &set);
+        t.set_option("starRatio", &json!(0.3));
+        t.key(&cx, ToolKey::Up, Mods::default());
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        let o = t.options();
+        assert_eq!((o[key].clone(), o["starRatio"].clone()), (set, json!(0.3)), "{id}");
+    }
 }
 
 /// The start and the dragged corner land on another object's anchors (#506), hovering shows
