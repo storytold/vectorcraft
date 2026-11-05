@@ -524,6 +524,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.toolbar.list", "List Toolbars", "", "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots}]"),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
+        "window.pathfinder.compoundShapes",
+        "Shape Mode Buttons Make Compound Shapes",
+        "",
+        "{} toggles the Compound Shapes add-on's setting: on, the Pathfinder panel's Shape Mode buttons make a compound shape and Alt-click gives the permanent Pathfinder result; off (the default), the other way round. Members of a compound shape selected always take the mode",
+    ),
+    (
         "window.taskBar.pin",
         "Pin Bar Position",
         "",

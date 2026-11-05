@@ -6215,3 +6215,7 @@ breakText	Glyphs	Глифи
 	Even-Numbered Anchors	Четни опорни точки
 	Minimum angle	Минимален ъгъл
 	Maximum angle	Максимален ъгъл
+
+# Compound Shapes add-on
+	Compound Shapes	Съставни фигури
+	Shape Mode Buttons Make Compound Shapes	Бутоните за режими на фигури създават съставни фигури

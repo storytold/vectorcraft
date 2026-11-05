@@ -104,6 +104,7 @@ impl VectorcraftApp {
             clipboard_publishing: Default::default(),
             pending_url: None,
             control_rx: None,
+            deferred_control: None,
             pending_screenshots: vec![],
             queued_screenshots: vec![],
             screenshot_token: 0,

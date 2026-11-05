@@ -6400,3 +6400,7 @@ breakText	Glyphs	Merkit
 	Even-Numbered Anchors	Parilliset ankkurit
 	Minimum angle	Pienin kulma
 	Maximum angle	Suurin kulma
+
+# Compound Shapes add-on
+	Compound Shapes	Yhdistelmämuodot
+	Shape Mode Buttons Make Compound Shapes	Muototilapainikkeet luovat yhdistelmämuotoja
