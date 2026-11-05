@@ -6100,6 +6100,9 @@ anchor	Points:	წერტილები:
 	Find Nearest Swatch…	უახლოესი ფერის ნიმუშის პოვნა…
 	Find Nearest Swatch	უახლოესი ფერის ნიმუშის პოვნა
 	Apply Nearest Swatch	უახლოესი ფერის ნიმუშის გამოყენება
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	შევსების გამოყენება კონტურზე
+	Apply Stroke to Fill	კონტურის გამოყენება შევსებაზე
 	Select objects to find the swatches nearest their colors.	აირჩიეთ ობიექტები მათ ფერებთან უახლოესი ფერის ნიმუშების საპოვნელად.
 @msg	select objects or give `color`	აირჩიეთ ობიექტები ან მიუთითეთ `color`
 @msg	`color` is not a colour	`color` ფერი არ არის

@@ -6078,6 +6078,9 @@ shape	Open	Otvoren
 	Find Nearest Swatch…	Pronađi najbliži uzorak boje…
 	Find Nearest Swatch	Pronađi najbliži uzorak boje
 	Apply Nearest Swatch	Primijeni najbliži uzorak boje
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Primijeni ispunu na potez
+	Apply Stroke to Fill	Primijeni potez na ispunu
 	Select objects to find the swatches nearest their colors.	Odaberite objekte da pronađete uzorke boja najbliže njihovim bojama.
 @msg	select objects or give `color`	odaberite objekte ili navedite `color`
 @msg	`color` is not a colour	`color` nije boja

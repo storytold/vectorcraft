@@ -6133,6 +6133,9 @@ anchor	Points:	Pisteet:
 	Find Nearest Swatch…	Etsi lähin värimalli…
 	Find Nearest Swatch	Etsi lähin värimalli
 	Apply Nearest Swatch	Käytä lähintä värimallia
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Käytä täyttöä viivaan
+	Apply Stroke to Fill	Käytä viivaa täyttöön
 	Select objects to find the swatches nearest their colors.	Valitse objektit, joiden väreille haluat etsiä lähimmät värimallit.
 @msg	select objects or give `color`	valitse objekteja tai anna `color`
 @msg	`color` is not a colour	`color` ei ole väri

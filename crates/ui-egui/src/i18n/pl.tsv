@@ -5957,6 +5957,9 @@ anchor	Points:	Punkty:
 	Find Nearest Swatch…	Znajdź najbliższą próbkę…
 	Find Nearest Swatch	Znajdź najbliższą próbkę
 	Apply Nearest Swatch	Zastosuj najbliższą próbkę
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Zastosuj wypełnienie do obrysu
+	Apply Stroke to Fill	Zastosuj obrys do wypełnienia
 	Select objects to find the swatches nearest their colors.	Zaznacz obiekty, aby znaleźć próbki najbliższe ich kolorom.
 @msg	select objects or give `color`	zaznacz obiekty lub podaj `color`
 @msg	`color` is not a colour	`color` nie jest kolorem

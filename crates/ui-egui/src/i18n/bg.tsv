@@ -5952,6 +5952,9 @@ anchor	Points:	Точки:
 	Find Nearest Swatch…	Намиране на най-близкия образец…
 	Find Nearest Swatch	Намиране на най-близкия образец
 	Apply Nearest Swatch	Прилагане на най-близкия образец
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Прилагане на запълването към щриха
+	Apply Stroke to Fill	Прилагане на щриха към запълването
 	Select objects to find the swatches nearest their colors.	Изберете обекти, за да намерите най-близките до цветовете им образци.
 @msg	select objects or give `color`	изберете обекти или задайте `color`
 @msg	`color` is not a colour	`color` не е цвят

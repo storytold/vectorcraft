@@ -3019,7 +3019,7 @@ fn apply_fill_to_stroke_with_characters_selected_changes_only_them() {
     s.set_tool_option("select", &json!({"start": 0, "end": 6}));
     s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
     let steps = undo_labels(&s).len();
-    s.execute("paint.fillToStroke", &json!({})).unwrap();
+    s.execute("addon.color.fillToStroke", &json!({})).unwrap();
     let t = obj(&s, id);
     assert_eq!(t.runs[0].text, "Sample");
     assert_eq!(t.runs[0].style.stroke, t.runs[0].style.fill, "the selected characters take their fill as a stroke");

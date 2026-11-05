@@ -6054,6 +6054,9 @@ anchor	Points:	Σημεία:
 	Find Nearest Swatch…	Εύρεση πλησιέστερου δείγματος χρώματος…
 	Find Nearest Swatch	Εύρεση πλησιέστερου δείγματος χρώματος
 	Apply Nearest Swatch	Εφαρμογή πλησιέστερου δείγματος χρώματος
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Εφαρμογή γεμίσματος στο περίγραμμα
+	Apply Stroke to Fill	Εφαρμογή περιγράμματος στο γέμισμα
 	Select objects to find the swatches nearest their colors.	Επιλέξτε αντικείμενα για να βρείτε τα δείγματα χρωμάτων που πλησιάζουν περισσότερο τα χρώματά τους.
 @msg	select objects or give `color`	επιλέξτε αντικείμενα ή δώστε `color`
 @msg	`color` is not a colour	το `color` δεν είναι χρώμα

@@ -5688,6 +5688,9 @@ anchor	Points:	Punkte:
 	Find Nearest Swatch…	Ähnlichstes Farbfeld suchen…
 	Find Nearest Swatch	Ähnlichstes Farbfeld suchen
 	Apply Nearest Swatch	Ähnlichstes Farbfeld anwenden
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Fläche auf Kontur anwenden
+	Apply Stroke to Fill	Kontur auf Fläche anwenden
 	Select objects to find the swatches nearest their colors.	Wählen Sie Objekte aus, um die Farbfelder zu finden, die ihren Farben am nächsten kommen.
 @msg	select objects or give `color`	wählen Sie Objekte aus oder geben Sie `color` an
 @msg	`color` is not a colour	`color` ist keine Farbe
