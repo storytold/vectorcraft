@@ -477,6 +477,11 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             })
         }
         "window.toolbarAdvanced" => flag(&mut app.ui.toolbar_advanced),
+        "window.toolsBesideCanvas" => opt_bool(p, "on").map(|on| {
+            let on = on.unwrap_or(!app.ui.tools_beside_canvas);
+            app.ui.tools_beside_canvas = on;
+            json!(on)
+        }),
         "imageTrace.preview" => opt_bool(p, "on").map(|on| {
             let on = on.unwrap_or(!app.ui.image_trace_preview);
             app.ui.image_trace_preview = on;

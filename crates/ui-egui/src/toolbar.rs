@@ -95,19 +95,26 @@ pub fn remember(app: &mut VectorcraftApp, id: &str) {
     crate::custom_toolbars::remember(&mut app.ui, id);
 }
 
+/// The docked Tools panel's rect as last laid out; removed while it floats.
+pub(crate) fn docked_rect_id() -> egui::Id {
+    egui::Id::unique("toolbar-docked-rect")
+}
+
 fn panel_width(ui: &crate::state::UiState) -> f32 {
     if ui.toolbar_double { 80.0 } else { WIDTH }
 }
 
-/// Space reserved inside the protected canvas panel for a visible docked Tools panel.
+/// Space reserved inside the protected canvas panel for a visible Tools panel docked beside the
+/// canvas (`UiState::tools_beside_canvas`); none while Tools docks at the window's edge.
 pub(crate) fn docked_width(ui: &crate::state::UiState) -> f32 {
-    if ui.toolbar && ui.screen_mode < 3 && ui.toolbar_pos.is_none() { panel_width(ui) + 6.0 } else { 0.0 }
+    if ui.tools_beside_canvas && ui.toolbar && ui.screen_mode < 3 && ui.toolbar_pos.is_none() { panel_width(ui) + 6.0 } else { 0.0 }
 }
 
-/// Register redocking targets even while Tools floats; a docked panel follows the canvas's
-/// left edge as dock columns resize, collapse or hide.
+/// With `UiState::tools_beside_canvas` on, the canvas-edge redocking target, registered even
+/// while Tools floats, and the docked panel, which follows the canvas's left edge as dock columns
+/// resize, collapse or hide. With it off, `app.rs` draws Tools before the docking layout.
 pub(crate) fn show_beside_canvas(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if app.ui.toolbar && app.ui.screen_mode < 3 {
+    if app.ui.tools_beside_canvas && app.ui.toolbar && app.ui.screen_mode < 3 {
         crate::tools_float::set_dock_zones(ui.ctx(), ui.available_rect_before_wrap(), WIDTH);
         if app.ui.toolbar_pos.is_none() {
             show(app, ui);
@@ -125,11 +132,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     match app.ui.toolbar_pos {
         None => {
             let margin = egui::Margin { left: 6, right: 0, top: 6, bottom: 6 };
-            egui::Panel::left("toolbar").resizable(false).exact_size(w + 6.0).frame(egui::Frame::NONE).show(ui, |ui| {
+            let docked = egui::Panel::left("toolbar").resizable(false).exact_size(w + 6.0).frame(egui::Frame::NONE).show(ui, |ui| {
                 crate::theme::card(ui, &t, margin, |ui| body(app, ui, cols, None));
             });
+            ui.ctx().data_mut(|d| d.insert_temp(docked_rect_id(), docked.response.rect));
         }
         Some(pos) => {
+            ui.ctx().data_mut(|d| d.remove::<egui::Rect>(docked_rect_id()));
             // Floating, kept inside the window, its tools scrolling when they don't fit under it.
             let ctx = ui.ctx().clone();
             let id = egui::Id::unique("toolbar-floating");

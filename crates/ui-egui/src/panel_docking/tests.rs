@@ -274,7 +274,7 @@ fn switching_workspace_during_a_tab_drag_keeps_the_new_workspace_layout() {
 #[test]
 fn the_tools_panel_floats_by_its_title_bar_and_docks_on_the_left_edge() {
     let mut h = Harness::new();
-    let zone = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).expect("the Tools panel's docking strip");
+    let zone = docked_tools(&h);
     let title = zone.min + vec2(20.0, 12.0);
     h.drag(title, pos2(600.0, 400.0));
     let [x, y] = h.app.ui.toolbar_pos.expect("the Tools panel floats");
@@ -284,70 +284,186 @@ fn the_tools_panel_floats_by_its_title_bar_and_docks_on_the_left_edge() {
     assert_eq!(h.app.ui.toolbar_pos, None, "dropped on the left edge, it docks");
 }
 
-/// A left-side panel dock leaves the Tools panel between that dock and the document.
-#[test]
-fn docked_tools_stay_beside_the_canvas_with_left_side_panels() {
-    let mut h = Harness::new();
-    h.app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
+/// The docked Tools panel as last drawn.
+fn docked_tools(h: &Harness) -> Rect {
+    h.ctx.data(|d| d.get_temp::<Rect>(crate::toolbar::docked_rect_id())).expect("the docked Tools panel")
+}
+
+fn settle(h: &mut Harness) {
     for _ in 0..3 {
         h.frame(vec![]);
     }
-    let tools = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).unwrap();
-    let layers = h.tab("layers").unwrap();
-    let canvas = h.app.canvas_rect.unwrap();
-    assert!(layers.right() <= tools.left(), "the left dock precedes Tools: {layers:?}, {tools:?}");
-    assert!(tools.right() <= canvas.left() && canvas.left() - tools.right() < 40.0, "Tools stays beside the canvas: {tools:?}, {canvas:?}");
+}
+
+fn keep_tools_beside_canvas(h: &mut Harness, on: bool) {
+    assert_eq!(h.app.run("window.toolsBesideCanvas", json!({"on": on})).unwrap(), json!(on));
+    settle(h);
+}
+
+/// Where docked Tools sits with a left-side dock: `Some(true)` between the dock and the canvas,
+/// `Some(false)` at the window's edge outside the dock.
+fn tools_place(h: &Harness) -> Option<bool> {
+    let tools = docked_tools(h);
+    let layers = h.tab("layers")?;
+    let canvas = h.app.canvas_rect?;
+    if layers.right() <= tools.left() && tools.right() <= canvas.left() && canvas.left() - tools.right() < 40.0 {
+        Some(true)
+    } else if tools.left() < 10.0 && tools.right() <= layers.left() {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// Off by default: docked Tools stays at the window's edge, outside a left-side dock, and the
+/// setting moves it between the dock and the canvas and back.
+#[test]
+fn docked_tools_keep_the_window_edge_unless_kept_beside_the_canvas() {
+    let mut h = Harness::new();
+    assert!(!h.app.ui.tools_beside_canvas);
+    assert_eq!(crate::menus::checked(&h.app, "window.toolsBesideCanvas", &json!({})), Some(false));
+    h.app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
+    settle(&mut h);
+    assert_eq!(tools_place(&h), Some(false), "Tools, then the left dock, then the canvas");
+    assert_eq!(crate::toolbar::docked_width(&h.app.ui), 0.0, "the canvas reserves no room for Tools");
+    keep_tools_beside_canvas(&mut h, true);
+    assert_eq!(crate::menus::checked(&h.app, "window.toolsBesideCanvas", &json!({})), Some(true));
+    assert_eq!(tools_place(&h), Some(true), "the left dock, then Tools, then the canvas");
+    keep_tools_beside_canvas(&mut h, false);
+    assert_eq!(tools_place(&h), Some(false), "back at the window's edge");
 }
 
 #[test]
-fn tools_redock_beside_left_panels_from_either_drop_target() {
+fn keep_tools_beside_the_canvas_toggles_and_rejects_a_value_that_is_not_true_or_false() {
+    let mut h = Harness::new();
+    assert_eq!(h.app.run("window.toolsBesideCanvas", json!({})).unwrap(), json!(true));
+    assert_eq!(h.app.run("window.toolsBesideCanvas", json!({})).unwrap(), json!(false));
+    assert!(h.app.run("window.toolsBesideCanvas", json!({"on": "yes"})).is_err());
+    assert!(!h.app.ui.tools_beside_canvas, "a bad value changes nothing");
+}
+
+/// Off, only the window's edge docks a floating Tools panel; on, the canvas's edge does too, and
+/// both dock it beside the canvas.
+#[test]
+fn tools_redock_at_the_targets_of_the_chosen_placement() {
+    for beside in [false, true] {
+        let mut h = Harness::new();
+        keep_tools_beside_canvas(&mut h, beside);
+        h.app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
+        for at_window_edge in [false, true] {
+            h.app.run("window.panel.float", json!({"panel": "tools", "x": 600, "y": 300})).unwrap();
+            settle(&mut h);
+            let canvas = h.app.canvas_rect.unwrap();
+            let canvas_edge = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id()));
+            assert_eq!(canvas_edge.is_some(), beside, "a canvas-edge target only while kept beside the canvas");
+            let canvas_edge = canvas_edge.map_or(pos2(canvas.left() + 12.0, canvas.center().y), |r| r.center());
+            let target = if at_window_edge { pos2(12.0, canvas.center().y) } else { canvas_edge };
+            h.drag(pos2(620.0, 307.0), target);
+            if !beside && !at_window_edge {
+                assert!(h.app.ui.toolbar_pos.is_some(), "the canvas's edge does not dock Tools while the setting is off");
+                continue;
+            }
+            assert_eq!(h.app.ui.toolbar_pos, None, "beside: {beside}, at the window edge: {at_window_edge}");
+            settle(&mut h);
+            assert_eq!(tools_place(&h), Some(beside), "beside: {beside}, at the window edge: {at_window_edge}");
+        }
+    }
+}
+
+/// Turning the setting off while Tools floats forgets the canvas-edge target, and turning it on
+/// leaves a floating Tools panel floating.
+#[test]
+fn toggling_while_tools_floats_keeps_it_floating_and_drops_the_canvas_target() {
     let mut h = Harness::new();
     h.app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
-    for at_window_edge in [false, true] {
-        h.app.run("window.panel.float", json!({"panel": "tools", "x": 600, "y": 300})).unwrap();
-        for _ in 0..3 {
-            h.frame(vec![]);
-        }
-        let zone = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).unwrap();
-        let target = if at_window_edge { pos2(12.0, zone.center().y) } else { zone.center() };
-        h.drag(pos2(620.0, 307.0), target);
-        assert_eq!(h.app.ui.toolbar_pos, None, "redock at window edge: {at_window_edge}");
-        let tools = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).unwrap();
-        assert!(h.tab("layers").unwrap().right() <= tools.left());
-        assert!(tools.right() <= h.app.canvas_rect.unwrap().left());
-    }
+    keep_tools_beside_canvas(&mut h, true);
+    h.app.run("window.panel.float", json!({"panel": "tools", "x": 600, "y": 300})).unwrap();
+    settle(&mut h);
+    let zone = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).expect("the canvas-edge target");
+    keep_tools_beside_canvas(&mut h, false);
+    assert!(h.app.ui.toolbar_pos.is_some(), "turning it off leaves Tools floating");
+    assert!(h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).is_none(), "the canvas-edge target is gone");
+    h.drag(pos2(620.0, 307.0), zone.center());
+    assert!(h.app.ui.toolbar_pos.is_some(), "the old canvas-edge strip docks nothing");
+    let [x, y] = h.app.ui.toolbar_pos.unwrap();
+    keep_tools_beside_canvas(&mut h, true);
+    assert_eq!(h.app.ui.toolbar_pos, Some([x, y]), "turning it on leaves Tools floating where it was");
+    keep_tools_beside_canvas(&mut h, false);
+    h.drag(pos2(x + 20.0, y + 7.0), pos2(12.0, zone.center().y));
+    assert_eq!(h.app.ui.toolbar_pos, None);
+    settle(&mut h);
+    assert_eq!(tools_place(&h), Some(false));
+}
+
+/// The setting is kept with a workspace; state and workspaces saved without it keep Tools at the
+/// window's edge.
+#[test]
+fn keep_tools_beside_the_canvas_is_saved_and_off_in_state_saved_without_it() {
+    let mut saved = serde_json::to_value(crate::state::UiState { tools_beside_canvas: true, ..Default::default() }).unwrap();
+    assert_eq!(saved["tools_beside_canvas"], json!(true));
+    let reloaded: crate::state::UiState = serde_json::from_value(saved.clone()).unwrap();
+    assert!(reloaded.tools_beside_canvas);
+    saved.as_object_mut().unwrap().remove("tools_beside_canvas");
+    let old: crate::state::UiState = serde_json::from_value(saved).unwrap();
+    assert!(!old.tools_beside_canvas && old.toolbar_pos.is_none(), "older state docks Tools at the window's edge");
+
+    let mut h = Harness::new();
+    h.app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
+    keep_tools_beside_canvas(&mut h, true);
+    let mut workspace = serde_json::to_value(crate::workspaces::capture(&h.app.ui, "Mine")).unwrap();
+    assert_eq!(workspace["toolsBesideCanvas"], json!(true));
+    workspace.as_object_mut().unwrap().remove("toolsBesideCanvas");
+    let old: crate::workspaces::Workspace = serde_json::from_value(workspace).unwrap();
+    assert!(!old.tools_beside_canvas, "a workspace saved without it docks Tools at the window's edge");
+
+    h.app.run("window.workspace.new", json!({"name": "Mine"})).unwrap();
+    h.app.run("window.workspace", json!({"name": "Essentials"})).unwrap();
+    settle(&mut h);
+    assert!(!h.app.ui.tools_beside_canvas, "built-in workspaces keep Tools at the window's edge");
+    h.app.run("window.workspace", json!({"name": "Mine"})).unwrap();
+    settle(&mut h);
+    assert!(h.app.ui.tools_beside_canvas);
+    assert_eq!(tools_place(&h), Some(true), "the saved workspace brings Tools back beside the canvas");
 }
 
 #[test]
 fn tools_follow_left_panels_when_resized_hidden_and_restored() {
-    let mut h = Harness::new();
-    h.app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
-    gesture(&mut h.app, Action::ResizeColumn { panel: "layers".into(), width: 430.0 }).unwrap();
-    h.app.ui.toolbar_double = true;
-    for hidden in [false, true, false] {
-        if hidden == h.app.ui.dock {
-            h.app.run("window.panels", json!({})).unwrap();
+    for (beside, double) in [(false, false), (false, true), (true, false), (true, true)] {
+        let mut h = Harness::new();
+        keep_tools_beside_canvas(&mut h, beside);
+        h.app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
+        gesture(&mut h.app, Action::ResizeColumn { panel: "layers".into(), width: 430.0 }).unwrap();
+        h.app.ui.toolbar_double = double;
+        let width = if double { 80.0 } else { 48.0 };
+        for hidden in [false, true, false] {
+            if hidden == h.app.ui.dock {
+                h.app.run("window.panels", json!({})).unwrap();
+            }
+            settle(&mut h);
+            let tools = docked_tools(&h);
+            assert!((tools.width() - (width + 6.0)).abs() < 1.0, "{} columns: {tools:?}", if double { 2 } else { 1 });
+            if hidden {
+                assert!(h.tab("layers").is_none());
+                assert!(tools.left() < 10.0);
+            } else {
+                assert_eq!(tools_place(&h), Some(beside), "beside: {beside}, double: {double}");
+                assert!(h.tab("layers").unwrap().width() > 0.0);
+            }
+            let canvas = h.app.canvas_rect.unwrap();
+            assert!(canvas.left() - tools.left() >= width, "Tools has its own room: {tools:?}, {canvas:?}");
+            assert!(canvas.width() > 200.0);
         }
-        for _ in 0..3 {
-            h.frame(vec![]);
-        }
-        let tools = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).unwrap();
-        if hidden {
-            assert!(h.tab("layers").is_none());
-            assert!(tools.left() < 10.0);
-        } else {
-            assert!(h.tab("layers").unwrap().right() <= tools.left());
-        }
-        let canvas = h.app.canvas_rect.unwrap();
-        assert!(canvas.left() - tools.left() >= 80.0, "double-width Tools has its own room");
-        assert!(canvas.width() > 200.0);
     }
 }
 
+/// A layout with panels above or below the canvas: the full-height strip along the window's left
+/// edge docks Tools in both placements; off, Tools runs the window's height beside those panels,
+/// and on, it stays in the canvas's row.
 #[test]
 fn tools_redock_at_window_edge_above_and_below_canvas() {
-    for above in [true, false] {
+    for (beside, above) in [(false, true), (false, false), (true, true), (true, false)] {
         let mut h = Harness::new();
+        keep_tools_beside_canvas(&mut h, beside);
         let tabs = |panel: &str| Box::new(Node::Tabs { panels: vec![panel.to_string()], active: 0 });
         h.app.ui.docking = Some(Layout {
             root: Some(Node::Split {
@@ -372,7 +488,17 @@ fn tools_redock_at_window_edge_above_and_below_canvas() {
         let canvas = h.app.canvas_rect.unwrap();
         assert!(panel.center().y < canvas.top() || panel.center().y > canvas.bottom());
         h.drag(pos2(620.0, 307.0), pos2(12.0, panel.center().y));
-        assert_eq!(h.app.ui.toolbar_pos, None, "window-edge drop above canvas: {above}");
+        assert_eq!(h.app.ui.toolbar_pos, None, "window-edge drop, beside: {beside}, above the canvas: {above}");
+        settle(&mut h);
+        let tools = docked_tools(&h);
+        let panel = h.tab(if above { "layers" } else { "properties" }).unwrap();
+        assert!(tools.left() < 10.0 && tools.right() <= panel.left() + 60.0, "{tools:?}");
+        match (beside, above) {
+            (false, true) => assert!(tools.top() <= panel.top(), "Tools runs past the panel above: {tools:?}, {panel:?}"),
+            (false, false) => assert!(tools.bottom() >= panel.bottom(), "Tools runs past the panel below: {tools:?}, {panel:?}"),
+            (true, true) => assert!(tools.top() >= panel.bottom(), "Tools stays below the panel above: {tools:?}, {panel:?}"),
+            (true, false) => assert!(tools.bottom() <= panel.top(), "Tools stays above the panel below: {tools:?}, {panel:?}"),
+        }
     }
 }
 
@@ -382,6 +508,7 @@ fn capture_tools_beside_left_panels() {
     let dir = std::path::PathBuf::from(std::env::var_os("LEFT_TOOLS_SCREENSHOTS").unwrap());
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("window.toolsBesideCanvas", json!({"on": true})).unwrap();
     app.run("window.panel.dock", json!({"panel": "layers", "side": "Start"})).unwrap();
     let mut h = egui_kittest::Harness::builder()
         .with_size(vec2(1200.0, 800.0))

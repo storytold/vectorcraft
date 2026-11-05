@@ -429,7 +429,9 @@ below). Dragging a tab, a group's drag bar or an icon out of the dock and droppi
 floats it; dropping it on a group's tabs, on a group's upper or lower edge or beside a column docks it there. On
 the desktop each floating window is an OS window of its own; on the web and on Wayland it floats inside the app
 window. `ui.toolbar_pos` in `ui.inspect` is the Tools panel's corner (null: docked); `window.panel.float` and
-`window.panel.dock` with `panel: "tools"` float it at `x`, `y` or dock it on the window's left edge.
+`window.panel.dock` with `panel: "tools"` float it at `x`, `y` or dock it on the window's left edge. With
+`window.toolsBesideCanvas {on?}` (Window › Toolbars › Keep Tools Beside the Canvas, off by default; `ui.tools_beside_canvas`)
+the docked Tools panel sits between left-side panels and the canvas, and `window.panel.dock` docks it there.
 
 Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTransparency` dialog for the selection
 (fields `preset`: a preset name, setting it loads that preset's options; the option keys of

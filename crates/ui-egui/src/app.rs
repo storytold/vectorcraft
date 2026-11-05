@@ -545,7 +545,12 @@ impl VectorcraftApp {
         if self.ui.toolbar && self.ui.screen_mode < 3 {
             tools_float::set_window_dock_zone(&ctx, ui.available_rect_before_wrap());
         }
-        if self.ui.toolbar && self.ui.screen_mode < 3 && self.ui.toolbar_pos.is_some() {
+        if !self.ui.tools_beside_canvas {
+            // A canvas-edge target left from before the setting was turned off docks nothing.
+            tools_float::clear_canvas_dock_zone(&ctx);
+        }
+        // Beside the canvas, docked Tools draws inside the canvas panel (`toolbar::show_beside_canvas`).
+        if self.ui.toolbar && self.ui.screen_mode < 3 && (!self.ui.tools_beside_canvas || self.ui.toolbar_pos.is_some()) {
             toolbar::show(self, ui);
         } else if !self.ui.toolbar && self.ui.screen_mode < 3 && self.ui.tab_hid.is_none() {
             // Window › Tools hides the Tools panel alone; Tab hides the toolbars made with New

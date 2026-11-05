@@ -460,9 +460,14 @@ pub struct UiState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
     /// The Tools panel floats with its top-left corner here (dragged out by its title bar); `None`:
-    /// docked beside the canvas's left edge, inside any left-side panel dock.
+    /// docked at the window's left edge, or beside the canvas with [`Self::tools_beside_canvas`].
     #[serde(default)]
     pub toolbar_pos: Option<[f32; 2]>,
+    /// The docked Tools panel sits between the left-side panels and the canvas instead of at the
+    /// window's left edge (Window › Toolbars › Keep Tools Beside the Canvas,
+    /// `window.toolsBesideCanvas`). Off by default, and off in state saved without it.
+    #[serde(default)]
+    pub tools_beside_canvas: bool,
     pub status_bar: bool,
     pub dock: bool,
     /// The bars that Tab (`window.dock`) hid, which the next Tab shows again; none when Tab has not
@@ -992,6 +997,7 @@ impl Default for UiState {
             docking_generation: 0,
             dock_width: None,
             toolbar_pos: None,
+            tools_beside_canvas: false,
             status_bar: true,
             dock: true,
             tab_hid: None,
