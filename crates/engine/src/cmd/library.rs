@@ -989,11 +989,13 @@ fn selected_paint(s: &Session, p: &Value, stroke: bool) -> Result<Paint> {
         None => st.selection.objects.clone(),
     };
     let from_art = ids.iter().filter_map(|id| st.doc.node(*id)).find_map(|n| {
-        let (paint, to_doc, _) = n.proxy_paint(stroke, None)?;
+        let (paint, to_doc, bounds) = n.proxy_paint(stroke, None)?;
         // Type's characters paint in its own space: a gradient there takes its placement in the
         // document, so that it keeps the direction it shows.
-        match (paint, n.proxy_gradient(stroke, None)) {
-            (Paint::Gradient(g), Some((_, geom))) if to_doc != vectorcraft_geom::Affine::IDENTITY => {
+        match paint {
+            Paint::Gradient(g) if to_doc != vectorcraft_geom::Affine::IDENTITY => {
+                let mut geom = g.resolve(bounds);
+                geom.transform(to_doc, g.gradient.kind);
                 Some(Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..(**g).clone() })))
             }
             _ => Some(paint.clone()),
