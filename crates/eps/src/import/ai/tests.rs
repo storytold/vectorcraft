@@ -1060,18 +1060,132 @@ fn a_clipping_paths_stroke_stays_on_the_clipping_path() {
         children(&read_ok(&format!("{defs}{}", layer(&gradient))).doc),
         [(true, None, false, Some((blue, 3.0))), (false, None, true, None), (false, red, false, None)]
     );
-    // Several clipping paths clip as one compound path, which keeps their stroke when they all have the same one.
+    // Several clipping paths each keep their own stroke, opacity and blend mode: the second one clips a clipping group
+    // inside the first one's.
     let inner = rect_path(10.0, 10.0, 20.0, 20.0);
-    let compound_stroke = |first: &str, second: &str| {
+    let strokes = |first: &str, second: &str| {
         let body = format!("0 Ae\nq\n{RED}{under}f\n0 0 1 0 0 0 1 XA\n3 w\n{first}{clip}W\nS\n{second}{inner}W\nS\nQ\n");
         let doc = read_ok(&layer(&body)).doc;
         let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
-        assert!(matches!(children[0].kind, NodeKind::Compound { .. }), "{:?}", children[0].kind);
-        (children[0].appearance.stroke().map(|s| (s.paint.color(), s.width)), children[0].opacity, children[0].blend)
+        let NodeKind::Group { children: nested, clip: true } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+        [&children[0], &nested[0]].map(|c| {
+            assert!(matches!(c.kind, NodeKind::Path { clipping: true, .. }), "{:?}", c.kind);
+            (c.appearance.stroke().map(|s| (s.paint.color(), s.width)), c.opacity, c.blend)
+        })
     };
-    assert_eq!(compound_stroke("", ""), (Some((blue, 3.0)), 1.0, BlendMode::Normal));
-    assert_eq!(compound_stroke("9 0.5 0 0 0 Xy\n", ""), (Some((blue, 3.0)), 0.5, BlendMode::Lighten));
-    assert_eq!(compound_stroke("", "5 w\n"), (None, 1.0, BlendMode::Normal), "strokes that differ");
+    let plain = (Some((blue, 3.0)), 1.0, BlendMode::Normal);
+    assert_eq!(strokes("", ""), [plain, plain]);
+    assert_eq!(strokes("", "9 0.5 0 0 0 Xy\n"), [plain, (Some((blue, 3.0)), 0.5, BlendMode::Lighten)]);
+    assert_eq!(strokes("", "5 w\n"), [plain, (Some((blue, 5.0)), 1.0, BlendMode::Normal)], "strokes that differ");
+}
+
+/// Several clipping paths in a clipping group, a layer or an opacity mask's art clip to their intersection: each `W`
+/// reduces the clip set by the ones before it (AI7 spec §5.6.2). Each clipping path after the first clips a clipping
+/// group inside the one before it, and the innermost one holds the art; a clipping path's painted fill stays at its own
+/// level.
+#[test]
+fn several_clipping_paths_clip_to_their_intersection() {
+    let square = rect_path(0.0, 0.0, 80.0, 80.0);
+    let (a, b) = (rect_path(20.0, 20.0, 60.0, 60.0), rect_path(25.0, 25.0, 70.0, 55.0));
+    // (clipping, fill color, bounds) of a clipping group's children, with a nested clipping group's children listed
+    // after it.
+    type Level = Vec<(bool, Option<Color>, Option<Rect>)>;
+    fn levels(children: &[Arc<Node>]) -> Vec<Level> {
+        let mut out = vec![];
+        let mut at = children;
+        loop {
+            out.push(at.iter().map(|c| (matches!(c.kind, NodeKind::Path { clipping: true, .. }), fill(c).color(), c.geometric_bounds())).collect());
+            let Some(NodeKind::Group { children, clip: true }) = at.last().map(|c| &c.kind) else { return out };
+            at = children;
+        }
+    }
+    let red = Some(Color::rgb(1.0, 0.0, 0.0));
+    let blue = Some(Color::rgb(0.0, 0.0, 1.0));
+    // A rectangle as written, in the document's coordinates (y down from the 100 pt high page's top).
+    let r = |x0, y0, x1, y1| Some(Rect::new(x0, 100.0 - y1, x1, 100.0 - y0));
+    let (ra, rb) = (r(20.0, 20.0, 60.0, 60.0), r(25.0, 25.0, 70.0, 55.0));
+    let group = |body: &str| {
+        let doc = read_ok(&layer(body)).doc;
+        let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+        levels(children)
+    };
+    // The art after both clipping paths, in a clipping group of the second inside the first's.
+    let two = group(&format!("0 Ae\nq\n{a}h\nW\nn\n{b}h\nW\nn\n{RED}{square}f\nQ\n"));
+    assert_eq!((two.len(), two[0].len()), (2, 2), "{two:?}");
+    assert_eq!(two[0][0], (true, None, ra));
+    assert_eq!(two[1], [(true, None, rb), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
+    // Three clipping paths nest twice; a filled clipping path's painted copy is clipped by the paths before it only.
+    let three =
+        group(&format!("0 Ae\nq\n{a}h\nW\nn\n0 0 1 0 0 0 1 Xa\n{b}h\nW\nf\n{}h\nW\nn\n{RED}{square}f\nQ\n", rect_path(30.0, 10.0, 50.0, 90.0)));
+    assert_eq!(three.len(), 3, "{three:?}");
+    assert_eq!(three[1][..2], [(true, None, rb), (false, blue, rb)]);
+    assert_eq!(three[2], [(true, None, r(30.0, 10.0, 50.0, 90.0)), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
+    // As with one clipping path, every object in the group is clipped by all of them, in the order written, wherever
+    // it is written.
+    let small = rect_path(0.0, 0.0, 10.0, 10.0);
+    let before = group(&format!("0 Ae\nq\n{RED}{small}f\n{a}h\nW\nn\n{b}h\nW\nn\n0 0 1 0 0 0 1 Xa\n{square}f\nQ\n"));
+    assert_eq!(before.len(), 2, "{before:?}");
+    assert_eq!(before[1], [(true, None, rb), (false, red, r(0.0, 0.0, 10.0, 10.0)), (false, blue, r(0.0, 0.0, 80.0, 80.0))]);
+    let between = group(&format!("0 Ae\nq\n{RED}{small}f\n{a}h\nW\nn\n0 0 1 0 0 0 1 Xa\n{square}f\n{b}h\nW\nn\n{RED}{square}f\nQ\n"));
+    assert_eq!((between.len(), between[0].len()), (2, 2), "{between:?}");
+    assert_eq!(
+        between[1],
+        [(true, None, rb), (false, red, r(0.0, 0.0, 10.0, 10.0)), (false, blue, r(0.0, 0.0, 80.0, 80.0)), (false, red, r(0.0, 0.0, 80.0, 80.0))]
+    );
+    // A compound clipping path and a clipping path after it: their union, then that intersected with the second.
+    let c = rect_path(30.0, 10.0, 50.0, 90.0);
+    let mixed = format!("0 Ae\nq\n*u\n{a}h\nW\nn\n{b}h\nW\nn\n*U\n{c}h\nW\nn\n{RED}{square}f\nQ\n");
+    let doc = read_ok(&layer(&mixed)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Compound { .. }) && children.len() == 2, "{children:?}");
+    assert_eq!(levels(children)[1], [(true, None, r(30.0, 10.0, 50.0, 90.0)), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
+    // Clipping paths alone in a group (`u <path> W n <path> W n U`) clip the clipping group around it the same way.
+    let grouped = group(&format!("0 Ae\nq\n{RED}{square}f\n0 Ae\nu\n{a}h\nW\nn\n{b}h\nW\nn\nU\nQ\n"));
+    assert_eq!(grouped.len(), 2, "{grouped:?}");
+    assert_eq!(grouped[1], [(true, None, rb), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
+    // A compound path of clipping paths is still one clipping path, their union.
+    let compound = format!("0 Ae\nq\n*u\n{a}h\nW\nn\n{b}h\nW\nn\n*U\n{RED}{square}f\nQ\n");
+    let doc = read_ok(&layer(&compound)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Compound { .. }) && children.len() == 2, "{children:?}");
+    // Two clipping paths in a layer: the layer clips by the first, a clipping group in it by the second.
+    let doc = read_ok(&layer(&format!("{a}h\nW\nn\n{b}h\nW\nn\n{RED}{square}f\n"))).doc;
+    let NodeKind::Layer { clip: true, children, .. } = &doc.layers[0].kind else { panic!("{:?}", doc.layers[0].kind) };
+    let in_layer = levels(children);
+    assert_eq!(in_layer.len(), 2, "{in_layer:?}");
+    assert_eq!(in_layer[1], [(true, None, rb), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
+    // Two clipping paths in an opacity mask's art: the art clips by the first, a clipping group in it by the second.
+    let mask_art: String = format!("{a}h\nW\nn\n{b}h\nW\nn\n1 g\n{square}f\n").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let doc = read_ok(&layer(&format!("{RED}{square}f\n{mask}"))).doc;
+    let m = art(&doc)[0].extras().mask.clone().unwrap();
+    let NodeKind::Group { children, clip: true } = &m.art.kind else { panic!("{:?}", m.art.kind) };
+    let in_mask = levels(children);
+    assert_eq!(in_mask.len(), 2, "{in_mask:?}");
+    assert_eq!((in_mask[0][0].0, in_mask[0][0].2, in_mask[1][0]), (true, ra, (true, None, rb)));
+    assert_eq!(in_mask[1].len(), 2, "{in_mask:?}");
+    // Clipping paths are nested as far as the document's depth limit allows; past it they are refused rather than
+    // merged away, in a clipping group, a layer and an opacity mask's art.
+    let fits = |text: &dyn Fn(usize) -> String| (2..400).take_while(|n| read(stream(&layer(&text(*n))).as_bytes()).is_ok()).last().unwrap();
+    let deep = |n: usize, last: &str| format!("0 Ae\nq\n{}{last}{RED}{square}f\nQ\n", format!("{a}h\nW\nn\n").repeat(n));
+    // The layer is 1 deep, the clipping group 2, and the art in the innermost of `n` levels `n + 2`.
+    let in_group = fits(&|n| deep(n, ""));
+    assert_eq!(in_group, vectorcraft_doc::MAX_DEPTH - 2);
+    let r = read_ok(&layer(&deep(in_group, "")));
+    let NodeKind::Group { children, clip: true } = &art(&r.doc)[0].kind else { panic!("{:?}", art(&r.doc)[0].kind) };
+    assert_eq!(levels(children).len(), in_group, "{:?}", r.warnings);
+    assert!(read(stream(&layer(&deep(400, ""))).as_bytes()).unwrap_err().contains("nested too deeply"));
+    let in_layer = fits(&|n| format!("{}{RED}{square}f\n", format!("{a}h\nW\nn\n").repeat(n)));
+    assert_eq!(in_layer, vectorcraft_doc::MAX_DEPTH - 1);
+    let in_mask = fits(&|n| {
+        let art: String = format!("{}1 g\n{square}f\n", format!("{a}h\nW\nn\n").repeat(n)).lines().map(|l| format!("%_{l}\n")).collect();
+        format!("{RED}{square}f\n%_/ArtDictionary :\n%_/Mask :\n%_X=\n{art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n")
+    });
+    // The masked object is 2 deep and its mask's art 3.
+    assert_eq!(in_mask, vectorcraft_doc::MAX_DEPTH - 3);
+    // A compound clipping path holds its subpaths one level down: as the innermost one, it adds a level.
+    let compound_last = format!("*u\n{a}h\nW\nn\n{b}h\nW\nn\n*U\n");
+    assert!(read(stream(&layer(&deep(in_group - 1, &compound_last))).as_bytes()).unwrap_err().contains("nested too deeply"));
 }
 
 /// A clipping group's clipping path can sit alone in a group of its own, after the art it clips (`q … u <path> W n U

@@ -3892,6 +3892,12 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "*U",
             "q",
             "Q",
+            // Several clipping paths in one clipping group or layer clip to their intersection (AI7 spec §5.6.2), each
+            // nesting a clipping group.
+            "0 0 m 9 0 L 9 9 L h W n 1 1 m 8 1 L 8 8 L h W f",
+            "q 0 0 m 9 0 L 9 9 L h W n 1 1 m 8 1 L 8 8 L h W n 0 0 m 5 5 L 0 5 L f Q",
+            "u 0 0 m 9 0 L 9 9 L h W n 1 1 m 8 1 L 8 8 L h W n U",
+            "q 0 0 m 9 0 L 9 9 L h W n 0 0 m 9 0 L 9 9 L h W n 0 0 m 9 0 L 9 9 L h W n 0 0 m 9 0 L 9 9 L h W n 0 0 m 9 0 L 9 9 L h W n 0 0 m 9 0 L 9 9 L h W n 0 0 m 9 0 L 9 9 L h W n 0 0 m 9 0 L 9 9 L h W n",
             "LB",
             "Lb",
             "Ln",
