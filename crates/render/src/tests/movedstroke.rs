@@ -3,7 +3,9 @@
 //! again.
 
 use vectorcraft_color::{Color, Gradient, GradientPaint, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeLayer, WidthProfile};
+use vectorcraft_doc::{
+    Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeLayer, WidthProfile,
+};
 use vectorcraft_geom::{PathData, Point, Vec2};
 
 use crate::renderer::{STROKES_OUTLINED, offset_between};
