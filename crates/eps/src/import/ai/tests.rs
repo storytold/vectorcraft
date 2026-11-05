@@ -3001,6 +3001,29 @@ fn legacy_type_attributes_with_bad_operands_stay_as_they_were() {
     assert_eq!(bad.xf, good.xf);
 }
 
+/// `(text) justified TS` (special characters, §22.6) adds its characters to the story like `Tx`
+/// and `Tj`, whichever its flag. Without a string, or outside a text object, it adds nothing.
+#[test]
+fn legacy_special_characters_join_the_story() {
+    let texts = legacy_texts(&point_type("", "One").replace("TO\n", "(\\t) 0 TS\n(Two\\r) 1 TS\n(Three) Tx\nTO\n"));
+    let [t] = texts.as_slice() else { panic!("{texts:?}") };
+    assert_eq!(t.plain_text(), "One\tTwo\nThree");
+    let texts = legacy_texts(&format!("(x) 0 TS\n{}", point_type("0 TS", "Hi")));
+    let [t] = texts.as_slice() else { panic!("{texts:?}") };
+    assert_eq!(t.plain_text(), "Hi");
+}
+
+/// `Te` (end render, §22.6) reads in a text object with no operands and with four, inside a tab
+/// definition too, and keeps nothing; so does `TM` (pop text matrix, §22.6).
+#[test]
+fn legacy_end_render_and_text_matrix_pop_read() {
+    for te in ["Te", "0 0 1 36 Te", "36 0 Xb\n0 0 1 36 Te\nXB", "1 0 0 1 10 50 Tm\nTM"] {
+        let texts = legacy_texts(&point_type(te, "Hi"));
+        let [t] = texts.as_slice() else { panic!("{te}: {texts:?}") };
+        assert_eq!(t.plain_text(), "Hi", "{te}");
+    }
+}
+
 /// Spacing is kept to the ranges the Justification options take, a Minimum, Desired and Maximum
 /// out of order go back to their defaults, and hyphenation's letter counts and limit to the ranges
 /// `text.setFormat` takes.
