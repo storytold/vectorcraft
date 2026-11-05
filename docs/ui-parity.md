@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Path Precision Tools: Set Corners… rounds only the corners in an angle range; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (document tabs are reordered by dragging them along the tab strip; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -300,6 +300,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | Interaction | Status | Evidence |
 |---|---|---|
 | Selection artwork drag hovers a visible document tab to activate it, then drops editable artwork on its canvas | done | `tests_document_drag`, `edit.dropSelection`, lossless resource and one-step Undo regressions; overflow and cross-window drag remain separate |
+| A document tab dragged along the tab strip moves its document; a line marks where it goes, the current document and every document's view stay as they were, and a drag off the strip still floats it | done | #5663, [public source](https://helpx.adobe.com/illustrator/using/customizing-workspace.html); `document.move`; `tests::tab_reorder`, `chrome::tests` (drop index with floating and view tabs), `engine` `tests::document_move` |
 
 | Behaviour | Status | Notes |
 |---|---|---|
@@ -435,6 +436,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Document tabs are reordered by dragging them along the tab strip (`document.move`, #5663). |
 | 2026-11-04 | minor | Path Precision Tools add-on (a VectorCraft addition): Set Corners… rounds only the corners in an angle range (#5545); scores and estimates unchanged |
 | 2026-11-04 | minor | Path Precision Tools add-on (a VectorCraft addition): Set Corners… rounds all, the odd-numbered or the even-numbered anchors (#5546); scores and estimates unchanged |
 | 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen document, as the pane's options are listed "for the selected preset" ([public source](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/start-a-new-file/create-and-save-custom-document-presets.html)); the chosen card shows them, every other Recent and Saved card keeps the units its document or preset was made in, and the built-in tabs still follow the chosen units (#2078); scores and estimates unchanged |

@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (document tabs are reordered by dragging them along the tab strip; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -611,6 +611,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Done:** Window › Arrange › Tile (`window.arrange.tile`) shows every open document in its own pane, edge to edge in the document area, and Consolidate All Windows (`window.arrange.consolidateAllWindows`) goes back to one document under its tab, on the desktop and the web. Estimate unchanged.
 - **Done:** Window › Arrange › Float in Window (`window.arrange.floatInWindow`), Float All in Windows (`window.arrange.floatAllInWindows`) and Cascade (`window.arrange.cascade`) move documents out of the tab strip into floating windows of their own, OS windows on the desktop and windows inside the app's window on the web and on Wayland; Cascade stacks them from the upper left to the lower right. Consolidate All Windows brings them back under the tabs. Estimate unchanged.
 - **Done:** a document tab dragged off the tab strip floats its document in a window under the pointer, and a document window dragged by its title bar (an OS window by the tab at its top) onto the tab strip goes back under the tabs. Estimate unchanged.
+- **Done (#5663):** a document tab dragged along the tab strip moves its document among the others ([public source](https://helpx.adobe.com/illustrator/using/customizing-workspace.html)), a line marking where it goes; the current document stays current, each document keeps its own view, the views Window › New Window opened move with their document, and Window › Next/Previous Document follow the new order. `document.move` does the same from MCP and the control channel. Estimate unchanged.
 - **Done (#4116):** Window › New Window (`window.newWindow`) opens another view of the current document, with its own zoom, center, rotation, artboard and Outline or Preview, as a tab titled with the view's number ("Name:2"); Tile, Cascade, Float in Window, Float All in Windows and Consolidate All Windows arrange each view as they arrange a document. Closing a view leaves the document open until its last view closes. Estimate unchanged.
 - **Estimate:** 15–25 h.
 
@@ -735,6 +736,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | G7: document tabs are dragged along the tab strip to reorder them (`document.move`, #5663). Estimate unchanged. |
 | 2026-11-02 | minor | G15: the renderer keeps a compound path's assembled path between frames and drops unused geometry entries after a few frames however few there are. Estimate unchanged. |
 | 2026-11-02 | minor | G15: hit testing culls paths and compound paths by their control points' box and tests a compound path's outline and fill against only its members near the click; the same objects are hit. Estimate unchanged. |
 | 2026-11-03 | minor | Symbol editing shows draggable 9-slice guides within the artwork (#5280). Guides outside the artwork remain unsupported. The G5 estimate remains 14–24 h. |
