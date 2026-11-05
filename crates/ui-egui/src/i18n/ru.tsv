@@ -6482,3 +6482,7 @@ shape	Open	Открытый
 # Compound Shapes add-on
 	Compound Shapes	Составные фигуры
 	Shape Mode Buttons Make Compound Shapes	Кнопки режимов фигур создают составные фигуры
+
+# 3D Box add-on
+	3D Box	3D-параллелепипед
+	3D Box Tool	Инструмент «3D-параллелепипед»

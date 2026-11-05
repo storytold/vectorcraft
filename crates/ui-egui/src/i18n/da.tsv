@@ -6259,3 +6259,7 @@ breakText	Glyphs	Glyffer
 # Compound Shapes add-on
 	Compound Shapes	Sammensatte figurer
 	Shape Mode Buttons Make Compound Shapes	Knapper til formtilstande opretter sammensatte figurer
+
+# 3D Box add-on
+	3D Box	3D-boks
+	3D Box Tool	3D-boksværktøj

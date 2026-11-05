@@ -6243,3 +6243,7 @@ breakText	Glyphs	Глифи
 # Compound Shapes add-on
 	Compound Shapes	Съставни фигури
 	Shape Mode Buttons Make Compound Shapes	Бутоните за режими на фигури създават съставни фигури
+
+# 3D Box add-on
+	3D Box	3D кутия
+	3D Box Tool	Инструмент за 3D кутия

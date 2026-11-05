@@ -6078,3 +6078,7 @@ breakText	Glyphs	字形
 # Compound Shapes add-on
 	Compound Shapes	複合シェイプ
 	Shape Mode Buttons Make Compound Shapes	シェイプモードボタンで複合シェイプを作成
+
+# 3D Box add-on
+	3D Box	3Dボックス
+	3D Box Tool	3Dボックスツール
