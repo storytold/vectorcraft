@@ -7078,8 +7078,10 @@ image in `folder` (PNG, JPEG, TIFF, BMP, GIF, WebP, PSD; with `includeSubdirs`, 
 `preset` (an `imageTrace.presets` name; Default by default; with `expand`, as Make and Expand), saves it into
 `destinationFolder` as `<name>.<ext>` in `format` (`vectorcraft` by default; `svg`, `pdf`, `ai`, `eps`), with `-2`,
 `-3`… added when the name is taken so no file is replaced, and closes it again whether it traced or not; the active
-document stays active. Images that can't be traced are listed in `failed` and the others are still traced. Up to 500
-images and 8 folder levels (a folder with more than 1,000 entries is refused); not on the web. The desktop app's Batch
+document stays active. Images that can't be traced are listed in `failed` and the others are still traced. Optional
+`format` and `preset` accept strings; `expand` and `includeSubdirs` accept true or false. Null and values of another
+type return an error before any image is opened. Up to 500 images and 8 folder levels (a folder with more than 1,000
+entries is refused); not on the web. The desktop app's Batch
 Trace Folder asks for both folders (#4921). → `{traced: [{path, output}], failed: [{path, error}], format}`
 
 ```json
