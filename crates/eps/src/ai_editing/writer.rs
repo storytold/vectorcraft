@@ -17,6 +17,7 @@ use crate::ps;
 
 mod images;
 mod paints;
+mod symbols;
 mod texts;
 
 pub(super) use images::PAYLOAD;
@@ -25,6 +26,8 @@ pub(super) use images::{IMAGE_DEPTH, IMAGES, LINKS_EMBEDDED};
 #[cfg(test)]
 pub(super) use paints::{GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT, free_gradient_name};
 #[cfg(test)]
+pub(super) use symbols::{MISSING_SYMBOL, SYMBOL_ART, SYMBOL_COUNT, SYMBOL_OPTIONS};
+#[cfg(test)]
 pub(super) use texts::TYPE_ATTRIBUTES;
 
 /// How deep symbols, live objects and pattern tiles may nest in one another (deeper art is left
@@ -32,14 +35,14 @@ pub(super) use texts::TYPE_ATTRIBUTES;
 /// [`vectorcraft_doc::MAX_DEPTH`].
 const MAX_NEST: u32 = 8;
 
-pub(super) const TYPE: &str = "type in opacity masks, pattern tiles and art cut to a clipping object, mirrored type, area type and type on a path that is turned or unevenly scaled or whose frame or path has several parts, area type in an open frame, type on an open path whose ends meet, area type that flows around a text wrap, type of only white space, threads of type on a path, threads whose frames differ in orientation or hold a frame written as outlines, type of sizes past what the reader reads, stories past what the reader reads (1,048,576 bytes a story, 16,777,216 bytes in all, and the size of text document it reads), and type with inline graphics, ruby, gradient or pattern paint, or fills, strokes, effects or an opacity mask of the object's own, is written as its outlines in the editing data for other apps";
-pub(super) const PATTERNS: &str = "pattern fills whose tiles aren't a grid or whose art reaches past the tile, pattern fills in another pattern's tile and pattern fills nested more than 8 deep are written as their tiles cut to the shape in the editing data for other apps";
+pub(super) const TYPE: &str = "type in opacity masks, pattern tiles, symbols and art cut to a clipping object, mirrored type, area type and type on a path that is turned or unevenly scaled or whose frame or path has several parts, area type in an open frame, type on an open path whose ends meet, area type that flows around a text wrap, type of only white space, threads of type on a path, threads whose frames differ in orientation or hold a frame written as outlines, type of sizes past what the reader reads, stories past what the reader reads (1,048,576 bytes a story, 16,777,216 bytes in all, and the size of text document it reads), and type with inline graphics, ruby, gradient or pattern paint, or fills, strokes, effects or an opacity mask of the object's own, is written as its outlines in the editing data for other apps";
+pub(super) const PATTERNS: &str = "pattern fills whose tiles aren't a grid or whose art reaches past the tile, pattern fills in another pattern's tile or in a symbol, and pattern fills nested more than 8 deep are written as their tiles cut to the shape in the editing data for other apps";
 pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fill places are written filled gray in the editing data for other apps";
 pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose clipping object isn't a path, and the clipping groups inside them, are written as their art cut to that object in the editing data for other apps";
 pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths that a plain fill and line can't draw are written as paths of their own inside the clipping (fills under the clipped art, strokes over it) in the editing data for other apps";
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
 pub(super) const LIVE: &str =
-    "symbols, blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
+    "blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
 const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
     "the opacity and blending modes of single fills and strokes are left out of the editing data for other apps";
@@ -162,6 +165,49 @@ pub(super) struct Writer<'a> {
     hidden: u32,
     /// The text document: the stories of the type written as text.
     pub(super) texts: texts::TextDoc,
+    /// Symbol instances on the layers may be written as instances ([`Self::live_instance`]); false
+    /// on a large canvas, where they are written as their art.
+    pub(super) symbols_live: bool,
+    /// The document symbols are defined from: on a large canvas, the document at its own size
+    /// (symbols' art is in its own space, which the canvas's scale doesn't change).
+    pub(super) symbol_doc: &'a Document,
+    /// A symbol's art is being written ([`Self::define_symbol`]).
+    in_symbol: bool,
+    /// The document → the space an instance's `RTransformMatrix` takes its symbol's art to: art
+    /// space, and in a symbol's art the canvas's turned y up about art space's origin there.
+    instance_space: Affine,
+    /// The symbol definitions written (`%AI14_BeginSymbol` … `%AI10_EndSymbol`), each after those
+    /// its art uses, and their names.
+    symbol_defs: Vec<String>,
+    defined_symbols: HashSet<String>,
+    /// The symbols whose definitions are being written.
+    defining_symbols: Vec<String>,
+    /// Whether each symbol's own art paints with a pattern, and the symbols its instances use
+    /// ([`Self::symbol_own_patterns`]).
+    pattern_symbols: HashMap<String, (bool, Vec<String>)>,
+    /// Whether each symbol's art paints with a pattern, nested symbols included
+    /// ([`Self::symbol_paints_pattern`]).
+    patterned_symbols: HashMap<String, bool>,
+    /// Pattern tiles were written in the art being written ([`Self::define_symbol`] starts it over
+    /// for each symbol's art).
+    wrote_pattern: bool,
+    /// The symbols whose definitions hold pattern tiles: a brushed stroke's brush art or a live
+    /// object's art can paint with a pattern that the symbol's own objects don't name.
+    pattern_written: HashSet<String>,
+    /// Art that draws as it should only where it is was written in the art being written
+    /// ([`Self::define_symbol`] starts it over for each symbol's art): a stroke as its outline or its
+    /// brush's art, type as its outlines, a live object or a symbol instance as its art, or a shape
+    /// with rounded live corners.
+    wrote_fixed: bool,
+    /// The symbols whose definitions hold such art, nested symbols' included
+    /// ([`Self::keeps_scale`]).
+    fixed_symbols: HashSet<String>,
+    /// The largest scale a live instance in the art being written applies, nested symbols' scales
+    /// included, and that of each symbol's definition.
+    inner_scale: f64,
+    symbol_scales: HashMap<String, f64>,
+    /// The entries a symbol's dictionary adds to its art's dictionary, and the art's id.
+    root_entries: Option<(vectorcraft_doc::NodeId, String)>,
 }
 
 impl<'a> Writer<'a> {
@@ -195,6 +241,22 @@ impl<'a> Writer<'a> {
             next: HashMap::new(),
             brushes: None,
             symbol_nodes: 0,
+            symbols_live: true,
+            symbol_doc: doc,
+            in_symbol: false,
+            instance_space: to_art,
+            symbol_defs: vec![],
+            defined_symbols: HashSet::new(),
+            defining_symbols: vec![],
+            pattern_symbols: HashMap::new(),
+            patterned_symbols: HashMap::new(),
+            wrote_pattern: false,
+            pattern_written: HashSet::new(),
+            wrote_fixed: false,
+            fixed_symbols: HashSet::new(),
+            inner_scale: 1.0,
+            symbol_scales: HashMap::new(),
+            root_entries: None,
         }
     }
 
@@ -394,6 +456,9 @@ impl<'a> Writer<'a> {
         if let NodeKind::Layer { .. } = n.kind {
             return self.write_layer(n, &[]);
         }
+        if self.in_symbol {
+            self.wrote_fixed |= symbols::redrawn(n);
+        }
         self.effects(n);
         self.state(n.locked, !n.visible);
         let xy = Xy::of(n);
@@ -422,10 +487,18 @@ impl<'a> Writer<'a> {
             NodeKind::Compound { rule, .. } => self.shape(n, &compound_path(n), *rule, xy),
             NodeKind::Text(_) => self.text(n, xy),
             NodeKind::Image(im) => self.image(im, xy),
+            NodeKind::SymbolInstance { symbol, xf } if self.live_instance(n, symbol, *xf) => self.symbol_instance(symbol, *xf, xy),
             NodeKind::SymbolInstance { symbol, xf } => {
-                self.warn(LIVE);
-                self.line("u");
+                // The canvas places an instance inside a symbol's art where the outer instance puts
+                // it (9-slice guides, stains and patterns included), and this art doesn't move with it.
+                self.wrote_fixed |= self.in_symbol;
                 let doc = self.doc;
+                if doc.symbols.iter().any(|s| &s.name == symbol) {
+                    self.warn(symbols::SYMBOL_ART);
+                } else {
+                    self.warn(symbols::MISSING_SYMBOL);
+                }
+                self.line("u");
                 if let Some(sym) = doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
                 {
@@ -492,7 +565,8 @@ impl<'a> Writer<'a> {
     }
 
     /// `n`'s `/ArtDictionary`, after it, when it has a name (`AI10_ArtUID`, see [`Self::take_id`])
-    /// or an opacity mask (`AI9_Mask`, see [`Self::mask`]).
+    /// or an opacity mask (`AI9_Mask`, see [`Self::mask`]), or is a symbol's art (its symbol's
+    /// entries first, see [`Self::define_symbol`]).
     fn dictionary(&mut self, n: &Node) {
         let name = n.name.as_deref().filter(|s| !s.is_empty());
         let mut mask = n.extras().mask.as_deref();
@@ -501,10 +575,17 @@ impl<'a> Writer<'a> {
             self.warn(DEEP_MASKS);
             mask = None;
         }
-        if name.is_none() && mask.is_none() {
+        let entries = match &self.root_entries {
+            Some((id, _)) if *id == n.id => self.root_entries.take().map(|(_, e)| e),
+            _ => None,
+        };
+        if name.is_none() && mask.is_none() && entries.is_none() {
             return;
         }
         self.body.push_str("%_/ArtDictionary :\n");
+        if let Some(e) = entries {
+            self.body.push_str(&e);
+        }
         if let Some(name) = name {
             let id = self.take_id(name);
             let _ = writeln!(self.body, "%_/XMLUID : {} ; (AI10_ArtUID) ,", ps::bytes(id.as_bytes()));
@@ -751,6 +832,7 @@ impl<'a> Writer<'a> {
             AppearanceItem::Stroke(s) if self.direct_stroke(s) => self.path_object(path, rule, None, Some(s), xy),
             AppearanceItem::Stroke(s) => {
                 self.warn(STROKES);
+                self.wrote_fixed = true;
                 if self.brush_art(path, s, xy) {
                     return;
                 }
@@ -812,6 +894,7 @@ impl<'a> Writer<'a> {
                     let flat = FillLayer { paint: Paint::solid(Color::gray(0.5)), ..f.clone() };
                     return self.path_object(path, rule, Some(&flat), None, xy);
                 }
+                self.wrote_pattern = true;
                 let outer = self.clip.clone();
                 let region = self.cut(path, rule);
                 self.clip = Some(region);
@@ -850,6 +933,7 @@ impl<'a> Writer<'a> {
             self.plain_object(&region, FillRule::NonZero, fill, None, own);
         }
         if let Some(s) = stroke {
+            self.wrote_fixed = true;
             let outline = stroke::outline_region(path, rule, s);
             let region = self.cut(&outline, FillRule::NonZero);
             let fill = FillLayer { overprint: s.overprint, ..FillLayer::new(s.paint.clone()) };
@@ -913,13 +997,13 @@ impl<'a> Writer<'a> {
     // ---------- type ----------
 
     /// Type `n`: a text object stub naming its story in the text document ([`texts`]) when the
-    /// text document can hold it, outside opacity masks, pattern tiles and art cut to a clipping
-    /// object; else its outlines ([`Self::outlined_text`]). A frame of threaded area type names the
-    /// story of its thread, which its first frame holds.
+    /// text document can hold it, outside opacity masks, pattern tiles, symbols' art and art cut to
+    /// a clipping object; else its outlines ([`Self::outlined_text`]). A frame of threaded area type
+    /// names the story of its thread, which its first frame holds.
     fn text(&mut self, n: &Node, xy: Xy) {
         let NodeKind::Text(t) = &n.kind else { return };
         let doc = self.doc;
-        let placed = if self.hidden > 0 || self.clip.is_some() {
+        let placed = if self.hidden > 0 || self.clip.is_some() || self.in_symbol {
             None
         } else if let Some(thread) = doc.text_threads.iter().find(|th| th.contains(&n.id)) {
             // A thread is checked for what it loses, in every frame, when its story is written.

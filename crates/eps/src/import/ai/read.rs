@@ -145,6 +145,10 @@ pub(super) use types::{blend_mode, blend_name};
 #[path = "legacy_text.rs"]
 mod legacy_text;
 
+// The `.ai` writer defines symbols as this reader keeps them.
+pub(crate) use directives::symbol_art_member;
+pub(crate) use types::MAX_SYMBOLS;
+
 /// What the editing data holds: the document of its art, and where its art space is.
 #[derive(Debug)]
 pub struct Structure {

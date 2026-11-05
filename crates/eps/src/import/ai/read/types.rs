@@ -41,7 +41,7 @@ pub(crate) const FLIP: Affine = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
 pub(super) const MAX_PATTERNS: usize = 4096;
 
 /// Most symbol definitions read (instances of others come in as the page draws them).
-pub(super) const MAX_SYMBOLS: usize = 4096;
+pub(crate) const MAX_SYMBOLS: usize = 4096;
 
 /// Most names a symbol list orders.
 pub(super) const MAX_LISTED: usize = 4 * MAX_SYMBOLS;

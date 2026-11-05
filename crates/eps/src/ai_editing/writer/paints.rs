@@ -341,9 +341,10 @@ impl Writer<'_> {
 
     /// Can pattern `name` be written as a definition and painted with from here: the document has
     /// it, its tiles make a grid, its art is within its tile and holds something, and it isn't used
-    /// in another pattern's tile or nested more than [`MAX_NEST`] deep?
+    /// in another pattern's tile or a symbol's art (the reader keeps no symbol whose art paints with
+    /// a pattern) or nested more than [`MAX_NEST`] deep?
     pub(super) fn pattern_writable(&self, name: &str) -> bool {
-        if !self.defining.is_empty() || self.nest >= MAX_NEST {
+        if !self.defining.is_empty() || self.nest >= MAX_NEST || self.in_symbol {
             return false;
         }
         if self.patterns.iter().any(|p| p.name == name) {

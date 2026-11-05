@@ -241,6 +241,11 @@ fn view(nodes: &[Arc<Node>], depth: usize, out: &mut Vec<String>) {
                 }
                 out.push(s);
             }
+            // The matrix is written to ten decimals.
+            NodeKind::SymbolInstance { symbol, xf } => {
+                let xf: Vec<String> = xf.as_coeffs().iter().map(|v| format!("{:.6}", v + 0.0)).collect();
+                out.push(format!("{head} instance {symbol:?} [{}] {} {:?}", xf.join(" "), r3(f64::from(n.opacity)), n.blend));
+            }
             other => out.push(format!("{head} {other:?}")),
         }
     }
@@ -602,8 +607,8 @@ fn hidden_layers_open_hidden() {
     assert!(text.contains("%AI5_NumLayers: 3\n%AI5_OpenViewLayers: 776\n"), "{text}");
 }
 
-/// A 200 × 100 document of a gradient fill, a compound path and an image, and what the data holds
-/// as plain paths: type and a symbol instance.
+/// A 200 × 100 document of a gradient fill, a compound path, an image and a symbol instance, and
+/// what the data holds as plain paths: type.
 fn unsupported() -> Document {
     let mut doc = Document::new(200.0, 100.0);
     let layer = doc.layers[0].id;
@@ -671,9 +676,7 @@ fn paths(nodes: &[Arc<Node>], out: &mut Vec<Node>) {
 fn art_the_slice_does_not_cover_is_written_as_plain_paths() {
     let doc = unsupported();
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    for w in [writer::TYPE, writer::LIVE] {
-        assert!(out.warnings.iter().any(|x| x == w), "{w}: {:?}", out.warnings);
-    }
+    assert_eq!(out.warnings, [writer::TYPE]);
     let back = read_back(&doc);
     let layer = back.layers[0].children().unwrap();
     let kinds: Vec<&str> = layer
@@ -683,12 +686,13 @@ fn art_the_slice_does_not_cover_is_written_as_plain_paths() {
             NodeKind::Group { .. } => "group",
             NodeKind::Compound { .. } => "compound",
             NodeKind::Image(_) => "image",
+            NodeKind::SymbolInstance { .. } => "instance",
             _ => "other",
         })
         .collect();
-    assert_eq!(kinds, ["path", "compound", "image", "group", "group"]);
+    assert_eq!(kinds, ["path", "compound", "image", "group", "instance"]);
     let mut all = vec![];
-    paths(&layer[3..], &mut all);
+    paths(&layer[3..4], &mut all);
     assert!(all.iter().all(|n| matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })));
     // The gradient as a gradient, drawing as it did.
     let bounds = Rect::new(10.0, 10.0, 30.0, 30.0);
@@ -802,11 +806,11 @@ fn a_scaled_nine_slice_symbol_instance_keeps_its_corner_size() {
     assert!(sizes.contains(&(200, 150)), "the frame is scaled: {sizes:?}");
 }
 
-/// Nested symbols whose instances multiply stop at [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects of
-/// symbol art in all, with a warning.
+/// Nested symbols whose instances multiply, written as their art (on a large canvas), stop at
+/// [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects of symbol art in all, with a warning.
 #[test]
 fn nested_symbol_instances_stop_at_the_symbol_art_limit() {
-    let mut doc = Document::new(200.0, 100.0);
+    let mut doc = Document::new(20000.0, 100.0);
     let layer = doc.layers[0].id;
     // Empty paths: counted, but written as nothing, so the test stays small; and one filled square.
     let empty = Arc::new(Node::path(doc.alloc_id(), PathData::new(vec![]), Appearance::default()));
@@ -824,7 +828,9 @@ fn nested_symbol_instances_stop_at_the_symbol_art_limit() {
     assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_LIMIT), "{:?}", out.warnings);
     // 5,001 objects for the tree and each leaf: 3,198 leaves fit in 16,000,000.
     let text = String::from_utf8(out.program).unwrap();
-    assert_eq!(text.matches("\r\nf\r\n").count(), 3198, "the squares of the leaves written");
+    // On the layers; the symbols' definitions come before them, in the setup.
+    let layers = text.split_once("%%EndSetup").unwrap().1;
+    assert_eq!(layers.matches("\r\nf\r\n").count(), 3198, "the squares of the leaves written");
 }
 
 #[test]
@@ -900,7 +906,7 @@ fn geometry_effects_in_a_symbol_are_written_as_their_result() {
     let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::translate((50.0, 20.0)) });
     doc.insert(Some(layer), usize::MAX, instance).unwrap();
     let back = read_back(&doc);
-    let b = back.layers[0].children().unwrap()[0].visual_bounds().unwrap();
+    let b = back.bounds_of_with(&[back.layers[0].children().unwrap()[0].id], true, &back.symbol_boxes()).unwrap();
     // The 10 pt square offset by 5 pt, at (50, 20).
     assert!((b.x0 - 45.0).abs() < 0.1 && (b.x1 - 65.0).abs() < 0.1 && (b.y0 - 15.0).abs() < 0.1 && (b.y1 - 35.0).abs() < 0.1, "{b:?}");
 }
@@ -925,7 +931,8 @@ fn an_adjusted_image_in_a_symbol_is_written_in_its_adjusted_color() {
     doc.insert(Some(layer), usize::MAX, instance).unwrap();
     let back = read_back(&doc);
     let mut found = vec![];
-    pictures(&back, &back.layers, "", &mut found);
+    let art: Vec<Arc<Node>> = back.symbols.iter().map(|s| s.art.clone()).collect();
+    pictures(&back, &art, "", &mut found);
     assert_eq!(found.len(), 1, "the adjusted image is found");
     assert!(!found[0].ends_with("rgba [0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]"), "the image is adjusted: {found:?}");
 }
@@ -1206,6 +1213,7 @@ fn looks(nodes: &[Arc<Node>], depth: usize, out: &mut Vec<String>) {
             NodeKind::Group { clip, .. } => format!("group clip={clip}"),
             NodeKind::Path { clipping, .. } => format!("path clipping={clipping}"),
             NodeKind::Compound { .. } => "compound".into(),
+            NodeKind::SymbolInstance { symbol, .. } => format!("instance {symbol:?}"),
             _ => "other".into(),
         };
         let mut s = format!(
@@ -3322,6 +3330,126 @@ fn type_lines(doc: &Document) -> Vec<String> {
     out
 }
 
+// ---------- symbols ----------
+
+const LEAF: Color = Color::Cmyk { c: 0.6, m: 0.0, y: 0.9, k: 0.1 };
+
+fn instance(doc: &mut Document, symbol: &str, xf: Affine) -> Node {
+    Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: symbol.into(), xf })
+}
+
+/// A `w` × `h` document whose swatches are one CMYK color (the default swatches' CMYK equivalents
+/// change at the fourth decimal when read back, so a second write would differ there).
+fn one_swatch_document(w: f64, h: f64) -> Document {
+    let mut doc = Document::new(w, h);
+    doc.swatches = vec![Swatch { name: "Leaf".into(), paint: solid(LEAF), global: false, spot: false }].into();
+    doc.swatch_groups = vec![].into();
+    doc
+}
+
+/// A 300 × 200 document of symbols. Its symbols, in the Symbols panel's order: `Spare`, a path no
+/// instance uses; `Pair`, a group of a red square and an instance of `Leaf` at half its size; `Leaf`,
+/// a group of a square in `LEAF` and an ellipse, its registration point the top left; `Shade`, a
+/// group of a rectangle filled with a gradient, a clipping group and an image, its registration
+/// point the bottom right; `Solo`, a group of one square, which no instance uses. Layer `Art`
+/// holds, bottom first: `Leaf` moved; `Leaf` turned 30° and scaled 1.5 by 0.5, named `Turned`; a
+/// hidden one; a locked one; one at 50% in Multiply; `Pair`; a group holding `Leaf`; a clipping
+/// group holding `Leaf`; `Leaf` with an opacity mask whose art holds an instance of `Leaf`; `Shade`;
+/// and sublayer `Inner` (60%, Screen), which holds `Pair` mirrored.
+fn symbols_document() -> Document {
+    use vectorcraft_color::gradient::GradientGeom;
+    let mut doc = Document::new(300.0, 200.0);
+    doc.swatches = vec![Swatch { name: "Leaf".into(), paint: solid(LEAF), global: false, spot: false }].into();
+    doc.swatch_groups = vec![].into();
+    doc.layers.clear();
+    let art_layer = doc.add_layer(Some("Art"));
+    // The symbols.
+    let spare = square(&mut doc, Rect::new(-5.0, -5.0, 5.0, 5.0), Color::gray(0.4));
+    let leaf_square = square(&mut doc, Rect::new(0.0, 0.0, 20.0, 20.0), LEAF);
+    let ellipse =
+        Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(5.0, 10.0, 25.0, 30.0)), Appearance::basic(Paint::None, solid(Color::BLACK), 1.5));
+    let leaf = group(&mut doc, vec![leaf_square, ellipse], false);
+    let red = square(&mut doc, Rect::new(-10.0, -10.0, 10.0, 10.0), Color::rgb(1.0, 0.0, 0.0));
+    let small = instance(&mut doc, "Leaf", Affine::translate((15.0, -5.0)) * Affine::scale(0.5));
+    let pair = group(&mut doc, vec![red, small], false);
+    let geom = GradientGeom { start: (0.0, 0.0).into(), end: (40.0, 10.0).into(), aspect: 1.0, focal: None };
+    let shaded = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 20.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(sunset(), Some(geom), None)))],
+    );
+    let edge = clipping(&mut doc, shapes::ellipse(Rect::new(0.0, 20.0, 20.0, 40.0)));
+    let inside = square(&mut doc, Rect::new(0.0, 25.0, 40.0, 35.0), Color::rgb(0.0, 0.0, 1.0));
+    let clipped = group(&mut doc, vec![edge, inside], true);
+    let pixels = png_of(image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 128, 255, 255]).unwrap()));
+    let picture = image_node(&mut doc, ImageBlob::new("image/png", pixels), (2, 1), Affine::new([10.0, 0.0, 0.0, 10.0, 25.0, 25.0]), None);
+    let shade = group(&mut doc, vec![shaded, clipped, picture], false);
+    let lone = square(&mut doc, Rect::new(0.0, 0.0, 8.0, 8.0), Color::gray(0.2));
+    let solo = group(&mut doc, vec![lone], false);
+    for (name, art) in [("Spare", spare), ("Pair", pair), ("Leaf", leaf), ("Shade", shade), ("Solo", solo)] {
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    doc.set_symbol_registration("Leaf", vectorcraft_doc::SymbolRegistration(0));
+    doc.set_symbol_registration("Shade", vectorcraft_doc::SymbolRegistration(8));
+    // The instances.
+    let mut art = vec![instance(&mut doc, "Leaf", Affine::translate((10.0, 10.0)))];
+    let turned = Affine::translate((80.0, 20.0)) * Affine::rotate(30f64.to_radians()) * Affine::scale_non_uniform(1.5, 0.5);
+    art.push(named(instance(&mut doc, "Leaf", turned), "Turned"));
+    let mut hidden = instance(&mut doc, "Leaf", Affine::translate((130.0, 10.0)));
+    hidden.visible = false;
+    art.push(hidden);
+    let mut locked = instance(&mut doc, "Leaf", Affine::translate((160.0, 10.0)));
+    locked.locked = true;
+    art.push(locked);
+    art.push(see_through(instance(&mut doc, "Leaf", Affine::translate((190.0, 10.0))), 0.5, BlendMode::Multiply));
+    art.push(instance(&mut doc, "Pair", Affine::translate((240.0, 30.0))));
+    let grouped = instance(&mut doc, "Leaf", Affine::translate((10.0, 60.0)));
+    art.push(group(&mut doc, vec![grouped], false));
+    let window = clipping(&mut doc, shapes::rectangle(Rect::new(50.0, 60.0, 65.0, 75.0)));
+    let clipped = instance(&mut doc, "Leaf", Affine::translate((50.0, 60.0)));
+    art.push(group(&mut doc, vec![window, clipped], true));
+    let mask_leaf = instance(&mut doc, "Leaf", Affine::translate((90.0, 60.0)));
+    let mask_art = group(&mut doc, vec![mask_leaf], false);
+    let mut masked = instance(&mut doc, "Leaf", Affine::translate((90.0, 60.0)));
+    masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(mask_art), clip: true, invert: false, disabled: false, linked: true }));
+    art.push(masked);
+    art.push(instance(&mut doc, "Shade", Affine::translate((130.0, 60.0))));
+    for n in art {
+        doc.insert(Some(art_layer), usize::MAX, n).unwrap();
+    }
+    let inner = doc.add_layer(Some("Inner"));
+    let inner_node = doc.layers.iter().position(|l| l.id == inner).map(|i| doc.layers.remove(i)).unwrap();
+    doc.insert(Some(art_layer), usize::MAX, (*inner_node).clone()).unwrap();
+    let mirrored = instance(&mut doc, "Pair", Affine::new([-1.0, 0.0, 0.0, 1.0, 260.0, 120.0]));
+    doc.insert(Some(inner), usize::MAX, mirrored).unwrap();
+    // The sublayer's own transparency, after its last object, an instance.
+    let sub = doc.node_mut(inner).unwrap();
+    (sub.opacity, sub.blend) = (0.6, BlendMode::Screen);
+    doc
+}
+
+/// Each symbol of `doc` in its order: its name and registration point, then what its art draws, its
+/// objects as [`view`] shows them (points, handles, paint, strokes and instances), its images, and
+/// its objects' names, transparency and clipping.
+fn symbol_looks(doc: &Document) -> Vec<String> {
+    let mut out = vec![];
+    for s in doc.symbols.iter() {
+        out.push(format!("symbol {} {:?}", s.name, doc.symbol_registration(&s.name)));
+        let art = std::slice::from_ref(&s.art);
+        paints_of(doc, art, 1, &mut out);
+        let mut objects = vec![];
+        view(art, 1, &mut objects);
+        // Images are compared by `pictures`, gradients by `paints_of`.
+        out.extend(objects.into_iter().filter(|l| !l.contains(" Image(")).map(|l| match l.find(" fill(Gradient(") {
+            Some(at) => format!("{} fill(gradient)", &l[..at]),
+            None => l,
+        }));
+        pictures(doc, art, &s.name, &mut out);
+        looks(art, 1, &mut out);
+    }
+    out
+}
+
 #[test]
 fn type_comes_back_as_type() {
     let doc = typed();
@@ -4131,4 +4259,885 @@ fn type_with_an_opacity_mask_is_written_as_its_outlines() {
     let top = &back.layers[0].children().unwrap()[0];
     assert!(!matches!(top.kind, NodeKind::Text(_)));
     assert!(top.extras().mask.is_some());
+}
+
+#[test]
+fn symbols_and_their_instances_are_read_back() {
+    let doc = symbols_document();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&lines(&back), &lines(&doc));
+    same_lines(&all_looks(&back), &all_looks(&doc));
+    same_lines(&symbol_looks(&back), &symbol_looks(&doc));
+    // Each instance draws where it did: the symbols' art and the instances' places agree.
+    let boxes = |d: &Document| -> Vec<String> {
+        let b = d.symbol_boxes();
+        let mut ids = vec![];
+        d.walk(|n| {
+            if matches!(n.kind, NodeKind::SymbolInstance { .. }) {
+                ids.push(n.id);
+            }
+        });
+        ids.iter().map(|id| format!("{:?}", d.bounds_of_with(&[*id], true, &b).map(|r| [r.x0, r.y0, r.x1, r.y1].map(r3)))).collect()
+    };
+    same_lines(&boxes(&back), &boxes(&doc));
+}
+
+#[test]
+fn symbols_write_the_same_bytes_again() {
+    let doc = symbols_document();
+    let first = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(first.program, export_ai_editing(&doc, &opts()).unwrap().program);
+    assert_eq!(private_data(&doc, &opts()).unwrap().0, private_data(&doc, &opts()).unwrap().0);
+    let again = export_ai_editing(&read_back(&doc), &opts()).unwrap().program;
+    same_lines(&shown(&again).lines().map(String::from).collect::<Vec<_>>(), &shown(&first.program).lines().map(String::from).collect::<Vec<_>>());
+    assert_eq!(again, first.program);
+}
+
+#[test]
+fn symbols_are_written_in_their_forms() {
+    let p = program_shown(&symbols_document());
+    // The definitions in a non-printing block after the patterns, in the order the art first uses
+    // them (each after those its art uses), the others after them; and the list after the palette
+    // in the panel's order.
+    let defs = ["(Leaf)", "(Pair)", "(Shade)", "(Spare)", "(Solo)"].map(|n| p.find(&format!("%AI14_BeginSymbol\n{n}\n0 A\n0 Xw\n0 Ae\n")).unwrap());
+    assert!(defs.windows(2).all(|w| w[0] < w[1]), "{p}");
+    assert!(p.contains("%AI5_Begin_NonPrinting\nNp\n%AI14_BeginSymbol\n(Leaf)\n"), "{p}");
+    let list =
+        "%AI5_Begin_NonPrinting\nNp\n%AI24_BeginSymbolList\n(Spare)\n(Pair)\n(Leaf)\n(Shade)\n(Solo)\n%AI24_EndSymbolList\n%AI5_End_NonPrinting--\n";
+    let at = p.find(list).unwrap();
+    assert!(p.find("%AI5_EndPalette").unwrap() < at && at < p.find("%AI9_BeginDocumentData").unwrap(), "{p}");
+    // A group's registration point in its dictionary, before its state block; a path is written in
+    // a group of its own.
+    assert!(p.contains("U\n%_/ArtDictionary :\n%_1 /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n"), "{p}");
+    assert!(p.contains("%_/ArtDictionary :\n%_9 /Int (AI13PatternRegistrationType) ,\n"), "{p}");
+    assert!(p.contains("%AI14_BeginSymbol\n(Spare)\n0 A\n0 Xw\n0 Ae\nu\n"), "{p}");
+    // A plain group of one object in a group of its own.
+    assert!(p.contains("%AI14_BeginSymbol\n(Solo)\n0 A\n0 Xw\n0 Ae\nu\nu\n"), "{p}");
+    assert!(p.contains("f\nU\n%_/ArtDictionary :\n%_5 /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n"), "{p}");
+    // An instance on the page: its matrix takes the art to art space (y up from the artboard's top
+    // left), then its state block.
+    assert!(p.contains("/SymbolInstance :\n(Leaf) /SymbolRef ,\n1 0 0 -1 10 -10 /RTransformMatrix\n;\n9 () XW\n"), "{p}");
+    // Its name between the two, and its transparency as a group's.
+    assert!(p.contains("/RTransformMatrix\n;\n%_/ArtDictionary :\n%_/XMLUID : (Turned) ; (AI10_ArtUID) ,\n%_;\n%_\n9 () XW\n"), "{p}");
+    assert!(p.contains("1 0 0 -1 190 -10 /RTransformMatrix\n;\n1 0.5 0 2 0 Xy\n0 0 Xd\n6 () XW\n"), "{p}");
+    // In a symbol's art, about the canvas point of art space's origin (the template box's center
+    // is the canvas's).
+    let t: Vec<f64> = p.lines().find_map(|l| l.strip_prefix("%AI3_TemplateBox: ")).unwrap().split(' ').map(|v| v.parse().unwrap()).collect();
+    let (ox, oy) = (f64::from(CANVAS_SIZE) / 2.0 - t[0], f64::from(CANVAS_SIZE) / 2.0 + t[1]);
+    let nested = format!("(Leaf) /SymbolRef ,\n0.5 0 0 -0.5 {} {} /RTransformMatrix\n", ps::num(15.0 - ox), ps::num(oy + 5.0));
+    assert!(p.contains(&nested), "{nested}\n{p}");
+}
+
+/// Instances that the data can't hold as instances are written as their art, with a warning: a
+/// stained one, one of a symbol with 9-slice guides, one scaled almost flat, every one on the
+/// layers of a large canvas (whose symbols are still defined), one in a pattern's tile, one with a
+/// dynamic symbol's appearance changes and one in art cut to a clipping object that isn't a path.
+/// A symbol whose art holds an instance of itself is defined once, that instance as art.
+#[test]
+fn instances_the_data_cant_hold_are_written_as_their_art() {
+    let leaf = |doc: &mut Document| {
+        let art = square(doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+    };
+    let kinds = |d: &Document| -> Vec<&'static str> {
+        d.layers[0].children().unwrap().iter().map(|n| if matches!(n.kind, NodeKind::SymbolInstance { .. }) { "instance" } else { "art" }).collect()
+    };
+    // Stained.
+    let mut doc = Document::new(200.0, 100.0);
+    leaf(&mut doc);
+    let mut stained = instance(&mut doc, "Leaf", Affine::translate((50.0, 10.0)));
+    stained.appearance = Appearance::basic(solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    let plain = instance(&mut doc, "Leaf", Affine::translate((80.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, stained).unwrap();
+    doc.insert(Some(layer), usize::MAX, plain).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    assert_eq!(kinds(&read_back(&doc)), ["art", "instance"]);
+    // 9-slice guides.
+    doc.set_symbol_nine_slice("Leaf", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::SYMBOL_ART, writer::SYMBOL_OPTIONS]);
+    let back = read_back(&doc);
+    assert_eq!((kinds(&back), back.symbols.len()), (vec!["art", "art"], 1));
+    // Scaled so flat that its matrix to ten decimals has no area.
+    let mut doc = Document::new(200.0, 100.0);
+    leaf(&mut doc);
+    let flat = instance(&mut doc, "Leaf", Affine::new([1e-11, 0.0, 0.0, 1.0, 50.0, 10.0]));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, flat).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    assert_eq!(kinds(&read_back(&doc)), ["art"]);
+    // A large canvas.
+    let mut doc = Document::new(20000.0, 100.0);
+    leaf(&mut doc);
+    let one = instance(&mut doc, "Leaf", Affine::translate((50.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    // The symbol is still defined, at its own size: the canvas's scale doesn't touch its art.
+    let back = read_back(&doc);
+    assert_eq!(kinds(&back), ["art"]);
+    assert_eq!(symbol_looks(&back), symbol_looks(&doc));
+    // A pattern a symbol's art and the layers both paint with: the layers' fill keeps it, the
+    // symbol's art has its tiles.
+    let dot = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), Color::BLACK));
+    let mut dots = vectorcraft_doc::PatternDef::new("Dots", vec![dot]);
+    dots.tile = Rect::new(0.0, 0.0, 8.0, 8.0);
+    doc.patterns.push(dots);
+    let fill = || Appearance::basic(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, Paint::None, 0.0);
+    let patch = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 16.0, 16.0)), fill());
+    doc.symbols.push(Symbol { dynamic: false, name: "Patch".into(), art: Arc::new(patch) });
+    let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(100.0, 10.0, 132.0, 42.0)), fill());
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::SYMBOL_ART, writer::PATTERNS]);
+    let back = read_back(&doc);
+    let on_layer = back.layers[0].children().unwrap()[1].appearance.items[0].paint().clone();
+    assert!(matches!(on_layer, Paint::Pattern { .. }), "{on_layer:?}");
+    let patch = &back.symbols.iter().find(|s| s.name == "Patch").unwrap().art;
+    assert!(matches!(patch.kind, NodeKind::Group { .. }), "the symbol's art is its tiles: {:?}", patch.kind);
+    // A pattern's tile: the tile holds the symbol's art.
+    let mut doc = Document::new(200.0, 100.0);
+    leaf(&mut doc);
+    let tiled = instance(&mut doc, "Leaf", Affine::IDENTITY);
+    doc.patterns.push(vectorcraft_doc::PatternDef::new("Tiles", vec![Arc::new(tiled)]));
+    let fill = Appearance::basic(Paint::Pattern { pattern: "Tiles".into(), xf: Affine::IDENTITY }, Paint::None, 0.0);
+    let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), fill);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    let back = read_back(&doc);
+    let tile = &back.patterns.iter().find(|p| p.name == "Tiles").unwrap().art;
+    assert_eq!(tile.len(), 1);
+    assert_eq!(instances(&tile[0]), 0, "{:?}", tile[0].kind);
+    let NodeKind::Group { children, .. } = &tile[0].kind else { panic!("{:?}", tile[0].kind) };
+    assert_eq!(paints_of_nodes(&back, children), paints_of_nodes(&back, &[Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF))]));
+    // A symbol holding an instance of itself: defined once, that instance as its art.
+    let mut doc = Document::new(200.0, 100.0);
+    let looped_art = {
+        let me = instance(&mut doc, "Loop", Affine::translate((20.0, 0.0)));
+        let dot = square(&mut doc, Rect::new(0.0, 0.0, 5.0, 5.0), LEAF);
+        group(&mut doc, vec![dot, me], false)
+    };
+    doc.symbols.push(Symbol { dynamic: false, name: "Loop".into(), art: Arc::new(looped_art) });
+    let looped = instance(&mut doc, "Loop", Affine::translate((100.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, looped).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    let p = program(&doc);
+    assert_eq!(p.matches("%AI14_BeginSymbol\n(Loop)\n").count(), 1, "{p}");
+    assert_eq!(kinds(&read_back(&doc)), ["instance"]);
+    // Appearance changes of a dynamic symbol's instance.
+    let mut doc = Document::new(200.0, 100.0);
+    leaf(&mut doc);
+    doc.symbols[0].dynamic = true;
+    let mut changed = instance(&mut doc, "Leaf", Affine::translate((50.0, 10.0)));
+    changed.extras_mut().symbol_overrides =
+        vec![vectorcraft_doc::SymbolOverride { fill: Some(solid(Color::rgb(0.0, 1.0, 0.0))), ..Default::default() }];
+    let plain = instance(&mut doc, "Leaf", Affine::translate((80.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, changed).unwrap();
+    doc.insert(Some(layer), usize::MAX, plain).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART, writer::SYMBOL_OPTIONS]);
+    let back = read_back(&doc);
+    assert_eq!(kinds(&back), ["art", "instance"]);
+    let green = back.layers[0].children().unwrap()[0].clone();
+    let drawn = paints_of_nodes(&back, &[green]);
+    assert!(drawn.iter().any(|l| l.contains("rgb 0.000 1.000 0.000")), "the change is drawn: {drawn:?}");
+    // Art cut to a clipping object that isn't a path.
+    let mut doc = Document::new(200.0, 100.0);
+    leaf(&mut doc);
+    let pixels = png_of(image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(2, 2, image::Rgba([0, 0, 255, 255]))));
+    let frame = image_node(&mut doc, ImageBlob::new("image/png", pixels), (2, 2), Affine::new([20.0, 0.0, 0.0, 20.0, 40.0, 0.0]), None);
+    let cut = instance(&mut doc, "Leaf", Affine::translate((45.0, 5.0)));
+    let clipped = group(&mut doc, vec![frame, cut], true);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, clipped).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.layers.iter().map(|l| instances(l)).sum::<usize>(), 0);
+    assert_eq!(back.symbols.len(), 1);
+}
+
+/// Symbols whose art paints with a pattern, directly, through a nested symbol, in an opacity mask
+/// and through an inline graphic: their definitions hold the pattern fills as tiles cut to the shape (the reader keeps no
+/// symbol whose art paints with a pattern), and their instances are written as their art, whose
+/// pattern fills keep the document's placement as the canvas draws them, each with a warning. An
+/// instance of a symbol without pattern paint stays an instance.
+#[test]
+fn symbols_with_pattern_fills_are_defined_with_tiles_and_placed_as_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    // Tiles that cover the shape, so its tiles cut to it draw its box.
+    let dot = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 8.0, 8.0), Color::BLACK));
+    let mut dots = vectorcraft_doc::PatternDef::new("Dots", vec![dot]);
+    dots.tile = Rect::new(0.0, 0.0, 8.0, 8.0);
+    doc.patterns.push(dots);
+    let fill = || Appearance::basic(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, Paint::None, 0.0);
+    let patch = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 16.0, 16.0)), fill());
+    doc.symbols.push(Symbol { dynamic: false, name: "Patch".into(), art: Arc::new(patch) });
+    let inner = instance(&mut doc, "Patch", Affine::translate((20.0, 0.0)));
+    let edge = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    let outer = group(&mut doc, vec![edge, inner], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Outer".into(), art: Arc::new(outer) });
+    let mask_art = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 12.0, 12.0)), fill());
+    let mut masked = square(&mut doc, Rect::new(0.0, 0.0, 12.0, 12.0), LEAF);
+    masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(mask_art), clip: true, invert: false, disabled: false, linked: true }));
+    doc.symbols.push(Symbol { dynamic: false, name: "Masked".into(), art: Arc::new(masked) });
+    let plain = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Plain".into(), art: Arc::new(plain) });
+    // Type holding `Patch` as an inline graphic.
+    let style = vectorcraft_doc::CharStyle { size: 18.0, fill: solid(Color::BLACK), ..vectorcraft_doc::CharStyle::default() };
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(0.0, 20.0), "A", style.clone());
+    t.runs.push(vectorcraft_doc::TextRun::inline(vectorcraft_doc::InlineArt::new("Patch"), style));
+    let typed = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.symbols.push(Symbol { dynamic: false, name: "Typed".into(), art: Arc::new(typed) });
+    let layer = doc.layers[0].id;
+    // Two instances of `Patch` a part of a tile apart.
+    for (name, x) in [("Patch", 10.0), ("Patch", 33.0), ("Outer", 60.0), ("Masked", 120.0), ("Plain", 140.0), ("Typed", 10.0)] {
+        let one = instance(&mut doc, name, Affine::translate((x, 10.0)));
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(150.0, 10.0, 182.0, 42.0)), fill());
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART) && out.warnings.iter().any(|w| w == writer::PATTERNS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let names: Vec<&str> = back.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["Patch", "Outer", "Masked", "Plain", "Typed"]);
+    let patch = &back.symbols[0].art;
+    assert!(matches!(patch.kind, NodeKind::Group { .. }), "the symbol's art is its tiles: {:?}", patch.kind);
+    assert_eq!(instances(&back.symbols[1].art), 0, "the nested instance is its art");
+    let kids = back.layers[0].children().unwrap();
+    let kinds: Vec<bool> = kids.iter().map(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })).collect();
+    assert_eq!(kinds, [false, false, false, false, true, false, false]);
+    // The pattern fills of both `Patch` instances and of the layers' path keep one placement.
+    let placements = |n: &Node| {
+        let mut out = vec![];
+        vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+            for it in m.appearance.items.iter() {
+                if let Paint::Pattern { xf, .. } = it.paint() {
+                    out.push(xf.as_coeffs().map(r3));
+                }
+            }
+        });
+        out
+    };
+    let layer_fill = placements(&kids[6]);
+    assert_eq!(layer_fill.len(), 1);
+    assert_eq!(placements(&kids[0]), layer_fill);
+    assert_eq!(placements(&kids[1]), layer_fill);
+    // Each instance draws where it did.
+    let boxes = |d: &Document| -> Vec<String> {
+        let b = d.symbol_boxes();
+        let ids: Vec<_> = d.layers[0].children().unwrap().iter().take(5).map(|n| n.id).collect();
+        ids.iter().map(|id| format!("{:?}", d.bounds_of_with(&[*id], true, &b).map(|r| [r.x0, r.y0, r.x1, r.y1].map(r3)))).collect()
+    };
+    same_lines(&boxes(&back), &boxes(&doc));
+}
+
+/// A symbol whose art paints with a pattern only through a brushed stroke, whose brush's art is
+/// filled with a pattern: the definition holds the tiles, and its instance is written as its art.
+#[test]
+fn symbols_painting_patterns_through_brush_art_are_placed_as_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    let dot = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 8.0, 8.0), Color::BLACK));
+    let mut dots = vectorcraft_doc::PatternDef::new("Dots", vec![dot]);
+    dots.tile = Rect::new(0.0, 0.0, 8.0, 8.0);
+    doc.patterns.push(dots);
+    let fill = Appearance::basic(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, Paint::None, 0.0);
+    let art = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 8.0)), fill);
+    let brush = vectorcraft_brush::Brush {
+        name: "Dotted".into(),
+        kind: vectorcraft_brush::BrushKind::Art(vectorcraft_brush::ArtBrush {
+            art,
+            colorization: vectorcraft_brush::Colorization::None,
+            ..Default::default()
+        }),
+    };
+    vectorcraft_brush::store(&mut doc, &[brush]);
+    let mut line =
+        Node::path(doc.alloc_id(), shapes::line((0.0, 0.0).into(), (60.0, 0.0).into()), Appearance::basic(Paint::None, solid(Color::BLACK), 4.0));
+    line.appearance.stroke_mut().unwrap().brush = Some("Dotted".into());
+    doc.symbols.push(Symbol { dynamic: false, name: "Brushed".into(), art: Arc::new(line) });
+    let layer = doc.layers[0].id;
+    let one = instance(&mut doc, "Brushed", Affine::translate((10.0, 40.0)));
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Brushed"]);
+    assert_eq!(instances(&back.layers[0]), 0, "the instance is its art");
+}
+
+/// A symbol whose stroke is written as its outline (an outside stroke): a scaled instance, a scaled
+/// instance of a symbol holding it and a turned and mirrored instance are written as their art,
+/// which keeps the stroke the canvas draws; a moved instance stays an instance.
+#[test]
+fn scaled_instances_of_symbols_with_outlined_strokes_are_written_as_their_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut look = Appearance::basic(Paint::None, solid(Color::BLACK), 4.0);
+    look.stroke_mut().unwrap().align = vectorcraft_doc::StrokeAlign::Outside;
+    let framed = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), look);
+    doc.symbols.push(Symbol { dynamic: false, name: "Framed".into(), art: Arc::new(framed) });
+    let inner = instance(&mut doc, "Framed", Affine::IDENTITY);
+    let edge = square(&mut doc, Rect::new(20.0, 0.0, 30.0, 10.0), LEAF);
+    let outer = group(&mut doc, vec![inner, edge], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Outer".into(), art: Arc::new(outer) });
+    let layer = doc.layers[0].id;
+    let turned = Affine::translate((150.0, 20.0)) * Affine::rotate(0.5) * Affine::new([-1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
+    for (name, xf) in [
+        ("Framed", Affine::translate((40.0, 40.0)) * Affine::scale(2.0)),
+        ("Outer", Affine::translate((80.0, 10.0)) * Affine::scale(2.0)),
+        ("Framed", turned),
+        ("Framed", Affine::translate((170.0, 60.0))),
+    ] {
+        let one = instance(&mut doc, name, xf);
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Framed", "Outer"]);
+    let kids = back.layers[0].children().unwrap();
+    let kinds: Vec<bool> = kids.iter().map(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })).collect();
+    assert_eq!(kinds, [false, false, false, true]);
+    // Each draws where it did, with the stroke the canvas draws: 4 pt wide whatever the scale.
+    let boxes = |d: &Document| -> Vec<String> {
+        let b = d.symbol_boxes();
+        let ids: Vec<_> = d.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+        ids.iter().map(|id| format!("{:?}", d.bounds_of_with(&[*id], true, &b).map(|r| [r.x0, r.y0, r.x1, r.y1].map(r3)))).collect()
+    };
+    let (got, want) = (boxes(&back), boxes(&doc));
+    same_lines(&[got[0].clone(), got[2].clone(), got[3].clone()], &[want[0].clone(), want[2].clone(), want[3].clone()]);
+    // `Outer` at twice its size from (80, 10): the frame's square is 20 pt from 80 with its 4 pt
+    // stroke outside, and the plain square is 40 to 60 pt in from it.
+    assert_eq!(got[1], format!("{:?}", Some([76.0, 6.0, 140.0, 34.0].map(r3))));
+}
+
+/// Scaled instances of a symbol holding a rounded rectangle with live corners, of one clipped by
+/// it, of one holding type, of one holding a blend and of one holding an instance written as its
+/// art (of a symbol with 9-slice guides), and instances that scale their symbol more than 100
+/// times (tiny, thin and stroked tiny objects, and a 10 pt square), are written as their art;
+/// instances that scale a 10 pt square a thousandth, scale an ellipse unevenly or only move stay
+/// instances.
+#[test]
+fn scaled_instances_of_symbols_drawn_only_at_their_own_size_are_written_as_their_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    let live = vectorcraft_doc::LiveShape::Rectangle {
+        w: 100.0,
+        h: 100.0,
+        radii: [10.0; 4],
+        kinds: Default::default(),
+        radii_relative: false,
+        xf: Affine::IDENTITY,
+    };
+    let mut rounded = Node::new(
+        doc.alloc_id(),
+        NodeKind::Path { path: live.to_path(), rule: FillRule::NonZero, live: Some(Box::new(live)), clipping: false, guide: false },
+    );
+    rounded.appearance = Appearance::basic(solid(LEAF), Paint::None, 0.0).into();
+    // The same rounded rectangle clipping a square.
+    let mut frame = rounded.clone();
+    frame.id = doc.alloc_id();
+    let inside = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), LEAF);
+    let clipped = group(&mut doc, vec![frame, inside], true);
+    doc.symbols.push(Symbol { dynamic: false, name: "Rounded".into(), art: Arc::new(rounded) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Clipped".into(), art: Arc::new(clipped) });
+    // A tiny square with a 1 pt stroke.
+    let mut dot = square(&mut doc, Rect::new(0.0, 0.0, 0.00001, 0.00001), LEAF);
+    dot.appearance = Appearance::basic(solid(LEAF), solid(Color::BLACK), 1.0).into();
+    doc.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(dot) });
+    // A blend of two squares 20 pt apart with a step every 10 pt.
+    let keys =
+        vec![Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 2.0, 2.0), LEAF)), Arc::new(square(&mut doc, Rect::new(20.0, 0.0, 22.0, 2.0), LEAF))];
+    let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(10.0), ..Default::default() };
+    let blend = Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Steps".into(), art: Arc::new(blend) });
+    // A symbol holding an instance of one with 9-slice guides.
+    let frame = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), LEAF));
+    let corner = Arc::new(square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), Color::BLACK));
+    let sliced = Node::group(doc.alloc_id(), vec![frame, corner]);
+    doc.symbols.push(Symbol { dynamic: false, name: "Sliced".into(), art: Arc::new(sliced) });
+    doc.set_symbol_nine_slice("Sliced", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let inner = instance(&mut doc, "Sliced", Affine::IDENTITY);
+    let holder = group(&mut doc, vec![inner], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Holder".into(), art: Arc::new(holder) });
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(0.0, 10.0), "Hi", style(10.0, Color::BLACK));
+    let typed = text_node(&mut doc, t);
+    doc.symbols.push(Symbol { dynamic: false, name: "Typed".into(), art: Arc::new(typed) });
+    let tiny = square(&mut doc, Rect::new(0.0, 0.0, 0.00001, 0.00001), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Tiny".into(), art: Arc::new(tiny) });
+    let thin = square(&mut doc, Rect::new(0.0, 0.0, 0.00001, 1.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Thin".into(), art: Arc::new(thin) });
+    let plain = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Plain".into(), art: Arc::new(plain) });
+    let oval = vectorcraft_doc::LiveShape::Ellipse { w: 10.0, h: 6.0, pie: (0.0, 360.0), xf: Affine::IDENTITY };
+    let mut ellipse = Node::new(
+        doc.alloc_id(),
+        NodeKind::Path { path: oval.to_path(), rule: FillRule::NonZero, live: Some(Box::new(oval)), clipping: false, guide: false },
+    );
+    ellipse.appearance = Appearance::basic(solid(LEAF), Paint::None, 0.0).into();
+    doc.symbols.push(Symbol { dynamic: false, name: "Oval".into(), art: Arc::new(ellipse) });
+    let layer = doc.layers[0].id;
+    for (name, xf) in [
+        ("Rounded", Affine::new([0.3, 0.0, 0.0, 0.1, 10.0, 10.0])),
+        ("Typed", Affine::translate((50.0, 50.0)) * Affine::scale(3.0)),
+        ("Tiny", Affine::translate((100.0, 50.0)) * Affine::scale(1e6)),
+        ("Plain", Affine::translate((150.0, 50.0)) * Affine::scale(1e-3)),
+        ("Plain", Affine::translate((150.0, 60.0)) * Affine::scale(1e3)),
+        ("Oval", Affine::translate((170.0, 20.0)) * Affine::new([3.0, 0.0, 0.0, 1.0, 0.0, 0.0])),
+        ("Thin", Affine::translate((100.0, 70.0)) * Affine::new([1e6, 0.0, 0.0, 10.0, 0.0, 0.0])),
+        ("Clipped", Affine::new([0.3, 0.0, 0.0, 0.1, 10.0, 30.0])),
+        ("Dot", Affine::translate((120.0, 70.0)) * Affine::scale(1e6)),
+        ("Steps", Affine::translate((10.0, 80.0)) * Affine::scale(5.0)),
+        ("Holder", Affine::scale(2.0)),
+        ("Holder", Affine::translate((5.0, 5.0))),
+    ] {
+        let one = instance(&mut doc, name, xf);
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let kids = back.layers[0].children().unwrap();
+    let kinds: Vec<bool> = kids.iter().map(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })).collect();
+    assert_eq!(kinds, [false, false, false, true, false, true, false, false, false, false, false, true]);
+    let b = kids[6].visual_bounds().map(|r| [r.x0, r.y0, r.x1, r.y1].map(r3));
+    assert_eq!(b, Some([100.0, 70.0, 110.0, 80.0].map(r3)));
+    // The tiny square comes back 10 pt across, where the instance put it.
+    let b = kids[2].visual_bounds().map(|r| [r.x0, r.y0, r.x1, r.y1].map(r3));
+    assert_eq!(b, Some([100.0, 50.0, 110.0, 60.0].map(r3)));
+}
+
+/// A symbol whose art is a hidden path with two fills: the canvas draws a symbol's art even when
+/// its root is hidden, so the definition's root is written shown and the instance still draws.
+#[test]
+fn a_symbol_whose_root_is_hidden_still_draws() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut look = Appearance::basic(solid(LEAF), Paint::None, 0.0);
+    look.items.push(AppearanceItem::Fill(FillLayer::new(solid(Color::BLACK))));
+    let mut art = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), look);
+    art.visible = false;
+    doc.symbols.push(Symbol { dynamic: false, name: "Hidden".into(), art: Arc::new(art) });
+    let layer = doc.layers[0].id;
+    let one = instance(&mut doc, "Hidden", Affine::translate((20.0, 20.0)));
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    let back = read_back(&doc);
+    let kids = back.layers[0].children().unwrap();
+    assert!(matches!(kids[0].kind, NodeKind::SymbolInstance { .. }));
+    let mut shown = 0;
+    vectorcraft_doc::swatches::walk_with_masks(&back.symbols[0].art, &mut |m| {
+        shown += usize::from(m.visible && matches!(m.kind, NodeKind::Path { .. }))
+    });
+    assert!(back.symbols[0].art.visible && shown > 0, "{:?}", back.symbols[0].art);
+}
+
+/// The number of symbol instances in `n` and its subtree.
+fn instances(n: &Node) -> usize {
+    let mut count = 0;
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| count += usize::from(matches!(m.kind, NodeKind::SymbolInstance { .. })));
+    count
+}
+
+/// What `nodes` draw ([`paints_of`]).
+fn paints_of_nodes(doc: &Document, nodes: &[Arc<Node>]) -> Vec<String> {
+    let mut out = vec![];
+    paints_of(doc, nodes, 1, &mut out);
+    out
+}
+
+/// An instance with isolation, knockout or knockout shape of its own is written as its art, which
+/// keeps them as a group's; a plain one beside it stays an instance.
+#[test]
+fn instances_with_a_groups_transparency_are_written_as_their_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    let art = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+    let mut shape = instance(&mut doc, "Leaf", Affine::translate((10.0, 10.0)));
+    shape.knockout_shape = true;
+    let mut isolated = instance(&mut doc, "Leaf", Affine::translate((30.0, 10.0)));
+    isolated.isolate = true;
+    let mut knocks = instance(&mut doc, "Leaf", Affine::translate((50.0, 10.0)));
+    knocks.knockout = Knockout::On;
+    let plain = instance(&mut doc, "Leaf", Affine::translate((70.0, 10.0)));
+    let mut outer = group(&mut doc, vec![shape, isolated, knocks, plain], false);
+    outer.knockout = Knockout::On;
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, outer).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    let back = read_back(&doc);
+    let kids = back.layers[0].children().unwrap()[0].children().unwrap().clone();
+    let states: Vec<_> = kids.iter().map(|n| (matches!(n.kind, NodeKind::SymbolInstance { .. }), n.knockout_shape, n.isolate, n.knockout)).collect();
+    assert_eq!(
+        states,
+        [
+            (false, true, false, Knockout::Neutral),
+            (false, false, true, Knockout::Neutral),
+            (false, false, false, Knockout::On),
+            (true, false, false, Knockout::Neutral)
+        ]
+    );
+    // Each group holds the symbol's art where the instance placed it.
+    for (i, k) in kids[..3].iter().enumerate() {
+        let b = k.geometric_bounds().unwrap();
+        assert_eq!([b.x0, b.y0, b.x1, b.y1].map(r3), [10.0 + 20.0 * i as f64, 10.0, 20.0 + 20.0 * i as f64, 20.0].map(r3));
+    }
+}
+
+/// A symbol's definition is the same wherever its first instance lies: one first met deep in
+/// opacity masks keeps its own masks and instances.
+#[test]
+fn a_symbol_first_used_deep_in_masks_is_defined_whole() {
+    let mut doc = Document::new(200.0, 100.0);
+    let leaf = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(leaf) });
+    // `Deep`: a square with an opacity mask, and an instance of `Leaf`.
+    let mask_art = square(&mut doc, Rect::new(0.0, 0.0, 5.0, 5.0), Color::WHITE);
+    let mut veiled = square(&mut doc, Rect::new(0.0, 0.0, 20.0, 20.0), Color::BLACK);
+    veiled.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(mask_art), clip: true, invert: false, disabled: false, linked: true }));
+    let inner = instance(&mut doc, "Leaf", Affine::translate((5.0, 5.0)));
+    let deep = group(&mut doc, vec![veiled, inner], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Deep".into(), art: Arc::new(deep) });
+    // Its only instance, in the art of an opacity mask seven masks deep.
+    let mut art = instance(&mut doc, "Deep", Affine::translate((50.0, 20.0)));
+    for _ in 0..7 {
+        let mut holder = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), Color::gray(0.5));
+        holder.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(art), clip: false, invert: false, disabled: false, linked: true }));
+        art = holder;
+    }
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, art).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::DEEP_MASKS || w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&symbol_looks(&back), &symbol_looks(&doc));
+    let deep = &back.symbols.iter().find(|s| s.name == "Deep").unwrap().art;
+    assert_eq!(instances(deep), 1);
+    let mut masks = 0;
+    deep.walk(&mut |n| masks += usize::from(n.extras().mask.is_some()));
+    assert_eq!(masks, 1);
+}
+
+/// Symbols past the 4,096 the reader keeps are left out, their instances written as their art.
+#[test]
+fn symbols_past_the_readers_count_are_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    for i in 0..=crate::import::MAX_SYMBOLS {
+        let art = square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), Color::gray(0.5));
+        doc.symbols.push(Symbol { dynamic: false, name: format!("S{i}"), art: Arc::new(art) });
+    }
+    // An instance of each, in the panel's order: the last one's symbol is past the count.
+    let layer = doc.layers[0].id;
+    for i in 0..=crate::import::MAX_SYMBOLS {
+        let one = instance(&mut doc, &format!("S{i}"), Affine::translate((10.0, 10.0)));
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::SYMBOL_COUNT, writer::SYMBOL_ART]);
+    let back = read_back(&doc);
+    assert_eq!(back.symbols.len(), crate::import::MAX_SYMBOLS);
+    assert!(back.symbols.iter().all(|s| s.name != format!("S{}", crate::import::MAX_SYMBOLS)));
+    let live = back.layers[0].children().unwrap().iter().map(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })).collect::<Vec<_>>();
+    assert_eq!(live.len(), crate::import::MAX_SYMBOLS + 1);
+    assert!(live[..crate::import::MAX_SYMBOLS].iter().all(|l| *l) && !live[crate::import::MAX_SYMBOLS]);
+}
+
+/// With one place left under the reader's count, a symbol whose type holds an inline graphic with
+/// an instance of another symbol (found only as its art is written) takes the last place, and that
+/// instance is written as its art: no more definitions are written than the reader keeps.
+#[test]
+fn a_symbol_found_while_its_holder_is_written_keeps_within_the_readers_count() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for i in 0..crate::import::MAX_SYMBOLS - 1 {
+        let art = square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), Color::gray(0.5));
+        doc.symbols.push(Symbol { dynamic: false, name: format!("S{i}"), art: Arc::new(art) });
+        let one = instance(&mut doc, &format!("S{i}"), Affine::translate((10.0, 10.0)));
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let style = vectorcraft_doc::CharStyle { size: 18.0, fill: solid(Color::BLACK), ..vectorcraft_doc::CharStyle::default() };
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(0.0, 20.0), "A", style.clone());
+    t.runs.push(vectorcraft_doc::TextRun::inline(vectorcraft_doc::InlineArt::new("Inner"), style));
+    let typed = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.symbols.push(Symbol { dynamic: false, name: "Typed".into(), art: Arc::new(typed) });
+    // The inline graphic's art holds an instance of a symbol of its own.
+    let deeper = square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Deeper".into(), art: Arc::new(deeper) });
+    let nested = instance(&mut doc, "Deeper", Affine::translate((1.0, 1.0)));
+    let edge = square(&mut doc, Rect::new(0.0, 0.0, 2.0, 2.0), LEAF);
+    let inner = group(&mut doc, vec![edge, nested], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Inner".into(), art: Arc::new(inner) });
+    let one = instance(&mut doc, "Typed", Affine::translate((50.0, 50.0)));
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    let program = String::from_utf8_lossy(&out.program);
+    assert_eq!(program.matches("%AI14_BeginSymbol").count(), crate::import::MAX_SYMBOLS);
+    let back = read_back(&doc);
+    assert_eq!(back.symbols.len(), crate::import::MAX_SYMBOLS);
+    assert!(back.symbols.iter().any(|s| s.name == "Typed"));
+    assert!(matches!(back.layers[0].children().unwrap().last().unwrap().kind, NodeKind::SymbolInstance { .. }));
+}
+
+/// A linked image in a symbol's art is embedded; a dynamic symbol and a symbol's export type are
+/// reported left out.
+#[test]
+fn symbol_options_and_linked_images_in_symbols_are_reported() {
+    let mut doc = Document::new(200.0, 100.0);
+    let pixels = png_of(image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(2, 2, image::Rgba([0, 0, 255, 255]))));
+    let link = vectorcraft_doc::LinkInfo { path: "/tmp/blue.png".into(), ..Default::default() };
+    let picture = image_node(&mut doc, ImageBlob::new("image/png", pixels), (2, 2), Affine::scale(5.0), Some(link));
+    doc.symbols.push(Symbol { dynamic: true, name: "Picture".into(), art: Arc::new(picture) });
+    let one = instance(&mut doc, "Picture", Affine::translate((50.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::SYMBOL_OPTIONS, writer::LINKS_EMBEDDED]);
+    let p = program_shown(&doc);
+    assert!(p.contains("%AI5_BeginRaster") && !p.contains("%AI5_BeginPlace"), "{p}");
+    let back = read_back(&doc);
+    let NodeKind::Image(im) = &back.symbols[0].art.kind else { panic!("the symbol's image") };
+    assert!(im.link.is_none());
+    doc.symbols[0].dynamic = false;
+    doc.set_symbol_export_type("Picture", vectorcraft_doc::SymbolExportType::Graphic);
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_OPTIONS, writer::LINKS_EMBEDDED]);
+}
+
+/// Each of the nine registration points is written 1 to 9 by its place on the grid, row by row
+/// from the top left, and read back.
+#[test]
+fn every_registration_point_is_written_by_its_place() {
+    for (point, written, read) in (0..9).map(|r| (r, r + 1, r)) {
+        let mut doc = Document::new(200.0, 100.0);
+        let art = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        doc.symbols.push(Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+        doc.set_symbol_registration("Mark", vectorcraft_doc::SymbolRegistration(point));
+        let p = program_shown(&doc);
+        assert!(p.contains(&format!("%_{written} /Int (AI13PatternRegistrationType) ,\n")), "{point}: {p}");
+        assert_eq!(read_back(&doc).symbol_registration("Mark"), vectorcraft_doc::SymbolRegistration(read), "{point}");
+    }
+}
+
+/// Symbols whose art is a group with a state of its own (a name, transparency, an opacity mask, a
+/// clipping group) come back with it; the registration point shares the group's dictionary.
+#[test]
+fn symbols_whose_art_is_a_group_with_a_state_come_back() {
+    let mut doc = one_swatch_document(200.0, 100.0);
+    let pair = |doc: &mut Document| {
+        let a = square(doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        let b = square(doc, Rect::new(5.0, 5.0, 15.0, 15.0), Color::rgb(1.0, 0.0, 0.0));
+        vec![a, b]
+    };
+    let kids = pair(&mut doc);
+    let labeled = named(group(&mut doc, kids, false), "Label");
+    let kids = pair(&mut doc);
+    let faded = see_through(group(&mut doc, kids, false), 0.5, BlendMode::Multiply);
+    let kids = pair(&mut doc);
+    let mut masked = group(&mut doc, kids, false);
+    let mask_art = square(&mut doc, Rect::new(0.0, 0.0, 8.0, 8.0), Color::WHITE);
+    masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(mask_art), clip: true, invert: true, disabled: false, linked: true }));
+    let edge = clipping(&mut doc, shapes::ellipse(Rect::new(0.0, 0.0, 12.0, 12.0)));
+    let inside = square(&mut doc, Rect::new(0.0, 0.0, 20.0, 20.0), Color::rgb(0.0, 0.0, 1.0));
+    let window = group(&mut doc, vec![edge, inside], true);
+    let lone = square(&mut doc, Rect::new(0.0, 0.0, 6.0, 6.0), Color::gray(0.3));
+    let lone_named = named(group(&mut doc, vec![lone], false), "Lone");
+    for (name, art) in [("Labeled", labeled), ("Faded", faded), ("Masked", masked), ("Window", window), ("Lone", lone_named)] {
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        let one = instance(&mut doc, name, Affine::translate((20.0, 20.0)));
+        let layer = doc.layers[0].id;
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    doc.set_symbol_registration("Labeled", vectorcraft_doc::SymbolRegistration(2));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&symbol_looks(&back), &symbol_looks(&doc));
+    same_lines(&all_looks(&back), &all_looks(&doc));
+    assert_eq!(export_ai_editing(&back, &opts()).unwrap().program, out.program);
+    let p = program_shown(&doc);
+    // The name and the registration point in one dictionary, the group not wrapped again.
+    assert!(p.contains("%AI14_BeginSymbol\n(Labeled)\n0 A\n0 Xw\n0 Ae\nu\n0.6 0 0.9 0.1 k\n"), "{p}");
+    assert!(p.contains("%_/ArtDictionary :\n%_3 /Int (AI13PatternRegistrationType) ,\n%_/XMLUID : (Label) ; (AI10_ArtUID) ,\n%_;\n"), "{p}");
+}
+
+/// The names of symbols in every form a string takes: parentheses, a backslash, a slash, text
+/// outside ASCII, an empty name (which the reader names `Symbol`); two symbols of one name keep the
+/// first; an instance of a symbol the document doesn't have is an empty group, with a warning that
+/// says so.
+#[test]
+fn symbol_names_and_missing_symbols() {
+    let mut doc = Document::new(200.0, 100.0);
+    let names = ["Paren (a)", "Back\\slash", "Path/To", "Hoja ñ 葉", "", "Twice"];
+    for (i, name) in names.iter().chain(["Twice"].iter()).enumerate() {
+        let art = square(&mut doc, Rect::new(0.0, 0.0, 4.0 + i as f64, 4.0), Color::gray(0.5));
+        doc.symbols.push(Symbol { dynamic: false, name: (*name).into(), art: Arc::new(art) });
+    }
+    let layer = doc.layers[0].id;
+    for name in names {
+        let one = instance(&mut doc, name, Affine::translate((10.0, 10.0)));
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let names = names.map(|n| if n.is_empty() { "Symbol" } else { n });
+    assert_eq!(back.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), names);
+    let refs: Vec<String> = back.layers[0]
+        .children()
+        .unwrap()
+        .iter()
+        .map(|n| match &n.kind {
+            NodeKind::SymbolInstance { symbol, .. } => symbol.clone(),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(refs, names);
+    // The first symbol of a name is the one defined.
+    let twice = &back.symbols.iter().find(|s| s.name == "Twice").unwrap().art;
+    assert_eq!(paints_of_nodes(&back, std::slice::from_ref(twice)), paints_of_nodes(&doc, std::slice::from_ref(&doc.symbols[5].art)));
+    // A missing symbol.
+    let lost = instance(&mut doc, "Gone", Affine::translate((40.0, 10.0)));
+    doc.insert(Some(layer), usize::MAX, lost).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::MISSING_SYMBOL]);
+    let back = read_back(&doc);
+    let last = back.layers[0].children().unwrap().last().unwrap().clone();
+    assert!(matches!(&last.kind, NodeKind::Group { children, clip: false } if children.is_empty()), "{:?}", last.kind);
+}
+
+/// On a large canvas, a symbol's art holding a gradient and a nested instance is defined at its own
+/// size and comes back as it was.
+#[test]
+fn a_symbol_with_a_gradient_and_an_instance_on_a_large_canvas_comes_back() {
+    use vectorcraft_color::gradient::GradientGeom;
+    let mut doc = Document::new(20000.0, 100.0);
+    let leaf = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(leaf) });
+    let geom = GradientGeom { start: (0.0, 0.0).into(), end: (40.0, 10.0).into(), aspect: 1.0, focal: None };
+    let shaded = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 20.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(sunset(), Some(geom), None)))],
+    );
+    let nested = instance(&mut doc, "Leaf", Affine::translate((25.0, 5.0)) * Affine::rotate(0.4));
+    let both = group(&mut doc, vec![shaded, nested], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Both".into(), art: Arc::new(both) });
+    let one = instance(&mut doc, "Both", Affine::translate((100.0, 10.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
+    let back = read_back(&doc);
+    same_lines(&symbol_looks(&back), &symbol_looks(&doc));
+}
+
+/// Instance matrices of every kind (turned, sheared, mirrored, scaled near the smallest area the
+/// data keeps), nested in one another, are read back as written, and written again as the same
+/// bytes. The matrices come from a fixed seed.
+#[test]
+fn generated_instance_matrices_come_back() {
+    let mut seed = 0x2545_f491_4f6c_dd1du64;
+    let mut next = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    for round in 0..40 {
+        let mut doc = one_swatch_document(300.0, 300.0);
+        let base = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        doc.symbols.push(Symbol { dynamic: false, name: "S0".into(), art: Arc::new(base) });
+        let matrix = |next: &mut dyn FnMut() -> f64| {
+            // Four nested matrices together scale by at most 64, within the 100 an instance may.
+            let scale = 10f64.powf(next() * 3.0 - 3.0);
+            Affine::new([
+                (next() * 4.0 - 2.0) * scale,
+                (next() * 4.0 - 2.0) * scale,
+                (next() * 4.0 - 2.0) * scale,
+                (next() * 4.0 - 2.0) * scale,
+                next() * 300.0,
+                next() * 300.0,
+            ])
+        };
+        // A chain of symbols, each holding an instance of the one before.
+        for level in 1..4 {
+            let xf = matrix(&mut next);
+            let inner = instance(&mut doc, &format!("S{}", level - 1), xf);
+            let dot = square(&mut doc, Rect::new(0.0, 0.0, 3.0, 3.0), Color::gray(0.4));
+            let art = group(&mut doc, vec![dot, inner], false);
+            doc.symbols.push(Symbol { dynamic: false, name: format!("S{level}"), art: Arc::new(art) });
+        }
+        let layer = doc.layers[0].id;
+        for _ in 0..6 {
+            let pick = format!("S{}", (next() * 4.0) as usize % 4);
+            let xf = matrix(&mut next);
+            let one = instance(&mut doc, &pick, xf);
+            doc.insert(Some(layer), usize::MAX, one).unwrap();
+        }
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        let back = read_back(&doc);
+        // Each instance written as one comes back with its matrix to ten decimals.
+        let written = |d: &Document| {
+            let mut all = vec![];
+            for n in d.layers[0].children().unwrap().iter().chain(d.symbols.iter().map(|s| &s.art)) {
+                n.walk(&mut |m| {
+                    if let NodeKind::SymbolInstance { symbol, xf } = &m.kind {
+                        all.push((symbol.clone(), *xf));
+                    }
+                });
+            }
+            all
+        };
+        assert!(out.warnings.is_empty(), "round {round}: {:?}", out.warnings);
+        let (got, want) = (written(&back), written(&doc));
+        assert_eq!(got.len(), want.len(), "round {round}");
+        for (g, w) in got.iter().zip(&want) {
+            assert_eq!(g.0, w.0, "round {round}");
+            for (a, b) in g.1.as_coeffs().iter().zip(w.1.as_coeffs()) {
+                assert!((a - b).abs() <= 1e-9 * b.abs().max(1.0), "round {round}: {:?} {:?}", g.1, w.1);
+            }
+        }
+        let again = export_ai_editing(&back, &opts()).unwrap().program;
+        same_lines(&shown(&again).lines().map(String::from).collect::<Vec<_>>(), &shown(&out.program).lines().map(String::from).collect::<Vec<_>>());
+        assert_eq!(again, out.program, "round {round}");
+    }
+    // About the smallest area the data keeps: an instance whose matrix keeps it stays one, one
+    // whose matrix (to ten decimals) loses it is written as its art.
+    for (xf, live) in [
+        (Affine::new([1e-6, 0.0, 0.0, 1.1e-6, 50.0, 10.0]), true),
+        (Affine::new([1e-6, 0.0, 0.0, 0.9e-6, 50.0, 10.0]), false),
+        (Affine::new([1.0, 0.4, 2.5, 1.0000000001, 50.0, 10.0]), true),
+        (Affine::new([4e-11, 0.0, 0.0, 1e6, 50.0, 10.0]), false),
+    ] {
+        let mut doc = Document::new(200.0, 100.0);
+        let base = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        doc.symbols.push(Symbol { dynamic: false, name: "S0".into(), art: Arc::new(base) });
+        let one = instance(&mut doc, "S0", xf);
+        let layer = doc.layers[0].id;
+        doc.insert(Some(layer), usize::MAX, one).unwrap();
+        let back = read_back(&doc);
+        assert_eq!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::SymbolInstance { .. }), live, "{xf:?}");
+    }
+}
+
+/// Type in a symbol's art is written as its outlines (the reader reads no type there), so the
+/// symbol and its instance come back; type on the layers stays type.
+#[test]
+fn type_in_a_symbols_art_is_written_as_its_outlines() {
+    let mut doc = Document::new(200.0, 100.0);
+    let label = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(0.0, 20.0), "Tag", style(18.0, Color::BLACK));
+    let label = text_node(&mut doc, label);
+    doc.symbols.push(Symbol { dynamic: false, name: "Tag".into(), art: Arc::new(label) });
+    let one = instance(&mut doc, "Tag", Affine::translate((20.0, 20.0)));
+    let plain = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 90.0), "Plain", style(18.0, Color::BLACK));
+    let plain = text_node(&mut doc, plain);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, one).unwrap();
+    doc.insert(Some(layer), usize::MAX, plain).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::TYPE]);
+    assert_eq!(program(&doc).matches("/AI11Text :").count(), 1);
+    let back = read_back(&doc);
+    assert_eq!(back.symbols.len(), 1);
+    assert!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::SymbolInstance { .. }));
 }
