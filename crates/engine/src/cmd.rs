@@ -168,6 +168,17 @@ pub fn has_selection(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
     if st.selection.is_empty() { Err("nothing selected".into()) } else { Ok(()) }
 }
+/// A path is selected, or inside a selected group or compound path: Object › Path's items that
+/// work on paths (not on text, images or other objects alone).
+pub fn has_selected_path(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    let st = s.active().ok_or("no document open")?;
+    let mut found = false;
+    for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+        n.walk(&mut |c| found |= matches!(c.kind, vectorcraft_doc::NodeKind::Path { guide: false, .. }));
+    }
+    if found { Ok(()) } else { Err("select a path".into()) }
+}
 /// Objects or ruler guides are selected, or the Artboard tool is chosen (what Copy and Cut take).
 pub fn has_selection_guides_or_artboard_tool(s: &Session) -> std::result::Result<(), String> {
     if s.tool_id() == "artboard" { has_doc(s) } else { has_selection_or_guides(s) }
