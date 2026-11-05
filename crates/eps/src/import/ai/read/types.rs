@@ -269,6 +269,11 @@ pub(super) const MAX_PLACED_FOLDER: usize = 4096;
 pub(super) const LINKED_PREVIEWS: &str =
     "linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel";
 
+/// What the open result says of linked images the data keeps no pixels of (`XF`): they show a
+/// placeholder.
+pub const LINKED_PLACEHOLDERS: &str =
+    "linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel";
+
 /// Operators that change nothing the reader keeps.
 pub(super) const IGNORED: &[&str] = &[
     "Ae",
@@ -276,12 +281,10 @@ pub(super) const IGNORED: &[&str] = &[
     "As",
     "Xd",
     "Xr",
-    "XG",
     // `/DeviceGray XC` after a linked image's file name (`XG`): its colour space.
     "XC",
     "Xh",
     "XH",
-    "XF",
     "Bc",
     "XP",
     "Np",

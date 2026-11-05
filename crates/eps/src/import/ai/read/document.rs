@@ -894,6 +894,7 @@ impl<'a> Reader<'a> {
             unread_elsewhere: self.unread_elsewhere,
             slot_names: self.slot_names,
             restyled: self.restyled,
+            placeholders: self.placeholders,
             placed_elsewhere: self.placed_elsewhere,
             envelopes_drawn: self.envelopes_drawn,
             styles_read,

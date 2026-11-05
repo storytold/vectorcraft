@@ -35,6 +35,11 @@
 //!   and the samples after `XI`. 8-bit CMYK samples keep their ink amounts in a CMYK TIFF, and
 //!   an alpha channel that hides part of such an image becomes its opacity mask; other samples
 //!   become an RGBA PNG.
+//! - Linked images in the version 7 form (§8.2, §8.3): `(path) modified XG`, then `XF` with the
+//!   operands `XI` takes and no samples. Each is a linked image of that file showing a placeholder
+//!   over the image's place until its file is found. An `XF` without a file name before it, or
+//!   with operands `XI` couldn't read, is left out with a warning. An `XI` after `XG` (newer files
+//!   write `() 1 XG` before their embedded images) stays an embedded image.
 //! - Placed (linked) files, as written in files users sent: `%AI5_BeginPlace`, `[matrix] llx lly urx
 //!   ury … (path)` and the operator `` ` ``, the file's preview between `%AI26_BeginPlacedObjectPreview`
 //!   and its end (`w h rowBytes 32 n `, then rows of premultiplied ARGB, the top one first), `~`. The
@@ -124,7 +129,7 @@ pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
 use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster};
 #[cfg(test)]
-pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
+pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
 
 #[path = "legacy_text.rs"]
@@ -155,6 +160,10 @@ pub struct Structure {
     /// Where the drawn looks lay that objects read with their art style took the place of (the
     /// document's coordinates): the page draws Illustrator's rendering of those styles there.
     pub restyled: Vec<Rect>,
+    /// Where linked images whose pixels the data doesn't keep (`XF`) show a placeholder (the
+    /// document's coordinates). A PostScript page doesn't draw them there; a PDF part draws the
+    /// image's pixels.
+    pub placeholders: Vec<Rect>,
     /// Placed files whose pixels the file puts at another point too: their image's id and the
     /// move, in its pixels, that places them there (the corner of the box they are written with,
     /// in place of the canvas point of art space's origin).
@@ -259,6 +268,8 @@ struct Reader<'a> {
     /// a global process colour, so these make swatches only for names no colour operator defines.
     stop_spots: Vec<Named>,
     raster: Option<Raster>,
+    /// The file `XG` names for the image after it (`XF`), until an image is read.
+    image_link: Option<String>,
     /// The placed file being read (`%AI5_BeginPlace` … `~`).
     place: Option<Place>,
     /// The last object read is the last child of the innermost frame, and nothing started since.
@@ -343,6 +354,8 @@ struct Reader<'a> {
     palette: super::palette::Palette,
     /// See [`Structure::restyled`].
     restyled: Vec<Rect>,
+    /// See [`Structure::placeholders`].
+    placeholders: Vec<Rect>,
     /// See [`Structure::placed_elsewhere`].
     placed_elsewhere: Vec<(NodeId, Affine)>,
     unread_elsewhere: Vec<(NodeId, Rect)>,
@@ -443,6 +456,7 @@ impl<'a> Reader<'a> {
             spots: Vec::new(),
             stop_spots: Vec::new(),
             raster: None,
+            image_link: None,
             place: None,
             foreign_data: None,
             after_object: false,
@@ -487,6 +501,7 @@ impl<'a> Reader<'a> {
             style_links: vec![],
             palette: super::palette::Palette::default(),
             restyled: vec![],
+            placeholders: vec![],
             placed_elsewhere: vec![],
             unread_elsewhere: vec![],
             mesh: None,

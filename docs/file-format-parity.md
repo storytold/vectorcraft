@@ -120,7 +120,9 @@ private editing data. VectorCraft:
   without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868, with its paragraphs' letter
   and word spacing (`TC`, `TW`), hanging punctuation (`Tq`) and hyphenation (`Th`). Its patterns in
   the version 7 form (a list of `@` and `&` layers, `_ &` for the tile's background) open as pattern swatches,
-  with a fill's offset, scale, rotation, reflection and shear applied before its matrix.
+  with a fill's offset, scale, rotation, reflection and shear applied before its matrix. Its linked images in
+  the version 7 form (`(path) modified XG`, then `XF` with no samples) come in as linked images of their files,
+  showing a placeholder where the image goes until the file is relinked in the Links panel.
 - Estimate: **~65%** for real exchange with Illustrator users (open: ~75%; save: PDF-compatible, or legacy
   version 7 with layers and groups; not yet tested by users who hand files back).
   Closing the open-side issues: 10–20 h with users' files.

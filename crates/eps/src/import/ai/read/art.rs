@@ -1,13 +1,14 @@
 use super::containers::close;
 use super::document::TEXT_SLOT;
 use super::types::{
-    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART,
+    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART,
     NON_NATIVE_ART_UNREAD, Place,
 };
 use super::{
     Affine, AnchorKind, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node,
     NodeId, NodeKind, Obj, OpacityMask, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
 };
+use vectorcraft_doc::links::missing_placeholder;
 
 impl<'a> Reader<'a> {
     /// A text object (`/AI11Text`): an empty group standing for it, named after its story.
@@ -383,14 +384,46 @@ impl<'a> Reader<'a> {
         self.image_from(vals, data)
     }
 
+    /// The matrix and the numbers of an image's operands (`[a b c d tx ty] llx lly urx ury w h bits
+    /// ImageType AlphaChannelCount reserved bin-ascii ImageMask`, as `XI` and `XF` take them); `None`
+    /// without a matrix or with fewer numbers than up to the encoding (bin-ascii).
+    fn image_operands(vals: &[V]) -> Option<(Vec<f64>, Vec<f64>)> {
+        let m = vals.iter().find_map(|v| if let V::Arr(a) = v { Some(Self::nums(a)) } else { None })?;
+        let n = Self::nums(vals);
+        (n.len() >= 11).then_some((m, n))
+    }
+
+    /// `XG` (`w`, which names the file of the image after it) or `XF` (that image), with their
+    /// operands `vals`. Before the art, the setup's procedures run: there they do nothing.
+    pub(super) fn image_link_op(&mut self, w: &str, vals: Vec<V>, hidden: bool) -> Result<(), String> {
+        if self.frames.is_empty() {
+            return Ok(());
+        }
+        if w == "XG" {
+            self.image_link = Self::image_link(&vals);
+            return Ok(());
+        }
+        self.linked_image(vals, hidden)
+    }
+
+    /// The file `XG`'s operands (`(path) modified`) name; `None` for operands of another shape or
+    /// an empty path.
+    fn image_link(vals: &[V]) -> Option<String> {
+        match vals {
+            [.., V::Str(path), V::Num(_)] if !path.is_empty() => Some(super::obj::text(path)),
+            _ => None,
+        }
+    }
+
     /// An image of operands `vals` and samples `data`.
     pub(super) fn image_from(&mut self, vals: Vec<V>, data: &[u8]) -> Result<(), String> {
+        // A file `XG` named before this image isn't the file of a later `XF`.
+        self.image_link = None;
         let space = self.raster.as_ref().and_then(|r| r.space.clone()).unwrap_or_default();
-        let Some(m) = vals.iter().find_map(|v| if let V::Arr(a) = v { Some(Self::nums(a)) } else { None }) else {
+        let Some((m, n)) = Self::image_operands(&vals) else {
             self.warn("an image VectorCraft can't read was left out");
             return Ok(());
         };
-        let n = Self::nums(&vals);
         let [_, _, _, _, w, h, bits, kind, alpha, _, binary, ..] = n.as_slice() else {
             self.warn("an image VectorCraft can't read was left out");
             return Ok(());
@@ -474,6 +507,52 @@ impl<'a> Reader<'a> {
             return Ok(());
         }
         self.add_raster(ImageBlob::new("image/png", png), None, &m, (w as u32, h as u32))
+    }
+
+    /// `XF` (§8.2): an image whose pixels are in the file the `XG` before it names becomes a linked
+    /// image of that file, of its `w` × `h` pixels placed as the matrix maps them, as `XI` places an
+    /// image. The data keeps no pixels or preview of it, so a placeholder is spread over those pixels
+    /// until its file is found. One without that file name, or whose operands `XI` couldn't read (no
+    /// matrix, too few numbers, no pixels, or samples of other than 1 or 8 bits), is left out with a
+    /// warning. No pixels are read, so its size isn't held to the limit on `XI`'s samples.
+    fn linked_image(&mut self, vals: Vec<V>, hidden: bool) -> Result<(), String> {
+        let path = self.image_link.take();
+        let operands = Self::image_operands(&vals);
+        let (Some(path), Some((m, n))) = (path, operands) else {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
+        let (&[a, b, c, d, tx, ty], &[_, _, _, _, w, h, bits, ..]) = (m.as_slice(), n.as_slice()) else {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
+        if !(1.0..=MAX_SIDE).contains(&w) || !(1.0..=MAX_SIDE).contains(&h) || ![1.0, 8.0].contains(&bits) {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        }
+        let (w, h) = (w as u32, h as u32);
+        let xf = self.space() * Affine::new([a, b, c, d, tx, ty]) * FLIP;
+        if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        }
+        let Some(png) = missing_placeholder() else {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
+        // The placeholder is all the document has of the file: what a missing link shows.
+        let bytes = Arc::new(png);
+        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
+        let key = linked_key(&blob, &path);
+        self.doc.images.entry(key.clone()).or_insert(blob);
+        self.warn(LINKED_PLACEHOLDERS);
+        // A PostScript page doesn't draw the placeholder: there its pixels are left out of the
+        // comparisons with the page.
+        if !hidden && !self.gs.hidden && self.shown() {
+            self.placeholders.push(xf.transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(w), f64::from(h))));
+        }
+        let im = ImageObject { key, width: w, height: h, xf, link: Some(LinkInfo::new(path)), placement: Default::default(), pixels: None };
+        self.add_image(im, hidden)
     }
 
     /// Add the image `blob` (`w` × `h` pixels), which the matrix `m` maps into art space, with
@@ -597,7 +676,7 @@ impl<'a> Reader<'a> {
         // The preview is all the document has of the file: what a missing link shows.
         let bytes = Arc::new(png);
         let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
-        let key = blob.content_key();
+        let key = linked_key(&blob, &path);
         self.doc.images.entry(key.clone()).or_insert(blob);
         self.warn(LINKED_PREVIEWS);
         if let Some(shift) = elsewhere
@@ -721,6 +800,13 @@ pub(super) fn relative_path(folder: &str, name: &str) -> Option<String> {
         return None;
     }
     Some(format!("{}/{name}", folder.trim_end_matches('/')))
+}
+
+/// The image key of a linked image of the file at `path` that shows `blob` (its preview or a
+/// placeholder): the blob's own key and the path's. Images of other files that show the same pixels
+/// have keys of their own, and reading one file's pixels in changes that file's images only.
+fn linked_key(blob: &ImageBlob, path: &str) -> String {
+    format!("{}-{}", blob.content_key(), vectorcraft_doc::links::hash_bytes(path.as_bytes()))
 }
 
 pub(super) fn sane(r: Rect) -> bool {

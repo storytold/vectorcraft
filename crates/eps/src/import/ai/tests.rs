@@ -2112,6 +2112,90 @@ fn a_rotated_image_is_placed_as_its_matrix_maps_it() {
     }
 }
 
+/// A raster object in the version 7 form (§8): `%AI5_BeginRaster`, `head` (a link's `XG`, or
+/// nothing), the operands `[matrix] 0 0 w h w h 8 3 0 0 0 0`, the operator `op` and `tail` (an
+/// `XI`'s samples on `%` lines), `%AI5_EndRaster`.
+fn raster7(head: &str, matrix: &str, (w, h): (u32, u32), op: &str, tail: &str) -> String {
+    format!("%AI5_File:\n%AI5_BeginRaster\n{head}{matrix} 0 0 {w} {h} {w} {h} 8 3 0 0 0 0 {op}\n{tail}%AI5_EndRaster\n")
+}
+
+/// A linked image in the version 7 form (§8.2, §8.3), `(path) modified XG` and then `XF` with no
+/// samples, is a linked image of that file. The data keeps no pixels of it, so it shows a
+/// placeholder over the place the matrix maps the image's pixels to, as an embedded image (`XI`)
+/// of the same operands is placed.
+#[test]
+fn a_version_7_linked_image_shows_a_placeholder_where_the_image_is() {
+    let (s, c) = 30f64.to_radians().sin_cos();
+    for m in [[2.0, 0.0, 0.0, 3.0, 100.0, 400.0], [3.0 * c, 3.0 * s, -2.0 * s, 2.0 * c, 40.0, 60.0]] {
+        let matrix = format!("[ {} ]", m.map(|v| v.to_string()).join(" "));
+        let linked = raster7("(Macintosh HD:Images:photo.tif) 0 XG\n", &matrix, (10, 20), "XF", "");
+        let embedded = raster7("", &matrix, (10, 20), "XI", &"%FF0000\n".repeat(200));
+        let r = read(stream7(&layer7("L", &format!("{linked}{embedded}"))).as_bytes()).unwrap();
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 2, "{:?}", r.warnings);
+        let (NodeKind::Image(link), NodeKind::Image(emb)) = (&a[0].kind, &a[1].kind) else { panic!("{:?}", a) };
+        assert_eq!(link.link.as_ref().map(|l| l.path.as_str()), Some("Macintosh HD:Images:photo.tif"));
+        assert_eq!(emb.link, None, "an image whose samples follow stays embedded");
+        assert!(r.doc.images[&link.key].is_proxy(), "the placeholder is what a missing link shows");
+        // The file's pixels, placed as the embedded image's are: relinking keeps that size.
+        assert_eq!((link.width, link.height, link.xf), (emb.width, emb.height, emb.xf));
+        assert_eq!((link.width, link.height), (10, 20));
+        assert_eq!(r.warnings.iter().filter(|w| *w == read::LINKED_PLACEHOLDERS).count(), 1, "{:?}", r.warnings);
+        assert!(!r.warnings.iter().any(|w| w.contains("left out")), "{:?}", r.warnings);
+    }
+    // Images of other files keep images of their own, though each shows the same placeholder; two
+    // of one file share theirs.
+    let m = "[ 1 0 0 1 0 100 ]";
+    let three = ["(a.tif) 0 XG\n", "(b.tif) 0 XG\n", "(a.tif) 0 XG\n"].map(|xg| raster7(xg, m, (2, 2), "XF", "")).concat();
+    let r = read(stream7(&layer7("L", &three)).as_bytes()).unwrap();
+    let keys: Vec<_> = art(&r.doc).iter().filter_map(|n| if let NodeKind::Image(im) = &n.kind { Some(im.key.clone()) } else { None }).collect();
+    assert!(matches!(&keys[..], [a, b, c] if a != b && a == c), "{keys:?}");
+    assert_eq!(r.doc.images.len(), 2);
+}
+
+/// `XG` names the file of the `XF` after it only: an `XF` without a file name before it, after an
+/// `XG` with operands of another shape or an empty path, or after an image that took the name,
+/// is left out with a warning, as is one whose operands `XI` couldn't read. Of two `XG`s, the
+/// second names the file.
+#[test]
+fn a_version_7_linked_image_without_its_file_name_is_left_out_with_a_warning() {
+    let m = "[ 1 0 0 1 0 100 ]";
+    let embedded = raster7("() 1 XG\n", m, (1, 1), "XI", "%FF0000\n");
+    for (what, src) in [
+        ("no XG", raster7("", m, (2, 2), "XF", "")),
+        ("a name, not a string", raster7("/photo 0 XG\n", m, (2, 2), "XF", "")),
+        ("no modified flag", raster7("(a.tif) XG\n", m, (2, 2), "XF", "")),
+        ("an empty path", raster7("() 0 XG\n", m, (2, 2), "XF", "")),
+        ("taken by an embedded image", format!("{}{}", raster7("(a.tif) 0 XG\n", m, (1, 1), "XI", "%FF0000\n"), raster7("", m, (2, 2), "XF", ""))),
+        ("named in an earlier raster object", format!("%AI5_BeginRaster\n(a.tif) 0 XG\n%AI5_EndRaster\n{}", raster7("", m, (2, 2), "XF", ""))),
+        ("named outside a raster object", format!("(a.tif) 0 XG\n{}", raster7("", m, (2, 2), "XF", ""))),
+        ("too few operands", raster7("(a.tif) 0 XG\n", m, (2, 2), "XF", "").replace(" 8 3 0 0 0 0 XF", " 8 3 0 XF")),
+        ("no matrix", raster7("(a.tif) 0 XG\n", "", (2, 2), "XF", "")),
+        ("a matrix with no area", raster7("(a.tif) 0 XG\n", "[ 0 0 0 0 0 0 ]", (2, 2), "XF", "")),
+        ("no pixels", raster7("(a.tif) 0 XG\n", m, (0, 2), "XF", "")),
+        ("a side past the largest", raster7("(a.tif) 0 XG\n", m, (2_000_000, 2), "XF", "")),
+        ("samples of 7 bits", raster7("(a.tif) 0 XG\n", m, (2, 2), "XF", "").replace(" 8 3 0 0 0 0 XF", " 7 3 0 0 0 0 XF")),
+    ] {
+        let body = format!("{embedded}{src}");
+        let r = read(stream7(&layer7("L", &body)).as_bytes()).unwrap();
+        let a = art(&r.doc);
+        assert_eq!(a.len(), body.matches(" XI\n").count(), "{what}: {:?}", r.warnings);
+        assert!(a.iter().all(|n| matches!(&n.kind, NodeKind::Image(im) if im.link.is_none())), "{what}: the embedded images only");
+        let left_out = r.warnings.iter().filter(|w| *w == "an image VectorCraft can't read was left out").count();
+        assert_eq!(left_out, 1, "{what}: {:?}", r.warnings);
+        assert!(!r.warnings.iter().any(|w| w == read::LINKED_PLACEHOLDERS), "{what}: {:?}", r.warnings);
+    }
+    // More pixels than an embedded image may have: no pixels are read, so the linked image comes in.
+    let r = read(stream7(&layer7("L", &raster7("(a.tif) 0 XG\n", m, (100_000, 100_000), "XF", ""))).as_bytes()).unwrap();
+    let a = art(&r.doc);
+    assert!(matches!(&a[..], [n] if matches!(&n.kind, NodeKind::Image(im) if (im.width, im.height) == (100_000, 100_000))), "{a:?}");
+    assert!(!r.warnings.iter().any(|w| w == read::IMAGE_TOO_LARGE), "{:?}", r.warnings);
+    let twice = raster7("(a.tif) 0 XG\n(b.tif) 0 XG\n", m, (2, 2), "XF", "");
+    let r = read(stream7(&layer7("L", &twice)).as_bytes()).unwrap();
+    let a = art(&r.doc);
+    assert!(matches!(&a[..], [n] if matches!(&n.kind, NodeKind::Image(im) if im.link.as_ref().is_some_and(|l| l.path == "b.tif"))), "{a:?}");
+}
+
 /// CMYK images keep their ink amounts, as the file's PDF part keeps them, and an alpha channel
 /// becomes their opacity mask: a grayscale image over the image.
 #[test]
@@ -2480,6 +2564,25 @@ fn xml_ids_stay_within_their_byte_budget() {
     assert!(!ids.contains_key("long_id"));
     assert_eq!(ids.get("id_2"), Some(&None), "two objects with one id are neither of them that id's");
     assert_eq!(bytes, super::read::MAX_XML_ID_BYTES);
+}
+
+/// Placed files of other paths keep images of their own though their previews are alike; two of
+/// one path share theirs.
+#[test]
+fn placed_files_of_other_paths_keep_images_of_their_own() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let object = |path: &str| {
+        let data = placed(true, "[5 0 0 -5 0 200]", path, Some(&preview), "");
+        let find = |s: &[u8]| data.windows(s.len()).position(|w| w == s).unwrap();
+        data[find(b"%AI5_BeginPlace")..find(b"%AI5_EndPlace\r") + 14].to_vec()
+    };
+    let mut data = placed(true, "[5 0 0 -5 0 200]", "a.png", Some(&preview), "");
+    let end = data.windows(14).position(|w| w == b"%AI5_EndPlace\r").unwrap() + 14;
+    data.splice(end..end, [object("b.png"), object("a.png")].concat());
+    let r = read(&data).unwrap();
+    let keys: Vec<_> = art(&r.doc).iter().filter_map(|n| if let NodeKind::Image(im) = &n.kind { Some(im.key.clone()) } else { None }).collect();
+    assert!(matches!(&keys[..], [a, b, c] if a != b && a == c), "{keys:?}");
+    assert_eq!(r.doc.images.len(), 2);
 }
 
 #[test]
