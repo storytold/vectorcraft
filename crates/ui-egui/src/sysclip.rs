@@ -149,9 +149,9 @@ impl VectorcraftApp {
 
     /// The text of the latest Copy or Cut whose formats could not be written to the system
     /// clipboard, while nothing has been copied since that Copy or Cut. A paste into type or a text
-    /// field takes this text until another app copies something. Where the platform has no change count, a
-    /// copy is noticed only when it changes the clipboard's text, and once a clipboard whose text
-    /// could not be read when the write failed has text, Paste takes that text.
+    /// field takes this text until another app copies something. Where the platform has no change
+    /// count, a copy is noticed only when it changes the clipboard's text, so the copy is kept only
+    /// when the clipboard held text when the write failed.
     pub(crate) fn unwritten_clipboard_text(&mut self) -> Option<String> {
         let cb = self.services.system_clipboard.as_deref_mut()?;
         let (held, text) = self.clipboard_publishing.unwritten.as_ref()?;
@@ -226,7 +226,10 @@ impl VectorcraftApp {
                             Some(now) => text.as_deref().is_some_and(|ours| now.data == ours.as_bytes()),
                             None => !cb.has(&PASTE_ORDER) || f.iter().any(|ours| cb.read(&[ours.mime]).is_some_and(|now| now.data == ours.data)),
                         };
-                    app.clipboard_publishing.unwritten = text.filter(|_| current && left_by_write).map(|text| (held, text));
+                    // Without a change count, a clipboard with no text can't show a later copy of
+                    // a picture, or tell an empty clipboard from one that couldn't be read.
+                    let trackable = held != Held::Text(None);
+                    app.clipboard_publishing.unwritten = text.filter(|_| current && left_by_write && trackable).map(|text| (held, text));
                     return Err(e);
                 }
                 Ok(warnings)
