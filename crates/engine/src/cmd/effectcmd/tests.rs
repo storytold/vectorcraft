@@ -366,14 +366,16 @@ fn expand_appearance_bakes_geometry() {
     assert!(s.execute("effect.expandAppearance", &json!({})).is_err());
 }
 
+/// Each copy is an object of its own (#5612).
 #[test]
-fn expand_transform_copies_makes_compound() {
+fn expand_transform_copies_makes_a_group_of_the_copies() {
     let (mut s, id) = session_with_rect();
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
     s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"moveH": 120, "copies": 1}})).unwrap();
     s.execute("effect.expandAppearance", &json!({})).unwrap();
     let n = node(&s, id);
-    assert!(matches!(n.kind, NodeKind::Compound { .. }));
+    assert!(matches!(n.kind, NodeKind::Group { .. }), "{}", n.kind_label());
+    assert_eq!(n.children().map(|c| c.len()), Some(2));
     let b = n.geometric_bounds().unwrap();
     assert!((b.x1 - 320.0).abs() < 1e-6, "{b:?}");
 }
