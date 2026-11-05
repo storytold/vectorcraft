@@ -13,7 +13,8 @@ impl VectorcraftApp {
             // `ui.pointer` drives the tool at once, while `ui.key` and the other synthetic input
             // reach it in a later UI pass: a pointer request waits until the input sent before it
             // was applied, so a key pressed during a drag changes the drag before its release.
-            if req.method == "ui.pointer" && (!self.synthetic.is_empty() || self.synthetic_injected) {
+            // One its caller gave up meanwhile is dropped below instead of holding back the rest.
+            if req.method == "ui.pointer" && !req.given_up() && (!self.synthetic.is_empty() || self.synthetic_injected) {
                 self.deferred_control = Some(req);
                 ctx.request_repaint();
                 break;
