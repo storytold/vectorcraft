@@ -1,10 +1,13 @@
+use std::collections::HashMap;
+
 use super::super::brush;
 use super::art::{four, sane, two};
 use super::types::{
-    FLIP, GState, Kind, MAX_HEX, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED,
-    VERSIONED_UNENDED,
+    FLIP, GState, Kind, MAX_DEPTH, MAX_HEX, MAX_LISTED, MAX_NODES, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, MAX_SYMBOLS,
+    PatternHead, Place, Raster, SKIPPED, SymbolHead, VERSIONED_UNENDED,
 };
-use super::{Arc, Global, Lexer, Node, PatternDef, Reader, Rect, Tok, V, marker, obj};
+use super::{Arc, Global, Lexer, Node, NodeKind, PatternDef, Reader, Rect, Tok, V, marker, obj};
+use vectorcraft_doc::{NodeId, Symbol, SymbolRegistration};
 
 impl<'a> Reader<'a> {
     pub(super) fn push(&mut self, v: V) -> Result<(), String> {
@@ -85,7 +88,7 @@ impl<'a> Reader<'a> {
         }
         let m = marker(line);
         // A pattern's definition. One inside another's isn't read, and the outer tile is then incomplete.
-        if m == "BeginPattern" {
+        if m == "BeginPattern" && self.symbol.is_none() {
             let section = self.section("EndPattern")?;
             if self.pattern.is_some() {
                 self.unsupported.insert("patterns inside patterns".into());
@@ -96,7 +99,12 @@ impl<'a> Reader<'a> {
         }
         if m == "BeginSymbol" {
             let section = self.section("EndSymbol")?;
-            self.symbol_bounds(section);
+            self.define_symbol(section);
+            return Ok(());
+        }
+        if m == "BeginSymbolList" {
+            let section = self.section("EndSymbolList")?;
+            self.symbol_list(section);
             return Ok(());
         }
         // Brushes and their art (those in a pattern's or a brush's art aren't read).
@@ -504,32 +512,165 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// Read a definition's box for an instance whose art must come from the page.
-    fn symbol_bounds(&mut self, section: &[u8]) {
-        if self.symbol_bounds.len() >= MAX_PATTERNS || self.subreader_depth >= MAX_SUBREADERS {
+    /// A symbol's definition (`section`: what follows `%AI14_BeginSymbol`), read by a reader of its
+    /// own into a symbol of the document, its art in the symbol's space (y down), named as the file
+    /// names it unless another symbol has that name. A definition inside another one or inside a
+    /// pattern's isn't read, nor is one after the first layer (the symbols were checked there, see
+    /// [`Reader::check_symbols`]). One it can't read whole (an operator it doesn't know, type, unbalanced
+    /// groups, art it leaves out) isn't kept: its instances come in as the page draws them, within
+    /// its art's box when that can be measured.
+    fn define_symbol(&mut self, section: &[u8]) {
+        if self.symbol.is_some()
+            || self.pattern.is_some()
+            || self.symbols_checked
+            || self.subreader_depth >= MAX_SUBREADERS
+            || self.doc.symbols.len() + self.symbol_bounds.len() >= MAX_SYMBOLS
+        {
             return;
         }
-        let mut lex = super::Lexer::new(section);
-        let name = match lex.next_token().map(|t| t.tok) {
-            Some(Tok::Str(bytes)) => super::obj::text(&bytes),
+        let name = match Lexer::new(section).next_token().map(|t| t.tok) {
+            Some(Tok::Str(bytes)) => obj::text(&bytes),
             _ => return,
         };
         let mut sub = Reader::new(section);
         sub.subreader_depth = self.subreader_depth + 1;
-        sub.cropmarks = self.cropmarks;
+        sub.symbol = Some(SymbolHead::default());
         sub.template = self.template;
+        // The gradients, art styles and patterns defined so far and the names given, lent.
+        sub.gradients = std::mem::take(&mut self.gradients);
+        sub.global_names = std::mem::take(&mut self.global_names);
+        sub.styles = std::mem::take(&mut self.styles);
+        sub.pattern_tiles = std::mem::take(&mut self.pattern_tiles);
+        sub.v7_patterns.clone_from(&self.v7_patterns);
         sub.nodes = self.nodes;
         let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
         self.nodes = sub.nodes;
-        if read.is_err() || !sub.unsupported.is_empty() || !sub.unknown.is_empty() || sub.frames.len() != 1 {
+        self.gradients = std::mem::take(&mut sub.gradients);
+        self.global_names = std::mem::take(&mut sub.global_names);
+        self.styles = std::mem::take(&mut sub.styles);
+        self.pattern_tiles = std::mem::take(&mut sub.pattern_tiles);
+        // Art stopped by a trailer, or with an array, type, image, placed file, gradient mesh or
+        // gradient still open at the end (as [`Reader::run_string`] checks), isn't whole.
+        let open = sub.done
+            || sub.stack.iter().any(|v| matches!(v, V::Mark))
+            || !sub.marks.is_empty()
+            || sub.text.is_some()
+            || sub.raster.is_some()
+            || sub.place.is_some()
+            || sub.mesh.is_some()
+            || sub.gradient_def.is_some();
+        let head = sub.symbol.take().unwrap_or_default();
+        let registration = head.registration;
+        let measured = read.is_ok() && !open && sub.unsupported.is_empty() && sub.unknown.is_empty() && sub.frames.len() == 1;
+        let Some(frame) = sub.frames.pop().filter(|_| measured) else { return };
+        let mut kids = frame.children;
+        // Where a symbol's art puts a pattern's tiles isn't known.
+        let whole = !head.left_out && sub.unread.is_empty() && sub.hidden_unread.is_empty() && !kids.iter().any(|n| paints_pattern(n, 0));
+        if !whole {
+            let boxes = self.doc.symbol_boxes();
+            let bounds = kids.iter().fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.visual_bounds_with(&boxes)));
+            drop(boxes);
+            if let Some(b) = bounds.filter(|b| sane(*b) && b.area() > 0.0) {
+                self.symbol_bounds.insert(name, b);
+            }
             return;
         }
-        let Some(frame) = sub.frames.pop() else { return };
-        let bounds = frame.children.iter().fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.visual_bounds()));
-        let Some(bounds) = bounds.map(|b| sub.space().inverse().transform_rect_bbox(b)) else { return };
-        if sane(bounds) && bounds.area() > 0.0 {
-            self.symbol_bounds.insert(name, bounds);
+        let art = match (kids.len(), kids.pop()) {
+            (1, Some(one)) => one,
+            (_, last) => Node::group(self.doc.alloc_id(), kids.into_iter().chain(last).map(Arc::new).collect()),
+        };
+        // The group a definition holds its art in, when it holds one object and isn't linked to a
+        // graphic style.
+        let linked = sub.style_links.iter().any(|(id, _)| *id == art.id);
+        let art = match symbol_art_member(&art).filter(|_| !linked).cloned() {
+            Some(m) => Arc::unwrap_or_clone(m),
+            None => art,
+        };
+        let read_art = art;
+        let mut art = self.doc.reid(&read_art);
+        self.reid_masks(&mut art, 0);
+        // The objects of the art linked to graphic styles, by their ids in the document.
+        if !sub.style_links.is_empty() {
+            let mut ids = HashMap::new();
+            pair_ids(&read_art, &art, &mut ids, 0);
+            for (id, style) in &sub.style_links {
+                if let Some(new) = ids.get(id)
+                    && self.style_links.len() < MAX_NODES
+                {
+                    self.style_links.push((*new, style.clone()));
+                }
+            }
         }
+        let named = self.unique_symbol_name(if name.is_empty() { "Symbol" } else { &name });
+        self.doc.symbols.push(Symbol { name: named.clone(), art: Arc::new(art), dynamic: false });
+        if let Some(reg) = registration.and_then(symbol_registration) {
+            self.doc.set_symbol_registration(&named, reg);
+        }
+        self.symbol_names.entry(name).or_insert(named);
+        for (key, blob) in sub.doc.images {
+            self.doc.images.entry(key).or_insert(blob);
+        }
+        self.spots.extend(sub.spots);
+        self.stop_spots.extend(sub.stop_spots);
+        self.cmyk_colors += sub.cmyk_colors;
+        self.rgb_colors += sub.rgb_colors;
+        self.drawn_looks += sub.drawn_looks;
+        for w in &sub.warnings {
+            self.warn(w);
+        }
+    }
+
+    /// `base`, or the first free "`base` N" (N from 2) when a symbol read has that name, as
+    /// [`vectorcraft_doc::Document::unique_symbol_name`] names it, without looking at every symbol
+    /// for each N.
+    fn unique_symbol_name(&mut self, base: &str) -> String {
+        let mut named = base.to_string();
+        if self.symbol_taken.contains(&named) {
+            let next = self.symbol_suffix.entry(named.clone()).or_insert(2);
+            while self.symbol_taken.contains(&format!("{base} {next}")) {
+                *next += 1;
+            }
+            named = format!("{base} {next}");
+            *next += 1;
+        }
+        self.symbol_taken.insert(named.clone());
+        named
+    }
+
+    /// Give the art of the opacity masks in `n` (a copy of a symbol's art with ids of this
+    /// document, [`vectorcraft_doc::Document::reid`], which leaves masks as they are) ids of this
+    /// document too.
+    fn reid_masks(&mut self, n: &mut Node, depth: usize) {
+        if depth > MAX_DEPTH {
+            return;
+        }
+        if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+            let mut art = self.doc.reid(&m.art);
+            self.reid_masks(&mut art, depth + 1);
+            m.art = Arc::new(art);
+        }
+        for c in n.children_mut().into_iter().flatten() {
+            self.reid_masks(Arc::make_mut(c), depth + 1);
+        }
+    }
+
+    /// The symbol list (`section`: what follows `%AI24_BeginSymbolList`): the symbols' names in the
+    /// Symbols panel's order. The first list is kept.
+    fn symbol_list(&mut self, section: &[u8]) {
+        if self.symbol.is_some() || self.pattern.is_some() || self.symbol_list.is_some() {
+            return;
+        }
+        let mut lex = Lexer::new(section);
+        let mut names = vec![];
+        while let Some(t) = lex.next_token() {
+            if let Tok::Str(bytes) = t.tok {
+                if names.len() >= MAX_LISTED {
+                    break;
+                }
+                names.push(obj::text(&bytes));
+            }
+        }
+        self.symbol_list = Some(names);
     }
 
     /// A plug-in object (`section`: what follows `%AI8_BeginPluginObject`): the brush manager's
@@ -788,6 +929,64 @@ fn ps_string(v: &[u8]) -> Option<String> {
     None
 }
 
+/// The one member of `n` when `n` is a plain group holding only it (not clipping, unnamed, shown,
+/// unlocked, opaque, Normal, not isolated, knockout neutral, no knockout shape, appearance, opacity
+/// mask or other extras such as object attributes): a symbol's art written as such a group
+/// (definitions hold a group) is that member.
+pub(crate) fn symbol_art_member(n: &Node) -> Option<&Arc<Node>> {
+    let NodeKind::Group { children, clip: false } = &n.kind else { return None };
+    let [one] = children.as_slice() else { return None };
+    let plain = n.name.as_deref().is_none_or(str::is_empty)
+        && n.visible
+        && !n.locked
+        && n.opacity == 1.0
+        && n.blend == vectorcraft_color::BlendMode::Normal
+        && !n.isolate
+        && n.knockout == vectorcraft_doc::Knockout::Neutral
+        && !n.knockout_shape
+        && n.appearance.items.is_empty()
+        && n.appearance.effects.is_empty()
+        && *n.extras() == vectorcraft_doc::NodeExtras::default();
+    plain.then_some(one)
+}
+
+/// Whether `n`, an object in it or the art of an opacity mask in it is filled or stroked with a
+/// pattern.
+fn paints_pattern(n: &Node, depth: usize) -> bool {
+    if depth > MAX_DEPTH {
+        return true;
+    }
+    let pattern = |p: &super::Paint| matches!(p, super::Paint::Pattern { .. });
+    n.appearance.items.iter().any(|item| match item {
+        super::AppearanceItem::Fill(f) => pattern(&f.paint),
+        super::AppearanceItem::Stroke(s) => pattern(&s.paint),
+    }) || n.extras().mask.as_ref().is_some_and(|m| paints_pattern(&m.art, depth + 1))
+        || n.children().into_iter().flatten().any(|c| paints_pattern(c, depth + 1))
+}
+
+/// Each id of `old` and its descendants → the id of the object in its place in `new`, a copy of
+/// `old` with new ids ([`vectorcraft_doc::Document::reid`]).
+fn pair_ids(old: &Node, new: &Node, ids: &mut HashMap<NodeId, NodeId>, depth: usize) {
+    ids.insert(old.id, new.id);
+    if depth > MAX_DEPTH {
+        return;
+    }
+    if let (Some(a), Some(b)) = (old.extras().mask.as_ref(), new.extras().mask.as_ref()) {
+        pair_ids(&a.art, &b.art, ids, depth + 1);
+    }
+    if let (Some(a), Some(b)) = (old.children(), new.children()) {
+        for (a, b) in a.iter().zip(b) {
+            pair_ids(a, b, ids, depth + 1);
+        }
+    }
+}
+
+/// The registration point `AI13PatternRegistrationType` `v` gives a symbol: 1 to 9 from the top
+/// left, row by row (5 the center); `None` for other numbers.
+pub(super) fn symbol_registration(v: f64) -> Option<SymbolRegistration> {
+    (v.fract() == 0.0 && (1.0..=9.0).contains(&v)).then(|| SymbolRegistration(v as u8 - 1))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -805,9 +1004,11 @@ mod tests {
         assert_eq!(ps_string(longest.as_bytes()).map(|s| s.len()), Some(MAX_STRING));
     }
 
+    /// Definitions nested in a definition aren't read, however deep, and none is read past the
+    /// limit of nested readers.
     #[test]
     fn deeply_nested_symbol_definitions_stop_at_subreader_limit() {
-        let mut definition = String::from("(Outer) 0 Ae\n");
+        let mut definition = String::from("(Outer) 0 A 0 Xw 0 Ae\n");
         for i in 0..300 {
             definition.push_str(&format!("%AI14_BeginSymbol\n(S{i}) 0 Ae\n"));
         }
@@ -817,8 +1018,34 @@ mod tests {
         }
         let mut reader = Reader::new(b"");
         reader.subreader_depth = MAX_SUBREADERS;
-        reader.symbol_bounds(definition.as_bytes());
-        assert!(reader.symbol_bounds.is_empty());
+        reader.define_symbol(definition.as_bytes());
+        assert!(reader.doc.symbols.is_empty());
+        reader.subreader_depth = 0;
+        reader.define_symbol(definition.as_bytes());
+        let names: Vec<&str> = reader.doc.symbols.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["Outer"]);
+    }
+
+    /// Definitions past the limit aren't read, however they are named.
+    #[test]
+    fn symbol_definitions_stop_at_the_limit_even_with_one_name() {
+        let mut reader = Reader::new(b"");
+        for _ in 0..MAX_SYMBOLS + 10 {
+            reader.define_symbol(b"(Same) 0 A 0 Xw 0 Ae\nu\nU\n");
+        }
+        assert_eq!(reader.doc.symbols.len(), MAX_SYMBOLS);
+        assert_eq!(reader.doc.symbols.last().map(|s| s.name.as_str()), Some(format!("Same {MAX_SYMBOLS}").as_str()));
+    }
+
+    /// The registration points 1 to 9 run from the top left, row by row; other numbers give none.
+    #[test]
+    fn symbol_registration_numbers_run_row_by_row() {
+        assert_eq!(symbol_registration(1.0), Some(SymbolRegistration(0)));
+        assert_eq!(symbol_registration(5.0), Some(SymbolRegistration::CENTER));
+        assert_eq!(symbol_registration(9.0), Some(SymbolRegistration(8)));
+        for v in [0.0, 10.0, 2.5, -1.0, f64::NAN] {
+            assert_eq!(symbol_registration(v), None);
+        }
     }
 
     #[test]
