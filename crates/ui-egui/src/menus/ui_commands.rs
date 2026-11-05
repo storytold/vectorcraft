@@ -15,7 +15,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     (
         crate::addons::arrange::ZOOM,
         "Zoom to Selection",
-        "",
+        "Cmd+Shift+0",
         "{} zoom and centre the active view so the selection's visual bounds fill the window, with a margin (as view.fitArtboard fits the artboard); off with nothing selected",
     ),
     (

@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; Select by Artboards add-on selects by overlap, inside or outside several artboards; Cmd+Space keeps the active drawing cursor during its drag; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (View › Zoom to Selection, Cmd/Ctrl+Shift+0; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; Select by Artboards add-on selects by overlap, inside or outside several artboards; Cmd+Space keeps the active drawing cursor during its drag; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -296,6 +296,10 @@ empty), without opening the dialog.
 Cmd/Ctrl+Alt+Shift+U (`document.switchUnits`, Switch Units in the shortcut editor) switches the document to the
 next unit in the order a right-click on a ruler lists them, from Feet back to Points.
 
+Cmd/Ctrl+Shift+0 (View › Zoom to Selection, `addon.arrange.zoomSelection`, a VectorCraft addition) fits the
+active view to the selection, beside Fit Artboard in Window (Cmd/Ctrl+0) and Fit All in Window (Cmd/Ctrl+Alt+0);
+the menu item is dimmed with nothing selected, and the shortcut can be reassigned (#5601).
+
 ## Panels, Control bar, Properties, context menus
 
 | Interaction | Status | Evidence |
@@ -437,6 +441,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | View › Zoom to Selection after Fit All in Window, with the default shortcut Cmd/Ctrl+Shift+0 (#5601; a VectorCraft addition); scores and estimates unchanged |
 | 2026-11-04 | minor | Contour add-on (beyond Illustrator): drag away from a selected shape's edge to grow a live copy of it, or toward the inside to shrink it; the copy carries a live Offset Path effect, so it stays editable until Bake (Expand Appearance), a second drag changes the same Contour instead of nesting one, and a floating bar sets the distance and the Sharp, Round or Square corners. `addon.contour.set` is the command behind it. It is a built-in add-on: Object › Plug-ins › Contour, and its own heading in All Tools, with no default shortcut or toolbar slot. A VectorCraft design built on Offset Path; no other application was inspected. Scores and estimates unchanged. |
 | 2026-11-04 | minor | Contour tool (beyond Illustrator): drag away from a selected shape's edge to grow a live copy of it, or toward the inside to shrink it; the copy carries a live Offset Path effect, so it stays editable until Bake (Expand Appearance), a second drag changes the same Contour instead of nesting one, and a floating bar sets the distance and the Sharp, Round or Square corners. `object.contour` is the command behind it. A VectorCraft design built on Offset Path; no other application was inspected. Scores and estimates unchanged. |
 | 2026-11-05 | minor | Document tabs are reordered by dragging them along the tab strip (`document.move`, #5663). |
