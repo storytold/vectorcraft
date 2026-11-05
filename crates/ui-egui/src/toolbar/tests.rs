@@ -5,6 +5,60 @@ use vectorcraft_engine::Session;
 use super::*;
 use crate::widgets::accessibility_tests::{role_and_state, tree};
 
+/// Docked tools fill the column just like the shared icon rail, without a card gutter.
+#[test]
+fn docked_tools_use_a_flush_shared_surface() {
+    for double in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui.toolbar_double = double;
+        let ctx = egui::Context::default();
+        let width = if double { 80.0 } else { WIDTH };
+        let mut remaining = egui::Rect::NOTHING;
+        let mut bounds = egui::Rect::NOTHING;
+        let mut status_bounds = egui::Rect::NOTHING;
+        let mut hint_bounds = egui::Rect::NOTHING;
+        let mut out = ctx.run_ui(
+            egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1200.0))), ..Default::default() },
+            |ui| {
+                // Match the app's bottom chrome order, including the hint strip above the status bar.
+                crate::chrome::status_bar(&mut app, ui);
+                crate::chrome::hint_bar(&mut app, ui);
+                show(&mut app, ui);
+                remaining = ui.available_rect_before_wrap();
+                bounds = egui::containers::panel::PanelState::load(ui.ctx(), ui.make_persistent_id("toolbar")).unwrap().outer_rect;
+                status_bounds = egui::containers::panel::PanelState::load(ui.ctx(), ui.make_persistent_id("status_bar")).unwrap().outer_rect;
+                hint_bounds = egui::containers::panel::PanelState::load(ui.ctx(), ui.make_persistent_id("hint_bar")).unwrap().outer_rect;
+            },
+        );
+        out.textures_delta.clear();
+        assert_eq!(bounds.min, Pos2::ZERO, "no left or top card gutter");
+        assert_eq!(bounds.size(), vec2(width, hint_bounds.top()), "no bottom gutter or extra width");
+        assert_eq!(bounds.bottom(), hint_bounds.top(), "toolbar border meets the bottom chrome");
+        assert_eq!(hint_bounds.bottom(), status_bounds.top(), "hint strip meets the status bar");
+        assert_eq!(status_bounds.bottom(), 1200.0, "status bar reaches the window bottom");
+        assert_eq!(remaining.left(), width, "canvas starts at the tools' edge");
+        assert!(app.ui.status.is_empty(), "{}", app.ui.status);
+        let panel = out
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Rect(rect) if rect.rect == bounds && rect.fill == Tokens::get(&ctx).panel => Some(rect),
+                _ => None,
+            })
+            .expect("craft-ui paints the tools' full background");
+        assert_eq!(panel.corner_radius, CornerRadius::ZERO);
+        let border = out
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Rect(rect) if rect.rect == bounds && rect.stroke == egui::Stroke::new(1.0, Tokens::get(&ctx).border) => Some(rect),
+                _ => None,
+            })
+            .expect("same full outline as craft-ui's dock columns, including the bottom edge");
+        assert_eq!(border.stroke_kind, egui::StrokeKind::Inside);
+    }
+}
+
 /// One headless frame of the toolbar; returns the tool buttons' rects, top to bottom.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<egui::Rect> {
     frame_in(app, ctx, time, events, 1200.0)
@@ -95,6 +149,15 @@ fn the_tool_buttons_are_centred_in_the_panel() {
         let row_right = tools.iter().filter(|r| r.top() == first.top()).map(|r| r.right()).fold(first.right(), f32::max);
         assert_eq!(row_right - hdr.center().x, hdr.center().x - first.left(), "double {double}, floating {floating:?}: {first:?} in {hdr:?}");
         assert!(first.left() >= hdr.left() && row_right <= hdr.right(), "double {double}, floating {floating:?}: {first:?} in {hdr:?}");
+        if floating.is_none() {
+            let well = egui::Rect::from_center_size(first.center(), TOOL_WELL);
+            let side_gap = well.left() - hdr.left() - 1.0;
+            let top_gap = well.top() - (hdr.bottom() + GRIP_SPACING + 6.0);
+            assert!(
+                (top_gap - side_gap).abs() <= 0.5 / ctx.pixels_per_point(),
+                "clearance matches within half a physical pixel after layout rounding: top {top_gap}, side {side_gap}"
+            );
+        }
     }
 }
 

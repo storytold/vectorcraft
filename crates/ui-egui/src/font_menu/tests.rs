@@ -371,8 +371,9 @@ fn the_variable_filter_is_named_as_fonts_are() {
 #[test]
 fn the_variable_filter_lists_only_variable_families() {
     use vectorcraft_text::FontClass;
-    use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY, two_axis_font};
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, TWO_AXIS_FAMILY, height_font, two_axis_font};
     let db = vectorcraft_text::FontDb::global();
+    db.add_font(height_font(true).unwrap());
     db.add_font(two_axis_font().unwrap());
     let ctx = egui::Context::default();
     let mut st = super::MenuState::default();
@@ -385,7 +386,7 @@ fn the_variable_filter_lists_only_variable_families() {
                     ui,
                     egui::Id::unique("variable-filter"),
                     st,
-                    "Source Sans 3",
+                    HEIGHT_FAMILY,
                     None,
                     super::MenuLook { samples: false, favorites, ..Default::default() },
                 );
@@ -419,11 +420,11 @@ fn the_variable_filter_lists_only_variable_families() {
         frame(&mut st, vec![], &favorites);
     }
     let all = frame(&mut st, vec![], &favorites).0;
-    assert!(has(&all, TWO_AXIS_FAMILY) && has(&all, "Source Sans 3") && has(&all, "JetBrains Mono"), "{all:?}");
+    assert!(has(&all, TWO_AXIS_FAMILY) && has(&all, HEIGHT_FAMILY), "{all:?}");
     let variable = click(&mut st, &favorites);
     assert!(st.variable_only, "the click turns the filter on");
     assert!(has(&variable, TWO_AXIS_FAMILY), "{variable:?}");
-    assert!(!has(&variable, "Source Sans 3") && !has(&variable, "Inter") && !has(&variable, "JetBrains Mono"), "static families: {variable:?}");
+    assert!(!has(&variable, HEIGHT_FAMILY), "static families: {variable:?}");
     assert!(variable.iter().all(|f| db.family_traits(f).variable), "{variable:?}");
     // With the kind, script and favourites filters: each must pass.
     st.class = Some(FontClass::Sans);
@@ -435,7 +436,7 @@ fn the_variable_filter_lists_only_variable_families() {
     assert!(!has(&frame(&mut st, vec![], &favorites).0, TWO_AXIS_FAMILY), "a family without Thai under Thai");
     st.script = 0;
     st.favorites_only = true;
-    favorites.push("Source Sans 3".into());
+    favorites.push(HEIGHT_FAMILY.into());
     assert!(frame(&mut st, vec![], &favorites).0.is_empty(), "the one favourite is static");
     favorites.push(TWO_AXIS_FAMILY.into());
     assert_eq!(frame(&mut st, vec![], &favorites).0, [TWO_AXIS_FAMILY]);
@@ -444,5 +445,5 @@ fn the_variable_filter_lists_only_variable_families() {
     let again = click(&mut st, &favorites);
     assert!(!st.variable_only);
     assert_eq!(again, frame(&mut st, vec![], &[]).0);
-    assert!(has(&again, TWO_AXIS_FAMILY) && has(&again, "Source Sans 3") && has(&again, "JetBrains Mono"), "{again:?}");
+    assert!(has(&again, TWO_AXIS_FAMILY) && has(&again, HEIGHT_FAMILY), "{again:?}");
 }

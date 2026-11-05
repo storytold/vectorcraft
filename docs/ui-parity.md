@@ -2,6 +2,12 @@
 
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Pencil and Paintbrush: a new stroke with Keep selected off leaves nothing selected, #5752; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
+## Tools surface follow-up (2026-10-31)
+
+Docked Tools uses the existing craft-ui docking surface and icon-rail style, with flush square edges, matching borders, balanced tool clearance and a 2 pt gap above the grip. Existing column and floating commands remain in use; scores and estimates are unchanged.
+
+Evidence: `crates/ui-egui/src/toolbar.rs`, `panel_docking.rs` and `toolbar/tests.rs`; Windows preview reviewed with the contributor. 75 targeted toolbar/edit-drawer and docking tests passed; UI clippy passed with warnings denied. Full workspace tests were not run, as requested by the contributor.
+
 ## Feature submission evidence
 
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
@@ -488,6 +494,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-11-01 | minor | Arrange Tools add-on (a VectorCraft addition): Group Overlapping Objects (#4928); scores and estimates unchanged |
 | 2026-11-01 | minor | Character panel › Language: the selected characters' language, from Document Setup's list, which gains Hindi, Marathi, Gujarati, Bengali, Punjabi, Tamil, Telugu, Kannada, Malayalam, Odia and Urdu (#4946, #4943); the Digits menu's numeral names keep their own translations; scores unchanged |
 | 2026-11-01 | minor | VectorCraft Options' Version is a menu of the versions VectorCraft writes, each named by the releases that read it, and an uncompressible version turns Use Compression off (#4931); a save refused before writing shows the Can't save alert with the reason (#4933); About › Contributors' table keeps its header row above the scrolling rows (#4944); the Gradient panel's freeform point swatch opens the point's popover (#4953); scores unchanged |
+| 2026-10-31 | minor | UI chrome: docked Tools shares craft-ui rail styling; margins and grip spacing corrected. Scores and estimates unchanged. |
 | 2026-10-31 | minor | A file opened from the file manager while VectorCraft runs opens as a new tab in that window, which comes to the front, on Windows and Linux (#4892); `--new-instance` opts out; scores unchanged |
 | 2026-10-31 | minor | Object › Path › Smooth: Auto-Smooth takes a shaky line to one smooth curve, and direct-selected anchors smooth only their section; scores unchanged |
 | 2026-10-31 | minor | New Document: More Settings has Save Preset beside the name, as Preset Details does, and saves its settings (#4893); scores and estimates unchanged |
