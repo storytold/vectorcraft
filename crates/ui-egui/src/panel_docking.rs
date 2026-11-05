@@ -1113,6 +1113,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         }
     }
     let modal = modal_open(app, &ctx);
+    // Palette windows are OS windows of their own, held above the app's window while it is active,
+    // so a dialog or a menu drawn in the main window would be covered by them.
+    #[cfg(not(target_arch = "wasm32"))]
+    palette_window_levels(&ctx, &layout, modal, egui::Popup::is_any_open(&ctx) || crate::menus::menu_open(&ctx));
     let mut blocked = Vec::new();
     if modal || egui::Popup::is_any_open(&ctx) {
         blocked.push(ctx.content_rect());
@@ -1174,6 +1178,54 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
 /// Whether a modal is open: a dialog, About, the command palette, a native file dialog, or a
 /// window behind the modal backdrop last frame (export progress, plug-in runs). Floating panels
 /// in OS windows of their own take no input meanwhile, as the main window behind it takes none.
+/// The window level and visibility a palette window takes: hidden under a modal dialog (a click
+/// must not bring it back over the dialog), at the normal level under a menu or another popup drawn
+/// in the main window (so the menu is seen), and otherwise its palette level, which craft-ui leaves
+/// a palette at when it creates one: topmost while the app is active, behind other applications'
+/// windows while it is not.
+#[cfg(not(target_arch = "wasm32"))]
+fn palette_window_state(modal: bool, popup: bool, active: bool) -> (egui::WindowLevel, bool) {
+    if modal {
+        return (egui::WindowLevel::Normal, false);
+    }
+    if popup {
+        // Hidden as under a dialog: a menu is drawn in the main window, and lowering a palette
+        // window is not always enough for it to go behind the window (the OS may keep it above
+        // while the app is activated through it).
+        return (egui::WindowLevel::Normal, false);
+    }
+    let level = if active {
+        egui::WindowLevel::AlwaysOnTop
+    } else if cfg!(target_os = "windows") {
+        egui::WindowLevel::AlwaysOnBottom
+    } else {
+        egui::WindowLevel::Normal
+    };
+    (level, true)
+}
+
+/// Sends the palette windows of `layout` the level and visibility [`palette_window_state`] gives
+/// when they change. craft-ui varies a palette's level through the viewport builder, which egui
+/// applies when the window opens and not to one already on screen, so the commands go explicitly to
+/// the windows there are.
+#[cfg(not(target_arch = "wasm32"))]
+fn palette_window_levels(ctx: &egui::Context, layout: &Layout<String>, modal: bool, popup: bool) {
+    let active = ctx.input(|i| i.focused || i.raw.viewports.values().any(|v| v.focused == Some(true)));
+    let key = area_id().with("palette-levels-state");
+    if ctx.data(|d| d.get_temp::<(bool, bool, bool)>(key)) == Some((modal, popup, active)) {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(key, (modal, popup, active)));
+
+    let (level, visible) = palette_window_state(modal, popup, active);
+    for window in &layout.floating {
+        let viewport = craft_ui::docking::DockArea::<String>::window_viewport(area_id(), window.id);
+        ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::WindowLevel(level));
+        ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::Visible(visible));
+    }
+}
+
+/// Does a modal dialog block the app's other windows ([`modal_open`] for the docking renderer)?
 pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
     app.ui.dialog.is_some()
         || app.ui.about
