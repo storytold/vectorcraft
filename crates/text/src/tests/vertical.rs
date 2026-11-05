@@ -688,6 +688,37 @@ fn mojikumi_spaces_japanese_from_latin_by_a_quarter_em() {
     assert!(on.glyphs.iter().zip(&off.glyphs).all(|(a, b)| (a.advance - b.advance).abs() < 0.01));
 }
 
+/// Mojikumi applies to type holding Japanese punctuation or a Japanese letter; type without either
+/// lays out the same with Line-end Punctuation Half Width as with Mojikumi None, across lines and
+/// list markers too.
+#[test]
+fn mojikumi_applies_only_to_japanese_punctuation_and_letters() {
+    use vectorcraft_doc::Mojikumi;
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let styled = |text: &str, m: Mojikumi| {
+        let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 20.0, ..CharStyle::default() });
+        t.xf = Affine::IDENTITY;
+        t.para.mojikumi = m;
+        t
+    };
+    let placed = |l: &TextLayout| l.glyphs.iter().map(|g| (g.byte, g.advance, g.origin, g.xf)).collect::<Vec<_>>();
+    for text in ["", "A", "Latin words, digits 2026 and (brackets).", "first\nsecond"] {
+        let on = styled(text, Mojikumi::LineEndHalf);
+        let lay = layout(FontDb::global(), &on);
+        assert!(!lay.mojikumi_applies(&on.plain_text()), "{text:?}");
+        let off = layout(FontDb::global(), &styled(text, Mojikumi::None));
+        assert_eq!(placed(&lay), placed(&off), "{text:?}");
+        assert_eq!(lay.bounds, off.bounds, "{text:?}");
+    }
+    let mut listed = styled("first\nsecond", Mojikumi::LineEndHalf);
+    listed.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    assert!(!layout(FontDb::global(), &listed).mojikumi_applies(&listed.plain_text()));
+    for text in ["、", "「A」", "雅", "々", "Latin 漢字"] {
+        let t = styled(text, Mojikumi::LineEndHalf);
+        assert!(layout(FontDb::global(), &t).mojikumi_applies(&t.plain_text()), "{text:?}");
+    }
+}
+
 /// Mojikumi (JLREQ 3.1.5): with Line-end Punctuation Half Width, an opening bracket starting a
 /// wrapped line is set flush with the line's start (the space before it goes), giving the line half
 /// an em more room; at the start of a paragraph too, so its face starts at the first-line indent

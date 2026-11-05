@@ -149,9 +149,9 @@ impl VectorcraftApp {
 
     /// The text of the latest Copy or Cut whose formats could not be written to the system
     /// clipboard, while nothing has been copied since that Copy or Cut. A paste into type or a text
-    /// field takes this text until another app copies something. Where the platform has no change count, a
-    /// copy is noticed only when it changes the clipboard's text, and once a clipboard whose text
-    /// could not be read when the write failed has text, Paste takes that text.
+    /// field takes this text until another app copies something. Where the platform has no change
+    /// count, a copy is noticed only when it changes the clipboard's text, so the copy is kept only
+    /// when the clipboard held text when the write failed.
     pub(crate) fn unwritten_clipboard_text(&mut self) -> Option<String> {
         let cb = self.services.system_clipboard.as_deref_mut()?;
         let (held, text) = self.clipboard_publishing.unwritten.as_ref()?;
@@ -208,15 +208,28 @@ impl VectorcraftApp {
             let formats = r.and_then(|_| made.try_recv().map_err(|e| e.to_string()));
             let written = formats.and_then(|(f, warnings)| {
                 let Some(cb) = app.services.system_clipboard.as_mut() else { return Ok(warnings) };
+                let before_write = Held::now(cb.as_mut());
                 // Nothing copied elsewhere since the Copy or Cut.
-                let current = before.as_ref().is_some_and(|b| *b == Held::now(cb.as_mut()));
+                let current = before.as_ref() == Some(&before_write);
                 if let Err(e) = cb.write(&f) {
                     // Another app may hold the clipboard open. It keeps what it held (or what the
                     // failed write left), and a paste into text takes this copy's text until
                     // something else is copied.
                     let held = Held::now(cb.as_mut());
                     let text = f.iter().find(|t| t.mime == TEXT).map(|t| String::from_utf8_lossy(&t.data).into_owned());
-                    app.clipboard_publishing.unwritten = text.filter(|_| current).map(|text| (held, text));
+                    // A change during the write is the failed write emptying the clipboard and
+                    // writing some of the formats, or another app's copy: the clipboard then holds
+                    // nothing to paste, this copy's text, or no text and one of this copy's
+                    // formats only after the former.
+                    let left_by_write = held == before_write
+                        || match cb.read(&[TEXT]) {
+                            Some(now) => text.as_deref().is_some_and(|ours| now.data == ours.as_bytes()),
+                            None => !cb.has(&PASTE_ORDER) || f.iter().any(|ours| cb.read(&[ours.mime]).is_some_and(|now| now.data == ours.data)),
+                        };
+                    // Without a change count, a clipboard with no text can't show a later copy of
+                    // a picture, or tell an empty clipboard from one that couldn't be read.
+                    let trackable = held != Held::Text(None);
+                    app.clipboard_publishing.unwritten = text.filter(|_| current && left_by_write && trackable).map(|text| (held, text));
                     return Err(e);
                 }
                 Ok(warnings)

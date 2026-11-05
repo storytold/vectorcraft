@@ -145,6 +145,17 @@ fn is_japanese_letter(c: char) -> bool {
         && punct(c).is_none()
 }
 
+impl TextLayout {
+    /// Whether Line-end Punctuation Half Width (Mojikumi) can set type laid out as this layout
+    /// differently from Mojikumi None: `text`, the type's plain text, or one of the layout's list
+    /// markers holds Japanese punctuation or a Japanese letter, the only characters it spaces.
+    /// When it holds neither, the type lays out the same with either setting.
+    pub fn mojikumi_applies(&self, text: &str) -> bool {
+        let spaced = |c: char| punct(c).is_some() || is_japanese_letter(c);
+        text.chars().any(spaced) || self.markers.iter().any(|m| m.text.chars().any(spaced))
+    }
+}
+
 /// A Latin letter or digit (or another script's letter), set proportionally.
 fn is_latin_letter(c: char) -> bool {
     c.is_alphanumeric() && !is_cjk(c)
