@@ -1,6 +1,6 @@
 //! The Anchor Inspector panel's Corners section: the Corner Tool's radius and kind, how many corners
 //! the selection holds, Apply (`addon.pathtools.cornerSet`) and Set Corners… (its dialog, which
-//! can also take every other anchor).
+//! can also take every other anchor, or only the corners in an angle range).
 
 use egui::Ui;
 use serde_json::{Value, json};
