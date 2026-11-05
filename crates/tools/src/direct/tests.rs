@@ -755,11 +755,17 @@ fn group_selection_picks_a_path_of_a_compound_path() {
     d.insert(Some(l), 0, c).unwrap();
     let p = paint();
     let none = Selection::default();
-    let click = |s: &Selection, x, y| DirectSelectionTool::new(true).pointer(&cx(&d, s, &p), &PointerEvent::new(PointerKind::Down, x, y));
+    let click = |s: &Selection, x, y| {
+        let mut t = DirectSelectionTool::new(true);
+        let context = cx(&d, s, &p);
+        let mut actions = t.pointer(&context, &PointerEvent::new(PointerKind::Down, x, y));
+        actions.extend(t.pointer(&context, &PointerEvent::new(PointerKind::Up, x, y)));
+        actions
+    };
     let set = |id: NodeId| vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))];
     assert_eq!(click(&none, 25.0, 100.0), set(outer), "the fill between the outline and the hole");
     assert_eq!(click(&none, 50.0, 100.0), set(hole), "the hole's outline");
-    assert!(click(&none, 100.0, 100.0).is_empty(), "inside the hole nothing is hit");
+    assert_eq!(click(&none, 100.0, 100.0), vec![Action::Exec("select.none".into(), json!({}))], "a click inside the hole clears selection");
     let mut s = Selection::default();
     s.set([outer]);
     assert_eq!(click(&s, 25.0, 100.0), vec![Action::Exec("select.add".into(), json!({"ids": [compound.0]}))]);
@@ -811,6 +817,30 @@ fn nested_group_doc() -> (vectorcraft_doc::Document, NodeId, NodeId, NodeId, Nod
     let outer_g = vectorcraft_doc::Node::group(outer, vec![std::sync::Arc::new(inner_g), path(outside, 300.0)]);
     d.insert(Some(l), 0, outer_g).unwrap();
     (d, inside, outside, inner, outer)
+}
+
+/// A selected component drags independently; only a completed click adds its group.
+#[test]
+fn group_selection_distinguishes_selected_leaf_drags_from_clicks() {
+    let (d, inside, _, inner, _) = nested_group_doc();
+    let paint = paint();
+    let mut selected = Selection::default();
+    selected.set([inside]);
+    let context = cx(&d, &selected, &paint);
+    let mut t = DirectSelectionTool::new(true);
+    let down = PointerEvent::new(PointerKind::Down, 150.0, 150.0);
+    assert!(t.pointer(&context, &down).is_empty());
+    let actions = t.pointer(&context, &PointerEvent::new(PointerKind::Drag, 180.0, 165.0));
+    assert!(matches!(actions.as_slice(), [Action::Begin(_), Action::Preview(command, _)] if command=="object.transform"));
+    assert_eq!(t.pointer(&context, &PointerEvent::new(PointerKind::Up, 180.0, 165.0)), vec![Action::Commit]);
+    assert!(t.pointer(&context, &down).is_empty());
+    assert_eq!(
+        t.pointer(&context, &PointerEvent::new(PointerKind::Up, 150.0, 150.0)),
+        vec![Action::Exec("select.add".into(), json!({"ids":[inner.0]}))]
+    );
+    assert!(t.pointer(&context, &down).is_empty());
+    assert_eq!(t.key(&context, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.pointer(&context, &PointerEvent::new(PointerKind::Up, 150.0, 150.0)).is_empty());
 }
 
 /// Isolation mode: a marquee and an anchor click take the path inside the isolated group and
