@@ -489,14 +489,17 @@ mode. To press the key during a drag, end one
 bounding-box scale or rotation, a marquee, a corner widget, pie widget or bracket drag) cancels it: the art goes back,
 no copy is left, no undo step is added, and the `up` event that follows does nothing.
 
-With nothing being dragged, `e` chooses the tool bound to E.
+With nothing being dragged, headless `press_key` `e` chooses the tool bound to E. Remote `press_key` does not run
+single-key shortcuts (see the Arc tool below).
 
 While an arc is being dragged out with the Arc tool, `press_key {key: "c"}` switches it between an open and a closed
 path, `{key: "f"}` switches its base between the X and Y axes in the same box, and `{key: "up"}` and `{key: "down"}`
 raise and lower its slope by 10, within −100…100. Each press switches once. The arc drawn on release uses these
 values, and they stay as the Arc tool's `closed`, `baseAlong` and `slope` options for the next arc. With nothing being
-dragged, `c` chooses the tool bound to C, and `f` runs the shortcut bound to F in remote mode (headless has no
-binding for it).
+dragged, headless `press_key` `c` chooses the tool bound to C (headless has no binding for F). In remote mode,
+`press_key` sends the key event without the letter it types, and the app runs a single-key shortcut such as C or F only
+from the typed letter, so with nothing being dragged `c` and `f` do not run their shortcuts there. Use `select_tool` or
+`invoke_menu` instead.
 
 While a spiral is being dragged out with the Spiral tool, a `drag` event with `mods.alt` or `mods.cmd` keeps the
 spiral's inner end at the distance from the center it had on the first modified `drag` event, and the outer end follows
@@ -515,7 +518,8 @@ While a grid is being dragged out with the Rectangular Grid or Polar Grid tool, 
 10, and `{key: "x"}` and `{key: "c"}` lower and raise that of the vertical dividers (`columnSkew`) or the concentric
 dividers (`concentricSkew`), within ±500. Plain and Shift presses change the skew; with Alt, Ctrl or Cmd held they do not.
 The grid drawn on release uses these skews, and they stay as the tool's options for the next grid. With nothing
-being dragged, the four letters run their shortcuts as before.
+being dragged, headless `press_key` runs the shortcuts bound to `v`, `x` and `c` (it has none for `f`), and remote
+`press_key` does not run single-key shortcuts (see the Arc tool above).
 
 Appearance stacks: an object can carry several fills and strokes (`appearance.addFill`, `appearance.addStroke`), indexed
 in paint order (0 is painted first, the bottom row of the Appearance panel). Cmd+/ runs `appearance.addFill` and
