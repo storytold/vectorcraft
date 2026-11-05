@@ -93,6 +93,10 @@ pub struct CharStyle {
     /// them.
     #[serde(default, rename = "charDirection", skip_serializing_if = "Option::is_none")]
     pub char_direction: Option<ParaDirection>,
+    /// Character panel menu › Kashidas: whether these characters may receive a kashida when
+    /// their paragraph is justified with Insert Kashidas. On by default, including old documents.
+    #[serde(default = "crate::yes", skip_serializing_if = "crate::skip::is_true")]
+    pub kashidas: bool,
     /// Proportional Metrics (Character panel menu, East Asian options): full-width glyphs take the
     /// font's own proportional widths, OpenType `palt` (#966); in vertical type upright glyphs take
     /// its proportional heights, `vpal`.
@@ -143,6 +147,28 @@ pub struct CharStyle {
     /// document's language (Document Setup). Saved only when set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+    /// Another glyph of the font for the run's first character (Glyphs panel › Show › Alternates
+    /// for Current Selection). The text keeps the character; layout draws the chosen glyph while
+    /// the run starts with that character and is set in the face the choice names, and the
+    /// default glyph otherwise. Saved only when set.
+    #[serde(default, rename = "glyphAlternate", skip_serializing_if = "Option::is_none")]
+    pub glyph_alternate: Option<GlyphChoice>,
+}
+
+/// A glyph chosen for one character ([`CharStyle::glyph_alternate`]): the glyph id and the face it
+/// belongs to, named by its PostScript name and version string, so that a glyph id is never used
+/// in another font or another version of the font.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct GlyphChoice {
+    /// The character the glyph is drawn for.
+    pub ch: char,
+    /// The glyph id in the face.
+    pub gid: u32,
+    /// The face's PostScript name (`SourceSans3-Regular`).
+    pub font: String,
+    /// The face's version string (`Version 3.052`); empty when it has none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub version: String,
 }
 
 /// What a character's font size measures ([`CharStyle::font_height_reference`]): the em square
@@ -405,6 +431,7 @@ impl Default for CharStyle {
             position: CharPosition::Normal,
             char_align: CharAlign::RomanBaseline,
             char_direction: None,
+            kashidas: true,
             proportional_metrics: false,
             tate_chu_yoko: false,
             tcy_up_down: 0.0,
@@ -415,6 +442,7 @@ impl Default for CharStyle {
             font_height_reference: FontHeightReference::EmBox,
             no_break: false,
             language: None,
+            glyph_alternate: None,
         }
     }
 }

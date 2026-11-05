@@ -19,6 +19,12 @@ pub(super) fn xml_text(s: &str) -> String {
     xml_escape(&s)
 }
 
+/// `s` without the characters XML 1.0 does not allow, ready for a double-quoted attribute.
+pub(super) fn xml_attr_valid(s: &str) -> String {
+    let s: String = s.chars().filter(|c| valid_xml_value(c.encode_utf8(&mut [0; 4]))).collect();
+    xml_attr_escape(&s)
+}
+
 pub(super) fn valid_xml_value(s: &str) -> bool {
     s.chars().all(|c| matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}'))
 }

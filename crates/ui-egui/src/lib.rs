@@ -34,6 +34,7 @@ pub mod credits;
 pub mod cursors;
 mod custom_toolbars;
 pub mod dialogs;
+pub mod doc_windows;
 pub mod dock;
 mod edit_toolbar;
 pub mod export_progress;
@@ -125,6 +126,10 @@ pub struct VectorcraftApp {
     pub session: Session,
     pub ui: UiState,
     pub views: Vec<View>,
+    /// The document ([`vectorcraft_engine::DocState::uid`]) each of `views` belonged to at the last
+    /// [`VectorcraftApp::sync_views`], which puts the views back with their documents after
+    /// `document.move` reorders them (#5663).
+    pub(crate) view_uids: Vec<u64>,
     pub services: Services,
     pub canvas: CanvasCache,
     pub perf: Perf,

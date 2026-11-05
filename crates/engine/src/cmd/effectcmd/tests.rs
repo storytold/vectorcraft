@@ -366,14 +366,16 @@ fn expand_appearance_bakes_geometry() {
     assert!(s.execute("effect.expandAppearance", &json!({})).is_err());
 }
 
+/// Each copy is an object of its own (#5612).
 #[test]
-fn expand_transform_copies_makes_compound() {
+fn expand_transform_copies_makes_a_group_of_the_copies() {
     let (mut s, id) = session_with_rect();
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
     s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"moveH": 120, "copies": 1}})).unwrap();
     s.execute("effect.expandAppearance", &json!({})).unwrap();
     let n = node(&s, id);
-    assert!(matches!(n.kind, NodeKind::Compound { .. }));
+    assert!(matches!(n.kind, NodeKind::Group { .. }), "{}", n.kind_label());
+    assert_eq!(n.children().map(|c| c.len()), Some(2));
     let b = n.geometric_bounds().unwrap();
     assert!((b.x1 - 320.0).abs() < 1e-6, "{b:?}");
 }
@@ -472,6 +474,53 @@ fn expand_appearance_gives_each_copy_of_a_transform_its_own_gradient() {
         }
     });
     assert_eq!(boxes, vec![100.0; 3], "three squares, each with its own gradient");
+}
+
+/// Expand Appearance on a solid-filled path whose Transform effect makes copies gives a group of
+/// one path per copy, each with the path's fill, not one compound path (#5612); a second Transform
+/// effect's copies of those copies nest, a group per copy of the first.
+#[test]
+fn expand_appearance_makes_each_copy_of_a_transform_an_object() {
+    use vectorcraft_color::{Color, Paint};
+    let fill = |n: &vectorcraft_doc::Node| n.appearance.fill_paint().color();
+    let (mut s, id) = session_with_rect();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("effect.apply", &json!({"effect":"distort.transform","ids":[id.0],"item":null})).unwrap();
+    s.execute("effect.setParams", &json!({"index":0,"params":{"moveH":150,"copies":2},"ids":[id.0],"item":null})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
+    let n = node(&s, id);
+    assert!(matches!(n.kind, NodeKind::Group { clip: false, .. }), "{}", n.kind_label());
+    assert!(n.appearance.effects.is_empty());
+    let copies = n.children().unwrap();
+    assert_eq!(copies.len(), 3, "the path and its two copies");
+    let xs: Vec<f64> = copies.iter().map(|c| c.geometric_bounds().unwrap().x0).collect();
+    assert_eq!(xs, vec![100.0, 250.0, 400.0]);
+    for c in copies {
+        assert!(matches!(c.kind, NodeKind::Path { .. }), "{}", c.kind_label());
+        assert_eq!(fill(c), Some(Color::rgb(1.0, 0.0, 0.0)));
+        assert!((c.geometric_bounds().unwrap().width() - 100.0).abs() < 1e-9);
+    }
+    let mut ids: Vec<NodeId> = vec![];
+    n.walk(&mut |c| ids.push(c.id));
+    ids.sort();
+    ids.dedup();
+    assert_eq!(ids.len(), 4, "the group and each copy have ids of their own");
+    // Two Transform effects: three columns, each a group of the column's two copies.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*s.doc().unwrap().doc, *before);
+    s.execute("effect.apply", &json!({"effect":"distort.transform","ids":[id.0],"item":null})).unwrap();
+    s.execute("effect.setParams", &json!({"index":1,"params":{"moveV":150,"copies":1},"ids":[id.0],"item":null})).unwrap();
+    s.execute("effect.expandAppearance", &json!({"ids":[id.0]})).unwrap();
+    let columns = node(&s, id).children().unwrap().to_vec();
+    assert_eq!(columns.len(), 3);
+    for (col, x) in columns.iter().zip([100.0, 250.0, 400.0]) {
+        let cells = col.children().unwrap_or_else(|| panic!("a column is a group: {}", col.kind_label()));
+        let ys: Vec<(f64, f64)> = cells.iter().map(|c| (c.geometric_bounds().unwrap().x0, c.geometric_bounds().unwrap().y0)).collect();
+        assert_eq!(ys, vec![(x, 100.0), (x, 250.0)]);
+        assert!(cells.iter().all(|c| matches!(c.appearance.fill_paint(), Paint::Solid { .. })));
+    }
 }
 
 /// The object's own effect ids, in order.

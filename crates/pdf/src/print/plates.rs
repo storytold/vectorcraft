@@ -14,15 +14,20 @@ use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
 use super::{DEFAULT_FREQUENCY, PrintInk, PrintSettings};
 
 /// The inks of a separation of `doc`: the process inks, then one per spot swatch (none when
-/// spots print as process), with the options of [`super::PrintOutput::inks`]; and a warning for
-/// each option naming no ink.
+/// spots print as process), with the options of [`super::PrintOutput::inks`]; and a warning
+/// naming the options that name no ink.
 pub fn print_inks(doc: &Document, set: &PrintSettings) -> (Vec<PrintInk>, Vec<String>) {
     let out = &set.output;
+    // Options by ink name, the first for a name winning: looked up, not searched for each ink.
+    let mut options = std::collections::HashMap::new();
+    for o in &out.inks {
+        options.entry(o.name.as_str()).or_insert(o);
+    }
     let list: Vec<PrintInk> = plates(doc)
         .into_iter()
         .filter(|p| !(p.spot && out.spots_to_process))
         .map(|p| {
-            let o = out.inks.iter().find(|i| i.name == p.name);
+            let o = options.get(p.name.as_str()).copied();
             PrintInk {
                 print: o.is_none_or(|o| o.print),
                 frequency: o.and_then(|o| o.frequency).unwrap_or(DEFAULT_FREQUENCY),
@@ -32,16 +37,26 @@ pub fn print_inks(doc: &Document, set: &PrintSettings) -> (Vec<PrintInk>, Vec<St
             }
         })
         .collect();
-    let warnings = out
-        .inks
-        .iter()
-        .filter(|i| !list.iter().any(|p| p.name == i.name))
-        .map(|i| {
-            format!("there is no ink named `{}` to print (inks: {})", i.name, list.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(", "))
-        })
-        .collect();
+    // One warning for all the options naming no ink, each list cut short: the options and the
+    // inks both come from the file.
+    let names: BTreeSet<&str> = list.iter().map(|p| p.name.as_str()).collect();
+    let unknown: Vec<&str> = out.inks.iter().map(|i| i.name.as_str()).filter(|n| !names.contains(n)).collect();
+    let warnings = if unknown.is_empty() {
+        vec![]
+    } else {
+        let few = |all: Vec<&str>| {
+            let more = all.len().saturating_sub(MAX_NAMED);
+            let shown = all.into_iter().take(MAX_NAMED).map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ");
+            if more > 0 { format!("{shown} and {more} more") } else { shown }
+        };
+        let inks = few(list.iter().map(|p| p.name.as_str()).collect());
+        vec![format!("there is no ink named {} to print (inks: {inks})", few(unknown))]
+    };
     (list, warnings)
 }
+
+/// The most names a warning of [`print_inks`] lists.
+const MAX_NAMED: usize = 10;
 
 /// The colour settings separations of `doc` convert with: the document's colour spaces
 /// ([`crate::output::document_cms`]), with the printer profile as their CMYK profile when it is a

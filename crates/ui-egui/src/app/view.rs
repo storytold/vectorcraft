@@ -1,14 +1,37 @@
 use super::{Value, VectorcraftApp, View, ViewInfo, panels};
 
 impl VectorcraftApp {
-    /// Keep `views` aligned with the session's documents (a new one starts at its saved view).
+    /// Keep `views` aligned with the session's documents (a new one starts at its saved view, and
+    /// opens in a floating window while Open Documents As Tabs is cleared). The views Window › New
+    /// Window opened go with their documents.
+    ///
+    /// A view stays with its document when the documents change order (`document.move`, also in a
+    /// recording or a batch, #5663): while every view still has the document it was synced with,
+    /// they are put in the documents' order by uid. Code that removed a view by hand (closing a
+    /// document) leaves them aligned by index, as before.
     pub fn sync_views(&mut self) {
         let docs = self.session.documents();
+        if self.view_uids.len() == self.views.len()
+            && docs.len() == self.views.len()
+            && docs.iter().map(|d| d.uid).ne(self.view_uids.iter().copied())
+            && docs.iter().all(|d| self.view_uids.contains(&d.uid))
+        {
+            let mut old: Vec<Option<View>> = std::mem::take(&mut self.views).into_iter().map(Some).collect();
+            self.views = docs
+                .iter()
+                .map(|d| {
+                    self.view_uids.iter().position(|u| *u == d.uid).and_then(|k| old.get_mut(k)).and_then(Option::take).unwrap_or_else(|| View::of(d))
+                })
+                .collect();
+        }
         self.views.truncate(docs.len());
         self.views.extend(docs.iter().skip(self.views.len()).map(View::of));
         for (view, doc) in self.views.iter_mut().zip(docs) {
             view.artboard = view.artboard.min(doc.doc.artboards.len().saturating_sub(1));
         }
+        self.view_uids = docs.iter().map(|d| d.uid).collect();
+        crate::doc_windows::retain_views(self);
+        crate::doc_windows::opened(self);
         // Undo can remove the Artboard tool's active or additionally selected boards. Repair only
         // invalid indices: valid multiselection, drag state and tool options must survive history.
         if self.session.tool_id() != "artboard" || self.session.tool_busy() {

@@ -12,6 +12,23 @@ fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value
 }
 
 #[test]
+fn control_lists_and_selects_optional_addon_tools() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let listed = input_request(&mut app, "ui.tool.list", json!({}));
+    assert_eq!(listed["ok"], true);
+    let groups = listed["result"].as_array().unwrap();
+    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
+        let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
+        assert_eq!(matching.len(), 1, "{}", tool.id);
+        assert_eq!(matching[0]["label"], tool.label);
+        assert!(matching[0]["shortcut"].is_null());
+        let selected = input_request(&mut app, "ui.tool.select", json!({"tool": tool.id}));
+        assert_eq!(selected["ok"], true, "{selected}");
+        assert_eq!(selected["result"]["tool"], tool.id);
+    }
+}
+
+#[test]
 fn ui_set_turns_the_image_trace_preview_off_and_on() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     assert!(app.ui.image_trace_preview);

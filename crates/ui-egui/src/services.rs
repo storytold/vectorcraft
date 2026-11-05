@@ -65,6 +65,9 @@ pub(crate) fn browsable_url(url: &str) -> Result<(), String> {
 /// Shows a file in the system file manager, or opens it in its app.
 pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
 
+/// Opens a file in a fixed app; `Ok(false)` when that app isn't installed.
+pub type OpenInFn = Box<dyn FnMut(&str) -> Result<bool, String>>;
+
 /// Platform services injected by the host app (desktop or web).
 #[derive(Default)]
 pub struct Services {
@@ -116,6 +119,10 @@ pub struct Services {
     /// Open a file (or a folder) in the system's default app for it (desktop: Edit Original, Show
     /// Package). Without it (the web) those answer with an error.
     pub open_file: Option<RevealFn>,
+    /// Open a file in PhotoCraft where it is installed (desktop: Edit Original of a raster image
+    /// with Preferences › File Handling › Use System Defaults for Edit Original off); `Ok(false)`
+    /// when it isn't. Without it Edit Original uses `open_file`.
+    pub open_in_photocraft: Option<OpenInFn>,
     /// Show a folder picker; returns its path (desktop: Relink to Folder, Package).
     pub pick_folder: Option<Box<dyn FnMut() -> Option<String>>>,
     /// Show the system's color sampler, which picks a color anywhere on the screen (macOS, and
@@ -143,7 +150,7 @@ pub struct Services {
     pub wayland: bool,
     /// On Wayland, no cursor theme can be loaded, so winit sets no pointer and the compositor's
     /// default one would never come back once the canvas hid it: the canvas keeps the system
-    /// pointer visible next to the tool glyph ([`cursors::hide_system_pointer`], #2450).
+    /// pointer and paints no tool glyph ([`cursors::paint_glyphs`], #2450).
     pub no_cursor_theme: bool,
     /// The pen pressure and pen end the host reads from the system itself (desktop Linux under
     /// X11 and XWayland, macOS and Windows). The canvas uses the pressure when a frame's events carry no touch force,

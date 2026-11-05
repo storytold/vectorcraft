@@ -1474,6 +1474,29 @@ fn missing_glyph_protection_keeps_the_version_of_the_font_kept() {
     assert_eq!(versions, [moved.clone(), kept, moved]);
 }
 
+/// The font warning of `text.setStyle` and `text.setRangeStyle` names only the fonts the command
+/// set: a character that keeps an unavailable font through Missing Glyph Protection isn't reported.
+#[test]
+fn missing_glyph_protection_leaves_the_font_kept_out_of_the_warning() {
+    let (from, to, c) = ("No Such Font Family", "JetBrains Mono", '\u{180}');
+    let db = vectorcraft_text::FontDb::global();
+    // The unavailable family is drawn in the fallback font, which has the character; the new font is installed and lacks it.
+    let installed = db.resolve(to, "Regular").is_some_and(|(_, m)| m == vectorcraft_text::FontMatch::Exact);
+    if !installed || !db.face(from, "Regular").is_some_and(|f| f.covers(c)) || db.face(to, "Regular").is_some_and(|f| f.covers(c)) {
+        return; // The fonts installed here cover other characters.
+    }
+    let mut s = new_doc();
+    let id = NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": "a\u{180}c", "font": from})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    for change in [json!({"font": to}), json!({"id": id.0, "start": 0, "end": 4, "font": to})] {
+        let cmd = if change.get("id").is_some() { "text.setRangeStyle" } else { "text.setStyle" };
+        let out = s.execute(cmd, &change).unwrap();
+        assert_eq!(style_at(&s, id, 1).font_family, from, "{cmd}: the character keeps its font");
+        assert_eq!(out.get("warning"), None, "{cmd}: {out}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
 // ---------- #394, fourth batch ----------
 
 /// Type › Type Object Selection by Path Only (#394): on, a click among point type's glyphs no
@@ -1656,6 +1679,30 @@ fn real_time_drawing_off_still_shows_a_dragged_guide() {
     assert_eq!(s.doc().unwrap().doc.guides[0].pos, 150.0, "the guide moves while dragged");
     s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 200.0), v).unwrap();
     assert_eq!((s.doc().unwrap().doc.guides[0].pos, s.doc().unwrap().history.undo.last().map(|e| e.label.as_str())), (150.0, Some("Move Guide")));
+}
+
+/// With Real-time Drawing off, a 9-slice guide of the edited symbol moved with the Selection tool
+/// still moves while it is dragged, and the release leaves one Symbol Options undo step.
+#[test]
+fn real_time_drawing_off_still_shows_a_dragged_nine_slice_guide() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Box", "nineSlice": true})).unwrap();
+    s.execute("symbol.edit", &json!({})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let left = |s: &Session| s.doc().unwrap().doc.symbol_nine_slice("Box").unwrap().left;
+    assert_eq!(left(&s), 0.25);
+    let steps = s.doc().unwrap().history.undo.len();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 150.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 110.0, 150.0), v).unwrap();
+    assert!((left(&s) - 0.1).abs() < 1e-9, "the guide moves while dragged: {}", left(&s));
+    s.pointer(&PointerEvent::new(PointerKind::Up, 110.0, 150.0), v).unwrap();
+    let d = s.doc().unwrap();
+    assert!((left(&s) - 0.1).abs() < 1e-9);
+    assert_eq!((d.history.undo.len(), d.history.undo.last().map(|e| e.label.as_str())), (steps + 1, Some("Symbol Options")));
 }
 
 /// Real-time Drawing turned on mid-drag still applies the deferred preview on commit.

@@ -18,10 +18,16 @@ use super::{
     group, ink, kurbo, live, lru, peniko, proof, vello_cpu,
 };
 
+#[cfg(test)]
+pub(crate) use paint::{STROKES_OUTLINED, anchors_moved, offset_between};
+
 mod images;
 mod nodes;
 mod paint;
 mod text;
+
+#[cfg(test)]
+pub(crate) use paint::{CROP_STROKES, crop_line};
 
 impl Renderer {
     pub fn new() -> Self {
@@ -31,9 +37,11 @@ impl Renderer {
             clips: FrameCache::new(lru::CLIP_BUDGET, 256),
             threads: default_threads(),
             geom: PtrMap::default(),
+            kept: PtrMap::default(),
             symbols: vec![],
             plugin_revision: 0,
             strokes: PtrMap::default(),
+            moved_strokes: PtrMap::default(),
             char_strokes: FrameCache::new(lru::CHAR_STROKE_BUDGET, 0),
             cur: None,
             made_again: false,
@@ -172,11 +180,18 @@ impl Renderer {
     /// so the nodes they hold go with them).
     fn end_frame(&mut self) {
         let g = self.stamp;
-        if self.geom.len() > 1024 {
-            self.geom.retain(|_, e| g - e.stamp <= 3);
-        }
+        // Swept however few the entries: each keeps its node alive, and an object dragged or
+        // edited makes a new node (with its layer) in every frame. Kept until there were 1,024 of
+        // them, a drag left up to that many old copies of the object alive, each with all its
+        // members (and, for a compound path, its assembled path).
+        self.geom.retain(|_, e| g - e.stamp <= 3);
+        // A kept path stays while its object is in `geom`, which keeps the objects still drawn.
+        let geom = &self.geom;
+        self.kept.retain(|_, e| g - e.stamp <= 3 || geom.get(&(Arc::as_ptr(&e.node) as usize)).is_some_and(|k| Arc::ptr_eq(&k.node, &e.node)));
         if self.strokes.len() > 1024 {
             self.strokes.retain(|_, e| g - e.stamp <= 3);
+            let strokes = &self.strokes;
+            self.moved_strokes.retain(|_, k| strokes.contains_key(k));
         }
         if self.stroke_slices.len() > 256 {
             self.stroke_slices.retain(|_, e| g - e.stamp <= 3);
@@ -305,15 +320,20 @@ impl Renderer {
 
     /// Render node `n` of `doc` (its resources) into `w`×`h` transparent pixels through `view`.
     pub fn render_node(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine) -> Option<Rendered> {
+        self.render_node_with(doc, n, w, h, view, &RenderOptions::default())
+    }
+
+    /// [`Self::render_node`] with `opts` (e.g. [`RenderOptions::mark_undecoded_images`]).
+    pub fn render_node_with(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine, opts: &RenderOptions) -> Option<Rendered> {
         self.check_plugins();
         self.check_symbols(doc);
         let inv = view.inverse();
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
         let mut ctx = single_threaded_context(w, h);
-        let opts = RenderOptions::default();
+        ctx.set_aliasing_threshold(opts.anti_alias.threshold());
         let symbols = doc.symbol_boxes().quick();
-        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts: &opts, ink: Ink::Display, plates: None };
+        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, plates: None };
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
@@ -352,6 +372,7 @@ impl Renderer {
         let s = (w as f64 - 2.0).max(1.0) / b.width().max(b.height()).max(1e-6);
         let view = Affine::translate((w as f64 / 2.0, w as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
         let mut ctx = single_threaded_context(w, w);
+        ctx.set_aliasing_threshold(opts.anti_alias.threshold());
         if let Some(bg) = background {
             ctx.set_paint(peniko::Color::from_rgba8(bg[0], bg[1], bg[2], bg[3]));
             ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, w as f64));

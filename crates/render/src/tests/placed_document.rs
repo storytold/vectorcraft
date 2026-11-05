@@ -8,7 +8,9 @@ use vectorcraft_geom::shapes;
 use crate::*;
 
 /// Every file reads as a 40×20 artboard filled blue; a file whose bytes start with `loop` also
-/// places itself (the same key) in its middle, and one whose bytes start with `bad` can't be read.
+/// places itself (the same key) in its middle, one whose bytes start with `cut` also shows an
+/// image whose pixels can't be decoded over its left half, and one whose bytes start with `bad`
+/// can't be read.
 fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
     if bytes.starts_with(b"bad") {
         return None;
@@ -17,6 +19,19 @@ fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)>
     d.layers.clear();
     let blue = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
     let mut children = vec![Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 20.0)), blue))];
+    if bytes.starts_with(b"cut") {
+        d.images.insert("cut-image".into(), ImageBlob::new("image/png", b"not a PNG: placed document".to_vec()));
+        let im = vectorcraft_doc::ImageObject {
+            key: "cut-image".into(),
+            width: 20,
+            height: 20,
+            xf: Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        children.push(Arc::new(Node::new(NodeId(3), NodeKind::Image(Box::new(im)))));
+    }
     if bytes.starts_with(b"loop") {
         d.images.insert(p.key.clone(), ImageBlob::new("application/json", bytes.to_vec()));
         let me = PlacedDocument { xf: Affine::translate((10.0, 5.0)) * Affine::scale(0.5), ..p.clone() };
@@ -252,6 +267,36 @@ fn a_bitmap_that_cant_be_made_is_not_asked_for_again() {
     assert_eq!(placed_document::scheduled("unreadable-1"), 1, "asked for once");
     let shown = &later.pixel(50, 30)[..3];
     assert!(shown != [255, 255, 255] && shown != [0, 0, 255], "the placeholder: {shown:?}");
+}
+
+/// A bitmap made for a frame that marks images whose pixels can't be decoded shows such an image
+/// in the file as a crossed box; one made for a frame that does not shows the art under it.
+#[test]
+fn a_bitmap_marks_undecoded_images_when_the_frame_does() {
+    let d = doc_with("cut-1", b"cut");
+    let Some(NodeKind::PlacedDocument(p)) = d.node(NodeId(50)).map(|n| &n.kind) else { panic!("a placed document") };
+    let Some(blob) = d.images.get("cut-1") else { panic!("the file's bytes") };
+    for mark in [false, true] {
+        // 40 × 20 pixels at one pixel a point; the image covers x 0 to 20.
+        let Some(pm) = placed_document::bitmap(p, blob, 1.0, mark) else { panic!("a bitmap") };
+        let pixel = |x: usize, y: usize| pm.data_as_u8_slice()[(y * 40 + x) * 4..][..4].to_vec();
+        assert_eq!(pixel(30, 10), [0, 0, 255, 255], "mark {mark}: the art beside the image");
+        assert_eq!(pixel(5, 10) != [0, 0, 255, 255], mark, "mark {mark}: the crossed box over the art: {:?}", pixel(5, 10));
+    }
+}
+
+/// Frames with and without marks on undecoded images ask for bitmaps of their own, so a bitmap
+/// made for one is not shown in the other. The file can't be read, so no bitmap is made after
+/// the test ends.
+#[test]
+fn bitmaps_with_and_without_undecoded_marks_are_asked_for_apart() {
+    let _serial = serial();
+    let d = doc_with("marks-1", b"bad");
+    for mark in [false, true] {
+        let opts = RenderOptions { progressive_placed: true, mark_undecoded_images: mark, ..Default::default() };
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    }
+    assert_eq!(placed_document::scheduled("marks-1"), 2, "one for each");
 }
 
 /// Once bitmaps are ready, drawing again where [`placed_area`] says gives what drawing the whole

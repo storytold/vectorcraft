@@ -1,0 +1,1165 @@
+//! The program's art and swatches (see [`super`] for the form).
+
+use std::collections::{HashMap, HashSet};
+use std::fmt::Write;
+use std::sync::Arc;
+
+use vectorcraft_color::cms::Cms;
+use vectorcraft_color::swatch::{REGISTRATION, Swatch};
+use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Knockout, LAYER_COLORS, LayerColor, Node, NodeKind, OpacityMask, StrokeLayer};
+use vectorcraft_effects::stroke;
+use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Shape, SubPath};
+use vectorcraft_pathops::BoolOp;
+
+use crate::ai_ops::{self, average, unit};
+use crate::ps;
+
+/// How deep symbols, live objects and pattern tiles may nest in one another (deeper art is left
+/// out). Groups and layers need no limit of their own: a document is never deeper than
+/// [`vectorcraft_doc::MAX_DEPTH`].
+const MAX_NEST: u32 = 8;
+/// The side of the image whose pixels are averaged (larger ones are scaled down to it first).
+const AVERAGE_SIDE: u32 = 64;
+/// Most pixels an image may have to be decoded and averaged (more: mid gray).
+const MAX_AVERAGED_PIXELS: u64 = 1 << 24;
+
+pub(super) const TYPE: &str = "type is written as its outlines in the editing data for other apps";
+pub(super) const GRADIENTS: &str = "gradients are written as their average color in the editing data for other apps";
+const PATTERNS: &str = "pattern fills are written as their tiles cut to the shape in the editing data for other apps";
+pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fill places are written filled gray in the editing data for other apps";
+pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose clipping object isn't a path, and the clipping groups inside them, are written as their art cut to that object in the editing data for other apps";
+pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths that a plain fill and line can't draw are written as paths of their own inside the clipping (fills under the clipped art, strokes over it) in the editing data for other apps";
+pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
+pub(super) const IMAGES: &str = "images are written as their outlines filled with their average color in the editing data for other apps";
+pub(super) const LIVE: &str =
+    "symbols, blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
+const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
+pub(super) const ITEM_TRANSPARENCY: &str =
+    "the opacity and blending modes of single fills and strokes are left out of the editing data for other apps";
+pub(super) const LAYER_MASKS: &str = "opacity masks on layers are left out of the editing data for other apps";
+pub(super) const DEEP_MASKS: &str =
+    "opacity masks more than 8 deep in opacity masks, symbols, live objects and pattern tiles are left out of the editing data for other apps";
+const GROUPED_LAYER: &str =
+    "the transparency and opacity masks of layers that an effect made into a group are left out of the editing data for other apps";
+pub(super) const EFFECTS: &str = "live effects other than geometry effects are left out of the editing data for other apps";
+const SWATCHES: &str = "gradient and pattern swatches are left out of the editing data for other apps";
+pub(super) const SYMBOL_LIMIT: &str = "symbol instances past 16,000,000 objects of symbol art in all are left out of the editing data for other apps";
+const TEMPLATES: &str = "template layers are written as dimmed layers that don't print in the editing data for other apps";
+
+/// The transparency `mode opacity isolate knockout shape Xy` sets: the blending mode ([`blend_code`]),
+/// the opacity, Isolate Blending, Knockout Group (0 off, 1 on, 2 neutral) and Opacity & Mask Define
+/// Knockout Shape. It stays set for the objects that follow, as the lock and hidden state do; a
+/// group, a clipping group or a layer takes it after its end.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Xy {
+    blend: BlendMode,
+    opacity: f32,
+    isolate: bool,
+    knockout: Knockout,
+    shape: bool,
+}
+
+impl Xy {
+    /// The state before any `Xy`, and an opaque path's.
+    const OPAQUE: Xy = Xy { blend: BlendMode::Normal, opacity: 1.0, isolate: false, knockout: Knockout::Off, shape: false };
+    /// A group's or a layer's without transparency of its own (no `Xy` after its end).
+    const PLAIN: Xy = Xy { knockout: Knockout::Neutral, ..Self::OPAQUE };
+
+    /// `n`'s transparency.
+    fn of(n: &Node) -> Xy {
+        let opacity = if n.opacity.is_finite() { n.opacity.clamp(0.0, 1.0) } else { 1.0 };
+        Xy { blend: n.blend, opacity, isolate: n.isolate, knockout: n.knockout, shape: n.knockout_shape }
+    }
+
+    /// As a path's own: isolation and knockout are a group's.
+    fn object(self) -> Xy {
+        Xy { isolate: false, knockout: Knockout::Off, ..self }
+    }
+}
+
+/// The number `Xy` gives blending mode `b`.
+fn blend_code(b: BlendMode) -> u8 {
+    match b {
+        BlendMode::Normal => 0,
+        BlendMode::Multiply => 1,
+        BlendMode::Screen => 2,
+        BlendMode::Overlay => 3,
+        BlendMode::SoftLight => 4,
+        BlendMode::HardLight => 5,
+        BlendMode::ColorDodge => 6,
+        BlendMode::ColorBurn => 7,
+        BlendMode::Darken => 8,
+        BlendMode::Lighten => 9,
+        BlendMode::Difference => 10,
+        BlendMode::Exclusion => 11,
+        BlendMode::Hue => 12,
+        BlendMode::Saturation => 13,
+        BlendMode::Color => 14,
+        BlendMode::Luminosity => 15,
+    }
+}
+
+pub(super) struct Writer<'a> {
+    doc: &'a Document,
+    /// The document → art space.
+    to_art: Affine,
+    cms: Arc<Cms>,
+    pub(super) body: String,
+    pub(super) warnings: Vec<String>,
+    /// The lock and hidden state (`A`, `Xw`) the last operators set; `None` at a layer's start.
+    state: Option<(bool, bool)>,
+    /// The transparency the last `Xy` set; `None` when it isn't known (after an opacity mask, whose
+    /// art's last `Xy` stays set).
+    gs: Option<Xy>,
+    /// Where the state block of the group ended last starts and ends in [`Self::body`].
+    block_start: usize,
+    block_end: usize,
+    /// The region the art being written is cut to (a clipping path's, in document space).
+    clip: Option<PathData>,
+    /// Symbols, live objects and pattern tiles being written inside one another.
+    nest: u32,
+    /// The XML ids objects are named with so far.
+    ids: HashSet<String>,
+    /// The number the next object named after each XML id tries first.
+    next: HashMap<String, u64>,
+    /// The document's brushes, read the first time a brushed stroke is written.
+    brushes: Option<Vec<vectorcraft_brush::Brush>>,
+    /// The objects of the symbol art written so far, within [`vectorcraft_doc::MAX_SYMBOL_NODES`].
+    symbol_nodes: u64,
+}
+
+impl<'a> Writer<'a> {
+    pub(super) fn new(doc: &'a Document, to_art: Affine) -> Self {
+        Self {
+            doc,
+            to_art,
+            cms: vectorcraft_color::cms::active(),
+            body: String::new(),
+            warnings: vec![],
+            state: None,
+            gs: Some(Xy::OPAQUE),
+            block_start: 0,
+            block_end: usize::MAX,
+            clip: None,
+            nest: 0,
+            ids: HashSet::new(),
+            next: HashMap::new(),
+            brushes: None,
+            symbol_nodes: 0,
+        }
+    }
+
+    /// Whether the art of a symbol, `art`, may be written: the objects of the symbol art written
+    /// so far stay within [`vectorcraft_doc::MAX_SYMBOL_NODES`], as in the PDF part (instances of
+    /// symbols that hold instances multiply). Past it the art is left out, with a warning.
+    fn take_symbol(&mut self, art: &Node) -> bool {
+        let total = self.symbol_nodes.saturating_add(art.count() as u64);
+        if total > vectorcraft_doc::MAX_SYMBOL_NODES {
+            self.warn(SYMBOL_LIMIT);
+            return false;
+        }
+        self.symbol_nodes = total;
+        true
+    }
+
+    fn warn(&mut self, w: &str) {
+        if !self.warnings.iter().any(|x| x == w) {
+            self.warnings.push(w.to_string());
+        }
+    }
+
+    fn line(&mut self, s: &str) {
+        self.body.push_str(s);
+        self.body.push('\n');
+    }
+
+    // ---------- layers and objects ----------
+
+    /// A top-level layer. A layer that baking its effects made a group of the layer and the art an
+    /// effect adds (Crop Marks) is written as that layer holding the added art too, and any other
+    /// object at the top level in a layer of its own.
+    pub(super) fn layer(&mut self, n: &Node) {
+        if n.is_layer() {
+            return self.write_layer(n, &[]);
+        }
+        let members = n.children().map(Vec::as_slice).unwrap_or_default();
+        self.effects(n);
+        match members.iter().find(|c| c.is_layer()) {
+            Some(l) => {
+                if Xy::of(n) != Xy::PLAIN || n.extras().mask.is_some() {
+                    self.warn(GROUPED_LAYER);
+                }
+                // The group took the layer's name. The added art is outside the layer's clipping.
+                let layer = Node { name: l.name.clone().or_else(|| n.name.clone()), ..(**l).clone() };
+                let added: Vec<Arc<Node>> = members.iter().filter(|c| !c.is_layer()).cloned().collect();
+                self.write_layer(&layer, &added);
+            }
+            None => {
+                let mut layer = Node::layer(n.id, n.name.as_deref().unwrap_or("Layer"), LayerColor::Preset(0));
+                (layer.visible, layer.locked) = (n.visible, n.locked);
+                self.write_layer(&layer, &[Arc::new(n.clone())]);
+            }
+        }
+    }
+
+    /// A layer or sublayer: `%AI5_BeginLayer`, its options `Lb`, its name `Ln` and as an XML id, its art (its
+    /// clipping path last, with `W`, when it clips), `after` (outside the clipping path), its transparency
+    /// (`Xy`, `0 0 Xd`, `7 () XW`) when it has any, `LB`, `%AI5_EndLayer--`.
+    fn write_layer(&mut self, n: &Node, after: &[Arc<Node>]) {
+        let NodeKind::Layer { color, template, printable, children, clip, preview, dim_images } = &n.kind else { return };
+        let [r, g, b] = match color {
+            LayerColor::Preset(i) => LAYER_COLORS.get(usize::from(*i)).map_or([79, 128, 255], |c| c.1),
+            LayerColor::Custom(rgb) => *rgb,
+        };
+        let index = match color {
+            LayerColor::Preset(i) if usize::from(*i) < LAYER_COLORS.len() => i64::from(*i),
+            _ => -1,
+        };
+        if *template {
+            self.warn(TEMPLATES);
+        }
+        self.effects(n);
+        if n.extras().mask.is_some() {
+            self.warn(LAYER_MASKS);
+        }
+        let flag = |b: bool| u8::from(b);
+        let dim = dim_images.unwrap_or(50);
+        let name = n.name.as_deref().unwrap_or("Layer");
+        // The last flag makes the layer a clipping layer: its top object clips the rest. Only a
+        // clipping path or compound path, outside any art cut to a clipping object, is written as
+        // one ([`Self::clip_group`] writes the others).
+        let clips = *clip && after.is_empty() && self.clip.is_none() && children.first().is_some_and(|c| clip_path(c).is_some());
+        let _ = writeln!(
+            self.body,
+            "%AI5_BeginLayer\n{} {} {} {} {} 0 1 {index} {r} {g} {b} 0 {dim} {} Lb\n{} Ln",
+            flag(n.visible),
+            flag(*preview),
+            flag(!n.locked),
+            flag(*printable && !*template),
+            flag(dim_images.is_some() || *template),
+            flag(clips),
+            ps::bytes(name.as_bytes()),
+        );
+        self.xml_id(if name.is_empty() { "Layer" } else { name });
+        self.state = None;
+        if clips {
+            self.clipped(children);
+        } else if *clip && !children.is_empty() {
+            // The added art lies outside the clipping path, or the clipping object isn't a path:
+            // the clipped art is a clipping group, or a group of the art cut to the object.
+            self.clip_group(children, Xy::PLAIN);
+        } else {
+            for c in children {
+                self.node(c);
+            }
+        }
+        for c in after {
+            self.node(c);
+        }
+        let xy = Xy::of(n);
+        if xy != Xy::PLAIN {
+            // Always written: the layer takes the `Xy` its own state block has.
+            self.write_xy(xy);
+            self.line("0 0 Xd\n7 () XW");
+        }
+        self.line("LB\n%AI5_EndLayer--");
+        // The reader's state carries over into the art that follows.
+        self.state = None;
+    }
+
+    /// Set the lock and hidden state of the object that follows.
+    fn state(&mut self, locked: bool, hidden: bool) {
+        let (was_locked, was_hidden) = match self.state {
+            Some((l, h)) => (Some(l), Some(h)),
+            None => (None, None),
+        };
+        if was_locked != Some(locked) {
+            self.line(if locked { "1 A" } else { "0 A" });
+        }
+        if was_hidden != Some(hidden) {
+            self.line(if hidden { "1 Xw" } else { "0 Xw" });
+        }
+        self.state = Some((locked, hidden));
+    }
+
+    /// Set the transparency of the object that follows to `xy` (`Xy`, when it isn't set already).
+    fn set_xy(&mut self, xy: Xy) {
+        if self.gs != Some(xy) {
+            self.write_xy(xy);
+        }
+    }
+
+    /// `mode opacity isolate knockout shape Xy`.
+    fn write_xy(&mut self, xy: Xy) {
+        let knockout = match xy.knockout {
+            Knockout::Off => 0,
+            Knockout::On => 1,
+            Knockout::Neutral => 2,
+        };
+        let _ = write!(self.body, "{} ", blend_code(xy.blend));
+        ps::push_num(&mut self.body, f64::from(xy.opacity));
+        let _ = writeln!(self.body, " {} {knockout} {} Xy", u8::from(xy.isolate), u8::from(xy.shape));
+        self.gs = Some(xy);
+    }
+
+    /// The end `close` (`U` or `Q`) of a group of transparency `xy`, then its state block: when it
+    /// has transparency of its own, `Xy`, `0 0 Xd` and `6 () XW`; else `9 () XW`. The group's
+    /// dictionary goes between the two ([`Self::node`]).
+    fn end_group(&mut self, close: &str, xy: Xy) {
+        self.line(close);
+        self.block_start = self.body.len();
+        if xy == Xy::PLAIN {
+            self.line("9 () XW");
+        } else {
+            self.write_xy(xy);
+            self.line("0 0 Xd\n6 () XW");
+        }
+        self.block_end = self.body.len();
+    }
+
+    /// Warn when `n` has effects the data leaves out.
+    fn effects(&mut self, n: &Node) {
+        let items = n.appearance.items.iter().filter(|i| i.visible()).flat_map(|i| i.effects());
+        if n.appearance.effects.iter().chain(items).any(|e| e.visible) {
+            self.warn(EFFECTS);
+        }
+    }
+
+    /// One object: its state before it, its transparency, and its name and opacity mask after it.
+    fn node(&mut self, n: &Node) {
+        if let NodeKind::Layer { .. } = n.kind {
+            return self.write_layer(n, &[]);
+        }
+        self.effects(n);
+        self.state(n.locked, !n.visible);
+        let xy = Xy::of(n);
+        let start = self.body.len();
+        match &n.kind {
+            NodeKind::Layer { .. } => {}
+            NodeKind::Group { children, clip: true } => self.clip_group(children, xy),
+            NodeKind::Group { children, clip: false } => {
+                self.line("u");
+                for c in children {
+                    self.node(c);
+                }
+                self.end_group("U", xy);
+            }
+            NodeKind::Path { path, rule, guide, .. } => {
+                if *guide {
+                    // Its own transparency, not the one the object before it set.
+                    if path.subpaths.iter().any(|sp| !sp.anchors.is_empty()) {
+                        self.set_xy(xy.object());
+                    }
+                    ai_ops::guide(&mut self.body, self.to_art, path, true);
+                } else {
+                    self.shape(n, path, *rule, xy);
+                }
+            }
+            NodeKind::Compound { rule, .. } => self.shape(n, &compound_path(n), *rule, xy),
+            NodeKind::Text(_) => self.text(n, xy),
+            NodeKind::Image(im) => {
+                let bounds = PathData::from_bezpath(&(im.xf * Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1)));
+                let color = image_average(self.doc.image_blob(im).map(|b| b.bytes.as_slice()));
+                self.warn(IMAGES);
+                self.fill_object(&bounds, FillRule::NonZero, &FillLayer::new(Paint::solid(color)), xy);
+            }
+            NodeKind::SymbolInstance { symbol, xf } => {
+                self.warn(LIVE);
+                self.line("u");
+                let doc = self.doc;
+                if let Some(sym) = doc.symbols.iter().find(|s| &s.name == symbol)
+                    && self.nest < MAX_NEST
+                {
+                    // Stained by the instance's fill, as the canvas draws it.
+                    let stained = vectorcraft_brush::instance_art(&sym.art, n);
+                    // Through the symbol's 9-slice guides when it has them, as the canvas draws it;
+                    // placing through them needs room for the most objects it can make, and the
+                    // objects it makes count.
+                    let map = doc.symbol_slice_map(symbol, *xf);
+                    let most = map.map_or(stained.count() as u64, |m| m.most_placed(&stained, doc));
+                    let placed = vectorcraft_doc::charge_symbol_art(&mut self.symbol_nodes, most, || {
+                        let art = match map {
+                            Some(m) => m.place(&stained, doc),
+                            None => {
+                                let mut a = stained.clone();
+                                a.transform(*xf, false);
+                                a
+                            }
+                        };
+                        let count = if map.is_some() { art.count_with_masks() } else { art.count() } as u64;
+                        (art, count)
+                    });
+                    if let Some(mut art) = placed {
+                        art.visible = true;
+                        art.locked = false;
+                        art.name = None;
+                        self.nest += 1;
+                        self.node(&art);
+                        self.nest -= 1;
+                    } else {
+                        self.warn(SYMBOL_LIMIT);
+                    }
+                }
+                self.end_group("U", xy);
+            }
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. } => {
+                self.warn(LIVE);
+                self.line("u");
+                if self.nest < MAX_NEST {
+                    let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                    self.nest += 1;
+                    for c in g.children().map(Vec::as_slice).unwrap_or_default() {
+                        self.node(c);
+                    }
+                    self.nest -= 1;
+                }
+                self.end_group("U", xy);
+            }
+        }
+        if self.body.len() > start {
+            // A group's dictionary goes between its end and its state block.
+            let block = (self.block_end == self.body.len() && self.block_start >= start).then(|| self.body.split_off(self.block_start));
+            self.block_end = usize::MAX;
+            self.dictionary(n);
+            if let Some(b) = block {
+                self.body.push_str(&b);
+            }
+        }
+    }
+
+    /// `n`'s `/ArtDictionary`, after it, when it has a name (`AI10_ArtUID`, see [`Self::take_id`])
+    /// or an opacity mask (`AI9_Mask`, see [`Self::mask`]).
+    fn dictionary(&mut self, n: &Node) {
+        let name = n.name.as_deref().filter(|s| !s.is_empty());
+        let mut mask = n.extras().mask.as_deref();
+        // Masks nested too deep are left out (an empty mask would hide the object).
+        if mask.is_some() && self.nest >= MAX_NEST {
+            self.warn(DEEP_MASKS);
+            mask = None;
+        }
+        if name.is_none() && mask.is_none() {
+            return;
+        }
+        self.body.push_str("%_/ArtDictionary :\n");
+        if let Some(name) = name {
+            let id = self.take_id(name);
+            let _ = writeln!(self.body, "%_/XMLUID : {} ; (AI10_ArtUID) ,", ps::bytes(id.as_bytes()));
+        }
+        if let Some(m) = mask {
+            self.mask(m);
+        }
+        self.body.push_str("%_;\n%_\n");
+    }
+
+    /// An `/ArtDictionary` whose `AI10_ArtUID` is `name` as an XML id.
+    fn xml_id(&mut self, name: &str) {
+        let id = self.take_id(name);
+        let _ = writeln!(self.body, "%_/ArtDictionary :\n%_/XMLUID : {} ; (AI10_ArtUID) ,\n%_;\n%_", ps::bytes(id.as_bytes()));
+    }
+
+    /// `name` as an XML id no layer or object has yet, numbered (`_` and 20 digits, `_`) when one
+    /// has it.
+    fn take_id(&mut self, name: &str) -> String {
+        let base = vectorcraft_doc::xml_id::from_object_name(name);
+        let mut id = base.clone();
+        let next = self.next.entry(base.clone()).or_insert(0);
+        while self.ids.contains(&id) {
+            *next += 1;
+            id = format!("{base}_{next:020}_");
+        }
+        self.ids.insert(id.clone());
+        id
+    }
+
+    /// An opacity mask, as an entry of its object's dictionary: `/Mask :`, `X=`, its art on `%_`
+    /// lines (from the state a dictionary's art starts in: unlocked, shown, opaque), `X+`, `(Art) ,`,
+    /// its options as the `/Bool` entries `Clipping`, `Inverted`, `Disabled` and `Linked`, and
+    /// `; (AI9_Mask) ,`. The art is in document coordinates, as the object's is.
+    fn mask(&mut self, m: &OpacityMask) {
+        let outer = std::mem::take(&mut self.body);
+        let (state, clip) = (self.state, self.clip.take());
+        (self.state, self.gs) = (Some((false, false)), Some(Xy::OPAQUE));
+        // A plain group holding the art is the group the art is read into.
+        let art = &m.art;
+        let plain = matches!(art.kind, NodeKind::Group { clip: false, .. })
+            && Xy::of(art) == Xy::PLAIN
+            && art.visible
+            && !art.locked
+            && art.name.as_deref().is_none_or(str::is_empty)
+            && art.extras().mask.is_none();
+        let members = match art.children() {
+            Some(c) if plain => c.as_slice(),
+            _ => std::slice::from_ref(art),
+        };
+        self.nest += 1;
+        for c in members {
+            self.node(c);
+        }
+        self.nest -= 1;
+        let lines = std::mem::replace(&mut self.body, outer);
+        self.body.push_str("%_/Mask :\n%_X=\n");
+        for l in lines.lines() {
+            if !l.starts_with("%_") {
+                self.body.push_str("%_");
+            }
+            self.body.push_str(l);
+            self.body.push('\n');
+        }
+        self.body.push_str("%_X+\n%_(Art) ,\n");
+        for (key, on) in [("Clipping", m.clip), ("Inverted", m.invert), ("Disabled", m.disabled), ("Linked", m.linked)] {
+            let _ = writeln!(self.body, "%_{} /Bool ({key}) ,", u8::from(on));
+        }
+        self.body.push_str("%_; (AI9_Mask) ,\n");
+        // The dictionary ends with the state before it, except the transparency its art set last.
+        (self.state, self.gs, self.clip, self.block_end) = (state, None, clip, usize::MAX);
+    }
+
+    /// Warn that art is cut to clipping object `first` when it isn't a path or compound path (a path
+    /// without points cuts everything away, as it clips everything away).
+    fn warn_cut(&mut self, first: Option<&Arc<Node>>) {
+        if first.is_some_and(|c| !matches!(c.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. })) {
+            self.warn(CLIPPING);
+        }
+    }
+
+    /// A clipping group: `q`, its members, its clipping path or compound path last (the top object:
+    /// a mask shows the objects beneath it, §5.6.2) with `W`, `Q`, then the group's transparency.
+    /// `Q` sets back the state at `q`. A clipping object of another kind cuts the members instead,
+    /// in a group ([`Self::clip_contents`]). A clipping group without members is an empty group.
+    fn clip_group(&mut self, children: &[Arc<Node>], xy: Xy) {
+        if self.clip.is_some() || children.first().is_none_or(|c| clip_path(c).is_none()) {
+            self.warn_cut(children.first());
+            // Inside art cut to a clipping object, a clipping path cuts its art too.
+            if self.clip.is_some() && !children.is_empty() {
+                self.warn(CLIPPING);
+            }
+            self.line("u");
+            self.clip_contents(children);
+            return self.end_group("U", xy);
+        }
+        let at_q = (self.state, self.gs);
+        self.line("q");
+        self.clipped(children);
+        (self.state, self.gs) = at_q;
+        self.end_group("Q", xy);
+    }
+
+    /// The members of a clipping group or layer, the first one clipping the others: the others,
+    /// then the first one as the clipping path (see [`Self::clip_group`]), its name after it. Fills
+    /// and strokes the clipping path can't paint itself are paths of their own, the fills under the
+    /// others and the strokes over them.
+    fn clipped(&mut self, children: &[Arc<Node>]) {
+        let Some((first, rest)) = children.split_first() else { return };
+        let Some((path, rule)) = clip_path(first) else {
+            self.warn_cut(Some(first));
+            return self.clip_contents(children);
+        };
+        let painted = plain_paint(first);
+        if visible_items(first).iter().any(|i| i.opacity() < 1.0 || i.blend() != BlendMode::Normal) {
+            self.warn(ITEM_TRANSPARENCY);
+        }
+        // Paint the clipping path can't carry: its fills under the others, its strokes over them.
+        let (fills, strokes): (Vec<&AppearanceItem>, Vec<&AppearanceItem>) =
+            if painted.is_none() { visible_items(first).into_iter().partition(|i| matches!(i, AppearanceItem::Fill(_))) } else { (vec![], vec![]) };
+        if painted.is_none() {
+            self.warn(CLIP_PAINT);
+            if first.extras().mask.is_some() && !visible_items(first).is_empty() {
+                self.warn(CLIP_PAINT_MASKS);
+            }
+        }
+        self.clip_paint_part(first, &path, rule, &fills);
+        for c in rest {
+            self.node(c);
+        }
+        self.clip_paint_part(first, &path, rule, &strokes);
+        let (fill, stroke) = painted.unwrap_or_default();
+        self.state(first.locked, !first.visible);
+        let start = self.body.len();
+        self.paint_state(fill, stroke, Xy::of(first).object(), rule);
+        let op = paint_op(fill.is_some(), stroke.is_some());
+        let subpaths: Vec<&SubPath> = path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).collect();
+        let several = subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in subpaths {
+            ai_ops::subpath(&mut self.body, self.to_art, sp);
+            let op = if sp.closed { op } else { op.to_ascii_uppercase() };
+            let _ = writeln!(self.body, "{}\nW\n{op}", if sp.closed { 'h' } else { 'H' });
+        }
+        if several {
+            self.line("*U");
+        }
+        if self.body.len() > start {
+            self.dictionary(first);
+        }
+    }
+
+    /// The fills or the strokes `items` of clipping path `first` (outline `path`) that it can't paint
+    /// itself, locked and hidden as it is, with its transparency once for all of them: one object,
+    /// or a group of an object for each (as the canvas draws them, [`Node::clip_paint`]).
+    fn clip_paint_part(&mut self, first: &Node, path: &PathData, rule: FillRule, items: &[&AppearanceItem]) {
+        if items.is_empty() {
+            return;
+        }
+        self.state(first.locked, !first.visible);
+        let xy = Xy::of(first);
+        if let [one] = items {
+            return self.item(path, rule, one, xy);
+        }
+        self.line("u");
+        for i in items {
+            self.item(path, rule, i, Xy::PLAIN);
+        }
+        self.end_group("U", xy);
+    }
+
+    /// A container's members, the first one's outline cutting the others: its fills painted
+    /// behind them (cut to the region outside too), its strokes over them, not cut by it.
+    fn clip_contents(&mut self, children: &[Arc<Node>]) {
+        let Some((first, rest)) = children.split_first() else { return };
+        // Nothing to clip by hides the clipped art.
+        let Some((outline, rule)) = vectorcraft_effects::clip_outline(first) else { return };
+        let paint = first.clip_paint();
+        let outer = self.clip.clone();
+        let region = self.cut(&PathData::from_bezpath(&outline), rule);
+        self.clip = Some(region);
+        if let Some(fill) = &paint.fill {
+            self.node(fill);
+        }
+        for c in rest {
+            self.node(c);
+        }
+        self.clip = outer;
+        if let Some(stroke) = &paint.stroke {
+            self.node(stroke);
+        }
+    }
+
+    /// `path` (filled by `rule`) cut to the region the art is cut to, as a non-zero path.
+    fn cut(&self, path: &PathData, rule: FillRule) -> PathData {
+        match &self.clip {
+            Some(clip) => vectorcraft_pathops::boolean(path, rule, clip, FillRule::NonZero, BoolOp::Intersect),
+            None => vectorcraft_pathops::boolean(path, rule, path, rule, BoolOp::Intersect),
+        }
+    }
+
+    // ---------- paths ----------
+
+    /// A path's fills and strokes, with the path's transparency `xy`: one object with one fill and
+    /// a plain stroke over it where it can be, else a group of an object for each (in paint order).
+    fn shape(&mut self, n: &Node, path: &PathData, rule: FillRule, xy: Xy) {
+        if path.is_empty() {
+            return;
+        }
+        let items = visible_items(n);
+        if items.iter().any(|i| i.opacity() < 1.0 || i.blend() != BlendMode::Normal) {
+            self.warn(ITEM_TRANSPARENCY);
+        }
+        match (plain_paint(n), items.as_slice()) {
+            (Some((fill, stroke)), _) => self.path_object(path, rule, fill, stroke, xy),
+            (None, [one]) => self.item(path, rule, one, xy),
+            (None, items) => {
+                self.line("u");
+                for i in items {
+                    self.item(path, rule, i, Xy::PLAIN);
+                }
+                self.end_group("U", xy);
+            }
+        }
+    }
+
+    /// One fill or stroke of a path as an object of its own, of transparency `xy`.
+    fn item(&mut self, path: &PathData, rule: FillRule, item: &AppearanceItem, xy: Xy) {
+        match item {
+            AppearanceItem::Fill(f) => self.fill_object(path, rule, f, xy),
+            AppearanceItem::Stroke(s) if direct_stroke(s) => self.path_object(path, rule, None, Some(s), xy),
+            AppearanceItem::Stroke(s) => {
+                self.warn(STROKES);
+                if self.brush_art(path, s, xy) {
+                    return;
+                }
+                let outline = stroke::outline_region(path, rule, s);
+                let fill = FillLayer { overprint: s.overprint, ..FillLayer::new(s.paint.clone()) };
+                self.fill_object(&outline, FillRule::NonZero, &fill, xy);
+            }
+        }
+    }
+
+    /// A brushed stroke `st` of `path` as a group of its brush's art, of transparency `xy`. False
+    /// when it has no brush the document knows (or brushes nest too deep).
+    fn brush_art(&mut self, path: &PathData, st: &StrokeLayer, xy: Xy) -> bool {
+        if self.nest >= MAX_NEST {
+            return false;
+        }
+        let doc = self.doc;
+        let brushes = self.brushes.get_or_insert_with(|| vectorcraft_brush::library(doc));
+        let Some(b) = st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name)) else { return false };
+        let art = vectorcraft_brush::stroke_pieces(doc, b, &path.to_bezpath(), st);
+        let state = self.state;
+        self.nest += 1;
+        self.line("u");
+        for piece in &art {
+            self.node(piece);
+        }
+        if let Some((locked, hidden)) = state {
+            self.state(locked, hidden);
+        }
+        self.end_group("U", xy);
+        self.nest -= 1;
+        true
+    }
+
+    /// A fill as an object of its own, of transparency `xy`: a gradient as its average color, a
+    /// pattern as its tiles cut to the path.
+    fn fill_object(&mut self, path: &PathData, rule: FillRule, f: &FillLayer, xy: Xy) {
+        match &f.paint {
+            Paint::Solid { .. } => self.path_object(path, rule, Some(f), None, xy),
+            Paint::Gradient(g) => {
+                self.warn(GRADIENTS);
+                let flat = FillLayer { paint: Paint::solid(average(&g.gradient)), ..f.clone() };
+                self.path_object(path, rule, Some(&flat), None, xy);
+            }
+            Paint::Pattern { pattern, xf } => {
+                self.warn(PATTERNS);
+                let doc = self.doc;
+                let Some(def) = doc.pattern(pattern).filter(|_| self.nest < MAX_NEST) else {
+                    let flat = FillLayer { paint: Paint::solid(Color::gray(0.5)), ..f.clone() };
+                    return self.path_object(path, rule, Some(&flat), None, xy);
+                };
+                let tiles = def.instances_in(*xf, path.to_bezpath().bounding_box());
+                // More tiles than a fill places come back as none: the shape is filled gray, as a
+                // pattern that isn't found is.
+                if tiles.is_empty() && !def.art.is_empty() {
+                    self.warn(PATTERN_TILES);
+                    let flat = FillLayer { paint: Paint::solid(Color::gray(0.5)), ..f.clone() };
+                    return self.path_object(path, rule, Some(&flat), None, xy);
+                }
+                let outer = self.clip.clone();
+                let region = self.cut(path, rule);
+                self.clip = Some(region);
+                self.nest += 1;
+                let state = self.state;
+                self.line("u");
+                for t in &tiles {
+                    self.node(t);
+                }
+                if let Some((locked, hidden)) = state {
+                    self.state(locked, hidden);
+                }
+                self.end_group("U", xy);
+                self.nest -= 1;
+                self.clip = outer;
+            }
+            Paint::None => {}
+        }
+    }
+
+    /// A path object of transparency `xy` painted with `fill` (a color) and `stroke` (a plain line
+    /// of a color) over it; several subpaths make a compound path. Where the art is cut to a
+    /// clipping path, the fill is the path's region cut to it and the stroke its outline cut to it,
+    /// filled.
+    fn path_object(&mut self, path: &PathData, rule: FillRule, fill: Option<&FillLayer>, stroke: Option<&StrokeLayer>, xy: Xy) {
+        if self.clip.is_none() {
+            return self.plain_object(path, rule, fill, stroke, xy.object());
+        }
+        let both = fill.is_some() && stroke.is_some();
+        let own = if both { Xy::OPAQUE } else { xy.object() };
+        if both {
+            self.line("u");
+        }
+        if fill.is_some() || stroke.is_none() {
+            let region = self.cut(path, rule);
+            self.plain_object(&region, FillRule::NonZero, fill, None, own);
+        }
+        if let Some(s) = stroke {
+            let outline = stroke::outline_region(path, rule, s);
+            let region = self.cut(&outline, FillRule::NonZero);
+            let fill = FillLayer { overprint: s.overprint, ..FillLayer::new(s.paint.clone()) };
+            self.plain_object(&region, FillRule::NonZero, Some(&fill), None, own);
+        }
+        if both {
+            self.end_group("U", xy);
+        }
+    }
+
+    /// The paint of a path of transparency `xy` filled by `rule`: its fill color and `O`, its stroke
+    /// color and `R`, `Xy`, the line style, `XR`. Without paint, `XR` comes first: an `Xy` right
+    /// after a group or compound path would be theirs.
+    fn paint_state(&mut self, fill: Option<&FillLayer>, stroke: Option<&StrokeLayer>, xy: Xy, rule: FillRule) {
+        let rule = if rule == FillRule::EvenOdd { "1 XR" } else { "0 XR" };
+        if let Some(f) = fill {
+            self.color(&f.paint, false);
+            self.line(if f.overprint { "1 O" } else { "0 O" });
+        }
+        if let Some(s) = stroke {
+            self.color(&s.paint, true);
+            self.line(if s.overprint { "1 R" } else { "0 R" });
+        }
+        if fill.is_none() && stroke.is_none() {
+            self.line(rule);
+            return self.set_xy(xy);
+        }
+        self.set_xy(xy);
+        if let Some(s) = stroke {
+            ai_ops::line_style(&mut self.body, s);
+        }
+        self.line(rule);
+    }
+
+    /// [`Self::path_object`] without cutting: the paint ([`Self::paint_state`]), each subpath's
+    /// points and painting operator (`*u` … `*U` around several).
+    fn plain_object(&mut self, path: &PathData, rule: FillRule, fill: Option<&FillLayer>, stroke: Option<&StrokeLayer>, xy: Xy) {
+        let subpaths: Vec<&SubPath> = path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).collect();
+        if subpaths.is_empty() {
+            return;
+        }
+        self.paint_state(fill, stroke, xy, rule);
+        let op = paint_op(fill.is_some(), stroke.is_some());
+        let several = subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in subpaths {
+            ai_ops::subpath(&mut self.body, self.to_art, sp);
+            let op = if sp.closed { op } else { op.to_ascii_uppercase() };
+            self.body.push(op);
+            self.body.push('\n');
+        }
+        if several {
+            self.line("*U");
+        }
+    }
+
+    // ---------- type ----------
+
+    /// Type `n` as a group of what Type › Create Outlines makes of it
+    /// ([`vectorcraft_effects::outline_text`]): each run's glyphs with their underline and
+    /// strikethrough, its color glyphs, and the object's own fills and strokes; then its inline
+    /// graphics as their symbols' art where the layout places them, as the PDF page draws them;
+    /// the group has the type's transparency `xy`.
+    fn text(&mut self, n: &Node, xy: Xy) {
+        self.warn(TYPE);
+        self.line("u");
+        let doc = self.doc;
+        let resolved = match &n.kind {
+            NodeKind::Text(t) => Some(doc.inline_resolved(t).into_owned()),
+            _ => None,
+        };
+        let node = match &resolved {
+            Some(t) => Node { kind: NodeKind::Text(Box::new(t.clone())), ..n.clone() },
+            None => n.clone(),
+        };
+        let state = self.state;
+        let outlined = vectorcraft_effects::outline_text(&node);
+        let pieces = outlined.as_ref().and_then(|o| o.children()).map(Vec::as_slice).unwrap_or_default();
+        // The object's fills and strokes above the Characters row, when they paint, are the last
+        // piece: the inline graphics go under it, as the PDF page draws them.
+        let above = !node.appearance.split_contents().1.is_empty() && {
+            let bare = Node { appearance: Default::default(), ..node.clone() };
+            let glyphs = vectorcraft_effects::outline_text(&bare).and_then(|o| o.children().map(Vec::len)).unwrap_or_default();
+            pieces.len() > glyphs
+        };
+        let (under, over) = pieces.split_at(pieces.len() - usize::from(above));
+        for c in under {
+            self.node(c);
+        }
+        if let Some(t) = resolved.as_ref().filter(|_| self.nest < MAX_NEST) {
+            let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+            for ig in &layout.inlines {
+                let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref()) else { continue };
+                let Some(sym) = doc.symbols.iter().find(|x| x.name == art.symbol) else { continue };
+                if !self.take_symbol(&sym.art) {
+                    continue;
+                }
+                self.warn(LIVE);
+                let mut art_node = (*sym.art).clone();
+                // Strokes scale with the art, as on the canvas.
+                art_node.transform(t.xf * ig.xf * doc.symbol_natural_xf(&art.symbol), true);
+                (art_node.visible, art_node.locked, art_node.name) = (true, false, None);
+                self.nest += 1;
+                self.node(&art_node);
+                self.nest -= 1;
+            }
+        }
+        for c in over {
+            self.node(c);
+        }
+        if let Some((locked, hidden)) = state {
+            self.state(locked, hidden);
+        }
+        self.end_group("U", xy);
+    }
+
+    // ---------- color ----------
+
+    /// Set the fill (or with `stroke`, the stroke) color to solid paint `p`: a spot or global
+    /// swatch by its name, Registration, else the color itself.
+    fn color(&mut self, p: &Paint, stroke: bool) {
+        let Paint::Solid { color, swatch, tint } = p else {
+            return self.plain_color(Color::gray(1.0), stroke);
+        };
+        if swatch.as_deref() == Some(REGISTRATION) {
+            let mut s = String::from("1 1 1 1 ");
+            s.push_str(&ps::bytes(REGISTRATION.as_bytes()));
+            s.push(' ');
+            ps::push_num(&mut s, f64::from(1.0 - unit(*tint)));
+            s.push_str(if stroke { " XS" } else { " Xs" });
+            return self.line(&s);
+        }
+        let doc = self.doc;
+        if let Some(name) = swatch
+            && let Some(sw) = doc.swatch(name).filter(|s| s.global || s.spot)
+            && let Paint::Solid { color: full, swatch: None, .. } = sw.paint
+        {
+            let mut s = String::new();
+            self.named(&mut s, name, full, *tint, sw.spot, stroke);
+            return self.body.push_str(&s);
+        }
+        self.plain_color(*color, stroke);
+    }
+
+    /// A color that names no swatch: `g` (gray), `k` (CMYK), else `c m y k r g b Xa` (RGB, and
+    /// Lab as RGB), with its CMYK equivalent.
+    fn plain_color(&mut self, color: Color, stroke: bool) {
+        let s = &mut self.body;
+        let op = |fill: &'static str, line: &'static str| if stroke { line } else { fill };
+        match color {
+            // Gray is ink coverage; the format's gray is lightness.
+            Color::Gray { k } => {
+                ps::push_num(s, f64::from(1.0 - unit(k)));
+                let _ = writeln!(s, " {}", op("g", "G"));
+            }
+            Color::Cmyk { c, m, y, k } => {
+                ps::push_nums(s, &[c, m, y, k].map(|v| f64::from(unit(v))));
+                let _ = writeln!(s, "{}", op("k", "K"));
+            }
+            Color::Rgb { .. } | Color::Lab { .. } => {
+                let cmyk = self.cms.to_cmyk(&color, self.cms.settings().intent).map(unit);
+                ps::push_nums(s, &cmyk.map(f64::from));
+                ps::push_nums(s, &color.to_rgb().map(|v| f64::from(unit(v))));
+                let _ = writeln!(s, "{}", op("Xa", "XA"));
+            }
+        }
+    }
+
+    /// A spot (`spot`) or global process color `name` of full color `full` at `tint`, written to
+    /// `s`: its CMYK equivalent, its RGB or Lab values, the name, how much lighter than the full
+    /// color, and for any but a CMYK spot color (`x`) the model (0 CMYK, 1 RGB, 2 Lab) before
+    /// `Xx` (spot) or `Xk` (global process).
+    fn named(&self, s: &mut String, name: &str, full: Color, tint: f32, spot: bool, stroke: bool) {
+        let cmyk = self.cms.to_cmyk(&self.doc.linked_color(full, spot), self.cms.settings().intent).map(unit);
+        ps::push_nums(s, &cmyk.map(f64::from));
+        let model = match full {
+            Color::Rgb { r, g, b } => {
+                ps::push_nums(s, &[r, g, b].map(|v| f64::from(unit(v))));
+                Some(1)
+            }
+            Color::Lab { l, a, b } => {
+                ps::push_nums(s, &[f64::from(l), f64::from(a), f64::from(b)]);
+                Some(2)
+            }
+            _ if spot => None,
+            _ => Some(0),
+        };
+        s.push_str(&ps::bytes(name.as_bytes()));
+        s.push(' ');
+        ps::push_num(s, f64::from(1.0 - unit(tint)));
+        let op = match (model, spot) {
+            (None, _) => "x",
+            (Some(_), true) => "Xx",
+            (Some(_), false) => "Xk",
+        };
+        if let Some(m) = model {
+            let _ = write!(s, " {m}");
+        }
+        let op = if stroke { op.to_ascii_uppercase() } else { op.to_string() };
+        let _ = writeln!(s, " {op}");
+    }
+
+    // ---------- swatches ----------
+
+    /// The swatches: `%AI5_BeginPalette`, `0 0 Pb`, the Registration swatch, each color swatch's color and `(name) Pc`
+    /// (the ungrouped ones first, then each color group's after `0 (name) count Pg`), `PB`,
+    /// `%AI5_EndPalette`.
+    pub(super) fn palette(&mut self, s: &mut String) {
+        s.push_str("%AI5_BeginPalette\n0 0 Pb\n");
+        self.registration_cell(s);
+        let doc = self.doc;
+        for sw in doc.swatches.iter() {
+            self.swatch(s, sw);
+        }
+        for g in doc.swatch_groups.iter() {
+            let colors: Vec<&Swatch> = g.swatches.iter().filter(|sw| writable(sw)).collect();
+            let _ = writeln!(s, "0 {} {} Pg", ps::bytes(g.name.as_bytes()), colors.len());
+            for sw in &g.swatches {
+                self.swatch(s, sw);
+            }
+        }
+        s.push_str("PB\n%AI5_EndPalette\n");
+    }
+
+    /// The Registration swatch, which every palette in the files users sent starts with: in a
+    /// CMYK document `1 1 1 1 ([Registration]) 0 Xs`, in an RGB one black's CMYK equivalent,
+    /// `0 0 0 ([Registration]) 0 1 Xz`; then `([Registration]) Pc`.
+    fn registration_cell(&self, s: &mut String) {
+        let name = ps::bytes(REGISTRATION.as_bytes());
+        if self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk {
+            let _ = writeln!(s, "1 1 1 1 {name} 0 Xs");
+        } else {
+            let black = Color::rgb(0.0, 0.0, 0.0);
+            let cmyk = self.cms.to_cmyk(&black, self.cms.settings().intent).map(unit);
+            ps::push_nums(s, &cmyk.map(f64::from));
+            let _ = writeln!(s, "0 0 0 {name} 0 1 Xz");
+        }
+        let _ = writeln!(s, "{name} Pc");
+    }
+
+    /// One swatch of the palette: a color swatch's color and `(name) Pc`; gradient and pattern
+    /// swatches are left out.
+    fn swatch(&mut self, s: &mut String, sw: &Swatch) {
+        if sw.name == REGISTRATION || matches!(sw.paint, Paint::None) {
+            return;
+        }
+        if !writable(sw) {
+            return self.warn(SWATCHES);
+        }
+        let Paint::Solid { color, swatch, .. } = &sw.paint else { return };
+        if swatch.is_none() && (sw.global || sw.spot) {
+            self.named(s, &sw.name, *color, 1.0, sw.spot, false);
+        } else {
+            let body = std::mem::take(&mut self.body);
+            self.plain_color(*color, false);
+            s.push_str(&std::mem::replace(&mut self.body, body));
+        }
+        let _ = writeln!(s, "{} Pc", ps::bytes(sw.name.as_bytes()));
+    }
+
+    /// The spot color swatches, with their full colors' CMYK equivalents, for the header.
+    pub(super) fn spot_swatches(&self) -> Vec<(String, [f32; 4])> {
+        let intent = self.cms.settings().intent;
+        self.doc
+            .swatches_iter()
+            .filter(|sw| sw.spot)
+            .filter_map(|sw| match sw.paint {
+                Paint::Solid { color, swatch: None, .. } => {
+                    Some((sw.name.clone(), self.cms.to_cmyk(&self.doc.linked_color(color, true), intent).map(unit)))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+/// Is `sw` a color swatch the palette writes?
+fn writable(sw: &Swatch) -> bool {
+    matches!(sw.paint, Paint::Solid { .. }) && sw.name != REGISTRATION
+}
+
+/// Does a plain line of one color draw `s` (the line style operators can write it)?
+fn direct_stroke(s: &StrokeLayer) -> bool {
+    matches!(s.paint, Paint::Solid { .. }) && stroke::is_plain(s)
+}
+
+/// `n`'s fills and strokes that paint.
+fn visible_items(n: &Node) -> Vec<&AppearanceItem> {
+    n.appearance
+        .items
+        .iter()
+        .filter(|i| match i {
+            AppearanceItem::Fill(f) => f.visible && !f.paint.is_none(),
+            AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0 && s.width.is_finite(),
+        })
+        .collect()
+}
+
+/// `n`'s paint as one path object paints: no paint, a fill of a color, a plain line of a color,
+/// or both, the line over the fill; `None` when it has other paint.
+fn plain_paint(n: &Node) -> Option<(Option<&FillLayer>, Option<&StrokeLayer>)> {
+    let solid = |p: &Paint| matches!(p, Paint::Solid { .. });
+    match visible_items(n).as_slice() {
+        [] => Some((None, None)),
+        [AppearanceItem::Fill(f)] if solid(&f.paint) => Some((Some(f), None)),
+        [AppearanceItem::Stroke(s)] if direct_stroke(s) => Some((None, Some(s))),
+        [AppearanceItem::Fill(f), AppearanceItem::Stroke(s)] if solid(&f.paint) && direct_stroke(s) => Some((Some(f), Some(s))),
+        _ => None,
+    }
+}
+
+/// The painting operator of a closed subpath (§5.3.3): `b` fill and stroke, `f` fill, `s`
+/// stroke, `n` neither; an open one's is upper case.
+fn paint_op(fill: bool, stroke: bool) -> char {
+    match (fill, stroke) {
+        (true, true) => 'b',
+        (true, false) => 'f',
+        (false, true) => 's',
+        (false, false) => 'n',
+    }
+}
+
+/// The subpaths of compound path `n`'s members, as one path.
+fn compound_path(n: &Node) -> PathData {
+    let mut subpaths = vec![];
+    for p in n.children().map(Vec::as_slice).unwrap_or_default().iter().filter_map(|c| c.path_data()) {
+        subpaths.extend(p.subpaths.iter().cloned());
+    }
+    PathData::new(subpaths)
+}
+
+/// The outline and fill rule a clipping path or compound path `n` clips by; `None` for other
+/// clipping objects and for a path without points (it clips everything away, see
+/// [`Writer::clip_contents`]).
+fn clip_path(n: &Node) -> Option<(PathData, FillRule)> {
+    let (path, rule) = match &n.kind {
+        NodeKind::Path { path, rule, guide: false, .. } => (path.clone(), *rule),
+        NodeKind::Compound { rule, .. } => (compound_path(n), *rule),
+        _ => return None,
+    };
+    path.subpaths.iter().any(|sp| !sp.anchors.is_empty()).then_some((path, rule))
+}
+
+/// The image `bytes` decoded, when its header gives at most [`MAX_AVERAGED_PIXELS`] pixels; the
+/// decoder may allocate at most 8 bytes a pixel.
+fn decode_bounded(bytes: &[u8]) -> Option<image::DynamicImage> {
+    let reader = || -> image::ImageResult<image::ImageReader<std::io::Cursor<&[u8]>>> {
+        let mut r = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
+        let mut limits = image::Limits::default();
+        limits.max_alloc = Some(MAX_AVERAGED_PIXELS * 8);
+        r.limits(limits);
+        Ok(r)
+    };
+    let (w, h) = reader().and_then(|r| r.into_dimensions()).ok()?;
+    if u64::from(w) * u64::from(h) > MAX_AVERAGED_PIXELS {
+        return None;
+    }
+    reader().and_then(|r| r.decode()).ok()
+}
+
+/// The average color of the image `bytes` (scaled down first), transparent pixels over white;
+/// mid gray when it can't be decoded or has more than [`MAX_AVERAGED_PIXELS`] pixels.
+fn image_average(bytes: Option<&[u8]>) -> Color {
+    let Some(img) = bytes.and_then(decode_bounded) else { return Color::gray(0.5) };
+    let img = if img.width() > AVERAGE_SIDE || img.height() > AVERAGE_SIDE { img.thumbnail(AVERAGE_SIDE, AVERAGE_SIDE) } else { img };
+    let rgba = img.to_rgba8();
+    let mut sum = [0u64; 3];
+    let mut n = 0u64;
+    for px in rgba.pixels() {
+        let [r, g, b, a] = px.0;
+        let over = |c: u8| (u64::from(c) * u64::from(a) + 255 * (255 - u64::from(a))) / 255;
+        sum[0] += over(r);
+        sum[1] += over(g);
+        sum[2] += over(b);
+        n += 1;
+    }
+    if n == 0 {
+        return Color::gray(0.5);
+    }
+    let c = |v: u64| (v as f32 / n as f32 / 255.0).clamp(0.0, 1.0);
+    Color::rgb(c(sum[0]), c(sum[1]), c(sum[2]))
+}

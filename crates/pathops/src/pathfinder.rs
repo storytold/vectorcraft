@@ -330,7 +330,18 @@ impl CoverIds {
 /// enclosing contour of its mask, as in that mask's own pass; an outer contour always starts a face
 /// of its own, even inside a hole of its mask (an island left in a cutout is a separate face, not
 /// part of the frame around it).
-fn face_groups(c: &linesweeper::topology::Contours, owner: &[usize]) -> Vec<(usize, Vec<ContourIdx>)> {
+///
+/// The sweep's tree of contours is wrong where it cut a loop off a contour at a point the contour
+/// visits twice and the loop isn't nested in it: two holes touching at a point (the second comes
+/// out an island inside the first), or an outer contour touching its own hole (it comes out an
+/// island inside the hole). Such a loop winds the same way as the contour it was cut from, against
+/// its flag ([`Contour::outer`](linesweeper::topology::Contour::outer)), and the pass is then
+/// grouped by where the contours lie instead ([`face_groups_by_winding`]).
+fn face_groups(c: &Contours, owner: &[usize]) -> Vec<(usize, Vec<ContourIdx>)> {
+    let areas: Vec<f64> = c.contours().map(|ct| ct.path.area()).collect();
+    if c.contours().zip(&areas).any(|(ct, &a)| ct.outer != (a > 0.0)) {
+        return face_groups_by_winding(c, owner, &areas);
+    }
     let mut children = vec![Vec::new(); owner.len()];
     let mut roots = Vec::new();
     for (i, &m) in owner.iter().enumerate() {
@@ -356,6 +367,47 @@ fn face_groups(c: &linesweeper::topology::Contours, owner: &[usize]) -> Vec<(usi
             (owner[r], group)
         })
         .collect()
+}
+
+/// [`face_groups`] without the sweep's tree: each hole (a contour whose area in `areas` isn't
+/// positive) goes with the smallest outer contour of its mask around it, and each outer contour,
+/// or hole with none around it, starts a face. Faces come in the order of their first contour,
+/// each with its contours in pass order.
+fn face_groups_by_winding(c: &Contours, owner: &[usize], areas: &[f64]) -> Vec<(usize, Vec<ContourIdx>)> {
+    let boxes: Vec<kurbo::Rect> = c.contours().map(|ct| ct.path.bounding_box()).collect();
+    let outer = |i: usize| areas.get(i).is_some_and(|&a| a > 0.0);
+    let mut root: Vec<usize> = (0..owner.len()).collect();
+    for (i, ct) in c.contours().enumerate() {
+        // Contours of one mask share no edge, so the middle of a hole's first piece is strictly
+        // inside or outside each outer contour of its mask.
+        let (false, Some(p), Some(b)) = (outer(i), ct.path.segments().next().map(|s| s.eval(0.5)), boxes.get(i)) else {
+            continue;
+        };
+        let around = c
+            .contours()
+            .enumerate()
+            .filter(|&(j, o)| {
+                outer(j) && owner.get(j) == owner.get(i) && boxes.get(j).is_some_and(|bj| bj.union(*b) == *bj) && o.path.winding(p) != 0
+            })
+            .min_by(|(j, _), (k, _)| areas.get(*j).unwrap_or(&f64::INFINITY).total_cmp(areas.get(*k).unwrap_or(&f64::INFINITY)))
+            .map(|(j, _)| j);
+        if let (Some(j), Some(r)) = (around, root.get_mut(i)) {
+            *r = j;
+        }
+    }
+    let mut slot: Vec<Option<usize>> = vec![None; owner.len()];
+    let mut groups: Vec<(usize, Vec<ContourIdx>)> = Vec::new();
+    for (i, &r) in root.iter().enumerate() {
+        let (Some(s), Some(&m)) = (slot.get_mut(r), owner.get(r)) else { continue };
+        let k = *s.get_or_insert_with(|| {
+            groups.push((m, Vec::new()));
+            groups.len() - 1
+        });
+        if let Some((_, g)) = groups.get_mut(k) {
+            g.push(ContourIdx(i));
+        }
+    }
+    groups
 }
 
 /// A point as a map key (the arrangement's vertices are exact).
@@ -1018,6 +1070,31 @@ mod tests {
         ];
         (path, any::<bool>(), any::<u64>())
             .prop_map(|(p, even_odd, key)| Shape::new(p, if even_odd { FillRule::EvenOdd } else { FillRule::NonZero }, key))
+    }
+
+    /// Contours that touch at a point, which the sweep's tree of contours gets wrong
+    /// ([`face_groups`]): each face keeps its holes, and no hole is a face of its own.
+    #[test]
+    fn contours_touching_at_a_point_keep_their_faces() {
+        let sorted = |shapes: &[Shape]| {
+            let mut v: Vec<(Vec<usize>, f64)> =
+                regions(shapes).iter().map(|r| (r.sources.clone(), crate::area(&r.path, FillRule::NonZero))).collect();
+            v.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+            v
+        };
+        // A frame whose cutout corner (60,110) touches its hole: the sweep makes the frame an
+        // island inside the hole.
+        let mut frame = rect(50.0, 100.0, 80.0, 130.0);
+        frame.subpaths.extend(rect(60.0, 110.0, 65.0, 115.0).subpaths);
+        let s = [Shape::new(rect(20.0, 70.0, 60.0, 110.0), FillRule::NonZero, 0), Shape::new(frame, FillRule::EvenOdd, 0)];
+        assert_eq!(sorted(&s), [(vec![0], 1500.0), (vec![0, 1], 100.0), (vec![1], 775.0)]);
+        // Two holes touching at (30,50): the sweep makes the second an island inside the first.
+        let s = [
+            Shape::new(rect(0.0, 0.0, 100.0, 100.0), FillRule::NonZero, 0),
+            Shape::new(rect(20.0, 40.0, 30.0, 50.0), FillRule::NonZero, 0),
+            Shape::new(rect(30.0, 50.0, 40.0, 60.0), FillRule::NonZero, 0),
+        ];
+        assert_eq!(sorted(&s), [(vec![0], 9800.0), (vec![0, 1], 100.0), (vec![0, 2], 100.0)]);
     }
 
     #[test]

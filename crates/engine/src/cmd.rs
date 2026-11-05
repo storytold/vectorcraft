@@ -168,9 +168,9 @@ pub fn has_selection(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
     if st.selection.is_empty() { Err("nothing selected".into()) } else { Ok(()) }
 }
-/// Objects are selected, or the Artboard tool is chosen (Copy and Cut take its artboard).
-pub fn has_selection_or_artboard_tool(s: &Session) -> std::result::Result<(), String> {
-    if s.tool_id() == "artboard" { has_doc(s) } else { has_selection(s) }
+/// Objects or ruler guides are selected, or the Artboard tool is chosen (what Copy and Cut take).
+pub fn has_selection_guides_or_artboard_tool(s: &Session) -> std::result::Result<(), String> {
+    if s.tool_id() == "artboard" { has_doc(s) } else { has_selection_or_guides(s) }
 }
 /// Objects or ruler guides are selected (what Delete and the arrow keys act on).
 pub fn has_selection_or_guides(s: &Session) -> std::result::Result<(), String> {
@@ -484,9 +484,10 @@ pub fn matrix_param(p: &Value, key: &str) -> Option<Affine> {
 }
 /// A colour from `"#rrggbb"`, a colour key (`"cmyk 0 100 100 0"`, `"lab 55 60 40"`), `[r,g,b]` (0..1),
 /// `{"c":..,"m":..,"y":..,"k":..}` (percent when any component is above 1, else 0..1), `{"gray":..}` or `{"l":..,"a":..,"b":..}` (CIE Lab: L 0..100, a and b about
-/// −128..127).
+/// −128..127). `None` for a hex color with an alpha part (`#rrggbbaa` or `#rgba`, with or without the `#`).
 pub fn color_value(v: &Value) -> Option<Color> {
     match v {
+        Value::String(s) if hex_with_alpha(s) => None,
         // A hex, or a colour key ("cmyk 0 100 100 0", as Recolor Artwork lists colours).
         Value::String(s) => Color::from_hex(s).or_else(|| vectorcraft_color::recolor::ColorKey::parse(s).map(|k| k.color())),
         Value::Array(a) if a.len() >= 3 => Some(Color::rgb(a[0].as_f64()? as f32, a[1].as_f64()? as f32, a[2].as_f64()? as f32)),
@@ -509,6 +510,23 @@ pub fn color_value(v: &Value) -> Option<Color> {
             serde_json::from_value(v.clone()).ok()
         }
         _ => None,
+    }
+}
+
+/// Is `s` a hex color with an alpha part: eight or four hex digits, with or without the `#`?
+/// [`Color::from_hex`] reads `#rrggbbaa` as `#rrggbb`, without the alpha.
+pub(crate) fn hex_with_alpha(s: &str) -> bool {
+    let s = s.trim();
+    let h = s.strip_prefix('#').unwrap_or(s);
+    matches!(h.len(), 4 | 8) && h.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// The color `p` gives for `key`, read by [`color_value`]: `None` when `p` leaves it out or gives
+/// null. Any other value that is not a color is an error: "bad color {v}".
+pub(crate) fn color_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Color>> {
+    match p.get(key).filter(|v| !v.is_null()) {
+        None => Ok(None),
+        Some(v) => color_value(v).map(Some).ok_or_else(|| bad(cmd, format!("bad color {v}"))),
     }
 }
 
@@ -610,6 +628,26 @@ pub(crate) fn unique_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
     }
     (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
 }
+
+/// [`unique_name`] for names given one after another (an import): `next` keeps, per base (in
+/// any case), the number after the last one tried, so a run of one name doesn't count up from 2
+/// again for each copy. Names only become taken meanwhile, so the result is the same.
+pub(crate) fn unique_name_from(base: &str, next: &mut std::collections::HashMap<String, usize>, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
+    }
+    let i = next.entry(base.to_lowercase()).or_insert(2);
+    loop {
+        let n = format!("{base} {i}");
+        *i += 1;
+        if !taken(&n) {
+            return n;
+        }
+    }
+}
+
+/// The most presets one presets file imports: each is looked up among the saved ones.
+pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;

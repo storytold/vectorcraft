@@ -71,6 +71,7 @@ digits	Malayalam	マラヤーラム数字
 	Join Our Discord	Discord に参加
 	Line-end Punctuation Half Width	行末約物半角
 	Insert Kashidas	カシーダを挿入
+	Kashidas	カシーダ
 	Long	長い
 	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
@@ -463,6 +464,7 @@ digits	Malayalam	マラヤーラム数字
 	Variable Font	バリアブルフォント
 	Text Fill Color	テキストカラー (塗り)
 	Text Stroke Color	テキストカラー (線)
+	Text Fill & Stroke Color	テキストカラー (塗りと線)
 	All on Same Layers	同じレイヤー上のすべて
 	Direction Handles	方向線ハンドル
 	Brush Strokes	ブラシストローク
@@ -647,6 +649,7 @@ digits	Malayalam	マラヤーラム数字
 	Cascade	重ねて表示
 	Tile	並べて表示
 	Float in Window	ウィンドウを分離
+	Float All in Windows	すべてをウィンドウに分離
 	Consolidate All Windows	すべてのウィンドウを統合
 	Workspace	ワークスペース
 	Reset Essentials	初期設定をリセット
@@ -655,6 +658,11 @@ digits	Malayalam	マラヤーラム数字
 	New Toolbar	新規ツールバー
 	Show Toolbar	ツールバーを表示
 	List Toolbars	ツールバーの一覧
+	Manage Toolbars…	ツールバーを管理…
+	Manage Toolbars	ツールバーを管理
+	Rename Toolbar	ツールバーの名前を変更
+	Duplicate Toolbar	ツールバーを複製
+	Delete Toolbar	ツールバーを削除
 	Manage Workspaces…	ワークスペースを管理…
 	Control	コントロール
 	Contextual Task Bar	コンテキストタスクバー
@@ -684,6 +692,8 @@ digits	Malayalam	マラヤーラム数字
 	Links	リンク
 	Magic Wand	自動選択
 	Navigator	ナビゲーター
+	Navigator Panel Options	ナビゲーターパネルオプション
+	Draw Dashed Lines as Solid Lines	破線を実線で表示
 	Pattern Options	パターンオプション
 	Properties	プロパティ
 	Separations Preview	分版プレビュー
@@ -1027,6 +1037,9 @@ digits	Malayalam	マラヤーラム数字
 	Baseline Shift	ベースラインシフト
 	Batch	バッチ
 	Begin Recording	記録を開始
+	Exclude from playback	再生から除外
+	Include in playback	再生に含める
+	Include Action Steps	アクションステップを含める
 	Bend:	カーブ:
 	Bevel Join	ベベル結合
 	Bitmap	ビットマップ
@@ -1406,6 +1419,11 @@ digits	Malayalam	マラヤーラム数字
 	Double-click to edit the characters' paint	ダブルクリックで文字のペイントを編集
 	Click to edit	クリックで編集
 	Double-click to edit	ダブルクリックで編集
+	Alternates for Current Selection	選択文字の異体字
+	Select a character with the Type tool to see its alternates.	文字ツールで文字を選択すると、その異体字が表示されます。
+	The selected character's font is not available.	選択した文字のフォントを使用できません。
+	No alternates for the selected character.	選択した文字には異体字がありません。
+	Double-click to replace	ダブルクリックで置換
 	Double-click to insert	ダブルクリックで挿入
 	Double-click to rename	ダブルクリックで名前を変更
 	Double-click to target the contents	ダブルクリックで内容をターゲット
@@ -1725,6 +1743,10 @@ digits	Malayalam	マラヤーラム数字
 	Hard Light	ハードライト
 	Hard Mix	ハードミックス
 	Harmony Rules:	ハーモニールール:
+	Segmented color wheel	分割カラーホイール
+	Show smooth color wheel	滑らかなカラーホイールを表示
+	Show segmented color wheel	分割カラーホイールを表示
+	Show color bars	カラーバーを表示
 	Height	高さ
 	Height:	高さ:
 	Help › Search Commands…	ヘルプ › コマンドを検索…
@@ -1985,6 +2007,8 @@ digits	Malayalam	マラヤーラム数字
 	Large	大
 	Large Tabs	大きいタブ
 	Lasso Tool	なげなわツール
+	Enclosing Lasso Tool	囲みなげなわツール
+	Enclosing Lasso	囲みなげなわ
 	Last Effect: {name}	最後の効果：{name}
 	Last Page	最後のページ
 	Layer Options…	レイヤーオプション…
@@ -2088,6 +2112,7 @@ digits	Malayalam	マラヤーラム数字
 	Manage Workspaces	ワークスペースを管理
 	Manually	手動
 	Mark Older Files as [Converted] When Opened	古いファイルを開くときに[変換]と表示
+	Use System Defaults for Edit Original	「オリジナルを編集」にシステムのデフォルトを使用
 	Mark as trapped	トラップ済みとしてマーク
 	Marks	トンボ
 	Match User Interface Brightness	ユーザーインターフェイスの明るさに合わせる
@@ -2722,6 +2747,8 @@ mark-style	Japanese	日本式
 	Replace Font	フォントを置換
 	Replace Symbol	シンボルを置き換え
 	Replace With Font	置換するフォント
+	Replace With Font From	置換するフォントの一覧
+	System	システム
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	別のファイルに置き換えるか、無視してください。無視した場合、画像にはドキュメントに保存されたプレビューが表示され続けます。
 	Replaces the saved preset of that name.	同じ名前の保存済みプリセットを置き換えます。
 	Replace…	置換…
@@ -3263,6 +3290,7 @@ mark-style	Japanese	日本式
 	Use Artboards	アートボードを使用
 	Use Black Point Compensation	ブラックポイントの補正を使用
 	Use Compression	圧縮を使用
+	Include Editing Data for Other Apps	他のアプリ用の編集データを含める
 	Use Even-Odd Fill Rule	奇偶規則を使用
 	Use Japanese Crop Marks	日本式トンボを使用
 	Use Low Resolution Proxy for Linked EPS	リンク EPS に低解像度プロキシを使用
@@ -3365,6 +3393,12 @@ mark-style	Japanese	日本式
 	to	→
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} に {n} 個のファイル{note}。パッケージフォルダーを表示しますか？
 @plural	{n} linked file not found|{n} linked files not found	リンクファイルが {n} 個見つかりません
+@msgplural	{n} linked file not found|{n} linked files not found	リンクファイルが {n} 個見つかりません
+@msg	fonts not copied: {fonts}	コピーされなかったフォント：{fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(リンクファイルが {n} 個見つかりません)
+@msg	(fonts not copied: {fonts})	(コピーされなかったフォント：{fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	コピーされなかったフォント：{fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	保存後に {n} 個のリンク画像が変更されています。新しいバージョンを表示しますか？
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} 個のリンク画像がディスク上で変更されました。新しいバージョンを表示しますか？
@@ -3575,6 +3609,10 @@ file-filter	Templates	テンプレート
 	Installed plug-in {}	プラグイン {} をインストールしました
 	Internal CSS	内部 CSS
 	Justify all lines	両端揃え (最終行も均等配置)
+	Align Top	上揃え
+	Align Center	上下中央揃え
+	Align Bottom	下揃え
+	Justify Vertically	縦方向に均等配置
 	Justify with last line aligned center	両端揃え (最終行中央揃え)
 	Justify with last line aligned left	両端揃え (最終行左揃え)
 	Justify with last line aligned right	両端揃え (最終行右揃え)
@@ -3596,6 +3634,7 @@ file-filter	Templates	テンプレート
 	Left-Justified Tab	左揃えタブ
 	Letter	レター
 	Light Blue	ライトブルー
+	Light Red	ライトレッド
 	Lightness	明度
 	Link	リンク
 	Low	低
@@ -4141,7 +4180,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{path}: no file system here (pass dataBase64 to open; omit the path to get dataBase64)	{path}: この環境にはファイルシステムがありません (開くには dataBase64 を渡し、dataBase64 を受け取るにはパスを省略してください)
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	保存できる形式は {_1} のみで、{_2} 形式では保存できません: ほかの形式には document.export を使用してください
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	保存できる形式は {_1} のみで、{_2} 形式では保存できません: この形式で保存するには file.saveAsTemplate を使用してください
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 は従来の .ai ファイルを書き出します。.ait テンプレートは常に PDF 互換です
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 は従来の .ai ファイルを書き出し、.ait テンプレートは書き出しません
 @msg	no changes since the last save	前回の保存以降、変更はありません
 @msg	unknown format `{f}` (Save writes {_1})	`{f}` は不明な形式です (保存できる形式: {_1})
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` には SVG オプションのオブジェクトを指定してください (document.formats を参照)
@@ -4281,6 +4320,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{key}` must be one of {_1}	`{key}` は {_1} のいずれかにしてください
 @msg	unknown preference `{key}`	`{key}` は不明な環境設定の項目です
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	データ復帰のコピーを保存する場所がありません: 環境設定 → ファイル管理 → データ復帰 → フォルダー (recoveryFolder) を設定してください
+@msg	Data Recovery can't keep copies in {path}: {e}	データ復帰は {path} にコピーを保存できません: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	{path} からプラグインを読み込めません: {e}
 @msg	`{area}` is no recovery area name	`{area}` は復帰用領域の名前として使えません
 @msg	`{name}` is no recovery entry name	`{name}` は復帰用エントリの名前として使えません
 @msg	no clock to keep a heartbeat by	ハートビートの記録に必要な時刻を取得できません
@@ -4365,6 +4406,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft がまだ読み込めないブラシ {_1} 個はブラシパネルに追加されませんでした
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	塗りや線が複数ある、または効果やブラシを適用したオブジェクト {_1} 個は見た目のまま読み込まれました: アピアランスはまだ編集できません
 @msg	patterns nested too deeply are filled with mid-grey	入れ子が深すぎるパターンは中間のグレーで塗りつぶされています
 @msg	shadings of an unknown type were left out	種類が不明なシェーディングは除外されました
@@ -5188,6 +5230,10 @@ lighting	Light	ライト
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	データセット {name} から何も適用されませんでした: 値のある変数にバインドされたオブジェクトがありません
 @msg	no bound object reports a value (locked objects and embedded images report none)	値を返すバインドされたオブジェクトがありません (ロックされたオブジェクトと埋め込み画像は値を返しません)
 @msg	the action has no steps	アクションにステップがありません
+@msg	the action has no included steps	アクションに含まれるステップがありません
+@msg	no such action step	指定されたアクションステップが見つかりません
+@msg	included must be true or false	included には true または false を指定してください
+@msg	others must be true or false	others には true または false を指定してください
 
 # User Interface › Accent Color
 	Accent Color	アクセントカラー
@@ -5214,6 +5260,15 @@ lighting	Light	ライト
 	Export Type:	書き出しタイプ:
 	Movie Clip	ムービークリップ
 @msg	name is empty	名前が空です
+@msg	an action is already recording	すでにアクションを記録中です
+@msg	an action is already playing	すでにアクションを再生中です
+@msg	the action stopped playing: its document is no longer active	アクションの再生を停止しました: そのドキュメントはアクティブではなくなりました
+@msg	speed must be accelerated, step or pause	speed には accelerated、step または pause を指定してください
+@msg	seconds must be a whole number from 1 to 60	seconds には 1 から 60 までの整数を指定してください
+@msg	no such function key	指定されたファンクションキーが見つかりません
+@msg	no such color	指定されたカラーが見つかりません
+@msg	{_1} cannot be used on Windows	{_1} は Windows では使用できません
+@msg	more than one action is named “{_1}”	「{_1}」という名前のアクションが複数あります
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
 	Smudge Stick…	スマッジスティック…
 	Smudge Stick	スマッジスティック
@@ -5296,6 +5351,7 @@ lighting	Light	ライト
 	Effect Gallery	効果ギャラリー
 	Filters	フィルター
 	Select artwork to apply effects	効果を適用するグラフィックを選択してください
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	ファイルの変数のバインドの一部が読み込まれませんでした (スキップしたバインド: {_1})。それらのオブジェクトは変数にバインドされていません
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ファイルの変数ライブラリは一部だけ読み込まれました (スキップした項目: {_1})。残りは変数パネルに表示されます
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ファイルの変数ライブラリを読み込めませんでした。変数パネルには表示されません
 @msg	a variable of unknown kind can't be bound to objects	種類が不明な変数はオブジェクトにバインドできません
@@ -5408,10 +5464,23 @@ axis	Y Axis	Y 軸
 	Set Options	セットオプション
 	Action Options…	アクションオプション…
 	Action Options	アクションオプション
+	Playback Options…	再生オプション…
+	Playback Options	再生オプション
+	Accelerated	高速
+	Step by Step	ステップ実行
+	Pause For	一時停止
 	Rename Action	アクション名を変更
+	New Action…	新規アクション…
+	New Action	新規アクション
+	Create New Action	新規アクションを作成
+	Play Action	アクションを再生
+	Action Set:	アクションセット:
+	Function Key:	ファンクションキー:
+	Record	記録
 	Create New Set	新規セットを作成
 	Stop Global Edit	グローバル編集を終了
 	Global Edit Options	グローバル編集オプション
+	Leave Out of Global Edit	グローバル編集から除外
 	Match	一致
 	On Artboards	アートボード上
 	All Artboards	すべてのアートボード
@@ -5420,6 +5489,8 @@ axis	Y Axis	Y 軸
 @msg	select one object	オブジェクトを 1 つ選択してください
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	グローバル編集はパス、複合パス、シンボルインスタンスとそれらのグループに使用できます
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	類似するオブジェクトが見つかりません（回転または反転したコピーは一致しません）。グローバル編集オプションを変更してもう一度試してください
+@msg	Global Edit is off	グローバル編集はオフです
+@msg	only an object of the Global Edit other than the one it started from can be left out	除外できるのは、グローバル編集を開始したオブジェクト以外のオブジェクトだけです
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all または 1, 3-5 のような範囲を指定してください ({v} ではなく)
 	Add to Symbols	シンボルに追加
 	Basic Shapes	基本シェイプ
@@ -5678,6 +5749,12 @@ anchor	Points:	ポイント:
 	Horizontal Scale	水平比率
 	Vertical Scale	垂直比率
 @msg	{label} must be a number from {min} to {max}	{label} には {min} から {max} までの数値を指定してください
+	Character Color	文字カラー
+	OpenType Features	OpenType 機能
+	Stylistic Sets	スタイルセット
+	Set {n}	セット {n}
+@msg	features lists at most {max} tags	features に指定できるタグは {max} 個までです
+@msg	unknown OpenType feature `{t}`	不明な OpenType 機能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} には 0 より大きく {max} 以下の数値を指定してください
 @msg	no character style `{name}`	文字スタイル `{name}` が見つかりません
 
@@ -5827,6 +5904,7 @@ breakText	Glyphs	字形
 	Gap 5	間隔 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ページのアートとして読み込みました
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	ファイル自身のページと描画が異なるオブジェクトをページのアートとして読み込みました: {_1}
 
 @msg	You must choose a side pattern.	側面パターンを選択してください。
 @msg	invalid pattern tile choice	パターンタイルの選択が無効です
@@ -5888,6 +5966,11 @@ breakText	Glyphs	字形
 	Export All Open Documents as SVG	開いているすべてのドキュメントを SVG として書き出し
 @msgplural	Exported {n} document|Exported {n} documents	{n} 個のドキュメントを書き出しました
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} 個のドキュメントを書き出しました; {title} は書き出されませんでした: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	フォルダーを一括トレース
+@msgplural	Traced {n} image|Traced {n} images	{n} 個の画像をトレースしました
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} 個の画像をトレースできませんでした
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} 個の画像をトレースしました; トレースできなかった画像: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	シンボルの種類:
 	Dynamic Symbol	ダイナミックシンボル
@@ -5928,3 +6011,34 @@ breakText	Glyphs	字形
 	Create Swatch Legend	スウォッチの凡例を作成
 	Create Swatch Legend…	スウォッチの凡例を作成…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	テキストツール
+	Text Tweaker…	テキストの調整…
+	Text Tweaker	テキストの調整
+	Attribute:	属性:
+	From:	開始:
+	To:	終了:
+	Bow	弓形
+	Spike	山形
+	Skip Spaces	スペースをスキップ
+	Release Type on a Path…	パス上文字を解除…
+	Release Type on a Path	パス上文字を解除
+	Text and Path	テキストとパス
+	Path Only	パスのみ
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	アートワークが大きすぎるため画像としてコピーできません：他のアプリには PNG が渡されません
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	アートボードで選択
+	Select by Artboards…	アートボードで選択…
+	Selection Tools	選択ツール
+	Search artboards	アートボードを検索
+	Fully Inside	完全に内側
+	Fully Outside	完全に外側
+	No artboards match.	一致するアートボードはありません。
+	Chosen: {n} of {total}	選択中: {n} / {total}
+	Set Corners…	コーナーを設定…
+	All Anchors	すべてのアンカー
+	Odd-Numbered Anchors	奇数番目のアンカー
+	Even-Numbered Anchors	偶数番目のアンカー
+	Minimum angle	最小角度
+	Maximum angle	最大角度

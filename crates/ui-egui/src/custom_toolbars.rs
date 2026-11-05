@@ -4,13 +4,16 @@
 //! `toolbar` param of its commands). Its title bar moves it, its × hides it and its double arrow
 //! shows its tools in one column or two. Each toolbar is listed under Window › Toolbars, where its
 //! item shows or hides it, and is kept with the workspace it was made in (`Workspace::toolbars`).
+//! Window › Toolbars › Manage Toolbars (also in the drawer's menu) renames, copies and deletes them.
 //!
 //! Behavior from the public documentation:
 //! <https://helpx.adobe.com/illustrator/using/tools.html> (Create and manage toolbars: New Toolbar
 //! from Window › Toolbars or the drawer's flyout menu, a name and OK make a blank toolbar, its Edit
 //! Toolbar button opens the drawer to add tools, and a toolbar stays in the workspace it is made in;
 //! a toolbar moves by its title bar, whose double arrow toggles one column or two and whose close
-//! button hides it).
+//! button hides it. Manage toolbars: Manage Toolbars from Window › Toolbars or the drawer's flyout
+//! menu; a new name typed for the selected toolbar renames it, + copies the selected toolbar or,
+//! with none selected, makes a new one, and Delete deletes it).
 
 use std::sync::atomic::Ordering;
 
@@ -118,6 +121,97 @@ fn show_alone_after_tab(ui: &mut UiState, name: &str) {
     }
 }
 
+/// Where the toolbar named `name` is in the list, whatever its case.
+fn index(ui: &UiState, name: &str) -> Result<usize, String> {
+    let k = key(name);
+    ui.custom_toolbars.iter().position(|b| key(&b.name) == k).ok_or_else(|| format!("no toolbar named `{name}`"))
+}
+
+/// The All Tools drawer beside the toolbar named `old`, and a group's flyout open on it (`ctx`),
+/// close when it is deleted (`new` is `None`) or renamed; a new name that changes only the case
+/// leaves them open on it.
+fn close_popups(ui: &mut UiState, ctx: Option<&egui::Context>, old: &str, new: Option<&str>) {
+    let same = new.is_some_and(|n| key(n) == key(old));
+    if drawer_target(ui).map(key) == Some(key(old)) {
+        if same {
+            ui.drawer_toolbar = new.map(String::from);
+        } else {
+            ui.tools_drawer = false;
+            ui.drawer_toolbar = None;
+        }
+    }
+    let Some(ctx) = ctx else { return };
+    let id = crate::toolbar::flyout_toolbar_id();
+    if ui.flyout.is_some() && ctx.data(|d| d.get_temp::<Option<String>>(id)).flatten().is_some_and(|t| key(&t) == key(old)) {
+        if same {
+            ctx.data_mut(|d| d.insert_temp(id, new.map(String::from)));
+        } else {
+            ui.flyout = None;
+        }
+    }
+}
+
+/// Give the toolbar named `name` the name `to`; returns the new name.
+pub(crate) fn rename(ui: &mut UiState, ctx: Option<&egui::Context>, name: &str, to: &str) -> Result<String, String> {
+    let to = to.trim();
+    if to.is_empty() {
+        return Err("toolbar name can't be empty".into());
+    }
+    if to.chars().count() > MAX_NAME {
+        return Err(format!("a toolbar name has at most {MAX_NAME} characters"));
+    }
+    let k = index(ui, name)?;
+    if ui.custom_toolbars.iter().enumerate().any(|(i, b)| i != k && key(&b.name) == key(to)) {
+        return Err(format!("there is already a toolbar named `{to}`"));
+    }
+    let old = ui.custom_toolbars.get(k).map(|b| b.name.clone()).unwrap_or_default();
+    close_popups(ui, ctx, &old, Some(to));
+    if let Some(b) = ui.custom_toolbars.get_mut(k) {
+        b.name = to.to_string();
+    }
+    Ok(to.to_string())
+}
+
+/// A copy of the toolbar named `name`, with its tools, shown a little below it (further down
+/// while an earlier copy is there) and called
+/// "`name` Copy" (then "`name` Copy 2"…); without `name`, a blank toolbar called "Toolbar N".
+/// Returns the new toolbar's name.
+pub(crate) fn duplicate(ui: &mut UiState, name: Option<&str>) -> Result<String, String> {
+    let Some(name) = name else {
+        let name = (1..).map(|i| format!("Toolbar {i}")).find(|n| find(ui, n).is_none()).unwrap_or_default();
+        return create(ui, &name);
+    };
+    let k = index(ui, name)?;
+    if ui.custom_toolbars.len() >= MAX {
+        return Err(format!("a workspace keeps at most {MAX} toolbars"));
+    }
+    let Some(mut copy) = ui.custom_toolbars.get(k).cloned() else { return Err(format!("no toolbar named `{name}`")) };
+    // A long name is shortened so that "Copy" and its number fit in MAX_NAME characters.
+    let stem: String = copy.name.chars().take(MAX_NAME - " Copy 64".len()).collect();
+    let base = format!("{} Copy", stem.trim_end());
+    copy.name = std::iter::once(base.clone()).chain((2..).map(|i| format!("{base} {i}"))).find(|n| find(ui, n).is_none()).unwrap_or_default();
+    copy.shown = true;
+    let from = copy.pos;
+    let at = |n: f32| [from[0] + 16.0 * n, from[1] + 24.0 * n];
+    let n = (1..=MAX + 1).map(|n| n as f32).find(|&n| ui.custom_toolbars.iter().all(|b| b.pos != at(n))).unwrap_or(1.0);
+    copy.pos = at(n);
+    for f in &mut copy.floating {
+        f.pos = [f.pos[0] + 16.0 * n, f.pos[1] + 24.0 * n];
+    }
+    let name = copy.name.clone();
+    ui.custom_toolbars.push(copy);
+    show_alone_after_tab(ui, &name);
+    Ok(name)
+}
+
+/// Delete the toolbar named `name`, with the groups torn off it.
+pub(crate) fn delete(ui: &mut UiState, ctx: Option<&egui::Context>, name: &str) -> Result<(), String> {
+    let k = index(ui, name)?;
+    close_popups(ui, ctx, name, None);
+    ui.custom_toolbars.remove(k);
+    Ok(())
+}
+
 /// Keep named toolbars, each name once whatever its case and at most [`MAX_NAME`] characters, of
 /// known tools, each once in its toolbar, at a position that is a number, with one strip per group
 /// torn off them, and each group's tool chosen last only when the group holds it (a hand-edited
@@ -190,6 +284,26 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             }
             Ok(json!(shown))
         })(),
+        "window.toolbar.manage" => {
+            app.ui.dialog = Some(Dialog::new(MANAGE, json!({ "selected": "", "name": "" })));
+            Ok(Value::Null)
+        }
+        "window.toolbar.rename" => (|| {
+            let name = p.get("name").and_then(Value::as_str).ok_or("name (a toolbar's name) is required")?;
+            let to = p.get("to").and_then(Value::as_str).ok_or("to (the new name) is required")?;
+            rename(&mut app.ui, app.ui_ctx.as_ref(), name, to).map(|name| json!({ "toolbar": name }))
+        })(),
+        "window.toolbar.duplicate" => (|| {
+            let name = match p.get("name").filter(|v| !v.is_null()) {
+                Some(v) => Some(v.as_str().ok_or("name must be a toolbar's name")?),
+                None => None,
+            };
+            duplicate(&mut app.ui, name).map(|name| json!({ "toolbar": name }))
+        })(),
+        "window.toolbar.delete" => (|| {
+            let name = p.get("name").and_then(Value::as_str).ok_or("name (a toolbar's name) is required")?;
+            delete(&mut app.ui, app.ui_ctx.as_ref(), name).map(|_| Value::Null)
+        })(),
         "window.toolbar.list" => Ok(json!(
             app.ui
                 .custom_toolbars
@@ -250,6 +364,143 @@ pub(crate) fn show_dialog(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
+/// Manage Toolbars' dialog.
+pub(crate) const MANAGE: &str = "manageToolbars";
+
+/// The name typed in Manage Toolbars' text box becomes the selected toolbar's (a no-op while it is
+/// the same). Returns true when the selected toolbar was deleted or renamed while the dialog was
+/// open (a command, another workspace): none is selected then, and the name typed for it is dropped.
+fn rename_selected(app: &mut VectorcraftApp) -> Result<bool, String> {
+    let Some(d) = app.ui.dialog.as_ref() else { return Ok(false) };
+    let (sel, name) = (d.str("selected"), d.str("name"));
+    if !sel.is_empty() && find(&app.ui, &sel).is_none() {
+        if let Some(d) = app.ui.dialog.as_mut() {
+            d.fields.insert("selected".into(), json!(""));
+            d.fields.insert("name".into(), json!(""));
+        }
+        return Ok(true);
+    }
+    if sel.is_empty() || sel == name.trim() {
+        return Ok(false);
+    }
+    let new = app.run("window.toolbar.rename", json!({ "name": sel, "to": name }))?;
+    let new = new.get("toolbar").and_then(Value::as_str).unwrap_or_default().to_string();
+    if let Some(d) = app.ui.dialog.as_mut() {
+        d.fields.insert("selected".into(), json!(new));
+        d.fields.insert("name".into(), json!(new));
+    }
+    Ok(false)
+}
+
+/// OK in Manage Toolbars: the typed name is kept, and the dialog closes.
+pub(crate) fn confirm_manage(app: &mut VectorcraftApp) -> Result<Value, String> {
+    rename_selected(app)?;
+    app.ui.dialog = None;
+    Ok(Value::Null)
+}
+
+/// The Manage Toolbars dialog: the toolbars made with New Toolbar; the selected one's name in the
+/// text box, where a new name renames it; + copies the selected toolbar (none selected: makes a
+/// blank one), and the trash can deletes it.
+pub(crate) fn show_manage(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some(mut d) = app.ui.dialog.clone() else { return };
+    let t = Tokens::get(ctx);
+    let (mut ok, mut commit) = (false, false);
+    // A toolbar clicked in the list (none: the click left none selected), + (true) or the trash
+    // can (false): each applied after the name typed for the selected toolbar.
+    let mut pick: Option<String> = None;
+    let mut action: Option<bool> = None;
+    crate::dialogs::modal::show(ctx, "Manage Toolbars", egui::Id::unique("dialog-manage-toolbars"), -40.0, 22, |ui| {
+        ui.set_width(320.0);
+        crate::dialogs::modal::heading(ui, tl!("Manage Toolbars"));
+        ui.add_space(12.0);
+        let sel = d.str("selected");
+        egui::Frame::NONE.fill(t.input).stroke(egui::Stroke::new(1.0, t.input_border)).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
+            ui.set_min_height(140.0);
+            ui.set_width(ui.available_width());
+            egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                for b in &app.ui.custom_toolbars {
+                    let on = !sel.is_empty() && key(&sel) == key(&b.name);
+                    if ui.selectable_label(on, egui::RichText::new(&b.name).color(t.text)).clicked() {
+                        // A click on the selected toolbar leaves none selected.
+                        pick = Some(if on { String::new() } else { b.name.clone() });
+                    }
+                }
+            });
+        });
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            let mut name = d.str("name");
+            let r = ui.add_enabled(!sel.is_empty(), egui::TextEdit::singleline(&mut name).desired_width(220.0));
+            if r.changed() {
+                d.fields.insert("name".into(), json!(name));
+            }
+            commit = r.lost_focus();
+            let tip = if sel.is_empty() { tl!("New Toolbar") } else { tl!("Duplicate Toolbar") };
+            if widgets::icon_button(ui, "plus", tip, false, 24.0).clicked() {
+                action = Some(true);
+            }
+            if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Toolbar"), false, !sel.is_empty(), 24.0).clicked() {
+                action = Some(false);
+            }
+        });
+        ui.add_space(16.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if widgets::primary_button(ui, tl!("OK")).clicked() {
+                ok = true;
+            }
+        });
+    });
+    app.ui.dialog = Some(d);
+    if ok {
+        if let Err(e) = confirm_manage(app) {
+            app.status(e);
+        }
+        return;
+    }
+    manage_step(app, commit, pick, action);
+}
+
+/// What the Manage Toolbars dialog does after a frame: the name typed for the selected toolbar is
+/// applied when the text box loses focus, another toolbar is clicked (`pick`) or + (`Some(true)`)
+/// or the trash can (`Some(false)`) is clicked. When that rename fails, the click is not applied,
+/// so the name typed can be corrected; when the selected toolbar has gone meanwhile, + and the trash
+/// can are not applied either.
+fn manage_step(app: &mut VectorcraftApp, commit: bool, pick: Option<String>, mut action: Option<bool>) {
+    if commit || pick.is_some() || action.is_some() {
+        match rename_selected(app) {
+            Err(e) => {
+                app.status(e);
+                return;
+            }
+            // The toolbar + or the trash can was meant for is gone.
+            Ok(true) => action = None,
+            Ok(false) => {}
+        }
+    }
+    let sel = app.ui.dialog.as_ref().map(|d| d.str("selected")).unwrap_or_default();
+    let done = match action {
+        Some(true) => Some(app.run("window.toolbar.duplicate", if sel.is_empty() { json!({}) } else { json!({ "name": sel }) })),
+        Some(false) => Some(app.run("window.toolbar.delete", json!({ "name": sel }))),
+        None => None,
+    };
+    // The new toolbar is selected, ready to be renamed; after Delete, none is.
+    let select = match done {
+        Some(Ok(r)) => Some(r.get("toolbar").and_then(Value::as_str).unwrap_or_default().to_string()),
+        Some(Err(e)) => {
+            app.status(e);
+            None
+        }
+        None => pick,
+    };
+    if let Some(name) = select
+        && let Some(d) = app.ui.dialog.as_mut()
+    {
+        d.fields.insert("selected".into(), json!(name));
+        d.fields.insert("name".into(), json!(name));
+    }
+}
+
 // ---------- the menu ----------
 
 crate::shortcut_editor::ui_mirror!(fn names_store() -> Vec<&'static str>);
@@ -269,7 +520,7 @@ pub fn sync(ui: &UiState) {
 }
 
 /// Window › Toolbars: Advanced and Double Column, the toolbars made with New Toolbar (each checked
-/// while it shows), and New Toolbar….
+/// while it shows), New Toolbar… and Manage Toolbars….
 pub fn menu_items() -> Vec<crate::menus::Item> {
     use crate::menus::Item;
     let c = |label: &'static str, id: &'static str| Item::Cmd(label, id, Value::Null);
@@ -280,6 +531,7 @@ pub fn menu_items() -> Vec<crate::menus::Item> {
         v.push(Item::Sep);
     }
     v.push(c("New Toolbar…", "window.toolbar.new"));
+    v.push(c("Manage Toolbars…", "window.toolbar.manage"));
     v
 }
 
@@ -567,7 +819,8 @@ mod tests {
     #[test]
     fn a_new_toolbar_is_listed_under_window_toolbars() {
         let mut app = app();
-        assert_eq!(toolbars_menu(&app).last().map(|(l, id, _)| (*l, *id)), Some(("New Toolbar…", "window.toolbar.new")));
+        let last: Vec<_> = toolbars_menu(&app).iter().rev().take(2).map(|(l, id, _)| (*l, *id)).collect();
+        assert_eq!(last, [("Manage Toolbars…", "window.toolbar.manage"), ("New Toolbar…", "window.toolbar.new")]);
         assert_eq!(app.run("window.toolbar.new", json!({"name": " Mine "})).unwrap(), json!({"toolbar": "Mine"}));
         let menu = toolbars_menu(&app);
         let item = menu.iter().find(|(l, ..)| *l == "Mine").expect("Mine is listed");
@@ -1058,6 +1311,264 @@ mod tests {
         frames(&mut app, click(pos2(r.left() + 1.0 + TITLE_BUTTON / 2.0, r.top() + 1.0 + GRIP / 2.0)));
         assert!(!find(&app.ui, "Mine").unwrap().shown);
         assert!(!drawn(&ctx, area_id("Mine"), egui::Order::Middle));
+    }
+
+    fn listed(app: &VectorcraftApp) -> Vec<&'static str> {
+        toolbars_menu(app).into_iter().filter(|(_, id, _)| *id == "window.toolbar.custom").map(|(l, ..)| l).collect()
+    }
+
+    /// Manage Toolbars renames, copies and deletes the toolbars made with New Toolbar: each change
+    /// shows under Window › Toolbars and stays in the workspace after switching away and back.
+    #[test]
+    fn manage_toolbars_renames_duplicates_and_deletes() {
+        let mut app = app();
+        let menu = toolbars_menu(&app);
+        assert_eq!(menu.last().map(|(l, id, _)| (*l, *id)), Some(("Manage Toolbars…", "window.toolbar.manage")));
+        app.run("window.workspace.new", json!({"name": "Drawing"})).unwrap();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        app.run("toolbar.addTool", json!({"tool": "pen", "toolbar": "Mine"})).unwrap();
+        app.run("window.toolbar.new", json!({"name": "Other"})).unwrap();
+        let back = |app: &mut VectorcraftApp| {
+            app.run("window.workspace", json!({"name": "Essentials"})).unwrap();
+            app.run("window.workspace", json!({"name": "Drawing"})).unwrap();
+        };
+        // Rename.
+        assert_eq!(app.run("window.toolbar.rename", json!({"name": "mine", "to": " Pens "})).unwrap(), json!({"toolbar": "Pens"}));
+        assert_eq!(listed(&app), ["Pens", "Other"]);
+        back(&mut app);
+        assert_eq!(listed(&app), ["Pens", "Other"]);
+        assert_eq!(find(&app.ui, "Pens").unwrap().slots, [["pen"]]);
+        assert!(app.run("window.toolbar.rename", json!({"name": "Pens", "to": "other"})).unwrap_err().contains("already"));
+        assert!(app.run("window.toolbar.rename", json!({"name": "Pens", "to": " "})).unwrap_err().contains("empty"));
+        assert!(app.run("window.toolbar.rename", json!({"name": "Nope", "to": "X"})).unwrap_err().contains("Nope"));
+        // Only the case changes.
+        app.run("window.toolbar.rename", json!({"name": "Pens", "to": "PENS"})).unwrap();
+        app.run("window.toolbar.rename", json!({"name": "pens", "to": "Pens"})).unwrap();
+        // Duplicate: a copy with its tools, shown; without a name, a blank toolbar.
+        app.run("window.toolbar.custom", json!({"name": "Pens", "show": false})).unwrap();
+        assert_eq!(app.run("window.toolbar.duplicate", json!({"name": "pens"})).unwrap(), json!({"toolbar": "Pens Copy"}));
+        assert_eq!(app.run("window.toolbar.duplicate", json!({"name": "Pens"})).unwrap(), json!({"toolbar": "Pens Copy 2"}));
+        assert_eq!(app.run("window.toolbar.duplicate", json!({})).unwrap(), json!({"toolbar": "Toolbar 1"}));
+        let copy = find(&app.ui, "Pens Copy").unwrap();
+        assert!(copy.shown && copy.slots == [["pen"]]);
+        assert_ne!(copy.pos, find(&app.ui, "Pens").unwrap().pos, "not on top of the toolbar it copies");
+        assert_ne!(copy.pos, find(&app.ui, "Pens Copy 2").unwrap().pos, "nor on top of an earlier copy");
+        assert!(find(&app.ui, "Toolbar 1").unwrap().slots.is_empty());
+        assert_eq!(listed(&app), ["Pens", "Other", "Pens Copy", "Pens Copy 2", "Toolbar 1"]);
+        // The copy is a toolbar of its own.
+        app.run("toolbar.addTool", json!({"tool": "rectangle", "toolbar": "Pens Copy"})).unwrap();
+        assert_eq!(find(&app.ui, "Pens").unwrap().slots, [["pen"]]);
+        back(&mut app);
+        assert_eq!(listed(&app), ["Pens", "Other", "Pens Copy", "Pens Copy 2", "Toolbar 1"]);
+        assert!(app.run("window.toolbar.duplicate", json!({"name": "Nope"})).is_err());
+        // Delete.
+        app.run("window.toolbar.delete", json!({"name": "pens copy 2"})).unwrap();
+        app.run("window.toolbar.delete", json!({"name": "Toolbar 1"})).unwrap();
+        assert_eq!(listed(&app), ["Pens", "Other", "Pens Copy"]);
+        back(&mut app);
+        assert_eq!(listed(&app), ["Pens", "Other", "Pens Copy"]);
+        assert!(app.run("window.toolbar.delete", json!({"name": "Toolbar 1"})).unwrap_err().contains("Toolbar 1"));
+        // Kept in the saved workspace and the preferences.
+        app.run("window.workspace.new", json!({"name": "Drawing"})).unwrap();
+        let prefs: UiState = serde_json::from_slice(&serde_json::to_vec(&app.ui).unwrap()).unwrap();
+        let mut ui = prefs.sanitized();
+        crate::workspaces::switch(&mut ui, "Essentials").unwrap();
+        crate::workspaces::switch(&mut ui, "Drawing").unwrap();
+        assert_eq!(ui.custom_toolbars.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Pens", "Other", "Pens Copy"]);
+    }
+
+    /// Renaming or deleting the toolbar the All Tools drawer edits closes the drawer; a new name
+    /// that changes only the case leaves it open.
+    #[test]
+    fn renaming_or_deleting_the_toolbar_being_edited_closes_the_drawer() {
+        let mut app = app();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        app.run("window.toolbar.new", json!({"name": "Other"})).unwrap();
+        app.run("window.editToolbar", json!({"toolbar": "Mine", "open": true})).unwrap();
+        app.run("window.toolbar.rename", json!({"name": "Other", "to": "Second"})).unwrap();
+        assert_eq!(drawer_target(&app.ui), Some("Mine"), "another toolbar's rename leaves it open");
+        app.run("window.toolbar.rename", json!({"name": "Mine", "to": "MINE"})).unwrap();
+        assert_eq!(drawer_target(&app.ui), Some("MINE"), "a change of case leaves it open");
+        app.run("window.toolbar.rename", json!({"name": "MINE", "to": "Mine"})).unwrap();
+        app.run("window.toolbar.rename", json!({"name": "Mine", "to": "Pens"})).unwrap();
+        assert_eq!(drawer_target(&app.ui), None);
+        app.run("window.editToolbar", json!({"toolbar": "Pens", "open": true})).unwrap();
+        app.run("window.toolbar.delete", json!({"name": "Pens"})).unwrap();
+        assert!(!app.ui.tools_drawer && app.ui.drawer_toolbar.is_none());
+    }
+
+    /// The Manage Toolbars dialog: the name typed for the selected toolbar renames it at OK, and a
+    /// name another toolbar has keeps the dialog open.
+    #[test]
+    fn the_manage_toolbars_dialog_renames_the_selected_toolbar() {
+        let mut app = app();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        assert_eq!(app.run("window.toolbar.manage", json!({})).unwrap(), Value::Null);
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!(d.kind, MANAGE);
+        d.fields.insert("selected".into(), json!("Mine"));
+        d.fields.insert("name".into(), json!("Pens"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert!(find(&app.ui, "Pens").is_some() && find(&app.ui, "Mine").is_none());
+        // A name taken by another toolbar keeps the dialog open.
+        app.run("window.toolbar.new", json!({"name": "Other"})).unwrap();
+        app.run("window.toolbar.manage", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("selected".into(), json!("Pens"));
+        d.fields.insert("name".into(), json!("other"));
+        assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains("already"));
+        assert!(app.ui.dialog.is_some());
+        // Drawn with no toolbar selected, the dialog stays open.
+        let ctx = egui::Context::default();
+        app.ui.dialog.as_mut().unwrap().fields.insert("selected".into(), json!(""));
+        for k in 0..3 {
+            window_frame(&mut app, &ctx, f64::from(k) * 0.05, 800.0);
+        }
+        assert!(app.ui.dialog.as_ref().is_some_and(|d| d.kind == MANAGE));
+    }
+
+    /// An open flyout of a group on a toolbar closes when that toolbar is renamed or deleted; the
+    /// flyout of another toolbar or of the Tools panel stays open.
+    #[test]
+    fn renaming_or_deleting_a_toolbar_closes_only_its_own_flyout() {
+        let mut app = app();
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        app.run("window.toolbar.new", json!({"name": "Other"})).unwrap();
+        let mut time = 0.0;
+        let mut frames = |app: &mut VectorcraftApp| {
+            for _ in 0..2 {
+                time += 0.05;
+                window_frame(app, &ctx, time, 800.0);
+            }
+        };
+        frames(&mut app);
+        let open = |app: &mut VectorcraftApp, toolbar: Option<&str>| {
+            app.ui.flyout = Some(0);
+            ctx.data_mut(|d| {
+                d.insert_temp(egui::Id::unique("flyout-tools"), vec!["rectangle".to_string(), "ellipse".to_string()]);
+                d.insert_temp(crate::toolbar::flyout_toolbar_id(), toolbar.map(String::from));
+            });
+        };
+        for (toolbar, change) in [
+            (None, json!({"name": "Other", "to": "Second"})),
+            (Some("Mine"), json!({"name": "Second", "to": "Third"})),
+            (Some("Mine"), json!({"name": "Mine", "to": "mine"})),
+        ] {
+            open(&mut app, toolbar);
+            app.run("window.toolbar.rename", change).unwrap();
+            frames(&mut app);
+            assert_eq!(app.ui.flyout, Some(0), "{toolbar:?}'s flyout stays open");
+        }
+        open(&mut app, Some("mine"));
+        app.run("window.toolbar.rename", json!({"name": "mine", "to": "Pens"})).unwrap();
+        frames(&mut app);
+        assert_eq!(app.ui.flyout, None, "the renamed toolbar's flyout closes");
+        open(&mut app, Some("Pens"));
+        app.run("window.toolbar.delete", json!({"name": "Third"})).unwrap();
+        frames(&mut app);
+        assert_eq!(app.ui.flyout, Some(0), "another toolbar's delete leaves it open");
+        app.run("window.toolbar.delete", json!({"name": "Pens"})).unwrap();
+        frames(&mut app);
+        assert_eq!(app.ui.flyout, None, "the deleted toolbar's flyout closes");
+        // Another toolbar that takes the old name before the next frame doesn't keep it open.
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        app.run("window.toolbar.new", json!({"name": "Other"})).unwrap();
+        frames(&mut app);
+        open(&mut app, Some("Mine"));
+        app.run("window.toolbar.rename", json!({"name": "Mine", "to": "X"})).unwrap();
+        app.run("window.toolbar.rename", json!({"name": "Other", "to": "Mine"})).unwrap();
+        assert_eq!(app.ui.flyout, None, "renamed, then its name taken");
+        open(&mut app, Some("Mine"));
+        app.run("window.toolbar.delete", json!({"name": "Mine"})).unwrap();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        assert_eq!(app.ui.flyout, None, "deleted, then its name taken");
+    }
+
+    /// A toolbar deleted while Manage Toolbars has it selected leaves none selected, and a click
+    /// on + or the trash can meant for it does nothing, so the dialog can go on.
+    #[test]
+    fn manage_toolbars_lets_go_of_a_toolbar_deleted_elsewhere() {
+        let mut app = app();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        app.run("window.toolbar.new", json!({"name": "Other"})).unwrap();
+        for action in [Some(false), Some(true), None] {
+            app.run("window.toolbar.manage", json!({})).unwrap();
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("selected".into(), json!("Mine"));
+            d.fields.insert("name".into(), json!("Typed"));
+            app.run("window.toolbar.delete", json!({"name": "Mine"})).unwrap();
+            manage_step(&mut app, action.is_none(), None, action);
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.str("selected"), d.str("name")), (String::new(), String::new()), "{action:?}");
+            assert_eq!(listed(&app), ["Other"], "{action:?}");
+            app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+            app.run("window.toolbar.delete", json!({"name": "Other"})).unwrap();
+            app.run("window.toolbar.new", json!({"name": "Other"})).unwrap();
+        }
+        // OK closes the dialog.
+        app.ui.dialog.as_mut().unwrap().fields.insert("selected".into(), json!("Gone"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+    }
+
+    /// A name that can't be given to the selected toolbar stops a click on +, the trash can or
+    /// another toolbar, so the name typed stays to be corrected.
+    #[test]
+    fn a_refused_name_stops_the_next_click_in_manage_toolbars() {
+        let mut app = app();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        app.run("window.toolbar.new", json!({"name": "Other"})).unwrap();
+        app.run("window.toolbar.manage", json!({})).unwrap();
+        let typed = |app: &mut VectorcraftApp| {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("selected".into(), json!("Mine"));
+            d.fields.insert("name".into(), json!("other"));
+        };
+        for (pick, action) in [(None, Some(false)), (None, Some(true)), (Some("Other".to_string()), None)] {
+            typed(&mut app);
+            manage_step(&mut app, false, pick, action);
+            assert_eq!(listed(&app), ["Mine", "Other"]);
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.str("selected"), d.str("name")), ("Mine".to_string(), "other".to_string()));
+        }
+        // A name that is free renames the toolbar first, then the trash can deletes it.
+        app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Pens"));
+        manage_step(&mut app, false, None, Some(false));
+        assert_eq!(listed(&app), ["Other"]);
+    }
+
+    /// A new name and a copy's name keep to the length New Toolbar allows, so the toolbar is kept
+    /// when the preferences load again.
+    #[test]
+    fn renamed_and_copied_toolbars_keep_names_short_enough_to_load() {
+        let mut app = app();
+        let long = "x".repeat(MAX_NAME);
+        app.run("window.toolbar.new", json!({"name": long})).unwrap();
+        assert!(app.run("window.toolbar.rename", json!({"name": long, "to": "y".repeat(MAX_NAME + 1)})).unwrap_err().contains("at most"));
+        let copy = app.run("window.toolbar.duplicate", json!({"name": long})).unwrap();
+        let copy = copy["toolbar"].as_str().unwrap().to_string();
+        assert!(copy.ends_with(" Copy") && copy.chars().count() <= MAX_NAME, "{copy}");
+        let second = app.run("window.toolbar.duplicate", json!({"name": long})).unwrap();
+        assert!(second["toolbar"].as_str().unwrap().ends_with(" Copy 2"));
+        let mut bars = app.ui.custom_toolbars.clone();
+        sanitize(&mut bars);
+        assert_eq!(bars.len(), 3);
+    }
+
+    /// A copy made while Tab hides the toolbars shows alone, as a new toolbar does.
+    #[test]
+    fn a_copy_made_while_tab_hides_the_toolbars_shows_alone() {
+        let mut app = app();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        app.run("window.toolbar.new", json!({"name": "Other"})).unwrap();
+        app.ui.tab_hid = Some(Default::default());
+        app.run("window.toolbar.duplicate", json!({"name": "Mine"})).unwrap();
+        assert!(app.ui.tab_hid.is_none());
+        let shown: Vec<_> = app.ui.custom_toolbars.iter().filter(|b| b.shown).map(|b| b.name.as_str()).collect();
+        assert_eq!(shown, ["Mine Copy"]);
     }
 
     /// A hand-edited file: unnamed toolbars and repeated names go, unknown tools go, each tool once,

@@ -127,6 +127,9 @@ impl Reader<'_> {
     /// `type To`: a text object begins.
     pub(super) fn begin_text(&mut self, vals: &[V], hidden: bool) {
         self.end_path_quietly();
+        if self.pattern.is_some() {
+            self.unreadable("type in a pattern", false);
+        }
         let kind = nums::<1>(vals).map_or(0, |[k]| k as i64);
         self.text = Some(LegacyText { kind, gs: self.gs.clone(), hidden, ..LegacyText::default() });
     }

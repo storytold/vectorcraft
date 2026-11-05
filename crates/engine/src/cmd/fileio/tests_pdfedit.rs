@@ -403,3 +403,252 @@ fn ai_export_without_artboards_keeps_art_outside_the_original_pages() {
     assert_eq!(comparable(&s.doc().unwrap().doc), before);
     assert!(s.execute("document.export", &json!({"format": "ai", "useArtboards": "yes"})).is_err());
 }
+
+/// Color Halftone's Max Radius is in pixels of the raster effects resolution since document
+/// version 3 (#3260). A PDF saved with Preserve Editing carries the native document, so one from
+/// before that opens with the radius converted, drawing the same dots; one saved since opens as
+/// it was.
+#[test]
+fn a_preserve_editing_pdf_opens_with_its_halftone_radius_in_pixels() {
+    let halftone = |old: bool| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+        s.execute("document.rasterEffectsSettings", &json!({"resolution": 300})).unwrap();
+        let r = super::tests_svgedit::rect(&mut s, 10.0, 10.0);
+        s.execute("effect.apply", &json!({"effect": "pixelate.colorHalftone", "params": {"maxRadius": 8}, "ids": [r]})).unwrap();
+        if old {
+            // As VectorCraft 0.18 wrote it: the document model's version 1, the radius in points.
+            std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).version = 1;
+        }
+        let pdf = b64(&s.execute("document.exportPdf", &json!({})).unwrap());
+        let opened = open(&mut s, "halftone.pdf", &pdf);
+        assert_eq!(opened["restored"], json!(true), "{opened}");
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.version, vectorcraft_doc::FORMAT_VERSION);
+        let n = d.node(vectorcraft_doc::NodeId(r)).unwrap();
+        n.appearance.effects.iter().find(|e| e.id == "pixelate.colorHalftone").and_then(|e| e.params["maxRadius"].as_f64()).unwrap()
+    };
+    // 8 pt at 300 ppi are 33⅓ px.
+    assert!((halftone(true) - 8.0 * 300.0 / 72.0).abs() < 1e-9, "{}", halftone(true));
+    assert_eq!(halftone(false), 8.0);
+}
+
+/// The layers of `doc` as their names and the kinds and bounds of what they hold, rounded.
+fn outline(doc: &vectorcraft_doc::Document) -> Vec<String> {
+    fn walk(nodes: &[std::sync::Arc<vectorcraft_doc::Node>], depth: usize, out: &mut Vec<String>) {
+        for n in nodes {
+            let b = n.visual_bounds().map(|b| [b.x0, b.y0, b.x1, b.y1].map(|v| v.round() as i64));
+            let kind = match &n.kind {
+                vectorcraft_doc::NodeKind::Layer { .. } => "layer",
+                vectorcraft_doc::NodeKind::Group { .. } => "group",
+                vectorcraft_doc::NodeKind::Path { .. } => "path",
+                _ => "other",
+            };
+            out.push(format!("{depth} {kind} {:?} {} {b:?}", n.name, n.visible));
+            walk(n.children().map(Vec::as_slice).unwrap_or_default(), depth + 1, out);
+        }
+    }
+    let mut out = vec![];
+    walk(&doc.layers, 0, &mut out);
+    out
+}
+
+/// A `.ai` also carries the editing copy of its art that other apps read: opened without the
+/// VectorCraft document it carries, it gives back the same layers, groups and paths, its page
+/// matching them. `editingData: false` leaves the copy out.
+#[test]
+fn ai_files_carry_an_editing_copy_for_other_apps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 60, "y": 10, "width": 50, "height": 30})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("layer.new", &json!({"name": "Top"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 120, "y": 50, "width": 60, "height": 40})).unwrap();
+    let before = outline(&s.doc().unwrap().doc);
+    let bytes = b64(&s.execute("document.export", &json!({"format": "ai"})).unwrap());
+    let private = vectorcraft_pdf::illustrator_data(&bytes, None).expect("the editing copy for other apps");
+    assert!(private.starts_with(b"%AI24_ZStandard_Data"));
+    let opts = LoadOptions { native: false, ..Default::default() };
+    let l = load::load_with("art.ai", &bytes, &opts).unwrap();
+    assert!(l.editing_data && !l.restored);
+    assert!(!l.warnings.iter().any(|w| w.contains("editing data")), "{:?}", l.warnings);
+    assert_eq!(outline(&l.doc), before);
+    let r = s.execute("document.export", &json!({"format": "ai", "editingData": false})).unwrap();
+    assert_eq!(vectorcraft_pdf::illustrator_data(&b64(&r), None), None);
+    assert!(s.execute("document.export", &json!({"format": "ai", "editingData": "no"})).is_err());
+}
+
+/// A `.ai` whose editing copy for other apps differs from the VectorCraft document it carries (the
+/// copy leaves the live effect out) opens in VectorCraft from the VectorCraft document.
+#[test]
+fn an_ai_file_opens_from_its_vectorcraft_document_when_the_editing_copy_differs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id]})).unwrap();
+    let r = s.execute("document.export", &json!({"format": "ai"})).unwrap();
+    assert!(r["warnings"].to_string().contains("live effects"), "{r}");
+    let bytes = b64(&r);
+    let effects = |doc: &vectorcraft_doc::Document| {
+        let mut out = vec![];
+        doc.walk(|n| {
+            if matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. }) {
+                out.push(n.appearance.effects.len());
+            }
+        });
+        out
+    };
+    let copy = load::load_with("art.ai", &bytes, &LoadOptions { native: false, trust_editing_data: true, ..Default::default() }).unwrap();
+    assert!(copy.editing_data && !copy.restored);
+    assert_eq!(effects(&copy.doc), [0]);
+    let opened = load::load_with("art.ai", &bytes, &LoadOptions::default()).unwrap();
+    assert!(opened.restored);
+    assert_eq!(effects(&opened.doc), [1]);
+}
+
+/// The layers, groups, compound paths and paths of `doc` with their names, visibility, geometric
+/// bounds (rounded), transparency, clipping and opacity masks, one line each; a mask's art after
+/// its object.
+fn see_through_outline(doc: &vectorcraft_doc::Document) -> Vec<String> {
+    use vectorcraft_doc::NodeKind;
+    fn walk(nodes: &[std::sync::Arc<vectorcraft_doc::Node>], depth: usize, out: &mut Vec<String>) {
+        for n in nodes {
+            let kind = match &n.kind {
+                NodeKind::Layer { clip, .. } => format!("layer clip={clip}"),
+                NodeKind::Group { clip, .. } => format!("group clip={clip}"),
+                NodeKind::Compound { .. } => "compound".into(),
+                NodeKind::Path { clipping, .. } => format!("path clipping={clipping}"),
+                _ => "other".into(),
+            };
+            let b = n.geometric_bounds().map(|b| [b.x0, b.y0, b.x1, b.y1].map(|v| v.round() as i64));
+            let mask = n.extras().mask.clone();
+            out.push(format!(
+                "{depth} {kind} {:?} {} {b:?} {} {:?} isolate={} {:?} shape={} mask={:?}",
+                n.name,
+                n.visible,
+                (n.opacity * 100.0).round(),
+                n.blend,
+                n.isolate,
+                n.knockout,
+                n.knockout_shape,
+                mask.as_ref().map(|m| (m.clip, m.invert, m.disabled, m.linked))
+            ));
+            if let Some(m) = mask {
+                walk(std::slice::from_ref(&m.art), depth + 1, out);
+            }
+            walk(n.children().map(Vec::as_slice).unwrap_or_default(), depth + 1, out);
+        }
+    }
+    let mut out = vec![];
+    walk(&doc.layers, 0, &mut out);
+    out
+}
+
+/// A document of two artboards (the art on the first) with a compound path at 70% in Screen, a
+/// clipping group at 50% in Multiply, a named group (isolated, knockout on, knockout shape) and a
+/// square with an opacity mask that doesn't clip on layer `Layer 1`, and layer `Cut` (40%,
+/// clipping) holding two squares.
+fn see_through_session() -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 200, "artboards": 2})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let rect = |s: &mut Session, x: f64, y: f64, w: f64, h: f64| {
+        id(s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap())
+    };
+    // A compound path at 70% in Screen.
+    let (a, b) = (rect(&mut s, 10.0, 10.0, 40.0, 40.0), rect(&mut s, 20.0, 20.0, 20.0, 20.0));
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 70, "blend": "Screen"})).unwrap();
+    // A clipping group at 50% in Multiply.
+    let (art, clip) = (rect(&mut s, 60.0, 10.0, 60.0, 40.0), rect(&mut s, 70.0, 20.0, 30.0, 20.0));
+    s.execute("select.set", &json!({"ids": [art, clip]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50, "blend": "Multiply"})).unwrap();
+    // A named group, isolated, knockout on, whose opacity defines the knockout shape.
+    let (a, b) = (rect(&mut s, 60.0, 60.0, 30.0, 30.0), rect(&mut s, 75.0, 75.0, 30.0, 30.0));
+    let g = id(s.execute("object.group", &json!({"ids": [a, b]})).unwrap());
+    s.execute("object.setProps", &json!({"ids": [g], "name": "Knock", "opacity": 80, "isolate": true, "knockout": "on", "knockoutShape": true}))
+        .unwrap();
+    // A square with an opacity mask that doesn't clip.
+    let masked = rect(&mut s, 130.0, 10.0, 40.0, 40.0);
+    s.execute("paint.setFill", &json!({"color": "#808080"})).unwrap();
+    let mask = rect(&mut s, 140.0, 20.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [masked, mask]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({"clip": false})).unwrap();
+    // A clipping layer at 40%.
+    let cut = id(s.execute("layer.new", &json!({"name": "Cut"})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    rect(&mut s, 10.0, 100.0, 80.0, 60.0);
+    rect(&mut s, 30.0, 110.0, 40.0, 40.0);
+    s.execute("layer.clippingMask.toggle", &json!({})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [cut], "opacity": 40})).unwrap();
+    s
+}
+
+/// The editing copy of `bytes` read alone, checked against its page.
+fn editing_copy(bytes: &[u8]) -> vectorcraft_doc::Document {
+    let l = load::load_with("art.ai", bytes, &LoadOptions { native: false, ..Default::default() }).unwrap();
+    assert!(l.editing_data && !l.restored, "{:?}", l.warnings);
+    assert!(!l.warnings.iter().any(|w| w.contains("editing data")), "{:?}", l.warnings);
+    l.doc
+}
+
+/// `nodes` as the editing copy reads them back: an opacity mask's art that isn't a group comes
+/// back as a plain group holding it.
+fn mask_art_grouped(nodes: &mut [std::sync::Arc<vectorcraft_doc::Node>]) {
+    use vectorcraft_doc::{Node, NodeKind};
+    for n in nodes {
+        let n = std::sync::Arc::make_mut(n);
+        if let Some(m) = n.extras_mut().mask.as_mut()
+            && !matches!(m.art.kind, NodeKind::Group { .. })
+        {
+            let art = m.art.clone();
+            m.art = std::sync::Arc::new(Node::new(art.id, NodeKind::Group { children: vec![art], clip: false }));
+        }
+        if let Some(c) = n.children_mut() {
+            mask_art_grouped(c);
+        }
+    }
+}
+
+/// Transparency, a compound path, a clipping group, an opacity mask and a clipping layer come back
+/// from the editing copy for other apps alone, its page matching it, with every save option that
+/// writes the copy; the version 7 `.ai` keeps the compound path and the clipping group.
+#[test]
+fn transparency_clipping_and_opacity_masks_come_back_from_the_editing_copy() {
+    let mut s = see_through_session();
+    let mut before = (*s.doc().unwrap().doc).clone();
+    // The mask's art is one path; it reads back as a group holding the path.
+    let mut arts = vec![];
+    before.walk(|n| arts.extend(n.extras().mask.as_ref().map(|m| matches!(m.art.kind, vectorcraft_doc::NodeKind::Path { .. }))));
+    assert_eq!(arts, [true]);
+    mask_art_grouped(&mut before.layers);
+    let want = see_through_outline(&before);
+    for opts in [json!({"format": "ai"}), json!({"format": "ai", "compress": false}), json!({"format": "ai", "pdfCompatible": true})] {
+        let bytes = b64(&s.execute("document.export", &opts).unwrap());
+        assert_eq!(see_through_outline(&editing_copy(&bytes)), want, "{opts}");
+    }
+    // Each artboard in a file of its own: the first holds all the art.
+    let path = tmp("see-through.ai");
+    let r = s.execute("document.save", &json!({"path": path, "separateArtboards": true})).unwrap();
+    let files: Vec<String> = r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap().to_string()).collect();
+    assert_eq!(files.len(), 3, "{r}");
+    for f in &files {
+        let copy = editing_copy(&std::fs::read(f).unwrap());
+        if f.ends_with("-2.ai") {
+            assert!(copy.layers.iter().all(|l| l.children().is_none_or(Vec::is_empty)), "{f} {:#?}", see_through_outline(&copy));
+        } else {
+            assert_eq!(see_through_outline(&copy), want, "{f}");
+        }
+    }
+    // Version 7 has no transparency; it keeps the compound path and the clipping group.
+    let r = s.execute("document.export", &json!({"format": "ai", "aiVersion": 7})).unwrap();
+    let legacy = load::load_with("art.ai", &b64(&r), &LoadOptions::default()).unwrap();
+    let kinds = see_through_outline(&legacy.doc);
+    assert!(kinds.iter().any(|l| l.contains(" compound ")) && kinds.iter().any(|l| l.contains("group clip=true")), "{kinds:#?}");
+}

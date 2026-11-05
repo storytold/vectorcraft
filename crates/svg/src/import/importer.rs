@@ -1,4 +1,4 @@
-use super::convert::{aff, bezpath, blend, clip_shapes, gradient_stops, is_plain, made_up, rule, uncut, unique_name, without_ids};
+use super::convert::{aff, bezpath, blend, clip_shapes, drawn_ellipse, gradient_stops, is_plain, made_up, rule, uncut, unique_name, without_ids};
 use super::layers::filter_names;
 use super::prepass::link;
 use super::{
@@ -187,7 +187,10 @@ impl Importer {
             Some(made) if whole && made.art == without_ids(&art) && made.reuse.allows(xf) => made.name.clone(),
             Some(_) => return None,
             None => {
-                let name = unique_name(self.name_of(&sym), |n| self.doc.symbols.iter().any(|s| s.name == n));
+                let base = self.name_of(&sym).to_string();
+                let names = &self.symbol_names;
+                let name = unique_name(&base, &mut self.symbol_suffixes, |n| names.contains(n));
+                self.symbol_names.insert(name.clone());
                 let reuse = Reuse::of(&self.doc, &art);
                 let made = SymbolMade { name: name.clone(), art: without_ids(&art), reuse };
                 self.doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
@@ -545,7 +548,8 @@ impl Importer {
         let art = self.named("", NodeKind::Group { children, clip: true });
         let Some(art) = art else { return Paint::None };
         let base = if pt.id().is_empty() { "Pattern" } else { pt.id() };
-        let name = unique_name(base, |n| self.doc.pattern(n).is_some());
+        let doc = &self.doc;
+        let name = unique_name(base, &mut self.pattern_suffixes, |n| doc.pattern(n).is_some());
         let mut def = PatternDef::new(&name, vec![Arc::new(art)]);
         def.tile = tile;
         self.doc.patterns.push(def);
@@ -605,7 +609,8 @@ impl Importer {
         if !p.is_visible() {
             return None;
         }
-        let path = PathData::from_bezpath(&bezpath(p.data(), acc));
+        let ellipse = if self.ellipses.contains(p.id()) { drawn_ellipse(p.data()) } else { None };
+        let path = ellipse.map_or_else(|| PathData::from_bezpath(&bezpath(p.data(), acc)), |e| e.transformed(acc));
         if path.is_empty() {
             return None;
         }
@@ -687,9 +692,10 @@ impl Importer {
             std::mem::take(&mut self.non_scaling),
             std::mem::take(&mut self.data),
             std::mem::take(&mut self.events),
+            std::mem::take(&mut self.ellipses),
         );
         let art = self.group_node(tree.root(), acc);
-        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events) = outer;
+        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events, self.ellipses) = outer;
         art
     }
 }
@@ -716,6 +722,9 @@ mod tests {
             hidden: HashSet::new(),
             uses: HashMap::new(),
             symbols: HashMap::new(),
+            symbol_names: HashSet::new(),
+            symbol_suffixes: HashMap::new(),
+            pattern_suffixes: HashMap::new(),
             blends: HashMap::new(),
             files: Files::default(),
             non_scaling: HashSet::new(),
@@ -724,6 +733,7 @@ mod tests {
             foreign: HashMap::new(),
             sublayers: HashSet::new(),
             sublayer_groups: HashSet::new(),
+            ellipses: HashSet::new(),
             screen: 1.0,
             converted_nodes: 0,
             max_nodes: 1000,

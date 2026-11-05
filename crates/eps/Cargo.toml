@@ -13,6 +13,8 @@ vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
 vectorcraft-effects = { workspace = true }
+# The editing data for other apps writes clipped art cut to its clipping path.
+vectorcraft-pathops = { workspace = true }
 vectorcraft-brush = { workspace = true }
 vectorcraft-text = { workspace = true }
 # Windows metafile previews, opened when a file's PostScript can't be read.

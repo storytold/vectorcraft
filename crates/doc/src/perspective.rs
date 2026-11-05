@@ -63,7 +63,7 @@ impl Node {
     pub(crate) fn transform_projection(&mut self, a: vectorcraft_geom::Affine) {
         if let Some(p) = self.extras_if_any().and_then(|e| e.perspective.as_deref_mut())
             && let Some(h) = p.homography()
-            && a.determinant().abs() >= 1e-15
+            && Homography::affine_is_invertible(a)
         {
             p.projection = h.conjugated(a).map(|h| h.to_array());
         }

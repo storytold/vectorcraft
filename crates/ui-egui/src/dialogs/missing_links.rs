@@ -249,6 +249,8 @@ mod tests {
         for n in ["a.png", "b.png"] {
             std::fs::remove_file(dir.join(n)).unwrap();
         }
+        // Reopened: an open file would only come to the front (#3455).
+        app.run("file.close", json!({})).unwrap();
         crate::io::open_path(&mut app, &doc).unwrap();
         (app, dir, doc)
     }
@@ -344,6 +346,8 @@ mod tests {
         };
         std::fs::write(&pic, png([0, 0, 200])).unwrap();
         mark_modified(2);
+        // Reopened: an open file would only come to the front (#3455).
+        app.run("file.close", json!({})).unwrap();
         crate::io::open_path(&mut app, &doc).unwrap();
         let d = app.ui.dialog.as_ref().expect("asks");
         assert_eq!((d.kind.as_str(), d.str("__command")), (super::super::confirm::KIND, "links.update".to_string()));
@@ -353,6 +357,7 @@ mod tests {
         app.run("prefs.set", json!({"key": "updateLinks", "value": "manually"})).unwrap();
         std::fs::write(&pic, png([0, 200, 0])).unwrap();
         mark_modified(4);
+        app.session.execute("file.close", &json!({})).unwrap();
         crate::io::open_path(&mut app, &doc).unwrap();
         assert!(app.ui.dialog.is_none());
         assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 1);

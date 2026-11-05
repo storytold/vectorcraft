@@ -4,7 +4,8 @@
 
 use egui::Ui;
 use serde_json::json;
-use vectorcraft_text::{EXTRA_FEATURES, OtFeatures};
+use vectorcraft_doc::{CharStyle, NodeKind};
+use vectorcraft_text::{EXTRA_FEATURES, FontDb, OtFeatures, StylisticSet};
 
 use super::character::{shared, text_editing, text_style};
 use crate::VectorcraftApp;
@@ -20,12 +21,12 @@ enum Flag {
 /// A checkbox row: label and the feature it toggles.
 type Toggle = (&'static str, Flag);
 
-const FIGURES: [&str; 5] = ["Default Figure", "Tabular Lining", "Proportional Lining", "Proportional Oldstyle", "Tabular Oldstyle"];
+pub(crate) const FIGURES: [&str; 5] = ["Default Figure", "Tabular Lining", "Proportional Lining", "Proportional Oldstyle", "Tabular Oldstyle"];
 
-const POSITIONS: [&str; 5] = ["Default Position", "Superscript", "Subscript", "Numerator", "Denominator"];
+pub(crate) const POSITIONS: [&str; 5] = ["Default Position", "Superscript", "Subscript", "Numerator", "Denominator"];
 
 /// The features the Position menu's entries after Default Position turn on, in menu order.
-const POSITION_TAGS: [&str; 4] = ["sups", "subs", "numr", "dnom"];
+pub(crate) const POSITION_TAGS: [&str; 4] = ["sups", "subs", "numr", "dnom"];
 
 /// The bit of [`OtFeatures::extra`] that turns `tag` on (0 for a tag outside [`EXTRA_FEATURES`]).
 fn extra_bit(tag: &str) -> u32 {
@@ -51,7 +52,7 @@ impl Flag {
 
 /// The Figure menu entry `f` shows: Default Figure, Tabular Lining, Proportional Lining
 /// (`pnum` and `lnum`), Proportional Oldstyle or Tabular Oldstyle.
-fn figure(f: &OtFeatures) -> usize {
+pub(crate) fn figure(f: &OtFeatures) -> usize {
     let proportional_lining = extra_bit("pnum") | extra_bit("lnum");
     match (f.tabular_figures, f.oldstyle_figures) {
         (false, false) if f.extra & proportional_lining == proportional_lining => 2,
@@ -81,7 +82,7 @@ fn set_figure(f: &mut OtFeatures, i: usize) {
 /// The Position menu entry `f` shows: Superscript (`sups`), Subscript (`subs`), Numerator
 /// (`numr`) or Denominator (`dnom`) when `f` turns that one on, Default Position when it turns
 /// none of them on, and `None` when it turns on more than one.
-fn position(f: &OtFeatures) -> Option<usize> {
+pub(crate) fn position(f: &OtFeatures) -> Option<usize> {
     let mut on = POSITION_TAGS.iter().enumerate().filter(|(_, t)| f.extra & extra_bit(t) != 0).map(|(i, _)| i + 1);
     match (on.next(), on.next()) {
         (None, _) => Some(0),
@@ -135,14 +136,22 @@ impl Change {
 }
 
 /// Make `change` to the features of each character the panel acts on, from the character's own
-/// features (`featureChanges`), unless it changes none of them.
+/// features (`featureChanges`), unless it changes none of them. At a Type tool caret the
+/// command styles all the text, so every character of the text is checked.
 fn edit(app: &mut VectorcraftApp, change: Change) {
-    let unchanged = shared(app, |s| {
+    let same = |s: &CharStyle| {
         let before = OtFeatures::from_tags(s.features.iter().map(String::as_str));
         let mut after = before;
         change.apply(&mut after);
         after == before
-    });
+    };
+    let unchanged = match text_editing(app) {
+        Some((id, a, b)) if b <= a => match app.session.active().and_then(|st| st.doc.node(id)).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => Some(t.runs.iter().all(|r| same(&r.style))),
+            _ => None,
+        },
+        _ => shared(app, same),
+    };
     if unchanged != Some(true) {
         run_features(app, "featureChanges", OtFeatures::changes(|f| change.apply(f)));
     }
@@ -156,10 +165,13 @@ fn set(app: &mut VectorcraftApp, f: OtFeatures) {
 /// Send `tags` as the `key` param (`features` or `featureChanges`) for the Type tool's range or
 /// caret, or else for the selected type.
 fn run_features(app: &mut VectorcraftApp, key: &str, tags: Vec<String>) {
-    let (cmd, mut p) = match text_editing(app) {
-        Some((id, a, b)) if b > a => ("text.setRangeStyle", json!({ "id": id.0, "start": a, "end": b })),
-        Some((id, _, _)) => ("text.setRangeStyle", json!({ "id": id.0 })),
-        None => ("text.setStyle", json!({})),
+    // After Select All in threaded text: every frame of the story.
+    let story = super::character::text_story(app).and_then(|story| story.first().copied());
+    let (cmd, mut p) = match (text_editing(app), story) {
+        (Some(_), Some(first)) => ("text.setRangeStyle", json!({ "id": first.0, "story": true })),
+        (Some((id, a, b)), None) if b > a => ("text.setRangeStyle", json!({ "id": id.0, "start": a, "end": b })),
+        (Some((id, _, _)), None) => ("text.setRangeStyle", json!({ "id": id.0 })),
+        (None, _) => ("text.setStyle", json!({})),
     };
     p[key] = json!(tags);
     if let Err(e) = app.run(cmd, p) {
@@ -199,11 +211,46 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             change = Some(Change::Toggle(flag, !on));
         }
     }
+    // The font, not the text, decides which numbered sets can be offered. Each set is an
+    // independent feature, so the menu permits several at once. A font's own label wins over
+    // the numbered fallback. See the public Stylistic Sets help page.
+    let sets = offered_sets(&st);
+    ui.add_enabled_ui(!sets.is_empty(), |ui| {
+        ui.menu_button(tl!("Stylistic Sets"), |ui| {
+            for set in &sets {
+                let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
+                let on = flag.get(&next);
+                if widgets::check_name(ui, &set_label(set), on) {
+                    change = Some(Change::Toggle(flag, !on));
+                }
+            }
+        });
+    });
     if cur.ligatures && vectorcraft_text::ligatures_suppressed_by(st.tracking) && !vectorcraft_text::explicit_ligatures(&st.features) {
         widgets::dim_label(ui, tl!("Ligatures are off while the text is tracked."));
     }
     if let Some(c) = change {
         edit(app, c);
+    }
+}
+
+/// The stylistic sets of the font `st` names. A font that is not available offers none, rather than
+/// the sets of the face drawn in its place.
+fn offered_sets(st: &vectorcraft_doc::CharStyle) -> Vec<StylisticSet> {
+    let db = FontDb::global();
+    let (family, _) = db.canonical(&st.font_family, &st.font_style);
+    if !db.has_family(&family) {
+        return Vec::new();
+    }
+    db.style_face(st).map(|face| face.stylistic_sets()).unwrap_or_default()
+}
+
+/// A Stylistic Sets menu entry: the font's own name for the set, shown as the font gives it, or
+/// `Set 1` through `Set 20` in the UI language.
+fn set_label(set: &StylisticSet) -> String {
+    match &set.name {
+        Some(name) => name.clone(),
+        None => crate::i18n::fmt(tl!("Set {n}"), &[("n", &set.number.to_string())]),
     }
 }
 
@@ -282,6 +329,46 @@ mod tests {
             set(&mut app, f);
             assert!(text_style(&app).unwrap().0.features.is_empty(), "{label} off");
         }
+    }
+
+    /// Stylistic sets are independent: selecting a second set keeps the first, and clearing one
+    /// keeps the other. The command reaches the selected text's stored OpenType feature tags.
+    #[test]
+    fn multiple_stylistic_sets_stay_independent() {
+        let mut app = selected_text();
+        edit(&mut app, Change::Toggle(Flag::Extra("ss01"), true));
+        edit(&mut app, Change::Toggle(Flag::Extra("ss03"), true));
+        assert_eq!(text_style(&app).unwrap().0.features, ["ss01", "ss03"]);
+        edit(&mut app, Change::Toggle(Flag::Extra("ss01"), false));
+        assert_eq!(text_style(&app).unwrap().0.features, ["ss03"]);
+    }
+
+    /// A set the font names keeps the font's name; a set without one gets the numbered label in
+    /// the UI language.
+    #[test]
+    fn stylistic_set_labels_follow_the_ui_language() {
+        let named = StylisticSet { number: 1, name: Some("Curved Capitals".into()) };
+        let numbered = StylisticSet { number: 3, name: None };
+        assert_eq!(set_label(&numbered), "Set 3");
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let (named_de, numbered_de) = (set_label(&named), set_label(&numbered));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(named_de, "Curved Capitals");
+        assert_eq!(numbered_de, "Satz 3");
+    }
+
+    /// A font that is not available offers no sets, even though the face drawn in its place has
+    /// some.
+    #[test]
+    fn a_missing_font_offers_no_stylistic_sets() {
+        let fallback = vectorcraft_doc::CharStyle { font_family: vectorcraft_text::FALLBACK_FAMILY.into(), ..Default::default() };
+        // Builds without the bundled fonts have no fallback face to draw in a missing font's place.
+        if FontDb::global().has_family(vectorcraft_text::FALLBACK_FAMILY) {
+            assert!(!offered_sets(&fallback).is_empty(), "the fallback face lists its sets");
+        }
+        let missing = vectorcraft_doc::CharStyle { font_family: "No Such Family Zq".into(), ..fallback };
+        assert!(offered_sets(&missing).is_empty());
     }
 
     /// The Figure menu lists its five entries in order; Proportional Lining sets `pnum` and
@@ -446,5 +533,27 @@ mod tests {
                 ("3".to_string(), none)
             ]
         );
+    }
+
+    /// At a caret whose insertion style is already a denominator, Denominator still reaches the
+    /// characters the command styles at a caret (all of them) in one undo step; chosen again once
+    /// every character has it, it adds no undo step.
+    #[test]
+    fn caret_with_the_same_position_still_applies_it() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "1/23"})).unwrap()["id"].clone();
+        app.session.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 1, "features": ["dnom"]})).unwrap();
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
+        assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((1, 1)));
+        assert_eq!(shown_position(&app), Some(4));
+        let undo = undo_steps(&app);
+        edit(&mut app, Change::Position(4));
+        assert_eq!(undo_steps(&app), undo + 1);
+        assert_eq!(run_features(&mut app, &id, 4), [("1/23".to_string(), json!(["dnom"]))]);
+        edit(&mut app, Change::Position(4));
+        assert_eq!(undo_steps(&app), undo + 1);
     }
 }

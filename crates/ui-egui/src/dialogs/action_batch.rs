@@ -20,6 +20,9 @@ pub fn open(app: &mut VectorcraftApp, set: usize, action: usize) -> Result<Value
     if a.steps.is_empty() {
         return Err("the action has no steps".into());
     }
+    if a.steps.iter().enumerate().all(|(i, _)| a.excluded_steps.contains(&i)) {
+        return Err("the action has no included steps".into());
+    }
     let name = a.name.clone();
     app.ui.dialog = Some(Dialog::new(KIND, initial_fields(set, action, &name)));
     Ok(Value::Null)
@@ -93,7 +96,10 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let set = d.fields.get("set").and_then(Value::as_u64).unwrap_or(0) as usize;
     let action = d.fields.get("action").and_then(Value::as_u64).unwrap_or(0) as usize;
     let a = app.ui.action_sets.get(set).and_then(|s| s.actions.get(action)).ok_or("no such action")?.clone();
-    let commands: Vec<Value> = a.steps.iter().map(|(c, p)| json!({"command": c, "params": p})).collect();
+    let commands = a.included_commands();
+    if commands.is_empty() {
+        return Err("the action has no included steps".into());
+    }
     let source = d.str("source");
     if source == "folder" && d.str("folder").trim().is_empty() {
         return Err("choose a source folder".into());

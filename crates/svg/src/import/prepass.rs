@@ -5,6 +5,8 @@ use super::{
     symbol_units, vector_effect,
 };
 
+mod id_styles;
+
 /// What usvg would lose, found in the XML before it runs ([`prepass`]).
 #[derive(Default)]
 pub(super) struct Found {
@@ -28,6 +30,11 @@ pub(super) struct Found {
     pub(super) scripts: Vec<String>,
     /// Ids of the `<g>` elements marked as layers ([`marked_layer`]).
     pub(super) sublayers: HashSet<String>,
+    /// Ids of the `<circle>` and `<ellipse>` elements, which come back as the ellipse VectorCraft
+    /// draws ([`drawn_ellipse`](super::convert::drawn_ellipse)).
+    pub(super) ellipses: HashSet<String>,
+    /// The text importer reads styles from this SVG before tracking IDs are added.
+    pub(super) text_source: Option<String>,
     pub(super) warnings: Vec<String>,
 }
 
@@ -35,8 +42,15 @@ pub(super) struct Found {
 #[derive(Default)]
 pub(crate) struct Edits {
     list: Vec<(std::ops::Range<usize>, String)>,
+    /// These edits assign tracking IDs.
+    id_edits: Vec<(std::ops::Range<usize>, String)>,
     /// The ids made up so far, by element.
     ids: HashMap<roxmltree::NodeId, String>,
+    /// The numbers `n` of the `{MADE_UP_ID}n` the file names (as an element's id, in a style
+    /// sheet's `#id` selector or in a `#id` link to no element), read when the first id is made up.
+    taken: Option<HashSet<usize>>,
+    /// The number the next made-up id is tried with: the numbers below it are made up or taken.
+    next: usize,
     /// Declarations added to elements' `style`s, by element: (where they go, whether the element
     /// has a `style` attribute, the declarations, XML-escaped).
     styles: HashMap<roxmltree::NodeId, (usize, bool, String)>,
@@ -47,7 +61,8 @@ impl Edits {
         self.list.push((at..at, text));
     }
 
-    /// The id of element `n` (in `svg`), made up and written in when it has none.
+    /// The id of element `n` (in `svg`), made up and written in when it has none. A made-up id is
+    /// one the file does not name ([`named_made_up_ids`]).
     pub(super) fn id(&mut self, svg: &str, n: XNode) -> String {
         if let Some(id) = n.attribute("id").filter(|id| !id.is_empty()) {
             return id.to_string();
@@ -55,8 +70,19 @@ impl Edits {
         if let Some(id) = self.ids.get(&n.id()) {
             return id.clone();
         }
-        let id = format!("{MADE_UP_ID}{}", self.ids.len());
-        self.set(svg, n, "id", &id);
+        let taken = self.taken.get_or_insert_with(|| named_made_up_ids(n.document()));
+        while taken.contains(&self.next) {
+            self.next += 1;
+        }
+        let id = format!("{MADE_UP_ID}{}", self.next);
+        self.next += 1;
+        match n.attributes().find(|a| a.name() == "id" && a.namespace().is_none()) {
+            Some(a) => self.id_edits.push((a.range_value(), id.clone())),
+            None => {
+                let at = tag_name_end(svg, n);
+                self.id_edits.push((at..at, format!(" id=\"{id}\"")));
+            }
+        }
         self.ids.insert(n.id(), id.clone());
         id
     }
@@ -84,6 +110,7 @@ impl Edits {
     /// `svg` with the edits made; overlapping ones and ranges off character boundaries are
     /// skipped.
     fn apply(mut self, svg: &str) -> Cow<'_, str> {
+        self.list.append(&mut self.id_edits);
         for (at, has_style, decls) in std::mem::take(&mut self.styles).into_values() {
             self.insert(at, if has_style { decls } else { format!(" style=\"{}\"", decls.strip_prefix(';').unwrap_or(&decls)) });
         }
@@ -105,6 +132,24 @@ impl Edits {
     }
 }
 
+/// The number after each [`MADE_UP_ID`] followed by digits in the attribute values and text of
+/// `xml`, read with their character references decoded (numbers too large for a `usize` left out).
+fn named_made_up_ids(xml: &roxmltree::Document) -> HashSet<usize> {
+    fn numbers(s: &str) -> impl Iterator<Item = usize> + '_ {
+        s.match_indices(MADE_UP_ID).filter_map(|(at, _)| {
+            let rest = s.get(at + MADE_UP_ID.len()..)?;
+            let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+            rest.get(..digits)?.parse().ok()
+        })
+    }
+    let mut taken = HashSet::new();
+    for n in xml.descendants() {
+        taken.extend(n.attributes().flat_map(|a| numbers(a.value())));
+        taken.extend(n.text().filter(|_| n.is_text()).into_iter().flat_map(numbers));
+    }
+    taken
+}
+
 /// usvg reads `<a href>` and `<use>` as plain groups, drops what isn't displayed and reads linked
 /// files on its own. Before it runs, the SVG is changed so that what we keep can be found:
 /// * every `<a href>` and every `<use>` of a `<symbol>` gets an id when it has none
@@ -115,6 +160,9 @@ impl Edits {
 /// * objects with event attributes get an id when they have none, recorded with them
 ///   ([`user_events`]), and the `<script>` links are recorded ([`linked_scripts`]);
 /// * so do objects with attributes in other applications' namespaces ([`foreign`]);
+/// * so do `<circle>` and `<ellipse>` elements, recorded: usvg makes their arcs into a varying
+///   number of curves, and they come back as the ellipse VectorCraft draws (not in a file whose
+///   style sheet has an attribute selector);
 /// * linked files are read ([`files`]);
 /// * percentage lengths in a `<symbol>` with a `viewBox` become numbers ([`symbol_units`]);
 /// * what style sheet rules with a `:not()` set goes in `style` attributes ([`not_rules`]).
@@ -122,22 +170,31 @@ impl Edits {
 /// Whether each is there at all is read from `markers`: `svg` with its data URLs left out
 /// ([`depth::prescan`]), so an embedded picture isn't searched a dozen times. The edits are made
 /// in `svg` itself.
-pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
+pub(super) fn prepass<'s>(
+    svg: &'s str,
+    markers: &str,
+    xml: &roxmltree::Document,
+    opts: &ImportOptions,
+) -> Result<(Cow<'s, str>, Found), crate::SvgError> {
     let mut found = Found::default();
     // (`:` for prefixed elements such as `<svg:image>`.)
     let css_transform = has_css_transform(markers);
     let not = markers.contains(":not(");
     let events = SVG_EVENTS.iter().any(|e| markers.contains(e));
     let foreign_attrs = markers.contains("xmlns:") && has_foreign_attributes(xml);
+    let attribute_selectors =
+        xml.descendants().filter(|n| n.is_element() && n.tag_name().name() == "style").filter_map(|n| n.text()).any(|text| text.contains('['));
+    let ellipses = !attribute_selectors && ["<circle", ":circle", "<ellipse", ":ellipse"].iter().any(|t| markers.contains(t));
     if !css_transform
         && !not
         && !events
         && !foreign_attrs
+        && !ellipses
         && !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "class", "groupmode", "script"]
             .iter()
             .any(|t| markers.contains(t))
     {
-        return (svg.into(), found);
+        return Ok((svg.into(), found));
     }
     let mut edits = Edits::default();
     let elements = || xml.descendants().filter(|n| n.is_element());
@@ -171,6 +228,11 @@ pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document
             }
         }
     }
+    if ellipses {
+        for e in elements().filter(|e| matches!(e.tag_name().name(), "circle" | "ellipse")) {
+            found.ellipses.insert(edits.id(svg, e));
+        }
+    }
     if markers.contains("script") {
         found.scripts = linked_scripts(xml, &mut found.warnings);
     }
@@ -202,7 +264,14 @@ pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document
     if css_transform {
         edits.list.extend(css_transform::rewrites(svg, xml));
     }
-    (edits.apply(svg), found)
+    if attribute_selectors && !edits.ids.is_empty() {
+        if elements().any(|n| matches!(n.tag_name().name(), "text" | "flowRoot")) {
+            let text_edits = Edits { list: edits.list.clone(), styles: edits.styles.clone(), ..Default::default() };
+            found.text_source = Some(text_edits.apply(svg).into_owned());
+        }
+        id_styles::preserve_matches(svg, xml, &mut edits, &mut found.warnings)?;
+    }
+    Ok((edits.apply(svg), found))
 }
 
 /// Is there a `transform` CSS declaration in `markers` (`transform` followed by `:`)?
@@ -409,4 +478,26 @@ pub(super) fn labels(xml: &roxmltree::Document) -> HashMap<String, String> {
             Some((id.to_string(), name.to_string()))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A file that already holds the made-up ids does not make each new id try them all again:
+    /// 5,000 ids made up past 50,000 taken ones take a moment, not 250 million tries.
+    #[test]
+    fn made_up_ids_skip_the_taken_ones_once() {
+        let taken: String = (0..50_000).map(|i| format!("<g id=\"{MADE_UP_ID}{i}\"/>")).collect();
+        let bare = "<rect/>".repeat(5_000);
+        let svg = format!("<svg xmlns=\"http://www.w3.org/2000/svg\">{taken}{bare}</svg>");
+        let doc = roxmltree::Document::parse(&svg).unwrap();
+        let rects: Vec<XNode> = doc.descendants().filter(|n| n.has_tag_name("rect")).collect();
+        let mut edits = Edits::default();
+        let start = std::time::Instant::now();
+        let ids: Vec<String> = rects.iter().map(|n| edits.id(&svg, *n)).collect();
+        assert!(start.elapsed() < std::time::Duration::from_secs(1), "{:?}", start.elapsed());
+        assert_eq!(ids.first().map(String::as_str), Some(format!("{MADE_UP_ID}50000").as_str()));
+        assert_eq!(ids.iter().collect::<HashSet<_>>().len(), ids.len());
+    }
 }

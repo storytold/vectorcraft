@@ -58,7 +58,12 @@ fn idle_control_socket_releases_its_worker() {
 fn idle_expiry_closes_without_writing_a_line() {
     let (mut client, done, worker) = socket_fixture(short_timeouts(), |_, _| panic!("no request expected"));
     let mut got = Vec::new();
-    client.read_to_end(&mut got).unwrap();
+    match client.read_to_end(&mut got) {
+        // On Windows the server's close can reach the client as a reset.
+        Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => {}
+        Ok(_) => {}
+        Err(e) => panic!("reading the idle connection: {e}"),
+    }
     assert_eq!(String::from_utf8_lossy(&got), "", "the app wrote to an idle connection");
     expect_socket_deadline(client, done, worker);
 }
@@ -329,12 +334,13 @@ fn tcp_connection_is_closed_after_junk() {
     let addr = listener.local_addr().unwrap();
     let server = std::thread::spawn(move || {
         let (s, _) = listener.accept().unwrap();
-        let read = s.try_clone().unwrap();
-        serve_lines(read, s, |_, _| Some(json!({"ok": true})));
+        serve_socket(s, ConnectionTimeouts::default(), |_, _| Some(json!({"ok": true})));
     });
     let mut c = TcpStream::connect(addr).unwrap();
     c.set_read_timeout(Some(WAIT)).unwrap();
-    c.write_all(b"{\"id\":7,\"method\":\"x\"}\nhello\n{\"method\":\"y\"}\n").unwrap();
+    // The server closes gracefully ([`close_gracefully`]): the client reads both replies and then
+    // the end of the stream, not a reset.
+    c.write_all(b"{\"id\":7,\"method\":\"x\"}\nhello\n").unwrap();
     let mut text = String::new();
     c.read_to_string(&mut text).unwrap(); // returns at EOF: the server closed the connection
     server.join().unwrap();

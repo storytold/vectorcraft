@@ -154,14 +154,18 @@ fn runs_a_command(i: &egui::InputState, key: Key, cmd_only: bool) -> bool {
 /// `key` and `code` are the browser's names for the character typed and the key's position, which
 /// egui reads with [`Key::from_name`]; `modifiers` as egui reports them. The press is matched as
 /// the dispatcher matches it ([`dispatch`]) on a layout about which nothing is known: what typing
-/// has shown of the layout is left out, and so are double presses.
+/// has shown of the layout is left out, and so are double presses. An action's function key runs
+/// a shortcut too.
 pub fn runs_a_shortcut(key: &str, code: &str, modifiers: Modifiers) -> bool {
     let physical_key = Key::from_name(code);
     let Some(key) = Key::from_name(key).or(physical_key) else { return false };
     let press = egui::Event::Key { key, physical_key, pressed: true, repeat: false, modifiers };
     let Some(input) = craft_keymap::KeyInput::from_egui(&press, crate::keymap::platform()) else { return false };
     let mirror = crate::shortcut_editor::current();
-    craft_keymap::Layout::default().candidates(&input).iter().any(|c| mirror.keymap.lookup(c, false, &Active::NONE) != craft_keymap::Lookup::None)
+    craft_keymap::Layout::default()
+        .candidates(&input)
+        .iter()
+        .any(|c| mirror.keymap.lookup(c, false, &Active::NONE) != craft_keymap::Lookup::None || crate::panels::actions::plays_an_action(c))
 }
 
 /// Process one frame's events against the keymap at most once per context, viewport and frame, so
@@ -215,8 +219,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         presentation_keys(app, ctx, escape_pair);
         return;
     }
-    // Escape that cancels a ruler-origin drag or floating Tools move skips the tool and later Escape actions.
-    let escape_ended_gesture = crate::canvas::ruler_origin_dragging(ctx) || crate::tools_float::escape_cancelled_move(ctx);
+    // Escape that cancels a ruler-origin drag or floating Tools move skips the tool and later Escape actions,
+    // and so do its repeats while it is held.
+    let escape_ended_gesture = escape_ended_gesture(ctx);
     let escape_held_by_drag = crate::canvas::dragging(ctx) || escape_ended_gesture;
     let typing = ctx.egui_wants_keyboard_input();
     // Escape closes Edit Toolbar's drawer first (egui drops a drag from it on Escape already).
@@ -338,15 +343,19 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if claimed_tool_keys(app, ctx, view, rows_keys) {
         return;
     }
+    // An action's function key plays the action, also when a command has the same shortcut.
+    crate::panels::actions::play_function_key(app, ctx);
     // Command, panel and tool shortcuts. A bound shifted punctuation chord uses its key press;
     // other text keys use the typed character below.
     let row_key = |chord: &craft_keymap::Chord| {
         rows_keys && chord.is_plain() && !chord.mods.shift && matches!(chord.key, craft_keymap::Key::Delete | craft_keymap::Key::Backspace)
     };
+    // An Escape that ended a ruler-origin drag or floating Tools move runs no command bound to it.
+    let gesture_escape = |chord: &craft_keymap::Chord| escape_ended_gesture && chord.is_plain() && chord.key == craft_keymap::Key::Escape;
     let hits = dispatch(app, ctx, |hit| {
         let chord = &hit.trigger.chord;
         let shifted_punctuation = chord.mods.shift && chord.key.name().chars().all(|c| !c.is_alphanumeric());
-        !(chord.is_plain() && types_text(chord.key) && !shifted_punctuation || row_key(chord))
+        !(chord.is_plain() && types_text(chord.key) && !shifted_punctuation || row_key(chord) || gesture_escape(chord))
     });
     let ran = !hits.is_empty();
     for c in hits {
@@ -360,6 +369,33 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     nudge_and_clear(app, ctx, rows_keys);
     single_key_shortcuts(app, ctx);
+}
+
+/// The key of the mark that the Escape held down ended a ruler-origin drag or a floating Tools move.
+fn escape_ended_gesture_id() -> egui::Id {
+    egui::Id::unique("escape-ended-gesture")
+}
+
+/// Does this frame's Escape end a ruler-origin drag or a floating Tools move? The repeats of an
+/// Escape that ended one do too, up to the frame that releases Escape or presses it again.
+fn escape_ended_gesture(ctx: &egui::Context) -> bool {
+    let (down, pressed, repeated) = ctx.input(|i| {
+        let escape =
+            |repeat: bool| i.events.iter().any(|e| matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, repeat: r, .. } if *r == repeat));
+        (i.key_down(Key::Escape), escape(false), escape(true))
+    });
+    if crate::canvas::ruler_origin_dragging(ctx) || crate::tools_float::escape_cancelled_move(ctx) {
+        if down {
+            ctx.data_mut(|d| d.insert_temp(escape_ended_gesture_id(), true));
+        }
+        return true;
+    }
+    // A release in the same frame as a repeat still holds that repeat back.
+    let held = (down || repeated) && !pressed && ctx.data(|d| d.get_temp::<bool>(escape_ended_gesture_id())).is_some();
+    if !(held && down) {
+        ctx.data_mut(|d| d.remove::<bool>(escape_ended_gesture_id()));
+    }
+    held
 }
 
 fn remember_escape_pair(ctx: &egui::Context, key: Key, escape_pair: Option<bool>) {
@@ -487,6 +523,7 @@ fn type_tool_input(app: &mut VectorcraftApp, ctx: &egui::Context, composing: boo
             })
         });
     }
+    crate::panels::actions::play_function_key(app, ctx);
     // Editing keys with modifiers and the clipboard (Cmd+A is Select All's, below: the text).
     crate::panels::character::route_type_input(app, ctx);
     // Enter was already delivered above as ToolKey::Enter (newline). Only chords with the
@@ -894,7 +931,7 @@ fn latin(text: &str, physical: Option<Key>) -> String {
 /// types at most one text. A text takes the press after it only when every later text in the same
 /// run of alternating texts and presses has a press after it too; otherwise the text after that
 /// press takes it as the press before it, and this text has none.
-fn typing_presses(events: &[egui::Event]) -> Vec<Option<usize>> {
+pub(crate) fn typing_presses(events: &[egui::Event]) -> Vec<Option<usize>> {
     let is_press = |k: usize| matches!(events.get(k), Some(egui::Event::Key { key, pressed: true, .. }) if !is_modifier(*key));
     let is_text = |k: usize| matches!(events.get(k), Some(egui::Event::Text(_)));
     // Whether the run of alternating texts and presses that starts with the text at `j` ends
