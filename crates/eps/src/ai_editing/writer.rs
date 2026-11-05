@@ -22,7 +22,7 @@ pub(super) use images::PAYLOAD;
 #[cfg(test)]
 pub(super) use images::{IMAGE_DEPTH, IMAGES, LINKS_EMBEDDED};
 #[cfg(test)]
-pub(super) use paints::{GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT};
+pub(super) use paints::{GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT, free_gradient_name};
 
 /// How deep symbols, live objects and pattern tiles may nest in one another (deeper art is left
 /// out). Groups and layers need no limit of their own: a document is never deeper than
@@ -141,6 +141,8 @@ pub(super) struct Writer<'a> {
     canvas: Affine,
     /// The gradient definitions, in the order they are first used.
     gradients: Vec<paints::GradientDef>,
+    /// The number the next new gradient definition's name tries first (1 is `Gradient`).
+    next_gradient: u64,
     /// The pattern definitions written, each after those its art uses.
     patterns: Vec<paints::PatternOut>,
     /// The patterns whose definitions are being written.
@@ -167,6 +169,7 @@ impl<'a> Writer<'a> {
             tile_grad_space: Affine::translate((-origin.0, origin.1)),
             canvas: Affine::new([1.0, 0.0, 0.0, -1.0, origin.0, origin.1]) * to_art,
             gradients: vec![],
+            next_gradient: 1,
             patterns: vec![],
             defining: vec![],
             in_palette: false,

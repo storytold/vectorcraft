@@ -49,6 +49,18 @@ fn writable_gradient(g: &Gradient) -> bool {
     g.kind != GradientKind::Freeform && !g.stops.is_empty() && g.stops.len() <= crate::import::MAX_GRADIENT_STOPS
 }
 
+/// The first name of `Gradient`, `Gradient 2`, `Gradient 3`, … numbered `next` or higher for
+/// which `taken` returns false (`Gradient` is number 1); `next` is set past it.
+pub(in crate::ai_editing) fn free_gradient_name(next: &mut u64, mut taken: impl FnMut(&str) -> bool) -> String {
+    loop {
+        let name = if *next <= 1 { String::from("Gradient") } else { format!("Gradient {next}") };
+        *next = next.saturating_add(1);
+        if !taken(&name) {
+            return name;
+        }
+    }
+}
+
 /// The stops of `g` in order of their place on the ramp.
 fn sorted_stops(g: &Gradient) -> Vec<&GradientStop> {
     let mut stops: Vec<&GradientStop> = g.stops.iter().collect();
@@ -72,7 +84,8 @@ impl Writer<'_> {
 
     /// The name of the definition of `g`: the swatch `swatch` names when it is a gradient swatch
     /// of the same gradient, else a definition of the same gradient that no swatch names, else a
-    /// new one (`Gradient`, numbered when taken by another definition, a swatch or a pattern).
+    /// new one ([`free_gradient_name`]: `Gradient`, numbered when taken by another definition, a
+    /// swatch or a pattern).
     fn define_gradient(&mut self, g: &Gradient, swatch: Option<&str>) -> String {
         let used = !self.in_palette;
         let found = swatch
@@ -82,16 +95,10 @@ impl Writer<'_> {
             d.used |= used;
             return d.name.clone();
         }
-        let doc = self.doc;
-        let taken = |gradients: &[GradientDef], name: &str| {
+        let (doc, gradients) = (self.doc, &self.gradients);
+        let name = free_gradient_name(&mut self.next_gradient, |name| {
             gradients.iter().any(|d| d.name == name) || doc.swatch(name).is_some() || doc.pattern(name).is_some()
-        };
-        let mut name = String::from("Gradient");
-        let mut i = 1;
-        while taken(&self.gradients, &name) {
-            i += 1;
-            name = format!("Gradient {i}");
-        }
+        });
         self.gradients.push(GradientDef { name: name.clone(), gradient: g.clone(), swatch: false, used });
         name
     }
