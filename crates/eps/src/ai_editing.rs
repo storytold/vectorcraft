@@ -32,8 +32,8 @@
 //!   global process color `… (name) tint model Xk`; Registration `1 1 1 1 ([Registration]) tint
 //!   Xs`. Upper case paints the stroke.
 //! - State before each object: locked `A`, hidden `Xw` (`1` or `0`). An object's name follows it as
-//!   an `/ArtDictionary` whose `AI10_ArtUID` is the name as an XML id. Guides are `(N) *`, the
-//!   path, `(N) *` (`(n) *` when closed).
+//!   an `/ArtDictionary` whose `AI10_ArtUID` is the name as an XML id. Guides are the path
+//!   followed by `(N) *` (`(n) *` when closed), without the `(N) *` that §6 also puts before it.
 //! - Transparency: `mode opacity isolate knockout shape Xy` (the blending mode's number, Knockout
 //!   Group 0 off, 1 on, 2 neutral), written when it changes: in a path's paint after its colors,
 //!   before a guide, and after a group's end (`U` or `Q`) followed by `0 0 Xd` and `6 () XW`; a

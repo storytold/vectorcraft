@@ -978,6 +978,24 @@ fn artboard_display_marks_are_written() {
     assert!(ab.show_center_mark && !ab.show_cross_hairs && ab.show_video_safe_areas);
 }
 
+/// A guide is its path followed by `(n) *` (closed) or `(N) *` (open), with no `(N) *` before
+/// it, and reads back as the same guide.
+#[test]
+fn guides_are_their_path_then_the_guide_operator() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let line = shapes::line(vectorcraft_geom::Point::new(10.0, 80.0), vectorcraft_geom::Point::new(150.0, 80.0));
+    for path in [shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), line] {
+        let g = Node::new(doc.alloc_id(), NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: false, guide: true });
+        doc.insert(Some(layer), usize::MAX, g).unwrap();
+    }
+    let p = program(&doc);
+    let (closed, open) = (p.matches("\n(n) *\n").count(), p.matches("\n(N) *\n").count());
+    assert_eq!((closed, open), (1, 1), "{p}");
+    assert!(p.contains("0 Xw\n10 -10 m\n") && p.contains("10 -10 L\n(n) *\n10 -80 m\n150 -80 L\n(N) *\nLB\n"), "{p}");
+    assert_eq!(lines(&read_back(&doc)), lines(&doc));
+}
+
 #[test]
 fn effects_on_a_fill_are_reported_left_out() {
     let mut doc = Document::new(200.0, 100.0);
