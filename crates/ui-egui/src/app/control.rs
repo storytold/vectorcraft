@@ -9,7 +9,15 @@ impl VectorcraftApp {
         let Some(rx) = self.control_rx.take() else { return };
         let mut handled = 0;
         while handled < control::MAX_CONTROL_REQUESTS_PER_FRAME {
-            let Ok(req) = rx.try_recv() else { break };
+            let Some(req) = self.deferred_control.take().or_else(|| rx.try_recv().ok()) else { break };
+            // `ui.pointer` drives the tool at once, while `ui.key` and the other synthetic input
+            // reach it in a later UI pass: a pointer request waits until the input sent before it
+            // was applied, so a key pressed during a drag changes the drag before its release.
+            if req.method == "ui.pointer" && (!self.synthetic.is_empty() || self.synthetic_injected) {
+                self.deferred_control = Some(req);
+                ctx.request_repaint();
+                break;
+            }
             // Its caller stopped waiting (the app was busy or its window not drawn for too long)
             // and was told it won't run: an edit applied now would come from nowhere (#1725).
             if !req.claim() {
