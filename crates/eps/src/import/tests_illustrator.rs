@@ -433,6 +433,26 @@ fn a_legacy_files_paths_keep_their_notes_and_show_center() {
     assert!(kids[0].shows_center() && !kids[1].shows_center());
 }
 
+/// A version 8 file's object tags open as each object's URL and data.
+#[test]
+fn a_legacy_files_object_tags_open_as_urls_and_data() {
+    let body = format!(
+        "%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Tags) Ln\n0 A\n0 0 0 1 k\n{}\n/AdobeURL (https://example.com) XT\n/sku (B-7) XT\n\
+         u\n{}\nU\n/part () XT\nLB\n%AI5_EndLayer--\n",
+        tri(10),
+        tri(40)
+    );
+    let r = import(&ai(AI8, "", &body)).unwrap();
+    let kids = r.document.layers[0].children().unwrap();
+    let attrs: Vec<_> = kids.iter().map(|n| n.extras().attrs.as_deref().map(|a| (a.url.clone(), a.data.clone()))).collect();
+    assert_eq!(
+        attrs,
+        [Some(("https://example.com".into(), vec![("sku".into(), "B-7".into())])), Some((String::new(), vec![("part".into(), String::new())]))],
+        "{:?}",
+        r.warnings
+    );
+}
+
 #[test]
 fn unbalanced_and_runaway_groups_are_read_safely() {
     // Ends without a beginning end nothing; groups left open hold the rest.

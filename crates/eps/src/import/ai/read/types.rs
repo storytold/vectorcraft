@@ -43,6 +43,17 @@ pub(super) const MAX_PATTERNS: usize = 4096;
 /// Most characters of a path's note read (the version 7 specification allows 254, §5.3.1).
 pub(super) const MAX_NOTE: usize = 1024;
 
+/// Most object tags (`XT`) kept in one object's data. SVG import keeps the same number of `data-*`
+/// attributes per element.
+pub(super) const MAX_TAGS: usize = 64;
+
+/// The longest identifier or string an object tag (`XT`) may have, in bytes: SVG import keeps
+/// another application's attribute values up to the same length.
+pub(super) const MAX_TAG_TEXT: usize = 64 * 1024;
+
+/// The object tag that holds the object's URL (version 7 specification §7).
+pub(super) const URL_TAG: &str = "AdobeURL";
+
 #[derive(Clone, Debug)]
 pub(crate) struct GState {
     pub(crate) fill: Paint,
