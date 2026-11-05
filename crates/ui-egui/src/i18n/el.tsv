@@ -1991,6 +1991,7 @@ font-technology	Variable	Μεταβλητές
 	Patterns	Μοτίβα
 	Stroke Options	Επιλογές περιγράμματος
 	Character:	Χαρακτήρας:
+	Paragraph:	Παράγραφος:
 	Stroke:	Περίγραμμα:
 	Style	Στυλ
 	Style:	Στυλ:
@@ -3655,6 +3656,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Stray Points	Μεμονωμένα σημεία
 	Stroke (X), double-click for the Color Picker	Περίγραμμα (X), διπλό κλικ για επιλογέα χρώματος
 	Character options	Επιλογές χαρακτήρων
+	Paragraph options	Επιλογές παραγράφου
 	Stroke options	Επιλογές περιγράμματος
 	Transform options	Επιλογές μετασχηματισμού
 	Stroke Weight	Πάχος περιγράμματος
