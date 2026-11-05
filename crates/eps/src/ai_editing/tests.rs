@@ -2259,6 +2259,58 @@ fn gradient_definitions_skip_the_names_of_swatches_and_patterns() {
     same_lines(&gradient_looks(&read_back(&doc)), &gradient_looks(&doc));
 }
 
+/// Each search for a new gradient name starts after the last name given, so naming many gradients
+/// tries each name once.
+#[test]
+fn gradient_names_are_searched_from_the_last_one_given() {
+    let mut taken: std::collections::HashSet<String> = ["Gradient 2", "Gradient 5"].map(String::from).into();
+    let (mut next, mut tries) = (1, 0);
+    let mut names = vec![];
+    for _ in 0..1000 {
+        let name = writer::free_gradient_name(&mut next, |name| {
+            tries += 1;
+            taken.contains(name)
+        });
+        taken.insert(name.clone());
+        names.push(name);
+    }
+    assert_eq!(names[..4], ["Gradient", "Gradient 3", "Gradient 4", "Gradient 6"]);
+    assert_eq!(names.last().map(String::as_str), Some("Gradient 1002"));
+    assert_eq!(tries, 1002);
+    assert_eq!(next, 1003);
+}
+
+/// Many gradients that no swatch names each get their own name, in order, skipping the names of
+/// swatches and patterns, and the same names when the document is written again.
+#[test]
+fn many_gradient_definitions_take_distinct_names_in_order() {
+    let mut doc = one_object(shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), vec![]);
+    let check = square(&mut doc, Rect::new(0.0, 0.0, 5.0, 5.0), Color::BLACK);
+    let mut taken = vectorcraft_doc::PatternDef::new("Gradient 7", vec![Arc::new(check)]);
+    taken.tile = Rect::new(0.0, 0.0, 10.0, 10.0);
+    doc.patterns.push(taken);
+    swatches_plus(&mut doc, vec![Swatch { name: "Gradient 3".into(), paint: solid(Color::rgb(0.0, 0.5, 0.0)), global: false, spot: false }]);
+    let layer = doc.layers[0].id;
+    for i in 0..300u16 {
+        let shade = f32::from(i) / 300.0;
+        let g = ramp(GradientKind::Linear, &[(0.0, Color::rgb(shade, 0.0, 0.0), 1.0, 0.5), (1.0, Color::rgb(0.0, 0.0, 1.0), 1.0, 0.5)]);
+        let x = f64::from(i % 20) * 10.0;
+        let y = f64::from(i / 20) * 6.0;
+        let n = painted(
+            &mut doc,
+            shapes::rectangle(Rect::new(x, y, x + 8.0, y + 5.0)),
+            vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(g, None, None)))],
+        );
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let text = program(&doc);
+    let names: Vec<&str> = text.lines().filter_map(|l| l.strip_prefix("%AI5_BeginGradient: ")).collect();
+    let expected: Vec<String> =
+        std::iter::once("(Gradient)".to_string()).chain((2..=302).filter(|&i| i != 3 && i != 7).map(|i| format!("(Gradient {i})"))).collect();
+    assert_eq!(names, expected);
+    assert_eq!(text, program(&doc));
+}
+
 /// A hard edge: a linear gradient whose stops all lie at one place is written from its last stop,
 /// and reads back with each stop on its side.
 #[test]
