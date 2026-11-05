@@ -6350,6 +6350,25 @@ breakText	Glyphs	Glifák
 	Minimum angle	Legkisebb szög
 	Maximum angle	Legnagyobb szög
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Csatoltak kijelölése
+	Select Embedded	Beágyazottak kijelölése
+	Select Missing	Hiányzók kijelölése
+	Select Modified	Módosítottak kijelölése
+	Select by Link Status	Kijelölés csatolási állapot szerint
+	Select by Link Status…	Kijelölés csatolási állapot szerint…
+	Search images	Képek keresése
+	No images match.	Nincs egyező kép.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Kijelölt csatolt képek: {n}
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Kijelölt beágyazott képek: {n}
+@msgplural	Selected {n} missing image|Selected {n} missing images	Kijelölt hiányzó képek: {n}
+@msgplural	Selected {n} modified image|Selected {n} modified images	Kijelölt módosított képek: {n}
+@msgplural	Selected {n} image|Selected {n} images	Kijelölt képek: {n}
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; további rejtett vagy zárolt: {n}
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; további sablonrétegen: {n}
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; további az elkülönített csoporton kívül: {n}
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; további most nem jelölhető ki: {n}
+
 # Compound Shapes add-on
 	Compound Shapes	Összetett alakzatok
 	Shape Mode Buttons Make Compound Shapes	Az alakzatmód-gombok összetett alakzatokat hoznak létre

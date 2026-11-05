@@ -6004,6 +6004,25 @@ breakText	Glyphs	字符
 	Minimum angle	最小角度
 	Maximum angle	最大角度
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	選取已連結
+	Select Embedded	選取已內嵌
+	Select Missing	選取遺失
+	Select Modified	選取已修改
+	Select by Link Status	依連結狀態選取
+	Select by Link Status…	依連結狀態選取…
+	Search images	搜尋影像
+	No images match.	沒有符合的影像。
+@msgplural	Selected {n} linked image|Selected {n} linked images	已選取 {n} 個已連結的影像
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	已選取 {n} 個已內嵌的影像
+@msgplural	Selected {n} missing image|Selected {n} missing images	已選取 {n} 個遺失的影像
+@msgplural	Selected {n} modified image|Selected {n} modified images	已選取 {n} 個已修改的影像
+@msgplural	Selected {n} image|Selected {n} images	已選取 {n} 個影像
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}；另有 {n} 個已隱藏或鎖定
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}；另有 {n} 個位於範本圖層上
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}；另有 {n} 個位於隔離的群組之外
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}；另有 {n} 個現在無法選取
+
 # Compound Shapes add-on
 	Compound Shapes	複合形狀
 	Shape Mode Buttons Make Compound Shapes	形狀模式按鈕製作複合形狀

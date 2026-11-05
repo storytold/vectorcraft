@@ -6422,6 +6422,25 @@ digits	Hindi	Hindi
 	Minimum angle	Minsta vinkel
 	Maximum angle	Största vinkel
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Markera länkade
+	Select Embedded	Markera inbäddade
+	Select Missing	Markera saknade
+	Select Modified	Markera ändrade
+	Select by Link Status	Markera efter länkstatus
+	Select by Link Status…	Markera efter länkstatus…
+	Search images	Sök bilder
+	No images match.	Ingen bild matchar.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Markerade {n} länkad bild|Markerade {n} länkade bilder
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Markerade {n} inbäddad bild|Markerade {n} inbäddade bilder
+@msgplural	Selected {n} missing image|Selected {n} missing images	Markerade {n} saknad bild|Markerade {n} saknade bilder
+@msgplural	Selected {n} modified image|Selected {n} modified images	Markerade {n} ändrad bild|Markerade {n} ändrade bilder
+@msgplural	Selected {n} image|Selected {n} images	Markerade {n} bild|Markerade {n} bilder
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} till är dold eller låst|{selected}; {n} till är dolda eller låsta
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} till ligger på ett mallager|{selected}; {n} till ligger på mallager
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} till ligger utanför den isolerade gruppen|{selected}; {n} till ligger utanför den isolerade gruppen
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} till kan inte markeras nu|{selected}; {n} till kan inte markeras nu
+
 # Compound Shapes add-on
 	Compound Shapes	Sammansatta former
 	Shape Mode Buttons Make Compound Shapes	Formlägesknapparna skapar sammansatta former

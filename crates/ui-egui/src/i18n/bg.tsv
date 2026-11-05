@@ -6216,6 +6216,25 @@ breakText	Glyphs	Глифи
 	Minimum angle	Минимален ъгъл
 	Maximum angle	Максимален ъгъл
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Избиране на свързаните
+	Select Embedded	Избиране на вградените
+	Select Missing	Избиране на липсващите
+	Select Modified	Избиране на модифицираните
+	Select by Link Status	Избиране по състояние на връзката
+	Select by Link Status…	Избиране по състояние на връзката…
+	Search images	Търсене на изображения
+	No images match.	Няма съвпадащи изображения.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Избрано е {n} свързано изображение|Избрани са {n} свързани изображения
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Избрано е {n} вградено изображение|Избрани са {n} вградени изображения
+@msgplural	Selected {n} missing image|Selected {n} missing images	Избрано е {n} липсващо изображение|Избрани са {n} липсващи изображения
+@msgplural	Selected {n} modified image|Selected {n} modified images	Избрано е {n} модифицирано изображение|Избрани са {n} модифицирани изображения
+@msgplural	Selected {n} image|Selected {n} images	Избрано е {n} изображение|Избрани са {n} изображения
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; още {n} е скрито или заключено|{selected}; още {n} са скрити или заключени
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; още {n} е в шаблонен слой|{selected}; още {n} са в шаблонни слоеве
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; още {n} е извън изолираната група|{selected}; още {n} са извън изолираната група
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; още {n} не може да бъде избрано сега|{selected}; още {n} не могат да бъдат избрани сега
+
 # Compound Shapes add-on
 	Compound Shapes	Съставни фигури
 	Shape Mode Buttons Make Compound Shapes	Бутоните за режими на фигури създават съставни фигури

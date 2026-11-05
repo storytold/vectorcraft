@@ -6323,6 +6323,25 @@ breakText	Glyphs	Glifler
 	Minimum angle	En Küçük Açı
 	Maximum angle	En Büyük Açı
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Bağlantılıları Seç
+	Select Embedded	Gömülüleri Seç
+	Select Missing	Eksikleri Seç
+	Select Modified	Değiştirilenleri Seç
+	Select by Link Status	Bağlantı Durumuna Göre Seç
+	Select by Link Status…	Bağlantı Durumuna Göre Seç…
+	Search images	Görüntülerde ara
+	No images match.	Eşleşen görüntü yok.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} bağlantılı görüntü seçildi
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} gömülü görüntü seçildi
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} eksik görüntü seçildi
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} değiştirilmiş görüntü seçildi
+@msgplural	Selected {n} image|Selected {n} images	{n} görüntü seçildi
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} tane daha gizli veya kilitli
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} tane daha şablon katmanında
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} tane daha izole grubun dışında
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} tane daha şu anda seçilemiyor
+
 # Compound Shapes add-on
 	Compound Shapes	Bileşik Şekiller
 	Shape Mode Buttons Make Compound Shapes	Şekil Modu Düğmeleri Bileşik Şekiller Yapar

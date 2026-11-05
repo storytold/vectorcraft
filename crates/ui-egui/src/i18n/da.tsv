@@ -6232,6 +6232,25 @@ breakText	Glyphs	Glyffer
 	Minimum angle	Mindste vinkel
 	Maximum angle	Største vinkel
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Markér linkede
+	Select Embedded	Markér integrerede
+	Select Missing	Markér manglende
+	Select Modified	Markér ændrede
+	Select by Link Status	Markér efter linkstatus
+	Select by Link Status…	Markér efter linkstatus…
+	Search images	Søg i billeder
+	No images match.	Ingen billeder passer.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Markerede {n} linket billede|Markerede {n} linkede billeder
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Markerede {n} integreret billede|Markerede {n} integrerede billeder
+@msgplural	Selected {n} missing image|Selected {n} missing images	Markerede {n} manglende billede|Markerede {n} manglende billeder
+@msgplural	Selected {n} modified image|Selected {n} modified images	Markerede {n} ændret billede|Markerede {n} ændrede billeder
+@msgplural	Selected {n} image|Selected {n} images	Markerede {n} billede|Markerede {n} billeder
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} mere er skjult eller låst|{selected}; {n} mere er skjult eller låst
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} mere er på et skabelonlag|{selected}; {n} mere er på skabelonlag
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} mere er uden for den isolerede gruppe|{selected}; {n} mere er uden for den isolerede gruppe
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} mere kan ikke markeres nu|{selected}; {n} mere kan ikke markeres nu
+
 # Compound Shapes add-on
 	Compound Shapes	Sammensatte figurer
 	Shape Mode Buttons Make Compound Shapes	Knapper til formtilstande opretter sammensatte figurer

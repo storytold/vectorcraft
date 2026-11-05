@@ -385,6 +385,11 @@ pub struct UiState {
     /// is open. Not saved.
     #[serde(skip)]
     pub context_intertwine: Option<(u64, vectorcraft_doc::NodeId, vectorcraft_geom::Point, vectorcraft_doc::NodeId)>,
+    /// Which link statuses the active document's images and placed documents have, for Select ›
+    /// Linked, Embedded, Missing and Modified to be on only when some do (refreshed by
+    /// [`crate::addons::select::link_status::refresh`]). Not saved.
+    #[serde(skip)]
+    pub link_statuses: crate::addons::select::link_status::Present,
     /// Last tool shown in each toolbar slot (keyed by the slot's first tool id).
     #[serde(default)]
     pub slot_tool: std::collections::BTreeMap<String, String>,
@@ -946,6 +951,7 @@ impl Default for UiState {
             shape_modes_compound: false,
             context_locked: None,
             context_intertwine: None,
+            link_statuses: Default::default(),
             slot_tool: Default::default(),
             floating_flyouts: vec![],
             toolbar_edits: ToolbarEdits::default(),

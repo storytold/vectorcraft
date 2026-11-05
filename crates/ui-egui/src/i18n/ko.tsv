@@ -5947,6 +5947,25 @@ breakText	Glyphs	글리프
 	Minimum angle	최소 각도
 	Maximum angle	최대 각도
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	연결됨 선택
+	Select Embedded	포함됨 선택
+	Select Missing	없는 이미지 선택
+	Select Modified	수정된 이미지 선택
+	Select by Link Status	링크 상태로 선택
+	Select by Link Status…	링크 상태로 선택…
+	Search images	이미지 검색
+	No images match.	일치하는 이미지가 없습니다.
+@msgplural	Selected {n} linked image|Selected {n} linked images	연결된 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	포함된 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} missing image|Selected {n} missing images	없는 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} modified image|Selected {n} modified images	수정된 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} image|Selected {n} images	이미지 {n}개를 선택했습니다
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}. {n}개는 숨겨졌거나 잠겨 있습니다
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}. {n}개는 템플릿 레이어에 있습니다
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}. {n}개는 격리된 그룹 밖에 있습니다
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}. {n}개는 지금 선택할 수 없습니다
+
 # Compound Shapes add-on
 	Compound Shapes	컴파운드 모양
 	Shape Mode Buttons Make Compound Shapes	모양 모드 버튼으로 컴파운드 모양 만들기

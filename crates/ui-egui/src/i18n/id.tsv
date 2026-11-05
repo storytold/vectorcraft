@@ -6232,6 +6232,25 @@ breakText	Glyphs	Glif
 	Minimum angle	Sudut minimum
 	Maximum angle	Sudut maksimum
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Pilih yang Tertaut
+	Select Embedded	Pilih yang Tersemat
+	Select Missing	Pilih yang Hilang
+	Select Modified	Pilih yang Diubah
+	Select by Link Status	Pilih menurut Status Tautan
+	Select by Link Status…	Pilih menurut Status Tautan…
+	Search images	Cari gambar
+	No images match.	Tidak ada gambar yang cocok.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Telah memilih {n} gambar tertaut
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Telah memilih {n} gambar tersemat
+@msgplural	Selected {n} missing image|Selected {n} missing images	Telah memilih {n} gambar yang hilang
+@msgplural	Selected {n} modified image|Selected {n} modified images	Telah memilih {n} gambar yang diubah
+@msgplural	Selected {n} image|Selected {n} images	Telah memilih {n} gambar
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} lainnya tersembunyi atau terkunci
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} lainnya berada di layer templat
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} lainnya berada di luar grup yang diisolasi
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} lainnya tidak dapat dipilih sekarang
+
 # Compound Shapes add-on
 	Compound Shapes	Bentuk majemuk
 	Shape Mode Buttons Make Compound Shapes	Tombol mode bentuk membuat bentuk majemuk

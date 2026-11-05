@@ -6401,6 +6401,25 @@ breakText	Glyphs	Merkit
 	Minimum angle	Pienin kulma
 	Maximum angle	Suurin kulma
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Valitse linkitetyt
+	Select Embedded	Valitse upotetut
+	Select Missing	Valitse puuttuvat
+	Select Modified	Valitse muokatut
+	Select by Link Status	Valitse linkin tilan mukaan
+	Select by Link Status…	Valitse linkin tilan mukaan…
+	Search images	Hae kuvia
+	No images match.	Mikään kuva ei vastaa hakua.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Valittiin {n} linkitetty kuva|Valittiin {n} linkitettyä kuvaa
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Valittiin {n} upotettu kuva|Valittiin {n} upotettua kuvaa
+@msgplural	Selected {n} missing image|Selected {n} missing images	Valittiin {n} puuttuva kuva|Valittiin {n} puuttuvaa kuvaa
+@msgplural	Selected {n} modified image|Selected {n} modified images	Valittiin {n} muokattu kuva|Valittiin {n} muokattua kuvaa
+@msgplural	Selected {n} image|Selected {n} images	Valittiin {n} kuva|Valittiin {n} kuvaa
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} muu on piilotettu tai lukittu|{selected}; {n} muuta on piilotettu tai lukittu
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} muu on mallitasolla|{selected}; {n} muuta on mallitasoilla
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} muu on eristetyn ryhmän ulkopuolella|{selected}; {n} muuta on eristetyn ryhmän ulkopuolella
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} muuta ei voi valita nyt|{selected}; {n} muuta ei voi valita nyt
+
 # Compound Shapes add-on
 	Compound Shapes	Yhdistelmämuodot
 	Shape Mode Buttons Make Compound Shapes	Muototilapainikkeet luovat yhdistelmämuotoja

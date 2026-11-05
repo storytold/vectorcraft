@@ -6352,6 +6352,25 @@ breakText	Glyphs	Glifs
 	Minimum angle	Angle mínim
 	Maximum angle	Angle màxim
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Selecciona les enllaçades
+	Select Embedded	Selecciona les incrustades
+	Select Missing	Selecciona les que falten
+	Select Modified	Selecciona les modificades
+	Select by Link Status	Selecciona per estat de l’enllaç
+	Select by Link Status…	Selecciona per estat de l’enllaç…
+	Search images	Cerca imatges
+	No images match.	Cap imatge no coincideix.
+@msgplural	Selected {n} linked image|Selected {n} linked images	S’ha seleccionat {n} imatge enllaçada|S’han seleccionat {n} imatges enllaçades
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	S’ha seleccionat {n} imatge incrustada|S’han seleccionat {n} imatges incrustades
+@msgplural	Selected {n} missing image|Selected {n} missing images	S’ha seleccionat {n} imatge que falta|S’han seleccionat {n} imatges que falten
+@msgplural	Selected {n} modified image|Selected {n} modified images	S’ha seleccionat {n} imatge modificada|S’han seleccionat {n} imatges modificades
+@msgplural	Selected {n} image|Selected {n} images	S’ha seleccionat {n} imatge|S’han seleccionat {n} imatges
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} més està oculta o bloquejada|{selected}; {n} més estan ocultes o bloquejades
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} més és en una capa de plantilla|{selected}; {n} més són en capes de plantilla
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} més és fora del grup aïllat|{selected}; {n} més són fora del grup aïllat
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} més no es pot seleccionar ara|{selected}; {n} més no es poden seleccionar ara
+
 # Compound Shapes add-on
 	Compound Shapes	Formes compostes
 	Shape Mode Buttons Make Compound Shapes	Els botons de mode de forma creen formes compostes

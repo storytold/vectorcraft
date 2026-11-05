@@ -125,6 +125,12 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
                 if !e.get("x").is_some_and(Value::is_number) || !e.get("y").is_some_and(Value::is_number) {
                     return Err(format!("event {i}: numeric `x` and `y` required"));
                 }
+                if e.get("backquote").is_some_and(|v| !v.is_boolean()) {
+                    return Err(format!("event {i}: `backquote` must be a boolean"));
+                }
+            }
+            if a.get("backquote").is_some_and(|v| !v.is_boolean()) {
+                return Err("`backquote` must be a boolean".into());
             }
             if let Some(t) = a.get("tool").and_then(Value::as_str) {
                 b.call("ui.tool.select", json!({"tool": t}))?;
