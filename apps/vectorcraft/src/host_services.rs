@@ -198,6 +198,30 @@ fn read_file_refuses_what_is_not_a_regular_file() {
     assert!(read_file("/dev/zero").is_err());
 }
 
+/// Read the first `max` bytes of a file (all of it when it is shorter), and nothing past them. Only
+/// a regular file is read.
+fn read_file_head(path: &str, max: usize) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    if !std::fs::metadata(path).map_err(|e| e.to_string())?.is_file() {
+        return Err(format!("{path}: not a file"));
+    }
+    let mut out = vec![];
+    std::fs::File::open(path).and_then(|f| f.take(max as u64).read_to_end(&mut out)).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
+#[cfg(test)]
+#[test]
+fn read_file_head_reads_no_more_than_it_is_asked_for() {
+    let path = std::env::temp_dir().join(format!("vectorcraft-read-head-{}", std::process::id()));
+    std::fs::write(&path, b"0123456789").unwrap();
+    let p = path.to_string_lossy();
+    assert_eq!(read_file_head(&p, 4).unwrap(), b"0123");
+    assert_eq!(read_file_head(&p, 20).unwrap(), b"0123456789", "a shorter file is read whole");
+    let _ = std::fs::remove_file(&path);
+    assert!(read_file_head(&std::env::temp_dir().to_string_lossy(), 4).is_err(), "a folder is not read");
+}
+
 /// Write a file the safe way: a failed write keeps the old file ([`fileio::write_atomic`]).
 fn write_file(path: &str, bytes: &[u8]) -> Result<(), String> {
     fileio::write_atomic(std::path::Path::new(path), bytes).map_err(|e| e.to_string())
@@ -325,6 +349,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         #[cfg(windows)]
         stylus: Some(windows_stylus::start()),
         read: Some(Box::new(read_file)),
+        // Load Actions… refuses a file over its size limit without reading all of it.
+        read_head: Some(Box::new(read_file_head)),
         write: Some(Box::new(write_file)),
         exists: Some(Box::new(|p: &str| std::path::Path::new(p).exists())),
         // Background Save and Export write from a worker thread.
