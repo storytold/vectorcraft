@@ -329,10 +329,15 @@ mod tests {
     #[test]
     fn a_stale_endpoint_file_is_ignored_and_replaced() {
         let (path, dir, file) = folder("stale");
-        // No listener on the recorded port any more.
-        let port = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap().local_addr().unwrap().port();
+        // The recorded app is gone: whatever holds the port closes without a greeting. (A freed
+        // port can be taken by another test's listener meanwhile, which would then accept this
+        // connection in place of its own client's.)
+        let gone = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = gone.local_addr().unwrap().port();
         write_endpoint(&path, &json!({ "port": port, "token": "t", "hello": "h" })).unwrap();
+        let closed = std::thread::spawn(move || drop(gone.accept()));
         assert!(forward(&path, std::slice::from_ref(&file)).is_err());
+        closed.join().unwrap();
         // A listener that doesn't know the greeting gets neither the token nor the paths.
         let impostor = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = impostor.local_addr().unwrap().port();

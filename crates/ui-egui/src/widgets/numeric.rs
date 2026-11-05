@@ -59,20 +59,35 @@ pub fn num_field_within(
     bounds: RangeInclusive<f64>,
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], false)
+    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], false, "")
+}
+
+/// [`num_field_within`] whose empty value reads `empty` (Transform Each's Absolute scales read
+/// "Mixed" when the selected objects differ): typing replaces it, as it replaces the value shown.
+pub fn num_field_within_empty(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    value: Option<f64>,
+    empty: &str,
+    unit: Unit,
+    width: f32,
+    bounds: RangeInclusive<f64>,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], false, empty)
 }
 
 /// [`num_field`] for a row whose visible label is not an adjacent label widget (a grid cell with
 /// its label painted separately): screen readers name the field `name` (already translated).
 pub fn num_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, name, value, unit, width, false, ANY, &[], false)
+    unit_field(ui, id, label, name, value, unit, width, false, ANY, &[], false, "")
 }
 
 /// The field returns valid typed distances immediately and preserves the text being edited.
 pub fn num_field_live(ui: &mut Ui, id: impl std::hash::Hash, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, None, value, unit, width, false, ANY, &[], true)
+    unit_field(ui, id, label, None, value, unit, width, false, ANY, &[], true, "")
 }
 
 /// Any number: the bounds of a field that has none.
@@ -100,9 +115,10 @@ fn unit_field(
     bounds: RangeInclusive<f64>,
     stops: &[f64],
     live: bool,
+    empty: &str,
 ) -> Option<f64> {
     let id = id_with(ui.scope_id(), id);
-    let shown = value.map(|v| unit.format(v)).unwrap_or_default();
+    let shown = value.map(|v| unit.format(v)).unwrap_or_else(|| empty.to_string());
     take_dialog_focus(ui, id, &shown);
     let (mut buf, commit, resp, rect) = recessed_text(ui, id, &shown, width, 1, label, name);
     select_all_on_focus(ui, &resp, &buf);
@@ -116,7 +132,7 @@ fn unit_field(
     let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds_unit);
     let commit = commit && buf != shown;
     if commit {
-        match read(&buf).or_else(|| if share_of_value { share_of(&decimal_point(&buf), value?) } else { None }) {
+        match read(&buf).or_else(|| if share_of_value { share_of(&buf, value?) } else { None }) {
             Some(v) => {
                 let clamped = within(v, &bounds);
                 let formatted = unit.format(clamped);
@@ -152,9 +168,11 @@ fn unit_field(
 }
 
 /// A percentage typed alone (`50%`, `150 %`, `100/3%`) as that share of `value`; `None` for any
-/// other text. `Unit::parse` reads a bare percentage as nothing, having no value to take it of.
+/// other text. `Unit::parse` reads a bare percentage as nothing, having no value to take it of. A
+/// decimal comma is read ([`decimal_point`]) after the `%` is dropped, so `12,5%` is 12.5% and
+/// `1,000%` is refused as thousands rather than read as 1%.
 pub(super) fn share_of(text: &str, value: f64) -> Option<f64> {
-    let percent = vectorcraft_doc::parse_number(text.trim().strip_suffix('%')?)?;
+    let percent = vectorcraft_doc::parse_number(&decimal_point(text.trim().strip_suffix('%')?))?;
     Some(value * percent / 100.0)
 }
 
@@ -330,7 +348,7 @@ pub fn size_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str
             }
         });
     }
-    unit_field(ui, id, label, name, value, unit, width, true, ANY, &[], false)
+    unit_field(ui, id, label, name, value, unit, width, true, ANY, &[], false, "")
 }
 
 /// [`plain_field`] for a number kept within `range` (the values of dialogs, preferences and panels
@@ -433,9 +451,8 @@ pub fn mixed_field_named(
     bounded_field(ui, id, label, name, value, suffix, decimals, width, &ANY, None, false, false)
 }
 
-/// [`mixed_field`] whose ↑/↓, wheel and scrub stop at `bounds`; ↑/↓ and the wheel take `step`'s steps
-/// when it is given (see [`SliderValue::step`]). Armed with id salt `id` ([`arm_field_focus`]), it
-/// takes the keyboard focus with its value selected.
+/// [`bounded_field_reading`] that reads one pair of parentheses around its text only while it shows
+/// its value in parentheses.
 #[allow(clippy::too_many_arguments)]
 fn bounded_field(
     ui: &mut Ui,
@@ -451,16 +468,33 @@ fn bounded_field(
     parentheses: bool,
     live: bool,
 ) -> Option<f64> {
+    bounded_field_reading(ui, id, label, name, value, suffix, decimals, width, bounds, step, parentheses, parentheses, live)
+}
+
+/// [`mixed_field`] whose ↑/↓, wheel and scrub stop at `bounds`; ↑/↓ and the wheel take `step`'s steps
+/// when it is given (see [`SliderValue::step`]). Armed with id salt `id` ([`arm_field_focus`]), it
+/// takes the keyboard focus with its value selected. With `parentheses` it shows its value as
+/// `(12)`; with `read_parentheses` it reads typed text as [`field_number`] does with its Kerning flag.
+#[allow(clippy::too_many_arguments)]
+fn bounded_field_reading(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    label: Option<PreviousLabel>,
+    name: Option<&str>,
+    value: Option<f64>,
+    suffix: &str,
+    decimals: usize,
+    width: f32,
+    bounds: &RangeInclusive<f64>,
+    step: Option<fn(f64, f64) -> f64>,
+    parentheses: bool,
+    read_parentheses: bool,
+    live: bool,
+) -> Option<f64> {
     let armed = take_armed_focus(ui, &id);
     let id = id_with(ui.scope_id(), id);
     let show = |value: f64| field_text(value, suffix, decimals);
-    // The suffix (and %, °) may follow any operand: `45*2°`, `50% / 2`.
-    let read = |buf: &str| {
-        let suffix = suffix.trim();
-        let buf = decimal_point(buf);
-        let bare = if suffix.is_empty() { buf.to_string() } else { buf.replace(suffix, "") };
-        vectorcraft_doc::parse_number(&bare.replace(['%', '°', '(', ')'], ""))
-    };
+    let read = |buf: &str| field_number(buf, suffix, read_parentheses);
     let shown = value.map(|v| if parentheses { format!("({})", show(v)) } else { show(v) }).unwrap_or_default();
     take_dialog_focus(ui, id, &shown);
     if armed {
@@ -489,6 +523,21 @@ fn bounded_field(
     } else {
         None
     }
+}
+
+/// The number text typed into a [`bounded_field`] with `suffix` reads as. The suffix, `%` and `°`
+/// may follow any operand: `45*2°`, `50% / 2`. With `parentheses` (Kerning, which shows its
+/// automatic value as `(12)`), one pair of parentheses around the whole text is dropped first, so
+/// `(12)` reads as 12. Any other parentheses are refused: `(10+5)*2` reads as nothing, not as
+/// `10+5*2`. A decimal comma is read ([`decimal_point`]) after the suffix, `%`, `°` and that pair
+/// are dropped, so `(1,000)` and `1,000%` are refused as thousands rather than read as 1.
+pub(super) fn field_number(buf: &str, suffix: &str, parentheses: bool) -> Option<f64> {
+    let suffix = suffix.trim();
+    let bare = if suffix.is_empty() { buf.to_string() } else { buf.replace(suffix, "") };
+    let bare = bare.replace(['%', '°'], "");
+    let bare = bare.trim();
+    let bare = if parentheses { bare.strip_prefix('(').and_then(|b| b.strip_suffix(')')).unwrap_or(bare) } else { bare };
+    vectorcraft_doc::parse_number(&decimal_point(bare))
 }
 
 /// The text [`plain_field`] shows for `value`: at most `decimals` places, without trailing zeros,
@@ -567,7 +616,7 @@ pub fn spin_field_stops_named(
 ) -> Option<f64> {
     let label = take_previous_label(ui);
     spin_generic(ui, label, value, None, None, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets, false)
+        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets, false, "")
     })
     .and_then(SpinPick::value)
 }
@@ -624,7 +673,7 @@ pub fn spin_field_auto_named(
 ) -> Option<SpinPick> {
     let label = take_previous_label(ui);
     spin_generic(ui, label, value, auto, None, None, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[], false)
+        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[], false, "")
     })
 }
 
@@ -668,7 +717,9 @@ pub fn spin_plain_named(
     .and_then(SpinPick::value)
 }
 
-/// Kerning's numeric field and automatic method choices.
+/// Kerning's numeric field and automatic method choices. With `parentheses` the field shows its
+/// value as `(12)`; typed text such as `(10+5)` reads with one pair of parentheses around it either
+/// way.
 #[allow(clippy::too_many_arguments)]
 pub fn spin_kerning(
     ui: &mut Ui,
@@ -695,7 +746,7 @@ pub fn spin_kerning(
         presets,
         &[],
         &|v| format!("{v}"),
-        &mut |ui, fw, label| bounded_field(ui, id, label, None, value, "", 0, fw, &(-1000.0..=f64::INFINITY), None, parentheses, false),
+        &mut |ui, fw, label| bounded_field_reading(ui, id, label, None, value, "", 0, fw, &(-1000.0..=f64::INFINITY), None, parentheses, true, false),
     )
 }
 

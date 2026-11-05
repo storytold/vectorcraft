@@ -353,7 +353,7 @@ impl Tool for DimensionTool {
             PointerKind::Down => {
                 if self.pending.is_some() && !self.dragging {
                     self.press = Some((ev.pos, None));
-                    return vec![];
+                    return self.preview(cx, ev.pos);
                 }
                 self.press = Some((ev.pos, self.target(cx, ev.pos)));
                 vec![]
@@ -532,14 +532,30 @@ mod tests {
         }
         assert!(t.pending.is_some());
         assert!(matches!(t.pointer(&c, &ev(PointerKind::Move, 470.0, 450.0)).first(), Some(Action::Begin(_))));
-        assert!(t.pointer(&c, &ev(PointerKind::Down, 470.0, 450.0)).is_empty());
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Down, 470.0, 450.0)).last(), Some(Action::Preview(_, _))));
         assert_eq!(t.drop_press(&c), vec![Action::Cancel]);
         assert!(t.pointer(&c, &ev(PointerKind::Up, 470.0, 450.0)).is_empty());
         assert!(t.pending.is_some(), "the dimension can still be placed");
-        assert!(t.pointer(&c, &ev(PointerKind::Down, 480.0, 460.0)).is_empty());
+        assert!(matches!(t.pointer(&c, &ev(PointerKind::Down, 480.0, 460.0)).last(), Some(Action::Preview(_, _))));
         let dragged = t.pointer(&c, &ev(PointerKind::Drag, 490.0, 470.0));
         assert!(matches!(dragged.last(), Some(Action::Preview(_, _))), "{dragged:?}");
         let placed = t.pointer(&c, &ev(PointerKind::Up, 490.0, 470.0));
         assert!(matches!(placed.last(), Some(Action::Commit)), "{placed:?}");
+    }
+
+    #[test]
+    fn placement_press_previews_without_a_prior_move() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = DimensionTool::default();
+        for (x, y) in [(400.0, 400.0), (450.0, 420.0)] {
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y)).is_empty());
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y)).is_empty());
+        }
+        assert!(t.pending.is_some());
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Down, 470.0, 450.0));
+        assert!(matches!(acts.first(), Some(Action::Begin(_))), "{acts:?}");
+        assert!(matches!(acts.last(), Some(Action::Preview(_, _))), "{acts:?}");
     }
 }

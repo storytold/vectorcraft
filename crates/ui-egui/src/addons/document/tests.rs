@@ -123,3 +123,29 @@ fn export_all_open_documents_writes_each_to_the_folder_picked() {
     assert!(app.session.execute(super::EXPORT_ALL, &json!({"folder": out, "format": "doc"})).is_err());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// #4921: Batch Trace Folder from Object › Plug-ins › Document Tools asks for the folder of images,
+/// then the destination, traces each image there and reports the count (a status the catalogs
+/// translate); cancelling either does nothing.
+#[test]
+fn batch_trace_folder_asks_for_both_folders() {
+    let dir = folder("batch-trace");
+    let (src, out) = (dir.join("in"), dir.join("out"));
+    std::fs::create_dir_all(&src).unwrap();
+    image::RgbaImage::from_pixel(16, 16, image::Rgba([0, 0, 0, 255])).save(src.join("a.png")).unwrap();
+    std::fs::write(src.join("b.png"), b"not a png").unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut picks = vec![out.to_string_lossy().into_owned(), src.to_string_lossy().into_owned()];
+    app.services.pick_folder = Some(Box::new(move || picks.pop()));
+    click(&mut app, "Batch Trace Folder");
+    assert!(out.join("a.vectorcraft").exists(), "{}", app.ui.status);
+    assert_eq!(app.ui.status, "Traced 1 image; not traced: 1");
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    assert_eq!(crate::i18n::message(de, &app.ui.status), "1 Bild nachgezeichnet; nicht nachgezeichnet: 1");
+    assert_eq!(crate::i18n::message(de, "Traced 2 images"), "2 Bilder nachgezeichnet");
+    assert_eq!(crate::i18n::message(de, "2 images couldn't be traced"), "2 Bilder konnten nicht nachgezeichnet werden");
+    assert!(app.session.documents().is_empty(), "the images' documents are closed");
+    app.services.pick_folder = Some(Box::new(|| None));
+    assert_eq!(app.run(super::BATCH_TRACE, json!({})).unwrap_err(), "cancelled");
+    let _ = std::fs::remove_dir_all(&dir);
+}

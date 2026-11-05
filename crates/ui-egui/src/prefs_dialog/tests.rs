@@ -79,6 +79,24 @@ fn saved_scheme_accent_and_canvas_color_show_from_the_first_frame() {
     }
 }
 
+/// A Render Threads change made after the preferences were applied, and before the first UI pass
+/// applies them again, still restarts the canvas renderer.
+#[test]
+fn reapply_restarts_the_renderer_after_a_render_threads_change() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    apply_runtime(&mut app, &ctx);
+    app.canvas.worker_started = true;
+    // The automatic count as an explicit value: the process-wide count other tests read stays the same.
+    // `VECTORCRAFT_RENDER_THREADS` can give more than the 64 the preference accepts.
+    let threads = vectorcraft_render::default_threads().min(64);
+    app.run("prefs.set", json!({"key": "renderThreads", "value": threads})).unwrap();
+    reapply(&mut app, &ctx);
+    let restarted = !app.canvas.worker_started;
+    app.run("prefs.set", json!({"key": "renderThreads", "value": -1})).unwrap();
+    assert!(restarted, "the canvas renderer kept its old thread count");
+}
+
 fn app() -> VectorcraftApp {
     VectorcraftApp::new(Session::new(), Services::default())
 }
@@ -405,4 +423,126 @@ fn use_system_defaults_for_edit_original_is_a_checkbox() {
     a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalSystemDefaults".into(), json!(false));
     confirm(&mut a).unwrap();
     assert!(!a.session.prefs.edit_original_system_defaults);
+}
+
+/// A new, empty folder of its own for test `name`.
+fn temp_folder(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("vc-ui-prefs-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// File Handling › Data Recovery › Folder has a Choose… button where the host has a folder
+/// picker, and none where it has not (the web).
+#[test]
+fn recovery_folder_has_a_choose_button_with_a_folder_picker() {
+    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    a.services.pick_folder = Some(Box::new(|| None));
+    open(&mut a, Some("File Handling"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Data Recovery") && text.contains("Choose…"), "{text}");
+    a.services.pick_folder = None;
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Data Recovery") && !text.contains("Choose…"), "{text}");
+}
+
+/// Choose… puts the folder picked into the Folder field, and OK saves it; a canceled picker
+/// leaves the field as it was.
+#[test]
+fn a_chosen_recovery_folder_fills_the_field_and_cancel_keeps_it() {
+    let dir = temp_folder("recovery-chosen");
+    let picked = dir.to_string_lossy().into_owned();
+    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    open(&mut a, Some("File Handling"));
+    let answer = picked.clone();
+    a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
+    let mut d = a.ui.dialog.clone().unwrap();
+    choose_recovery_folder(&mut a, &mut d);
+    assert_eq!(d.str("recoveryFolder"), picked);
+    assert!(a.ui.status.is_empty(), "{}", a.ui.status);
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "the write check leaves nothing behind");
+    a.services.pick_folder = Some(Box::new(|| None));
+    choose_recovery_folder(&mut a, &mut d);
+    assert_eq!(d.str("recoveryFolder"), picked, "cancel keeps the field");
+    a.ui.dialog = Some(d);
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.recovery_folder, picked);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A picked folder that no folder can be created in is refused: the field keeps its value and the
+/// status bar says why.
+#[test]
+fn a_recovery_folder_that_cannot_be_written_is_refused() {
+    let dir = temp_folder("recovery-refused");
+    let file = dir.join("not-a-folder.txt");
+    std::fs::write(&file, b"x").unwrap();
+    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    open(&mut a, Some("File Handling"));
+    let mut d = a.ui.dialog.clone().unwrap();
+    d.fields.insert("recoveryFolder".into(), json!("kept"));
+    for path in [file.clone(), dir.join("missing")] {
+        let answer = path.to_string_lossy().into_owned();
+        a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
+        a.ui.status.clear();
+        choose_recovery_folder(&mut a, &mut d);
+        assert_eq!(d.str("recoveryFolder"), "kept");
+        assert_eq!(a.ui.status, format!("{} is not a folder", path.to_string_lossy()));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let locked = dir.join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // An account that may write anyway (root) has nothing to refuse.
+        if std::fs::create_dir(locked.join("probe")).is_err() {
+            let answer = locked.to_string_lossy().into_owned();
+            a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
+            a.ui.status.clear();
+            choose_recovery_folder(&mut a, &mut d);
+            assert_eq!(d.str("recoveryFolder"), "kept");
+            assert!(a.ui.status.starts_with("Data Recovery can't keep copies in "), "{}", a.ui.status);
+        }
+        let _ = std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755));
+        // A folder that can be written but not listed: the recovery store lists its folders.
+        let unlisted = dir.join("unlisted");
+        std::fs::create_dir(&unlisted).unwrap();
+        std::fs::set_permissions(&unlisted, std::fs::Permissions::from_mode(0o333)).unwrap();
+        // An account that may list anyway (root) has nothing to refuse.
+        if std::fs::read_dir(&unlisted).is_err() {
+            let answer = unlisted.to_string_lossy().into_owned();
+            a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
+            a.ui.status.clear();
+            choose_recovery_folder(&mut a, &mut d);
+            assert_eq!(d.str("recoveryFolder"), "kept");
+            assert!(a.ui.status.starts_with("Data Recovery can't keep copies in "), "{}", a.ui.status);
+        }
+        let _ = std::fs::set_permissions(&unlisted, std::fs::Permissions::from_mode(0o755));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The recovery folder is an app preference: a folder picked off the UI thread (Linux) fills the
+/// open dialog's field even when the active document closed while the picker was open.
+#[test]
+fn a_chosen_recovery_folder_fills_the_field_after_the_active_document_closes() {
+    let dir = temp_folder("recovery-closed");
+    let picked = dir.to_string_lossy().into_owned();
+    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    let (shown, _) = crate::tests_picks::off_the_ui_thread(&mut a.services);
+    a.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    open(&mut a, Some("File Handling"));
+    let mut d = a.ui.dialog.take().unwrap();
+    choose_recovery_folder(&mut a, &mut d);
+    a.ui.dialog = Some(d);
+    assert!(matches!(shown.requests().as_slice(), [crate::picks::PickRequest::Folder]));
+    a.session.execute("file.close", &json!({})).unwrap();
+    a.sync_views();
+    assert!(a.session.documents().is_empty());
+    shown.answer(&[&picked]);
+    crate::picks::poll(&mut a, &egui::Context::default());
+    assert_eq!(a.ui.dialog.as_ref().unwrap().str("recoveryFolder"), picked, "{}", a.ui.status);
+    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -45,7 +45,7 @@ fn button(pos: Pos2, pressed: bool) -> egui::Event {
 
 /// The documents' indices in the panes the last frame drew, and the panes.
 fn panes(app: &VectorcraftApp) -> (Vec<usize>, Vec<egui::Rect>) {
-    app.canvas.panes.last.iter().copied().unzip()
+    app.canvas.panes.last.iter().map(|(w, r)| (w.0, *r)).unzip()
 }
 
 #[test]
@@ -198,7 +198,7 @@ fn closing_a_document_while_tiled_tiles_the_others() {
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0, [0, 1, 2]);
-    let first = app.session.documents()[0].uid as usize;
+    let first = (app.session.documents()[0].uid, 1);
     assert!(app.canvas.panes.shown.contains_key(&first));
     // The first document, not the current one, closes.
     app.run("file.close", json!({"index": 0})).unwrap();
@@ -220,7 +220,7 @@ fn an_edit_shows_in_its_pane_once_another_document_is_current() {
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    let uid = app.session.documents()[1].uid as usize;
+    let uid = (app.session.documents()[1].uid, 1);
     let before = app.canvas.panes.shown.get(&uid).map(|(k, _)| k.revision);
     assert_eq!(before, Some(app.session.documents()[1].revision), "the second document's pane shows it");
     app.run("document.activate", json!({"index": 1})).unwrap();
@@ -294,7 +294,7 @@ fn other_panes_show_pixel_preview() {
     app.ui.view.pixel_preview = true;
     app.views[0].zoom = 4.0;
     frame(&mut app, &ctx, vec![]);
-    let uid = app.session.documents()[0].uid as usize;
+    let uid = (app.session.documents()[0].uid, 1);
     let key = app.canvas.panes.shown.get(&uid).map(|(k, _)| k.clone()).unwrap();
     let [x0, y0, x1, y1] = key.pixel.expect("the pane renders document pixels");
     assert!(x1 > x0 && y1 > y0);

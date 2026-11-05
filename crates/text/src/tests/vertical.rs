@@ -343,6 +343,41 @@ fn tracking_spaces_upright_marks_without_moving_them_off_the_centre_line() {
     assert!((step - 24.0).abs() < 1e-6, "one em plus 200/1000 em of tracking: {step}");
 }
 
+/// Baseline shift moves an upright glyph across the column, as it moves a letter lying on its
+/// side, at any Character Rotation, and leaves its neighbors where they are. The glyph turns about
+/// its shifted pen position (`xf * pivot`), and `xf * unturned` places the shifted glyph without
+/// its rotation.
+#[test]
+fn baseline_shift_moves_an_upright_glyph_across_the_column() {
+    let at = |byte: usize, rotation: f64, shift: f64| {
+        let mut t = vertical("§l§");
+        edit::style_range(&mut t.runs, byte, byte + "§l§"[byte..].chars().next().map_or(1, char::len_utf8), |s| {
+            s.rotation = rotation;
+            s.baseline_shift = shift;
+        });
+        layout(FontDb::global(), &t)
+    };
+    let centre = |l: &TextLayout, byte: usize| l.glyphs.iter().find(|g| g.byte == byte).map(|g| g.outline.bounding_box().center()).unwrap();
+    // The letter lying on its side moves across the column by the shift.
+    let across = centre(&at(2, 0.0, 10.0), 2) - centre(&at(2, 0.0, 0.0), 2);
+    assert!((across.x.abs() - 10.0).abs() < 1e-6 && across.y.abs() < 1e-6, "{across:?}");
+    for rotation in [0.0, 30.0, 90.0, -90.0] {
+        let (plain, shifted) = (at(3, rotation, 0.0), at(3, rotation, 10.0));
+        let moved = centre(&shifted, 3) - centre(&plain, 3);
+        assert!((moved - across).hypot() < 1e-6, "{rotation}°: {moved:?}, across {across:?}");
+        for byte in [0, 2] {
+            assert!((centre(&shifted, byte) - centre(&plain, byte)).hypot() < 1e-6, "{rotation}°: byte {byte} moved");
+        }
+        let (p, s) = (plain.glyphs.iter().find(|g| g.byte == 3).unwrap(), shifted.glyphs.iter().find(|g| g.byte == 3).unwrap());
+        let turn_at = s.xf * s.pivot - p.xf * p.pivot;
+        assert!((turn_at - across).hypot() < 1e-6, "{rotation}°: turns about a point moved by {turn_at:?}");
+        let unrotated = at(3, 0.0, 10.0);
+        let u = unrotated.glyphs.iter().find(|g| g.byte == 3).unwrap();
+        let (a, b) = ((s.xf * s.unturned).as_coeffs(), u.xf.as_coeffs());
+        assert!(a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-6), "{rotation}°: {a:?} vs {b:?}");
+    }
+}
+
 /// Character panel menu › Tate-chu-yoko: a marked run stands across one em of the column, including
 /// a number longer than three digits and Latin letters. Unmarked text keeps the automatic rule
 /// (two or three digits only). Horizontal type stores the mark and does not move the letters.
@@ -651,6 +686,37 @@ fn mojikumi_spaces_japanese_from_latin_by_a_quarter_em() {
     let on = lay("第10回", Mojikumi::LineEndHalf, true);
     let off = lay("第10回", Mojikumi::None, true);
     assert!(on.glyphs.iter().zip(&off.glyphs).all(|(a, b)| (a.advance - b.advance).abs() < 0.01));
+}
+
+/// Mojikumi applies to type holding Japanese punctuation or a Japanese letter; type without either
+/// lays out the same with Line-end Punctuation Half Width as with Mojikumi None, across lines and
+/// list markers too.
+#[test]
+fn mojikumi_applies_only_to_japanese_punctuation_and_letters() {
+    use vectorcraft_doc::Mojikumi;
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let styled = |text: &str, m: Mojikumi| {
+        let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 20.0, ..CharStyle::default() });
+        t.xf = Affine::IDENTITY;
+        t.para.mojikumi = m;
+        t
+    };
+    let placed = |l: &TextLayout| l.glyphs.iter().map(|g| (g.byte, g.advance, g.origin, g.xf)).collect::<Vec<_>>();
+    for text in ["", "A", "Latin words, digits 2026 and (brackets).", "first\nsecond"] {
+        let on = styled(text, Mojikumi::LineEndHalf);
+        let lay = layout(FontDb::global(), &on);
+        assert!(!lay.mojikumi_applies(&on.plain_text()), "{text:?}");
+        let off = layout(FontDb::global(), &styled(text, Mojikumi::None));
+        assert_eq!(placed(&lay), placed(&off), "{text:?}");
+        assert_eq!(lay.bounds, off.bounds, "{text:?}");
+    }
+    let mut listed = styled("first\nsecond", Mojikumi::LineEndHalf);
+    listed.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    assert!(!layout(FontDb::global(), &listed).mojikumi_applies(&listed.plain_text()));
+    for text in ["、", "「A」", "雅", "々", "Latin 漢字"] {
+        let t = styled(text, Mojikumi::LineEndHalf);
+        assert!(layout(FontDb::global(), &t).mojikumi_applies(&t.plain_text()), "{text:?}");
+    }
 }
 
 /// Mojikumi (JLREQ 3.1.5): with Line-end Punctuation Half Width, an opening bracket starting a

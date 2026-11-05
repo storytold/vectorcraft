@@ -62,7 +62,8 @@ fn a_straight_ramp_sizes_each_letter_and_skips_spaces() {
     select(&mut s, &[id]);
     let n = steps(&s);
     let out = s.execute(C, &json!({"attribute": "size", "from": 10, "to": 40})).unwrap();
-    assert_eq!(out, json!({"count": 4, "ids": [id.0]}));
+    // `b` is 20 pt already: three characters change.
+    assert_eq!(out, json!({"count": 3, "ids": [id.0]}));
     assert_eq!(steps(&s), n + 1, "one undo step");
     let sizes: Vec<(char, f64)> = styles(&s, id).into_iter().map(|(c, st)| (c, st.size)).collect();
     assert_eq!(sizes, [('a', 10.0), ('b', 20.0), (' ', 20.0), ('c', 30.0), ('d', 40.0)], "the space keeps its size");
@@ -108,7 +109,8 @@ fn each_object_gets_its_own_ramp() {
     let (a, b) = (text(&mut s, "abc"), text(&mut s, "de"));
     select(&mut s, &[a, b]);
     let out = s.execute(C, &json!({"attribute": "rotation", "from": 0, "to": 30})).unwrap();
-    assert_eq!(out["count"], json!(5));
+    // Each first character is upright already.
+    assert_eq!(out["count"], json!(3));
     let turns = |id| styles(&s, id).iter().map(|(_, st)| st.rotation).collect::<Vec<_>>();
     assert_eq!((turns(a), turns(b)), (vec![0.0, 15.0, 30.0], vec![0.0, 30.0]));
 }
@@ -120,6 +122,16 @@ fn a_range_changes_only_its_characters() {
     s.execute(C, &json!({"id": id.0, "start": 1, "end": 4, "attribute": "tracking", "from": 100, "to": 300})).unwrap();
     let tracking: Vec<f64> = styles(&s, id).iter().map(|(_, st)| st.tracking).collect();
     assert_eq!(tracking, [0.0, 100.0, 200.0, 300.0, 0.0]);
+}
+
+#[test]
+fn a_range_inside_a_multibyte_character_uses_character_boundaries() {
+    let mut s = session();
+    let id = text(&mut s, "éx");
+    let out = s.execute(C, &json!({"id": id.0, "start": 1, "end": 2, "attribute": "tracking", "from": 100, "to": 300})).unwrap();
+    assert_eq!(out["count"], 1);
+    let tracking: Vec<f64> = styles(&s, id).iter().map(|(_, st)| st.tracking).collect();
+    assert_eq!(tracking, [100.0, 0.0]);
 }
 
 #[test]
@@ -162,6 +174,19 @@ fn empty_text_and_only_spaces_change_nothing() {
 }
 
 #[test]
+fn characters_that_already_have_the_value_are_left_out() {
+    let mut s = session();
+    let id = text(&mut s, "abc");
+    select(&mut s, &[id]);
+    let p = json!({"attribute": "rotation", "from": 0, "to": 30});
+    // The first character already has 0°.
+    assert_eq!(s.execute(C, &p).unwrap(), json!({"count": 2, "ids": [id.0]}));
+    let (before, n) = (s.doc().unwrap().doc.clone(), steps(&s));
+    assert_eq!(s.execute(C, &p).unwrap(), json!({"count": 0, "ids": []}), "again: nothing to change");
+    assert_eq!((s.doc().unwrap().doc.clone(), steps(&s)), (before, n), "no step");
+}
+
+#[test]
 fn bad_params_are_refused_without_a_change() {
     let mut s = session();
     let id = text(&mut s, "abc");
@@ -179,6 +204,9 @@ fn bad_params_are_refused_without_a_change() {
         json!({"seed": -1}),
         json!({"skipSpaces": "yes"}),
         json!({"ids": [999_999]}),
+        json!({"id": id.0, "start": -1}),
+        json!({"id": id.0, "start": 1, "end": 1.5}),
+        json!({"id": id.0, "end": "2"}),
     ] {
         assert!(s.execute(C, &p).is_err(), "{p}");
         assert_eq!(s.doc().unwrap().doc, before, "{p}");

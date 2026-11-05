@@ -183,10 +183,12 @@ impl<'a> Reader<'a> {
         // The compound path's paint is its last path's (a gradient's instance wraps only
         // that one); the last painted one, should the last have none.
         let shown = kids.iter().rev().find(|k| !k.appearance.items.is_empty()).or(kids.last())?;
-        let (appearance, opacity, blend, rule) = (shown.appearance.clone(), shown.opacity, shown.blend, path_rule(shown));
+        let (appearance, opacity, blend, shape, rule) =
+            (shown.appearance.clone(), shown.opacity, shown.blend, shown.knockout_shape, path_rule(shown));
         for k in &mut kids {
             k.opacity = 1.0;
             k.blend = BlendMode::Normal;
+            k.knockout_shape = false;
             k.visible = true;
             k.locked = false;
         }
@@ -194,6 +196,7 @@ impl<'a> Reader<'a> {
         n.appearance = appearance;
         n.opacity = opacity;
         n.blend = blend;
+        n.knockout_shape = shape;
         Some(n)
     }
 
@@ -234,6 +237,7 @@ impl<'a> Reader<'a> {
         self.pending_unread_stroke = false;
         let mut f = self.close("LB", |k| matches!(k, Kind::Layer(_)))?;
         let state = self.layer_state.take();
+        self.container_undo = None;
         // An `Xy` right after the layer's last mesh or blend, then `LB`: the layer's, not theirs.
         if let (Some(_), Some(before)) = (state, self.mesh_undo.take())
             && let Some(mesh) = f.children.last_mut().filter(|n| matches!(n.kind, NodeKind::Mesh(_) | NodeKind::Blend { .. }))
@@ -251,8 +255,8 @@ impl<'a> Reader<'a> {
         layer.visible = a.visible;
         layer.locked = a.locked;
         // The layer's own opacity, blend and knockout, written after its art (#2003).
-        if let Some((opacity, blend, isolate, knockout)) = state {
-            (layer.opacity, layer.blend, layer.isolate, layer.knockout) = (opacity, blend, isolate, knockout);
+        if let Some((opacity, blend, isolate, knockout, shape)) = state {
+            (layer.opacity, layer.blend, layer.isolate, layer.knockout, layer.knockout_shape) = (opacity, blend, isolate, knockout, shape);
         }
         match self.frames.last_mut() {
             Some(parent) => {
@@ -540,7 +544,7 @@ impl<'a> Reader<'a> {
     /// the drawn steps stay, without the blend's own art drawn over them (see [`super::blend`]).
     pub(super) fn end_blend(&mut self) {
         let Some((_, hex)) = self.blend_record.take() else { return };
-        let ids = crate::import::ai::blend::hex_bytes(&hex).as_deref().and_then(crate::import::ai::blend::record_ids);
+        let record = crate::import::ai::blend::hex_bytes(&hex).as_deref().and_then(crate::import::ai::blend::record);
         let roles = &self.blend_roles;
         let Some(f) = self.frames.last_mut() else { return };
         let n = f.children.len();
@@ -558,7 +562,7 @@ impl<'a> Reader<'a> {
             return;
         }
         let mut budget = self.blend_budget;
-        let live = ids.and_then(|ids| crate::import::ai::blend::live_blend(edit, steps, &ids, roles, &mut budget));
+        let live = record.and_then(|record| crate::import::ai::blend::live_blend(edit, steps, &record, roles, &mut budget));
         self.blend_budget = budget;
         let Some(mut steps) = f.children.pop() else { return };
         let Some(_edit) = f.children.pop() else { return };
@@ -662,8 +666,12 @@ fn has_text_slot(node: &Node) -> bool {
     !slots.is_empty()
 }
 
-/// The source text inside an envelope options dictionary, carried through its containing metadata.
+/// The source text inside an envelope options dictionary, carried through its containing metadata
+/// (not type that a look draws, which isn't the envelope's source text).
 fn envelope_text_slots(node: &Node, out: &mut Vec<Node>) {
+    if super::is_look_slot(node.name.as_deref()) {
+        return;
+    }
     if slot_of(node.name.as_deref()).is_some() {
         out.push(node.clone());
     } else if let Some(children) = node.children() {

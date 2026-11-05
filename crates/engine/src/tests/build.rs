@@ -1807,6 +1807,71 @@ fn live_paint_make_builds_group_with_hidden_sources() {
     assert_eq!(info["sources"], 2);
 }
 
+/// Make and Expand preserve the colors of compound paths sharing a curved boundary.
+#[test]
+fn live_paint_make_and_expand_keep_abutting_compound_colors() {
+    use kurbo::Shape as _;
+    use vectorcraft_geom::shapes;
+
+    let mut s = session();
+    let mut ring = shapes::ellipse(Rect::new(0.0, 0.0, 1.0, 1.0));
+    let mut disk = shapes::ellipse(Rect::new(0.2, 0.2, 0.8, 0.8));
+    let mut hole = disk.clone();
+    hole.reverse();
+    ring.subpaths.extend(hole.subpaths);
+    disk.subpaths.extend(shapes::rectangle(Rect::new(1.0, 0.0, 1.3, 1.0)).subpaths);
+    let compound = |s: &mut Session, path: &PathData, color: &str| {
+        let id = s.execute("path.create", &json!({"d": path.to_bezpath().to_svg()})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"id": id, "color": color})).unwrap();
+        s.execute("paint.setStroke", &json!({"id": id, "none": true})).unwrap();
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap())
+    };
+    let ink = compound(&mut s, &ring, "#000000");
+    let blue = compound(&mut s, &disk, "#2878f0");
+    s.execute("select.set", &json!({"ids": [ink.0, blue.0]})).unwrap();
+    let history = s.doc().unwrap().history.undo.len();
+    let made = s.execute("livePaint.make", &json!({})).unwrap();
+    assert_eq!(made["faces"], 3);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history + 1);
+    let group = NodeId(made["id"].as_u64().unwrap());
+    let paint_at = |n: &Node, p: Point| {
+        n.children()
+            .unwrap()
+            .iter()
+            .filter(|c| c.visible && !c.appearance.fill_paint().is_none())
+            .filter(|c| c.path_data().is_some_and(|path| path.to_bezpath().winding(p) != 0))
+            .map(|c| c.appearance.fill_paint())
+            .collect::<Vec<_>>()
+    };
+    let check_colors = |n: &Node| {
+        assert_eq!(paint_at(n, Point::new(0.1, 0.5)), vec![Paint::solid(Color::BLACK)]);
+        let blue = Paint::solid(Color::from_hex("#2878f0").unwrap());
+        assert_eq!(paint_at(n, Point::new(0.5, 0.5)), vec![blue.clone()]);
+        assert_eq!(paint_at(n, Point::new(1.15, 0.5)), vec![blue]);
+    };
+    check_colors(&node(&s, group));
+    let info = s.execute("livePaint.info", &json!({"group": group.0})).unwrap();
+    assert_eq!(info["sources"], 2);
+    assert_eq!(info["faces"].as_array().unwrap().len(), 3);
+    s.execute("livePaint.expand", &json!({})).unwrap();
+    let expanded = node(&s, group);
+    assert!(!vectorcraft_tools::builder::is_live_paint(&expanded));
+    assert_eq!(expanded.children().unwrap().len(), 3);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history + 2);
+    check_colors(&expanded);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(vectorcraft_tools::builder::is_live_paint(&node(&s, group)));
+    check_colors(&node(&s, group));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(layer_children(&s), 2);
+    assert!(matches!(node(&s, ink).kind, NodeKind::Compound { .. }));
+    assert!(matches!(node(&s, blue).kind, NodeKind::Compound { .. }));
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    check_colors(&node(&s, group));
+}
+
 #[test]
 fn live_paint_fill_assigns_the_face_under_the_point() {
     let mut s = session();
@@ -2177,6 +2242,25 @@ fn live_paint_gap_detection_stops_paint_at_a_gap() {
     // Expand leaves a plain group, without the options.
     s.execute("livePaint.expand", &json!({"id": g.0})).unwrap();
     assert!(node(&s, g).extras().live_paint_gaps.is_none());
+}
+
+/// A Gap Preview Color with an alpha part (`#rrggbbaa` or `#rgba`) is refused and changes nothing;
+/// `#rrggbb` and a layer color's name still set it.
+#[test]
+fn a_gap_color_with_an_alpha_part_is_refused() {
+    let mut s = session();
+    let g = live_square_with_a_gap(&mut s);
+    let depth = s.doc().unwrap().history.undo.len();
+    for bad in ["#00ff0080", "00ff0080", "#0f08"] {
+        let err = s.execute("livePaint.gapOptions", &json!({"id": g.0, "color": bad})).unwrap_err().to_string();
+        assert!(err.contains(&format!("`{bad}` is not a colour (#rrggbb or a preset name)")), "{bad}: {err}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth);
+    assert_eq!(gap_options(&s, g).color, [0xff, 0x4f, 0x4f]);
+    s.execute("livePaint.gapOptions", &json!({"id": g.0, "color": "#00ff00"})).unwrap();
+    assert_eq!(gap_options(&s, g).color, [0, 0xff, 0]);
+    s.execute("livePaint.gapOptions", &json!({"id": g.0, "color": "Green"})).unwrap();
+    assert_eq!(gap_options(&s, g).color, [0x4f, 0xff, 0x4f]);
 }
 
 #[test]
