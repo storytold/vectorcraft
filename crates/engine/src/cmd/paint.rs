@@ -42,6 +42,24 @@ pub fn specs() -> Vec<CommandSpec> {
             swap
         ),
         cmd!(
+            "paint.fillToStroke",
+            "Apply Fill to Stroke",
+            [],
+            None,
+            "{ids?|id?, skipNone?: bool} each target's top stroke takes its own top fill, as it is (a colour in its model, a global or spot colour linked at its tint, a gradient or pattern with its placement, None); a stroke given paint at width 0 gets 1 pt, as Swap Fill and Stroke does. Type: each run's stroke takes its own fill, and while the Type tool has characters selected (no ids), only those. skipNone: leave alone a target whose fill is None. The default stroke takes the default fill the same way → {objects}",
+            has_doc,
+            |s, p| copy_paint(s, p, true)
+        ),
+        cmd!(
+            "paint.strokeToFill",
+            "Apply Stroke to Fill",
+            [],
+            None,
+            "{ids?|id?, skipNone?: bool} each target's top fill takes its own top stroke's paint, as paint.fillToStroke does the other way; the stroke itself is unchanged. The default fill takes the default stroke → {objects}",
+            has_doc,
+            |s, p| copy_paint(s, p, false)
+        ),
+        cmd!(
             "paint.default",
             "Default Fill and Stroke",
             [],
@@ -791,6 +809,95 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
     }
     std::mem::swap(&mut s.paint.fill, &mut s.paint.stroke);
     ok()
+}
+
+/// Apply Fill to Stroke (`to_stroke`) or Apply Stroke to Fill: each target copies one of its own
+/// paints onto the other, so a mixed selection keeps each object's colour (#5530). Aimed and
+/// undone like Swap Fill and Stroke; characters selected with the Type tool are the only ones that
+/// change, as for `paint.setFill`. When nothing changes, the document and its undo history stay
+/// as they are.
+fn copy_paint(s: &mut Session, p: &Value, to_stroke: bool) -> Result<Value> {
+    let (cmd, label) = if to_stroke { ("paint.fillToStroke", "Apply Fill to Stroke") } else { ("paint.strokeToFill", "Apply Stroke to Fill") };
+    let skip_none = switch_or(p, "skipNone", false, cmd)?;
+    // One text style: its stroke takes its fill, or the other way.
+    let copy_run = |st: &mut CharStyle| {
+        let from = if to_stroke { st.fill.clone() } else { st.stroke.clone() };
+        if skip_none && from.is_none() {
+            return;
+        }
+        if to_stroke {
+            set_run_stroke(st, from);
+        } else {
+            st.fill = from;
+        }
+    };
+    if p.get("ids").is_none()
+        && p.get("id").is_none()
+        && let Some((id, a, b)) = super::textedit::editing_range(s)?
+        && a != b
+    {
+        // After Select All in threaded text, every frame's text takes it.
+        let story = super::textedit::editing_story(s);
+        let ranges: Vec<(NodeId, usize, usize)> =
+            if story.is_empty() { vec![(id, a, b)] } else { story.iter().map(|f| (*f, 0, usize::MAX)).collect() };
+        let ids: Vec<NodeId> = ranges.iter().map(|(f, _, _)| *f).collect();
+        let before = s.doc()?.doc.clone();
+        let n = super::overprint::edit_counted(s, label, |d| {
+            for &(id, a, b) in &ranges {
+                let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+                vectorcraft_text::edit::style_range(&mut t.runs, a, b, copy_run);
+                super::typecmd::refresh_bounds(t);
+            }
+            Ok(super::appearance::count_changed(d, &before, &ids))
+        })?;
+        return Ok(json!({"objects": n}));
+    }
+    let ids = paint_targets(s, p)?;
+    let mut n = 0;
+    if !ids.is_empty() {
+        let before = s.doc()?.doc.clone();
+        n = super::overprint::edit_counted(s, label, |d| {
+            for id in &ids {
+                let Some(node) = d.node_mut(*id) else { continue };
+                if let NodeKind::Text(t) = &mut node.kind {
+                    for r in &mut t.runs {
+                        copy_run(&mut r.style);
+                    }
+                    super::typecmd::refresh_bounds(t);
+                    continue;
+                }
+                let ap = &mut node.appearance;
+                if to_stroke {
+                    let f = ap.fill_paint();
+                    if skip_none && f.is_none() {
+                        continue;
+                    }
+                    restore_unpainted_stroke(ap, None, &f);
+                    ap.set_stroke(f);
+                } else {
+                    let st = ap.stroke_paint();
+                    if skip_none && st.is_none() {
+                        continue;
+                    }
+                    ap.set_fill(st);
+                }
+            }
+            Ok(super::appearance::count_changed(d, &before, &ids))
+        })?;
+    }
+    // The defaults for new art change the same way, as Swap Fill and Stroke changes them.
+    let from = if to_stroke { s.paint.fill.clone() } else { s.paint.stroke.clone() };
+    if !(skip_none && from.is_none()) {
+        if to_stroke {
+            if s.paint.stroke.is_none() && !from.is_none() && s.paint.stroke_width == 0.0 {
+                s.paint.stroke_width = 1.0;
+            }
+            s.paint.stroke = from;
+        } else {
+            s.paint.fill = from;
+        }
+    }
+    Ok(json!({"objects": n}))
 }
 
 fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {

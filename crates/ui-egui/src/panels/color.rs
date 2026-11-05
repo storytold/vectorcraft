@@ -782,6 +782,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             recolor(app, ui, &tgt, invert, false);
         }
     }
+    // Each selected object's stroke takes its own fill, or the other way (#5530).
+    for (label, cmd) in [(tl!("Apply Fill to Stroke"), "paint.fillToStroke"), (tl!("Apply Stroke to Fill"), "paint.strokeToFill")] {
+        if menu_item(ui, label, true, false) {
+            app.run(cmd, json!({})).ok();
+        }
+    }
     ui.separator();
     if menu_item(ui, tl!("Create New Swatch…"), color.is_some(), false)
         && let Some(c) = color

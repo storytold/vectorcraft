@@ -414,3 +414,149 @@ fn a_group_shows_its_contents_in_the_proxies() {
     s.execute("select.none", &json!({})).unwrap();
     assert_eq!(s.proxy_paints().0, s.paint.fill);
 }
+
+/// The top fill and top stroke of object `id`.
+fn paints(s: &Session, id: NodeId) -> (Paint, Paint, f64) {
+    let n = node(s, id);
+    (n.appearance.fill_paint(), n.appearance.stroke_paint(), n.appearance.stroke().map_or(0.0, |st| st.width))
+}
+
+/// Apply Fill to Stroke gives each selected object a stroke of its own fill, not the first
+/// object's; Apply Stroke to Fill does the other way (#5530). A stroke that had no paint and no
+/// width gets the 1 pt Swap Fill and Stroke gives it, and the paint copied from stays.
+#[test]
+fn each_object_copies_its_own_paint_onto_the_other() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s), rect(&mut s));
+    for (id, hex) in [(a, "#ff0000"), (b, "#0080ff")] {
+        s.execute("paint.setFill", &json!({"ids": [id.0], "color": hex})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [id.0], "none": true})).unwrap();
+        s.execute("object.setStrokeWidth", &json!({"ids": [id.0], "width": 0})).ok();
+    }
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let r = s.execute("paint.fillToStroke", &json!({})).unwrap();
+    assert_eq!(r["objects"], 2);
+    for (id, hex) in [(a, "#ff0000"), (b, "#0080ff")] {
+        let (fill, stroke, width) = paints(&s, id);
+        assert_eq!(fill.color().unwrap().to_hex(), hex, "the fill stays");
+        assert_eq!(stroke, fill, "the stroke is the object's own fill");
+        assert!(width > 0.0, "and shows: {width}");
+    }
+    s.execute("paint.setStroke", &json!({"ids": [a.0], "color": "#00ff00"})).unwrap();
+    s.execute("paint.strokeToFill", &json!({"ids": [a.0]})).unwrap();
+    let (fill, stroke, _) = paints(&s, a);
+    assert_eq!((fill.color().unwrap().to_hex(), stroke.color().unwrap().to_hex()), ("#00ff00".into(), "#00ff00".into()));
+    assert_eq!(paints(&s, b).0.color().unwrap().to_hex(), "#0080ff", "an object not aimed at is left alone");
+}
+
+/// A global swatch at a tint stays linked at that tint, and a gradient keeps its stops and
+/// placement: the paint is copied as it is.
+#[test]
+fn a_linked_swatch_and_a_gradient_copy_as_they_are() {
+    let mut s = session();
+    let a = rect(&mut s);
+    s.execute("swatch.new", &json!({"name": "Ink", "color": "#c82828", "global": true})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [a.0], "swatch": "Ink", "tint": 40})).unwrap();
+    s.execute("paint.fillToStroke", &json!({"ids": [a.0]})).unwrap();
+    let (fill, stroke, _) = paints(&s, a);
+    assert!(matches!(&stroke, Paint::Solid { swatch: Some(name), .. } if name == "Ink"), "{stroke:?}");
+    assert_eq!(stroke, fill);
+    let g = json!({"gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}], "angle": 30}});
+    let mut q = g.clone();
+    q["ids"] = json!([a.0]);
+    s.execute("paint.setFill", &q).unwrap();
+    s.execute("paint.fillToStroke", &json!({"ids": [a.0]})).unwrap();
+    let (fill, stroke, _) = paints(&s, a);
+    assert!(matches!(stroke, Paint::Gradient { .. }), "{stroke:?}");
+    assert_eq!(stroke, fill, "the same stops and placement");
+}
+
+/// None copies as None, as Swap moves it; `skipNone` leaves an object whose source is None alone.
+#[test]
+fn none_copies_unless_skipped() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s), rect(&mut s));
+    s.execute("paint.setFill", &json!({"ids": [a.0], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [a.0, b.0], "color": "#123456"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [b.0], "color": "#ff8000"})).unwrap();
+    let r = s.execute("paint.fillToStroke", &json!({"ids": [a.0, b.0], "skipNone": true})).unwrap();
+    assert_eq!(r["objects"], 1, "only the object with a fill changed");
+    assert_eq!(paints(&s, a).1.color().unwrap().to_hex(), "#123456", "skipped: its stroke stays");
+    assert_eq!(paints(&s, b).1.color().unwrap().to_hex(), "#ff8000");
+    s.execute("paint.fillToStroke", &json!({"ids": [a.0]})).unwrap();
+    assert!(paints(&s, a).1.is_none(), "without skipNone, no fill gives no stroke");
+}
+
+/// The objects inside a group each copy their own paint, as for Swap Fill and Stroke.
+#[test]
+fn a_groups_members_each_copy_their_own() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s), rect(&mut s));
+    s.execute("paint.setFill", &json!({"ids": [a.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [b.0], "color": "#00ff00"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.execute("paint.fillToStroke", &json!({})).unwrap();
+    assert_eq!(paints(&s, a).1.color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(paints(&s, b).1.color().unwrap().to_hex(), "#00ff00");
+}
+
+/// Type: each run's stroke takes its own fill, so multi-colour text keeps its colours.
+#[test]
+fn each_text_run_copies_its_own_fill() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#aa0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [id.0], "none": true})).unwrap();
+    s.execute("paint.fillToStroke", &json!({"ids": [id.0]})).unwrap();
+    let NodeKind::Text(t) = &node(&s, id).kind else { panic!("not text") };
+    for r in &t.runs {
+        assert_eq!(r.style.stroke, r.style.fill, "{:?}", r.text);
+        assert!(r.style.stroke_width > 0.0, "a painted stroke is visible");
+    }
+}
+
+/// One undo step each; when nothing changes, none, and the document stays unmodified. Bad
+/// parameters change nothing, not even the defaults.
+#[test]
+fn one_undo_step_none_when_nothing_changes_and_bad_params_change_nothing() {
+    let mut s = session();
+    let id = rect(&mut s);
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [id.0], "color": "#ff0000"})).unwrap();
+    select_with_a_step_to_redo(&mut s, &[id]);
+    let before = history(&s);
+    s.execute("paint.fillToStroke", &json!({})).unwrap();
+    s.execute("paint.strokeToFill", &json!({})).unwrap();
+    assert_eq!(history(&s), before, "the paints were already the same");
+    s.execute("paint.setStroke", &json!({"ids": [id.0], "color": "#0000ff"})).unwrap();
+    let before = history(&s);
+    s.execute("paint.fillToStroke", &json!({})).unwrap();
+    assert_eq!(history(&s), (before.0 + 1, 0, true), "one step");
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Apply Fill to Stroke"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paints(&s, id).1.color().unwrap().to_hex(), "#0000ff");
+    let defaults = (s.paint.fill.clone(), s.paint.stroke.clone());
+    for (cmd, p) in [("paint.fillToStroke", json!({"ids": "not an array"})), ("paint.strokeToFill", json!({"skipNone": "yes"}))] {
+        assert!(s.execute(cmd, &p).is_err(), "{cmd} {p}");
+    }
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke.clone()), defaults, "the defaults are as they were");
+}
+
+/// With nothing selected the defaults for new art change the same way: the default stroke takes
+/// the default fill, with the weight Swap gives a stroke that had none.
+#[test]
+fn with_nothing_selected_the_defaults_take_it() {
+    let mut s = session();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let r = s.execute("paint.fillToStroke", &json!({})).unwrap();
+    assert_eq!(r["objects"], 0);
+    assert_eq!(s.paint.stroke, s.paint.fill);
+    assert!(s.paint.stroke_width > 0.0);
+    s.execute("paint.setStroke", &json!({"color": "#ff00ff"})).unwrap();
+    s.execute("paint.strokeToFill", &json!({})).unwrap();
+    assert_eq!(s.paint.fill.color().unwrap().to_hex(), "#ff00ff");
+}
