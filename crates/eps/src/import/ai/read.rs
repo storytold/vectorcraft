@@ -52,7 +52,9 @@
 //!   lines and `1 (style) XW`: the drawn look is kept, named after the object.
 //! - Patterns: `%AI3_BeginPattern: (name)`, `(name) llx lly urx ury` (the tile, in the pattern's
 //!   space, y up), the tile's art (on `%_` lines in newer files), `E`, `%AI3_EndPattern`; each is
-//!   read by a reader of its own and becomes a pattern swatch. In the version 7 form (§3.4) a list
+//!   read by a reader of its own and becomes a pattern swatch. An unpainted path whose dictionary
+//!   marks it as the tile's box (`AIPattern_Editor_Backing_Tile_Rect`) is left out of the art. In
+//!   the version 7 form (§3.4) a list
 //!   of layers follows the tile, `[ (colors) @ (tile) & … ] E`, each layer's tile read from its
 //!   string with the colors' state (`_ &`: the tile's box filled). A fill or stroke with one:
 //!   `(name) x y scaleX scaleY angle reflect axis shear shearAxis [matrix] p` (`P`), the matrix

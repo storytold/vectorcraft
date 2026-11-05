@@ -6349,9 +6349,39 @@ breakText	Glyphs	Glyphes
 	Fully Outside	Entièrement à l’extérieur
 	No artboards match.	Aucun plan de travail ne correspond.
 	Chosen: {n} of {total}	Choisis : {n} sur {total}
+
+# Contour add-on
+	Contour	Pourtour
+	Contour Tool	Outil Pourtour
+	Sharp	Pointu
+	Bake	Décomposer
+	Turn the Contour into plain paths	Transforme le pourtour en tracés simples
 	Set Corners…	Définir les angles…
 	All Anchors	Tous les points d’ancrage
 	Odd-Numbered Anchors	Points d’ancrage impairs
 	Even-Numbered Anchors	Points d’ancrage pairs
 	Minimum angle	Angle minimal
 	Maximum angle	Angle maximal
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Sélectionner les images liées
+	Select Embedded	Sélectionner les images incorporées
+	Select Missing	Sélectionner les images manquantes
+	Select Modified	Sélectionner les images modifiées
+	Select by Link Status	Sélectionner par état de lien
+	Select by Link Status…	Sélectionner par état de lien…
+	Search images	Rechercher des images
+	No images match.	Aucune image ne correspond.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} image liée sélectionnée|{n} images liées sélectionnées
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} image incorporée sélectionnée|{n} images incorporées sélectionnées
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} image manquante sélectionnée|{n} images manquantes sélectionnées
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} image modifiée sélectionnée|{n} images modifiées sélectionnées
+@msgplural	Selected {n} image|Selected {n} images	{n} image sélectionnée|{n} images sélectionnées
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected} ; {n} autre est masquée ou verrouillée|{selected} ; {n} autres sont masquées ou verrouillées
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected} ; {n} autre est sur un calque modèle|{selected} ; {n} autres sont sur des calques modèles
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected} ; {n} autre est hors du groupe isolé|{selected} ; {n} autres sont hors du groupe isolé
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected} ; {n} autre ne peut pas être sélectionnée pour l’instant|{selected} ; {n} autres ne peuvent pas être sélectionnées pour l’instant
+
+# Compound Shapes add-on
+	Compound Shapes	Formes composées
+	Shape Mode Buttons Make Compound Shapes	Les boutons de mode de forme créent des formes composées

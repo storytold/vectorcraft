@@ -6306,9 +6306,39 @@ breakText	Glyphs	Γλύφοι
 	Fully Outside	Πλήρως εκτός
 	No artboards match.	Κανένας πίνακας σχεδίασης δεν ταιριάζει.
 	Chosen: {n} of {total}	Επιλεγμένοι: {n} από {total}
+
+# Contour add-on
+	Contour	Παράλληλο περίγραμμα
+	Contour Tool	Εργαλείο παράλληλου περιγράμματος
+	Sharp	Οξεία
+	Bake	Επέκταση
+	Turn the Contour into plain paths	Μετατρέπει το παράλληλο περίγραμμα σε απλές διαδρομές
 	Set Corners…	Ορισμός γωνιών…
 	All Anchors	Όλα τα σημεία αγκύρωσης
 	Odd-Numbered Anchors	Μονά σημεία αγκύρωσης
 	Even-Numbered Anchors	Ζυγά σημεία αγκύρωσης
 	Minimum angle	Ελάχιστη γωνία
 	Maximum angle	Μέγιστη γωνία
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Επιλογή συνδεδεμένων
+	Select Embedded	Επιλογή ενσωματωμένων
+	Select Missing	Επιλογή όσων λείπουν
+	Select Modified	Επιλογή τροποποιημένων
+	Select by Link Status	Επιλογή κατά κατάσταση σύνδεσης
+	Select by Link Status…	Επιλογή κατά κατάσταση σύνδεσης…
+	Search images	Αναζήτηση εικόνων
+	No images match.	Καμία εικόνα δεν ταιριάζει.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Επιλέχθηκε {n} συνδεδεμένη εικόνα|Επιλέχθηκαν {n} συνδεδεμένες εικόνες
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Επιλέχθηκε {n} ενσωματωμένη εικόνα|Επιλέχθηκαν {n} ενσωματωμένες εικόνες
+@msgplural	Selected {n} missing image|Selected {n} missing images	Επιλέχθηκε {n} εικόνα που λείπει|Επιλέχθηκαν {n} εικόνες που λείπουν
+@msgplural	Selected {n} modified image|Selected {n} modified images	Επιλέχθηκε {n} τροποποιημένη εικόνα|Επιλέχθηκαν {n} τροποποιημένες εικόνες
+@msgplural	Selected {n} image|Selected {n} images	Επιλέχθηκε {n} εικόνα|Επιλέχθηκαν {n} εικόνες
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}· {n} ακόμη είναι κρυφή ή κλειδωμένη|{selected}· {n} ακόμη είναι κρυφές ή κλειδωμένες
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}· {n} ακόμη είναι σε επίπεδο προτύπου|{selected}· {n} ακόμη είναι σε επίπεδα προτύπου
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}· {n} ακόμη είναι εκτός της απομονωμένης ομάδας|{selected}· {n} ακόμη είναι εκτός της απομονωμένης ομάδας
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}· {n} ακόμη δεν μπορεί να επιλεγεί τώρα|{selected}· {n} ακόμη δεν μπορούν να επιλεγούν τώρα
+
+# Compound Shapes add-on
+	Compound Shapes	Σύνθετα σχήματα
+	Shape Mode Buttons Make Compound Shapes	Τα κουμπιά λειτουργιών σχημάτων δημιουργούν σύνθετα σχήματα

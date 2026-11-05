@@ -5940,9 +5940,39 @@ breakText	Glyphs	Glyphen
 	Fully Outside	Vollständig außen
 	No artboards match.	Keine Zeichenfläche passt.
 	Chosen: {n} of {total}	Gewählt: {n} von {total}
+
+# Contour add-on
+	Contour	Umriss
+	Contour Tool	Umriss-Werkzeug
+	Sharp	Spitz
+	Bake	Umwandeln
+	Turn the Contour into plain paths	Wandelt den Umriss in einfache Pfade um
 	Set Corners…	Ecken festlegen…
 	All Anchors	Alle Ankerpunkte
 	Odd-Numbered Anchors	Ungerade Ankerpunkte
 	Even-Numbered Anchors	Gerade Ankerpunkte
 	Minimum angle	Minimaler Winkel
 	Maximum angle	Maximaler Winkel
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Verknüpfte auswählen
+	Select Embedded	Eingebettete auswählen
+	Select Missing	Fehlende auswählen
+	Select Modified	Geänderte auswählen
+	Select by Link Status	Nach Verknüpfungsstatus auswählen
+	Select by Link Status…	Nach Verknüpfungsstatus auswählen…
+	Search images	Bilder suchen
+	No images match.	Kein Bild passt.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} verknüpftes Bild ausgewählt|{n} verknüpfte Bilder ausgewählt
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} eingebettetes Bild ausgewählt|{n} eingebettete Bilder ausgewählt
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} fehlendes Bild ausgewählt|{n} fehlende Bilder ausgewählt
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} geändertes Bild ausgewählt|{n} geänderte Bilder ausgewählt
+@msgplural	Selected {n} image|Selected {n} images	{n} Bild ausgewählt|{n} Bilder ausgewählt
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} weiteres ist ausgeblendet oder gesperrt|{selected}; {n} weitere sind ausgeblendet oder gesperrt
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} weiteres liegt auf einer Vorlagenebene|{selected}; {n} weitere liegen auf Vorlagenebenen
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} weiteres liegt außerhalb der isolierten Gruppe|{selected}; {n} weitere liegen außerhalb der isolierten Gruppe
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} weiteres kann gerade nicht ausgewählt werden|{selected}; {n} weitere können gerade nicht ausgewählt werden
+
+# Compound Shapes add-on
+	Compound Shapes	Zusammengesetzte Formen
+	Shape Mode Buttons Make Compound Shapes	Formmodus-Schaltflächen erstellen zusammengesetzte Formen

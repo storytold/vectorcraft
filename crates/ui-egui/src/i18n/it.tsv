@@ -5974,9 +5974,39 @@ breakText	Glyphs	Glifi
 	Fully Outside	Completamente esterno
 	No artboards match.	Nessuna tavola da disegno corrisponde.
 	Chosen: {n} of {total}	Scelte: {n} di {total}
+
+# Contour add-on
+	Contour	Contorno
+	Contour Tool	Strumento Contorno
+	Sharp	Appuntito
+	Bake	Espandi
+	Turn the Contour into plain paths	Trasforma il contorno in tracciati semplici
 	Set Corners…	Imposta angoli…
 	All Anchors	Tutti gli ancoraggi
 	Odd-Numbered Anchors	Ancoraggi dispari
 	Even-Numbered Anchors	Ancoraggi pari
 	Minimum angle	Angolo minimo
 	Maximum angle	Angolo massimo
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Seleziona collegate
+	Select Embedded	Seleziona incorporate
+	Select Missing	Seleziona mancanti
+	Select Modified	Seleziona modificate
+	Select by Link Status	Seleziona per stato del collegamento
+	Select by Link Status…	Seleziona per stato del collegamento…
+	Search images	Cerca immagini
+	No images match.	Nessuna immagine corrisponde.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Selezionata {n} immagine collegata|Selezionate {n} immagini collegate
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Selezionata {n} immagine incorporata|Selezionate {n} immagini incorporate
+@msgplural	Selected {n} missing image|Selected {n} missing images	Selezionata {n} immagine mancante|Selezionate {n} immagini mancanti
+@msgplural	Selected {n} modified image|Selected {n} modified images	Selezionata {n} immagine modificata|Selezionate {n} immagini modificate
+@msgplural	Selected {n} image|Selected {n} images	Selezionata {n} immagine|Selezionate {n} immagini
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; altra {n} è nascosta o bloccata|{selected}; altre {n} sono nascoste o bloccate
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; altra {n} è su un livello modello|{selected}; altre {n} sono su livelli modello
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; altra {n} è fuori dal gruppo isolato|{selected}; altre {n} sono fuori dal gruppo isolato
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; altra {n} non può essere selezionata ora|{selected}; altre {n} non possono essere selezionate ora
+
+# Compound Shapes add-on
+	Compound Shapes	Forme composte
+	Shape Mode Buttons Make Compound Shapes	I pulsanti dei metodi forma creano forme composte

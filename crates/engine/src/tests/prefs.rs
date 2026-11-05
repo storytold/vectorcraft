@@ -2001,6 +2001,52 @@ fn a_move_held_by_a_paths_stroke_lands_the_path_on_a_ruler_guide() {
     }
 }
 
+/// #5746: a rectangle dragged until its left edge and its top edge are each 1 px from a ruler
+/// guide lands on both guides, with "align", whichever guide was added last and wherever it was
+/// grabbed; between two upright guides, its left edge lands on the one within reach; and an edge
+/// Smart Guides line up with another object stays there, not on a ruler guide as near.
+#[test]
+fn a_moved_rectangle_lines_its_edges_up_with_two_ruler_guides() {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let v = ViewInfo::default();
+    // (guides as (vertical, pos), where it is grabbed, the top left it lands on)
+    type Case = (&'static [(bool, f64)], (f64, f64), (f64, f64));
+    let cases: [Case; 3] = [
+        (&[(true, 250.0), (false, 320.0)], (200.0, 100.0), (250.0, 320.0)),
+        (&[(false, 320.0), (true, 250.0)], (100.0, 175.0), (250.0, 320.0)),
+        (&[(true, 250.0), (true, 455.0)], (200.0, 175.0), (250.0, 100.0)),
+    ];
+    for (guides, (x, y), want) in cases {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+        let id = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 150})).unwrap()["id"].as_u64().unwrap());
+        for (vertical, pos) in guides {
+            s.execute("guide.add", &json!({"vertical": vertical, "pos": pos})).unwrap();
+        }
+        s.execute("select.none", &json!({})).unwrap();
+        s.select_tool("selection", v).unwrap();
+        // 1 px past the guides: the left edge at 251, the top edge at 321 (or where it was).
+        let (to_x, to_y) = (x + 151.0, if want.1 == 100.0 { y } else { y + 221.0 });
+        gesture(&mut s, v, &[(Down, x, y), (Drag, (x + to_x) / 2.0, (y + to_y) / 2.0), (Drag, to_x, to_y)]);
+        let align = s.overlays(v).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "align"));
+        gesture(&mut s, v, &[(Up, to_x, to_y)]);
+        assert_eq!(top_left(&s, id), want, "guides {guides:?}, grabbed at ({x}, {y})");
+        assert!(align, "guides {guides:?}, grabbed at ({x}, {y}): no align");
+    }
+    // Dragged by its centre until its left edge is at 401: 1 px from another rectangle's left
+    // edge (400) and 1 px from a ruler guide (402).
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let id = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 150})).unwrap()["id"].as_u64().unwrap());
+    s.execute("shape.rectangle", &json!({"x": 400, "y": 400, "width": 60, "height": 60})).unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 402.0})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    gesture(&mut s, v, &[(Down, 200.0, 175.0), (Drag, 350.0, 175.0), (Drag, 501.0, 175.0), (Up, 501.0, 175.0)]);
+    assert_eq!(top_left(&s, id), (400.0, 100.0), "a Smart Guides alignment gave way to a ruler guide");
+}
+
 /// #3701: at 28,757%, Direct Selection pressed 1.5 px beside a rectangle's straight left side and
 /// dragged until the side is 1 px from a ruler guide lands both its anchors on the guide; so does
 /// the same press and drag on the rectangle selected whole, which moves it.

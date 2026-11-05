@@ -1,7 +1,8 @@
 //! Selection Tools in the interface: its submenu (Object › Plug-ins › Selection Tools) and the
 //! Select by Artboards dialog (#5548), which lists the artboards with their number, name and size,
 //! filters them by name, picks several, fits one in the window on double-click (#5549), and on OK
-//! runs `addon.select.byArtboards` with the relation chosen.
+//! runs `addon.select.byArtboards` with the relation chosen; and Select by Link Status
+//! ([`link_status`], #5526).
 
 use egui::{Sense, Ui, vec2};
 use serde_json::{Value, json};
@@ -12,6 +13,8 @@ use crate::menus::Item;
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets;
+
+pub mod link_status;
 
 /// Select by Artboards, and its dialog's kind.
 pub const COMMAND: &str = "addon.select.byArtboards";
@@ -25,7 +28,9 @@ const LIST_H: f32 = 220.0;
 
 /// Object › Plug-ins › Selection Tools.
 pub fn menu() -> Vec<Item> {
-    vec![Item::Cmd("Select by Artboards…", COMMAND, Value::Null)]
+    let mut v = vec![Item::Cmd("Select by Artboards…", COMMAND, Value::Null), Item::Sep];
+    v.extend(link_status::menu());
+    v
 }
 
 /// The dialog's fields to start with: the active artboard chosen, Overlapping.

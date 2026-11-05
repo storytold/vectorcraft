@@ -240,6 +240,42 @@ fn row_thumbnails_wait_for_the_end_of_a_drag() {
 }
 
 #[test]
+fn the_row_thumbnails_follow_the_document_shown_and_none_once_it_closes() {
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let showing = || THUMBS.with(|c| c.borrow().showing);
+    frame(&mut app, &ctx, vec![], false);
+    let first = app.session.active().map(|st| st.uid);
+    assert_eq!(showing(), first);
+    // With no thumbnails drawn, the panel still tells which document it shows.
+    let p = &mut app.ui.layers_panel;
+    (p.thumb_layers, p.thumb_groups, p.thumb_objects) = (false, false, false);
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    let second = app.session.active().map(|st| st.uid);
+    assert_ne!(second, first);
+    assert_eq!(showing(), second, "the new document's rows are drawn");
+    for _ in 0..2 {
+        app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    }
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(showing(), None, "no document is shown once both close");
+
+    // The Links panel alone does the same.
+    let links = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::links::show(app, ui));
+        out.textures_delta.clear();
+    };
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    links(&mut app);
+    assert_eq!(showing(), app.session.active().map(|st| st.uid));
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    links(&mut app);
+    assert_eq!(showing(), None, "the Links panel shows no document");
+}
+
+#[test]
 fn clicking_a_target_circle_targets_the_layer() {
     let (mut app, layer, [a, b]) = two_rects();
     let ctx = egui::Context::default();

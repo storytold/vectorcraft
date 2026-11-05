@@ -1431,6 +1431,34 @@ fn pointer_gesture_forwards_backquote_on_each_event() {
     assert_eq!(rect["bounds"]["x"], 100.0, "{doc}");
 }
 
+/// A `backquote` that is not a boolean is an error, and none of the gesture's events runs.
+#[test]
+fn pointer_gesture_rejects_a_backquote_that_is_not_a_boolean() {
+    let mut s = server();
+    let made = call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 50, "height": 50, "fill": "#ff0000"}));
+    let id = serde_json::from_str::<Value>(&text_of(&made)).unwrap()["id"].as_u64().unwrap();
+    let drag = |top: Option<Value>, first: Option<Value>| {
+        let mut down = json!({"kind": "down", "x": 300, "y": 300});
+        if let Some(b) = first {
+            down["backquote"] = b;
+        }
+        let mut a = json!({"tool": "rectangle", "events": [down, {"kind": "drag", "x": 350, "y": 350}, {"kind": "up", "x": 350, "y": 350}]});
+        if let Some(b) = top {
+            a["backquote"] = b;
+        }
+        a
+    };
+    for (n, args) in [drag(Some(json!("true")), None), drag(None, Some(json!(1)))].into_iter().enumerate() {
+        let r = call(&mut s, 2 + n as u64, "pointer_gesture", args);
+        assert_eq!(r["isError"], true, "{r}");
+        assert!(text_of(&r).contains("`backquote` must be a boolean"), "{r}");
+    }
+    let inspected = call(&mut s, 4, "inspect_document", json!({}));
+    let doc = serde_json::from_str::<Value>(&text_of(&inspected)).unwrap();
+    let children = doc["layers"][0]["children"].as_array().unwrap();
+    assert_eq!(children.iter().map(|n| n["id"].as_u64()).collect::<Vec<_>>(), vec![Some(id)], "{doc}");
+}
+
 /// A Shift-drag marquee reaches agents (#483): `pointer_gesture` with `mods.shift` toggles the
 /// objects it reaches, so a selected one leaves the selection and an unselected one joins it.
 #[test]

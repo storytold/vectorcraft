@@ -3307,6 +3307,24 @@ proptest! {
         survive("hostile .ai line widths", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose pattern definition (a marked tile box, a gradient placed by `Bg`'s matrix) and
+    /// pattern fill are damaged or hostile.
+    #[test]
+    fn ai_pattern_definitions_never_panic(
+        cut in 0usize..2_000,
+        edits in prop::collection::vec((0usize..2_000, prop::sample::select(vec!['0', '1', '-', '.', ' ', '\n', '(', ')', '[', ']', '%', '_', 'n', 'E', 'p', 'B'])), 0..12),
+    ) {
+        use vectorcraft_testkit::ai;
+        let gradient = "%AI5_BeginGradient: (G)\n(G) 1 2 Bd\n[\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+        let pattern = "%AI3_BeginPattern: (P)\n(P) 0 -10 10 0\n%_0 A\n%_0 Xw\n%_0 XR\n%_0 0 m\n%_10 0 L\n%_10 -10 L\n%_0 -10 L\n%_0 0 L\n%_n\n\
+                       %_/ArtDictionary :\n%_1 /Bool (AIPattern_Editor_Backing_Tile_Rect) ,\n%_;\n%_\n%_2 -2 m\n%_8 -2 L\n%_8 -8 L\n%_2 -8 L\n%_Bb\n\
+                       %_0.1 0.2 45 0.3 Bh\n%_1 (G) 0.1 0.2 0 1.5 3 0 0 3 0 0 1 Bg\n%_3 0 0 3 -8000 8000 Bm\n%_f\n%_0 BB\nE\n%AI3_EndPattern\n";
+        let art = format!("(P) 0 0 1 1 0 0 0 0 0 [0.5 0.2 -0.2 0.5 3 -4] p\n{}f\n", ai::rect(20.0, 20.0, 80.0, 80.0));
+        let data = mutate_text(&ai::editing_data(100.0, 100.0, &format!("{gradient}{pattern}{}", ai::layer("L", &art))), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
+        survive("hostile .ai patterns", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose variable library is damaged or hostile: the library is counted for the warning
     /// whether the layers are read or not (an inserted `Z` can make an operator the reader doesn't
     /// handle, and then the layers aren't read).

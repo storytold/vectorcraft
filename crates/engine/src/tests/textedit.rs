@@ -1645,6 +1645,173 @@ fn select_all_in_one_frame_selects_only_its_text_once_the_caret_moves() {
     assert!(s.execute("text.editRange", &json!({"id": a.0, "start": 0, "end": 0, "clear": "x"})).is_err());
 }
 
+/// A story of bulleted paragraphs threaded from area type `a` into frame `b`, each frame holding
+/// paragraph returns, with the Type tool editing `b` at its start.
+fn threaded_list_edited_in_its_second_frame() -> (Session, NodeId, NodeId, String) {
+    let mut s = session();
+    let story = "Alpha beta.\n".repeat(12);
+    let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 300})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "bullet"})).unwrap();
+    let (a, b) = (NodeId(a), NodeId(b));
+    for id in [a, b] {
+        let t = obj(&s, id);
+        assert!(t.plain_text().contains('\n'), "frame {} holds paragraph returns", id.0);
+        assert!((0..t.paragraph_count()).all(|k| t.para_at(k).list.is_some()), "frame {} is a list", id.0);
+    }
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    (s, a, b, story)
+}
+
+#[test]
+fn remove_breaks_takes_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    let joined = format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text());
+    assert_eq!(joined, story.trim_end_matches('\n').replace('\n', " "), "every frame's returns go, each between words as a space");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+    assert!(obj(&s, a).plain_text().contains('\n') && obj(&s, b).plain_text().contains('\n'));
+}
+
+#[test]
+fn remove_breaks_on_a_selected_threaded_story_puts_a_space_between_its_frames() {
+    let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
+    assert!(obj(&s, a).plain_text().ends_with('\n'), "the first frame ends with a paragraph return");
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    let joined = format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text());
+    assert_eq!(joined, story.trim_end_matches('\n').replace('\n', " "), "the return at the end of the first frame becomes a space");
+}
+
+#[test]
+fn remove_breaks_in_one_frames_selection_leaves_the_other_frames() {
+    let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+    let (in_a, b_len) = (obj(&s, a).plain_text(), obj(&s, b).plain_text().len());
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": b_len}));
+    s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    assert_eq!(obj(&s, a).plain_text(), in_a, "the first frame keeps its returns");
+    assert!(!obj(&s, b).plain_text().contains('\n'), "the edited frame's returns go");
+}
+
+#[test]
+fn convert_to_text_takes_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("text.convertListToText", &json!({})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    for id in [a, b] {
+        let t = obj(&s, id);
+        assert!((0..t.paragraph_count()).all(|k| t.para_at(k).list.is_none()), "frame {} leaves its list", id.0);
+        assert!(t.plain_text().contains("\u{2022}\t"), "frame {} holds its bullets as characters", id.0);
+    }
+    assert!(s.tool_options().get("story").is_some(), "the whole story stays selected");
+    s.execute("edit.undo", &json!({})).unwrap();
+    for id in [a, b] {
+        let t = obj(&s, id);
+        assert!((0..t.paragraph_count()).all(|k| t.para_at(k).list.is_some()), "frame {} is a list again", id.0);
+    }
+}
+
+#[test]
+fn convert_to_text_of_the_whole_story_leaves_a_locked_frame() {
+    // Over MCP without ids, and as the Paragraph panel sends it, with every frame of the story.
+    for named in [false, true] {
+        let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+        s.execute("object.lock", &json!({"ids": [b.0]})).unwrap();
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        s.set_tool_option("textSelection", &json!({"editing": a.0, "anchor": 0, "caret": 0}));
+        assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+        // The first frame ends with a paragraph return, so the paragraph that starts the locked
+        // frame takes in the first frame's empty last part and starts its text there.
+        let in_a = obj(&s, a).plain_text();
+        assert!(in_a.ends_with('\n'));
+        let own = in_a.split('\n').filter(|piece| !piece.is_empty()).count();
+        let p = if named { json!({"ids": [a.0, b.0]}) } else { json!({}) };
+        let r = s.execute("text.convertListToText", &p).unwrap();
+        assert_eq!(r["ids"], json!([a.0]), "only the editable frame is changed (ids named: {named})");
+        assert_eq!(r["converted"], json!(own), "only the paragraphs whose text starts in the editable frame convert");
+        assert!(r["inserted"].as_array().unwrap().iter().all(|i| i["id"] == json!(a.0)));
+        let (ta, tb) = (obj(&s, a), obj(&s, b));
+        assert!(ta.plain_text().contains("\u{2022}\t"), "the editable frame is converted");
+        let markers = ta.plain_text().matches("\u{2022}\t").count() + tb.plain_text().matches("\u{2022}\t").count();
+        assert_eq!(markers, own, "the locked frame's first paragraph keeps its list");
+        // The converted text is longer, so the story flows on into the locked frame; its own
+        // paragraphs stay a list.
+        let last = tb.paragraph_count() - 2;
+        assert!(tb.para_at(last).list.is_some(), "the locked frame's paragraphs stay a list (ids named: {named})");
+        assert!(!tb.plain_text().ends_with("\u{2022}\tAlpha beta.\n"));
+        assert!(s.tool_options().get("story").is_some(), "the whole story stays selected");
+    }
+}
+
+#[test]
+fn convert_to_text_of_the_whole_story_leaves_a_paragraph_that_starts_in_a_locked_frame() {
+    for named in [false, true] {
+        let mut s = session();
+        let story = format!("Alpha beta.\nAlpha beta.\n{}end.\nAlpha beta.\nAlpha beta.\n", "Gamma delta ".repeat(40));
+        let a = NodeId(
+            s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        let b = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 900})).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [a.0, b.0], "list": "bullet"})).unwrap();
+        let in_a = obj(&s, a).plain_text();
+        assert!(!in_a.ends_with('\n') && !obj(&s, b).plain_text().starts_with('\n'), "a paragraph runs on from the first frame into the second");
+        s.execute("object.lock", &json!({"ids": [a.0]})).unwrap();
+        s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+        assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+        let p = if named { json!({"ids": [a.0, b.0]}) } else { json!({}) };
+        let r = s.execute("text.convertListToText", &p).unwrap();
+        assert_eq!(r["ids"], json!([b.0]), "only the editable frame is changed (ids named: {named})");
+        // The two paragraphs that start in the editable frame, and the empty one that ends the story.
+        assert_eq!(r["converted"], json!(3), "only the paragraphs that start in the editable frame convert");
+        let (ta, tb) = (obj(&s, a), obj(&s, b));
+        assert_eq!(ta.plain_text(), in_a, "the locked frame's text is as it was");
+        assert!((0..ta.paragraph_count()).all(|k| ta.para_at(k).list.is_some()), "the locked frame stays a list");
+        assert!(tb.para_at(0).list.is_some(), "the paragraph the locked frame starts stays a list");
+        assert!(!tb.plain_text().starts_with('\u{2022}'));
+        assert_eq!(tb.plain_text().matches("\u{2022}\t").count(), 2);
+    }
+}
+
+#[test]
+fn convert_to_text_of_named_frames_ends_the_story_selection() {
+    let (mut s, _, b, _) = threaded_list_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("text.convertListToText", &json!({"ids": [b.0]})).unwrap();
+    assert!(obj(&s, b).plain_text().contains("\u{2022}\t"));
+    assert!(s.tool_options().get("story").is_none(), "the Type tool's selection moves past the characters inserted");
+}
+
+#[test]
+fn convert_to_text_in_one_frame_leaves_the_other_frames() {
+    let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+    let in_a = obj(&s, a).plain_text();
+    s.execute("text.convertListToText", &json!({})).unwrap();
+    let (ta, tb) = (obj(&s, a), obj(&s, b));
+    assert_eq!(ta.plain_text(), in_a, "the first frame's text is as it was");
+    assert!(ta.para_at(0).list.is_some(), "the first frame stays a list");
+    assert!((0..tb.paragraph_count()).all(|k| tb.para_at(k).list.is_none()), "the edited frame leaves its list");
+    assert!(tb.plain_text().contains("\u{2022}\t"), "the edited frame holds its bullets as characters");
+}
+
 #[test]
 fn a_frame_dragged_with_the_type_tools_is_the_dragged_rectangle() {
     for tool in ["type", "verticalType"] {
@@ -2823,9 +2990,11 @@ fn the_fallback_glyph_of_a_consonant_after_its_vowel_sign_is_reported() {
     let glyphs = vectorcraft_text::layout(db, &obj(&s, open)).glyphs;
     let fallback = db.face_by_id(glyphs[0].font_id).expect("the fallback face");
     assert_ne!(fallback.id(), requested.id());
-    let (ka, sign) = (fallback.glyph_for('क'), fallback.glyph_for('\u{93F}'));
+    let ka = fallback.glyph_for('क');
     let drawn: Vec<_> = glyphs.iter().map(|g| (g.gid, g.byte)).collect();
-    assert_eq!(drawn, [(sign, 0), (ka, 0)], "the vowel sign is drawn first, in Ka's cluster ({} or {MATRA_FAMILY})", fallback.family);
+    // A face may draw the vowel sign with a glyph other than its own, so only its place is checked.
+    let sign_first = matches!(drawn[..], [(sign, 0), (k, 0)] if sign != 0 && sign != ka && k == ka);
+    assert!(sign_first, "the vowel sign is drawn first, in Ka's cluster ({} or {MATRA_FAMILY}): {drawn:?}", fallback.family);
     let query = s.execute("text.glyphAlternates", &json!({"id": open.0, "start": 0})).unwrap();
     assert_eq!(query["chosen"], json!(ka), "the fallback face's glyph for Ka");
 

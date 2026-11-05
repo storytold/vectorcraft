@@ -6296,9 +6296,39 @@ breakText	Glyphs	Glifos
 	Fully Outside	Totalmente fuera
 	No artboards match.	Ninguna mesa de trabajo coincide.
 	Chosen: {n} of {total}	Elegidas: {n} de {total}
+
+# Contour add-on
+	Contour	Contorno
+	Contour Tool	Herramienta Contorno
+	Sharp	Puntiaguda
+	Bake	Expandir
+	Turn the Contour into plain paths	Convierte el contorno en trazados simples
 	Set Corners…	Definir esquinas…
 	All Anchors	Todas las anclas
 	Odd-Numbered Anchors	Anclas impares
 	Even-Numbered Anchors	Anclas pares
 	Minimum angle	Ángulo mínimo
 	Maximum angle	Ángulo máximo
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Seleccionar vinculadas
+	Select Embedded	Seleccionar incrustadas
+	Select Missing	Seleccionar ausentes
+	Select Modified	Seleccionar modificadas
+	Select by Link Status	Seleccionar por estado de vínculo
+	Select by Link Status…	Seleccionar por estado de vínculo…
+	Search images	Buscar imágenes
+	No images match.	Ninguna imagen coincide.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Se seleccionó {n} imagen vinculada|Se seleccionaron {n} imágenes vinculadas
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Se seleccionó {n} imagen incrustada|Se seleccionaron {n} imágenes incrustadas
+@msgplural	Selected {n} missing image|Selected {n} missing images	Se seleccionó {n} imagen ausente|Se seleccionaron {n} imágenes ausentes
+@msgplural	Selected {n} modified image|Selected {n} modified images	Se seleccionó {n} imagen modificada|Se seleccionaron {n} imágenes modificadas
+@msgplural	Selected {n} image|Selected {n} images	Se seleccionó {n} imagen|Se seleccionaron {n} imágenes
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} más está oculta o bloqueada|{selected}; {n} más están ocultas o bloqueadas
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} más está en una capa de plantilla|{selected}; {n} más están en capas de plantilla
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} más está fuera del grupo aislado|{selected}; {n} más están fuera del grupo aislado
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} más no se puede seleccionar ahora|{selected}; {n} más no se pueden seleccionar ahora
+
+# Compound Shapes add-on
+	Compound Shapes	Formas compuestas
+	Shape Mode Buttons Make Compound Shapes	Los botones de modo de forma crean formas compuestas

@@ -18,11 +18,16 @@
 //!   `%AI5_ArtFlags`, `%AI5_TargetResolution`, `%AI5_NumLayers`, `%AI5_OpenViewLayers` (a digit for
 //!   each layer, 7 shown and 6 hidden), `%AI7_GridSettings` (§2.1.1), and the version comment
 //!   `%%AI8_CreatorVersion` ([`CREATOR_VERSION`]).
-//! - Setup: `0 Bn` (no gradient definitions, §3), the color swatches (`%AI5_BeginPalette`,
-//!   `0 0 Pb`, the Registration swatch, each swatch's color operator and `(name) Pc`, a color group as `0 (name) count Pg`
-//!   before its swatches, `PB`), then the artboards as the `ArtboardArray` of the `/Document`
-//!   dictionary's `/Recorded` part and the canvas size as its `AIDocumentCanvasSize`, on `%_`
-//!   lines.
+//! - Setup: the gradients the art uses as `n Bn` and a definition of each (§3.5: `%AI5_BeginGradient:
+//!   (name)`, `(name) type stops Bd`, `[`, each stop on a `%_` line as `color style opacity 6 midpoint
+//!   rampPoint Bs`, `BD`, `%AI5_EndGradient`), those only the swatches use in a non-printing block
+//!   (§14: `%AI5_Begin_NonPrinting`, `Np`, `%AI5_End_NonPrinting--`); the patterns the same way
+//!   (§3.4: `%AI3_BeginPattern: (name)`, `(name) llx lly urx ury`, the tile's art on `%_` lines, `E`,
+//!   `%AI3_EndPattern`); the swatches (`%AI5_BeginPalette`, `0 0 Pb`, the Registration swatch, each
+//!   swatch's color operator, gradient instance or pattern operator and `(name) Pc`, a color group as
+//!   `0 (name) count Pg` before its swatches, `PB`), then the artboards as the `ArtboardArray` of the
+//!   `/Document` dictionary's `/Recorded` part and the canvas size as its `AIDocumentCanvasSize`, on
+//!   `%_` lines.
 //! - Layers: `%AI5_BeginLayer`, `visible preview unlocked printing dimmed 0 1 colorIndex r g b 0
 //!   dimPercent clipping Lb` (14 operands; a color that isn't one of the preset layer colors has the
 //!   index -1; `clipping` is 1 for a clipping layer), `(name) Ln`, the layer's name as an XML id in an
@@ -30,10 +35,22 @@
 //! - Colors: `g` gray, `k` CMYK, `c m y k r g b Xa` RGB (Lab is written as RGB); a spot color
 //!   `c m y k (name) tint x` (CMYK) or `c m y k r g b|L a b (name) tint 1|2 Xx` (RGB or Lab); a
 //!   global process color `… (name) tint model Xk`; Registration `1 1 1 1 ([Registration]) tint
-//!   Xs`. Upper case paints the stroke.
+//!   Xs`; a pattern `(name) 0 0 1 1 0 0 0 0 0 [matrix] p` (`P`), the matrix taking the pattern's
+//!   space (its tile's lower left corner the origin) to art space. Upper case paints the stroke.
+//! - Gradients (§3.5.3): around the painting operator of a path (of a compound path's last path),
+//!   `Bb` (`1 Bb` for the stroke), a radial gradient's focal point `x y angle fraction Bh`, then
+//!   `flag (name) x y angle length a b c d tx ty 1 Bg`, which places the gradient on the path: a
+//!   linear one with the identity matrix, `x` the start and `length` the length as fractions of the
+//!   path's extent along `angle`; a radial one with the matrix taking the unit circle onto its
+//!   extent ellipse, `x` and `y` its center as fractions of the path's bounds there and `length` its
+//!   radius as a multiple of the one the bounds give (`writer::paints::placement`). The imaging data
+//!   follows (a linear gradient's `a b c d tx ty Xm`, its caps `Bc` and a `Bm` for each pair of
+//!   stops; a radial one's `Bm`), then the operator and `0 BB` (`2 BB` or `1 BB` when the path is
+//!   stroked too; a fill's instance ends `2 BB` before a stroke's). In a pattern's tile the matrices
+//!   are in the canvas's space (y down, from art space's origin there).
 //! - State before each object: locked `A`, hidden `Xw` (`1` or `0`). An object's name follows it as
-//!   an `/ArtDictionary` whose `AI10_ArtUID` is the name as an XML id. Guides are `(N) *`, the
-//!   path, `(N) *` (`(n) *` when closed).
+//!   an `/ArtDictionary` whose `AI10_ArtUID` is the name as an XML id. Guides are the path
+//!   followed by `(N) *` (`(n) *` when closed), without the `(N) *` that §6 also puts before it.
 //! - Transparency: `mode opacity isolate knockout shape Xy` (the blending mode's number, Knockout
 //!   Group 0 off, 1 on, 2 neutral), written when it changes: in a path's paint after its colors,
 //!   before a guide, and after a group's end (`U` or `Q`) followed by `0 0 Xd` and `6 () XW`; a
@@ -50,14 +67,19 @@
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
 //! artboards together are centered; each artboard's `RulerOrigin` is its top-left corner there, and
 //! `%AI3_TemplateBox` holds the canvas's center in art space. What the form above can't hold is written as plain filled and stroked paths, each such
-//! loss a warning: type as its outlines and its inline graphics' art, gradients as their average color, pattern fills as their
-//! tiles cut to the shape, clipping groups and clipping layers whose clipping object isn't a path,
+//! loss a warning: type as its outlines and its inline graphics' art, freeform gradients, gradients
+//! along or across a stroke and gradients without stops, with more than 256 stops or without extent
+//! as their average color
+//! (gradients that dither or mix perceptually are written as classic ones, and gradient stops linked
+//! to global process colors as their colors), pattern fills whose tiles aren't a grid, whose art reaches past
+//! the tile or is painted with patterns as their tiles cut to the shape, clipping groups and clipping layers whose clipping object isn't a path,
 //! and the clipping groups inside them, as their art cut to that object (its fill cut too, its
 //! stroke not), images as their outlines filled with
 //! their average color, symbols and live objects as their art (symbol art past
 //! [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects in all left out), strokes a plain line can't draw
-//! as their filled outlines, several fills or strokes as a group of a path for each, gradient and
-//! pattern swatches, the opacity and blending modes of single fills and strokes, opacity masks on
+//! as their filled outlines, several fills or strokes as a group of a path for each, freeform
+//! gradient swatches, gradient swatches of more than 256 stops, swatches of patterns written as
+//! tiles and the placement of pattern swatches that move, turn or scale their pattern, the opacity and blending modes of single fills and strokes, opacity masks on
 //! layers and opacity masks nested too deep, and live effects other than geometry effects left out.
 //!
 //! The data streams hold the program compressed with Zstandard after `%AI24_ZStandard_Data`, with
@@ -160,10 +182,15 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     // The document is y down; art space is ruler space: y up, its origin the first artboard's
     // top-left corner.
     let to_art = Affine::new([1.0, 0.0, 0.0, -1.0, -board.x0, board.y0]);
-    let mut w = Writer::new(doc, to_art);
+    let origin = ruler_origin(doc, to_art);
+    let mut w = Writer::new(doc, to_art, origin);
+    w.reserve_swatch_gradients();
     for layer in &doc.layers {
         w.layer(layer);
     }
+    // The palette first: its gradient and pattern swatches add definitions.
+    let mut palette = String::new();
+    w.palette(&mut palette);
     let first = to_art.transform_rect_bbox(board);
     let art = doc
         .layers
@@ -174,12 +201,11 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
         .filter(|b| b.is_finite())
         .reduce(|a, b| a.union(b))
         .unwrap_or(first);
-    let origin = ruler_origin(doc, to_art);
     let header = header(doc, o, &w, art, first, origin, scale);
     let mut s = header.clone();
-    // No gradient definitions: gradients are written as their average color.
-    s.push_str("%%BeginProlog\n%%EndProlog\n%%BeginSetup\n0 Bn\n");
-    w.palette(&mut s);
+    s.push_str("%%BeginProlog\n%%EndProlog\n%%BeginSetup\n");
+    w.definitions(&mut s);
+    s.push_str(&palette);
     artboards(&mut s, doc, to_art, origin);
     s.push_str("%%EndSetup\n");
     s.push_str(&w.body);

@@ -12,8 +12,13 @@ use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Shape, SubPath};
 use vectorcraft_pathops::BoolOp;
 
-use crate::ai_ops::{self, average, unit};
+use crate::ai_ops::{self, unit};
 use crate::ps;
+
+mod paints;
+
+#[cfg(test)]
+pub(super) use paints::{GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT};
 
 /// How deep symbols, live objects and pattern tiles may nest in one another (deeper art is left
 /// out). Groups and layers need no limit of their own: a document is never deeper than
@@ -25,8 +30,7 @@ const AVERAGE_SIDE: u32 = 64;
 const MAX_AVERAGED_PIXELS: u64 = 1 << 24;
 
 pub(super) const TYPE: &str = "type is written as its outlines in the editing data for other apps";
-pub(super) const GRADIENTS: &str = "gradients are written as their average color in the editing data for other apps";
-const PATTERNS: &str = "pattern fills are written as their tiles cut to the shape in the editing data for other apps";
+pub(super) const PATTERNS: &str = "pattern fills whose tiles aren't a grid or whose art reaches past the tile, pattern fills in another pattern's tile and pattern fills nested more than 8 deep are written as their tiles cut to the shape in the editing data for other apps";
 pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fill places are written filled gray in the editing data for other apps";
 pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose clipping object isn't a path, and the clipping groups inside them, are written as their art cut to that object in the editing data for other apps";
 pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths that a plain fill and line can't draw are written as paths of their own inside the clipping (fills under the clipped art, strokes over it) in the editing data for other apps";
@@ -43,7 +47,7 @@ pub(super) const DEEP_MASKS: &str =
 const GROUPED_LAYER: &str =
     "the transparency and opacity masks of layers that an effect made into a group are left out of the editing data for other apps";
 pub(super) const EFFECTS: &str = "live effects other than geometry effects are left out of the editing data for other apps";
-const SWATCHES: &str = "gradient and pattern swatches are left out of the editing data for other apps";
+pub(super) const SWATCHES: &str = "freeform gradient swatches, gradient swatches of more than 256 stops, and pattern swatches whose patterns the data can't define, are left out of the editing data for other apps";
 pub(super) const SYMBOL_LIMIT: &str = "symbol instances past 16,000,000 objects of symbol art in all are left out of the editing data for other apps";
 const TEMPLATES: &str = "template layers are written as dimmed layers that don't print in the editing data for other apps";
 
@@ -127,13 +131,38 @@ pub(super) struct Writer<'a> {
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// The objects of the symbol art written so far, within [`vectorcraft_doc::MAX_SYMBOL_NODES`].
     symbol_nodes: u64,
+    /// The document → the space gradients' matrices (`Xm`, `Bm`, `Bc`) and focal points are
+    /// written in: art space, and in a pattern's definition [`Self::tile_grad_space`].
+    grad_space: Affine,
+    /// The pattern's space (y down) → the space a pattern's definition writes gradients' matrices
+    /// in: the canvas's (y down), from art space's origin there.
+    tile_grad_space: Affine,
+    /// The document → the canvas (y down), the space of a gradient's transformation in `Bg`; in a
+    /// pattern's definition, the pattern's space turned y up.
+    canvas: Affine,
+    /// The gradient definitions, in the order they are first used.
+    gradients: Vec<paints::GradientDef>,
+    /// The pattern definitions written, each after those its art uses.
+    patterns: Vec<paints::PatternOut>,
+    /// The patterns whose definitions are being written.
+    defining: Vec<String>,
+    /// Writing the palette: the definitions it adds are for its swatches only.
+    in_palette: bool,
 }
 
 impl<'a> Writer<'a> {
-    pub(super) fn new(doc: &'a Document, to_art: Affine) -> Self {
+    /// A writer of `doc`'s art through `to_art`; `origin` is art space's origin on the canvas.
+    pub(super) fn new(doc: &'a Document, to_art: Affine, origin: (f64, f64)) -> Self {
         Self {
             doc,
             to_art,
+            grad_space: to_art,
+            tile_grad_space: Affine::translate((-origin.0, origin.1)),
+            canvas: Affine::new([1.0, 0.0, 0.0, -1.0, origin.0, origin.1]) * to_art,
+            gradients: vec![],
+            patterns: vec![],
+            defining: vec![],
+            in_palette: false,
             cms: vectorcraft_color::cms::active(),
             body: String::new(),
             warnings: vec![],
@@ -560,16 +589,17 @@ impl<'a> Writer<'a> {
             self.warn_cut(Some(first));
             return self.clip_contents(children);
         };
-        let painted = plain_paint(first);
-        if visible_items(first).iter().any(|i| i.opacity() < 1.0 || i.blend() != BlendMode::Normal) {
+        let items = self.items(first, path.to_bezpath().bounding_box());
+        let painted = self.plain_paint(&items);
+        if items.iter().any(|i| i.opacity() < 1.0 || i.blend() != BlendMode::Normal) {
             self.warn(ITEM_TRANSPARENCY);
         }
         // Paint the clipping path can't carry: its fills under the others, its strokes over them.
         let (fills, strokes): (Vec<&AppearanceItem>, Vec<&AppearanceItem>) =
-            if painted.is_none() { visible_items(first).into_iter().partition(|i| matches!(i, AppearanceItem::Fill(_))) } else { (vec![], vec![]) };
+            if painted.is_none() { items.iter().partition(|i| matches!(i, AppearanceItem::Fill(_))) } else { (vec![], vec![]) };
         if painted.is_none() {
             self.warn(CLIP_PAINT);
-            if first.extras().mask.is_some() && !visible_items(first).is_empty() {
+            if first.extras().mask.is_some() && !items.is_empty() {
                 self.warn(CLIP_PAINT_MASKS);
             }
         }
@@ -588,10 +618,13 @@ impl<'a> Writer<'a> {
         if several {
             self.line("*u");
         }
-        for sp in subpaths {
+        let last = subpaths.len().saturating_sub(1);
+        let outline = path.to_bezpath();
+        for (i, sp) in subpaths.into_iter().enumerate() {
             ai_ops::subpath(&mut self.body, self.to_art, sp);
-            let op = if sp.closed { op } else { op.to_ascii_uppercase() };
-            let _ = writeln!(self.body, "{}\nW\n{op}", if sp.closed { 'h' } else { 'H' });
+            let _ = writeln!(self.body, "{}\nW", if sp.closed { 'h' } else { 'H' });
+            let gradients = if i == last { (gradient(fill.map(|f| &f.paint)), gradient(stroke.map(|s| &s.paint))) } else { (None, None) };
+            self.painted(op, sp.closed, gradients, stroke.is_some(), true, &outline);
         }
         if several {
             self.line("*U");
@@ -658,11 +691,11 @@ impl<'a> Writer<'a> {
         if path.is_empty() {
             return;
         }
-        let items = visible_items(n);
+        let items = self.items(n, path.to_bezpath().bounding_box());
         if items.iter().any(|i| i.opacity() < 1.0 || i.blend() != BlendMode::Normal) {
             self.warn(ITEM_TRANSPARENCY);
         }
-        match (plain_paint(n), items.as_slice()) {
+        match (self.plain_paint(&items), items.as_slice()) {
             (Some((fill, stroke)), _) => self.path_object(path, rule, fill, stroke, xy),
             (None, [one]) => self.item(path, rule, one, xy),
             (None, items) => {
@@ -679,7 +712,7 @@ impl<'a> Writer<'a> {
     fn item(&mut self, path: &PathData, rule: FillRule, item: &AppearanceItem, xy: Xy) {
         match item {
             AppearanceItem::Fill(f) => self.fill_object(path, rule, f, xy),
-            AppearanceItem::Stroke(s) if direct_stroke(s) => self.path_object(path, rule, None, Some(s), xy),
+            AppearanceItem::Stroke(s) if self.direct_stroke(s) => self.path_object(path, rule, None, Some(s), xy),
             AppearanceItem::Stroke(s) => {
                 self.warn(STROKES);
                 if self.brush_art(path, s, xy) {
@@ -716,15 +749,17 @@ impl<'a> Writer<'a> {
         true
     }
 
-    /// A fill as an object of its own, of transparency `xy`: a gradient as its average color, a
-    /// pattern as its tiles cut to the path.
+    /// A fill as an object of its own, of transparency `xy`: a color, a placed gradient or a
+    /// pattern the data can define as the path's fill, another pattern as its tiles cut to the path.
     fn fill_object(&mut self, path: &PathData, rule: FillRule, f: &FillLayer, xy: Xy) {
+        if !matches!(f.paint, Paint::None) && self.direct(&f.paint) {
+            return self.path_object(path, rule, Some(f), None, xy);
+        }
         match &f.paint {
-            Paint::Solid { .. } => self.path_object(path, rule, Some(f), None, xy),
-            Paint::Gradient(g) => {
-                self.warn(GRADIENTS);
-                let flat = FillLayer { paint: Paint::solid(average(&g.gradient)), ..f.clone() };
-                self.path_object(path, rule, Some(&flat), None, xy);
+            // A gradient not placed yet: placed on the path, or its average color.
+            Paint::Solid { .. } | Paint::Gradient(_) => {
+                let flat = self.placed(&f.paint, path.to_bezpath().bounding_box());
+                self.path_object(path, rule, Some(&FillLayer { paint: flat, ..f.clone() }), None, xy);
             }
             Paint::Pattern { pattern, xf } => {
                 self.warn(PATTERNS);
@@ -826,11 +861,13 @@ impl<'a> Writer<'a> {
         if several {
             self.line("*u");
         }
-        for sp in subpaths {
+        // A gradient's instance paints the last subpath; the compound path takes its paint.
+        let last = subpaths.len().saturating_sub(1);
+        let outline = path.to_bezpath();
+        for (i, sp) in subpaths.into_iter().enumerate() {
             ai_ops::subpath(&mut self.body, self.to_art, sp);
-            let op = if sp.closed { op } else { op.to_ascii_uppercase() };
-            self.body.push(op);
-            self.body.push('\n');
+            let gradients = if i == last { (gradient(fill.map(|f| &f.paint)), gradient(stroke.map(|s| &s.paint))) } else { (None, None) };
+            self.painted(op, sp.closed, gradients, stroke.is_some(), false, &outline);
         }
         if several {
             self.line("*U");
@@ -899,11 +936,15 @@ impl<'a> Writer<'a> {
 
     // ---------- color ----------
 
-    /// Set the fill (or with `stroke`, the stroke) color to solid paint `p`: a spot or global
-    /// swatch by its name, Registration, else the color itself.
+    /// Set the fill (or with `stroke`, the stroke) to paint `p`: a spot or global swatch by its
+    /// name, Registration, the color itself, or a pattern ([`Self::pattern_paint`]). A gradient sets
+    /// nothing: its instance paints ([`Self::painted`]).
     fn color(&mut self, p: &Paint, stroke: bool) {
-        let Paint::Solid { color, swatch, tint } = p else {
-            return self.plain_color(Color::gray(1.0), stroke);
+        let (color, swatch, tint) = match p {
+            Paint::Solid { color, swatch, tint } => (color, swatch, tint),
+            Paint::Pattern { pattern, xf } => return self.pattern_paint(pattern, *xf, stroke),
+            Paint::Gradient(_) => return,
+            Paint::None => return self.plain_color(Color::gray(1.0), stroke),
         };
         if swatch.as_deref() == Some(REGISTRATION) {
             let mut s = String::from("1 1 1 1 ");
@@ -989,6 +1030,7 @@ impl<'a> Writer<'a> {
     /// (the ungrouped ones first, then each color group's after `0 (name) count Pg`), `PB`,
     /// `%AI5_EndPalette`.
     pub(super) fn palette(&mut self, s: &mut String) {
+        self.in_palette = true;
         s.push_str("%AI5_BeginPalette\n0 0 Pb\n");
         self.registration_cell(s);
         let doc = self.doc;
@@ -996,13 +1038,13 @@ impl<'a> Writer<'a> {
             self.swatch(s, sw);
         }
         for g in doc.swatch_groups.iter() {
-            let colors: Vec<&Swatch> = g.swatches.iter().filter(|sw| writable(sw)).collect();
-            let _ = writeln!(s, "0 {} {} Pg", ps::bytes(g.name.as_bytes()), colors.len());
-            for sw in &g.swatches {
-                self.swatch(s, sw);
-            }
+            let mut cells = String::new();
+            let count = g.swatches.iter().filter(|sw| self.swatch(&mut cells, sw)).count();
+            let _ = writeln!(s, "0 {} {count} Pg", ps::bytes(g.name.as_bytes()));
+            s.push_str(&cells);
         }
         s.push_str("PB\n%AI5_EndPalette\n");
+        self.in_palette = false;
     }
 
     /// The Registration swatch, which every palette in the files users sent starts with: in a
@@ -1021,24 +1063,31 @@ impl<'a> Writer<'a> {
         let _ = writeln!(s, "{name} Pc");
     }
 
-    /// One swatch of the palette: a color swatch's color and `(name) Pc`; gradient and pattern
-    /// swatches are left out.
-    fn swatch(&mut self, s: &mut String, sw: &Swatch) {
+    /// One swatch of the palette: a color swatch's color, a gradient swatch's or pattern swatch's
+    /// paint ([`Self::swatch_paint`]), then `(name) Pc`. False when it isn't written: Registration
+    /// (written first), the None swatch, and paint the data can't hold (with a warning).
+    fn swatch(&mut self, s: &mut String, sw: &Swatch) -> bool {
         if sw.name == REGISTRATION || matches!(sw.paint, Paint::None) {
-            return;
+            return false;
         }
-        if !writable(sw) {
-            return self.warn(SWATCHES);
-        }
-        let Paint::Solid { color, swatch, .. } = &sw.paint else { return };
-        if swatch.is_none() && (sw.global || sw.spot) {
-            self.named(s, &sw.name, *color, 1.0, sw.spot, false);
-        } else {
-            let body = std::mem::take(&mut self.body);
-            self.plain_color(*color, false);
-            s.push_str(&std::mem::replace(&mut self.body, body));
+        match &sw.paint {
+            Paint::Solid { color, swatch, .. } => {
+                if swatch.is_none() && (sw.global || sw.spot) {
+                    self.named(s, &sw.name, *color, 1.0, sw.spot, false);
+                } else {
+                    let body = std::mem::take(&mut self.body);
+                    self.plain_color(*color, false);
+                    s.push_str(&std::mem::replace(&mut self.body, body));
+                }
+            }
+            _ if self.swatch_paint(s, sw) => {}
+            _ => {
+                self.warn(SWATCHES);
+                return false;
+            }
         }
         let _ = writeln!(s, "{} Pc", ps::bytes(sw.name.as_bytes()));
+        true
     }
 
     /// The spot color swatches, with their full colors' CMYK equivalents, for the header.
@@ -1057,14 +1106,12 @@ impl<'a> Writer<'a> {
     }
 }
 
-/// Is `sw` a color swatch the palette writes?
-fn writable(sw: &Swatch) -> bool {
-    matches!(sw.paint, Paint::Solid { .. }) && sw.name != REGISTRATION
-}
-
-/// Does a plain line of one color draw `s` (the line style operators can write it)?
-fn direct_stroke(s: &StrokeLayer) -> bool {
-    matches!(s.paint, Paint::Solid { .. }) && stroke::is_plain(s)
+/// The gradient of paint `p`, when it has one.
+fn gradient(p: Option<&Paint>) -> Option<&vectorcraft_color::GradientPaint> {
+    match p {
+        Some(Paint::Gradient(g)) => Some(g),
+        _ => None,
+    }
 }
 
 /// `n`'s fills and strokes that paint.
@@ -1077,19 +1124,6 @@ fn visible_items(n: &Node) -> Vec<&AppearanceItem> {
             AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0 && s.width.is_finite(),
         })
         .collect()
-}
-
-/// `n`'s paint as one path object paints: no paint, a fill of a color, a plain line of a color,
-/// or both, the line over the fill; `None` when it has other paint.
-fn plain_paint(n: &Node) -> Option<(Option<&FillLayer>, Option<&StrokeLayer>)> {
-    let solid = |p: &Paint| matches!(p, Paint::Solid { .. });
-    match visible_items(n).as_slice() {
-        [] => Some((None, None)),
-        [AppearanceItem::Fill(f)] if solid(&f.paint) => Some((Some(f), None)),
-        [AppearanceItem::Stroke(s)] if direct_stroke(s) => Some((None, Some(s))),
-        [AppearanceItem::Fill(f), AppearanceItem::Stroke(s)] if solid(&f.paint) && direct_stroke(s) => Some((Some(f), Some(s))),
-        _ => None,
-    }
 }
 
 /// The painting operator of a closed subpath (§5.3.3): `b` fill and stroke, `f` fill, `s`

@@ -6365,9 +6365,39 @@ font-script	Japanese	იაპონური
 	Fully Outside	მთლიანად გარეთ
 	No artboards match.	შესაბამისი სამუშაო დაფა არ არის.
 	Chosen: {n} of {total}	არჩეულია: {n} / {total}
+
+# Contour add-on
+	Contour	მოხაზულობა
+	Contour Tool	მოხაზულობის ხელსაწყო
+	Sharp	მახვილი
+	Bake	გაშლა
+	Turn the Contour into plain paths	მოხაზულობას ჩვეულებრივ ტრაექტორიებად აქცევს
 	Set Corners…	კუთხეების დაყენება…
 	All Anchors	ყველა საყრდენი წერტილი
 	Odd-Numbered Anchors	კენტი საყრდენი წერტილები
 	Even-Numbered Anchors	ლუწი საყრდენი წერტილები
 	Minimum angle	მინიმალური კუთხე
 	Maximum angle	მაქსიმალური კუთხე
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	დაკავშირებულების არჩევა
+	Select Embedded	ჩაშენებულების არჩევა
+	Select Missing	დაკარგულების არჩევა
+	Select Modified	შეცვლილების არჩევა
+	Select by Link Status	კავშირის მდგომარეობით არჩევა
+	Select by Link Status…	კავშირის მდგომარეობით არჩევა…
+	Search images	გამოსახულებების ძებნა
+	No images match.	შესაბამისი გამოსახულება არ არის.
+@msgplural	Selected {n} linked image|Selected {n} linked images	არჩეულია დაკავშირებული გამოსახულებები: {n}
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	არჩეულია ჩაშენებული გამოსახულებები: {n}
+@msgplural	Selected {n} missing image|Selected {n} missing images	არჩეულია დაკარგული გამოსახულებები: {n}
+@msgplural	Selected {n} modified image|Selected {n} modified images	არჩეულია შეცვლილი გამოსახულებები: {n}
+@msgplural	Selected {n} image|Selected {n} images	არჩეულია გამოსახულებები: {n}
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; დამალული ან ჩაკეტილია კიდევ: {n}
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; შაბლონის ფენაზეა კიდევ: {n}
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; იზოლირებული ჯგუფის გარეთაა კიდევ: {n}
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; ახლა ვერ აირჩევა კიდევ: {n}
+
+# Compound Shapes add-on
+	Compound Shapes	შედგენილი ფიგურები
+	Shape Mode Buttons Make Compound Shapes	ფიგურის რეჟიმის ღილაკები ქმნის შედგენილ ფიგურებს

@@ -8988,3 +8988,77 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
     assert_eq!(set_count, 1, "settled frame 10 is uploaded to texture");
     assert_eq!(app.canvas.key.as_ref().unwrap().revision, 10, "settled frame 10 is uploaded");
 }
+
+/// The labels the Contour bar draws in a headless frame, with their rects; none while it isn't
+/// shown.
+fn contour_bar_labels(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+    egui_extras::install_image_loaders(ctx);
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+    out.textures_delta.clear();
+    let Some(bar) = contour_bar::bar_rect(ctx) else { return vec![] };
+    out.shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Text(t) if bar.contains(t.visual_bounding_rect().center()) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A click on the centre of the label `name` of the Contour bar, laid out by one frame before it.
+fn click_contour_bar(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) {
+    let labels = contour_bar_labels(app, ctx, vec![]);
+    let at = labels.iter().find(|(t, _)| t == name).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{name}` in {labels:?}"));
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    contour_bar_labels(app, ctx, vec![egui::Event::PointerMoved(at)]);
+    contour_bar_labels(app, ctx, vec![button(true), button(false)]);
+}
+
+/// The Contour bar shows with the Contour tool and a shape selected: Sharp, Round and Square set the
+/// corner style (of a selected Contour at once, else of the next one), and Bake turns a Contour into
+/// plain paths.
+#[test]
+fn the_contour_bar_sets_corners_and_bakes() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 80, "height": 60})).unwrap();
+    let ctx = egui::Context::default();
+
+    // Only the Contour tool shows it.
+    app.select_tool("selection");
+    assert!(contour_bar_labels(&mut app, &ctx, vec![]).is_empty());
+    app.select_tool("contour");
+    contour_bar_labels(&mut app, &ctx, vec![]);
+    let names: Vec<String> = contour_bar_labels(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+    for want in ["Contour", "Sharp", "Round", "Square", "Bake"] {
+        assert!(names.iter().any(|n| n == want), "{want} in {names:?}");
+    }
+    let offsets = |app: &VectorcraftApp| {
+        let mut found = vec![];
+        app.session.active().unwrap().doc.walk(|n| {
+            if let Some(e) = n.appearance.effects.iter().find(|e| e.id == "path.offsetPath") {
+                found.push(e.params["joins"].as_str().unwrap_or_default().to_string());
+            }
+        });
+        found
+    };
+
+    // No Contour yet: Round is kept for the next one, and Bake does nothing.
+    let steps = app.session.active().unwrap().history.undo.len();
+    click_contour_bar(&mut app, &ctx, "Round");
+    assert_eq!(app.session.tool_options()["corners"], json!("round"));
+    click_contour_bar(&mut app, &ctx, "Bake");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "nothing to bake");
+    assert!(offsets(&app).is_empty());
+
+    // A Contour made now has round corners; Square changes the selected Contour in place.
+    app.session.execute("addon.contour.set", &json!({"offset": 8, "corners": "round"})).unwrap();
+    assert_eq!(offsets(&app), ["round"]);
+    click_contour_bar(&mut app, &ctx, "Square");
+    assert_eq!(offsets(&app), ["bevel"], "the selected Contour changed, none was added");
+
+    // Bake: the live effect is gone and the art stays.
+    click_contour_bar(&mut app, &ctx, "Bake");
+    assert!(offsets(&app).is_empty(), "baked");
+}

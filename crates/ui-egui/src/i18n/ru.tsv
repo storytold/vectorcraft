@@ -6443,9 +6443,39 @@ shape	Open	Открытый
 	Fully Outside	Полностью снаружи
 	No artboards match.	Нет подходящих монтажных областей.
 	Chosen: {n} of {total}	Выбрано: {n} из {total}
+
+# Contour add-on
+	Contour	Эквидистанта
+	Contour Tool	Инструмент «Эквидистанта»
+	Sharp	Острый
+	Bake	Разобрать
+	Turn the Contour into plain paths	Преобразует эквидистанту в обычные контуры
 	Set Corners…	Задать углы…
 	All Anchors	Все опорные точки
 	Odd-Numbered Anchors	Нечётные опорные точки
 	Even-Numbered Anchors	Чётные опорные точки
 	Minimum angle	Минимальный угол
 	Maximum angle	Максимальный угол
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Выделить связанные
+	Select Embedded	Выделить внедрённые
+	Select Missing	Выделить отсутствующие
+	Select Modified	Выделить изменённые
+	Select by Link Status	Выделить по состоянию связи
+	Select by Link Status…	Выделить по состоянию связи…
+	Search images	Поиск изображений
+	No images match.	Нет подходящих изображений.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Выделено {n} связанное изображение|Выделено {n} связанных изображения|Выделено {n} связанных изображений
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Выделено {n} внедрённое изображение|Выделено {n} внедрённых изображения|Выделено {n} внедрённых изображений
+@msgplural	Selected {n} missing image|Selected {n} missing images	Выделено {n} отсутствующее изображение|Выделено {n} отсутствующих изображения|Выделено {n} отсутствующих изображений
+@msgplural	Selected {n} modified image|Selected {n} modified images	Выделено {n} изменённое изображение|Выделено {n} изменённых изображения|Выделено {n} изменённых изображений
+@msgplural	Selected {n} image|Selected {n} images	Выделено {n} изображение|Выделено {n} изображения|Выделено {n} изображений
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; ещё {n} скрыто или заблокировано|{selected}; ещё {n} скрыты или заблокированы|{selected}; ещё {n} скрыты или заблокированы
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; ещё {n} на слое-шаблоне|{selected}; ещё {n} на слоях-шаблонах|{selected}; ещё {n} на слоях-шаблонах
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; ещё {n} вне изолированной группы|{selected}; ещё {n} вне изолированной группы|{selected}; ещё {n} вне изолированной группы
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; ещё {n} сейчас нельзя выделить|{selected}; ещё {n} сейчас нельзя выделить|{selected}; ещё {n} сейчас нельзя выделить
+
+# Compound Shapes add-on
+	Compound Shapes	Составные фигуры
+	Shape Mode Buttons Make Compound Shapes	Кнопки режимов фигур создают составные фигуры
