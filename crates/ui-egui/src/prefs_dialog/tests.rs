@@ -458,12 +458,12 @@ fn a_chosen_recovery_folder_fills_the_field_and_cancel_keeps_it() {
     let answer = picked.clone();
     a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
     let mut d = a.ui.dialog.clone().unwrap();
-    choose_recovery_folder(&mut a, &mut d);
+    choose_folder(&mut a, &mut d, "recoveryFolder");
     assert_eq!(d.str("recoveryFolder"), picked);
     assert!(a.ui.status.is_empty(), "{}", a.ui.status);
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "the write check leaves nothing behind");
     a.services.pick_folder = Some(Box::new(|| None));
-    choose_recovery_folder(&mut a, &mut d);
+    choose_folder(&mut a, &mut d, "recoveryFolder");
     assert_eq!(d.str("recoveryFolder"), picked, "cancel keeps the field");
     a.ui.dialog = Some(d);
     confirm(&mut a).unwrap();
@@ -486,7 +486,7 @@ fn a_recovery_folder_that_cannot_be_written_is_refused() {
         let answer = path.to_string_lossy().into_owned();
         a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
         a.ui.status.clear();
-        choose_recovery_folder(&mut a, &mut d);
+        choose_folder(&mut a, &mut d, "recoveryFolder");
         assert_eq!(d.str("recoveryFolder"), "kept");
         assert_eq!(a.ui.status, format!("{} is not a folder", path.to_string_lossy()));
     }
@@ -501,7 +501,7 @@ fn a_recovery_folder_that_cannot_be_written_is_refused() {
             let answer = locked.to_string_lossy().into_owned();
             a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
             a.ui.status.clear();
-            choose_recovery_folder(&mut a, &mut d);
+            choose_folder(&mut a, &mut d, "recoveryFolder");
             assert_eq!(d.str("recoveryFolder"), "kept");
             assert!(a.ui.status.starts_with("Data Recovery can't keep copies in "), "{}", a.ui.status);
         }
@@ -515,7 +515,7 @@ fn a_recovery_folder_that_cannot_be_written_is_refused() {
             let answer = unlisted.to_string_lossy().into_owned();
             a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
             a.ui.status.clear();
-            choose_recovery_folder(&mut a, &mut d);
+            choose_folder(&mut a, &mut d, "recoveryFolder");
             assert_eq!(d.str("recoveryFolder"), "kept");
             assert!(a.ui.status.starts_with("Data Recovery can't keep copies in "), "{}", a.ui.status);
         }
@@ -535,7 +535,7 @@ fn a_chosen_recovery_folder_fills_the_field_after_the_active_document_closes() {
     a.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     open(&mut a, Some("File Handling"));
     let mut d = a.ui.dialog.take().unwrap();
-    choose_recovery_folder(&mut a, &mut d);
+    choose_folder(&mut a, &mut d, "recoveryFolder");
     a.ui.dialog = Some(d);
     assert!(matches!(shown.requests().as_slice(), [crate::picks::PickRequest::Folder]));
     a.session.execute("file.close", &json!({})).unwrap();
@@ -544,5 +544,114 @@ fn a_chosen_recovery_folder_fills_the_field_after_the_active_document_closes() {
     shown.answer(&[&picked]);
     crate::picks::poll(&mut a, &egui::Context::default());
     assert_eq!(a.ui.dialog.as_ref().unwrap().str("recoveryFolder"), picked, "{}", a.ui.status);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Plug-ins & Scratch Disks › Additional Plug-ins Folder has a Choose… button where the host has a
+/// folder picker, and none where it has not (the web).
+#[test]
+fn plugins_folder_has_a_choose_button_with_a_folder_picker() {
+    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    a.services.pick_folder = Some(Box::new(|| None));
+    open(&mut a, Some("Plug-ins & Scratch Disks"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Additional Plug-ins Folder") && text.contains("Choose…"), "{text}");
+    a.services.pick_folder = None;
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Additional Plug-ins Folder") && !text.contains("Choose…"), "{text}");
+}
+
+/// Choose… beside Additional Plug-ins Folder puts the folder picked into the field, and OK saves
+/// it; a canceled picker, a file and a missing folder leave the field as it was.
+#[test]
+fn a_chosen_plugins_folder_fills_the_field_and_others_keep_it() {
+    let dir = temp_folder("plugins-chosen");
+    let file = dir.join("not-a-folder.txt");
+    std::fs::write(&file, b"x").unwrap();
+    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    open(&mut a, Some("Plug-ins & Scratch Disks"));
+    let mut d = a.ui.dialog.clone().unwrap();
+    for path in [file.clone(), dir.join("missing")] {
+        let answer = path.to_string_lossy().into_owned();
+        a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
+        a.ui.status.clear();
+        choose_folder(&mut a, &mut d, "pluginsFolder");
+        assert_eq!(d.str("pluginsFolder"), "");
+        assert_eq!(a.ui.status, format!("{} is not a folder", path.to_string_lossy()));
+    }
+    let picked = dir.to_string_lossy().into_owned();
+    let answer = picked.clone();
+    a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
+    a.ui.status.clear();
+    choose_folder(&mut a, &mut d, "pluginsFolder");
+    assert_eq!(d.str("pluginsFolder"), picked);
+    assert!(a.ui.status.is_empty(), "{}", a.ui.status);
+    a.services.pick_folder = Some(Box::new(|| None));
+    choose_folder(&mut a, &mut d, "pluginsFolder");
+    assert_eq!(d.str("pluginsFolder"), picked, "cancel keeps the field");
+    a.ui.dialog = Some(d);
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.plugins_folder, picked);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// OK checks a folder typed into Data Recovery › Folder or Additional Plug-ins Folder as Choose…
+/// checks a picked one: one that fails keeps the dialog open and changes no preference. An empty
+/// field and a folder the preference already holds are not checked.
+#[test]
+fn ok_refuses_a_typed_folder_that_choose_would_refuse() {
+    let dir = temp_folder("typed-folders");
+    let file = dir.join("not-a-folder.txt");
+    std::fs::write(&file, b"x").unwrap();
+    let missing = dir.join("missing").to_string_lossy().into_owned();
+    for key in ["recoveryFolder", "pluginsFolder"] {
+        let mut a = VectorcraftApp::new(Session::new(), Default::default());
+        open(&mut a, Some("File Handling"));
+        let before = a.session.prefs.to_json();
+        for path in [file.to_string_lossy().into_owned(), missing.clone()] {
+            let d = a.ui.dialog.as_mut().unwrap();
+            d.fields.insert(key.into(), json!(path));
+            d.fields.insert("showToolTips".into(), json!(!a.session.prefs.show_tool_tips));
+            assert_eq!(confirm(&mut a), Err(format!("{path} is not a folder")), "{key}");
+            assert!(a.ui.dialog.is_some(), "{key}: the dialog stays open");
+            assert_eq!(a.session.prefs.to_json(), before, "{key}: no preference changes");
+        }
+        // A typed folder that passes is saved, with the spaces around it as typed.
+        let typed = format!(" {} ", dir.to_string_lossy());
+        a.ui.dialog.as_mut().unwrap().fields.insert(key.into(), json!(typed));
+        confirm(&mut a).unwrap();
+        assert_eq!(a.session.prefs.to_json()[key], json!(typed), "{key}");
+        // An empty field keeps the default folder.
+        open(&mut a, Some("File Handling"));
+        a.ui.dialog.as_mut().unwrap().fields.insert(key.into(), json!(""));
+        confirm(&mut a).unwrap();
+        assert_eq!(a.session.prefs.to_json()[key], json!(""), "{key}");
+        // A folder already saved is not checked again, so OK works while it is unavailable.
+        a.run("prefs.set", json!({"key": key, "value": missing})).unwrap();
+        open(&mut a, Some("File Handling"));
+        a.ui.dialog.as_mut().unwrap().fields.insert("showToolTips".into(), json!(!a.session.prefs.show_tool_tips));
+        confirm(&mut a).unwrap();
+        assert_eq!(a.session.prefs.to_json()[key], json!(missing), "{key}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Under automation roots, OK refuses a typed folder outside them before it looks at the folder.
+#[test]
+fn ok_refuses_a_typed_folder_outside_the_automation_roots_before_looking_at_it() {
+    use vectorcraft_engine::file_access::{self, Access};
+    let dir = temp_folder("typed-roots");
+    let inside = dir.join("inside");
+    std::fs::create_dir_all(&inside).unwrap();
+    let outside = dir.join("outside-missing").to_string_lossy().into_owned();
+    let roots = file_access::AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap().unwrap();
+    for (key, access) in [("recoveryFolder", Access::Write), ("pluginsFolder", Access::Read)] {
+        let mut a = VectorcraftApp::new(Session::new(), Default::default());
+        open(&mut a, Some("File Handling"));
+        a.ui.dialog.as_mut().unwrap().fields.insert(key.into(), json!(outside));
+        let r = file_access::confine(Some(&roots), || confirm(&mut a));
+        assert_eq!(r, Err(roots.check(&outside, access).unwrap_err()), "{key}");
+        assert!(a.ui.dialog.is_some(), "{key}: the dialog stays open");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }

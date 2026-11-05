@@ -3895,6 +3895,7 @@ axis	Both	Båda
 @msg	Create from Selection: the selection has no area	Skapa från markering: markeringen har ingen area
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Dataåterställning har ingenstans att spara kopior: ange Inställningar → Filhantering → Dataåterställning → Mapp (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Dataåterställning kan inte spara kopior i {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Det går inte att läsa in plugin-program från {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	direktmarkera ankarpunkter att klippa vid (inte slutpunkterna på öppna banor)
 @msg	Divide Objects Below: select a path	Dela objekt under: markera en bana
 @msg	Divide Objects Below: select exactly one path	Dela objekt under: markera exakt en bana

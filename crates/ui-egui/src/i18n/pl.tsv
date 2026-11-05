@@ -4115,6 +4115,7 @@ imageTrace	Outline	Kontur
 @msg	Create from Selection: the selection has no area	Utwórz z zaznaczenia: zaznaczenie nie ma powierzchni
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Odzyskiwanie danych nie ma gdzie przechowywać kopii: ustaw Preferencje → Obsługa plików → Odzyskiwanie danych → Folder (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Odzyskiwanie danych nie może przechowywać kopii w {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Nie można wczytać wtyczek z {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	zaznacz bezpośrednio punkty kontrolne, w których ma nastąpić cięcie (nie punkty końcowe otwartych ścieżek)
 @msg	Divide Objects Below: select a path	Podziel obiekty poniżej: zaznacz ścieżkę
 @msg	Divide Objects Below: select exactly one path	Podziel obiekty poniżej: zaznacz dokładnie jedną ścieżkę

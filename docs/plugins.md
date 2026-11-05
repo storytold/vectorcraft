@@ -51,7 +51,8 @@ background ([below](#heavy-filters)).
 
 **Preference folder.** Edit › Preferences › Plug-ins & Scratch Disks › *Additional Plug-ins Folder*: when set, every
 `*.wasm` in that folder (not recursive) is installed at startup and whenever the preference changes (desktop builds;
-the web build installs from bytes).
+the web build installs from bytes). On the desktop, Choose… beside the field picks the folder; the dialog refuses a
+picked or typed folder whose contents can't be listed.
 
 Plug-ins are installed **per process**, not per document. Documents store a live effect as an ordinary effect record
 (`{"id": "plugin.<id>", "params": {…}}`): while the plug-in is installed it is drawn, exported and expanded; without it
