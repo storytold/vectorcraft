@@ -3,7 +3,8 @@
 //! type runs along, `TP`), the modal character and paragraph attributes
 //! (`Tr Tf Ts Tz Tt TA Tl Ta Ti`, and §15.4.7 and §22's letter and word spacing `TC TW`, hanging
 //! punctuation `Tq` and hyphenation `Th`), the paint style, and the characters (`Tx`, `Tj`,
-//! overflow `TX`; `\r` ends a paragraph). Final-form operators (the
+//! overflow `TX`; `\r` ends a paragraph). Type set in rendering modes 4 to 7 is a mask (§5.7): the
+//! text object clips the objects of its clipping group. Final-form operators (the
 //! computed positions, §15.1) are skipped: the type is laid out again. Strings are decoded by the
 //! encoding pairs of the current font's `TZ`, then by the file's `TE` encoding unless that `TZ`'s
 //! `useDefault` is 0, else as Windows-1252; a re-encoded font `/_name` is the font its `%AI3_BeginEncoding` or `TZ` names
@@ -16,7 +17,7 @@ use vectorcraft_geom::AnchorKind;
 
 use super::super::obj::V;
 use super::art::path_data;
-use super::{FLIP, GState, HashSet, Node, NodeId, Reader};
+use super::{FLIP, GState, HashSet, Kind, Node, NodeId, Reader};
 use crate::latin;
 
 /// Most characters of type read in one file.
@@ -36,6 +37,9 @@ const MAX_TEXT_PATHS: usize = 4096;
 const MAX_THREAD_WORK: usize = MAX_CHARS;
 /// The warning when [`MAX_TEXT_PATHS`] or [`MAX_THREAD_WORK`] leaves frames of linked areas out.
 const LINKED_AREAS_LEFT_OUT: &str = "linked type areas past VectorCraft's limits were left out";
+/// The warning when type set in a mask rendering mode can't be a clipping path: type in linked
+/// areas (several frames), in wraparound text or in a compound path doesn't clip.
+const MASK_NOT_CLIPPED: &str = "type used as a mask in linked areas, wraparound text or a compound path doesn't clip";
 
 /// A text path (`Tp` … `TP`).
 #[derive(Debug, Default)]
@@ -67,6 +71,9 @@ pub(super) struct LegacyText {
     para_taken: bool,
     /// An overflow paragraph break (`(\r) TX`) not yet followed by type: the story's end.
     pending_break: bool,
+    /// Characters were set in a mask rendering mode (`Tr` 4 to 7): the text object is a clipping
+    /// path (§5.7).
+    clips: bool,
     /// The state when it began (lock, visibility), and whether it began on a `%_` line.
     gs: GState,
     hidden: bool,
@@ -330,8 +337,9 @@ impl Reader<'_> {
         let st = &mut self.type_state;
         let n0 = nums::<1>(vals).map(|[v]| v);
         match w {
+            // `render Tr`: a mode from 0 to 9 (§15.4.5.1).
             "Tr" => {
-                if let Some(v) = n0 {
+                if let Some(v) = n0.filter(|v| v.fract() == 0.0 && (0.0..=9.0).contains(v)) {
                     st.render = v as i64;
                 }
             }
@@ -469,6 +477,9 @@ impl Reader<'_> {
         st.chars += decoded.chars().count();
         let gs = &self.gs;
         let mut style = st.style.clone();
+        // Characters in modes 4 to 7 make the whole text object the mask, not each run (§5.7); 7
+        // paints nothing, nor does 3 (invisible).
+        t.clips |= (4..=7).contains(&st.render);
         let (fill, stroke) = match st.render {
             0 | 4 => (true, false),
             1 | 5 => (false, true),
@@ -519,6 +530,8 @@ impl Reader<'_> {
         let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
         let most = (MAX_THREAD_WORK / chars.max(1)).max(1);
         let all_areas = t.paths.iter().filter(|p| p.path.is_some()).count();
+        // Area type with linked areas, also when the limits leave one frame of it.
+        let linked = t.kind == 1 && (all_areas > 1 || t.past_limit);
         let areas: Vec<&TextPath> = t.paths.iter().filter(|p| p.path.is_some()).take(most).collect();
         let placed: Vec<(Affine, TextKind)> = match t.kind {
             1 if areas.len() > 1 => areas.into_iter().map(|p| placed(1, Some(p))).collect(),
@@ -550,7 +563,28 @@ impl Reader<'_> {
             nodes.push(self.new_node(NodeKind::Text(Box::new(obj)), &t.gs));
         }
         let frames: Vec<NodeId> = nodes.iter().map(|n| n.id).collect();
+        // Type used as a mask clips the objects of its clipping group, as a `W` path does. A
+        // clipping path is one object, and wraparound text and compound paths don't clip their
+        // objects with type, so the frames of linked areas and type in those don't clip, with a
+        // warning. The frames up to the clipping group or opacity mask's art are checked, a group in
+        // either included.
+        let in_wrap_or_compound = self
+            .frames
+            .iter()
+            .rev()
+            .take_while(|f| !matches!(f.kind, Kind::Clip | Kind::Mask | Kind::Layer(_)))
+            .any(|f| matches!(f.kind, Kind::Wrap | Kind::Compound));
+        let can_clip = !linked && nodes.len() == 1 && !in_wrap_or_compound;
+        if t.clips && !can_clip {
+            self.warn(MASK_NOT_CLIPPED);
+        }
         for node in nodes.into_iter().rev() {
+            if t.clips
+                && can_clip
+                && let Some(f) = self.frames.last_mut()
+            {
+                f.clips.push(f.children.len());
+            }
             self.add(node, t.hidden || hidden)?;
         }
         if frames.len() > 1 {

@@ -131,6 +131,10 @@ private editing data. VectorCraft:
   with a fill's offset, scale, rotation, reflection and shear applied before its matrix.
   Its area type with several linked areas opens as threaded frames, one for each area with its own matrix,
   and the story flows through them.
+  Legacy `.ai` type set in rendering modes 4 to 7 (`Tr`, text used as a mask) is a clipping path of its
+  clipping group, as a `W` path is, and the mode lasts into later text objects. Type in linked areas, in
+  wraparound text or in a compound path doesn't clip, with a warning. A `Tr` operand that is not a whole number
+  from 0 to 9 leaves the mode as it was.
   with a fill's offset, scale, rotation, reflection and shear applied before its matrix. Its linked images in
   the version 7 form (`(path) modified XG`, then `XF` with no samples) come in as linked images of their files,
   showing a placeholder where the image goes until the file is relinked in the Links panel.

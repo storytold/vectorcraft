@@ -3269,6 +3269,179 @@ fn one_long_run_of_legacy_type_stops_at_the_allowance() {
     assert_eq!(texts[0].plain_text().chars().count(), ALLOWANCE);
 }
 
+/// The fill and stroke colors of a text object's first run (None: no paint).
+fn run_paint(n: &Node) -> (Option<Color>, Option<Color>) {
+    let NodeKind::Text(t) = &n.kind else { panic!("type: {:?}", n.kind) };
+    (t.runs[0].style.fill.color(), t.runs[0].style.stroke.color())
+}
+
+/// Legacy type set in rendering modes 4 to 7 is a mask (§5.7): the text object is the clipping
+/// path of its clipping group (`q` … `Q`) and clips the objects with it. Modes 4, 5 and 6 also
+/// fill, stroke, or fill and stroke it; 7 paints nothing.
+#[test]
+fn legacy_type_in_a_mask_rendering_mode_clips_its_clipping_group() {
+    let (black, red) = (Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)), Some(Color::rgb(1.0, 0.0, 0.0)));
+    let square = format!("1 0 0 Xa\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let cases = [("4", (black, None)), ("5", (None, red)), ("6", (black, red)), ("7", (None, None))];
+    for (mode, paint) in cases {
+        let text = point_type(&format!("{mode} Tr\n1 0 0 XA\n1 w"), "Hi");
+        let doc = legacy_read(&format!("q\n{text}{square}Q\n")).doc;
+        let a = art(&doc);
+        assert_eq!(a.len(), 1, "{mode} Tr");
+        let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{mode} Tr: {:?}", a[0].kind) };
+        assert_eq!(children.len(), 2, "{mode} Tr");
+        assert_eq!(run_paint(&children[0]), paint, "{mode} Tr");
+        assert!(matches!(children[1].kind, NodeKind::Path { clipping: false, .. }), "{mode} Tr");
+        // The art takes its shape from the type: it is bounded by the characters, not the square.
+        let b = a[0].geometric_bounds().unwrap();
+        assert!(b.width() < 50.0 && b.height() < 50.0, "{mode} Tr: {b:?}");
+    }
+    // Directly in a layer, the layer clips. As with a `W` path in this reader, the art written before the
+    // type is clipped too.
+    let doc = legacy_read(&format!("{square}{}", point_type("7 Tr", "Hi"))).doc;
+    let NodeKind::Layer { children, clip: true, .. } = &doc.layers[0].kind else { panic!("{:?}", doc.layers[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Text(_)) && matches!(children[1].kind, NodeKind::Path { .. }));
+    // With a clipping path after it, the art shows where both are: the type clips a clipping group nested in it, and
+    // keeps its paint.
+    let doc = legacy_read(&format!("q\n{}{}h\nW\nn\n{square}Q\n", point_type("6 Tr\n1 0 0 XA\n1 w", "Hi"), rect_path(0.0, 0.0, 30.0, 30.0))).doc;
+    let a = art(&doc);
+    let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(run_paint(&children[0]), (black, red));
+    let NodeKind::Group { children: inner, clip: true } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+    assert!(matches!(inner[0].kind, NodeKind::Path { clipping: true, .. }) && matches!(inner[1].kind, NodeKind::Path { clipping: false, .. }));
+}
+
+/// A filled clipping path (`W` then `f`) beside type used as a mask: its painted fill stays at its own path's level,
+/// as beside another clipping path (the reader's rule for `W` paths). Written after the type, it is painted within the
+/// type's mask, since a later mask narrows the clip set by the earlier ones (§5.6.2); written before it, the type doesn't
+/// clip it.
+#[test]
+fn a_filled_clipping_path_beside_legacy_type_used_as_a_mask() {
+    let square = format!("1 0 0 Xa\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let filled = format!("0 0 1 Xa\n{}h\nW\nf\n", rect_path(0.0, 0.0, 30.0, 30.0));
+    let text = point_type("7 Tr", "Hi");
+    let is_fill = |n: &Node| matches!(n.kind, NodeKind::Path { clipping: false, .. }) && fill(n).color() == Some(Color::rgb(0.0, 0.0, 1.0));
+    let is_art = |n: &Node| matches!(n.kind, NodeKind::Path { clipping: false, .. }) && fill(n).color() == Some(Color::rgb(1.0, 0.0, 0.0));
+    // The type first: the path's fill is in the clipping group the path clips, inside the type's.
+    let doc = legacy_read(&format!("q\n{text}{filled}{square}Q\n")).doc;
+    let a = art(&doc);
+    let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Text(_)) && children.len() == 2, "{children:?}");
+    let NodeKind::Group { children: inner, clip: true } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+    assert!(matches!(inner[0].kind, NodeKind::Path { clipping: true, .. }), "{inner:?}");
+    assert!(is_fill(&inner[1]) && is_art(&inner[2]) && inner.len() == 3, "{inner:?}");
+    // The path first: its fill is in the outer clipping group, which only the path clips; the type clips the art.
+    let doc = legacy_read(&format!("q\n{filled}{text}{square}Q\n")).doc;
+    let a = art(&doc);
+    let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }), "{children:?}");
+    assert!(is_fill(&children[1]) && children.len() == 3, "{children:?}");
+    let NodeKind::Group { children: inner, clip: true } = &children[2].kind else { panic!("{:?}", children[2].kind) };
+    assert!(matches!(inner[0].kind, NodeKind::Text(_)) && is_art(&inner[1]) && inner.len() == 2, "{inner:?}");
+}
+
+/// `Tr` sets the rendering mode of all the type that follows (§15.3.2), in later text objects too: a second text
+/// object with no `Tr` of its own is also a mask.
+#[test]
+fn a_legacy_mask_rendering_mode_lasts_into_the_next_text_object() {
+    let square = format!("1 0 0 Xa\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let second = point_type("", "Yo").replace("0 Tr\n", "");
+    let doc = legacy_read(&format!("q\n{}{second}{square}Q\n", point_type("7 Tr", "Hi"))).doc;
+    let a = art(&doc);
+    let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Text(_)), "{children:?}");
+    let NodeKind::Group { children: inner, clip: true } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+    assert!(matches!(inner[0].kind, NodeKind::Text(_)) && matches!(inner[1].kind, NodeKind::Path { clipping: false, .. }), "{inner:?}");
+}
+
+/// Type in a mask rendering mode that can't be one clipping path doesn't clip, with a warning: area type with linked
+/// areas (threaded frames), the type of wraparound text, and type in a compound path.
+#[test]
+fn legacy_type_used_as_a_mask_that_cannot_clip_is_left_unclipped() {
+    const WARNING: &str = "type used as a mask in linked areas, wraparound text or a compound path doesn't clip";
+    let square = format!("1 0 0 Xa\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let linked = format!(
+        "1 To\n1 0 0 1 0 40 0 Tp\n{}n\nTP\n7 Tr\n/_Helvetica 12 Tf\n(Linked ) Tx\n1 0 0 1 60 40 0 Tp\n{}n\nTP\n(areas) Tx\nTO\n",
+        rect_path(0.0, 0.0, 50.0, 40.0),
+        rect_path(60.0, 0.0, 110.0, 40.0)
+    );
+    let r = legacy_read(&format!("q\n{linked}{square}Q\n"));
+    let a = art(&r.doc);
+    let NodeKind::Group { children, clip: false } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(children.len(), 3);
+    assert_eq!(r.doc.text_threads.len(), 1);
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    // Also when the reader's limits leave one frame of a long story in linked areas.
+    let long = linked.replace("(areas) Tx", &format!("({}) Tx", "a".repeat(3_000_000)));
+    let r = legacy_read(&format!("q\n{long}{square}Q\n"));
+    let a = art(&r.doc);
+    let NodeKind::Group { children, clip: false } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(children.len(), 2);
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    // Wraparound text: the type is what flows around the other objects, which it doesn't clip.
+    let area = format!("1 To\n1 0 0 1 0 0 0 Tp\n{}n\nTP\n7 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(Around) Tx\nTO\n", rect_path(0.0, 0.0, 100.0, 80.0));
+    let r = legacy_read(&format!("q\n*w\n{area}{square}*W\nQ\n"));
+    let a = art(&r.doc);
+    let NodeKind::Group { children, clip: false } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    let NodeKind::Group { children: wrap, clip: false } = &children[0].kind else { panic!("{:?}", children[0].kind) };
+    assert!(matches!(wrap[0].kind, NodeKind::Text(_)) && wrap.len() == 2, "{wrap:?}");
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    // A compound path: its type is no clipping subpath, and the compound path doesn't clip the group.
+    let r = legacy_read(&format!("q\n*u\n{}f\n{}*U\n{square}Q\n", rect_path(0.0, 0.0, 30.0, 30.0), point_type("7 Tr", "Hi")));
+    assert_eq!(unclipped_texts(&art(&r.doc)), 1);
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    // The same with the type in a group inside the compound path or the wraparound text.
+    let grouped = format!("u\n{}U\n", point_type("7 Tr", "Hi"));
+    let r = legacy_read(&format!("q\n*u\n{}f\n{grouped}*U\n{square}Q\n", rect_path(0.0, 0.0, 30.0, 30.0)));
+    assert_eq!(unclipped_texts(&art(&r.doc)), 1);
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    let grouped = format!("u\n{area}U\n");
+    let r = legacy_read(&format!("q\n*w\n{grouped}{square}*W\nQ\n"));
+    assert_eq!(unclipped_texts(&art(&r.doc)), 1);
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    // An opacity mask's art clips on its own, also on an object in wraparound text.
+    let mask_art: String =
+        format!("{}1 g\n{}f\n", point_type("7 Tr", "Hi"), rect_path(0.0, 0.0, 100.0, 100.0)).lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let r = legacy_read(&format!("q\n*w\n{area}{square}{mask}*W\nQ\n"));
+    assert!(r.warnings.iter().filter(|w| *w == WARNING).count() == 1, "{:?}", r.warnings);
+    let a = art(&r.doc);
+    let NodeKind::Group { children, .. } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    let NodeKind::Group { children: wrap, .. } = &children[0].kind else { panic!("{:?}", children[0].kind) };
+    let Some(m) = wrap.iter().find_map(|n| n.extras().mask.clone()) else { panic!("{wrap:?}") };
+    let NodeKind::Group { children: in_mask, clip: true } = &m.art.kind else { panic!("{:?}", m.art.kind) };
+    assert!(matches!(in_mask[0].kind, NodeKind::Text(_)) && in_mask.len() == 2, "{in_mask:?}");
+}
+
+/// The text objects in `nodes` and the groups and compound paths under them, checking that nothing among them clips.
+#[track_caller]
+fn unclipped_texts(nodes: &[Arc<Node>]) -> usize {
+    let mut texts = 0;
+    for n in nodes {
+        assert!(!matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Path { clipping: true, .. }), "{:?}", n.kind);
+        texts += usize::from(matches!(n.kind, NodeKind::Text(_)));
+        texts += n.children().map_or(0, |c| unclipped_texts(c));
+    }
+    texts
+}
+
+/// Legacy type in rendering modes 0 to 3 is no mask (3: invisible, painting nothing). A mode that is not a whole
+/// number from 0 to 9 leaves the mode as it was.
+#[test]
+fn legacy_type_in_other_rendering_modes_does_not_clip() {
+    let (black, red) = (Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)), Some(Color::rgb(1.0, 0.0, 0.0)));
+    let square = format!("{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let cases = [("0 Tr", (black, None)), ("3 Tr", (None, None)), ("1 Tr\n4.5 Tr\n10 Tr\n-4 Tr\n/x Tr", (None, red))];
+    for (modes, paint) in cases {
+        let text = point_type(&format!("{modes}\n1 0 0 XA\n1 w"), "Hi");
+        let doc = legacy_read(&format!("q\n{text}{square}Q\n")).doc;
+        let a = art(&doc);
+        assert_eq!(a.len(), 1, "{modes}");
+        let NodeKind::Group { children, clip: false } = &a[0].kind else { panic!("{modes}: {:?}", a[0].kind) };
+        assert_eq!(run_paint(&children[0]), paint, "{modes}");
+    }
+}
+
 /// A legacy-format file whose layer holds `art`, read.
 fn legacy_read(art: &str) -> Structure {
     match read(type_stream7(art).as_bytes()) {

@@ -4689,6 +4689,8 @@ imageTrace	Outline	Körvonal
 @msg	graphs come in as plain art, without their data or settings	a diagramok egyszerű grafikaként kerülnek be, adataik és beállításaik nélkül
 @msg	an image whose data is cut short was left out	kimaradt egy csonka adatú kép
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	a csatolt képek a fájlban mentett kis felbontású előnézetet mutatják, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
+@msg	linked type areas past VectorCraft's limits were left out	a VectorCraft korlátain túli csatolt szövegterületek kimaradtak
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	a csatolt területeken, körbefuttatott szövegben vagy összetett útvonalban maszkként használt szöveg nem vág ki
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	a fájlban előnézet nélküli csatolt képek helyőrzőt mutatnak, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	a túl alacsony keretben lévő területszöveg, amelybe a megjelenítő betűtípus egy sora sem fér el, magasabb keretet kapott ({_1}): különben nem látszana
 @msg	an object can't be read	egy objektum nem olvasható
