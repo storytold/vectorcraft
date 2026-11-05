@@ -395,6 +395,16 @@ pub(crate) fn cmyk_pixmap(blob: &ImageBlob, lut: &InkLut) -> Option<Pixmap> {
     inks_pixmap(&blob.cmyk()?, lut)
 }
 
+/// The ink amounts behind image pixels `key` when they are CMYK image `blob`'s inks as shown (not
+/// adjusted or greyscale): its own inks, halved as its pixels are to `key`'s mip
+/// ([`images::half_inks`]). `None` for other pixels.
+pub(crate) fn key_inks(key: &ImageKey, blob: Option<&ImageBlob>) -> Option<Inks> {
+    if key.luts.0 == 0 || key.adjust.is_some() || key.grey {
+        return None;
+    }
+    (0..key.mip).try_fold(blob?.cmyk()?, |inks, _| images::half_inks(&inks))
+}
+
 /// The separation tables of placed images ([`Ink::Cmy`], [`Ink::K`]) and their generation.
 fn separation() -> (Arc<[ProofLut; 2]>, u64) {
     cached(&SEPARATE, |cms| {
@@ -432,10 +442,7 @@ fn darkened_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, amount: f32, blob:
     }
     let base = ink.base();
     let display = matches!(base, Ink::Display | Ink::RichBlack);
-    let raw_cmyk = (key.luts.0 != 0 && key.adjust.is_none() && !key.grey)
-        .then(|| blob.and_then(ImageBlob::cmyk))
-        .flatten()
-        .filter(|i| (i.width, i.height) == (u32::from(pm.width()), u32::from(pm.height())));
+    let raw_cmyk = key_inks(key, blob).filter(|i| (i.width, i.height) == (u32::from(pm.width()), u32::from(pm.height())));
     let sep = (!display).then(separation);
     let shown = (display && raw_cmyk.is_some()).then(display_lut);
     let mut out = Pixmap::new(pm.width(), pm.height());
@@ -487,8 +494,7 @@ pub(crate) fn ink_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, blob: Option
     }
     // CMYK images (shown through the display table) paint their own inks; the others are separated.
     let size = (pm.width() as u32, pm.height() as u32);
-    let cmyk = key.luts.0 != 0 && key.adjust.is_none() && !key.grey;
-    let inks = blob.filter(|_| cmyk).and_then(ImageBlob::cmyk).filter(|i| (i.width, i.height) == size);
+    let inks = key_inks(key, blob).filter(|i| (i.width, i.height) == size);
     let planes = [Ink::Cmy, Ink::K].map(|plane| {
         let mut out = Pixmap::new(pm.width(), pm.height());
         if let Some(inks) = &inks {

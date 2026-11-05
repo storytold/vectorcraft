@@ -2422,3 +2422,75 @@ fn compound_paths_draw_from_kept_paths_and_let_old_ones_go() {
     assert!(r.geom.len() < 1024);
     assert_eq!(Arc::strong_count(&old), 1, "the renderer no longer keeps the compound path drawn before the move");
 }
+
+/// A `w`×`h` CMYK document showing `blob` as image `key` of `w`×`h` pixels, one point a pixel.
+fn cmyk_doc_with(key: &str, blob: ImageBlob, w: u32, h: u32) -> Document {
+    let mut d = Document::new_with_mode(w as f64, h as f64, vectorcraft_doc::ColorMode::Cmyk);
+    d.images.insert(key.into(), blob);
+    let (id, layer) = (d.alloc_id(), d.layers[0].id);
+    let im = ImageObject { key: key.into(), width: w, height: h, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    d
+}
+
+/// #4155: an image drawn reduced on the ink planes is separated from the mip it draws, never at
+/// its full size. Separating a 141-megapixel image for each plane before shrinking it took
+/// seconds a frame, and its full-size planes overflowed the store, so every frame did it again.
+#[test]
+fn a_reduced_image_is_separated_from_its_mip_not_its_full_pixels() {
+    let _fonts = fonts_steady();
+    let d = cmyk_doc_with("img", ImageBlob::new("image/png", png(64, 64, 111)), 64, 64);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let _ = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 64.0, 64.0), 0.25, &on);
+    let full = blob_key(&d.images["img"]).0;
+    let quarter = images::ImageKey { mip: 2, ..full.clone() };
+    let s = images::store();
+    for plane in [Ink::Cmy, Ink::K] {
+        assert!(s.peek(&ink::ink_key(&full, plane)).is_none(), "the {plane:?} plane was made at full size");
+        let made = s.peek(&ink::ink_key(&quarter, plane)).unwrap_or_else(|| panic!("no {plane:?} plane of the quarter mip"));
+        assert_eq!((made.width(), made.height()), (16, 16));
+    }
+}
+
+/// A CMYK image drawn reduced paints its own inks, averaged, as at full size: not its displayed
+/// colours separated again, which would change how much of its dark is black ink.
+#[test]
+fn a_reduced_cmyk_image_paints_its_own_inks() {
+    let _fonts = fonts_steady();
+    // Inks a separation of their displayed colour would not give back: rich in black.
+    let ink = [0u8, 102, 255, 140];
+    let blob = ImageBlob::cmyk_tiff(&vectorcraft_doc::cmyk::Inks::new(8, 8, ink.repeat(64)).unwrap()).unwrap();
+    let d = cmyk_doc_with("inks", blob, 8, 8);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let inks = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 8.0, 8.0), 0.25, &on);
+    for px in inks.as_chunks::<4>().0 {
+        assert!(px.iter().zip(ink).all(|(a, b)| a.abs_diff(b) <= 1), "{px:?} vs {ink:?}");
+    }
+}
+
+/// On the ink planes, a reduced image shows the average of its pixels as they show at full size:
+/// 1-pixel black and white lines show as the mid grey they make. Separating the full pixels and
+/// averaging the planes made that grey a dark brown, 44 levels off.
+#[test]
+fn a_reduced_image_on_the_ink_planes_shows_its_average() {
+    let _fonts = fonts_steady();
+    let lines = image::RgbaImage::from_fn(64, 64, |x, _| image::Rgba(if x % 2 == 0 { [0, 0, 0, 255] } else { [255; 4] }));
+    let mut bytes = vec![];
+    lines.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    let mut d = cmyk_doc_with("lines", ImageBlob::new("image/png", bytes), 64, 64);
+    // Transparency beside the image: the document blends in CMYK, drawing on its ink planes.
+    let shape = vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 0.0, 110.0, 10.0));
+    let mut veil = Node::path(d.alloc_id(), shape, vectorcraft_doc::Appearance::basic(Paint::solid(Color::gray(0.5)), Paint::None, 0.0));
+    veil.opacity = 0.5;
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 1, veil).unwrap();
+    let full = Renderer::new().render(&d, 64, 64, Affine::IDENTITY, &RenderOptions::default()).pixels;
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let reduced = Renderer::new().render(&d, 16, 16, Affine::scale(0.25), &on).pixels;
+    for (i, px) in reduced.as_chunks::<4>().0.iter().enumerate() {
+        let (bx, by) = (i % 16 * 4, i / 16 * 4);
+        let block = |c: usize| (0..16).map(|j| u32::from(full[((by + j / 4) * 64 + bx + j % 4) * 4 + c])).sum::<u32>().div_ceil(16) as u8;
+        let want = [block(0), block(1), block(2)];
+        assert!(px.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 2), "pixel {i}: {px:?}, the full frame averages {want:?}");
+    }
+}
