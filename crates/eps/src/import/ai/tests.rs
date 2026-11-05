@@ -4759,6 +4759,206 @@ fn an_object_with_path_effects_comes_in_as_itself_with_them_live() {
     assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// The paint of a blue fill in a style.
+const BLUE_FILL: Option<&str> = Some("0 0 0 0 0 0 1 Xa\n");
+
+/// An art style section with style `Bent`: effect `name` with dictionary `keys` on the whole
+/// object, over a fill painting with `paint`, or over a fill and stroke that paint nothing.
+fn distort_styles(name: &str, keys: &str, paint: Option<&str>) -> String {
+    let (paints, color) = match paint {
+        Some(p) => ("0 1", p),
+        None => ("0 0", ""),
+    };
+    format!(
+        "%AI9_BeginArtStyles\n/KnownStyle :\n(Bent) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n({name}) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{keys}; /Dict ;\n /Part ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/StrokeStyle : 0 1 0 0 0 Xy\n0 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{color}{paints} Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+         ;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+    )
+}
+
+/// Free Distort's 16 entries for a 40 × 30 pt object whose source frame is its own box, with its
+/// destination corners `dst` (top left, top right, bottom left, bottom right, art space).
+fn free_distort_keys(dst: [[f64; 2]; 4]) -> String {
+    let src = [[20.0, 50.0], [60.0, 50.0], [20.0, 20.0], [60.0, 20.0]];
+    let mut out = String::new();
+    for (which, c) in [("src", src), ("dst", dst)] {
+        for (i, [h, v]) in c.into_iter().enumerate() {
+            out += &format!("{h} /Real ({which}{i}h) ,\n{v} /Real ({which}{i}v) ,\n");
+        }
+    }
+    out
+}
+
+#[test]
+fn an_object_with_a_distort_effect_that_draws_alike_comes_in_as_itself_with_it_live() {
+    // GUARDS: only type took Distort & Transform effects; a path with Transform, Twist, a still Tweak,
+    // Pucker & Bloat at 0 or an affine Free Distort came in as its drawn look.
+    let hidden_rect = rect_path(20.0, 20.0, 60.0, 50.0).replace('\n', "\n%_");
+    let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{hidden_rect}f\n%_0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0));
+    // A slanted box: its corners make a parallelogram.
+    let slanted = free_distort_keys([[25.0, 50.0], [65.0, 50.0], [20.0, 20.0], [60.0, 20.0]]);
+    for (name, keys, id) in [
+        ("Adobe Transform", "5 /Real (moveH_Pts) ,\n0.5 /Real (rotate_Radians) ,\n0 /Bool (transformPatterns) ,\n", "distort.transform"),
+        ("Adobe Twirl", "45 /Real (angle) ,\n", "distort.twist"),
+        ("Adobe Scribble and Tweak", "30 /Real (horz) ,\n0 /Bool (anch) ,\n0 /Bool (in) ,\n0 /Bool (out) ,\n", "distort.tweak"),
+        ("Adobe Punk and Bloat", "0 /Real (d_factor) ,\n", "distort.puckerBloat"),
+        ("Adobe Free Distort", slanted.as_str(), "distort.freeDistort"),
+        ("Adobe Free Distort", "", "distort.freeDistort"),
+    ] {
+        let r = read_ok(&format!("{}{}", distort_styles(name, keys, BLUE_FILL), layer(&art_)));
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{name}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{name}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Path { .. }), "{name}: the object, not its look: {a:#?}");
+        let b = a[0].geometric_bounds().unwrap();
+        assert_eq!((b.width(), b.height()), (40.0, 30.0), "{name}: the object keeps its own path");
+        assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)), "{name}");
+        let ids: Vec<_> = a[0].appearance.effects.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids, [id], "{name}");
+    }
+}
+
+#[test]
+fn an_object_with_a_distort_effect_drawn_another_way_keeps_its_drawn_look() {
+    // Pucker & Bloat and Zig Zag draw other outlines than the file's, a Free Distort whose corners
+    // aren't a parallelogram bends the curves differently, and Transform's copies paint as one path.
+    let hidden_rect = rect_path(20.0, 20.0, 60.0, 50.0).replace('\n', "\n%_");
+    let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{hidden_rect}f\n%_0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0));
+    let bent = free_distort_keys([[25.0, 50.0], [65.0, 52.0], [20.0, 20.0], [60.0, 20.0]]);
+    for (name, keys) in [
+        ("Adobe Punk and Bloat", "-50 /Real (d_factor) ,\n"),
+        ("Adobe Zigzag", "3 /Real (amount) ,\n1 /Real (absoluteness) ,\n"),
+        ("Adobe Free Distort", bent.as_str()),
+        ("Adobe Scribble and Tweak", "30 /Real (horz) ,\n"),
+        ("Adobe Transform", "1 /Bool (randomize) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformPatterns) ,\n"),
+        ("Adobe Transform", "5 /Real (moveH_Pts) ,\n2 /Int (numCopies) ,\n0 /Bool (transformPatterns) ,\n"),
+    ] {
+        let r = read_ok(&format!("{}{}", distort_styles(name, keys, BLUE_FILL), layer(&art_)));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{name}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{name}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{name}: {:?}", r.warnings);
+    }
+}
+
+/// The gradient `G`, white to black, defined for a document.
+const GRADIENT_G: &str = "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n";
+
+#[test]
+fn an_object_whose_outline_moves_away_from_its_gradient_keeps_its_drawn_look() {
+    // GUARDS: a gradient stays where it is placed while Transform, Twist or Free Distort moves the
+    // outline, so the live object lost the gradient its drawn look shows.
+    let gradient = Some("Bb\n0 0 0 0 Bh\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n");
+    let hidden_rect = rect_path(20.0, 20.0, 60.0, 50.0).replace('\n', "\n%_");
+    let object = format!(
+        "0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_1 (G) 20 35 0 40 1 0 0 1 0 0 Bg\n%_{hidden_rect}f\n%_0 BB\n1 (Bent) XW\n",
+        rect_path(16.0, 16.0, 64.0, 54.0)
+    );
+    let hidden = |color: &str, x: f64| format!("{color}{}f\n", rect_path(x, 0.0, x + 10.0, 10.0)).replace('\n', "\n%_");
+    let shaded = format!("Bb\n1 (G) 5 5 0 10 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", rect_path(5.0, 0.0, 15.0, 10.0)).replace('\n', "\n%_");
+    let group = format!("0 Ae\nu\n{RED}{}f\nU\n%_0 Ae\n%_u\n%_{}{shaded}U\n1 (Bent) XW\n", rect_path(0.0, 0.0, 15.0, 10.0), hidden(RED, 0.0));
+    let slanted = free_distort_keys([[25.0, 50.0], [65.0, 50.0], [20.0, 20.0], [60.0, 20.0]]);
+    let moves = [
+        ("Adobe Transform", "5 /Real (moveH_Pts) ,\n0 /Bool (transformPatterns) ,\n"),
+        ("Adobe Twirl", "45 /Real (angle) ,\n"),
+        ("Adobe Free Distort", slanted.as_str()),
+    ];
+    for (name, keys) in moves {
+        // A gradient in the style, and one on a member of a group.
+        for (paint, art_) in [(gradient, &object), (None, &group)] {
+            let r = read_ok(&format!("{GRADIENT_G}{}{}", distort_styles(name, keys, paint), layer(art_)));
+            let a = art(&r.doc);
+            assert_eq!(a.len(), 1, "{name}: {a:#?}");
+            assert!(a[0].appearance.effects.is_empty(), "{name}: the drawn look: {a:#?}");
+            assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{name}: {:?}", r.warnings);
+        }
+    }
+    // An effect that leaves the outline where it is keeps the gradient under it.
+    let r = read_ok(&format!("{GRADIENT_G}{}{}", distort_styles("Adobe Punk and Bloat", "", gradient), layer(&object)));
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "{a:#?}");
+    assert!(matches!(fill(&a[0]), Paint::Gradient(_)), "{:?}", fill(&a[0]));
+}
+
+/// A group with style `Bent`, its drawn look one path, holding a red and a blue square.
+fn distort_group() -> String {
+    let hidden = |color: &str, x: f64| format!("{color}{}f\n", rect_path(x, 0.0, x + 10.0, 10.0)).replace('\n', "\n%_");
+    format!(
+        "0 Ae\nu\n{RED}{}f\nU\n%_0 Ae\n%_u\n%_{}{}U\n1 (Bent) XW\n",
+        rect_path(0.0, 0.0, 15.0, 10.0),
+        hidden(RED, 0.0),
+        hidden("0 0 1 0 0 0 1 Xa\n", 5.0)
+    )
+}
+
+#[test]
+fn a_group_with_a_transform_keeps_its_members_and_the_effect() {
+    // GUARDS: the group came in as its drawn look, one path with no effect.
+    let keys = "5 /Real (moveH_Pts) ,\n0 /Bool (transformPatterns) ,\n";
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Transform", keys, None), layer(&distort_group())));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let members = a[0].children().cloned().unwrap_or_default();
+    assert_eq!(members.len(), 2, "the squares, not the look: {a:#?}");
+    let [e] = a[0].appearance.effects.as_slice() else { panic!("{:?}", a[0].appearance) };
+    assert_eq!((e.id.as_str(), e.params["moveH"].as_f64()), ("distort.transform", Some(5.0)));
+    assert!(a[0].appearance.items.is_empty(), "{:?}", a[0].appearance);
+}
+
+/// `styles` (from [`distort_styles`]) with a red stroke 2 pt wide in place of the stroke that
+/// paints nothing.
+fn with_red_stroke(styles: &str) -> String {
+    styles.replace("/StrokeStyle : 0 1 0 0 0 Xy\n0 0 Xd", "/StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 1 0 0 0 Xy\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd")
+}
+
+#[test]
+fn twist_and_a_scaling_transform_are_read_only_where_their_outline_is_known() {
+    // GUARDS: Twist was read on curves, strokes and groups, and Transform scaling a stroked object,
+    // where the outline VectorCraft draws hasn't been checked.
+    let object = |hidden: &str| {
+        format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}f\n%_0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0), hidden.replace('\n', "\n%_"))
+    };
+    let square = object(&rect_path(20.0, 20.0, 60.0, 50.0));
+    let curved = object("20 35 m\n20 45 60 45 60 35 c\n60 25 20 25 20 35 c\n");
+    let twist = distort_styles("Adobe Twirl", "45 /Real (angle) ,\n", BLUE_FILL);
+    let scale = "0.5 /Real (scaleH_Factor) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformPatterns) ,\n";
+    let corner = distort_styles("Adobe Transform", &format!("0 /Int (pinPoint) ,\n{scale}"), BLUE_FILL);
+    let center = distort_styles("Adobe Transform", scale, BLUE_FILL);
+    let moved = distort_styles("Adobe Transform", "0 /Int (pinPoint) ,\n5 /Real (moveH_Pts) ,\n0 /Bool (transformPatterns) ,\n", BLUE_FILL);
+    let read = |styles: &str, art_: &str| read_ok(&format!("{styles}{}", layer(art_)));
+    for (what, r) in [
+        ("a twisted curve", read(&twist, &curved)),
+        ("a twisted stroke", read(&with_red_stroke(&twist), &square)),
+        ("a twisted group", read(&distort_styles("Adobe Twirl", "45 /Real (angle) ,\n", None), &distort_group())),
+        ("a stroke scaled from a corner", read(&with_red_stroke(&corner), &square)),
+        ("a stroke scaled from the center", read(&with_red_stroke(&center), &square)),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty(), "{what}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+    }
+    for (what, r) in [
+        ("a twisted square", read(&twist, &square)),
+        ("a stroke moved from a corner", read(&with_red_stroke(&moved), &square)),
+        ("a fill scaled from a corner", read(&corner, &square)),
+        ("a fill scaled from the center", read(&center, &square)),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Path { .. }) && a[0].appearance.effects.len() == 1, "{what}: {a:#?}");
+    }
+    let r = read(&twist, &square);
+    let a = art(&r.doc);
+    let [e] = a[0].appearance.effects.as_slice() else { panic!("{:?}", a[0].appearance) };
+    assert_eq!((e.id.as_str(), e.params["angle"].as_f64()), ("distort.twist", Some(45.0)));
+}
+
 #[test]
 fn a_bare_comment_line_in_a_prolog_leaves_its_end_alone() {
     // GUARDS: a bare `%` line's empty marker matched the empty begin marker of a section that has none.
