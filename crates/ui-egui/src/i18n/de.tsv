@@ -5932,3 +5932,7 @@ breakText	Glyphs	Glyphen
 	Fully Outside	Vollständig außen
 	No artboards match.	Keine Zeichenfläche passt.
 	Chosen: {n} of {total}	Gewählt: {n} von {total}
+	Set Corners…	Ecken festlegen…
+	All Anchors	Alle Ankerpunkte
+	Odd-Numbered Anchors	Ungerade Ankerpunkte
+	Even-Numbered Anchors	Gerade Ankerpunkte

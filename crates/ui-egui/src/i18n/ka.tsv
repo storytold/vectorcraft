@@ -6357,3 +6357,7 @@ font-script	Japanese	იაპონური
 	Fully Outside	მთლიანად გარეთ
 	No artboards match.	შესაბამისი სამუშაო დაფა არ არის.
 	Chosen: {n} of {total}	არჩეულია: {n} / {total}
+	Set Corners…	კუთხეების დაყენება…
+	All Anchors	ყველა საყრდენი წერტილი
+	Odd-Numbered Anchors	კენტი საყრდენი წერტილები
+	Even-Numbered Anchors	ლუწი საყრდენი წერტილები

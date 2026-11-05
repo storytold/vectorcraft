@@ -5927,3 +5927,7 @@ breakText	Glyphs	글리프
 	Fully Outside	완전히 바깥쪽
 	No artboards match.	일치하는 아트보드가 없습니다.
 	Chosen: {n} of {total}	선택됨: {n} / {total}
+	Set Corners…	모퉁이 설정…
+	All Anchors	모든 앵커
+	Odd-Numbered Anchors	홀수 번째 앵커
+	Even-Numbered Anchors	짝수 번째 앵커

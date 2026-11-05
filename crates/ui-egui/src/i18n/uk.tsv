@@ -5946,3 +5946,7 @@ breakText	Glyphs	Гліфи
 	Fully Outside	Повністю зовні
 	No artboards match.	Немає відповідних монтажних областей.
 	Chosen: {n} of {total}	Вибрано: {n} з {total}
+	Set Corners…	Задати кути…
+	All Anchors	Усі опорні точки
+	Odd-Numbered Anchors	Непарні опорні точки
+	Even-Numbered Anchors	Парні опорні точки
