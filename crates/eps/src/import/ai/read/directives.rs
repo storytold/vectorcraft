@@ -4,7 +4,7 @@ use super::types::{
     FLIP, GState, Kind, MAX_HEX, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED,
     VERSIONED_UNENDED,
 };
-use super::{Arc, Lexer, Node, PatternDef, Reader, Rect, Tok, V, marker, obj};
+use super::{Arc, Global, Lexer, Node, PatternDef, Reader, Rect, Tok, V, marker, obj};
 
 impl<'a> Reader<'a> {
     pub(super) fn push(&mut self, v: V) -> Result<(), String> {
@@ -127,6 +127,9 @@ impl<'a> Reader<'a> {
         }
         if m == "BeginEncoding" {
             self.type_state.encoding_comment(line);
+            let section = self.section("EndEncoding")?;
+            self.encoding_section(section);
+            return Ok(());
         }
         // Versioned content holds alternatives of the same art, the newest first: the first is
         // read, and the next one (`%AI17_Alternate_Content`, or `…_if_version_gt:` for a version
@@ -307,6 +310,8 @@ impl<'a> Reader<'a> {
             _ => return,
         };
         if !name.trim().is_empty() && !self.custom_colors.iter().any(|n| n.name == name) {
+            // A gradient or pattern defined after it does not take its swatch's name.
+            self.global_names.reserve(&name);
             self.custom_colors.push(super::Named { name, color, tint: 1.0, spot: true });
         }
     }
@@ -359,13 +364,15 @@ impl<'a> Reader<'a> {
         let mut sub = Reader::new(section);
         sub.subreader_depth = self.subreader_depth + 1;
         sub.pattern = Some(PatternHead::default());
-        // The gradients defined so far, lent (and those it defines kept).
+        // The gradients defined so far and the names given, lent (and those it defines kept).
         sub.gradients = std::mem::take(&mut self.gradients);
+        sub.global_names = std::mem::take(&mut self.global_names);
         sub.nodes = self.nodes;
         sub.template = self.template;
         let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
+        self.global_names = std::mem::take(&mut sub.global_names);
         // Unread art in the definition, hidden or not, leaves the tile incomplete.
         let whole = read.is_ok()
             && sub.unsupported.is_empty()
@@ -384,6 +391,7 @@ impl<'a> Reader<'a> {
         sub.subreader_depth = self.subreader_depth + 1;
         sub.pattern = Some(PatternHead { taken: true, name: def.name.clone(), tile: Some(def.tile) });
         sub.gradients = std::mem::take(&mut self.gradients);
+        sub.global_names = std::mem::take(&mut self.global_names);
         sub.nodes = self.nodes;
         sub.template = self.template;
         let mut read = sub.open(Kind::Group, false);
@@ -395,6 +403,7 @@ impl<'a> Reader<'a> {
         }
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
+        self.global_names = std::mem::take(&mut sub.global_names);
         let whole = read.is_ok()
             && sub.unsupported.is_empty()
             && sub.unknown.is_empty()
@@ -470,15 +479,17 @@ impl<'a> Reader<'a> {
             return;
         };
         let art: Vec<Arc<Node>> = frame.children.iter().map(|n| Arc::new(self.doc.reid(n))).collect();
-        let mut def = PatternDef::new(&head.name, art);
+        // Fills and the tables look the pattern up by its name in the file; the document has it by
+        // the name it shows.
+        let mut def = PatternDef::new(&self.global_names.define(Global::Pattern, &head.name), art);
         def.tile = FLIP.transform_rect_bbox(tile);
-        if self.pattern_tiles.insert(def.name.clone(), def.tile).is_some() {
+        if self.pattern_tiles.insert(head.name.clone(), def.tile).is_some() {
             self.doc.patterns.retain(|p| p.name != def.name);
         }
         if v7 {
-            self.v7_patterns.insert(def.name.clone());
+            self.v7_patterns.insert(head.name);
         } else {
-            self.v7_patterns.remove(&def.name);
+            self.v7_patterns.remove(&head.name);
         }
         self.doc.patterns.push(def);
         for (key, blob) in sub.doc.images {
@@ -567,12 +578,14 @@ impl<'a> Reader<'a> {
         // The gradients and patterns defined so far, lent.
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.pattern_tiles = std::mem::take(&mut self.pattern_tiles);
+        sub.global_names = std::mem::take(&mut self.global_names);
         sub.nodes = self.nodes;
         sub.template = self.template;
         let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
         self.pattern_tiles = std::mem::take(&mut sub.pattern_tiles);
+        self.global_names = std::mem::take(&mut sub.global_names);
         // Images aren't kept: the document's images don't count a brush's art among their users. Art
         // read with a note (something left out of it) isn't kept either.
         let whole = read.is_ok()

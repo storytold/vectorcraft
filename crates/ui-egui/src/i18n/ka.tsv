@@ -191,6 +191,7 @@
 	Shape	ფიგურა
 	Convert to Shape	ფიგურად გარდაქმნა
 	Expand Shape	ფიგურის გაშლა
+	Expand Object	ობიექტის გაშლა
 	Pattern	პატერნი
 	Edit Pattern	პატერნის რედაქტირება
 	Tile Edge Color…	ფილის კიდის ფერი…
@@ -4780,6 +4781,8 @@ font-technology	Variable	ცვლადი
 	Even	თანაბრად
 	Stacked	დასტად
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები ფაილში შენახულ დაბალი გარჩევადობის მინიატურას აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
+@msg	linked type areas past VectorCraft's limits were left out	VectorCraft-ის ლიმიტების მიღმა დაკავშირებული ტექსტის არეები გამოტოვებულია
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	დაკავშირებულ არეებში, გარსშემოვლებულ ტექსტში ან შედგენილ ტრაექტორიაში ნიღბად გამოყენებული ტექსტი არ ჭრის
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები, რომელთა მინიატურაც ფაილში არ არის, ადგილის შემნახველს აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	არის ტექსტს ჩარჩოებში, რომლებიც მისი შრიფტის ერთი სტრიქონისთვის ზედმეტად დაბალი იყო, ჩარჩოები გაეზარდა ({_1}): სხვაგვარად ტექსტი არ გამოჩნდებოდა
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	მათზე არსებული ნახატი გვერდისგან {_1}%-ით განსხვავდება: მიუხედავად ამისა, ისინი რედაქტირების მონაცემებიდან აიღება
@@ -6098,6 +6101,9 @@ anchor	Points:	წერტილები:
 	Find Nearest Swatch…	უახლოესი ფერის ნიმუშის პოვნა…
 	Find Nearest Swatch	უახლოესი ფერის ნიმუშის პოვნა
 	Apply Nearest Swatch	უახლოესი ფერის ნიმუშის გამოყენება
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	შევსების გამოყენება კონტურზე
+	Apply Stroke to Fill	კონტურის გამოყენება შევსებაზე
 	Select objects to find the swatches nearest their colors.	აირჩიეთ ობიექტები მათ ფერებთან უახლოესი ფერის ნიმუშების საპოვნელად.
 @msg	select objects or give `color`	აირჩიეთ ობიექტები ან მიუთითეთ `color`
 @msg	`color` is not a colour	`color` ფერი არ არის
@@ -6400,3 +6406,7 @@ font-script	Japanese	იაპონური
 # Compound Shapes add-on
 	Compound Shapes	შედგენილი ფიგურები
 	Shape Mode Buttons Make Compound Shapes	ფიგურის რეჟიმის ღილაკები ქმნის შედგენილ ფიგურებს
+
+# 3D Box add-on
+	3D Box	3D ყუთი
+	3D Box Tool	3D ყუთის ხელსაწყო

@@ -4808,6 +4808,8 @@ imageTrace	Outline	Kontur
 @msg	graphs come in as plain art, without their data or settings	wykresy są wczytywane jako zwykła grafika, bez ich danych i ustawień
 @msg	an image whose data is cut short was left out	pominięto obraz z uciętymi danymi
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	połączone obrazy pokazują zapisany w pliku podgląd niskiej rozdzielczości, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
+@msg	linked type areas past VectorCraft's limits were left out	połączone obszary tekstu poza limitami VectorCraft zostały pominięte
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst użyty jako maska w połączonych obszarach, oblewanym tekście lub ścieżce złożonej nie przycina
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	połączone obrazy bez podglądu w pliku pokazują symbol zastępczy, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	tekst akapitowy w ramkach niższych niż wiersz wyświetlanej czcionki otrzymał wyższe ramki ({_1}): inaczej tekst nie byłby widoczny
 @msg	its editing data doesn't say where its art is	jego dane edycyjne nie określają położenia kompozycji
@@ -5956,6 +5958,9 @@ anchor	Points:	Punkty:
 	Find Nearest Swatch…	Znajdź najbliższą próbkę…
 	Find Nearest Swatch	Znajdź najbliższą próbkę
 	Apply Nearest Swatch	Zastosuj najbliższą próbkę
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Zastosuj wypełnienie do obrysu
+	Apply Stroke to Fill	Zastosuj obrys do wypełnienia
 	Select objects to find the swatches nearest their colors.	Zaznacz obiekty, aby znaleźć próbki najbliższe ich kolorom.
 @msg	select objects or give `color`	zaznacz obiekty lub podaj `color`
 @msg	`color` is not a colour	`color` nie jest kolorem
@@ -6244,3 +6249,7 @@ breakText	Glyphs	Glify
 # Compound Shapes add-on
 	Compound Shapes	Kształty złożone
 	Shape Mode Buttons Make Compound Shapes	Przyciski trybów kształtu tworzą kształty złożone
+
+# 3D Box add-on
+	3D Box	Bryła 3D
+	3D Box Tool	Narzędzie Bryła 3D

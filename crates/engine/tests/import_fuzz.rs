@@ -3312,7 +3312,7 @@ proptest! {
     #[test]
     fn ai_line_widths_never_panic(
         width in prop::sample::select(vec!["0", "0.0", "-0", "-1", "1e308", "1e-308", "nan", "inf", "2"]),
-        render in prop::sample::select(vec!["0", "1", "2", "5", "6", "7", "-1", "99"]),
+        render in prop::sample::select(vec!["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "4.5", "-1", "99"]),
         cut in 0usize..2_000,
         edits in prop::collection::vec((0usize..2_000, prop::sample::select(vec!['0', '1', '-', '.', ' ', '\n', '(', ')', 'w', 'B', 'S', 'T'])), 0..8),
     ) {
@@ -3344,6 +3344,34 @@ proptest! {
         let data = mutate_text(&ai::editing_data(100.0, 100.0, &format!("{gradient}{pattern}{}", ai::layer("L", &art))), cut, &edits);
         let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
         survive("hostile .ai patterns", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
+    /// A `.ai` whose gradients and patterns have names with newlines (blank before one, several,
+    /// repeated, one shown like another's numbered name), used by fills and a palette, damaged or
+    /// hostile.
+    #[test]
+    fn ai_global_names_with_newlines_never_panic(
+        names in prop::collection::vec(prop::sample::select(vec!["Sky\\n1", "Sky\\n2", "Sky", "Sky 2", "\\n3", "\\n", "Sky\\n\\n1", "\\012x"]), 1..6),
+        cut in 0usize..3_000,
+        edits in prop::collection::vec((0usize..3_000, prop::sample::select(vec!['\\', 'n', '(', ')', ' ', '\n', 'B', 'p', 'E', '%'])), 0..10),
+    ) {
+        use vectorcraft_testkit::ai;
+        let mut setup = String::new();
+        let mut art = String::new();
+        let mut cells = String::new();
+        for name in &names {
+            setup.push_str(&format!(
+                "%AI5_BeginGradient: ({name})\n({name}) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n\
+                 %AI3_BeginPattern: ({name})\n({name}) 0 0 6 6\n%_0 A\n%_0 0 m\n%_0 6 L\n%_6 6 L\n%_6 0 L\n%_0 0 0 1 k\n%_f\nE\n%AI3_EndPattern\n"
+            ));
+            art.push_str(&format!("Bb\n1 ({name}) 0 0 0 50 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", ai::rect(10.0, 10.0, 40.0, 40.0)));
+            art.push_str(&format!("({name}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", ai::rect(50.0, 50.0, 90.0, 90.0)));
+            cells.push_str(&format!("Bb\n2 ({name}) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\nPc\n({name}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\nPc\n"));
+        }
+        setup.push_str(&format!("%AI5_BeginPalette\n0 0 Pb\n{cells}PB\n%AI5_EndPalette\n"));
+        let data = mutate_text(&ai::editing_data(100.0, 100.0, &format!("{setup}{}", ai::layer("L", &art))), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
+        survive("hostile .ai global names", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
     /// A `.ai` whose images (binary samples with an alpha channel, the operators that end a raster,
@@ -4053,7 +4081,17 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "(\\r) TX",
             "() Tj",
             "(x) Tx",
+            "(\\t) 1 TS",
+            "() /x TS",
+            "Te",
+            "0 0 1e308 -1e308 Te",
+            "TM",
             "7 Tr",
+            "4 Tr",
+            "9 Tr",
+            "4.5 Tr",
+            "*w",
+            "*W",
             "-1e308 Ts",
             "1e308 0 Tz",
             "1e308 Tt",
@@ -4069,10 +4107,23 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "7 Tq",
             "1 1 1e308 -1e308 4e9 Th",
             "1 1 (2) 3 4 Th",
+            "36 2 Xb",
+            "Xb",
+            "0 0 4 1e308 Xe",
+            "0 0 2 -1e308 Xe",
+            "0 0 3 72 Xe",
+            "0 0 1e308 72 Xe",
+            "(x) /y Xe",
+            "XB",
             "[39/quotesingle 128/Euro/eacute/nosuch 300/x TE",
             "[1e308/a -1/b TE",
             "\n%AI3_BeginEncoding: _Helvetica Helvetica\n[/_Helvetica/Helvetica 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n",
             "\n%AI3_BeginEncoding:\n",
+            "[ 39/quotesingle 1e308/a -1/b 200/eacute\n/_Helvetica/Helvetica 0 0 1 [0.5 1e308] TZ",
+            "/_ 0 TZ",
+            "[ ] ] [ /a /b (c) TZ",
+            "\n%AI3_EndEncoding AdobeType\n",
+            "\n%%BeginEncoding: _x x\n[ 39/grave\n/_x/x 0 1 TZ\n%%EndEncoding\n",
             "800 Ar",
             "frobnicate",
             "\n%AI5_BeginLayer\n",

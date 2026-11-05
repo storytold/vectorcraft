@@ -9,6 +9,7 @@
 
 use std::collections::VecDeque;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
+use std::sync::{Arc, Mutex};
 
 use vectorcraft_render::{Rendered, Renderer};
 
@@ -32,8 +33,11 @@ struct Job<S, K> {
     run: JobFn,
 }
 
-/// Which slots' jobs [`ThumbWorker::discard`] drops.
+/// Which slots' jobs [`ThumbWorker::discard`] or [`ThumbWorker::forget`] drops.
 type SlotTest<S> = Box<dyn Fn(&S) -> bool + Send>;
+
+/// The slots [`ThumbWorker::forget`] picked since the worker was last idle.
+type Forgotten<S> = Arc<Mutex<Vec<SlotTest<S>>>>;
 
 /// What a panel sends its worker: a job, or the slots whose jobs not started yet are dropped.
 enum Msg<S, K> {
@@ -47,6 +51,7 @@ enum Msg<S, K> {
 pub struct ThumbWorker<S, K> {
     tx: Sender<Msg<S, K>>,
     rx: Receiver<Done<K>>,
+    forgotten: Forgotten<S>,
 }
 
 impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
@@ -64,6 +69,8 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
     pub(crate) fn start(ctx: &egui::Context, name: &str) -> Option<Self> {
         let (tx, jobs) = channel::<Msg<S, K>>();
         let (done_tx, rx) = channel::<Done<K>>();
+        let forgotten: Forgotten<S> = Arc::default();
+        let gone = forgotten.clone();
         let ctx = ctx.clone();
         std::thread::Builder::new()
             .name(format!("vectorcraft-{name}"))
@@ -79,24 +86,55 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
                 };
                 loop {
                     if queue.is_empty() {
-                        // The panel is gone (its sender dropped): end the thread.
-                        let Ok(job) = jobs.recv() else { break };
-                        add(&mut queue, job);
+                        // With no job here or on its way (checked under the lock, since a panel
+                        // sends a job before it forgets that job's slot), what `forget` picked
+                        // has no job left to drop.
+                        let waiting = match gone.lock() {
+                            Ok(mut f) => match jobs.try_recv() {
+                                Ok(msg) => Some(msg),
+                                Err(_) => {
+                                    f.clear();
+                                    None
+                                }
+                            },
+                            Err(_) => break,
+                        };
+                        let msg = match waiting {
+                            Some(msg) => msg,
+                            // The panel is gone (its sender dropped): end the thread.
+                            None => match jobs.recv() {
+                                Ok(msg) => msg,
+                                Err(_) => break,
+                            },
+                        };
+                        add(&mut queue, msg);
                     }
                     while let Ok(job) = jobs.try_recv() {
                         add(&mut queue, job);
                     }
                     let Some(job) = queue.pop_front() else { continue };
+                    let Ok(skip) = gone.lock().map(|f| f.iter().any(|which| which(&job.slot))) else { break };
+                    if skip {
+                        continue;
+                    }
                     let t0 = crate::now_ms();
                     let img = (job.run)(&mut r);
-                    if done_tx.send(Done { key: job.key, img, ms: crate::now_ms() - t0 }).is_err() {
+                    let done = Done { key: job.key, img, ms: crate::now_ms() - t0 };
+                    // Sent under the lock, so a `forget` either drops it here or comes after it
+                    // and finds it in the next `poll`.
+                    let Ok(f) = gone.lock() else { break };
+                    if f.iter().any(|which| which(&job.slot)) {
+                        continue;
+                    }
+                    if done_tx.send(done).is_err() {
                         break;
                     }
+                    drop(f);
                     ctx.request_repaint();
                 }
             })
             .ok()?;
-        Some(Self { tx, rx })
+        Some(Self { tx, rx, forgotten })
     }
 
     /// Queue `run` for `slot` (replacing a job for the slot that hasn't started). False when the
@@ -112,6 +150,15 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
     #[must_use]
     pub fn discard(&self, which: impl Fn(&S) -> bool + Send + 'static) -> bool {
         self.tx.send(Msg::Discard(Box::new(which))).is_ok()
+    }
+
+    /// Drop the jobs whose slot `which` picks, queued or running: their images never come back
+    /// from [`ThumbWorker::poll`], except those finished before this call, which the next poll
+    /// returns. The panel must not submit jobs for those slots again.
+    pub fn forget(&self, which: impl Fn(&S) -> bool + Send + 'static) {
+        if let Ok(mut f) = self.forgotten.lock() {
+            f.push(Box::new(which));
+        }
     }
 
     /// The jobs finished since the last call, oldest first; None when the thread is gone (the

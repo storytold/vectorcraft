@@ -5,8 +5,8 @@ use super::types::{
     line_width,
 };
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
-    Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
+    Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
 };
 
 impl<'a> Reader<'a> {
@@ -157,6 +157,7 @@ impl<'a> Reader<'a> {
                 "Bs" => d.stop(&vals, &mut self.stop_spots),
                 "BD" => {
                     if let Some((name, g)) = self.gradient_def.take().and_then(GradientDef::finish) {
+                        self.global_names.define(Global::Gradient, &name);
                         self.gradients.insert(name, g);
                     }
                 }
@@ -356,15 +357,19 @@ impl<'a> Reader<'a> {
             "Tp" => self.begin_text_path(&vals),
             "TP" => self.end_text_path(),
             "TO" => self.end_text(hidden)?,
-            "Tx" | "Tj" | "TX" => self.text_body(w, &vals),
-            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" | "TC" | "TW" | "Tq" | "Th" => self.text_attr(w, &vals),
+            // `(text) justified TS`, special characters (§22.6): the reader adds its characters like `Tx`.
+            "Tx" | "Tj" | "TX" | "TS" => self.text_body(w, &vals),
+            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" | "TC" | "TW" | "Tq" | "Th" | "Xb" | "Xe" | "XB" => self.text_attr(w, &vals),
             // Attributes the reader doesn't keep (kerning pairs, Far-Eastern type) and final-form
             // positions (§15.3).
             "Tk" | "TK" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TV" | "Tv" | "Ty" | "TY" | "TG" | "Tg" | "Tu" | "Xu" => {}
-            // The hyphenation language and tab rulers, which the reader doesn't keep either (§22): `XL`,
-            // `Xb`/`XB` a tab definition (and the `Xe` tab descriptions between them).
-            "XL" | "Xb" | "XB" | "Xe" => {}
+            // `TM` (pop text matrix) and `Te` (end render), listed in §22.6, keep nothing either; the
+            // reader takes `Te` with any number of operands.
+            "TM" | "Te" => {}
+            // The hyphenation language (`XL`), which the reader doesn't keep either (§22).
+            "XL" => {}
             "TE" => self.te(&vals),
+            "TZ" => self.tz(&vals),
             // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).
             "XI" if self.raster.is_some() => {
                 if let Some(r) = self.raster.as_mut() {
@@ -473,7 +478,7 @@ impl<'a> Reader<'a> {
             self.unread_pattern(w);
             return;
         };
-        let p = Paint::Pattern { pattern: name.unwrap_or_default(), xf };
+        let p = Paint::Pattern { pattern: name.as_deref().map(|n| self.global_names.get(Global::Pattern, n).to_string()).unwrap_or_default(), xf };
         if w == "p" {
             self.pending_unread_fill = false;
             self.gs.fill = p;
@@ -702,7 +707,14 @@ impl<'a> Reader<'a> {
                 object,
                 look,
                 st,
-                &StylePaints { gradients: &self.gradients, patterns: &self.pattern_tiles, v7_patterns: &self.v7_patterns, space },
+                &StylePaints {
+                    gradients: &self.gradients,
+                    patterns: &self.pattern_tiles,
+                    names: &self.global_names,
+                    v7_patterns: &self.v7_patterns,
+                    brushes: &self.brush_drafts,
+                    space,
+                },
             )
         }) {
             // Strokes and effects at the document's scale, as the art (a Large Canvas copy's is scaled up).
@@ -836,12 +848,15 @@ fn pattern_controls(n: &[f64]) -> Option<Affine> {
     xf.as_coeffs().iter().all(|v| v.is_finite()).then_some(xf)
 }
 
-/// What a style's fills paint with: the file's gradients and pattern tiles, the patterns defined in
-/// the version 7 form, and art space → the document.
+/// What a style's fills paint with: the file's gradients and pattern tiles with the names they get
+/// in the document, the patterns defined in the version 7 form, and art space → the document.
 struct StylePaints<'a> {
     gradients: &'a HashMap<String, Gradient>,
     patterns: &'a HashMap<String, Rect>,
+    names: &'a ShownNames,
     v7_patterns: &'a HashSet<String>,
+    /// The brushes the file defines, which a brushed stroke names.
+    brushes: &'a [super::super::brush::BrushDraft],
     space: Affine,
 }
 
@@ -910,7 +925,8 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
         let mut layer = match item {
             StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
             StyleItem::Gradient { name, angle } => {
-                let paint = match (name.as_ref().and_then(|n| placed.get(n)), gradients, own_gradient) {
+                // The drawn look's gradients are keyed by the names they got in the document.
+                let paint = match (name.as_ref().and_then(|n| placed.get(paints.names.get(Global::Gradient, n))), gradients, own_gradient) {
                     // Other objects than type: the object's own, as they always were.
                     (_, 1, Some(own)) if !slot => own.paint.clone(),
                     (Some(p), ..) => p.clone(),
@@ -925,7 +941,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                 };
                 AppearanceItem::Fill(FillLayer::new(paint))
             }
-            StyleItem::Pattern { name, matrix, controls } => match placed.get(&format!("{PATTERN_KEY}{name}")) {
+            StyleItem::Pattern { name, matrix, controls } => match placed.get(&format!("{PATTERN_KEY}{}", paints.names.get(Global::Pattern, name))) {
                 Some(p) => AppearanceItem::Fill(FillLayer::new(p.clone())),
                 None => {
                     let tile = paints.patterns.get(name).copied()?;
@@ -934,10 +950,20 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                         matrix = Some(matrix.unwrap_or(Affine::IDENTITY) * pattern_controls(controls)?);
                     }
                     let xf = pattern_xf(paints.space, matrix, tile)?;
-                    AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: name.clone(), xf }))
+                    AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: paints.names.get(Global::Pattern, name).to_string(), xf }))
                 }
             },
-            StyleItem::Stroke { .. } => stroke_layer(item)?,
+            StyleItem::Stroke { brush, .. } => {
+                // A brushed stroke draws as its look only with the brush the file defines (the
+                // first of its name, as the Brushes panel keeps it) at the object's settings.
+                if let Some((name, settings)) = brush {
+                    let draft = paints.brushes.iter().find(|d| &d.name == name)?;
+                    if !super::super::brush::draws_as(draft, settings) {
+                        return None;
+                    }
+                }
+                stroke_layer(item)?
+            }
         };
         if let Some(look) = st.looks.get(n) {
             with_look(&mut layer, look);
@@ -963,6 +989,8 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle)
     for (n, item) in st.items.iter().enumerate() {
         let mut layer = match item {
             StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
+            // A graphic style's brush isn't checked against the file's brushes: it is left out.
+            StyleItem::Stroke { brush: Some(_), .. } => return None,
             StyleItem::Stroke { .. } => stroke_layer(item)?,
             StyleItem::Gradient { .. } | StyleItem::Pattern { .. } => return None,
         };
@@ -976,9 +1004,10 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle)
 
 /// A style's stroke as an appearance item (`None` for a fill).
 fn stroke_layer(item: &crate::import::ai::style::StyleItem) -> Option<AppearanceItem> {
-    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile } = item else { return None };
+    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, brush } = item else { return None };
     let mut layer = StrokeLayer::new(paint.clone(), line_width(*width));
     (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile) = (*cap, *join, *miter, dash.clone(), profile.clone());
+    layer.brush = brush.as_ref().map(|(name, _)| name.clone());
     Some(AppearanceItem::Stroke(layer))
 }
 

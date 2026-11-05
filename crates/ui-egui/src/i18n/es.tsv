@@ -4676,6 +4676,8 @@ axis	Both	Ambos
 @msg	graphs come in as plain art, without their data or settings	los gráficos se importan como ilustración normal, sin sus datos ni sus ajustes
 @msg	an image whose data is cut short was left out	se omitió una imagen con datos incompletos
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	las imágenes vinculadas muestran la vista previa de baja resolución guardada en el archivo hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
+@msg	linked type areas past VectorCraft's limits were left out	se omitieron las áreas de texto enlazadas que superan los límites de VectorCraft
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el texto usado como máscara en áreas enlazadas, texto ceñido o un trazado compuesto no recorta
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	las imágenes vinculadas sin vista previa en el archivo muestran un marcador de posición hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	el texto de área en marcos demasiado bajos para una línea de la fuente en que se muestra recibió marcos más altos ({_1}): de otro modo no se vería
 @msg	its editing data doesn't say where its art is	sus datos de edición no dicen dónde está su ilustración
@@ -6044,6 +6046,9 @@ anchor	Points:	Puntos:
 	Find Nearest Swatch…	Buscar muestra más cercana…
 	Find Nearest Swatch	Buscar muestra más cercana
 	Apply Nearest Swatch	Aplicar muestra más cercana
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Aplicar relleno al trazo
+	Apply Stroke to Fill	Aplicar trazo al relleno
 	Select objects to find the swatches nearest their colors.	Seleccione objetos para buscar las muestras más cercanas a sus colores.
 @msg	select objects or give `color`	seleccione objetos o indique `color`
 @msg	`color` is not a colour	`color` no es un color
@@ -6331,3 +6336,7 @@ breakText	Glyphs	Glifos
 # Compound Shapes add-on
 	Compound Shapes	Formas compuestas
 	Shape Mode Buttons Make Compound Shapes	Los botones de modo de forma crean formas compuestas
+
+# 3D Box add-on
+	3D Box	Caja 3D
+	3D Box Tool	Herramienta Caja 3D

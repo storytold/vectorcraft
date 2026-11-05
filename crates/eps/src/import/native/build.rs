@@ -331,6 +331,7 @@ pub(super) fn build_from(
             // Its page is the file's own (its bounding box), as when it comes in as its page: art
             // reaching past the editing data's artboard stays on it (#1102).
             doc.artboards.truncate(1);
+            doc.opened_artboard = None;
             if let Some(a) = doc.artboards.first_mut() {
                 a.rect = rect;
             }

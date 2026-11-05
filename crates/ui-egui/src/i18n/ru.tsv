@@ -4713,6 +4713,8 @@ axis	Both	Оба
 @msg	graphs come in as plain art, without their data or settings	диаграммы импортируются как обычная графика, без их данных и настроек
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	связанные изображения показываются как сохранённый в файле просмотр низкого разрешения, пока их файлы не найдены: восстановите связи на панели «Связи»
+@msg	linked type areas past VectorCraft's limits were left out	связанные текстовые области за пределами ограничений VectorCraft пропущены
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, используемый как маска в связанных областях, обтекающем тексте или составном контуре, не обрезает
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	связанные изображения без просмотра в файле показываются как заполнитель, пока их файлы не найдены: восстановите связи на панели «Связи»
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в области в рамках, слишком низких для строки шрифта, которым он отображается, получил более высокие рамки ({_1}): иначе он не был бы виден
 @msg	its editing data doesn't say where its art is	в его данных редактирования не указано, где находится графика
@@ -6079,6 +6081,9 @@ anchor	Points:	Точки:
 	Find Nearest Swatch…	Найти ближайший образец…
 	Find Nearest Swatch	Найти ближайший образец
 	Apply Nearest Swatch	Применить ближайший образец
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Применить заливку к обводке
+	Apply Stroke to Fill	Применить обводку к заливке
 	Select objects to find the swatches nearest their colors.	Выделите объекты, чтобы найти образцы, ближайшие к их цветам.
 @msg	select objects or give `color`	выделите объекты или укажите `color`
 @msg	`color` is not a colour	`color` не является цветом
@@ -6478,3 +6483,7 @@ shape	Open	Открытый
 # Compound Shapes add-on
 	Compound Shapes	Составные фигуры
 	Shape Mode Buttons Make Compound Shapes	Кнопки режимов фигур создают составные фигуры
+
+# 3D Box add-on
+	3D Box	3D-параллелепипед
+	3D Box Tool	Инструмент «3D-параллелепипед»

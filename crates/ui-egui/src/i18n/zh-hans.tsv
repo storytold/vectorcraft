@@ -3465,6 +3465,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Update Changed Links	更新已更改的链接
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	有 {n} 个链接图像已在磁盘上更改。要显示新版本吗？
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	链接的图片在找到其文件之前显示文件中存储的低分辨率预览：请在“链接”面板中重新链接
+@msg	linked type areas past VectorCraft's limits were left out	超出 VectorCraft 限制的串接文字区域已省略
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	在串接区域、绕排文字或复合路径中用作蒙版的文字不会剪切
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	文件中没有预览的链接图片在找到其文件之前显示占位符：请在“链接”面板中重新链接
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	框架高度不足以容纳所显示字体一行的区域文字已加高框架 ({_1})：否则文字不会显示
 	Update Modified Links	更新已修改的链接
@@ -5943,6 +5945,9 @@ anchor	Points:	点：
 	Find Nearest Swatch…	查找最接近的色板…
 	Find Nearest Swatch	查找最接近的色板
 	Apply Nearest Swatch	应用最接近的色板
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	将填色应用于描边
+	Apply Stroke to Fill	将描边应用于填色
 	Select objects to find the swatches nearest their colors.	选择对象以查找与其颜色最接近的色板。
 @msg	select objects or give `color`	请选择对象或提供 `color`
 @msg	`color` is not a colour	`color` 不是颜色
@@ -6230,3 +6235,7 @@ breakText	Glyphs	字形
 # Compound Shapes add-on
 	Compound Shapes	复合形状
 	Shape Mode Buttons Make Compound Shapes	形状模式按钮创建复合形状
+
+# 3D Box add-on
+	3D Box	3D 盒子
+	3D Box Tool	3D 盒子工具

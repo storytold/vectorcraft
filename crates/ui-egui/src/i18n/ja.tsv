@@ -4405,6 +4405,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	graphs come in as plain art, without their data or settings	グラフは通常のアートとして読み込まれ、データと設定は保持されません
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
+@msg	linked type areas past VectorCraft's limits were left out	VectorCraft の上限を超えるリンクされたテキストエリアは省略されました
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	リンクされたエリア、テキストの回り込み、複合パス内でマスクとして使われた文字はクリップしません
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ファイルにプレビューのないリンク画像は、元のファイルが見つかるまでプレースホルダーで表示されます：リンクパネルで再リンクしてください
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
@@ -5786,6 +5788,9 @@ anchor	Points:	ポイント:
 	Find Nearest Swatch…	最も近いスウォッチを検索…
 	Find Nearest Swatch	最も近いスウォッチを検索
 	Apply Nearest Swatch	最も近いスウォッチを適用
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	塗りを線に適用
+	Apply Stroke to Fill	線を塗りに適用
 	Select objects to find the swatches nearest their colors.	カラーに最も近いスウォッチを探すオブジェクトを選択してください。
 @msg	select objects or give `color`	オブジェクトを選択するか `color` を指定してください
 @msg	`color` is not a colour	`color` はカラーではありません
@@ -6074,3 +6079,7 @@ breakText	Glyphs	字形
 # Compound Shapes add-on
 	Compound Shapes	複合シェイプ
 	Shape Mode Buttons Make Compound Shapes	シェイプモードボタンで複合シェイプを作成
+
+# 3D Box add-on
+	3D Box	3Dボックス
+	3D Box Tool	3Dボックスツール

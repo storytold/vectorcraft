@@ -4525,6 +4525,8 @@ axis	Both	И двете
 @msg	an image VectorCraft can't read was left out	изображение, което VectorCraft не може да разчете, беше пропуснато
 @msg	an image whose data is cut short was left out	изображение с непълни данни беше пропуснато
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	свързаните картини показват записания във файла предварителен преглед с ниска резолюция, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
+@msg	linked type areas past VectorCraft's limits were left out	свързаните текстови области извън ограниченията на VectorCraft бяха пропуснати
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, използван като маска в свързани области, обтичащ текст или съставен път, не изрязва
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	свързаните картини без предварителен преглед във файла показват заместител, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текстовите рамки за област в редове, твърде къси за шрифта, в който се показват, получиха по-високи рамки ({_1}): текстът им иначе нямаше да се види
 @msg	its editing data doesn't say where its art is	данните му за редактиране не посочват къде се намира неговата графика
@@ -5951,6 +5953,9 @@ anchor	Points:	Точки:
 	Find Nearest Swatch…	Намиране на най-близкия образец…
 	Find Nearest Swatch	Намиране на най-близкия образец
 	Apply Nearest Swatch	Прилагане на най-близкия образец
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Прилагане на запълването към щриха
+	Apply Stroke to Fill	Прилагане на щриха към запълването
 	Select objects to find the swatches nearest their colors.	Изберете обекти, за да намерите най-близките до цветовете им образци.
 @msg	select objects or give `color`	изберете обекти или задайте `color`
 @msg	`color` is not a colour	`color` не е цвят
@@ -6239,3 +6244,7 @@ breakText	Glyphs	Глифи
 # Compound Shapes add-on
 	Compound Shapes	Съставни фигури
 	Shape Mode Buttons Make Compound Shapes	Бутоните за режими на фигури създават съставни фигури
+
+# 3D Box add-on
+	3D Box	3D кутия
+	3D Box Tool	Инструмент за 3D кутия

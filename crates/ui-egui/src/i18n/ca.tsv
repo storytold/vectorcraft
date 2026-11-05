@@ -5182,6 +5182,8 @@ digits	Malayalam	Malaiàlam
 @msg	library panel `{given}` isn't missing its library	al panell de biblioteca `{given}` no li falta la biblioteca
 @msg	library panel `{given}` isn't open	el panell de biblioteca `{given}` no està obert
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les imatges enllaçades mostren la previsualització de baixa resolució desada al fitxer fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
+@msg	linked type areas past VectorCraft's limits were left out	s’han omès les àrees de text enllaçades que superen els límits de VectorCraft
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el text usat com a màscara en àrees enllaçades, en text ajustat o en un traçat compost no retalla
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les imatges enllaçades sense previsualització al fitxer mostren un marcador de posició fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Fusió de pintura interactiva: seleccioneu un grup de pintura interactiva i els traçats que voleu afegir
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	La pintura interactiva accepta traçats i traçats compostos: convertiu abans el text, les imatges i altres objectes a traçats
@@ -6086,6 +6088,9 @@ anchor	Points:	Punts:
 	Find Nearest Swatch…	Cerca la mostra més propera…
 	Find Nearest Swatch	Cerca la mostra més propera
 	Apply Nearest Swatch	Aplica la mostra més propera
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Aplica el farciment al traç
+	Apply Stroke to Fill	Aplica el traç al farciment
 	Select objects to find the swatches nearest their colors.	Seleccioneu objectes per trobar les mostres més properes als seus colors.
 @msg	select objects or give `color`	seleccioneu objectes o indiqueu `color`
 @msg	`color` is not a colour	`color` no és un color
@@ -6375,3 +6380,7 @@ breakText	Glyphs	Glifs
 # Compound Shapes add-on
 	Compound Shapes	Formes compostes
 	Shape Mode Buttons Make Compound Shapes	Els botons de mode de forma creen formes compostes
+
+# 3D Box add-on
+	3D Box	Caixa 3D
+	3D Box Tool	Eina Caixa 3D

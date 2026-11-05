@@ -3,6 +3,7 @@
 //! submenu selects them. Tool gestures emit engine commands.
 
 pub mod anchor_eraser;
+pub mod box3d;
 pub mod contour;
 pub mod corner_tool;
 pub mod enclosing_lasso;
@@ -33,13 +34,15 @@ pub const CONTOUR: &[ToolInfo] = &[ToolInfo { id: contour::ID, label: "Contour T
 
 pub const ENCLOSING_LASSO: &[ToolInfo] = &[ToolInfo { id: enclosing_lasso::ID, label: "Enclosing Lasso Tool", shortcut: None, icon: "tool-lasso" }];
 
+pub const BOX_3D: &[ToolInfo] = &[ToolInfo { id: box3d::ID, label: "3D Box Tool", shortcut: None, icon: "box" }];
+
 /// The add-ons' tool groups, after the toolbar's own ([`crate::TOOL_GROUPS`]), each with the
 /// heading the All Tools drawer lists it under (its add-on's name).
 const HEADED: &[(&[ToolInfo], &str)] =
-    &[(PATH_TOOLS, "Path Precision Tools"), (SMART_PEN, "Smart Pen"), (ENCLOSING_LASSO, "Enclosing Lasso"), (CONTOUR, "Contour")];
+    &[(PATH_TOOLS, "Path Precision Tools"), (SMART_PEN, "Smart Pen"), (ENCLOSING_LASSO, "Enclosing Lasso"), (CONTOUR, "Contour"), (BOX_3D, "3D Box")];
 
 /// The add-ons' tool groups, after the toolbar's own ([`crate::TOOL_GROUPS`]).
-pub const GROUPS: &[&[ToolInfo]] = &[PATH_TOOLS, SMART_PEN, ENCLOSING_LASSO, CONTOUR];
+pub const GROUPS: &[&[ToolInfo]] = &[PATH_TOOLS, SMART_PEN, ENCLOSING_LASSO, CONTOUR, BOX_3D];
 
 /// The heading the All Tools drawer lists tool `id` under: its add-on's name.
 pub fn heading(id: &str) -> Option<&'static str> {
@@ -59,6 +62,7 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         smart_pen::ID => Box::new(smart_pen::SmartPenTool::default()),
         enclosing_lasso::ID => Box::new(enclosing_lasso::EnclosingLassoTool::default()),
         contour::ID => Box::new(contour::ContourTool::default()),
+        box3d::ID => Box::new(box3d::Box3dTool::default()),
         _ => return None,
     })
 }
@@ -80,6 +84,7 @@ mod tests {
         assert_eq!(heading(smart_pen::ID), Some("Smart Pen"));
         assert_eq!(heading(enclosing_lasso::ID), Some("Enclosing Lasso"));
         assert_eq!(heading(contour::ID), Some("Contour"));
+        assert_eq!(heading(box3d::ID), Some("3D Box"));
         assert_eq!(GROUPS.len(), HEADED.len());
         assert!(crate::catalog::all_tools().any(|t| t.id == extend_path::ID));
         assert!(create("pen").is_none() && heading("pen").is_none());

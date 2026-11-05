@@ -605,6 +605,36 @@ fn a_gradient_stop_naming_a_process_colour_leaves_its_swatch_process() {
     assert!(near(sw.paint.color()), "{sw:?}");
 }
 
+/// A gradient whose name in the file is shown as the name of a color a later gradient's stop names
+/// is numbered: the color keeps its swatch.
+#[test]
+fn a_gradient_shown_as_a_stops_color_name_is_numbered() {
+    let first = "%AI5_BeginGradient: (Test Cyan\\n1)\n(Test Cyan\\n1) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let brand = "%AI5_BeginGradient: (Brand)\n(Brand) 0 2 Bd\n[\n\
+                 %_0.93 0.1 0 0 (Test Cyan) 0 0 5 1 6 50 0 Bs\n%_0 0 0 0 1 0 0 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let art_ = format!("Bb\n1 (Test Cyan\\n1) 0 0 0 10 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&format!("{first}{brand}{}", layer(&art_))).doc;
+    let Paint::Gradient(g) = fill(&art(&doc)[0]) else { panic!("{:?}", fill(&art(&doc)[0])) };
+    assert_eq!(g.swatch.as_deref(), Some("Test Cyan 2"));
+    let sw = doc.swatch("Test Cyan").unwrap();
+    assert!(matches!(sw.paint, Paint::Solid { .. }) && sw.global, "{sw:?}");
+}
+
+/// A gradient whose name has no newline keeps it when a gradient shown as that name is defined
+/// first: the one shown up to its newline is numbered.
+#[test]
+fn a_gradient_name_without_a_newline_is_kept_whichever_comes_first() {
+    let gradient = |name: &str| format!("%AI5_BeginGradient: ({name})\n({name}) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n");
+    let filled = |name: &str| format!("Bb\n1 ({name}) 0 0 0 10 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&format!("{}{}{}", gradient("Sky\\n1"), gradient("Sky"), layer(&format!("{}{}", filled("Sky\\n1"), filled("Sky"))))).doc;
+    let links: Vec<_> = art(&doc).iter().map(|n| if let Paint::Gradient(g) = fill(n) { g.swatch.clone() } else { None }).collect();
+    assert_eq!(links, [Some("Sky 2".to_string()), Some("Sky".to_string())]);
+    // A gradient without stops isn't kept, and its name stays free.
+    let empty = "%AI5_BeginGradient: (Sky)\n(Sky) 0 0 Bd\n[\nBD\n%AI5_EndGradient\n";
+    let doc = read_ok(&format!("{empty}{}{}", gradient("Sky\\n1"), layer(&filled("Sky\\n1")))).doc;
+    assert!(matches!(fill(&art(&doc)[0]), Paint::Gradient(g) if g.swatch.as_deref() == Some("Sky")));
+}
+
 /// A pattern's definition (`%AI3_BeginPattern`): its name and tile (8 points square here, y up),
 /// then its art on `%_` lines (a group of the tile's unpainted box and a dot, a round-capped
 /// stroke of no length), `E`.
@@ -686,6 +716,116 @@ fn patterns_are_pattern_swatches_and_fill_with_them() {
     let Some(Paint::Pattern { xf, .. }) = paving.appearance.stroke().map(|st| st.paint.clone()) else { panic!() };
     assert_eq!(xf * Point::ZERO, Point::new(10.0, 64.0));
     assert!(s.warnings.is_empty(), "{:?}", s.warnings);
+}
+
+/// A pattern's name in the file is shown up to its newline (AI7 spec §4): two patterns named
+/// `Dots` apart from what follows the newline are "Dots" and "Dots 2", each fill paints with its
+/// own, and one defined again under its name in the file replaces the first.
+#[test]
+fn pattern_names_are_shown_up_to_their_newline() {
+    let def = |name: &str, tile: u32| DOTS.replace("(Dots)", &format!("({name})")).replace("0 0 8 8\n", &format!("0 0 {tile} {tile}\n"));
+    let filled = |name: &str| format!("({name}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(10.0, 20.0, 70.0, 80.0));
+    let body = format!(
+        "{}{}{}{}",
+        def("Dots\\n1", 8),
+        def("Dots\\n2", 8),
+        def("Dots\\n2", 9),
+        layer(&format!("{}{}", filled("Dots\\n2"), filled("Dots\\n1")))
+    );
+    let s = read_ok(&body);
+    let doc = &s.doc;
+    let tiles: Vec<_> = doc.patterns.iter().map(|p| (p.name.as_str(), p.tile.width())).collect();
+    assert_eq!(tiles, [("Dots", 8.0), ("Dots 2", 9.0)]);
+    for name in ["Dots", "Dots 2"] {
+        assert!(matches!(&doc.swatch(name).unwrap().paint, Paint::Pattern { pattern, .. } if pattern == name), "{name}");
+    }
+    let fills: Vec<_> = art(doc).iter().map(|n| if let Paint::Pattern { pattern, .. } = fill(n) { pattern } else { String::new() }).collect();
+    assert_eq!(fills, ["Dots 2", "Dots"]);
+    assert!(s.warnings.is_empty(), "{:?}", s.warnings);
+    // Without a palette (or with an empty one) the document keeps its default swatches, and a named
+    // color the art uses has its swatch: a pattern takes none of their names.
+    let empty = "%AI5_BeginPalette\n0 0 Pb\nPB\n%AI5_EndPalette\n";
+    let ink = format!("0 1 1 0 (Ink) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    for palette in ["", empty] {
+        let body =
+            format!("{}{}{palette}{}", def("Black\\n1", 8), def("Ink\\n1", 8), layer(&format!("{}{}{ink}", filled("Black\\n1"), filled("Ink\\n1"))));
+        let doc = read_ok(&body).doc;
+        for (solid, pattern) in [("Black", "Black 2"), ("Ink", "Ink 2")] {
+            assert!(matches!(&doc.swatch(pattern).unwrap().paint, Paint::Pattern { pattern: p, .. } if p == pattern), "{palette:?}");
+            assert!(matches!(doc.swatch(solid).unwrap().paint, Paint::Solid { .. }), "{palette:?}");
+        }
+        let fills: Vec<_> = art(&doc).iter().map(|n| fill(n)).collect();
+        assert!(matches!(&fills[..2], [Paint::Pattern { pattern: a, .. }, Paint::Pattern { pattern: b, .. }] if a == "Black 2" && b == "Ink 2"));
+    }
+    // Nor the name of a custom color the program of an EPS gives, or None's.
+    let ps = b"%!PS-Adobe-3.0\n%%CMYKCustomColor: 0 0 1 0 (Outer Ink)\n%%EndComments\n";
+    let data = stream(&format!("{}{}{}", def("Outer Ink\\n1", 8), def("[None]\\n1", 8), layer(&filled("Outer Ink\\n1"))));
+    let doc = super::read_beside(data.as_bytes(), true, ps).unwrap().doc;
+    assert_eq!(doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Outer Ink 2", "[None] 2"]);
+    assert!(matches!(doc.swatch("Outer Ink").unwrap().paint, Paint::Solid { .. }));
+    assert!(matches!(fill(&art(&doc)[0]), Paint::Pattern { pattern, .. } if pattern == "Outer Ink 2"));
+}
+
+/// A pattern shown as the name of one of the document's other swatches is numbered: a swatch or a
+/// color group of the palette the reader keeps (under any version's prefix, a swatch it names by
+/// its values too), Registration, and a custom color of the editing data's own header. A pattern
+/// whose name has no newline keeps it, whichever is defined first. The default swatches go when a
+/// palette replaces them, and their names are free then; a palette only in versioned content that
+/// isn't read replaces nothing.
+#[test]
+fn pattern_names_are_numbered_around_the_documents_swatches() {
+    let def = |name: &str| DOTS.replace("(Dots)", &format!("({name})"));
+    let palette = "%AI12_BeginPalette\n0 0 Pb\n0 0 0 0.5 k\n(Mist)\nPc\n1 (Greys) 1 Pg\n0 0 0 0.2 k\nPc\nPB\n%AI12_EndPalette\n";
+    let header = "%%CMYKCustomColor: 0 0 1 0 (Head Ink)\n";
+    let doc = |defs: &[&str], palette: &str| {
+        let body = format!("{}{palette}{}", defs.iter().map(|n| def(n)).collect::<String>(), layer(""));
+        read(stream_with_header(header, &body).as_bytes()).unwrap().doc
+    };
+    let names = |d: &Document| d.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
+    let d = doc(&["Mist\\n1", "Greys\\n1", "[Registration]\\n1", "Head Ink\\n1", "Red\\n1", "Sky\\n1", "Sky"], palette);
+    let generated = d.swatch_groups[0].swatches[0].name.clone();
+    let all: Vec<&str> = d.swatches_iter().map(|s| s.name.as_str()).collect();
+    assert!(d.swatch("Mist").is_some() && d.swatch("Head Ink").is_some(), "{all:?}");
+    assert!(matches!(&d.swatch("Red").unwrap().paint, Paint::Pattern { pattern, .. } if pattern == "Red"), "{all:?}");
+    assert_eq!(names(&d), ["Mist 2", "Greys 2", "[Registration] 2", "Head Ink 2", "Red", "Sky 2", "Sky"]);
+    let d = doc(&[&format!("{generated}\\n1")], palette);
+    assert_eq!(names(&d), [format!("{generated} 2")]);
+    // Without a palette the default swatches stay, and so they do when the only palette is in
+    // versioned content that isn't read.
+    let versioned = format!("%AI17_Begin_Content_if_version_gt:17 1\n%AI17_Alternate_Content\n{palette}%AI17_End_Versioned_Content\n");
+    for palette in ["", &versioned] {
+        let d = doc(&["Red\\n1"], palette);
+        assert!(matches!(d.swatch("Red").unwrap().paint, Paint::Solid { .. }), "{palette:?}");
+        assert_eq!(names(&d), ["Red 2"], "{palette:?}");
+    }
+    // A pattern and a color in versioned content that isn't read take no name.
+    let unread = format!(
+        "%AI17_Begin_Content_if_version_gt:17 1\n%AI17_Alternate_Content\n{}{}%AI17_End_Versioned_Content\n",
+        def("Sky"),
+        layer("0 1 1 0 (Sea) 0 x\n")
+    );
+    let d = doc(&["Sky\\n1", "Sea\\n1"], &unread);
+    assert_eq!(names(&d), ["Sky", "Sea"]);
+    // Nor does a color of a palette that a later one replaces, or of a palette's alternate.
+    let replaced = "%AI5_BeginPalette\n0 0 Pb\n0 1 1 0 (Sky) 0 x\n(Sky)\nPc\nPB\n%AI5_EndPalette\n\
+                    %AI5_BeginPalette\n0 0 Pb\n%AI17_Begin_Content_if_version_gt:17 1\n0 0 0 1 k\n(Ink)\nPc\n\
+                    %AI17_Alternate_Content\n0 1 0 0 (Sea) 0 x\n(Sea)\nPc\n%AI17_End_Versioned_Content\nPB\n%AI5_EndPalette\n";
+    let d = doc(&["Sky\\n1", "Sea\\n1"], replaced);
+    assert_eq!(names(&d), ["Sky", "Sea"]);
+    // Versioned content that doesn't end is read whole, its colors too.
+    let unended = format!("%AI17_Begin_Content_if_version_gt:17 1\n%AI17_Alternate_Content\n{}", layer("0 1 1 0 (Sea) 0 x\n"));
+    let d = doc(&["Sea\\n1"], &unended);
+    assert_eq!(names(&d), ["Sea 2"]);
+}
+
+/// A palette's pattern swatch named by its pattern takes the name the pattern is shown with.
+#[test]
+fn a_palette_pattern_swatch_takes_its_patterns_shown_name() {
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n(Dots\\n1) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\nPc\nPB\n%AI5_EndPalette\n";
+    let doc = read_ok(&format!("{}{palette}{}", DOTS.replace("(Dots)", "(Dots\\n1)"), layer(""))).doc;
+    let names: Vec<&str> = doc.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["[None]", "Dots"]);
+    assert!(matches!(&doc.swatch("Dots").unwrap().paint, Paint::Pattern { pattern, .. } if pattern == "Dots"));
 }
 
 /// Where a definition draws its tile doesn't move the fill: the tile's lower left is the pattern's
@@ -855,6 +995,17 @@ fn a_version_7_patterns_underbar_fills_the_tile_box() {
     assert!(def.art[1].appearance.stroke().is_some());
 }
 
+/// A version 7 pattern shown as the name of a custom color its own layer strings use is numbered:
+/// the color keeps its swatch.
+#[test]
+fn a_version_7_pattern_shown_as_its_colors_name_is_numbered() {
+    let layers = "(0 O 0 R 0 0 0 1 \\(Ink\\) 0 x) @ (2 2 m 9 2 L 9 9 L f) &\n";
+    let s = pattern_read7(&pattern7("Ink\\n1", layers), &pattern_layer7("Art", ""));
+    assert_eq!(s.doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Ink 2"]);
+    assert!(matches!(&s.doc.swatch("Ink 2").unwrap().paint, Paint::Pattern { pattern, .. } if pattern == "Ink 2"));
+    assert!(matches!(s.doc.swatch("Ink").unwrap().paint, Paint::Solid { .. }));
+}
+
 /// A layer's strings are read with their escapes undone: `\r`, `\n`, an octal tab, a backslash at
 /// a line's end, and escaped parentheses around a custom color's name.
 #[test]
@@ -993,6 +1144,20 @@ fn a_style_pattern_fill_is_placed_as_a_direct_one() {
         let (got, want) = (xf(&styled).as_coeffs(), xf(&direct).as_coeffs());
         assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-9), "{name}: {got:?} {want:?}");
     }
+}
+
+/// An art style's pattern fill paints with the pattern under the name it is shown with.
+#[test]
+fn a_style_pattern_fill_paints_with_the_shown_name() {
+    let look = "0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nU\n";
+    let own = "%_/AI11Text :\n%_0 /FreeUndo ,\n%_0 /FrameIndex ,\n%_0 /StoryIndex ,\n%_;\n";
+    let defs = format!("{}{}", pattern7("Grid", "(0 g) @ _ &\n"), pattern7("Grid\\n1", "(0 g) @ _ &\n"));
+    let s = read_ok(&format!("{}{defs}{}", tiled_style("Grid\\n1", "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]"), layer(&format!("{look}{own}1 (Tiled) XW\n"))));
+    let pattern = |n: &Node| match fill(n) {
+        Paint::Pattern { pattern, .. } => pattern,
+        p => panic!("{p:?} {:?} {:?}", s.unread, s.warnings),
+    };
+    assert_eq!(pattern(&art(&s.doc)[0]), "Grid 2");
 }
 
 #[test]
@@ -1568,6 +1733,35 @@ fn artboards() {
     );
     let doc = read(old.as_bytes()).unwrap().doc;
     assert_eq!(doc.artboards[0].rect, Rect::new(0.0, 0.0, 600.0, 400.0));
+}
+
+#[test]
+fn the_active_artboard_is_the_one_crop_area_active_names() {
+    let board = |x: i32, w: i32| {
+        format!(
+            "%_/Dictionary :\n%_{x} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            x + w
+        )
+    };
+    let square = layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    // Four artboards in the array, the second of no width (left out); `entry` follows the array.
+    let opened = |entry: &str| {
+        let boards = [board(0, 100), board(200, 0), board(400, 100), board(600, 100)].concat();
+        let data = format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n{boards}%_; (ArtboardArray) ,\n{entry}%_; /NotRecorded ,\n%_;\n{square}");
+        let doc = read_ok(&data).doc;
+        doc.opened_artboard.map(|id| doc.artboards.iter().position(|a| a.id == id))
+    };
+    // The index counts every entry of the array, the one left out too.
+    assert_eq!(opened("%_3 /Int (CropAreaActive) ,\n"), Some(Some(2)));
+    assert_eq!(opened("%_2 /Int (CropAreaActive) ,\n"), Some(Some(1)));
+    // After another entry of the dictionary that holds the array.
+    assert_eq!(opened("%_1 /Int (Other) ,\n%_3 /Int (CropAreaActive) ,\n"), Some(Some(2)));
+    // The first artboard, the one left out, one past the end, a value of another type, or none.
+    for entry in
+        ["%_0 /Int (CropAreaActive) ,\n", "%_1 /Int (CropAreaActive) ,\n", "%_4 /Int (CropAreaActive) ,\n", "%_2 /Real (CropAreaActive) ,\n", ""]
+    {
+        assert_eq!(opened(entry), None, "{entry}");
+    }
 }
 
 /// The document data of artboards side by side, 100 points wide, each with the entries `extra`.
@@ -2937,6 +3131,60 @@ fn legacy_texts(art: &str) -> Vec<vectorcraft_doc::TextObject> {
     art_texts(&doc)
 }
 
+/// The characters of each text object of a legacy-format file whose setup is `setup` and whose
+/// layer holds point type with the string `(chars)` in each font of `fonts`.
+fn legacy_chars(setup: &str, fonts: &[&str], chars: &str) -> Vec<String> {
+    let art: String = fonts.iter().map(|f| point_type("", chars).replace("/_Helvetica 12 Tf", &format!("/{f} 12 Tf"))).collect();
+    let data = type_stream7(&art).replace("%%BeginSetup\n%%EndSetup", &format!("%%BeginSetup\n{setup}%%EndSetup"));
+    let doc = match read(data.as_bytes()) {
+        Ok(r) => r.doc,
+        Err(e) => panic!("{e}"),
+    };
+    art_texts(&doc).iter().map(|t| t.runs.iter().map(|r| r.text.as_str()).collect()).collect()
+}
+
+/// `TZ` (§3.3.1) gives a re-encoded font encoding pairs of its own: its strings decode by them
+/// first, then by `TE`'s encoding when `useDefault` is 1, and other fonts' strings keep `TE`'s. `TZ` is read in an
+/// `%AI3_BeginEncoding` section and in an `%%BeginEncoding` one, with a Multiple Master weight
+/// vector after it, and without the direction operand.
+#[test]
+fn a_re_encoded_fonts_own_encoding_pairs_decode_only_its_strings() {
+    let setup = "[39/quoteright 96/grave 128/Adieresis\nTE\n\
+                 %AI3_BeginEncoding: _F F\n[ 39/quotesingle 200/eacute\n/_F/F 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n\
+                 %%BeginEncoding: _M M\n[ 39/quotesingle\n/_M/M 0 0 1 [0.5 0.25] TZ\n%%EndEncoding\n\
+                 %AI3_BeginEncoding: _N N\n[ 39/quotesingle\n/_N/N 0 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    let got = legacy_chars(setup, &["_F", "_M", "_N", "_G"], "\\047\\140\\200\\310");
+    assert_eq!(got, ["'`Äé", "'`ÄÈ", "'`ÄÈ", "’`ÄÈ"]);
+    // The re-encoded fonts are the fonts they were made from.
+    let data = type_stream7(&point_type("", "a").replace("/_Helvetica", "/_M"))
+        .replace("%%BeginSetup\n%%EndSetup", "%%BeginSetup\n%%BeginEncoding: _M Courier\n[/_M/Courier 0 0 1 TZ\n%%EndEncoding\n%%EndSetup");
+    let texts = art_texts(&read(data.as_bytes()).unwrap().doc);
+    assert_eq!(texts[0].runs[0].style.font_family, "Courier");
+}
+
+/// The reader does not use the pairs of a `TZ` whose font names aren't the last two operands, or
+/// are followed by other values. The first `TZ` for a font is used, also when it has no pairs.
+#[test]
+fn a_tz_of_another_shape_changes_no_encoding() {
+    let setup = "[39/quoteright\nTE\n\
+                 %AI3_BeginEncoding: _F F\n[ 39/quotesingle\n/_F/F (x) 1 TZ\n%AI3_EndEncoding AdobeType\n\
+                 %AI3_BeginEncoding: _G G\n[ 39/quotesingle\n/_G 0 /G 1 TZ\n%AI3_EndEncoding AdobeType\n\
+                 %AI3_BeginEncoding: _H H\n[ 39/grave\n/_H/H 0 0 1 TZ\n[ 39/quotesingle\n/_H/H 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n\
+                 %AI3_BeginEncoding: _K K\n[/_K/K 0 0 1 TZ\n[ 39/quotesingle\n/_K/K 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_F", "_G", "_H", "_K"], "\\047"), ["’", "’", "`", "’"]);
+}
+
+/// A `TZ` whose `useDefault` is 0 leaves `TE`'s encoding out for its font (§3.3.1): the codes its
+/// pairs leave out decode as Windows-1252.
+#[test]
+fn a_tz_with_use_default_0_leaves_te_out() {
+    let setup = "[39/quoteright 128/Adieresis\nTE\n\
+                 %AI3_BeginEncoding: _F F\n[ 96/grave\n/_F/F 0 0 0 TZ\n%AI3_EndEncoding TrueType\n\
+                 %AI3_BeginEncoding: _S S\n[/_S/S 0 0 0 TZ\n%AI3_EndEncoding AdobeType\n\
+                 %AI3_BeginEncoding: _M M\n[ 96/grave\n/_M/M 0 0 [0.5] TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_F", "_S", "_M", "_G"], "\\047\\140\\200"), ["'`€", "'`€", "'`€", "’`Ä"]);
+}
+
 fn art_texts(doc: &Document) -> Vec<vectorcraft_doc::TextObject> {
     art(doc).iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
 }
@@ -3001,6 +3249,81 @@ fn legacy_type_attributes_with_bad_operands_stay_as_they_were() {
     assert_eq!(bad.xf, good.xf);
 }
 
+/// `(text) justified TS` (special characters, §22.6) adds its characters to the story like `Tx`
+/// and `Tj`, whichever its flag. Without a string, or outside a text object, it adds nothing.
+#[test]
+fn legacy_special_characters_join_the_story() {
+    let texts = legacy_texts(&point_type("", "One").replace("TO\n", "(\\t) 0 TS\n(Two\\r) 1 TS\n(Three) Tx\nTO\n"));
+    let [t] = texts.as_slice() else { panic!("{texts:?}") };
+    assert_eq!(t.plain_text(), "One\tTwo\nThree");
+    let texts = legacy_texts(&format!("(x) 0 TS\n{}", point_type("0 TS", "Hi")));
+    let [t] = texts.as_slice() else { panic!("{texts:?}") };
+    assert_eq!(t.plain_text(), "Hi");
+}
+
+/// A tab definition (`Xb`, `Xe`, `XB`, §22.6) sets the paragraph's tab stops, sorted by position
+/// with one stop at each position; each paragraph keeps the stops in force at its first character,
+/// and they last into the next text object. A definition with no stops leaves the default ones.
+#[test]
+fn legacy_tab_definitions_set_the_paragraph_tab_stops() {
+    use vectorcraft_doc::TabAlign;
+    let stops = |p: &vectorcraft_doc::ParaStyle| p.tabs.iter().map(|t| (t.position, t.align)).collect::<Vec<_>>();
+    let ruler = "36 5 Xb\n0 0 3 144 Xe\n0 0 1 72 Xe\n0 0 2 200.5 Xe\n0 0 4 250 Xe\n0 0 2 72 Xe\nXB";
+    let two_paragraphs = point_type(ruler, "A\\tB\\r").replace("TO\n", "36 0 Xb\nXB\n(C\\tD) Tx\nTO\n");
+    let texts = legacy_texts(&format!("{two_paragraphs}{}", point_type("", "E")));
+    assert_eq!(texts.len(), 2);
+    let want = vec![(72.0, TabAlign::Left), (144.0, TabAlign::Right), (200.5, TabAlign::Center), (250.0, TabAlign::Decimal)];
+    let one = texts[0].para_at(0);
+    assert_eq!(stops(one), want);
+    assert!(one.tabs.iter().all(|t| t.leader.is_empty() && t.align_on == '.'));
+    assert!(texts[0].para_at(1).tabs.is_empty(), "an empty definition leaves the default stops");
+    assert!(texts[1].para_at(0).tabs.is_empty(), "the next text object keeps the empty definition");
+    let texts = legacy_texts(&format!("{}{}", point_type(ruler, "A"), point_type("", "B")));
+    assert_eq!(stops(texts[1].para_at(0)), want, "the next text object keeps the stops");
+}
+
+/// A tab description whose type is not 1 to 4 or whose position is missing, not a number,
+/// negative or past 100,000 pt is skipped; so is one outside a tab definition, and an `XB` without
+/// an `Xb` leaves the stops as they were.
+#[test]
+fn legacy_tab_descriptions_out_of_range_are_skipped() {
+    let bad = "0 0 5 90 Xe\n0 0 0 90 Xe\n0 0 1.5 90 Xe\n0 0 1 -1 Xe\n0 0 1 100001 Xe\n0 0 1 /x Xe\n1 Xe";
+    let texts = legacy_texts(&point_type(&format!("0 0 1 10 Xe\n36 2 Xb\n{bad}\n0 0 3 100000 Xe\n0 0 1 0 Xe\nXB\nXB\n0 0 1 50 Xe"), "Hi"));
+    let tabs: Vec<f64> = texts[0].para_at(0).tabs.iter().map(|t| t.position).collect();
+    assert_eq!(tabs, [0.0, 100_000.0]);
+}
+
+/// A tab definition whose descriptions were all skipped leaves the default stops; a definition
+/// keeps its first 1024 stops; and a definition left open (an `Xb` with no `XB`) ends at the next
+/// text object's `To`, so that object's descriptions outside a definition are skipped.
+#[test]
+fn legacy_tab_definitions_skipped_capped_and_left_open() {
+    let positions = |t: &vectorcraft_doc::TextObject| t.para_at(0).tabs.iter().map(|t| t.position).collect::<Vec<f64>>();
+    let all_skipped = format!("{}{}", point_type("36 1 Xb\n0 0 1 72 Xe\nXB", "A"), point_type("36 1 Xb\n0 0 9 90 Xe\nXB", "B"));
+    let texts = legacy_texts(&all_skipped);
+    assert_eq!(positions(&texts[0]), [72.0]);
+    assert!(texts[1].para_at(0).tabs.is_empty(), "a definition with every stop skipped leaves the default stops");
+    let many: String = (0..1100).map(|i| format!("0 0 1 {i} Xe\n")).collect();
+    let texts = legacy_texts(&point_type(&format!("36 1100 Xb\n{many}XB"), "C"));
+    assert_eq!(positions(&texts[0]).len(), 1024);
+    assert_eq!(positions(&texts[0]).last(), Some(&1023.0));
+    let open = format!("{}{}", point_type("36 1 Xb\n0 0 1 72 Xe", "D"), point_type("0 0 1 90 Xe\nXB", "E"));
+    let texts = legacy_texts(&open);
+    assert!(texts[0].para_at(0).tabs.is_empty(), "an unended definition sets no stops");
+    assert!(texts[1].para_at(0).tabs.is_empty(), "the next object's `To` ends the open definition");
+}
+
+/// `Te` (end render, §22.6) reads in a text object with no operands and with four, inside a tab
+/// definition too, and keeps nothing; so does `TM` (pop text matrix, §22.6).
+#[test]
+fn legacy_end_render_and_text_matrix_pop_read() {
+    for te in ["Te", "0 0 1 36 Te", "36 0 Xb\n0 0 1 36 Te\nXB", "1 0 0 1 10 50 Tm\nTM"] {
+        let texts = legacy_texts(&point_type(te, "Hi"));
+        let [t] = texts.as_slice() else { panic!("{te}: {texts:?}") };
+        assert_eq!(t.plain_text(), "Hi", "{te}");
+    }
+}
+
 /// Spacing is kept to the ranges the Justification options take, a Minimum, Desired and Maximum
 /// out of order go back to their defaults, and hyphenation's letter counts and limit to the ranges
 /// `text.setFormat` takes.
@@ -3025,6 +3348,179 @@ fn one_long_run_of_legacy_type_stops_at_the_allowance() {
     let long = "a".repeat(ALLOWANCE + 10);
     let texts = legacy_texts(&point_type("", &long));
     assert_eq!(texts[0].plain_text().chars().count(), ALLOWANCE);
+}
+
+/// The fill and stroke colors of a text object's first run (None: no paint).
+fn run_paint(n: &Node) -> (Option<Color>, Option<Color>) {
+    let NodeKind::Text(t) = &n.kind else { panic!("type: {:?}", n.kind) };
+    (t.runs[0].style.fill.color(), t.runs[0].style.stroke.color())
+}
+
+/// Legacy type set in rendering modes 4 to 7 is a mask (§5.7): the text object is the clipping
+/// path of its clipping group (`q` … `Q`) and clips the objects with it. Modes 4, 5 and 6 also
+/// fill, stroke, or fill and stroke it; 7 paints nothing.
+#[test]
+fn legacy_type_in_a_mask_rendering_mode_clips_its_clipping_group() {
+    let (black, red) = (Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)), Some(Color::rgb(1.0, 0.0, 0.0)));
+    let square = format!("1 0 0 Xa\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let cases = [("4", (black, None)), ("5", (None, red)), ("6", (black, red)), ("7", (None, None))];
+    for (mode, paint) in cases {
+        let text = point_type(&format!("{mode} Tr\n1 0 0 XA\n1 w"), "Hi");
+        let doc = legacy_read(&format!("q\n{text}{square}Q\n")).doc;
+        let a = art(&doc);
+        assert_eq!(a.len(), 1, "{mode} Tr");
+        let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{mode} Tr: {:?}", a[0].kind) };
+        assert_eq!(children.len(), 2, "{mode} Tr");
+        assert_eq!(run_paint(&children[0]), paint, "{mode} Tr");
+        assert!(matches!(children[1].kind, NodeKind::Path { clipping: false, .. }), "{mode} Tr");
+        // The art takes its shape from the type: it is bounded by the characters, not the square.
+        let b = a[0].geometric_bounds().unwrap();
+        assert!(b.width() < 50.0 && b.height() < 50.0, "{mode} Tr: {b:?}");
+    }
+    // Directly in a layer, the layer clips. As with a `W` path in this reader, the art written before the
+    // type is clipped too.
+    let doc = legacy_read(&format!("{square}{}", point_type("7 Tr", "Hi"))).doc;
+    let NodeKind::Layer { children, clip: true, .. } = &doc.layers[0].kind else { panic!("{:?}", doc.layers[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Text(_)) && matches!(children[1].kind, NodeKind::Path { .. }));
+    // With a clipping path after it, the art shows where both are: the type clips a clipping group nested in it, and
+    // keeps its paint.
+    let doc = legacy_read(&format!("q\n{}{}h\nW\nn\n{square}Q\n", point_type("6 Tr\n1 0 0 XA\n1 w", "Hi"), rect_path(0.0, 0.0, 30.0, 30.0))).doc;
+    let a = art(&doc);
+    let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(run_paint(&children[0]), (black, red));
+    let NodeKind::Group { children: inner, clip: true } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+    assert!(matches!(inner[0].kind, NodeKind::Path { clipping: true, .. }) && matches!(inner[1].kind, NodeKind::Path { clipping: false, .. }));
+}
+
+/// A filled clipping path (`W` then `f`) beside type used as a mask: its painted fill stays at its own path's level,
+/// as beside another clipping path (the reader's rule for `W` paths). Written after the type, it is painted within the
+/// type's mask, since a later mask narrows the clip set by the earlier ones (§5.6.2); written before it, the type doesn't
+/// clip it.
+#[test]
+fn a_filled_clipping_path_beside_legacy_type_used_as_a_mask() {
+    let square = format!("1 0 0 Xa\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let filled = format!("0 0 1 Xa\n{}h\nW\nf\n", rect_path(0.0, 0.0, 30.0, 30.0));
+    let text = point_type("7 Tr", "Hi");
+    let is_fill = |n: &Node| matches!(n.kind, NodeKind::Path { clipping: false, .. }) && fill(n).color() == Some(Color::rgb(0.0, 0.0, 1.0));
+    let is_art = |n: &Node| matches!(n.kind, NodeKind::Path { clipping: false, .. }) && fill(n).color() == Some(Color::rgb(1.0, 0.0, 0.0));
+    // The type first: the path's fill is in the clipping group the path clips, inside the type's.
+    let doc = legacy_read(&format!("q\n{text}{filled}{square}Q\n")).doc;
+    let a = art(&doc);
+    let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Text(_)) && children.len() == 2, "{children:?}");
+    let NodeKind::Group { children: inner, clip: true } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+    assert!(matches!(inner[0].kind, NodeKind::Path { clipping: true, .. }), "{inner:?}");
+    assert!(is_fill(&inner[1]) && is_art(&inner[2]) && inner.len() == 3, "{inner:?}");
+    // The path first: its fill is in the outer clipping group, which only the path clips; the type clips the art.
+    let doc = legacy_read(&format!("q\n{filled}{text}{square}Q\n")).doc;
+    let a = art(&doc);
+    let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }), "{children:?}");
+    assert!(is_fill(&children[1]) && children.len() == 3, "{children:?}");
+    let NodeKind::Group { children: inner, clip: true } = &children[2].kind else { panic!("{:?}", children[2].kind) };
+    assert!(matches!(inner[0].kind, NodeKind::Text(_)) && is_art(&inner[1]) && inner.len() == 2, "{inner:?}");
+}
+
+/// `Tr` sets the rendering mode of all the type that follows (§15.3.2), in later text objects too: a second text
+/// object with no `Tr` of its own is also a mask.
+#[test]
+fn a_legacy_mask_rendering_mode_lasts_into_the_next_text_object() {
+    let square = format!("1 0 0 Xa\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let second = point_type("", "Yo").replace("0 Tr\n", "");
+    let doc = legacy_read(&format!("q\n{}{second}{square}Q\n", point_type("7 Tr", "Hi"))).doc;
+    let a = art(&doc);
+    let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Text(_)), "{children:?}");
+    let NodeKind::Group { children: inner, clip: true } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+    assert!(matches!(inner[0].kind, NodeKind::Text(_)) && matches!(inner[1].kind, NodeKind::Path { clipping: false, .. }), "{inner:?}");
+}
+
+/// Type in a mask rendering mode that can't be one clipping path doesn't clip, with a warning: area type with linked
+/// areas (threaded frames), the type of wraparound text, and type in a compound path.
+#[test]
+fn legacy_type_used_as_a_mask_that_cannot_clip_is_left_unclipped() {
+    const WARNING: &str = "type used as a mask in linked areas, wraparound text or a compound path doesn't clip";
+    let square = format!("1 0 0 Xa\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let linked = format!(
+        "1 To\n1 0 0 1 0 40 0 Tp\n{}n\nTP\n7 Tr\n/_Helvetica 12 Tf\n(Linked ) Tx\n1 0 0 1 60 40 0 Tp\n{}n\nTP\n(areas) Tx\nTO\n",
+        rect_path(0.0, 0.0, 50.0, 40.0),
+        rect_path(60.0, 0.0, 110.0, 40.0)
+    );
+    let r = legacy_read(&format!("q\n{linked}{square}Q\n"));
+    let a = art(&r.doc);
+    let NodeKind::Group { children, clip: false } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(children.len(), 3);
+    assert_eq!(r.doc.text_threads.len(), 1);
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    // Also when the reader's limits leave one frame of a long story in linked areas.
+    let long = linked.replace("(areas) Tx", &format!("({}) Tx", "a".repeat(3_000_000)));
+    let r = legacy_read(&format!("q\n{long}{square}Q\n"));
+    let a = art(&r.doc);
+    let NodeKind::Group { children, clip: false } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(children.len(), 2);
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    // Wraparound text: the type is what flows around the other objects, which it doesn't clip.
+    let area = format!("1 To\n1 0 0 1 0 0 0 Tp\n{}n\nTP\n7 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(Around) Tx\nTO\n", rect_path(0.0, 0.0, 100.0, 80.0));
+    let r = legacy_read(&format!("q\n*w\n{area}{square}*W\nQ\n"));
+    let a = art(&r.doc);
+    let NodeKind::Group { children, clip: false } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    let NodeKind::Group { children: wrap, clip: false } = &children[0].kind else { panic!("{:?}", children[0].kind) };
+    assert!(matches!(wrap[0].kind, NodeKind::Text(_)) && wrap.len() == 2, "{wrap:?}");
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    // A compound path: its type is no clipping subpath, and the compound path doesn't clip the group.
+    let r = legacy_read(&format!("q\n*u\n{}f\n{}*U\n{square}Q\n", rect_path(0.0, 0.0, 30.0, 30.0), point_type("7 Tr", "Hi")));
+    assert_eq!(unclipped_texts(&art(&r.doc)), 1);
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    // The same with the type in a group inside the compound path or the wraparound text.
+    let grouped = format!("u\n{}U\n", point_type("7 Tr", "Hi"));
+    let r = legacy_read(&format!("q\n*u\n{}f\n{grouped}*U\n{square}Q\n", rect_path(0.0, 0.0, 30.0, 30.0)));
+    assert_eq!(unclipped_texts(&art(&r.doc)), 1);
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    let grouped = format!("u\n{area}U\n");
+    let r = legacy_read(&format!("q\n*w\n{grouped}{square}*W\nQ\n"));
+    assert_eq!(unclipped_texts(&art(&r.doc)), 1);
+    assert!(r.warnings.iter().any(|w| w == WARNING), "{:?}", r.warnings);
+    // An opacity mask's art clips on its own, also on an object in wraparound text.
+    let mask_art: String =
+        format!("{}1 g\n{}f\n", point_type("7 Tr", "Hi"), rect_path(0.0, 0.0, 100.0, 100.0)).lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let r = legacy_read(&format!("q\n*w\n{area}{square}{mask}*W\nQ\n"));
+    assert!(r.warnings.iter().filter(|w| *w == WARNING).count() == 1, "{:?}", r.warnings);
+    let a = art(&r.doc);
+    let NodeKind::Group { children, .. } = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    let NodeKind::Group { children: wrap, .. } = &children[0].kind else { panic!("{:?}", children[0].kind) };
+    let Some(m) = wrap.iter().find_map(|n| n.extras().mask.clone()) else { panic!("{wrap:?}") };
+    let NodeKind::Group { children: in_mask, clip: true } = &m.art.kind else { panic!("{:?}", m.art.kind) };
+    assert!(matches!(in_mask[0].kind, NodeKind::Text(_)) && in_mask.len() == 2, "{in_mask:?}");
+}
+
+/// The text objects in `nodes` and the groups and compound paths under them, checking that nothing among them clips.
+#[track_caller]
+fn unclipped_texts(nodes: &[Arc<Node>]) -> usize {
+    let mut texts = 0;
+    for n in nodes {
+        assert!(!matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Path { clipping: true, .. }), "{:?}", n.kind);
+        texts += usize::from(matches!(n.kind, NodeKind::Text(_)));
+        texts += n.children().map_or(0, |c| unclipped_texts(c));
+    }
+    texts
+}
+
+/// Legacy type in rendering modes 0 to 3 is no mask (3: invisible, painting nothing). A mode that is not a whole
+/// number from 0 to 9 leaves the mode as it was.
+#[test]
+fn legacy_type_in_other_rendering_modes_does_not_clip() {
+    let (black, red) = (Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)), Some(Color::rgb(1.0, 0.0, 0.0)));
+    let square = format!("{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let cases = [("0 Tr", (black, None)), ("3 Tr", (None, None)), ("1 Tr\n4.5 Tr\n10 Tr\n-4 Tr\n/x Tr", (None, red))];
+    for (modes, paint) in cases {
+        let text = point_type(&format!("{modes}\n1 0 0 XA\n1 w"), "Hi");
+        let doc = legacy_read(&format!("q\n{text}{square}Q\n")).doc;
+        let a = art(&doc);
+        assert_eq!(a.len(), 1, "{modes}");
+        let NodeKind::Group { children, clip: false } = &a[0].kind else { panic!("{modes}: {:?}", a[0].kind) };
+        assert_eq!(run_paint(&children[0]), paint, "{modes}");
+    }
 }
 
 /// A legacy-format file whose layer holds `art`, read.
@@ -3862,7 +4358,7 @@ fn artboards_after_what_stops_the_reading() {
     let array = format!("%_/Array :\n{}{}%_; (ArtboardArray) ,\n", board("one", 0), board("two", 200));
     // Art in the document's own data that the reader can't follow comes before the artboards.
     let data = format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n%_/Dictionary :\nLB\n{array}%_; /NotRecorded ,\n%_;\n");
-    let boards: Vec<_> = super::artboards(data.as_bytes()).into_iter().map(|(n, r)| (n, r.x0)).collect();
+    let boards: Vec<_> = super::artboards(data.as_bytes()).0.into_iter().map(|(n, r)| (n, r.x0)).collect();
     assert_eq!(boards, [("one".to_string(), 0.0), ("two".to_string(), 200.0)]);
 }
 
@@ -5983,6 +6479,107 @@ fn a_gradients_br_is_not_a_brush() {
     assert!(!r.doc.unknown.contains_key(vectorcraft_brush::DOC_KEY));
     let Paint::Gradient(g) = fill(&art(&r.doc)[0]) else { panic!("a gradient: {:?}", r.warnings) };
     assert_eq!(g.gradient.stops.len(), 2);
+}
+
+/// The Brush Options codes for how a Calligraphic brush's values vary: Tilt, Bearing and Rotation
+/// are the pen's other channels (#372: a 6D Art Pen brush varies its diameter with the pressure,
+/// its roundness with the bearing and its angle with the barrel's rotation). The stylus wheel isn't
+/// read: it varies at random, as an unknown code does.
+#[test]
+fn a_calligraphic_brushs_pen_channels_come_in_by_their_codes() {
+    use vectorcraft_brush::Variation::{Bearing, Fixed, Pressure, Random, Rotation, Tilt};
+    let modes = |params: &str| {
+        let d = brush::parse_tool_object(brush::Tool::Calligraphic, "Pen", params).unwrap();
+        let brush::DraftKind::Calligraphic(c) = d.kind else { panic!("{d:?}") };
+        c.modes.unwrap()
+    };
+    assert_eq!(modes("1 51 69 13 57 -346 14 2 5 6 0"), [Rotation, Bearing, Pressure]);
+    assert_eq!(modes("1 2 6 40 60 -30 10 4 4 4 0"), [Tilt, Tilt, Tilt]);
+    assert_eq!(modes("1 2 6 40 60 -30 10 3 3 3 0"), [Random, Random, Random], "the stylus wheel");
+    assert_eq!(modes("1 4 4 50 50 10 10 3 9 9 0"), [Fixed, Fixed, Fixed], "nothing to vary");
+}
+
+/// A 6D Art Pen brush: diameter 4 to 8 with the pressure, roundness 30 to 50 with the bearing and
+/// angle -150 to 210 with the barrel's rotation.
+const SIX_D: &str = "1 4 8 30 50 -150 210 2 5 6 0";
+
+/// The style `Inked`: a stroke in red of weight `weight` with the Calligraphic brush `brush` at
+/// diameter, roundness and angle `settings` (each its value and variation either side), varying by
+/// the codes `codes`, its angle relative to `relative` (0 the page).
+fn brushed_style(brush: &str, weight: f64, settings: [(f64, f64); 3], codes: [u8; 3], relative: u8) -> String {
+    let [(d, dv), (r, rv), (a, av)] = settings;
+    let [dm, rm, am] = codes;
+    format!(
+        "%AI9_BeginArtStyles\n/KnownStyle :\n(Inked) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n({CALLIGRAPHIC}) 1 0 /Filter ,\n1 /Visible ,\n(Calligraphic Brush) /Title ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+         /StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 1 0 0 0 Xy\n0 J 0 j {weight} w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n\
+         {d} /Real (Diameter) ,\n{dv} /Real (DiameterVariation) ,\n{dm} /Int (DiameterDependsOn) ,\n\
+         {r} /Real (Roundness) ,\n{rv} /Real (RoundnessVariation) ,\n{rm} /Int (RoundnessDependsOn) ,\n\
+         {a} /Real (Angle) ,\n{av} /Real (AngleVariation) ,\n{am} /Int (AngleDependsOn) ,\n{relative} /Int (AngleRelativeTo) ,\n\
+         ({brush}) /UnicodeString (DisplayString) ,\n/GObjRef : ({brush}) ({CALLIGRAPHIC}) /PluginObject ; (Brush) ,\n; /Dict ;\n /Part ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+         /FillStyle : 0 O\n0 0 0 0 k\n0 0 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+         ;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+    )
+}
+
+/// The settings [`SIX_D`] has, as an art style writes them.
+const SIX_D_SETTINGS: [(f64, f64); 3] = [(6.0, 2.0), (40.0, 10.0), (30.0, 180.0)];
+
+/// A brushed path as the file writes it: its drawn look (a filled outline) in a group, then the
+/// path itself on `%_` lines, unpainted, with the style `Inked`.
+fn brushed_path() -> String {
+    let line = "20 20 m\n100 60 L\n";
+    format!("0 Ae\nu\n{RED}{}f\nU\n0 0 Xd\n6 () XW\n%_{}n\n1 (Inked) XW\n", rect_path(20.0, 18.0, 100.0, 62.0), line.replace('\n', "\n%_"))
+}
+
+/// A path drawn with a Calligraphic brush comes in as the path, its stroke in that brush at its
+/// weight (the weight scales the brush), not as its drawn look: here a 6D Art Pen brush, whose
+/// channels the brush keeps (#372).
+#[test]
+fn a_path_with_a_calligraphic_brush_comes_in_brushed() {
+    let def = plugin_object(CALLIGRAPHIC, "Six D", SIX_D);
+    let style = brushed_style("Six D", 0.5, SIX_D_SETTINGS, [2, 5, 6], 0);
+    let r = read_ok(&format!("{def}{style}{}", layer(&brushed_path())));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the path, not its look: {a:#?}");
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let st = a[0].appearance.stroke().unwrap();
+    assert_eq!((st.brush.as_deref(), st.width, st.paint.color()), (Some("Six D"), 0.5, Some(Color::rgb(1.0, 0.0, 0.0))));
+    assert!(a[0].appearance.fill().is_none_or(|f| f.paint.is_none()), "{:?}", a[0].appearance);
+    use vectorcraft_brush::{BrushKind, Variation};
+    let lib = vectorcraft_brush::library(&r.doc);
+    let BrushKind::Calligraphic(c) = brush_named(&lib, "Six D") else { panic!("calligraphic") };
+    assert_eq!(c.modes, Some([Variation::Rotation, Variation::Bearing, Variation::Pressure]));
+    // With no pen recorded on the path, the nib is the brush's own at the stroke's weight.
+    let pieces = vectorcraft_brush::stroke_pieces(&r.doc, &lib[0], &a[0].path_data().unwrap().to_bezpath(), st);
+    let height = pieces.iter().filter_map(|n| n.geometric_bounds()).map(|b| b.height()).fold(0.0, f64::max);
+    assert!(height > 40.0 && height < 46.0, "the line's rise and about half the nib's 3 pt: {height}");
+}
+
+/// A brushed path keeps its drawn look when its stroke can't be read as the brush: the object's
+/// own settings differ from the brush's (Options of Selected Object), its angle follows the path,
+/// or the file defines no brush of its name.
+#[test]
+fn a_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
+    let def = plugin_object(CALLIGRAPHIC, "Six D", SIX_D);
+    let mut own = SIX_D_SETTINGS;
+    own[0] = (9.0, 2.0);
+    let cases = [
+        ("its own settings", def.clone(), brushed_style("Six D", 1.0, own, [2, 5, 6], 0)),
+        ("its own modes", def.clone(), brushed_style("Six D", 1.0, SIX_D_SETTINGS, [2, 5, 4], 0)),
+        ("an angle on the path", def.clone(), brushed_style("Six D", 1.0, SIX_D_SETTINGS, [2, 5, 6], 1)),
+        ("no such brush", def, brushed_style("Other", 1.0, SIX_D_SETTINGS, [2, 5, 6], 0)),
+    ];
+    for (why, def, style) in cases {
+        let r = read_ok(&format!("{def}{style}{}", layer(&brushed_path())));
+        let a = art(&r.doc);
+        assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{why}: the drawn look, {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
+    }
 }
 
 use read::{GRAPH_PLAIN, GRAPH_UNENDED};

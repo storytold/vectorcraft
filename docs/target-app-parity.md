@@ -1,8 +1,16 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Select Text by Font takes an artboard or layer scope; Layers panel: a layer whose Layer Options › Print is off shows its name italic, #5739; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Select Text by Font takes an artboard or layer scope; SVG export skips unused shape bounds; output, scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
+
+Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
+
+**PR #3273 revision — 2026-11-04:** Thin curved stroke coverage ported to the current raster-only cache, cropped-long-stroke and effect paths with guarded flattening; vector export geometry unchanged. Scores and estimates unchanged.
+
+Group Selection keeps an already selected component selected during a drag; a completed click still adds its next enclosing group. The current Direct Selection click/release machinery is shared, preserving compound-member picks, Shift deselection, isolation and masked-art dragging. Outline Stroke continues to preserve all original fills, including open contours; the change does not remove fills. Regressions: `group_selection_distinguishes_selected_leaf_drags_from_clicks` and `outline_fill_and_stroke_move_independently_with_group_selection` cover tool events, independent component movement and Undo/Redo. Scores and estimates unchanged.
+
+**PR #3272 revision — 2026-11-04:** Group Selection component drags defer ancestor selection until a completed click, using current Direct Selection release handling; original Outline Stroke fills and newer selection behavior retained. Scores and estimates unchanged.
 
 Ligature caret stops use a font's GDEF contour-point positions in horizontal and vertical text. They use unhinted outlines at the default variation location; invalid point indices use the existing evenly divided fallback. Scores and estimates are unchanged.
 
@@ -23,6 +31,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Large drawings of solid-colour or pattern-filled paths and compound paths export to SVG faster when their unused geometric bounds are skipped. Gradients and outside-aligned stroke masks retain their placement; SVG output, scores and estimates are unchanged. |
 | 2026-11-05 | minor | Selection Tools add-on: Select Linked, Embedded, Missing and Modified select the images and placed documents with that link status (Object › Plug-ins › Selection Tools and the Links panel menu; Shift adds), and Select by Link Status… lists them by name, status and format to pick from, optionally zooming to them; what is hidden, locked, on a template layer or outside the isolated group is left out and the status bar says how many (#5526, a VectorCraft addition); scores and estimates unchanged (estimated). |
 | 2026-11-05 | minor | Layers panel: a layer whose Layer Options › Print is off shows its name italic, as the reference application shows non-printing layers, and keeps it while the row is dragged (#5739); a printing layer's name is upright, and Print on again makes it upright again; scores and estimates unchanged. |
 | 2026-11-05 | minor | G12: Hyphenation › Default Language sets the language of new type unless Document Setup chose one, stored as a tag; each run hyphenates in its own language, English only so far, so 2 Preferences options stay unused (#394) |
@@ -1633,7 +1642,7 @@ A VectorCraft addition, not a feature of the reference app, so no area score mov
 
 ## Document Tools add-on: Batch Trace Folder (2026-11-04)
 
-A VectorCraft addition (it replaces a script some users ran), so no area score moves. Object › Plug-ins › Document Tools › Batch Trace Folder (`addon.document.batchTraceFolder`) asks for a folder of images and a destination folder, traces each image with a preset (optionally expanded) and saves it there under its own name as `.vectorcraft`, `.svg`, `.pdf`, `.ai` or `.eps`, without replacing files, closing each image's document again and reporting the images it couldn't trace (#4921). A folder with more than 1,000 entries is refused rather than traced in part. Tests: `cmd::addons::document::tests::batch_trace_folder_traces_and_saves_each_image` and `batch_trace_folder_refuses_a_folder_it_cannot_list_in_full` (engine), `addons::document::tests::batch_trace_folder_asks_for_both_folders` (ui-egui).
+A VectorCraft addition (it replaces a script some users ran), so no area score moves. Object › Plug-ins › Document Tools › Batch Trace Folder (`addon.document.batchTraceFolder`) asks for a folder of images and a destination folder, traces each image with a preset (optionally expanded) and saves it there under its own name as `.vectorcraft`, `.svg`, `.pdf`, `.ai` or `.eps`, without replacing files, closing each image's document again and reporting the images it couldn't trace (#4921). A folder with more than 1,000 entries is refused rather than traced in part. Optional settings reject null and values of the wrong type before opening images. Tests: `cmd::addons::document::tests::batch_trace_folder_traces_and_saves_each_image`, `batch_trace_folder_refuses_a_folder_it_cannot_list_in_full`, and `batch_trace_folder_rejects_wrong_typed_options` (engine), `addons::document::tests::batch_trace_folder_asks_for_both_folders` (ui-egui).
 
 ## Color Effects add-on: Find Nearest Swatch (2026-11-01)
 

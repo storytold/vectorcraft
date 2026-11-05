@@ -209,14 +209,14 @@ fn a_postscript_ai_with_a_multi_layer_mask_opens_with_its_layers() {
 }
 
 /// A `.ai` in PostScript form (read through its layers) whose text carries hyphenation and
-/// tab-ruler attributes: `XL` (hyphenation language), `Xb`/`XB` (a tab definition) and `Th`
-/// (hyphen control). These keep no geometry, so the reader drops them rather than failing the
-/// file the way it did before — the symptom seen on Illustrator 6/8 EPS files whose
-/// `Adobe_level2_AI5` program can't be run.
+/// tab-ruler attributes: `XL` (hyphenation language), `Xb`/`Xe`/`XB` (a tab definition) and `Th`
+/// (hyphen control). The reader drops `XL` and keeps the tab definition as the paragraph's tab
+/// stops rather than failing the file the way it did before (the symptom seen on Illustrator 6/8
+/// EPS files whose `Adobe_level2_AI5` program can't be run).
 #[test]
 fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let text = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 9 Tf\n\
-        %_ 0 XL\n36 0 Xb\nXB\n0 1 2 2 99 Th\n0 Ta\n(hi) Tx\nTO\n";
+        %_ 0 XL\n36 1 Xb\n0 0 3 72 Xe\nXB\n0 1 2 2 99 Th\n0 Ta\n(hi) Tx\nTO\n";
     // The operators sit on a visible layer (so they'd be reported as unknown, not quietly skipped
     // on a hidden one), beside the square so the layer is never empty.
     let src = NAMED_PROLOG.replace("S\nLB\n%AI5_EndLayer--\n%AI5_BeginLayer", &format!("S\n{text}LB\n%AI5_EndLayer--\n%AI5_BeginLayer"));
@@ -234,6 +234,8 @@ fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let [p] = texts.as_slice() else { panic!("{texts:?}") };
     assert!(!p.hyphenate);
     assert_eq!((p.hyphenation.after_first, p.hyphenation.before_last, p.hyphenation.hyphen_limit), (2, 2, 25));
+    let tabs: Vec<_> = p.tabs.iter().map(|t| (t.position, t.align)).collect();
+    assert_eq!(tabs, [(72.0, vectorcraft_doc::TabAlign::Right)]);
 }
 
 /// An Illustrator 3 file of paths alone, as image editors export their paths (storytold/photocraft#6036):
@@ -444,6 +446,47 @@ fn a_version_7_palette_keeps_its_swatches_without_names() {
     assert!(d.swatches.iter().filter(|s| s.name != "Spot A").all(|s| !s.spot && !s.global));
     assert!(matches!(&d.swatch("B&W").unwrap().paint, Paint::Gradient(g) if g.swatch.as_deref() == Some("B&W")));
     assert_eq!(d.swatch("Gray K=0").unwrap().paint.color(), Some(Color::gray(0.0)), "1 g is white");
+}
+
+/// A gradient's name in the file is shown up to its newline (the AI7 spec's §4): two gradients
+/// named `Sky` apart from what follows the newline come in as swatches "Sky" and "Sky 2", and each
+/// object keeps its own gradient, linked to its own swatch. A palette swatch that has the name
+/// "Sky" of its own keeps it, and the gradients take the next free names.
+#[test]
+fn gradient_names_are_shown_up_to_their_newline() {
+    let gradient = |name: &str, gray: f64| {
+        format!("%AI5_BeginGradient: ({name})\n({name}) 0 2 Bd\n[\n%_{gray} 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n")
+    };
+    let cell = |name: &str| format!("Bb\n2 ({name}) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\nPc\n");
+    let fill = |name: &str, x: u32| format!("Bb\n1 ({name}) 0 0 0 100 1 0 0 1 0 0 Bg\n{}\n0 BB\n", tri(x));
+    let body = format!(
+        "%AI5_BeginLayer\n1 1 1 1 0 0 1 -1 79 128 255 0 50 0 Lb\n(Art) Ln\n0 A\n0 Xw\n{}{}LB\n%AI5_EndLayer--\n",
+        fill("Sky\\n2", 10),
+        fill("Sky\\n1", 30)
+    );
+    let first_stop = |p: &Paint| match p {
+        Paint::Gradient(g) => (g.swatch.clone(), g.gradient.stops.first().map(|s| s.color)),
+        _ => panic!("{p:?}"),
+    };
+    for (own, first, second) in [("", "Sky", "Sky 2"), ("0 1 1 0 (Sky) 0 x\nPc\n", "Sky 2", "Sky 3")] {
+        let setup = format!(
+            "{}{}%AI5_BeginPalette\n0 0 Pb\nPn\nPc\n{own}{}{}PB\n%AI5_EndPalette\n",
+            gradient("Sky\\n1", 1.0),
+            gradient("Sky\\n2", 0.5),
+            cell("Sky\\n1"),
+            cell("Sky\\n2")
+        );
+        let r = import(&stream7(&setup, &body)).unwrap();
+        let d = &r.document;
+        let names: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
+        let expected: Vec<&str> = ["[None]"].into_iter().chain((!own.is_empty()).then_some("Sky")).chain([first, second]).collect();
+        assert_eq!(names, expected, "{:?}", r.warnings);
+        assert_eq!(first_stop(&d.swatch(first).unwrap().paint), (Some(first.into()), Some(Color::gray(0.0))));
+        assert_eq!(first_stop(&d.swatch(second).unwrap().paint), (Some(second.into()), Some(Color::gray(0.5))));
+        let art = d.layers[0].children().unwrap();
+        let fills: Vec<_> = art.iter().map(|n| first_stop(&n.appearance.fill().unwrap().paint)).collect();
+        assert_eq!(fills, [(Some(second.into()), Some(Color::gray(0.5))), (Some(first.into()), Some(Color::gray(0.0)))]);
+    }
 }
 
 /// A version 8 file's paths keep their notes and Show Center.

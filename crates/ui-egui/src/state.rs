@@ -34,9 +34,12 @@ impl Default for View {
 }
 
 impl View {
-    /// The view a document opens at: the one it was saved with, else fitted on first display.
+    /// The view a document opens at: the one it was saved with, else fitted on first display, on
+    /// the artboard the opened file names as its active one ([`vectorcraft_doc::Document::opened_artboard`]),
+    /// else the first.
     pub fn of(st: &vectorcraft_engine::DocState) -> Self {
-        st.view.as_ref().and_then(Self::saved).unwrap_or_default()
+        let artboard = st.doc.opened_artboard.and_then(|id| st.doc.artboards.iter().position(|a| a.id == id)).unwrap_or(0);
+        Self { artboard, ..st.view.as_ref().and_then(Self::saved).unwrap_or_default() }
     }
 
     /// The view `v` saved (the one a document was saved with, or a View → New View… one), within
@@ -1200,6 +1203,30 @@ mod tests {
         assert_eq!(zoom_from_display_percent(100.0, false), 1.0);
         assert_eq!(zoom_label(b, true), "100%");
         assert_eq!(next_zoom_with_display(b, true, true), zoom_from_display_percent(150.0, true));
+    }
+
+    #[test]
+    fn a_document_opens_on_the_artboard_its_file_names_as_active() {
+        let mut doc = vectorcraft_doc::Document::new(100.0, 100.0);
+        let first = doc.artboards[0].clone();
+        for id in [2, 3] {
+            let x0 = f64::from(id - 1) * 150.0;
+            doc.artboards.push(vectorcraft_doc::Artboard { id, rect: vectorcraft_geom::Rect::new(x0, 0.0, x0 + 100.0, 100.0), ..first.clone() });
+        }
+        let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        for (opened, active) in [(Some(3), 2), (None, 0), (Some(9), 0)] {
+            let mut d = doc.clone();
+            d.opened_artboard = opened;
+            app.session.add_document(d, None);
+            app.sync_views();
+            assert_eq!(app.view().map(|v| v.artboard), Some(active), "{opened:?}");
+        }
+        // With the view the document was saved with too.
+        doc.opened_artboard = Some(2);
+        doc.last_view = Some(vectorcraft_doc::SavedView { name: String::new(), center: Point::new(400.0, 50.0), zoom: 2.0, rotation: 0.0 });
+        app.session.add_document(doc, None);
+        app.sync_views();
+        assert_eq!(app.view().map(|v| (v.artboard, v.zoom)), Some((1, 2.0)));
     }
 
     #[test]

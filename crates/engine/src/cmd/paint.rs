@@ -732,7 +732,7 @@ pub(crate) fn picked_mesh_points_of(s: &Session, ids: &[NodeId]) -> Option<Vec<(
 }
 
 /// A type run's stroke; a painted stroke on a run without one gets 1 pt.
-fn set_run_stroke(style: &mut CharStyle, paint: Paint) {
+pub(super) fn set_run_stroke(style: &mut CharStyle, paint: Paint) {
     if !paint.is_none() {
         run_stroke_weight(style);
     }

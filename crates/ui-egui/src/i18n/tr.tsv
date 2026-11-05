@@ -4412,6 +4412,8 @@ axis	Both	Her İkisi
 @msg	graphs come in as plain art, without their data or settings	grafikler, verileri ve ayarları olmadan düz çizim olarak içe aktarılır
 @msg	an image whose data is cut short was left out	verileri kısa kesilen bir resim dışarıda bırakıldı
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	bağlantılı resimler, dosyaları bulunana kadar dosyaya kaydedilen düşük çözünürlüklü önizlemeyi gösterir: bunları Bağlantılar panelinde yeniden bağlayın
+@msg	linked type areas past VectorCraft's limits were left out	VectorCraft sınırlarını aşan bağlantılı metin alanları dışarıda bırakıldı
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	bağlantılı alanlarda, kaydırılan metinde veya bileşik yolda maske olarak kullanılan metin kırpmaz
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	dosyada önizlemesi olmayan bağlantılı resimler, dosyaları bulunana kadar bir yer tutucu gösterir: bunları Bağlantılar panelinde yeniden bağlayın
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	çerçevelerdeki alan türü, daha uzun çerçevelerde gösterdiği yazı tipinin bir satırı için çok kısa ({_1}): bunların türü aksi halde gösterilmez
 @msg	its editing data doesn't say where its art is	düzenleme verileri sanatın nerede olduğunu söylemiyor
@@ -6059,6 +6061,9 @@ anchor	Points:	Noktalar:
 	Find Nearest Swatch…	En Yakın Renk Örneğini Bul…
 	Find Nearest Swatch	En Yakın Renk Örneğini Bul
 	Apply Nearest Swatch	En Yakın Renk Örneğini Uygula
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Dolguyu Kontura Uygula
+	Apply Stroke to Fill	Konturu Dolguya Uygula
 	Select objects to find the swatches nearest their colors.	Renklerine en yakın renk örneklerini bulmak için nesneleri seçin.
 @msg	select objects or give `color`	nesneleri seçin veya `color` verin
 @msg	`color` is not a colour	`color` bir renk değil
@@ -6346,3 +6351,7 @@ breakText	Glyphs	Glifler
 # Compound Shapes add-on
 	Compound Shapes	Bileşik Şekiller
 	Shape Mode Buttons Make Compound Shapes	Şekil Modu Düğmeleri Bileşik Şekiller Yapar
+
+# 3D Box add-on
+	3D Box	3B Kutu
+	3D Box Tool	3B Kutu Aracı
