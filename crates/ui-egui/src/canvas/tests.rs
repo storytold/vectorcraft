@@ -9198,3 +9198,71 @@ fn the_contour_bar_sets_corners_and_bakes() {
     click_contour_bar(&mut app, &ctx, "Bake");
     assert!(offsets(&app).is_empty(), "baked");
 }
+
+/// A frame the render worker finished for `job`: white pixels of the job's size.
+fn finished(job: &crate::render_worker::Job) -> crate::render_worker::Done {
+    let img = vectorcraft_render::Rendered { width: job.w, height: job.h, pixels: vec![255; job.w as usize * job.h as usize * 4] };
+    crate::render_worker::Done { key: job.key.clone(), doc: job.doc.clone(), opts: job.opts.clone(), img, ms: 40.0, moved: 0 }
+}
+
+/// #4155: a document's first frame renders on the render worker, not on the UI thread, where a
+/// heavy one froze the window for seconds while it opened. The canvas shows the document's paper
+/// meanwhile, does not queue the frame again while it renders, and shows it once it lands.
+#[test]
+fn a_documents_first_frame_renders_on_the_worker() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+    let ctx = egui::Context::default();
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+    let frame = |app: &mut VectorcraftApp| ctx.run_ui(raw.clone(), |ui| show(app, ui)).textures_delta.clear();
+
+    frame(&mut app);
+    let job = jobs.try_recv().expect("the first frame is queued on the worker");
+    assert!(app.canvas.texture.is_none(), "not rendered on the UI thread");
+    frame(&mut app);
+    assert!(jobs.try_recv().is_err(), "not queued again while it renders");
+    assert!(app.canvas.texture.is_none());
+
+    done_tx.send(finished(&job)).unwrap();
+    frame(&mut app);
+    assert!(app.canvas.texture.is_some(), "shown once it lands");
+    assert_eq!(app.canvas.key.as_ref(), Some(&job.key));
+    assert!(app.canvas.from_worker);
+}
+
+/// The canvas waits for a document's first frame only briefly (`FIRST_FRAME_GRACE`): `wait`
+/// returns a frame finished before or during the wait, clearing the pending job, and nothing once
+/// the time is up.
+#[test]
+fn the_render_worker_waits_for_a_frame_only_as_long_as_asked() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let (worker, jobs, _) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+    let ctx = egui::Context::default();
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(200.0, 150.0))), ..Default::default() };
+    ctx.run_ui(raw, |ui| show(&mut app, ui)).textures_delta.clear();
+    let job = jobs.try_recv().expect("a job to finish");
+
+    let (mut w, _, done_tx) = crate::render_worker::Worker::test_channel();
+    let t0 = std::time::Instant::now();
+    assert!(w.wait(std::time::Duration::from_millis(20)).is_none());
+    assert!(t0.elapsed() >= std::time::Duration::from_millis(20), "waited the time asked");
+
+    w.pending = Some(job.key.clone());
+    done_tx.send(finished(&job)).unwrap();
+    assert_eq!(w.wait(std::time::Duration::from_secs(5)).map(|d| d.key), Some(job.key.clone()), "finished before the wait");
+    assert!(w.pending.is_none());
+
+    let late = finished(&job);
+    let sender = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        done_tx.send(late).unwrap();
+    });
+    assert!(w.wait(std::time::Duration::from_secs(5)).is_some(), "finished during the wait");
+    sender.join().unwrap();
+}
