@@ -1,6 +1,7 @@
-//! Set Corners in the interface: its dialog (radius, corner kind, and which anchors: all, the
-//! odd-numbered or the even-numbered ones), which previews on the canvas and runs
-//! `addon.pathtools.cornerSet` on OK, one undo step. It opens on the Corner Tool's radius and kind.
+//! Set Corners in the interface: its dialog (radius, corner kind, which anchors: all, the
+//! odd-numbered or the even-numbered ones, and the range of corner angles to round), which
+//! previews on the canvas and runs `addon.pathtools.cornerSet` on OK, one undo step. It opens on
+//! the Corner Tool's radius and kind, every corner angle (0° to 180°).
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -20,13 +21,16 @@ const KINDS: [(&str, &str); 3] = [("round", "Round"), ("invertedRound", "Inverte
 const EVERY: [(&str, &str); 3] = [("all", "All Anchors"), ("odd", "Odd-Numbered Anchors"), ("even", "Even-Numbered Anchors")];
 const LABEL_W: f32 = 64.0;
 const FIELD_W: f32 = 170.0;
+const ANGLE_W: f32 = 64.0;
+/// The corner angles the command takes (degrees).
+const ANGLES: std::ops::RangeInclusive<f64> = 0.0..=180.0;
 
 /// The dialog's fields to start with: the Corner Tool's radius and kind, every anchor, Preview on.
 pub(crate) fn fields(app: &VectorcraftApp) -> Value {
     let options = app.session.tool_options_of(ID);
     let radius = options["radius"].as_f64().unwrap_or(RADIUS);
     let kind = options["kind"].as_str().unwrap_or("round").to_string();
-    json!({ "radius": radius, "kind": kind, "every": "all", "preview": true })
+    json!({ "radius": radius, "kind": kind, "every": "all", "minAngle": 0.0, "maxAngle": 180.0, "preview": true })
 }
 
 pub(crate) const SPEC: DialogSpec =
@@ -39,6 +43,24 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     });
     form::choice(ui, d, "kind", tl!("Corner:"), (LABEL_W, FIELD_W), &KINDS);
     form::choice(ui, d, "every", tl!("Anchors:"), (LABEL_W, FIELD_W), &EVERY);
+    // Only the corners whose sides meet at an angle in this range: small for a sharp spike, near
+    // 180° for a shallow bend. Typing one end past the other moves the other along.
+    let (min, max) = (d.f64("minAngle", 0.0), d.f64("maxAngle", 180.0));
+    widgets::label_row(ui, tl!("Angle:"), LABEL_W, |ui| {
+        if let Some(v) = widgets::range_field_named(ui, "set-corners-min-angle", Some(tl!("Minimum angle")), min, ANGLES, "°", 1, ANGLE_W) {
+            d.fields.insert("minAngle".into(), json!(v));
+            if v > max {
+                d.fields.insert("maxAngle".into(), json!(v));
+            }
+        }
+        ui.label(tl!("to"));
+        if let Some(v) = widgets::range_field_named(ui, "set-corners-max-angle", Some(tl!("Maximum angle")), max, ANGLES, "°", 1, ANGLE_W) {
+            d.fields.insert("maxAngle".into(), json!(v));
+            if v < min {
+                d.fields.insert("minAngle".into(), json!(v));
+            }
+        }
+    });
     form::preview(app, ui, d, "Set Corners", COMMAND, form::params(d));
     false
 }
@@ -97,5 +119,32 @@ mod tests {
         assert!(app.ui.dialog.is_none());
         assert_eq!(app.session.doc().unwrap().history.undo.len(), n + 1);
         assert_eq!(cut(&app, id), vec![1, 3]);
+    }
+
+    #[test]
+    fn set_corners_previews_only_the_corners_in_its_angle_range() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        // A house: square corners at 0, 1 and 3, the roof's 135° corners at 2 and 4.
+        let anchors = json!([{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 50, "y": 150}, {"x": 0, "y": 100}]);
+        let id = app.run("path.create", json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        menus::invoke(&mut app, super::COMMAND, json!({}));
+        let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        for s in ["Angle:", "to", "0°", "180°"] {
+            assert!(shown.contains(s), "{s} in {shown}");
+        }
+        let n = app.session.doc().unwrap().history.undo.len();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("minAngle".into(), json!(120));
+        painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        assert_eq!(cut(&app, id), vec![2, 4], "the roof previewed");
+        app.ui.dialog.as_mut().unwrap().fields.insert("maxAngle".into(), json!(100));
+        app.ui.dialog.as_mut().unwrap().fields.insert("minAngle".into(), json!(80));
+        painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        assert_eq!(cut(&app, id), vec![0, 1, 3], "the square corners previewed");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), n + 1);
+        assert_eq!(cut(&app, id), vec![0, 1, 3]);
     }
 }

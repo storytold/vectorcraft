@@ -654,6 +654,83 @@ fn corner_set_every_refuses_bad_values_and_says_when_nothing_is_left() {
     assert!(e.contains("two sides meet"), "{e}");
 }
 
+/// A closed house: a 100 × 100 square under a roof, its corners 90°, 90°, 135°, 90° and 135°.
+fn house(s: &mut Session) -> NodeId {
+    line(s, &[(250.0, 100.0), (350.0, 100.0), (350.0, 200.0), (300.0, 250.0), (250.0, 200.0)], true)
+}
+
+#[test]
+fn corner_set_angle_range_rounds_only_the_corners_in_it_on_each_path() {
+    let mut s = session();
+    // The star's points meet at about 38°, its inner corners at about 110°.
+    let (star, home) = (star_path(&mut s), house(&mut s));
+    select(&mut s, &[star, home]);
+    let n = steps(&s);
+    // The sharp spikes only: the house has none, the star five, as one step.
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"radius": 3, "maxAngle": 60})).unwrap();
+    assert_eq!((r["ids"].clone(), r["corners"].clone(), steps(&s)), (json!([star.0]), json!(5), n + 1));
+    assert_eq!((cut(&s, star), cut(&s, home)), (vec![0, 2, 4, 6, 8], vec![]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((cut(&s, star), steps(&s)), (vec![], n));
+    // Exactly 90°: the house's square corners.
+    s.execute("addon.pathtools.cornerSet", &json!({"radius": 3, "minAngle": 90, "maxAngle": 90})).unwrap();
+    assert_eq!((cut(&s, star), cut(&s, home)), (vec![], vec![0, 1, 3]));
+    // 100° to 140°: the star's inner corners and the roof's; the square corners stay as they are.
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"radius": 2, "minAngle": 100, "maxAngle": 140})).unwrap();
+    assert_eq!(r["corners"], json!(7));
+    assert_eq!((cut(&s, star), cut(&s, home)), (vec![1, 3, 5, 7, 9], vec![0, 1, 2, 3, 4]));
+    assert_eq!((drawn(&s, home, 0), drawn(&s, home, 2)), (3.0, 2.0));
+    // On top of the named anchors and of `every`.
+    s.execute("addon.pathtools.cornerRemove", &json!({})).unwrap();
+    s.execute("addon.pathtools.cornerSet", &json!({"ids": [home.0], "anchors": [1, 2, 3], "radius": 4, "minAngle": 80, "maxAngle": 100})).unwrap();
+    assert_eq!(cut(&s, home), vec![1, 3]);
+    s.execute("addon.pathtools.cornerSet", &json!({"ids": [star.0], "radius": 4, "every": "even", "minAngle": 100})).unwrap();
+    assert_eq!(cut(&s, star), vec![1, 3, 5, 7, 9]);
+}
+
+#[test]
+fn corner_set_angle_range_on_a_three_anchor_path() {
+    let mut s = session();
+    // An open pen path of three anchors: one corner, of 90°.
+    let id = line(&mut s, &[(10.0, 10.0), (60.0, 60.0), (110.0, 10.0)], false);
+    select(&mut s, &[id]);
+    let e = s.execute("addon.pathtools.cornerSet", &json!({"radius": 5, "maxAngle": 45})).unwrap_err().to_string();
+    assert!(e.contains("none of the chosen corners has an angle from 0° to 45°"), "{e}");
+    let r = s.execute("addon.pathtools.cornerSet", &json!({"radius": 5, "minAngle": 80, "maxAngle": 100})).unwrap();
+    assert_eq!(r["corners"], json!(1));
+    assert_eq!(cut(&s, id), vec![1]);
+}
+
+#[test]
+fn corner_set_angle_range_refuses_bad_values_and_says_when_nothing_matches() {
+    let mut s = session();
+    let star = star_path(&mut s);
+    select(&mut s, &[star]);
+    let i = star.0;
+    refuses(
+        &mut s,
+        "addon.pathtools.cornerSet",
+        &[
+            json!({"ids": [i], "radius": 5, "minAngle": -1}),
+            json!({"ids": [i], "radius": 5, "maxAngle": 181}),
+            json!({"ids": [i], "radius": 5, "minAngle": 1e308}),
+            json!({"ids": [i], "radius": 5, "maxAngle": "sharp"}),
+            json!({"ids": [i], "radius": 5, "minAngle": 120, "maxAngle": 60}),
+            json!({"ids": [i], "radius": 5, "minAngle": 50, "maxAngle": 100}),
+            json!({"ids": [i], "radius": 5, "every": "odd", "minAngle": 100}),
+        ],
+    );
+    let err = |s: &mut Session, p: Value| s.execute("addon.pathtools.cornerSet", &p).unwrap_err().to_string();
+    let e = err(&mut s, json!({"ids": [i], "radius": 5, "maxAngle": 200}));
+    assert!(e.contains("`maxAngle` must be from 0 to 180 degrees"), "{e}");
+    let e = err(&mut s, json!({"ids": [i], "radius": 5, "minAngle": 120, "maxAngle": 60}));
+    assert!(e.contains("`minAngle` (120°) can't be more than `maxAngle` (60°)"), "{e}");
+    let e = err(&mut s, json!({"ids": [i], "radius": 5, "minAngle": 50, "maxAngle": 100}));
+    assert!(e.contains("none of the chosen corners has an angle from 50° to 100°"), "{e}");
+    let e = err(&mut s, json!({"ids": [i], "radius": 5, "every": "odd", "minAngle": 100}));
+    assert!(e.contains("none of the chosen corners at an odd-numbered anchor (the 1st, 3rd, 5th…) has an angle from 100° to 180°"), "{e}");
+}
+
 #[test]
 fn the_corner_tool_clicks_drags_and_removes_in_one_step_each() {
     let mut s = session();
