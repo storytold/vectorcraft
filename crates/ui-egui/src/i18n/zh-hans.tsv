@@ -6234,3 +6234,7 @@ breakText	Glyphs	字形
 # Compound Shapes add-on
 	Compound Shapes	复合形状
 	Shape Mode Buttons Make Compound Shapes	形状模式按钮创建复合形状
+
+# 3D Box add-on
+	3D Box	3D 盒子
+	3D Box Tool	3D 盒子工具

@@ -5979,3 +5979,7 @@ breakText	Glyphs	Glyphen
 # Compound Shapes add-on
 	Compound Shapes	Zusammengesetzte Formen
 	Shape Mode Buttons Make Compound Shapes	Formmodus-Schaltflächen erstellen zusammengesetzte Formen
+
+# 3D Box add-on
+	3D Box	3D-Quader
+	3D Box Tool	3D-Quader-Werkzeug

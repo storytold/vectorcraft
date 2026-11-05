@@ -6428,3 +6428,7 @@ breakText	Glyphs	Merkit
 # Compound Shapes add-on
 	Compound Shapes	Yhdistelmämuodot
 	Shape Mode Buttons Make Compound Shapes	Muototilapainikkeet luovat yhdistelmämuotoja
+
+# 3D Box add-on
+	3D Box	3D-laatikko
+	3D Box Tool	3D-laatikkotyökalu

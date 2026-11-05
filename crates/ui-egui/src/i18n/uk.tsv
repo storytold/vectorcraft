@@ -5993,3 +5993,7 @@ breakText	Glyphs	Гліфи
 # Compound Shapes add-on
 	Compound Shapes	Складені фігури
 	Shape Mode Buttons Make Compound Shapes	Кнопки режимів фігур створюють складені фігури
+
+# 3D Box add-on
+	3D Box	3D-паралелепіпед
+	3D Box Tool	Інструмент «3D-паралелепіпед»

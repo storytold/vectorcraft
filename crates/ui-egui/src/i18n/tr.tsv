@@ -6350,3 +6350,7 @@ breakText	Glyphs	Glifler
 # Compound Shapes add-on
 	Compound Shapes	Bileşik Şekiller
 	Shape Mode Buttons Make Compound Shapes	Şekil Modu Düğmeleri Bileşik Şekiller Yapar
+
+# 3D Box add-on
+	3D Box	3B Kutu
+	3D Box Tool	3B Kutu Aracı

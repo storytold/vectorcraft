@@ -6388,3 +6388,7 @@ breakText	Glyphs	Glyphes
 # Compound Shapes add-on
 	Compound Shapes	Formes composées
 	Shape Mode Buttons Make Compound Shapes	Les boutons de mode de forme créent des formes composées
+
+# 3D Box add-on
+	3D Box	Boîte 3D
+	3D Box Tool	Outil Boîte 3D
