@@ -270,6 +270,11 @@ pub(crate) fn showing(ui: &UiState, panel: &str) -> bool {
     (ui.open_panel.as_deref() == Some(panel) && iconic) || (!iconic && layout.panel_state(&panel.to_string()) == craft_ui::docking::PanelState::Front)
 }
 
+/// Can either panel that uses row thumbnails be seen, including in a floating window or flyout?
+fn thumbnail_panel_showing(ui: &UiState) -> bool {
+    ui.dock && ui.screen_mode < 3 && (showing(ui, "layers") || showing(ui, "links"))
+}
+
 /// Where a panel with no other destination goes: a panel of the first expanded dock column,
 /// else of any column.
 fn first_dock_panel(layout: &Layout<String>, except: &str) -> Option<String> {
@@ -1173,6 +1178,11 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.open_dropped_files(window.dropped, None, shift);
     }
     forward_keys(app, &ctx, output.forwarded_events, output.forwarded_modifiers);
+    if !thumbnail_panel_showing(&app.ui) {
+        // No panel can ask for these rows again this pass. Keep the cache of open documents, but
+        // discard worker jobs queued behind the one already rendering.
+        crate::panels::layers::show_thumbs_of(None);
+    }
 }
 
 /// Whether a modal is open: a dialog, About, the command palette, a native file dialog, or a
