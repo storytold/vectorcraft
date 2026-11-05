@@ -4321,6 +4321,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	unknown preference `{key}`	`{key}` は不明な環境設定の項目です
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	データ復帰のコピーを保存する場所がありません: 環境設定 → ファイル管理 → データ復帰 → フォルダー (recoveryFolder) を設定してください
 @msg	Data Recovery can't keep copies in {path}: {e}	データ復帰は {path} にコピーを保存できません: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	{path} からプラグインを読み込めません: {e}
 @msg	`{area}` is no recovery area name	`{area}` は復帰用領域の名前として使えません
 @msg	`{name}` is no recovery entry name	`{name}` は復帰用エントリの名前として使えません
 @msg	no clock to keep a heartbeat by	ハートビートの記録に必要な時刻を取得できません

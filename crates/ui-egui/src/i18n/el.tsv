@@ -2184,6 +2184,7 @@ axis	Both	Και τα δύο
 @msg	Create from Selection: the selection has no area	Δημιουργία από επιλογή: η επιλογή δεν έχει επιφάνεια
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Η ανάκτηση δεδομένων δεν διαθέτει θέση αποθήκευσης αντιγράφων: ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Η ανάκτηση δεδομένων δεν μπορεί να αποθηκεύσει αντίγραφα στο {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Δεν είναι δυνατή η φόρτωση πρόσθετων από το {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	Επιλέξτε άμεσα τα σημεία αγκύρωσης όπου θα γίνει η αποκοπή (όχι τα τελικά σημεία ανοιχτών διαδρομών)
 @msg	Divide Objects Below: select a path	Διαίρεση αντικειμένων από κάτω: επιλέξτε μια διαδρομή
 @msg	Divide Objects Below: select exactly one path	Διαίρεση αντικειμένων από κάτω: επιλέξτε ακριβώς μία διαδρομή
