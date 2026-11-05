@@ -173,6 +173,9 @@ impl VectorcraftApp {
                 return r;
             }
         }
+        // A `.ai` file a command writes (a save, an export, a batch's save) names the view's
+        // active artboard.
+        io::remember_active_artboard(self);
         // Native files carry the view they reopen at.
         if fileio::SaveMode::of(id).is_some() {
             io::remember_view(self);

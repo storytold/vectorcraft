@@ -190,7 +190,11 @@ fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(C
         return Ok((Cow::Owned(doc), display_doc_title));
     }
     let st = s.doc()?;
-    let doc = export_source(st, p)?;
+    let mut doc = export_source(st, p)?;
+    // A `.ai` export names the view's active artboard, as a `.ai` save does.
+    if let Some(id) = super::save::moved_active_artboard(st, &doc, f) {
+        doc.to_mut().opened_artboard = Some(id);
+    }
     let display_doc_title = super::has_own_title(&doc);
     Ok((super::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, Cow::Owned), display_doc_title))
 }

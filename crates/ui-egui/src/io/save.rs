@@ -171,11 +171,24 @@ pub(super) fn target_path_keeping(
     pick_path(app, &FilePick { name, folder, filters }, keeps)
 }
 
-/// Keep the active document's saved view current before a save (native files reopen at it).
+/// Keep the active document's saved view current before a save (native files reopen at it), and
+/// its active artboard ([`remember_active_artboard`]).
 pub fn remember_view(app: &mut VectorcraftApp) {
+    remember_active_artboard(app);
     let Some(v) = app.view().copied().filter(|v| v.fitted) else { return };
     if let Some(st) = app.session.active_mut() {
         st.view = Some(SavedView { name: String::new(), center: v.center, zoom: v.zoom, rotation: v.rotation });
+    }
+}
+
+/// Keep the active document's active artboard current (a `.ai` file saved or exported names it
+/// as its active one): the view's, an index past the last artboard being the last one as in the
+/// Artboards panel; `None` without a view.
+pub fn remember_active_artboard(app: &mut VectorcraftApp) {
+    let index = app.view().map(|v| v.artboard);
+    if let Some(st) = app.session.active_mut() {
+        let last = st.doc.artboards.len().saturating_sub(1);
+        st.active_artboard = index.and_then(|i| st.doc.artboards.get(i.min(last))).map(|a| a.id);
     }
 }
 
