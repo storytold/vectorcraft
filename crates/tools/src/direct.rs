@@ -215,8 +215,8 @@ pub struct DirectSelectionTool {
     click: Option<(NodeId, usize, usize)>,
     /// A click on a whole path picks the segment on release; a drag still moves the whole path.
     click_segment: Option<(NodeId, usize, usize)>,
-    /// An Alt-click on a path selected whole adds this enclosing group on release, as a Group
-    /// Selection click does; an Alt-drag still copies the selection.
+    /// A Group Selection click, or an Alt-click on a path selected whole, adds this enclosing
+    /// group on release. A drag keeps the selection; an Alt-drag still copies it.
     click_group: Option<NodeId>,
     /// The selected anchors of area type's frames, picked by a click or a marquee: they show
     /// filled, a drag of one moves them all, and the arrow keys nudge them. They stay selected
@@ -1159,6 +1159,7 @@ impl DirectSelectionTool {
         Some(vec![])
     }
     fn press_group(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point, tol: f64) -> Vec<Action> {
+        self.click_group = None;
         if let Some(out) = self.guide.press(cx, ev) {
             self.state = State::Idle;
             return out;
@@ -1188,7 +1189,8 @@ impl DirectSelectionTool {
             }
         } else if !cx.selection.contains(target) {
             if cx.selection.contains(h.leaf) {
-                out.push(Action::Exec("select.add".into(), json!({"ids": [target.0]})));
+                // A completed click climbs the group; a drag moves only the selected art.
+                self.click_group = Some(target);
             } else {
                 out.push(Action::Exec("select.set".into(), json!({"ids": [target.0]})));
             }

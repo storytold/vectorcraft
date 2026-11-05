@@ -118,6 +118,31 @@ fn dialogs_move_by_their_heading_stay_on_screen_and_where_they_were_moved() {
     }
 }
 
+/// #5246: the band that moves a dialog keeps the arrow when hovered, as a title bar does (the grab
+/// cursor is the four-way move arrows on Windows); it shows the window held only while dragged.
+#[test]
+fn the_band_that_moves_a_dialog_keeps_the_arrow_until_dragged() {
+    let opens: [(&str, Open, egui::Id); 2] = [
+        ("Offset Path", |app| crate::menus::invoke(app, "object.path.offsetPath", json!({})), egui::Id::unique(("dialog", "offsetPath"))),
+        ("New Document", open_new_document, egui::Id::unique(("dialog", "newDocument"))),
+    ];
+    for (name, open, id) in opens {
+        let (ctx, mut app) = (ctx(), app_with_selection());
+        open(&mut app);
+        settle(&ctx, &mut app);
+        let at = rect_of(&ctx, id).left_top() + vec2(40.0, 6.0);
+        let cursor = |ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<Event>| {
+            let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), events, ..Default::default() };
+            ctx.run_ui(input, |ui| show(app, ui.ctx())).platform_output.cursor_icon
+        };
+        cursor(&ctx, &mut app, vec![Event::PointerMoved(at)]);
+        assert_eq!(cursor(&ctx, &mut app, vec![]), egui::CursorIcon::Default, "{name}: hovering the band");
+        cursor(&ctx, &mut app, vec![button(at, true)]);
+        assert_eq!(cursor(&ctx, &mut app, vec![Event::PointerMoved(at + vec2(20.0, 10.0))]), egui::CursorIcon::Grabbing, "{name}: dragging it");
+        cursor(&ctx, &mut app, vec![button(at + vec2(20.0, 10.0), false)]);
+    }
+}
+
 /// Tab goes through a dialog's controls and does not stop on the band that moves the window.
 #[test]
 fn tab_skips_the_band_that_moves_a_dialog() {

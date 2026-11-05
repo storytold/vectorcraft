@@ -12,7 +12,7 @@ use super::{
 /// Fit a freehand polyline: drop jitter, build a spline through the samples (sharp turns stay
 /// corners) and simplify it to `tol`.
 fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
-    let min = (tol * 0.3).max(vectorcraft_tools::draw2::MIN_FIDELITY * 0.3);
+    let min = (tol * 0.3).max(vectorcraft_tools::draw2::MIN_FIT_TOLERANCE * 0.3);
     let (Some(&p0), Some(&pn)) = (pts.first(), pts.last()) else { return SubPath::new(vec![], closed) };
     let mut kept: Vec<Point> = vec![p0];
     for &p in pts.iter().skip(1) {
@@ -382,12 +382,15 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let pen = PenRecord::of_samples(&samples);
     let mut pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
-    let tol = number_or(p, "fidelity", 1.5, C)?.clamp(vectorcraft_tools::draw2::MIN_FIDELITY, 100.0);
+    let tol = number_or(p, "fidelity", 1.5, C)?.clamp(vectorcraft_tools::draw2::MIN_FIT_TOLERANCE, 100.0);
     // The tolerance the stroke is fitted at; with `fit: false` it is not fitted.
     let fit_tol = switch_or(p, "fit", true, C)?.then_some(tol);
     let closed = switch_or(p, "closed", false, C)?;
     let brush = str_param(p, "style") == Some("brush");
     let keep_selected = switch_or(p, "keepSelected", true, C)?;
+    // The Pencil's preview of a stroke that redraws a path draws it as a new path but leaves the
+    // selection as it is: the path being redrawn stays selected until the release redraws it.
+    let leave_selection = switch_or(p, "leaveSelection", false, C)?;
     let filled = switch_or(p, "fill", false, C)?;
     if let Some(ext) = p.get("extend").filter(|v| !v.is_null()) {
         let id = id_param(ext, "id").ok_or_else(|| bad(C, "extend needs id"))?;
@@ -570,7 +573,13 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(st) = look.appearance.stroke_mut() {
         pen.write(st);
     }
-    insert_look(s, if brush { "Paintbrush" } else { "Pencil" }, path_kind(PathData::single(sp)), look, None, keep_selected)
+    let out = insert_look(s, if brush { "Paintbrush" } else { "Pencil" }, path_kind(PathData::single(sp)), look, None, keep_selected)?;
+    if !keep_selected && !leave_selection {
+        // A new stroke with Keep selected off leaves nothing selected: Illustrator starts the stroke
+        // by dropping the earlier selection, it does not keep it (#5752).
+        s.select(|_, sel| sel.clear())?;
+    }
+    Ok(out)
 }
 
 // ---------- Blob Brush ----------

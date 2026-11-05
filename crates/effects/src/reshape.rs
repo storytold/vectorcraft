@@ -39,8 +39,13 @@ pub fn needs_outline(n: &Node) -> bool {
 /// in a fill or stroke? Such an object is drawn through its art ([`outline_art`]) so that each copy
 /// paints its gradient by itself ([`copy_leaf`]), as a group's copies do.
 pub fn has_gradient_copies(n: &Node) -> bool {
+    (n.appearance.has_unplaced_gradient() || n.appearance.has_placed_gradient()) && has_transform_copies(n)
+}
+
+/// Is `n` a path or compound path with a visible Transform effect that makes copies? Expand
+/// Appearance makes each copy an object of its own ([`expand_outlined`]).
+pub fn has_transform_copies(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. })
-        && (n.appearance.has_unplaced_gradient() || n.appearance.has_placed_gradient())
         && geometry_effects(n)
             .iter()
             .any(|e| e.id == "distort.transform" && crate::distort::transform_map(Rect::ZERO, &merged_params(&e.id, &e.params), 0).1 > 0)
@@ -249,11 +254,20 @@ fn with_id(art: &Node, id: NodeId) -> Node {
 /// through the guides could hold more than [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects. A Repeat counts the Repeats in the art of
 /// `doc`'s symbols that its instances show toward its instance budget.
 pub fn outline_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    outline_art_with(doc, n, symbol_art, &outline_text, &SymbolNodes::default())
+    outline_art_with(doc, n, symbol_art, &outline_text, &SymbolNodes::default(), false)
 }
 
-/// [`outline_art`] with live objects evaluated through `outline` ([`evaluated_with`]).
-fn outline_art_with(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>, outline: OutlineHook, nodes: &SymbolNodes) -> Option<Node> {
+/// [`outline_art`] with live objects evaluated through `outline` ([`evaluated_with`]); with
+/// `apart`, also a path or compound path whose Transform effect makes copies
+/// ([`has_transform_copies`]), as the one piece the copies are made from.
+fn outline_art_with(
+    doc: Option<&Document>,
+    n: &Node,
+    symbol_art: Option<&Node>,
+    outline: OutlineHook,
+    nodes: &SymbolNodes,
+    apart: bool,
+) -> Option<Node> {
     let mut art = match &n.kind {
         NodeKind::Text(_) => outline_text(n)?,
         NodeKind::SymbolInstance { symbol, xf } => {
@@ -268,7 +282,7 @@ fn outline_art_with(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>,
             Node::group(n.id, vec![Arc::new(a)])
         }
         // The object as the one piece the copies of its Transform effect are made from.
-        _ if has_transform_art(n) => {
+        _ if has_transform_art(n) || (apart && has_transform_copies(n)) => {
             let mut one = n.clone();
             one.opacity = 1.0;
             one.blend = Default::default();
@@ -429,10 +443,12 @@ pub fn reshape(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> O
 /// geometry effects, else type with fills or strokes of its own outlined, or an image with fills
 /// or strokes of its own that paint a shape, in the same form. `None` when it has none of these.
 pub fn expand_outlined(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    // A path whose Transform effect copies it with a gradient, or scales its strokes or moves its
-    // patterns: each copy an object of its own.
-    if has_transform_art(n) {
-        return as_art(doc, n, symbol_art);
+    // A path whose Transform effect copies it, or scales its strokes or moves its patterns: each
+    // copy an object of its own with the path's fills and strokes, the copies of each Transform
+    // effect in a group of their own (copies of copies nest), as the reference app expands them
+    // (#5612).
+    if has_transform_art(n) || has_transform_copies(n) {
+        return as_art_opts(doc, n, symbol_art, &outline_text, &SymbolNodes::default(), true);
     }
     let own_paint = match n.kind {
         NodeKind::Text(_) => !n.appearance.items.is_empty(),
@@ -451,6 +467,12 @@ pub(crate) fn as_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>
 
 /// [`as_art`] with live objects evaluated through `outline` ([`evaluated_with`]).
 pub(crate) fn as_art_with(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>, outline: OutlineHook, nodes: &SymbolNodes) -> Option<Node> {
+    as_art_opts(doc, n, symbol_art, outline, nodes, false)
+}
+
+/// [`as_art_with`]; with `apart`, a path's or compound path's Transform effects make each copy an
+/// object of its own ([`copy_leaf`]) rather than one path of every copy.
+fn as_art_opts(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>, outline: OutlineHook, nodes: &SymbolNodes, apart: bool) -> Option<Node> {
     let fx = geometry_effects(n);
     let mut art = match &n.kind {
         NodeKind::Image(im) => {
@@ -478,9 +500,12 @@ pub(crate) fn as_art_with(doc: Option<&Document>, n: &Node, symbol_art: Option<&
                 Node::group(n.id, rows(below).into_iter().chain([Arc::new(image)]).chain(rows(above)).collect())
             }
         }
-        _ => outline_art_with(doc, n, symbol_art, outline, nodes)?,
+        _ => outline_art_with(doc, n, symbol_art, outline, nodes, apart)?,
     };
-    reshape_leaves(&mut art, &fx);
+    reshape_leaves_apart(&mut art, &fx, Budget::EFFECTS, apart);
+    if apart {
+        hoist_copies(&mut art);
+    }
     transform_items(&mut art);
     // Type and symbols in perspective: the art projected onto their plane.
     if let Some(h) = n.projection() {
@@ -546,6 +571,28 @@ pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect]) {
 
 /// [`reshape_leaves`] whose paths keep to `budget` together, or to what they cost.
 pub(crate) fn reshape_leaves_within(art: &mut Node, fx: &[&Effect], budget: Budget) {
+    reshape_leaves_apart(art, fx, budget, false);
+}
+
+/// `art`, the group of the one piece a path's copies are made from ([`outline_art_with`]), holding
+/// the group of its copies ([`copy_leaf`]) as its only member: the copies become its members, so
+/// the expanded path is one group of its copies rather than a group in a group.
+fn hoist_copies(art: &mut Node) {
+    let id = art.id;
+    let Some(children) = art.children_mut() else { return };
+    let [only] = children.as_slice() else { return };
+    if only.id != id || !matches!(only.kind, NodeKind::Group { clip: false, .. }) {
+        return;
+    }
+    let copies = only.children().cloned().unwrap_or_default();
+    if !copies.is_empty() {
+        *children = copies;
+    }
+}
+
+/// [`reshape_leaves_within`]; with `apart`, a Transform effect's copies of each path are objects
+/// of their own ([`copy_leaf`]) whatever paints them, as Expand Appearance makes them.
+fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: bool) {
     if fx.is_empty() {
         return;
     }
@@ -588,14 +635,14 @@ pub(crate) fn reshape_leaves_within(art: &mut Node, fx: &[&Effect], budget: Budg
             if let Some((m, copies, options, map)) = transform {
                 // Transform Patterns and Scale Strokes & Effects change each copy's fills and
                 // strokes; a gradient paints each copy by itself, not the one piece the copies
-                // make together.
-                let gradient = copies > 0 && (leaf.appearance.has_unplaced_gradient() || leaf.appearance.has_placed_gradient());
+                // make together; and Expand Appearance (`apart`) makes each copy an object.
+                let separate = copies > 0 && (apart || leaf.appearance.has_unplaced_gradient() || leaf.appearance.has_placed_gradient());
                 if options.reach_appearance() {
                     let made = transform_leaf(leaf, &path, map, copies, options, room);
                     used = used.minus(before).plus(made);
                     return;
                 }
-                if gradient {
+                if separate {
                     let made = copy_leaf(leaf, &path, m, copies, vectorcraft_doc::Scaling::default(), room);
                     used = used.minus(before).plus(made);
                     return;

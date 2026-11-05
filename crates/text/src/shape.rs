@@ -80,6 +80,8 @@ pub(crate) struct SGlyph {
     /// decided for the whole segment it was shaped in ([`joins`]): on a curved path it is bent
     /// along the path so its joins meet.
     pub cursive: bool,
+    /// The glyph's language has hyphenation break points ([`crate::hyphen::language_has_patterns`]).
+    pub hyphenates: bool,
 }
 
 /// Does `script` join its letters (a cursive script, whose neighbouring glyphs touch)?
@@ -947,6 +949,7 @@ fn inline_glyph(
         no_break: st.no_break,
         vertical_roman: false,
         cursive: false,
+        hyphenates: false,
     }
 }
 
@@ -1327,6 +1330,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             no_break: gst.no_break,
             vertical_roman: gst.standard_vertical_roman,
             cursive,
+            hyphenates: crate::hyphen::language_has_patterns(gst.language.as_deref()),
         });
     }
 }

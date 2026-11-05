@@ -254,7 +254,8 @@ pub enum PixelFx {
     /// Stylize › Glowing Edges: bright coloured Sobel outlines on black.
     GlowingEdges { width: f64, brightness: f64, smoothness: f64 },
     /// Pixelate › Color Halftone: each colour channel screened at its angle (`angles`° of channels
-    /// 1 to 4) into dots of up to `max_radius`, whose area follows the channel's strength.
+    /// 1 to 4) into dots of up to `max_radius` pixels of the Document Raster Effects resolution
+    /// ([`PixelSpace::line`] each), whose area follows the channel's strength.
     ColorHalftone { max_radius: f64, angles: [f64; 4] },
     /// Pixelate › Crystallize: polygons of solid colour around random points about `cell` apart.
     Crystallize { cell: f64 },
@@ -668,9 +669,10 @@ impl PixelFx {
         }
     }
 
-    /// How far (document units) from a pixel the content that decides it lies; `None` when that
-    /// is anywhere in the object (Radial Blur).
-    pub fn reach(&self) -> Option<f64> {
+    /// How far (document units) from a pixel the content that decides it lies, with lines of the
+    /// raster grid `line` apart ([`PixelSpace::line`]); `None` when that is anywhere in the object
+    /// (Radial Blur).
+    pub fn reach(&self, line: f64) -> Option<f64> {
         match *self {
             PixelFx::RadialBlur { .. } => None,
             PixelFx::SmartBlur { radius, mode: SmartBlurMode::Normal, .. } => Some(radius),
@@ -703,7 +705,10 @@ impl PixelFx {
             PixelFx::Stamp { smoothness, .. } => Some(sketch_ink::stamp_reach(smoothness)),
             PixelFx::GlowingEdges { width, smoothness, .. } => Some(width.max(smoothness * 3.0)),
             // The cells around the pixel's, and the cells around theirs.
-            PixelFx::ColorHalftone { max_radius, .. } => Some(3.0 * std::f64::consts::SQRT_2 * max_radius),
+            // (Without a usable grid there are no dots: see `pixelate::color_halftone`.)
+            PixelFx::ColorHalftone { max_radius, .. } => {
+                Some(3.0 * std::f64::consts::SQRT_2 * max_radius * line).filter(|d| d.is_finite()).or(Some(0.0))
+            }
             PixelFx::Crystallize { cell } => Some(1.5 * cell),
             PixelFx::ColoredPencil { width, .. } => Some(artistic::colored_pencil_reach(width)),
             PixelFx::ChalkCharcoal { .. } => Some(sketch::CHALK_CHARCOAL_REACH),

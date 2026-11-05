@@ -66,7 +66,9 @@ pub struct GestureTool {
     /// Pencil/Paintbrush starting on a selected path away from its ends: (path, Edit Selected
     /// Paths' distance in points); the stroke redraws the section it ends on (#2850).
     redraw: Option<(NodeId, f64)>,
-    /// Fit tolerance in points (Pencil/Paintbrush/Smooth/Blob Brush "Fidelity").
+    /// Fit tolerance (Pencil/Paintbrush/Smooth/Blob Brush "Fidelity"): in screen pixels for the
+    /// Pencil and the Paintbrush, so a stroke keeps as many points at any zoom (#5729), in points
+    /// for the others.
     pub fidelity: f64,
     /// Brush / eraser diameter in points (the Eraser's across its tip's long axis).
     pub size: f64,
@@ -453,11 +455,12 @@ impl GestureTool {
         self.draws_path() && !self.smoothing && !self.straight && self.extend.is_none() && self.redraw.is_none() && self.ends_near_start(cx, end)
     }
 
-    /// Parameters of `path.freehand` for the current stroke.
-    pub fn freehand_params(&self, closed: bool) -> Value {
+    /// Parameters of `path.freehand` for the current stroke, fitted at Fidelity on screen. Only the
+    /// Pencil and the Paintbrush (`draws_path`) send it; the Blob Brush's Fidelity stays in points.
+    pub fn freehand_params(&self, cx: &ToolContext, closed: bool) -> Value {
         let mut v = json!({
             "points": self.stroke_json(),
-            "fidelity": self.fidelity,
+            "fidelity": cx.tol(self.fidelity),
             "closed": closed,
             "style": if self.id == "paintbrush" { "brush" } else { "pencil" },
             "fill": self.fill,
@@ -473,16 +476,17 @@ impl GestureTool {
 
     /// The preview of a stroke being drawn: [`Self::freehand_params`], except that a stroke that
     /// redraws a selected path is shown as it is drawn, joined at its start to the point of the
-    /// path nearest to it, with no fill, and leaves the path as it is: where the stroke ends is
-    /// only known at the release, which redraws the path (`finish`).
+    /// path nearest to it, with no fill, and leaves the path and the selection as they are: where
+    /// the stroke ends is only known at the release, which redraws the path (`finish`).
     fn drawing_params(&self, cx: &ToolContext) -> Value {
-        let mut v = self.freehand_params(false);
+        let mut v = self.freehand_params(cx, false);
         let Some((id, _)) = self.redraw else { return v };
         if let Some(o) = v.as_object_mut() {
             o.remove("redraw");
         }
         v["fill"] = json!(false);
         v["keepSelected"] = json!(false);
+        v["leaveSelection"] = json!(true);
         let on = self.points.first().and_then(|&p| cx.doc.node(id)?.path_data()?.nearest(p)).map(|n| n.3);
         if let (Some(on), Some(pts)) = (on, v["points"].as_array_mut()) {
             pts.insert(0, json!([on.x, on.y]));
@@ -513,7 +517,7 @@ impl GestureTool {
                 let near = pts.last().is_some_and(|&end| self.ends_near_start(cx, end));
                 // A straight line has two points: closing it would draw it back over itself.
                 let closed = !self.straight && ((m.alt && (self.id == "paintbrush" || !self.alt_smooth)) || (self.extend.is_none() && near));
-                let mut params = self.freehand_params(closed);
+                let mut params = self.freehand_params(cx, closed);
                 // A Pencil stroke that continues a selected path and ends on an open end of another
                 // path selected at the press connects the two.
                 let connect = pts.last().and_then(|&end| self.find_end(cx, end, &self.connect_to));
@@ -669,8 +673,8 @@ impl Tool for GestureTool {
                 // With the Pencil's Live preview off a thin line shows instead (`overlays`).
                 if self.previews() && crate::previews_at(self.points.len()) {
                     let mut v = self.drawing_params(cx);
-                    let fidelity = self.fidelity.max(cx.tol(PREVIEW_FIDELITY_PX));
-                    v["fidelity"] = json!(fidelity);
+                    let fidelity = self.fidelity.max(PREVIEW_FIDELITY_PX);
+                    v["fidelity"] = json!(cx.tol(fidelity));
                     // A preview fitted coarser than the stroke kept is stale (`deactivate`).
                     self.previewed = if fidelity > self.fidelity { 0 } else { self.points.len() };
                     if !self.live_fit {
@@ -767,14 +771,14 @@ impl Tool for GestureTool {
     fn hover_ended(&mut self, _cx: &ToolContext) {
         self.tip_at = None;
     }
-    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         let began = self.began;
         self.tip_at = None;
         // Drags past the last preview are in the stroke kept, too, with Live curve fitting off the
         // stroke kept is fitted, and a stroke that redraws a path redraws it (`drawing_params`).
         let stale =
             (began && (self.previewed != self.points.len() || !self.live_fit || self.redraw.is_some()) && self.draws_path() && !self.smoothing)
-                .then(|| Action::Preview("path.freehand".into(), self.freehand_params(false)));
+                .then(|| Action::Preview("path.freehand".into(), self.freehand_params(cx, false)));
         self.snap.clear();
         self.active = false;
         self.near_start = false;

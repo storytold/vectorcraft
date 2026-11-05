@@ -211,6 +211,9 @@ pub(crate) struct DialogSpec {
     pub ok_label: Option<fn(&VectorcraftApp) -> &'static str>,
     /// Can OK (or Enter) apply the dialog as it is? None: always. The body says why not.
     pub ok_enabled: Option<fn(&VectorcraftApp, &Dialog) -> bool>,
+    /// What a dialog draws at the left end of its button row, level with the buttons, instead of
+    /// in its body (Transform Each's Preview checkbox).
+    pub footer_left: Option<fn(&mut egui::Ui, &mut Dialog)>,
 }
 
 impl DialogSpec {
@@ -240,6 +243,7 @@ impl DialogSpec {
         passes: |_, _| false,
         ok_label: None,
         ok_enabled: None,
+        footer_left: None,
     };
 
     /// A dialog that draws its own window and confirms through its module.
@@ -413,10 +417,12 @@ registry! {
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
+    SetCorners: [crate::addons::pathtools::set_corners::KIND] => crate::addons::pathtools::set_corners::SPEC,
     NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
     SwatchLegend: [crate::addons::color::legend::KIND] => crate::addons::color::legend::SPEC,
     TextTweaker: [crate::addons::typetools::KIND] => crate::addons::typetools::SPEC,
     SelectByArtboards: [crate::addons::select::KIND] => crate::addons::select::SPEC,
+    SelectByLinkStatus: [crate::addons::select::link_status::KIND] => crate::addons::select::link_status::SPEC,
     ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE, crate::addons::arrange::OPACITY, crate::addons::arrange::SORT] => crate::addons::arrange::SPEC,
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
 }
@@ -504,10 +510,14 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 }
 
 /// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
-/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), and a change
+/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
-/// the dialog.
+/// the dialog, and Transform Each's Relative / Absolute keeps the Scale fields' size.
 pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == transform_each::KIND) {
+        transform_each::field_set(app, field, old);
+        return Ok(());
+    }
     let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };
     match field {
         "exportPreset" => export_for_screens::preset_set(app),
@@ -718,6 +728,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if let Some(label) = spec.discard {
                 ui.add_space(28.0);
                 discard = widgets::secondary_button(ui, label).clicked();
+            }
+            // The row runs right to left: a left-to-right layout in the room left of the buttons
+            // puts its control at the row's left end.
+            if let Some(left) = spec.footer_left {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| left(ui, &mut d));
             }
         });
     });

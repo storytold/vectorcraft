@@ -3984,6 +3984,7 @@ axis	Both	Ambos
 @msg	Create from Selection: the selection has no area	Crear a partir de la selección: la selección no tiene área
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Recuperación de datos no tiene dónde guardar copias: configura Preferencias → Manejo de archivos → Recuperación de datos → Carpeta (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Recuperación de datos no puede guardar copias en {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	No se pueden cargar plugins desde {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecciona con Selección directa los puntos de ancla en los que cortar (no los puntos finales de trazados abiertos)
 @msg	Divide Objects Below: select a path	Dividir objetos inferiores: selecciona un trazado
 @msg	Divide Objects Below: select exactly one path	Dividir objetos inferiores: selecciona exactamente un trazado
@@ -4674,6 +4675,9 @@ axis	Both	Ambos
 @msg	graphs come in as plain art, without their data or settings	los gráficos se importan como ilustración normal, sin sus datos ni sus ajustes
 @msg	an image whose data is cut short was left out	se omitió una imagen con datos incompletos
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	las imágenes vinculadas muestran la vista previa de baja resolución guardada en el archivo hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
+@msg	linked type areas past VectorCraft's limits were left out	se omitieron las áreas de texto enlazadas que superan los límites de VectorCraft
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el texto usado como máscara en áreas enlazadas, texto ceñido o un trazado compuesto no recorta
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	las imágenes vinculadas sin vista previa en el archivo muestran un marcador de posición hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	el texto de área en marcos demasiado bajos para una línea de la fuente en que se muestra recibió marcos más altos ({_1}): de otro modo no se vería
 @msg	its editing data doesn't say where its art is	sus datos de edición no dicen dónde está su ilustración
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	este archivo se guardó sin compatibilidad con PDF y sus datos de edición no se pueden leer ({why})
@@ -6041,6 +6045,9 @@ anchor	Points:	Puntos:
 	Find Nearest Swatch…	Buscar muestra más cercana…
 	Find Nearest Swatch	Buscar muestra más cercana
 	Apply Nearest Swatch	Aplicar muestra más cercana
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Aplicar relleno al trazo
+	Apply Stroke to Fill	Aplicar trazo al relleno
 	Select objects to find the swatches nearest their colors.	Seleccione objetos para buscar las muestras más cercanas a sus colores.
 @msg	select objects or give `color`	seleccione objetos o indique `color`
 @msg	`color` is not a colour	`color` no es un color
@@ -6277,6 +6284,10 @@ breakText	Glyphs	Glifos
 	Bow	Arco
 	Spike	Pico
 	Skip Spaces	Omitir espacios
+	Release Type on a Path…	Soltar texto en trazado…
+	Release Type on a Path	Soltar texto en trazado
+	Text and Path	Texto y trazado
+	Path Only	Solo trazado
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	La ilustración es demasiado grande para copiarla como imagen: las demás aplicaciones no reciben un PNG de ella
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6288,3 +6299,43 @@ breakText	Glyphs	Glifos
 	Fully Outside	Totalmente fuera
 	No artboards match.	Ninguna mesa de trabajo coincide.
 	Chosen: {n} of {total}	Elegidas: {n} de {total}
+
+# Contour add-on
+	Contour	Contorno
+	Contour Tool	Herramienta Contorno
+	Sharp	Puntiaguda
+	Bake	Expandir
+	Turn the Contour into plain paths	Convierte el contorno en trazados simples
+	Set Corners…	Definir esquinas…
+	All Anchors	Todas las anclas
+	Odd-Numbered Anchors	Anclas impares
+	Even-Numbered Anchors	Anclas pares
+	Minimum angle	Ángulo mínimo
+	Maximum angle	Ángulo máximo
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Seleccionar vinculadas
+	Select Embedded	Seleccionar incrustadas
+	Select Missing	Seleccionar ausentes
+	Select Modified	Seleccionar modificadas
+	Select by Link Status	Seleccionar por estado de vínculo
+	Select by Link Status…	Seleccionar por estado de vínculo…
+	Search images	Buscar imágenes
+	No images match.	Ninguna imagen coincide.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Se seleccionó {n} imagen vinculada|Se seleccionaron {n} imágenes vinculadas
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Se seleccionó {n} imagen incrustada|Se seleccionaron {n} imágenes incrustadas
+@msgplural	Selected {n} missing image|Selected {n} missing images	Se seleccionó {n} imagen ausente|Se seleccionaron {n} imágenes ausentes
+@msgplural	Selected {n} modified image|Selected {n} modified images	Se seleccionó {n} imagen modificada|Se seleccionaron {n} imágenes modificadas
+@msgplural	Selected {n} image|Selected {n} images	Se seleccionó {n} imagen|Se seleccionaron {n} imágenes
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} más está oculta o bloqueada|{selected}; {n} más están ocultas o bloqueadas
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} más está en una capa de plantilla|{selected}; {n} más están en capas de plantilla
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} más está fuera del grupo aislado|{selected}; {n} más están fuera del grupo aislado
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} más no se puede seleccionar ahora|{selected}; {n} más no se pueden seleccionar ahora
+
+# Compound Shapes add-on
+	Compound Shapes	Formas compuestas
+	Shape Mode Buttons Make Compound Shapes	Los botones de modo de forma crean formas compuestas
+
+# 3D Box add-on
+	3D Box	Caja 3D
+	3D Box Tool	Herramienta Caja 3D

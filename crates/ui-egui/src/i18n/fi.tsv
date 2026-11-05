@@ -4206,6 +4206,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Create from Selection: the selection has no area	Luo valinnasta: valinnalla ei ole pinta-alaa
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tietojen palautuksella ei ole paikkaa kopioille: määritä Asetukset → Tiedostojen käsittely → Tietojen palautus → Kansio (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Tietojen palautus ei voi tallentaa kopioita kansioon {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Laajennuksia ei voi ladata kansiosta {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	valitse suoravalinnalla ankkuripisteet, joista leikataan (ei avoimien polkujen päätepisteitä)
 @msg	Divide Objects Below: select a path	Jaa alla olevat objektit: valitse polku
 @msg	Divide Objects Below: select exactly one path	Jaa alla olevat objektit: valitse tasan yksi polku
@@ -4882,6 +4883,9 @@ imageTrace	Outline	Ääriviiva
 @msg	graphs come in as plain art, without their data or settings	kaaviot tuodaan tavallisena grafiikkana ilman niiden tietoja ja asetuksia
 @msg	an image whose data is cut short was left out	kuva, jonka data on katkennut, jätettiin pois
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkitetyt kuvat näyttävät tiedostoon tallennetun matalan tarkkuuden esikatselun, kunnes niiden tiedostot löytyvät: linkitä ne uudelleen Linkit-paneelissa
+@msg	linked type areas past VectorCraft's limits were left out	VectorCraftin rajat ylittävät linkitetyt tekstialueet jätettiin pois
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	maskina käytetty teksti linkitetyissä alueissa, rivitetyssä tekstissä tai yhdistelmäpolussa ei rajaa
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	linkitetyt kuvat, joilla ei ole esikatselua tiedostossa, näkyvät paikkamerkkinä, kunnes niiden tiedostot löytyvät: linkitä ne uudelleen Linkit-paneelissa
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	aluetekstin kehykset, jotka olivat liian matalia yhdelle riville niiden fontilla, korotettiin ({_1}): muuten niiden teksti ei näkyisi
 @msg	its editing data doesn't say where its art is	sen muokkaustiedoista ei selviä kuvituksen sijainti
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	tämä tiedosto tallennettiin ilman PDF-yhteensopivuutta, eikä sen muokkaustietoja voi lukea ({why})
@@ -6129,6 +6133,9 @@ anchor	Points:	Pisteet:
 	Find Nearest Swatch…	Etsi lähin värimalli…
 	Find Nearest Swatch	Etsi lähin värimalli
 	Apply Nearest Swatch	Käytä lähintä värimallia
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Käytä täyttöä viivaan
+	Apply Stroke to Fill	Käytä viivaa täyttöön
 	Select objects to find the swatches nearest their colors.	Valitse objektit, joiden väreille haluat etsiä lähimmät värimallit.
 @msg	select objects or give `color`	valitse objekteja tai anna `color`
 @msg	`color` is not a colour	`color` ei ole väri
@@ -6365,6 +6372,10 @@ breakText	Glyphs	Merkit
 	Bow	Kaari
 	Spike	Piikki
 	Skip Spaces	Ohita välilyönnit
+	Release Type on a Path…	Vapauta teksti polulta…
+	Release Type on a Path	Vapauta teksti polulta
+	Text and Path	Teksti ja polku
+	Path Only	Vain polku
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafiikka on liian suuri kopioitavaksi kuvana: muut sovellukset eivät saa siitä PNG-kuvaa
 	Check for Updates…	Tarkista päivitykset…
 	VectorCraft Updates	VectorCraft-päivitykset
@@ -6381,3 +6392,43 @@ breakText	Glyphs	Merkit
 	Fully Outside	Kokonaan ulkona
 	No artboards match.	Mikään piirtoalusta ei vastaa hakua.
 	Chosen: {n} of {total}	Valittu: {n}/{total}
+
+# Contour add-on
+	Contour	Ääriviiva
+	Contour Tool	Ääriviivatyökalu
+	Sharp	Terävä
+	Bake	Laajenna
+	Turn the Contour into plain paths	Muuntaa ääriviivan tavallisiksi poluiksi
+	Set Corners…	Aseta kulmat…
+	All Anchors	Kaikki ankkurit
+	Odd-Numbered Anchors	Parittomat ankkurit
+	Even-Numbered Anchors	Parilliset ankkurit
+	Minimum angle	Pienin kulma
+	Maximum angle	Suurin kulma
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Valitse linkitetyt
+	Select Embedded	Valitse upotetut
+	Select Missing	Valitse puuttuvat
+	Select Modified	Valitse muokatut
+	Select by Link Status	Valitse linkin tilan mukaan
+	Select by Link Status…	Valitse linkin tilan mukaan…
+	Search images	Hae kuvia
+	No images match.	Mikään kuva ei vastaa hakua.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Valittiin {n} linkitetty kuva|Valittiin {n} linkitettyä kuvaa
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Valittiin {n} upotettu kuva|Valittiin {n} upotettua kuvaa
+@msgplural	Selected {n} missing image|Selected {n} missing images	Valittiin {n} puuttuva kuva|Valittiin {n} puuttuvaa kuvaa
+@msgplural	Selected {n} modified image|Selected {n} modified images	Valittiin {n} muokattu kuva|Valittiin {n} muokattua kuvaa
+@msgplural	Selected {n} image|Selected {n} images	Valittiin {n} kuva|Valittiin {n} kuvaa
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} muu on piilotettu tai lukittu|{selected}; {n} muuta on piilotettu tai lukittu
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} muu on mallitasolla|{selected}; {n} muuta on mallitasoilla
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} muu on eristetyn ryhmän ulkopuolella|{selected}; {n} muuta on eristetyn ryhmän ulkopuolella
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} muuta ei voi valita nyt|{selected}; {n} muuta ei voi valita nyt
+
+# Compound Shapes add-on
+	Compound Shapes	Yhdistelmämuodot
+	Shape Mode Buttons Make Compound Shapes	Muototilapainikkeet luovat yhdistelmämuotoja
+
+# 3D Box add-on
+	3D Box	3D-laatikko
+	3D Box Tool	3D-laatikkotyökalu

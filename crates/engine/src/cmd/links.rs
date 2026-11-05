@@ -1110,7 +1110,7 @@ fn linked_param(st: &crate::DocState, p: &Value, cmd: &str) -> Result<NodeId> {
 
 /// Per linked image in the layers of `st`: its file's status, where it was found when away from
 /// its path, and whether the image shows its preview (each file probed once).
-fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, bool)> {
+pub(crate) fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, bool)> {
     let mut out = BTreeMap::new();
     for g in groups(&st.doc, None).iter().filter(|g| !g.ids.is_empty()) {
         let (status, found) = probe(g, st.path.as_deref());
@@ -1349,12 +1349,11 @@ fn file_fields_here(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Va
     let doc_path = st.path.as_deref();
     let path = fileio::document_path(&l.path, doc_path).ok();
     let stamp = path.as_deref().and_then(file_stamp);
-    let folder_len = l.path.len().saturating_sub(l.name().len());
     out["status"] = json!(status.as_str());
     note_refused(out, l, doc_path);
     out["path"] = json!(l.path);
     out["fileName"] = json!(l.name());
-    out["location"] = json!(l.path.get(..folder_len).unwrap_or_default().trim_end_matches(['/', '\\']));
+    out["location"] = json!(l.folder());
     for (k, v) in [
         ("page", l.page.map(u64::from)),
         ("fileSize", stamp.map(|s| s.0).or(l.size)),

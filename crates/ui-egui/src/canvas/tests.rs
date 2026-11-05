@@ -1466,9 +1466,10 @@ fn a_huge_selection_of_type_images_symbols_or_meshes_shows_its_bounds() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
         app.ui.task_bar = false;
-        // The Rectangle tool draws nothing of its own (no bounding box, no type on a path
-        // brackets): only the selection's overlay changes the frame.
-        app.select_tool("rectangle");
+        // The Line Segment tool draws nothing of its own (no bounding box, no type on a path
+        // brackets; the box-drawing shape tools show the bounding box, #5477): only the
+        // selection's overlay changes the frame.
+        app.select_tool("lineSegment");
         match kind {
             "point type" => {
                 app.session.execute("text.create", &json!({"x": 20, "y": 40, "text": "Type"})).unwrap();
@@ -6233,6 +6234,141 @@ fn ime_edge_orders_never_eat_committed_text_or_lose_the_composition() {
     assert_eq!(plain(&app, id), "雅がくらくか");
 }
 
+/// Starts editing new point type with the Type tool; returns its id.
+fn start_typing(app: &mut VectorcraftApp, ctx: &egui::Context) -> u64 {
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    typing_frame(app, ctx, vec![]);
+    app.select_tool("type");
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = xf.to_screen(Point::new(100.0, 100.0));
+    let click =
+        |p: Pos2, pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    typing_frame(app, ctx, vec![egui::Event::PointerMoved(at), click(at, true)]);
+    typing_frame(app, ctx, vec![click(at, false)]);
+    assert!(app.session.tool_wants_text());
+    app.session.active().unwrap().selection.objects[0].0
+}
+
+/// Returns a key press and its release.
+fn tap(key: egui::Key) -> [egui::Event; 2] {
+    [true, false].map(|pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() })
+}
+
+/// Arrows, Home, End, Tab, Enter and clipboard events go to the Type tool in order with the text
+/// of the same frame, and each Enter types a line break.
+#[test]
+fn the_type_tool_takes_text_and_editing_keys_in_the_order_they_came() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let text = |t: &str| egui::Event::Text(t.into());
+    typing_frame(&mut app, &ctx, vec![text("ax")]);
+    // ← moves the caret before the text that follows it goes in.
+    typing_frame(&mut app, &ctx, [tap(egui::Key::ArrowLeft).to_vec(), vec![text("b")]].concat());
+    assert_eq!(plain(&app, id), "abx");
+    // Home and End move the caret before the text that follows each goes in.
+    typing_frame(&mut app, &ctx, [tap(egui::Key::Home).to_vec(), vec![text("0")], tap(egui::Key::End).to_vec(), vec![text("9")]].concat());
+    assert_eq!(plain(&app, id), "0abx9");
+    // Tab and a paste go in between the texts around them.
+    let paste = egui::Event::Paste("p".into());
+    typing_frame(&mut app, &ctx, [vec![text("t")], tap(egui::Key::Tab).to_vec(), vec![text("u"), paste, text("q")]].concat());
+    assert_eq!(plain(&app, id), "0abx9t\tupq");
+    // Enter types its line break between the texts around it, once for each press.
+    typing_frame(&mut app, &ctx, [vec![text("1")], tap(egui::Key::Enter).to_vec(), tap(egui::Key::Enter).to_vec(), vec![text("2")]].concat());
+    assert_eq!(plain(&app, id), "0abx9t\tupq1\n\n2");
+    // A key that comes before a composition starts in the same frame still moves the caret.
+    typing_frame(&mut app, &ctx, [tap(egui::Key::Home).to_vec(), vec![preedit("k", 1)]].concat());
+    typing_frame(&mut app, &ctx, vec![preedit("", 0), egui::Event::Ime(egui::ImeEvent::Commit("k".into()))]);
+    assert_eq!(plain(&app, id), "0abx9t\tupq1\n\nk2");
+}
+
+/// Enter keeps each key event's modifiers while sharing a frame with typed text.
+#[test]
+fn shift_enter_types_a_soft_return_in_order_with_plain_enter() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let text = |t: &str| egui::Event::Text(t.into());
+    let enter =
+        |modifiers| [true, false].map(|pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers });
+    typing_frame(
+        &mut app,
+        &ctx,
+        [vec![text("a")], enter(egui::Modifiers::SHIFT).to_vec(), vec![text("b")], enter(egui::Modifiers::NONE).to_vec(), vec![text("c")]].concat(),
+    );
+    assert_eq!(plain(&app, id), "a\u{2028}b\nc");
+}
+
+/// Within one frame, Home between two texts, Tab inside a line, and Backspace after a paste each
+/// act on the text as the events before them left it.
+#[test]
+fn home_tab_and_backspace_act_on_the_text_before_them_in_the_frame() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let text = |t: &str| egui::Event::Text(t.into());
+    typing_frame(&mut app, &ctx, vec![text("abc")]);
+    typing_frame(&mut app, &ctx, [vec![text("d")], tap(egui::Key::Home).to_vec(), vec![text("0")]].concat());
+    assert_eq!(plain(&app, id), "0abcd");
+    typing_frame(&mut app, &ctx, [tap(egui::Key::ArrowRight).to_vec(), tap(egui::Key::Tab).to_vec(), vec![text("t")]].concat());
+    assert_eq!(plain(&app, id), "0a\ttbcd");
+    typing_frame(&mut app, &ctx, [tap(egui::Key::End).to_vec(), vec![egui::Event::Paste("pq".into())], tap(egui::Key::Backspace).to_vec()].concat());
+    assert_eq!(plain(&app, id), "0a\ttbcdp");
+}
+
+/// In a frame that began composing, an editing key after the IME's commit applies before the text
+/// that follows it; a key before the commit and an Enter after it stay the IME's.
+#[test]
+fn editing_keys_after_an_ime_commit_apply_in_the_same_frame() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let text = |t: &str| egui::Event::Text(t.into());
+    let commit = |t: &str| egui::Event::Ime(egui::ImeEvent::Commit(t.into()));
+    typing_frame(&mut app, &ctx, vec![text("ab")]);
+    typing_frame(&mut app, &ctx, vec![preedit("漢", 1)]);
+    typing_frame(&mut app, &ctx, [vec![preedit("", 0), commit("漢")], tap(egui::Key::ArrowLeft).to_vec(), vec![text("x")]].concat());
+    assert_eq!(plain(&app, id), "abx漢");
+    typing_frame(&mut app, &ctx, vec![preedit("字", 1)]);
+    let keys = [tap(egui::Key::ArrowLeft).to_vec(), vec![preedit("", 0), commit("字")], tap(egui::Key::Enter).to_vec()];
+    typing_frame(&mut app, &ctx, keys.concat());
+    assert_eq!(plain(&app, id), "abx字漢");
+}
+
+/// Cmd/Ctrl+Enter bound to a command runs the command and types no line break, also when a plain
+/// Enter comes in the same frame. Unbound, it types a line break as Enter does.
+#[test]
+fn a_command_on_cmd_enter_runs_without_typing_a_line_break() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let cmd_enter = [true, false].map(|pressed| egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    });
+    typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
+    typing_frame(&mut app, &ctx, cmd_enter.to_vec());
+    assert_eq!(plain(&app, id), "a\n", "nothing is bound to Cmd+Enter");
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.grid", "Cmd+Enter");
+    crate::shortcut_editor::sync(&app.ui);
+    let grid = app.ui.view.grid;
+    typing_frame(&mut app, &ctx, cmd_enter.to_vec());
+    let ran = (plain(&app, id), app.ui.view.grid);
+    typing_frame(&mut app, &ctx, [tap(egui::Key::Enter).to_vec(), cmd_enter.to_vec()].concat());
+    app.ui.shortcut_overrides.clear();
+    crate::shortcut_editor::sync(&app.ui);
+    assert_eq!((ran.0.as_str(), ran.1), ("a\n", !grid), "Cmd+Enter runs Show Grid only");
+    assert_eq!((plain(&app, id).as_str(), app.ui.view.grid), ("a\n\n", grid), "Enter types a line break and Cmd+Enter runs Show Grid");
+}
+
 /// Reset to a blank document, select the Type tool and click document point (100, 100), returning
 /// the screen position used by IME fixtures.
 fn type_at(app: &mut VectorcraftApp, ctx: &egui::Context) -> egui::Pos2 {
@@ -8987,4 +9123,78 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
     out.textures_delta.clear();
     assert_eq!(set_count, 1, "settled frame 10 is uploaded to texture");
     assert_eq!(app.canvas.key.as_ref().unwrap().revision, 10, "settled frame 10 is uploaded");
+}
+
+/// The labels the Contour bar draws in a headless frame, with their rects; none while it isn't
+/// shown.
+fn contour_bar_labels(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+    egui_extras::install_image_loaders(ctx);
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+    out.textures_delta.clear();
+    let Some(bar) = contour_bar::bar_rect(ctx) else { return vec![] };
+    out.shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Text(t) if bar.contains(t.visual_bounding_rect().center()) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A click on the centre of the label `name` of the Contour bar, laid out by one frame before it.
+fn click_contour_bar(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) {
+    let labels = contour_bar_labels(app, ctx, vec![]);
+    let at = labels.iter().find(|(t, _)| t == name).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{name}` in {labels:?}"));
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    contour_bar_labels(app, ctx, vec![egui::Event::PointerMoved(at)]);
+    contour_bar_labels(app, ctx, vec![button(true), button(false)]);
+}
+
+/// The Contour bar shows with the Contour tool and a shape selected: Sharp, Round and Square set the
+/// corner style (of a selected Contour at once, else of the next one), and Bake turns a Contour into
+/// plain paths.
+#[test]
+fn the_contour_bar_sets_corners_and_bakes() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 80, "height": 60})).unwrap();
+    let ctx = egui::Context::default();
+
+    // Only the Contour tool shows it.
+    app.select_tool("selection");
+    assert!(contour_bar_labels(&mut app, &ctx, vec![]).is_empty());
+    app.select_tool("contour");
+    contour_bar_labels(&mut app, &ctx, vec![]);
+    let names: Vec<String> = contour_bar_labels(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+    for want in ["Contour", "Sharp", "Round", "Square", "Bake"] {
+        assert!(names.iter().any(|n| n == want), "{want} in {names:?}");
+    }
+    let offsets = |app: &VectorcraftApp| {
+        let mut found = vec![];
+        app.session.active().unwrap().doc.walk(|n| {
+            if let Some(e) = n.appearance.effects.iter().find(|e| e.id == "path.offsetPath") {
+                found.push(e.params["joins"].as_str().unwrap_or_default().to_string());
+            }
+        });
+        found
+    };
+
+    // No Contour yet: Round is kept for the next one, and Bake does nothing.
+    let steps = app.session.active().unwrap().history.undo.len();
+    click_contour_bar(&mut app, &ctx, "Round");
+    assert_eq!(app.session.tool_options()["corners"], json!("round"));
+    click_contour_bar(&mut app, &ctx, "Bake");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "nothing to bake");
+    assert!(offsets(&app).is_empty());
+
+    // A Contour made now has round corners; Square changes the selected Contour in place.
+    app.session.execute("addon.contour.set", &json!({"offset": 8, "corners": "round"})).unwrap();
+    assert_eq!(offsets(&app), ["round"]);
+    click_contour_bar(&mut app, &ctx, "Square");
+    assert_eq!(offsets(&app), ["bevel"], "the selected Contour changed, none was added");
+
+    // Bake: the live effect is gone and the art stays.
+    click_contour_bar(&mut app, &ctx, "Bake");
+    assert!(offsets(&app).is_empty(), "baked");
 }

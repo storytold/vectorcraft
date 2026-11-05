@@ -125,6 +125,30 @@ fn an_ai_file_opens_with_its_artboard_options_raster_settings_and_author() {
 }
 
 #[test]
+fn an_ai_file_opens_with_its_active_artboard() {
+    let board = |x: i32, name: &str| {
+        format!(
+            "%_/Dictionary :\n%_{x} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_({name}) /UnicodeString (Name) ,\n%_; ,\n",
+            x + 200
+        )
+    };
+    let document = format!(
+        "%_/Document :\n%_/Dictionary :\n%_/Array :\n{}{}%_; (ArtboardArray) ,\n%_1 /Int (CropAreaActive) ,\n%_; /NotRecorded ,\n%_;\n",
+        board(0, "One"),
+        board(300, "Two")
+    );
+    let data = ai::sample_data();
+    let at = data.windows(15).position(|w| w == b"%AI5_BeginLayer").unwrap();
+    let data = [&data[..at], document.as_bytes(), &data[at..]].concat();
+    let mut s = Session::new();
+    let r = open(&mut s, "art.ai", &ai::ai(&compressed(&data), PLACEHOLDER), json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let names: Vec<&str> = d.artboards.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(names, ["One", "Two"], "{r}");
+    assert_eq!(d.opened_artboard, Some(d.artboards[1].id), "{r}");
+}
+
+#[test]
 fn an_ai_unread_group_keeps_its_layers_and_live_neighbor() {
     let live = format!("0 0 1 0 k\n{}f", ai::rect(10.0, 10.0, 14.0, 14.0));
     let unread = format!("u\n0 0 1 0 k\n{}f\nZZ\nU\n{}", ai::rect(50.0, 10.0, 54.0, 14.0), ai::named("Unread"));
@@ -285,6 +309,38 @@ fn a_swatch_library_in_a_ai_file_without_layers_loads_its_palette() {
     assert!(doc.is_ok(), "{doc:?}");
     let sky = s.doc().unwrap().doc.swatch("Sky").map(|w| w.paint.clone());
     assert!(matches!(sky, Some(vectorcraft_color::Paint::Gradient(_))), "{sky:?}");
+}
+
+/// Other Library… on a `.ai` graphic style library (art styles, their list and no layers) gives the
+/// library the styles of its list, in the list's order, not the default styles; the file opens with
+/// them too.
+#[test]
+fn a_graphic_style_library_in_a_ai_file_without_layers_loads_its_styles() {
+    let style = |name: &str, xa: &str| {
+        format!(
+            "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{xa}0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n"
+        )
+    };
+    let styles = format!(
+        "%AI9_BeginArtStyles\n{}{}{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Red)\n(Green)\n(Blue)\n%AI9_EndArtStyleList\n",
+        style("Blue", "0 0 0 0 0 0 1 Xa\n"),
+        style("Green", "0 0 0 0 0 1 0 Xa\n"),
+        style("Red", "0 0 0 0 1 0 0 Xa\n")
+    );
+    let data = ai::editing_data(200.0, 100.0, &styles);
+    let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "fills.ai"});
+    let r = s.execute("graphicStyle.loadLibrary", &p).unwrap();
+    assert_eq!((&r["name"], &r["count"]), (&json!("fills"), &json!(3)), "{r}");
+    let lib = s.execute("graphicStyle.library", &json!({"library": r["library"]})).unwrap();
+    let names: Vec<&str> = lib["styles"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Red", "Green", "Blue"], "{lib}");
+    let r = open(&mut s, "fills.ai", &file, json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let styles: Vec<(&str, u32)> = doc.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect();
+    assert_eq!(styles, [("Red", 1), ("Green", 2), ("Blue", 3)], "{r}");
 }
 
 /// A 1-bit RGB image opens from the editing data in the colors its PDF part shows.
@@ -1021,6 +1077,46 @@ fn an_empty_page_with_type_as_outlines_outlines_the_editing_datas_type() {
     assert_eq!(texts, 0, "no type left: {r}");
     assert!(paths > 0, "the outlines are there: {r}");
     assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "the editing data's layers");
+}
+
+/// A story of a `.ai` file's text document with no character or paragraph runs is set in
+/// `[Normal Character Style]` and `[Normal Paragraph Style]`; the base attributes give only what
+/// those styles leave out.
+#[test]
+fn an_ai_story_without_runs_takes_the_normal_styles() {
+    let story = "<< /0 << /0 (Hi\r) >> \
+                 /1 << /0 [ << /0 0 >> ] /2 [ << /99 /PC /6 [ << /99 /F /0 << /0 [ 8191.5 8191.5 ] >> /6 [ << /99 /R /6 [ << /99 /R /6 [ << /99 /L /6 [ \
+                 << /99 /S /0 << /0 [ 0.0 0.0 ] >> /15 << /0 3 >> >> ] >> ] >> ] >> ] >> ] >> ] >> >>";
+    let char_sheets = "/5 << /0 [ << /0 << /0 ([Normal Character Style]) /6 << /0 0 /1 9.0 \
+                       /53 << /99 /SimplePaint /0 << /0 1 /1 [ 1.0 0.0 0.0 1.0 ] >> >> >> >> >> ] >>";
+    let para_sheets = "/6 << /0 [ << /0 << /0 ([Normal Paragraph Style]) /5 << /1 6.0 /9 false >> >> >> ] >>";
+    let document = format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> {char_sheets} {para_sheets} \
+         /8 << /0 [ << /0 << /0 [ 0 0 ] /2 << /2 [ 1 0 0 1 0 0 ] >> >> >> ] >> >>\n\
+         /1 << /1 [ {story} ] /2 << /1 12.0 /53 << /99 /SimplePaint /0 << /0 0 /1 [ 1.0 1.0 ] >> >> >> /3 << /1 2.0 /9 true >> >>\n"
+    );
+    let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    let text = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n2 /TextAntialiasing ,\n;\n";
+    let data = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
+         %AI5_NumLayers: 1\n{}%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n%%Trailer\n",
+        ai::layer("Art", text),
+        lines.join("\n")
+    );
+    let mut s = Session::new();
+    let r = open(&mut s, "plain.ai", &ai::ai(&compressed(data.as_bytes()), ""), json!({})).unwrap();
+    let mut texts = vec![];
+    s.doc().unwrap().doc.walk(|c| {
+        if let NodeKind::Text(t) = &c.kind {
+            texts.push((**t).clone());
+        }
+    });
+    let [t] = texts.as_slice() else { panic!("one text object: {r}") };
+    assert_eq!(t.plain_text(), "Hi");
+    let style = &t.runs[0].style;
+    assert_eq!(style.size, 9.0, "{r}");
+    assert_eq!(style.fill, vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!((t.para.first_line_indent, t.para.hyphenate), (6.0, false));
 }
 
 /// Type asked for as outlines in a `.ai` saved without PDF compatibility (its page only a

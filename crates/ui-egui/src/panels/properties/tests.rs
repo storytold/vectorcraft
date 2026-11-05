@@ -665,6 +665,25 @@ fn edit_artboards_fill_sets_the_background_color() {
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields.get("artboard")), Some(Some(&json!(1))), "the chip opens it too");
 }
 
+/// #5698: with Artboards 1 and 3 selected, a Fill chosen in Edit Artboards goes to both, in one
+/// command and one undo step; Artboard 2 keeps none.
+#[test]
+fn edit_artboards_fill_sets_every_selected_artboard() {
+    let mut app = two_selected_artboards();
+    let colors = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards.iter().map(|a| a.color).collect::<Vec<_>>();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let texts = frame(&mut app, &ctx, vec![]);
+    click(&mut app, &ctx, &texts, "None");
+    let texts = frame(&mut app, &ctx, vec![]);
+    let commands = app.run_count;
+    click(&mut app, &ctx, &texts, "Black");
+    assert_eq!(app.run_count.wrapping_sub(commands), 1, "one command");
+    assert_eq!(colors(&app), [Some(Color::BLACK), None, Some(Color::BLACK)]);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+}
+
 fn artboard_deletion_app(count: usize) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 100, "artboards": count})).unwrap();

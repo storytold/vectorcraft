@@ -16,6 +16,7 @@ pub mod corners;
 pub mod depth;
 pub mod dimension;
 pub mod graph;
+mod halftone_radii;
 pub mod hit;
 mod id_index;
 pub mod inks;
@@ -324,6 +325,11 @@ pub struct Document {
     /// Never saved.
     #[serde(skip)]
     pub retired_artboard_id: RetiredArtboardId,
+    /// The id of the artboard an imported file names as its active one (a `.ai` file's
+    /// `CropAreaActive`): the document opens with that artboard active. `None`: the first. Never
+    /// saved.
+    #[serde(skip)]
+    pub opened_artboard: Option<u32>,
     /// Some object is a dimension (the Dimension tool): edits refresh dimensions only while this
     /// is set, so documents without any pay nothing for them.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

@@ -964,7 +964,14 @@ impl Targets {
     /// ([`Self::for_move`]) is spaced evenly along an axis that lines up with nothing
     /// ([`Self::even_spacing`]). Returns the shift and the guides.
     pub fn snap_rects(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>) {
+        let (d, ov, _) = self.snap_rects_axes(rects, tol);
+        (d, ov)
+    }
+
+    /// [`Self::snap_rects`], also saying which axes (x, y) lined up or were spaced evenly.
+    pub(crate) fn snap_rects_axes(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, [bool; 2]) {
         let (mut d, mut ov, aligned) = self.align_rects(rects, tol);
+        let mut taken = aligned;
         if let [r] = rects
             && !self.boxes.is_empty()
         {
@@ -973,6 +980,7 @@ impl Targets {
             for (x, lined_up) in [true, false].into_iter().zip(aligned) {
                 if let Some((shift, _)) = self.even_spacing(moved, x, tol).filter(|_| !lined_up) {
                     *(if x { &mut d.x } else { &mut d.y }) += shift;
+                    taken[usize::from(!x)] = true;
                     spaced = true;
                 }
             }
@@ -985,7 +993,7 @@ impl Targets {
                 }
             }
         }
-        (d, ov)
+        (d, ov, taken)
     }
 
     /// Spacing Guides along the x axis (`x`) or the y axis for the moved rectangle `r`, among the
@@ -1086,6 +1094,50 @@ impl Targets {
             ov.extend(self.line(Point::new(x0, y), Point::new(x1, y)));
         }
         (d, ov, [best_x.is_some(), best_y.is_some()])
+    }
+
+    /// Snap a selection grabbed at `p` and moved as a whole, its bounds now `r`, to the ruler
+    /// guides: the grabbed point goes into line with a guide running within `tol` of it
+    /// ([`Self::snap_point`]), and on an axis where none does and that is not `taken` (x, y)
+    /// already, the edge or centre of `r` nearest a guide running past it within `tol` goes onto it
+    /// (#5746). Returns the shift, the guides (none when nothing lines up) and whether a guide held
+    /// the grabbed point.
+    pub(crate) fn snap_moved_to_rulers(&self, p: Point, r: Option<Rect>, tol: f64, taken: [bool; 2]) -> (Vec2, Vec<Overlay>, bool) {
+        let near = |vertical: bool| {
+            let v = if vertical { p.x } else { p.y };
+            self.rulers.iter().any(|g| g.vertical == vertical && (g.pos - v).abs() <= tol && g.line_at(p, tol).is_some())
+        };
+        let held = [near(true), near(false)];
+        let (q, mut ov) = if held.contains(&true) { self.snap_point(p, tol) } else { (p, vec![]) };
+        let mut d = q - p;
+        let Some(r) = r.map(|r| r + d) else { return (d, ov, held.contains(&true)) };
+        // The guide upright (`vertical`) or level nearest one of `vs`, running past `r` across.
+        let nearest = |vertical: bool, vs: [f64; 3]| {
+            let (c, half) =
+                if vertical { (Point::new(0.0, r.center().y), r.height() / 2.0) } else { (Point::new(r.center().x, 0.0), r.width() / 2.0) };
+            self.rulers
+                .iter()
+                .filter(|g| g.vertical == vertical)
+                .filter_map(|g| g.line_at(c, tol + half))
+                .flat_map(|(t, from, _)| vs.into_iter().map(move |v| (t - v, t, from)))
+                .filter(|(s, ..)| s.abs() <= tol)
+                .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()))
+        };
+        let hx = if held[0] || taken[0] { None } else { nearest(true, [r.x0, r.center().x, r.x1]) };
+        let hy = if held[1] || taken[1] { None } else { nearest(false, [r.y0, r.center().y, r.y1]) };
+        let shift = Vec2::new(hx.map_or(0.0, |h| h.0), hy.map_or(0.0, |h| h.0));
+        let (r, lined) = (r + shift, hx.is_some() || hy.is_some());
+        d += shift;
+        if let Some((_, x, from)) = hx {
+            ov.extend(self.line(Point::new(x, from.y.min(r.y0)), Point::new(x, from.y.max(r.y1))));
+        }
+        if let Some((_, y, from)) = hy {
+            ov.extend(self.line(Point::new(from.x.min(r.x0), y), Point::new(from.x.max(r.x1), y)));
+        }
+        if lined && !held.contains(&true) {
+            ov.extend(self.label(p + d, "align"));
+        }
+        (d, ov, held.contains(&true))
     }
 
     /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for

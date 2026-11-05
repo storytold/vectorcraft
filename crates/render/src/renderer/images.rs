@@ -1,14 +1,20 @@
 use super::{
-    Affine, Arc, BezPath, Document, FillRule, Frame, HashMap, Ink, Node, Pixmap, Rect, RenderContext, Renderer, Shape, blob_key, blob_pixmap,
-    fill_rule, image_mip, ink, lookup, mip_level, peniko, proof, vello_cpu,
+    Affine, Arc, BezPath, Document, FillRule, Frame, HashMap, Ink, Node, NodeKind, Pixmap, Rect, RenderContext, Renderer, Shape, blob_key,
+    blob_pixmap, fill_rule, image_mip, ink, lookup, mip_level, peniko, proof, vello_cpu,
 };
 use crate::images;
 
-/// The color image node `n` is colorized with ([`vectorcraft_doc::NodeExtras::colorize`]), if it
-/// is, as `ink` paints it: the display color, or on an ink plane the color's own inks, as a fill
-/// of that color paints them.
-pub(super) fn image_tint(n: &Node, ink: Ink) -> Option<[u8; 3]> {
+/// The color image node `n` of `doc` is colorized with ([`vectorcraft_doc::NodeExtras::colorize`]),
+/// if it is and its pixels take it ([`vectorcraft_doc::ImageBlob::takes_colorize`]), as `ink`
+/// paints it: the display color, or on an ink plane the color's own inks, as a fill of that color
+/// paints them.
+pub(super) fn image_tint(doc: &Document, n: &Node, ink: Ink) -> Option<[u8; 3]> {
     let c = n.extras().colorize.as_deref()?.color()?;
+    if let NodeKind::Image(im) = &n.kind
+        && doc.image_blob(im).is_some_and(|b| !b.takes_colorize())
+    {
+        return None;
+    }
     Some(ink.rgb(&c).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8))
 }
 
@@ -70,18 +76,21 @@ impl Renderer {
             Some(pm)
         } else {
             self.image_pixmap(f.doc, &im.key, im.pixels.as_deref(), outline, !mips).map(|(key, pm)| {
+                // Shrunk first, so what is made of the pixels below is made of the ones drawn: a
+                // 141-megapixel photo is separated at the size it shows, not at its own (#4155).
+                let (key, pm) = if mips { image_mip(key, pm, unit) } else { (key, pm) };
+                let blob = f.doc.image_blob(im);
                 let (key, pm) = match tint {
-                    Some(rgb) => colorized_pixmap(key, &pm, rgb, !mips),
+                    Some(rgb) => colorized_pixmap(key, &pm, rgb),
                     None => (key, pm),
                 };
                 // A colorized image is already in the frame's ink ([`image_tint`]), and with
                 // Separations Preview its color is already the visible plates' (`proof::prepare`).
-                let (key, pm) = if outline || tint.is_some() { (key, pm) } else { ink::ink_image(&key, &pm, f.ink, f.doc.image_blob(im), !mips) };
-                let (key, pm) = match f.plates.filter(|_| !outline && tint.is_none()) {
-                    Some(lut) => proof::plate_image(lut, &key, &pm, f.doc.image_blob(im), !mips),
-                    None => (key, pm),
-                };
-                if mips { image_mip(&key, pm, unit) } else { pm }
+                let (key, pm) = if outline || tint.is_some() { (key, pm) } else { ink::ink_image(&key, &pm, f.ink, blob, true) };
+                match f.plates.filter(|_| !outline && tint.is_none()) {
+                    Some(lut) => proof::plate_image(lut, &key, &pm, blob, true).1,
+                    None => pm,
+                }
             })
         };
         if let Some(pm) = shown {
@@ -314,10 +323,10 @@ fn shown_key(f: &Frame, key: images::ImageKey, grey: bool, tint: Option<[u8; 3]>
 }
 
 /// Image pixels `pm` (kept as `key`) colorized with `rgb` ([`images::colorized`]), kept with the
-/// images, and their key. `touch` marks them used there.
-fn colorized_pixmap(key: images::ImageKey, pm: &Pixmap, rgb: [u8; 3], touch: bool) -> (images::ImageKey, Arc<Pixmap>) {
+/// images and marked used there, and their key.
+fn colorized_pixmap(key: images::ImageKey, pm: &Pixmap, rgb: [u8; 3]) -> (images::ImageKey, Arc<Pixmap>) {
     let key = images::ImageKey { tint: Some(rgb), ..key };
-    if let Some(p) = lookup(&key, touch) {
+    if let Some(p) = lookup(&key, true) {
         return (key, p);
     }
     let pm = images::store().insert(key.clone(), Arc::new(images::colorized(pm, rgb)));

@@ -296,11 +296,15 @@ impl Tidy {
 }
 
 impl Arrangement {
-    pub(crate) fn new(mut paths: Vec<(BezPath, FillRule)>) -> Result<Self, PathOpsError> {
+    pub(crate) fn new(paths: Vec<(BezPath, FillRule)>) -> Result<Self, PathOpsError> {
+        Self::new_budgeted(paths, crate::budget::MAX_SEGMENT_PAIRS)
+    }
+
+    pub(crate) fn new_budgeted(mut paths: Vec<(BezPath, FillRule)>, cap: usize) -> Result<Self, PathOpsError> {
         let eps = eps_for(paths.iter().map(|p| &p.0))?;
         snap_horizontals(&mut paths.iter_mut().map(|p| &mut p.0).collect::<Vec<_>>(), eps);
         // Counted on the snapped geometry, which is what the sweep sees: snapping can bring boxes into contact.
-        if !crate::budget::sweep_fits(paths.iter().map(|p| &p.0)) {
+        if !crate::budget::sweep_fits_within(paths.iter().map(|p| &p.0), cap) {
             return Err(PathOpsError::TooComplex);
         }
         // The sweep can panic on rare near-degenerate input; that must never take the app down,
@@ -833,6 +837,23 @@ mod tests {
         lens.curve_to(upper.p2, upper.p1, upper.p0);
         lens.close_path();
         assert_eq!(tidy.repair(&lens), lens);
+    }
+
+    #[test]
+    fn arrangement_new_budgeted_fails_on_complexity_and_open_paths() {
+        let mut bp = BezPath::new();
+        for i in 0..100 {
+            let r = kurbo::Rect::new(0.0, 0.0, 10.0 + i as f64, 10.0 + i as f64);
+            bp.extend(r.to_path(0.1).iter());
+        }
+        let too_complex = Arrangement::new_budgeted(vec![(bp, FillRule::NonZero)], 5);
+        assert_eq!(too_complex.err(), Some(PathOpsError::TooComplex));
+
+        let mut open = BezPath::new();
+        open.move_to((0.0, 0.0));
+        open.line_to((10.0, 10.0));
+        let failed_arr = Arrangement::new_budgeted(vec![(open, FillRule::NonZero)], 1000);
+        assert_eq!(failed_arr.err(), Some(PathOpsError::OpenPath));
     }
 
     fn square(x: f64, y: f64, size: f64) -> PathData {
