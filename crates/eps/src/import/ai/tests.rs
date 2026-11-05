@@ -2173,6 +2173,61 @@ fn one_bit_images_read_each_channel() {
     assert_eq!((0..3).map(|x| img.get_pixel(x, 0).0[0]).collect::<Vec<_>>(), [255, 0, 255]);
 }
 
+/// A gray image `w` × 1 in hex with ImageMask `mask` and `bits` bits a pixel, after the fill `fill`.
+fn masked_gray(fill: &str, bits: u32, mask: u32, w: u32, hex: &[u8]) -> Vec<u8> {
+    let text = String::from_utf8(image("[ 1 0 0 1 0 100 ]", (w, 1), ("DeviceGray", 1, 0), hex, hex.len())).unwrap();
+    text.replacen(" 8 1 0 0 1 0 ", &format!(" {bits} 1 0 0 0 {mask} "), 1).replacen("(L) Ln\n", &format!("(L) Ln\n{fill}"), 1).into_bytes()
+}
+
+/// ImageMask 1 on a 1-bit gray image: the image is colorized with the fill color, so its black
+/// pixels take the color and its white ones are transparent. ImageMask 0 keeps the opaque image.
+#[test]
+fn image_masks_are_colorized_with_the_fill() {
+    // 4 × 1 at 1 bit: black, white, white, black (0110).
+    let r = read(&masked_gray("0 0 1 0 k\n", 1, 1, 4, b"60")).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    let Some(Paint::Solid { color, .. }) = a[0].extras().colorize.as_deref() else { panic!("{:?}", a[0].extras().colorize) };
+    assert_eq!(color.to_rgba8(1.0), Color::cmyk(0.0, 0.0, 1.0, 0.0).to_rgba8(1.0));
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    let blob = &r.doc.images[&im.key];
+    assert!(blob.gray_source().is_some_and(|g| !g.alpha), "an image a fill color can colorize");
+    let img = pixels(&r.doc).0;
+    assert_eq!(
+        (0..4).map(|x| img.get_pixel(x, 0).0).collect::<Vec<_>>(),
+        [[0, 0, 0, 255], [255, 255, 255, 255], [255, 255, 255, 255], [0, 0, 0, 255]]
+    );
+    // How much of the color each pixel shows: the black ones only.
+    assert_eq!(blob.coverage().map(|c| c.2), Some(vec![255, 0, 0, 255]));
+    // A spot color keeps its swatch and tint.
+    let spot = "0 0 1 0 (Ink) 0.5 0 Xx\n";
+    let a = art(&read(&masked_gray(spot, 1, 1, 4, b"60")).unwrap().doc);
+    assert!(
+        matches!(a[0].extras().colorize.as_deref(), Some(Paint::Solid { swatch: Some(s), tint, .. }) if s == "Ink" && (*tint - 0.5).abs() < 1e-6),
+        "{:?}",
+        a[0].extras().colorize
+    );
+    // A fill that isn't a solid color (here a pattern) colorizes it black.
+    let patterned = String::from_utf8(masked_gray("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n", 1, 1, 4, b"60")).unwrap();
+    let doc = read(patterned.replacen("%AI5_BeginLayer", &format!("{DOTS}%AI5_BeginLayer"), 1).as_bytes()).unwrap().doc;
+    let a = art(&doc);
+    let Some(Paint::Solid { color, swatch: None, .. }) = a[0].extras().colorize.as_deref() else { panic!("{:?}", a[0].extras().colorize) };
+    assert_eq!(color.to_rgba8(1.0), Color::BLACK.to_rgba8(1.0));
+    // An 8-bit gray image with ImageMask 1 opens as before, with no color.
+    let doc = read(&masked_gray("0 1 0 0 k\n", 8, 1, 2, b"00ff")).unwrap().doc;
+    assert!(art(&doc)[0].extras().colorize.is_none());
+    assert_eq!(pixels(&doc).0.get_pixel(1, 0).0, [255, 255, 255, 255]);
+    // ImageMask 0: the opaque image, with no color.
+    let doc = read(&masked_gray("0 0 1 0 k\n", 1, 0, 4, b"60")).unwrap().doc;
+    assert!(art(&doc)[0].extras().colorize.is_none());
+    assert_eq!(pixels(&doc).0.get_pixel(0, 0).0, [0, 0, 0, 255]);
+    // An RGB image can't take a color: ImageMask 1 leaves it as it is.
+    let text = String::from_utf8(image("[ 1 0 0 1 0 100 ]", (1, 1), ("DeviceRGB", 3, 0), b"ff0000", 6)).unwrap();
+    let doc = read(text.replacen(" 8 3 0 0 1 0 ", " 8 3 0 0 0 1 ", 1).as_bytes()).unwrap().doc;
+    assert!(art(&doc)[0].extras().colorize.is_none());
+    assert_eq!(pixels(&doc).0.get_pixel(0, 0).0, [255, 0, 0, 255]);
+}
+
 #[test]
 fn images_with_alpha_channels() {
     // RGB samples, then the alpha channel (not counted in the data's size).
@@ -2260,6 +2315,27 @@ fn a_rotated_image_is_placed_as_its_matrix_maps_it() {
 /// `XI`'s samples on `%` lines), `%AI5_EndRaster`.
 fn raster7(head: &str, matrix: &str, (w, h): (u32, u32), op: &str, tail: &str) -> String {
     format!("%AI5_File:\n%AI5_BeginRaster\n{head}{matrix} 0 0 {w} {h} {w} {h} 8 3 0 0 0 0 {op}\n{tail}%AI5_EndRaster\n")
+}
+
+/// A linked 1-bit gray image with ImageMask 1 keeps the fill color as the color that colorizes it,
+/// as an embedded one does. Other linked images have no color.
+#[test]
+fn linked_image_masks_are_colorized_with_the_fill() {
+    let m = "[ 1 0 0 1 0 0 ]";
+    let linked = |bits_kind_mask: &str| {
+        let xf = raster7("(a.tif) 0 XG\n", m, (2, 2), "XF", "").replace(" 8 3 0 0 0 0 XF", &format!(" {bits_kind_mask} XF"));
+        let r = read(stream7(&layer7("L", &format!("0 0 1 0 (Ink) 0.5 0 Xx\n{xf}"))).as_bytes()).unwrap();
+        let a = art(&r.doc);
+        assert!(matches!(&a[0].kind, NodeKind::Image(im) if im.link.is_some()), "{:?} {:?}", a, r.warnings);
+        a[0].extras().colorize.as_deref().cloned()
+    };
+    assert!(
+        matches!(linked("1 1 0 0 0 1"), Some(Paint::Solid { swatch: Some(s), tint, .. }) if s == "Ink" && (tint - 0.5).abs() < 1e-6),
+        "a 1-bit image mask"
+    );
+    assert_eq!(linked("1 1 0 0 0 0"), None, "ImageMask 0");
+    assert_eq!(linked("8 1 0 0 0 1"), None, "8-bit gray");
+    assert_eq!(linked("8 3 0 0 0 1"), None, "RGB");
 }
 
 /// A linked image in the version 7 form (§8.2, §8.3), `(path) modified XG` and then `XF` with no

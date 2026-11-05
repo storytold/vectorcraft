@@ -130,6 +130,9 @@ private editing data. VectorCraft:
   with a fill's offset, scale, rotation, reflection and shear applied before its matrix. Its linked images in
   the version 7 form (`(path) modified XG`, then `XF` with no samples) come in as linked images of their files,
   showing a placeholder where the image goes until the file is relinked in the Links panel.
+  A 1-bit gray image whose `XI` or `XF` has ImageMask 1 comes in colorized by the fill color set before it,
+  or by black when that fill is not a solid color. VectorCraft's own rule is that the pixels that open black
+  with ImageMask 0 take the color and the others are transparent.
 - Estimate: **~65%** for real exchange with Illustrator users (open: ~75%; save: PDF-compatible, or legacy
   version 7 with layers and groups; not yet tested by users who hand files back).
   Closing the open-side issues: 10–20 h with users' files.

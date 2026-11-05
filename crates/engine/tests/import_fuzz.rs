@@ -2763,6 +2763,10 @@ fn editing_text() -> String {
         "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceCMYK XN\n[ 4 0 0 4 10 30 ] 2 1 0 Xh\n[ 4 0 0 4 10 30 ] 0 0 2 1 2 1 8 4 1 0 0 0 4 4 0 0\n\
          %%BeginData: 18\rXI\nff000000000000ff80ff\n%%EndData\nXH\n%AI5_EndRaster\nN"
             .into(),
+        // A 9 × 2 1-bit image mask (ImageMask 1) colorized by the global fill before it, in hex.
+        "0 0 0 1 (Black global) 0.4 0 Xk\n%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ 4 0 0 4 10 30 ] 9 2 0 Xh\n\
+         [ 4 0 0 4 10 30 ] 0 0 9 2 9 2 1 1 0 0 0 1 4 4 0 0\n%%BeginData: 8\rXI\n6080ff00\n%%EndData\nXH\n%AI5_EndRaster\nN"
+            .into(),
     ]
     .join("\n");
     let layer = |name: &str, visible: u8, body: &str| {
@@ -2847,6 +2851,23 @@ fn the_editing_fixture_reads_its_cmyk_image_with_its_mask() {
     let mut found = vec![];
     doc.visit_images(|n, im| found.push((doc.images[&im.key].cmyk().map(|i| i.data), n.extras().mask.is_some())));
     assert!(layers && found.contains(&(Some(vec![255, 0, 0, 0, 0, 0, 0, 255]), true)), "{found:?} {warnings:?}");
+}
+
+/// The fuzzed editing data, as it is, reads its 1-bit image mask as an image colorized with the
+/// global color before it.
+#[test]
+fn the_editing_fixture_reads_its_image_mask_colorized() {
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing_text())].concat();
+    let (doc, warnings, layers) = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0);
+    let mut found = vec![];
+    doc.visit_images(|n, im| {
+        if let Some(vectorcraft_color::Paint::Solid { swatch, .. }) = n.extras().colorize.as_deref() {
+            found.push((swatch.clone(), im.width, im.height, doc.images[&im.key].coverage().map(|c| c.2)));
+        }
+    });
+    // Clear bits (black) show the color; set bits (white) are transparent.
+    let cover = vec![255, 0, 0, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255];
+    assert!(layers && found == [(Some("Black global".to_string()), 9, 2, Some(cover))], "{found:?} {warnings:?}");
 }
 
 /// The text document of a story of centred type with two styles, as an editing copy keeps it.
