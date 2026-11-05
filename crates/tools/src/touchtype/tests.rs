@@ -176,6 +176,35 @@ fn a_character_rotated_near_a_quarter_turn_moves_across_its_line() {
     }
 }
 
+/// In vertical type, a character standing upright (§) still splits a drag into kerning down its
+/// column and baseline shift across it: down 10 pt and right 4 pt is `dx` 10 and `dy` 4. Every
+/// arrow key nudges it.
+#[test]
+fn an_upright_character_in_vertical_type_moves_down_and_across_its_column() {
+    let (mut d, id, s) = doc_with_type();
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        **t = TextObject::point(Point::new(100.0, 200.0), "l§", CharStyle { size: 40.0, ..Default::default() });
+        t.vertical = true;
+    }
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = TouchTypeTool { target: Some((id, 1)), ..Default::default() };
+    let q = quad(&t, &cx);
+    let at = q[0].midpoint(q[2]);
+    let acts = drag(&mut t, &cx, at, at + Vec2::new(4.0, 10.0));
+    let p1 = preview(&acts[1]);
+    assert!(close(p1["dx"].as_f64().unwrap_or(0.0), 10.0) && close(p1["dy"].as_f64().unwrap_or(0.0), 4.0), "{p1}");
+    for key in [ToolKey::Up, ToolKey::Down, ToolKey::Left, ToolKey::Right] {
+        let acts = t.key(&cx, key, Mods::default());
+        let moved = match acts.first() {
+            Some(Action::Exec(c, v)) if c == "text.touchType" => v,
+            other => panic!("{key:?}: {other:?}"),
+        };
+        let parts = [&moved["dx"], &moved["dy"]].map(|v| v.as_f64().unwrap_or(0.0).abs());
+        assert!(close(parts[0] + parts[1], 1.0) && (close(parts[0], 0.0) || close(parts[1], 0.0)), "{key:?}: {moved}");
+    }
+}
+
 /// In type scaled unevenly, a drag's parts are measured in document points: right 10 pt and up 4
 /// pt of a quarter-turned character is `dx` 10 and `dy` 4.
 #[test]

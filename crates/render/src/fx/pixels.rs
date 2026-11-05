@@ -54,7 +54,7 @@ impl Renderer {
         let split_frame;
         let (f, screen) = match content.kept.and_then(|k| k.frame.map(|frame| (k.window, frame))) {
             Some((window, (view, px))) => {
-                split_frame = Frame { view, px, ..*f };
+                split_frame = Frame { view, visible: window, px, ..*f };
                 (&split_frame, view.transform_rect_bbox(window))
             }
             None => (f, Rect::new(0.0, 0.0, ctx.width() as f64, ctx.height() as f64)),
@@ -70,7 +70,11 @@ impl Renderer {
         }
         let fits = full.area() <= PIXEL_BUDGET;
         // Device pixels from a pixel to the content deciding it (`None`: anywhere).
-        let margin = chain.iter().try_fold(2.0, |m, fx| looks_around(fx).map(|d| m + d / f.px));
+        // De-Interlace's field lines and Color Halftone's pixels: the rows of the document's
+        // raster grid (1 to 2400 ppi).
+        let ppi = doc_raster_ppi(f.doc);
+        let line = 72.0 / ppi;
+        let margin = chain.iter().try_fold(2.0, |m, fx| looks_around(fx, line).map(|d| m + d / f.px));
         let linear = linear_key(f.view);
         let key = content.cache.map(|slot| (content.node as *const Node as usize, slot, f.ink));
         // Made again at this zoom and rotation (after a pan), a raster cropped to the view covers a
@@ -104,13 +108,14 @@ impl Renderer {
             Ink::Display | Ink::RichBlack if f.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk => effects::pixel::Channels::Cmyk,
             _ => effects::pixel::Channels::Rgb,
         };
-        // De-Interlace's field lines: the rows of the document's raster grid (1 to 2400 ppi).
-        let ppi = doc_raster_ppi(f.doc);
         // What the content reads (as the raster kept for it found it, else found now), with the
-        // channels the effects run on and, under De-Interlace or Rasterize, the resolution.
+        // channels the effects run on and, under De-Interlace, Color Halftone (its dots are sized
+        // in the grid's pixels) or Rasterize, the resolution.
         let inputs = key.map(|key| {
             let reads = self.pixel_fx.get(&key).filter(|e| e.node.is(content.node)).map_or_else(|| Reads::of(content.node), |e| e.inputs.reads);
-            let interlaced = chain.iter().any(|fx| matches!(fx, RasterFx::Pixel(PixelFx::DeInterlace { .. }) | RasterFx::Rasterize(_)));
+            let interlaced = chain
+                .iter()
+                .any(|fx| matches!(fx, RasterFx::Pixel(PixelFx::DeInterlace { .. } | PixelFx::ColorHalftone { .. }) | RasterFx::Rasterize(_)));
             self.raster_inputs(f, content.node, reads).with((std::mem::discriminant(&channels), interlaced.then_some(ppi.to_bits())))
         });
         let interacting = f.opts.interacting;
@@ -156,7 +161,6 @@ impl Renderer {
         let to_doc = view.inverse();
         let px = f.px / k;
         let frame = Frame { mt: false, view, visible: to_doc.transform_rect_bbox(Rect::new(0.0, 0.0, w, h)), px, ..*f };
-        let line = 72.0 / ppi;
         let (before, decoded) = (self.stats.moved, crate::paint::decode_failures());
         let outer_image_left_out = self.image_left_out.replace(false);
         let pattern_images_left_out = crate::pattern::images_left_out();
@@ -382,7 +386,7 @@ impl Renderer {
     }
 
     /// The inputs a raster of `n`'s content, which reads `reads`, is drawn with in frame `f`: the
-    /// color settings, the edge smoothing, the document's raster effects resolution (which a
+    /// color settings, the edge smoothing, whether dashed strokes draw as solid lines, the document's raster effects resolution (which a
     /// Rasterize or De-Interlace anywhere in the content follows), the knockout `n` inherits and,
     /// while `n` holds the isolated group, isolation mode; the pattern definitions, symbols and
     /// brush library it reads; for images and placed documents their pixels and files, the
@@ -398,6 +402,8 @@ impl Renderer {
         (doc.cms, f.opts.anti_alias.threshold(), self.knockout, f.doc.raster_effects_ppi.to_bits()).hash(&mut h);
         // Cached effects on containers can include paths made into guides.
         f.opts.hide_guides.hash(&mut h);
+        // Cached effects can include dashed strokes drawn as solid lines.
+        f.opts.solid_dashes.hash(&mut h);
         if let Some((isolated, path)) = self.isolation_path(f)
             && n.id != isolated
             && path.contains(&n.id)
@@ -580,7 +586,10 @@ impl Renderer {
             None => (x0, y0, w, h, k),
         };
         let mut off = f.offscreen_context(w, h);
-        let shifted = Frame { mt: false, view: Affine::scale(k) * Affine::translate((-x0, -y0)) * f.view, px: f.px / k, ..*f };
+        let view = Affine::scale(k) * Affine::translate((-x0, -y0)) * f.view;
+        // Art is culled against, and long strokes outlined around, the offscreen's own area.
+        let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(w), f64::from(h)));
+        let shifted = Frame { mt: false, view, visible, px: f.px / k, ..*f };
         self.inside_layer(|r| draw(r, &mut off, &shifted, None));
         off.flush();
         let mut pm = vello_cpu::Pixmap::new(w, h);
@@ -637,8 +646,9 @@ impl Renderer {
             let outline = match item {
                 AppearanceItem::Fill(_) => ig.clone(),
                 AppearanceItem::Stroke(st) => {
+                    let st = &*f.stroke(st);
                     let w = effects::stroke::aligned_width(st, effects::stroke::is_closed(ig));
-                    effects::stroke::line_outline(&effects::stroke::stroke_pieces(ig, st).line, st, w, f.px * 0.25)
+                    crate::stroke::outline(&effects::stroke::stroke_pieces(ig, st).line, st, w, f.px * 0.25)
                 }
             };
             let outset = n.appearance.outset();

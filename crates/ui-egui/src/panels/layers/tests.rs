@@ -211,6 +211,67 @@ fn two_rects() -> (VectorcraftApp, NodeId, [NodeId; 2]) {
     (app, layer, [NodeId(a), NodeId(b)])
 }
 
+/// The painted names one headless frame of the panel draws italic.
+fn italic_names(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+    out.textures_delta.clear();
+    fn collect(shape: &egui::Shape, names: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(t) => {
+                if t.galley.job.sections.iter().any(|s| s.format.italics) {
+                    names.push(t.galley.text().to_string());
+                }
+            }
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, names)),
+            _ => {}
+        }
+    }
+    let mut names = Vec::new();
+    out.shapes.iter().for_each(|c| collect(&c.shape, &mut names));
+    names
+}
+
+/// A layer whose Layer Options › Print is off has its name italic in the panel (#5739), as the
+/// reference application shows it; a printing layer's name stays upright, and unticking Print again
+/// makes it upright.
+#[test]
+fn a_layer_that_does_not_print_has_its_name_italic() {
+    let (mut app, layer, _) = two_rects();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    assert!(!italic_names(&mut app, &ctx).iter().any(|n| n == "Layer 1"), "a printing layer's name is upright");
+    app.session.execute("layer.setProps", &json!({"ids": [layer.0], "printable": false})).unwrap();
+    assert!(italic_names(&mut app, &ctx).iter().any(|n| n == "Layer 1"), "Print off: its name is italic");
+    app.session.execute("layer.setProps", &json!({"ids": [layer.0], "printable": true})).unwrap();
+    assert!(!italic_names(&mut app, &ctx).iter().any(|n| n == "Layer 1"), "Print on again: upright again");
+}
+
+#[test]
+fn closing_a_document_releases_only_its_layer_thumbnails() {
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let first = app.session.active().unwrap().uid;
+    frame(&mut app, &ctx, vec![], false);
+    assert!(THUMBS.with(|c| c.borrow().cached(first)));
+
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let second = app.session.active().unwrap().uid;
+    frame(&mut app, &ctx, vec![], false);
+    assert!(THUMBS.with(|c| c.borrow().cached(second)));
+
+    // Close the first document the way File › Close does (Don't Save), with no panel drawn after.
+    assert_eq!(app.run("file.close", json!({"index": 0})).unwrap(), json!({"pending": crate::unsaved::KIND}));
+    app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.session.documents().iter().all(|d| d.uid != first), "the first document closed");
+    THUMBS.with(|c| {
+        let thumbs = c.borrow();
+        assert!(!thumbs.cached(first), "closed document textures are released");
+        assert!(thumbs.cached(second), "open document textures stay cached");
+    });
+}
+
 #[test]
 fn row_thumbnails_wait_for_the_end_of_a_drag() {
     let (mut app, _, _) = two_rects();
@@ -237,6 +298,42 @@ fn row_thumbnails_wait_for_the_end_of_a_drag() {
     let after = renders();
     frame(&mut app, &ctx, vec![], false);
     assert_eq!(renders(), after, "once");
+}
+
+#[test]
+fn the_row_thumbnails_follow_the_document_shown_and_none_once_it_closes() {
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let showing = || THUMBS.with(|c| c.borrow().showing);
+    frame(&mut app, &ctx, vec![], false);
+    let first = app.session.active().map(|st| st.uid);
+    assert_eq!(showing(), first);
+    // With no thumbnails drawn, the panel still tells which document it shows.
+    let p = &mut app.ui.layers_panel;
+    (p.thumb_layers, p.thumb_groups, p.thumb_objects) = (false, false, false);
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    let second = app.session.active().map(|st| st.uid);
+    assert_ne!(second, first);
+    assert_eq!(showing(), second, "the new document's rows are drawn");
+    for _ in 0..2 {
+        app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    }
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(showing(), None, "no document is shown once both close");
+
+    // The Links panel alone does the same.
+    let links = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::links::show(app, ui));
+        out.textures_delta.clear();
+    };
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    links(&mut app);
+    assert_eq!(showing(), app.session.active().map(|st| st.uid));
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    links(&mut app);
+    assert_eq!(showing(), None, "the Links panel shows no document");
 }
 
 #[test]

@@ -79,6 +79,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             crate::toolbar::strips(&app.ui, toolbar).iter().any(|f| f.tools.iter().any(|id| id == tool))
         }
         "window.taskBar" => app.ui.task_bar,
+        "window.pathfinder.compoundShapes" => app.ui.shape_modes_compound,
         "window.taskBar.pin" => app.ui.task_bar_place.pinned,
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
@@ -134,7 +135,7 @@ fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
 /// or off), or `None` while they leave it out: an empty slot ([`hidden_when_disabled`]) or an item
 /// another stands in for ([`swapped_out`]).
 pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, Option<bool>)> {
-    let en = enabled(app, id);
+    let en = enabled(app, id) && (id != crate::addons::select::link_status::COMMAND || crate::addons::select::link_status::enabled(app, p));
     if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
         return None;
     }

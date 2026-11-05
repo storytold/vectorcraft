@@ -89,6 +89,46 @@ pub(super) fn tool_drag_mods_changed(ui: &Ui, m: Mods, backquote: bool) -> bool 
     dragged && last.is_some_and(|l| l != held)
 }
 
+/// Whether Backtick is held at the end of this frame, and whether it was at the end of the frame
+/// before (`None` before the first). The canvas records it once a frame.
+pub(super) fn backquote_seen(ui: &Ui) -> (bool, Option<bool>) {
+    let id = egui::Id::unique("canvas-backquote-seen");
+    let now = ui.input(|i| i.key_down(egui::Key::Backtick));
+    let before = ui.data_mut(|d| {
+        let before = d.get_temp::<bool>(id);
+        d.insert_temp(id, now);
+        before
+    });
+    (now, before)
+}
+
+/// Whether Backtick was held when `button` went up in this frame, with `before` its state at the end
+/// of the frame before ([`backquote_seen`]). Its state as the frame began is the opposite of its
+/// first press or release in the frame; when the window lost the focus first (which lets go of every
+/// key without a release), it is `before`; with neither, it is its state now. The frame's presses,
+/// releases and focus losses before the button-up then apply in the order they came. Without a
+/// button-up in this frame, its state now.
+pub(super) fn backquote_at_release(ui: &Ui, button: egui::PointerButton, before: Option<bool>) -> bool {
+    ui.input(|i| {
+        let now = i.key_down(egui::Key::Backtick);
+        // A press or release of Backtick (`Some(pressed)`), or a focus loss (`None`).
+        let step = |e: &egui::Event| match e {
+            egui::Event::Key { key: egui::Key::Backtick, pressed, repeat: false, .. } => Some(Some(*pressed)),
+            egui::Event::WindowFocused(false) => Some(None),
+            _ => None,
+        };
+        let Some(up) = i.events.iter().position(|e| matches!(e, egui::Event::PointerButton { button: b, pressed: false, .. } if *b == button)) else {
+            return now;
+        };
+        let start = match i.events.iter().find_map(step) {
+            Some(Some(down)) => !down,
+            Some(None) => before.unwrap_or(now),
+            None => now,
+        };
+        i.events[..up].iter().filter_map(step).fold(start, |_, s| s.unwrap_or(false))
+    })
+}
+
 /// The pen pressure (0..1) of the press in progress: the force of this frame's pen or touch
 /// input, else the pressure in the host's feed while a pen is the pointer that moved last
 /// ([`crate::Services::stylus`]: [`StylusFeed::press`] for a new press, [`StylusFeed::held`]

@@ -42,6 +42,9 @@ pub struct SliderValue {
     /// steps from `value` (±1 for an arrow, ±10 with Shift or Page Up/Down). `None` steps to whole
     /// numbers.
     pub step: Option<fn(f64, f64) -> f64>,
+    /// The places the field shows, which a screen reader's set-value action rounds to; `None`
+    /// keeps the number it sets.
+    pub decimals: Option<usize>,
 }
 
 /// Two values are the same when they show the same number, range and text, whatever their keys' steps
@@ -55,20 +58,20 @@ impl PartialEq for SliderValue {
 impl SliderValue {
     /// `value` on a rail over `range`, without a text.
     pub fn number(value: f64, range: std::ops::RangeInclusive<f64>) -> Self {
-        Self { value, range, text: None, step: None }
+        Self { value, range, text: None, step: None, decimals: None }
     }
 
     /// `value` on a rail over `range` as [`plain_field`] shows it with `suffix` and at most
     /// `decimals` places: the number it shows (`value` rounded) and its text.
     pub fn field(value: f64, range: std::ops::RangeInclusive<f64>, suffix: &str, decimals: usize) -> Self {
         let number = field_text(value, "", decimals);
-        Self { value: number.parse().unwrap_or(value), range, text: Some(format!("{number}{suffix}")), step: None }
+        Self { value: number.parse().unwrap_or(value), range, text: Some(format!("{number}{suffix}")), step: None, decimals: Some(decimals) }
     }
 
     /// `value` on a rail over `range`, with `text`, for a field that writes its own text (a length
     /// in the document's unit, an egui `DragValue`).
     pub fn text(value: f64, range: std::ops::RangeInclusive<f64>, text: String) -> Self {
-        Self { value, range, text: Some(text), step: None }
+        Self { value, range, text: Some(text), step: None, decimals: None }
     }
 
     /// This value, stepped by the keys with `step` instead of to whole numbers (see
@@ -119,8 +122,11 @@ pub fn color_slider_valued(
 /// While it has the focus, → and ↑ raise the number `shown` holds to the next whole number and ←
 /// and ↓ lower it to the next whole number, Shift with an arrow, Page Up and Page Down add or take
 /// ten, and Home and End set the start and the end of `shown`'s range. Screen readers' increment
-/// and decrement actions step the number as → and ← do. A number past the range steps from the
-/// range's nearer end, and no step goes past either end. With `shown` `None` (a blank field), or
+/// and decrement actions step the number as → and ← do, and their set-value action sets it within
+/// the range they get (the range, extended to a number past its end), rounded to
+/// [`SliderValue::decimals`] (a value that is not a finite number leaves it as it is). A number
+/// past the range steps from the range's nearer end, and no step goes past
+/// either end. With `shown` `None` (a blank field), or
 /// in a disabled `ui`, the keys and actions leave the rail as it is. Returns the new value from 0
 /// to 1 that a click or a drag gives, its phase, and the number in `shown`'s units that a key or
 /// an action gives.
@@ -167,6 +173,7 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
     let stepped = shown.filter(|_| ui.is_enabled()).and_then(|s| {
         ui.ctx().accesskit_node_builder(id, |node| {
             node.set_numeric_value_step(1.0);
+            node.add_action(egui::accesskit::Action::SetValue);
             node.add_action(egui::accesskit::Action::Increment);
             node.add_action(egui::accesskit::Action::Decrement);
         });
@@ -185,7 +192,7 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
 /// The number of slider `id` (`s`) after this frame's keys while it is `focused`, and after screen
 /// readers' actions on it ([`color_slider_stepped`]); `None` when they leave it as it was.
 fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f64> {
-    use egui::accesskit::Action;
+    use egui::accesskit::{Action, ActionData};
     use egui::{Event, Key};
     let (lo, hi) = (*s.range.start(), *s.range.end());
     if !lo.is_finite() || !hi.is_finite() || hi <= lo {
@@ -235,11 +242,27 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
             ui.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
         }
     }
+    // A set-value request is rounded to the field's places when it has them and otherwise kept as
+    // asked; only the keys' and the steps' numbers are rounded to `STEP_DECIMALS`.
+    let mut exact = false;
     ui.input(|i| {
         let n = i.num_accesskit_action_requests(id, Action::Increment) as f64 - i.num_accesskit_action_requests(id, Action::Decrement) as f64;
         v = by(v, n).clamp(lo, hi);
+        // The last set-value request this frame.
+        let set = i.accesskit_action_requests(id, Action::SetValue).last().and_then(|request| match request.data {
+            Some(ActionData::NumericValue(value)) if value.is_finite() => Some(value),
+            _ => None,
+        });
+        if let Some(value) = set {
+            // The number the field would show, as `SliderValue::field` reads it.
+            let shown = s.decimals.map_or(value, |d| field_text(value, "", d).parse().unwrap_or(value));
+            // The range screen readers get (`slider_info`), which takes in a number past the rail.
+            v = shown.clamp(lo.min(s.value), hi.max(s.value));
+            end = true;
+            exact = true;
+        }
     });
-    (v != from || (end && v != s.value)).then_some(round_to(v, STEP_DECIMALS).clamp(lo, hi))
+    (v != from || (end && v != s.value)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
 }
 
 /// The rail of [`color_slider_valued`] with the id `id`: its response, the new value from 0 to 1

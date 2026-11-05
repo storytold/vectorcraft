@@ -46,7 +46,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let Some(b) = (if on_artboards { picked_artboards_bounds(app) } else { app.selection_bounds() }) else { return };
     let Some(st) = app.session.active() else { return };
     let n = st.selection.len();
-    let first = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned();
+    let first = st.selection.objects.first().and_then(|id| st.doc.node(*id));
     let is_group = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Group { .. }));
     let is_image = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Image(_)));
     let is_clip_group = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Group { clip: true, .. }));
@@ -70,13 +70,15 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     // Selection tool: its properties take the place of Lock, as in the reference app
     // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
     use vectorcraft_doc::LiveShape;
-    let shape = first.clone().filter(|f| {
-        n == 1
-            && st.selection.anchors.is_empty()
-            && app.session.tool_id() == "selection"
-            && matches!(&f.kind, NodeKind::Path { live: Some(l), .. }
-                if matches!(**l, LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. }))
-    });
+    let shape = first
+        .filter(|f| {
+            n == 1
+                && st.selection.anchors.is_empty()
+                && app.session.tool_id() == "selection"
+                && matches!(&f.kind, NodeKind::Path { live: Some(l), .. }
+                    if matches!(**l, LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. }))
+        })
+        .cloned();
     let mut items: Vec<(&str, &str, &str, serde_json::Value)> = vec![]; // (label, icon, command, params)
     let none = || json!({});
     if on_artboards {

@@ -18,6 +18,7 @@
 //! did before (the printed page, or the PDF), with a warning saying why.
 
 mod blend;
+mod brush;
 mod envelope;
 mod frames;
 mod lex;
@@ -35,7 +36,10 @@ use crate::ps;
 
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
 pub(crate) use frames::text_frames;
-pub use read::{IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, palette, read, read_beside, variables};
+pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
+pub use read::{
+    BindingRef, Brushes, IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, bindings_note, brushes, palette, read, read_beside, variables,
+};
 pub(crate) use read::{join_and, slot_frame, slot_of};
 
 pub(crate) use read::is_look_slot;

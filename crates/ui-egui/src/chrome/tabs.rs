@@ -79,6 +79,40 @@ fn tear_off(ui: &Ui, resp: &egui::Response, strip: egui::Rect) -> Option<egui::P
     torn_off(strip, p).then_some(p - GRAB)
 }
 
+/// The documents of the tabs the strip shows, from `slots` (each tab's document index and rect,
+/// left to right): one entry per document, spanning the tabs of all its views (Window › New
+/// Window), which sit side by side and move together.
+pub(super) fn tab_groups(slots: &[(usize, egui::Rect)]) -> Vec<(usize, egui::Rangef)> {
+    let mut groups: Vec<(usize, egui::Rangef)> = vec![];
+    for &(i, r) in slots {
+        match groups.last_mut() {
+            Some((d, span)) if *d == i => span.max = span.max.max(r.right()),
+            _ => groups.push((i, egui::Rangef::new(r.left(), r.right()))),
+        }
+    }
+    groups
+}
+
+/// Where document `from`'s tabs, dragged along the strip to `x`, go among the other documents'
+/// tabs in `groups` ([`tab_groups`]): before the first whose middle is right of `x`, else after
+/// the last. → the document's new index among all the open documents (floating ones and those
+/// whose tabs don't fit included) and the x of the gap the drop goes in; `None` when the drop
+/// leaves the document where it is, or there is no other tab to drop beside.
+pub(super) fn tab_drop(groups: &[(usize, egui::Rangef)], from: usize, x: f32) -> Option<(usize, f32)> {
+    let others: Vec<&(usize, egui::Rangef)> = groups.iter().filter(|(d, _)| *d != from).collect();
+    let slot = others.iter().filter(|(_, span)| span.center() < x).count();
+    let (to, gap) = match others.get(slot) {
+        // Before document `d`: it shifts left by one when `from` was before it.
+        Some(&&(d, span)) => (if from < d { d - 1 } else { d }, span.min),
+        // After the last tab shown.
+        None => {
+            let &&(d, span) = others.last()?;
+            (if from < d { d } else { d + 1 }, span.max)
+        }
+    };
+    (to != from).then_some((to, gap))
+}
+
 /// Whether a document tab's × comes before its title (macOS) rather than after it (Windows,
 /// Linux and the web).
 pub(super) const CLOSE_BEFORE_TITLE: bool = cfg!(target_os = "macos");
@@ -100,7 +134,9 @@ pub(super) fn first_tab_shown(widths: &[f32], active: Option<usize>, room: f32) 
 /// Each view Window › New Window opened has a tab of its own. Windows floating have no tab
 /// ([`crate::doc_windows`]); while the current window is a floating one, the tab of the window the
 /// strip shows is the highlighted one. A tab dragged more than [`crate::doc_windows::TEAR_OFF`]
-/// above or below the strip floats its view in a window under the pointer.
+/// above or below the strip floats its view in a window under the pointer; one dragged along the
+/// strip moves its document among the others (`document.move`, #5663), a line marking where it
+/// will go.
 pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     /// The width of the » button.
     const MORE: f32 = 30.0;
@@ -133,6 +169,10 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut close = None;
     let mut float = None;
     let mut hovering_art = false;
+    // The tabs shown, by document and rect, and the document whose tab is dragged (and whether
+    // the drag just ended), for moving it along the strip.
+    let mut slots: Vec<(usize, egui::Rect)> = vec![];
+    let mut dragged = None;
     for (k, ((_, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
         if x + w > strip.left() + room && Some(k) != active {
             break;
@@ -142,6 +182,10 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         let is_active = Some(k) == active;
         let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(*w, strip.height() - 1.0));
         let resp = ui.interact(r, ui.scope_id().with(("tab", i, win.1)), Sense::click_and_drag());
+        slots.push((i, r));
+        if resp.dragged() || resp.drag_stopped() {
+            dragged = Some((i, resp.drag_stopped()));
+        }
         if is_active {
             ui.painter().rect_filled(r, 0.0, t.panel);
         } else if resp.hovered() {
@@ -166,6 +210,25 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         x += w;
     }
     crate::document_drag::finish_tabs(ui.ctx(), hovering_art);
+    // A tab dragged along the strip (not off it, which floats it) moves its document: a line marks
+    // the gap it goes in, and the release moves it there. Artwork dragged over the tabs never does.
+    let mut reorder = None;
+    if let Some((from, released)) = dragged
+        && !crate::document_drag::carrying_artwork(ui.ctx())
+        && let Some(p) = ui.input(|i| i.pointer.interact_pos().or(i.pointer.latest_pos()))
+        && !crate::doc_windows::torn_off(strip, p)
+    {
+        let drop = tab_drop(&tab_groups(&slots), from, p.x);
+        if released {
+            reorder = drop.map(|(to, _)| (from, to));
+        } else {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+            if let Some((_, gap)) = drop {
+                let gap = gap.clamp(strip.left() + 1.0, strip.right() - 1.0);
+                ui.painter().vline(gap, strip.y_range().shrink(4.0), Stroke::new(2.0, t.accent));
+            }
+        }
+    }
     // The » button: every window, floating ones included, the current one checked. The list
     // scrolls once it reaches the bottom of the window, so every document of a large session stays
     // reachable (#4017).
@@ -195,6 +258,10 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     } else if let Some(((i, n), at)) = float {
         if let Err(e) = app.run("window.arrange.floatInWindow", json!({"index": i, "view": n, "at": [at.x, at.y]})) {
+            app.status(e);
+        }
+    } else if let Some((from, to)) = reorder {
+        if let Err(e) = app.run("document.move", json!({"from": from, "to": to})) {
             app.status(e);
         }
     } else if let Some(w) = activate {

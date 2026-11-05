@@ -98,6 +98,10 @@ impl GraphicStyle {
 /// The extension (and `format` header) of graphic style library files.
 pub const STYLES_EXT: &str = "vcstyles";
 
+/// The version of the `.vcstyles` files [`write`] writes. Version 2: a positive Twist angle turns
+/// clockwise ([`crate::twist`]).
+const STYLES_VERSION: u32 = crate::twist::TWIST_CLOCKWISE_SINCE;
+
 /// The file: a header around the library.
 #[derive(Serialize, Deserialize)]
 struct NativeFile {
@@ -109,17 +113,21 @@ struct NativeFile {
 
 /// `lib` as a `.vcstyles` file.
 pub fn write(lib: &StyleLibrary) -> String {
-    let file = NativeFile { format: STYLES_EXT.into(), version: 1, library: lib.clone() };
+    let file = NativeFile { format: STYLES_EXT.into(), version: STYLES_VERSION, library: lib.clone() };
     serde_json::to_string_pretty(&file).unwrap_or_default()
 }
 
-/// Read a `.vcstyles` file; an unnamed library is called `name`.
+/// Read a `.vcstyles` file; an unnamed library is called `name`. A version 1 file was written by
+/// an app that turned Twist counterclockwise: its Twist angles are negated.
 pub fn read(text: &str, name: &str) -> Result<StyleLibrary, String> {
     let f: NativeFile = serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| format!("not a graphic style library: {e}"))?;
     if f.format != STYLES_EXT {
         return Err(format!("not a graphic style library (format `{}`)", f.format));
     }
     let mut lib = f.library;
+    if f.version < STYLES_VERSION {
+        crate::twist::negate_library(&mut lib);
+    }
     if lib.name.trim().is_empty() {
         lib.name = name.into();
     }

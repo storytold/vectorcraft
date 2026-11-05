@@ -4,9 +4,11 @@
 mod arrange;
 mod cleanup;
 mod color;
+mod contour;
 mod document;
 mod pathtools;
 mod pen;
+mod select;
 mod typetools;
 
 use super::CommandSpec;
@@ -16,9 +18,11 @@ pub fn specs() -> Vec<CommandSpec> {
     let mut v = arrange::specs();
     v.extend(cleanup::specs());
     v.extend(color::specs());
+    v.extend(contour::specs());
     v.extend(document::specs());
     v.extend(pathtools::specs());
     v.extend(pen::specs());
+    v.extend(select::specs());
     v.extend(typetools::specs());
     v
 }

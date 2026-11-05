@@ -1,10 +1,12 @@
 //! Action set files: the Actions panel menu's Save Actions… and Load Actions….
 //!
-//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1, "name",
-//! "actions": [{"name", "steps": [{"command", "params"}], "key"?, "color"?}]}`. Each step is a
+//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1 or 2, "name",
+//! "actions": [{"name", "steps": [{"command", "params", "excluded"?}], "key"?, "color"?}]}`. Each step is a
 //! command id and its params, as `command.batch` takes them. `key` is the action's function key
 //! (`{"key": 1 to 15, "cmd", "shift"}`) and `color` its Button Mode color; an action without them,
-//! or with a value that is not one, has none.
+//! or with a value that is not one, has none. `excluded: true` keeps a step but skips it during
+//! playback. Sets with exclusions use version 2 so older builds refuse them rather than replay
+//! excluded steps. Sets without exclusions use version 1, and earlier version 1 files still work.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -57,6 +59,12 @@ struct FileStep {
     command: String,
     #[serde(default)]
     params: Value,
+    #[serde(default, skip_serializing_if = "is_false")]
+    excluded: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 /// `set` as the text of an action set file.
@@ -66,12 +74,18 @@ pub fn write_set(set: &ActionSet) -> String {
         .iter()
         .map(|a| FileAction {
             name: a.name.clone(),
-            steps: a.steps.iter().map(|(command, params)| FileStep { command: command.clone(), params: params.clone() }).collect(),
+            steps: a
+                .steps
+                .iter()
+                .enumerate()
+                .map(|(i, (command, params))| FileStep { command: command.clone(), params: params.clone(), excluded: a.excluded_steps.contains(&i) })
+                .collect(),
             key: a.key,
             color: a.color.clone(),
         })
         .collect();
-    let file = SetFile { format: ACTIONS_EXT.into(), version: 1, name: set.name.clone(), actions };
+    let version = if set.actions.iter().any(|a| !a.excluded_steps.is_empty()) { 2 } else { 1 };
+    let file = SetFile { format: ACTIONS_EXT.into(), version, name: set.name.clone(), actions };
     serde_json::to_string_pretty(&file).unwrap_or_default()
 }
 
@@ -84,7 +98,7 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     if f.format != ACTIONS_EXT {
         return Err("not an action set file".into());
     }
-    if f.version != 1 {
+    if !matches!(f.version, 1 | 2) {
         return Err("the action set file needs a later version of VectorCraft".into());
     }
     if f.actions.len() > MAX_SET_ACTIONS {
@@ -96,7 +110,10 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     let actions = f
         .actions
         .into_iter()
-        .map(|a| Action { key: a.key, color: a.color, ..Action::new(a.name, a.steps.into_iter().map(|s| (s.command, s.params)).collect()) })
+        .map(|a| {
+            let excluded_steps = a.steps.iter().enumerate().filter_map(|(i, step)| step.excluded.then_some(i)).collect();
+            Action { key: a.key, color: a.color, excluded_steps, ..Action::new(a.name, a.steps.into_iter().map(|s| (s.command, s.params)).collect()) }
+        })
         .collect();
     let set_name = if f.name.trim().is_empty() { name.to_string() } else { f.name };
     Ok(ActionSet::new(set_name, actions))
@@ -164,7 +181,8 @@ pub(crate) fn can_load(app: &VectorcraftApp) -> bool {
 /// the file's text `data`, and adds its set after the others, with its actions. A set with the
 /// same name as one in the panel gets the next free number (`Print 2`). Loaded actions keep their
 /// function keys. The current set and the other sets stay as they are →
-/// `{set: index, name, actions: n}`.
+/// `{set: index, name, actions: n}`. Where the host can read part of a file (the desktop), a file
+/// larger than 8 MiB is refused after its first 8 MiB and one byte are read.
 pub fn load_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (text, stem) = match p.get("data") {
         Some(Value::String(data)) => {
@@ -183,7 +201,12 @@ pub fn load_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
                     crate::picks::open(app, &pick).ok_or("cancelled")?
                 }
             };
-            let bytes = app.services.read.as_ref().ok_or("no file reader")?(&path)?;
+            // One byte past the limit tells a larger file apart without reading all of it.
+            let bytes = match (&app.services.read_head, &app.services.read) {
+                (Some(read_head), _) => read_head(&path, MAX_SET_FILE + 1)?,
+                (None, Some(read)) => read(&path)?,
+                (None, None) => return Err("no file reader".into()),
+            };
             if bytes.len() > MAX_SET_FILE {
                 return Err("the action set file is larger than 8 MiB".into());
             }

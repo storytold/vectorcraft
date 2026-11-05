@@ -282,6 +282,9 @@ font-technology	Variable	Променливи
 	Basic Latin	Основни латински
 	Batch	Пакет
 	Begin Recording	Начало на запис
+	Exclude from playback	Изключване от изпълнението
+	Include in playback	Включване в изпълнението
+	Include Action Steps	Включване на стъпки от действие
 	Bend:	Извиване:
 	Bevel Join	Заоблено съединение
 	Bitmap	Битова мащабна графика
@@ -838,6 +841,11 @@ font-technology	Variable	Променливи
 	Double-click to edit the characters' paint	Двойно щракване за редактиране на оцветяването на знаците
 	Click to edit	Щракнете за редактиране
 	Double-click to edit	Двойно щракване за редактиране
+	Alternates for Current Selection	Алтернативи за текущата селекция
+	Select a character with the Type tool to see its alternates.	Изберете знак с инструмента „Текст“, за да видите алтернативите му.
+	The selected character's font is not available.	Шрифтът на избрания знак не е наличен.
+	No alternates for the selected character.	Няма алтернативи за избрания знак.
+	Double-click to replace	Двойно щракване за замяна
 	Double-click to insert	Двойно щракване за вмъкване
 	Double-click to rename	Двойно щракване за преименуване
 	Double-click to target the contents	Двойно щракване за насочване към съдържанието
@@ -1594,6 +1602,10 @@ font-technology	Variable	Променливи
 	Join Tool	Инструмент „Свързване“
 	Justification…	Подравняване…
 	Justify all lines	Двустранно подравняване на всички редове
+	Align Top	Подравняване горе
+	Align Center	Подравняване в средата
+	Align Bottom	Подравняване долу
+	Justify Vertically	Двустранно вертикално подравняване
 	Justify with last line aligned center	Двустранно подравняване с центриран последен ред
 	Justify with last line aligned left	Двустранно подравняване с ляво подравнен последен ред
 	Justify with last line aligned right	Двустранно подравняване с дясно подравнен последен ред
@@ -1699,6 +1711,7 @@ font-technology	Variable	Променливи
 	Ligatures are off while the text is tracked.	Лигатурите са изключени, докато текстът е с проследяване.
 	Light	Светло
 	Light Blue	Светлосиньо
+	Light Red	Светлочервено
 	Lighten	Изсветляване
 	Lightness	Светлина
 	Limit Color Guide to Library	Ограничаване на цветния справочник до библиотека
@@ -1917,6 +1930,8 @@ font-technology	Variable	Променливи
 	Name:	Име:
 	Navigate	Навигация
 	Navigator	Навигатор
+	Navigator Panel Options	Опции за панела „Навигатор“
+	Draw Dashed Lines as Solid Lines	Изчертаване на прекъснатите линии като плътни
 	Needs the desktop app	Изисква десктоп приложение
 	Neutral Gradients	Неутрални градиенти
 	New	Нов
@@ -3235,6 +3250,7 @@ digits	Malayalam	Малаялам
 	Swap start and end arrowheads	Размяна на началната и крайната стрелка
 	Swap the selected object for the file, keeping its place and transform	Замяна на избрания обект с файла, като се запазват мястото и трансформациите му
 	Stylistic Alternates	Стилистични алтернативи
+	Set {n}	Набор {n}
 	Swash	Декоративен елемент
 	Swatch Conflict	Конфликт на образци
 	Swatch Conflicts	Конфликти на образци
@@ -3662,6 +3678,12 @@ digits	Malayalam	Малаялам
 	Scrub Numeric Fields by Dragging	Плъзгане на числени полета чрез влачене
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} файл в {folder} {note}. Показване на папката на пакета?|{n} файла в {folder} {note}. Показване на папката на пакета?
 @plural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени
+@msgplural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени
+@msg	fonts not copied: {fonts}	некопирани шрифтове: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} свързан файл не е намерен)|({n} свързани файла не са намерени)
+@msg	(fonts not copied: {fonts})	(некопирани шрифтове: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	некопирани шрифтове: {fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} свързано изображение е променено след запазването на този документ. Показване на новата версия?|{n} свързани изображения са променени след запазването на този документ. Показване на новите версии?
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} свързано изображение е променено на диска. Показване на новата версия?|{n} свързани изображения са променени на диска. Показване на новите версии?
@@ -4496,11 +4518,15 @@ axis	Both	И двете
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	той съдържа {_1}, който VectorCraft все още не може да разчете
 @msg	its objects are nested too deeply	обектите му са вложени твърде дълбоко
 @msg	its section ending with `%{end}` doesn't end	разделът му, завършващ на `%{end}`, няма край
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	четките, които VectorCraft все още не може да прочете, бяха пропуснати от панела „Четки“ ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	обектите с множество запълвания или щрихове, ефекти или четки се появиха във вид на изрисувания си изглед ({_1}): тяхната поява все още не подлежи на редактиране
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиентът „{name}“ не е дефиниран във файла: заменен е с обикновен цвят
 @msg	an image VectorCraft can't read was left out	изображение, което VectorCraft не може да разчете, беше пропуснато
 @msg	an image whose data is cut short was left out	изображение с непълни данни беше пропуснато
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	свързаните картини показват записания във файла предварителен преглед с ниска резолюция, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
+@msg	linked type areas past VectorCraft's limits were left out	свързаните текстови области извън ограниченията на VectorCraft бяха пропуснати
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, използван като маска в свързани области, обтичащ текст или съставен път, не изрязва
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	свързаните картини без предварителен преглед във файла показват заместител, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текстовите рамки за област в редове, твърде къси за шрифта, в който се показват, получиха по-високи рамки ({_1}): текстът им иначе нямаше да се види
 @msg	its editing data doesn't say where its art is	данните му за редактиране не посочват къде се намира неговата графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	този файл е записан без съвместимост с PDF и данните му за редактиране не могат да бъдат прочетени ({why})
@@ -5444,6 +5470,10 @@ theme	Appearance	Външен вид
 @msg	choose a source folder	изберете изходна папка
 @msg	open a document with data sets	отворете документ с набори от данни
 @msg	the action has no steps	действието няма стъпки
+@msg	the action has no included steps	действието няма включени стъпки
+@msg	no such action step	няма такава стъпка от действие
+@msg	included must be true or false	included трябва да бъде true или false
+@msg	others must be true or false	others трябва да бъде true или false
 	Registration:	Регистрация:
 # Layers panel filters (Filter Layers Panel Rows) and Color Panel Options
 	By Layer	По слой
@@ -5486,6 +5516,10 @@ theme	Appearance	Външен вид
 	Movie Clip	Филмов клип
 @msg	name is empty	името е празно
 @msg	an action is already recording	вече се записва действие
+@msg	an action is already playing	вече се възпроизвежда действие
+@msg	the action stopped playing: its document is no longer active	действието спря: документът му вече не е активен
+@msg	speed must be accelerated, step or pause	speed трябва да е accelerated, step или pause
+@msg	seconds must be a whole number from 1 to 60	seconds трябва да е цяло число от 1 до 60
 @msg	no such function key	няма такъв функционален клавиш
 @msg	no such color	няма такъв цвят
 @msg	{_1} cannot be used on Windows	{_1} не може да се използва в Windows
@@ -5552,6 +5586,7 @@ theme	Appearance	Външен вид
 	Effect Gallery	Галерия с ефекти
 	Filters	Филтри
 	Select artwork to apply effects	Изберете графика, за да приложите ефекти
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	не всички връзки на променливите във файла бяха прочетени (пропуснати връзки: {_1}): тези обекти не са свързани със своите променливи
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	библиотеката с променливи на файла беше прочетена частично (пропуснати записи: {_1}): панелът „Променливи“ показва останалите
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	библиотеката с променливи на файла не можа да бъде прочетена: панелът „Променливи“ не я показва
 @msg	a variable of unknown kind can't be bound to objects	променлива от неизвестен вид не може да бъде свързана с обекти
@@ -5635,6 +5670,11 @@ axis	Y Axis	Y ос
 	Set Options	Опции на набора
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
+	Playback Options…	Опции за възпроизвеждане…
+	Playback Options	Опции за възпроизвеждане
+	Accelerated	Ускорено
+	Step by Step	Стъпка по стъпка
+	Pause For	Пауза за
 	Rename Action	Преименуване на действие
 	New Action…	Ново действие…
 	New Action	Ново действие
@@ -5912,6 +5952,9 @@ anchor	Points:	Точки:
 	Find Nearest Swatch…	Намиране на най-близкия образец…
 	Find Nearest Swatch	Намиране на най-близкия образец
 	Apply Nearest Swatch	Прилагане на най-близкия образец
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Прилагане на запълването към щриха
+	Apply Stroke to Fill	Прилагане на щриха към запълването
 	Select objects to find the swatches nearest their colors.	Изберете обекти, за да намерите най-близките до цветовете им образци.
 @msg	select objects or give `color`	изберете обекти или задайте `color`
 @msg	`color` is not a colour	`color` не е цвят
@@ -6094,6 +6137,11 @@ breakText	Glyphs	Глифи
 	Export All Open Documents as SVG	Експортиране на всички отворени документи като SVG
 @msgplural	Exported {n} document|Exported {n} documents	Експортиран е {n} документ|Експортирани са {n} документа
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Експортиран е {n} документ; {title} не беше записан: {error}|Експортирани са {n} документа; {title} не беше записан: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Пакетно трасиране на папка
+@msgplural	Traced {n} image|Traced {n} images	Трасирано е {n} изображение|Трасирани са {n} изображения
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} изображение не можа да бъде трасирано|{n} изображения не можаха да бъдат трасирани
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Трасирано е {n} изображение; нетрасирани: {failed}|Трасирани са {n} изображения; нетрасирани: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Тип на символа:
 	Dynamic Symbol	Динамичен символ
@@ -6144,4 +6192,54 @@ breakText	Glyphs	Глифи
 	Bow	Дъга
 	Spike	Връх
 	Skip Spaces	Пропускане на интервалите
+	Release Type on a Path…	Освобождаване на текст по пътя…
+	Release Type on a Path	Освобождаване на текст по пътя
+	Text and Path	Текст и път
+	Path Only	Само път
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графиката е твърде голяма, за да се копира като изображение: другите приложения не получават PNG от нея
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Избиране по работни области
+	Select by Artboards…	Избиране по работни области…
+	Selection Tools	Инструменти за избиране
+	Search artboards	Търсене в работните области
+	Fully Inside	Изцяло вътре
+	Fully Outside	Изцяло извън
+	No artboards match.	Няма съвпадащи работни области.
+	Chosen: {n} of {total}	Избрани: {n} от {total}
+
+# Contour add-on
+	Contour	Очертание
+	Contour Tool	Инструмент „Очертание“
+	Sharp	Заостряне
+	Bake	Разшири
+	Turn the Contour into plain paths	Превръща очертанието в обикновени пътища
+	Set Corners…	Задаване на ъгли…
+	All Anchors	Всички опорни точки
+	Odd-Numbered Anchors	Нечетни опорни точки
+	Even-Numbered Anchors	Четни опорни точки
+	Minimum angle	Минимален ъгъл
+	Maximum angle	Максимален ъгъл
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Избиране на свързаните
+	Select Embedded	Избиране на вградените
+	Select Missing	Избиране на липсващите
+	Select Modified	Избиране на модифицираните
+	Select by Link Status	Избиране по състояние на връзката
+	Select by Link Status…	Избиране по състояние на връзката…
+	Search images	Търсене на изображения
+	No images match.	Няма съвпадащи изображения.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Избрано е {n} свързано изображение|Избрани са {n} свързани изображения
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Избрано е {n} вградено изображение|Избрани са {n} вградени изображения
+@msgplural	Selected {n} missing image|Selected {n} missing images	Избрано е {n} липсващо изображение|Избрани са {n} липсващи изображения
+@msgplural	Selected {n} modified image|Selected {n} modified images	Избрано е {n} модифицирано изображение|Избрани са {n} модифицирани изображения
+@msgplural	Selected {n} image|Selected {n} images	Избрано е {n} изображение|Избрани са {n} изображения
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; още {n} е скрито или заключено|{selected}; още {n} са скрити или заключени
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; още {n} е в шаблонен слой|{selected}; още {n} са в шаблонни слоеве
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; още {n} е извън изолираната група|{selected}; още {n} са извън изолираната група
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; още {n} не може да бъде избрано сега|{selected}; още {n} не могат да бъдат избрани сега
+
+# Compound Shapes add-on
+	Compound Shapes	Съставни фигури
+	Shape Mode Buttons Make Compound Shapes	Бутоните за режими на фигури създават съставни фигури

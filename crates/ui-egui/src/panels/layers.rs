@@ -69,7 +69,7 @@ use model::{push_rows, rows_of_doc};
 use rows::{drag_ghost, key, rename_id, resolve_click, row};
 #[cfg(test)]
 use thumbs::THUMBS;
-pub(crate) use thumbs::{ThumbSource, node_arc, real_thumb, thumb_options};
+pub(crate) use thumbs::{ThumbSource, node_arc, real_thumb, retain_open_thumbs, show_thumbs_of, thumb_options};
 
 /// Width of the eye and the lock columns.
 const COLUMN: f32 = 25.0;
@@ -184,6 +184,7 @@ pub(crate) const ROW_KEYS: &str = "ly-keys";
 /// The Layers panel: the layer tree with its click, drag and rename rules and the bottom buttons; Delete/Backspace after a row click delete the highlighted rows.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
+    show_thumbs_of(app.session.active().map(|st| st.uid));
     let Some(st) = app.session.active() else { return };
     // A rename belongs to the document it started in (node ids are per document): drop it when
     // another document shows, so it can't rename that document's node with the same id.
