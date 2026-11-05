@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Pencil and Paintbrush: a new stroke with Keep selected off leaves nothing selected, #5752; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Selection tool: Cmd/Ctrl-drag a bounding-box handle to move the selection and snap from that handle, #5482; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -38,6 +38,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Selection tool: Cmd/Ctrl-dragging a bounding-box handle moves the selection, unscaled, with the handle as the point that snaps; without the modifier the handle still scales (#5482, a VectorCraft addition); scores and estimates unchanged |
 | 2026-11-05 | minor | Selection Tools add-on: Select Linked, Embedded, Missing and Modified select the images and placed documents with that link status (Object › Plug-ins › Selection Tools and the Links panel menu; Shift adds), and Select by Link Status… lists them by name, status and format to pick from, optionally zooming to them; what is hidden, locked, on a template layer or outside the isolated group is left out and the status bar says how many (#5526, a VectorCraft addition); scores and estimates unchanged (estimated). |
 | 2026-11-05 | minor | Pencil and Paintbrush: a new stroke with Keep selected off leaves nothing selected, the earlier selection included (#5752); scores and estimates unchanged |
 | 2026-11-05 | minor | Layers panel: a layer whose Layer Options › Print is off shows its name italic, as the reference application shows non-printing layers, and keeps it while the row is dragged (#5739); scores and estimates unchanged |
@@ -212,6 +213,7 @@ tools, never checked side by side) isn't captured row by row.
 |---|---|---|
 | Moving a rounded rectangle with Craquelure at high DPI | partial | Distance searches optimized; moved-viewport pixels unchanged for three texture effects; `texture_drag_perf` probe available. Idle Windows mouse-drag QA remains (#1257) |
 | Bounding-box handles: Shift proportional, Alt from centre, rotate outside the corners | done | |
+| Cmd/Ctrl-drag a bounding-box handle to move the selection by it: the handle is the point that snaps (move cursor over the handle while the modifier is held) | done | #5482, a VectorCraft addition: the reference application moves by the point grabbed with Snap to Point ([public source](https://helpx.adobe.com/illustrator/desktop/measure-and-align/grids-and-guides/align-graphic-objects-with-guides.html)); this extends it to the handles; test `a_cmd_drag_on_a_bbox_handle_moves_the_selection_and_snaps_the_handle` |
 | Rotated objects keep a rotated bounding box and their angle; Reset Bounding Box | done | |
 | Free Transform, Scale and Reflect along a rotated box | missing | |
 | Free Transform widget: constrain, free distort, perspective distort; the key-held variants | done | |

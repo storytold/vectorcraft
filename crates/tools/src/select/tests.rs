@@ -691,6 +691,40 @@ fn a_move_snaps_the_grabbed_point_to_a_ruler_guide_with_smart_guides_on() {
     assert_eq!(dx(&ToolContext { snap_to_point: false, ..cx(&d, &s, &p) }, 172.0), 22.0);
 }
 
+/// #5482: Cmd/Ctrl-dragging a bounding-box handle moves the selection, unscaled, with the handle
+/// (not the pointer) as the point that snaps; the pointer over it is the move cursor. Without the
+/// modifier the handle still scales.
+#[test]
+fn a_cmd_drag_on_a_bbox_handle_moves_the_selection_and_snaps_the_handle() {
+    let (mut d, id) = doc_with_rect();
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+    d.guides = vec![vectorcraft_doc::Guide::new(true, 263.4)];
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    // Pressed 2 pt off the Right handle (200, 150).
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, Point::new(202.0, 151.0), cmd), Cursor::Move);
+    assert_ne!(t.cursor(&c, Point::new(202.0, 151.0), Mods::default()), Cursor::Move);
+    assert!(t.pointer(&c, &ev(PointerKind::Down, 202.0, 151.0).with_mods(cmd)).is_empty());
+    // 62 pt to the right: the handle comes within reach of the guide 1.4 pt further on; the
+    // pointer, 2 pt to the right of the handle, would be past it.
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 264.0, 151.0).with_mods(cmd));
+    assert_eq!(a.first(), Some(&Action::Begin("Move".into())), "{a:?}");
+    let Some(Action::Preview(id, v)) = a.last() else { panic!("{a:?}") };
+    assert_eq!(id, "object.transform");
+    let m: Vec<f64> = v["matrix"].as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+    // Unscaled; the handle at x = 200 lands on the guide at 263.4, from the handle, not the pointer.
+    assert_eq!(&m[..4], &[1.0, 0.0, 0.0, 1.0], "{m:?}");
+    assert!((m[4] - 63.4).abs() < 1e-9 && m[5].abs() < 1e-9, "{m:?}");
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 264.0, 151.0).with_mods(cmd)), vec![Action::Commit]);
+    // Without Cmd the same press scales.
+    let mut t = SelectionTool::default();
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Down, 202.0, 151.0)), vec![Action::Begin("Scale".into())]);
+}
+
 /// Alt pressed during a move makes a copy, which snaps to the original it leaves behind (as
 /// gathered before the previews moved it); released, the move doesn't.
 #[test]
