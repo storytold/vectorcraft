@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Pencil and Paintbrush: a new stroke with Keep selected off leaves nothing selected, #5752; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Appearance panel: Delete Selected Item on an Opacity row sets it back to Default, #5742; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -38,6 +38,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Appearance panel: Delete Selected Item (and Delete/Backspace, and Remove Item in the panel menu) on a selected Opacity row, the object's or a fill's or stroke's, sets it back to Default (100%, Normal) as one undo step instead of being dimmed (#5742); scores and estimates unchanged |
 | 2026-11-05 | minor | Selection Tools add-on: Select Linked, Embedded, Missing and Modified select the images and placed documents with that link status (Object › Plug-ins › Selection Tools and the Links panel menu; Shift adds), and Select by Link Status… lists them by name, status and format to pick from, optionally zooming to them; what is hidden, locked, on a template layer or outside the isolated group is left out and the status bar says how many (#5526, a VectorCraft addition); scores and estimates unchanged (estimated). |
 | 2026-11-05 | minor | Pencil and Paintbrush: a new stroke with Keep selected off leaves nothing selected, the earlier selection included (#5752); scores and estimates unchanged |
 | 2026-11-05 | minor | Layers panel: a layer whose Layer Options › Print is off shows its name italic, as the reference application shows non-printing layers, and keeps it while the row is dragged (#5739); scores and estimates unchanged |
