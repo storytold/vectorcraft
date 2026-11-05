@@ -386,10 +386,11 @@ fn pencil_redraws_the_shorter_way_round_a_closed_path() {
     assert!(s.execute("path.freehand", &json!({"points": [[0, 0], [1, 1]], "redraw": {"id": id.0, "within": -1}})).is_err());
 }
 
-/// With Keep selected off, the path a stroke draws or continues is not selected afterwards, the
-/// rest of the selection stays, and the stroke is one undo step.
+/// With Keep selected off, a new stroke leaves nothing selected (the earlier selection goes too,
+/// as Illustrator starts the stroke by dropping it, #5752); a continued or redrawn path is
+/// deselected and the rest of the selection stays. The stroke is one undo step.
 #[test]
-fn pencil_with_keep_selected_off_leaves_the_new_path_unselected() {
+fn pencil_with_keep_selected_off_leaves_nothing_selected() {
     let mut s = session();
     let r = rect(&mut s, 400.0, 400.0, 50.0, 50.0);
     let selected = |s: &Session| s.doc().unwrap().selection.objects.clone();
@@ -401,7 +402,7 @@ fn pencil_with_keep_selected_off_leaves_the_new_path_unselected() {
     let off = s.execute("path.freehand", &json!({"points": [[100, 200], [150, 220], [200, 200]], "keepSelected": false})).unwrap();
     let off = NodeId(off["id"].as_u64().unwrap());
     assert!(s.doc().unwrap().doc.node(off).is_some());
-    assert_eq!(selected(&s), vec![r]);
+    assert!(selected(&s).is_empty(), "a new stroke with Keep selected off leaves nothing selected, the rectangle included");
     assert_eq!(undo_steps(&s), undo + 1);
     // Continuing a selected open path deselects it and keeps the rest.
     let l = line(&mut s, 100.0, 300.0, 200.0, 300.0);
