@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Transform Each: Relative and Absolute scaling and the documented panel order; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (isolation mode: a locked or hidden layer keeps the isolated art from clicks and marquees; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -30,6 +30,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | Isolation mode: once the layer, or a group, around the isolated object is locked or hidden, a click or a marquee with the Selection tool no longer selects the isolated art (part of #5309); scores and estimates unchanged |
 | 2026-11-04 | minor | Transform Each's Scale has the documented Relative and Absolute radio buttons: percentages of each object's size, or the width and height it becomes (`object.transformEach` `relative`); the two scales have the link that keeps them in proportion (`__constrain`, as the shape dialogs'), and the panel lists Scale, Move, Rotate, the Options in two columns, the Reference Point and Preview (level with Copy, Cancel and OK) in the documented order; scores and estimates unchanged |
 | 2026-11-04 | minor | Cmd+Space pressed during an active drawing drag keeps that tool's cursor; clarify that Space can move an in-progress shape or anchor. Scores and estimates unchanged. |
 | 2026-11-04 | minor | Selection Tools add-on: Select by Artboards selects the objects overlapping, fully inside or fully outside several chosen artboards, from a dialog that lists, searches and multi-selects the artboards and fits one in the window on double-click (#5525, #5548, #5549, a VectorCraft addition); scores and estimates unchanged. |
@@ -157,7 +158,7 @@ tools, never checked side by side) isn't captured row by row.
 | Live Corners widgets (radius readout, Alt-click cycles kind, double-click the Corners dialog) | done | a Direct Selection click on a widget selects its corner (#1239); a press-and-drag on a widget of a path selected whole still rounds every corner (#908), and adding widgets to the selection by Shift-click (#1232) is missing; the bounding box hides while a widget is dragged with the Selection tool (#1229); a round corner next to a curved side curves smoothly instead of sticking out of the shape (#1512); a corner rounds until its cut reaches its neighbours' cuts, so one corner of a square alone reaches the whole side (#2332) |
 | Corners between curved sides (#1144), Relative rounding | done | #1144 closed; Relative rounding in the Corners dialog (Relative / Absolute, radius as a percentage of each corner's maximum, kept as the shape is resized; `object.setLiveShape` `relativeRadii`, #3091, `tests_livecorners::relative_corner_rounding_keeps_fraction_on_resize`) |
 | Pie widgets on a live ellipse: drag one to set Pie Start or End Angle, double-click one to make the ellipse whole | done | Selection tool, with the bounding box showing |
-| Isolation mode by double-click (groups and single objects), breadcrumbs, Esc to exit | done | Single paths, compound paths, images, meshes and placed files isolate too ([helpx: Isolate objects](https://helpx.adobe.com/africa/illustrator/desktop/manage-objects/select-objects/isolate-objects.html)) |
+| Isolation mode by double-click (groups and single objects), breadcrumbs, Esc to exit | done | Single paths, compound paths, images, meshes and placed files isolate too ([helpx: Isolate objects](https://helpx.adobe.com/africa/illustrator/desktop/manage-objects/select-objects/isolate-objects.html)); locking or hiding the layer (or a group) around the isolated object afterwards keeps clicks and marquees off it, as outside isolation mode (#5309) |
 | "Magnetic" moves of selected anchors with a modifier (#955 request) | missing | not a feature of the reference app as documented; under discussion |
 | Coinciding anchors of overlapping objects: the selected object's anchor is taken, also under another object | done | #1508 |
 

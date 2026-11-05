@@ -508,8 +508,9 @@ fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(No
         && let Some(isolated) = doc.node(scope)
         && let Some(mut chain) = doc.ancestry(scope)
     {
-        // Isolated before its artboard was locked: nothing in it hits.
-        if locks.holds_id(scope) {
+        // Isolated before its artboard, or its layer or a group around it, was locked or hidden:
+        // nothing in it hits (#5309).
+        if !doc.is_editable_with(&locks, scope) {
             return None;
         }
         if isolated.is_container() {
@@ -893,6 +894,9 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
     let mut out = Vec::new();
     // `tops` pairs each object with the part of `r` in which the marquee can touch it.
     let tops: Vec<(&std::sync::Arc<Node>, Rect)> = match scope.and_then(|s| doc.node(s)) {
+        // Isolated art whose layer, or a group around it, was locked or hidden afterwards: the
+        // marquee touches none of it, as clicks don't (#5309).
+        Some(s) if !doc.is_editable(s.id) => vec![],
         Some(s) => match (s.children(), marquee_in(s, r)) {
             (Some(c), Some(r)) => c.iter().enumerate().filter(|(i, _)| !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
             (Some(_), None) => vec![],
