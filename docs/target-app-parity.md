@@ -4,6 +4,10 @@
 
 ## Feature submission evidence
 
+Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
+
+**PR #3273 revision — 2026-11-04:** Thin curved stroke coverage ported to the current raster-only cache, cropped-long-stroke and effect paths with guarded flattening; vector export geometry unchanged. Scores and estimates unchanged.
+
 Group Selection keeps an already selected component selected during a drag; a completed click still adds its next enclosing group. The current Direct Selection click/release machinery is shared, preserving compound-member picks, Shift deselection, isolation and masked-art dragging. Outline Stroke continues to preserve all original fills, including open contours; the change does not remove fills. Regressions: `group_selection_distinguishes_selected_leaf_drags_from_clicks` and `outline_fill_and_stroke_move_independently_with_group_selection` cover tool events, independent component movement and Undo/Redo. Scores and estimates unchanged.
 
 **PR #3272 revision — 2026-11-04:** Group Selection component drags defer ancestor selection until a completed click, using current Direct Selection release handling; original Outline Stroke fills and newer selection behavior retained. Scores and estimates unchanged.
