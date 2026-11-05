@@ -237,13 +237,22 @@ impl Sub {
         if was.anchors.len() == now.anchors.len() && was.closed == now.closed {
             self.moved(was, now, els, st);
         } else if was.anchors.len() < 2 || now.anchors.len() < 2 {
-            let to = (at + self.len()).min(els.len());
-            let len = if now.anchors.is_empty() { 0 } else { 1 + now.segment_count() + usize::from(now.closed) };
-            els.splice(at.min(to)..to, (0..len).map(|o| element_at(now, o)));
-            *self = Sub::measured(now, at, els, st);
+            self.remade(now, at, self.len(), els, st);
         } else {
-            self.spliced(was, now, els, st);
+            let mut span = self.len();
+            if self.spliced(was, now, els, st, &mut span).is_none() {
+                self.remade(now, at, span, els, st);
+            }
         }
+    }
+
+    /// Write the elements of `now` over the `span` elements at `at` in `els` that the subpath holds,
+    /// and measure it whole with the tips of `st`.
+    fn remade(&mut self, now: &SubPath, at: usize, span: usize, els: &mut Vec<PathEl>, st: Option<&StrokeLayer>) {
+        let to = at.saturating_add(span).min(els.len());
+        let len = if now.anchors.is_empty() { 0 } else { 1 + now.segment_count() + usize::from(now.closed) };
+        els.splice(at.min(to)..to, (0..len).map(|o| element_at(now, o)));
+        *self = Sub::measured(now, at, els, st);
     }
 
     /// [`Self::update`] for a subpath with the same anchor count and closed state: the elements of
@@ -314,8 +323,10 @@ impl Sub {
     /// last are written again, and the closing segment and the ClosePath when the first or last
     /// anchor changed or it was closed or opened; the elements before and after stay. The runs
     /// that held the segments written are measured again, with the tips of the runs of the
-    /// segments with length before them.
-    fn spliced(&mut self, was: &SubPath, now: &SubPath, els: &mut Vec<PathEl>, st: Option<&StrokeLayer>) {
+    /// segments with length before them. `span` is the count of elements the subpath holds in
+    /// `els`, kept up to date as they are written. `None` when the segments and runs kept do not
+    /// fit `was`: the caller then makes the subpath again from those `span` elements.
+    fn spliced(&mut self, was: &SubPath, now: &SubPath, els: &mut Vec<PathEl>, st: Option<&StrokeLayer>, span: &mut usize) -> Option<()> {
         let (n0, n1) = (was.anchors.len(), now.anchors.len());
         let least = n0.min(n1);
         // On a subpath open before and after, the handle before the first anchor and the one after
@@ -336,25 +347,36 @@ impl Sub {
         let (len0, len1) = (1 + s0 + usize::from(c0), 1 + s1 + usize::from(c1));
         // Elements `a..mid` change: the MoveTo when the first anchor changed and the segments up
         // to the first of those between the last `b` anchors.
-        let (mid0, mid1) = ((1 + n0 - b).min(1 + s0), (1 + n1 - b).min(1 + s1));
+        let (mid0, mid1) = ((1 + n0.checked_sub(b)?).min(1 + s0), (1 + n1.checked_sub(b)?).min(1 + s1));
         // Elements `tail..len` follow the segments between the last `b` anchors: the closing
         // segment and the ClosePath. They stay when the anchors either side of the closing segment
         // stayed and the subpath was neither closed nor opened.
         let (tail0, tail1) = if b >= 1 { (n0, n1) } else { (mid0, mid1) };
         let keep_tail = c0 == c1 && (!c1 || b == 0 || a >= 1);
+        // The `old` segments from segment `lo` become `new` segments, and when the tail is written,
+        // the segments from the one before it do too.
+        let lo = a.saturating_sub(1);
+        let (old, new) = (mid0.checked_sub(1)?.checked_sub(lo)?, mid1.checked_sub(1)?.checked_sub(lo)?);
+        let tail = match keep_tail {
+            true => None,
+            false => Some((tail0.checked_sub(1)?, (1 + s0).saturating_sub(tail0), (1 + s1).saturating_sub(tail1), tail1.checked_sub(1)?)),
+        };
         let at = self.start;
         let mut stale = vec![false; self.runs()];
         let tips = st.is_some();
-        if !keep_tail {
-            let to = (at + len0).min(els.len());
-            els.splice((at + tail0).min(to)..to, (tail1..len1).map(|o| element_at(now, o)));
-            let (lo, old, new) = (tail0 - 1, (1 + s0).saturating_sub(tail0), (1 + s1).saturating_sub(tail1));
-            self.resize(lo, old, new, &mut stale, tips);
+        // Writes elements `e0..e1` of `now` over elements `o0..o1` of the subpath and updates `span`.
+        let mut write = |els: &mut Vec<PathEl>, (o0, o1): (usize, usize), (e0, e1): (usize, usize)| {
+            let to = at.saturating_add(o1).min(els.len());
+            let from = at.saturating_add(o0).min(to);
+            els.splice(from..to, (e0..e1).map(|o| element_at(now, o)));
+            *span = from.saturating_sub(at) + e1.saturating_sub(e0) + at.saturating_add(*span).saturating_sub(to);
+        };
+        if let Some((lo, old, new, _)) = tail {
+            self.resize(lo, old, new, &mut stale, tips)?;
+            write(els, (tail0, len0), (tail1, len1));
         }
-        let to = (at + mid0).min(els.len());
-        els.splice((at + a).min(to)..to, (a..mid1).map(|o| element_at(now, o)));
-        let lo = a.max(1) - 1;
-        self.resize(lo, mid0 - 1 - lo, mid1 - 1 - lo, &mut stale, tips);
+        self.resize(lo, old, new, &mut stale, tips)?;
+        write(els, (a, mid0), (a, mid1));
         self.anchors = n1;
         self.closed = c1;
         let els: &[PathEl] = els;
@@ -364,12 +386,12 @@ impl Sub {
                 *slot = b;
             }
         }
-        let Some(st) = st else { return };
+        let Some(st) = st else { return Some(()) };
         let mut runs: Vec<usize> = stale.iter().enumerate().filter(|(_, s)| **s).map(|(r, _)| r).collect();
         // Closed or opened: the tips of every joint change when the stroke reaches farther from one
         // than from the other.
         let mut whole = c0 != c1 && st.side_reach(c0).to_bits() != st.side_reach(c1).to_bits();
-        for i in [lo].into_iter().chain((!keep_tail).then_some(tail1 - 1)) {
+        for i in [lo].into_iter().chain(tail.map(|(.., last)| last)) {
             match self.prev_drawn(els, i) {
                 Ok(Some(j)) => runs.push(self.run_of(j)),
                 Ok(None) => {}
@@ -377,36 +399,43 @@ impl Sub {
             }
         }
         self.measure_tips(els, runs, whole, st);
+        Some(())
     }
 
     /// Replace the `old` segments from segment `lo` with `new` segments in the runs: the runs that
     /// held them become one run, split into runs of [`RUN`] segments when longer than twice that,
-    /// whose boxes and (with `tips`) tips are marked in `stale` to be measured again.
-    fn resize(&mut self, lo: usize, old: usize, new: usize, stale: &mut Vec<bool>, tips: bool) {
+    /// whose boxes and (with `tips`) tips are marked in `stale` to be measured again. `None`, and
+    /// nothing changed, when the runs kept do not hold those `old` segments.
+    fn resize(&mut self, lo: usize, old: usize, new: usize, stale: &mut Vec<bool>, tips: bool) -> Option<()> {
         if old == 0 && new == 0 {
-            return;
+            return Some(());
         }
         let (r0, r1, first, last) = match self.runs() {
             0 => (0, 0, 0, new),
             _ => {
                 let r0 = self.run_of(lo);
                 let r1 = if old == 0 { r0 } else { self.run_of(lo + old - 1) };
-                let last = self.ends.get(r1).copied().unwrap_or(lo + old) + new - old;
+                let last = self.ends.get(r1).copied().unwrap_or(lo + old).checked_add(new)?.checked_sub(old)?;
                 (r0, r1 + 1, self.range(r0).start, last)
             }
         };
-        let len = last - first;
-        let count = if len > 2 * RUN { len.div_ceil(RUN) } else { usize::from(len > 0) };
-        for e in self.ends.iter_mut().skip(r1) {
-            *e = *e + new - old;
+        let len = last.checked_sub(first)?;
+        let segs = self.segs.checked_add(new)?.checked_sub(old)?;
+        let after: Vec<usize> = self.ends.get(r1..)?.iter().map(|&e| e.checked_add(new)?.checked_sub(old)).collect::<Option<_>>()?;
+        if r1 > self.boxes.len() || r1 > stale.len() {
+            return None;
         }
+        let count = if len > 2 * RUN { len.div_ceil(RUN) } else { usize::from(len > 0) };
+        self.ends.truncate(r1);
+        self.ends.extend(after);
         self.ends.splice(r0..r1, (1..=count).map(|j| if j == count { last } else { first + j * RUN }));
         self.boxes.splice(r0..r1, std::iter::repeat_n(None, count));
         if tips {
             self.tips.splice(r0.min(self.tips.len())..r1.min(self.tips.len()), std::iter::repeat_n(None, count));
         }
         stale.splice(r0..r1, std::iter::repeat_n(true, count));
-        self.segs = self.segs + new - old;
+        self.segs = segs;
+        Some(())
     }
 
     /// Measure again the tips of `st` in `runs`, or in every run when `whole`.
@@ -477,7 +506,9 @@ impl KeptPath {
     /// compound path that gained or lost subpaths is made again, and so are the members added
     /// between the first and the last member that the edit left as they were, when the edit added
     /// or removed members. False, and nothing changed, when `n` has no kept path, or when the edit
-    /// added or deleted anchors in or closed or opened more than [`SPLICES`] subpaths. False as well
+    /// added or deleted anchors in or closed or opened more than [`SPLICES`] subpaths, or when the
+    /// members kept do not pair with those of `n`. A subpath whose segments or runs kept do not fit
+    /// its anchors before the edit is made again whole ([`Sub::spliced`]). False as well
     /// when the path written does not end where the subpaths measured end. The renderer makes the
     /// path again whole after a false.
     pub(crate) fn update(&mut self, n: &Arc<Node>) -> bool {
@@ -495,7 +526,15 @@ impl KeptPath {
             let rest = (was.len() - head).min(now.len() - head);
             (head, was.iter().rev().zip(now.iter().rev()).take(rest).take_while(|(w, p)| std::ptr::eq(**w, **p)).count())
         };
-        let paired = |i: usize| if i < head { Some(i) } else { (now.len() - i <= tail).then(|| was.len() - (now.len() - i)) };
+        // Where the members that are not paired end in `was` and in `now`.
+        let (Some(was_end), Some(now_end)) = (was.len().checked_sub(tail), now.len().checked_sub(tail)) else { return false };
+        if head > was_end || head > now_end {
+            return false;
+        }
+        let paired = |i: usize| match i < head {
+            true => Some(i),
+            false => now.len().checked_sub(i).filter(|&back| back <= tail).and_then(|back| was.len().checked_sub(back)),
+        };
         let spliced: usize = (0..now.len()).filter_map(|i| paired(i).map(|w| splices(was[w], now[i]))).sum();
         if spliced > SPLICES {
             return false;
@@ -515,8 +554,9 @@ impl KeptPath {
         for (i, p) in now.iter().enumerate() {
             if i == head {
                 // The members of `was` that are not paired give way to those of `now`.
-                let gone: usize = old_parts[head..was.len() - tail].iter_mut().flat_map(|s| s.take().into_iter().flatten()).map(|s| s.len()).sum();
-                parts.extend(made_again(&now[head..now.len() - tail], gone, &mut els, &mut at, st));
+                let gone: usize =
+                    old_parts.get_mut(head..was_end).into_iter().flatten().flat_map(|s| s.take().into_iter().flatten()).map(|s| s.len()).sum();
+                parts.extend(made_again(now.get(head..now_end).unwrap_or_default(), gone, &mut els, &mut at, st));
             }
             let Some(w) = paired(i) else { continue };
             let Some(mut subs) = old_parts.get_mut(w).and_then(Option::take) else { continue };
