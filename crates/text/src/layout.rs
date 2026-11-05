@@ -14,7 +14,7 @@ use vectorcraft_geom::{ArcPath, PathData};
 use crate::GlyphBend;
 use crate::composer::{Breakpoint, Params, compose};
 use crate::fontdb::FontDb;
-use crate::hyphen::hyphen_points_with;
+use crate::hyphen::hyphen_points_in;
 use crate::justify::{Flex, LineFit, apply_desired, fit_line, is_word_space};
 use crate::kashida;
 use crate::shape::{
