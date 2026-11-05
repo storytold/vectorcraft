@@ -82,6 +82,41 @@ fn a_typed_key_holds_its_modifiers_for_its_text() {
     assert_eq!(app.session.tool_id(), "blobBrush", "Shift+B, not B");
 }
 
+/// A `ui.pointer` release sent right after a `ui.key` waits until the key reached the busy tool:
+/// C pressed while an arc is dragged out closes the arc drawn on release.
+#[test]
+fn a_pointer_release_after_a_key_waits_for_the_key() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("tool.select", json!({"tool": "arc"})).unwrap();
+    let ctx = egui::Context::default();
+    control(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]}));
+    let (key, _key_reply) = ControlRequest::new("ui.key", json!({"key": "c"}));
+    let (up, up_reply) = ControlRequest::new("ui.pointer", json!({"events": [{"kind": "up", "x": 200, "y": 180}]}));
+    tx.send(key).unwrap();
+    tx.send(up).unwrap();
+    // Each frame as the host runs it: the input hook, the control requests, then the UI pass.
+    let mut released = None;
+    for _ in 0..8 {
+        let mut raw = egui::RawInput::default();
+        app.raw_input_hook(&ctx, &mut raw);
+        app.drain_control(&ctx);
+        if let Ok(r) = up_reply.try_recv() {
+            released = Some(r);
+            break;
+        }
+        let mut out = ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+    let r = released.expect("the release ran");
+    assert_eq!(r["ok"], true, "{r}");
+    let document = app.session.active().unwrap();
+    let arc = *document.selection.objects.last().expect("the arc drawn on release");
+    let closed = document.doc.node(arc).unwrap().path_data().unwrap().subpaths[0].closed;
+    assert!(closed, "C reached the Arc tool before the release");
+}
+
 #[test]
 fn a_drag_holds_its_modifiers_from_the_press_to_the_release() {
     let (mut app, _) = one_square();
