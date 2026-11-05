@@ -3,7 +3,7 @@ use super::{
     Slices, StrokeAlign, StrokeEntry, StrokeLayer, TextGeom, blend_mode, drawable, effects, fill_rule, fx, kurbo, lru, owns_stroke, peniko,
     rects_overlap,
 };
-use crate::frame::{MovedKey, StrokeKey};
+use crate::frame::{MovedKey, MovedSliceKey, StrokeKey};
 use crate::paint;
 
 impl Renderer {
@@ -164,7 +164,9 @@ impl Renderer {
     /// Paint the line and arrowheads (`pieces`) of stroke `st` of `bp` (filled with `rule`) with
     /// its gradient `g` laid along or across the path ([`effects::stroke::gradient_slices`]). Each
     /// piece clips the slices, grown a pixel into each other and each replacing what it covers, so
-    /// neighbours meet without seams and translucent colours paint once.
+    /// neighbours meet without seams and translucent colours paint once. The slices of a stroke
+    /// of `self.cur` are kept in `stroke_slices`, and a moved copy of the object draws the slices
+    /// made before it moved, moved by the same offset ([`Self::moved_slices`]).
     #[allow(clippy::too_many_arguments)]
     fn fill_path_gradient(
         &mut self,
@@ -180,6 +182,8 @@ impl Renderer {
     ) {
         let level = (f.px * 0.25).log2().floor() as i32;
         let make = || -> Slices {
+            #[cfg(test)]
+            SLICES_MADE.with(|n| n.set(n.get() + 1));
             let tol = 2f64.powi(level);
             // Reach a pixel past the stroke, so its antialiased edge has colour under it.
             let slices = effects::stroke::gradient_slices(bp, rule, st, tol, f.px + tol, f.px);
@@ -193,22 +197,37 @@ impl Renderer {
                     .collect(),
             )
         };
-        let slices = match self.cur.clone().filter(|n| owns_stroke(n, st)) {
+        let (slices, by) = match self.cur.clone().filter(|n| owns_stroke(n, st)) {
             Some(node) => {
                 let key = (self.stroke_owner(Arc::as_ptr(&node) as usize), st as *const StrokeLayer as usize, level);
                 match self.stroke_slices.get_mut(&key) {
                     Some(e) if Arc::ptr_eq(&e.node, &node) => {
                         e.stamp = self.stamp;
-                        e.slices.clone()
+                        (e.slices.clone(), e.by)
                     }
                     _ => {
-                        let slices = make();
-                        self.stroke_slices.insert(key, SliceEntry { node, slices: slices.clone(), stamp: self.stamp });
-                        slices
+                        // Under its object's id, the stroke's place and the tolerance level, the key
+                        // of the stroke's latest slices is kept, except for art made again in every
+                        // frame.
+                        let place = node.appearance.items.iter().position(|i| matches!(i, AppearanceItem::Stroke(s) if std::ptr::eq(s, st)));
+                        let moved = place.filter(|_| !self.made_again).map(|place| (node.id.0, place, level));
+                        let kept = moved.and_then(|mk| self.moved_slices(mk, &node, st, rule, bp));
+                        let (made, slices, by, own) = match kept {
+                            Some((made, slices, by)) => (made, slices, by, true),
+                            None => {
+                                let own = moved.is_some() && self.own_path(&node, bp);
+                                (node.clone(), make(), kurbo::Vec2::ZERO, own)
+                            }
+                        };
+                        self.stroke_slices.insert(key, SliceEntry { node, made, slices: slices.clone(), by, rule, own, stamp: self.stamp });
+                        if let Some(mk) = moved {
+                            self.moved_slices.insert(mk, key);
+                        }
+                        (slices, by)
                     }
                 }
             }
-            None => make(),
+            None => (make(), kurbo::Vec2::ZERO),
         };
         let line = match self.cached_stroke(f, chars, bp, &pieces.line, st, width) {
             Some(o) => o,
@@ -223,8 +242,18 @@ impl Renderer {
             ctx.push_clip_layer(clip);
             ctx.set_blend_mode(BlendMode::new(Mix::Normal, Compose::Copy));
             for (shape, paint, b) in slices.iter() {
-                if rects_overlap(*b, cb) && paint::set_paint(ctx, paint, *b, f) {
-                    ctx.fill_path(shape);
+                let b = *b + by;
+                if !rects_overlap(b, cb) {
+                    continue;
+                }
+                if by == kurbo::Vec2::ZERO {
+                    if paint::set_paint(ctx, paint, b, f) {
+                        ctx.fill_path(shape);
+                    }
+                } else if paint::set_paint(ctx, &moved_paint(paint, by), b, f) {
+                    let mut shape = shape.clone();
+                    shape.apply_affine(Affine::translate(by));
+                    ctx.fill_path(&shape);
                 }
             }
             ctx.set_blend_mode(BlendMode::default());
@@ -364,6 +393,49 @@ impl Renderer {
         Some((Arc::new(outline), crop))
     }
 
+    /// The slices of stroke `st` of `node` along `bp` (filled with `rule`), made from the latest
+    /// slices kept under `mk` ([`MovedSliceKey`]) when those were made along their object's own
+    /// path, their object is `node` changed, its stroke there differs from `st` at most in where
+    /// its gradient is placed, its fill rule is `rule`, and `bp` is its path moved (to within
+    /// rounding): the node they were made from, those slices, and the offset from that node to
+    /// `bp`, which the slices are drawn moved by. The anchors of the two objects are compared first
+    /// ([`anchors_moved`]), and the earlier path is made again from its object only when they
+    /// match. `None` when there are no such slices.
+    fn moved_slices(
+        &self,
+        mk: MovedSliceKey,
+        node: &Node,
+        st: &StrokeLayer,
+        rule: FillRule,
+        bp: &BezPath,
+    ) -> Option<(Arc<Node>, Slices, kurbo::Vec2)> {
+        let e = self.stroke_slices.get(self.moved_slices.get(&mk)?)?;
+        if !e.own || e.rule != rule || e.made.id != node.id {
+            return None;
+        }
+        let Some(AppearanceItem::Stroke(old)) = e.made.appearance.items.get(mk.1) else {
+            return None;
+        };
+        // The slices take only the gradient's stops and kind, not where it is placed, which a move
+        // moves too.
+        let unplaced = |s: &StrokeLayer| {
+            let mut s = s.clone();
+            if let vectorcraft_color::Paint::Gradient(g) = &mut s.paint {
+                g.geom = None;
+                g.angle = 0.0;
+            }
+            s
+        };
+        if !std::ptr::eq(old, st) && unplaced(old) != unplaced(st) {
+            return None;
+        }
+        if !anchors_moved(&e.made, node) {
+            return None;
+        }
+        let by = offset_between(&e.made.stroke_path()?, bp)?;
+        Some((e.made.clone(), e.slices.clone(), by))
+    }
+
     /// What the `strokes`, `char_strokes` and `stroke_slices` keys hold for a stroke owner at
     /// `address` (`self.cur` or kept glyph geometry): the address, or 0 while art made again in
     /// every frame is drawn ([`Self::made_again`]).
@@ -382,6 +454,24 @@ thread_local! {
     pub(crate) static CROP_STROKES: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
     /// How many stroke outlines of nodes [`Renderer::cached_stroke`] has made on this thread.
     pub(crate) static STROKES_OUTLINED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many sets of gradient stroke slices [`Renderer::fill_path_gradient`] has made on this
+    /// thread.
+    pub(crate) static SLICES_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Paint `p` of a slice ([`Slices`]) moved by `by`: a gradient's start, end and focal point moved.
+fn moved_paint(p: &vectorcraft_color::Paint, by: kurbo::Vec2) -> vectorcraft_color::Paint {
+    let mut p = p.clone();
+    if let vectorcraft_color::Paint::Gradient(g) = &mut p
+        && let Some(geom) = &mut g.geom
+    {
+        geom.start += by;
+        geom.end += by;
+        if let Some(focal) = &mut geom.focal {
+            *focal += by;
+        }
+    }
+    p
 }
 
 /// The offset that moves path `was` onto path `now`, when `now` is `was` moved (each point within
