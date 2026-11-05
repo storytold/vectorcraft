@@ -3312,7 +3312,7 @@ proptest! {
     #[test]
     fn ai_line_widths_never_panic(
         width in prop::sample::select(vec!["0", "0.0", "-0", "-1", "1e308", "1e-308", "nan", "inf", "2"]),
-        render in prop::sample::select(vec!["0", "1", "2", "5", "6", "7", "-1", "99"]),
+        render in prop::sample::select(vec!["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "4.5", "-1", "99"]),
         cut in 0usize..2_000,
         edits in prop::collection::vec((0usize..2_000, prop::sample::select(vec!['0', '1', '-', '.', ' ', '\n', '(', ')', 'w', 'B', 'S', 'T'])), 0..8),
     ) {
@@ -4087,6 +4087,11 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "0 0 1e308 -1e308 Te",
             "TM",
             "7 Tr",
+            "4 Tr",
+            "9 Tr",
+            "4.5 Tr",
+            "*w",
+            "*W",
             "-1e308 Ts",
             "1e308 0 Tz",
             "1e308 Tt",
