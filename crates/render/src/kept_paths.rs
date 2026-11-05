@@ -1,24 +1,38 @@
 //! The paths of long paths and compound paths kept by object id, with the boxes of their segments
 //! and of their miter tips by runs of segments. When an object's anchors move, the renderer changes
-//! only the path elements, boxes and tips of the segments that start or end at a moved anchor,
-//! instead of making its path again and measuring it whole.
+//! only the path elements, boxes and tips of the segments that start or end at a moved anchor.
+//! When anchors are added or deleted, or a subpath is closed or opened, it replaces only the path
+//! elements of the segments between the first and the last anchor that changed, and measures again
+//! only the runs that hold them. When a compound path gains or loses members, or a member gains or
+//! loses subpaths, it makes the path of those members again. In each case it does not make the
+//! object's path again or measure it whole.
 
 use std::sync::Arc;
 
 use vectorcraft_doc::{LineJoin, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::bez::has_length;
 use vectorcraft_geom::path::segment_bounds;
-use vectorcraft_geom::{Anchor, BezPath, PathData, PathEl, PathSeg, Rect, SubPath};
+use vectorcraft_geom::{Anchor, BezPath, PathData, PathEl, PathSeg, Point, Rect, SubPath};
 
 /// Paths and compound paths with at least this many anchors are kept ([`KeptPath`]).
 pub(crate) const KEPT_ANCHORS: usize = 1024;
 
-/// Segments measured together into one box.
-const RUN: usize = 128;
+/// Segments measured together into one box in a subpath measured whole. A run that anchors were
+/// added to or deleted from holds more or fewer, and one that grows past twice this is split.
+pub(crate) const RUN: usize = 128;
+
+/// The most subpaths one edit may add anchors to, delete anchors from, close or open: past this,
+/// the kept path is made again whole.
+const SPLICES: usize = 16;
 
 /// The boxes and the miter tips' boxes of a subpath's runs ([`KeptPath::runs`]).
 #[cfg(test)]
 pub(crate) type RunBoxes = (Vec<Option<Rect>>, Vec<Option<Rect>>);
+
+/// A subpath's MoveTo, segments and anchors, whether it is closed, and the segments of each of its
+/// runs ([`KeptPath::layout`]).
+#[cfg(test)]
+pub(crate) type Layout = ((usize, usize, usize, bool), Vec<usize>);
 
 /// A subpath of a kept path.
 struct Sub {
@@ -28,7 +42,9 @@ struct Sub {
     segs: usize,
     anchors: usize,
     closed: bool,
-    /// The box of each run of [`RUN`] segments ([`segment_bounds`]).
+    /// The segment after the last of each run of segments.
+    ends: Vec<usize>,
+    /// The box of each run of segments ([`segment_bounds`]).
     boxes: Vec<Option<Rect>>,
     /// The box of the miter tips of `tips_of` at the joints whose first segment is in each run.
     tips: Vec<Option<Rect>>,
@@ -72,8 +88,14 @@ pub(crate) fn kept(n: &Node) -> bool {
 
 /// Whether anchors `a` and `b` have the same points, bit for bit.
 fn same(a: &Anchor, b: &Anchor) -> bool {
-    let bits = |a: &Anchor| [a.p.x, a.p.y, a.h_in.x, a.h_in.y, a.h_out.x, a.h_out.y].map(f64::to_bits);
-    bits(a) == bits(b)
+    same_drawn(a, b, true, true)
+}
+
+/// Whether anchors `a` and `b` have the same point, bit for bit, and the same incoming handle when
+/// `h_in` and outgoing handle when `h_out`.
+fn same_drawn(a: &Anchor, b: &Anchor, h_in: bool, h_out: bool) -> bool {
+    let bits = |p: Point| [p.x, p.y].map(f64::to_bits);
+    bits(a.p) == bits(b.p) && (!h_in || bits(a.h_in) == bits(b.h_in)) && (!h_out || bits(a.h_out) == bits(b.h_out))
 }
 
 /// The path element of segment `i` of `sp`, as [`SubPath::to_bezpath_into`] writes it.
@@ -82,15 +104,62 @@ fn element(sp: &SubPath, i: usize) -> PathEl {
     if sp.segment_is_line(i) { PathEl::LineTo(c.p3) } else { PathEl::CurveTo(c.p1, c.p2, c.p3) }
 }
 
+/// Element `o` of the elements [`SubPath::to_bezpath_into`] writes for `sp`, a subpath with
+/// anchors: its MoveTo, then its segments, then its ClosePath.
+fn element_at(sp: &SubPath, o: usize) -> PathEl {
+    match o {
+        0 => PathEl::MoveTo(sp.anchors.first().map_or(Point::ORIGIN, |a| a.p)),
+        o if o <= sp.segment_count() => element(sp, o - 1),
+        _ => PathEl::ClosePath,
+    }
+}
+
 /// The point a path element ends at (`None` for a ClosePath).
-fn end(el: &PathEl) -> Option<vectorcraft_geom::Point> {
+fn end(el: &PathEl) -> Option<Point> {
     match *el {
         PathEl::MoveTo(p) | PathEl::LineTo(p) | PathEl::QuadTo(_, p) | PathEl::CurveTo(_, _, p) => Some(p),
         PathEl::ClosePath => None,
     }
 }
 
+/// The ends of the runs of a subpath of `segs` segments measured whole: [`RUN`] segments each.
+fn whole_runs(segs: usize) -> Vec<usize> {
+    (1..=segs.div_ceil(RUN)).map(|r| (r * RUN).min(segs)).collect()
+}
+
+/// The paths `ps` written over the `len` elements at `at` in `els`, and their subpaths measured
+/// whole with the tips of `st`. `at` moves past them.
+fn made_again(ps: &[&PathData], len: usize, els: &mut Vec<PathEl>, at: &mut usize, st: Option<&StrokeLayer>) -> Vec<Vec<Sub>> {
+    let mut bp = BezPath::new();
+    ps.iter().flat_map(|p| &p.subpaths).for_each(|sp| sp.to_bezpath_into(&mut bp));
+    let to = (*at + len).min(els.len());
+    els.splice((*at).min(to)..to, bp.into_elements());
+    let mut measure = |sp: &SubPath| {
+        let sub = Sub::measured(sp, *at, els, st);
+        *at += sub.len();
+        sub
+    };
+    ps.iter().map(|p| p.subpaths.iter().map(&mut measure).collect()).collect()
+}
+
 impl Sub {
+    /// Subpath `sp`, its MoveTo at `start` in `els`, measured whole, with the tips of `st`.
+    fn measured(sp: &SubPath, start: usize, els: &[PathEl], st: Option<&StrokeLayer>) -> Self {
+        let segs = sp.segment_count();
+        let mut sub = Sub { start, segs, anchors: sp.anchors.len(), closed: sp.closed, ends: whole_runs(segs), boxes: vec![], tips: vec![] };
+        sub.boxes = (0..sub.runs()).map(|r| sub.run_box(els, r)).collect();
+        if let Some(st) = st {
+            sub.tips = (0..sub.runs()).map(|r| sub.run_tips(els, r, st)).collect();
+        }
+        sub
+    }
+
+    /// Its elements in the path: none without anchors, otherwise its MoveTo, its segments and
+    /// its ClosePath when closed.
+    fn len(&self) -> usize {
+        if self.anchors == 0 { 0 } else { 1 + self.segs + usize::from(self.closed) }
+    }
+
     /// Segment `i`, as kurbo's `segments` makes it from the path's elements.
     fn seg(&self, els: &[PathEl], i: usize) -> Option<PathSeg> {
         let p0 = end(els.get(self.start + i)?)?;
@@ -103,12 +172,23 @@ impl Sub {
     }
 
     fn runs(&self) -> usize {
-        self.segs.div_ceil(RUN)
+        self.ends.len()
+    }
+
+    /// The segments of run `r`.
+    fn range(&self, r: usize) -> std::ops::Range<usize> {
+        let from = r.checked_sub(1).and_then(|p| self.ends.get(p)).copied().unwrap_or(0);
+        from..self.ends.get(r).copied().unwrap_or(from)
+    }
+
+    /// The run that holds segment `i` (the last run for a segment past the end).
+    fn run_of(&self, i: usize) -> usize {
+        self.ends.partition_point(|&e| e <= i).min(self.runs().saturating_sub(1))
     }
 
     /// The box of the segments of run `r`.
     fn run_box(&self, els: &[PathEl], r: usize) -> Option<Rect> {
-        (r * RUN..((r + 1) * RUN).min(self.segs)).filter_map(|i| self.seg(els, i)).map(segment_bounds).reduce(|a, b| a.union(b))
+        self.range(r).filter_map(|i| self.seg(els, i)).map(segment_bounds).reduce(|a, b| a.union(b))
     }
 
     /// The segment with length that follows segment `i` (round to the start when closed), or
@@ -140,7 +220,7 @@ impl Sub {
     /// ([`StrokeLayer::miter_tip`]).
     fn run_tips(&self, els: &[PathEl], r: usize, st: &StrokeLayer) -> Option<Rect> {
         let mut out: Option<Rect> = None;
-        for i in r * RUN..((r + 1) * RUN).min(self.segs) {
+        for i in self.range(r) {
             let Some(a) = self.seg(els, i).filter(has_length) else { continue };
             let Some(b) = self.next_drawn(els, i) else { continue };
             if let Some(tip) = st.miter_tip(self.closed, &a, &b) {
@@ -149,12 +229,224 @@ impl Sub {
         }
         out
     }
+
+    /// Bring the subpath, its MoveTo now at `at` in `els`, up to date from `was` to `now`, with the
+    /// tips of `st`.
+    fn update(&mut self, was: &SubPath, now: &SubPath, at: usize, els: &mut Vec<PathEl>, st: Option<&StrokeLayer>) {
+        self.start = at;
+        if was.anchors.len() == now.anchors.len() && was.closed == now.closed {
+            self.moved(was, now, els, st);
+        } else if was.anchors.len() < 2 || now.anchors.len() < 2 {
+            let to = (at + self.len()).min(els.len());
+            let len = if now.anchors.is_empty() { 0 } else { 1 + now.segment_count() + usize::from(now.closed) };
+            els.splice(at.min(to)..to, (0..len).map(|o| element_at(now, o)));
+            *self = Sub::measured(now, at, els, st);
+        } else {
+            self.spliced(was, now, els, st);
+        }
+    }
+
+    /// [`Self::update`] for a subpath with the same anchor count and closed state: the elements of
+    /// the segments that start or end at an anchor that moved are made again, with the boxes of
+    /// their runs and the tips of those runs and of the runs of the segments with length before
+    /// them.
+    fn moved(&mut self, was: &SubPath, now: &SubPath, els: &mut [PathEl], st: Option<&StrokeLayer>) {
+        let (mut first, mut segs) = (false, vec![]);
+        for (k, (a, b)) in was.anchors.iter().zip(&now.anchors).enumerate() {
+            if same(a, b) {
+                continue;
+            }
+            if k >= 1 && k - 1 < self.segs {
+                segs.push(k - 1);
+            }
+            if k == 0 {
+                first = true;
+                if self.closed && self.segs > 0 {
+                    segs.push(self.segs - 1);
+                }
+            }
+            if k < self.segs {
+                segs.push(k);
+            }
+        }
+        if !first && segs.is_empty() {
+            return;
+        }
+        segs.sort_unstable();
+        segs.dedup();
+        if first && let (Some(a), Some(el)) = (now.anchors.first(), els.get_mut(self.start)) {
+            *el = PathEl::MoveTo(a.p);
+        }
+        for &i in &segs {
+            if let Some(el) = els.get_mut(self.start + 1 + i) {
+                *el = element(now, i);
+            }
+        }
+        let els: &[PathEl] = els;
+        // Many moved: the subpath is measured again whole.
+        let all = segs.len() * 4 > self.segs;
+        let mut boxes: Vec<usize> = if all { (0..self.runs()).collect() } else { segs.iter().map(|&i| self.run_of(i)).collect() };
+        boxes.dedup();
+        for r in boxes {
+            let b = self.run_box(els, r);
+            if let Some(slot) = self.boxes.get_mut(r) {
+                *slot = b;
+            }
+        }
+        let Some(st) = st else { return };
+        // A joint's tip changes with its segments and with which segment with length comes next:
+        // the runs of the moved segments and of the segments with length before them.
+        let mut runs = vec![];
+        let mut whole = all;
+        for &i in &segs {
+            runs.push(self.run_of(i));
+            match self.prev_drawn(els, i) {
+                Ok(Some(j)) => runs.push(self.run_of(j)),
+                Ok(None) => {}
+                Err(()) => whole = true,
+            }
+        }
+        self.measure_tips(els, runs, whole, st);
+    }
+
+    /// [`Self::update`] for a subpath of at least two anchors before and after that gained or lost
+    /// anchors or was closed or opened. Its elements from the first anchor that changed to the
+    /// last are written again, and the closing segment and the ClosePath when the first or last
+    /// anchor changed or it was closed or opened; the elements before and after stay. The runs
+    /// that held the segments written are measured again, with the tips of the runs of the
+    /// segments with length before them.
+    fn spliced(&mut self, was: &SubPath, now: &SubPath, els: &mut Vec<PathEl>, st: Option<&StrokeLayer>) {
+        let (n0, n1) = (was.anchors.len(), now.anchors.len());
+        let least = n0.min(n1);
+        // On a subpath open before and after, the handle before the first anchor and the one after
+        // the last draw nothing.
+        let open = !was.closed && !now.closed;
+        let a = was.anchors.iter().zip(&now.anchors).enumerate().take_while(|(i, (x, y))| same_drawn(x, y, !open || *i > 0, true)).count().min(least);
+        let b = was
+            .anchors
+            .iter()
+            .rev()
+            .zip(now.anchors.iter().rev())
+            .take(least - a)
+            .enumerate()
+            .take_while(|(i, (x, y))| same_drawn(x, y, true, !open || *i > 0))
+            .count();
+        let (s0, s1) = (self.segs, now.segment_count());
+        let (c0, c1) = (self.closed, now.closed);
+        let (len0, len1) = (1 + s0 + usize::from(c0), 1 + s1 + usize::from(c1));
+        // Elements `a..mid` change: the MoveTo when the first anchor changed and the segments up
+        // to the first of those between the last `b` anchors.
+        let (mid0, mid1) = ((1 + n0 - b).min(1 + s0), (1 + n1 - b).min(1 + s1));
+        // Elements `tail..len` follow the segments between the last `b` anchors: the closing
+        // segment and the ClosePath. They stay when the anchors either side of the closing segment
+        // stayed and the subpath was neither closed nor opened.
+        let (tail0, tail1) = if b >= 1 { (n0, n1) } else { (mid0, mid1) };
+        let keep_tail = c0 == c1 && (!c1 || b == 0 || a >= 1);
+        let at = self.start;
+        let mut stale = vec![false; self.runs()];
+        let tips = st.is_some();
+        if !keep_tail {
+            let to = (at + len0).min(els.len());
+            els.splice((at + tail0).min(to)..to, (tail1..len1).map(|o| element_at(now, o)));
+            let (lo, old, new) = (tail0 - 1, (1 + s0).saturating_sub(tail0), (1 + s1).saturating_sub(tail1));
+            self.resize(lo, old, new, &mut stale, tips);
+        }
+        let to = (at + mid0).min(els.len());
+        els.splice((at + a).min(to)..to, (a..mid1).map(|o| element_at(now, o)));
+        let lo = a.max(1) - 1;
+        self.resize(lo, mid0 - 1 - lo, mid1 - 1 - lo, &mut stale, tips);
+        self.anchors = n1;
+        self.closed = c1;
+        let els: &[PathEl] = els;
+        for (r, _) in stale.iter().enumerate().filter(|(_, s)| **s) {
+            let b = self.run_box(els, r);
+            if let Some(slot) = self.boxes.get_mut(r) {
+                *slot = b;
+            }
+        }
+        let Some(st) = st else { return };
+        let mut runs: Vec<usize> = stale.iter().enumerate().filter(|(_, s)| **s).map(|(r, _)| r).collect();
+        // Closed or opened: the tips of every joint change when the stroke reaches farther from one
+        // than from the other.
+        let mut whole = c0 != c1 && st.side_reach(c0).to_bits() != st.side_reach(c1).to_bits();
+        for i in [lo].into_iter().chain((!keep_tail).then_some(tail1 - 1)) {
+            match self.prev_drawn(els, i) {
+                Ok(Some(j)) => runs.push(self.run_of(j)),
+                Ok(None) => {}
+                Err(()) => whole = true,
+            }
+        }
+        self.measure_tips(els, runs, whole, st);
+    }
+
+    /// Replace the `old` segments from segment `lo` with `new` segments in the runs: the runs that
+    /// held them become one run, split into runs of [`RUN`] segments when longer than twice that,
+    /// whose boxes and (with `tips`) tips are marked in `stale` to be measured again.
+    fn resize(&mut self, lo: usize, old: usize, new: usize, stale: &mut Vec<bool>, tips: bool) {
+        if old == 0 && new == 0 {
+            return;
+        }
+        let (r0, r1, first, last) = match self.runs() {
+            0 => (0, 0, 0, new),
+            _ => {
+                let r0 = self.run_of(lo);
+                let r1 = if old == 0 { r0 } else { self.run_of(lo + old - 1) };
+                let last = self.ends.get(r1).copied().unwrap_or(lo + old) + new - old;
+                (r0, r1 + 1, self.range(r0).start, last)
+            }
+        };
+        let len = last - first;
+        let count = if len > 2 * RUN { len.div_ceil(RUN) } else { usize::from(len > 0) };
+        for e in self.ends.iter_mut().skip(r1) {
+            *e = *e + new - old;
+        }
+        self.ends.splice(r0..r1, (1..=count).map(|j| if j == count { last } else { first + j * RUN }));
+        self.boxes.splice(r0..r1, std::iter::repeat_n(None, count));
+        if tips {
+            self.tips.splice(r0.min(self.tips.len())..r1.min(self.tips.len()), std::iter::repeat_n(None, count));
+        }
+        stale.splice(r0..r1, std::iter::repeat_n(true, count));
+        self.segs = self.segs + new - old;
+    }
+
+    /// Measure again the tips of `st` in `runs`, or in every run when `whole`.
+    fn measure_tips(&mut self, els: &[PathEl], mut runs: Vec<usize>, whole: bool, st: &StrokeLayer) {
+        if whole {
+            runs = (0..self.runs()).collect();
+        }
+        runs.sort_unstable();
+        runs.dedup();
+        for r in runs {
+            let t = self.run_tips(els, r, st);
+            if let Some(slot) = self.tips.get_mut(r) {
+                *slot = t;
+            }
+        }
+    }
 }
 
 /// What [`KeptPath::tips`] measures `st`'s tips by: its reach from an open and a closed path and
 /// its miter limit.
 fn tips_key(st: &StrokeLayer) -> [u64; 3] {
     [st.side_reach(false).to_bits(), st.side_reach(true).to_bits(), st.miter_limit.to_bits()]
+}
+
+/// Whether the subpaths of `was` and `now` differ: in number, in anchors or in being closed.
+fn differs(was: &PathData, now: &PathData) -> bool {
+    !std::ptr::eq(was, now)
+        && (was.subpaths.len() != now.subpaths.len()
+            || was.subpaths.iter().zip(&now.subpaths).any(|(w, p)| {
+                w.closed != p.closed || w.anchors.len() != p.anchors.len() || w.anchors.iter().zip(&p.anchors).any(|(a, b)| !same(a, b))
+            }))
+}
+
+/// The subpaths of `was` and `now`, paths with as many subpaths, whose anchors were added or
+/// deleted or that were closed or opened.
+fn splices(was: &PathData, now: &PathData) -> usize {
+    if std::ptr::eq(was, now) || was.subpaths.len() != now.subpaths.len() {
+        return 0;
+    }
+    was.subpaths.iter().zip(&now.subpaths).filter(|(w, p)| w.anchors.len() != p.anchors.len() || w.closed != p.closed).count()
 }
 
 impl KeptPath {
@@ -170,12 +462,8 @@ impl KeptPath {
         for pd in paths(n)? {
             let mut subs = vec![];
             for sp in &pd.subpaths {
-                let segs = sp.segment_count();
-                let mut sub = Sub { start, segs, anchors: sp.anchors.len(), closed: sp.closed, boxes: vec![], tips: vec![] };
-                sub.boxes = (0..sub.runs()).map(|r| sub.run_box(els, r)).collect();
-                if !sp.anchors.is_empty() {
-                    start += 1 + segs + usize::from(sp.closed);
-                }
+                let sub = Sub::measured(sp, start, els, None);
+                start += sub.len();
                 subs.push(sub);
             }
             parts.push(subs);
@@ -183,106 +471,79 @@ impl KeptPath {
         (start == els.len()).then(|| Self { node: n.clone(), path: Arc::new(path), parts, tips_of: None, stamp })
     }
 
-    /// Bring the path up to date with `n`, a path with the same subpaths and anchor counts as the
-    /// object it was made from: the elements of the segments that start or end at an anchor that
-    /// moved are made again, with the boxes of their runs and the tips of those runs and of the
-    /// runs of the segments with length before them. False, and nothing changed, when `n` has
-    /// other subpaths, other anchor counts or no kept path.
+    /// Bring the path up to date with `n`, a later version of the object it was made from. The
+    /// subpaths whose anchors moved change as [`Sub::moved`] says, and those whose anchors were
+    /// added or deleted or that were closed or opened as [`Sub::spliced`] says. A member of a
+    /// compound path that gained or lost subpaths is made again, and so are the members added
+    /// between the first and the last member that the edit left as they were, when the edit added
+    /// or removed members. False, and nothing changed, when `n` has no kept path, or when the edit
+    /// added or deleted anchors in or closed or opened more than [`SPLICES`] subpaths. False as well
+    /// when the path written does not end where the subpaths measured end. The renderer makes the
+    /// path again whole after a false.
     pub(crate) fn update(&mut self, n: &Arc<Node>) -> bool {
         let old = self.node.clone();
         let (Some(was), Some(now)) = (paths(&old), paths(n)) else { return false };
-        let shape =
-            |ps: &[&PathData]| ps.iter().map(|p| p.subpaths.iter().map(|s| (s.anchors.len(), s.closed)).collect::<Vec<_>>()).collect::<Vec<_>>();
-        if !kept(n) || shape(&was) != shape(&now) {
+        if !kept(n) || self.parts.len() != was.len() || self.parts.iter().zip(&was).any(|(s, p)| s.len() != p.subpaths.len()) {
             return false;
         }
-        // Per subpath whose anchors moved: (member, subpath, whether its first anchor moved, the
-        // segments that start or end at a moved anchor).
-        let mut moved: Vec<(usize, usize, bool, Vec<usize>)> = vec![];
-        for (pi, (w, p)) in was.iter().zip(&now).enumerate() {
-            if std::ptr::eq(*w, *p) {
-                continue;
-            }
-            for (si, (ws, ps)) in w.subpaths.iter().zip(&p.subpaths).enumerate() {
-                let Some(sub) = self.parts.get(pi).and_then(|s| s.get(si)) else { return false };
-                let (mut first, mut segs) = (false, vec![]);
-                for (k, (a, b)) in ws.anchors.iter().zip(&ps.anchors).enumerate() {
-                    if same(a, b) {
-                        continue;
-                    }
-                    if k >= 1 && k - 1 < sub.segs {
-                        segs.push(k - 1);
-                    }
-                    if k == 0 {
-                        first = true;
-                        if sub.closed && sub.segs > 0 {
-                            segs.push(sub.segs - 1);
-                        }
-                    }
-                    if k < sub.segs {
-                        segs.push(k);
-                    }
-                }
-                if first || !segs.is_empty() {
-                    segs.sort_unstable();
-                    segs.dedup();
-                    moved.push((pi, si, first, segs));
-                }
-            }
+        // The members paired with one of `was`: all when there are as many, otherwise those
+        // before the first and after the last that is not the same. The others are made again.
+        let (head, tail) = if was.len() == now.len() {
+            (was.len(), 0)
+        } else {
+            let head = was.iter().zip(&now).take_while(|(w, p)| std::ptr::eq(**w, **p)).count();
+            let rest = (was.len() - head).min(now.len() - head);
+            (head, was.iter().rev().zip(now.iter().rev()).take(rest).take_while(|(w, p)| std::ptr::eq(**w, **p)).count())
+        };
+        let paired = |i: usize| if i < head { Some(i) } else { (now.len() - i <= tail).then(|| was.len() - (now.len() - i)) };
+        let spliced: usize = (0..now.len()).filter_map(|i| paired(i).map(|w| splices(was[w], now[i]))).sum();
+        if spliced > SPLICES {
+            return false;
         }
         self.node = n.clone();
-        if moved.is_empty() {
+        // Nothing to change: the path is left as it is, shared or not.
+        if was.len() == now.len() && was.iter().zip(&now).all(|(w, p)| !differs(w, p)) {
             return true;
         }
+        let st = self.tips_of.clone();
+        let st = st.as_ref();
         let path = Arc::make_mut(&mut self.path);
-        let els = path.elements_mut();
-        for (pi, si, first, segs) in &moved {
-            let (Some(sub), Some(sp)) = (self.parts.get(*pi).and_then(|s| s.get(*si)), now.get(*pi).and_then(|p| p.subpaths.get(*si))) else {
+        let mut els = std::mem::take(path).into_elements();
+        let mut old_parts: Vec<Option<Vec<Sub>>> = std::mem::take(&mut self.parts).into_iter().map(Some).collect();
+        let mut at = 0;
+        let mut parts = Vec::with_capacity(now.len());
+        for (i, p) in now.iter().enumerate() {
+            if i == head {
+                // The members of `was` that are not paired give way to those of `now`.
+                let gone: usize = old_parts[head..was.len() - tail].iter_mut().flat_map(|s| s.take().into_iter().flatten()).map(|s| s.len()).sum();
+                parts.extend(made_again(&now[head..now.len() - tail], gone, &mut els, &mut at, st));
+            }
+            let Some(w) = paired(i) else { continue };
+            let Some(mut subs) = old_parts.get_mut(w).and_then(Option::take) else { continue };
+            if was[w].subpaths.len() != p.subpaths.len() {
+                let len = subs.iter().map(Sub::len).sum();
+                parts.extend(made_again(&[*p], len, &mut els, &mut at, st));
                 continue;
-            };
-            if *first && let (Some(a), Some(el)) = (sp.anchors.first(), els.get_mut(sub.start)) {
-                *el = PathEl::MoveTo(a.p);
             }
-            for &i in segs {
-                if let Some(el) = els.get_mut(sub.start + 1 + i) {
-                    *el = element(sp, i);
+            let moved = !std::ptr::eq(was[w], *p);
+            for (sub, (ws, ps)) in subs.iter_mut().zip(was[w].subpaths.iter().zip(&p.subpaths)) {
+                if moved {
+                    sub.update(ws, ps, at, &mut els, st);
                 }
+                sub.start = at;
+                at += sub.len();
             }
+            parts.push(subs);
         }
-        let els = path.elements();
-        for (pi, si, _, segs) in moved {
-            let tips_of = self.tips_of.as_ref();
-            let Some(sub) = self.parts.get_mut(pi).and_then(|s| s.get_mut(si)) else { continue };
-            // Many moved: the subpath is measured again whole.
-            let all = segs.len() * 4 > sub.segs;
-            let mut boxes: Vec<usize> = if all { (0..sub.runs()).collect() } else { segs.iter().map(|i| i / RUN).collect() };
-            boxes.dedup();
-            for r in boxes {
-                sub.boxes[r] = sub.run_box(els, r);
-            }
-            let Some(st) = tips_of else { continue };
-            // A joint's tip changes with its segments and with which segment with length comes
-            // next: the runs of the moved segments and of the segments with length before them.
-            let mut runs = vec![];
-            let mut whole = all;
-            for &i in &segs {
-                runs.push(i / RUN);
-                match sub.prev_drawn(els, i) {
-                    Ok(Some(j)) => runs.push(j / RUN),
-                    Ok(None) => {}
-                    Err(()) => whole = true,
-                }
-            }
-            if whole {
-                runs = (0..sub.runs()).collect();
-            }
-            runs.sort_unstable();
-            runs.dedup();
-            for r in runs {
-                sub.tips[r] = sub.run_tips(els, r, st);
-            }
+        if head == now.len() && head < was.len() {
+            // Members were removed from the end.
+            let gone: usize = old_parts[head..].iter_mut().flat_map(|s| s.take().into_iter().flatten()).map(|s| s.len()).sum();
+            parts.extend(made_again(&[], gone, &mut els, &mut at, st));
         }
-        true
+        let made = at == els.len();
+        *path = BezPath::from_vec(els);
+        self.parts = parts;
+        made
     }
 
     /// The object's geometric bounds ([`Node::geometric_bounds`]): each path's as
@@ -318,9 +579,25 @@ impl KeptPath {
         self.parts.iter().flatten().flat_map(|s| s.tips.iter().flatten()).copied().reduce(|a, b| a.union(b))
     }
 
-    /// The boxes and tips kept per run of each subpath, and the stroke the tips were measured for.
+    /// Each subpath's MoveTo, segments and anchors, whether it is closed, and the segments of each
+    /// of its runs.
     #[cfg(test)]
-    pub(crate) fn runs(&self) -> (Vec<RunBoxes>, Option<StrokeLayer>) {
-        (self.parts.iter().flatten().map(|s| (s.boxes.clone(), s.tips.clone())).collect(), self.tips_of.clone())
+    pub(crate) fn layout(&self) -> Vec<Layout> {
+        let runs = |s: &Sub| (0..s.runs()).map(|r| s.range(r).len()).collect();
+        self.parts.iter().flatten().map(|s| ((s.start, s.segs, s.anchors, s.closed), runs(s))).collect()
+    }
+
+    /// The boxes and tips kept per run of each subpath, the same measured again from the path
+    /// over the same runs, and the stroke the tips were measured for.
+    #[cfg(test)]
+    pub(crate) fn runs(&self) -> (Vec<RunBoxes>, Vec<RunBoxes>, Option<StrokeLayer>) {
+        let els = self.path.elements();
+        let kept = self.parts.iter().flatten().map(|s| (s.boxes.clone(), s.tips.clone())).collect();
+        let again = self.parts.iter().flatten().map(|s| {
+            let boxes = (0..s.runs()).map(|r| s.run_box(els, r)).collect();
+            let tips = self.tips_of.as_ref().map_or(vec![], |st| (0..s.runs()).map(|r| s.run_tips(els, r, st)).collect());
+            (boxes, tips)
+        });
+        (kept, again.collect(), self.tips_of.clone())
     }
 }
