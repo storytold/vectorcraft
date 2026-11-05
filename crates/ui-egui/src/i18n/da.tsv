@@ -5969,6 +5969,9 @@ anchor	Points:	Punkter:
 	Find Nearest Swatch…	Find nærmeste farveprøve…
 	Find Nearest Swatch	Find nærmeste farveprøve
 	Apply Nearest Swatch	Anvend nærmeste farveprøve
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Anvend udfyldning på kontur
+	Apply Stroke to Fill	Anvend kontur på udfyldning
 	Select objects to find the swatches nearest their colors.	Markér objekter for at finde de farveprøver, der ligger tættest på deres farver.
 @msg	select objects or give `color`	markér objekter, eller angiv `color`
 @msg	`color` is not a colour	`color` er ikke en farve

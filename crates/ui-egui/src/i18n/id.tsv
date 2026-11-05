@@ -5969,6 +5969,9 @@ anchor	Points:	Titik:
 	Find Nearest Swatch…	Cari Swatch Terdekat…
 	Find Nearest Swatch	Cari Swatch Terdekat
 	Apply Nearest Swatch	Terapkan Swatch Terdekat
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Terapkan isian ke guratan
+	Apply Stroke to Fill	Terapkan guratan ke isian
 	Select objects to find the swatches nearest their colors.	Pilih objek untuk menemukan swatch yang paling dekat dengan warnanya.
 @msg	select objects or give `color`	pilih objek atau berikan `color`
 @msg	`color` is not a colour	`color` bukan warna

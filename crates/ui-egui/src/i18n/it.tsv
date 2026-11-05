@@ -5722,6 +5722,9 @@ anchor	Points:	Punti:
 	Find Nearest Swatch…	Trova campione più vicino…
 	Find Nearest Swatch	Trova campione più vicino
 	Apply Nearest Swatch	Applica campione più vicino
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Applica riempimento alla traccia
+	Apply Stroke to Fill	Applica traccia al riempimento
 	Select objects to find the swatches nearest their colors.	Seleziona gli oggetti per trovare i campioni più vicini ai loro colori.
 @msg	select objects or give `color`	seleziona gli oggetti o indica `color`
 @msg	`color` is not a colour	`color` non è un colore

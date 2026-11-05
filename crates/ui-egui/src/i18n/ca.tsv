@@ -6087,6 +6087,9 @@ anchor	Points:	Punts:
 	Find Nearest Swatch…	Cerca la mostra més propera…
 	Find Nearest Swatch	Cerca la mostra més propera
 	Apply Nearest Swatch	Aplica la mostra més propera
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Aplica el farciment al traç
+	Apply Stroke to Fill	Aplica el traç al farciment
 	Select objects to find the swatches nearest their colors.	Seleccioneu objectes per trobar les mostres més properes als seus colors.
 @msg	select objects or give `color`	seleccioneu objectes o indiqueu `color`
 @msg	`color` is not a colour	`color` no és un color

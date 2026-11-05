@@ -6098,6 +6098,9 @@ anchor	Points:	Points :
 	Find Nearest Swatch…	Rechercher la nuance la plus proche…
 	Find Nearest Swatch	Rechercher la nuance la plus proche
 	Apply Nearest Swatch	Appliquer la nuance la plus proche
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Appliquer le fond au contour
+	Apply Stroke to Fill	Appliquer le contour au fond
 	Select objects to find the swatches nearest their colors.	Sélectionnez des objets pour trouver les nuances les plus proches de leurs couleurs.
 @msg	select objects or give `color`	sélectionnez des objets ou indiquez `color`
 @msg	`color` is not a colour	`color` n’est pas une couleur
