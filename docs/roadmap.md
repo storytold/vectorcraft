@@ -28,6 +28,7 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | M7: Find Font's Replace With Font lists family and style rows with a search, and the list and the document's font list scroll on their own (#4972); scores and estimates unchanged. |
 | 2026-11-04 | minor | Selection Tools add-on: Select by Artboards selects the objects overlapping, fully inside or fully outside several chosen artboards, from a dialog that lists, searches and multi-selects the artboards and fits one in the window on double-click (#5525, #5548, #5549, a VectorCraft addition); scores and estimates unchanged. |
 | 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen preset; Recent and Saved cards keep the units their document or preset was made in, and the built-in tabs still follow the chosen units (#2078). Scores and estimates unchanged. |
 | 2026-11-03 | minor | M1: Enclosing Lasso provides whole-object enclosure selection as an add-on with no default shortcut or Basic toolbar slot; estimates unchanged. |

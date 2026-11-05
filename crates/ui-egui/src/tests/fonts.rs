@@ -9,6 +9,10 @@ use crate::{VectorcraftApp, menus};
 #[test]
 fn type_font_menu_lists_every_available_family() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    // The app starts the installed fonts' scan, and until it ends Type › Font lists only the
+    // loaded fonts (#5483). The scan changes the generation a moment before it counts as done, so
+    // a read in between sees the old list under the new generation: wait for it to end first.
+    FontDb::global().family_list();
     app.run("file.new", json!({})).unwrap();
     let fonts = |app: &VectorcraftApp| -> Vec<String> {
         menus::menu_entries(app).into_iter().filter(|e| e.path == ["Type", "Font"]).map(|e| e.label).collect()
