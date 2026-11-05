@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use vectorcraft_doc::{NodeKind, TextKind};
 use vectorcraft_geom::PathData;
 
@@ -51,6 +52,8 @@ type ThumbJob = ((u64, NodeId), Weak<Node>, u32);
 #[derive(Default)]
 pub(super) struct Thumbs {
     entries: HashMap<(u64, NodeId), ThumbEntry>,
+    /// Documents still open. None until the app first synchronizes its documents.
+    open_docs: Option<HashSet<u64>>,
     /// What the worker is rendering, by row.
     pending: HashMap<(u64, NodeId), (Weak<Node>, u32)>,
     worker: Option<ThumbWorker<(u64, NodeId), ThumbJob>>,
@@ -249,6 +252,36 @@ fn render_thumb(r: &mut vectorcraft_render::Renderer, doc: &Document, n: &Node, 
 }
 
 impl Thumbs {
+    #[cfg(test)]
+    pub(super) fn cached(&self, uid: u64) -> bool {
+        self.entries.keys().any(|key| key.0 == uid)
+    }
+
+    /// Release thumbnails and queued jobs for documents that have closed, keeping the cache for
+    /// other open documents even when the panels are hidden or another document is active.
+    fn retain_open(&mut self, uids: &[u64]) {
+        if self.open_docs.as_ref().is_some_and(|open| open.len() == uids.len() && uids.iter().all(|uid| open.contains(uid))) {
+            return;
+        }
+        let open: HashSet<u64> = uids.iter().copied().collect();
+        let stale =
+            self.entries.keys().chain(self.pending.keys()).any(|key| !open.contains(&key.0)) || self.showing.is_some_and(|uid| !open.contains(&uid));
+        self.entries.retain(|key, _| open.contains(&key.0));
+        self.pending.retain(|key, _| open.contains(&key.0));
+        self.showing = self.showing.filter(|uid| open.contains(uid));
+        if stale
+            && let Some(w) = &self.worker
+            && !w.discard({
+                let open = open.clone();
+                move |key| !open.contains(&key.0)
+            })
+        {
+            self.worker = None;
+            self.pending.clear();
+        }
+        self.open_docs = Some(open);
+    }
+
     /// Keep `img` (None: nothing drawn) as the thumbnail of row `key` showing `node`.
     fn upload(&mut self, ctx: &egui::Context, key: (u64, NodeId), node: Weak<Node>, px: u32, img: Option<&vectorcraft_render::Rendered>, ms: f64) {
         let color = img.map(crate::canvas::color_image);
@@ -280,7 +313,7 @@ impl Thumbs {
     /// The panels draw the rows of document `uid` (None: no document). When that is another
     /// document than before, the worker drops the jobs it has not started for every other
     /// document, so they don't hold up this one's thumbnails, and those rows are asked for again
-    /// when their document shows again. The thumbnails made already stay.
+    /// when their document shows again. The thumbnails of still-open documents stay.
     pub(super) fn show(&mut self, uid: Option<u64>) {
         if self.showing == uid {
             return;
@@ -298,6 +331,9 @@ impl Thumbs {
     /// Keep the thumbnail `d` the worker finished.
     fn receive(&mut self, ctx: &egui::Context, d: Done<ThumbJob>) {
         let (key, node, px) = d.key;
+        if self.open_docs.as_ref().is_some_and(|open| !open.contains(&key.0)) {
+            return;
+        }
         if self.pending.get(&key).is_some_and(|(p, ppx)| p.ptr_eq(&node) && *ppx == px) {
             self.pending.remove(&key);
         }
@@ -383,6 +419,11 @@ pub(crate) fn show_thumbs_of(uid: Option<u64>) {
     THUMBS.with(|c| c.borrow_mut().show(uid));
 }
 
+/// Forget thumbnails of documents no longer open, even if neither thumbnail panel is shown.
+pub(crate) fn retain_open_thumbs(uids: &[u64]) {
+    THUMBS.with(|c| c.borrow_mut().retain_open(uids));
+}
+
 /// A real rendered thumbnail of row `n`, cached by node identity (unchanged nodes keep their `Arc`
 /// allocation, so the address is a free change detector). Only rendered for visible rows; see
 /// [`Thumbs::texture`] for when.
@@ -439,6 +480,17 @@ mod tests {
     use vectorcraft_geom::{Affine, Point, SubPath};
 
     use super::*;
+
+    #[test]
+    fn a_finished_job_cannot_restore_a_closed_documents_thumbnail() {
+        let mut thumbs = Thumbs::default();
+        let ctx = egui::Context::default();
+        thumbs.retain_open(&[2]);
+        thumbs.receive(&ctx, Done { key: ((1, NodeId(1)), Weak::new(), 16), img: None, ms: 0.0 });
+        assert!(thumbs.entries.is_empty(), "a closed document's late result is discarded");
+        thumbs.receive(&ctx, Done { key: ((2, NodeId(2)), Weak::new(), 16), img: None, ms: 0.0 });
+        assert!(thumbs.entries.contains_key(&(2, NodeId(2))), "an open document's result is kept");
+    }
 
     /// An open zigzag of `anchors` anchors.
     fn line(anchors: usize) -> PathData {

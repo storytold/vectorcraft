@@ -247,6 +247,29 @@ fn a_layer_that_does_not_print_has_its_name_italic() {
 }
 
 #[test]
+fn closing_a_document_releases_only_its_layer_thumbnails() {
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let first = app.session.active().unwrap().uid;
+    frame(&mut app, &ctx, vec![], false);
+    assert!(THUMBS.with(|c| c.borrow().cached(first)));
+
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let second = app.session.active().unwrap().uid;
+    frame(&mut app, &ctx, vec![], false);
+    assert!(THUMBS.with(|c| c.borrow().cached(second)));
+
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    app.sync_views();
+    THUMBS.with(|c| {
+        let thumbs = c.borrow();
+        assert!(!thumbs.cached(first), "closed document textures are released");
+        assert!(thumbs.cached(second), "open document textures stay cached");
+    });
+}
+
+#[test]
 fn row_thumbnails_wait_for_the_end_of_a_drag() {
     let (mut app, _, _) = two_rects();
     app.session.execute("select.all", &json!({})).unwrap();
