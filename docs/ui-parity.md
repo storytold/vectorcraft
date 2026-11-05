@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Path Precision Tools: Set Corners… rounds every other anchor; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Gradient panel: Delete Stop beside the ramp, #5403; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -30,6 +30,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Gradient panel: Delete Stop sits at the right end of the ramp, so it shows whenever the ramp does instead of under the stop fields, where a short panel hid it (#5403); scores and estimates unchanged |
 | 2026-11-04 | minor | Artboards panel: a Shift- or Ctrl/Cmd-click on a row selects several artboards with any tool, switching to the Artboard tool first, so a preset, orientation, size or Fill set in Properties or the Control bar goes to every selected artboard; Fill used to set the active artboard only (#5698); scores and estimates unchanged |
 | 2026-11-04 | minor | Isolation mode: once the layer, or a group, around the isolated object is locked or hidden, a click or a marquee with the Selection tool no longer selects the isolated art (part of #5309); scores and estimates unchanged |
 | 2026-11-04 | minor | Transform Each's Scale has the documented Relative and Absolute radio buttons: percentages of each object's size, or the width and height it becomes (`object.transformEach` `relative`); the two scales have the link that keeps them in proportion (`__constrain`, as the shape dialogs'), and the panel lists Scale, Move, Rotate, the Options in two columns, the Reference Point and Preview (level with Copy, Cancel and OK) in the documented order; scores and estimates unchanged |
@@ -358,6 +359,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | Gradient panel: Dither (30.0) | done | Dither box under the stops (`paint.editGradient` `dither`); dimmed behind the Stroke proxy, fills only; `panels::gradient` test |
 | Gradient panel: Method, Classic or Perceptual (30.0) | done | Method menu under the Stroke buttons for linear and radial gradients (`paint.editGradient` `method`); [public source](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-perceptual-interpolation-in-gradients.html); `panels::gradient` test |
 | Gradient panel: Presets (30.0) | done | Presets menu by library (theme) plus Saved: applies a preset to the gradient behind the active proxy, keeping its placement, one undo step; panel menu Save Gradient Preset…, Delete Gradient Preset, Hide/Show Presets (`gradient.presets.*`); `panels::gradient` tests |
+| Gradient panel: delete a stop | done | Delete Stop at the right end of the ramp deletes the selected stop, and a stop dragged down off the ramp is deleted on release, never below two stops, one undo step each; [Gradient panel options](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/gradient-tool-and-panel.html); `panels::gradient` test |
 | SVG Interactivity, Retype, Comments, Version History panels | missing | the last two are cloud features (out of scope) |
 | Workspaces (save, reset, switch); each remembers the layout changes made in it across switches and restarts until Reset <name> | done | `UiState::workspace_changes` |
 | Background Export: a progress dialog with the file name, the artboard count and a bar (busy for one artboard and for formats made in one go), Cancel (Esc) and Continue in Background; it opens after 0.4 s and never over another dialog. A cancelled export writes no file | done | #2564; on the shared `vectorcraft_doc::cancel` token (#2546), so a cancelled render keeps no half-drawn pattern tile or effect raster. The bar moves between artboards, not within one. Save As, Export for Screens and Export Selection don't show it yet |
