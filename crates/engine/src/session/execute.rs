@@ -35,6 +35,48 @@ impl Session {
 
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
+        self.execute_scoped(id, params, false)
+    }
+
+    /// A bounded control request addressed by document UID, never by tab index.
+    /// Background work must not deactivate the foreground tool, inherit another
+    /// document's paint defaults, or accidentally join an interactive undo group.
+    pub fn execute_document(&mut self, document: u64, revision: Option<u64>, id: &str, params: &Value) -> Result<Value> {
+        let index = self.docs.iter().position(|d| d.uid == document).ok_or_else(|| EngineError::Other("conflict: native document closed".into()))?;
+        let background = self.active != Some(index);
+        let inspect = id == "document.inspect";
+        if !inspect {
+            let revision = revision.ok_or_else(|| EngineError::Other("capability: addressed edits require a revision".into()))?;
+            self.check_property_revision(document, revision)?;
+            if id != "object.setProps" && !(id == "file.saveCopy" && params.as_object().is_some_and(|p| p.is_empty())) {
+                return Err(EngineError::Other("capability: addressed commands support properties and native byte snapshots only".into()));
+            }
+        }
+        if background {
+            if self.depth != 0 || self.explicit_undo_group.is_some() || self.docs.iter().any(|d| d.undo_group.is_some()) {
+                return Err(EngineError::Other("conflict: background routing waits for pending commands or undo groups".into()));
+            }
+            if id == "object.setProps"
+                && !params.as_object().is_some_and(|p| {
+                    p.keys().all(|k| matches!(k.as_str(), "ids" | "name" | "opacity"))
+                        && p.get("ids").and_then(Value::as_array).is_some_and(|ids| !ids.is_empty() && ids.iter().all(|v| v.as_u64().is_some()))
+                })
+            {
+                return Err(EngineError::Other("capability: background properties require explicit ids and support name/opacity only".into()));
+            }
+        }
+        // Do not call set_active: it commits/cancels the user's foreground tool.
+        let active = self.active;
+        self.active = Some(index);
+        let result = guard::catch_panic(|| self.execute_scoped(id, params, background));
+        self.active = active;
+        match result {
+            Ok(result) => result,
+            Err(msg) => Err(EngineError::Internal { cmd: id.to_string(), msg }),
+        }
+    }
+
+    fn execute_scoped(&mut self, id: &str, params: &Value, background: bool) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
         // The crate's own tests are the audit of the params descriptions (#1442): a key a test
         // passes that its command's description doesn't name fails the test.
@@ -122,7 +164,7 @@ impl Session {
                 "edit.redo" => d.history.undo.last().is_some_and(|e| e.color_mode_paints.is_some()),
                 _ => false,
             });
-            if !restored {
+            if !restored && !background {
                 self.inherit_new_art();
             }
             for uid in std::mem::take(&mut self.batch_paint_docs) {
@@ -146,7 +188,9 @@ impl Session {
         }
         if self.depth == 0 {
             self.journal_in_undo_groups(doc, &grouped, journal);
-            self.after_command(Some(id));
+            if !background {
+                self.after_command(Some(id));
+            }
         } else if matches!(id, "edit.undo" | "edit.redo") {
             // A step of `command.batch`: the tool hears of it as it does of the command alone.
             self.notify_text_tool(id);
@@ -171,7 +215,7 @@ impl Session {
     /// Check on the engine thread immediately before synchronous property dispatch.
     /// Native tokens are scoped to this authenticated app launch, not persistent IDs.
     pub fn check_property_revision(&self, document: u64, revision: u64) -> Result<()> {
-        let state = self.active().ok_or_else(|| EngineError::Other("conflict: native document closed".into()))?;
+        let state = self.docs.iter().find(|d| d.uid == document).ok_or_else(|| EngineError::Other("conflict: native document closed".into()))?;
         if state.uid != document || state.revision != revision || state.interaction.is_some() {
             return Err(EngineError::Other("conflict: native document/revision changed or an interaction is pending".into()));
         }

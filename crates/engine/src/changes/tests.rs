@@ -71,3 +71,53 @@ fn changes_closed_document_invalidates_and_revision_guard_fails() {
     assert_eq!(s.changes.latest(), cursor + 1);
     assert!(s.check_property_revision(document, revision).is_err());
 }
+
+#[test]
+fn changes_tool_preview_coalesces_at_commit_and_preserves_history() {
+    use vectorcraft_tools::Action;
+    let (mut s, id) = fixture();
+    let cursor = s.changes.latest();
+    let history = s.active().unwrap().history.undo.len();
+    s.apply_actions(vec![Action::Begin("Opacity drag".into())]).unwrap();
+    for opacity in 1..=20 {
+        s.apply_actions(vec![Action::Preview("object.setProps".into(), json!({"ids":[id],"opacity":opacity}))]).unwrap();
+        assert_eq!(s.changes.latest(), cursor);
+    }
+    s.apply_actions(vec![Action::Commit]).unwrap();
+    assert_eq!(s.changes.latest(), cursor + 1);
+    assert_eq!(s.active().unwrap().history.undo.len(), history + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.active().unwrap().doc.node(crate::NodeId(id)).unwrap().opacity, 1.0);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.active().unwrap().doc.node(crate::NodeId(id)).unwrap().opacity, 0.2);
+    assert_eq!(s.changes.latest(), cursor + 3);
+}
+
+#[test]
+fn changes_cancelled_and_unchanged_interactions_emit_nothing() {
+    use vectorcraft_tools::Action;
+    let (mut s, id) = fixture();
+    let cursor = s.changes.latest();
+    s.apply_actions(vec![
+        Action::Begin("Cancelled".into()),
+        Action::Preview("object.setProps".into(), json!({"ids":[id],"opacity":25})),
+        Action::Cancel,
+    ])
+    .unwrap();
+    s.apply_actions(vec![
+        Action::Begin("Unchanged".into()),
+        Action::Preview("object.setProps".into(), json!({"ids":[id],"opacity":100})),
+        Action::Commit,
+    ])
+    .unwrap();
+    assert_eq!(s.changes.latest(), cursor);
+    s.execute(
+        "command.batch",
+        &json!({"commands":[
+            {"command":"object.setProps","params":{"ids":[id],"opacity":60}},
+            {"command":"object.setProps","params":{"ids":[id],"opacity":40}}
+        ]}),
+    )
+    .unwrap();
+    assert_eq!(s.changes.latest(), cursor + 1, "batch publishes only its committed outer result");
+}

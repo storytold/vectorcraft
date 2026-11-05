@@ -21,8 +21,17 @@ revision/path/dirty state. Other conditional commands are unsupported. Wrong or
 stale UID/revision, a different explicit `document`, a closed source or a pending
 interaction fails before normal app dispatch. Unsupported conditional commands
 and malformed tokens fail explicitly. Existing unguarded command callers retain
-their behavior. Routing is **active document only**: select/reconnect the bound
-source explicitly; this does not switch tabs or overwrite another open document.
+their behavior. Address an open document with top-level `document: uid` (or the
+UID in `expected`); `ui.inspect.documents` exposes UIDs and paths. Inspection,
+guarded name/opacity writes with explicit nonempty `ids`, and guarded native
+byte snapshots can target background tabs. Routing preserves the foreground
+tab, tool and paint defaults; it never calls the tab-switch/deactivation path.
+Writes fail closed during target-document interactions or pending undo groups;
+an unrelated foreground interaction stays intact and does not block routing.
+Other background properties/commands fail with a capability error. Target/guard
+disagreement, unknown object IDs and closed UIDs cannot fall back to a selection
+or a different tab. Capabilities advertise `documentRouting: guarded-properties`
+and `backgroundProperties: [name, opacity]`.
 
 `events.poll {after, timeoutMs}` runs on the existing control worker, not the UI
 thread. Timeout defaults to 20 seconds and is capped at 30. A successful outer
@@ -31,8 +40,11 @@ command that changes committed document contents wakes waiters with small
 and close are included; close reports native revision zero. Queries, equal-content
 no-ops, failed/rolled-back batches and interaction previews emit no invalidation.
 Outer commands that finish interactions compare against their starting document.
-Direct interaction commits, gesture callbacks and engine data mutations outside
-command dispatch are not covered.
+Direct interaction commits also emit once after keeping their native undo step;
+drag previews coalesce until release, and cancellation emits nothing. Arbitrary
+engine mutations outside commands/interactions remain uncovered. Gesture event
+coverage does not advertise transform interoperability: the consumer's semantic
+contract still supports only rectangle name/opacity.
 
 The response has `events`, `cursor`, `reset`, `dropped`. Each waiting subscriber
 uses the shared 256-entry bus and is released after its poll. History between

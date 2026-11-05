@@ -1,5 +1,7 @@
 # VectorCraft Roadmap
 
+- NATIVE.2 (2026-11-05): document-UID routing for guarded background name/opacity edits and byte snapshots preserves foreground tools; direct interaction commits coalesce previews into one invalidation. Scope and verification: `docs/craftlink-native.md`. No parity scores changed.
+
 - NATIVE.1 (2026-11-04): additive command invalidations reuse the proposed shared command bus; active-document conditional `object.setProps` rejects stale revisions. See `docs/craftlink-native.md`. No parity scores or estimates changed; auth/shared IPC adoption remains separately owned.
 - Contour add-on (beyond Illustrator): drag a selected shape's edge outward or inward for a live, editable offset copy, with a floating bar for distance and Sharp, Round or Square corners; Bake turns it into paths. Scores and estimates unchanged.
 - Compound Shapes add-on (beyond Illustrator): a menu for Make, Release and Expand Compound Shape and a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons create compound shapes on a click. Scores and estimates unchanged.
