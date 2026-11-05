@@ -368,7 +368,11 @@ pub fn font_menu(
                 out = Some(FontPick::Wheel(steps));
             }
         }
-        if drawn || !field.contains_pointer() {
+        let queued = ui.data(|d| {
+            d.get_temp::<WheelFields>(wheel_fields_id(ui.ctx().viewport_id()))
+                .is_some_and(|fields| fields.queued.iter().any(|event| event.field == field.id))
+        });
+        if drawn || (!field.contains_pointer() && !queued) {
             st.wheel_order = None;
             ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
         }
@@ -497,6 +501,7 @@ impl egui::Plugin for WheelLayerSnapshot {
         for event in ready {
             let layer = fields.fields.iter().find(|field| field.id == event.field).map(|field| field.layer);
             let active = layer.is_some_and(|layer| ctx.layer_id_at(event.position) == Some(layer));
+            let left = !active || event.reset_after || event.positions_after.iter().any(|position| ctx.layer_id_at(*position) != layer);
             let id = event.field.with("wheel");
             if !active {
                 ctx.data_mut(|d| d.remove::<f32>(id));
@@ -510,8 +515,9 @@ impl egui::Plugin for WheelLayerSnapshot {
                     fields.pending.entry(event.field).or_default().push(WheelInput::Notches(whole as i32));
                 }
             }
-            if event.reset_after || event.positions_after.iter().any(|position| ctx.layer_id_at(*position) != layer) {
+            if left {
                 ctx.data_mut(|d| d.remove::<f32>(id));
+                fields.pending.entry(event.field).or_default().push(WheelInput::Leave);
             }
         }
         if fields.replay.len() > replayed {
@@ -733,7 +739,10 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
             egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } => {
                 mark_queued_wheel_leaves(&mut fields, Some(*p));
                 for field in &fields.fields {
-                    if pointer.is_some_and(|point| field.rect.contains(point)) && !field.rect.contains(*p) {
+                    if pointer.is_some_and(|point| field.rect.contains(point))
+                        && !field.rect.contains(*p)
+                        && !fields.queued.iter().any(|event| event.field == field.id)
+                    {
                         ctx.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
                         fields.pending.entry(field.id).or_default().push(WheelInput::Leave);
                     }
@@ -744,8 +753,10 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
                 pointer = None;
                 mark_queued_wheel_leaves(&mut fields, None);
                 for field in &fields.fields {
-                    ctx.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
-                    fields.pending.entry(field.id).or_default().push(WheelInput::Leave);
+                    if !fields.queued.iter().any(|event| event.field == field.id) {
+                        ctx.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
+                        fields.pending.entry(field.id).or_default().push(WheelInput::Leave);
+                    }
                 }
             }
             egui::Event::MouseWheel { unit, delta, modifiers, .. } if modifiers.is_none() && delta.y != 0.0 => {

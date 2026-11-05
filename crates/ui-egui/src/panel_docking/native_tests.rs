@@ -879,6 +879,38 @@ fn leaving_a_floating_font_field_resets_queued_fractional_wheel_input() {
 }
 
 #[test]
+fn a_floating_wheel_turn_precedes_a_pointer_leave_in_the_menu_order() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    h.app.ui.recent_fonts = ["Source Sans 3", "Source Serif 4", "Inter"].map(str::to_string).into();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let inside = pos2(field.min.x + 4.0, field.center().y);
+    let outside = pos2(field.max.x + 500.0, field.center().y);
+    let wheel = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: vec2(0.0, -1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(inside), wheel.clone()]);
+    h.frame(vec![]);
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap()[0]["family"], "Source Serif 4");
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([wheel, Event::PointerMoved(outside)]);
+    h.frame(vec![]);
+    h.frames(2);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap()[0]["family"], "Inter");
+}
+
+#[test]
 fn moving_under_an_overlay_resets_queued_fractional_font_wheel_input() {
     let mut h = Harness::new();
     h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
