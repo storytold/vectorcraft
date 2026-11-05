@@ -138,7 +138,8 @@ pub(super) struct ArtStyle {
     pub plain: bool,
     /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
     /// no transparency or effects of their own, and only Drop Shadow, Inner Glow, Outer Glow,
-    /// Feather, Round Corners, Scribble, Convert to Shape and the Path effects (Offset Path, Outline Object, Outline Stroke) on the object
+    /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke)
+    /// and some Distort & Transform effects ([`any_object_takes`]) on the object
     /// (and Pathfinder effects when it has no fills or strokes): what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
@@ -155,6 +156,13 @@ pub(super) struct ArtStyle {
     pub transparency: Option<(f32, BlendMode, bool, Knockout)>,
     /// [`Self::effects`] holds Effect › Pathfinder effects, which only a group is read with.
     pub pathfinder: bool,
+}
+
+impl ArtStyle {
+    /// Do its effects move the object's outline (Transform, Twist, Free Distort)?
+    pub fn moves_outline(&self) -> bool {
+        self.effects.iter().any(|e| matches!(e.id.as_str(), "distort.transform" | "distort.twist" | "distort.freeDistort"))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1230,6 +1238,52 @@ impl Builder<'_> {
     }
 }
 
+/// Is `e`, on the whole object, an effect any object is read with? Of the Distort & Transform
+/// effects: Transform without copies (Random is never read), Twist, a Tweak that moves nothing,
+/// Pucker & Bloat at 0, and Free Distort when its corners make a parallelogram (an affine map).
+/// Zig Zag is left to type. Which objects Transform, Twist and Free Distort are read on is
+/// `read::ops`' `moves_with`.
+fn any_object_takes(e: &Effect) -> bool {
+    match e.id.as_str() {
+        "stylize.dropShadow"
+        | "stylize.innerGlow"
+        | "stylize.outerGlow"
+        | "stylize.feather"
+        | "stylize.roundCorners"
+        | "stylize.scribble"
+        | "convertToShape.rectangle"
+        | "convertToShape.roundedRectangle"
+        | "convertToShape.ellipse"
+        | "path.offsetPath"
+        | "path.outlineObject"
+        | "path.outlineStroke"
+        | "distort.twist"
+        | "distort.tweak" => true,
+        // Copies are drawn as one path, its fills under all its strokes, where the file paints each
+        // copy's fill and stroke in turn.
+        "distort.transform" => e.params["copies"].as_i64() == Some(0),
+        "distort.puckerBloat" => e.params["amount"].as_f64() == Some(0.0),
+        "distort.freeDistort" => affine(&e.params),
+        id => is_pathfinder(id),
+    }
+}
+
+/// Do Free Distort params `p`'s corners (top left, top right, bottom right, bottom left) make a
+/// parallelogram, so that the bilinear map is affine?
+fn affine(p: &serde_json::Value) -> bool {
+    let Some(c) = p["corners"].as_array() else { return false };
+    let at = |i: usize, axis: usize| c.get(i).and_then(|c| c.get(axis)).and_then(serde_json::Value::as_f64);
+    (0..2).all(|axis| match (at(0, axis), at(1, axis), at(2, axis), at(3, axis)) {
+        (Some(tl), Some(tr), Some(br), Some(bl)) => {
+            // The corners are fractions of the object's box, divided out of the file's rounded
+            // decimals; the tolerance is relative to how far apart they lie, not where.
+            let (lo, hi) = [tl, tr, br, bl].iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(*v), hi.max(*v)));
+            ((tl + br) - (tr + bl)).abs() <= 1e-5 * (hi - lo).max(1.0)
+        }
+        _ => false,
+    })
+}
+
 fn style(filters: &[Filter]) -> ArtStyle {
     let mut st = ArtStyle { plain: true, ..ArtStyle::default() };
     let Some(root) = filters.iter().position(|f| f.parent.is_none()) else { return st };
@@ -1274,23 +1328,10 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && count(false) <= 1
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
         && st.looks.iter().all(|l| l.visible && l.opacity >= 1.0 && l.blend == BlendMode::Normal && l.effects.is_empty())
-        && st.effects.iter().all(|e| {
-            matches!(
-                e.id.as_str(),
-                "stylize.dropShadow"
-                    | "stylize.innerGlow"
-                    | "stylize.outerGlow"
-                    | "stylize.feather"
-                    | "stylize.roundCorners"
-                    | "stylize.scribble"
-                    | "convertToShape.rectangle"
-                    | "convertToShape.roundedRectangle"
-                    | "convertToShape.ellipse"
-                    | "path.offsetPath"
-                    | "path.outlineObject"
-                    | "path.outlineStroke"
-            ) || is_pathfinder(&e.id)
-        })
+        && st.effects.iter().all(any_object_takes)
+        // An effect that moves the outline is drawn on its own: with others, their order and what
+        // scales with it aren't kept.
+        && (!st.moves_outline() || st.effects.len() == 1)
         // Pathfinder effects on a group with no fills or strokes of its own (`styled` checks the group).
         && (!st.pathfinder || st.items.is_empty());
     st

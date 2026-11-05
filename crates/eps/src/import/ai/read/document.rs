@@ -7,7 +7,7 @@ use super::{
     Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, Global, HashMap, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect,
     Structure, Swatch, Unit, V, obj,
 };
-use vectorcraft_doc::{DataSet, DataValue, GraphicStyle, Guide, ImageBlob, PatternDef, TextWrap, Variable, VariableKind, Variables};
+use vectorcraft_doc::{DataSet, DataValue, GraphicStyle, Guide, ImageBlob, PatternDef, Symbol, TextWrap, Variable, VariableKind, Variables};
 
 /// `%AI5_RulerUnits` → [`Unit`] (Illustrator 7 spec table 3; centimeters is 4; pixels is 6 in later files).
 fn ruler_unit(v: u8) -> Option<Unit> {
@@ -361,6 +361,22 @@ pub fn brushes(data: &[u8], patterns: &[PatternDef]) -> Option<Brushes> {
     Some(Brushes { brushes: lib, patterns: added, images, note: (unread > 0).then(|| brush::left_out_note(unread)) })
 }
 
+/// The graphic styles of the editing data `data`, for a file whose layers aren't read (a graphic
+/// style library has none), as [`read`] makes them, with ids from 1, and the data's declared large
+/// canvas scale (1 when it declares none). `large_canvas`: as [`read`] takes it. The styles are
+/// those the list names before reading stops, and none when the data has no style list or lists no
+/// style this reads.
+pub fn graphic_styles(data: &[u8], large_canvas: bool) -> (Vec<GraphicStyle>, f64) {
+    if crate::import::ai::find(data, b"BeginArtStyleList").is_none() {
+        return (vec![], 1.0);
+    }
+    let mut r = Reader::with_names(data);
+    r.large_canvas = large_canvas.then_some(1.0);
+    // The styles come before the art, so an error in the art leaves them read.
+    let _ = r.run();
+    (r.graphic_styles().0, r.canvas_scale)
+}
+
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
 /// those of a `/Document` still open when it stopped (its art can be what stopped it).
 fn artboards_read(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
@@ -560,6 +576,13 @@ impl<'a> Reader<'a> {
             f.children.pop();
             return;
         }
+        // The dictionary after a symbol's art: its registration point.
+        if self.frames.len() == 1
+            && let Some(head) = self.symbol.as_mut()
+            && let Some(r) = o.nums("AI13PatternRegistrationType").first()
+        {
+            head.registration = Some(*r);
+        }
         self.constraint_art(o);
         // A blend's key object or spine.
         if let Some(kind) = o.text("ShapeBlendPathType")
@@ -709,9 +732,50 @@ impl<'a> Reader<'a> {
     }
 
     /// Art space → where the art being read goes: the document, or while a pattern's definition is
-    /// read, the pattern's space (y down).
+    /// read, the pattern's space (y down). A symbol's definition is written in the symbol's space.
     pub(crate) fn space(&mut self) -> Affine {
-        if self.pattern.is_some() { FLIP } else { self.ensure_space() }
+        if self.pattern.is_some() {
+            FLIP
+        } else if self.symbol.is_some() {
+            Affine::IDENTITY
+        } else {
+            self.ensure_space()
+        }
+    }
+
+    /// The space an image's matrix is in → where the art being read goes: [`Self::space`], and in a
+    /// symbol's art (outside a pattern's definition) the canvas's space turned y up about art space's
+    /// origin there, as an instance's matrix in it is; `None` there without a template box.
+    pub(super) fn image_space(&mut self) -> Option<Affine> {
+        if self.pattern.is_none() && self.symbol.is_some() {
+            return self.canvas_origin().map(|o| Affine::new([1.0, 0.0, 0.0, -1.0, o.x, o.y]));
+        }
+        Some(self.space())
+    }
+
+    /// The canvas point of art space's origin, from the template box's center (the canvas's): what
+    /// a pattern's gradients and the instances in a symbol's art are written about.
+    pub(super) fn canvas_origin(&self) -> Option<Point> {
+        let t = self.template?;
+        let (cx, cy) = ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0);
+        let origin = Point::new(CANVAS_CENTRE - cx, CANVAS_CENTRE + cy);
+        (origin.x.is_finite() && origin.y.is_finite()).then_some(origin)
+    }
+
+    /// The symbols in the symbol list's order, those it doesn't name after them as they were
+    /// defined; names it has twice or that no symbol has don't count.
+    fn order_symbols(&mut self) {
+        let Some(list) = self.symbol_list.take() else { return };
+        let mut slots: Vec<Option<Symbol>> = std::mem::take(&mut self.doc.symbols).into_iter().map(Some).collect();
+        let at: HashMap<String, usize> = slots.iter().enumerate().filter_map(|(i, s)| s.as_ref().map(|s| (s.name.clone(), i))).collect();
+        let mut ordered = Vec::with_capacity(slots.len());
+        for name in &list {
+            if let Some(s) = self.symbol_names.get(name).and_then(|named| at.get(named)).and_then(|i| slots.get_mut(*i)).and_then(Option::take) {
+                ordered.push(s);
+            }
+        }
+        ordered.extend(slots.into_iter().flatten());
+        self.doc.symbols = ordered;
     }
 
     /// The swatches of the palette, `[None]` first, in its order, and its color groups; a gradient
@@ -818,6 +882,8 @@ impl<'a> Reader<'a> {
         }
         let to_doc = self.ensure_space();
         let artboard = self.first_board();
+        self.check_symbols();
+        self.order_symbols();
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
         super::on_path::apply(&mut self.doc, &self.on_path);
         let mut doc = std::mem::replace(&mut self.doc, Document::new(1.0, 1.0));
@@ -931,6 +997,9 @@ impl<'a> Reader<'a> {
             let links: HashMap<NodeId, u32> = self.style_links.iter().filter_map(|(node, name)| Some((*node, *ids.get(name)?))).collect();
             if !links.is_empty() {
                 link_styles(&mut doc.layers, &links, &styles, 0);
+                for symbol in &mut doc.symbols {
+                    link_styles(std::slice::from_mut(&mut symbol.art), &links, &styles, 0);
+                }
             }
             doc.graphic_styles = styles.into();
         }
@@ -953,6 +1022,11 @@ impl<'a> Reader<'a> {
             doc.variables = variables.variables.into();
         }
         let (bindings, bindings_skipped) = (variables.bindings, variables.bindings_skipped);
+        // Symbols that hold instances of themselves can't be drawn: those instances go before the
+        // layers are compared with the page.
+        if !doc.symbols.is_empty() {
+            doc.limit_depth_noting(&mut warnings);
+        }
         Ok(Structure {
             doc,
             to_doc,
