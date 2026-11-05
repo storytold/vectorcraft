@@ -136,6 +136,40 @@ fn views_follow_a_move_made_by_the_engine_command() {
     assert_eq!(app.views.iter().map(|v| v.zoom).collect::<Vec<_>>(), [4.0, 2.0, 3.0]);
 }
 
+/// One batch that closes documents and moves others (a script, a recording) leaves every view with
+/// its own document; the views are put right once, after the whole batch.
+#[test]
+fn views_follow_closes_and_moves_made_in_one_batch() {
+    let (mut app, _ctx) = app();
+    let zooms = |app: &VectorcraftApp| app.views.iter().map(|v| v.zoom).collect::<Vec<_>>();
+    for (k, v) in app.views.iter_mut().enumerate() {
+        v.zoom = 1.0 + k as f64;
+    }
+    // A close alone, in the middle: the documents after it keep their own views.
+    app.run("command.batch", json!({"commands": [{"command": "file.close", "params": {"index": 1}}]})).unwrap();
+    assert_eq!(order(&app), ["Alpha", "Charlie", "Delta"]);
+    assert_eq!(zooms(&app), [1.0, 3.0, 4.0], "Charlie and Delta keep theirs, not Bravo's and Charlie's");
+    // A close and a move together.
+    app.run(
+        "command.batch",
+        json!({"commands": [
+            {"command": "file.close", "params": {"index": 0}},
+            {"command": "document.move", "params": {"from": 1, "to": 0}},
+        ]}),
+    )
+    .unwrap();
+    assert_eq!(order(&app), ["Delta", "Charlie"]);
+    assert_eq!(zooms(&app), [4.0, 3.0], "Delta does not take the closed Alpha's view");
+    // Closing by index made the document in the closed one's place current (Charlie); it shows its own view.
+    assert_eq!((current(&app), app.view().map(|v| v.zoom)), ("Charlie".into(), Some(3.0)));
+    // A document opened afterwards starts with a view of its own.
+    app.run("file.new", json!({"width": 100, "height": 100, "name": "Echo"})).unwrap();
+    app.sync_views();
+    assert_eq!(order(&app), ["Delta", "Charlie", "Echo"]);
+    assert_eq!(app.views.len(), 3);
+    assert_eq!(&zooms(&app)[..2], [4.0, 3.0]);
+}
+
 #[test]
 fn a_tab_dragged_off_the_strip_still_floats_and_moves_nothing() {
     let (mut app, ctx) = app();
