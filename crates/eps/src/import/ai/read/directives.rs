@@ -575,9 +575,10 @@ impl<'a> Reader<'a> {
         // In a space of its own (y down), with no head to take.
         sub.pattern = Some(PatternHead { taken: true, ..PatternHead::default() });
         sub.subreader_depth = self.subreader_depth + 1;
-        // The gradients and patterns defined so far, lent.
+        // The gradients and patterns defined so far, and which patterns are in the version 7 form, lent.
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.pattern_tiles = std::mem::take(&mut self.pattern_tiles);
+        sub.v7_patterns = std::mem::take(&mut self.v7_patterns);
         sub.global_names = std::mem::take(&mut self.global_names);
         sub.nodes = self.nodes;
         sub.template = self.template;
@@ -585,6 +586,7 @@ impl<'a> Reader<'a> {
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
         self.pattern_tiles = std::mem::take(&mut sub.pattern_tiles);
+        self.v7_patterns = std::mem::take(&mut sub.v7_patterns);
         self.global_names = std::mem::take(&mut sub.global_names);
         // Images aren't kept: the document's images don't count a brush's art among their users. Art
         // read with a note (something left out of it) isn't kept either.
