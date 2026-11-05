@@ -214,12 +214,13 @@ fn pointing(n: usize, rows: &mut Vec<(String, f64)>) -> Result<(), String> {
         format!("smart guide targets in view ({n} paths)"),
         median_ms(5, || drop(vectorcraft_engine::tools::guides::Targets::collect(&doc, &[], Some(view_rect)))),
     ));
-    // Shift-clicking one more object into a selection of half the document.
+    // Adding one more object to a selection of half the document: the command a shift-click ends
+    // in, without the pointer handling and hit test before it.
     let ids: Vec<u64> = doc.layers[0].children().map(|c| c.iter().map(|n| n.id.0).collect()).unwrap_or_default();
     s.execute("select.set", &json!({"ids": ids[..ids.len() / 2]})).map_err(err)?;
     let mut k = ids.len() / 2;
     rows.push((
-        format!("shift-click into a {}-object selection", ids.len() / 2),
+        format!("select.toggle in a {}-object selection", ids.len() / 2),
         median_ms(5, || {
             k += 1;
             let _ = s.execute("select.toggle", &json!({"id": ids[k % ids.len()]}));
