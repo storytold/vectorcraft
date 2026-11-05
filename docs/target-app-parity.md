@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (adding a selected library paint avoids duplicate geometry measurement; behavior, scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Eyedropper samples a single visible stroke without rebuilding its path; behavior, scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
@@ -31,6 +31,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Eyedropper colour sampling from a path or compound path with one visible stroke no longer rebuilds its path merely to choose among stroke layers. Multiple strokes still sample the topmost one that reaches the point; colours, scores and estimates are unchanged. |
 | 2026-11-05 | minor | Adding a selected colour, gradient or pattern to a library measures the source object's geometry once rather than twice. Gradient placement, library contents, scores and estimates are unchanged. |
 | 2026-11-05 | minor | Large drawings of solid-colour or pattern-filled paths and compound paths export to SVG faster when their unused geometric bounds are skipped. Gradients and outside-aligned stroke masks retain their placement; SVG output, scores and estimates are unchanged. |
 | 2026-11-05 | minor | Selection Tools add-on: Select Linked, Embedded, Missing and Modified select the images and placed documents with that link status (Object › Plug-ins › Selection Tools and the Links panel menu; Shift adds), and Select by Link Status… lists them by name, status and format to pick from, optionally zooming to them; what is hidden, locked, on a template layer or outside the isolated group is left out and the status bar says how many (#5526, a VectorCraft addition); scores and estimates unchanged (estimated). |
