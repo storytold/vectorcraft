@@ -144,8 +144,9 @@ pub(crate) fn field(ui: &Ui, field: Id, rect: Rect, text: &str, value: Option<f6
     if !enabled(ui.ctx()) || !ui.is_enabled() {
         return None;
     }
-    // On top of the label, which may sense clicks itself (selectable text).
-    let resp = ui.interact(label, field.with("scrub-label"), Sense::click_and_drag());
+    // On top of the label, which may sense clicks itself (selectable text). Not focusable
+    // (`click_and_drag` is): Tab goes from field to field, not through their labels (#3953).
+    let resp = ui.interact(label, field.with("scrub-label"), Sense::CLICK | Sense::DRAG);
     drag(ui, &resp, field, text, value, decimals).map(|v| v.max(*bounds.start()).min(*bounds.end()))
 }
 

@@ -438,6 +438,66 @@ fn artboard_fields_keep_the_reference_point() {
     assert_eq!(artboard_rect(r, 8, None, Some(500.0), None, None, false), Rect::new(0.0, 300.0, 300.0, 500.0));
 }
 
+/// Where each Tab stop of `draw` is on screen, in the order Tab visits them.
+fn tab_stops(app: &mut VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui)) -> Vec<egui::Rect> {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut time = 0.0;
+    let mut frame = |app: &mut VectorcraftApp, tab: bool| {
+        time += 0.05;
+        let events = if tab {
+            vec![egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }]
+        } else {
+            vec![]
+        };
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 400.0)));
+        let raw = egui::RawInput { events, time: Some(time), screen_rect, focused: true, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
+        out.textures_delta.clear();
+    };
+    // The grids lay themselves out on their second frame.
+    frame(app, false);
+    frame(app, false);
+    let mut stops = vec![];
+    for _ in 0..20 {
+        frame(app, true);
+        frame(app, false);
+        if let Some(r) = ctx.memory(|m| m.focused()).and_then(|id| ctx.read_response(id)) {
+            stops.push(r.rect);
+        }
+    }
+    stops
+}
+
+/// #3953: Tab goes X, Y, W, H (down the first column, then down the second), while the fields
+/// stay where they were: X and W on the first row, Y and H on the second.
+#[test]
+fn tab_goes_x_y_w_h() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
+    check_xywh_order("Transform", &mut app, show, 0);
+    check_xywh_order("Properties", &mut app, crate::panels::properties::transform_section, 0);
+    app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+    check_xywh_order("Artboard", &mut app, show, 0);
+    // The Properties panel starts with the artboard's name field.
+    check_xywh_order("Edit Artboards", &mut app, crate::panels::properties::show, 1);
+}
+
+fn check_xywh_order(name: &str, app: &mut VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui), skip: usize) {
+    // X is the first wide stop after `skip` of them (the reference point's cells are small); from
+    // there Tab takes the four fields one after the other, none of their labels between them.
+    let stops = tab_stops(app, draw);
+    let start = stops.iter().enumerate().filter(|(_, r)| r.width() > 50.0).nth(skip).map(|(i, _)| i);
+    let Some([x, y, w, h, next]) = start.and_then(|i| stops.get(i..i + 5)).and_then(|s| <[egui::Rect; 5]>::try_from(s).ok()) else {
+        panic!("{name}: four fields and a stop after them expected, got {stops:?}")
+    };
+    assert!(x.min.x == y.min.x && w.min.x == h.min.x && x.max.x < w.min.x, "{name}: columns {stops:?}");
+    assert!(x.min.y == w.min.y && y.min.y == h.min.y && x.max.y < y.min.y, "{name}: rows {stops:?}");
+    // After H, Tab leaves the grid (right of it or below), not back to H's label on its left.
+    assert!(next.min.x >= h.max.x || next.min.y >= h.max.y, "{name}: after H {next:?}, stops {stops:?}");
+}
+
 #[test]
 fn constrain_proportions() {
     assert_eq!(constrained(100.0, 50.0, Some(200.0), None), (200.0, 100.0));

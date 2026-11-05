@@ -189,25 +189,32 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
     ui.horizontal(|ui| {
         reference_locator(ui, refi);
         ui.add_space(4.0);
-        egui::Grid::new("xfp-ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-            widgets::dim_label(ui, "X:");
-            if let Some(v) = widgets::num_field_named(ui, "xfp-ab-x", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, 80.0) {
-                set(app, Some(v + origin.x), None, None, None);
-            }
-            widgets::dim_label(ui, "W:");
-            if let Some(v) = widgets::size_field_named(ui, "xfp-ab-w", Some(tl!("W:")), Some(r.width()), units, 80.0) {
-                set(app, None, None, Some(v), None);
-            }
-            ui.end_row();
-            widgets::dim_label(ui, "Y:");
-            if let Some(v) = widgets::num_field_named(ui, "xfp-ab-y", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, 80.0) {
-                set(app, None, Some(v + origin.y), None, None);
-            }
-            widgets::dim_label(ui, "H:");
-            if let Some(v) = widgets::size_field_named(ui, "xfp-ab-h", Some(tl!("H:")), Some(r.height()), units, 80.0) {
-                set(app, None, None, None, Some(v));
-            }
-            ui.end_row();
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            egui::Grid::new("xfp-ab-grid-pos").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                widgets::dim_label(ui, "X:");
+                if let Some(v) = widgets::num_field_named(ui, "xfp-ab-x", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, 80.0) {
+                    set(app, Some(v + origin.x), None, None, None);
+                }
+                ui.end_row();
+                widgets::dim_label(ui, "Y:");
+                if let Some(v) = widgets::num_field_named(ui, "xfp-ab-y", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, 80.0) {
+                    set(app, None, Some(v + origin.y), None, None);
+                }
+                ui.end_row();
+            });
+            egui::Grid::new("xfp-ab-grid-size").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                widgets::dim_label(ui, "W:");
+                if let Some(v) = widgets::size_field_named(ui, "xfp-ab-w", Some(tl!("W:")), Some(r.width()), units, 80.0) {
+                    set(app, None, None, Some(v), None);
+                }
+                ui.end_row();
+                widgets::dim_label(ui, "H:");
+                if let Some(v) = widgets::size_field_named(ui, "xfp-ab-h", Some(tl!("H:")), Some(r.height()), units, 80.0) {
+                    set(app, None, None, None, Some(v));
+                }
+                ui.end_row();
+            });
         });
         constrain_link(app, ui);
     });
@@ -281,25 +288,32 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.add_space(4.0);
         ui.add_enabled_ui(has, |ui| {
-            egui::Grid::new("xfp-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-                widgets::dim_label(ui, "X:");
-                if let Some(v) = widgets::num_field_named(ui, "xfp-x", Some(crate::i18n::t("X:")), rp.map(|p| p.x - origin.x), units, 80.0) {
-                    run_transform(app, "object.setBounds", json!({"x": to_box(v + origin.x, 0.0).0, "reference": refi, "copy": copy}));
-                }
-                widgets::dim_label(ui, "W:");
-                if let Some(v) = widgets::size_field_named(ui, "xfp-w", Some(tl!("W:")), bounds.map(|b| b.width()), units, 80.0) {
-                    run_transform(app, "object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy}));
-                }
-                ui.end_row();
-                widgets::dim_label(ui, "Y:");
-                if let Some(v) = widgets::num_field_named(ui, "xfp-y", Some(crate::i18n::t("Y:")), rp.map(|p| p.y - origin.y), units, 80.0) {
-                    run_transform(app, "object.setBounds", json!({"y": to_box(0.0, v + origin.y).1, "reference": refi, "copy": copy}));
-                }
-                widgets::dim_label(ui, "H:");
-                if let Some(v) = widgets::size_field_named(ui, "xfp-h", Some(tl!("H:")), bounds.map(|b| b.height()), units, 80.0) {
-                    run_transform(app, "object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy}));
-                }
-                ui.end_row();
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                egui::Grid::new("xfp-grid-pos").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                    widgets::dim_label(ui, "X:");
+                    if let Some(v) = widgets::num_field_named(ui, "xfp-x", Some(crate::i18n::t("X:")), rp.map(|p| p.x - origin.x), units, 80.0) {
+                        run_transform(app, "object.setBounds", json!({"x": to_box(v + origin.x, 0.0).0, "reference": refi, "copy": copy}));
+                    }
+                    ui.end_row();
+                    widgets::dim_label(ui, "Y:");
+                    if let Some(v) = widgets::num_field_named(ui, "xfp-y", Some(crate::i18n::t("Y:")), rp.map(|p| p.y - origin.y), units, 80.0) {
+                        run_transform(app, "object.setBounds", json!({"y": to_box(0.0, v + origin.y).1, "reference": refi, "copy": copy}));
+                    }
+                    ui.end_row();
+                });
+                egui::Grid::new("xfp-grid-size").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                    widgets::dim_label(ui, "W:");
+                    if let Some(v) = widgets::size_field_named(ui, "xfp-w", Some(tl!("W:")), bounds.map(|b| b.width()), units, 80.0) {
+                        run_transform(app, "object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy}));
+                    }
+                    ui.end_row();
+                    widgets::dim_label(ui, "H:");
+                    if let Some(v) = widgets::size_field_named(ui, "xfp-h", Some(tl!("H:")), bounds.map(|b| b.height()), units, 80.0) {
+                        run_transform(app, "object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy}));
+                    }
+                    ui.end_row();
+                });
             });
         });
         constrain_link(app, ui);
