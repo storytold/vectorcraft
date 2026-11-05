@@ -582,6 +582,60 @@ fn set_pref(s: &mut Session, key: &str, value: Value) {
     s.execute("prefs.set", &json!({"key": key, "value": value})).unwrap();
 }
 
+/// New type with the session's defaults: its id and language.
+fn new_type(s: &mut Session) -> (NodeId, Option<String>) {
+    let id = NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hello"})).unwrap()["id"].as_u64().unwrap());
+    (id, type_language(s, id))
+}
+
+fn type_language(s: &Session, id: NodeId) -> Option<String> {
+    let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(id).map(|n| &n.kind) else { panic!("not text") };
+    t.runs[0].style.language.clone()
+}
+
+/// Preferences › Hyphenation › Default Language (#394) is the language of new type, stored as its
+/// tag. Type already there keeps its language, and a language chosen in Document Setup comes first.
+#[test]
+fn default_language_is_the_language_of_new_type() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let (before, language) = new_type(&mut s);
+    assert_eq!(language, None, "the default language isn't stored");
+
+    set_pref(&mut s, "hyphenationLanguage", json!("German"));
+    assert_eq!(s.prefs.hyphenation_language, "de", "a name is stored as its tag");
+    assert_eq!(new_type(&mut s).1.as_deref(), Some("de"));
+    assert_eq!(type_language(&s, before), None, "type already there stays as it is");
+
+    s.execute("document.setup", &json!({"language": "French"})).unwrap();
+    assert_eq!(new_type(&mut s).1.as_deref(), Some("fr"), "the document's own language comes first");
+
+    set_pref(&mut s, "hyphenationLanguage", json!("en-US"));
+    s.execute("document.setup", &json!({"language": "English: USA"})).unwrap();
+    assert_eq!(new_type(&mut s).1, None);
+}
+
+/// Preferences saved before the language was a tag hold its name; a language no longer in the list
+/// reads as the default.
+#[test]
+fn a_saved_default_language_reads_as_its_tag() {
+    let read = |v: &str| serde_json::from_value::<Prefs>(json!({"hyphenationLanguage": v})).unwrap().hyphenation_language;
+    assert_eq!(read("German"), "de");
+    assert_eq!(read("English: USA"), "en-US");
+    assert_eq!(read("de"), "de");
+    assert_eq!(read("Klingon"), "en-US");
+    assert_eq!(Prefs::default().hyphenation_language, "en-US");
+}
+
+/// The preference offers every language the Character panel and Document Setup do.
+#[test]
+fn default_language_offers_every_language() {
+    let spec = PREF_SPECS.iter().find(|p| p.key == "hyphenationLanguage").unwrap();
+    let crate::cmd::prefscmds::PrefKind::Choice(options) = spec.kind else { panic!("a choice") };
+    let languages: Vec<(&str, &str)> = vectorcraft_doc::setup::LANGUAGES.iter().map(|(name, tag, _)| (*tag, *name)).collect();
+    assert_eq!(options, languages.as_slice());
+}
+
 fn gesture(s: &mut Session, v: ViewInfo, events: &[(vectorcraft_tools::PointerKind, f64, f64)]) {
     for (k, x, y) in events {
         s.pointer(&vectorcraft_tools::PointerEvent::new(*k, *x, *y), v).unwrap();
@@ -1474,6 +1528,29 @@ fn missing_glyph_protection_keeps_the_version_of_the_font_kept() {
     assert_eq!(versions, [moved.clone(), kept, moved]);
 }
 
+/// The font warning of `text.setStyle` and `text.setRangeStyle` names only the fonts the command
+/// set: a character that keeps an unavailable font through Missing Glyph Protection isn't reported.
+#[test]
+fn missing_glyph_protection_leaves_the_font_kept_out_of_the_warning() {
+    let (from, to, c) = ("No Such Font Family", "JetBrains Mono", '\u{180}');
+    let db = vectorcraft_text::FontDb::global();
+    // The unavailable family is drawn in the fallback font, which has the character; the new font is installed and lacks it.
+    let installed = db.resolve(to, "Regular").is_some_and(|(_, m)| m == vectorcraft_text::FontMatch::Exact);
+    if !installed || !db.face(from, "Regular").is_some_and(|f| f.covers(c)) || db.face(to, "Regular").is_some_and(|f| f.covers(c)) {
+        return; // The fonts installed here cover other characters.
+    }
+    let mut s = new_doc();
+    let id = NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": "a\u{180}c", "font": from})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    for change in [json!({"font": to}), json!({"id": id.0, "start": 0, "end": 4, "font": to})] {
+        let cmd = if change.get("id").is_some() { "text.setRangeStyle" } else { "text.setStyle" };
+        let out = s.execute(cmd, &change).unwrap();
+        assert_eq!(style_at(&s, id, 1).font_family, from, "{cmd}: the character keeps its font");
+        assert_eq!(out.get("warning"), None, "{cmd}: {out}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
 // ---------- #394, fourth batch ----------
 
 /// Type › Type Object Selection by Path Only (#394): on, a click among point type's glyphs no
@@ -1922,6 +1999,52 @@ fn a_move_held_by_a_paths_stroke_lands_the_path_on_a_ruler_guide() {
         assert!((edge - g).abs() < 1e-9 && align, "pressed at {x}: the edge is {} pt off the guide (align: {align})", edge - g);
         s.execute("edit.undo", &json!({})).unwrap();
     }
+}
+
+/// #5746: a rectangle dragged until its left edge and its top edge are each 1 px from a ruler
+/// guide lands on both guides, with "align", whichever guide was added last and wherever it was
+/// grabbed; between two upright guides, its left edge lands on the one within reach; and an edge
+/// Smart Guides line up with another object stays there, not on a ruler guide as near.
+#[test]
+fn a_moved_rectangle_lines_its_edges_up_with_two_ruler_guides() {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let v = ViewInfo::default();
+    // (guides as (vertical, pos), where it is grabbed, the top left it lands on)
+    type Case = (&'static [(bool, f64)], (f64, f64), (f64, f64));
+    let cases: [Case; 3] = [
+        (&[(true, 250.0), (false, 320.0)], (200.0, 100.0), (250.0, 320.0)),
+        (&[(false, 320.0), (true, 250.0)], (100.0, 175.0), (250.0, 320.0)),
+        (&[(true, 250.0), (true, 455.0)], (200.0, 175.0), (250.0, 100.0)),
+    ];
+    for (guides, (x, y), want) in cases {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+        let id = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 150})).unwrap()["id"].as_u64().unwrap());
+        for (vertical, pos) in guides {
+            s.execute("guide.add", &json!({"vertical": vertical, "pos": pos})).unwrap();
+        }
+        s.execute("select.none", &json!({})).unwrap();
+        s.select_tool("selection", v).unwrap();
+        // 1 px past the guides: the left edge at 251, the top edge at 321 (or where it was).
+        let (to_x, to_y) = (x + 151.0, if want.1 == 100.0 { y } else { y + 221.0 });
+        gesture(&mut s, v, &[(Down, x, y), (Drag, (x + to_x) / 2.0, (y + to_y) / 2.0), (Drag, to_x, to_y)]);
+        let align = s.overlays(v).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "align"));
+        gesture(&mut s, v, &[(Up, to_x, to_y)]);
+        assert_eq!(top_left(&s, id), want, "guides {guides:?}, grabbed at ({x}, {y})");
+        assert!(align, "guides {guides:?}, grabbed at ({x}, {y}): no align");
+    }
+    // Dragged by its centre until its left edge is at 401: 1 px from another rectangle's left
+    // edge (400) and 1 px from a ruler guide (402).
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let id = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 150})).unwrap()["id"].as_u64().unwrap());
+    s.execute("shape.rectangle", &json!({"x": 400, "y": 400, "width": 60, "height": 60})).unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 402.0})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    gesture(&mut s, v, &[(Down, 200.0, 175.0), (Drag, 350.0, 175.0), (Drag, 501.0, 175.0), (Up, 501.0, 175.0)]);
+    assert_eq!(top_left(&s, id), (400.0, 100.0), "a Smart Guides alignment gave way to a ruler guide");
 }
 
 /// #3701: at 28,757%, Direct Selection pressed 1.5 px beside a rectangle's straight left side and

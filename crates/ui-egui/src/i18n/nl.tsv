@@ -617,6 +617,11 @@
 	New Toolbar	Nieuwe werkbalk
 	Show Toolbar	Werkbalk tonen
 	List Toolbars	Lijst met werkbalken
+	Manage Toolbars…	Werkbalken beheren…
+	Manage Toolbars	Werkbalken beheren
+	Rename Toolbar	Werkbalk hernoemen
+	Duplicate Toolbar	Werkbalk dupliceren
+	Delete Toolbar	Werkbalk verwijderen
 	Manage Workspaces…	Werkruimten beheren…
 	Control	Bediening
 	Contextual Task Bar	Contextuele taakbalk
@@ -649,6 +654,8 @@
 	Update Changed Links	Gewijzigde koppelingen bijwerken
 	Magic Wand	Magische toverstaf
 	Navigator	Navigator
+	Navigator Panel Options	Opties voor het paneel Navigator
+	Draw Dashed Lines as Solid Lines	Streepjeslijnen als doorgetrokken lijnen tekenen
 	Pattern Options	Patroonopties
 	Properties	Eigenschappen
 	Separations Preview	Scheidingsvoorbeeld
@@ -893,6 +900,10 @@ lighting	Light	Licht
 	Home	Home
 	Import Keyboard Shortcuts…	Sneltoetsen importeren…
 	Justify all lines	Alle regels uitvullen
+	Align Top	Boven uitlijnen
+	Align Center	Midden uitlijnen
+	Align Bottom	Onder uitlijnen
+	Justify Vertically	Verticaal uitvullen
 	Justify with last line aligned left	Uitvullen met laatste regel links uitgelijnd
 	Keyboard Shortcut Conflicts	Sneltoetsconflicten
 	Keyboard Shortcut Set	Sneltoetsset
@@ -1193,6 +1204,8 @@ lighting	Light	Licht
 	Hand	Hand
 	Join Tool	Samenvoegen-gereedschap
 	Lasso Tool	Lasso-gereedschap
+	Enclosing Lasso Tool	Omsluitend lassogereedschap
+	Enclosing Lasso	Omsluitende lasso
 	Lasso	Lasso
 	Line Cut Tool	Lijnknip-gereedschap
 	Line Graph Tool	Lijndiagram-gereedschap
@@ -1266,6 +1279,9 @@ lighting	Light	Licht
 	Zoom Tool	Zoom-gereedschap
 	Action {n}	Actie {n}
 	Begin Recording	Opname starten
+	Exclude from playback	Uitsluiten van afspelen
+	Include in playback	Insluiten bij afspelen
+	Include Action Steps	Actiestappen insluiten
 	Center on Artboard	Centreren op tekengebied
 	Default Actions	Standaardacties
 	▾ Default Actions	▾ Standaardacties
@@ -1479,6 +1495,11 @@ digits	Malayalam	Malayalam
 	Save Transparency Flattener Preset…	Voorinstelling voor transparantieafvlakking opslaan…
 	Basic Latin	Basic Latin
 	Currency & Symbols	Valuta & symbolen
+	Alternates for Current Selection	Alternatieven voor huidige selectie
+	Select a character with the Type tool to see its alternates.	Selecteer een teken met het Type-gereedschap om de alternatieven te zien.
+	The selected character's font is not available.	Het lettertype van het geselecteerde teken is niet beschikbaar.
+	No alternates for the selected character.	Geen alternatieven voor het geselecteerde teken.
+	Double-click to replace	Dubbelklik om te vervangen
 	Double-click to insert	Dubbelklik om in te voegen
 	Entire Font	Volledig lettertype
 	glyph {id}	glyph {id}
@@ -1660,6 +1681,7 @@ digits	Malayalam	Malayalam
 	Select text to set its OpenType features.	Selecteer tekst om de OpenType-functies in te stellen.
 	Standard Ligatures	Standaardligaturen
 	Stylistic Alternates	Stilistische alternatieven
+	Set {n}	Set {n}
 	Swash	Swash
 	Tabular Lining	Tabulaire lining
 	Tabular Oldstyle	Tabulaire oldstyle
@@ -1674,6 +1696,7 @@ digits	Malayalam	Malayalam
 	Left-to-Right Paragraph Direction	Alinearichting van links naar rechts
 	Line-end Punctuation Half Width	Leestekens op regeleinde op halve breedte
 	Insert Kashidas	Kashida's invoegen
+	Kashidas	Kashida's
 	Long	Lang
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-set
@@ -2216,6 +2239,7 @@ digits	Malayalam	Malayalam
 	“{file}” is protected by a password.	„{file}” is beveiligd met een wachtwoord.
 	Dim Images to:	Afbeeldingen dimmen tot:
 	Light Blue	Lichtblauw
+	Light Red	Lichtrood
 	Layers Panel Options	Opties voor het paneel Lagen
 	Row Size:	Rijgrootte:
 	Show Layers Only	Alleen lagen weergeven
@@ -2304,6 +2328,12 @@ digits	Malayalam	Malayalam
 	Save the document first?	Wil je het document eerst opslaan?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} bestand in {folder} {note}. De pakketmap openen?|{n} bestanden in {folder} {note}. De pakketmap openen?
 @plural	{n} linked file not found|{n} linked files not found	{n} gekoppeld bestand niet gevonden|{n} gekoppelde bestanden niet gevonden
+@msgplural	{n} linked file not found|{n} linked files not found	{n} gekoppeld bestand niet gevonden|{n} gekoppelde bestanden niet gevonden
+@msg	fonts not copied: {fonts}	niet gekopieerde lettertypen: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} gekoppeld bestand niet gevonden)|({n} gekoppelde bestanden niet gevonden)
+@msg	(fonts not copied: {fonts})	(niet gekopieerde lettertypen: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	niet gekopieerde lettertypen: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Ingebouwde voorinstellingen zijn alleen-lezen: Nieuw… start een bewerkbare kopie.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} op het tekenbord staat voor {real} {unit} in de scène.
@@ -3410,6 +3440,7 @@ theme	Appearance	Vormgeving
 	Type Object Selection by Path Only	Tekstobjecten alleen via hun pad selecteren
 	UI Scaling	UI-schaling
 	Use Compression	Compressie gebruiken
+	Include Editing Data for Other Apps	Bewerkingsgegevens voor andere apps opnemen
 	Use Japanese Crop Marks	Japanse aftekenlijnen gebruiken
 	Use Low Resolution Proxy for Linked EPS	Proxy met lage resolutie gebruiken voor gekoppelde EPS
 	Use Precise Cursors	Nauwkeurige cursors gebruiken
@@ -4586,11 +4617,13 @@ imageTrace	Outline	Contour
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	het bevat {_1}, wat VectorCraft er nog niet uit leest
 @msg	its objects are nested too deeply	de objecten ervan zijn te diep genest
 @msg	its section ending with `%{end}` doesn't end	zijn sectie die op `%{end}` eindigt, eindigt niet
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	penselen die VectorCraft nog niet kan lezen, zijn weggelaten uit het deelvenster Penselen ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objecten met meerdere vullingen of lijnen, effecten of penselen zijn als hun getekende uiterlijk binnengekomen ({_1}): hun vormgeving is nog niet bewerkbaar
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	verloop „{name}” is niet gedefinieerd in het bestand: er is een effen kleur voor gebruikt
 @msg	an image VectorCraft can't read was left out	een afbeelding die VectorCraft niet kan lezen, is weggelaten
 @msg	an image whose data is cut short was left out	een afbeelding waarvan de gegevens zijn afgekapt, is weggelaten
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gekoppelde afbeeldingen tonen het in het bestand opgeslagen voorbeeld met lage resolutie totdat hun bestanden zijn gevonden: koppel ze opnieuw in het paneel Koppelingen
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	gekoppelde afbeeldingen zonder voorbeeld in het bestand tonen een tijdelijke aanduiding totdat hun bestanden zijn gevonden: koppel ze opnieuw in het paneel Koppelingen
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	vlaktekst in kaders die te kort zijn voor één regel van het lettertype waarin de tekst wordt weergegeven, heeft hogere kaders gekregen ({_1}): anders zou de tekst niet zichtbaar zijn
 @msg	its editing data doesn't say where its art is	zijn bewerkingsgegevens zeggen niet waar de illustratie zich bevindt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	dit bestand is opgeslagen zonder PDF-compatibiliteit en de bewerkingsgegevens kunnen niet worden gelezen ({why})
@@ -5205,6 +5238,10 @@ mark-style	Japanese	Japans
 @msg	choose a source folder	kies een bronmap
 @msg	open a document with data sets	open een document met gegevenssets
 @msg	the action has no steps	de actie heeft geen stappen
+@msg	the action has no included steps	de actie heeft geen ingesloten stappen
+@msg	no such action step	actiestap bestaat niet
+@msg	included must be true or false	included moet true of false zijn
+@msg	others must be true or false	others moet true of false zijn
 	Registration:	Passermarkering:
 	By Layer	Per laag
 	By Object	Per object
@@ -5233,6 +5270,7 @@ mark-style	Japanese	Japans
 	Path Length	Padlengte
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	de lagen van het bestand zijn niet ingelezen ({_1}): het komt binnen als zijn pagina, in één laag
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	de lagen van het bestand zijn niet ingelezen uit de bewerkingsgegevens ({_1}): ze komen uit het PDF-gedeelte
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	niet alle variabelekoppelingen van het bestand zijn ingelezen (overgeslagen koppelingen: {_1}): die objecten zijn niet aan hun variabelen gekoppeld
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	de variabelenbibliotheek van het bestand is slechts gedeeltelijk ingelezen (overgeslagen items: {_1}): het Variabelen-paneel toont de rest
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	de variabelenbibliotheek van het bestand kan niet worden ingelezen: het Variabelen-paneel toont die niet
 @msg	a variable of unknown kind can't be bound to objects	een variabele van onbekend type kan niet aan objecten worden gekoppeld
@@ -5369,6 +5407,10 @@ swatch	Bright Violet	Felviolet
 	Movie Clip	Filmclip
 @msg	name is empty	naam is leeg
 @msg	an action is already recording	er wordt al een actie opgenomen
+@msg	an action is already playing	er wordt al een actie afgespeeld
+@msg	the action stopped playing: its document is no longer active	de actie is gestopt: het document ervan is niet meer actief
+@msg	speed must be accelerated, step or pause	speed moet accelerated, step of pause zijn
+@msg	seconds must be a whole number from 1 to 60	seconds moet een geheel getal van 1 tot 60 zijn
 @msg	no such function key	functietoets bestaat niet
 @msg	no such color	kleur bestaat niet
 @msg	{_1} cannot be used on Windows	{_1} kan niet worden gebruikt in Windows
@@ -5687,6 +5729,11 @@ axis	Y Axis	Y-as
 	Set Options	Setopties
 	Action Options…	Actieopties…
 	Action Options	Actieopties
+	Playback Options…	Afspeelopties…
+	Playback Options	Afspeelopties
+	Accelerated	Versneld
+	Step by Step	Stap voor stap
+	Pause For	Pauzeren
 	Rename Action	Actie hernoemen
 	New Action…	Nieuwe actie…
 	New Action	Nieuwe actie
@@ -6083,6 +6130,7 @@ breakText	Glyphs	Glyphs
 	Gap 5	Tussenruimte 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ze zijn geïmporteerd als pagina-afbeelding
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objecten die anders werden getekend dan de eigen pagina van het bestand, zijn geïmporteerd als pagina-afbeelding: {_1}
 
 @msg	You must choose a side pattern.	Kies een zijpatroon.
 @msg	invalid pattern tile choice	ongeldige keuze voor patroontegel
@@ -6144,6 +6192,11 @@ breakText	Glyphs	Glyphs
 	Export All Open Documents as SVG	Alle geopende documenten exporteren als SVG
 @msgplural	Exported {n} document|Exported {n} documents	{n} document geëxporteerd|{n} documenten geëxporteerd
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} document geëxporteerd; {title} is niet geschreven: {error}|{n} documenten geëxporteerd; {title} is niet geschreven: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Map in batch traceren
+@msgplural	Traced {n} image|Traced {n} images	{n} afbeelding getraceerd|{n} afbeeldingen getraceerd
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} afbeelding kon niet worden getraceerd|{n} afbeeldingen konden niet worden getraceerd
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} afbeelding getraceerd; niet getraceerd: {failed}|{n} afbeeldingen getraceerd; niet getraceerd: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symbooltype:
 	Dynamic Symbol	Dynamisch symbool
@@ -6194,3 +6247,54 @@ breakText	Glyphs	Glyphs
 	Bow	Boog
 	Spike	Piek
 	Skip Spaces	Spaties overslaan
+	Release Type on a Path…	Tekst op pad vrijgeven…
+	Release Type on a Path	Tekst op pad vrijgeven
+	Text and Path	Tekst en pad
+	Path Only	Alleen pad
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Het illustratiewerk is te groot om als afbeelding te kopiëren: andere apps krijgen er geen PNG van
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Selecteren op tekengebieden
+	Select by Artboards…	Selecteren op tekengebieden…
+	Selection Tools	Selectiegereedschappen
+	Search artboards	Tekengebieden zoeken
+	Fully Inside	Volledig binnen
+	Fully Outside	Volledig buiten
+	No artboards match.	Geen tekengebied komt overeen.
+	Chosen: {n} of {total}	Gekozen: {n} van {total}
+
+# Contour add-on
+	Contour	Omtrek
+	Contour Tool	Omtrek-gereedschap
+	Sharp	Scherp
+	Bake	Uitbreiden
+	Turn the Contour into plain paths	Zet de omtrek om in gewone paden
+	Set Corners…	Hoeken instellen…
+	All Anchors	Alle ankerpunten
+	Odd-Numbered Anchors	Oneven ankerpunten
+	Even-Numbered Anchors	Even ankerpunten
+	Minimum angle	Minimale hoek
+	Maximum angle	Maximale hoek
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Gekoppelde selecteren
+	Select Embedded	Ingesloten selecteren
+	Select Missing	Ontbrekende selecteren
+	Select Modified	Gewijzigde selecteren
+	Select by Link Status	Selecteren op koppelingsstatus
+	Select by Link Status…	Selecteren op koppelingsstatus…
+	Search images	Afbeeldingen zoeken
+	No images match.	Geen afbeelding komt overeen.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} gekoppelde afbeelding geselecteerd|{n} gekoppelde afbeeldingen geselecteerd
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} ingesloten afbeelding geselecteerd|{n} ingesloten afbeeldingen geselecteerd
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} ontbrekende afbeelding geselecteerd|{n} ontbrekende afbeeldingen geselecteerd
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} gewijzigde afbeelding geselecteerd|{n} gewijzigde afbeeldingen geselecteerd
+@msgplural	Selected {n} image|Selected {n} images	{n} afbeelding geselecteerd|{n} afbeeldingen geselecteerd
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; nog {n} is verborgen of vergrendeld|{selected}; nog {n} zijn verborgen of vergrendeld
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; nog {n} staat op een sjabloonlaag|{selected}; nog {n} staan op sjabloonlagen
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; nog {n} staat buiten de geïsoleerde groep|{selected}; nog {n} staan buiten de geïsoleerde groep
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; nog {n} kan nu niet worden geselecteerd|{selected}; nog {n} kunnen nu niet worden geselecteerd
+
+# Compound Shapes add-on
+	Compound Shapes	Samengestelde vormen
+	Shape Mode Buttons Make Compound Shapes	Vormmodus-knoppen maken samengestelde vormen

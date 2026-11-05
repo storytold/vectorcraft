@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), method?: classic|perceptual (how the colours between the stops mix: in display RGB, or perceptually (OKLab) so the steps look even, which SVG and PDF exports draw as an image, except that PDF writes one with spot color stops in its inks when every other stop is paper white, CMYK or gray; freeform gradients mix their own way), stops?: [{offset 0..1, color? (needed without swatch), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), keepModel?: bool (as paint.setFill; a stop color the gradient already has keeps its model), angle?: deg, aspect?: %, reverse?: bool, dither?: bool (fills only: a linear or radial gradient fill is drawn with fine noise that hides banding, and as pixels in SVG and PDF exports), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?|id?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), method?: classic|perceptual (how the colours between the stops mix: in display RGB, or perceptually (OKLab) so the steps look even; SVG exports draw a Perceptual gradient as an image, and PDF exports do too unless it is linear or radial, has spot color stops, every other stop is paper white or written in CMYK or gray (an export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a CMYK document unless the export converts colors to an RGB destination profile), it is not a dithered fill and its curve does not have too many stops: then PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK or gray inks as a DeviceN shading; freeform gradients mix their own way), stops?: [{offset 0..1, color? (needed without swatch; #rrggbbaa and #rgba are refused), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), keepModel?: bool (as paint.setFill; a stop color the gradient already has keeps its model), angle?: deg, aspect?: %, reverse?: bool, dither?: bool (fills only: a linear or radial gradient fill is drawn with fine noise that hides banding, and as pixels in SVG and PDF exports), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?|id?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
             has_doc,
             edit_gradient
         ),
@@ -197,7 +197,8 @@ pub(crate) fn with_stored_stops<'a>(g: &'a Value, old: &Paint, stored: &StopColo
 /// Parse `stops` params: at least two, each with a numeric `offset` (clamped to 0..1) and a valid
 /// `color`; `opacity` is 0..1 (values above 1 are percentages) and `midpoint` is clamped to the
 /// diamond's range; `swatch` and `tint` (%) keep a stop's link as given (resolve them first with
-/// [`link_stops`]). The result is sorted by offset.
+/// [`link_stops`]), and `plates` (C, M, Y, K, 0..1) the process inks a linked stop prints with its
+/// spot ink. The result is sorted by offset.
 pub(crate) fn parse_stops(v: &Value) -> Parsed<Vec<GradientStop>> {
     let arr = v.as_array().ok_or("`stops` must be an array")?;
     if arr.len() < 2 {
@@ -213,6 +214,10 @@ pub(crate) fn parse_stops(v: &Value) -> Parsed<Vec<GradientStop>> {
             let opacity = num("opacity")?.map(|o| if o > 1.0 { o / 100.0 } else { o }).unwrap_or(1.0);
             let swatch = str_param(st, "swatch").map(str::to_string);
             let tint = num("tint")?.filter(|_| swatch.is_some()).map_or(1.0, |t| (t / 100.0).clamp(0.0, 1.0) as f32);
+            let plates = match st.get("plates").filter(|_| swatch.is_some()) {
+                None | Some(Value::Null) => None,
+                Some(p) => Some(plates_param(p).ok_or_else(|| format!("stop {i}: `plates` must be four numbers from 0 to 1 (C, M, Y, K)"))?),
+            };
             Ok(GradientStop {
                 offset: offset.clamp(0.0, 1.0) as f32,
                 color,
@@ -220,11 +225,23 @@ pub(crate) fn parse_stops(v: &Value) -> Parsed<Vec<GradientStop>> {
                 midpoint: num("midpoint")?.unwrap_or(0.5).clamp(0.13, 0.87) as f32,
                 swatch,
                 tint,
+                plates,
             })
         })
         .collect::<Parsed<Vec<_>>>()?;
     out.sort_by(|a, b| a.offset.total_cmp(&b.offset));
     Ok(out)
+}
+
+/// A stop's `plates` param: the process inks (C, M, Y, K, 0..1) printed with its spot swatch.
+fn plates_param(v: &Value) -> Option<[f32; 4]> {
+    let a = v.as_array().filter(|a| a.len() == 4)?;
+    let mut out = [0.0f32; 4];
+    for (o, x) in out.iter_mut().zip(a) {
+        let x = x.as_f64().filter(|x| x.is_finite())?;
+        *o = x.clamp(0.0, 1.0) as f32;
+    }
+    Some(out)
 }
 
 /// Parse a gradient paint object (the `gradient` param of `paint.setFill`). Lossless for everything

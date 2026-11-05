@@ -99,6 +99,36 @@ fn rtl_manual_kerning_spaces_the_character_from_the_next_in_reading_order() {
 }
 
 #[test]
+fn rtl_manual_kerning_with_whole_point_widths_keeps_the_previous_character_in_place() {
+    // Reading order: alef (bytes 0..2), bet (2..4), gimel (4..6); bet carries the kerning, which
+    // is a fraction of a point.
+    for (system_layout, fractional_widths) in [(true, true), (false, false)] {
+        for value in [3.0, 4.0, 6.0, 7.0] {
+            let kerned = |value: f64| {
+                let mut t = TextObject::point(Point::ZERO, "אבג", CharStyle { size: 100.0, ..CharStyle::default() });
+                t.system_layout = system_layout;
+                t.fractional_widths = fractional_widths;
+                edit::style_range(&mut t.runs, 2, 4, |s| s.kerning = Some(value));
+                layout(db(), &t)
+            };
+            let ink = |lay: &TextLayout, byte: usize| {
+                let g = lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+                assert!(g.rtl && g.gid != 0, "byte {byte} is set right to left with a glyph of its own");
+                (g.xf * Point::ZERO).x
+            };
+            let (plain, spaced) = (kerned(0.0), kerned(value));
+            let gap = |lay: &TextLayout, right: usize, left: usize| ink(lay, right) - ink(lay, left);
+            assert!(
+                (gap(&spaced, 0, 2) - gap(&plain, 0, 2)).abs() < 1e-9,
+                "alef, before bet in reading order, keeps its place (kerning {value}, System Layout {system_layout})"
+            );
+            let wider = gap(&spaced, 2, 4) - gap(&plain, 2, 4);
+            assert!((wider - wider.round()).abs() < 1e-9, "bet moves from gimel by whole points: {wider} (kerning {value})");
+        }
+    }
+}
+
+#[test]
 fn rtl_manual_kerning_on_a_rotated_character_moves_it_along_the_baseline() {
     // Reading order: alef (bytes 0..2), bet (2..4), gimel (4..6); bet is turned 90 degrees and
     // carries the kerning.
@@ -172,6 +202,10 @@ fn optical_pair_after_separate_combining_mark_uses_base_outline() {
 
 #[test]
 fn optical_pair_after_rtl_separate_mark_uses_base_outline() {
+    if db().face("Noto Sans Arabic", "Regular").is_none_or(|f| f.family != "Noto Sans Arabic") {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
     let st = CharStyle { font_family: "Noto Sans Arabic".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
     let shaped = |text: &str, manual: bool| {
         let mut style = st.clone();
@@ -193,6 +227,54 @@ fn optical_pair_after_rtl_separate_mark_uses_base_outline() {
         plain.iter().filter(|g| g.0 == 2).map(|g| g.1).sum::<f64>() - plain_zero.iter().filter(|g| g.0 == 2).map(|g| g.1).sum::<f64>();
     assert!(plain_correction.abs() > 0.1, "Optical adjusts the unmarked pair");
     assert!((correction - plain_correction).abs() < 0.01, "the marked cluster uses the base outline");
+}
+
+/// Optical spaces pairs by the face's own stem spacing (#5336): straight pairs like `nn` keep the
+/// font's spacing, diagonal pairs close up, and a line of ordinary text is no narrower than it
+/// is with the font's spacing and no kerning.
+#[test]
+fn optical_keeps_the_fonts_stem_spacing_and_closes_diagonal_pairs() {
+    let st = CharStyle { font_family: "Source Sans 3".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let advances = |text: &str, kerning: Option<f64>| {
+        layout(db(), &TextObject::point(Point::ZERO, text, CharStyle { kerning, ..st.clone() })).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>()
+    };
+    let width = |text: &str, kerning: Option<f64>| advances(text, kerning).iter().sum::<f64>();
+    let (optical, zero) = (advances("nn", None), advances("nn", Some(0.0)));
+    assert!((optical[0] - zero[0]).abs() <= 0.11, "nn, the reference, keeps the font's spacing: {optical:?} {zero:?}");
+    for pair in ["HH", "ll", "nl"] {
+        let (optical, zero) = (advances(pair, None), advances(pair, Some(0.0)));
+        assert!((optical[0] - zero[0]).abs() <= 3.0, "{pair} stays within 0.03 em of the font's spacing: {optical:?} {zero:?}");
+    }
+    for pair in ["AV", "To", "Yo"] {
+        let (optical, zero) = (advances(pair, None), advances(pair, Some(0.0)));
+        assert!(optical[0] < zero[0] - 1.0, "{pair} closes up: {optical:?} {zero:?}");
+        assert!(optical[0] >= zero[0] - 12.0 - 0.01, "{pair} tightens by at most 0.12 em: {optical:?} {zero:?}");
+    }
+    for text in ["minimum", "Hamburgefonstiv", "illumination"] {
+        let (optical, zero) = (width(text, None), width(text, Some(0.0)));
+        assert!(optical >= zero * 0.97, "{text} is not squeezed: {optical} against {zero}");
+    }
+}
+
+/// Ideographs, kana and fullwidth forms keep the font's spacing under Optical, even where their
+/// outlines would be spaced (the test face draws them with Latin outlines).
+#[test]
+fn optical_leaves_ideographs_kana_and_fullwidth_forms_alone() {
+    use crate::test_fonts::{IDEOGRAPH_OPTICAL_FAMILY, ideograph_optical_font};
+
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(ideograph_optical_font().unwrap()), 1);
+    let st = CharStyle { font_family: IDEOGRAPH_OPTICAL_FAMILY.into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let advances = |kerning: Option<f64>| {
+        layout(&db, &TextObject::point(Point::ZERO, "日本カなＷ日", CharStyle { kerning, ..st.clone() }))
+            .glyphs
+            .iter()
+            .map(|g| g.advance)
+            .collect::<Vec<_>>()
+    };
+    let (optical, zero) = (advances(None), advances(Some(0.0)));
+    assert_eq!(optical.len(), 6);
+    assert_eq!(optical, zero, "no ideograph, kana or fullwidth pair is corrected");
 }
 
 #[test]
@@ -929,6 +1011,33 @@ fn hyphenation_rules() {
         let pts = hyphen::hyphen_points(w);
         assert!(pts.iter().all(|&p| p >= hyphen::MIN_BEFORE && p <= w.chars().count() - hyphen::MIN_AFTER), "{w}: {pts:?}");
     }
+}
+
+/// #394: each run hyphenates in its own language. English breaks words, a language without break
+/// points doesn't, and text saved without a language breaks as it always did.
+#[test]
+fn each_run_hyphenates_in_its_own_language() {
+    let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    let frame = Rect::new(0.0, 0.0, 120.0, 600.0);
+    let hyphens = |language: Option<&str>| {
+        let st = CharStyle { language: language.map(str::to_string), ..style(14.0) };
+        let mut t = area(text, st, frame, Justify::Left);
+        t.para.hyphenate = true;
+        layout(db(), &t).glyphs.iter().filter(|g| g.len == 0).count()
+    };
+    let saved_without_one = hyphens(None);
+    assert!(saved_without_one > 0, "some words hyphenated");
+    assert_eq!(hyphens(Some("en-GB")), saved_without_one);
+    assert_eq!(hyphens(Some("de")), 0, "German has no break points yet");
+    assert_eq!(hyphens(Some("x-from-a-file")), 0, "a tag that isn't known has no hyphenation");
+
+    // both in one paragraph: the English run breaks and the German one doesn't
+    let mut t = area(&format!("{text} {text}"), style(14.0), frame, Justify::Left);
+    t.para.hyphenate = true;
+    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("de".into()));
+    let l = layout(db(), &t);
+    let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
+    assert!(!at.is_empty() && at.iter().all(|b| *b < text.len()), "hyphens only in the English run: {at:?}");
 }
 
 #[test]
@@ -1727,6 +1836,28 @@ fn proportional_metrics_set_full_width_glyphs_on_their_proportional_widths() {
     assert!((none.glyphs[0].advance - 20.0).abs() < 0.01 && (half.glyphs[0].advance - 10.0).abs() < 0.01, "{:?}", adv(&half));
     let moved = x0(&half)[1] - x0(&none)[1];
     assert!((moved - 10.0).abs() < 0.01, "〙's empty half goes past the line's end: あ moved {moved}");
+}
+
+#[test]
+fn mojikumi_trim_keeps_a_rotated_opening_bracket_on_its_line() {
+    use vectorcraft_doc::Mojikumi;
+    if db().face("Shippori Mincho", "Regular").is_none_or(|f| f.family != "Shippori Mincho") {
+        eprintln!("skipped: Shippori Mincho is not in CRAFT_FONTS_DIR");
+        return;
+    }
+    let lay = |rotation, mojikumi| {
+        let st = CharStyle { font_family: "Shippori Mincho".into(), size: 20.0, rotation, ..Default::default() };
+        let mut t = area("「あ", st, Rect::new(0.0, 0.0, 200.0, 200.0), Justify::Left);
+        t.para.mojikumi = mojikumi;
+        layout(db(), &t)
+    };
+    for rotation in [0.0, 45.0, 90.0, -90.0] {
+        let (plain, trimmed) = (lay(rotation, Mojikumi::None), lay(rotation, Mojikumi::LineEndHalf));
+        let (a, b) = (&plain.glyphs[0], &trimmed.glyphs[0]);
+        assert!((a.advance - 20.0).abs() < 0.01 && (b.advance - 10.0).abs() < 0.01, "full-width bracket fixture");
+        let shift = b.xf * Point::ZERO - a.xf * Point::ZERO;
+        assert!((shift.x + 10.0).abs() < 0.01 && shift.y.abs() < 0.01, "{rotation} degrees: {shift:?}");
+    }
 }
 
 /// The arrows pass a Thai consonant with its vowel and tone marks whole (น้ำ: no, mai tho, sara am),

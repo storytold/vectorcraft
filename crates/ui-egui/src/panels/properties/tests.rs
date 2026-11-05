@@ -135,6 +135,40 @@ fn start_global_edit_quick_action_and_escape() {
     assert!(!tall(&mut app, vec![]).iter().any(|(t, _)| t == "Start Global Edit"), "type has no Global Edit");
 }
 
+/// The Quick Actions' Global Edit Options close when Global Edit starts while they are open, and
+/// stay closed once it stops.
+#[test]
+fn global_edit_starting_closes_the_quick_action_options() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap()["id"].clone();
+    app.run("shape.rectangle", json!({"x": 200, "y": 20, "width": 40, "height": 40})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 700.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| global_edit_row(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+    let results = |nodes: &Nodes| nodes.iter().any(|(_, n)| n.label().or(n.value()).is_some_and(|t| t.starts_with("Result")));
+    let nodes = frame(&mut app, vec![]);
+    let b = nodes.iter().find(|(_, n)| n.label() == Some("Global Edit Options")).and_then(|(_, n)| n.bounds()).unwrap_or_else(|| panic!("{nodes:?}"));
+    let at = Pos2::new(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+    let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, vec![Event::PointerMoved(at), press(true)]);
+    frame(&mut app, vec![press(false)]);
+    assert!(results(&frame(&mut app, vec![])), "the options open");
+    app.run("select.globalEdit", json!({})).unwrap();
+    assert!(!results(&frame(&mut app, vec![])), "Global Edit starting closes the open options");
+    app.run("select.globalEdit", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    assert!(!results(&frame(&mut app, vec![])), "the options stay closed once Global Edit stops");
+}
+
 /// The options' Results count is found once per document revision, options and selected
 /// object, not every frame; another selected object or other options find it again.
 #[test]
@@ -629,6 +663,25 @@ fn edit_artboards_fill_sets_the_background_color() {
     frame(&mut app, &ctx, vec![Event::PointerMoved(chip), press(true)]);
     frame(&mut app, &ctx, vec![press(false)]);
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields.get("artboard")), Some(Some(&json!(1))), "the chip opens it too");
+}
+
+/// #5698: with Artboards 1 and 3 selected, a Fill chosen in Edit Artboards goes to both, in one
+/// command and one undo step; Artboard 2 keeps none.
+#[test]
+fn edit_artboards_fill_sets_every_selected_artboard() {
+    let mut app = two_selected_artboards();
+    let colors = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards.iter().map(|a| a.color).collect::<Vec<_>>();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let texts = frame(&mut app, &ctx, vec![]);
+    click(&mut app, &ctx, &texts, "None");
+    let texts = frame(&mut app, &ctx, vec![]);
+    let commands = app.run_count;
+    click(&mut app, &ctx, &texts, "Black");
+    assert_eq!(app.run_count.wrapping_sub(commands), 1, "one command");
+    assert_eq!(colors(&app), [Some(Color::BLACK), None, Some(Color::BLACK)]);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
 }
 
 fn artboard_deletion_app(count: usize) -> VectorcraftApp {
@@ -1757,4 +1810,72 @@ fn objects_on_path_options_set_pivot_and_rotate_in_one_undo_step() {
     click_named(&mut app, &ctx, objects_on_path_options, "Bottom Right");
     assert_eq!((pivot_rotate(&app, &group), pivot_rotate(&app, &other)), ((8, 30.0), (8, 45.0)), "both groups' Pivot");
     assert_eq!(undo_depth(&app), depth + 1, "one undo step for both groups");
+}
+
+/// #3759: with area type selected, the Properties panel's Paragraph section shows Align Top, Align
+/// Center, Align Bottom and Justify Vertically; a click sets the alignment on every selected frame
+/// in one undo step. Point type shows none; frames with rows or columns and threaded frames turn
+/// the buttons off, as the public documentation limits vertical alignment to them.
+#[test]
+fn vertical_alignment_buttons_align_the_selected_area_type() {
+    use vectorcraft_doc::{NodeId, VerticalAlign};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 500, "height": 400})).unwrap();
+    let make = |app: &mut VectorcraftApp, x: f64, y: f64| {
+        app.run("text.create", json!({"x": x, "y": y, "text": "Panel", "area": {"width": 100, "height": 120}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (make(&mut app, 10.0, 10.0), make(&mut app, 200.0, 10.0));
+    let point = app.run("text.create", json!({"x": 10, "y": 350, "text": "Point"})).unwrap()["id"].as_u64().unwrap();
+    let align = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.vertical_align,
+        k => panic!("{k:?}"),
+    };
+    app.run("select.set", json!({"ids": [point]})).unwrap();
+    assert_eq!(vertical_align::shown(&app), None, "point type: no buttons");
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(vertical_align::shown(&app), Some(vertical_align::Shown { shared: Some(VerticalAlign::Top), enabled: true }));
+    // The buttons sit in the panel's Paragraph section: click Align Center (the second).
+    let ctx = egui::Context::default();
+    let mut row = Rect::NOTHING;
+    let draw = |app: &mut VectorcraftApp, ui: &mut Ui, row: &mut Rect| {
+        *row = ui
+            .horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 3.0;
+                vertical_align::buttons(app, ui, 24.0);
+            })
+            .response
+            .rect;
+    };
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| draw(&mut app, ui, &mut row));
+    out.textures_delta.clear();
+    let texts = panel_frame(&mut app, &ctx, vec![], type_sections);
+    assert!(texts.iter().any(|(t, _)| t == "Paragraph"), "{texts:?}");
+    let undo = app.session.active().unwrap().history.undo.len();
+    let center = row.min + vec2(12.0 + 27.0, 12.0);
+    super::super::tests_appearance::click(&ctx, &mut app, center, |app, ui| {
+        let mut r = Rect::NOTHING;
+        draw(app, ui, &mut r);
+    });
+    assert_eq!((align(&app, a), align(&app, b)), (VerticalAlign::Center, VerticalAlign::Center));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step for both frames");
+    // Differing alignments show none selected.
+    app.run("text.areaOptions", json!({"ids": [b], "verticalAlign": "bottom"})).unwrap();
+    assert_eq!(vertical_align::shown(&app).map(|s| s.shared), Some(None));
+    // Columns turn the buttons off, and a click does nothing.
+    app.run("text.areaOptions", json!({"ids": [b], "columns": 2})).unwrap();
+    assert_eq!(vertical_align::shown(&app).map(|s| s.enabled), Some(false));
+    let undo = app.session.active().unwrap().history.undo.len();
+    super::super::tests_appearance::click(&ctx, &mut app, center, |app, ui| {
+        let mut r = Rect::NOTHING;
+        draw(app, ui, &mut r);
+    });
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "turned off: no change");
+    assert_eq!(align(&app, a), VerticalAlign::Center);
+    // So does threading: a and c threaded, b left out of the selection.
+    let c = make(&mut app, 10.0, 200.0);
+    app.run("select.set", json!({"ids": [a, c]})).unwrap();
+    assert_eq!(vertical_align::shown(&app).map(|s| s.enabled), Some(true));
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(vertical_align::shown(&app).map(|s| s.enabled), Some(false));
 }

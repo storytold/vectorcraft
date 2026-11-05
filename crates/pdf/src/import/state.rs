@@ -136,8 +136,9 @@ pub(super) struct Builder<'p> {
     /// Some groups are hidden or don't print: art in marked content whose group can't be told
     /// (once the scan and the interpreter part) is [`UNSORTED`] rather than the page's.
     pub(super) unsure: bool,
-    /// The marked-content sequences open: the group each marks.
-    pub(super) marked: Vec<Option<usize>>,
+    /// The marked-content sequences open: the group each marks, and the innermost group marked
+    /// at or around it (kept per level, so art drawn deep in sequences finds its group at once).
+    pub(super) marked: Vec<(Option<usize>, Option<usize>)>,
     pub(super) nested: u32,
     /// Reading an alpha soft mask's art: images are read white with their own alpha, so the
     /// mask's luminance is their alpha, as whitened vector art's is (cairo, and so Inkscape,

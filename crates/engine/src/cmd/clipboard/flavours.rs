@@ -127,6 +127,8 @@ pub struct Flavour {
 const COPY_PNG_SIDE: f64 = 4096.0;
 /// The smallest scale (pixels a point) the PNG encoder renders at.
 const MIN_COPY_PNG_SCALE: f64 = 0.01;
+/// What Copy says when the art is too large for its PNG.
+const TOO_LARGE_FOR_PNG: &str = "The art is too large to copy as a picture: other apps get no PNG of it";
 /// Most bytes of text `clipboard.importText` takes.
 const MAX_TEXT: usize = 1 << 20;
 /// Most bytes of images the SVG markup may embed and still go out as plain text. A paste reads the
@@ -284,13 +286,24 @@ impl Clipboard {
 
     /// The MIME types of [`Self::flavours`], without making them.
     pub fn flavour_types(&self, svg: bool, pdf: bool) -> Vec<&'static str> {
-        if self.is_empty() {
+        if !self.has_art() {
             return vec![];
         }
         let text = (svg && self.image_bytes() <= COPY_TEXT_IMAGE_BYTES) || self.nodes.iter().all(type_only);
         // Art without an area (a lone guide-like line) has no page or picture.
         let area = self.bounds().is_some_and(|b| b.width() > 0.0 && b.height() > 0.0);
-        [(TEXT, text), (SVG, svg), (PDF, pdf && area), (PNG, area)].into_iter().filter_map(|(m, on)| on.then_some(m)).collect()
+        [(TEXT, text), (SVG, svg), (PDF, pdf && area), (PNG, area && self.png_scale().is_some())]
+            .into_iter()
+            .filter_map(|(m, on)| on.then_some(m))
+            .collect()
+    }
+
+    /// The scale (pixels a point) of the PNG Copy offers: at most [`COPY_PNG_SIDE`] pixels a side,
+    /// and `None` when even [`MIN_COPY_PNG_SCALE`], the encoder's smallest, can't bring it that small
+    /// (rather than a PNG of up to a gigabyte of pixels).
+    fn png_scale(&self) -> Option<f64> {
+        let side = self.bounds().map_or(1.0, |b| b.width().max(b.height()));
+        Some((COPY_PNG_SIDE / side).min(1.0)).filter(|s| *s >= MIN_COPY_PNG_SCALE)
     }
 
     /// What Copy offers other apps, best first, with Include SVG Code (`svg`) and On Copy: PDF
@@ -308,6 +321,9 @@ impl Clipboard {
         let svg = types.contains(&SVG).then(|| self.svg()).flatten();
         let mut out = vec![];
         let mut warnings: Vec<String> = vec![];
+        if !self.is_empty() && self.png_scale().is_none() {
+            warnings.push(TOO_LARGE_FOR_PNG.to_string());
+        }
         let mut keep = |(bytes, notes): (Vec<u8>, Vec<String>)| {
             for w in notes {
                 if !warnings.contains(&w) {
@@ -321,18 +337,10 @@ impl Clipboard {
                 TEXT => self.text().or_else(|| svg.clone()).map(String::into_bytes),
                 SVG => svg.clone().map(String::into_bytes),
                 PDF => self.pdf().inspect_err(|e| log::warn!("clipboard PDF: {e}")).ok().flatten().map(&mut keep),
-                _ => {
-                    let side = self.bounds().map_or(1.0, |b| b.width().max(b.height()));
-                    let scale = (COPY_PNG_SIDE / side).min(1.0);
-                    // The encoder renders at no fewer than MIN_COPY_PNG_SCALE pixels a point: art
-                    // too large to fit COPY_PNG_SIDE at that scale gets no PNG, rather than one
-                    // of up to a gigabyte of pixels.
-                    if scale < MIN_COPY_PNG_SCALE {
-                        log::warn!("clipboard PNG: art {side} pt across is too large to copy as a picture");
-                        continue;
-                    }
-                    self.png(scale).inspect_err(|e| log::warn!("clipboard PNG: {e}")).ok().flatten().map(|(png, _, _, notes)| keep((png, notes)))
-                }
+                _ => self
+                    .png_scale()
+                    .and_then(|scale| self.png(scale).inspect_err(|e| log::warn!("clipboard PNG: {e}")).ok().flatten())
+                    .map(|(png, _, _, notes)| keep((png, notes))),
             };
             out.extend(data.map(|data| Flavour { mime, data }));
         }

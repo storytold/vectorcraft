@@ -143,8 +143,19 @@ pub(crate) fn eps_for<'a>(paths: impl IntoIterator<Item = &'a BezPath>) -> Resul
             }
         }
     }
-    Ok((m * f64::EPSILON * 64.0).max(1e-6))
+    let eps = (m * f64::EPSILON * 64.0).max(1e-6);
+    // Past this the sweep tolerance is wider than a document unit: features thinner than it collapse and the call
+    // would answer `Ok` with part of the art (or all of it) gone. Refuse instead, so callers keep the original.
+    if eps > MAX_SWEEP_EPS {
+        return Err(PathOpsError::Degenerate);
+    }
+    Ok(eps)
 }
+
+/// The widest sweep tolerance [`eps_for`] accepts: one document unit, reached by coordinates of about 7e13. (The engine
+/// refuses coordinates far below that, so this only guards the library's own callers; it does not follow the `precision`
+/// a caller asks for.)
+const MAX_SWEEP_EPS: f64 = 1.0;
 
 fn el_points(el: &kurbo::PathEl) -> impl Iterator<Item = Point> {
     use kurbo::PathEl::*;
@@ -285,11 +296,15 @@ impl Tidy {
 }
 
 impl Arrangement {
-    pub(crate) fn new(mut paths: Vec<(BezPath, FillRule)>) -> Result<Self, PathOpsError> {
+    pub(crate) fn new(paths: Vec<(BezPath, FillRule)>) -> Result<Self, PathOpsError> {
+        Self::new_budgeted(paths, crate::budget::MAX_SEGMENT_PAIRS)
+    }
+
+    pub(crate) fn new_budgeted(mut paths: Vec<(BezPath, FillRule)>, cap: usize) -> Result<Self, PathOpsError> {
         let eps = eps_for(paths.iter().map(|p| &p.0))?;
         snap_horizontals(&mut paths.iter_mut().map(|p| &mut p.0).collect::<Vec<_>>(), eps);
         // Counted on the snapped geometry, which is what the sweep sees: snapping can bring boxes into contact.
-        if !crate::budget::sweep_fits(paths.iter().map(|p| &p.0)) {
+        if !crate::budget::sweep_fits_within(paths.iter().map(|p| &p.0), cap) {
             return Err(PathOpsError::TooComplex);
         }
         // The sweep can panic on rare near-degenerate input; that must never take the app down,
@@ -327,6 +342,13 @@ impl Arrangement {
 
     pub(crate) fn contours(&self, pred: impl Fn(&[bool]) -> bool) -> Contours {
         self.contours_where(|w| pred(&self.mask(w)))
+    }
+
+    /// [`Self::contours`] with a panic in the sweep's contour pass turned into an error, as `new` does for the
+    /// sweep itself (native builds only: on the web a panic aborts, whatever is caught here). Used by the calls that can return an error; the rest have none to return and let the engine's
+    /// guard report it.
+    pub(crate) fn try_contours(&self, pred: impl Fn(&[bool]) -> bool) -> Result<Contours, PathOpsError> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.contours(pred))).map_err(|_| PathOpsError::Degenerate)
     }
 
     /// All distinct non-empty coverage masks that occur next to some edge, sorted.
@@ -670,7 +692,7 @@ pub fn boolean(a: &PathData, a_rule: FillRule, b: &PathData, b_rule: FillRule, o
 /// Boolean operation with an explicit refit `precision`; errors on non-finite input.
 pub fn try_boolean(a: &PathData, a_rule: FillRule, b: &PathData, b_rule: FillRule, op: BoolOp, precision: f64) -> Result<PathData, PathOpsError> {
     let arr = Arrangement::new(vec![(fill_bezpath(a), a_rule), (fill_bezpath(b), b_rule)])?;
-    let c = arr.contours(|m| op.apply(m[0], m[1]));
+    let c = arr.try_contours(|m| op.apply(m[0], m[1]))?;
     let tidy = Tidy { precision, ..arr.tidy };
     Ok(all_contours_to_path(&c, &tidy))
 }
@@ -680,7 +702,7 @@ pub fn try_boolean(a: &PathData, a_rule: FillRule, b: &PathData, b_rule: FillRul
 pub fn try_boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[bool]) -> bool) -> Result<PathData, PathOpsError> {
     let bps: Vec<(BezPath, FillRule)> = paths.iter().map(|(p, r)| (fill_bezpath(p), *r)).collect();
     let arr = Arrangement::new(bps)?;
-    Ok(all_contours_to_path(&arr.contours(pred), &arr.tidy))
+    Ok(all_contours_to_path(&arr.try_contours(pred)?, &arr.tidy))
 }
 
 /// N-ary boolean: the area where `pred(inside_flags)` holds, `inside_flags[i]` telling whether a
@@ -815,5 +837,93 @@ mod tests {
         lens.curve_to(upper.p2, upper.p1, upper.p0);
         lens.close_path();
         assert_eq!(tidy.repair(&lens), lens);
+    }
+
+    #[test]
+    fn arrangement_new_budgeted_fails_on_complexity_and_open_paths() {
+        let mut bp = BezPath::new();
+        for i in 0..100 {
+            let r = kurbo::Rect::new(0.0, 0.0, 10.0 + i as f64, 10.0 + i as f64);
+            bp.extend(r.to_path(0.1).iter());
+        }
+        let too_complex = Arrangement::new_budgeted(vec![(bp, FillRule::NonZero)], 5);
+        assert_eq!(too_complex.err(), Some(PathOpsError::TooComplex));
+
+        let mut open = BezPath::new();
+        open.move_to((0.0, 0.0));
+        open.line_to((10.0, 10.0));
+        let failed_arr = Arrangement::new_budgeted(vec![(open, FillRule::NonZero)], 1000);
+        assert_eq!(failed_arr.err(), Some(PathOpsError::OpenPath));
+    }
+
+    fn square(x: f64, y: f64, size: f64) -> PathData {
+        PathData::single(vectorcraft_geom::SubPath::new(
+            [(x, y), (x + size, y), (x + size, y + size), (x, y + size)]
+                .iter()
+                .map(|&(x, y)| vectorcraft_geom::Anchor::corner(Point::new(x, y)))
+                .collect(),
+            true,
+        ))
+    }
+
+    #[test]
+    fn coordinates_wider_than_the_precision_are_refused_not_emptied() {
+        // At 1e15 the sweep tolerance is far above a 10 unit square: both squares used to vanish and the call said `Ok`.
+        let near = square(0.0, 0.0, 10.0);
+        let far = square(1e15, 1e15, 10.0);
+        for op in [BoolOp::Union, BoolOp::Intersect, BoolOp::Difference, BoolOp::Xor] {
+            assert_eq!(
+                try_boolean(&near, FillRule::NonZero, &far, FillRule::NonZero, op, DEFAULT_PRECISION),
+                Err(PathOpsError::Degenerate),
+                "{op:?}"
+            );
+        }
+        assert_eq!(try_area(&far, FillRule::NonZero), Err(PathOpsError::Degenerate));
+        assert_eq!(try_normalize(&far, FillRule::NonZero), Err(PathOpsError::Degenerate));
+        // The infallible entry points keep answering with an empty path.
+        assert!(boolean(&near, FillRule::NonZero, &far, FillRule::NonZero, BoolOp::Union).is_empty());
+    }
+
+    #[test]
+    fn coordinates_near_the_float_limit_do_not_reach_the_sweep() {
+        // A 1e308 rectangle made linesweeper panic (a caught panic here, an abort on the web).
+        let huge = square(0.0, 0.0, 1e308);
+        let small = square(0.0, 0.0, 10.0);
+        assert_eq!(try_area(&huge, FillRule::NonZero), Err(PathOpsError::Degenerate));
+        assert_eq!(try_boolean(&huge, FillRule::NonZero, &small, FillRule::NonZero, BoolOp::Union, DEFAULT_PRECISION), Err(PathOpsError::Degenerate));
+        assert_eq!(try_unite_all(&[(&huge, FillRule::NonZero), (&small, FillRule::NonZero)]), Err(PathOpsError::Degenerate));
+    }
+
+    #[test]
+    fn large_but_sensible_coordinates_still_work() {
+        // Well inside the limit: far-out but sensible offsets.
+        for at in [1e5, 1e7] {
+            let u = try_boolean(
+                &square(at, at, 10.0),
+                FillRule::NonZero,
+                &square(at + 5.0, at, 10.0),
+                FillRule::NonZero,
+                BoolOp::Union,
+                DEFAULT_PRECISION,
+            )
+            .unwrap();
+            let a = try_area(&u, FillRule::NonZero).unwrap();
+            assert!((a - 150.0).abs() < 1.0, "at {at}: area {a}");
+        }
+    }
+
+    #[test]
+    fn the_coordinate_limit_sits_where_the_tolerance_passes_a_unit() {
+        // 100 unit squares: tolerance 0.7 at 5e13 (kept), 1.4 at 1e14 (refused).
+        assert!(try_area(&square(5e13, 5e13, 100.0), FillRule::NonZero).is_ok());
+        assert_eq!(try_area(&square(1e14, 1e14, 100.0), FillRule::NonZero), Err(PathOpsError::Degenerate));
+    }
+
+    #[test]
+    #[cfg(panic = "unwind")]
+    fn a_panic_in_the_contour_pass_becomes_an_error() {
+        let arr = Arrangement::new(vec![(fill_bezpath(&square(0.0, 0.0, 10.0)), FillRule::NonZero)]).unwrap();
+        assert!(arr.try_contours(|m| m[0]).is_ok());
+        assert_eq!(arr.try_contours(|_| panic!("simulated panic in the sweep")).err(), Some(PathOpsError::Degenerate));
     }
 }

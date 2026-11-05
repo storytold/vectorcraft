@@ -1,12 +1,15 @@
-//! VectorCraft's built-in add-ons in the interface: each has a panel and a submenu at the top of
-//! Object › Plug-ins, and acts through its engine commands (`addon.<name>.*`).
+//! The module defines VectorCraft's built-in add-on menus and panels. Object › Plug-ins lists their tools and commands.
 
 pub mod arrange;
 pub mod cleanup;
 pub mod color;
+pub mod compounds;
+pub mod contour;
 pub mod document;
+pub mod enclosing_lasso;
 pub mod pathtools;
 pub mod pen;
+pub mod select;
 pub mod typetools;
 
 use crate::menus::Item;
@@ -17,8 +20,12 @@ pub fn plugin_menu() -> Vec<Item> {
         Item::Sub("Arrange Tools", arrange::menu()),
         Item::Sub("Artwork Cleanup", cleanup::menu()),
         Item::Sub("Color Effects", color::menu()),
+        Item::Sub("Compound Shapes", compounds::menu()),
+        Item::Sub("Contour", contour::menu()),
         Item::Sub("Document Tools", document::menu()),
+        Item::Sub("Enclosing Lasso", enclosing_lasso::menu()),
         Item::Sub("Path Precision Tools", pathtools::menu()),
+        Item::Sub("Selection Tools", select::menu()),
         Item::Sub("Smart Pen", pen::menu()),
         Item::Sub("Type Tools", typetools::menu()),
         Item::Sep,

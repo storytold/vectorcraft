@@ -143,6 +143,19 @@ fn every_tool_is_listed_once_under_a_heading() {
 }
 
 #[test]
+fn enclosing_lasso_is_an_optional_addon_tool() {
+    let mut app = app();
+    let id = vectorcraft_tools::addons::enclosing_lasso::ID;
+    assert_eq!(heading(id), "Enclosing Lasso");
+    assert!(slot_of(&app, id).is_none());
+    app.run("toolbar.addTool", json!({"tool": id})).unwrap();
+    assert!(slot_of(&app, id).is_some());
+    app.run("tool.select", json!({"tool": id})).unwrap();
+    app.run("toolbar.reset", json!({})).unwrap();
+    assert!(slot_of(&app, id).is_none());
+}
+
+#[test]
 fn the_commands_add_move_remove_and_reset_tools() {
     let mut app = app();
     let shipped = slots(&app);
@@ -515,10 +528,23 @@ fn drop_targets_follow_the_buttons_edges() {
 #[test]
 fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let mut app = app();
+    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
+    let contour = vectorcraft_tools::addons::contour::ID;
     let addon: Vec<&str> = vectorcraft_tools::addons::GROUPS.iter().flat_map(|g| g.iter().map(|t| t.id)).collect();
     assert_eq!(
         addon,
-        ["anchorEraserBrush", "extendPath", "measureInspect", "parametricShape", "cornerTool", "slideAnchor", "sharedEdge", "smartPen"]
+        [
+            "anchorEraserBrush",
+            "extendPath",
+            "measureInspect",
+            "parametricShape",
+            "cornerTool",
+            "slideAnchor",
+            "sharedEdge",
+            "smartPen",
+            enclosing,
+            contour
+        ]
     );
     for advanced in [false, true] {
         if advanced {
@@ -531,7 +557,9 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     };
     assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..7].to_vec())));
     assert_eq!(listed("smartPen"), Some(("Smart Pen", vec!["smartPen"])));
-    for tool in ["extendPath", "smartPen"] {
+    assert_eq!(listed(enclosing), Some(("Enclosing Lasso", vec![enclosing])));
+    assert_eq!(listed(contour), Some(("Contour", vec![contour])));
+    for tool in ["extendPath", "smartPen", enclosing, contour] {
         app.run("toolbar.addTool", json!({"tool": tool})).unwrap();
         assert!(slot_of(&app, tool).is_some(), "{tool}");
     }

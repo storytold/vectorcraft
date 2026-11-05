@@ -94,6 +94,31 @@ fn the_default_stays_pdf_compatible_and_other_versions_are_refused() {
 }
 
 #[test]
+fn errors_name_the_legacy_ai_not_the_pdf_compatible_one() {
+    let mut s = three_boards();
+    for (cmd, p) in [
+        ("file.saveCopy", json!({"format": "ai", "aiVersion": "7", "artboard": "2"})),
+        ("document.export", json!({"format": "ai", "aiVersion": "7", "range": 2})),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains("legacy .ai (version 7) options: invalid type") && !e.contains("PDF-compatible"), "{cmd}: {e}");
+    }
+    // Version 7 writes a legacy .ai whatever pdfCompatible says, and its errors and notes name it.
+    let e = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "pdfCompatible": false, "artboard": "2"})).unwrap_err().to_string();
+    assert!(e.contains("legacy .ai (version 7) options: invalid type"), "{e}");
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "artboard": 1, "version": 3})).unwrap();
+    assert!(r["warnings"].to_string().contains("`version` was not used: legacy .ai (version 7) files don't read it"), "{r}");
+    // Several artboards are several files, which one encoded file can't hold.
+    let d = &s.doc().unwrap().doc;
+    let e = crate::cmd::fileio::encode_with_warnings(d, "ai", &json!({"aiVersion": "7"})).unwrap_err().to_string();
+    assert!(e.contains("legacy .ai (version 7) writes one file per artboard here") && !e.contains("PDF-compatible"), "{e}");
+    assert!(crate::cmd::fileio::encode_with_warnings(d, "ai", &json!({"aiVersion": "7", "artboard": 2})).is_ok());
+    // The PDF-compatible file keeps its name.
+    let e = s.execute("document.export", &json!({"format": "ai", "includeLinked": "yes"})).unwrap_err().to_string();
+    assert!(e.contains("PDF-compatible .ai options: invalid type") && !e.contains("legacy"), "{e}");
+}
+
+#[test]
 fn transparency_and_appearances_are_written_as_plain_art_and_type_as_text() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
@@ -496,6 +521,42 @@ fn a_range_saves_those_artboards_and_save_writes_them_again() {
     assert_eq!(r["files"].as_array().map(Vec::len), Some(3), "{r}");
     // Save keeps the range it was saved with.
     s.execute("file.saveAs", &json!({"path": path, "format": "ai", "aiVersion": "7", "range": "1-2"})).unwrap();
+    let r = s.execute("document.save", &json!({})).unwrap();
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(2), "{r}");
+}
+
+/// The message of a refused command's error.
+fn refusal(s: &mut Session, cmd: &str, p: &Value) -> String {
+    match s.execute(cmd, p) {
+        Err(EngineError::BadParams { cmd: c, msg }) if c == cmd => msg,
+        other => panic!("{cmd} {p}: {:?}", other.map(|r| r["files"].as_array().map(Vec::len))),
+    }
+}
+
+#[test]
+fn an_artboard_the_document_does_not_have_is_refused_as_an_export_refuses_it() {
+    let dir = Folder::new("ai7-no-artboard");
+    let mut s = three_boards();
+    let path = dir.file("Poster.ai");
+    for pick in [json!({"artboards": [5]}), json!({"artboards": [0, 3]}), json!({"artboard": 3}), json!({"range": "4"})] {
+        let mut p = json!({"format": "ai", "aiVersion": "7"});
+        p.as_object_mut().unwrap().extend(pick.as_object().unwrap().clone());
+        let export = refusal(&mut s, "document.export", &p);
+        assert!(export.starts_with("no artboard") || export.starts_with("range `4`"), "{p}: {export}");
+        assert_eq!(refusal(&mut s, "file.saveCopy", &p), export, "{p}");
+        p["path"] = json!(path);
+        assert_eq!(refusal(&mut s, "file.saveAs", &p), export, "{p}");
+        assert_eq!(refusal(&mut s, "document.save", &p), export, "{p}");
+    }
+    // A `range` that isn't text is refused as an export refuses it.
+    let p = json!({"format": "ai", "aiVersion": "7", "range": 42});
+    assert_eq!(refusal(&mut s, "file.saveCopy", &p), refusal(&mut s, "document.export", &p));
+    assert_eq!(std::fs::read_dir(&dir.0).unwrap().count(), 0, "nothing is written");
+    // An artboard the document has is saved with the artboards of the range: every one.
+    let r = s.execute("file.saveAs", &json!({"path": path, "format": "ai", "aiVersion": "7", "artboards": [2]})).unwrap();
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(3), "{r}");
+    // Once that artboard is deleted, Save is not refused for it.
+    s.execute("artboard.delete", &json!({"index": 2})).unwrap();
     let r = s.execute("document.save", &json!({})).unwrap();
     assert_eq!(r["files"].as_array().map(Vec::len), Some(2), "{r}");
 }

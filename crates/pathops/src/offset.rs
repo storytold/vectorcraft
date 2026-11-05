@@ -7,11 +7,25 @@ pub use kurbo::{Cap, Join};
 
 use linesweeper::topology::{ContourIdx, Contours};
 
+use crate::PathOpsError;
 use crate::boolean::{Arrangement, DEFAULT_PRECISION, Tidy, all_contours_to_path, contours_to_path, fill_bezpath, normalize_bez};
 use crate::edit::remove_redundant_points;
 
 /// Flattening/fit tolerance handed to kurbo's stroker.
 const STROKE_TOL: f64 = 1e-3;
+
+/// Most overlapping segment pairs allowed for planar arrangement in offset path: 524,288 (1 << 19).
+///
+/// Rationale:
+/// - The global boolean sweep cap is `MAX_SEGMENT_PAIRS = 1 << 22` (4,194,304 pairs).
+/// - An offset operation decomposes paths into outer rings, inner/fill boundaries, and open
+///   subpath strokes. When applied to multi-copy transformations (e.g. 25–50 copies in #4145),
+///   these parallel strokes create dense self- and cross-intersections where pairwise bounding-box
+///   overlaps scale quadratically with the number of segments.
+/// - At 1 << 19 (524,288 segment pairs), the planar sweep memory usage is bounded to tens of MBs
+///   and completes within ~100 ms on typical CPUs, preventing exponential allocation spikes and
+///   application hangs while still generously accommodating legitimate complex artwork.
+pub const MAX_OFFSET_SEGMENT_PAIRS: usize = 1 << 19;
 
 /// Drop collinear and coincident spine vertices before stroking (#3446). Uses `tol` only for
 /// redundancy; does not simplify or refit the spine.
@@ -92,13 +106,23 @@ pub fn stroke_region(outlines: &[BezPath]) -> PathData {
     normalize_bez(&all, FillRule::NonZero).map(|c| all_contours_to_path(&c, &tidy)).unwrap_or_default()
 }
 
-/// Object → Path → Offset Path. Positive `delta` grows the filled area, negative insets it.
-/// Closed subpaths are treated as a non-zero filled region; open subpaths are outlined with a
-/// stroke of width `2|delta|` (butt caps). An open subpath whose last anchor sits on its first is
-/// offset as a closed one.
-pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> PathData {
-    if !delta.is_finite() || path.is_empty() {
-        return PathData::default();
+/// Validate that all anchor coordinates and control handles of `path` are finite.
+fn path_is_finite(path: &PathData) -> bool {
+    path.subpaths.iter().all(|sp| {
+        sp.anchors.iter().all(|a| {
+            a.p.x.is_finite() && a.p.y.is_finite() && a.h_in.x.is_finite() && a.h_in.y.is_finite() && a.h_out.x.is_finite() && a.h_out.y.is_finite()
+        })
+    })
+}
+
+/// Fallible [`offset_path`] that returns an error when the input is non-finite or exceeds
+/// the complexity bound ([`MAX_OFFSET_SEGMENT_PAIRS`]), or when planar arrangement fails.
+pub fn try_offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> Result<PathData, PathOpsError> {
+    if !delta.is_finite() || !path_is_finite(path) {
+        return Err(PathOpsError::NonFinite);
+    }
+    if path.is_empty() {
+        return Ok(PathData::default());
     }
     let subpaths: Vec<SubPath> = path.subpaths.iter().map(close_if_ends_meet).collect();
     let closed = PathData::new(subpaths.iter().filter(|s| s.closed && s.anchors.len() > 1).cloned().collect());
@@ -111,23 +135,39 @@ pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) ->
     } else {
         BezPath::new()
     };
-    let Ok(arr) = Arrangement::new(vec![(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)]) else {
-        return PathData::default();
-    };
+    let arr = Arrangement::new_budgeted(
+        vec![(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)],
+        MAX_OFFSET_SEGMENT_PAIRS,
+    )?;
     let c = if delta >= 0.0 { arr.contours(|m| m[0] || m[1] || m[2]) } else { arr.contours(|m| m[0] && !m[1]) };
     // When `d` exceeds a curvature radius the stroker's inner offset inverts and its loops cancel
     // winding, leaving faces uncovered that are really within `d` of the path. Every face of the
     // true offset is bounded by arrangement edges, so a contour is spurious iff a point deep inside
     // it lies closer than `d`: holes when growing, islands when insetting.
-    let src = path.to_bezpath();
+    let src = std::cell::LazyCell::new(|| boxed_segments(&path.to_bezpath()));
     let drop_outer = delta < 0.0;
     let spurious: Vec<bool> =
-        c.contours().map(|k| k.outer == drop_outer && deep_point(&k.path).is_some_and(|p| dist_to(&src, p) < d * (1.0 - 1e-4) - 1e-6)).collect();
+        c.contours().map(|k| k.outer == drop_outer && deep_point(&k.path).is_some_and(|p| any_within(&src, p, d * (1.0 - 1e-4) - 1e-6))).collect();
     if !spurious.contains(&true) {
-        return all_contours_to_path(&c, &Tidy::free(DEFAULT_PRECISION));
+        return Ok(all_contours_to_path(&c, &Tidy::free(DEFAULT_PRECISION)));
     }
     let keep = (0..spurious.len()).filter(|&i| !has_marked_ancestor(&c, i, &spurious)).map(ContourIdx);
-    contours_to_path(&c, keep, &Tidy::free(DEFAULT_PRECISION))
+    Ok(contours_to_path(&c, keep, &Tidy::free(DEFAULT_PRECISION)))
+}
+
+/// Object → Path → Offset Path. Positive `delta` grows the filled area, negative insets it.
+/// Closed subpaths are treated as a non-zero filled region; open subpaths are outlined with a
+/// stroke of width `2|delta|` (butt caps). An open subpath whose last anchor sits on its first is
+/// offset as a closed one.
+///
+/// If planar arrangement exceeds complexity or encounters a degenerate arrangement error,
+/// gracefully preserves `path` unchanged to prevent rendering crashes or disappearing artwork (#4145).
+/// Non-finite input returns an empty path.
+pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> PathData {
+    try_offset_path(path, delta, join, miter_limit).unwrap_or_else(|e| match e {
+        PathOpsError::NonFinite => PathData::default(),
+        _ => path.clone(),
+    })
 }
 
 /// An open subpath of three or more anchors whose last anchor lies within 1e-6 of its first (the
@@ -208,9 +248,25 @@ fn deep_point(bp: &BezPath) -> Option<kurbo::Point> {
     best.map(|(_, p)| p)
 }
 
-fn dist_to(bp: &BezPath, p: kurbo::Point) -> f64 {
+/// Each segment of `bp` with its bounding box.
+fn boxed_segments(bp: &BezPath) -> Vec<(kurbo::Rect, kurbo::PathSeg)> {
+    use kurbo::ParamCurveExtrema;
+    bp.segments().map(|s| (s.bounding_box(), s)).collect()
+}
+
+/// Whether a segment with bounding box `b` could lie within `r` of `p`: the box is inflated by `r`
+/// and by slack for rounding in the box and in the curve evaluation, which grows with the coordinates.
+fn box_may_reach(b: &kurbo::Rect, p: kurbo::Point, r: f64) -> bool {
+    let reach = r + 1e-6 + 1e-9 * p.x.abs().max(p.y.abs());
+    p.x >= b.x0 - reach && p.x <= b.x1 + reach && p.y >= b.y0 - reach && p.y <= b.y1 + reach
+}
+
+/// Whether some segment lies closer than `r` to `p`. A segment whose box is too far away can't, so
+/// it is skipped without the costly nearest-point search, and the search stops at the first
+/// segment that does.
+fn any_within(segs: &[(kurbo::Rect, kurbo::PathSeg)], p: kurbo::Point, r: f64) -> bool {
     use kurbo::ParamCurveNearest;
-    bp.segments().map(|s| s.nearest(p, 1e-6).distance_sq).fold(f64::INFINITY, f64::min).sqrt()
+    r > 0.0 && segs.iter().any(|(b, s)| box_may_reach(b, p, r) && s.nearest(p, 1e-6).distance_sq.sqrt() < r)
 }
 
 #[cfg(test)]
@@ -218,6 +274,125 @@ mod tests {
     use kurbo::Shape;
 
     use super::*;
+
+    /// The check as it was: the nearest distance over every segment, then compared.
+    fn dist_to(bp: &BezPath, p: kurbo::Point) -> f64 {
+        use kurbo::ParamCurveNearest;
+        bp.segments().map(|s| s.nearest(p, 1e-6).distance_sq).fold(f64::INFINITY, f64::min).sqrt()
+    }
+
+    struct Lcg(u64);
+    impl Lcg {
+        fn next(&mut self) -> f64 {
+            self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (self.0 >> 11) as f64 / (1u64 << 53) as f64
+        }
+        /// A coordinate on a coarse grid, so segments touch, coincide and nest often.
+        fn grid(&mut self, n: f64) -> f64 {
+            (self.next() * n).floor()
+        }
+    }
+
+    #[test]
+    fn nearby_segment_check_agrees_with_the_full_scan() {
+        let mut rng = Lcg(7);
+        let (mut hits, mut skipped) = (0, 0);
+        for case in 0..400 {
+            let n = [3.0, 6.0, 20.0][case % 3];
+            let mut bp = BezPath::new();
+            for _ in 0..1 + (rng.next() * 12.0) as usize {
+                let pt = |rng: &mut Lcg| kurbo::Point::new(rng.grid(n), rng.grid(n));
+                let a = pt(&mut rng);
+                bp.move_to(a);
+                match (rng.next() * 5.0) as u32 {
+                    0 => bp.line_to(a), // zero length
+                    1 => bp.line_to(pt(&mut rng)),
+                    2 => bp.quad_to(pt(&mut rng), pt(&mut rng)),
+                    3 => bp.curve_to(pt(&mut rng), pt(&mut rng), pt(&mut rng)),
+                    _ => {
+                        // A circle, touching or nested in others.
+                        let r = 1.0 + rng.grid(n / 2.0);
+                        bp.extend(kurbo::Circle::new(a, r).to_path(0.01));
+                    }
+                }
+                if rng.next() < 0.3 {
+                    bp.close_path();
+                }
+            }
+            // The same geometry far from the origin too, where the rounding slack matters.
+            let shift = [0.0, 1e6, 1e9][case % 3];
+            let bp = kurbo::Affine::translate((shift, -shift)) * bp;
+            let segs = boxed_segments(&bp);
+            for _ in 0..40 {
+                // On the grid (on segments and their ends) and off it.
+                let p = if rng.next() < 0.5 {
+                    kurbo::Point::new(rng.grid(n), rng.grid(n))
+                } else {
+                    kurbo::Point::new(rng.next() * (n + 2.0) - 1.0, rng.next() * (n + 2.0) - 1.0)
+                };
+                let p = kurbo::Point::new(p.x + shift, p.y - shift);
+                let nearest = dist_to(&bp, p);
+                // Radii around the true distance (where a wrong skip would show), just outside a
+                // segment's box, and the usual kind.
+                let box_gap =
+                    segs.iter().map(|(b, _)| (b.x0 - p.x).max(p.x - b.x1).max(b.y0 - p.y).max(p.y - b.y1).max(0.0)).fold(f64::INFINITY, f64::min);
+                for r in [
+                    nearest,
+                    nearest * (1.0 - 1e-9),
+                    nearest * (1.0 + 1e-9),
+                    nearest + 1e-6,
+                    box_gap + 5e-7,
+                    box_gap + 2e-6,
+                    0.0,
+                    -1.0,
+                    1e-7,
+                    rng.next() * 3.0,
+                    1e6,
+                ] {
+                    assert_eq!(any_within(&segs, p, r), nearest < r, "case {case} p {p:?} r {r} nearest {nearest}");
+                    hits += usize::from(nearest < r);
+                    // Every segment the box test skips is really out of reach.
+                    for (b, s) in &segs {
+                        if r > 0.0 && !box_may_reach(b, p, r) {
+                            skipped += 1;
+                            use kurbo::ParamCurveNearest;
+                            assert!(s.nearest(p, 1e-6).distance_sq.sqrt() >= r, "case {case} skipped a segment within {r} of {p:?}");
+                        }
+                    }
+                }
+            }
+        }
+        assert!(hits > 1000 && skipped > 10_000, "{hits} {skipped}");
+        assert!(!any_within(&[], kurbo::Point::ZERO, 1.0));
+    }
+
+    #[test]
+    fn growing_a_plate_with_many_holes_keeps_the_holes_that_stay() {
+        // A plate with a grid of round holes: growing by 1 closes the narrow ones (radius <= 1)
+        // and keeps the wide ones.
+        let mut plate = BezPath::new();
+        plate.extend(kurbo::Rect::new(0.0, 0.0, 200.0, 200.0).to_path(0.1));
+        for i in 0..10 {
+            for j in 0..10 {
+                let r = if (i + j) % 2 == 0 { 0.8 } else { 4.0 };
+                plate.extend(kurbo::Circle::new((10.0 + 20.0 * f64::from(i), 10.0 + 20.0 * f64::from(j)), r).to_path(0.01).reverse_subpaths());
+            }
+        }
+        let out = offset_path(&PathData::from_bezpath(&plate), 1.0, Join::Round, 4.0);
+        // The outer contour and the 50 wide holes; the 50 narrow ones are gone.
+        assert_eq!(out.subpaths.len(), 1 + 50);
+        // The holes left are the wide ones, shrunk to radius 3 and still centred on their grid point.
+        let mut holes = 0;
+        for sp in out.subpaths.iter().skip(1) {
+            let b = PathData::single(sp.clone()).to_bezpath().bounding_box();
+            let (cx, cy) = ((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0);
+            assert!((b.width() - 6.0).abs() < 0.05 && (b.height() - 6.0).abs() < 0.05, "{b:?}");
+            let (i, j) = (((cx - 10.0) / 20.0).round(), ((cy - 10.0) / 20.0).round());
+            assert!((cx - 10.0 - 20.0 * i).abs() < 0.05 && (cy - 10.0 - 20.0 * j).abs() < 0.05 && (i + j) % 2.0 != 0.0, "{b:?}");
+            holes += 1;
+        }
+        assert_eq!(holes, 50);
+    }
 
     #[test]
     fn stroke_region_unites_outlines_whatever_their_winding() {
@@ -306,5 +481,46 @@ mod tests {
         let arc_compact = stroke_bez(&arc_bez, width, cap, join, miter);
         let arc_raw = stroke_bez_without_spine_compact(&arc_bez, width, cap, join, miter);
         assert!(outline_max_deviation(&arc_compact, &arc_raw) <= 1e-3, "curved spine compaction must not refit the stroke outline");
+    }
+
+    #[test]
+    fn offset_path_recovers_gracefully_when_complexity_exceeds_budget() {
+        // Issue #4145: dense overlapping geometry must not hang or panic; if complexity passes
+        // the offset cap, try_offset_path reports PathOpsError::TooComplex and offset_path
+        // preserves the input path unchanged.
+        let mut bp = BezPath::new();
+        for i in 0..300 {
+            let offset = i as f64 * 0.1;
+            let rect = kurbo::Rect::new(offset, offset, offset + 100.0, offset + 100.0);
+            bp.extend(rect.to_path(0.1).iter());
+        }
+        let path = PathData::from_bezpath(&bp);
+        assert_eq!(try_offset_path(&path, 5.0, Join::Round, 4.0), Err(PathOpsError::TooComplex));
+        let res = offset_path(&path, 5.0, Join::Round, 4.0);
+        assert_eq!(res, path);
+    }
+
+    #[test]
+    fn offset_path_returns_empty_on_non_finite() {
+        let rect = kurbo::Rect::new(0.0, 0.0, 100.0, 100.0);
+        let path = PathData::from_bezpath(&rect.to_path(0.1));
+        assert_eq!(try_offset_path(&path, f64::NAN, Join::Round, 4.0), Err(PathOpsError::NonFinite));
+        assert_eq!(try_offset_path(&path, f64::INFINITY, Join::Round, 4.0), Err(PathOpsError::NonFinite));
+        assert!(offset_path(&path, f64::NAN, Join::Round, 4.0).is_empty());
+        assert!(offset_path(&path, f64::INFINITY, Join::Round, 4.0).is_empty());
+
+        // Even with dense overlapping geometry, non-finite points return NonFinite error and empty rather than fallback.
+        let mut bp = BezPath::new();
+        for i in 0..300 {
+            let offset = i as f64 * 0.1;
+            let rect = kurbo::Rect::new(offset, offset, offset + 100.0, offset + 100.0);
+            bp.extend(rect.to_path(0.1).iter());
+        }
+        let mut dense_non_finite = PathData::from_bezpath(&bp);
+        dense_non_finite
+            .subpaths
+            .push(SubPath::polyline(&[vectorcraft_geom::Point::new(f64::NAN, 0.0), vectorcraft_geom::Point::new(10.0, 10.0)], true));
+        assert_eq!(try_offset_path(&dense_non_finite, 5.0, Join::Round, 4.0), Err(PathOpsError::NonFinite));
+        assert!(offset_path(&dense_non_finite, 5.0, Join::Round, 4.0).is_empty());
     }
 }

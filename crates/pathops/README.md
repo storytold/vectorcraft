@@ -66,6 +66,7 @@ Unlike `regions`, which splits the filled areas of closed shapes, `live_paint` t
 ```rust
 pub use kurbo::{Cap, Join};
 pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> PathData; // delta < 0 insets
+pub fn try_offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> Result<PathData, PathOpsError>;
 pub fn outline_stroke(path: &PathData, width: f64, cap: Cap, join: Join, miter_limit: f64) -> PathData;
 ```
 

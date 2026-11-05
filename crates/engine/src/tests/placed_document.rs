@@ -290,6 +290,30 @@ fn ai_export_public_aliases_preserve_missing_placed_links() {
     }
 }
 
+/// The `.ai` editing copy for other apps draws a missing placed file as its preview, with the
+/// pages or without them, and says so.
+#[test]
+fn ai_editing_copy_warns_about_missing_placed_files() {
+    let dir = Folder::new("placed-ai-editing-copy-missing");
+    let src = dir.file("logo.vectorcraft");
+    star_source(&src, "placed-ai-editing-copy-missing-unique");
+    let mut s = session();
+    place(&mut s, &src);
+    let parent = dir.file("parent.vectorcraft");
+    save(&mut s, &parent);
+    std::fs::remove_file(&src).unwrap();
+    open(&mut s, &parent);
+    let doc = &s.doc().unwrap().doc;
+    let (_, missing) = cmd::place::document::full_documents(doc);
+    assert!(!missing.is_empty());
+    for compatible in [true, false] {
+        let enc = cmd::fileio::encode_all(doc, "ai", &json!({"pdfCompatible": compatible})).unwrap();
+        for w in &missing {
+            assert!(enc.warnings.contains(w), "pdfCompatible {compatible}: {w:?} not in {:?}", enc.warnings);
+        }
+    }
+}
+
 /// Include Linked Files must retain relinkable objects when only their previews are available.
 #[test]
 fn native_included_links_keep_missing_placed_documents_editable() {
@@ -347,6 +371,30 @@ fn native_included_links_keep_missing_placed_documents_editable() {
             }
         }
     }
+}
+
+/// Output prepared by a caller that may not read the placed file shows its preview, not the full
+/// art an earlier caller that could read it left cached.
+#[test]
+fn a_confined_export_does_not_reuse_full_art_read_for_another_caller() {
+    let dir = Folder::new("placed-confined");
+    let other = Folder::new("placed-confined-other");
+    let src = dir.file("src.vectorcraft");
+    source(&src, 100.0, 50.0, BLUE, 0);
+    let mut s = session();
+    place(&mut s, &src);
+    // As a document saved with previews opens: each placed file's blob holds only its preview.
+    for b in std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).images.values_mut() {
+        if let Some(p) = b.proxy.clone() {
+            b.bytes = p;
+        }
+    }
+    let d = s.doc().unwrap().doc.clone();
+    let preview = |d: &Document| d.images.keys().any(|k| k.starts_with(vectorcraft_doc::placed_document::RESOURCE_PREFIX) && k.ends_with("/preview"));
+    assert!(!preview(&d.with_placed_art()), "the file is read in full");
+    let roots = crate::file_access::AutomationRoots::new(&[&other.0], &[]).unwrap().unwrap();
+    let confined = crate::file_access::confine(Some(&roots), || d.with_placed_art().into_owned());
+    assert!(preview(&confined), "only the preview shows");
 }
 
 #[test]
@@ -801,6 +849,24 @@ fn expand_turns_a_placed_document_into_editable_art_with_its_resources() {
     assert!(near(centre_colour(&vectorcraft_format::load(&saved).unwrap()), BLUE), "saved with its resources");
     let info = s.execute("object.expand.info", &json!({})).unwrap();
     assert_eq!(info["object"], false, "nothing left to expand: {info}");
+}
+
+/// Expand also expands a placed document in the art of a selected symbol instance, in the same
+/// command.
+#[test]
+fn expand_expands_a_placed_document_in_a_symbol_instances_art() {
+    let dir = Folder::new("placed-expand-symbol");
+    let src = dir.file("badge.vectorcraft");
+    star_source(&src, "star");
+    let mut s = session();
+    let id = place(&mut s, &src);
+    s.select(|_, sel| sel.set([id])).unwrap();
+    let inst = NodeId(s.execute("symbol.new", &json!({"name": "Badge"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.expand", &json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let mut placed = 0;
+    doc.node(inst).unwrap().walk(&mut |c| placed += usize::from(matches!(c.kind, NodeKind::PlacedDocument(_))));
+    assert_eq!(placed, 0, "the placed document in the art is expanded");
 }
 
 #[test]

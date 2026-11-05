@@ -125,6 +125,16 @@ pub(crate) fn cull_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     Some(b.inflate(pad, pad))
 }
 
+/// [`cull_bounds`] of path or compound path `n` made from `visual`, its visual bounds, when the
+/// renderer measures it by those ([`crate::fx::path_cull_bounds`]); else `None`.
+pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnOnce() -> Option<Rect>) -> Option<Option<Rect>> {
+    let b = crate::fx::path_cull_bounds(symbols, n, visual)?;
+    Some(b.map(|b| {
+        let pad = pad(symbols, n);
+        b.inflate(pad, pad)
+    }))
+}
+
 /// How far brush art can paint past `n`'s brushed strokes, or past the brushed strokes in the art
 /// of symbol instance `n`: `16 × w + 8`, where `w` is the widest stroke (at least 1) of `n` when it
 /// has a visible brushed stroke and of the objects in that art that have one

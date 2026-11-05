@@ -1,9 +1,10 @@
+use super::super::brush;
 use super::art::{four, sane, two};
 use super::types::{
     FLIP, GState, Kind, MAX_HEX, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, PatternHead, Place, Raster, SKIPPED,
     VERSIONED_UNENDED,
 };
-use super::{Arc, Node, PatternDef, Reader, Rect, Tok, V, marker};
+use super::{Arc, Lexer, Node, PatternDef, Reader, Rect, Tok, V, marker, obj};
 
 impl<'a> Reader<'a> {
     pub(super) fn push(&mut self, v: V) -> Result<(), String> {
@@ -98,6 +99,17 @@ impl<'a> Reader<'a> {
             self.symbol_bounds(section);
             return Ok(());
         }
+        // Brushes and their art (those in a pattern's or a brush's art aren't read).
+        if m == "BeginPluginObject" && self.pattern.is_none() {
+            let section = self.section("EndPluginObject")?;
+            self.plugin_object(section);
+            return Ok(());
+        }
+        if m == "BeginBrushPattern" && self.pattern.is_none() {
+            let section = self.section("EndBrushPattern")?;
+            self.define_brush_art(section);
+            return Ok(());
+        }
         if m == "BeginArtStyles" {
             let section = self.section("EndArtStyles")?;
             self.styles = crate::import::ai::style::art_styles(section);
@@ -115,6 +127,9 @@ impl<'a> Reader<'a> {
         }
         if m == "BeginEncoding" {
             self.type_state.encoding_comment(line);
+            let section = self.section("EndEncoding")?;
+            self.encoding_section(section);
+            return Ok(());
         }
         // Versioned content holds alternatives of the same art, the newest first: the first is
         // read, and the next one (`%AI17_Alternate_Content`, or `…_if_version_gt:` for a version
@@ -148,8 +163,12 @@ impl<'a> Reader<'a> {
             return Ok(());
         }
         if line.starts_with("AI5_BeginRaster") {
+            // An `XG` outside a raster object names no image in it.
+            self.image_link = None;
             self.raster = Some(Raster::default());
         } else if line.starts_with("AI5_EndRaster") {
+            // A file `XG` named in this raster object is no later one's.
+            self.image_link = None;
             if let Some(Raster { operands: Some(vals), hex, .. }) = self.raster.take() {
                 return self.image_from(vals, &hex);
             }
@@ -208,19 +227,27 @@ impl<'a> Reader<'a> {
             self.template_center = two(v);
             self.template = four(v).or(self.template);
         } else if let Some(v) = line.strip_prefix("AI24_LargeCanvasScale:") {
-            // Illustrator's Large Canvas writes the editing data (art and boxes) at 1/N scale, N
-            // being this; the printed page applies the same factor, so the art reaches the page's
-            // size once it is applied to the art space ([`Self::ensure_space`]). A value outside
-            // the range Illustrator writes is left alone.
-            if let (Some(scale), Ok(n)) = (&mut self.large_canvas, v.trim().parse::<f64>())
-                && (1.0..=100.0).contains(&n)
-            {
-                *scale = n;
-            }
+            self.large_canvas_scale(v);
         } else if let Some(v) = line.strip_prefix("AI9_ColorModel:") {
             self.color_model = Some(v.trim() == "2");
         }
         Ok(())
+    }
+
+    /// `%AI24_LargeCanvasScale:` with its value `v`.
+    fn large_canvas_scale(&mut self, v: &str) {
+        // Illustrator's Large Canvas writes the editing data (art and boxes) at 1/N scale, N
+        // being this; the printed page applies the same factor, so the art reaches the page's
+        // size once it is applied to the art space ([`Self::ensure_space`]). A value outside
+        // the range Illustrator writes is left alone.
+        if let Ok(n) = v.trim().parse::<f64>()
+            && (1.0..=100.0).contains(&n)
+        {
+            self.canvas_scale = n;
+            if let Some(scale) = &mut self.large_canvas {
+                *scale = n;
+            }
+        }
     }
 
     /// `%AI3_Note:` (or `%%Note:`) sets the note of the paths that follow, an empty one clearing it,
@@ -497,6 +524,78 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// A plug-in object (`section`: what follows `%AI8_BeginPluginObject`): the brush manager's
+    /// order or a brush ([`brush`]); other objects are left alone. A brush without a name is counted
+    /// as not read.
+    fn plugin_object(&mut self, section: &[u8]) {
+        let Some((kind, name, params)) = brush::plugin_strings(section) else { return };
+        if kind == brush::MANAGER {
+            if name.is_some() {
+                self.brush_objects = true;
+                self.brush_order = brush::parse_brush_manager(&params);
+            }
+            return;
+        }
+        let Some(tool) = brush::tool(&kind) else { return };
+        self.brush_objects = true;
+        let Some(name) = name else {
+            self.brushes_unread += 1;
+            return;
+        };
+        if self.brush_drafts.len() >= brush::MAX_BRUSHES {
+            self.brushes_unread += 1;
+            return;
+        }
+        match brush::parse_tool_object(tool, &name, &params) {
+            Ok(d) => self.brush_drafts.push(d),
+            Err(_) => self.brushes_unread += 1,
+        }
+    }
+
+    /// A brush's art (`section`: what follows `%AI8_BeginBrushPattern`, its name as a string, then
+    /// the art), read by a reader of its own as a pattern's is, in a space with y down. Art it can't
+    /// read whole isn't kept: the brushes that use it aren't read.
+    fn define_brush_art(&mut self, section: &[u8]) {
+        if self.brush_art_sections >= brush::MAX_BRUSH_ART || self.subreader_depth >= MAX_SUBREADERS {
+            return;
+        }
+        self.brush_art_sections += 1;
+        let mut lex = Lexer::new(section);
+        let Some(Tok::Str(name) | Tok::Hex(name)) = lex.next_token().map(|t| t.tok) else { return };
+        let name = obj::text(&name);
+        let mut sub = Reader::new(lex.slice(lex.offset(), section.len()));
+        // In a space of its own (y down), with no head to take.
+        sub.pattern = Some(PatternHead { taken: true, ..PatternHead::default() });
+        sub.subreader_depth = self.subreader_depth + 1;
+        // The gradients and patterns defined so far, lent.
+        sub.gradients = std::mem::take(&mut self.gradients);
+        sub.pattern_tiles = std::mem::take(&mut self.pattern_tiles);
+        sub.nodes = self.nodes;
+        sub.template = self.template;
+        let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
+        self.nodes = sub.nodes;
+        self.gradients = std::mem::take(&mut sub.gradients);
+        self.pattern_tiles = std::mem::take(&mut sub.pattern_tiles);
+        // Images aren't kept: the document's images don't count a brush's art among their users. Art
+        // read with a note (something left out of it) isn't kept either.
+        let whole = read.is_ok()
+            && sub.unsupported.is_empty()
+            && sub.unknown.is_empty()
+            && sub.unread.is_empty()
+            && sub.hidden_unread.is_empty()
+            && sub.warnings.is_empty()
+            && sub.frames.len() == 1
+            && sub.doc.images.is_empty();
+        let Some(frame) = sub.frames.pop().filter(|f| whole && !f.children.is_empty()) else { return };
+        let mut art: Vec<Arc<Node>> = frame.children.iter().map(|n| Arc::new(self.doc.reid(n))).collect();
+        let node = match art.len() {
+            1 => art.pop().map(Arc::unwrap_or_clone),
+            _ => Some(Node::group(self.doc.alloc_id(), art)),
+        };
+        let Some(node) = node else { return };
+        self.brush_art.insert(name, node);
+    }
+
     /// In a pattern's definition, the operands of its first operator start with its head,
     /// `(name) llx lly urx ury`: taken off them.
     pub(super) fn take_head(&mut self, mut vals: Vec<V>) -> Vec<V> {
@@ -708,5 +807,65 @@ mod tests {
         reader.subreader_depth = MAX_SUBREADERS;
         reader.symbol_bounds(definition.as_bytes());
         assert!(reader.symbol_bounds.is_empty());
+    }
+
+    #[test]
+    fn brush_art_stops_at_subreader_limit() {
+        let art = b"(A)\n0 g\n0 0 m\n4 0 L\n4 4 L\nf\n";
+        let mut reader = Reader::new(b"");
+        reader.define_brush_art(art);
+        assert_eq!(reader.brush_art.len(), 1);
+        let mut reader = Reader::new(b"");
+        reader.subreader_depth = MAX_SUBREADERS;
+        reader.define_brush_art(art);
+        assert!(reader.brush_art.is_empty());
+    }
+
+    #[test]
+    fn brush_art_sections_stop_at_their_limit_with_repeated_names() {
+        let mut reader = Reader::new(b"");
+        reader.brush_art_sections = brush::MAX_BRUSH_ART - 1;
+        reader.define_brush_art(b"(A)\n0 g\n0 0 m\n4 0 L\n4 4 L\nf\n");
+        let first = reader.brush_art.get("A").map(|n| n.id);
+        assert!(first.is_some());
+        // The same name again is past the limit: the first art stays.
+        reader.define_brush_art(b"(A)\n0 g\n0 0 m\n8 0 L\n8 8 L\nf\n");
+        assert_eq!(reader.brush_art.get("A").map(|n| n.id), first);
+    }
+
+    #[test]
+    fn brushes_sharing_art_stop_at_the_budget_of_copied_nodes() {
+        let mut reader = Reader::new(b"");
+        reader.define_brush_art(b"(A)\n0 g\n0 0 m\n4 0 L\n4 4 L\nf\n");
+        let nodes = reader.brush_art.get("A").map(brush::art_weight).unwrap_or_default();
+        assert!(nodes > 0);
+        let draft = |i: usize| brush::BrushDraft {
+            name: format!("Brush {i}"),
+            kind: brush::DraftKind::Art { brush: vectorcraft_brush::ArtBrush::default(), art: "A".to_string() },
+        };
+        let drafts: Vec<_> = (0..5).map(draft).collect();
+        let (kept, left_out) = brush::finish_brushes_within(drafts.clone(), &reader.brush_art, None, 3 * nodes);
+        assert_eq!((kept.len(), left_out), (3, 2));
+        let (kept, left_out) = brush::finish_brushes_within(drafts, &reader.brush_art, None, 5 * nodes);
+        assert_eq!((kept.len(), left_out), (5, 0));
+        // A second brush of the same name is left out without using the budget.
+        let mut repeated: Vec<_> = (0..2).map(draft).collect();
+        repeated.insert(1, draft(0));
+        let (kept, left_out) = brush::finish_brushes_within(repeated, &reader.brush_art, None, 2 * nodes);
+        assert_eq!((kept.len(), left_out), (2, 1));
+    }
+
+    #[test]
+    fn brush_art_with_an_unread_object_is_not_kept() {
+        // A placed file the data keeps no preview of, shown and hidden.
+        let placed =
+            "%AI5_BeginPlace\n%%FileType: 1\n[5 0 0 -5 0 200] 10 20 14 22 4 4 0\n(missing.png)`\n%%IncludeFile:missing.png\n~\n%AI5_EndPlace\n";
+        let hidden: String = placed.lines().map(|l| format!("%_{l}\n")).collect();
+        for placed in [placed, hidden.as_str()] {
+            let art = format!("(A)\n0 g\n0 0 m\n4 0 L\n4 4 L\nf\n{placed}");
+            let mut reader = Reader::new(b"");
+            reader.define_brush_art(art.as_bytes());
+            assert!(reader.brush_art.is_empty(), "{placed:?}");
+        }
     }
 }

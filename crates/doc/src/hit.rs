@@ -508,8 +508,9 @@ fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(No
         && let Some(isolated) = doc.node(scope)
         && let Some(mut chain) = doc.ancestry(scope)
     {
-        // Isolated before its artboard was locked: nothing in it hits.
-        if locks.holds_id(scope) {
+        // Isolated before its artboard, or its layer or a group around it, was locked or hidden:
+        // nothing in it hits (#5309).
+        if !doc.is_editable_with(&locks, scope) {
             return None;
         }
         if isolated.is_container() {
@@ -880,9 +881,22 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
 /// clipping mask counts only when the marquee meets the region its clipping path clips to, and then
 /// only within that region's bounds.
 pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> Vec<NodeId> {
+    marquee_with(doc, r, scope, leaves, false)
+}
+
+/// Candidates for whole-object enclosure by a loop bounded by `r`. Eligibility and group
+/// traversal follow [`marquee`]; compounds contribute the complete path they paint.
+pub fn enclosure_candidates(doc: &Document, r: Rect, scope: Option<NodeId>) -> Vec<NodeId> {
+    marquee_with(doc, r, scope, true, true)
+}
+
+fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, whole_compounds: bool) -> Vec<NodeId> {
     let mut out = Vec::new();
     // `tops` pairs each object with the part of `r` in which the marquee can touch it.
     let tops: Vec<(&std::sync::Arc<Node>, Rect)> = match scope.and_then(|s| doc.node(s)) {
+        // Isolated art whose layer, or a group around it, was locked or hidden afterwards: the
+        // marquee touches none of it, as clicks don't (#5309).
+        Some(s) if !doc.is_editable(s.id) => vec![],
         Some(s) => match (s.children(), marquee_in(s, r)) {
             (Some(c), Some(r)) => c.iter().enumerate().filter(|(i, _)| !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
             (Some(_), None) => vec![],
@@ -924,13 +938,19 @@ pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> 
     /// ([`shaper_hides`]). An Intertwine group is touched by its members, and a repeat is touched
     /// by the copies it draws, as clicks hit them. Objects of every other kind except paths,
     /// compound paths, layers and groups are touched by their box.
-    fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>) -> bool {
+    fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool) -> bool {
         match &n.kind {
             NodeKind::Path { path, .. } => vectorcraft_geom::hit::intersects_rect(path, r),
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => marquee_in(n, r)
-                .is_some_and(|r| children.iter().enumerate().any(|(i, c)| c.visible && !shaper_hides(n, i, scope) && touches(c, s, r, scope))),
-            NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope)),
-            NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope)),
+            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => {
+                marquee_in(n, r).is_some_and(|r| {
+                    children.iter().enumerate().any(|(i, c)| c.visible && !shaper_hides(n, i, scope) && touches(c, s, r, scope, whole_compounds))
+                })
+            }
+            NodeKind::Compound { children, .. } if whole_compounds => {
+                children.iter().filter_map(|c| c.path_data()).any(|path| vectorcraft_geom::hit::intersects_rect(path, r))
+            }
+            NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, whole_compounds)),
+            NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, whole_compounds)),
             // A box with no width or no height (an instance of a symbol that draws a straight
             // line) is touched where the marquee crosses it.
             _ => n.geometric_bounds_with(s).is_some_and(|b| {
@@ -939,18 +959,18 @@ pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> 
             }),
         }
     }
-    fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, out: &mut Vec<NodeId>) {
+    fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, out: &mut Vec<NodeId>) {
         match &n.kind {
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => {
                 let Some(r) = marquee_in(n, r) else { return };
                 for (i, c) in children.iter().enumerate() {
                     if c.visible && !c.locked && !shaper_hides(n, i, scope) {
-                        collect_leaves(c, s, r, scope, out);
+                        collect_leaves(c, s, r, scope, whole_compounds, out);
                     }
                 }
             }
             _ => {
-                if touches(n, s, r, scope) {
+                if touches(n, s, r, scope, whole_compounds) {
                     out.push(n.id);
                 }
             }
@@ -963,8 +983,8 @@ pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> 
             continue;
         }
         if leaves {
-            collect_leaves(t, &symbols, r, scope, &mut out);
-        } else if touches(t, &symbols, r, scope) {
+            collect_leaves(t, &symbols, r, scope, whole_compounds, &mut out);
+        } else if touches(t, &symbols, r, scope, whole_compounds) {
             out.push(t.id);
         }
     }

@@ -77,6 +77,7 @@ impl Session {
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,
+            batch_paint_docs: Vec::new(),
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
@@ -93,6 +94,7 @@ impl Session {
             plane_widget_press: false,
             pointer_held: false,
             press_options: None,
+            press_type_selection: None,
             press_point: None,
             ruler_guide: None,
             port_marks: Default::default(),
@@ -142,6 +144,7 @@ impl Session {
         if self.active.is_none() {
             return;
         }
+        self.press_type_selection = None;
         let view = self.last_view;
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
@@ -156,6 +159,12 @@ impl Session {
         self.tool = self.make_tool(self.tool.id());
         self.tool_resets = self.tool_resets.wrapping_add(1);
         self.tool_set_since_reset = false;
+    }
+
+    /// Finish the tool's pending work and give it fresh state, as a switch to another document
+    /// does, while the current document stays the same (a switch to another view of it).
+    pub fn reset_tool(&mut self) {
+        self.reset_tool_for_doc_switch();
     }
 
     pub fn set_active(&mut self, index: usize) -> bool {
@@ -280,6 +289,27 @@ impl Session {
             stash.push(old);
         }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
+        true
+    }
+
+    /// Move the document in tab `from` to tab `to` (a document tab dragged along the strip,
+    /// `document.move`); the documents between them shift by one. The current document stays the
+    /// current one, wherever it moves to, and its tool keeps its state: no document is switched to.
+    /// False, changing nothing, when either index is past the last document.
+    pub fn move_document(&mut self, from: usize, to: usize) -> bool {
+        let n = self.docs.len();
+        if from >= n || to >= n {
+            return false;
+        }
+        if from == to {
+            return true;
+        }
+        let active = self.active().map(|d| d.uid);
+        let d = self.docs.remove(from);
+        self.docs.insert(to, d);
+        if let Some(uid) = active {
+            self.active = self.docs.iter().position(|d| d.uid == uid);
+        }
         true
     }
 

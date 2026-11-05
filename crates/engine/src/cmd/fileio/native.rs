@@ -106,6 +106,12 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         description: "compress the PDF's content and the native document it carries (the PDF option compression.compressText)",
     },
     FormatOption {
+        name: "editingData",
+        ty: "boolean",
+        default: "true",
+        description: "also carry an editing copy of the artwork in the form other apps that open .ai files read: layers and sublayers, groups, compound paths, paths, fills and strokes, colors, linear and radial gradients, patterns on a grid of tiles, swatches, artboards, the transparency of objects and layers, objects' opacity masks, clipping groups and layers clipped by a path, embedded images with their pixels, and linked images as placed files with a preview, with type, other patterns, symbols, other clipping objects and live objects as plain filled and stroked paths, freeform gradients, gradients along or across a stroke and gradients of more than 256 stops as their average color, gradients that dither or mix perceptually as classic ones, and gradient stops linked to global process colors as their colors (written only with every artboard, as Preserve Editing is)",
+    },
+    FormatOption {
         name: "aiVersion",
         ty: "string",
         default: "\"pdf\"",

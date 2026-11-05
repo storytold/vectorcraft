@@ -35,9 +35,9 @@ pub use bitmap::GlyphImage;
 pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
 pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use fontdb::{
-    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, PlatformFontFiles, WantedFont, WantedFonts, app_font_dir,
-    is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight,
-    system_font_dirs, user_font_dirs,
+    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, IcfMargins, PlatformFontFiles, StylisticSet, WantedFont,
+    WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined,
+    style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 use std::sync::Arc;
@@ -147,7 +147,7 @@ pub struct PositionedGlyph {
     /// its Character Rotation. The identity for a glyph without one.
     pub unturned: Affine,
     /// Font units: `xf * pivot` is the point its Character Rotation turns it about, its pen
-    /// position on the baseline moved by its baseline shift.
+    /// position after composition spacing adjustments, moved by its baseline shift.
     pub pivot: Point,
     /// A ligature (one glyph that alone stands for several characters, grapheme clusters, of the
     /// text): the caret stop between each two of them, in logical order, as the byte offset of the
@@ -166,7 +166,9 @@ pub struct PositionedGlyph {
     /// in text space: the font's placement of the glyph (`GPOS` x placement), less a leading space
     /// taken off, plus the manual kerning of right-to-left text, which moves the glyph right so that
     /// the space it adds lies on the glyph's left. 0 for a glyph standing upright or set across the
-    /// column in vertical type, and for an inline graphic.
+    /// column in vertical type, and for an inline graphic. An upright glyph in vertical type on a
+    /// path turns about its pen, and its cell starts one cell length before the cell's top: 0.12 em
+    /// before the pen without the font's vertical metrics.
     pub width_start: f64,
 }
 
@@ -809,6 +811,12 @@ fn caret_horizontal_filtered(layout: &TextLayout, byte: usize, right: bool, vali
 /// character (numbers and punctuation don't count)?
 pub fn paragraph_is_rtl(text: &str, direction: Option<vectorcraft_doc::ParaDirection>) -> bool {
     layout::is_rtl(layout::para_bidi(text, direction).as_ref())
+}
+
+/// Is the character at byte `at` of paragraph `text` set right to left: its bidi level is odd, with
+/// the paragraph's `direction` (None: from its first strong character)?
+pub fn char_is_rtl(text: &str, direction: Option<vectorcraft_doc::ParaDirection>, at: usize) -> bool {
+    layout::para_bidi(text, direction).is_some_and(|info| info.levels.get(at).is_some_and(|level| level.is_rtl()))
 }
 
 /// Text stored in visual order (as PDF content draws it, each glyph where it is drawn), back in

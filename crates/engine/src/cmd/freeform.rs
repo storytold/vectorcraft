@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Freeform Point",
             [],
             None,
-            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it → {index}",
+            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it → {index}",
             has_doc,
             add_point
         ),
@@ -28,7 +28,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Freeform Point",
             [],
             None,
-            "{index? (default: the selected point), at?: [x,y] (document coordinates), color?, keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} move or recolour a point of the freeform gradient → {index}",
+            "{index? (default: the selected point), at?: [x,y] (document coordinates), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} move or recolour a point of the freeform gradient → {index}",
             has_doc,
             set_point
         ),

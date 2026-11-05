@@ -20,12 +20,18 @@ pub struct Pending {
     /// What the status bar shows ("Opening Poster.vectorcraft").
     pub label: String,
     done: Receiver<Result<ReadFile, String>>,
+    /// The automation roots in force where the open started: the document is installed under
+    /// them too (its links are read as it opens).
+    scope: ScopeHandle,
 }
 
 /// The files being read.
 #[derive(Default)]
 pub struct Opening {
     pub pending: Vec<Pending>,
+    /// Open documents asked for again while the active one couldn't change: their tabs come to
+    /// the front once it can ([`may_switch`]), each in the file access scope it was asked in.
+    pub activate: Vec<(String, ScopeHandle)>,
 }
 
 /// Is a long operation running that should show the busy cursor and status spinner (background
@@ -57,6 +63,7 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
     let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
     // The automation roots in force here are in force there.
     let scope = ScopeHandle::capture();
+    let opener = scope.clone();
     let spawned = std::thread::Builder::new().name("vectorcraft-open".into()).spawn(move || {
         let r = scope
             .run(|| {
@@ -74,10 +81,16 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
         return Err(Arc::try_unwrap(bytes).unwrap_or_else(|b| b.to_vec()));
     }
     let label = format!("Opening {}", fileio::file_name(path));
-    app.opening.pending.push(Pending { path: path.to_string(), label: label.clone(), done });
+    app.opening.pending.push(Pending { path: path.to_string(), label: label.clone(), done, scope: opener });
     let status = format!("{label}…");
     app.status(status.clone());
     Ok(json!({ "background": true, "status": status }))
+}
+
+/// May the active document change now ([`poll`])?
+pub(crate) fn may_switch(app: &VectorcraftApp) -> bool {
+    let s = &app.session;
+    !(app.ui.dialog.is_some() || s.in_interaction() || (s.tool_busy() && s.pointer_held()))
 }
 
 /// Open the files that are ready (each frame). Not while a dialog is open: a document that opens
@@ -90,9 +103,18 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
 /// waiting between its clicks (the Dimension tool after its first point): the file opens, and the
 /// tool starts afresh, as when the user switches documents.
 pub fn poll(app: &mut VectorcraftApp) {
-    let s = &app.session;
-    if app.ui.dialog.is_some() || s.in_interaction() || (s.tool_busy() && s.pointer_held()) {
-        return;
+    // One at a time: a document that opens again (closed meanwhile) may ask about its links or
+    // fonts, and the rest wait for that dialog too.
+    loop {
+        if !may_switch(app) {
+            return;
+        }
+        if app.opening.activate.is_empty() {
+            break;
+        }
+        let (path, scope) = app.opening.activate.remove(0);
+        // Closed meanwhile, it opens again; a failure is reported to the user there.
+        let _ = scope.run(|| crate::io::open_reporting(app, &path));
     }
     let mut i = 0;
     while let Some(p) = app.opening.pending.get(i) {
@@ -109,7 +131,11 @@ pub fn poll(app: &mut VectorcraftApp) {
         if app.ui.status == format!("{}…", p.label) {
             app.ui.status.clear();
         }
-        finish(app, &p.path, r);
+        p.scope.run(|| finish(app, &p.path, r));
+        // A file that opened and asks about its links or fonts holds back the others too.
+        if !may_switch(app) {
+            return;
+        }
     }
 }
 
