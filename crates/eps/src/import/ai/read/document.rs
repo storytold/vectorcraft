@@ -361,6 +361,22 @@ pub fn brushes(data: &[u8], patterns: &[PatternDef]) -> Option<Brushes> {
     Some(Brushes { brushes: lib, patterns: added, images, note: (unread > 0).then(|| brush::left_out_note(unread)) })
 }
 
+/// The graphic styles of the editing data `data`, for a file whose layers aren't read (a graphic
+/// style library has none), as [`read`] makes them, with ids from 1, and the data's declared large
+/// canvas scale (1 when it declares none). `large_canvas`: as [`read`] takes it. The styles are
+/// those the list names before reading stops, and none when the data has no style list or lists no
+/// style this reads.
+pub fn graphic_styles(data: &[u8], large_canvas: bool) -> (Vec<GraphicStyle>, f64) {
+    if crate::import::ai::find(data, b"BeginArtStyleList").is_none() {
+        return (vec![], 1.0);
+    }
+    let mut r = Reader::with_names(data);
+    r.large_canvas = large_canvas.then_some(1.0);
+    // The styles come before the art, so an error in the art leaves them read.
+    let _ = r.run();
+    (r.graphic_styles().0, r.canvas_scale)
+}
+
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
 /// those of a `/Document` still open when it stopped (its art can be what stopped it).
 fn artboards_read(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {

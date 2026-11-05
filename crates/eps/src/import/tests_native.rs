@@ -1378,6 +1378,114 @@ fn an_ai_brush_library_without_layers_keeps_its_brushes() {
     assert!(d.pattern("Dots").is_some_and(|p| !p.art.is_empty()), "the pattern the brush's art paints with");
 }
 
+/// An art style that strokes with black at `width` units, after the effects `effects` (filters as
+/// the format writes them), as the format writes it.
+fn stroke_art_style(name: &str, width: f64, effects: &str) -> String {
+    format!(
+        "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{effects}\
+         /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+         /StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n0 J 0 j {width} w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n"
+    )
+}
+
+/// The art styles and the style list of a graphic style library: Thin, Medium and Thick, listed in
+/// that order, 1, 2 and 3 units wide, Medium after an Offset Path of 4 units, and Unlisted, which
+/// the list leaves out, with Thin listed twice.
+fn style_list() -> String {
+    let offset = "/BasicFilter :\n(Adobe Offset Path) 1 0 /Filter ,\n1 /Visible ,\n(OffsetPath.aip) /PluginFileName ,\n(Offset Path) /Title ,\n\
+        /Dictionary : /NotRecorded ,\n4 /Real (ofst) ,\n6 /Real (mlim) ,\n1 /Int (jntp) ,\n; /Dict ;\n /Part ,\n";
+    format!(
+        "%AI9_BeginArtStyles\n{}{}{}{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Thin)\n(Medium)\n(Thick)\n(Thin)\n%AI9_EndArtStyleList\n",
+        stroke_art_style("Thick", 3.0, ""),
+        stroke_art_style("Unlisted", 4.0, ""),
+        stroke_art_style("Thin", 1.0, ""),
+        stroke_art_style("Medium", 2.0, offset)
+    )
+}
+
+/// The offset of each Offset Path in the graphic styles of `d`.
+fn style_offsets(d: &Document) -> Vec<f64> {
+    let effects = d.graphic_styles.iter().flat_map(|g| &g.appearance.effects);
+    effects.filter(|e| e.id == "path.offsetPath").filter_map(|e| e.params["offset"].as_f64()).collect()
+}
+
+/// A graphic style library (the art styles and list of [`style_list`], and no layers) with the
+/// editing data's setup `setup` before them.
+fn style_library(setup: &str) -> String {
+    let styles = style_list();
+    format!("%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%BeginSetup\n{setup}{styles}%%EndSetup\n%%PageTrailer\n%%Trailer\n")
+}
+
+/// A graphic style library (art styles and their list, no layers) comes in as its PDF part with the
+/// library's graphic styles in place of the default ones, in the list's order: Other Library lists them.
+#[test]
+fn an_ai_graphic_style_library_without_layers_keeps_its_styles() {
+    let (d, warnings, read) = crate::layered_ai(&private(&style_library("")), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    let styles: Vec<(&str, u32, f64)> = d.graphic_styles.iter().map(|g| (g.name.as_str(), g.id, g.appearance.stroke_width())).collect();
+    assert_eq!(styles, [("Thin", 1, 1.0), ("Medium", 2, 2.0), ("Thick", 3, 3.0)], "{warnings:?}");
+    assert_eq!(style_offsets(&d), [4.0]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    // Without a style list, the default styles stay.
+    let (d, warnings, _) = crate::layered_ai(&private(&native("")), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert_eq!(d.graphic_styles, Document::new(1.0, 1.0).graphic_styles, "{warnings:?}");
+}
+
+/// A graphic style library whose artboard is its page in the units of a `UserUnit` of 10 comes in
+/// with its styles' stroke weights and effects ten times as large, as the page's art is; one whose
+/// artboard is the page in points keeps them. Without a `UserUnit`, a Large Canvas library whose
+/// artboard is the page at its declared scale of 10 comes in with them ten times as large too.
+#[test]
+fn an_ai_graphic_style_library_in_the_units_of_a_user_unit_page_comes_in_at_the_pages_size() {
+    let board = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+        %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let widths = |d: &Document| d.graphic_styles.iter().map(|g| g.appearance.stroke_width()).collect::<Vec<_>>();
+    let page = in_points(pdf_part(10.0, 86.0), 10.0);
+    let (d, warnings, read) = crate::layered_ai(&private(&style_library(board)), page, vec![], false, true, 10.0);
+    assert!(!read, "{warnings:?}");
+    assert_eq!(widths(&d), [10.0, 20.0, 30.0], "{warnings:?}");
+    assert_eq!(style_offsets(&d), [40.0]);
+    let points = board.replace("0 100 /Real", "0 1000 /Real").replace("100 0 /Real", "1000 0 /Real");
+    let page = in_points(pdf_part(10.0, 86.0), 10.0);
+    let (d, warnings, _) = crate::layered_ai(&private(&style_library(&points)), page, vec![], false, true, 10.0);
+    assert_eq!(widths(&d), [1.0, 2.0, 3.0], "{warnings:?}");
+    assert_eq!(style_offsets(&d), [4.0]);
+    let large = format!("%AI24_LargeCanvasScale: 10\n{board}");
+    let page = in_points(pdf_part(10.0, 86.0), 10.0);
+    let (d, warnings, _) = crate::layered_ai(&private(&style_library(&large)), page, vec![], false, true, 1.0);
+    assert_eq!(widths(&d), [10.0, 20.0, 30.0], "{warnings:?}");
+    assert_eq!(style_offsets(&d), [40.0]);
+}
+
+/// An EPS whose editing copy has graphic styles and no layers comes in as its page with those
+/// styles, at the page's size when the copy is a Large Canvas one.
+#[test]
+fn an_eps_without_layers_keeps_its_graphic_styles() {
+    let r = import(&eps(&page_square(50, 50), &style_library(""))).unwrap();
+    let names: Vec<&str> = r.document.graphic_styles.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(names, ["Thin", "Medium", "Thick"], "{:?}", r.warnings);
+    let r = import(&eps(&page_square(50, 50), &style_library("%AI24_LargeCanvasScale: 10\n"))).unwrap();
+    let widths: Vec<f64> = r.document.graphic_styles.iter().map(|g| g.appearance.stroke_width()).collect();
+    assert_eq!(widths, [10.0, 20.0, 30.0], "{:?}", r.warnings);
+    assert_eq!(style_offsets(&r.document), [40.0]);
+}
+
+/// A `.ai` that comes in as its PDF part, and an EPS that comes in as its page, because their
+/// layers can't be used (their editing data is for another page) get the graphic styles of their
+/// editing data's style list in place of the default ones.
+#[test]
+fn a_file_whose_layers_cant_be_used_keeps_its_graphic_styles() {
+    let art = native(&format!("{}{}", style_list(), layer("Art", true, &square(10, 10)))).replace(" 0 0 100 100", " 0 0 600 400");
+    let names = |d: &Document| d.graphic_styles.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
+    assert!(!read && warnings.iter().any(|w| w.contains("600 × 400")), "{warnings:?}");
+    assert_eq!(names(&d), ["Thin", "Medium", "Thick"], "{warnings:?}");
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    assert!(r.warnings.iter().any(|w| w.contains("600 × 400")), "{:?}", r.warnings);
+    assert_eq!(names(&r.document), ["Thin", "Medium", "Thick"], "{:?}", r.warnings);
+}
+
 /// A PDF part whose tiling has the name of a pattern its editing data defines (the PDF part names
 /// its tilings `Pattern 1`, `Pattern 2` and so on): the editing data's pattern comes in under a free
 /// variant of the name, and the palette's swatch and the brush's art paint with it, not with the
