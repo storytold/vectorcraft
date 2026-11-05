@@ -5965,6 +5965,25 @@ breakText	Glyphs	Гліфи
 	Minimum angle	Мінімальний кут
 	Maximum angle	Максимальний кут
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Виділити пов’язані
+	Select Embedded	Виділити вбудовані
+	Select Missing	Виділити відсутні
+	Select Modified	Виділити змінені
+	Select by Link Status	Виділити за станом зв’язку
+	Select by Link Status…	Виділити за станом зв’язку…
+	Search images	Пошук зображень
+	No images match.	Немає відповідних зображень.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Виділено {n} пов’язане зображення|Виділено {n} пов’язані зображення|Виділено {n} пов’язаних зображень
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Виділено {n} вбудоване зображення|Виділено {n} вбудовані зображення|Виділено {n} вбудованих зображень
+@msgplural	Selected {n} missing image|Selected {n} missing images	Виділено {n} відсутнє зображення|Виділено {n} відсутні зображення|Виділено {n} відсутніх зображень
+@msgplural	Selected {n} modified image|Selected {n} modified images	Виділено {n} змінене зображення|Виділено {n} змінені зображення|Виділено {n} змінених зображень
+@msgplural	Selected {n} image|Selected {n} images	Виділено {n} зображення|Виділено {n} зображення|Виділено {n} зображень
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; ще {n} приховане або заблоковане|{selected}; ще {n} приховані або заблоковані|{selected}; ще {n} приховані або заблоковані
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; ще {n} на шарі-шаблоні|{selected}; ще {n} на шарах-шаблонах|{selected}; ще {n} на шарах-шаблонах
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; ще {n} поза ізольованою групою|{selected}; ще {n} поза ізольованою групою|{selected}; ще {n} поза ізольованою групою
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; ще {n} зараз не можна виділити|{selected}; ще {n} зараз не можна виділити|{selected}; ще {n} зараз не можна виділити
+
 # Compound Shapes add-on
 	Compound Shapes	Складені фігури
 	Shape Mode Buttons Make Compound Shapes	Кнопки режимів фігур створюють складені фігури

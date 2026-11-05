@@ -6365,6 +6365,25 @@ breakText	Glyphs	Glyfy
 	Minimum angle	Minimální úhel
 	Maximum angle	Maximální úhel
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Vybrat propojené
+	Select Embedded	Vybrat vložené
+	Select Missing	Vybrat chybějící
+	Select Modified	Vybrat upravené
+	Select by Link Status	Vybrat podle stavu propojení
+	Select by Link Status…	Vybrat podle stavu propojení…
+	Search images	Hledat obrazy
+	No images match.	Žádný obraz neodpovídá.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Vybrán {n} propojený obraz|Vybrány {n} propojené obrazy|Vybráno {n} propojených obrazů
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Vybrán {n} vložený obraz|Vybrány {n} vložené obrazy|Vybráno {n} vložených obrazů
+@msgplural	Selected {n} missing image|Selected {n} missing images	Vybrán {n} chybějící obraz|Vybrány {n} chybějící obrazy|Vybráno {n} chybějících obrazů
+@msgplural	Selected {n} modified image|Selected {n} modified images	Vybrán {n} upravený obraz|Vybrány {n} upravené obrazy|Vybráno {n} upravených obrazů
+@msgplural	Selected {n} image|Selected {n} images	Vybrán {n} obraz|Vybrány {n} obrazy|Vybráno {n} obrazů
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; další {n} je skrytý nebo zamčený|{selected}; další {n} jsou skryté nebo zamčené|{selected}; dalších {n} je skrytých nebo zamčených
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; další {n} je na vrstvě šablony|{selected}; další {n} jsou na vrstvách šablony|{selected}; dalších {n} je na vrstvách šablony
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; další {n} je mimo izolovanou skupinu|{selected}; další {n} jsou mimo izolovanou skupinu|{selected}; dalších {n} je mimo izolovanou skupinu
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; další {n} teď nelze vybrat|{selected}; další {n} teď nelze vybrat|{selected}; dalších {n} teď nelze vybrat
+
 # Compound Shapes add-on
 	Compound Shapes	Složené tvary
 	Shape Mode Buttons Make Compound Shapes	Tlačítka režimů tvarů vytvářejí složené tvary

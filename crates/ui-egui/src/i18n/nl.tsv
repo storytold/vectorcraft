@@ -6275,6 +6275,25 @@ breakText	Glyphs	Glyphs
 	Minimum angle	Minimale hoek
 	Maximum angle	Maximale hoek
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Gekoppelde selecteren
+	Select Embedded	Ingesloten selecteren
+	Select Missing	Ontbrekende selecteren
+	Select Modified	Gewijzigde selecteren
+	Select by Link Status	Selecteren op koppelingsstatus
+	Select by Link Status…	Selecteren op koppelingsstatus…
+	Search images	Afbeeldingen zoeken
+	No images match.	Geen afbeelding komt overeen.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} gekoppelde afbeelding geselecteerd|{n} gekoppelde afbeeldingen geselecteerd
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} ingesloten afbeelding geselecteerd|{n} ingesloten afbeeldingen geselecteerd
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} ontbrekende afbeelding geselecteerd|{n} ontbrekende afbeeldingen geselecteerd
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} gewijzigde afbeelding geselecteerd|{n} gewijzigde afbeeldingen geselecteerd
+@msgplural	Selected {n} image|Selected {n} images	{n} afbeelding geselecteerd|{n} afbeeldingen geselecteerd
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; nog {n} is verborgen of vergrendeld|{selected}; nog {n} zijn verborgen of vergrendeld
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; nog {n} staat op een sjabloonlaag|{selected}; nog {n} staan op sjabloonlagen
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; nog {n} staat buiten de geïsoleerde groep|{selected}; nog {n} staan buiten de geïsoleerde groep
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; nog {n} kan nu niet worden geselecteerd|{selected}; nog {n} kunnen nu niet worden geselecteerd
+
 # Compound Shapes add-on
 	Compound Shapes	Samengestelde vormen
 	Shape Mode Buttons Make Compound Shapes	Vormmodus-knoppen maken samengestelde vormen

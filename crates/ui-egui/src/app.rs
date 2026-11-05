@@ -314,6 +314,7 @@ impl VectorcraftApp {
         placing::poll(self);
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
+        crate::addons::select::link_status::refresh(self, now);
         if !self.background.jobs.is_empty()
             || !self.opening.pending.is_empty()
             || !self.plugin_runs.running.is_empty()

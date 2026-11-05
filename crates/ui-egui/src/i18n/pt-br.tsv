@@ -6438,6 +6438,25 @@ swatch	Yellow Green	Verde-amarelado
 	Minimum angle	Ângulo Mínimo
 	Maximum angle	Ângulo Máximo
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Selecionar vinculadas
+	Select Embedded	Selecionar incorporadas
+	Select Missing	Selecionar ausentes
+	Select Modified	Selecionar modificadas
+	Select by Link Status	Selecionar por status do vínculo
+	Select by Link Status…	Selecionar por status do vínculo…
+	Search images	Pesquisar imagens
+	No images match.	Nenhuma imagem corresponde.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} imagem vinculada selecionada|{n} imagens vinculadas selecionadas
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} imagem incorporada selecionada|{n} imagens incorporadas selecionadas
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} imagem ausente selecionada|{n} imagens ausentes selecionadas
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} imagem modificada selecionada|{n} imagens modificadas selecionadas
+@msgplural	Selected {n} image|Selected {n} images	{n} imagem selecionada|{n} imagens selecionadas
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; mais {n} está oculta ou bloqueada|{selected}; mais {n} estão ocultas ou bloqueadas
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; mais {n} está em uma camada de modelo|{selected}; mais {n} estão em camadas de modelo
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; mais {n} está fora do grupo isolado|{selected}; mais {n} estão fora do grupo isolado
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; mais {n} não pode ser selecionada agora|{selected}; mais {n} não podem ser selecionadas agora
+
 # Compound Shapes add-on
 	Compound Shapes	Formas Compostas
 	Shape Mode Buttons Make Compound Shapes	Os Botões de Modo de Forma Criam Formas Compostas
