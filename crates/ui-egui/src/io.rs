@@ -28,7 +28,7 @@ pub use open::{
 };
 #[cfg(test)]
 pub(crate) use open::{open_file, opened_with_notes};
-pub use save::{ask_format_options, ask_pdf_options, remember_view, save, save_pdf};
+pub use save::{ask_format_options, ask_pdf_options, remember_active_artboard, remember_view, save, save_pdf};
 pub(crate) use save::{export_path, is_web, report_saved, target_path, write_named, write_reporting, write_to};
 #[cfg(test)]
 pub(crate) use save::{report_write_error, saved_status};
@@ -162,6 +162,49 @@ mod tests {
         *started.borrow_mut() = true;
         save(&mut app, SaveMode::Save, &json!({}), false).unwrap();
         assert!(!app.session.doc().unwrap().is_dirty());
+    }
+
+    /// A `.ai` file saved from the app names the view's active artboard as its active one, in
+    /// the editing copy other apps read.
+    #[test]
+    fn a_saved_ai_file_names_the_views_active_artboard() {
+        let (mut app, written) = app();
+        app.run("file.new", json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        app.sync_views();
+        let opts = fileio::LoadOptions { native: false, ..Default::default() };
+        for artboard in [2, 0] {
+            if let Some(v) = app.view_mut() {
+                v.artboard = artboard;
+            }
+            save(&mut app, SaveMode::Copy, &json!({"path": "Art.ai"}), false).unwrap();
+            let bytes = written.borrow_mut().pop().map(|(_, b)| b).unwrap();
+            let l = fileio::load_with("Art.ai", &bytes, &opts).unwrap();
+            assert!(l.editing_data && !l.restored, "{:?}", l.warnings);
+            let active = l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id)).unwrap_or(0);
+            assert_eq!(active, artboard);
+        }
+    }
+
+    /// A `.ai` file a command exports names the view's active artboard as its active one: an
+    /// index past the last artboard names the last, as the Artboards panel shows it.
+    #[test]
+    fn an_exported_ai_file_names_the_views_active_artboard() {
+        let (mut app, _) = app();
+        app.run("file.new", json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        app.sync_views();
+        let opts = fileio::LoadOptions { native: false, ..Default::default() };
+        for (artboard, active) in [(1, 1), (99, 2)] {
+            if let Some(v) = app.view_mut() {
+                v.artboard = artboard;
+            }
+            let out = app.run("document.serialize", json!({"format": "ai"})).unwrap();
+            let bytes = vectorcraft_format::base64_decode(out["dataBase64"].as_str().unwrap()).unwrap();
+            let l = fileio::load_with("Art.ai", &bytes, &opts).unwrap();
+            assert!(l.editing_data && !l.restored, "{:?}", l.warnings);
+            assert_eq!(l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id)), Some(active), "{artboard}");
+        }
     }
 
     fn bytes_of(app: &mut VectorcraftApp, cmd: &str, p: Value) -> Vec<u8> {

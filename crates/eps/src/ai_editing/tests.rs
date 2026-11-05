@@ -367,9 +367,9 @@ fn add_rect(doc: &mut Document, r: Rect) {
     doc.insert(Some(layer), usize::MAX, rect).unwrap();
 }
 
-/// The end of the document data: the artboards and the canvas size in the `/Recorded` part of the
-/// `/Document` dictionary, then an empty `/NotRecorded` part.
-const RECORDED: &str = "%_; (ArtboardArray) ,\n%_16383 /Int (AIDocumentCanvasSize) ,\n%_; /Recorded ,\n%_/Dictionary : /NotRecorded ,\n%_; /NotRecorded ,\n%_;\n%AI9_EndDocumentData\n";
+/// The end of the document data: the artboards, the active artboard (the first) and the canvas
+/// size in the `/Recorded` part of the `/Document` dictionary, then an empty `/NotRecorded` part.
+const RECORDED: &str = "%_; (ArtboardArray) ,\n%_0 /Int (CropAreaActive) ,\n%_16383 /Int (AIDocumentCanvasSize) ,\n%_; /Recorded ,\n%_/Dictionary : /NotRecorded ,\n%_; /NotRecorded ,\n%_;\n%AI9_EndDocumentData\n";
 
 /// One letter-size artboard: the art 36 points in from its top-left corner, the artboard's record
 /// and the boxes, with the artboards in the `/Recorded` part of the `/Document` dictionary.
@@ -982,6 +982,29 @@ fn artboard_display_marks_are_written() {
     let back = read_back(&doc);
     let ab = &back.artboards[0];
     assert!(ab.show_center_mark && !ab.show_cross_hairs && ab.show_video_safe_areas);
+}
+
+/// The active artboard, the one `opened_artboard` names (else the first), is the selected one and
+/// its index follows the artboards in the recorded part; the editing data reads back with that
+/// artboard active.
+#[test]
+fn the_active_artboard_follows_the_artboards() {
+    let mut doc = Document::new(200.0, 100.0);
+    for (id, x0) in [(2, 250.0), (3, 500.0)] {
+        doc.artboards.push(Artboard { id, rect: Rect::new(x0, 0.0, x0 + 200.0, 100.0), ..doc.artboards[0].clone() });
+    }
+    let first = doc.artboards[0].id;
+    // None, the first, the third, and an artboard the document doesn't have (the first).
+    for (opened, index) in [(None, 0), (Some(first), 0), (Some(3), 2), (Some(9), 0)] {
+        doc.opened_artboard = opened;
+        let p = program(&doc);
+        let entry = format!("%_; (ArtboardArray) ,\n%_{index} /Int (CropAreaActive) ,\n%_16383 /Int (AIDocumentCanvasSize) ,\n%_; /Recorded ,\n");
+        assert!(p.contains(&entry), "{opened:?}: {p}");
+        assert_eq!(p.matches("%_1 /Bool (IsArtboardSelected) ,\n").count(), 1, "{opened:?}");
+        let back = read_back(&doc);
+        let active = back.opened_artboard.and_then(|id| back.artboards.iter().position(|a| a.id == id)).unwrap_or(0);
+        assert_eq!((back.artboards.len(), active), (3, index), "{opened:?}");
+    }
 }
 
 /// A guide is its path followed by `(n) *` (closed) or `(N) *` (open), with no `(N) *` before

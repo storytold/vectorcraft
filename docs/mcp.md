@@ -4684,6 +4684,11 @@ or in `options` (`file.formatOptions {format}` lists them with their values):
 - `pdfCompatible`: native files (default false) also carry a PDF of every artboard (`pdf` in the file); `.ai` files
   (default true) with false write blank pages around the native document (smaller; other apps show empty pages).
 - `.ai` only: `compress` (default true) is the PDF option `compression.compressText`.
+- The editing copy of a `.ai` or `.ait` file (`editingData`) names its active artboard (`CropAreaActive`): the active
+  artboard of the app's view when the app saves or exports the file, otherwise the artboard the document opened on (the
+  active artboard of the `.ai` file it was opened from), else the first. A `.ai` file read from its editing copy
+  opens on that artboard. VectorCraft opens a `.ai` file it saved from the native document the file carries, on the
+  first artboard.
 
 File → Save As asks for these in the save options dialog (VectorCraft Options) after the save panel, and Save a Copy
 does too for a `.ai` file; Save, Save a Copy to a native file and Save as Template reuse the options as last saved (or Use Compression).

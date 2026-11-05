@@ -62,7 +62,9 @@ private editing data. VectorCraft:
   Editing Data for Other Apps) every page's `PieceInfo` also carries an editing copy of the art in
   `AIPrivateData` streams, in the form VectorCraft's `.ai` reader reads: layers and sublayers, groups, paths with
   their fills and strokes (a compound path as one path of all its subpaths), process, spot and global colors, swatches and color groups, guides,
-  hidden and locked objects, object names, every artboard with its name, the transparency of objects and layers
+  hidden and locked objects, object names, every artboard with its name, the active artboard (`CropAreaActive`: the
+  view's active artboard when the app saves or exports the file, else the one the document opened on, else the first;
+  the reader opens the file on it), the transparency of objects and layers
   (opacity, blending mode, isolation, knockout and knockout shape), objects' opacity masks, and clipping groups and
   clipping layers clipped by a path or compound path, linear and radial gradients on fills and strokes (with their
   stops' opacity, midpoints and spot colors, elliptical radials and focal points) and gradient swatches, and
