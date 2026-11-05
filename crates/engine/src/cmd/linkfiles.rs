@@ -177,9 +177,28 @@ fn find(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// How many folder names the file at `found` has in common with the saved path `saved` (whichever
 /// system's separators it uses, [`vectorcraft_doc::links::path_separators`]), counted from the
-/// innermost out up to the first that differs, compared in lowercase.
+/// innermost out up to the first that differs, compared in lowercase. The saved path's parent
+/// components are resolved first: `..` in a `/` or `\` path, and each colon after the first in a
+/// run of colons in a classic Mac OS path (`Disk:Projects:Art::photo.png` is in `Projects`).
 fn shared_folders(saved: &str, found: &Path) -> usize {
-    let saved = saved.rsplit(vectorcraft_doc::links::path_separators(saved)).skip(1).filter(|c| !c.is_empty());
+    let separators = vectorcraft_doc::links::path_separators(saved);
+    let classic = separators == [':'];
+    let mut up = 0usize;
+    let saved = saved.rsplit(separators).skip(1).filter(move |c| {
+        let parent = if classic { c.is_empty() } else { *c == ".." };
+        if parent {
+            up += 1;
+            return false;
+        }
+        if c.is_empty() || *c == "." && !classic {
+            return false;
+        }
+        if up > 0 {
+            up -= 1;
+            return false;
+        }
+        true
+    });
     let found = found.parent().into_iter().flat_map(|p| p.components().rev()).map_while(|c| match c {
         Component::Normal(n) => n.to_str(),
         _ => None,

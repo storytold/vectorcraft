@@ -153,6 +153,37 @@ fn a_classic_mac_path_is_found_by_its_name_and_folders() {
     assert_eq!(found(&r, "photo.png", &root), files.map(|(p, k, c)| (p.to_string(), k.to_string(), c)));
 }
 
+/// The folders a saved path shares with a file found are counted after its parent components are
+/// resolved: `Art::` in a classic Mac OS path and `Art/..` in any other path go back to `Projects`.
+#[test]
+fn parent_components_in_a_saved_path_are_resolved_before_ranking() {
+    for (tag, saved) in [("classic-up", "Old Disk:Projects:Art::photo.png"), ("slash-up", "/old/Projects/Art/../photo.png")] {
+        let root = folder(tag);
+        let mut s = session_for(&root);
+        let photo = png(50, 30, BLUE);
+        write(&root.join("orig/photo.png"), &photo);
+        let id = placed(&mut s, &root.join("orig/photo.png"));
+        s.edit("saved path", |d, _| {
+            if let NodeKind::Image(im) = &mut d.node_mut(NodeId(id)).unwrap().kind {
+                im.link.as_mut().unwrap().path = saved.into();
+            }
+            Ok(())
+        })
+        .unwrap();
+        std::fs::remove_dir_all(root.join("orig")).unwrap();
+        let search = root.join("search");
+        let mut changed = photo.clone();
+        *changed.last_mut().unwrap() ^= 1;
+        write(&search.join("Art/photo.png"), &changed);
+        write(&search.join("Projects/photo.png"), &changed);
+        s.execute("links.findFiles", &json!({"folder": search})).unwrap();
+        let r = finished(&mut s);
+        assert_eq!(r["state"].as_str(), Some("done"), "{saved}: {r}");
+        let files = [("search/Projects/photo.png", "name", false), ("search/Art/photo.png", "name", false)];
+        assert_eq!(found(&r, "photo.png", &root), files.map(|(p, k, c)| (p.to_string(), k.to_string(), c)), "{saved}");
+    }
+}
+
 /// Without `ids`, a search looks for the files that can't be found; with them, for those objects'
 /// files, whatever their status.
 #[test]
