@@ -325,6 +325,18 @@ impl Dialog {
     }
 }
 
+/// The last Replace Font request whose warning the status bar shows, to refresh it as the
+/// document changes.
+#[derive(Clone, Debug)]
+pub struct ReplaceFontWarning {
+    pub document_uid: u64,
+    pub revision: u64,
+    pub request: serde_json::Value,
+    pub selection: Option<Vec<u64>>,
+    pub text: String,
+    pub styles: Vec<(String, String)>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
@@ -461,6 +473,9 @@ pub struct UiState {
     /// Last tool shown for each toolbar group (flyout selection sticks).
     pub group_tool: Vec<String>,
     pub status: String,
+    /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
+    #[serde(skip)]
+    pub replace_font_warning: Option<ReplaceFontWarning>,
     pub palette_open: bool,
     pub palette_query: String,
     /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation. Not saved:
@@ -974,6 +989,7 @@ impl Default for UiState {
             flyout: None,
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
             status: String::new(),
+            replace_font_warning: None,
             palette_open: false,
             palette_query: String::new(),
             screen_mode: 0,
