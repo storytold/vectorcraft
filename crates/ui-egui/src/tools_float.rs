@@ -1,9 +1,10 @@
-//! The Tools panel floats by its title bar and docks beside the canvas's left edge
+//! The Tools panel floats by its title bar and docks again on the window's left edge
 //! ([`crate::toolbar`]). It stays outside the docking layout: dragging its title bar out of the
 //! docked panel floats it under the pointer, a floating panel's title bar moves it, and a release
-//! over the canvas's left edge or the window's left edge (lit up) docks it beside the canvas.
-//! Escape or losing the
-//! window's focus puts it back where the drag began.
+//! over the strip along the window's left edge (lit up) docks it there. With Keep Tools Beside the
+//! Canvas on (`UiState::tools_beside_canvas`), a release over the canvas's left edge docks it too,
+//! and either release docks it beside the canvas. Escape or losing the window's focus puts it back
+//! where the drag began.
 //!
 //! `window.panel.float {panel: "tools"}` / `window.panel.dock {panel: "tools"}` do the same for
 //! agents. Its position is kept with the preferences and in user workspaces, and a position saved
@@ -42,7 +43,8 @@ pub(crate) fn escape_cancelled_move(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<u64>(escape_cancel_id())) == Some(ctx.cumulative_frame_nr_for(ctx.viewport_id()))
 }
 
-/// The strip along the canvas's left edge where the Tools panel docks, as last laid out.
+/// The strip along the canvas's left edge where the Tools panel docks while Keep Tools Beside the
+/// Canvas is on, as last laid out.
 pub(crate) fn tools_zone_id() -> Id {
     Id::unique("tools-float-zone")
 }
@@ -56,6 +58,12 @@ pub(crate) fn set_dock_zones(ctx: &egui::Context, canvas: Rect, width: f32) {
     ctx.data_mut(|d| {
         d.insert_temp(tools_zone_id(), Rect::from_min_size(canvas.min, vec2(width, canvas.height())));
     });
+}
+
+/// Forget the canvas-edge target, so a strip laid out while Keep Tools Beside the Canvas was on
+/// does not dock Tools after it is turned off.
+pub(crate) fn clear_canvas_dock_zone(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.remove::<Rect>(tools_zone_id()));
 }
 
 /// The legacy 48-point window-edge target spans the full layout below the bars, including
@@ -108,9 +116,13 @@ pub(crate) fn drag_tools(app: &mut VectorcraftApp, ctx: &egui::Context, title: &
     }
 }
 
-/// The docking strip under `at`, if any.
-fn drop_zone(ctx: &egui::Context, at: Pos2) -> Option<Rect> {
-    ctx.data(|d| [d.get_temp::<Rect>(tools_zone_id()), d.get_temp::<Rect>(window_zone_id())].into_iter().flatten().find(|r| r.contains(at)))
+/// The docking strip under `at`, if any: the window's left edge, and with `beside_canvas` the
+/// canvas's left edge as well.
+fn drop_zone(ctx: &egui::Context, at: Pos2, beside_canvas: bool) -> Option<Rect> {
+    ctx.data(|d| {
+        let canvas = d.get_temp::<Rect>(tools_zone_id()).filter(|_| beside_canvas);
+        [canvas, d.get_temp::<Rect>(window_zone_id())].into_iter().flatten().find(|r| r.contains(at))
+    })
 }
 
 fn highlight(ctx: &egui::Context, zone: Rect) {
@@ -134,7 +146,7 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     let at = ctx.input(|i| i.pointer.interact_pos());
-    let zone = at.filter(|at| at.distance(m.from) > TRAVEL).and_then(|at| drop_zone(ctx, at));
+    let zone = at.filter(|at| at.distance(m.from) > TRAVEL).and_then(|at| drop_zone(ctx, at, app.ui.tools_beside_canvas));
     if ctx.input(|i| i.pointer.primary_down()) {
         if let Some(p) = at.map(|at| at - m.grab)
             && p.x.is_finite()

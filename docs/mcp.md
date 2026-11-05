@@ -1614,6 +1614,21 @@ changes neither option. Behavior reference: [View artwork](https://helpx.adobe.c
 {"name":"invoke_menu","arguments":{"command":"ui.navigatorPanelOptions","params":{"color":"Light Blue","solidDashes":true}}}
 ```
 
+## Tools panel placement
+
+By default the docked Tools panel sits at the window's left edge, outside any panels docked on the left.
+`window.toolsBesideCanvas {on?}` (Window › Toolbars › Keep Tools Beside the Canvas, remote mode, `invoke_menu`)
+docks it between those panels and the canvas instead (`on: true`), back at the window's edge (`on: false`), or
+toggles it (no `on`), and answers the new state. A value of `on` that is not true or false is an error and changes
+nothing. With the setting on, a floating Tools panel docks when it is dropped on the canvas's left edge as well as
+on the window's left edge, and `window.panel.dock {panel: "tools"}` docks it beside the canvas. A floating Tools
+panel stays floating when the setting changes. The setting is VectorCraft's own layout option, off by default; it is
+kept with the workspace, and built-in workspaces and workspaces saved without it keep Tools at the window's edge.
+
+```json
+{"name":"invoke_menu","arguments":{"command":"window.toolsBesideCanvas","params":{"on":true}}}
+```
+
 ## Ruler guides
 
 Ruler guides are numbered in the order they were made. `guide.add {vertical, pos, artboard?}` makes one (the x of a

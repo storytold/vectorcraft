@@ -61,6 +61,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.control" => app.ui.control_bar,
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
+        "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,
         "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
             None => app.ui.toolbar_double,
             Some(name) => crate::custom_toolbars::find(&app.ui, name).is_some_and(|b| b.double),
