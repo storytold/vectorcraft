@@ -6419,6 +6419,41 @@ fn a_brushs_art_takes_the_patterns_defined_before_it() {
     assert!(matches!(fill(&s.art), Paint::Pattern { ref pattern, .. } if pattern == "Dots"), "{:?}", r.warnings);
 }
 
+/// A brush's art filled with a pattern defined in the version 7 form places the tiles with the
+/// fill's offset, scale, rotation, reflection and shear operands, and a brush whose art has such a
+/// fill without all nine of them isn't read.
+#[test]
+fn a_brushs_art_places_a_version_7_patterns_tiles_with_its_operands() {
+    let def = pattern7("Grid", "(0 g) @ _ &\n");
+    let read_with = |ops: &str| {
+        let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n(Grid) {ops} p\n{}f\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 4.0, 4.0));
+        read_ok(&format!("{def}{section}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")))
+    };
+    let placed = |ops: &str| {
+        let r = read_with(ops);
+        let lib = vectorcraft_brush::library(&r.doc);
+        let vectorcraft_brush::BrushKind::Scatter(s) = brush_named(&lib, "Spray") else { panic!("scatter") };
+        match fill(&s.art) {
+            Paint::Pattern { xf, .. } => xf,
+            p => panic!("{ops}: {p:?} {:?}", r.warnings),
+        }
+    };
+    let plain = placed("0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]");
+    // The operands and the move they make from the plain placement (a b c d e f): those of
+    // `a_pattern_fill_applies_its_offset_scale_rotation_reflection_and_shear` with y down, as the
+    // art's space has it.
+    let cases = [
+        ("10 15 1 1 0 0 0 0 0 [1 0 0 1 0 0]", [1.0, 0.0, 0.0, 1.0, 10.0, -15.0]),
+        ("-5 7 2 .5 -45 0 0 -15 45 [1 0 0 1 0 0]", [1.793151, 0.353553, -1.035276, 0.353553, -5.0, -7.0]),
+    ];
+    for (ops, want) in cases {
+        let got = (placed(ops) * plain.inverse()).as_coeffs();
+        assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-6), "{ops}: {got:?}");
+    }
+    let r = read_with("0 0 1 1 0 0 0 0 [1 0 0 1 0 0]");
+    assert!(!vectorcraft_brush::library(&r.doc).iter().any(|b| b.name == "Spray"), "{:?}", r.warnings);
+}
+
 /// A file without brush objects keeps the default brushes.
 #[test]
 fn a_file_without_brushes_keeps_the_default_ones() {
