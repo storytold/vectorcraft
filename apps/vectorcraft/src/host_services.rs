@@ -213,12 +213,25 @@ fn read_file_head(path: &str, max: usize) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 #[test]
 fn read_file_head_reads_no_more_than_it_is_asked_for() {
+    use std::io::Write as _;
+    /// Removes the file when the test ends, a failed assertion included.
+    struct Remove(std::path::PathBuf);
+    impl Drop for Remove {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
     let path = std::env::temp_dir().join(format!("vectorcraft-read-head-{}", std::process::id()));
-    std::fs::write(&path, b"0123456789").unwrap();
-    let p = path.to_string_lossy();
+    // A leftover file or link at the path is removed (never followed), and the new file is created
+    // exclusively.
+    let _ = std::fs::remove_file(&path);
+    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
+    let guard = Remove(path);
+    f.write_all(b"0123456789").unwrap();
+    drop(f);
+    let p = guard.0.to_string_lossy();
     assert_eq!(read_file_head(&p, 4).unwrap(), b"0123");
     assert_eq!(read_file_head(&p, 20).unwrap(), b"0123456789", "a shorter file is read whole");
-    let _ = std::fs::remove_file(&path);
     assert!(read_file_head(&std::env::temp_dir().to_string_lossy(), 4).is_err(), "a folder is not read");
 }
 
