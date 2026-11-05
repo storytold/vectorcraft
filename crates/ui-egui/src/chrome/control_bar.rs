@@ -203,9 +203,9 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let Some(st) = app.session.active() else { return };
                 let sel = st.selection.objects.clone();
                 let units = app.session.general_unit();
-                let first = sel.first().and_then(|id| st.doc.node(*id)).cloned();
+                let first = sel.first().and_then(|id| st.doc.node(*id));
                 let anchors = anchor_controls(app);
-                let label = match &first {
+                let label = match first {
                     _ if app.session.tool_id() == "artboard" => tl!("Artboard"),
                     Some(_) if sel.len() == 1 && anchors != AnchorControls::None => {
                         tl!("Anchor Point")
@@ -222,6 +222,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                     _ => tl!(crate::panels::appearance::object_label(app)),
                 };
+                let has_first = first.is_some();
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
                 // With the Artboard tool in use, the bar shows the active artboard's controls in place
                 // of the object controls.
@@ -238,7 +239,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 crate::toolbar::control_bar_options(app, ui);
                 crate::dialogs::envelope::control_bar(app, ui);
                 crate::panels::symbols::control_bar(app, ui);
-                let opacity = if first.is_some() { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
+                let opacity = if has_first { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
                 if !image {
                     let shown_stroke = crate::panels::current_stroke(app);
                     let mixed = crate::panels::stroke_mixed(app, ui.ctx());
