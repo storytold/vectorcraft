@@ -1153,9 +1153,11 @@ fn glyph_target(t: &TextObject, p: &Value, c: &str) -> Result<(char, std::ops::R
 /// text; `None` when the character is not laid out (overflowing text). A character that starts a
 /// longer grapheme (a letter and its combining marks) is drawn in the grapheme's cluster. Of a
 /// cluster of several glyphs (a mark, a vowel sign drawn before the letter), the character's glyph
-/// is its default glyph or one of its alternates, else the first glyph that is not the default glyph
-/// or an alternate of another character of the grapheme (a ligature of the letter and a mark);
-/// `Some(None)` when the cluster holds none of these.
+/// is the first in cluster order that is its default glyph or one of its alternates and not the
+/// default glyph of another character of the grapheme; else the first that is its default glyph or
+/// one of its alternates; else the first glyph that is not the default glyph or an alternate of
+/// another character of the grapheme (a ligature of the letter and a mark). `Some(None)` when the
+/// cluster holds none of these.
 fn own_glyph(
     plain: &str,
     lay: &vectorcraft_text::TextLayout,
@@ -1176,18 +1178,24 @@ fn own_glyph(
         _ => {
             // The glyphs of each character are looked up once: a grapheme can repeat a mark.
             let glyphs_of = |c: char| face.alternates(c).iter().map(|a| a.gid).chain([face.glyph_for(c)]).collect::<Vec<u32>>();
-            let default = face.glyph_for(ch);
-            let listed = || {
-                let own = glyphs_of(ch);
-                cluster.iter().copied().find(|g| own.contains(g))
-            };
-            cluster.iter().copied().find(|&g| g == default).or_else(listed).or_else(|| {
-                let mut others: Vec<char> = plain.get(bytes.end..bytes.start + grapheme).unwrap_or_default().chars().collect();
-                others.sort_unstable();
-                others.dedup();
-                let theirs: Vec<u32> = others.into_iter().flat_map(glyphs_of).collect();
-                cluster.iter().copied().find(|g| !theirs.contains(g))
-            })
+            // In cluster order: a conjunct's half form comes before the default glyph of its
+            // second consonant, which can be the same character. A glyph drawn for another
+            // character (a vowel sign drawn first) is skipped even when the font lists it as an
+            // alternate of this one.
+            let own = glyphs_of(ch);
+            let mut others: Vec<char> = plain.get(bytes.end..bytes.start + grapheme).unwrap_or_default().chars().filter(|&c| c != ch).collect();
+            others.sort_unstable();
+            others.dedup();
+            let their_defaults: Vec<u32> = others.iter().map(|&c| face.glyph_for(c)).collect();
+            cluster
+                .iter()
+                .copied()
+                .find(|g| own.contains(g) && !their_defaults.contains(g))
+                .or_else(|| cluster.iter().copied().find(|g| own.contains(g)))
+                .or_else(|| {
+                    let theirs: Vec<u32> = others.iter().flat_map(|&c| glyphs_of(c)).collect();
+                    cluster.iter().copied().find(|g| !theirs.contains(g))
+                })
         }
     })
 }
