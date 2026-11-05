@@ -562,11 +562,19 @@ impl PathData {
         }
         let mut bbox: Option<Rect> = None;
         for sp in &self.subpaths {
-            // (a closed subpath's last segment ends on its first anchor: its `ClosePath` adds no line)
             for i in 0..sp.segment_count() {
                 let c = sp.segment(i);
                 // `to_bezpath_into` writes a line where neither handle is out, else a cubic.
                 let seg = segment_bounds(if sp.segment_is_line(i) { PathSeg::Line(kurbo::Line::new(c.p0, c.p3)) } else { PathSeg::Cubic(c) });
+                bbox = Some(bbox.map_or(seg, |bb| bb.union(seg)));
+            }
+            // A closed subpath's last segment ends on its first anchor, so its `ClosePath` adds no
+            // line, unless that anchor is NaN: it then differs from itself, and kurbo closes with one.
+            if sp.closed
+                && let Some(a) = sp.anchors.first()
+                && (a.p.x.is_nan() || a.p.y.is_nan())
+            {
+                let seg = segment_bounds(PathSeg::Line(kurbo::Line::new(a.p, a.p)));
                 bbox = Some(bbox.map_or(seg, |bb| bb.union(seg)));
             }
         }
@@ -764,6 +772,15 @@ mod tests {
         let lone = PathData::new(vec![SubPath::polyline(&[Point::new(5.0, 5.0)], false), SubPath::polyline(&[Point::new(9.0, 1.0)], true)]);
         assert_eq!(lone.bounds(), Some(Rect::ZERO));
         assert_eq!(bits(lone.bounds()), bits(reference(&lone)));
+        // A NaN anchor differs from itself: kurbo closes such a subpath with a line of its own.
+        let nan = Point::new(f64::NAN, 1.0);
+        let closed = |pts: &[Point]| SubPath::polyline(pts, true);
+        for pd in [
+            PathData::new(vec![closed(&[nan]), closed(&[Point::new(5.0, 5.0)])]),
+            PathData::new(vec![closed(&[nan, Point::new(3.0, 4.0), Point::new(6.0, 1.0)])]),
+        ] {
+            assert_eq!(bits(pd.bounds()), bits(reference(&pd)));
+        }
     }
 
     fn square() -> PathData {
