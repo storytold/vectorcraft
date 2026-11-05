@@ -1192,6 +1192,27 @@ fn own_glyph(
     })
 }
 
+/// The glyph of `face` drawn for the character `ch` at `bytes` of `t` when the character is shaped
+/// alone in the writing direction of `t` and the direction its paragraph sets it in, with the rest
+/// of its grapheme in the grapheme's own styles: the glyph of a character that is not laid out
+/// (overflowing text).
+fn shaped_alone(t: &TextObject, ch: char, bytes: &std::ops::Range<usize>, face: &vectorcraft_text::FontFace) -> Option<u32> {
+    use vectorcraft_doc::ParaDirection;
+    let plain = t.plain_text();
+    let end = edit::next_cluster(&plain, bytes.start).max(bytes.end);
+    let mut single = TextObject::point(Point::ZERO, "", CharStyle::default());
+    single.runs = edit::slice_runs(&t.runs, bytes.start, end);
+    single.vertical = t.vertical;
+    // The bidi level of the character in its paragraph (a parenthesis is mirrored at an odd one).
+    let before = plain.get(..bytes.start).unwrap_or_default();
+    let (paragraph, start) = (before.matches('\n').count(), before.rfind('\n').map_or(0, |i| i + 1));
+    let stop = plain.get(bytes.start..).and_then(|after| after.find('\n')).map_or(plain.len(), |i| bytes.start + i);
+    let rtl = vectorcraft_text::char_is_rtl(plain.get(start..stop).unwrap_or_default(), t.para_at(paragraph).direction, bytes.start - start);
+    single.para.direction = Some(if rtl { ParaDirection::RightToLeft } else { ParaDirection::LeftToRight });
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &single);
+    own_glyph(&single.plain_text(), &lay, ch, &(0..bytes.len()), face).flatten()
+}
+
 fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setGlyphAlternate";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
@@ -1220,21 +1241,12 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     // out (overflowing text) is shaped alone in its writing direction, with the rest of its grapheme
     // in the grapheme's own styles.
     let plain = t.plain_text();
-    let grapheme = plain.get(bytes.start..edit::next_cluster(&plain, bytes.start).max(bytes.end)).map_or_else(|| ch.to_string(), str::to_owned);
-    let unchosen = match holder.as_ref().filter(|_| !styled) {
-        None => None,
-        Some((_, run)) => {
-            let mut probe = t.clone();
-            edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = None);
-            let db = vectorcraft_text::FontDb::global();
-            own_glyph(&plain, &vectorcraft_text::layout(db, &probe), ch, &bytes, &face).unwrap_or_else(|| {
-                let mut single = TextObject::point(Point::ZERO, &grapheme, run.style.clone());
-                single.runs = edit::slice_runs(&probe.runs, bytes.start, bytes.start + grapheme.len());
-                single.vertical = t.vertical;
-                own_glyph(&grapheme, &vectorcraft_text::layout(db, &single), ch, &(0..bytes.len()), &face).flatten()
-            })
-        }
-    };
+    let unchosen = holder.as_ref().filter(|_| !styled).and_then(|_| {
+        let mut probe = t.clone();
+        edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = None);
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe);
+        own_glyph(&plain, &lay, ch, &bytes, &face).unwrap_or_else(|| shaped_alone(&probe, ch, &bytes, &face))
+    });
     let substituted = unchosen.is_some_and(|g| g != default);
     let choice = match gid.filter(|g| *g != default || substituted) {
         None => None,
@@ -1283,7 +1295,13 @@ fn glyph_alternates(s: &mut Session, p: &Value) -> Result<Value> {
     let default = face.glyph_for(ch);
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
     let first = lay.glyphs.iter().find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len)).map(|g| g.gid);
-    let chosen = own_glyph(&t.plain_text(), &lay, ch, &bytes, &face).flatten().or(first).unwrap_or(default);
+    // A character that is not laid out (overflowing text) reports the glyph it is drawn with when
+    // it is shaped alone, as `text.setGlyphAlternate` finds it.
+    let chosen = match own_glyph(&t.plain_text(), &lay, ch, &bytes, &face) {
+        Some(own) => own.or(first),
+        None => shaped_alone(&t, ch, &bytes, &face),
+    }
+    .unwrap_or(default);
     let alternates: Vec<Value> = face.alternates(ch).iter().map(|a| json!({"gid": a.gid, "feature": String::from_utf8_lossy(&a.feature)})).collect();
     Ok(json!({"char": ch.to_string(), "font": face.family, "style": face.style, "default": default, "chosen": chosen, "alternates": alternates}))
 }
