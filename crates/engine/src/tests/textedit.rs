@@ -2823,9 +2823,11 @@ fn the_fallback_glyph_of_a_consonant_after_its_vowel_sign_is_reported() {
     let glyphs = vectorcraft_text::layout(db, &obj(&s, open)).glyphs;
     let fallback = db.face_by_id(glyphs[0].font_id).expect("the fallback face");
     assert_ne!(fallback.id(), requested.id());
-    let (ka, sign) = (fallback.glyph_for('क'), fallback.glyph_for('\u{93F}'));
+    let ka = fallback.glyph_for('क');
     let drawn: Vec<_> = glyphs.iter().map(|g| (g.gid, g.byte)).collect();
-    assert_eq!(drawn, [(sign, 0), (ka, 0)], "the vowel sign is drawn first, in Ka's cluster ({} or {MATRA_FAMILY})", fallback.family);
+    // A face may draw the vowel sign with a glyph other than its own, so only its place is checked.
+    let sign_first = matches!(drawn[..], [(sign, 0), (k, 0)] if sign != 0 && sign != ka && k == ka);
+    assert!(sign_first, "the vowel sign is drawn first, in Ka's cluster ({} or {MATRA_FAMILY}): {drawn:?}", fallback.family);
     let query = s.execute("text.glyphAlternates", &json!({"id": open.0, "start": 0})).unwrap();
     assert_eq!(query["chosen"], json!(ka), "the fallback face's glyph for Ka");
 
