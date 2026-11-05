@@ -15,8 +15,8 @@ use vectorcraft_pathops::{BoolOp, PathfinderOp};
 
 use super::edit::selected_roots;
 use super::{
-    CommandSpec, EngineError, Result, Session, always, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selection, number_or, str_param,
-    switch_or,
+    CommandSpec, EngineError, Result, Session, always, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selected_path, has_selection,
+    number_or, str_param, switch_or,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -153,7 +153,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             None,
             "{tolerance?: pt (1), level?: 0..100 (the Simplify slider, in place of tolerance: 0 fewest anchor points, 50 is 1 pt, every 10 levels halves or doubles it), auto?: bool (Auto-Simplify: the lowest level whose tolerance is at most 1/400 of the selection's longer side, or 100 when that side is under 12.5 pt), cornerAngle?: deg (30), straightLines?: bool, wholePaths?: bool (false: a path with segments direct-selected, or between direct-selected anchors, simplifies only each run of them between its end anchors, which stay as they are, and keeps the runs selected; true simplifies those paths whole)} → {ids, before, after} anchor counts, and the level used with level or auto",
-            has_selection,
+            has_selected_path,
             simplify
         ),
         cmd!(
@@ -162,17 +162,17 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             None,
             "{level?: 0..100 (50; the Smooth slider: 0 minimum smoothing, the path staying within 0.1% of its longer side, 100 maximum: smoothed along its length by up to 5% of it and refitted with curves within up to 2.5% of it, corners kept only where the path turns back, never with more anchor points), auto?: bool (Auto-Smooth: level 50), ids?: [id…] (default: the selection)} smooth each path under the objects, compound path members included, as one undo step; without ids, a path with anchor points or segments direct-selected smooths only the sections between them, which stay selected → {ids, before, after} anchor counts, and the level used",
-            has_selection,
+            has_selected_path,
             smooth
         ),
-        cmd!("object.path.addAnchorPoints", "Add Anchor Points", ["Object", "Path"], None, "{} → {ids}", has_selection, add_anchor_points),
+        cmd!("object.path.addAnchorPoints", "Add Anchor Points", ["Object", "Path"], None, "{} → {ids}", has_selected_path, add_anchor_points),
         cmd!(
             "object.path.divideObjectsBelow",
             "Divide Objects Below",
             ["Object", "Path"],
             None,
             "{} cut the objects below with the selected path (which is removed) → {ids}",
-            has_selection,
+            has_selected_path,
             divide_objects_below
         ),
         cmd!(
@@ -181,7 +181,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             None,
             "{rows?: 2, columns?: 2, gutter?: pt (12; rowGutter?, columnGutter?: one of the two), totalHeight?, totalWidth?: pt (the grid's size; the selected paths' when left out), height?, width?: pt (each row's and column's size, which then sets the total), addGuides?: false (ruler guides along the row and column edges)} one grid of rectangles over the selected paths replaces them, painted as the topmost one → {ids, guides: count}",
-            has_selection,
+            has_selected_path,
             split_into_grid
         ),
         cmd!(

@@ -5703,6 +5703,9 @@ anchor	Points:	Điểm:
 	Find Nearest Swatch…	Tìm mẫu màu gần nhất…
 	Find Nearest Swatch	Tìm mẫu màu gần nhất
 	Apply Nearest Swatch	Áp dụng mẫu màu gần nhất
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Áp dụng màu tô cho nét
+	Apply Stroke to Fill	Áp dụng nét cho màu tô
 	Select objects to find the swatches nearest their colors.	Chọn đối tượng để tìm các mẫu màu gần nhất với màu của chúng.
 @msg	select objects or give `color`	chọn đối tượng hoặc cung cấp `color`
 @msg	`color` is not a colour	`color` không phải là màu

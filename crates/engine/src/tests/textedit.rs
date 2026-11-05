@@ -3003,3 +3003,28 @@ fn the_fallback_glyph_of_a_consonant_after_its_vowel_sign_is_reported() {
     let query = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": 0})).unwrap();
     assert_eq!(query["chosen"], json!(ka), "an overflowing Ka reports the fallback face's glyph for Ka");
 }
+
+/// Apply Fill to Stroke with characters selected with the Type tool: only those characters take
+/// a stroke of their own fill, as one undo step (#5530).
+#[test]
+fn apply_fill_to_stroke_with_characters_selected_changes_only_them() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 50.0, 300.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Sample Text", v).unwrap();
+    // All of it red, then the first word green: a stroke on the rest would show.
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#ff0000"})).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 6}));
+    s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("addon.color.fillToStroke", &json!({})).unwrap();
+    let t = obj(&s, id);
+    assert_eq!(t.runs[0].text, "Sample");
+    assert_eq!(t.runs[0].style.stroke, t.runs[0].style.fill, "the selected characters take their fill as a stroke");
+    assert!(t.runs[0].style.stroke_width > 0.0);
+    assert!(t.runs[1].style.stroke.is_none(), "the rest of the type keeps its stroke");
+    let labels = undo_labels(&s);
+    assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Apply Fill to Stroke")));
+}

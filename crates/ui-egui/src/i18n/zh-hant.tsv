@@ -5740,6 +5740,9 @@ anchor	Points:	點：
 	Find Nearest Swatch…	尋找最接近的色票…
 	Find Nearest Swatch	尋找最接近的色票
 	Apply Nearest Swatch	套用最接近的色票
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	將填色套用至筆畫
+	Apply Stroke to Fill	將筆畫套用至填色
 	Select objects to find the swatches nearest their colors.	選取物件以尋找與其顏色最接近的色票。
 @msg	select objects or give `color`	請選取物件或提供 `color`
 @msg	`color` is not a colour	`color` 不是顏色

@@ -5683,6 +5683,9 @@ anchor	Points:	포인트:
 	Find Nearest Swatch…	가장 가까운 견본 찾기…
 	Find Nearest Swatch	가장 가까운 견본 찾기
 	Apply Nearest Swatch	가장 가까운 견본 적용
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	칠을 선에 적용
+	Apply Stroke to Fill	선을 칠에 적용
 	Select objects to find the swatches nearest their colors.	색상에 가장 가까운 견본을 찾을 개체를 선택하십시오.
 @msg	select objects or give `color`	개체를 선택하거나 `color`를 지정하십시오
 @msg	`color` is not a colour	`color`은(는) 색상이 아닙니다

@@ -6060,6 +6060,9 @@ anchor	Points:	Noktalar:
 	Find Nearest Swatch…	En Yakın Renk Örneğini Bul…
 	Find Nearest Swatch	En Yakın Renk Örneğini Bul
 	Apply Nearest Swatch	En Yakın Renk Örneğini Uygula
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Dolguyu Kontura Uygula
+	Apply Stroke to Fill	Konturu Dolguya Uygula
 	Select objects to find the swatches nearest their colors.	Renklerine en yakın renk örneklerini bulmak için nesneleri seçin.
 @msg	select objects or give `color`	nesneleri seçin veya `color` verin
 @msg	`color` is not a colour	`color` bir renk değil
