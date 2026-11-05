@@ -51,6 +51,22 @@ fn contour_offset(n: &Node) -> Option<f64> {
     Some(e.params.get("offset").and_then(Value::as_f64).unwrap_or(0.0))
 }
 
+/// The corner style and miter limit of a Contour's Offset Path effect, as `object.contour` takes
+/// them.
+fn contour_style(n: &Node) -> Option<Value> {
+    let e = n.appearance.effects.iter().rev().find(|e| e.id == EFFECT)?;
+    let corners = match e.params.get("joins").and_then(Value::as_str) {
+        Some("round") => "round",
+        Some("bevel") => "square",
+        _ => "sharp",
+    };
+    let mut style = json!({ "corners": corners });
+    if let Some(m) = e.params.get("miterLimit").and_then(Value::as_f64) {
+        style["miterLimit"] = json!(m);
+    }
+    Some(style)
+}
+
 /// How far `p` is from the nearest of `bases`' edges: positive outside, negative inside.
 fn signed_distance(bases: &[Base], p: Point) -> Option<f64> {
     let mut nearest = f64::INFINITY;
@@ -69,6 +85,9 @@ struct Drag {
     pressed_at: f64,
     /// The Contour's distance at the press (0 for a shape that is not one yet).
     start: f64,
+    /// The corner style and miter limit every preview carries: the pressed Contour's own, else the
+    /// tool's options.
+    style: Value,
     /// The distance last previewed.
     last: Option<f64>,
     /// Where the pointer is, for the distance label.
@@ -108,8 +127,9 @@ impl Corners {
 }
 
 impl ContourTool {
-    fn params(&self, offset: f64) -> Value {
-        let mut p = json!({"offset": offset, "corners": self.corners.id()});
+    /// The corner style and miter limit of a new Contour: the tool's options.
+    fn style(&self) -> Value {
+        let mut p = json!({ "corners": self.corners.id() });
         if let Some(m) = self.miter_limit {
             p["miterLimit"] = json!(m);
         }
@@ -142,21 +162,25 @@ impl Tool for ContourTool {
             PointerKind::Down => {
                 let shapes = selected_shapes(cx);
                 let start = shapes.first().and_then(|n| contour_offset(n)).unwrap_or(0.0);
+                // A Contour keeps its own corners; a new one takes the tool's.
+                let style = shapes.first().and_then(|n| contour_style(n)).unwrap_or_else(|| self.style());
                 let bases: Vec<Base> = shapes.into_iter().filter_map(base_of).collect();
                 let Some(pressed_at) = signed_distance(&bases, ev.pos) else { return vec![] };
-                self.drag = Some(Drag { bases, pressed_at, start, last: None, pos: ev.pos });
+                self.drag = Some(Drag { bases, pressed_at, start, style, last: None, pos: ev.pos });
                 vec![Action::Begin("Contour".into())]
             }
             PointerKind::Drag => {
-                let mut params = self.params(0.0);
                 let Some(drag) = self.drag.as_mut() else { return vec![] };
                 drag.pos = ev.pos;
                 let Some(now) = signed_distance(&drag.bases, ev.pos) else { return vec![] };
                 let offset = round_distance(drag.start + now - drag.pressed_at, ev.mods);
-                if !offset.is_finite() || drag.last == Some(offset) {
+                // Nothing is previewed until the distance has left where it started: a drag along
+                // the edge (or one Shift rounds back) would otherwise leave an unchanged copy.
+                if !offset.is_finite() || drag.last == Some(offset) || (drag.last.is_none() && offset == drag.start) {
                     return vec![];
                 }
                 drag.last = Some(offset);
+                let mut params = drag.style.clone();
                 params["offset"] = json!(offset);
                 vec![Action::Preview("object.contour".into(), params)]
             }

@@ -299,6 +299,40 @@ mod tool {
         assert_eq!(effects_of(&s, contour)[0].1["joins"], json!("round"));
     }
 
+    /// A Contour keeps its own corner style and miter limit when it is dragged again, whatever the
+    /// tool's options are by then (they said Sharp when the Contour was made Square).
+    #[test]
+    fn dragging_a_contour_again_keeps_its_corners_and_miter_limit() {
+        let (mut s, _) = ready();
+        s.execute("object.contour", &json!({"offset": 5, "corners": "square", "miterLimit": 7})).unwrap();
+        let contour = s.doc().unwrap().selection.objects[0];
+        s.set_tool_option("corners", &json!("sharp"));
+        at(&mut s, PointerKind::Down, 150.0, 120.0, Mods::default());
+        at(&mut s, PointerKind::Drag, 158.0, 120.0, Mods::default());
+        at(&mut s, PointerKind::Up, 158.0, 120.0, Mods::default());
+        let fx = effects_of(&s, contour);
+        assert_eq!(fx.len(), 1);
+        assert!((offset_of(&s, contour) - 13.0).abs() < 1e-6, "{}", offset_of(&s, contour));
+        assert_eq!(fx[0].1["joins"], json!("bevel"), "{:?}", fx[0].1);
+        assert_eq!(fx[0].1["miterLimit"], json!(7.0), "{:?}", fx[0].1);
+    }
+
+    /// A drag that never moves the distance (along the edge, or rounded back to nothing by Shift)
+    /// leaves no unchanged copy and no undo step.
+    #[test]
+    fn a_drag_along_the_edge_changes_nothing() {
+        let (mut s, _) = ready();
+        let (before, nodes) = (undo_depth(&s), node_count(&s));
+        let shift = Mods { shift: true, ..Mods::default() };
+        for (mods, to) in [(Mods::default(), (150.0, 135.0)), (shift, (150.3, 120.0))] {
+            at(&mut s, PointerKind::Down, 150.0, 120.0, mods);
+            at(&mut s, PointerKind::Drag, to.0, to.1, mods);
+            at(&mut s, PointerKind::Up, to.0, to.1, mods);
+            assert_eq!((undo_depth(&s), node_count(&s)), (before, nodes), "{to:?}");
+            assert!(!s.in_interaction());
+        }
+    }
+
     /// The outline a Contour was made from shows as a dashed guide over a solid halo (so it reads
     /// over any fill); a shape that is not a Contour yet has none.
     #[test]
