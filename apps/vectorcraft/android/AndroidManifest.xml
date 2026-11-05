@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="ai.storyteller.vectorcraft"
+    android:versionCode="200"
+    android:versionName="0.20.0">
+
+    <!-- Zero GMS (Google Mobile Services) dependency: 100% AOSP and HarmonyOS compatible -->
+    <!-- Required hardware features for tablet illustration -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="true" />
+    <uses-feature android:name="android.hardware.touchscreen.multitouch" android:required="true" />
+    <uses-feature android:name="android.hardware.touchscreen.multitouch.distinct" android:required="true" />
+    <uses-feature android:name="android.hardware.vulkan.version" android:required="false" android:version="0x400003" />
+
+    <!-- File access: scoped / app-private storage & document provider -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+
+    <application
+        android:label="VectorCraft"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:hasCode="false"
+        android:hardwareAccelerated="true"
+        android:largeHeap="true"
+        android:resizeableActivity="true"
+        android:supportsRtl="true"
+        android:theme="@style/VectorCraftTheme">
+
+        <!-- Native Activity backed by libvectorcraft.so compiled via Rust NDK -->
+        <activity
+            android:name="android.app.NativeActivity"
+            android:label="VectorCraft"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:exported="true"
+            android:screenOrientation="unspecified"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|uiMode|density|locale|layoutDirection"
+            android:theme="@style/VectorCraftTheme">
+            
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="vectorcraft" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- VectorCraft file associations (.vectorcraft, .svg, .pdf) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="image/svg+xml" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/json" />
+                <data android:pathPattern=".*\\.vectorcraft" />
+                <data android:pathPattern=".*\\.svg" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

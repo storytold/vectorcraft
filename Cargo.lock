@@ -6075,6 +6075,7 @@ dependencies = [
 name = "vectorcraft"
 version = "0.21.0"
 dependencies = [
+ "android-activity",
  "arboard",
  "block2 0.6.2",
  "chrono",

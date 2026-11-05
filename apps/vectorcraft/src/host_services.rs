@@ -12,6 +12,7 @@ use super::{mac_save_format, mac_screen_color, mac_tablet};
 pub(crate) type Parent = Option<std::sync::Arc<winit::window::Window>>;
 
 /// What rfd's blocking and asynchronous file dialogs are both set up with.
+#[cfg(not(target_os = "android"))]
 trait DialogSettings: Sized {
     fn parent(self, window: &winit::window::Window) -> Self;
     fn title(self, title: &str) -> Self;
@@ -20,6 +21,7 @@ trait DialogSettings: Sized {
     fn file_name(self, name: &str) -> Self;
 }
 
+#[allow(unused_macros)]
 macro_rules! dialog_settings {
     ($($dialog:ty),*) => {$(
         impl DialogSettings for $dialog {
@@ -42,6 +44,7 @@ macro_rules! dialog_settings {
     )*};
 }
 
+#[cfg(not(target_os = "android"))]
 dialog_settings!(rfd::FileDialog, rfd::AsyncFileDialog);
 
 /// On Linux and the BSDs the dialog is GTK's or the desktop portal's, which match a file type's
@@ -69,6 +72,7 @@ fn open_extensions(exts: &[impl AsRef<str>], any_case: bool) -> Vec<String> {
 }
 
 /// `d` set up for `request`: its title, file types, folder and suggested name.
+#[cfg(not(target_os = "android"))]
 fn dialog_for<D: DialogSettings>(d: D, request: &PickRequest) -> D {
     let pick = match request {
         PickRequest::Open(pick) | PickRequest::Save(pick) => pick,
@@ -98,7 +102,7 @@ fn dialog_for<D: DialogSettings>(d: D, request: &PickRequest) -> D {
 
 /// A native file dialog for `request` over `parent` (on Linux the portal then shows it over the
 /// window and keeps it in front).
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "android")))]
 fn file_dialog(request: &PickRequest, parent: &Parent) -> rfd::FileDialog {
     match parent {
         Some(w) => dialog_for(rfd::FileDialog::new().parent(w), request),
@@ -117,7 +121,7 @@ fn make_folder(request: &PickRequest) {
 /// Linux and the BSDs a save dialog with two or more file types is the desktop portal's, over
 /// `parent`, and its answer also names the file type picked ([`portal_save`]); `dialog` shows when
 /// the portal can't.
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "android")))]
 #[cfg_attr(windows, allow(unused_variables))]
 fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest, parent: &Parent) -> Vec<String> {
     make_folder(request);
@@ -137,9 +141,14 @@ fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest, parent: &Parent) 
 }
 
 /// Show the dialog for `request` over `parent` now → the paths picked.
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "android")))]
 fn pick_now(request: PickRequest, parent: &Parent) -> Vec<String> {
     show_dialog(file_dialog(&request, parent), &request, parent)
+}
+
+#[cfg(target_os = "android")]
+fn pick_now(_request: PickRequest, _parent: &Parent) -> Vec<String> {
+    Vec::new()
 }
 
 /// macOS shows no dialog in line: its modal loop would run inside winit's event handler, and an
@@ -206,7 +215,7 @@ fn write_file(path: &str, bytes: &[u8]) -> Result<(), String> {
 /// Linux: show the dialog for `request` over `parent` on a thread of its own, answering on the
 /// receiver. Shown on the UI thread, nothing would answer the compositor meanwhile, which then
 /// offers to kill the window as not responding (#592).
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "android")))]
 fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Option<std::sync::mpsc::Receiver<Vec<String>>> {
     let dialog = file_dialog(&request, parent);
     let (tx, rx) = std::sync::mpsc::channel();
@@ -221,6 +230,11 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
         })
         .ok()?;
     Some(rx)
+}
+
+#[cfg(target_os = "android")]
+fn start_pick(_request: PickRequest, _parent: &Parent, _ui: &egui::Context) -> Option<std::sync::mpsc::Receiver<Vec<String>>> {
+    None
 }
 
 /// The paths a dialog shown as a sheet picks, once it closes.
@@ -318,6 +332,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         no_cursor_theme: wayland && cursor_theme::theme_missing(),
         #[cfg(target_os = "linux")]
         stylus: if x11 { tablet::start() } else { None },
+        #[cfg(target_os = "android")]
+        stylus: Some(super::android_stylus::start()),
         // macOS reads it from AppKit's events (#852).
         #[cfg(target_os = "macos")]
         stylus: mac_tablet::start(),
@@ -377,7 +393,9 @@ fn open_file(path: &str) -> Result<(), String> {
     };
     #[cfg(target_os = "macos")]
     let mut c = std::process::Command::new("open");
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(target_os = "android")]
+    let mut c = std::process::Command::new("true");
+    #[cfg(not(any(target_os = "macos", windows, target_os = "android")))]
     let mut c = std::process::Command::new("xdg-open");
     #[cfg(not(windows))]
     c.arg(path);

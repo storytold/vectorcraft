@@ -30,7 +30,9 @@ pub fn system_clipboard(window: Option<std::sync::Arc<winit::window::Window>>) -
         let _ = window;
         Box::<win::Clipboard>::default()
     };
-    #[cfg(not(windows))]
+    #[cfg(target_os = "android")]
+    let cb = Box::new(android_clipboard::Clipboard::new(window));
+    #[cfg(not(any(windows, target_os = "android")))]
     let cb = Box::new(portable::Clipboard::new(window));
     cb
 }
@@ -334,6 +336,42 @@ mod win {
 
 /// arboard, or on a Wayland compositor without its data-control protocol the core protocol's text
 /// clipboard: one format at a time. Built everywhere so it is checked everywhere.
+#[cfg(target_os = "android")]
+mod android_clipboard {
+    use super::*;
+
+    #[derive(Default)]
+    pub struct Clipboard {
+        flavours: Vec<Flavour>,
+    }
+
+    impl Clipboard {
+        pub fn new(_window: Option<std::sync::Arc<winit::window::Window>>) -> Self {
+            Self::default()
+        }
+    }
+
+    impl SystemClipboard for Clipboard {
+        fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
+            self.flavours = flavours.to_vec();
+            Ok(())
+        }
+        fn holds_ours(&mut self) -> bool {
+            !self.flavours.is_empty()
+        }
+        fn has(&mut self, mimes: &[&'static str]) -> bool {
+            mimes.iter().any(|&m| self.flavours.iter().any(|f| f.mime == m))
+        }
+        fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
+            mimes.iter().find_map(|&m| self.flavours.iter().find(|f| f.mime == m).cloned())
+        }
+        fn read_deferred(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
+            self.read(mimes).map(ClipboardRead::Now)
+        }
+    }
+}
+
+#[cfg(not(target_os = "android"))]
 #[cfg_attr(windows, allow(dead_code))]
 mod portable {
     use std::borrow::Cow;

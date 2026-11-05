@@ -6,6 +6,36 @@ license.workspace = true
 publish = false
 default-run = "vectorcraft"
 
+[lib]
+name = "vectorcraft"
+crate-type = ["cdylib", "rlib"]
+path = "src/main.rs"
+
+[[bin]]
+name = "vectorcraft"
+path = "src/main.rs"
+
+[package.metadata.android]
+package = "ai.storyteller.vectorcraft"
+apk_name = "vectorcraft"
+resources = "android/res"
+
+[package.metadata.android.application]
+icon = "@mipmap/ic_launcher"
+label = "VectorCraft"
+theme = "@style/VectorCraftTheme"
+
+[package.metadata.android.application.activity]
+label = "VectorCraft"
+theme = "@style/VectorCraftTheme"
+config_changes = "orientation|screenSize|screenLayout|keyboardHidden|keyboard|uiMode|density|locale|layoutDirection"
+launch_mode = "singleTask"
+exported = true
+
+[package.metadata.android.signing.release]
+path = "release.keystore"
+keystore_password = "android"
+
 [lints]
 workspace = true
 
@@ -27,10 +57,12 @@ serde_json = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies]
 rfd = { workspace = true }
 # wayland-data-control: native Wayland clipboard (Linux; X11 through XWayland only sees what X11 apps copied).
 arboard = { workspace = true, features = ["image-data", "wayland-data-control"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 image = { workspace = true }
 webbrowser = { workspace = true }
 # The window's monitors, size and position (the same winit eframe runs on).
@@ -113,6 +145,9 @@ wayland-backend = { version = "0.3", features = ["client_system"] }
 # exactly: review the diff before bumping.
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 zbus = "=5.19.0"
+
+[target.'cfg(target_os = "android")'.dependencies]
+android-activity = { version = "0.6", default-features = false, features = ["native-activity"] }
 
 [build-dependencies]
 # Icon + VERSIONINFO for vectorcraft.exe; build.rs only uses it when targeting Windows.
