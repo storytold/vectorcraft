@@ -6386,6 +6386,13 @@ breakText	Glyphs	Merkit
 	Fully Outside	Kokonaan ulkona
 	No artboards match.	Mikään piirtoalusta ei vastaa hakua.
 	Chosen: {n} of {total}	Valittu: {n}/{total}
+
+# Contour add-on
+	Contour	Ääriviiva
+	Contour Tool	Ääriviivatyökalu
+	Sharp	Terävä
+	Bake	Laajenna
+	Turn the Contour into plain paths	Muuntaa ääriviivan tavallisiksi poluiksi
 	Set Corners…	Aseta kulmat…
 	All Anchors	Kaikki ankkurit
 	Odd-Numbered Anchors	Parittomat ankkurit

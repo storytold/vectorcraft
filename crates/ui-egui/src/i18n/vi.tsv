@@ -5952,6 +5952,13 @@ breakText	Glyphs	Glyph
 	Fully Outside	Hoàn toàn bên ngoài
 	No artboards match.	Không có bảng vẽ nào khớp.
 	Chosen: {n} of {total}	Đã chọn: {n} trên {total}
+
+# Contour add-on
+	Contour	Đường viền
+	Contour Tool	Công cụ Đường viền
+	Sharp	Nhọn
+	Bake	Mở rộng
+	Turn the Contour into plain paths	Chuyển đường viền thành các đường dẫn thường
 	Set Corners…	Đặt góc…
 	All Anchors	Tất cả điểm neo
 	Odd-Numbered Anchors	Điểm neo số lẻ

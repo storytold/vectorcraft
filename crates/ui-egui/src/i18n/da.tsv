@@ -6217,6 +6217,13 @@ breakText	Glyphs	Glyffer
 	Fully Outside	Helt udenfor
 	No artboards match.	Ingen tegneflader passer.
 	Chosen: {n} of {total}	Valgt: {n} af {total}
+
+# Contour add-on
+	Contour	Kontur
+	Contour Tool	Kontur-værktøj
+	Sharp	Spids
+	Bake	Udvid
+	Turn the Contour into plain paths	Gør konturen til almindelige stier
 	Set Corners…	Angiv hjørner…
 	All Anchors	Alle ankre
 	Odd-Numbered Anchors	Ulige ankre

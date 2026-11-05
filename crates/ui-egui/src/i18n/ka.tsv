@@ -6362,6 +6362,13 @@ font-script	Japanese	იაპონური
 	Fully Outside	მთლიანად გარეთ
 	No artboards match.	შესაბამისი სამუშაო დაფა არ არის.
 	Chosen: {n} of {total}	არჩეულია: {n} / {total}
+
+# Contour add-on
+	Contour	მოხაზულობა
+	Contour Tool	მოხაზულობის ხელსაწყო
+	Sharp	მახვილი
+	Bake	გაშლა
+	Turn the Contour into plain paths	მოხაზულობას ჩვეულებრივ ტრაექტორიებად აქცევს
 	Set Corners…	კუთხეების დაყენება…
 	All Anchors	ყველა საყრდენი წერტილი
 	Odd-Numbered Anchors	კენტი საყრდენი წერტილები

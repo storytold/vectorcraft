@@ -17,6 +17,7 @@ use crate::{CacheKey, VectorcraftApp, now_ms, widgets};
 
 mod artboards;
 mod context;
+mod contour_bar;
 mod cursor;
 mod drag;
 mod fill;
@@ -359,6 +360,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let dragging = app.session.tool_busy() && ui.input(|i| i.pointer.is_decidedly_dragging());
     if app.ui.task_bar && !revolve_edit && !dragging && app.ui.screen_mode < 3 && !strip {
         task_bar(app, ui, &xf);
+    }
+    if app.ui.screen_mode < 3 {
+        contour_bar::contour_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {
         crate::free_transform::show(app, ui, xf.rect);
