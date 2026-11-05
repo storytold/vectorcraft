@@ -137,7 +137,9 @@ private editing data. VectorCraft:
   from 0 to 9 leaves the mode as it was.
   with a fill's offset, scale, rotation, reflection and shear applied before its matrix. Its linked images in
   the version 7 form (`(path) modified XG`, then `XF` with no samples) come in as linked images of their files,
-  showing a placeholder where the image goes until the file is relinked in the Links panel.
+  showing a placeholder where the image goes until the file is relinked in the Links panel. A path stored in
+  the classic Mac OS form (`Disk:Folder:file.tif`, with a colon and no `/` or `\`) is named by its last part, and
+  relinking looks for that name.
   A 1-bit gray image whose `XI` or `XF` has ImageMask 1 comes in colorized by the fill color set before it,
   or by black when that fill is not a solid color. VectorCraft's own rule is that the pixels that open black
   with ImageMask 0 take the color and the others are transparent.

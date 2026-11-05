@@ -123,6 +123,36 @@ fn files_found_are_ranked_by_what_the_link_saved() {
     assert_eq!(photo_row["path"], json!(root.join("orig/photo.png")));
 }
 
+/// A link saved as a classic Mac OS path (`Disk:Folder:file`) is looked for by its file name, and
+/// the files found are ranked by the folder names they share with that path.
+#[test]
+fn a_classic_mac_path_is_found_by_its_name_and_folders() {
+    let root = folder("classic");
+    let mut s = session_for(&root);
+    let photo = png(50, 30, BLUE);
+    write(&root.join("orig/photo.png"), &photo);
+    let id = placed(&mut s, &root.join("orig/photo.png"));
+    s.edit("classic path", |d, _| {
+        if let NodeKind::Image(im) = &mut d.node_mut(NodeId(id)).unwrap().kind {
+            im.link.as_mut().unwrap().path = "Old Disk:Art:Images:photo.png".into();
+        }
+        Ok(())
+    })
+    .unwrap();
+    std::fs::remove_dir_all(root.join("orig")).unwrap();
+    // Other files of the name (a search ends once it finds the same file).
+    let search = root.join("search");
+    let mut changed = photo.clone();
+    *changed.last_mut().unwrap() ^= 1;
+    write(&search.join("a/photo.png"), &changed);
+    write(&search.join("z/Art/Images/photo.png"), &changed);
+    s.execute("links.findFiles", &json!({"folder": search})).unwrap();
+    let r = finished(&mut s);
+    assert_eq!(r["state"].as_str(), Some("done"), "{r}");
+    let files = [("search/z/Art/Images/photo.png", "name", false), ("search/a/photo.png", "name", false)];
+    assert_eq!(found(&r, "photo.png", &root), files.map(|(p, k, c)| (p.to_string(), k.to_string(), c)));
+}
+
 /// Without `ids`, a search looks for the files that can't be found; with them, for those objects'
 /// files, whatever their status.
 #[test]

@@ -1349,12 +1349,11 @@ fn file_fields_here(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Va
     let doc_path = st.path.as_deref();
     let path = fileio::document_path(&l.path, doc_path).ok();
     let stamp = path.as_deref().and_then(file_stamp);
-    let folder_len = l.path.len().saturating_sub(l.name().len());
     out["status"] = json!(status.as_str());
     note_refused(out, l, doc_path);
     out["path"] = json!(l.path);
     out["fileName"] = json!(l.name());
-    out["location"] = json!(l.path.get(..folder_len).unwrap_or_default().trim_end_matches(['/', '\\']));
+    out["location"] = json!(l.folder());
     for (k, v) in [
         ("page", l.page.map(u64::from)),
         ("fileSize", stamp.map(|s| s.0).or(l.size)),

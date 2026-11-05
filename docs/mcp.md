@@ -4163,7 +4163,10 @@ comes back to the front, following the same preference. `links.check` reports ev
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. A PNG, JPEG,
 GIF or WebP file whose pixels can't be read is not shown: `links.relink` fails with "the image's pixels can't be
 read", and `links.update`, or `document.open` when it reads the file, lists it as missing, its images keeping what they
-showed. Without a file system (the web), linked images show their previews.
+showed. Without a file system (the web), linked images show their previews. A link whose path has a colon and no `/`
+or `\` is read as a classic Mac OS path (`Disk:Folder:file.tif`), a form that older `.ai` files can hold. The link
+keeps that path and is named by its last part. `links.info` gives that part as `fileName` and the rest as `location`,
+and `links.relink {folder}`, the search of the document's folder and `links.findFiles` look for a file of that name.
 
 `links.findFiles {folder}` looks in an absolute folder and its subfolders, on separate threads, for the files of the
 active document's missing links, or of the images and placed documents `ids` whatever their status, and returns at once
