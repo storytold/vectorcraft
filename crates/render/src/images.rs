@@ -108,6 +108,8 @@ pub(crate) struct ImageKey {
     pub plates: u64,
     /// Halved this many times ([`half`]).
     pub mip: u8,
+    /// A [`TILE`]-pixel square of the pixels (column, row), when only part of them is made.
+    pub tile: Option<(u16, u16)>,
 }
 
 /// A blob's content key and whether it holds CMYK inks, worked out once per blob allocation, and
@@ -413,6 +415,36 @@ fn mean(v: [u8; 4]) -> u8 {
     ((v.iter().map(|&c| u32::from(c)).sum::<u32>() + 2) / 4) as u8
 }
 
+/// The side of the squares whose colours are made one by one when only part of an image's
+/// pixels show ([`ImageKey::tile`]): a large photo zoomed in on is separated, colorized or proofed
+/// only where it shows.
+pub(crate) const TILE: u32 = 1024;
+
+/// The `w`×`h` pixels of `pm` from (`x`, `y`). `None` unless they lie inside `pm`.
+pub(crate) fn crop(pm: &Pixmap, x: u32, y: u32, w: u32, h: u32) -> Option<Pixmap> {
+    let (pw, ph) = (u32::from(pm.width()), u32::from(pm.height()));
+    if w == 0 || h == 0 || x.checked_add(w)? > pw || y.checked_add(h)? > ph {
+        return None;
+    }
+    let (stride, x, w) = (pw as usize, x as usize, w as usize);
+    let rows = pm.data().chunks_exact(stride).skip(y as usize).take(h as usize);
+    let data: Vec<PremulRgba8> = rows.flat_map(|row| row.get(x..x + w).unwrap_or_default().iter().copied()).collect();
+    (data.len() == w * h as usize).then(|| Pixmap::from_parts(data, w as u16, h as u16))
+}
+
+/// `src` copied into `dst` with its top left at (`x`, `y`), as far as `dst` reaches.
+pub(crate) fn paste(dst: &mut Pixmap, src: &Pixmap, x: usize, y: usize) {
+    let (dw, sw) = (usize::from(dst.width()), usize::from(src.width()));
+    let dst_rows = dst.data_mut().chunks_exact_mut(dw).skip(y);
+    for (to, from) in dst_rows.zip(src.data().chunks_exact(sw)) {
+        let row = to.get_mut(x..).unwrap_or_default();
+        let n = row.len().min(from.len());
+        if let (Some(to), Some(from)) = (row.get_mut(..n), from.get(..n)) {
+            to.copy_from_slice(from);
+        }
+    }
+}
+
 /// Pixels `pm` colorized with `rgb`: each pixel takes the color, as opaque as the pixel is dark
 /// (255 less its Rec. 709 luma) times its alpha, so white pixels are transparent.
 pub(crate) fn colorized(pm: &Pixmap, [r, g, b]: [u8; 3]) -> Pixmap {
@@ -448,7 +480,7 @@ mod tests {
     use super::*;
 
     fn key(content: &str) -> ImageKey {
-        ImageKey { content: content.into(), adjust: None, grey: false, tint: None, ink: Ink::Display, luts: (0, 0), plates: 0, mip: 0 }
+        ImageKey { content: content.into(), adjust: None, grey: false, tint: None, ink: Ink::Display, luts: (0, 0), plates: 0, mip: 0, tile: None }
     }
 
     #[test]
