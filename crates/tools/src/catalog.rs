@@ -94,7 +94,6 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("livePaintBucket", "Live Paint Bucket", Some("K"), "tool-bucket"),
         t("livePaintSelection", "Live Paint Selection Tool", Some("Shift+L"), "tool-live-select"),
     ],
-    &[t("contour", "Contour Tool", None, "tool-contour")],
     &[
         t("perspectiveGrid", "Perspective Grid Tool", Some("Shift+P"), "tool-perspective"),
         t("perspectiveSelection", "Perspective Selection Tool", Some("Shift+V"), "tool-perspective-select"),

@@ -6440,6 +6440,13 @@ shape	Open	Открытый
 	Fully Outside	Полностью снаружи
 	No artboards match.	Нет подходящих монтажных областей.
 	Chosen: {n} of {total}	Выбрано: {n} из {total}
+
+# Contour add-on
+	Contour	Эквидистанта
+	Contour Tool	Инструмент «Эквидистанта»
+	Sharp	Острый
+	Bake	Разобрать
+	Turn the Contour into plain paths	Преобразует эквидистанту в обычные контуры
 	Set Corners…	Задать углы…
 	All Anchors	Все опорные точки
 	Odd-Numbered Anchors	Нечётные опорные точки

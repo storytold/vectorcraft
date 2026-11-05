@@ -1,18 +1,21 @@
-//! `object.contour`: the Contour tool's command. A Contour is a copy of a selected shape that
+//! Contour (`addon.contour.*`), a built-in add-on: the Contour tool's command. A Contour is a copy of a selected shape that
 //! carries a live Offset Path effect, so it grows or shrinks the shape without baking anything: its
 //! fill, stroke and effect stay editable, and Expand Appearance bakes it into plain paths. The
 //! original stays where it is. Running the command on an object that already carries an Offset
 //! Path effect (a Contour made earlier) changes that effect instead of nesting another one.
 
+#[cfg(test)]
+mod tests;
+
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 use vectorcraft_render::effects;
 
-use super::edit::{copy_above, selected_roots};
-use super::pathops::{len_param, num_param};
-use super::{CommandSpec, EngineError, NodeId, Result, Session, bad, cmd, has_selection, str_param};
+use super::super::edit::{copy_above, selected_roots};
+use super::super::pathops::{len_param, num_param};
+use super::super::{CommandSpec, EngineError, NodeId, Result, Session, bad, cmd, has_selection, str_param};
 
-const C: &str = "object.contour";
+const C: &str = "addon.contour.set";
 /// The live effect that does the offsetting (the one Effect › Path › Offset Path applies).
 const EFFECT: &str = "path.offsetPath";
 /// The largest offset, in points; Offset Path takes the same.
@@ -20,7 +23,7 @@ const MAX_OFFSET: f64 = 1e5;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![cmd!(
-        "object.contour",
+        "addon.contour.set",
         "Contour",
         [],
         None,

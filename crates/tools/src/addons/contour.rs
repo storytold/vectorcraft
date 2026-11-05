@@ -1,5 +1,5 @@
 //! The Contour tool: drag away from a selected shape's edge to grow a live copy of it, or toward the
-//! inside to shrink it (`object.contour`). The copy is the original's outline offset by the distance
+//! inside to shrink it (`addon.contour.set`). The copy is the original's outline offset by the distance
 //! the pointer has moved from the edge, previewed while the button is down and kept as one undo step
 //! on release. Nothing is baked: the copy carries a live Offset Path effect, so it keeps being
 //! editable (a second drag on a selected Contour changes its distance instead of nesting another),
@@ -16,9 +16,12 @@ use vectorcraft_geom::{BezPath, FillRule, Point, hit};
 
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
-/// The live effect a Contour is made of (the one `object.contour` applies).
+/// The tool's id.
+pub const ID: &str = "contour";
+
+/// The live effect a Contour is made of (the one `addon.contour.set` applies).
 const EFFECT: &str = "path.offsetPath";
-/// The largest distance, in points, `object.contour` accepts.
+/// The largest distance, in points, `addon.contour.set` accepts.
 const MAX_OFFSET: f64 = 1e5;
 /// The guide showing the shape a Contour was made from.
 const GUIDE: [u8; 3] = [0x1e, 0x88, 0xe5];
@@ -51,7 +54,7 @@ fn contour_offset(n: &Node) -> Option<f64> {
     Some(e.params.get("offset").and_then(Value::as_f64).unwrap_or(0.0))
 }
 
-/// The corner style and miter limit of a Contour's Offset Path effect, as `object.contour` takes
+/// The corner style and miter limit of a Contour's Offset Path effect, as `addon.contour.set` takes
 /// them.
 fn contour_style(n: &Node) -> Option<Value> {
     let e = n.appearance.effects.iter().rev().find(|e| e.id == EFFECT)?;
@@ -154,7 +157,7 @@ fn round_distance(v: f64, mods: Mods) -> f64 {
 
 impl Tool for ContourTool {
     fn id(&self) -> &'static str {
-        "contour"
+        ID
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
@@ -182,7 +185,7 @@ impl Tool for ContourTool {
                 drag.last = Some(offset);
                 let mut params = drag.style.clone();
                 params["offset"] = json!(offset);
-                vec![Action::Preview("object.contour".into(), params)]
+                vec![Action::Preview("addon.contour.set".into(), params)]
             }
             PointerKind::Up => match self.drag.take() {
                 Some(d) if d.last.is_some() => vec![Action::Commit],
@@ -248,9 +251,4 @@ impl Tool for ContourTool {
     fn busy(&self) -> bool {
         self.drag.is_some()
     }
-}
-
-/// The Contour tool, for [`crate::create`].
-pub fn create(id: &str) -> Option<Box<dyn Tool>> {
-    (id == "contour").then(|| Box::new(ContourTool::default()) as Box<dyn Tool>)
 }

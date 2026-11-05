@@ -1,6 +1,6 @@
 //! The Contour bar: a floating bar above the selection while the Contour tool is active. It has the
 //! Contour's distance in a number box, its corner style (Sharp, Round or Square) and Bake, which
-//! turns the live Contour into plain paths. It acts through `object.contour` and
+//! turns the live Contour into plain paths. It acts through `addon.contour.set` and
 //! `effect.expandAppearance`, so everything it does is a command with its own undo step.
 
 use serde_json::Value;
@@ -98,7 +98,7 @@ pub(super) fn contour_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                     if resp.drag_stopped() || resp.lost_focus() {
                         ui.data_mut(|d| d.remove_temp::<f64>(key));
                         if (v - shown).abs() > 1e-9 {
-                            run = Some(("object.contour", json!({"offset": v, "corners": corners})));
+                            run = Some(("addon.contour.set", json!({"offset": v, "corners": corners})));
                         }
                     }
                     for (label, id) in [(tl!("Sharp"), "sharp"), (tl!("Round"), "round"), (tl!("Square"), "square")] {
@@ -119,7 +119,7 @@ pub(super) fn contour_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         if result.is_ok()
             && let Some(s) = &stand
         {
-            result = app.run("object.contour", json!({"offset": s.offset, "corners": id}));
+            result = app.run("addon.contour.set", json!({"offset": s.offset, "corners": id}));
         }
         if let Err(e) = result {
             app.ui.status = e;

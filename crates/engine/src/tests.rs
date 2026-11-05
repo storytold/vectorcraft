@@ -36,7 +36,6 @@ mod compoundpaint;
 mod constrain_new;
 mod constrain_tools;
 mod containers;
-mod contour;
 mod css;
 mod cut;
 mod dashalign;

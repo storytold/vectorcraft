@@ -1,4 +1,4 @@
-//! Tests for `object.contour`: a live Offset Path copy of a shape that stays editable until baked.
+//! Tests for `addon.contour.set`: a live Offset Path copy of a shape that stays editable until baked.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
@@ -46,7 +46,7 @@ fn contour_is_a_live_copy_above_the_original() {
     let mut s = session();
     let a = rect(&mut s, 100.0, 100.0, 50.0, 40.0);
     let before = bounds(&s, a);
-    let r = s.execute("object.contour", &json!({"offset": 10})).unwrap();
+    let r = s.execute("addon.contour.set", &json!({"offset": 10})).unwrap();
     let (made, updated) = (ids_of(&r, "created"), ids_of(&r, "updated"));
     assert_eq!((made.len(), updated.len()), (1, 0));
     // The original is untouched, the copy is above it and selected, and nothing is baked: the
@@ -70,7 +70,7 @@ fn baking_a_contour_gives_the_grown_and_the_shrunk_shape() {
     let a = rect(&mut s, 100.0, 100.0, 50.0, 40.0);
     for (offset, want) in [(10.0, Rect::new(90.0, 90.0, 160.0, 150.0)), (-5.0, Rect::new(105.0, 105.0, 145.0, 135.0))] {
         select(&mut s, &[a]);
-        s.execute("object.contour", &json!({"offset": offset})).unwrap();
+        s.execute("addon.contour.set", &json!({"offset": offset})).unwrap();
         let baked = ids_of(&s.execute("effect.expandAppearance", &json!({})).unwrap(), "ids");
         let b = bounds(&s, baked[0]);
         // The default stroke widens the baked art by its weight; compare the fill's edges.
@@ -92,10 +92,10 @@ fn baked_fill_bounds(s: &Session, id: NodeId) -> Rect {
 fn a_second_drag_changes_the_contour_instead_of_nesting_one() {
     let mut s = session();
     let a = rect(&mut s, 100.0, 100.0, 50.0, 40.0);
-    let made = ids_of(&s.execute("object.contour", &json!({"offset": 10})).unwrap(), "created");
+    let made = ids_of(&s.execute("addon.contour.set", &json!({"offset": 10})).unwrap(), "created");
     let count = node_count(&s);
     // The Contour is selected: the next call edits it.
-    let r = s.execute("object.contour", &json!({"offset": -4, "corners": "round"})).unwrap();
+    let r = s.execute("addon.contour.set", &json!({"offset": -4, "corners": "round"})).unwrap();
     assert_eq!(ids_of(&r, "updated"), made);
     assert!(ids_of(&r, "created").is_empty());
     assert_eq!(node_count(&s), count, "no new object");
@@ -110,7 +110,7 @@ fn corner_styles_choose_the_join() {
     for (corners, joins) in [("sharp", "miter"), ("round", "round"), ("square", "bevel"), ("Round", "round")] {
         let mut s = session();
         rect(&mut s, 0.0, 0.0, 30.0, 30.0);
-        let made = ids_of(&s.execute("object.contour", &json!({"offset": 3, "corners": corners})).unwrap(), "created");
+        let made = ids_of(&s.execute("addon.contour.set", &json!({"offset": 3, "corners": corners})).unwrap(), "created");
         assert_eq!(effects_of(&s, made[0])[0].1["joins"], json!(joins), "{corners}");
     }
 }
@@ -119,7 +119,7 @@ fn corner_styles_choose_the_join() {
 fn contour_keeps_the_color_and_stroke_editable_on_the_copy() {
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 30.0, 30.0);
-    let made = ids_of(&s.execute("object.contour", &json!({"offset": 6})).unwrap(), "created");
+    let made = ids_of(&s.execute("addon.contour.set", &json!({"offset": 6})).unwrap(), "created");
     let original = node(&s, a).appearance.items.clone();
     assert_eq!(node(&s, made[0]).appearance.items, original, "the copy starts with the shape's own paint");
     // Recolouring the Contour (it is the selection) changes its fill only: the live effect stays
@@ -135,7 +135,7 @@ fn contour_is_one_undo_step() {
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 30.0, 30.0);
     let count = node_count(&s);
-    s.execute("object.contour", &json!({"offset": 6})).unwrap();
+    s.execute("addon.contour.set", &json!({"offset": 6})).unwrap();
     assert_eq!(node_count(&s), count + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(node_count(&s), count);
@@ -148,13 +148,13 @@ fn contour_refuses_what_it_cannot_offset() {
     rect(&mut s, 0.0, 0.0, 30.0, 30.0);
     let count = node_count(&s);
     for params in [json!({}), json!({"offset": "abc"}), json!({"offset": 1e300}), json!({"offset": 5, "corners": "pointy"})] {
-        assert!(s.execute("object.contour", &params).is_err(), "{params}");
+        assert!(s.execute("addon.contour.set", &params).is_err(), "{params}");
     }
     // Nothing was added by the refused calls.
     assert_eq!(node_count(&s), count);
     // Type is not a path to offset.
     s.execute("text.create", &json!({"x": 10, "y": 10, "text": "Hi"})).unwrap();
-    let err = s.execute("object.contour", &json!({"offset": 5})).unwrap_err().to_string();
+    let err = s.execute("addon.contour.set", &json!({"offset": 5})).unwrap_err().to_string();
     assert!(err.contains("select paths or shapes"), "{err}");
 }
 
@@ -169,9 +169,9 @@ fn border_with_a_gap_from_two_contours_and_minus_front() {
     // The gap first (+8), then the border (+20) from the same shape: both land directly above it,
     // the later one lower, so the gap ends up in front of the border.
     select(&mut s, &[a]);
-    let gap = ids_of(&s.execute("object.contour", &json!({"offset": 8})).unwrap(), "created")[0];
+    let gap = ids_of(&s.execute("addon.contour.set", &json!({"offset": 8})).unwrap(), "created")[0];
     select(&mut s, &[a]);
-    let border = ids_of(&s.execute("object.contour", &json!({"offset": 20})).unwrap(), "created")[0];
+    let border = ids_of(&s.execute("addon.contour.set", &json!({"offset": 20})).unwrap(), "created")[0];
     let d = &s.doc().unwrap().doc;
     assert!(d.index_path(gap).unwrap() > d.index_path(border).unwrap(), "the gap is in front of the border");
     select(&mut s, &[border, gap]);
@@ -239,7 +239,7 @@ mod tool {
         assert!(!s.in_interaction());
         assert_eq!(undo_depth(&s), before + 1);
         assert_eq!(node_count(&s), nodes + 1);
-        assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("object.contour"));
+        assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("addon.contour.set"));
         let made = s.doc().unwrap().selection.objects.clone();
         assert_eq!(made.len(), 1);
         assert_ne!(made[0], a);
@@ -304,7 +304,7 @@ mod tool {
     #[test]
     fn dragging_a_contour_again_keeps_its_corners_and_miter_limit() {
         let (mut s, _) = ready();
-        s.execute("object.contour", &json!({"offset": 5, "corners": "square", "miterLimit": 7})).unwrap();
+        s.execute("addon.contour.set", &json!({"offset": 5, "corners": "square", "miterLimit": 7})).unwrap();
         let contour = s.doc().unwrap().selection.objects[0];
         s.set_tool_option("corners", &json!("sharp"));
         at(&mut s, PointerKind::Down, 150.0, 120.0, Mods::default());

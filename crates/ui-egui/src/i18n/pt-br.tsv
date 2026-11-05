@@ -6424,6 +6424,13 @@ swatch	Yellow Green	Verde-amarelado
 	Fully Outside	Totalmente fora
 	No artboards match.	Nenhuma mesa de trabalho corresponde.
 	Chosen: {n} of {total}	Escolhidas: {n} de {total}
+
+# Contour add-on
+	Contour	Contorno
+	Contour Tool	Ferramenta Contorno
+	Sharp	Pontiagudo
+	Bake	Expandir
+	Turn the Contour into plain paths	Transforma o contorno em caminhos simples
 	Set Corners…	Definir Cantos…
 	All Anchors	Todas as Âncoras
 	Odd-Numbered Anchors	Âncoras Ímpares

@@ -9053,7 +9053,7 @@ fn the_contour_bar_sets_corners_and_bakes() {
     assert!(offsets(&app).is_empty());
 
     // A Contour made now has round corners; Square changes the selected Contour in place.
-    app.session.execute("object.contour", &json!({"offset": 8, "corners": "round"})).unwrap();
+    app.session.execute("addon.contour.set", &json!({"offset": 8, "corners": "round"})).unwrap();
     assert_eq!(offsets(&app), ["round"]);
     click_contour_bar(&mut app, &ctx, "Square");
     assert_eq!(offsets(&app), ["bevel"], "the selected Contour changed, none was added");
