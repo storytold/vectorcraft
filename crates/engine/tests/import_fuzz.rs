@@ -4547,8 +4547,9 @@ proptest! {
 
     /// Art styles with a Distort & Transform effect (Transform, Free Distort, Pucker & Bloat, Roughen,
     /// Tweak, Twist, Zig Zag) whose dictionary holds any of its entries, and unknown ones, as any kind,
-    /// with any value (huge, tiny, not a number, a string), repeated or left out, on a path and on type,
-    /// on the whole object or on its fill.
+    /// with any value (huge, tiny, not a number, a string), repeated or left out, on a path, on type and
+    /// on a group nested any number of levels around a curved path, stroked or not, on the whole object
+    /// or on its fill.
     #[test]
     fn ai_distort_effects_never_panic(
         name in prop::sample::select(vec![
@@ -4575,6 +4576,8 @@ proptest! {
             ],
         ), 0..24),
         on_fill in any::<bool>(),
+        depth in 0usize..300,
+        stroked in any::<bool>(),
     ) {
         use vectorcraft_testkit::ai;
         let keys: String = entries.iter().map(|(k, kind, v)| format!("{v} /{kind} ({k}) ,\n")).collect();
@@ -4589,10 +4592,15 @@ proptest! {
         };
         let styles = format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{root}%AI9_EndArtStyles\n");
         let hidden = ai::rect(20.0, 20.0, 80.0, 60.0).replace('\n', "\n%_");
+        let paint = if stroked { "0 0 1 0 K\n2 w\nB\n" } else { "f\n" };
+        let curve = format!("0 0 1 0 k\n20 70 m\n20 90 80 90 80 70 c\n80 50 20 50 20 70 c\n{paint}");
+        let nested = format!("0 Ae\n{}{curve}{}", "u\n".repeat(depth + 1), "U\n".repeat(depth + 1)).replace('\n', "\n%_");
         let art = format!(
-            "0 Ae\nu\n0 0 1 0 k\n{}f\nU\n%_{hidden}f\n1 (Fx) XW\nu\n/AI11Text :\n1 /FreeUndo ,\n;\n0 0 1 0 k\n{}f\nU\n1 (Fx) XW\n",
+            "0 Ae\nu\n0 0 1 0 k\n{}f\nU\n%_{hidden}f\n1 (Fx) XW\nu\n/AI11Text :\n1 /FreeUndo ,\n;\n0 0 1 0 k\n{}f\nU\n1 (Fx) XW\n\
+             0 Ae\nu\n0 0 1 0 k\n{}f\nU\n%_{nested}1 (Fx) XW\n",
             ai::rect(20.0, 20.0, 80.0, 60.0),
-            ai::rect(100.0, 20.0, 180.0, 60.0)
+            ai::rect(100.0, 20.0, 180.0, 60.0),
+            ai::rect(20.0, 50.0, 80.0, 90.0)
         );
         let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("L", &art)));
         survive("distort art style", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
