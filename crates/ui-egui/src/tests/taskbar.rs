@@ -418,3 +418,29 @@ fn a_compound_path_under_direct_selection_drops_edit_path() {
     let (_, texts) = bar(&mut app);
     assert!(has(&texts, "Release Compound Path") && !has(&texts, "Edit Path"), "{texts:?}");
 }
+
+/// After a switch to another document and back, the task bar shows the actions for the active
+/// document's selection: an open path's Join in the first, a rectangle's Shape Properties in the
+/// second.
+#[test]
+fn the_task_bar_follows_the_active_document() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let line = id(app.run("shape.line", json!({"x1": 50, "y1": 50, "x2": 200, "y2": 120})).unwrap());
+    select(&mut app, &[line]);
+    assert!(has(&bar(&mut app).1, "Join"));
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let rect = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
+    select(&mut app, &[rect]);
+    let (_, texts) = bar(&mut app);
+    assert!(!has(&texts, "Join") && has(&texts, "Duplicate"), "{texts:?}");
+    app.session.set_active(0);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Join"), "{texts:?}");
+    app.session.set_active(1);
+    let (_, texts) = bar(&mut app);
+    assert!(!has(&texts, "Join"), "{texts:?}");
+    let (_, texts) = click_lock_slot(&mut app);
+    assert!(has(&texts, "Rectangle Properties:"), "{texts:?}");
+    assert!(!locked(&app, rect), "the button doesn't lock the shape");
+}
