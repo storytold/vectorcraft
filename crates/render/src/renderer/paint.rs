@@ -134,7 +134,7 @@ impl Renderer {
         } else if paint::set_paint(ctx, &st.paint, paint_bounds, f) {
             self.fold_alpha(ctx, f.ink, &st.paint);
             ctx.set_fill_rule(peniko::Fill::NonZero);
-            match self.cached_stroke(f, chars, &pieces.line, st, width) {
+            match self.cached_stroke(f, chars, bp, &pieces.line, st, width) {
                 Some(o) => ctx.fill_path(&o),
                 None => ctx.fill_path(&effects::stroke::line_outline(&pieces.line, st, width, f.px * 0.25)),
             }
@@ -210,7 +210,7 @@ impl Renderer {
             }
             None => make(),
         };
-        let line = match self.cached_stroke(f, chars, &pieces.line, st, width) {
+        let line = match self.cached_stroke(f, chars, bp, &pieces.line, st, width) {
             Some(o) => o,
             None => Arc::new(effects::stroke::line_outline(&pieces.line, st, width, f.px * 0.25)),
         };
@@ -237,11 +237,12 @@ impl Renderer {
     /// stroke of `self.cur` in `strokes` (under [`Self::stroke_owner`] and the stroke layer). The
     /// tolerance (vello's 0.25 device px) is bucketed to powers of two, never coarser than needed,
     /// so zooming reuses outlines until the level changes. Other strokes aren't cached: for them
-    /// this returns `None`.
+    /// this returns `None`. `line` is the line of `st` along `path` ([`effects::stroke::stroke_pieces`]).
     fn cached_stroke(
         &mut self,
         f: &Frame,
         chars: Option<(&Arc<TextGeom>, usize)>,
+        path: &BezPath,
         line: &BezPath,
         st: &StrokeLayer,
         width: f64,
@@ -274,11 +275,11 @@ impl Renderer {
         // of the stroke's latest outline is kept, except for art made again in every frame.
         let place = node.appearance.items.iter().position(|i| matches!(i, AppearanceItem::Stroke(s) if std::ptr::eq(s, st)));
         let moved = place.filter(|_| !self.made_again).map(|place| (node.id.0, place, width.to_bits(), level));
-        let kept = moved.map(|_| Arc::new(line.clone()));
+        let own = moved.is_some() && self.own_path(&node, path);
         if let Some(mk) = moved
             && let Some((outline, crop)) = self.moved_outline(mk, &node, st, line, v)
         {
-            self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, line: kept }, moved);
+            self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, own }, moved);
             return Some(outline);
         }
         #[cfg(test)]
@@ -295,7 +296,7 @@ impl Renderer {
             && let Some(outline) = crop_dashed(line, st, width, region, crop_reach(st, width, f.px, tol), tol)
         {
             let outline = Arc::new(outline);
-            self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop: Some(region), line: kept }, moved);
+            self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop: Some(region), own }, moved);
             return Some(outline);
         }
         let cropped = (crops() && line.elements().len() > CROP_ELEMENTS && st.dash.is_none() && st.profile.is_none())
@@ -305,33 +306,38 @@ impl Renderer {
             Some(part) => (Arc::new(effects::stroke::line_outline(&part, st, width, tol)), Some(region)),
             None => (expand(), None),
         };
-        self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, line: kept }, moved);
+        self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, own }, moved);
         Some(outline)
     }
 
+    /// Whether `path` is the path that `geom` keeps for `node` ([`Self::path_of`]), the path
+    /// [`Node::stroke_path`] makes from its anchors.
+    fn own_path(&self, node: &Arc<Node>, path: &BezPath) -> bool {
+        self.geom
+            .get(&(Arc::as_ptr(node) as usize))
+            .is_some_and(|g| Arc::ptr_eq(&g.node, node) && g.path.as_deref().is_some_and(|p| std::ptr::eq(p, path)))
+    }
+
     /// Keeps outline `e` in `strokes` under `key`, and lists `key` as the latest outline under
-    /// `moved` ([`MovedKey`]), dropping the line kept with the outline listed there before, which
-    /// no moved copy draws from any more: one line is kept per [`MovedKey`].
+    /// `moved` ([`MovedKey`]).
     fn keep_stroke(&mut self, key: StrokeKey, e: StrokeEntry, moved: Option<MovedKey>) {
         self.strokes.insert(key, e);
-        if let Some(mk) = moved
-            && let Some(before) = self.moved_strokes.insert(mk, key)
-            && before != key
-            && let Some(e) = self.strokes.get_mut(&before)
-        {
-            e.line = None;
+        if let Some(mk) = moved {
+            self.moved_strokes.insert(mk, key);
         }
     }
 
     /// The outline of stroke `st` of `node` along `line`, made from the latest outline kept under
-    /// `mk` ([`MovedKey`]) when that outline's object is `node` changed, its stroke differs from `st`
-    /// in its paint at most, and its line is `line` moved (to within rounding): that outline moved
-    /// by the same offset, with the region it was cropped to moved too. `None` when there is no
-    /// such outline, or when its region does not hold the view `v`.
+    /// `mk` ([`MovedKey`]) when that outline was made along a line of its object's own path, its
+    /// object is `node` changed, its stroke differs from `st` in its paint at most, and its line is
+    /// `line` moved (to within rounding): that outline moved by the same offset, with the region it
+    /// was cropped to moved too. The anchors of the two objects are compared first
+    /// ([`anchors_moved`]), and the earlier line is made again from its object and stroke only when
+    /// they match. `None` when there is no such outline, or when its region does not hold the view
+    /// `v`.
     fn moved_outline(&self, mk: MovedKey, node: &Node, st: &StrokeLayer, line: &BezPath, v: Rect) -> Option<(Arc<BezPath>, Option<Rect>)> {
         let e = self.strokes.get(self.moved_strokes.get(&mk)?)?;
-        let was = e.line.as_deref()?;
-        if e.node.id != node.id {
+        if !e.own || e.node.id != node.id {
             return None;
         }
         let Some(AppearanceItem::Stroke(old)) = e.node.appearance.items.get(mk.1) else {
@@ -341,7 +347,11 @@ impl Renderer {
         if !std::ptr::eq(old, st) && unpainted(old) != unpainted(st) {
             return None;
         }
-        let by = offset_between(was, line)?;
+        if !anchors_moved(&e.node, node) {
+            return None;
+        }
+        let path = e.node.stroke_path()?;
+        let by = offset_between(&effects::stroke::stroke_pieces(&path, old).line, line)?;
         let crop = e.crop.map(|r| r + by);
         if crop.is_some_and(|r| r.x0 > v.x0 || r.y0 > v.y0 || r.x1 < v.x1 || r.y1 < v.y1) {
             return None;
@@ -384,16 +394,10 @@ pub(crate) fn offset_between(was: &BezPath, now: &BezPath) -> Option<kurbo::Vec2
         return None;
     }
     let (by, first) = match (was.first()?, now.first()?) {
-        (PathEl::MoveTo(a), PathEl::MoveTo(b)) => (*b - *a, a.x.abs().max(b.x.abs()).max(a.y.abs()).max(b.y.abs())),
+        (PathEl::MoveTo(a), PathEl::MoveTo(b)) => first_offset(*a, *b)?,
         _ => return None,
     };
-    if !by.is_finite() {
-        return None;
-    }
-    let near = |a: &kurbo::Point, b: &kurbo::Point| {
-        let close = |a: f64, by: f64, b: f64| (a + by - b).abs() <= 4.0 * f64::EPSILON * (a.abs() + b.abs() + first);
-        close(a.x, by.x, b.x) && close(a.y, by.y, b.y)
-    };
+    let near = |a: &kurbo::Point, b: &kurbo::Point| moved_by(*a, *b, by, first);
     let moved = was.iter().zip(now).all(|pair| match pair {
         (PathEl::MoveTo(a), PathEl::MoveTo(b)) | (PathEl::LineTo(a), PathEl::LineTo(b)) => near(a, b),
         (PathEl::QuadTo(a0, a1), PathEl::QuadTo(b0, b1)) => near(a0, b0) && near(a1, b1),
@@ -402,6 +406,49 @@ pub(crate) fn offset_between(was: &BezPath, now: &BezPath) -> Option<kurbo::Vec2
         _ => false,
     });
     moved.then_some(by)
+}
+
+/// The offset from first point `a` to first point `b` and the largest size of their coordinates,
+/// which [`moved_by`] measures its tolerance with. `None` when the offset is not finite.
+fn first_offset(a: kurbo::Point, b: kurbo::Point) -> Option<(kurbo::Vec2, f64)> {
+    let by = b - a;
+    by.is_finite().then(|| (by, a.x.abs().max(b.x.abs()).max(a.y.abs()).max(b.y.abs())))
+}
+
+/// Whether `b` is `a` moved by `by`, each coordinate within a few units in the last place (see
+/// [`offset_between`]; `first` from [`first_offset`]).
+fn moved_by(a: kurbo::Point, b: kurbo::Point, by: kurbo::Vec2, first: f64) -> bool {
+    let close = |a: f64, by: f64, b: f64| (a + by - b).abs() <= 4.0 * f64::EPSILON * (a.abs() + b.abs() + first);
+    close(a.x, by.x, b.x) && close(a.y, by.y, b.y)
+}
+
+/// Whether the anchors and handles of path `now` are those of path `was` moved by one offset,
+/// measured as [`offset_between`] measures it, with the same subpaths, anchor counts and closed
+/// subpaths. It reads the anchors without making either path ([`Node::stroke_path`]), and stops at
+/// the first anchor that differs. `false` for objects other than paths.
+fn anchors_moved(was: &Node, now: &Node) -> bool {
+    let (vectorcraft_doc::NodeKind::Path { path: was, .. }, vectorcraft_doc::NodeKind::Path { path: now, .. }) = (&was.kind, &now.kind) else {
+        return false;
+    };
+    if was.subpaths.len() != now.subpaths.len() {
+        return false;
+    }
+    let mut offset = None;
+    for (a, b) in was.subpaths.iter().zip(&now.subpaths) {
+        if a.closed != b.closed || a.anchors.len() != b.anchors.len() {
+            return false;
+        }
+        for (a, b) in a.anchors.iter().zip(&b.anchors) {
+            if offset.is_none() {
+                offset = first_offset(a.p, b.p);
+            }
+            let Some((by, first)) = offset else { return false };
+            if !(moved_by(a.p, b.p, by, first) && moved_by(a.h_in, b.h_in, by, first) && moved_by(a.h_out, b.h_out, by, first)) {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 fn crops() -> bool {

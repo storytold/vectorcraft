@@ -3,7 +3,7 @@
 //! again.
 
 use vectorcraft_color::{Color, Gradient, GradientPaint, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeLayer, WidthProfile};
+use vectorcraft_doc::{Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeLayer, WidthProfile};
 use vectorcraft_geom::{PathData, Point, Vec2};
 
 use crate::renderer::{STROKES_OUTLINED, offset_between};
@@ -76,12 +76,16 @@ fn ring(n: usize, r: f64) -> BezPath {
 }
 
 /// The documents of the cases: open and closed paths, short and long (outlined near the view), plain,
-/// dashed, with a width profile, and filled with a gradient (which a move changes, so the moved
+/// dashed, with a width profile, with arrowheads, and filled with a gradient (which a move changes, so the moved
 /// object has an appearance of its own), each with the point the view is centered on.
 fn cases() -> Vec<(&'static str, (Document, NodeId), Point)> {
     let round = stroke(6.0, LineJoin::Round, LineCap::Round);
     let mut lens = stroke(10.0, LineJoin::Round, LineCap::Butt);
     lens.profile = Some(WidthProfile { points: vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)] });
+    let mut arrows = stroke(4.0, LineJoin::Miter, LineCap::Butt);
+    arrows.start_arrow = Some(Arrowhead::Triangle);
+    arrows.end_arrow = Some(Arrowhead::Circle);
+    arrows.arrow_align = ArrowAlign::Tip;
     let gradient = FillLayer::new(Paint::Gradient(Box::new(GradientPaint::new(Gradient::default()))));
     let only = |st: StrokeLayer| vec![AppearanceItem::Stroke(st)];
     vec![
@@ -100,6 +104,9 @@ fn cases() -> Vec<(&'static str, (Document, NodeId), Point)> {
             Point::new(-5000.0, 0.0),
         ),
         ("a long open path, a width profile", doc(&zigzag(3000), only(lens)), Point::new(12_000.0, 15.0)),
+        // The heads shorten the line, so the line is not the path itself.
+        ("a short open path, arrowheads", doc(&zigzag(20), only(arrows.clone())), Point::new(70.0, 15.0)),
+        ("a long open path, arrowheads", doc(&zigzag(3000), only(arrows)), Point::new(40.0, 15.0)),
     ]
 }
 
@@ -131,7 +138,6 @@ fn a_moved_path_draws_its_stroke_from_the_outline_made_before() {
             }
         });
         assert_eq!(made, 0, "{what}, a fill changed: no new outline");
-        assert_eq!(r.strokes.values().filter(|e| e.line.is_some()).count(), 1, "{what}: one line kept");
     }
 }
 
@@ -155,6 +161,8 @@ fn a_path_changed_otherwise_outlines_its_stroke_again() {
         // A move, then an edit of an anchor near the path's start.
         assert_eq!(after(&mut r, &mut d, id, at, |n| n.transform(Affine::translate((0.5, 0.0)), true)), 0, "{what}: moved");
         assert_eq!(after(&mut r, &mut d, id, at, edit_anchor), 1, "{what}: an anchor moved");
+        // A move after the edit uses the outline made for the edited path.
+        assert_eq!(after(&mut r, &mut d, id, at, |n| n.transform(Affine::translate((0.5, 0.0)), true)), 0, "{what}: moved after the edit");
         // Scaled and rotated about the view's center, stroke weights kept.
         assert_eq!(after(&mut r, &mut d, id, at, |n| n.transform(Affine::scale_about(1.001, at), false)), 1, "{what}: scaled");
         assert_eq!(after(&mut r, &mut d, id, at, |n| n.transform(Affine::rotate_about(0.001, at), false)), 1, "{what}: rotated");

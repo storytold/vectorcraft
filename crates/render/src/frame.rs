@@ -37,14 +37,15 @@ pub(crate) type MovedKey = (u64, usize, u64, i32);
 
 /// A stroke expanded to a fill outline: (owning node, outline, last frame used, the region a frame
 /// must lie in to draw the outline, when the outline leaves out the segments far from that region,
-/// `None` when it has every segment, and the line the outline was made from, kept when the entry
-/// is listed under a [`MovedKey`]).
+/// `None` when it has every segment, and whether the outline was made along a line of the node's
+/// own path, the one [`Node::stroke_path`] makes, so that the line can be made again from the
+/// node and its stroke).
 pub(crate) struct StrokeEntry {
     pub(crate) node: Arc<Node>,
     pub(crate) outline: Arc<BezPath>,
     pub(crate) stamp: u64,
     pub(crate) crop: Option<Rect>,
-    pub(crate) line: Option<Arc<BezPath>>,
+    pub(crate) own: bool,
 }
 
 /// The slices of a stroke whose gradient runs along or across it, each with its paint and bounds.
