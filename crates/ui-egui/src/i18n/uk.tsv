@@ -4358,6 +4358,8 @@ axis	Both	Обидві
 @msg	no such saved selection	такого збереженого виділення немає
 @msg	no such segment	такого сегменту немає
 @msg	no such spine point	такої точки осі немає
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` має бути списком щонайбільше з 10000 індексів точок осі
+@msg	`with` moves points, not a handle	`with` переміщує точки, а не маркер
 @msg	no such spine segment	такого сегмента осі немає
 @msg	no such subpath	такого вкладеного контуру немає
 @msg	no such user library	такої користувацької бібліотеки немає

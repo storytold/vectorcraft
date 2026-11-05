@@ -4196,6 +4196,8 @@ axis	Both	И двете
 @msg	no such saved selection	няма такава запазена селекция
 @msg	no such segment	няма такъв сегмент
 @msg	no such spine point	няма такава точка от оста
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` трябва да е списък с най-много 10000 индекса на точки от оста
+@msg	`with` moves points, not a handle	`with` мести точки, не дръжка
 @msg	no such spine segment	няма такъв сегмент от оста
 @msg	no such subpath	няма такъв подпът
 @msg	no such user library	няма такава потребителска библиотека

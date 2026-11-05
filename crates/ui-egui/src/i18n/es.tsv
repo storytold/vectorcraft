@@ -4332,6 +4332,8 @@ axis	Both	Ambos
 @msg	no such saved selection	no existe esa selección guardada
 @msg	no such segment	no existe ese segmento
 @msg	no such spine point	no existe ese punto del eje
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` debe ser una lista de como máximo 10000 índices de puntos del eje
+@msg	`with` moves points, not a handle	`with` mueve puntos, no un manejador
 @msg	no such spine segment	no existe ese segmento del eje
 @msg	no such subpath	no existe ese subtrazado
 @msg	no such user library	no existe esa biblioteca de usuario

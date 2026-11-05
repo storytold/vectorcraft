@@ -4639,6 +4639,8 @@ imageTrace	Outline	Obrys
 @msg	no such saved selection	takový uložený výběr neexistuje
 @msg	no such segment	takový segment neexistuje
 @msg	no such spine point	takový bod páteře neexistuje
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` musí být seznam nejvýše 10000 indexů bodů páteře
+@msg	`with` moves points, not a handle	`with` posouvá body, ne táhlo
 @msg	no such spine segment	takový segment páteře neexistuje
 @msg	no such subpath	taková dílčí cesta neexistuje
 @msg	no such user library	taková uživatelská knihovna neexistuje

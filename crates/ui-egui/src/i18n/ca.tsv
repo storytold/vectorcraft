@@ -5328,6 +5328,8 @@ digits	Malayalam	Malaiàlam
 @msg	no such saved selection	no existeix aquesta selecció desada
 @msg	no such segment	no existeix aquest segment
 @msg	no such spine point	no existeix aquest punt de l’espina
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` ha de ser una llista d’un màxim de 10000 índexs de punts de l’espina
+@msg	`with` moves points, not a handle	`with` mou punts, no una nansa
 @msg	no such spine segment	no existeix aquest segment de l’espina
 @msg	no such subpath	no existeix aquest subtraçat
 @msg	no such user library	no existeix aquesta biblioteca d’usuari

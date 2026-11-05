@@ -4237,6 +4237,8 @@ axis	Both	Båda
 @msg	no such saved selection	den sparade markeringen finns inte
 @msg	no such segment	segmentet finns inte
 @msg	no such spine point	ryggradspunkten finns inte
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` måste vara en lista med högst 10000 ryggradspunktsindex
+@msg	`with` moves points, not a handle	`with` flyttar punkter, inte ett handtag
 @msg	no such spine segment	ryggradssegmentet finns inte
 @msg	no such subpath	delbanan finns inte
 @msg	no such user library	användarbiblioteket finns inte
