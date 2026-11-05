@@ -73,8 +73,15 @@ private editing data. VectorCraft:
   RGB or CMYK ink amounts, and their alpha channel) and linked images as placed files with their path, their folder
   relative to the document's and a preview; images that can't be decoded or have more than 33,554,432 pixels are
   written as their outlines filled mid gray, images of 16 bits a channel at 8 bits, and linked images in opacity
-  masks and pattern tiles as embedded images, each with a warning. Type, other patterns, symbols, other clipping
-  objects and live objects (placed documents included) are written as plain filled and stroked paths, and freeform gradients, gradients along
+  masks and pattern tiles as embedded images, each with a warning. Point type, area type (with its rows, columns,
+  gutters and first baseline, threaded frames included) and type on a path are written as text: a text object for
+  each, naming its story in the text document, with the characters, fonts, sizes, leading, tracking, baseline shift,
+  scales, solid fills and strokes, capitals and paragraph alignment, indents, spacing and direction; other character
+  and paragraph attributes are left out with a warning. Type in opacity masks, pattern tiles and art cut to a
+  clipping object, mirrored type, turned or unevenly scaled area type and type on a path, area type that flows around a text
+  wrap, threads whose frames differ in orientation, type and stories past the sizes VectorCraft's reader reads, and
+  type with inline graphics, ruby, gradient or pattern paint or an appearance or opacity mask of its own, other patterns, symbols, other clipping objects and live
+  objects (placed documents included) are written as plain filled and stroked paths, and freeform gradients, gradients along
   or across a stroke and gradients without stops, with more than 256 stops or without extent as their average
   color, each with a warning. Gradients that dither or mix their colors perceptually are written as classic
   gradients, and gradient stops linked to global process colors as their colors, each with a warning. The opacity

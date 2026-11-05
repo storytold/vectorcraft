@@ -3413,6 +3413,37 @@ proptest! {
         survive("hostile .ai images and placed files", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose type (point type turned, area type and type on a path, their stubs with the
+    /// frames' paths, and the text document they name, as the `.ai` writer writes them) is damaged:
+    /// read from its editing data alone and beside a page.
+    #[test]
+    fn ai_text_documents_never_panic(
+        cut in 0usize..30_000,
+        edits in prop::collection::vec((0usize..30_000, prop::sample::select(vec!['0', '1', '9', ' ', '\n', '(', ')', '[', ']', '<', '>', '/', '%', '_', 'n', 'f', 'z', '~'])), 0..16),
+    ) {
+        use vectorcraft_doc::{CharStyle, Node, NodeKind, TextKind, TextObject};
+        use vectorcraft_geom::{Affine, Point, Rect, shapes};
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut point = TextObject::point(Point::new(10.0, 30.0), "Turned\ntype", CharStyle::default());
+        point.xf *= Affine::rotate(0.4);
+        let mut area = TextObject::point(Point::ZERO, "Area type", CharStyle::default());
+        area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(20.0, 40.0, 90.0, 90.0)) };
+        area.xf = Affine::IDENTITY;
+        let mut on_path = TextObject::point(Point::ZERO, "On a path", CharStyle::default());
+        on_path.kind = TextKind::OnPath { path: shapes::ellipse(Rect::new(100.0, 20.0, 180.0, 80.0)), start: 0.25, end: None };
+        on_path.xf = Affine::IDENTITY;
+        for t in [point, area, on_path] {
+            let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+        let program = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap().program;
+        let text = mutate_text(&String::from_utf8_lossy(&program), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("hostile .ai type", || vectorcraft_eps::ai_alone(&private).ok().map(|r| r.0))?;
+        survive("hostile .ai type beside a page", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose variable library is damaged or hostile: the library is counted for the warning
     /// whether the layers are read or not (an inserted `Z` can make an operator the reader doesn't
     /// handle, and then the layers aren't read).
