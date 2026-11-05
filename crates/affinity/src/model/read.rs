@@ -26,6 +26,9 @@ const MAX_DOCUMENT_CHARS: usize = 16 << 20;
 /// Table cells of all tables together (each becomes a text object with its edge lines).
 const MAX_DOCUMENT_CELLS: usize = 1 << 18;
 
+/// Points of all strokes' pressure curves together (a stroke style may be shared by many layers).
+const MAX_DOCUMENT_PRESSURE_POINTS: usize = 1 << 20;
+
 /// What a whole read may still use. Shared objects can be linked from many layers, and embedded
 /// documents are read with what their embedding document left, so linking or embedding the
 /// same content many times can't multiply the work.
@@ -39,10 +42,18 @@ pub(crate) struct Budget {
     pub(crate) chars: usize,
     /// Table cells ([`MAX_DOCUMENT_CELLS`] in all).
     pub(crate) cells: usize,
+    /// Points of pressure curves ([`MAX_DOCUMENT_PRESSURE_POINTS`] in all).
+    pub(crate) pressure: usize,
 }
 
 impl Budget {
-    pub(crate) const FULL: Budget = Budget { nodes: MAX_NODES, pixels: MAX_LAYER_PIXELS, chars: MAX_DOCUMENT_CHARS, cells: MAX_DOCUMENT_CELLS };
+    pub(crate) const FULL: Budget = Budget {
+        nodes: MAX_NODES,
+        pixels: MAX_LAYER_PIXELS,
+        chars: MAX_DOCUMENT_CHARS,
+        cells: MAX_DOCUMENT_CELLS,
+        pressure: MAX_DOCUMENT_PRESSURE_POINTS,
+    };
 }
 
 /// Read a document: archive, `doc.dat` and the model.
@@ -441,7 +452,33 @@ impl<'s, 'a, 'b> Reader<'s, 'a, 'b> {
                 _ => self.warn("layer effects of other kinds (left out)"),
             }
         }
+        for a in s.objs(id, b"AdCh") {
+            if let Some(effect) = self.attached_recolor(a) {
+                out.push(effect);
+            }
+        }
         out
+    }
+    fn attached_recolor(&mut self, a: ObjId) -> Option<Effect> {
+        let s = self.s;
+        if !s.is(a, b"RcRA") {
+            return None;
+        }
+        if s.bool(a, b"Visi") == Some(false) {
+            return None;
+        }
+        let adjp = s.obj(a, b"AdjP")?;
+        if !s.is(adjp, b"RecP") {
+            return None;
+        }
+        let h = s.f64(adjp, b"RecH").unwrap_or(0.0);
+        let sat = s.f64(adjp, b"RecS").unwrap_or(1.0);
+        let l = s.f64(adjp, b"RecL").unwrap_or(0.5);
+        let (r, g, b) = crate::paint::hsl(h, sat, l);
+        let color = crate::paint::Color::Rgb { r, g, b, a: 1.0 };
+        let opacity = s.f64(a, b"Opac").filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0);
+        let blend = self.effect_blend(a);
+        Some(Effect::ColorOverlay { color, opacity, blend })
     }
 
     /// A layer effect's blend mode (`BlnM`); unknown modes are Normal (warned).
@@ -479,6 +516,8 @@ impl<'s, 'a, 'b> Reader<'s, 'a, 'b> {
                     Some(_) => self.warn("several pixel masks on one layer (only the first is used)"),
                     None => {}
                 }
+            } else if class == Tag::of(b"RcRA") {
+                // Handled in `effects` as a colour overlay.
             } else {
                 self.warn(format!("{} layers attached to other layers (imported without them)", describe(class)));
             }

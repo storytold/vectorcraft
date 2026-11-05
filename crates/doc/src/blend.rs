@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::{Color, Gradient, GradientPaint, GradientStop, Paint};
 use vectorcraft_geom::kurbo::ParamCurveArclen;
-use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, SubPath, Vec2};
+use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 
 use crate::appearance::{Appearance, AppearanceItem, Dash, StrokeLayer, WidthProfile};
 use crate::live::{BlendOrientation, BlendSpacing, BlendSpec};
@@ -196,7 +196,11 @@ pub fn lerp_paint(a: &Paint, b: &Paint, t: f32) -> Paint {
 /// so dashes open out of a solid line; patterns of different lengths repeat to a common one.
 fn lerp_dash(x: Option<&Dash>, y: Option<&Dash>, t: f64) -> Option<Dash> {
     let solid_like = |d: &Dash| Dash {
-        pattern: d.pattern.chunks(2).flat_map(|c| [c.iter().sum::<f64>(), 0.0]).take(d.pattern.len().max(2)).collect(),
+        // An odd pattern repeats twice per period, so pair up the doubled one to keep every gap closed.
+        pattern: if d.pattern.len() % 2 == 1 { d.pattern.repeat(2) } else { d.pattern.clone() }
+            .chunks(2)
+            .flat_map(|c| [c.iter().sum::<f64>(), 0.0])
+            .collect(),
         offset: d.offset,
         align_corners: d.align_corners,
     };
@@ -858,6 +862,52 @@ impl Spine {
     pub fn anchor_length(&self, i: usize) -> Option<f64> {
         self.anchors.get(i).copied()
     }
+    /// Arc length of the point of the spine nearest `p`. An open spine's end segments run on past
+    /// its ends as lines, so the result is below 0 before the start and above [`Spine::length`]
+    /// beyond the end. With `from`, the arc length of an earlier point a drag followed, each point
+    /// counts as farther by half its distance along the spine from there, so a pointer passing
+    /// near another part of the spine stays on the part it follows. Where two points count as
+    /// near as each other, the one earlier along the spine counts.
+    pub fn length_near(&self, p: Point, from: Option<f64>) -> f64 {
+        self.nearest(p, from).map_or(0.0, |(_, s)| s)
+    }
+    /// [`Spine::length_near`] with how near the point counts: its distance from `p`, plus half its
+    /// distance along the spine from `from`. `None` for a point that is not finite.
+    pub fn nearest(&self, p: Point, from: Option<f64>) -> Option<(f64, f64)> {
+        if !p.x.is_finite() || !p.y.is_finite() {
+            return None;
+        }
+        let last = self.pts.len().saturating_sub(2);
+        let mut best: Option<(f64, f64)> = None;
+        for (i, (w, c)) in self.pts.windows(2).zip(&self.cum).enumerate() {
+            let [a, b] = [w[0], w[1]];
+            let d = b - a;
+            let l2 = d.dot(d);
+            if !l2.is_finite() || l2 <= 0.0 {
+                continue;
+            }
+            let t = (p - a).dot(d) / l2;
+            let t = match (self.closed, i == 0, i == last) {
+                (false, true, true) => t,
+                (false, true, false) => t.min(1.0),
+                (false, false, true) => t.max(0.0),
+                _ => t.clamp(0.0, 1.0),
+            };
+            let s = c + t * l2.sqrt();
+            let dist = p.distance(a + d * t) + from.filter(|f| f.is_finite()).map_or(0.0, |f| self.apart(s, f) / 2.0);
+            if dist.is_finite() && best.is_none_or(|(b, _)| dist < b) {
+                best = Some((dist, s));
+            }
+        }
+        best
+    }
+    /// How far apart arc lengths `s` and `f` are along the spine: the shorter way round a closed
+    /// spine, across its first anchor.
+    pub fn apart(&self, s: f64, f: f64) -> f64 {
+        let len = self.length();
+        let d = (s - f).abs();
+        if self.closed && len > 0.0 { d.rem_euclid(len).min(len - d.rem_euclid(len)) } else { d }
+    }
     /// Point and tangent angle (radians) at arc-length fraction `f` (0..1).
     pub fn at(&self, f: f64) -> (Point, f64) {
         self.at_length(f.clamp(0.0, 1.0) * self.length())
@@ -1023,6 +1073,27 @@ impl Rail {
             n.transform(m, false);
         }
     }
+}
+
+/// A box round everything a blend of `keys` can paint once [`Rail::place`] puts its keys and steps
+/// on its spine, turned to it with Align to Path: the spine's box grown by three times the farthest
+/// any key paints from its centre. A step's shape lies within that distance of the point on the
+/// spine it is moved to, and so does its own centre, which it turns about. `None` when nothing
+/// moves.
+pub(crate) fn rail_reach(keys: &[Arc<Node>], spec: &BlendSpec, symbols: Option<&crate::SymbolBoxes>) -> Option<Rect> {
+    if spec.spine.is_none() && spec.orientation != BlendOrientation::AlignToPath {
+        return None;
+    }
+    let spine = blend_spine(keys, spec)?.0.bounds()?;
+    let radius = keys
+        .iter()
+        .filter_map(|k| {
+            let (c, b) = (center_of(k), k.visual(symbols)?);
+            let corners = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x0, b.y1), Point::new(b.x1, b.y1)];
+            Some(corners.into_iter().map(|q| (q - c).hypot()).fold(0.0, f64::max))
+        })
+        .fold(0.0, f64::max);
+    Some(spine.inflate(3.0 * radius, 3.0 * radius))
 }
 
 // =====================================================================================
@@ -1421,6 +1492,12 @@ mod tests {
         let p = lerp_profile(Some(&WidthProfile::lens()), None, 0.5).unwrap();
         assert_eq!(p.at(0.0), (0.5, 0.5));
         assert_eq!(p.at(0.5), (1.0, 1.0));
+    }
+
+    #[test]
+    fn odd_dash_blends_to_solid_with_closed_gaps() {
+        let d = lerp_dash(Some(&Dash { pattern: vec![2.0, 3.0, 4.0], ..Default::default() }), None, 1.0).unwrap();
+        assert!(d.pattern.iter().skip(1).step_by(2).all(|g| *g == 0.0), "{:?}", d.pattern);
     }
 
     #[test]

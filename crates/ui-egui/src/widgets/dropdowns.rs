@@ -135,6 +135,18 @@ pub(crate) fn combo_menu<R>(
     width: f32,
     menu: impl FnOnce(craft_ui::combo::Menu<'_>) -> Option<R>,
 ) -> Option<R> {
+    combo_menu_field(ui, id, current, width, menu).1
+}
+
+/// [`combo_menu`], also returning the closed field's response (the font family field reads the
+/// mouse wheel turned over it).
+pub(crate) fn combo_menu_field<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    current: &str,
+    width: f32,
+    menu: impl FnOnce(craft_ui::combo::Menu<'_>) -> Option<R>,
+) -> (Response, Option<R>) {
     let t = Tokens::get(ui.ctx());
     let label = take_previous_label(ui);
     egui::Frame::NONE
@@ -148,7 +160,8 @@ pub(crate) fn combo_menu<R>(
                 egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&resp));
                 ui.memory_mut(|m| m.stop_text_input());
             }
-            menu(craft_ui::combo::Menu::new(ui, &resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside))
+            let shown = menu(craft_ui::combo::Menu::new(ui, &resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside));
+            (resp, shown)
         })
         .inner
 }
@@ -204,7 +217,7 @@ pub fn popover<R>(resp: &Response, toggle: bool, content: impl FnOnce(&mut Ui) -
     let ctx = &resp.ctx;
     let id = resp.id.with("popover");
     let frame = ctx.cumulative_frame_nr();
-    let was_open = ctx.data(|d| d.get_temp::<u64>(id)).is_some_and(|f| f + 1 >= frame);
+    let was_open = popover_is_open(ctx, resp.id);
     let mut open = if toggle {
         !was_open
     } else {
@@ -231,6 +244,12 @@ pub fn popover<R>(resp: &Response, toggle: bool, content: impl FnOnce(&mut Ui) -
         }
     });
     inner
+}
+
+/// Whether the popover for this anchor was open in the latest completed frame.
+pub(crate) fn popover_is_open(ctx: &egui::Context, anchor: egui::Id) -> bool {
+    let frame = ctx.cumulative_frame_nr();
+    ctx.data(|d| d.get_temp::<u64>(anchor.with("popover"))).is_some_and(|f| f + 1 >= frame)
 }
 
 /// Records where the bottom bars (status and hint bars) start this frame, so menus can stop above

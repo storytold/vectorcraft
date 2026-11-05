@@ -121,6 +121,10 @@ pub fn start(app: &mut VectorcraftApp, command: &str, p: Value, from_panel: bool
     let runs = &mut app.trace_runs;
     runs.next_id += 1;
     runs.running.push(Running { id: runs.next_id, doc, target, token, superseded: false, steps, from_panel, hidden: false, done });
+    // This frame may have asked for its next one before the trace started (`tick`): ask now.
+    if let Some(ctx) = &app.ui_ctx {
+        ctx.request_repaint();
+    }
     let status = format!("{}…", crate::i18n::msg(LABEL));
     app.status(status.clone());
     Ok(json!({ "background": true, "status": status }))

@@ -74,7 +74,7 @@ fn recent(app: &mut VectorcraftApp, ui: &mut Ui) {
     for path in files {
         if recent_row(ui, &path).clicked() {
             // A failure is reported to the user there.
-            let _ = crate::io::open_recent_reporting(app, &path);
+            let _ = crate::io::open_reporting(app, &path);
         }
     }
 }

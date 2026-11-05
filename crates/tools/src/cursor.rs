@@ -125,9 +125,11 @@ pub enum Cursor {
     /// the path. Also while a stroke is drawn back near its start, where releasing the mouse button
     /// closes the path. A crosshair with a ring.
     PaintbrushClose,
-    /// The Blob Brush tool.
+    /// The Blob Brush tool: a dot at the brush's centre, the tool drawing the tip's outline round
+    /// it on the canvas.
     BlobBrush,
-    /// The Eraser tool.
+    /// The Eraser tool: a dot at the tip's centre, the tool drawing the tip's outline round it on
+    /// the canvas.
     Eraser,
     /// The Smooth tool.
     Smooth,
@@ -163,6 +165,14 @@ pub enum Cursor {
     SymbolStyler,
     /// The vertical type tools: a turned I-beam.
     TypeVertical,
+    /// A type tool over a closed path's outline: a click sets area type inside it.
+    TypeArea,
+    /// ...the vertical type tools.
+    TypeAreaVertical,
+    /// A type tool over a path's outline: a click sets type along it.
+    TypeOnPath,
+    /// ...the vertical type tools.
+    TypeOnPathVertical,
     /// The Scissors over a path segment (a click splits the path there)...
     Scissors,
     /// ...or away from every segment (a click does nothing).
@@ -171,6 +181,27 @@ pub enum Cursor {
     MeshAdd,
     /// Puppet Warp over the selection's mesh where a pin can go: a click adds one.
     PuppetPin,
+    /// The Anchor Eraser Brush (Path Precision Tools add-on); the brush's circle is drawn round it.
+    AnchorEraser,
+    /// The Extend Path tool (Path Precision Tools add-on).
+    ExtendPath,
+    /// The Measure & Inspect tool (Path Precision Tools add-on).
+    MeasureInspect,
+    /// The Parametric Shape Tool (Path Precision Tools add-on): a drag draws a shape out from its
+    /// centre; a selected shape's handles edit it.
+    ParametricShape,
+    /// The Corner Tool (Path Precision Tools add-on): a click or drag on an anchor cuts a corner;
+    /// a corner's marker resizes it.
+    CornerTool,
+    /// The Slide Anchor Along Path tool (Path Precision Tools add-on): a drag runs an anchor along
+    /// the path.
+    SlideAnchor,
+    /// The Shared Edge Merge Tool (Path Precision Tools add-on): a click merges the two paths'
+    /// touching edges under the brush, or makes an end there.
+    SharedEdge,
+    /// The Smart Pen Tool (Smart Pen add-on) away from paths, where a click starts a new path (over
+    /// a path or while drawing it shows the Pen's and Direct Selection's cursors).
+    SmartPen,
 }
 
 impl Cursor {
@@ -261,7 +292,15 @@ impl Cursor {
             | Cursor::SymbolStyler
             | Cursor::Scissors
             | Cursor::MeshAdd
-            | Cursor::PuppetPin => Cursor::Crosshair,
+            | Cursor::PuppetPin
+            | Cursor::AnchorEraser
+            | Cursor::ExtendPath
+            | Cursor::MeasureInspect
+            | Cursor::ParametricShape
+            | Cursor::CornerTool
+            | Cursor::SlideAnchor
+            | Cursor::SharedEdge
+            | Cursor::SmartPen => Cursor::Crosshair,
             c => c,
         }
     }
@@ -276,8 +315,6 @@ impl Cursor {
             | Cursor::MagicWand
             | Cursor::Pencil
             | Cursor::Paintbrush
-            | Cursor::BlobBrush
-            | Cursor::Eraser
             | Cursor::Smooth
             | Cursor::PathEraser
             | Cursor::Join
@@ -295,9 +332,17 @@ impl Cursor {
             | Cursor::SymbolStainer
             | Cursor::SymbolScreener
             | Cursor::SymbolStyler
-            | Cursor::Scissors => Some(Cursor::Crosshair),
+            | Cursor::Scissors
+            | Cursor::AnchorEraser
+            | Cursor::ExtendPath
+            | Cursor::MeasureInspect
+            | Cursor::ParametricShape
+            | Cursor::CornerTool
+            | Cursor::SlideAnchor
+            | Cursor::SharedEdge => Some(Cursor::Crosshair),
             Cursor::TypeVertical => Some(Cursor::Text),
             Cursor::MeshAdd | Cursor::PuppetPin => Some(Cursor::PenAdd),
+            Cursor::SmartPen => Some(Cursor::Pen),
             Cursor::ScissorsNotAllowed => Some(Cursor::NotAllowed),
             _ => None,
         }

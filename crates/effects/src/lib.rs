@@ -34,6 +34,7 @@
 //! anchored at the object's centre.
 #![forbid(unsafe_code)]
 
+pub mod addons;
 mod adjust;
 mod bake;
 mod clip;
@@ -69,17 +70,17 @@ pub use adjust::{
 pub use bake::{StrokeArt, bake_appearance, bake_document, expand_art, expand_leaf, fresh_ids, needs_bake};
 pub use clip::clip_outline;
 pub use group::{
-    OutlineHook, PATHFINDER_EFFECTS, evaluate_container, has_container_appearance, has_pathfinder, is_pathfinder, member_shapes, paints,
-    pathfinder_children,
+    OutlineHook, PATHFINDER_EFFECTS, compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder,
+    is_pathfinder, member_leaves, member_shapes, paints, pathfinder_children, shape_art,
 };
 pub use lighting_presets::{LIGHTING_PRESETS, LightingPreset, lighting_preset_params, matching_lighting_preset};
-pub use live::{expand_live, expand_live_deep, expanded_live_group, text_outliner};
+pub use live::{expand_live, expand_live_deep, expanded_live_group, outline_object, text_outliner};
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
-pub use raster::{RASTERIZE, RasterFx, Rasterize, outset, raster_effects};
+pub use raster::{RASTERIZE, RasterFx, Rasterize, color_param, outset, raster_effects};
 pub use reshape::{
-    expand_outlined, has_gradient_copies, has_item_geometry, has_transform_art, has_transform_options, image_paint, needs_outline, outline_art,
-    outline_text, reshape,
+    SYMBOL_ART_MAX_NODES, expand_outlined, has_gradient_copies, has_item_geometry, has_transform_art, has_transform_copies, has_transform_options,
+    image_paint, needs_outline, outline_art, outline_text, reshape,
 };
 pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_options, validate_revolve};
 pub use solids::{
@@ -94,7 +95,7 @@ mod catalog;
 mod geometry;
 mod params;
 
-pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, plugin_effects};
+pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, length_range, plugin_effects, raster_px_range};
 pub(crate) use geometry::{Budget, apply_one};
 pub use geometry::{GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_with};
 #[cfg(test)]

@@ -39,6 +39,8 @@ pub(crate) const COLUMN_MIN: f32 = 220.0;
 pub(crate) const COLUMN_MAX: f32 = 720.0;
 /// Width of a column collapsed to icons.
 pub(crate) const ICON_WIDTH: f32 = 38.0;
+/// The narrowest a panel other than the canvas is drawn, docked or floating.
+pub(crate) const PANEL_MIN_WIDTH: f32 = 220.0;
 
 /// Docking state that lives for the session only.
 #[derive(Default)]
@@ -337,12 +339,47 @@ fn show_panel(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String>
     if !layout.contains(&panel.to_string()) && !app.ui.docking_hidden.contains_key(panel) && crate::panels::library_panel::parse(panel).is_some() {
         return crate::panels::library_panel::float(app, panel);
     }
-    let value = shared_command(app, "window.panel.activate", &json!({"panel": panel}))?;
+    let value = if app.ui.docking_hidden.contains_key(panel) {
+        restore_hidden_group(app, panel)?
+    } else {
+        shared_command(app, "window.panel.activate", &json!({"panel": panel}))?
+    };
     let layout = layout_of(&app.ui);
     Ok(match floating_window(&layout, panel) {
         Some(window) => json!({"floating": window_panels(window)}),
         None => value,
     })
+}
+
+/// Hides the group holding an active panel and records each tab's return location.
+pub(crate) fn hide_group(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
+    let mut txn = Transaction::begin(app)?;
+    let panel = panel.to_string();
+    let closed = txn.apply(Action::CloseGroup { panel })?;
+    let group = closed.clone();
+    let result = txn.commit(app, closed, None);
+    if !group.is_empty() {
+        app.ui.docking_hidden_groups.push(group);
+    }
+    Ok(result)
+}
+
+/// Reopens the tabs hidden together with `panel` and brings it to the front.
+fn restore_hidden_group(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
+    let mut txn = Transaction::begin(app)?;
+    let members =
+        app.ui.docking_hidden_groups.iter().find(|group| group.iter().any(|id| id == panel)).cloned().unwrap_or_else(|| vec![panel.to_string()]);
+    for member in members {
+        if !txn.workspace.hidden.iter().any(|(id, _)| id == &member) {
+            continue;
+        }
+        let fallback = first_dock_panel(&txn.workspace.layout, &member);
+        txn.workspace.set_visible(member, true, fallback, model_permissions).map_err(|e| e.to_string())?;
+    }
+    txn.apply(Action::Activate { panel: panel.to_string() })?;
+    let result = txn.commit(app, Vec::new(), Some(panel.to_string()));
+    app.ui.docking_hidden_groups.retain(|group| !group.iter().any(|id| id == panel));
+    Ok(result)
 }
 
 /// Show `panel` as `window.panel` does, but leave it be when it already shows ([`showing`]): a
@@ -753,8 +790,9 @@ fn float_space(app: &VectorcraftApp) -> FloatSpace<String> {
 }
 
 /// Float `panel` (open or not) as a window of its own with its top-left corner at `at`, `width`
-/// wide: the Tabs panel over the text it sets.
-pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, at: egui::Pos2, width: f32) -> Result<(), String> {
+/// wide: the Tabs panel over the text it sets. `origin`: the main window's content top-left on the
+/// desktop. A panel already floating in an OS window of its own moves to `at` from there (#4995).
+pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, at: egui::Pos2, width: f32, origin: Option<egui::Pos2>) -> Result<(), String> {
     let panel = normalize(panel).ok_or("unknown panel")?.to_string();
     if !(at.x.is_finite() && at.y.is_finite() && width.is_finite()) {
         return Err("panel position must be finite".into());
@@ -766,8 +804,13 @@ pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, at: egui::Po
     let height = floating_window(&txn.workspace.layout, &panel).map_or(floating_size(&panel).y, |w| w.rect[3]);
     let rect = [at.x, at.y, width.max(1.0), height];
     let whole = floating_window(&txn.workspace.layout, &panel).is_some_and(|w| w.panels().count() == 1);
-    let action = if whole { Action::MoveFloating { panel, rect } } else { Action::Float { panel, rect } };
+    let native = whole && floating_window(&txn.workspace.layout, &panel).is_some_and(|w| w.native.is_some());
+    let action = if whole { Action::MoveFloating { panel: panel.clone(), rect } } else { Action::Float { panel: panel.clone(), rect } };
     txn.apply(action)?;
+    // The OS window follows its desktop rect, not the in-window one.
+    if let Some(origin) = origin.filter(|o| native && o.is_finite()) {
+        txn.apply(Action::SetNative { panel, rect: Some([origin.x + at.x, origin.y + at.y, rect[2], rect[3]]) })?;
+    }
     txn.commit(app, Vec::new(), None);
     Ok(())
 }
@@ -927,6 +970,10 @@ impl Transaction {
             }
         }
         let reveal = reveal.filter(|panel| layout.contains(panel));
+        for group in &mut app.ui.docking_hidden_groups {
+            group.retain(|panel| hidden.contains_key(panel) && !layout.contains(panel));
+        }
+        app.ui.docking_hidden_groups.retain(|group| !group.is_empty());
         let flyout = reveal.as_ref().filter(|panel| in_iconic_column(&layout, panel)).cloned();
         match (app.ui.docking.is_none() && hidden.is_empty()).then(|| default_flags(&app.ui, &layout)).flatten() {
             Some((tab, collapsed, width)) => {
@@ -1066,6 +1113,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         }
     }
     let modal = modal_open(app, &ctx);
+    // Palette windows are OS windows of their own, held above the app's window while it is active,
+    // so a dialog or a menu drawn in the main window would be covered by them.
+    #[cfg(not(target_arch = "wasm32"))]
+    palette_window_levels(&ctx, &layout, modal, egui::Popup::is_any_open(&ctx) || crate::menus::menu_open(&ctx));
     let mut blocked = Vec::new();
     if modal || egui::Popup::is_any_open(&ctx) {
         blocked.push(ctx.content_rect());
@@ -1076,8 +1127,15 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         .input_blocked(modal)
         .auto_collapse_iconic(app.session.prefs.auto_collapse_icon_panels);
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some(hook) = app.services.native_input_hook.clone() {
-        dock = dock.native_input_hook(move |_, raw| hook(raw));
+    {
+        crate::font_menu::ensure_native_wheel_layers(ui.ctx());
+        let hook = app.services.native_input_hook.clone();
+        dock = dock.native_input_hook(move |ctx, raw| {
+            if let Some(hook) = &hook {
+                hook(raw);
+            }
+            crate::font_menu::take_raw_wheel(ctx, raw);
+        });
     }
     // Tab and Shift+Tab (`window.dock`, `window.panels`) and the full screen modes hide the panels;
     // the canvas stays.
@@ -1120,6 +1178,54 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
 /// Whether a modal is open: a dialog, About, the command palette, a native file dialog, or a
 /// window behind the modal backdrop last frame (export progress, plug-in runs). Floating panels
 /// in OS windows of their own take no input meanwhile, as the main window behind it takes none.
+/// The window level and visibility a palette window takes: hidden under a modal dialog (a click
+/// must not bring it back over the dialog), at the normal level under a menu or another popup drawn
+/// in the main window (so the menu is seen), and otherwise its palette level, which craft-ui leaves
+/// a palette at when it creates one: topmost while the app is active, behind other applications'
+/// windows while it is not.
+#[cfg(not(target_arch = "wasm32"))]
+fn palette_window_state(modal: bool, popup: bool, active: bool) -> (egui::WindowLevel, bool) {
+    if modal {
+        return (egui::WindowLevel::Normal, false);
+    }
+    if popup {
+        // Hidden as under a dialog: a menu is drawn in the main window, and lowering a palette
+        // window is not always enough for it to go behind the window (the OS may keep it above
+        // while the app is activated through it).
+        return (egui::WindowLevel::Normal, false);
+    }
+    let level = if active {
+        egui::WindowLevel::AlwaysOnTop
+    } else if cfg!(target_os = "windows") {
+        egui::WindowLevel::AlwaysOnBottom
+    } else {
+        egui::WindowLevel::Normal
+    };
+    (level, true)
+}
+
+/// Sends the palette windows of `layout` the level and visibility [`palette_window_state`] gives
+/// when they change. craft-ui varies a palette's level through the viewport builder, which egui
+/// applies when the window opens and not to one already on screen, so the commands go explicitly to
+/// the windows there are.
+#[cfg(not(target_arch = "wasm32"))]
+fn palette_window_levels(ctx: &egui::Context, layout: &Layout<String>, modal: bool, popup: bool) {
+    let active = ctx.input(|i| i.focused || i.raw.viewports.values().any(|v| v.focused == Some(true)));
+    let key = area_id().with("palette-levels-state");
+    if ctx.data(|d| d.get_temp::<(bool, bool, bool)>(key)) == Some((modal, popup, active)) {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(key, (modal, popup, active)));
+
+    let (level, visible) = palette_window_state(modal, popup, active);
+    for window in &layout.floating {
+        let viewport = craft_ui::docking::DockArea::<String>::window_viewport(area_id(), window.id);
+        ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::WindowLevel(level));
+        ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::Visible(visible));
+    }
+}
+
+/// Does a modal dialog block the app's other windows ([`modal_open`] for the docking renderer)?
 pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
     app.ui.dialog.is_some()
         || app.ui.about
@@ -1131,8 +1237,9 @@ pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
 /// Keys, text and clipboard events that a floating panel's own OS window left over run the main
 /// window's shortcuts, tool keys and clipboard on its next frame ([`VectorcraftApp::raw_input_hook`]).
 /// craft-ui forwards nothing while a field in that window has the keyboard. A field of the main
-/// window loses it, as a click elsewhere in one window would take it.
-fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: Option<egui::Modifiers>) {
+/// window loses it, as a click elsewhere in one window would take it. A floating document's OS
+/// window forwards its keys here too ([`crate::doc_windows`]).
+pub(crate) fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: Option<egui::Modifiers>) {
     if events.is_empty() {
         return;
     }
@@ -1147,6 +1254,14 @@ fn forward_keys(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui:
     app.forwarded.extend(events);
     app.forwarded_modifiers = modifiers.or(app.forwarded_modifiers);
     ctx.request_repaint();
+}
+
+/// A field of a floating panel's window that ends its editing on Enter or Escape lets go of the
+/// keyboard in that frame, so craft-ui would forward the key to the main window's shortcuts: Enter
+/// in the Transparency panel's Opacity field also opened the Move dialog (#4803). The key was the
+/// field's, so it stays in the window.
+fn keep_field_ending_keys(ui: &egui::Ui) {
+    ui.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { key: egui::Key::Enter | egui::Key::Escape, pressed: true, .. })));
 }
 
 /// VectorCraft's look and wording of craft-ui's docking.
@@ -1185,9 +1300,12 @@ const DOCK_LABELS: &[(&str, &str)] = &[
 ];
 
 /// The size a panel floats at (tab strip included), whatever the size of the dock it left.
-fn floating_size(panel: &str) -> egui::Vec2 {
+pub(crate) fn floating_size(panel: &str) -> egui::Vec2 {
     match panel {
         "properties" | "layers" | "libraries" => egui::vec2(300.0, 420.0),
+        // Tall enough to show its Corners and Shared Edges sections, last in it, which the Corner
+        // Tool's and Shared Edge Merge Tool's menu items open.
+        crate::addons::pathtools::ID => egui::vec2(260.0, 660.0),
         _ => egui::vec2(260.0, 360.0),
     }
 }
@@ -1203,9 +1321,11 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
             self.app.canvas_area(ui);
             return;
         }
-        if ui.ctx().viewport_id() != egui::ViewportId::ROOT {
+        let floating = ui.ctx().viewport_id() != egui::ViewportId::ROOT;
+        if floating {
             crate::canvas::release_art_in_window(self.app, ui.ctx());
         }
+        let field_had_keyboard = floating && ui.memory(|m| m.focused().is_some());
         let t = crate::theme::Tokens::get(ui.ctx());
         let back = ui.max_rect();
         if back.is_positive() {
@@ -1221,6 +1341,9 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
                 let width = ui.available_width();
                 crate::dock::panel_body(self.app, ui, id, width, height)
             });
+        }
+        if field_had_keyboard {
+            keep_field_ending_keys(ui);
         }
     }
 
@@ -1238,7 +1361,7 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     }
 
     fn limits(&self, id: &String) -> craft_ui::docking::PanelLimits {
-        let min = if id == CANVAS { egui::vec2(200.0, 120.0) } else { egui::vec2(220.0, 80.0) };
+        let min = if id == CANVAS { egui::vec2(200.0, 120.0) } else { egui::vec2(PANEL_MIN_WIDTH, 80.0) };
         craft_ui::docking::PanelLimits { min, ..Default::default() }
     }
 

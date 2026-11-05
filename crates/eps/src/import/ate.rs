@@ -8,9 +8,9 @@
 //! The format isn't documented. What is read here was worked out from the files of the project's
 //! users, used locally and never committed, by comparing it with the type their pages draw: the
 //! meaning of each key below was checked against the page's own type in more than a thousand text
-//! objects, and it is only used for the keys that matched. A story the reader doesn't recognise (area
-//! type, type on a path, anything with a frame that has more than a point and a matrix) is left
-//! alone: it has no text, and the importer says so.
+//! objects, and it is only used for the keys that matched. Point type, area type and type on a path
+//! are read; a story in a frame of any other kind is left alone: it has no text, and the importer
+//! says so.
 //!
 //! Where type sits: a story lays its lines out round a point `F` (the anchor: the start of a line of
 //! left-aligned type, the middle of a centred one, the end of a right-aligned one), each line with an
@@ -235,20 +235,99 @@ fn read(bytes: &[u8]) -> Option<Val> {
     }
 }
 
+/// Most character styles read of a text document, and most styles a run's style is followed
+/// through to the ones they are based on.
+const MAX_SHEETS: usize = 4096;
+const MAX_SHEETS_BASED_ON: usize = 16;
+
 /// Most frames read of one story, and most path segments of a frame.
 const MAX_FRAMES: usize = 4096;
 const MAX_SEGMENTS: usize = 1 << 16;
 
 /// Where a frame puts its story's text.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum FrameKind {
     /// Point type: the matrix carries the layout (its anchor at the origin of its lines) onto the
     /// canvas.
     Point([f64; 6]),
-    /// Area type flowed inside a path: its cubic segments on the canvas, four points each.
-    Area(Vec<[f64; 8]>),
+    /// Area type flowed inside a path: its cubic segments on the canvas, four points each, and the
+    /// Area Type Options the frame keeps.
+    Area(Vec<[f64; 8]>, AreaFrame),
     /// Type on a path, from `start` to `end` (segment index and the place in that segment).
     OnPath { segments: Vec<[f64; 8]>, start: f64, end: f64 },
+}
+
+/// The Area Type Options an area frame keeps, in the units of the text document: each `None`
+/// where the frame leaves the key out or keeps a value that can't be read, so the option stays as
+/// it was.
+#[derive(Debug, Clone, Default, PartialEq)]
+struct AreaFrame {
+    /// Key 3, the rows.
+    rows: Option<usize>,
+    /// Key 4, the columns.
+    columns: Option<usize>,
+    /// Key 7, the gutter between rows.
+    row_gutter: Option<f64>,
+    /// Key 8, the gutter between columns.
+    column_gutter: Option<f64>,
+    /// Key 10, the first baseline (`0` its kind, `1` its minimum). Without it the first baseline
+    /// is Ascent.
+    first_baseline: Option<(vectorcraft_doc::FirstBaseline, f64)>,
+}
+
+/// Longest gutter or first-baseline minimum, as `text.areaOptions` caps them: read in the units of
+/// the text document, and again in document points once scaled.
+const MAX_AREA_LENGTH: f64 = 10_000.0;
+
+impl AreaFrame {
+    /// The options frame data `carries` keeps.
+    fn read(carries: &Val) -> AreaFrame {
+        // A whole number, at most `max`.
+        let whole = |v: &Val, max: f64| v.num().filter(|n| n.fract() == 0.0 && *n >= 0.0).map(|n| n.min(max) as usize);
+        let max = vectorcraft_doc::AreaOptions::MAX_ROWS_COLUMNS;
+        let count = |k: &str| carries.get(k).and_then(|v| whole(v, max as f64)).filter(|n| *n >= 1);
+        let length = |v: Option<&Val>| v.and_then(Val::num).filter(|n| *n >= 0.0).map(|n| n.min(MAX_AREA_LENGTH));
+        let first_baseline = carries.get("10").and_then(|b| {
+            use vectorcraft_doc::FirstBaseline as F;
+            let kind = match whole(b.get("0")?, 99.0)? {
+                0 => F::Fixed,
+                2 => F::CapHeight,
+                3 => F::Leading,
+                4 => F::XHeight,
+                // Em Box Height (5) and Legacy (6) have no first baseline of their own here: the
+                // first baseline stays as it was.
+                _ => return None,
+            };
+            Some((kind, length(b.get("1")).unwrap_or(0.0)))
+        });
+        AreaFrame {
+            rows: count("3"),
+            columns: count("4"),
+            row_gutter: length(carries.get("7")),
+            column_gutter: length(carries.get("8")),
+            first_baseline,
+        }
+    }
+
+    /// Sets the options it keeps on `area`, its lengths at `scale` (document points to a unit).
+    fn apply(&self, area: &mut vectorcraft_doc::AreaOptions, scale: f64) {
+        if let Some(n) = self.rows {
+            area.rows = n;
+        }
+        if let Some(n) = self.columns {
+            area.columns = n;
+        }
+        // A gutter the frame leaves out stays as it was.
+        let (row, column) = (area.row_gutter.unwrap_or(area.gutter), area.gutter);
+        let scaled = |g: f64| (g * scale).min(MAX_AREA_LENGTH);
+        let row = self.row_gutter.map_or(row, scaled);
+        area.gutter = self.column_gutter.map_or(column, scaled);
+        area.row_gutter = (row != area.gutter).then_some(row);
+        if let Some((kind, min)) = self.first_baseline {
+            area.first_baseline = kind;
+            area.first_baseline_min = scaled(min);
+        }
+    }
 }
 
 /// A paragraph's attributes, as the text document keeps them.
@@ -281,6 +360,11 @@ pub(super) struct Story {
     paras: Vec<(usize, Para)>,
     /// `(characters, style)` in order.
     runs: Vec<(usize, Style)>,
+    /// Type on a path: the spacing its first frame's layout implies ([`path_spacing`]).
+    path_spacing: f64,
+    /// Vertical type (Type › Type Orientation › Vertical): its lines are columns, from right to
+    /// left. Its layout's lines run down from the anchor, each column further left.
+    vertical: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -296,6 +380,10 @@ struct Style {
     fill: Option<Color>,
     stroke: Option<Color>,
     stroke_width: f64,
+    /// Key 12, the case: 1 Small Caps, 2 All Caps.
+    caps: u8,
+    /// Key 35 at 3: Tate-chu-yoko, the characters set across the column as one block.
+    tate_chu_yoko: bool,
 }
 
 /// The text document of an editing copy.
@@ -305,6 +393,12 @@ pub(super) struct Texts {
     /// The character and paragraph styles a story starts from.
     defaults: Val,
     para_defaults: Val,
+    /// The document's character styles (`[Normal Character Style]` first), each a name, the
+    /// character style it is based on (key 5, an index into these) and its attributes (key 6).
+    char_sheets: Vec<Val>,
+    /// The document's paragraph styles (`[Normal Paragraph Style]` first), each a name, its
+    /// attributes (key 5) and the paragraph style it is based on (key 6, an index into these).
+    para_sheets: Vec<Val>,
     frames: Vec<Val>,
 }
 
@@ -343,11 +437,17 @@ impl Texts {
             .map(|f| f.get("0").and_then(|f| f.get("0")).and_then(|f| f.get("0")).and_then(Val::str).unwrap_or_default().to_string())
             .collect();
         let main = doc.get("1")?;
+        let sheets = |key: &str| -> Vec<Val> {
+            let list = doc.get("0").and_then(|d| d.get(key)).and_then(|s| s.get("0")).map(Val::list).unwrap_or_default();
+            list.iter().take(MAX_SHEETS).map(|s| s.get("0").cloned().unwrap_or(Val::Dict(BTreeMap::new()))).collect()
+        };
         Some(Texts {
             stories: main.get("1")?.list().to_vec(),
             fonts,
             defaults: main.get("2")?.clone(),
             para_defaults: main.get("3").cloned().unwrap_or(Val::Dict(BTreeMap::new())),
+            char_sheets: sheets("5"),
+            para_sheets: sheets("6"),
             frames: doc.get("0")?.get("8")?.get("0")?.list().to_vec(),
         })
     }
@@ -368,7 +468,7 @@ impl Texts {
                 None => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
                 Some(m) => m.nums()?.try_into().ok()?,
             })),
-            1 => Some(FrameKind::Area(segments()?)),
+            1 => Some(FrameKind::Area(segments()?, AreaFrame::read(carries))),
             2 => {
                 let range = carries.get("6").and_then(Val::nums).unwrap_or_default();
                 let segments = segments()?;
@@ -390,24 +490,37 @@ impl Texts {
         }
     }
 
+    /// Is frame `i` vertical type? Key 1 of what it carries: 2 vertical, 0 or none horizontal. Any
+    /// other value is ignored: horizontal.
+    fn frame_vertical(&self, i: usize) -> bool {
+        let orientation = self.frames.get(i).and_then(|f| f.get("0")).and_then(|f| f.get("2")).and_then(|c| c.get("1"));
+        orientation.and_then(Val::num) == Some(2.0)
+    }
+
     /// Story `i`, if its frames are of kinds this reads.
     pub(super) fn story(&self, i: usize) -> Option<Story> {
         let s = self.stories.get(i)?;
         let text = s.get("0")?.get("0")?.str().filter(|t| t.len() <= MAX_STORY)?.to_string();
         let view = s.get("1")?;
-        let frames: Vec<FrameKind> = view
-            .get("0")?
-            .list()
-            .iter()
-            .take(MAX_FRAMES)
-            .map(|f| f.get("0").and_then(Val::num).and_then(|n| self.frame(n as usize)))
-            .collect::<Option<_>>()?;
+        let indices: Vec<usize> =
+            view.get("0")?.list().iter().take(MAX_FRAMES).map(|f| f.get("0").and_then(Val::num).map(|n| n as usize)).collect::<Option<_>>()?;
+        let frames: Vec<FrameKind> = indices.iter().map(|n| self.frame(*n)).collect::<Option<_>>()?;
         if frames.is_empty() {
             return None;
         }
+        // Threaded frames share one orientation: frames that differ aren't read.
+        let vertical = indices.first().is_some_and(|n| self.frame_vertical(*n));
+        if indices.iter().any(|n| self.frame_vertical(*n) != vertical) {
+            return None;
+        }
         // The first frame's layout, when the file keeps one: where its lines start.
-        let (mut anchor, mut lines) = ((0.0, 0.0), vec![]);
+        let (mut anchor, mut lines, mut path_spacing) = ((0.0, 0.0), vec![], 0.0);
         if let Some(f) = view.get("2").and_then(|l| find_node(l, "F")) {
+            // Vertical type on a path turns its glyphs across the path: their matrices don't give
+            // the spacing.
+            if matches!(frames.first(), Some(FrameKind::OnPath { .. })) && !vertical {
+                path_spacing = self::path_spacing(f);
+            }
             if let Some(a) = f.get("0").and_then(|a| a.get("0")).and_then(Val::nums)
                 && let [x, y, ..] = a.as_slice()
             {
@@ -427,24 +540,35 @@ impl Texts {
         let mut paras = vec![];
         for run in s.get("0")?.get("5").map(|p| p.get("0").map(Val::list).unwrap_or_default()).unwrap_or_default() {
             let n = run.get("1").and_then(Val::num)? as usize;
-            let props = run.get("0").and_then(|r| r.get("0")).and_then(|r| r.get("5"));
-            paras.push((n, self.para(props)));
+            paras.push((n, self.para(run.get("0").and_then(|r| r.get("0")))));
+        }
+        if paras.is_empty() {
+            paras.push((text.chars().count(), self.para(None)));
         }
         let mut runs = vec![];
         for run in s.get("0")?.get("6").map(|p| p.get("0").map(Val::list).unwrap_or_default()).unwrap_or_default() {
             let n = run.get("1").and_then(Val::num)? as usize;
-            let props = run.get("0").and_then(|r| r.get("0")).and_then(|r| r.get("6"));
-            runs.push((n, self.style(props)));
+            runs.push((n, self.style(run.get("0").and_then(|r| r.get("0")))));
         }
         if runs.is_empty() {
             runs.push((text.chars().count(), self.style(None)));
         }
-        Some(Story { text, anchor, lines, frames, paras, runs })
+        Some(Story { text, anchor, lines, frames, paras, runs, path_spacing, vertical })
     }
 
-    /// A paragraph's attributes: its own keys, else the document's.
-    fn para(&self, p: Option<&Val>) -> Para {
-        let pick = |k: &str| p.and_then(|p| p.get(k)).or_else(|| self.para_defaults.get(k));
+    /// A paragraph's attributes (`run`: its attributes, key 5, and the paragraph style it is based
+    /// on, key 6): its own keys, else those of its paragraph style and the ones that is based on,
+    /// else those of `[Normal Paragraph Style]`, else the document's.
+    fn para(&self, run: Option<&Val>) -> Para {
+        let mut chain = vec![];
+        let mut at = run;
+        for _ in 0..=MAX_SHEETS_BASED_ON {
+            let Some(style) = at else { break };
+            chain.extend(style.get("5"));
+            at = style.get("6").and_then(Val::num).filter(|i| i.is_finite() && *i >= 0.0).and_then(|i| self.para_sheets.get(i as usize));
+        }
+        chain.extend(self.para_sheets.first().and_then(|s| s.get("5")));
+        let pick = |k: &str| chain.iter().find_map(|s| s.get(k)).or_else(|| self.para_defaults.get(k));
         let num = |k: &str| pick(k).and_then(Val::num).filter(|v| v.abs() < 1e5).unwrap_or(0.0);
         Para {
             justify: pick("0").and_then(Val::num).map_or(0, |v| v.clamp(0.0, 6.0) as u8),
@@ -458,9 +582,20 @@ impl Texts {
         }
     }
 
-    /// A character style: its own keys, else the document's.
-    fn style(&self, s: Option<&Val>) -> Style {
-        let pick = |k: &str| s.and_then(|s| s.get(k)).or_else(|| self.defaults.get(k));
+    /// A run's character style (`run`: its attributes, key 6, and the character style it is based
+    /// on, key 5): its own keys, else those of its character style and the ones that is based on,
+    /// else those of `[Normal Character Style]`, else the document's.
+    fn style(&self, run: Option<&Val>) -> Style {
+        // The run's attributes, then its character style's, then the styles each is based on.
+        let mut chain = vec![];
+        let mut at = run;
+        for _ in 0..=MAX_SHEETS_BASED_ON {
+            let Some(style) = at else { break };
+            chain.extend(style.get("6"));
+            at = style.get("5").and_then(Val::num).filter(|i| i.is_finite() && *i >= 0.0).and_then(|i| self.char_sheets.get(i as usize));
+        }
+        chain.extend(self.char_sheets.first().and_then(|s| s.get("6")));
+        let pick = |k: &str| chain.iter().find_map(|s| s.get(k)).or_else(|| self.defaults.get(k));
         let num = |k: &str| pick(k).and_then(Val::num);
         let on = |k: &str| !matches!(pick(k), Some(Val::Bool(false)));
         let font = num("0").and_then(|i| self.fonts.get(i as usize)).filter(|f| !f.is_empty()).cloned();
@@ -476,6 +611,8 @@ impl Texts {
             fill: if on("56") { Some(pick("53").and_then(paint).unwrap_or(Color::BLACK)) } else { None },
             stroke: if matches!(pick("57"), Some(Val::Bool(true))) { pick("54").and_then(paint) } else { None },
             stroke_width: num("63").filter(|v| *v >= 0.0 && *v < 1e4).unwrap_or(1.0),
+            caps: num("12").filter(|v| *v == 1.0 || *v == 2.0).map_or(0, |v| v as u8),
+            tate_chu_yoko: num("35") == Some(3.0),
         }
     }
 }
@@ -569,15 +706,54 @@ fn length_fraction(segments: &[[f64; 8]], t: f64) -> f64 {
     ((before + within) / total).clamp(0.0, 1.0)
 }
 
+/// The spacing (Type on a Path Options › Spacing) that the layout `f` of type on a path implies.
+/// The file closes its glyphs up round the outside of a curve and opens them up round the inside,
+/// even where its frame keeps no spacing; the text engine spaces glyphs that way by the spacing
+/// (`vectorcraft_text`'s `path_steps`): between two glyphs' centres, the path's length `s`, their
+/// advances' mean `a` and how far it turns `t` (away from their tops) make `s + t × spacing = a`.
+/// Fitted over every pair of the layout's glyphs; none where the path doesn't turn under them.
+fn path_spacing(f: &Val) -> f64 {
+    let mut found = vec![];
+    find_nodes(f, "G", &mut found);
+    let (mut sum, mut turns) = (0.0, 0.0);
+    for g in found {
+        // Each glyph's origin, its matrix (along its baseline, then towards its foot) and where it
+        // ends along the line; the lists end with where the line ends.
+        let Some(at) = g.get("21") else { continue };
+        let list = |k: &str| at.get(k).and_then(Val::nums).unwrap_or_default();
+        let (xs, ys, matrices, ends) = (list("1"), list("2"), list("3"), list("4"));
+        let glyphs: Vec<(Point, f64, kurbo::Vec2, kurbo::Vec2)> = xs
+            .iter()
+            .zip(&ys)
+            .zip(matrices.as_chunks::<6>().0)
+            .zip(ends.windows(2))
+            .map(|(((x, y), [a, b, c, d, ..]), e)| {
+                let advance = e.get(1).zip(e.first()).map_or(0.0, |(e1, e0)| e1 - e0);
+                let along = kurbo::Vec2::new(*a, *b);
+                (Point::new(*x, *y) + along * (advance * 0.5), advance, along, kurbo::Vec2::new(*c, *d))
+            })
+            .collect();
+        for w in glyphs.windows(2) {
+            let [(p, a0, along, foot), (q, a1, next, _)] = w else { continue };
+            let turn = next.dot(*foot).atan2(next.dot(*along));
+            // The length of the arc between the centres (the path is taken to be round there). A
+            // corner (a turn of more than a radian between two glyphs) isn't round: left out.
+            let half = turn.abs() * 0.5;
+            let length = if half > 1e-9 { (*q - *p).hypot() * half / half.sin() } else { (*q - *p).hypot() };
+            if turn.abs() <= 1.0 && length.is_finite() && a0.is_finite() && a1.is_finite() {
+                sum += ((a0 + a1) * 0.5 - length) * turn;
+                turns += turn * turn;
+            }
+        }
+    }
+    let spacing = sum / turns;
+    if turns > 1e-6 && spacing.is_finite() { spacing.clamp(-1000.0, 1000.0) } else { 0.0 }
+}
+
 impl Story {
     /// How many bytes of text the story has.
     pub(super) fn len(&self) -> usize {
         self.text.len()
-    }
-
-    /// The story's characters, with `\r` ending paragraphs and `\x03` ending lines.
-    pub(super) fn text(&self) -> &str {
-        &self.text
     }
 
     /// The point frame's matrix (the first frame's, when it is one), else the identity.
@@ -604,7 +780,8 @@ impl Story {
             .iter()
             .enumerate()
             .map(|(i, (lx, ly))| {
-                let (x, y) = (self.anchor.0 + lx, self.anchor.1 + ly);
+                // A vertical layout's lines run down the canvas, and each next one is further left.
+                let (x, y) = if self.vertical { (self.anchor.0 - ly, self.anchor.1 + lx) } else { (self.anchor.0 + lx, self.anchor.1 + ly) };
                 (text.get(i).copied().unwrap_or_default().to_string(), to_art((a * x + c * y + e, b * x + d * y + f), template))
             })
             .collect()
@@ -616,7 +793,7 @@ impl Story {
         let size = self.runs.iter().map(|(_, s)| s.size).fold(0.0, f64::max) * art_scale(to_doc);
         let bounds = |segments: &[[f64; 8]]| path_of(segments, template, to_doc).bounds();
         let r = match self.frames.first()? {
-            FrameKind::Area(s) => bounds(s)?,
+            FrameKind::Area(s, _) => bounds(s)?,
             FrameKind::OnPath { segments, .. } => bounds(segments)?.inflate(size * 1.5, size * 1.5),
             FrameKind::Point(m) => {
                 let longest = self.text.split(['\r', '\x03']).map(|l| l.chars().count()).max().unwrap_or(0) as f64;
@@ -632,6 +809,8 @@ impl Story {
                 let along = to_doc * Point::new(m[0], -m[1]) - to_doc * Point::ZERO;
                 let along = if along.hypot() > 1e-9 && along.is_finite() { along / along.hypot() } else { kurbo::Vec2::new(1.0, 0.0) };
                 let across = kurbo::Vec2::new(-along.y, along.x);
+                // Vertical type: its lines run down the page, a quarter turn from the baseline.
+                let (along, across) = if self.vertical { (across, along) } else { (along, across) };
                 let mut r = Rect::from_points(first, first);
                 for p in points.iter().chain([&first]) {
                     for (t, n) in [(-reach, -1.5), (-reach, 1.5), (reach, -1.5), (reach, 1.5)] {
@@ -661,7 +840,7 @@ impl Story {
                 let at = to_doc * Point::new(x, y);
                 (scale, Affine::new([a / scale, b / scale, c / scale, d / scale, at.x, at.y]), TextKind::Point)
             }
-            FrameKind::Area(s) => (1.0, Affine::IDENTITY, TextKind::Area { frame: path_of(s, template, to_doc) }),
+            FrameKind::Area(s, _) => (1.0, Affine::IDENTITY, TextKind::Area { frame: path_of(s, template, to_doc) }),
             FrameKind::OnPath { segments, start, end } => {
                 let n = segments.len() as f64;
                 // A closed path keeps its end bracket wherever it is (the same place as the start: a
@@ -670,10 +849,20 @@ impl Story {
                 (1.0, Affine::IDENTITY, TextKind::OnPath { path: path_of(segments, template, to_doc), start: length_fraction(segments, *start), end })
             }
         };
+        // A `\x03` ends a line inside its paragraph: a forced line break (U+2028), which the
+        // paragraph's style runs over.
         let text: String = if threaded {
             String::new()
         } else {
-            self.text.trim_end_matches('\r').chars().map(|c| if matches!(c, '\r' | '\x03') { '\n' } else { c }).collect()
+            self.text
+                .trim_end_matches('\r')
+                .chars()
+                .map(|c| match c {
+                    '\r' => '\n',
+                    '\x03' => '\u{2028}',
+                    c => c,
+                })
+                .collect()
         };
         if text.trim().is_empty() && !threaded {
             return None;
@@ -708,6 +897,14 @@ impl Story {
         if paras.len() > 1 && paras.iter().any(|p| *p != t.para) {
             t.paras = paras;
         }
+        if matches!(kind, TextKind::OnPath { .. }) && !threaded {
+            t.path_spacing = self.path_spacing * scale;
+        }
+        // Each frame of a thread keeps its own options.
+        if let Some(FrameKind::Area(_, options)) = self.frames.get(frame) {
+            options.apply(&mut t.area, scale);
+        }
+        t.vertical = self.vertical;
         t.kind = kind;
         t.xf = xf;
         Some(Node::new(id, NodeKind::Text(Box::new(t))))
@@ -719,6 +916,44 @@ impl Story {
     /// top, by what the first line needs (`vectorcraft_text::fit_first_line`). Whether it was.
     pub(super) fn fit_first_line(&self, t: &mut TextObject) -> bool {
         !self.lines.is_empty() && vectorcraft_text::fit_first_line(vectorcraft_text::FontDb::global(), t)
+    }
+
+    /// Area type (`node`, the story's first frame as [`Self::node`] makes it with `template` and
+    /// `to_doc`) whose first line the file lays out higher or lower than it is laid out here, as its
+    /// page draws it: its first baseline is fixed where the file has it. The font's ascent below the
+    /// frame's top, the first baseline here, isn't where the app that wrote the file puts it for
+    /// every font. A first baseline its frame `frame` keeps (other than Ascent) stays as it is.
+    /// Whether it was.
+    pub(super) fn place_first_line(&self, node: &mut Node, frame: usize, template: (f64, f64), to_doc: Affine) -> bool {
+        // Closer than this (points of the document) and the line is where the file has it.
+        const SAME: f64 = 0.5;
+        if matches!(self.frames.get(frame), Some(FrameKind::Area(_, AreaFrame { first_baseline: Some(_), .. }))) {
+            return false;
+        }
+        let NodeKind::Text(t) = &mut node.kind else { return false };
+        if !matches!(t.kind, TextKind::Area { .. }) || t.area.vertical_align != vectorcraft_doc::VerticalAlign::Top {
+            return false;
+        }
+        let Some((_, (x, y))) = self.line_starts(template).into_iter().next() else { return false };
+        let at = to_doc * Point::new(x, y);
+        let db = vectorcraft_text::FontDb::global();
+        // A frame too short for the line lays nothing out: as the line needs it (see `fit_first_line`).
+        let mut probe = TextObject::clone(t);
+        vectorcraft_text::fit_first_line(db, &mut probe);
+        let laid = vectorcraft_text::layout(db, &probe);
+        let Some(first) = laid.lines.first().filter(|l| l.region == 0) else { return false };
+        // Where the first baseline goes in the layout's line space. Vertical type's line space is a
+        // quarter turn from the document (a line's height is how far left of the frame's right edge
+        // its column is), and the file's line is the column's centre line, the middle of the line
+        // (as `TextLayout::baselines` has it): the baseline is that far from it.
+        let want = if t.vertical { -at.x - (first.descent - first.ascent) / 2.0 } else { at.y };
+        let min = first.first_baseline + (want - first.baseline);
+        if (want - first.baseline).abs() <= SAME || !min.is_finite() || min <= 0.0 {
+            return false;
+        }
+        t.area.first_baseline = vectorcraft_doc::FirstBaseline::Fixed;
+        t.area.first_baseline_min = min;
+        true
     }
 
     /// The leading the file's own line positions imply: the distance from one line to the next, less
@@ -824,6 +1059,10 @@ fn char_style(s: &Style, scale: f64, leading: Option<f64>) -> CharStyle {
         fill: s.fill.map_or(Paint::None, Paint::solid),
         stroke: s.stroke.map_or(Paint::None, Paint::solid),
         stroke_width: if s.stroke.is_some() { s.stroke_width * scale } else { 0.0 },
+        all_caps: s.caps == 2,
+        // At the default Small Caps size of Document Setup: the file's own isn't read.
+        small_caps: (s.caps == 1).then(|| vectorcraft_doc::DocSetup::default().small_caps_size),
+        tate_chu_yoko: s.tate_chu_yoko,
         ..CharStyle::default()
     }
 }
@@ -841,9 +1080,16 @@ mod tests {
 
     #[test]
     fn right_to_left_paragraphs_swap_left_and_right_alignment() {
-        let texts =
-            Texts { stories: vec![], fonts: vec![], defaults: Val::Dict(BTreeMap::new()), para_defaults: read(b"/33 1").unwrap(), frames: vec![] };
-        let justify = |own: &[u8]| para_style(&texts.para(Some(&read(own).unwrap())), 1.0).justify;
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: read(b"/33 1").unwrap(),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let justify = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).justify;
         // Right to left from the document's defaults, or the paragraph's own.
         assert_eq!(justify(b"/0 0"), Justify::Right);
         assert_eq!(justify(b"/0 1 /33 1"), Justify::Left);
@@ -857,9 +1103,16 @@ mod tests {
     /// dimension's is) lies in a tall box, not a wide one.
     #[test]
     fn point_type_lies_along_its_baseline() {
-        let para =
-            Texts { stories: vec![], fonts: vec![], defaults: Val::Dict(BTreeMap::new()), para_defaults: Val::Dict(BTreeMap::new()), frames: vec![] }
-                .para(None);
+        let para = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+        }
+        .para(None);
         let mut s = story(" 80 mm ", &[0.0], &para);
         let size = |s: &Story| s.region((0.0, 0.0), Affine::IDENTITY).map(|r| (r.width(), r.height())).unwrap();
         let (w, h) = size(&s);
@@ -868,6 +1121,68 @@ mod tests {
         s.frames = vec![FrameKind::Point([0.0, 1.0, -1.0, 0.0, 0.0, 0.0])];
         let (w, h) = size(&s);
         assert!(h > 3.0 * w, "turned: {w} × {h}");
+        // Vertical type lies down the page without a turn.
+        s.frames = vec![FrameKind::Point([1.0, 0.0, 0.0, 1.0, 0.0, 0.0])];
+        s.vertical = true;
+        let (w, h) = size(&s);
+        assert!(h > 3.0 * w, "vertical: {w} × {h}");
+    }
+
+    /// A vertical layout's lines run down the canvas from the anchor, each next one further left:
+    /// the second column starts one line pitch left of the first, and a centred column (its start
+    /// before the anchor) starts higher up.
+    #[test]
+    fn vertical_lines_start_down_the_canvas_each_further_left() {
+        let mut s = story("ab\rc\rde\r", &[0.0, 14.4, 28.8], &Para::default());
+        s.vertical = true;
+        s.lines[2].0 = -12.0;
+        s.anchor = (CANVAS_CENTRE + 100.0, CANVAS_CENTRE - 50.0);
+        let starts: Vec<(f64, f64)> = s.line_starts((0.0, 0.0)).into_iter().map(|(_, p)| p).collect();
+        let [a, b, c] = starts.as_slice() else { panic!("{starts:?}") };
+        assert!((a.0 - 100.0).abs() < 1e-9 && (a.1 - 50.0).abs() < 1e-9, "the first column at the anchor: {a:?}");
+        assert!((b.0 - 85.6).abs() < 1e-9 && (b.1 - 50.0).abs() < 1e-9, "the next one to the left: {b:?}");
+        assert!((c.0 - 71.2).abs() < 1e-9 && (c.1 - 62.0).abs() < 1e-9, "a centred one higher (the art is y up): {c:?}");
+    }
+
+    /// Key 1 of what a frame carries is its orientation: 2 vertical; 0, none or any other value
+    /// horizontal.
+    #[test]
+    fn a_frame_is_vertical_only_at_orientation_two() {
+        let frame = |carries: &str| read(format!("/0 << /2 << /0 0 {carries} >> >>").as_bytes()).unwrap();
+        let cases = ["/1 2", "/1 0", "", "/1 1", "/1 2.5", "/1 -2", "/1 (2)", "/1 1e300", "/1 true", "/1 [ 2 ]"];
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: cases.iter().map(|c| frame(c)).collect(),
+        };
+        let vertical: Vec<bool> = (0..cases.len() + 1).map(|i| texts.frame_vertical(i)).collect();
+        assert_eq!(vertical, [true, false, false, false, false, false, false, false, false, false, false]);
+    }
+
+    /// Key 35 of a character style at 3 is Tate-chu-yoko; its other values (1 and 2, how half-width
+    /// characters stand in a column) and values that aren't that number aren't.
+    #[test]
+    fn baseline_direction_three_is_tate_chu_yoko() {
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: read(b"/35 1").unwrap(),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![read(b"/0 ([Normal Character Style]) /6 << >>").unwrap(), read(b"/0 (Block) /6 << /35 3 >>").unwrap()],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let tcy = |run: &[u8]| texts.style(Some(&read(run).unwrap())).tate_chu_yoko;
+        assert!(tcy(b"/6 << /35 3 >>"), "the run's own");
+        assert!(tcy(b"/5 1 /6 << >>"), "its character style's");
+        assert!(!tcy(b"/5 1 /6 << /35 1 >>"), "the run's own wins");
+        for other in [&b"/6 << >>"[..], b"/6 << /35 2 >>", b"/6 << /35 3.5 >>", b"/6 << /35 (3) >>", b"/6 << /35 -3 >>", b"/6 << /35 1e308 >>"] {
+            assert!(!tcy(other), "{}", String::from_utf8_lossy(other));
+        }
     }
 
     /// A right-to-left paragraph is laid out right to left even when it has no right-to-left
@@ -875,9 +1190,16 @@ mod tests {
     /// that doesn't say, goes by its letters.
     #[test]
     fn right_to_left_paragraphs_set_their_direction() {
-        let texts =
-            Texts { stories: vec![], fonts: vec![], defaults: Val::Dict(BTreeMap::new()), para_defaults: read(b"/33 1").unwrap(), frames: vec![] };
-        let direction = |own: &[u8]| para_style(&texts.para(Some(&read(own).unwrap())), 1.0).direction;
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: read(b"/33 1").unwrap(),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let direction = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).direction;
         assert_eq!(direction(b"/0 2"), Some(ParaDirection::RightToLeft), "from the document's defaults");
         assert_eq!(direction(b"/0 2 /33 0"), None, "the paragraph's own");
         let plain = Texts { para_defaults: Val::Dict(BTreeMap::new()), ..texts };
@@ -915,6 +1237,8 @@ mod tests {
             fonts: vec![],
             defaults: Val::Dict(BTreeMap::new()),
             para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![],
+            para_sheets: vec![],
             frames: vec![read(doc.as_bytes()).unwrap()],
         };
         texts.frame(0)
@@ -1006,9 +1330,64 @@ mod tests {
                     fill: Some(Color::BLACK),
                     stroke: None,
                     stroke_width: 1.0,
+                    caps: 0,
+                    tate_chu_yoko: false,
                 },
             )],
+            path_spacing: 0.0,
+            vertical: false,
         }
+    }
+
+    /// A layout of glyphs `advances` wide round a circle of radius `radius` (y down), from its left,
+    /// outside it (their feet towards its centre) or inside it, the length of the circle between
+    /// their centres `fraction` of their advances' mean.
+    fn round_layout(advances: &[f64], radius: f64, outside: bool, fraction: f64) -> Val {
+        let sign = if outside { 1.0 } else { -1.0 };
+        let (mut xs, mut ys, mut matrices, mut ends) = (vec![], vec![], vec![], vec![0.0]);
+        let mut angle = std::f64::consts::PI;
+        for (i, a) in advances.iter().enumerate() {
+            if i > 0 {
+                angle += sign * (advances[i - 1] + a) * 0.5 * fraction / radius;
+            }
+            // Outside, clockwise on the page (y down); inside, the other way round.
+            let along = (-angle.sin() * sign, angle.cos() * sign);
+            let centre = (radius * angle.cos(), radius * angle.sin());
+            xs.push(centre.0 - along.0 * a * 0.5);
+            ys.push(centre.1 - along.1 * a * 0.5);
+            matrices.extend([along.0, along.1, -along.1, along.0, 0.0, 0.0]);
+            ends.push(ends[i] + a);
+        }
+        let nums = |v: &[f64]| v.iter().map(|n| format!("{n}")).collect::<Vec<_>>().join(" ");
+        let doc = format!(
+            "/0 << /99 /F /6 [ << /99 /L /6 [ << /99 /S /6 [ << /99 /G /21 << /1 [ {} ] /2 [ {} ] /3 [ {} ] /4 [ {} ] >> >> ] >> ] >> ] >>",
+            nums(&xs),
+            nums(&ys),
+            nums(&matrices),
+            nums(&ends)
+        );
+        read(doc.as_bytes()).unwrap().get("0").unwrap().clone()
+    }
+
+    /// The file lays type on a path out closer round the outside of a curve and further apart round
+    /// the inside: the spacing that does that is read from its layout, as the text engine's model
+    /// has it (length + turn × spacing = advance).
+    #[test]
+    fn the_layout_of_type_on_a_path_gives_its_spacing() {
+        let advances = [20.0, 30.0, 10.0, 25.0, 20.0];
+        // Outside a circle of radius 100, 10 above the path: the centres are 100/110 of the advances apart.
+        let spacing = path_spacing(&round_layout(&advances, 100.0, true, 100.0 / 110.0));
+        assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
+        // Inside it, 20 above the path: 100/80 of them.
+        let spacing = path_spacing(&round_layout(&advances, 100.0, false, 100.0 / 80.0));
+        assert!((spacing - 20.0).abs() < 1e-6, "{spacing}");
+        // At their advances: none.
+        assert!(path_spacing(&round_layout(&advances, 100.0, true, 1.0)).abs() < 1e-6);
+        // Corners (here a turn of about four radians from glyph to glyph) aren't taken for a curve.
+        assert_eq!(path_spacing(&round_layout(&advances, 5.0, true, 1.0)), 0.0);
+        // A straight line turns nowhere, and a layout without glyphs says nothing.
+        assert_eq!(path_spacing(&round_layout(&advances, 1e12, true, 0.9)), 0.0);
+        assert_eq!(path_spacing(&read(b"/99 /F").unwrap()), 0.0);
     }
 
     /// The leading of the text object a story comes in as.
@@ -1067,6 +1446,21 @@ mod tests {
         assert_eq!(story("one\r", &[0.0], &Para::default()).line_leading(1.0), None);
     }
 
+    /// A `\x03` ends a line inside its paragraph: it comes in as a forced line break, and the
+    /// paragraph's style runs over it to the paragraph's end.
+    #[test]
+    fn a_soft_return_is_a_line_break_in_its_paragraph() {
+        let para = Para { space_before: 4.0, space_after: 2.0, first_indent: 6.0, ..Para::default() };
+        let mut s = story("A\x03B\rC\r", &[0.0, 15.6, 31.2], &para);
+        s.paras[1].1 = Para { left_indent: 3.0, ..para.clone() };
+        let node = s.node(NodeId(1), 0, (0.0, 0.0), Affine::IDENTITY).unwrap();
+        let NodeKind::Text(t) = &node.kind else { panic!("not text") };
+        assert_eq!(t.plain_text(), "A\u{2028}B\nC");
+        assert_eq!(t.paras.len(), 2, "{:?}", t.paras);
+        assert_eq!((t.paras[0].first_line_indent, t.paras[0].left_indent, t.paras[0].space_before), (6.0, 0.0, 4.0));
+        assert_eq!((t.paras[1].first_line_indent, t.paras[1].left_indent), (6.0, 3.0));
+    }
+
     #[test]
     fn a_frame_too_short_for_its_first_line_is_made_taller() {
         // A heading in a frame as tall as its size: a line of the font it shows in here is taller.
@@ -1091,5 +1485,230 @@ mod tests {
         assert!(!s.fit_first_line(&mut t) && height(&t).unwrap().3 == 40.0);
         let mut t = area(13.0);
         assert!(!story("Heading\r", &[], &Para::default()).fit_first_line(&mut t) && height(&t).unwrap().3 == 13.0);
+    }
+
+    #[test]
+    fn area_type_s_first_line_goes_where_the_file_lays_it_out() {
+        // GUARDS: area type's first baseline was the font's ascent below the frame's top, where the
+        // file's own layout (and its page) can have it higher: a heading came in lower than the page's.
+        let line = |a: (f64, f64), b: (f64, f64)| [a.0, a.1, a.0, a.1, b.0, b.1, b.0, b.1];
+        let frame = vec![
+            line((10.0, 20.0), (210.0, 20.0)),
+            line((210.0, 20.0), (210.0, 120.0)),
+            line((210.0, 120.0), (10.0, 120.0)),
+            line((10.0, 120.0), (10.0, 20.0)),
+        ];
+        // The canvas is the document here: the art's y up, the document's down.
+        let (template, to_doc) = ((CANVAS_CENTRE, -CANVAS_CENTRE), Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]));
+        let first = |s: &Story| {
+            let mut node = s.node(NodeId(0), 0, template, to_doc).unwrap();
+            let placed = s.place_first_line(&mut node, 0, template, to_doc);
+            let NodeKind::Text(t) = node.kind else { panic!("area type") };
+            let l = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+            (placed, l.lines.first().map(|l| l.baseline), t.area.first_baseline)
+        };
+        let mut s = story("Heading\r", &[], &Para::default());
+        s.frames = vec![FrameKind::Area(frame, AreaFrame::default())];
+        // Where this lays the line out on its own: the file agrees, and nothing changes.
+        s.lines = vec![(10.0, 20.0)];
+        let (_, Some(own), _) = first(&s) else { panic!("a line") };
+        s.lines = vec![(10.0, own)];
+        assert_eq!(first(&s), (false, Some(own), vectorcraft_doc::FirstBaseline::Ascent));
+        // Higher in the file: there.
+        s.lines = vec![(10.0, own - 3.0)];
+        let (placed, at, fb) = first(&s);
+        assert!(placed && fb == vectorcraft_doc::FirstBaseline::Fixed, "{fb:?}");
+        assert!(at.is_some_and(|y| (y - (own - 3.0)).abs() < 1e-6), "{at:?} for {}", own - 3.0);
+    }
+
+    /// A text document's area frame, the rectangle 10, 20 to 210, 120 of the canvas, whose frame
+    /// data has `options` besides its kind, written by hand.
+    fn area_frame(options: &str) -> FrameKind {
+        let line = |a: (f64, f64), b: (f64, f64)| format!("{} {} {} {} {} {} {} {}", a.0, a.1, a.0, a.1, b.0, b.1, b.0, b.1);
+        let segments = [
+            line((10.0, 20.0), (210.0, 20.0)),
+            line((210.0, 20.0), (210.0, 120.0)),
+            line((210.0, 120.0), (10.0, 120.0)),
+            line((10.0, 120.0), (10.0, 20.0)),
+        ];
+        let doc = format!("/0 << /1 << /0 [ {} ] >> /2 << /0 1 {options} >> >>", segments.join(" "));
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![read(doc.as_bytes()).unwrap()],
+        };
+        texts.frame(0).unwrap()
+    }
+
+    /// The area options of the text object a story of `frames` comes in as at frame `frame`, the
+    /// art's units `scale` document points each.
+    fn area_of(frames: Vec<FrameKind>, frame: usize, scale: f64) -> vectorcraft_doc::AreaOptions {
+        let mut s = story("Some area type\r", &[], &Para::default());
+        s.frames = frames;
+        let to_doc = Affine::scale(scale) * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
+        let NodeKind::Text(t) = s.node(NodeId(0), frame, (CANVAS_CENTRE, -CANVAS_CENTRE), to_doc).unwrap().kind else { panic!("area type") };
+        t.area
+    }
+
+    #[test]
+    fn area_frame_options_are_read() {
+        // GUARDS: area type came in with one row, one column and the 18 pt gutter whatever its frame kept.
+        let a = area_of(vec![area_frame("/3 2 /4 3 /7 20 /8 24")], 0, 1.0);
+        assert_eq!((a.rows, a.columns, a.gutter, a.row_gutter), (2, 3, 24.0, Some(20.0)));
+        // The same gutter between rows and columns is one gutter.
+        let a = area_of(vec![area_frame("/3 2 /4 3 /7 20 /8 20")], 0, 1.0);
+        assert_eq!((a.gutter, a.row_gutter), (20.0, None));
+        // Lengths scale with the art's units (a Large Canvas copy measures in tenths of the page).
+        let a = area_of(vec![area_frame("/7 2 /8 2.4 /10 << /0 3 /1 3 >>")], 0, 10.0);
+        assert!((a.gutter - 24.0).abs() < 1e-9 && a.row_gutter == Some(20.0), "{a:?}");
+        assert!((a.first_baseline_min - 30.0).abs() < 1e-9, "{a:?}");
+    }
+
+    #[test]
+    fn area_frame_first_baseline_kinds_and_minimum_are_read() {
+        use vectorcraft_doc::FirstBaseline as F;
+        for (code, kind) in [(0, F::Fixed), (2, F::CapHeight), (3, F::Leading), (4, F::XHeight)] {
+            let a = area_of(vec![area_frame(&format!("/10 << /0 {code} /1 30 >>"))], 0, 2.0);
+            assert_eq!((a.first_baseline, a.first_baseline_min), (kind, 60.0), "code {code}");
+        }
+        // A kind without its own first baseline here, or none known, leaves Ascent.
+        for code in ["1", "5", "6", "7", "-1", "2.5", "(x)"] {
+            let a = area_of(vec![area_frame(&format!("/10 << /0 {code} /1 30 >>"))], 0, 1.0);
+            assert_eq!((a.first_baseline, a.first_baseline_min), (F::Ascent, 0.0), "code {code}");
+        }
+        // A minimum that can't be read is none.
+        let a = area_of(vec![area_frame("/10 << /0 3 /1 -4 >>")], 0, 1.0);
+        assert_eq!((a.first_baseline, a.first_baseline_min), (F::Leading, 0.0));
+    }
+
+    /// A first baseline the frame keeps stays as it is: the first line isn't moved to where the
+    /// file lays it out.
+    #[test]
+    fn a_first_baseline_the_frame_keeps_is_not_moved() {
+        let (template, to_doc) = ((CANVAS_CENTRE, -CANVAS_CENTRE), Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]));
+        // Where this lays the first line out on its own.
+        let mut s = story("Heading\r", &[], &Para::default());
+        s.frames = vec![area_frame("")];
+        let NodeKind::Text(t) = s.node(NodeId(0), 0, template, to_doc).unwrap().kind else { panic!("area type") };
+        let own = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).lines.first().map(|l| l.baseline).unwrap();
+        let placed_in = |frames: &[&str]| {
+            let mut s = story("Heading\r", &[], &Para::default());
+            s.frames = frames.iter().map(|o| area_frame(o)).collect();
+            // Higher in the file.
+            s.lines = vec![(10.0, own - 3.0)];
+            let mut node = s.node(NodeId(0), 0, template, to_doc).unwrap();
+            let placed = s.place_first_line(&mut node, 0, template, to_doc);
+            let NodeKind::Text(t) = node.kind else { panic!("area type") };
+            (placed, t.area.first_baseline)
+        };
+        let placed = |options: &str| placed_in(&[options]);
+        assert_eq!(placed("/10 << /0 2 /1 0 >>"), (false, vectorcraft_doc::FirstBaseline::CapHeight));
+        // Without one (Ascent), or with one that isn't read, the line goes where the file has it.
+        assert_eq!(placed(""), (true, vectorcraft_doc::FirstBaseline::Fixed));
+        assert_eq!(placed("/10 << /0 5 /1 0 >>"), (true, vectorcraft_doc::FirstBaseline::Fixed));
+        // Another frame of the thread keeping one doesn't count for the first.
+        assert_eq!(placed_in(&["", "/10 << /0 2 /1 0 >>"]), (true, vectorcraft_doc::FirstBaseline::Fixed));
+    }
+
+    #[test]
+    fn area_frame_options_that_cannot_be_read_keep_their_defaults() {
+        let defaults = vectorcraft_doc::AreaOptions::default();
+        let bad = [
+            "/3 0 /4 2.5 /7 -1 /8 (x)",
+            "/3 NaN /4 inf /7 NaN /8 -inf /10 [ 1 2 ]",
+            "/3 (2) /4 [ 3 ] /7 << /0 1 >> /8 true /10 3",
+            "/10 << /1 30 >>",
+        ];
+        for options in bad {
+            assert_eq!(area_of(vec![area_frame(options)], 0, 1.0), defaults, "{options}");
+        }
+        // Too many rows and columns, and too long gutters, are capped.
+        let a = area_of(vec![area_frame("/3 1e9 /4 101 /7 1e300 /8 5e4")], 0, 1.0);
+        assert_eq!((a.rows, a.columns, a.gutter, a.row_gutter), (100, 100, MAX_AREA_LENGTH, None));
+        // The cap holds after the lengths scale with the art's units.
+        let a = area_of(vec![area_frame("/7 1e4 /8 2e3 /10 << /0 0 /1 1e4 >>")], 0, 10.0);
+        assert_eq!((a.gutter, a.row_gutter, a.first_baseline_min), (MAX_AREA_LENGTH, None, MAX_AREA_LENGTH));
+        // One that can be read is read beside one that can't.
+        let a = area_of(vec![area_frame("/3 2 /4 -3 /8 12 /7 NaN")], 0, 1.0);
+        assert_eq!((a.rows, a.columns, a.gutter, a.row_gutter), (2, 1, 12.0, Some(18.0)));
+    }
+
+    #[test]
+    fn area_frame_without_options_comes_in_as_before() {
+        assert_eq!(area_of(vec![area_frame("")], 0, 1.0), vectorcraft_doc::AreaOptions::default());
+        assert_eq!(area_frame(""), FrameKind::Area(area_segments(), AreaFrame::default()));
+    }
+
+    /// The segments [`area_frame`] writes.
+    fn area_segments() -> Vec<[f64; 8]> {
+        let line = |a: (f64, f64), b: (f64, f64)| [a.0, a.1, a.0, a.1, b.0, b.1, b.0, b.1];
+        vec![
+            line((10.0, 20.0), (210.0, 20.0)),
+            line((210.0, 20.0), (210.0, 120.0)),
+            line((210.0, 120.0), (10.0, 120.0)),
+            line((10.0, 120.0), (10.0, 20.0)),
+        ]
+    }
+
+    #[test]
+    fn each_frame_of_a_thread_keeps_its_own_options() {
+        let frames = vec![area_frame("/3 2 /7 10 /8 10 /10 << /0 0 /1 12 >>"), area_frame("/4 3 /7 6 /8 8")];
+        let (first, second) = (area_of(frames.clone(), 0, 1.0), area_of(frames, 1, 1.0));
+        assert_eq!((first.rows, first.columns, first.gutter, first.row_gutter), (2, 1, 10.0, None));
+        assert_eq!((first.first_baseline, first.first_baseline_min), (vectorcraft_doc::FirstBaseline::Fixed, 12.0));
+        assert_eq!((second.rows, second.columns, second.gutter, second.row_gutter), (1, 3, 8.0, Some(6.0)));
+        assert_eq!(second.first_baseline, vectorcraft_doc::FirstBaseline::Ascent);
+    }
+
+    /// Vertical area type: the file's first line is its first column's centre line, so far left of
+    /// the frame's right edge; the column goes there.
+    #[test]
+    fn vertical_area_type_s_first_column_goes_where_the_file_lays_it_out() {
+        let line = |a: (f64, f64), b: (f64, f64)| [a.0, a.1, a.0, a.1, b.0, b.1, b.0, b.1];
+        let frame = vec![
+            line((10.0, 20.0), (210.0, 20.0)),
+            line((210.0, 20.0), (210.0, 120.0)),
+            line((210.0, 120.0), (10.0, 120.0)),
+            line((10.0, 120.0), (10.0, 20.0)),
+        ];
+        let (template, to_doc) = ((CANVAS_CENTRE, -CANVAS_CENTRE), Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]));
+        // Whether the first line was placed, the first column's centre line (its x on the document)
+        // and the first baseline setting.
+        let first = |s: &Story, place: bool| {
+            let mut node = s.node(NodeId(0), 0, template, to_doc).unwrap();
+            let placed = place && s.place_first_line(&mut node, 0, template, to_doc);
+            let NodeKind::Text(t) = node.kind else { panic!("area type") };
+            assert!(t.vertical);
+            let l = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+            (placed, l.baselines().first().map(|b| b.0.x), t.area.first_baseline)
+        };
+        let mut s = story("§§\r", &[], &Para::default());
+        s.frames = vec![FrameKind::Area(frame, AreaFrame::default())];
+        s.vertical = true;
+        s.anchor = (210.0, 20.0);
+        s.lines = vec![(0.0, 0.0)];
+        let (_, Some(own), _) = first(&s, false) else { panic!("a column") };
+        assert!(own < 210.0 && own > 190.0, "near the right edge: {own}");
+        // The file's column where this lays it out on its own (so far left of the anchor, the
+        // frame's top right): nothing changes.
+        s.lines = vec![(0.0, 210.0 - own)];
+        assert_eq!(first(&s, true), (false, Some(own), vectorcraft_doc::FirstBaseline::Ascent));
+        // Further right in the file: there.
+        s.lines = vec![(0.0, 210.0 - own - 3.0)];
+        let (placed, at, fb) = first(&s, true);
+        assert!(placed && fb == vectorcraft_doc::FirstBaseline::Fixed, "{fb:?}");
+        assert!(at.is_some_and(|x| (x - (own + 3.0)).abs() < 1e-6), "{at:?} for {}", own + 3.0);
+        // Scaled characters (a column of another width) go there too.
+        s.runs[0].1.v_scale = 2.0;
+        s.runs[0].1.h_scale = 2.0;
+        s.lines = vec![(0.0, 0.0)];
+        let (_, Some(own), _) = first(&s, false) else { panic!("a column") };
+        s.lines = vec![(0.0, 210.0 - own - 3.0)];
+        let (placed, at, _) = first(&s, true);
+        assert!(placed && at.is_some_and(|x| (x - (own + 3.0)).abs() < 1e-6), "{at:?} for {}", own + 3.0);
     }
 }

@@ -2,7 +2,7 @@
 //! Japanese text only with craft-fonts' faces, skipped without them).
 use crate::*;
 use kurbo::Shape;
-use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun};
+use vectorcraft_doc::{AreaFit, CharStyle, Justify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
 fn vertical(text: &str) -> TextObject {
@@ -115,6 +115,31 @@ fn area_type_starts_at_the_right_edge_and_wraps_to_the_left() {
     distinct.dedup();
     assert!(distinct.len() >= 2 && distinct.windows(2).all(|w| w[1] < w[0]), "columns right to left: {distinct:?}");
     assert!(l.glyphs.iter().all(|g| g.outline.bounding_box().y1 <= 105.0 + 1e-6), "inside the frame");
+}
+
+/// A vertical frame too narrow for its first column is made wider from its right edge, where that
+/// column is; its height stays.
+#[test]
+fn fit_first_line_widens_a_vertical_frame_from_its_right_edge() {
+    let mut t = vertical("§§");
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(90.0, 0.0, 100.0, 105.0).to_path(0.1)) };
+    assert!(layout(FontDb::global(), &t).lines.is_empty(), "a column doesn't fit");
+    assert!(fit_first_line(FontDb::global(), &mut t));
+    let TextKind::Area { frame } = &t.kind else { panic!("area") };
+    let b = frame.bounds().unwrap();
+    assert!((b.x1 - 100.0).abs() < 1e-6 && b.x0 < 90.0 && b.x0 > 60.0 && (b.y0, b.y1) == (0.0, 105.0), "{b:?}");
+    let l = layout(FontDb::global(), &t);
+    assert_eq!(l.lines.len(), 1);
+    assert!(ink(&l, 0).x1 <= 100.0 + 1e-6, "the column at the right edge: {:?}", ink(&l, 0));
+    // A fixed first baseline further in than the line's ascent: wide enough for it too.
+    let mut t = vertical("§§");
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(90.0, 0.0, 100.0, 105.0).to_path(0.1)) };
+    t.area.first_baseline = crate::FirstBaseline::Fixed;
+    t.area.first_baseline_min = 40.0;
+    assert!(fit_first_line(FontDb::global(), &mut t));
+    let TextKind::Area { frame } = &t.kind else { panic!("area") };
+    assert!(frame.bounds().unwrap().x0 < 60.0, "{:?}", frame.bounds());
+    assert_eq!(layout(FontDb::global(), &t).lines.len(), 1);
 }
 
 /// `baselines`: one per line that holds characters, along it for horizontal type and down the
@@ -318,6 +343,41 @@ fn tracking_spaces_upright_marks_without_moving_them_off_the_centre_line() {
     assert!((step - 24.0).abs() < 1e-6, "one em plus 200/1000 em of tracking: {step}");
 }
 
+/// Baseline shift moves an upright glyph across the column, as it moves a letter lying on its
+/// side, at any Character Rotation, and leaves its neighbors where they are. The glyph turns about
+/// its shifted pen position (`xf * pivot`), and `xf * unturned` places the shifted glyph without
+/// its rotation.
+#[test]
+fn baseline_shift_moves_an_upright_glyph_across_the_column() {
+    let at = |byte: usize, rotation: f64, shift: f64| {
+        let mut t = vertical("§l§");
+        edit::style_range(&mut t.runs, byte, byte + "§l§"[byte..].chars().next().map_or(1, char::len_utf8), |s| {
+            s.rotation = rotation;
+            s.baseline_shift = shift;
+        });
+        layout(FontDb::global(), &t)
+    };
+    let centre = |l: &TextLayout, byte: usize| l.glyphs.iter().find(|g| g.byte == byte).map(|g| g.outline.bounding_box().center()).unwrap();
+    // The letter lying on its side moves across the column by the shift.
+    let across = centre(&at(2, 0.0, 10.0), 2) - centre(&at(2, 0.0, 0.0), 2);
+    assert!((across.x.abs() - 10.0).abs() < 1e-6 && across.y.abs() < 1e-6, "{across:?}");
+    for rotation in [0.0, 30.0, 90.0, -90.0] {
+        let (plain, shifted) = (at(3, rotation, 0.0), at(3, rotation, 10.0));
+        let moved = centre(&shifted, 3) - centre(&plain, 3);
+        assert!((moved - across).hypot() < 1e-6, "{rotation}°: {moved:?}, across {across:?}");
+        for byte in [0, 2] {
+            assert!((centre(&shifted, byte) - centre(&plain, byte)).hypot() < 1e-6, "{rotation}°: byte {byte} moved");
+        }
+        let (p, s) = (plain.glyphs.iter().find(|g| g.byte == 3).unwrap(), shifted.glyphs.iter().find(|g| g.byte == 3).unwrap());
+        let turn_at = s.xf * s.pivot - p.xf * p.pivot;
+        assert!((turn_at - across).hypot() < 1e-6, "{rotation}°: turns about a point moved by {turn_at:?}");
+        let unrotated = at(3, 0.0, 10.0);
+        let u = unrotated.glyphs.iter().find(|g| g.byte == 3).unwrap();
+        let (a, b) = ((s.xf * s.unturned).as_coeffs(), u.xf.as_coeffs());
+        assert!(a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-6), "{rotation}°: {a:?} vs {b:?}");
+    }
+}
+
 /// Character panel menu › Tate-chu-yoko: a marked run stands across one em of the column, including
 /// a number longer than three digits and Latin letters. Unmarked text keeps the automatic rule
 /// (two or three digits only). Horizontal type stores the mark and does not move the letters.
@@ -356,6 +416,71 @@ fn manual_tate_chu_yoko_sets_marked_characters_across_one_em() {
     assert!(ink(&row, 1).center().x > ink(&row, 0).center().x + 5.0, "horizontal type stays a row");
 }
 
+/// Character panel menu › Tate-chu-yoko Settings: a marked block moves up by a positive Up/Down
+/// and right by a positive Left/Right, in points, as one piece (the offsets of its first
+/// character), and keeps its one em down the column. An automatic two-digit block and horizontal
+/// type do not move.
+#[test]
+fn tate_chu_yoko_settings_move_a_marked_block_up_down_left_and_right() {
+    let marked = CharStyle { size: 20.0, tate_chu_yoko: true, ..CharStyle::default() };
+    let union = |l: &TextLayout, r: std::ops::Range<usize>| r.map(|i| ink(l, i)).reduce(|a, b| a.union(b)).unwrap();
+    let at = |up: f64, right: f64| {
+        let mut t = vertical_styled("", marked.clone());
+        t.runs = vec![
+            TextRun::new("AB", CharStyle { tcy_up_down: up, tcy_left_right: right, ..marked.clone() }),
+            TextRun::new("C", CharStyle { tcy_up_down: -up, tcy_left_right: -right, ..marked.clone() }),
+            TextRun::new("§", CharStyle { size: 20.0, ..CharStyle::default() }),
+        ];
+        layout(FontDb::global(), &t)
+    };
+    let still = at(0.0, 0.0);
+    for (up, right) in [(5.0, 0.0), (-3.5, 0.0), (0.0, 4.0), (0.0, -2.0), (6.0, -7.0)] {
+        let moved = at(up, right);
+        let (a, b) = (union(&still, 0..3), union(&moved, 0..3));
+        assert!((b.y0 - (a.y0 - up)).abs() < 1e-6 && (b.y1 - (a.y1 - up)).abs() < 1e-6, "up {up}: {a:?} {b:?}");
+        assert!((b.x0 - (a.x0 + right)).abs() < 1e-6 && (b.x1 - (a.x1 + right)).abs() < 1e-6, "right {right}: {a:?} {b:?}");
+        assert!((moved.glyphs[0].advance - 20.0).abs() < 1e-6 && moved.glyphs[1..3].iter().all(|g| g.advance == 0.0), "one em");
+        assert_eq!(ink(&moved, 3), ink(&still, 3), "the mark after the block stays");
+        assert_eq!(moved.glyphs[0].origin, still.glyphs[0].origin, "the caret and hit region stay");
+    }
+
+    // An automatic block of two digits takes no offsets, and horizontal type does not move.
+    let shifted = CharStyle { size: 20.0, tcy_up_down: 5.0, tcy_left_right: 5.0, ..CharStyle::default() };
+    let digits = layout(FontDb::global(), &vertical_styled("10", shifted.clone()));
+    let plain = layout(FontDb::global(), &vertical("10"));
+    assert_eq!(union(&digits, 0..2), union(&plain, 0..2));
+    let row = |st: CharStyle| {
+        let mut t = TextObject::point(Point::ZERO, "AB", st);
+        t.xf = Affine::IDENTITY;
+        layout(FontDb::global(), &t)
+    };
+    assert_eq!(union(&row(CharStyle { tate_chu_yoko: true, ..shifted }), 0..2), union(&row(marked.clone()), 0..2));
+}
+
+/// Shrink Text to Fit scales a marked block's Up/Down and Left/Right offsets with the size, as it
+/// scales the baseline shift.
+#[test]
+fn shrink_text_to_fit_scales_tate_chu_yoko_offsets() {
+    let marked = CharStyle { size: 20.0, tate_chu_yoko: true, ..CharStyle::default() };
+    let union = |l: &TextLayout, r: std::ops::Range<usize>| r.map(|i| ink(l, i)).reduce(|a, b| a.union(b)).unwrap();
+    let (up, right) = (6.0, -4.0);
+    let at = |up: f64, right: f64| {
+        let mut t = vertical_styled("", marked.clone());
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 60.0, 60.0).to_path(0.1)) };
+        t.area.fit = AreaFit::ShrinkText { min_percent: 10.0 };
+        t.runs = vec![
+            TextRun::new("AB", CharStyle { tcy_up_down: up, tcy_left_right: right, ..marked.clone() }),
+            TextRun::new("§§§§§§§§§§§§", CharStyle { size: 20.0, ..CharStyle::default() }),
+        ];
+        layout(FontDb::global(), &t)
+    };
+    let (still, moved) = (at(0.0, 0.0), at(up, right));
+    let f = moved.fit_scale;
+    assert!(f < 1.0 && f == still.fit_scale, "{f} {}", still.fit_scale);
+    let (a, b) = (union(&still, 0..2), union(&moved, 0..2));
+    assert!((b.y0 - (a.y0 - up * f)).abs() < 1e-6 && (b.x0 - (a.x0 + right * f)).abs() < 1e-6, "{f}: {a:?} {b:?}");
+}
+
 /// A marked run is one block; the unmarked digits beside it still follow the automatic rule.
 /// A column shorter than two ems holds the marked number on one line.
 #[test]
@@ -377,6 +502,60 @@ fn manual_tate_chu_yoko_leaves_unmarked_digits_and_stays_on_one_line() {
     t.runs = vec![TextRun::new("2026", CharStyle { size: 20.0, ..CharStyle::default() })];
     let wrapped = layout(FontDb::global(), &t);
     assert!(wrapped.lines.len() > 1, "unmarked 2026 is longer than the column");
+}
+
+/// Character panel menu › Standard Vertical Roman Alignment: marked Latin letters and digits stand
+/// upright one below the other, each in a cell of one em (the bundled font has no vertical
+/// metrics), centred on the column. A space keeps its width, two digits stay tate-chu-yoko,
+/// unmarked letters lie on their side, and horizontal type is unchanged.
+#[test]
+fn standard_vertical_roman_alignment_stands_half_width_characters_upright() {
+    let plain = CharStyle { size: 20.0, ..CharStyle::default() };
+    let marked = CharStyle { standard_vertical_roman: true, ..plain.clone() };
+    let h = layout(FontDb::global(), &TextObject::point(Point::ZERO, "l", plain.clone()));
+    let side = layout(FontDb::global(), &vertical_styled("lA l", plain.clone()));
+    let up = layout(FontDb::global(), &vertical_styled("lA l", marked.clone()));
+    let (hl, sl, ul) = (ink(&h, 0), ink(&side, 0), ink(&up, 0));
+    assert!(sl.width() > sl.height(), "unmarked l lies across the column: {sl:?}");
+    assert!((ul.width() - hl.width()).abs() < 0.01 && (ul.height() - hl.height()).abs() < 0.01, "marked l upright: {hl:?} {ul:?}");
+    assert!(ul.height() > ul.width());
+    for i in [0, 1, 3] {
+        assert!((up.glyphs[i].advance - 20.0).abs() < 1e-6, "one em down the column: {:?}", up.glyphs[i].advance);
+        assert!(ink(&up, i).center().x.abs() < 1.5, "centred on the column: {:?}", ink(&up, i));
+        assert!(side.glyphs[i].advance < 20.0, "unmarked advance: {:?}", side.glyphs[i].advance);
+    }
+    assert!(ink(&up, 1).center().y > ink(&up, 0).center().y + 15.0, "one below the other");
+    assert!((up.glyphs[2].advance - side.glyphs[2].advance).abs() < 1e-6, "the space keeps its width");
+
+    let digits = layout(FontDb::global(), &vertical_styled("10", marked.clone()));
+    assert!((digits.glyphs[0].advance - 20.0).abs() < 1e-6 && digits.glyphs[1].advance == 0.0, "two digits stay tate-chu-yoko");
+    let (a, b) = (ink(&digits, 0), ink(&digits, 1));
+    assert!((a.center().y - b.center().y).abs() < 1.0 && b.center().x > a.center().x, "side by side: {a:?} {b:?}");
+
+    let mut horizontal = TextObject::point(Point::ZERO, "lA", marked);
+    horizontal.xf = Affine::IDENTITY;
+    let row = layout(FontDb::global(), &horizontal);
+    let plain_row = layout(FontDb::global(), &TextObject::point(Point::ZERO, "lA", plain));
+    assert_eq!(row.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>(), plain_row.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>());
+    assert!((ink(&row, 0).height() - hl.height()).abs() < 0.01, "horizontal type stays as it is");
+}
+
+/// A combining mark shaped as a glyph of its own turns upright with its letter and stays over it,
+/// as in horizontal type, and takes no cell of its own down the column.
+#[test]
+fn standard_vertical_roman_alignment_keeps_combining_marks_on_their_letter() {
+    let plain = CharStyle { size: 20.0, ..CharStyle::default() };
+    let text = "q\u{301}x";
+    let h = layout(FontDb::global(), &TextObject::point(Point::ZERO, text, plain.clone()));
+    assert_eq!(h.glyphs.len(), 3, "the bundled font sets the acute as a glyph of its own");
+    let up = layout(FontDb::global(), &vertical_styled(text, CharStyle { standard_vertical_roman: true, ..plain }));
+    assert_eq!(up.glyphs.len(), 3);
+    let (hq, ha, q, a, x) = (ink(&h, 0), ink(&h, 1), ink(&up, 0), ink(&up, 1), ink(&up, 2));
+    let offset = |base: Rect, mark: Rect| (mark.center().x - base.center().x, mark.center().y - base.center().y);
+    let (want, got) = (offset(hq, ha), offset(q, a));
+    assert!((want.0 - got.0).abs() < 0.01 && (want.1 - got.1).abs() < 0.01, "the acute sits on the q as in a row: {want:?} {got:?}");
+    assert!((up.glyphs[0].advance - 20.0).abs() < 1e-6 && up.glyphs[1].advance == 0.0, "one cell for the cluster");
+    assert!(x.center().y > q.center().y + 10.0, "the next letter below: {q:?} {x:?}");
 }
 
 /// Issue #260 as reported, with a Japanese face of craft-fonts (whose own digits are proportional).
@@ -507,6 +686,37 @@ fn mojikumi_spaces_japanese_from_latin_by_a_quarter_em() {
     let on = lay("第10回", Mojikumi::LineEndHalf, true);
     let off = lay("第10回", Mojikumi::None, true);
     assert!(on.glyphs.iter().zip(&off.glyphs).all(|(a, b)| (a.advance - b.advance).abs() < 0.01));
+}
+
+/// Mojikumi applies to type holding Japanese punctuation or a Japanese letter; type without either
+/// lays out the same with Line-end Punctuation Half Width as with Mojikumi None, across lines and
+/// list markers too.
+#[test]
+fn mojikumi_applies_only_to_japanese_punctuation_and_letters() {
+    use vectorcraft_doc::Mojikumi;
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let styled = |text: &str, m: Mojikumi| {
+        let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 20.0, ..CharStyle::default() });
+        t.xf = Affine::IDENTITY;
+        t.para.mojikumi = m;
+        t
+    };
+    let placed = |l: &TextLayout| l.glyphs.iter().map(|g| (g.byte, g.advance, g.origin, g.xf)).collect::<Vec<_>>();
+    for text in ["", "A", "Latin words, digits 2026 and (brackets).", "first\nsecond"] {
+        let on = styled(text, Mojikumi::LineEndHalf);
+        let lay = layout(FontDb::global(), &on);
+        assert!(!lay.mojikumi_applies(&on.plain_text()), "{text:?}");
+        let off = layout(FontDb::global(), &styled(text, Mojikumi::None));
+        assert_eq!(placed(&lay), placed(&off), "{text:?}");
+        assert_eq!(lay.bounds, off.bounds, "{text:?}");
+    }
+    let mut listed = styled("first\nsecond", Mojikumi::LineEndHalf);
+    listed.para.list = Some(ParaList::bulleted(Bullet::Dot));
+    assert!(!layout(FontDb::global(), &listed).mojikumi_applies(&listed.plain_text()));
+    for text in ["、", "「A」", "雅", "々", "Latin 漢字"] {
+        let t = styled(text, Mojikumi::LineEndHalf);
+        assert!(layout(FontDb::global(), &t).mojikumi_applies(&t.plain_text()), "{text:?}");
+    }
 }
 
 /// Mojikumi (JLREQ 3.1.5): with Line-end Punctuation Half Width, an opening bracket starting a
@@ -719,5 +929,29 @@ fn proportional_metrics_kern_the_glyphs_they_respace() {
     };
     let (auto, manual) = (lay(true, None), lay(true, Some(0.0)));
     assert!(auto.iter().zip(&manual).any(|(a, b)| (a - b).abs() > 0.01), "kerned: {auto:?} {manual:?}");
+    let optical = {
+        let s = CharStyle { font_family: "Noto Sans CJK SC".into(), optical_kerning: true, ..st(true, None) };
+        layout(&db, &vertical_styled("「カタカナ」とトップ、ヤッホー。", s)).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>()
+    };
+    assert!(auto.iter().zip(&optical).all(|(a, b)| (a - b).abs() < 0.01), "vertical Optical uses font metrics: {auto:?} {optical:?}");
     assert!(lay(false, None).iter().all(|a| (a - 20.0).abs() < 0.01), "off: an em each, as before");
+}
+
+#[test]
+fn vertical_optical_to_auto_keeps_the_fonts_pair() {
+    use crate::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(pair_kerning_font().unwrap());
+    let style = CharStyle { font_family: PAIR_KERNING_FAMILY.into(), size: 100.0, ..CharStyle::default() };
+    let positions =
+        |t: &TextObject| layout(&db, t).glyphs.iter().map(|g| (g.advance, g.origin, g.xf.as_coeffs()[4], g.xf.as_coeffs()[5])).collect::<Vec<_>>();
+    let auto = vertical_styled("AV", style.clone());
+    let mut mixed = auto.clone();
+    edit::style_range(&mut mixed.runs, 0, 1, |s| s.optical_kerning = true);
+    let mut unkerned = auto.clone();
+    edit::style_range(&mut unkerned.runs, 0, 1, |s| s.kerning = Some(0.0));
+    let expected = positions(&auto);
+    assert_eq!(expected.len(), 2);
+    assert_ne!(expected, positions(&unkerned), "the font's A-V pair changes vertical positions");
+    assert_eq!(positions(&mixed), expected, "vertical Optical keeps the A-V font pair across the style boundary");
 }

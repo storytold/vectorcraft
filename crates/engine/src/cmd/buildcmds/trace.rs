@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use vectorcraft_color::Swatch;
 use vectorcraft_doc::ImageObject;
 
@@ -220,18 +222,16 @@ fn trace_params(s: &Session, c: &str, p: &Value) -> Result<tr::TraceParams> {
     Ok(params)
 }
 
-/// Document swatch `w`'s solid color with the paint a trace fills with it: a global or spot color,
-/// or a tint of one, linked to its swatch as `swatch_solid` (paint.rs) links it; any other color
-/// unlinked. The color is the one the paint shows (a Lab spot color's CMYK equivalent when the Spot
-/// Colors options use CMYK values).
+/// Document swatch `w`'s displayed solid color and unlinked trace paint. A tint uses its tinted
+/// color; a Lab spot color uses its CMYK equivalent when the Spot Colors options use CMYK values.
 fn trace_swatch_paint(d: &Document, w: &Swatch) -> Option<(Color, Paint)> {
     let linked = d.swatch_link(&w.name).and_then(|(base, tint)| d.tint_paint(&base, tint));
     let color = linked.as_ref().and_then(Paint::color).or_else(|| w.paint.color())?;
-    Some((color, linked.unwrap_or_else(|| Paint::solid(color))))
+    Some((color, Paint::solid(color)))
 }
 
 /// Document Library with `colorGroup`: the solid colors of the active document's color group
-/// `name` (so named exactly, else ignoring case), each with its paint ([`trace_swatch_paint`]).
+/// `name` (so named exactly, else ignoring case), each with its unlinked paint ([`trace_swatch_paint`]).
 /// Errors name command `c`. ([`trace_params`] has checked that the library is the document's
 /// swatches.)
 fn trace_group_colors(c: &str, s: &Session, name: &str) -> Result<Vec<(Color, Paint)>> {
@@ -247,9 +247,7 @@ fn trace_group_colors(c: &str, s: &Session, name: &str) -> Result<Vec<(Color, Pa
 }
 
 /// Document Library in Color mode: look the library's colors (or its color group's) up into
-/// `params.swatches` → each one as traced (sRGB) with the paint to fill with. The document's
-/// global and spot colors fill linked to their swatches ([`trace_swatch_paint`]); a swatch
-/// library's colors fill unlinked. Errors name command `c`.
+/// `params.swatches` → each one as traced (sRGB) with its unlinked paint. Errors name command `c`.
 fn trace_library(c: &str, s: &Session, params: &mut tr::TraceParams) -> Result<Vec<([u8; 3], Paint)>> {
     if params.mode != tr::Mode::Color || params.palette != tr::Palette::DocumentLibrary {
         return Ok(vec![]);
@@ -377,8 +375,11 @@ fn grouped(d: &mut Document, nodes: Vec<Node>, parents: &[Option<usize>]) -> Vec
 struct TraceInputs {
     target: NodeId,
     image: Box<ImageObject>,
-    /// The settings traced with, as JSON, the library's colours in.
+    /// The settings traced with, as JSON.
     params: Value,
+    /// Document Library: the library's colours, which the JSON leaves out
+    /// ([`tr::TraceParams::swatches`]).
+    swatches: Vec<[u8; 3]>,
 }
 
 /// What `imageTrace.make` and `imageTrace.makeAndExpand` take from the session before they trace.
@@ -431,7 +432,7 @@ fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
     let bytes = Arc::clone(&blob.bytes);
     let library = trace_library(c, s, &mut params)?;
     let traced_with = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
-    let inputs = TraceInputs { target, image, params: traced_with };
+    let inputs = TraceInputs { target, image, params: traced_with, swatches: params.swatches.clone() };
     Ok(Prepared { inputs, trace: params, view, params_json, preset_label, library, bytes })
 }
 
@@ -544,7 +545,7 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
         Some(traced) if traced.inputs == inputs => traced,
         _ => trace_now(&inputs, &trace, &bytes, &|_, _| true)?,
     };
-    let TraceInputs { target, image: img, params: _ } = inputs;
+    let TraceInputs { target, image: img, .. } = inputs;
     let warnings = trace_warnings((img.width, img.height), raster, res.worked_at);
     // Pixel space of the decoded raster → the image object's pixel space → document.
     let sx = img.width.max(1) as f64 / raster.0.max(1) as f64;
@@ -554,6 +555,12 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
     let unit = xf.determinant().abs().sqrt();
     let (npaths, anchors, colors) = (res.paths.len(), res.anchor_count(), res.palette.len());
     let label = if expand { "Image Trace (Make and Expand)" } else { "Image Trace" };
+    // A library color fills with the swatch's displayed color (its model kept), unlinked.
+    // Keep the first swatch that traces as a given color. Build the lookup once per trace.
+    let mut by_color: HashMap<[u8; 3], &Paint> = HashMap::new();
+    for (rgb, paint) in &library {
+        by_color.entry(*rgb).or_insert(paint);
+    }
     let id = s.edit(label, |d, sel| {
         let src = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
         let mut image = if is_trace_group(&src) {
@@ -581,12 +588,8 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
                 *path = shape.to_path();
                 *live = Some(Box::new(shape));
             }
-            // A library color fills with the swatch's own color (its model kept), linked to a
-            // global or spot swatch of the document.
-            let solid = library
-                .iter()
-                .find(|(rgb, _)| *rgb == tp.color)
-                .map_or_else(|| Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2])), |l| l.1.clone());
+            let solid =
+                by_color.get(&tp.color).map_or_else(|| Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2])), |paint| (*paint).clone());
             // Gradients: a path the tracer found to be a linear gradient is filled with it.
             let paint = tp.gradient.as_ref().map_or(solid, |g| traced_gradient(g, xf));
             n.appearance = match tp.stroke {

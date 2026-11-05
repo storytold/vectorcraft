@@ -1,8 +1,13 @@
-use super::art::{element_name, elements, join_and, sane};
+use super::super::brush;
+use super::art::{element_name, join_and, sane};
 use super::containers::drop_commented_copies;
+use super::ops::appearance_from_art_style;
 use super::types::{FLIP, Kind, MAX_DEPTH};
-use super::{Affine, Artboard, ColorMode, Document, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect, Structure, Swatch, Unit, V, obj};
-use vectorcraft_doc::{ImageBlob, PatternDef};
+use super::{
+    Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, HashMap, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect,
+    Structure, Swatch, Unit, V, obj,
+};
+use vectorcraft_doc::{DataSet, DataValue, GraphicStyle, Guide, ImageBlob, PatternDef, TextWrap, Variable, VariableKind, Variables};
 
 /// `%AI5_RulerUnits` → [`Unit`] (Illustrator 7 spec table 3; centimeters is 4; pixels is 6 in later files).
 fn ruler_unit(v: u8) -> Option<Unit> {
@@ -15,6 +20,92 @@ fn ruler_unit(v: u8) -> Option<Unit> {
         6 => Unit::Pixels,
         _ => return None,
     })
+}
+
+/// An artboard of the `/Document`'s `ArtboardArray`: its name, its rect in art space and its
+/// display options.
+#[derive(Clone, Debug)]
+pub(super) struct AiArtboard {
+    pub name: String,
+    pub rect: Rect,
+    pub center_mark: bool,
+    pub cross_hairs: bool,
+    pub safe_areas: bool,
+    /// The video ruler's pixel aspect ratio.
+    pub par: f64,
+}
+
+impl AiArtboard {
+    fn new(name: String, rect: Rect) -> Self {
+        Self { name, rect, center_mark: false, cross_hairs: false, safe_areas: false, par: 1.0 }
+    }
+}
+
+/// The number of entry `key` in `o` when it is written as one finite number of the type `ty`
+/// (`/Int`, `/Real`, `/Bool`; a whole number unless `/Real`), else `None`.
+fn typed(o: &Obj, key: &str, ty: &str) -> Option<f64> {
+    match o.get(key)? {
+        [V::Num(v), V::Name(t)] if t == ty && v.is_finite() && (ty == "Real" || v.fract() == 0.0) => Some(*v),
+        _ => None,
+    }
+}
+
+/// The `/Bool` entry `key` of `o`: 0 or 1.
+fn boolean(o: &Obj, key: &str) -> Option<bool> {
+    match typed(o, key, "Bool")? {
+        0.0 => Some(false),
+        1.0 => Some(true),
+        _ => None,
+    }
+}
+
+/// An `ArtboardArray` entry's display options: `DisplayMark` (`/Int`, bits: 1 the center mark,
+/// 2 cross hairs, 4 video safe areas) and `PAR` (`/Real`, the video ruler's pixel aspect ratio,
+/// 0.1 to 10). A value of another type or out of range leaves the option off, or 1.
+fn display_options(ab: &Obj, board: &mut AiArtboard) {
+    if let Some(mark) = typed(ab, "DisplayMark", "Int").filter(|m| (0.0..=f64::from(u32::MAX)).contains(m)) {
+        let mark = mark as u32;
+        (board.center_mark, board.cross_hairs, board.safe_areas) = (mark & 1 != 0, mark & 2 != 0, mark & 4 != 0);
+    }
+    if let Some(par) = typed(ab, "PAR", "Real").filter(|p| (0.1..=10.0).contains(p)) {
+        board.par = par;
+    }
+}
+
+/// The `AI Auto Rasterize` dictionary of the `/Document` (Document Raster Effects Settings) into
+/// `doc`: `dpi.` the resolution (`/Int`, 1 to 2400), `mask`, `alis` and `spot` the clipping mask,
+/// anti-aliasing and Preserve Spot Colors (`/Bool`), `padd` the room added around the object
+/// (`/Real`, points), and `colr` the color model and background (`/Int`: 0 the document's model on
+/// white, 4 the document's model, transparent, 6 grayscale, transparent). A value of another type,
+/// out of range or not one of these leaves the setting as it is.
+fn raster_settings(r: &Obj, doc: &mut Document) {
+    use vectorcraft_doc::rastersettings::{MAX_ADD_AROUND, RasterColorModel};
+    use vectorcraft_doc::setup::Background;
+    if let Some(ppi) = typed(r, "dpi.", "Int").filter(|p| (1.0..=2400.0).contains(p)) {
+        doc.raster_effects_ppi = ppi;
+    }
+    let s = &mut doc.raster_effects;
+    if let Some(on) = boolean(r, "mask") {
+        s.clipping_mask = on;
+    }
+    if let Some(on) = boolean(r, "alis") {
+        s.anti_alias = on;
+    }
+    if let Some(on) = boolean(r, "spot") {
+        s.preserve_spot_colors = on;
+    }
+    if let Some(pad) = typed(r, "padd", "Real").filter(|p| (0.0..=MAX_ADD_AROUND).contains(p)) {
+        s.add_around = pad;
+    }
+    let model = match typed(r, "colr", "Int") {
+        Some(0.0) => Some((RasterColorModel::Document, Background::White)),
+        Some(4.0) => Some((RasterColorModel::Document, Background::Transparent)),
+        Some(6.0) => Some((RasterColorModel::Grayscale, Background::Transparent)),
+        _ => None,
+    };
+    if let Some((model, background)) = model {
+        (s.color_model, s.background) = (model, background);
+    }
 }
 
 /// The name of the empty group that stands for a text object, followed by the number of its
@@ -30,6 +121,10 @@ pub(crate) fn slot_of(name: Option<&str>) -> Option<Option<u32>> {
 pub(crate) fn slot_frame(name: Option<&str>) -> usize {
     name.and_then(|n| n.strip_prefix(TEXT_SLOT)).and_then(|rest| rest.split_once(':')).and_then(|(_, f)| f.parse().ok()).unwrap_or(0)
 }
+
+/// The name of the text slot for type that a look draws (`1 /FreeUndo`): [`TEXT_SLOT`] with no
+/// story, as [`slot_of`] reads it.
+pub(crate) const LOOK_SLOT: &str = "\u{0}text:look";
 
 /// The artboards (names, and rects in art space) of the editing data `data` that [`read`] can't
 /// read as a whole, as far as it gets: where to put the pages of its PDF part instead, and what to
@@ -77,29 +172,85 @@ fn artboard_array(data: &[u8]) -> Option<&[u8]> {
 pub struct PaletteSwatches {
     pub swatches: Vec<Swatch>,
     pub groups: Vec<vectorcraft_color::swatch::SwatchGroup>,
-    /// The patterns the editing data defines that the given patterns lack and a swatch paints with.
+    /// The patterns the editing data defines that a swatch paints with, named apart from the given
+    /// patterns ([`beside`]).
     pub patterns: Vec<PatternDef>,
     /// The image blobs the art of `patterns` shows, by key.
     pub images: std::collections::BTreeMap<String, ImageBlob>,
 }
 
+/// The editing data's patterns `defined`, for a document that has the patterns `have` (those of a
+/// file's PDF part or page): each keeps its name, except one whose name a pattern of `have` already
+/// has (the PDF part names its tilings `Pattern 1`, `Pattern 2` and so on), which takes a free
+/// variant (`Pattern 1 2`). The art of each pattern paints with the names they got. Also the names
+/// changed, old to new. The same `defined` and `have` always give the same names.
+fn beside(mut defined: Vec<PatternDef>, have: &[PatternDef]) -> (Vec<PatternDef>, std::collections::BTreeMap<String, String>) {
+    let mut renamed = std::collections::BTreeMap::new();
+    let mut taken: std::collections::BTreeSet<String> = have.iter().chain(&defined).map(|p| p.name.clone()).collect();
+    let tries = taken.len() + 2;
+    for d in &mut defined {
+        if !have.iter().any(|p| p.name == d.name) {
+            continue;
+        }
+        let Some(name) = (2..=tries).map(|i| format!("{} {i}", d.name)).find(|n| !taken.contains(n)) else { continue };
+        taken.insert(name.clone());
+        renamed.insert(std::mem::replace(&mut d.name, name.clone()), name);
+    }
+    if !renamed.is_empty() {
+        for d in &mut defined {
+            for a in &mut d.art {
+                repoint(Arc::make_mut(a), &renamed);
+            }
+        }
+    }
+    (defined, renamed)
+}
+
+/// `n` and what it holds painting with the patterns `renamed` renames (old to new) by their new names.
+fn repoint(n: &mut Node, renamed: &std::collections::BTreeMap<String, String>) {
+    for p in vectorcraft_doc::swatches::node_paints_mut(n) {
+        if let Paint::Pattern { pattern, .. } = p
+            && let Some(new) = renamed.get(pattern)
+        {
+            pattern.clone_from(new);
+        }
+    }
+    if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        repoint(Arc::make_mut(&mut mask.art), renamed);
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children {
+            repoint(Arc::make_mut(c), renamed);
+        }
+    }
+}
+
 /// The swatches and color groups of the palette of the editing data `data`, for a file whose
 /// layers aren't read: the swatches its PDF part has are the defaults (#4036). They come as
 /// [`read`] makes them, with pattern swatches only for the patterns in `patterns` and those the
-/// editing data defines; `None` when the palette is empty or reading stops before it.
+/// editing data defines, which are named apart from `patterns` ([`beside`]); `None` when the
+/// palette is empty or reading stops before it.
 pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> {
     let mut r = Reader::new(data);
     // The palette, the gradients and the patterns it names come before the art, so an error in the
     // art leaves them read.
     let _ = r.run();
+    let (defined, renamed) = beside(std::mem::take(&mut r.doc.patterns), patterns);
     let mut known = patterns.to_vec();
-    let defined = std::mem::take(&mut r.doc.patterns);
-    known.extend(defined.iter().filter(|d| !patterns.iter().any(|p| p.name == d.name)).cloned());
-    let (swatches, groups) = r.palette_swatches(&known)?;
+    known.extend(defined.iter().cloned());
+    let (mut swatches, mut groups) = r.palette_swatches(&known)?;
+    // A swatch of a pattern the editing data defines paints with that pattern, under the name it got.
+    for s in swatches.iter_mut().chain(groups.iter_mut().flat_map(|g| &mut g.swatches)) {
+        if let Paint::Pattern { pattern, .. } = &mut s.paint
+            && let Some(new) = renamed.get(pattern)
+        {
+            pattern.clone_from(new);
+        }
+    }
     let painted = |name: &str| {
         swatches.iter().chain(groups.iter().flat_map(|g| &g.swatches)).any(|s| matches!(&s.paint, Paint::Pattern { pattern, .. } if pattern == name))
     };
-    let added: Vec<PatternDef> = defined.into_iter().filter(|d| !patterns.iter().any(|p| p.name == d.name) && painted(&d.name)).collect();
+    let added: Vec<PatternDef> = defined.into_iter().filter(|d| painted(&d.name)).collect();
     let mut shown = Document::new(1.0, 1.0);
     shown.patterns.clone_from(&added);
     let mut images = std::collections::BTreeMap::new();
@@ -109,6 +260,61 @@ pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> 
         }
     });
     Some(PaletteSwatches { swatches, groups, patterns: added, images })
+}
+
+/// The brushes of a `.ai` file's editing data, as [`brushes`] reads them.
+pub struct Brushes {
+    pub brushes: Vec<vectorcraft_brush::Brush>,
+    /// The patterns the editing data defines that the brushes' art paints with, named apart from
+    /// the given patterns ([`beside`]).
+    pub patterns: Vec<PatternDef>,
+    /// The image blobs the art of `patterns` shows, by key.
+    pub images: std::collections::BTreeMap<String, ImageBlob>,
+    /// The note for the brushes left out.
+    pub note: Option<String>,
+}
+
+/// The brushes of the editing data `data`, for a file whose layers aren't read (a brush library
+/// has none), as [`read`] makes them, with the patterns of the editing data their art paints with,
+/// named apart from `patterns` ([`beside`]) as [`palette`] names them. `None` when the file has no
+/// brush objects or reading stops before them.
+pub fn brushes(data: &[u8], patterns: &[PatternDef]) -> Option<Brushes> {
+    // Brush objects are plug-in objects: data without one isn't read again.
+    memchr::memmem::find(data, b"BeginPluginObject")?;
+    let mut r = Reader::new(data);
+    // The brushes come before the art, so an error in the art leaves them read.
+    let _ = r.run();
+    let (mut lib, unread) = r.brush_library()?;
+    let (defined, renamed) = beside(std::mem::take(&mut r.doc.patterns), patterns);
+    if !renamed.is_empty() {
+        for a in lib.iter_mut().flat_map(|b| b.art_mut()) {
+            repoint(a, &renamed);
+        }
+    }
+    // The patterns the brushes' art paints with, and those their art paints with, and so on.
+    let mut stack: Vec<&vectorcraft_doc::Node> = lib.iter().flat_map(|b| b.art()).collect();
+    let mut used = std::collections::BTreeSet::new();
+    while let Some(n) = stack.pop() {
+        stack.extend(n.children().into_iter().flatten().chain(n.extras().mask.as_ref().map(|m| &m.art)).map(|c| &**c));
+        for p in vectorcraft_doc::swatches::node_paints(n) {
+            if let Paint::Pattern { pattern, .. } = p
+                && used.insert(pattern.clone())
+                && let Some(d) = defined.iter().find(|d| &d.name == pattern)
+            {
+                stack.extend(d.art.iter().map(|a| &**a));
+            }
+        }
+    }
+    let added: Vec<PatternDef> = defined.into_iter().filter(|d| used.contains(&d.name)).collect();
+    let mut shown = Document::new(1.0, 1.0);
+    shown.patterns.clone_from(&added);
+    let mut images = std::collections::BTreeMap::new();
+    shown.visit_images(|_, im| {
+        if let Some(blob) = r.doc.images.get(&im.key) {
+            images.insert(im.key.clone(), blob.clone());
+        }
+    });
+    Some(Brushes { brushes: lib, patterns: added, images, note: (unread > 0).then(|| brush::left_out_note(unread)) })
 }
 
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
@@ -122,45 +328,71 @@ fn artboards_read(data: &[u8]) -> Vec<(String, Rect)> {
             r.document(o);
         }
     }
-    r.artboards
+    r.artboards.into_iter().map(|b| (b.name, b.rect)).collect()
 }
 
-/// How many variables and data sets the variable library of the editing data has: XML nodes
-/// (`/XMLNode`) of the `/Document` dictionary, a `variableSets` element holding `variableSet`s, each
-/// with its `variables` (`variable` elements) and `sampleDataSets` (`sampleDataSet` elements).
-/// VectorCraft doesn't read them.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct VariableLibrary {
-    pub variables: usize,
-    pub data_sets: usize,
+/// An object bound to a variable of the library: the variable's name, and the XML id of the object
+/// (the `AI10_ArtUID` of its dictionary). The id is `None` when the reference can't be read.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BindingRef {
+    pub variable: String,
+    pub target: Option<String>,
 }
 
-impl VariableLibrary {
-    /// The import's note that the library wasn't read, when it has a variable or a data set.
-    pub fn note(self) -> Option<String> {
-        let Self { variables, data_sets } = self;
-        // Counts after a colon need no plural, so every language can translate the note whole.
-        (variables + data_sets > 0).then(|| {
-            format!("the file's variables and data sets weren't read (variables: {variables}, data sets: {data_sets}): the Variables panel doesn't list them")
-        })
+/// The variable library of the editing data, as [`variable_library`] reads it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct VariableRead {
+    /// Its variables, data sets, active data set and lock, without bindings.
+    pub variables: Variables,
+    /// The objects bound to its variables, in the order the library declares them.
+    pub bindings: Vec<BindingRef>,
+    /// How many objects its declarations bind that aren't in `bindings`: those of a declaration
+    /// left out, and those past [`MAX_LIBRARY_BINDINGS`].
+    pub bindings_skipped: usize,
+    /// How many of its declarations, data sets, values and settings were left out.
+    pub skipped: usize,
+    /// Whether the editing data has a variable library (a `variableSets` element).
+    pub present: bool,
+}
+
+/// The import's note about the library's bindings when `skipped` of them weren't made: nothing
+/// when all of them were.
+pub fn bindings_note(skipped: usize) -> Option<String> {
+    // A count after a colon needs no plural, so every language can translate the note whole.
+    (skipped > 0).then(|| {
+        format!("the file's variable bindings weren't all read (bindings skipped: {skipped}): those objects aren't bound to their variables")
+    })
+}
+
+impl VariableRead {
+    /// The import's note about what of the library wasn't read: nothing when all of it was.
+    pub fn note(&self) -> Option<String> {
+        if !self.present || self.skipped == 0 {
+            return None;
+        }
+        if self.variables.variables.is_empty() && self.variables.datasets.is_empty() {
+            return Some("the file's variable library couldn't be read: the Variables panel doesn't list it".into());
+        }
+        // A count after a colon needs no plural, so every language can translate the note whole.
+        Some(format!("the file's variable library was partly read (entries skipped: {}): the Variables panel lists the rest", self.skipped))
     }
 }
 
-/// The variable library of the editing data `data` ([`VariableLibrary`]), for a file whose layers
+/// The variable library of the editing data `data` ([`VariableRead`]), for a file whose layers
 /// [`read`] can't read. Data without a `variableSets` element isn't read.
-pub fn variables(data: &[u8]) -> VariableLibrary {
+pub fn variables(data: &[u8]) -> VariableRead {
     if crate::import::ai::find(data, b"variableSets").is_none() {
-        return VariableLibrary::default();
+        return VariableRead::default();
     }
     let mut r = Reader::new(data);
     let _ = r.run();
+    if r.variables.present {
+        return r.variables;
+    }
     // A `/Document` still open when reading stopped.
     let open: Vec<Obj> = r.frames.iter().filter_map(|f| if let Kind::Obj(o) = &f.kind { Some((**o).clone()) } else { None }).collect();
-    for o in open.iter().filter(|o| o.ty == "Document") {
-        variable_library(o, 0, &mut r.variables);
-    }
-    if r.variables != VariableLibrary::default() {
-        return r.variables;
+    if let Some(found) = open.iter().filter(|o| o.ty == "Document").map(variable_library).find(|v| v.present) {
+        return found;
     }
     // Reading can stop before the library: read its node on its own.
     variable_sets_node(data).map_or(r.variables, |node| {
@@ -171,6 +403,34 @@ pub fn variables(data: &[u8]) -> VariableLibrary {
         let _ = r.run();
         r.variables
     })
+}
+
+impl<'a> Reader<'a> {
+    /// Take the author and custom colors that the header of the program `ps` gives (its comment
+    /// lines up to `%%EndComments`), where the editing data's own header gives none: the program of
+    /// an EPS whose editing data is kept apart from it.
+    pub(super) fn program_header(&mut self, ps: &[u8]) {
+        let mut end = 0;
+        for line in ps.split_inclusive(|&b| b == b'\n' || b == b'\r') {
+            if !line.starts_with(b"%") && !line.trim_ascii().is_empty() {
+                break;
+            }
+            end += line.len();
+            if line.trim_ascii_end() == b"%%EndComments" {
+                break;
+            }
+        }
+        let mut outer = Reader::new(ps.get(..end).unwrap_or_default());
+        let _ = outer.run();
+        if self.author.is_none() {
+            self.author = outer.author;
+        }
+        for n in outer.custom_colors {
+            if self.custom_colors.len() < super::directives::MAX_CUSTOM_COLORS && !self.custom_colors.iter().any(|c| c.name == n.name) {
+                self.custom_colors.push(n);
+            }
+        }
+    }
 }
 
 /// The `variableSets` XML node of the editing data `data`, from its `/XMLNode :` line to the line
@@ -217,10 +477,39 @@ fn variable_sets_node(data: &[u8]) -> Option<&[u8]> {
     }
 }
 
+/// The text wrap options an object's dictionary gives: its offset in points (`AI11TextWrapOffset`,
+/// times `scale`, the factor that takes the art onto the document) and Invert Wrap
+/// (`AI11TextWrapInvert`). The outline the file may keep with them (`AI11TextWrapPath`) is not
+/// read: the object's own shape gives it. A value that isn't a number is left at its default, and
+/// a dictionary without a readable entry gives none.
+fn text_wrap(o: &Obj, scale: f64) -> Option<TextWrap> {
+    let num = |key: &str| o.get(key).and_then(|v| v.iter().find_map(V::num)).filter(|v| v.is_finite());
+    let offset = num("AI11TextWrapOffset");
+    let invert = num("AI11TextWrapInvert").filter(|v| *v == 0.0 || *v == 1.0);
+    if offset.is_none() && invert.is_none() && o.get("AI11TextWrapPath").is_none() {
+        return None;
+    }
+    let default = TextWrap::default();
+    let offset = offset.map(|v| v * scale).filter(|v| !v.is_nan()).map_or(default.offset, |v| v.clamp(-1000.0, 1000.0));
+    Some(TextWrap { offset, invert: invert == Some(1.0) })
+}
+
 impl<'a> Reader<'a> {
-    /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`), and the
-    /// opacity mask it may carry.
+    /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`), the opacity
+    /// mask it may carry, and in a pattern's definition the mark of the tile's box
+    /// (`AIPattern_Editor_Backing_Tile_Rect`), which leaves that box out of the art.
     pub(super) fn art_dictionary(&mut self, o: &Obj) {
+        // The unpainted box that a pattern's definition marks as its tile's box isn't art.
+        if self.pattern.is_some()
+            && o.nums("AIPattern_Editor_Backing_Tile_Rect").first().copied() == Some(1.0)
+            && self.after_object
+            && let Some(f) = self.frames.last_mut()
+            && f.children.last().is_some_and(|n| matches!(n.kind, NodeKind::Path { .. }) && n.appearance.items.iter().all(|i| i.paint().is_none()))
+        {
+            f.children.pop();
+            return;
+        }
+        self.constraint_art(o);
         // A blend's key object or spine.
         if let Some(kind) = o.text("ShapeBlendPathType")
             && let Some(id) = self.last_object().map(|n| n.id)
@@ -229,9 +518,10 @@ impl<'a> Reader<'a> {
             self.blend_roles.insert(id, (kind, o.text("ShapeBlendPathID")));
         }
         // An envelope (a distortion, `AIDeformStyle` / `DeformValue`) is written on `%_` lines as
-        // a group holding the mesh that shapes it; the distorted art the file's PDF part draws
-        // follows on plain lines. That mesh isn't art, so it goes (#2405).
-        if (o.get("AIDeformStyle").is_some() || o.get("DeformValue").is_some()) && self.drop_envelope_mesh() {
+        // a group holding the mesh that shapes it (or its contents, while they are being edited);
+        // the distorted art the file's PDF part draws follows on plain lines. That group isn't
+        // art, so it goes (#2405), kept aside for the live envelope ([`Reader::end_envelope`]).
+        if (o.get("AIDeformStyle").is_some() || o.get("DeformValue").is_some()) && self.drop_envelope_art() {
             return;
         }
         if let Some(mask) = o.obj("AI9_Mask").or_else(|| o.obj("Mask")) {
@@ -240,13 +530,37 @@ impl<'a> Reader<'a> {
                 let value =
                     OpacityMask { art: art.clone(), clip: on("Clipping"), invert: on("Inverted"), disabled: on("Disabled"), linked: on("Linked") };
                 if let Some(n) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. })) {
-                    n.extras_mut().mask = Some(Box::new(value));
+                    n.extras_mut().mask = Some(Box::new(value.clone()));
+                    self.each_linked_frame(|n| n.extras_mut().mask = Some(Box::new(value.clone())));
                 } else if !on("Disabled") {
-                    self.unreadable("opacity masks without an owning object");
+                    self.unreadable("opacity masks without an owning object", false);
+                }
+                // What the art doesn't read matters only when the mask shapes what shows.
+                for what in &mask.unread {
+                    if on("Disabled") {
+                        self.hidden_unread.insert(what.clone());
+                    } else if let Some(op) = what.strip_prefix('`').and_then(|w| w.strip_suffix('`')) {
+                        self.note_unknown(op, false);
+                    } else {
+                        self.unreadable(what, false);
+                    }
                 }
             } else if mask.nums("Disabled").first().copied() != Some(1.0) {
-                self.unreadable("opacity masks without readable art");
+                self.unreadable("opacity masks without readable art", false);
             }
+        }
+        // Text wrap: area type below the object in its layer flows around it.
+        if let Some(wrap) = text_wrap(o, self.large_canvas.unwrap_or(1.0))
+            && let Some(n) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. }))
+        {
+            n.extras_mut().wrap = Some(wrap);
+            self.each_linked_frame(|n| n.extras_mut().wrap = Some(wrap));
+        }
+        // The object's XML id, which the variable library's bindings name it by.
+        if let Some(uid) = o.obj("AI10_ArtUID").and_then(Obj::content_text).filter(|u| !u.is_empty())
+            && let Some(id) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. })).map(|n| n.id)
+        {
+            super::remember_xml_id(&mut self.xml_ids, &mut self.xml_id_bytes, uid, id);
         }
         let name = match o.text("AIArtName") {
             Some(name) => name,
@@ -264,10 +578,16 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// The `/Document` dictionary: the artboards, and how many variables and data sets its variable
-    /// library has.
+    /// The `/Document` dictionary: the artboards and their display options, Document Raster Effects
+    /// Settings, its variable library (the first one read), and its Objects on Path records.
     pub(super) fn document(&mut self, o: &Obj) {
-        variable_library(o, 0, &mut self.variables);
+        if !self.variables.present {
+            self.variables = variable_library(o);
+        }
+        self.constraint_data(o);
+        if let Some(r) = find_entry(o, "AI Auto Rasterize", 0) {
+            raster_settings(r, &mut self.doc);
+        }
         let Some(list) = find_entry(o, "ArtboardArray", 0) else { return };
         for (i, ab) in list.items().enumerate().take(1000) {
             let (p1, p2) = (ab.nums("PositionPoint1"), ab.nums("PositionPoint2"));
@@ -277,7 +597,9 @@ impl<'a> Reader<'a> {
                 continue;
             }
             let name = ab.text("Name").unwrap_or_else(|| format!("Artboard {}", i + 1));
-            self.artboards.push((name, r));
+            let mut board = AiArtboard::new(name, r);
+            display_options(ab, &mut board);
+            self.artboards.push(board);
         }
     }
 
@@ -298,7 +620,13 @@ impl<'a> Reader<'a> {
 
     /// The first artboard: the `/Document`'s first, else the crop marks, else [`Self::sized_board`].
     fn first_board(&self) -> Option<Rect> {
-        self.artboards.first().map(|(_, r)| *r).or(self.cropmarks).or_else(|| self.sized_board())
+        self.artboards.first().map(|b| b.rect).or(self.cropmarks).or_else(|| self.sized_board())
+    }
+
+    /// The page the art is compared with in the document's space, once the art has started.
+    pub(super) fn page_in_doc(&self) -> Option<Rect> {
+        let board = self.first_board().or_else(|| self.bbox_board())?;
+        Some(self.to_doc?.transform_rect_bbox(board))
     }
 
     /// The page of a file that says nothing of its artboard (the legacy format as other apps write
@@ -363,7 +691,55 @@ impl<'a> Reader<'a> {
         Some((swatches, groups))
     }
 
+    /// The brushes read ([`brush::finish_brushes`]) and how many weren't; `None` when the file has
+    /// no brush objects (the document keeps the default brushes).
+    fn brush_library(&mut self) -> Option<(Vec<vectorcraft_brush::Brush>, usize)> {
+        if !self.brush_objects {
+            return None;
+        }
+        let drafts = std::mem::take(&mut self.brush_drafts);
+        let (lib, left_out) = brush::finish_brushes(drafts, &self.brush_art, self.brush_order.as_deref());
+        Some((lib, left_out + self.brushes_unread))
+    }
+
+    /// The graphic styles of the style list, in its order: each listed name the art styles define with
+    /// an appearance [`appearance_from_art_style`] reads, once (a name listed again, empty or not
+    /// defined is left out), with ids from 1. Also the id of each kept name.
+    fn graphic_styles(&self) -> (Vec<GraphicStyle>, HashMap<String, u32>) {
+        let mut styles: Vec<GraphicStyle> = vec![];
+        let mut ids = HashMap::new();
+        for raw in &self.style_list {
+            let name = obj::text(raw);
+            if name.is_empty() || ids.contains_key(&name) {
+                continue;
+            }
+            let Some(st) = self.styles.get(&name) else { continue };
+            let Some(mut appearance) = appearance_from_art_style(st) else { continue };
+            // A Large Canvas copy's styles are at its art's scale ([`Self::ensure_space`]).
+            if let Some(s) = self.large_canvas.filter(|s| *s != 1.0) {
+                appearance.scale_strokes(s);
+                appearance.scale_effects(s, vectorcraft_effects::scale_effect);
+            }
+            let id = u32::try_from(styles.len() + 1).unwrap_or(u32::MAX);
+            ids.insert(name.clone(), id);
+            let mut style = GraphicStyle { id, ..GraphicStyle::new(name, appearance) };
+            if let Some((opacity, blend, isolate, knockout)) = st.transparency {
+                (style.opacity, style.blend, style.isolate, style.knockout) = (opacity, blend, isolate, knockout);
+            }
+            styles.push(style);
+        }
+        (styles, ids)
+    }
+
     pub(super) fn finish(mut self) -> Result<Structure, String> {
+        if self.graph.take().is_some() {
+            self.warn(super::types::GRAPH_UNENDED);
+        }
+        // Envelopes whose plugin never closed them keep their drawn art.
+        if !self.envelopes.is_empty() {
+            self.envelopes.clear();
+            self.warn(crate::import::ai::envelope::DRAWN);
+        }
         if !self.unknown.is_empty() {
             let ops: Vec<String> = self.unknown.iter().map(|o| format!("`{o}`")).collect();
             self.unsupported.insert(format!("operators VectorCraft doesn't know ({})", ops.join(", ")));
@@ -378,24 +754,26 @@ impl<'a> Reader<'a> {
         let to_doc = self.ensure_space();
         let artboard = self.first_board();
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
+        super::on_path::apply(&mut self.doc, &self.on_path);
         let mut doc = std::mem::replace(&mut self.doc, Document::new(1.0, 1.0));
-        let boards: Vec<(String, Rect)> = if self.artboards.is_empty() {
-            artboard.or_else(|| self.bbox_board()).map(|r| vec![("Artboard 1".to_string(), r)]).unwrap_or_default()
+        let boards: Vec<AiArtboard> = if self.artboards.is_empty() {
+            artboard.or_else(|| self.bbox_board()).map(|r| vec![AiArtboard::new("Artboard 1".to_string(), r)]).unwrap_or_default()
         } else {
-            self.artboards.clone()
+            std::mem::take(&mut self.artboards)
         };
+        let board_rects: Vec<Rect> = boards.iter().map(|b| b.rect).collect();
         doc.artboards = boards
             .into_iter()
             .enumerate()
-            .map(|(i, (name, r))| Artboard {
+            .map(|(i, b)| Artboard {
                 id: i as u32 + 1,
-                name,
-                rect: to_doc.transform_rect_bbox(r),
+                name: b.name,
+                rect: to_doc.transform_rect_bbox(b.rect),
                 locked: false,
-                show_center_mark: false,
-                show_cross_hairs: false,
-                show_video_safe_areas: false,
-                video_ruler_pixel_aspect_ratio: 1.0,
+                show_center_mark: b.center_mark,
+                show_cross_hairs: b.cross_hairs,
+                show_video_safe_areas: b.safe_areas,
+                video_ruler_pixel_aspect_ratio: b.par,
                 color: None,
             })
             .collect();
@@ -413,6 +791,22 @@ impl<'a> Reader<'a> {
                 color: None,
             }];
         }
+        if !self.ruler_guides.is_empty() {
+            let ids: Vec<u32> = doc.artboards.iter().map(|a| a.id).collect();
+            let (candidates, centre) = (std::mem::take(&mut self.ruler_guides), self.template_center);
+            let pick = |id: NodeId| -> Option<Guide> {
+                let (a, b) = candidates.get(&id)?;
+                let (vertical, board) = ruler_guide(*a, *b, centre, &board_rects)?;
+                let p = to_doc * *a;
+                let artboard = match board {
+                    Some(i) => Some(*ids.get(i)?),
+                    None => None,
+                };
+                let pos = if vertical { p.x } else { p.y };
+                pos.is_finite().then_some(Guide { vertical, pos, artboard, layer: None })
+            };
+            take_ruler_guides(&mut doc.layers, &pick, &mut doc.guides, 0);
+        }
         if self.color_model.unwrap_or(self.cmyk_colors > self.rgb_colors) {
             doc.color_mode = ColorMode::Cmyk;
             let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
@@ -422,29 +816,75 @@ impl<'a> Reader<'a> {
             doc.units = u;
         }
         // The file's own swatches in place of the defaults, in its order and colour groups.
-        if let Some((swatches, groups)) = self.palette_swatches(&doc.patterns) {
-            (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
-        }
+        let own_palette = match self.palette_swatches(&doc.patterns) {
+            Some((swatches, groups)) => {
+                (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
+                true
+            }
+            None => false,
+        };
         // The colour operators' definitions first: a gradient, defined before the art, names a
-        // global process colour as a stop and would otherwise make it an ink (#1771).
-        for n in self.spots.iter().chain(&self.stop_spots) {
-            if doc.swatch(&n.name).is_none() {
-                doc.swatches.push(Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot: n.spot });
+        // global process colour as a stop and would otherwise make it an ink (#1771). The header's
+        // custom colors follow. The first definition of a name makes its swatch, and takes the place
+        // of a default swatch of that name when the file has no palette of its own (a reserved name
+        // in brackets, such as `[None]`, keeps its swatch).
+        let mut defined = std::collections::HashSet::new();
+        // The swatch names there are, looked up rather than scanned for each name a file defines
+        // (`Document::swatch` also knows the registration colour).
+        let mut have: std::collections::HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).collect();
+        have.insert(vectorcraft_color::swatch::REGISTRATION.to_string());
+        let colors = self.spots.iter().chain(&self.stop_spots).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
+        for (n, spot) in colors {
+            let first = defined.insert(n.name.clone());
+            let swatch = Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot };
+            if have.insert(n.name.clone()) {
+                doc.swatches.push(swatch);
+            } else if first
+                && !own_palette
+                && !(n.name.starts_with('[') && n.name.ends_with(']'))
+                && let Some(default) = doc.swatch_mut(&n.name)
+            {
+                *default = swatch;
             }
         }
+        if let Some(author) = self.author.take() {
+            doc.metadata.author = author;
+        }
         for name in doc.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>() {
-            if doc.swatch(&name).is_none() {
+            if have.insert(name.clone()) {
                 doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
             }
         }
+        let brushes = self.brush_library();
+        // The file's graphic styles in place of the defaults, and the objects linked to them.
+        let (styles, ids) = self.graphic_styles();
+        let styles_read = !styles.is_empty();
+        if styles_read {
+            let links: HashMap<NodeId, u32> = self.style_links.iter().filter_map(|(node, name)| Some((*node, *ids.get(name)?))).collect();
+            if !links.is_empty() {
+                link_styles(&mut doc.layers, &links, &styles, 0);
+            }
+            doc.graphic_styles = styles.into();
+        }
         let mut warnings = self.warnings;
+        if let Some((lib, unread)) = brushes {
+            vectorcraft_brush::store(&mut doc, &lib);
+            if unread > 0 {
+                warnings.push(brush::left_out_note(unread));
+            }
+        }
         if self.drawn_looks > 0 {
             warnings.push(format!(
                 "objects with several fills or strokes, effects or brushes came in as their drawn look ({}): their appearance isn't editable yet",
                 self.drawn_looks
             ));
         }
-        warnings.extend(self.variables.note());
+        let variables = std::mem::take(&mut self.variables);
+        warnings.extend(variables.note());
+        if variables.present {
+            doc.variables = variables.variables.into();
+        }
+        let (bindings, bindings_skipped) = (variables.bindings, variables.bindings_skipped);
         Ok(Structure {
             doc,
             to_doc,
@@ -452,35 +892,523 @@ impl<'a> Reader<'a> {
             artboard,
             template: self.template,
             hidden_unread: self.hidden_unread,
+            unread: self.unread,
+            unread_elsewhere: self.unread_elsewhere,
             slot_names: self.slot_names,
             restyled: self.restyled,
+            placeholders: self.placeholders,
+            placed_elsewhere: self.placed_elsewhere,
+            envelopes_drawn: self.envelopes_drawn,
+            styles_read,
+            canvas_scale: self.canvas_scale,
+            xml_ids: self.xml_ids,
+            bindings,
+            bindings_skipped,
             warnings,
         })
     }
 }
 
+/// Link the objects of `links` among `nodes` to their graphic style's id, each only when it has its
+/// style's appearance and transparency (`styles`, whose ids are 1, 2, … in order). A path, which
+/// has no contents, takes the style's contents slot.
+fn link_styles(nodes: &mut [Arc<Node>], links: &HashMap<NodeId, u32>, styles: &[GraphicStyle], depth: usize) {
+    if depth > MAX_DEPTH {
+        return;
+    }
+    for n in nodes {
+        if let Some(id) = links.get(&n.id)
+            && let Some(g) = id.checked_sub(1).and_then(|i| styles.get(usize::try_from(i).ok()?)).filter(|g| g.id == *id)
+        {
+            let mut appearance = (*n.appearance).clone();
+            if !n.is_container() && !matches!(n.kind, NodeKind::Text(_) | NodeKind::Image(_)) {
+                appearance.contents_index = g.appearance.contents_index;
+            }
+            if g.transparency_matches(n) && g.appearance_on(n).approx_eq(&appearance) {
+                let n = Arc::make_mut(n);
+                n.appearance = appearance.into();
+                n.extras_mut().graphic_style = Some(*id);
+            }
+        }
+        if n.children().is_some_and(|c| !c.is_empty())
+            && let Some(c) = Arc::make_mut(n).children_mut()
+        {
+            link_styles(c, links, styles, depth + 1);
+        }
+    }
+}
+
 /// The dictionary of entry `key` in `o` or the dictionaries it holds.
-fn find_entry<'o>(o: &'o Obj, key: &str, depth: usize) -> Option<&'o Obj> {
+/// How far (points) a ruler guide's ends may lie from the canvas's or an artboard's edges.
+const GUIDE_TOLERANCE: f64 = 0.01;
+
+/// Whether the straight guide path from `a` to `b` (art space) is a ruler guide → whether it is
+/// vertical, and the index in `boards` of the artboard it belongs to (`None`: a canvas guide). A
+/// canvas guide runs across the whole canvas, 16,383 points centred on the template box's
+/// centre `centre`; an artboard guide runs from edge to edge of one artboard of `boards`, inside it.
+fn ruler_guide(a: Point, b: Point, centre: Option<(f64, f64)>, boards: &[Rect]) -> Option<(bool, Option<usize>)> {
+    let near = |u: f64, v: f64| (u - v).abs() <= GUIDE_TOLERANCE;
+    let vertical = match (near(a.x, b.x), near(a.y, b.y)) {
+        (true, false) => true,
+        (false, true) => false,
+        _ => return None,
+    };
+    let (along, across) = if vertical { ((a.y.min(b.y), a.y.max(b.y)), a.x) } else { ((a.x.min(b.x), a.x.max(b.x)), a.y) };
+    if let Some((cx, cy)) = centre {
+        let c = if vertical { cy } else { cx };
+        if near(along.0, c - CANVAS_CENTRE) && near(along.1, c + CANVAS_CENTRE) {
+            return Some((vertical, None));
+        }
+    }
+    let mut on = boards.iter().enumerate().filter(|(_, r)| {
+        let (ends, sides) =
+            if vertical { ((r.min_y(), r.max_y()), (r.min_x(), r.max_x())) } else { ((r.min_x(), r.max_x()), (r.min_y(), r.max_y())) };
+        near(along.0, ends.0) && near(along.1, ends.1) && (sides.0..=sides.1).contains(&across)
+    });
+    match (on.next(), on.next()) {
+        (Some((i, _)), None) => Some((vertical, Some(i))),
+        _ => None,
+    }
+}
+
+/// Moves the children of the layers and sublayers of `nodes` that `pick` makes a guide of into
+/// `guides`, each on its layer.
+fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Guide>, guides: &mut Vec<Guide>, depth: usize) {
+    if depth > MAX_DEPTH {
+        return;
+    }
+    for n in nodes {
+        if !matches!(n.kind, NodeKind::Layer { .. }) {
+            continue;
+        }
+        let id = n.id;
+        let Some(kids) = Arc::make_mut(n).children_mut() else { continue };
+        kids.retain(|k| match pick(k.id) {
+            Some(g) => {
+                guides.push(Guide { layer: Some(id), ..g });
+                false
+            }
+            None => true,
+        });
+        take_ruler_guides(kids, pick, guides, depth + 1);
+    }
+}
+
+pub(super) fn find_entry<'o>(o: &'o Obj, key: &str, depth: usize) -> Option<&'o Obj> {
     if depth > 8 {
         return None;
     }
     o.obj(key).or_else(|| o.entries.iter().flat_map(|(_, v)| v.iter()).filter_map(V::obj).find_map(|c| find_entry(c, key, depth + 1)))
 }
 
-/// Add the variables and data sets of the variable libraries in `o` or the dictionaries it holds
-/// (see [`VariableLibrary`]) to `found`.
-fn variable_library(o: &Obj, depth: usize, found: &mut VariableLibrary) {
+// ---- the variable library -----------------------------------------------------------------
+
+/// Caps on the variable library of the editing data, as Load Variable Library has them: the XML
+/// nodes read, the variables and data sets kept, the characters of a name, and the bytes of the
+/// names and values kept. Past those, the objects bound to the variables.
+const MAX_LIBRARY_NODES: usize = 2_000_000;
+const MAX_LIBRARY_VARIABLES: usize = 256;
+const MAX_LIBRARY_BINDINGS: usize = 100_000;
+const MAX_LIBRARY_DATASETS: usize = 1_000;
+const MAX_LIBRARY_NAME: usize = 255;
+const MAX_LIBRARY_BYTES: usize = 8 << 20;
+
+/// The variable library in `o` or the dictionaries it holds: XML nodes (`/XMLNode`), each with its
+/// name (`xmlnode-nodename`), value (`xmlnode-nodevalue`), type (`xmlnode-nodetype`: 1 an element, 2
+/// an attribute, 3 text), children (`xmlnode-children`, an array in order) and attributes
+/// (`xmlnode-attributes`, a dictionary of attribute nodes). The library is a `variableSets` element
+/// holding a `variableSet` (its `locked` attribute `none`, or `variableAndTypes` when the variables
+/// are locked), with a `variables` element of `variable` elements (`varName`, and `trait`:
+/// `textcontent`, `visibility`, `fileref` or `graphdata`; another trait or none is a variable of
+/// unknown kind), and a `sampleDataSets` element (`activeDataSet`, the data set shown) of
+/// `sampleDataSet` elements (`dataSetName`). A `variable` bound to an object has a `docRef` attribute
+/// whose value is the object's XML id (`/XMLUIDREF`); a variable bound to several objects is
+/// declared once for each, with the same name and trait. In a data set, the element named after a
+/// variable holds its value: `p` elements of text, one paragraph each; a `/Bool` text, whether its
+/// objects show; a linked file's URL (`file://`) or path. Graph values aren't read. What is
+/// malformed, repeated or past the caps (a declaration, a data set, a value, a setting, a second
+/// `variableSet`) is left out and counted; a library past [`MAX_LIBRARY_NODES`] isn't read.
+fn variable_library(o: &Obj) -> VariableRead {
+    find_variable_sets(o, 0).map_or_else(VariableRead::default, read_variable_sets)
+}
+
+/// The `variableSets` XML node in `o` or the dictionaries it holds.
+fn find_variable_sets(o: &Obj, depth: usize) -> Option<&Obj> {
     if depth > MAX_DEPTH {
-        return;
+        return None;
     }
     if o.ty == "XMLNode" && element_name(o).as_deref() == Some("variableSets") {
-        for set in elements(o, "variableSet") {
-            found.variables += elements(set, "variables").flat_map(|v| elements(v, "variable")).count();
-            found.data_sets += elements(set, "sampleDataSets").flat_map(|d| elements(d, "sampleDataSet")).count();
+        return Some(o);
+    }
+    o.items().find_map(|c| find_variable_sets(c, depth + 1))
+}
+
+/// A value of an XML node's entry, by the type the editing data gives it.
+#[derive(Clone, Debug, PartialEq)]
+enum XmlValue {
+    /// A `/String` or `/UnicodeString`: its strings joined (a long one is written across lines).
+    Text(String),
+    /// A `/Bool`.
+    Bool(bool),
+}
+
+/// The value of entry `key` of the XML node `o`; `None` without it, when it is of another type, or
+/// when its text is longer than [`MAX_LIBRARY_BYTES`].
+fn xml_value(o: &Obj, key: &str) -> Option<XmlValue> {
+    let (V::Name(ty), rest) = o.get(key)?.split_last()? else { return None };
+    match ty.as_str() {
+        "String" | "UnicodeString" => {
+            let len = rest.iter().map(|v| if let V::Str(s) = v { s.len() } else { 0 }).fold(0usize, usize::saturating_add);
+            if len > MAX_LIBRARY_BYTES {
+                return None;
+            }
+            let mut bytes = Vec::with_capacity(len);
+            for v in rest {
+                let V::Str(s) = v else { return None };
+                bytes.extend_from_slice(s);
+            }
+            Some(XmlValue::Text(obj::text(&bytes)))
         }
-        return;
+        "Bool" => match rest {
+            [V::Num(n)] if *n == 0.0 => Some(XmlValue::Bool(false)),
+            [V::Num(n)] if *n == 1.0 => Some(XmlValue::Bool(true)),
+            _ => None,
+        },
+        _ => None,
     }
-    for c in o.items() {
-        variable_library(c, depth + 1, found);
+}
+
+/// Whether `o` is an XML node of type `ty` (1 an element, 2 an attribute, 3 text).
+fn is_node(o: &Obj, ty: f64) -> bool {
+    o.ty == "XMLNode" && o.nums("xmlnode-nodetype") == [ty]
+}
+
+/// The name of the XML node `o` as the file writes it, prefix and all.
+fn node_name(o: &Obj) -> Option<String> {
+    match xml_value(o, "xmlnode-nodename")? {
+        XmlValue::Text(name) => Some(name),
+        XmlValue::Bool(_) => None,
     }
+}
+
+/// Whether `o` is an element whose name without its prefix is `name`.
+fn is_element(o: &Obj, name: &str) -> bool {
+    is_node(o, 1.0) && node_name(o).is_some_and(|n| n.rsplit(':').next() == Some(name))
+}
+
+/// The text of the attribute `name` (without its prefix) of the element `o`.
+fn xml_attribute(o: &Obj, name: &str) -> Option<String> {
+    let attributes = o.obj("xmlnode-attributes").filter(|a| a.ty == "Dictionary")?;
+    let node = attributes.items().find(|a| is_node(a, 2.0) && node_name(a).is_some_and(|n| n.rsplit(':').next() == Some(name)))?;
+    match xml_value(node, "xmlnode-nodevalue")? {
+        XmlValue::Text(text) => Some(text),
+        XmlValue::Bool(_) => None,
+    }
+}
+
+/// A name of the library (a variable's or a data set's): trimmed, not empty and at most
+/// [`MAX_LIBRARY_NAME`] characters.
+fn library_name(name: Option<String>) -> Option<String> {
+    let name = name?.trim().to_string();
+    (!name.is_empty() && name.chars().count() <= MAX_LIBRARY_NAME).then_some(name)
+}
+
+/// The file path of a linked file's value: a `file://` URL (`file:////Users/…`) as its path, its
+/// `%XX` escapes decoded (a URL that names a host other than `localhost` as a network path,
+/// `//host/…`), or an absolute path as it is. White space around it isn't part of it.
+fn linked_path(text: &str) -> Option<String> {
+    let text = text.trim_matches([' ', '\t', '\n', '\r']);
+    let drive = |p: &str| matches!(p.as_bytes(), [l, b':', ..] if l.is_ascii_alphabetic());
+    let path = match text.strip_prefix("file://") {
+        Some(rest) => {
+            let rest = rest.strip_prefix("localhost").filter(|r| r.starts_with('/')).unwrap_or(rest);
+            if rest.starts_with('/') {
+                let p = percent_decoded(rest.trim_start_matches('/'));
+                if drive(&p) { p } else { format!("/{p}") }
+            } else {
+                // A host: the share it names.
+                format!("//{}", percent_decoded(rest))
+            }
+        }
+        None => text.to_string(),
+    };
+    (path.len() > 1 && (path.starts_with('/') || path.starts_with("\\\\") || drive(&path))).then_some(path)
+}
+
+/// `s` with `%XX` escapes decoded (a file URL's path); as it is when the decoded bytes aren't UTF-8.
+fn percent_decoded(s: &str) -> String {
+    if !s.contains('%') {
+        return s.to_string();
+    }
+    let mut out = Vec::with_capacity(s.len());
+    let mut rest = s.as_bytes();
+    while let Some((&b, tail)) = rest.split_first() {
+        let hex = tail
+            .get(..2)
+            .filter(|h| h.iter().all(u8::is_ascii_hexdigit))
+            .and_then(|h| std::str::from_utf8(h).ok())
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match hex {
+            Some(v) if b == b'%' => {
+                out.push(v);
+                rest = tail.get(2..).unwrap_or_default();
+            }
+            _ => {
+                out.push(b);
+                rest = tail;
+            }
+        }
+    }
+    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
+
+/// The object an element's `docRef` attribute names: `None` without one, `Some(None)` when its
+/// value isn't an XML id (`/XMLUIDREF`) of at most [`MAX_LIBRARY_NAME`] characters.
+fn doc_ref(o: &Obj) -> Option<Option<String>> {
+    let attributes = o.obj("xmlnode-attributes").filter(|a| a.ty == "Dictionary")?;
+    let node = attributes.items().find(|a| is_node(a, 2.0) && node_name(a).is_some_and(|n| n.rsplit(':').next() == Some("docRef")))?;
+    let id = node.obj("xmlnode-nodevalue").filter(|v| v.ty == "XMLUIDREF").and_then(Obj::content_text);
+    Some(id.filter(|id| !id.is_empty() && id.chars().count() <= MAX_LIBRARY_NAME))
+}
+
+/// The walk through a variable library: the nodes read, the bytes kept, the bindings, and what was
+/// left out.
+#[derive(Default)]
+struct LibraryWalk {
+    nodes: usize,
+    bytes: usize,
+    bindings: Vec<BindingRef>,
+    bindings_skipped: usize,
+    skipped: usize,
+}
+
+impl LibraryWalk {
+    /// The child nodes of the XML node `o`, in order. `None` when they aren't an array, or when the
+    /// library has more nodes than [`MAX_LIBRARY_NODES`].
+    fn children<'o>(&mut self, o: &'o Obj) -> Option<Vec<&'o Obj>> {
+        let list = o.obj("xmlnode-children").filter(|c| c.ty == "Array")?;
+        let children: Vec<&Obj> = list.items().collect();
+        self.nodes = self.nodes.saturating_add(children.len());
+        (self.nodes <= MAX_LIBRARY_NODES).then_some(children)
+    }
+
+    /// Whether `len` more bytes of names and values fit in [`MAX_LIBRARY_BYTES`] (they are then counted).
+    fn keep(&mut self, len: usize) -> bool {
+        let fits = self.bytes.saturating_add(len) <= MAX_LIBRARY_BYTES;
+        if fits {
+            self.bytes += len;
+        }
+        fits
+    }
+
+    /// Whether a value of `len` bytes would still fit in [`MAX_LIBRARY_BYTES`] (nothing is counted).
+    fn room(&self, len: usize) -> bool {
+        self.bytes.saturating_add(len) <= MAX_LIBRARY_BYTES
+    }
+
+    /// The `variableSet` `set`, into `vars`.
+    fn variable_set(&mut self, set: &Obj, vars: &mut Variables) {
+        vars.locked = match xml_attribute(set, "locked").as_deref() {
+            None | Some("none") => false,
+            Some("variableAndTypes") => true,
+            Some(_) => {
+                self.skipped += 1;
+                false
+            }
+        };
+        let Some(children) = self.children(set) else {
+            self.skipped += 1;
+            return;
+        };
+        for list in children.iter().filter(|c| is_element(c, "variables")) {
+            self.declarations(list, vars);
+        }
+        for list in children.iter().filter(|c| is_element(c, "sampleDataSets")) {
+            self.data_sets(list, vars);
+        }
+    }
+
+    /// The `variable` elements of the `variables` element `list`, into `vars`, and the objects they
+    /// bind. A second declaration of a variable binds one more object to it.
+    fn declarations(&mut self, list: &Obj, vars: &mut Variables) {
+        let Some(children) = self.children(list) else {
+            self.skipped += 1;
+            return;
+        };
+        for v in children.into_iter().filter(|c| !is_node(c, 3.0)) {
+            let name = is_element(v, "variable").then(|| library_name(xml_attribute(v, "varName"))).flatten();
+            let kind = match xml_attribute(v, "trait").as_deref() {
+                Some("textcontent") => VariableKind::Text,
+                Some("visibility") => VariableKind::Visibility,
+                Some("fileref") => VariableKind::Image,
+                Some("graphdata") => VariableKind::Graph,
+                _ => VariableKind::Unknown,
+            };
+            let target = doc_ref(v);
+            // A declaration left out, and the object it binds.
+            let left_out = |walk: &mut Self| {
+                walk.skipped += 1;
+                walk.bindings_skipped += usize::from(target.is_some());
+            };
+            let Some(name) = name else {
+                left_out(self);
+                continue;
+            };
+            match vars.variable(&name) {
+                // Another object bound to the variable.
+                Some(declared) if declared.kind == kind => {}
+                // A second variable of that name, of another kind.
+                Some(_) => {
+                    left_out(self);
+                    continue;
+                }
+                None if vars.variables.len() < MAX_LIBRARY_VARIABLES && self.keep(name.len()) => {
+                    vars.variables.push(Variable { name: name.clone(), kind });
+                }
+                None => {
+                    left_out(self);
+                    continue;
+                }
+            }
+            if let Some(target) = target {
+                // The binding keeps its own copy of the name, and its target.
+                let len = name.len().saturating_add(target.as_ref().map_or(0, String::len));
+                if self.bindings.len() < MAX_LIBRARY_BINDINGS && self.keep(len) {
+                    self.bindings.push(BindingRef { variable: name, target });
+                } else {
+                    self.bindings_skipped += 1;
+                }
+            }
+        }
+    }
+
+    /// The `sampleDataSet` elements of the `sampleDataSets` element `list`, into `vars`, and the
+    /// data set it shows.
+    fn data_sets(&mut self, list: &Obj, vars: &mut Variables) {
+        let Some(children) = self.children(list) else {
+            self.skipped += 1;
+            return;
+        };
+        for row in children.into_iter().filter(|c| !is_node(c, 3.0)) {
+            let name = is_element(row, "sampleDataSet").then(|| library_name(xml_attribute(row, "dataSetName"))).flatten();
+            let Some(name) = name.filter(|n| vars.dataset(n).is_none() && vars.datasets.len() < MAX_LIBRARY_DATASETS && self.keep(n.len())) else {
+                self.skipped += 1;
+                continue;
+            };
+            let values = self.values(row, vars);
+            vars.datasets.push(DataSet { name, values });
+        }
+        if let Some(active) = xml_attribute(list, "activeDataSet").and_then(|a| library_name(Some(a))) {
+            vars.active_dataset = vars.dataset(&active).map(|_| active);
+        }
+    }
+
+    /// The values of the `sampleDataSet` element `row`, for the variables of `vars`.
+    fn values(&mut self, row: &Obj, vars: &Variables) -> std::collections::BTreeMap<String, DataValue> {
+        let mut values = std::collections::BTreeMap::new();
+        let Some(children) = self.children(row) else {
+            self.skipped += 1;
+            return values;
+        };
+        for el in children.into_iter().filter(|c| !is_node(c, 3.0)) {
+            let variable = is_node(el, 1.0).then(|| node_name(el)).flatten().and_then(|n| vars.variable(n.rsplit(':').next().unwrap_or(&n)));
+            let Some(variable) = variable.filter(|v| !values.contains_key(&v.name)) else {
+                self.skipped += 1;
+                continue;
+            };
+            match self.value(el, variable.kind) {
+                Ok(Some(value)) => {
+                    values.insert(variable.name.clone(), value);
+                }
+                Ok(None) => {}
+                Err(()) => self.skipped += 1,
+            }
+        }
+        values
+    }
+
+    /// The value of a variable of `kind` that the element `el` holds: `Ok(None)` when it holds none,
+    /// `Err` when it can't be read (graph values aren't read).
+    fn value(&mut self, el: &Obj, kind: VariableKind) -> Result<Option<DataValue>, ()> {
+        let children = self.children(el).ok_or(())?;
+        if children.is_empty() {
+            return Ok(None);
+        }
+        let value = match kind {
+            VariableKind::Text => {
+                let (mut paragraphs, mut total) = (Vec::new(), 0usize);
+                // Text between the paragraphs is white space the XML had.
+                for p in children.into_iter().filter(|c| !is_node(c, 3.0)) {
+                    if !is_element(p, "p") {
+                        return Err(());
+                    }
+                    let mut paragraph = String::new();
+                    for t in self.children(p).ok_or(())? {
+                        match (is_node(t, 3.0), xml_value(t, "xmlnode-nodevalue")) {
+                            (true, Some(XmlValue::Text(text))) if self.room(total.saturating_add(text.len())) => {
+                                total += text.len();
+                                paragraph.push_str(&text);
+                            }
+                            _ => return Err(()),
+                        }
+                    }
+                    // The line break that joins it to the next one.
+                    total = total.saturating_add(1);
+                    paragraphs.push(paragraph);
+                }
+                if paragraphs.is_empty() {
+                    return Ok(None);
+                }
+                DataValue::Text(paragraphs.join("\n"))
+            }
+            VariableKind::Visibility => match children.as_slice() {
+                [t] if is_node(t, 3.0) => match xml_value(t, "xmlnode-nodevalue") {
+                    Some(XmlValue::Bool(show)) => DataValue::Visible(show),
+                    _ => return Err(()),
+                },
+                _ => return Err(()),
+            },
+            VariableKind::Image => {
+                let mut text = String::new();
+                for t in children {
+                    match (is_node(t, 3.0), xml_value(t, "xmlnode-nodevalue")) {
+                        (true, Some(XmlValue::Text(s))) if self.room(text.len().saturating_add(s.len())) => text.push_str(&s),
+                        _ => return Err(()),
+                    }
+                }
+                if text.trim_matches([' ', '\t', '\n', '\r']).is_empty() {
+                    return Ok(None);
+                }
+                DataValue::Image(linked_path(&text).ok_or(())?)
+            }
+            VariableKind::Graph | VariableKind::Unknown => return Err(()),
+        };
+        let len = match &value {
+            DataValue::Text(s) | DataValue::Image(s) | DataValue::Graph(s) => s.len(),
+            DataValue::Visible(_) => 1,
+        };
+        if self.keep(len) { Ok(Some(value)) } else { Err(()) }
+    }
+}
+
+/// The library of the `variableSets` element `sets` (see [`variable_library`]).
+fn read_variable_sets(sets: &Obj) -> VariableRead {
+    let mut walk = LibraryWalk::default();
+    let mut vars = Variables::default();
+    match walk.children(sets) {
+        Some(children) => {
+            let (sets, other): (Vec<&Obj>, Vec<&Obj>) = children.into_iter().filter(|c| !is_node(c, 3.0)).partition(|c| is_element(c, "variableSet"));
+            // A node that isn't a variable set, and a second set (VectorCraft keeps one set of
+            // variables), are left out.
+            walk.skipped += other.len() + sets.len().saturating_sub(1);
+            if let Some(first) = sets.first() {
+                walk.variable_set(first, &mut vars);
+            }
+        }
+        None => walk.skipped += 1,
+    }
+    if walk.nodes > MAX_LIBRARY_NODES {
+        return VariableRead { variables: Variables::default(), bindings: vec![], bindings_skipped: 0, skipped: 1, present: true };
+    }
+    VariableRead { variables: vars, bindings: walk.bindings, bindings_skipped: walk.bindings_skipped, skipped: walk.skipped, present: true }
 }

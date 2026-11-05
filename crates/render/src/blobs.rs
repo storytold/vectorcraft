@@ -12,8 +12,16 @@ pub(crate) fn lookup(key: &images::ImageKey, touch: bool) -> Option<Arc<Pixmap>>
 pub(crate) fn blob_key(blob: &vectorcraft_doc::ImageBlob) -> (images::ImageKey, Option<Arc<ink::InkLut>>, Option<(u16, u16)>) {
     let id = images::blob_id(blob);
     let lut = id.cmyk.then(ink::display_lut);
-    let key =
-        images::ImageKey { content: id.content, adjust: None, grey: false, ink: Ink::Display, luts: (lut.as_ref().map_or(0, |l| l.1), 0), mip: 0 };
+    let key = images::ImageKey {
+        content: id.content,
+        adjust: None,
+        grey: false,
+        tint: None,
+        ink: Ink::Display,
+        luts: (lut.as_ref().map_or(0, |l| l.1), 0),
+        plates: 0,
+        mip: 0,
+    };
     (key, lut.map(|l| l.0), id.size)
 }
 
@@ -30,8 +38,17 @@ pub(crate) fn blob_pixmap(blob: &vectorcraft_doc::ImageBlob, touch: bool) -> Opt
                 paint::add_decode_failures(1);
                 return None;
             }
-            // Decoded outside the lock: other renderers carry on meanwhile.
-            let pm = match lut.and_then(|lut| ink::cmyk_pixmap(blob, &lut)) {
+            // Decoded outside the lock: other renderers carry on meanwhile. The inks and the pixels
+            // shown from them are admitted together, as other images are, before either is made:
+            // without room the image is read as other images are (which reduces it).
+            let room = || {
+                image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice()))
+                    .with_guessed_format()
+                    .ok()
+                    .and_then(|r| r.into_dimensions().ok())
+                    .is_some_and(|(w, h)| paint::within_allowance(w, h.saturating_mul(2)))
+            };
+            let pm = match lut.filter(|_| room()).and_then(|lut| ink::cmyk_pixmap(blob, &lut)) {
                 Some(pm) => pm,
                 None => match paint::decode_pixmap_or_why(&blob.bytes) {
                     Ok(pm) => pm,

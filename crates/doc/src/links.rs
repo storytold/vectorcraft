@@ -166,6 +166,24 @@ impl ImageBlob {
     }
 }
 
+/// The side of [`missing_placeholder`]'s image, in pixels.
+pub const MISSING_SIDE: u32 = 64;
+
+/// What a linked image shows when an importer has no pixels for it (its file is missing or isn't
+/// in the data): a light tile, crossed out, [`MISSING_SIDE`] pixels a side, as a PNG. `None` when
+/// it can't be encoded.
+pub fn missing_placeholder() -> Option<Vec<u8>> {
+    let last = MISSING_SIDE - 1;
+    let img = image::RgbaImage::from_fn(MISSING_SIDE, MISSING_SIDE, |x, y| {
+        let edge = x == 0 || y == 0 || x == last || y == last;
+        let cross = x.abs_diff(y) <= 1 || (x + y).abs_diff(last) <= 1;
+        image::Rgba(if edge || cross { [200, 60, 60, 255] } else { [236, 236, 236, 255] })
+    });
+    let mut png = Vec::new();
+    img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+    Some(png)
+}
+
 /// `bytes` decoded and shrunk to fit [`PROXY_SIZE`] as a PNG; `None` when small enough already or
 /// undecodable.
 fn proxy_png(bytes: &[u8]) -> Option<Vec<u8>> {
@@ -443,6 +461,12 @@ mod tests {
             ),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn the_placeholder_is_a_png() {
+        let png = missing_placeholder().unwrap();
+        assert_eq!(image::load_from_memory(&png).unwrap().width(), MISSING_SIDE);
     }
 
     #[test]

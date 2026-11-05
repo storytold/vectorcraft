@@ -34,6 +34,8 @@ pub struct DocState {
     /// Select › Start Global Edit: the objects edited together until Stop Global Edit or Escape
     /// ([`cmd::globaledit`]). Editing state: not saved, not undoable.
     pub global_edit: Option<cmd::globaledit::GlobalEdit>,
+    /// What leaving symbol editing mode goes back to ([`cmd::symboledit`]).
+    pub(crate) symbol_edit_return: cmd::symboledit::Return,
     pub interaction: Option<Interaction>,
     /// Edits made while this is open are one undo step (a scrubbed numeric field).
     pub undo_group: Option<UndoGroup>,
@@ -50,6 +52,9 @@ pub struct DocState {
     pub recalled_selection: RecalledSelection,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
+    /// Preferences › User Interface › Open Documents As Tabs when the document opened: cleared,
+    /// the UI opens it in a floating window of its own.
+    pub opened_as_tab: bool,
     /// View Opacity Mask (Alt-click the mask thumbnail): the masked object whose mask the canvas
     /// shows alone, in greyscale, while that mask is edited (see [`DocState::shown_mask`]).
     pub mask_view: Option<NodeId>,
@@ -246,12 +251,14 @@ impl DocState {
             variables_highlight: None,
             isolation: None,
             global_edit: None,
+            symbol_edit_return: Default::default(),
             interaction: None,
             undo_group: None,
             last_transform: None,
             last_selection_cmd: None,
             recalled_selection: RecalledSelection::default(),
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            opened_as_tab: true,
             mask_view: None,
             transparency_grid,
             format: "vectorcraft",
@@ -311,6 +318,16 @@ impl DocState {
                 _ => it.selection,
             };
             self.push_undo(it.label, it.doc, selection);
+            if let Some(paints) = it.color_mode_paints
+                && let Some(e) = self.history.undo.last_mut()
+            {
+                match &mut e.color_mode_paints {
+                    Some((_, after)) => *after = paints.1,
+                    slot => *slot = Some(paints),
+                }
+                e.recost_paints();
+                self.history.trim();
+            }
             self.revision += 1;
         }
     }
@@ -347,6 +364,14 @@ impl DocState {
             self.variables_highlight = it.variables_highlight;
             self.isolation = it.isolation;
             self.revision += 1;
+        }
+    }
+    /// Clear the Variables panel highlight when the document defines no variable of that name
+    /// (deleted, or taken out by Undo or Redo), so a variable defined later under that name is
+    /// not highlighted without a click.
+    pub(crate) fn drop_stale_variables_highlight(&mut self) {
+        if self.variables_highlight.as_ref().is_some_and(|h| self.doc.variables.variable(h).is_none()) {
+            self.variables_highlight = None;
         }
     }
     /// Count the document as modified, as if never saved (a document restored by Data Recovery).

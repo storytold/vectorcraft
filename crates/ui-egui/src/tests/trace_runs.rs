@@ -76,6 +76,27 @@ fn make_traces_off_the_ui_thread_as_one_undo_step() {
     assert_eq!(app.session.doc().unwrap().history.undo.last().unwrap().label, "Image Trace (Make and Expand)");
 }
 
+/// Starting a trace asks for a frame, so its result is picked up without input: the frame that
+/// started it may have asked for its next one before it did (#4617 review).
+#[test]
+fn starting_a_trace_asks_for_a_frame() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    app.adopt_context(&ctx);
+    for _ in 0..5 {
+        if !ctx.has_requested_repaint() {
+            break;
+        }
+        let mut out = ctx.run_ui(Default::default(), |_| {});
+        out.textures_delta.clear();
+    }
+    assert!(!ctx.has_requested_repaint(), "the context settled");
+    crate::menus::invoke(&mut app, "imageTrace.make", json!({"preset": "Default"}));
+    assert_eq!(app.trace_runs.running.len(), 1);
+    assert!(ctx.has_requested_repaint());
+    wait(&mut app);
+}
+
 /// Without threads (the web, `VECTORCRAFT_SYNC_OPEN`, unit tests that don't ask), Make traces at once.
 #[test]
 fn without_threads_make_traces_at_once() {

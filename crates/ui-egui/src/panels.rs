@@ -179,6 +179,11 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         links::ID => links::show(app, ui),
         asset_export::ID => asset_export::show(app, ui),
         css_properties::ID => css_properties::show(app, ui),
+        crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
+        crate::addons::color::ID => crate::addons::color::show(app, ui),
+        crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),
+        crate::addons::pathtools::shape::ID => crate::addons::pathtools::shape::show(app, ui),
+        crate::addons::pen::ID => crate::addons::pen::show(app, ui),
         id if library_panel::parse(id).is_some() => library_panel::show(app, ui, id),
         _ => {
             dim_label(ui, tl!("This panel is on the roadmap (see the parity plan)."));
@@ -236,13 +241,18 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
     true
 }
 
-/// The ≡ panel-menu button drawn into `rect` (the right end of a panel's title/tab strip).
-pub fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, rect: Rect) {
+/// The ≡ button drawn into `rect` that opens a panel menu.
+fn menu_button(ui: &mut Ui, id: &str, rect: Rect) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     let resp = ui.interact(rect, ui.scope_id().with(("panel-menu", id)), Sense::click());
     icons::paint(ui, "menu", rect.shrink(1.0), if resp.hovered() { t.text_strong } else { t.text_dim });
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Panel menu")));
-    let resp = resp.on_hover_text(tl!("Panel menu"));
+    resp.on_hover_text(tl!("Panel menu"))
+}
+
+/// The ≡ panel-menu button drawn into `rect` (the right end of a panel's title/tab strip).
+pub fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, rect: Rect) {
+    let resp = menu_button(ui, id, rect);
     egui::Popup::menu(&resp).show(|ui| {
         crate::widgets::menu_scroll(ui, |ui| {
             ui.set_min_width(220.0);
@@ -431,6 +441,18 @@ fn paint_popover(app: &mut VectorcraftApp, ui: &mut Ui) {
                 set_pstate(ui.ctx(), MIXER, m);
             }
         }
+        // The mixer is the Color panel, so its menu comes along: the color modes (Grayscale,
+        // RGB, HSB, CMYK, Web Safe RGB), Invert, Complement and the rest (#4249).
+        if mixer {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let (rect, _) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
+                let resp = menu_button(ui, "color-mixer", rect);
+                egui::Popup::menu(&resp).show(|ui| {
+                    ui.set_min_width(200.0);
+                    color::menu(app, ui);
+                });
+            });
+        }
     });
     crate::widgets::divider(ui);
     if mixer {
@@ -468,6 +490,26 @@ pub(crate) fn pstate<T: Clone + Default + Send + Sync + 'static>(ctx: &egui::Con
 /// Store per-panel UI state in egui temp memory under the `panel-state` namespace.
 pub(crate) fn set_pstate<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, key: &str, v: T) {
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique(("panel-state", key)), v));
+}
+
+/// Whether the panel whose state is `key` has the keyboard for its rows (Delete and Backspace
+/// remove its highlighted rows): it took it with a click on a row ([`set_row_keys`]) and kept it in
+/// every frame since, so it lapses when the panel isn't drawn.
+pub(crate) fn has_row_keys(ctx: &egui::Context, key: &str) -> bool {
+    pstate::<Option<u64>>(ctx, key).is_some_and(|pass| pass + 1 >= ctx.cumulative_pass_nr())
+}
+
+/// Take (`on`) or give up the keyboard for the rows of the panel whose state is `key`, for this
+/// frame and the next ([`has_row_keys`]).
+pub(crate) fn set_row_keys(ctx: &egui::Context, key: &str, on: bool) {
+    set_pstate(ctx, key, on.then(|| ctx.cumulative_pass_nr()));
+}
+
+/// Whether a plain Delete or Backspace belongs to a panel's rows this frame, the Layers or the
+/// Appearance panel's after a click on one of them, so [`crate::shortcuts::handle`] leaves it to the
+/// panel instead of running Edit › Clear on the selected art.
+pub(crate) fn rows_take_delete(ctx: &egui::Context) -> bool {
+    has_row_keys(ctx, layers::ROW_KEYS) || has_row_keys(ctx, appearance::ROW_KEYS)
 }
 
 /// [`crate::i18n::label_or_name`] in the UI language.

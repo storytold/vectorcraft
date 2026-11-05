@@ -154,52 +154,97 @@ fn packaged(app: &mut VectorcraftApp, r: Result<Value, String>, web: bool, later
     let missing = r["missingLinks"].as_array().map_or(0, Vec::len);
     // The fonts left out: their license doesn't allow it, or they aren't on this computer.
     let fonts = r["skippedFonts"].as_array().into_iter().flatten().filter_map(|f| f["font"].as_str()).collect::<Vec<_>>().join(", ");
-    let shown_note = package_status_note(missing, &fonts);
-    let n_s = n.to_string();
+    let n = n as u64;
     if web {
         let (name, data) = (r["name"].as_str().unwrap_or("package.zip"), r["dataBase64"].as_str().unwrap_or_default());
         let bytes = vectorcraft_format::base64_decode(data).ok_or("the package came back damaged")?;
         io::write_named(app, None, name, &bytes)?;
-        let status = if shown_note.is_empty() {
-            crate::i18n::fmt(tl!("Packaged {n} file(s)"), &[("n", &n_s)])
-        } else {
-            crate::i18n::fmt(tl!("Packaged {n} file(s) {note}"), &[("n", &n_s), ("note", &shown_note)])
-        };
-        app.status(status);
+        // The web shows no dialog, so the status line names every font left out.
+        app.status(package_status(n, None, &package_status_note(missing, &fonts)));
         return Ok(r);
     }
     let folder = r["folder"].as_str().unwrap_or_default().to_string();
-    let status = if shown_note.is_empty() {
-        crate::i18n::fmt(tl!("Packaged {n} file(s) in {folder}"), &[("n", &n_s), ("folder", &folder)])
-    } else {
-        crate::i18n::fmt(tl!("Packaged {n} file(s) in {folder} {note}"), &[("n", &n_s), ("folder", &folder), ("note", &shown_note)])
-    };
-    app.status(status);
+    // A dialog open now (another one, after a package written in the background) stays, and no
+    // dialog names the fonts left out, so the status line names every one of them. Otherwise the
+    // dialog names them all, and the status line may cut the list short.
+    let asks = app.ui.dialog.is_none();
+    let listed = if asks { status_fonts(&fonts) } else { fonts.clone() };
+    app.status(package_status(n, Some(&folder), &package_status_note(missing, &listed)));
+    let shown_note = package_dialog_note(missing, &fonts);
     let detail = if shown_note.is_empty() {
-        crate::i18n::fmt(tl!("{count} file(s) in {folder}. Show the package folder?"), &[("count", &n_s), ("folder", &folder)])
+        crate::i18n::fmt(
+            &crate::i18n::tn(n, "{n} file in {folder}. Show the package folder?", "{n} files in {folder}. Show the package folder?"),
+            &[("folder", &folder)],
+        )
     } else {
         crate::i18n::fmt(
-            tl!("{count} file(s) in {folder} {note}. Show the package folder?"),
-            &[("count", &n_s), ("folder", &folder), ("note", &shown_note)],
+            &crate::i18n::tn(n, "{n} file in {folder} {note}. Show the package folder?", "{n} files in {folder} {note}. Show the package folder?"),
+            &[("folder", &folder), ("note", &shown_note)],
         )
     };
-    if app.ui.dialog.is_none() {
+    if asks {
         ask(app, tl!("Package created"), &detail, "file.showPackage", json!({ "folder": folder }));
     }
     Ok(r)
 }
 
-/// Parenthetical notes after the folder path in a package status (`(2 linked file(s) not found)` …),
-/// joined with spaces and without a leading space (#3494).
-fn package_status_note(missing: usize, fonts: &str) -> String {
-    let mut parts = Vec::new();
-    if missing > 0 {
-        parts.push(format!("({})", crate::i18n::fmt(tl!("{count} linked file(s) not found"), &[("count", &missing.to_string())])));
+/// The status bar's line for a package of `n` files written to `folder` (`None`: the web's
+/// download), with `note` from [`package_status_note`] when it isn't empty. With a note and a
+/// folder, the note comes before the folder and the folder ends the line. The line is English
+/// (the status bar translates it when it draws it): each catalog has `@msgplural` rows for it, and
+/// the folder takes the rest of the line after `) in `, so a folder name with spaces or parentheses
+/// stays whole.
+pub(super) fn package_status(n: u64, folder: Option<&str>, note: &str) -> String {
+    let (one, other) = match (folder.is_some(), note.is_empty()) {
+        (false, true) => ("Packaged {n} file", "Packaged {n} files"),
+        (false, false) => ("Packaged {n} file {note}", "Packaged {n} files {note}"),
+        (true, true) => ("Packaged {n} file in {folder}", "Packaged {n} files in {folder}"),
+        (true, false) => ("Packaged {n} file {note} in {folder}", "Packaged {n} files {note} in {folder}"),
+    };
+    crate::i18n::msg_n(n, one, other, &[("folder", folder.unwrap_or_default()), ("note", note)])
+}
+
+/// Parenthetical notes in a package status (`(2 linked files not found)` …), in English,
+/// joined with spaces and without a leading space (#3494). The catalogs' `@msg` and `@msgplural`
+/// rows for each note, and for one or two notes in parentheses, translate them where the status
+/// bar draws the line.
+pub(super) fn package_status_note(missing: usize, fonts: &str) -> String {
+    let missing = (missing > 0).then(|| crate::i18n::msg_n(missing as u64, "{n} linked file not found", "{n} linked files not found", &[]));
+    join_notes(missing, (!fonts.is_empty()).then(|| format!("fonts not copied: {fonts}")))
+}
+
+/// The most bytes of font names a package status lists next to the dialog that names them all.
+const STATUS_FONTS: usize = 500;
+
+/// `fonts` (names joined with `, `) as the desktop's status line lists them while the Package
+/// created dialog names them all: whole, or the names that fit in [`STATUS_FONTS`] bytes followed
+/// by `, …`, so the line stays short enough for the status bar to translate it.
+pub(super) fn status_fonts(fonts: &str) -> String {
+    if fonts.len() <= STATUS_FONTS {
+        return fonts.to_string();
     }
-    if !fonts.is_empty() {
-        parts.push(format!("({})", crate::i18n::fmt(tl!("fonts not copied: {fonts}"), &[("fonts", fonts)])));
+    let mut kept = String::new();
+    for name in fonts.split(", ") {
+        if kept.len() + name.len() + 2 > STATUS_FONTS {
+            break;
+        }
+        if !kept.is_empty() {
+            kept.push_str(", ");
+        }
+        kept.push_str(name);
     }
-    parts.join(" ")
+    if kept.is_empty() { "…".to_string() } else { format!("{kept}, …") }
+}
+
+/// [`package_status_note`] in the interface language, for the dialog shown when the package is made.
+pub(super) fn package_dialog_note(missing: usize, fonts: &str) -> String {
+    let missing = (missing > 0).then(|| crate::i18n::tn(missing as u64, "{n} linked file not found", "{n} linked files not found"));
+    join_notes(missing, (!fonts.is_empty()).then(|| crate::i18n::fmt(tl!("fonts not copied: {fonts}"), &[("fonts", fonts)])))
+}
+
+/// Each note in parentheses, joined with spaces.
+fn join_notes(missing: Option<String>, fonts: Option<String>) -> String {
+    [missing, fonts].into_iter().flatten().map(|note| format!("({note})")).collect::<Vec<_>>().join(" ")
 }
 
 /// `file.showPackage {folder}`: show a package folder in the file manager.

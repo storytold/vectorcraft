@@ -27,6 +27,8 @@ weezl = "0.2"
 # PNG rows read one at a time (MIT OR Apache-2.0; already used by the image crate's PNG reader).
 png = "0.18"
 log = { workspace = true }
+# Combining marks inside a lam-alef cluster (MIT OR Apache-2.0; already used by vectorcraft-text).
+unicode-general-category = "1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 vello_cpu = { workspace = true, features = ["multithreading"] }

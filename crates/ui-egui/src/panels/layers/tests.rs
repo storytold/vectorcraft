@@ -240,6 +240,42 @@ fn row_thumbnails_wait_for_the_end_of_a_drag() {
 }
 
 #[test]
+fn the_row_thumbnails_follow_the_document_shown_and_none_once_it_closes() {
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let showing = || THUMBS.with(|c| c.borrow().showing);
+    frame(&mut app, &ctx, vec![], false);
+    let first = app.session.active().map(|st| st.uid);
+    assert_eq!(showing(), first);
+    // With no thumbnails drawn, the panel still tells which document it shows.
+    let p = &mut app.ui.layers_panel;
+    (p.thumb_layers, p.thumb_groups, p.thumb_objects) = (false, false, false);
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    let second = app.session.active().map(|st| st.uid);
+    assert_ne!(second, first);
+    assert_eq!(showing(), second, "the new document's rows are drawn");
+    for _ in 0..2 {
+        app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    }
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(showing(), None, "no document is shown once both close");
+
+    // The Links panel alone does the same.
+    let links = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::links::show(app, ui));
+        out.textures_delta.clear();
+    };
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    links(&mut app);
+    assert_eq!(showing(), app.session.active().map(|st| st.uid));
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    links(&mut app);
+    assert_eq!(showing(), None, "the Links panel shows no document");
+}
+
+#[test]
 fn clicking_a_target_circle_targets_the_layer() {
     let (mut app, layer, [a, b]) = two_rects();
     let ctx = egui::Context::default();
@@ -1590,4 +1626,39 @@ fn a_canvas_selection_reveals_its_active_layer() {
     assert!(shown(&mut app, &top));
     app.session.active_mut().unwrap().active_layer = doc.layer_of(NodeId(rects[0]));
     assert!(shown(&mut app, &top) && !shown(&mut app, &bottom), "the highlighted row keeps the view");
+}
+
+/// #4820: an open blend lists its spine below its key objects, and a click on the spine's row
+/// selects the blend (whose spine Direct Selection edits); a locked blend's spine row selects
+/// nothing, and searching leaves the row out.
+#[test]
+fn a_blends_spine_is_a_row_below_its_keys_that_selects_the_blend() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 300, "height": 200}));
+    let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap();
+    let b = run(&mut app, "shape.rectangle", json!({"x": 200, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap();
+    run(&mut app, "select.set", json!({"ids": [a, b]}));
+    let blend = NodeId(run(&mut app, "object.blend.make", json!({}))["id"].as_u64().unwrap());
+    run(&mut app, "select.none", json!({}));
+    expand(&mut app, &json!({})).unwrap();
+    let st = app.session.active().unwrap();
+    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let kinds: Vec<(u64, bool)> = rows.iter().map(|r| (r.node.id.0, r.spine)).collect();
+    assert_eq!(kinds[1..], [(blend.0, false), (b, false), (a, false), (blend.0, true)], "the spine row comes last in the blend");
+    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "rect", &Filter::default());
+    assert!(!rows.iter().any(|r| r.spine), "no spine row while searching");
+    // Rows top down: the layer, the blend, both keys (with target circles), then the spine.
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 4);
+    let spine_row = egui::pos2(150.0, circles[3].y + (circles[3].y - circles[2].y));
+    let selected = |app: &VectorcraftApp| app.session.active().unwrap().selection.objects.to_vec();
+    click_with(&mut app, &ctx, spine_row, egui::Modifiers::NONE);
+    assert_eq!(selected(&app), [blend], "its row selects the blend");
+    click_with(&mut app, &ctx, spine_row, egui::Modifiers::SHIFT);
+    assert!(selected(&app).is_empty(), "Shift-click takes it out again");
+    run(&mut app, "layer.setProps", json!({"ids": [blend.0], "locked": true}));
+    click_with(&mut app, &ctx, spine_row, egui::Modifiers::NONE);
+    assert!(selected(&app).is_empty(), "a locked blend's spine can't be selected");
 }

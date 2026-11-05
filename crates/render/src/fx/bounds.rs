@@ -239,6 +239,23 @@ pub(crate) fn cull_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     cull_bounds_in(symbols, n, true)
 }
 
+/// [`cull_bounds`] of path or compound path `n` made from `visual`, its visual bounds as
+/// [`Node::visual_bounds_with`] measures them, when [`cull_bounds`] measures `n` by those (it has
+/// no crop marks, Vector Halftone, container appearance or effects); else `None`.
+pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnOnce() -> Option<Rect>) -> Option<Option<Rect>> {
+    let plain = matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+        && !effects::has_crop_marks(n)
+        && !effects::addons::halftone::has_halftone(n)
+        && !effects::has_container_appearance(n)
+        && !has_fx(n)
+        && !has_object_fx(n);
+    plain.then(|| {
+        let b = visual()?;
+        let a = live_content_reach(symbols, n);
+        Some(b.inflate(a, a))
+    })
+}
+
 /// [`cull_bounds`] of `n`. With `after_reshape` true, the effects in the art of a symbol instance
 /// with geometry effects of its own are measured on the art as those effects reshape it
 /// ([`reshaped_art_effects_reach`]). With `after_reshape` false, they are measured on the art
@@ -249,6 +266,11 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool) -> Optio
     match &n.kind {
         // The object and its crop marks.
         _ if effects::has_crop_marks(n) => effects::crop_marks_art(n).and_then(|art| inner(&art)),
+        // The object Vector Halftone samples, and as far as its dots reach past it.
+        _ if effects::addons::halftone::has_halftone(n) => {
+            let reach = effects::addons::halftone::reach(n);
+            inner(&effects::addons::halftone::split(n).0).map(|b| b.inflate(reach, reach))
+        }
         // The evaluated art (its fills, strokes and geometry effects) and the raster effects' reach.
         _ if effects::has_container_appearance(n) => {
             let art = effects::evaluate_container(Some(symbols.document()), n);

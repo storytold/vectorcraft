@@ -426,7 +426,7 @@ impl Tool for ArtboardTool {
                         vec![Action::Commit]
                     }
                     Drag::Resize { began: true, .. } => vec![Action::Commit],
-                    Drag::Create { toggle: Some((i, at)), .. } if p.distance(at) < cx.tol(3.0) => {
+                    Drag::Create { toggle: Some((i, at)), .. } if p.distance(at) < cx.tol(5.0) => {
                         self.toggle(cx, i);
                         vec![]
                     }
@@ -562,9 +562,14 @@ impl Tool for ArtboardTool {
         if let Some(Drag::Marquee { start, cur }) = self.drag {
             o.push(Overlay::Marquee(Rect::from_points(start, cur)));
         }
-        // The other selected artboards: dashed bounds (in a drag the document shows them moved).
-        for r in self.others.iter().filter_map(|i| cx.doc.artboards.get(*i)).map(|a| a.rect) {
-            o.push(Overlay::Path { path: polygon(&rect_corners(r), true), color: BLUE, width: 1.0, dashed: true });
+        // The other selected artboards: dashed bounds and labels.
+        for &i in &self.others {
+            if let Some(ab) = cx.doc.artboards.get(i) {
+                let r = ab.rect;
+                o.push(Overlay::Path { path: polygon(&rect_corners(r), true), color: BLUE, width: 1.0, dashed: true });
+                let at = Point::new(r.x0 - cx.tol(8.0), r.y0 - cx.tol(4.0));
+                o.push(Overlay::Label { p: at, text: format!("{:02} - {}", i + 1, ab.name), color: BLUE });
+            }
         }
         let Some(ab) = cx.doc.artboards.get(self.active) else { return o };
         let r = self.preview.unwrap_or(ab.rect);

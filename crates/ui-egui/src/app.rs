@@ -31,6 +31,16 @@ mod view;
 pub use fonts::MAX_RECENT_FONTS;
 
 impl VectorcraftApp {
+    /// Takes the host's Caps Lock state, which gives the drawing tools the crosshair while it is on
+    /// without changing the saved Use Precise Cursors preference.
+    pub fn set_caps_lock(&mut self, on: bool) {
+        if self.session.caps_lock != on
+            && let Err(err) = self.run("view.capsLock", json!({ "on": on }))
+        {
+            log::error!("Could not update Caps Lock cursor state: {err}");
+        }
+    }
+
     /// The app around `session`, reaching the platform through `services` (file pickers, the
     /// clipboard, files and the like). It starts cataloguing the installed fonts at once, gives
     /// Data Recovery the host's store and makes a view for each open document.
@@ -44,10 +54,13 @@ impl VectorcraftApp {
         // ([`place::place_from_cursor`]).
         session.place_cursor_requests = true;
         let views = session.documents().iter().map(View::of).collect();
+        let view_uids = session.documents().iter().map(|d| d.uid).collect();
+        let known = session.documents().iter().map(|d| d.uid).collect();
         Self {
             session,
             ui: UiState::default(),
             views,
+            view_uids,
             services,
             canvas: CanvasCache {
                 renderer: vectorcraft_render::Renderer::new(),
@@ -73,11 +86,15 @@ impl VectorcraftApp {
                 cursors: Default::default(),
                 view_moved: None,
                 hover_cursor: None,
+                presented: None,
+                panes: Default::default(),
+                windows: crate::doc_windows::Windows::new(known),
             },
             perf: Perf::default(),
             dock_rt: Default::default(),
             titlebar_inset: 0.0,
             last_effect: None,
+            last_pathfinder: None,
             last_warp: None,
             character_focus: None,
             run_count: 0,
@@ -87,6 +104,8 @@ impl VectorcraftApp {
             clipboard_publishing: Default::default(),
             pending_url: None,
             control_rx: None,
+            deferred_control: None,
+            synthetic_dropped_before: 0,
             pending_screenshots: vec![],
             queued_screenshots: vec![],
             screenshot_token: 0,
@@ -103,6 +122,7 @@ impl VectorcraftApp {
             hover_doc: None,
             custom_titlebar: false,
             last_window_title: String::new(),
+            fullscreen_for_mode: false,
             graphics_adapter: None,
             place: Default::default(),
             system_paste: false,
@@ -136,6 +156,7 @@ impl VectorcraftApp {
             ime_caret_rect: None,
             ime_discard: false,
             prefs_changed: false,
+            asset_export_presets: Value::Null,
             touch_screen: false,
             scrub_group: false,
             scrub_scope: None,
@@ -294,10 +315,12 @@ impl VectorcraftApp {
         placing::poll(self);
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
+        crate::addons::select::link_status::refresh(self, now);
         if !self.background.jobs.is_empty()
             || !self.opening.pending.is_empty()
             || !self.plugin_runs.running.is_empty()
             || !self.placing.pending.is_empty()
+            || !self.trace_runs.running.is_empty()
         {
             // Keep the status bar's progress moving and pick the result up when it arrives.
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
@@ -332,10 +355,12 @@ impl VectorcraftApp {
         }
         crate::keymap::note_os(ctx);
         shortcut_editor::sync(&self.ui);
+        crate::panels::actions::sync_function_keys(&self.ui);
         prefs_dialog::apply_runtime(self, ctx);
         // The OS title bar (and the taskbar / Alt-Tab entry) follows the active file; with the
         // system title bar this is where the document name lives, as the in-app mark is hidden.
         crate::chrome::sync_window_title(self, ctx);
+        crate::chrome::sync_fullscreen(self, ctx);
         self.drain_control(ctx);
         // An egui `PasteImage` with a rich system clipboard: run the paste command now, once. It
         // goes through `run`, whose `edit.paste` branch calls `adopt_system_clipboard` (which clears
@@ -350,6 +375,12 @@ impl VectorcraftApp {
         }
         self.flush_clipboard_out(ctx);
         self.drain_inbox();
+        // An action playing at Step by Step or Pause For runs its next step when it is due, after
+        // the control requests and opened files above: a Stop or a document switch they bring
+        // comes first.
+        if let Some(wait) = crate::panels::actions::tick_playback(self, now) {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        }
         if self.viewport_hidden(ctx) && (self.needs_hidden_paint() || (!dialog_was_open && self.ui.dialog.is_some())) {
             // A plain repaint runs only logic in a hidden window: the ui that applies injected
             // input, shows a queued dialog or issues a capture needs this command. egui-winit
@@ -395,7 +426,8 @@ impl VectorcraftApp {
         crate::ime::install_hooks(ctx);
         self.adopt_context(ctx);
         if !self.styled {
-            theme::apply(ctx, self.ui.brightness);
+            // The saved accent, color scheme and canvas color, not the defaults (#4837).
+            prefs_dialog::reapply(self, ctx);
             egui_extras::install_image_loaders(ctx);
             self.styled = true;
         }
@@ -408,16 +440,33 @@ impl VectorcraftApp {
         }
     }
 
-    /// The canvas panel's body: the document tabs, the canvas and the isolation bar over it.
+    /// The canvas panel's body: the document tabs, the canvas (a pane for each document while
+    /// Window › Arrange › Tile is on) and the isolation bar over it. While the current document is
+    /// in a floating window, the tab strip's document draws as a pane.
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let t = theme::Tokens::get(ui.ctx());
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.pasteboard);
+        self.canvas.windows.strip = None;
         if self.ui.screen_mode < 3 {
             chrome::doc_tabs(self, ui);
         }
-        canvas::show(self, ui);
+        self.canvas.windows.area = Some(ui.available_rect_before_wrap());
+        let floats = crate::doc_windows::current_floats(self);
+        if !canvas::tiled_area(self, ui) {
+            if floats {
+                let rect = ui.available_rect_before_wrap();
+                if let Some(w) = crate::doc_windows::tab_window(self)
+                    && canvas::pane(self, ui, w, rect)
+                {
+                    crate::doc_windows::show_window(self, w);
+                }
+            } else {
+                canvas::show(self, ui);
+            }
+        }
         // Over the canvas inside the rulers, so the rulers and scroll bars stay uncovered.
         if self.ui.screen_mode < 3
+            && !floats
             && !menus::home_showing(self)
             && let Some(area) = self.canvas_rect
         {
@@ -456,6 +505,8 @@ impl VectorcraftApp {
             return;
         }
         crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
+        // Whether this pass draws the last step of an action playing at Step by Step.
+        let step_held = crate::panels::actions::playback_held(self);
         let t0 = now_ms();
         widgets::set_dialog_open(&ctx, self.ui.dialog.is_some());
         // The canvas records this pass's IME caret geometry; a pass that draws no canvas has none.
@@ -481,10 +532,15 @@ impl VectorcraftApp {
         }
         if self.ui.toolbar && self.ui.screen_mode < 3 {
             toolbar::show(self, ui);
+        } else if self.ui.screen_mode < 3 && self.ui.tab_hid.is_none() {
+            // Window › Tools hides the Tools panel alone; Tab hides the toolbars made with New
+            // Toolbar too.
+            toolbar::show_custom(self, ui.ctx());
         }
         panels::library_panel::tidy(self);
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
+        crate::doc_windows::show(self, &ctx);
         dialogs::show(self, &ctx);
         updates_ui::show(self, &ctx);
         export_progress::show(self, &ctx);
@@ -495,6 +551,9 @@ impl VectorcraftApp {
             titlebar::resize_zones(ui);
         }
         self.ui_fonts.frame(&ctx);
+        if self.ui.dialog.is_none() && !self.ui.palette_open {
+            shortcuts::remember_text_focus(&ctx);
+        }
         scrub::end_frame(self, &ctx);
         native_menu::sync(self, &ctx);
         // Observe once, after all of this pass's input, dialogs, floating panels, palette and
@@ -512,6 +571,10 @@ impl VectorcraftApp {
         if !ctx.will_discard() {
             self.perf.frame_ms = now_ms() - t0;
             self.issue_screenshots(&ctx);
+            // A hidden window's pass shows nothing, so the step waits for a pass the user sees.
+            if step_held && !self.viewport_hidden(&ctx) {
+                crate::panels::actions::playback_drawn(self);
+            }
         }
         let _ = json!(null);
     }

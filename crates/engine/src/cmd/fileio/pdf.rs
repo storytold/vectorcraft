@@ -263,7 +263,7 @@ pub const EDITING_NEEDS_EVERY_ARTBOARD: &str =
 pub fn encode(cmd: &str, doc: &Document, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
     // Keep the editable object tree independent of preview fallbacks used by the drawn pages.
     let (full, mut warnings) = crate::cmd::place::document::full_documents(doc);
-    let (bytes, drawn_warnings) = encode_carrying(cmd, &full, p, || Ok(vectorcraft_format::save(doc, false)))?;
+    let (bytes, drawn_warnings) = encode_carrying(cmd, &full, p, || Ok(vectorcraft_format::save(doc, false)), || Ok(None))?;
     warnings.extend(drawn_warnings);
     warnings.extend(overflow_warning(cmd, &full, p)?);
     Ok((bytes, warnings))
@@ -281,9 +281,20 @@ fn overflow_warning(cmd: &str, doc: &Document, p: &Value) -> Result<Option<Strin
 }
 
 /// [`encode`] the pages of `doc`, carrying `native()` as the editing data (a `.ai` file: the
-/// native document with its save options, whose pages may be left blank).
-pub(super) fn encode_carrying(cmd: &str, doc: &Document, p: &Value, native: impl FnOnce() -> Result<Vec<u8>>) -> Result<(Vec<u8>, Vec<String>)> {
+/// native document with its save options, whose pages may be left blank), and `private()`, the
+/// editing copy of the art for other apps with what it couldn't hold, on every page.
+pub(super) fn encode_carrying(
+    cmd: &str,
+    doc: &Document,
+    p: &Value,
+    native: impl FnOnce() -> Result<Vec<u8>>,
+    private: impl FnOnce() -> Result<Option<(vectorcraft_pdf::PrivateData, Vec<String>)>>,
+) -> Result<(Vec<u8>, Vec<String>)> {
     let mut opts = options(cmd, doc, p)?;
+    // The pages' background colors, behind the art (the editing data keeps them as colors).
+    let pages = opts.artboards.clone().unwrap_or_else(|| (0..doc.artboards.len()).collect());
+    let filled = super::export::with_artboard_fills(doc, p, pages).map_err(|e| bad(cmd, e))?;
+    let doc = &*filled;
     if opts.settings.thumbnails {
         opts.thumbnails = thumbnails(doc, &opts).map_err(|e| pdf_error(cmd, e))?;
     }
@@ -291,6 +302,10 @@ pub(super) fn encode_carrying(cmd: &str, doc: &Document, p: &Value, native: impl
     if opts.settings.preserve_editing {
         if opts.artboards.as_ref().is_none_or(|v| v.iter().copied().eq(0..doc.artboards.len())) {
             opts.native = Some(native()?);
+            if let Some((data, lost)) = private()? {
+                opts.private_data = Some(data);
+                warnings.extend(lost);
+            }
         } else {
             opts.settings.preserve_editing = false;
             warnings.push(EDITING_NEEDS_EVERY_ARTBOARD.to_string());
@@ -317,9 +332,9 @@ pub const DEFAULT_FLATTENER: &str = "High Resolution";
 
 /// `doc` with its transparency flattened for a PDF 1.3 file (asked for, or PDF/X-1a and PDF/X-3,
 /// whose files have none), with `flattenerPreset` (default High Resolution) and `p`'s `flattener`
-/// options over it; images with see-through pixels count as transparency, rasterized areas are
-/// clipped to their regions, and discarded overprints are dropped. `None` when nothing changes (or
-/// the file keeps transparency).
+/// options over it; images with see-through pixels and colorized images, including those in
+/// pattern tiles, count as transparency. Rasterized areas are clipped to their regions, and
+/// discarded overprints are dropped. `None` when nothing changes (or the file keeps transparency).
 fn flatten_for(cmd: &str, doc: &Document, set: &PdfSettings, p: &Value) -> Result<Option<Document>> {
     if !set.pdf13() {
         return Ok(None);

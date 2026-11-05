@@ -55,6 +55,13 @@ pub struct CanvasCache {
     /// The cursor the active tool last gave over the canvas, with the tool and the modifier keys
     /// it was for: kept while the view moves.
     pub hover_cursor: Option<(&'static str, vectorcraft_tools::Mods, vectorcraft_tools::Cursor)>,
+    /// In Presentation Mode, the canvas rect the active artboard was last fitted to: it is fitted
+    /// again when the rect changes (the window going full screen).
+    pub presented: Option<egui::Rect>,
+    /// Window › Arrange › Tile: the renders the panes of the other documents draw.
+    pub panes: canvas::Panes,
+    /// Window › Arrange › Float in Window: what the floating document windows keep between frames.
+    pub windows: crate::doc_windows::Windows,
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).

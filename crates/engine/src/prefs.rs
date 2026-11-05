@@ -10,6 +10,14 @@ pub enum DrawMode {
     Inside,
 }
 
+/// A saved Default Language as its tag: older preferences hold the language's name, and one the list
+/// no longer has reads as the default.
+fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<String, D::Error> {
+    let saved = <String as serde::Deserialize>::deserialize(d)?;
+    let tag = vectorcraft_doc::setup::char_language(&saved).ok().flatten();
+    Ok(tag.or_else(|| vectorcraft_doc::setup::LANGUAGES.first().map(|(_, t, _)| *t)).unwrap_or_default().to_string())
+}
+
 /// Application preferences (Edit → Preferences). Every field is reachable through `prefs.get` /
 /// `prefs.set {key, value}` (camelCase keys, validated against [`cmd::prefscmds::PREF_SPECS`]).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -27,6 +35,12 @@ pub struct Prefs {
     pub select_same_tint_percent: bool,
     pub show_home_screen: bool,
     pub use_preview_bounds: bool,
+    /// Align panel menu › Align to Glyph Bounds › Point Text: Align and Distribute measure point
+    /// type by the ink of its glyphs instead of its em box.
+    pub align_glyph_bounds_point: bool,
+    /// Align panel menu › Align to Glyph Bounds › Area Text: the same for area type, instead of
+    /// its frame.
+    pub align_glyph_bounds_area: bool,
     pub display_print_size: bool,
     pub double_click_to_isolate: bool,
     pub transform_pattern_tiles: bool,
@@ -108,6 +122,9 @@ pub struct Prefs {
     pub show_slice_numbers: bool,
     pub slice_line_color: String,
     // Hyphenation
+    /// Default Language: the BCP 47 tag of the language new type takes when its document's language
+    /// is the default ([`vectorcraft_doc::setup::LANGUAGES`]).
+    #[serde(deserialize_with = "language_tag")]
     pub hyphenation_language: String,
     pub hyphenation_exceptions: String,
     /// Type › Options › Additional Fonts Folder: a folder (read with its subfolders) whose fonts
@@ -156,9 +173,10 @@ pub struct Prefs {
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
     pub render_threads: i32,
-    /// Linux: `automatic` opens the window on the session's display server; `x11` opens it through
-    /// XWayland on a Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it
-    /// through XWayland only when a pen is attached (#2028). Read when the app starts.
+    /// Linux: `automatic` opens the window on the session's display server, or through XWayland on
+    /// a Wayland session when a pen is attached (#4967); `x11` opens it through XWayland on a
+    /// Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it through XWayland
+    /// only when a pen is attached (#2028). Read when the app starts.
     pub linux_display_server: String,
     // File Handling
     pub background_save: bool,
@@ -197,6 +215,9 @@ pub struct Prefs {
     /// Pathfinder panel › Pathfinder Options (`object.pathfinder.options`; a preference group, see
     /// [`cmd::prefscmds::PREF_GROUPS`]).
     pub pathfinder: PathfinderOptions,
+    /// Character panel › Show Snap to Glyph Options: which guides View › Snap to Glyph gives
+    /// (`view.snapToGlyph.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
+    pub glyph_snap: vectorcraft_tools::GlyphSnap,
     /// Edit → Transparency Flattener Presets: the user's presets (the built-in ones aren't stored).
     /// Not a `prefs.set` key or group (resetting the preferences keeps them): `flattener.presets.*`
     /// edit it.
@@ -207,6 +228,11 @@ pub struct Prefs {
     /// `imageTrace.presets.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub trace_presets: Vec<cmd::TracePreset>,
+    /// Gradient panel › Presets: the user's saved gradients (the built-in presets aren't stored).
+    /// A local library, not a Preferences dialog field: resetting the preferences keeps it;
+    /// `gradient.presets.*` edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub gradient_presets: Vec<cmd::GradientPreset>,
     /// Width profiles saved to the Stroke panel's Profile list (`stroke.widthProfile.*`). Not a
     /// Preferences dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -238,6 +264,10 @@ pub struct Prefs {
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/VectorCraft Templates`).
     pub templates_folder: String,
+    /// File Handling → Use System Defaults for Edit Original (#5236): Links panel › Edit Original
+    /// opens a linked file in the system's default app for it; off, in the app that made it
+    /// (PhotoCraft for a raster image, where it is installed; the system's app otherwise).
+    pub edit_original_system_defaults: bool,
     /// Open older native files as "<name> [Converted]" so Save asks for a new name.
     pub append_converted: bool,
     /// File Handling → Use Compression: native saves are gzip-compressed (`document.save
@@ -317,6 +347,8 @@ impl Default for Prefs {
             select_same_tint_percent: false,
             show_home_screen: true,
             use_preview_bounds: false,
+            align_glyph_bounds_point: false,
+            align_glyph_bounds_area: false,
             display_print_size: false,
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
@@ -383,7 +415,7 @@ impl Default for Prefs {
             snap_perpendicular: true,
             show_slice_numbers: true,
             slice_line_color: s("#ff3f3f"),
-            hyphenation_language: s("English: USA"),
+            hyphenation_language: s("en-US"),
             hyphenation_exceptions: String::new(),
             fonts_folder: String::new(),
             plugins_folder: String::new(),
@@ -434,8 +466,10 @@ impl Default for Prefs {
             },
             eyedropper: Default::default(),
             pathfinder: Default::default(),
+            glyph_snap: Default::default(),
             flattener_presets: vec![],
             trace_presets: vec![],
+            gradient_presets: vec![],
             width_profiles: vec![],
             japanese_crop_marks: false,
             new_art_basic: true,
@@ -445,6 +479,7 @@ impl Default for Prefs {
             pdf_presets: vec![],
             screen_export_presets: vec![],
             templates_folder: String::new(),
+            edit_original_system_defaults: true,
             append_converted: true,
             use_compression: false,
             web_export_presets: vec![],

@@ -81,6 +81,16 @@ pub const UNITS: &[(&str, &str)] = &[
     ("yards", "Yards"),
     ("feet", "Feet"),
 ];
+/// What Units › East Asian Type offers, as (`Unit::key`, `Unit::label`): [`Unit::EAST_ASIAN`].
+pub const EAST_ASIAN_UNITS: &[(&str, &str)] = &{
+    let mut out = [("", ""); Unit::EAST_ASIAN.len()];
+    let mut i = 0;
+    while i < out.len() {
+        out[i] = (Unit::EAST_ASIAN[i].key(), Unit::EAST_ASIAN[i].label());
+        i += 1;
+    }
+    out
+};
 const LINE_STYLE: &[(&str, &str)] = &[("lines", "Lines"), ("dots", "Dots")];
 /// Performance › Graphics Processor (`gpuPreference`), read by the desktop app at startup. The
 /// values are WebGPU's power preferences plus `automatic`; 0.5.0's default, `powerSaving`, reads as
@@ -89,8 +99,9 @@ pub const GPU_PREFERENCES: &[(&str, &str)] =
     &[("automatic", "Automatic"), ("lowPower", "Power Saving (integrated)"), ("highPerformance", "High Performance (discrete)")];
 /// Performance › Linux Display Server (`linuxDisplayServer`), read by the desktop app at startup:
 /// `x11` opens the window through XWayland on a Wayland session, where dropped files arrive
-/// (winit 0.30 has no Wayland drag and drop, #1151); `x11WithPen` does the same only when a pen is
-/// attached as the app starts: under XWayland a drawing tablet's pen draws as a mouse (#2028).
+/// (winit 0.30 has no Wayland drag and drop, #1151); `automatic` and `x11WithPen` do the same only
+/// when a pen is attached as the app starts: under XWayland a drawing tablet's pen draws as a mouse
+/// (#2028, #4967).
 const LINUX_DISPLAY_SERVERS: &[(&str, &str)] =
     &[("automatic", "Automatic"), ("x11", "X11 (XWayland)"), ("x11WithPen", "X11 (XWayland) When a Pen Is Attached")];
 const BLACK: &[(&str, &str)] = &[("accurate", "Display All Blacks Accurately"), ("rich", "Display All Blacks as Rich Black")];
@@ -200,7 +211,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("unitsGeneral", "Units", "", "General", choice(UNITS)),
     p!("unitsStroke", "Units", "", "Stroke", choice(UNITS)),
     p!("unitsType", "Units", "", "Type", choice(UNITS)),
-    p!("unitsAsianType", "Units", "", "East Asian Type", choice(UNITS)),
+    p!("unitsAsianType", "Units", "", "East Asian Type", choice(EAST_ASIAN_UNITS)),
     p!("numbersWithoutUnitsArePoints", "Units", "", "Numbers Without Units Are Points", bool),
     p!("identifyObjectsBy", "Units", "", "Identify Objects By", choice(&[("objectName", "Object Name"), ("xmlId", "XML ID")])),
     // Guides & Grid
@@ -249,14 +260,40 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         "",
         "Default Language",
         choice(&[
-            ("English: USA", "English: USA"),
-            ("English: UK", "English: UK"),
-            ("French", "French"),
-            ("German", "German"),
-            ("Spanish", "Spanish"),
-            ("Italian", "Italian"),
-            ("Dutch", "Dutch"),
-            ("Portuguese", "Portuguese")
+            ("en-US", "English: USA"),
+            ("en-GB", "English: UK"),
+            ("de", "German"),
+            ("de-CH", "German: Swiss"),
+            ("fr", "French"),
+            ("it", "Italian"),
+            ("es", "Spanish"),
+            ("ca", "Catalan"),
+            ("pt", "Portuguese"),
+            ("nl", "Dutch"),
+            ("da", "Danish"),
+            ("sv", "Swedish"),
+            ("fi", "Finnish"),
+            ("nb", "Norwegian"),
+            ("pl", "Polish"),
+            ("cs", "Czech"),
+            ("ru", "Russian"),
+            ("sr-Cyrl", "Serbian: Cyrillic"),
+            ("sr-Latn", "Serbian: Latin"),
+            ("hr", "Croatian"),
+            ("tr", "Turkish"),
+            ("ja", "Japanese"),
+            ("zh", "Chinese"),
+            ("hi", "Hindi"),
+            ("mr", "Marathi"),
+            ("gu", "Gujarati"),
+            ("bn", "Bengali"),
+            ("pa", "Punjabi"),
+            ("ta", "Tamil"),
+            ("te", "Telugu"),
+            ("kn", "Kannada"),
+            ("ml", "Malayalam"),
+            ("or", "Odia"),
+            ("ur", "Urdu")
         ])
     ),
     p!("hyphenationExceptions", "Hyphenation", "", "Exceptions (comma separated)", text),
@@ -361,6 +398,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("newArtBasic", "General", "Appearance Panel", "New Art Has Basic Appearance", bool),
     // File Handling (continued)
     p!("templatesFolder", "File Handling", "Files", "Templates Folder", text),
+    // Off: raster images open in PhotoCraft where it is installed (#5236).
+    p!("editOriginalSystemDefaults", "File Handling", "Files", "Use System Defaults for Edit Original", bool),
     p!("appendConverted", "File Handling", "Files", "Mark Older Files as [Converted] When Opened", bool),
     // Native saves (`document.save {compress}`)
     p!("useCompression", "File Handling", "Files", "Use Compression", bool),
@@ -377,6 +416,9 @@ pub const PREF_SPECS: &[PrefSpec] = &[
         choice(&[("default", "Default"), ("object", "Transform Object Only"), ("pattern", "Transform Pattern Only"), ("both", "Transform Both")])
     ),
     p!("useRegistrationPointForSymbol", "General", "Transform Panel", "Use Registration Point for Symbol", bool),
+    // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
+    p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
+    p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {
@@ -385,10 +427,11 @@ pub fn spec(key: &str) -> Option<&'static PrefSpec> {
 
 /// Preferences kept as one object with a command of their own instead of [`PREF_SPECS`] rows (they
 /// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`), the
-/// Perspective Grid Options (`perspective.widget.options`) and the Pathfinder Options
-/// (`object.pathfinder.options`). `prefs.get` and `prefs.set` take them by key (a partial object
-/// updates what it names) and `prefs.reset` without a category resets them.
-pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder"];
+/// Perspective Grid Options (`perspective.widget.options`), the Pathfinder Options
+/// (`object.pathfinder.options`) and the Snap to Glyph options (`view.snapToGlyph.options`).
+/// `prefs.get` and `prefs.set` take them by key (a partial object updates what it names) and
+/// `prefs.reset` without a category resets them.
+pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder", "glyphSnap"];
 
 /// Validate a value for preference group `key` against `current`.
 fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
@@ -399,6 +442,10 @@ fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<
         }
         "pathfinder" => {
             let cur: super::PathfinderOptions = serde_json::from_value(current.clone()).unwrap_or_default();
+            cur.merged(v).map(|o| json!(o))
+        }
+        "glyphSnap" => {
+            let cur: vectorcraft_tools::GlyphSnap = serde_json::from_value(current.clone()).unwrap_or_default();
             cur.merged(v).map(|o| json!(o))
         }
         "perspectiveWidget" => {

@@ -17,12 +17,12 @@ use vectorcraft_doc::{AppearanceItem, Node, NodeKind, OpacityMask};
 use vectorcraft_geom::PathData;
 
 use crate::import::{closed_subpaths, round3};
-use crate::import_color::{Colors, Native};
+use crate::import_color::{Colors, Native, Space};
 use crate::import_mask::{contains, is_rectangle, luminance};
 
 /// The most mesh patches (or triangles) imported per shading: past it, the shading is a flat
-/// colour.
-const MAX_PATCHES: usize = 4096;
+/// colour. (Illustrator writes meshes of up to 14,355 in files users sent.)
+const MAX_PATCHES: usize = 16_384;
 
 /// An axial or radial shading as a gradient paint, with whether it extends past its start and
 /// its end. `inks`: the colorant names of its space, from the page's walk ([`Colors::solid`]).
@@ -51,14 +51,8 @@ pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>, ink
         }
     }
     let ts: Vec<f32> = linear_keep(&pts).iter().filter_map(|&k| pts.get(k)).map(|p| p.0).collect();
-    let mut stop_at = |t: f32, offset: f32| -> GradientStop {
-        let rgb = sample(t).unwrap_or(Color::BLACK);
-        match at(t).and_then(|v| colors.native(space, &v)) {
-            Some(Native { color, link: Some((name, tint)) }) => GradientStop { swatch: Some(name), tint, ..GradientStop::new(offset, color) },
-            Some(Native { color, link: None }) => GradientStop::new(offset, color),
-            None => GradientStop::new(offset, rgb),
-        }
-    };
+    let mut stop_at =
+        |t: f32, offset: f32| -> GradientStop { shading_stop(colors, space, at(t).as_deref(), offset, sample(t).unwrap_or(Color::BLACK)) };
     let c = |x: f32, y: f32| m * Point::new(x as f64, y as f64);
     let (kind, geom, stops) = if *axial {
         let geom = GradientGeom { start: c(coords[0], coords[1]), end: c(coords[2], coords[3]), aspect: 1.0, focal: None };
@@ -79,6 +73,21 @@ pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>, ink
     let mut g = GradientPaint::new(Gradient::new(kind, stops));
     g.geom = Some(geom);
     Some((g, *extend))
+}
+
+/// A shading's stop at `offset` of components `comps` of `space` in their own model, linked to
+/// its spot swatch at its tint (with the process plates it prints with, looking like `rgb`, the
+/// colour the file gives it); `rgb` when the components can't be read or kept.
+fn shading_stop(colors: &mut Colors<'_>, space: Space, comps: Option<&[f32]>, offset: f32, rgb: Color) -> GradientStop {
+    let Some(v) = comps else { return GradientStop::new(offset, rgb) };
+    if let Some((name, tint, plates)) = colors.ink_with_plates(space, v) {
+        return GradientStop { swatch: Some(name), tint, plates: Some(plates), ..GradientStop::new(offset, rgb) };
+    }
+    match colors.native(space, v) {
+        Some(Native { color, link: Some((name, tint)) }) => GradientStop { swatch: Some(name), tint, ..GradientStop::new(offset, color) },
+        Some(Native { color, link: None }) => GradientStop::new(offset, color),
+        None => GradientStop::new(offset, rgb),
+    }
 }
 
 /// The samples of `pts` (offset, RGB; at least one) a gradient keeps as stops: the first, the
@@ -299,11 +308,7 @@ fn function_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>, inks: Option<
         for k in linear_keep(&pts) {
             let Some(&(offset, read, c)) = piece.get(k) else { continue };
             let rgb = Color::rgb(round3(c[0]), round3(c[1]), round3(c[2]));
-            out.push(match value(read).and_then(|v| colors.native(space, &v)) {
-                Some(Native { color, link: Some((name, tint)) }) => GradientStop { swatch: Some(name), tint, ..GradientStop::new(offset, color) },
-                Some(Native { color, link: None }) => GradientStop::new(offset, color),
-                None => GradientStop::new(offset, rgb),
-            });
+            out.push(shading_stop(colors, space, value(read).as_deref(), offset, rgb));
         }
     }
     if out.len() > MAX_FUNCTION_STOPS {

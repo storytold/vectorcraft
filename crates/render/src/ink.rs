@@ -523,8 +523,16 @@ mod tests {
 
     #[test]
     fn darkness_image_cache_keeps_amount_and_coverage() {
-        let key =
-            ImageKey { content: Arc::from("darkness-rgb-cache-regression"), adjust: None, grey: false, ink: Ink::Display, luts: (0, 0), mip: 0 };
+        let key = ImageKey {
+            content: Arc::from("darkness-rgb-cache-regression"),
+            adjust: None,
+            grey: false,
+            tint: None,
+            ink: Ink::Display,
+            luts: (0, 0),
+            plates: 0,
+            mip: 0,
+        };
         let pm =
             Arc::new(Pixmap::from_parts(vec![PremulRgba8 { r: 204, g: 102, b: 51, a: 255 }, PremulRgba8 { r: 102, g: 51, b: 26, a: 128 }], 2, 1));
         let (k25, p25) = ink_image(&key, &pm, Ink::Display.darkened(0.25), None, false);

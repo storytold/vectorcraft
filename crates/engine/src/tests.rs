@@ -5,6 +5,7 @@ use vectorcraft_geom::Point;
 use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 
 pub(super) mod adjust;
+mod ai_open_path;
 mod appearance;
 mod areafit;
 mod assets;
@@ -26,9 +27,11 @@ mod cmdsplit;
 mod cmykflatten;
 mod colorguide;
 mod colorguidelib;
+mod colorize;
 pub(super) mod colormgmt;
 mod colorthemes;
 mod colourfonts;
+mod compound_shape;
 mod compoundpaint;
 mod constrain_new;
 mod constrain_tools;
@@ -38,7 +41,9 @@ mod cut;
 mod dashalign;
 mod distort;
 mod docsetup;
+mod document_move;
 mod draw2;
+mod dynamic_symbols;
 mod editcolors;
 mod effectedit;
 mod emptytype;
@@ -46,6 +51,7 @@ mod envelope;
 mod envelope_distort;
 mod envelope_edit;
 pub(super) mod expand;
+mod expand_symbols;
 mod eyedropper;
 mod file;
 mod fileinfo;
@@ -57,9 +63,12 @@ mod fontfiles;
 mod fontlist;
 mod freeform;
 mod globaledit;
+mod glyphbounds;
 mod gradient;
 mod gradpanel;
+mod gradpresets;
 mod gradspan;
+mod guide_clipboard;
 mod halftone;
 mod history_mem;
 mod ids_without_selection;
@@ -130,6 +139,7 @@ mod recolor;
 mod recovery;
 mod reflecthit;
 mod registration;
+mod repeat_edit;
 mod save;
 mod saveoptions;
 mod scalestrokes;
@@ -152,7 +162,9 @@ mod styles;
 mod swatchcmds;
 mod swatches;
 mod swatchlib;
+mod symbol_nine_slice;
 mod symbolbounds;
+mod symboledit;
 mod symbollib;
 mod targeting;
 mod textcombos;
@@ -3517,6 +3529,46 @@ fn a_panicking_command_rolls_back_instead_of_crashing() {
     assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("shape.rectangle"));
 }
 
+/// A command that recorded an undo step and then panicked leaves Undo and Redo as they were.
+#[test]
+fn a_panic_after_an_edit_leaves_undo_and_redo_as_they_were() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    rect(&mut s, 200.0, 10.0, 50.0, 50.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let (undo, redo) = (s.doc().unwrap().history.undo.len(), s.doc().unwrap().history.redo.len());
+    assert_eq!((undo, redo), (1, 1));
+    let r = s.run_guarded("test.panic", |s| {
+        s.execute("edit.clear", &json!({"ids": [a.0]}))?;
+        s.run_nested(|_| panic!("boom"))
+    });
+    assert!(matches!(r, Err(EngineError::Internal { .. })));
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo, redo));
+    assert!(st.doc.node(a).is_some());
+}
+
+/// A panic rolls back every document the command touched, and the active one stays the same.
+#[test]
+fn a_panic_rolls_back_other_documents_and_keeps_the_active_one() {
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let second = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let first_uid = s.doc().unwrap().uid;
+    let second_before = s.docs[1].doc.clone();
+    let steps = s.docs[1].history.undo.len();
+    let r = s.run_guarded("test.panic", |s| {
+        s.docs[1].history.undo.clear();
+        Arc::make_mut(&mut s.docs[1].doc).remove(second)?;
+        s.run_nested(|_| panic!("boom"))
+    });
+    assert!(matches!(r, Err(EngineError::Internal { .. })));
+    assert!(Arc::ptr_eq(&s.docs[1].doc, &second_before));
+    assert_eq!(s.docs[1].history.undo.len(), steps);
+    assert_eq!(s.doc().unwrap().uid, first_uid);
+}
+
 /// New layers and sublayers share one "Layer N" numbering, whatever art the document holds, and
 /// never repeat a name.
 #[test]
@@ -3559,6 +3611,50 @@ fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
     s.execute("select.all", &json!({})).unwrap();
     assert!(s.execute("text.setRangeStyle", &json!({"start": 0, "end": 3, "size": 40})).is_err(), "two type objects: which one?");
     assert!(s.execute("text.setRangeStyle", &json!({"id": "two", "size": 40})).is_err());
+}
+
+/// #785: commands whose `ids` or `id` the shared check doesn't read (it reads `id` where it stands
+/// for `ids` of one) refuse one that isn't an object id. They don't act on the selection or the
+/// current layer instead, and the document and its undo history stay as they are.
+#[test]
+fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 80.0, 60.0);
+    let b = rect(&mut s, 140.0, 120.0, 80.0, 60.0);
+    let graph = s.execute("graph.create", &json!({"type": "column", "x": 400, "y": 300, "width": 120, "height": 80, "rows": [[1, 2]]})).unwrap();
+    let ids = [json!([a.0, "x"]), json!(3)];
+    let id = [json!("2"), json!("$1.id"), json!(2.5)];
+    let commands = [
+        ("object.blend.make", json!({}), "ids", &ids[..], json!([a.0, b.0])),
+        ("object.envelope.makeWithWarp", json!({}), "ids", &ids[..], json!([a.0, b.0])),
+        ("graph.setData", json!({"rows": [[3, 4]]}), "id", &id[..], json!([graph["id"]])),
+        ("imageTrace.make", json!({}), "id", &id[..], json!([a.0])),
+        ("perspective.plane.matchObject", json!({}), "id", &id[..], json!([a.0])),
+        ("perspective.editText", json!({}), "id", &id[..], json!([a.0])),
+        ("layer.clippingMask.toggle", json!({}), "id", &id[..], json!([a.0, b.0])),
+        ("layer.newSublayer", json!({}), "parent", &id[..], json!([a.0])),
+    ];
+    let mut wrong = vec![];
+    for (cmd, params, key, values, selected) in commands {
+        s.execute("select.set", &json!({"ids": selected})).unwrap();
+        for bad in values {
+            let mut p = params.clone();
+            if let Some(p) = p.as_object_mut() {
+                p.insert(key.into(), bad.clone());
+            }
+            let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+            let r = s.execute(cmd, &p);
+            let refused = r.as_ref().err().map(|e| e.to_string()).is_some_and(|e| e.contains("object id") || e.contains("step reference"));
+            let same = s.doc().unwrap().doc == doc && s.doc().unwrap().history.undo.len() == undo;
+            if !(refused && same) {
+                wrong.push(format!("{cmd} {p}: {r:?}, document unchanged: {same}"));
+            }
+            if !same {
+                s.execute("edit.undo", &json!({})).ok();
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
 #[test]

@@ -127,6 +127,8 @@ const FILE_TYPES: &[(&str, &[&str])] = &[
     ("PDF presets", vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS),
     ("Perspective grid presets", vectorcraft_engine::cmd::perspgrid::PRESET_EXTS),
     ("Print presets", vectorcraft_engine::cmd::printpresets::PRESET_EXTS),
+    ("Action sets", &[crate::panels::actions::ACTIONS_EXT]),
+    ("Export presets", fileio::SCREEN_EXPORT_PRESET_EXTS),
     ("CSS", &["css"]),
     ("PostScript", &["ps"]),
 ];
@@ -368,7 +370,8 @@ pub fn save_pdf(app: &mut VectorcraftApp, mode: SaveMode, mut params: Value) -> 
 
 /// Open a written file in the system viewer (not on the web, which downloads it).
 pub(super) fn view_file(app: &mut VectorcraftApp, path: &str) {
-    if !is_web(app) {
+    // The viewer is another app: an export automation asked for is written but not opened.
+    if !is_web(app) && app.refuse_automation("viewAfterSaving").is_ok() {
         app.open_url(&file_url(path));
     }
 }
@@ -379,10 +382,15 @@ pub(crate) fn report_saved(app: &mut VectorcraftApp, path: &str, r: &Value) {
 }
 
 /// [`report_saved`]'s message.
-pub(super) fn saved_status(path: &str, r: &Value) -> String {
+pub(crate) fn saved_status(path: &str, r: &Value) -> String {
     let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
     match warnings.first() {
-        Some(first) => format!("Saved {path} with {} note(s): {first}", warnings.len()),
+        Some(first) => crate::i18n::msg_n(
+            warnings.len() as u64,
+            "Saved {path} with {n} note: {first}",
+            "Saved {path} with {n} notes: {first}",
+            &[("path", path), ("first", first)],
+        ),
         None => format!("Saved {path}"),
     }
 }
@@ -398,7 +406,16 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
     if app.background.busy_with(uid) {
         background::wait_all(app);
     }
-    let job = fileio::save_job(&mut app.session, plan).map_err(|e| e.to_string())?;
+    let refused = plan.path.clone().unwrap_or_else(|| plan.name.clone());
+    // Refused before writing (#4933): told as a failed write is, in the reason's own words.
+    let job = fileio::save_job(&mut app.session, plan).map_err(|e| {
+        let reason = match &e {
+            EngineError::BadParams { msg, .. } => msg.clone(),
+            e => e.to_string(),
+        };
+        report_write_error(app, false, &refused, &reason);
+        e.to_string()
+    })?;
     let (retargets, target) = (job.plan().retargets(), job.plan().path.clone());
     let (format, warnings) = (job.plan().format.id, job.known_warnings());
     let label = match &target {

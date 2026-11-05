@@ -32,11 +32,20 @@ struct Job<S, K> {
     run: JobFn,
 }
 
+/// Which slots' jobs [`ThumbWorker::discard`] drops.
+type SlotTest<S> = Box<dyn Fn(&S) -> bool + Send>;
+
+/// What a panel sends its worker: a job, or the slots whose jobs not started yet are dropped.
+enum Msg<S, K> {
+    Job(Job<S, K>),
+    Discard(SlotTest<S>),
+}
+
 /// A render thread for one panel's thumbnails. Jobs go in by slot (the Navigator has one, the
 /// Layers panel one per row): a job not started yet is replaced by a newer one for its slot, so
 /// only the latest image of anything is drawn.
 pub struct ThumbWorker<S, K> {
-    tx: Sender<Job<S, K>>,
+    tx: Sender<Msg<S, K>>,
     rx: Receiver<Done<K>>,
 }
 
@@ -52,8 +61,8 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
     }
 
     /// Spawn the thread.
-    fn start(ctx: &egui::Context, name: &str) -> Option<Self> {
-        let (tx, jobs) = channel::<Job<S, K>>();
+    pub(crate) fn start(ctx: &egui::Context, name: &str) -> Option<Self> {
+        let (tx, jobs) = channel::<Msg<S, K>>();
         let (done_tx, rx) = channel::<Done<K>>();
         let ctx = ctx.clone();
         std::thread::Builder::new()
@@ -61,9 +70,12 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
             .spawn(move || {
                 let mut r = Renderer::new();
                 let mut queue: VecDeque<Job<S, K>> = VecDeque::new();
-                let add = |queue: &mut VecDeque<Job<S, K>>, job: Job<S, K>| match queue.iter_mut().find(|j| j.slot == job.slot) {
-                    Some(old) => *old = job,
-                    None => queue.push_back(job),
+                let add = |queue: &mut VecDeque<Job<S, K>>, msg: Msg<S, K>| match msg {
+                    Msg::Job(job) => match queue.iter_mut().find(|j| j.slot == job.slot) {
+                        Some(old) => *old = job,
+                        None => queue.push_back(job),
+                    },
+                    Msg::Discard(which) => queue.retain(|j| !which(&j.slot)),
                 };
                 loop {
                     if queue.is_empty() {
@@ -91,7 +103,15 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
     /// thread is gone: the caller renders on the UI thread from now on.
     #[must_use]
     pub fn submit(&self, slot: S, key: K, run: JobFn) -> bool {
-        self.tx.send(Job { slot, key, run }).is_ok()
+        self.tx.send(Msg::Job(Job { slot, key, run })).is_ok()
+    }
+
+    /// Drop the jobs not started yet whose slot `which` picks, so they don't hold up the jobs
+    /// submitted after them; they never come back from [`ThumbWorker::poll`]. A job already
+    /// running still finishes. False when the thread is gone, as for [`ThumbWorker::submit`].
+    #[must_use]
+    pub fn discard(&self, which: impl Fn(&S) -> bool + Send + 'static) -> bool {
+        self.tx.send(Msg::Discard(Box::new(which))).is_ok()
     }
 
     /// The jobs finished since the last call, oldest first; None when the thread is gone (the
@@ -105,6 +125,12 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
                 Err(TryRecvError::Disconnected) => return None,
             }
         }
+    }
+
+    /// The next finished job, waiting for it; None when the thread is gone.
+    #[cfg(test)]
+    pub(crate) fn wait(&self) -> Option<Done<K>> {
+        self.rx.recv().ok()
     }
 }
 
@@ -161,6 +187,31 @@ mod tests {
         assert!(slot0.windows(2).all(|p| p[0] < p[1]), "{got:?}");
         assert!(got.contains(&10));
         drop(w);
+    }
+
+    #[test]
+    fn discarded_jobs_do_not_run_and_the_running_one_finishes() {
+        let Some(w) = ThumbWorker::<u8, u32>::start(&egui::Context::default(), "test") else { return };
+        let job = |n: u32| -> JobFn { Box::new(move |_| Some(Rendered { width: n, height: 1, pixels: vec![0; 4] })) };
+        // A job that holds the thread until it is let go, so the others queue behind it.
+        let (started, running) = channel::<()>();
+        let (release, held) = channel::<()>();
+        let blocker: JobFn = Box::new(move |_| {
+            started.send(()).ok();
+            held.recv().ok();
+            None
+        });
+        assert!(w.submit(0, 0, blocker));
+        running.recv().expect("the first job starts");
+        assert!(w.submit(1, 1, job(1)));
+        assert!(w.submit(2, 2, job(2)));
+        assert!(w.submit(1, 3, job(3)));
+        assert!(w.discard(|slot| *slot == 0 || *slot == 1));
+        assert!(w.submit(3, 4, job(4)));
+        release.send(()).expect("the first job is waiting");
+        assert_eq!(w.wait().map(|d| d.key), Some(0), "the running job finishes");
+        assert_eq!(w.wait().map(|d| d.key), Some(2), "slot 1's jobs were dropped");
+        assert_eq!(w.wait().map(|d| d.key), Some(4), "a job submitted after the discard runs");
     }
 
     #[test]

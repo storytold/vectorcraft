@@ -119,14 +119,15 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::PencilNew => C::Crosshair,
         Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor | Cursor::ShapeBuilder | Cursor::ShapeBuilderErase => C::Crosshair,
         Cursor::PencilClose | Cursor::PencilStraight | Cursor::PencilContinue | Cursor::PaintbrushClose => C::Crosshair,
-        Cursor::TypeVertical => C::VerticalText,
+        Cursor::TypeVertical | Cursor::TypeAreaVertical | Cursor::TypeOnPathVertical => C::VerticalText,
+        Cursor::TypeArea | Cursor::TypeOnPath => C::Text,
+        // The system has no tip outline to go round: its crosshair aims as well.
+        Cursor::BlobBrush | Cursor::Eraser => C::Crosshair,
         // Not drawn yet: the cursor each borrows.
         Cursor::Lasso
         | Cursor::MagicWand
         | Cursor::Pencil
         | Cursor::Paintbrush
-        | Cursor::BlobBrush
-        | Cursor::Eraser
         | Cursor::Smooth
         | Cursor::PathEraser
         | Cursor::Join
@@ -147,6 +148,14 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         | Cursor::Scissors
         | Cursor::ScissorsNotAllowed
         | Cursor::MeshAdd
-        | Cursor::PuppetPin => cursor_icon(c.stand_in().unwrap_or(Cursor::Crosshair)),
+        | Cursor::PuppetPin
+        | Cursor::AnchorEraser
+        | Cursor::ExtendPath
+        | Cursor::MeasureInspect
+        | Cursor::ParametricShape
+        | Cursor::CornerTool
+        | Cursor::SlideAnchor
+        | Cursor::SharedEdge
+        | Cursor::SmartPen => cursor_icon(c.stand_in().unwrap_or(Cursor::Crosshair)),
     }
 }

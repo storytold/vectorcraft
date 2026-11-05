@@ -125,7 +125,7 @@ pub fn oversized_tiff(bytes: &[u8]) -> Option<(u32, u32)> {
 }
 
 /// The color type of TIFF `bytes` and its decoder; `None` for [`oversized_tiff`] images too.
-fn tiff(bytes: &[u8]) -> Option<(tiff::ColorType, tiff::decoder::Decoder<Cursor<&[u8]>>)> {
+pub(crate) fn tiff(bytes: &[u8]) -> Option<(tiff::ColorType, tiff::decoder::Decoder<Cursor<&[u8]>>)> {
     if !is_tiff(bytes) || oversized_tiff(bytes).is_some() {
         return None;
     }
@@ -193,6 +193,24 @@ impl ImageBlob {
     /// header.
     pub fn is_cmyk(&self) -> bool {
         jpeg_components(&self.bytes) == Some(4) || tiff(&self.bytes).is_some_and(|(t, _)| matches!(t, tiff::ColorType::CMYK(8 | 16)))
+    }
+
+    /// Does the image hold CMYK samples of 16 bits (a CMYK TIFF), which [`Self::cmyk`] gives at 8
+    /// bits? Reads only its header.
+    pub fn is_cmyk16(&self) -> bool {
+        tiff(&self.bytes).is_some_and(|(t, _)| matches!(t, tiff::ColorType::CMYK(16)))
+    }
+
+    /// The width and height a JPEG or TIFF says it has, for any color type. Reads only its header.
+    pub fn header_size(&self) -> Option<(u32, u32)> {
+        let bytes = self.bytes.as_slice();
+        if bytes.starts_with(&[0xFF, 0xD8]) {
+            let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
+            d.decode_headers().ok()?;
+            let (w, h) = d.dimensions()?;
+            return Some((u32::try_from(w).ok()?, u32::try_from(h).ok()?));
+        }
+        tiff(bytes).and_then(|(_, mut d)| d.dimensions().ok())
     }
 
     /// The ink amounts of a CMYK image; `None` for other images, and ones that can't be decoded
@@ -631,6 +649,38 @@ mod tests {
         // Every image reader sees an RGB image: cyan is (0, 255, 255).
         let rgb = image::load_from_memory(&b.bytes).unwrap().to_rgb8();
         assert_eq!(rgb.get_pixel(1, 0).0, [0, 255, 255]);
+    }
+
+    #[test]
+    fn a_header_gives_the_size_without_the_samples() {
+        assert_eq!(ImageBlob::cmyk_tiff(&inks()).unwrap().header_size(), Some((3, 2)));
+        // A CMYK TIFF of 6000 × 6000 pixels whose samples aren't there.
+        let mut t = b"II*\0\x08\0\0\0\x07\0".to_vec();
+        // Bits per sample: four values, after the entries (8 + 2 + 7 × 12 + 4 = 98).
+        let entries = [
+            (256u16, 4u16, 1u32, 6000u32),
+            (257, 4, 1, 6000),
+            (258, 3, 4, 98),
+            (262, 3, 1, 5),
+            (273, 4, 1, 106),
+            (277, 3, 1, 4),
+            (279, 4, 1, 144_000_000),
+        ];
+        for (tag, kind, count, value) in entries {
+            t.extend_from_slice(&tag.to_le_bytes());
+            t.extend_from_slice(&kind.to_le_bytes());
+            t.extend_from_slice(&count.to_le_bytes());
+            t.extend_from_slice(&value.to_le_bytes());
+        }
+        t.extend_from_slice(&0u32.to_le_bytes());
+        t.extend_from_slice(&[8, 0, 8, 0, 8, 0, 8, 0]);
+        let big = ImageBlob::new("image/tiff", t);
+        assert!(big.is_cmyk());
+        assert_eq!(big.header_size(), Some((6000, 6000)));
+        assert_eq!(big.cmyk(), None);
+        let mut png = Vec::new();
+        image::RgbaImage::new(2, 2).write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        assert_eq!(ImageBlob::png(png).header_size(), None, "not a JPEG or TIFF");
     }
 
     #[test]

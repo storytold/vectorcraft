@@ -30,7 +30,7 @@ use vectorcraft_color::{Color, Paint};
 use super::obj::V;
 
 /// Largest number of stops read in one gradient.
-const MAX_STOPS: usize = 256;
+pub(crate) const MAX_STOPS: usize = 256;
 
 /// A colour read with the swatch it names (spot and global colours).
 #[derive(Clone, Debug, PartialEq)]
@@ -172,7 +172,16 @@ impl GradientDef {
         }
         // Stops are listed along the ramp from either end: listed downwards they're reversed, so
         // stops sharing a ramp point keep their order (and each its midpoint, to the next stop).
-        if self.gradient.stops.first().zip(self.gradient.stops.last()).is_some_and(|(first, last)| first.offset > last.offset) {
+        // When every stop shares one ramp point, a linear gradient's are taken as listed from the
+        // last, as newer files list a linear gradient's stops.
+        let linear = self.gradient.kind == GradientKind::Linear;
+        if self
+            .gradient
+            .stops
+            .first()
+            .zip(self.gradient.stops.last())
+            .is_some_and(|(first, last)| first.offset > last.offset || (linear && self.gradient.stops.len() > 1 && first.offset == last.offset))
+        {
             self.gradient.stops.reverse();
         }
         self.gradient.stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
@@ -432,6 +441,24 @@ mod tests {
         }
         let (_, g) = d.finish().unwrap();
         assert_eq!(g.stops.len(), MAX_STOPS);
+    }
+
+    /// A hard edge: every stop at one ramp point. A linear gradient's are listed from the last, a
+    /// radial one's from the first.
+    #[test]
+    fn stops_at_one_ramp_point_keep_their_sides() {
+        for (kind, listed) in [(0.0, [0.75, 0.25]), (1.0, [0.25, 0.75])] {
+            let mut d = GradientDef::begin(&[V::Str(b"E".to_vec()), V::Num(kind), V::Num(2.0)]).unwrap();
+            for (gray, mid) in listed.into_iter().zip([40.0, 70.0]) {
+                d.stop(&nums(&[gray, 0.0, 1.0, 6.0, mid, 30.0]), &mut vec![]);
+            }
+            let (_, g) = d.finish().unwrap();
+            let lightness: Vec<f32> = g.stops.iter().map(|s| (s.color.to_rgb()[0] * 100.0).round() / 100.0).collect();
+            let first_mid = if kind == 0.0 { 0.7 } else { 0.4 };
+            assert_eq!(lightness, vec![0.25, 0.75], "kind {kind}");
+            assert!((g.stops[0].midpoint - first_mid).abs() < 1e-6, "kind {kind}: {:?}", g.stops);
+            assert!(g.stops.iter().all(|s| (s.offset - 0.3).abs() < 1e-6));
+        }
     }
 
     /// A linear gradient of three stops as newer files place it: `Bg` with numbers that aren't in

@@ -41,7 +41,8 @@ const PARAMS: [&str; 12] = [
     "rasterEffectsPpi",
     "previewMode",
 ];
-/// The preset the fields were last filled from (its fields as `apply` set them).
+/// The preset the fields were last filled from, as `apply` set them; a Recent or Saved card keeps
+/// its own units here, which the units chosen in Preset Details don't change.
 const APPLIED: &str = "__applied";
 /// Save Preset's name field is showing.
 const SAVING: &str = "__saving";
@@ -257,21 +258,50 @@ fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(12.0, 12.0);
             let (w, h, preset, units) = (d.f64("width", 0.0), d.f64("height", 0.0), d.str("preset"), unit(d));
+            // The fields were last filled from this preset's card; Recent keeps one entry per size
+            // and units, so the units tell two entries of one size apart.
+            let chosen = d
+                .fields
+                .get(APPLIED)
+                .filter(|a| a.get("preset").and_then(Value::as_str) == Some(preset.as_str()))
+                .and_then(Value::as_object)
+                .cloned();
             for s in &list {
-                // The built-in presets' cards show the chosen orientation (square sizes have none)
-                // and the units chosen in Preset Details; choosing one keeps both. Recent and Saved
-                // show each entry as it was made, so a portrait and a landscape A3 are two cards
-                // (#2860).
-                let mut s = DocSettings { units, ..s.clone() };
-                if cat > 1 && ((w > h && s.height > s.width) || (h > w && s.width > s.height)) {
-                    std::mem::swap(&mut s.width, &mut s.height);
+                // The built-in presets' cards show the chosen orientation (square sizes have none);
+                // Recent and Saved show each entry as it was made, so a portrait and a landscape A3
+                // are two cards (#2860).
+                let mut card = s.clone();
+                if cat > 1 && ((w > h && card.height > card.width) || (h > w && card.width > card.height)) {
+                    std::mem::swap(&mut card.width, &mut card.height);
                 }
-                let selected = d.fields.contains_key(APPLIED) && s.name == preset && s.width == w && s.height == h;
-                let card = preset_card(ui, &s, selected);
-                if card.clicked() || card.double_clicked() {
-                    apply(d, &s);
+                // The built-in presets all share the units chosen in Preset Details.
+                if cat > 1 {
+                    card.units = units;
                 }
-                create |= card.double_clicked();
+                let selected = chosen.as_ref().is_some_and(|a| {
+                    a.get("preset").and_then(Value::as_str) == Some(card.name.as_str())
+                        && a.get("width").and_then(Value::as_f64) == Some(card.width)
+                        && a.get("height").and_then(Value::as_f64) == Some(card.height)
+                        && (cat > 1 || a.get("units").and_then(Value::as_str) == Some(s.units.label()))
+                });
+                // The chosen card shows the units chosen in Preset Details, which the new document
+                // will have (#2078); the others keep their own, so choosing one document's units
+                // doesn't restyle the whole tab.
+                if selected {
+                    card.units = units;
+                }
+                let resp = preset_card(ui, &card, selected);
+                if resp.clicked() || resp.double_clicked() {
+                    apply(d, &card);
+                    // The card is still the entry it was, whatever units it shows: its own units say
+                    // which entry it is, so a chosen card stays chosen after a units change.
+                    if cat < 2
+                        && let Some(Value::Object(a)) = d.fields.get_mut(APPLIED)
+                    {
+                        a.insert("units".into(), json!(s.units.label()));
+                    }
+                }
+                create |= resp.double_clicked();
             }
         });
     });
@@ -330,15 +360,7 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         form::text(ui, d, "name", DETAILS - 50.0);
-        if widgets::icon_button(ui, "save", tl!("Save Preset"), d.bool(SAVING), 26.0).clicked() {
-            let saving = !d.bool(SAVING);
-            d.fields.insert(SAVING.into(), json!(saving));
-            if saving && d.str("presetName").is_empty() {
-                let template = "Preset {number}";
-                let name = crate::i18n::fmt(tl!(template), &[("number", &(app.session.prefs.new_doc_presets.len() + 1).to_string())]);
-                d.fields.insert("presetName".into(), json!(name));
-            }
-        }
+        save_button(app, ui, d);
     });
     if d.bool(SAVING) {
         save_row(app, ui, d);
@@ -386,6 +408,19 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
         ui.add_space(8.0);
         b.close = widgets::secondary_button(ui, tl!("Close")).clicked();
     });
+}
+
+/// The Save Preset button beside the name: it shows or hides [`save_row`].
+fn save_button(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    if widgets::icon_button(ui, "save", tl!("Save Preset"), d.bool(SAVING), 26.0).clicked() {
+        let saving = !d.bool(SAVING);
+        d.fields.insert(SAVING.into(), json!(saving));
+        if saving && d.str("presetName").is_empty() {
+            let template = "Preset {number}";
+            let name = crate::i18n::fmt(tl!(template), &[("number", &(app.session.prefs.new_doc_presets.len() + 1).to_string())]);
+            d.fields.insert("presetName".into(), json!(name));
+        }
+    }
 }
 
 /// Save Preset: the preset's name, Save and Cancel.
@@ -520,7 +555,14 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ui.add_space(12.0);
         widgets::label_row(ui, tl!("Name:"), L, |ui| {
             form::text(ui, &mut d, "name", 300.0);
+            save_button(app, ui, &mut d);
         });
+        if d.bool(SAVING) {
+            // Under the name, in the fields' column.
+            widgets::label_row(ui, "", L, |ui| {
+                ui.vertical(|ui| save_row(app, ui, &mut d));
+            });
+        }
         // Profile: the preset categories (the tabs); Size: the profile's presets.
         let profiles: Vec<&str> = newdoc::CATEGORIES.iter().map(|c| c.0).collect();
         let profile = profiles.iter().find(|p| p.eq_ignore_ascii_case(&d.str("category"))).copied().unwrap_or("[Custom]");
@@ -893,5 +935,50 @@ mod tests {
         assert!((field(&app, "width").as_f64().unwrap() - 148.0 * 72.0 / 25.4).abs() < 1e-6, "A5 wide");
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(app.session.prefs.recent_new_docs[0].name, "Zine");
+    }
+
+    /// Save Preset works in More Settings too (#4893), saving its settings: the artboard layout
+    /// only More Settings shows among them.
+    #[test]
+    fn more_settings_saves_a_preset_of_its_settings() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().kind = super::MORE.into();
+        set(&mut app, "artboards", json!(4));
+        set(&mut app, "artboardLayout", json!({"layout": "column", "spacing": 30}));
+        set(&mut app, super::SAVING, json!(true));
+        set(&mut app, "presetName", json!("Strip"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut time = 0.0;
+        let mut run = |app: &mut VectorcraftApp, events| {
+            time += 0.5;
+            let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0)));
+            let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out
+        };
+        run(&mut app, vec![]);
+        let out = run(&mut app, vec![]);
+        fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Pos2)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        assert!(texts.iter().any(|(t, _)| t == "Preset Name"), "the preset's name field shows");
+        let at = texts.iter().find(|(t, _)| t == "Save").map(|(_, p)| *p).expect("a Save button");
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
+        run(&mut app, vec![press(false)]);
+        let saved = app.session.prefs.new_doc_presets.iter().find(|p| p.name == "Strip").expect("saved");
+        assert_eq!(saved.artboards, 4);
+        assert_eq!((saved.layout, saved.spacing), (super::ArtboardLayout::Column, 30.0));
+        assert_eq!((field(&app, "category"), field(&app, "preset"), field(&app, super::SAVING)), (json!("Saved"), json!("Strip"), json!(false)));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, super::MORE, "More Settings stays open");
     }
 }

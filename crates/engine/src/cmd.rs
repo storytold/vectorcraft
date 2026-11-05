@@ -1,5 +1,6 @@
 //! The command registry. Ids follow Illustrator's menu structure.
 
+mod addons;
 pub(crate) mod appearance;
 mod assets;
 mod attributes;
@@ -10,6 +11,7 @@ pub mod clipboard;
 mod colorcmds;
 pub mod colormgmt;
 pub mod colortheme;
+mod compoundshape;
 pub(crate) mod create;
 mod css;
 mod cut;
@@ -31,6 +33,7 @@ mod fonts;
 pub(crate) mod freeform;
 pub mod globaledit;
 pub(crate) mod gradient;
+pub mod gradpresets;
 pub(crate) mod graph;
 mod halftone;
 pub mod help;
@@ -59,6 +62,7 @@ pub mod params;
 mod path;
 pub(crate) mod pathops;
 mod patterncmds;
+pub mod patternlib;
 pub mod pdfcmds;
 pub mod perspgrid;
 pub mod place;
@@ -81,9 +85,11 @@ mod style;
 pub mod stylelib;
 mod swatch;
 pub mod swatchlib;
+pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
 mod textedit;
+pub use textedit::effective_kerning;
 pub mod textstyles;
 pub(crate) mod textwrap;
 pub(crate) mod threads;
@@ -162,9 +168,9 @@ pub fn has_selection(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
     if st.selection.is_empty() { Err("nothing selected".into()) } else { Ok(()) }
 }
-/// Objects are selected, or the Artboard tool is chosen (Copy and Cut take its artboard).
-pub fn has_selection_or_artboard_tool(s: &Session) -> std::result::Result<(), String> {
-    if s.tool_id() == "artboard" { has_doc(s) } else { has_selection(s) }
+/// Objects or ruler guides are selected, or the Artboard tool is chosen (what Copy and Cut take).
+pub fn has_selection_guides_or_artboard_tool(s: &Session) -> std::result::Result<(), String> {
+    if s.tool_id() == "artboard" { has_doc(s) } else { has_selection_or_guides(s) }
 }
 /// Objects or ruler guides are selected (what Delete and the arrow keys act on).
 pub fn has_selection_or_guides(s: &Session) -> std::result::Result<(), String> {
@@ -179,20 +185,26 @@ pub fn has_multi(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
     if st.selection.len() < 2 { Err("select at least two objects".into()) } else { Ok(()) }
 }
-/// A document is open and it is not in isolation mode: Object › Lock's and Object › Hide's items,
-/// Unlock All and Show All are off in isolation mode. Pattern editing mode and opacity mask
-/// editing isolate their art too, and do not count as isolation mode here while their own layer
-/// is the isolated one. An object isolated inside them counts.
-pub fn outside_isolation(s: &Session) -> std::result::Result<(), String> {
-    let st = s.active().ok_or("no document open")?;
-    let editing_layer = |l| st.doc.pattern_edit.as_ref().is_some_and(|e| e.layer == l) || st.doc.mask_edit.as_ref().is_some_and(|e| e.layer == l);
-    if st.isolation.is_some_and(|l| !editing_layer(l)) { Err("exit isolation mode first".into()) } else { Ok(()) }
+/// The isolated group, layer or object in isolation mode. Pattern editing mode, opacity mask
+/// editing and symbol editing mode isolate their own layer, which does not count here; an object
+/// isolated inside them counts.
+pub(crate) fn ordinary_isolation(st: &crate::DocState) -> Option<vectorcraft_doc::NodeId> {
+    st.isolation.filter(|l| {
+        !st.doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !st.doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l)
+            && !st.doc.symbol_edit.as_ref().is_some_and(|e| e.layer == *l)
+    })
 }
-/// Objects are selected ([`has_selection`]) and the document is not in isolation mode
-/// ([`outside_isolation`]).
-pub fn has_selection_outside_isolation(s: &Session) -> std::result::Result<(), String> {
-    outside_isolation(s)?;
-    has_selection(s)
+/// Objects are selected ([`has_selection`]), and in isolation mode ([`ordinary_isolation`]) at
+/// least one of them is inside the isolated object: Object › Lock's and Object › Hide's items.
+pub fn has_selected_member(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    let Some(root) = ordinary_isolation(st) else { return has_selection(s) };
+    if st.selection.objects.iter().any(|id| inside_isolation(&st.doc, root, *id)) { Ok(()) } else { Err("nothing selected".into()) }
+}
+/// Whether `id` lies inside the isolated object `root` (the root itself does not).
+pub(crate) fn inside_isolation(d: &vectorcraft_doc::Document, root: vectorcraft_doc::NodeId, id: vectorcraft_doc::NodeId) -> bool {
+    id != root && d.ancestry(id).is_some_and(|a| a.contains(&root))
 }
 pub fn can_undo(s: &Session) -> std::result::Result<(), String> {
     s.active().filter(|d| !d.history.undo.is_empty()).map(|_| ()).ok_or_else(|| "nothing to undo".into())
@@ -242,6 +254,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(style::specs());
         v.extend(swatch::specs());
         v.extend(gradient::specs());
+        v.extend(gradpresets::specs());
         v.extend(opacitymask::specs());
         v.extend(layer::specs());
         v.extend(layerpanel::specs());
@@ -249,6 +262,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
         v.extend(pathops::specs());
+        v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
         v.extend(menucmds::specs());
         v.extend(live::specs());
@@ -320,6 +334,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(perspgrid::specs());
         v.extend(shortcutset::specs());
         v.extend(importmatches::specs());
+        v.extend(addons::specs());
         v
     })
 }
@@ -377,6 +392,15 @@ pub(crate) fn check_switches(p: &Value, keys: &[&str], cmd: &str) -> Result<()> 
 }
 pub(crate) fn str_param<'a>(p: &'a Value, key: &str) -> Option<&'a str> {
     p.get(key).and_then(Value::as_str)
+}
+/// The string `p` gives for `key`, or `None` when `p` leaves it out or gives null. Any other
+/// value, such as `5`, is an error: "`{key}` must be a string".
+pub(crate) fn text_param<'a>(p: &'a Value, key: &str, cmd: &str) -> Result<Option<&'a str>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(v)) => Ok(Some(v)),
+        Some(_) => Err(bad(cmd, format!("`{key}` must be a string"))),
+    }
 }
 pub(crate) fn id_param(p: &Value, key: &str) -> Option<NodeId> {
     p.get(key).and_then(Value::as_u64).map(NodeId)
@@ -460,9 +484,10 @@ pub fn matrix_param(p: &Value, key: &str) -> Option<Affine> {
 }
 /// A colour from `"#rrggbb"`, a colour key (`"cmyk 0 100 100 0"`, `"lab 55 60 40"`), `[r,g,b]` (0..1),
 /// `{"c":..,"m":..,"y":..,"k":..}` (percent when any component is above 1, else 0..1), `{"gray":..}` or `{"l":..,"a":..,"b":..}` (CIE Lab: L 0..100, a and b about
-/// −128..127).
+/// −128..127). `None` for a hex color with an alpha part (`#rrggbbaa` or `#rgba`, with or without the `#`).
 pub fn color_value(v: &Value) -> Option<Color> {
     match v {
+        Value::String(s) if hex_with_alpha(s) => None,
         // A hex, or a colour key ("cmyk 0 100 100 0", as Recolor Artwork lists colours).
         Value::String(s) => Color::from_hex(s).or_else(|| vectorcraft_color::recolor::ColorKey::parse(s).map(|k| k.color())),
         Value::Array(a) if a.len() >= 3 => Some(Color::rgb(a[0].as_f64()? as f32, a[1].as_f64()? as f32, a[2].as_f64()? as f32)),
@@ -488,11 +513,61 @@ pub fn color_value(v: &Value) -> Option<Color> {
     }
 }
 
+/// Is `s` a hex color with an alpha part: eight or four hex digits, with or without the `#`?
+/// [`Color::from_hex`] reads `#rrggbbaa` as `#rrggbb`, without the alpha.
+pub(crate) fn hex_with_alpha(s: &str) -> bool {
+    let s = s.trim();
+    let h = s.strip_prefix('#').unwrap_or(s);
+    matches!(h.len(), 4 | 8) && h.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// The color `p` gives for `key`, read by [`color_value`]: `None` when `p` leaves it out or gives
+/// null. Any other value that is not a color is an error: "bad color {v}".
+pub(crate) fn color_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Color>> {
+    match p.get(key).filter(|v| !v.is_null()) {
+        None => Ok(None),
+        Some(v) => color_value(v).map(Some).ok_or_else(|| bad(cmd, format!("bad color {v}"))),
+    }
+}
+
+/// `v` as an object id: an error unless it is a non-negative integer.
+fn object_id(v: &Value) -> Result<NodeId> {
+    v.as_u64().map(NodeId).ok_or_else(|| EngineError::Other(format!("object ids are non-negative integers, not {v}")))
+}
+
+/// The error for `id` given as step reference `r`, which only a batch resolves.
+fn unresolved_reference(r: &str) -> EngineError {
+    EngineError::Other(format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve"))
+}
+
+/// The objects `p` names for a command whose `id` can only be an object id: its `ids`, else its
+/// `id` as `ids` of one. A value that isn't an object id is an error, never the selection (#785).
+/// `None` when `p` gives neither (or gives them as `null`). The ids are not looked up in the
+/// document.
+pub(crate) fn named_ids(p: &Value) -> Result<Option<Vec<NodeId>>> {
+    match p.get("ids").filter(|v| !v.is_null()) {
+        Some(Value::Array(a)) => return a.iter().map(object_id).collect::<Result<Vec<_>>>().map(Some),
+        Some(v) => return Err(EngineError::Other(format!("`ids` must be an array of object ids, not {v}"))),
+        None => {}
+    }
+    Ok(named_id(p)?.map(|id| vec![id]))
+}
+
+/// The object `p`'s `id` names, for a command whose `id` can only be an object id: a value that
+/// isn't an object id is an error, never the selection (#785). `None` when `p` leaves `id` out (or
+/// gives it as `null`). The id is not looked up in the document.
+pub(crate) fn named_id(p: &Value) -> Result<Option<NodeId>> {
+    match p.get("id").filter(|v| !v.is_null()) {
+        None => Ok(None),
+        Some(Value::String(r)) if r.starts_with('$') => Err(unresolved_reference(r)),
+        Some(v) => object_id(v).map(Some),
+    }
+}
+
 /// Objects a command targets: explicit `ids` param or the selection.
 pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     // Objects given are used as given: a value that isn't an object id fails rather than the
     // command acting on the selection instead (#785).
-    let object_id = |v: &Value| v.as_u64().map(NodeId).ok_or_else(|| EngineError::Other(format!("object ids are non-negative integers, not {v}")));
     match p.get("ids").filter(|v| !v.is_null()) {
         Some(Value::Array(a)) => return a.iter().map(object_id).collect(),
         Some(v) => return Err(EngineError::Other(format!("`ids` must be an array of object ids, not {v}"))),
@@ -502,9 +577,7 @@ pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
         Some(v @ Value::Number(_)) => Ok(vec![object_id(v)?]),
         // A step reference a batch couldn't resolve (other strings are other ids, such as an
         // effect's).
-        Some(Value::String(r)) if r.starts_with('$') => {
-            Err(EngineError::Other(format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve")))
-        }
+        Some(Value::String(r)) if r.starts_with('$') => Err(unresolved_reference(r)),
         _ => Ok(s.doc()?.selection.objects.clone()),
     }
 }
@@ -514,26 +587,30 @@ pub(crate) fn ok() -> Result<Value> {
 }
 
 /// Leaves whose appearance a paint command changes: groups and layers expand to their contents,
-/// and compound paths own their children's appearance, so a member stands for its compound path
-/// (#3692), which is listed once.
+/// and compound paths and compound shapes own their members' appearance, so a member stands for
+/// its compound path (#3692) or compound shape, which is listed once.
 pub(crate) fn leaf_targets(s: &Session, ids: &[NodeId]) -> Result<Vec<NodeId>> {
     use vectorcraft_doc::NodeKind;
     let d = &s.doc()?.doc;
-    let compound = |id: NodeId| d.parent_of(id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })));
+    let owns = |n: &vectorcraft_doc::Node| matches!(n.kind, NodeKind::Compound { .. }) || n.is_compound_shape();
+    let compound = |id: NodeId| d.parent_of(id).filter(|p| d.node(*p).is_some_and(owns));
     let mut out = vec![];
     for id in ids {
         let Some(n) = d.node(*id) else { continue };
         match &n.kind {
-            NodeKind::Group { .. } | NodeKind::Layer { .. } => n.walk(&mut |c| {
-                if !c.is_container() || matches!(c.kind, NodeKind::Compound { .. }) {
+            NodeKind::Group { .. } | NodeKind::Layer { .. } if !n.is_compound_shape() => n.walk(&mut |c| {
+                if !c.is_container() || owns(c) {
                     out.push(c.id)
                 }
             }),
             _ => out.push(compound(*id).unwrap_or(*id)),
         }
     }
-    let comp: Vec<NodeId> = out.iter().filter(|id| matches!(d.node(**id).map(|n| &n.kind), Some(NodeKind::Compound { .. }))).copied().collect();
-    out.retain(|id| !comp.iter().any(|c| d.parent_of(*id) == Some(*c)));
+    let comp: std::collections::HashSet<NodeId> = out.iter().filter(|id| d.node(**id).is_some_and(owns)).copied().collect();
+    if !comp.is_empty() {
+        // A compound shape's members lie at any depth in it.
+        out.retain(|id| !d.ancestry(*id).is_some_and(|up| up.iter().rev().skip(1).any(|a| comp.contains(a))));
+    }
     let mut seen = std::collections::HashSet::new();
     out.retain(|id| seen.insert(*id));
     Ok(out)
@@ -551,6 +628,26 @@ pub(crate) fn unique_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
     }
     (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
 }
+
+/// [`unique_name`] for names given one after another (an import): `next` keeps, per base (in
+/// any case), the number after the last one tried, so a run of one name doesn't count up from 2
+/// again for each copy. Names only become taken meanwhile, so the result is the same.
+pub(crate) fn unique_name_from(base: &str, next: &mut std::collections::HashMap<String, usize>, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
+    }
+    let i = next.entry(base.to_lowercase()).or_insert(2);
+    loop {
+        let n = format!("{base} {i}");
+        *i += 1;
+        if !taken(&n) {
+            return n;
+        }
+    }
+}
+
+/// The most presets one presets file imports: each is looked up among the saved ones.
+pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
@@ -581,6 +678,9 @@ pub use opacitymask::TransparencyInfo;
 /// Eyedropper Options (`Prefs::eyedropper`).
 pub use xform::{AppearanceAttrs, EyedropperAttrs, EyedropperOptions, FillAttrs, StrokeAttrs};
 
+/// The shape modes of the selected compound-shape members (the Pathfinder panel lights theirs).
+pub use compoundshape::selected_member_modes;
+
 /// Pathfinder Options (`Prefs::pathfinder`).
 pub use pathops::{PATHFINDER_PRECISION_RANGE, PathfinderOptions};
 
@@ -592,6 +692,9 @@ pub use flatten::FlattenOptions;
 
 /// A built-in or saved flattener preset ([`crate::Prefs::flattener_presets`]).
 pub use flatten::FlattenerPreset;
+
+/// A saved Gradient panel preset ([`crate::Prefs::gradient_presets`]) and a row of the Presets list.
+pub use gradpresets::{GradientPreset, GradientPresetEntry};
 
 /// A saved Image Trace preset ([`crate::Prefs::trace_presets`]), and a change to the saved presets.
 pub use buildcmds::{TracePreset, TracePresetChange};

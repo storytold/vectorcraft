@@ -1,6 +1,6 @@
 use super::options::{AntiAlias, RenderOptions};
 use super::threads::single_threaded_context;
-use super::{Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Rect, RenderContext, SymbolBoxes, TextObject, live};
+use super::{Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Rect, RenderContext, StrokeLayer, SymbolBoxes, TextObject, kurbo, live};
 
 /// Hasher for pointer-keyed caches: a multiply-xorshift (SipHash showed up in frame profiles).
 #[derive(Default, Clone, Copy)]
@@ -30,20 +30,46 @@ pub(crate) type PtrMap<K, V> = HashMap<K, V, std::hash::BuildHasherDefault<PtrHa
 /// stroke's place in it, width bits, tolerance level).
 pub(crate) type StrokeKey = (usize, usize, u64, i32);
 
-/// A stroke expanded to a fill outline: (owning node, outline, last frame used).
+/// What the [`StrokeKey`] of the latest outline of an object's stroke is found under once the
+/// object has changed: (the object's id, the stroke's place in its appearance items, width bits,
+/// tolerance level).
+pub(crate) type MovedKey = (u64, usize, u64, i32);
+
+/// A stroke expanded to a fill outline: (owning node, outline, last frame used, the region a frame
+/// must lie in to draw the outline, when the outline leaves out the segments far from that region,
+/// `None` when it has every segment, and whether the outline was made along a line of the node's
+/// own path, the one [`Node::stroke_path`] makes, so that the line can be made again from the
+/// node and its stroke).
 pub(crate) struct StrokeEntry {
     pub(crate) node: Arc<Node>,
     pub(crate) outline: Arc<BezPath>,
     pub(crate) stamp: u64,
+    pub(crate) crop: Option<Rect>,
+    pub(crate) own: bool,
 }
 
 /// The slices of a stroke whose gradient runs along or across it, each with its paint and bounds.
 pub(crate) type Slices = Arc<Vec<(BezPath, vectorcraft_color::Paint, Rect)>>;
 
-/// [`Slices`] cached for a stroke: (owning node, slices, last frame used).
+/// The key of cached [`Slices`]: ([`Renderer::stroke_owner`] of the stroke's object, stroke layer
+/// address, tolerance level).
+pub(crate) type SliceKey = (usize, usize, i32);
+
+/// What the [`SliceKey`] of the latest slices of an object's stroke is found under once the object
+/// has changed: (the object's id, the stroke's place in its appearance items, tolerance level).
+pub(crate) type MovedSliceKey = (u64, usize, i32);
+
+/// [`Slices`] cached for a stroke: (owning node, the node whose path and stroke the slices were
+/// made from, either the owning node or an earlier copy of it that the owning node is moved from,
+/// the slices, the offset they are drawn moved by, the fill rule they were made with, whether they
+/// were made along the path [`Node::stroke_path`] makes from that node, last frame used).
 pub(crate) struct SliceEntry {
     pub(crate) node: Arc<Node>,
+    pub(crate) made: Arc<Node>,
     pub(crate) slices: Slices,
+    pub(crate) by: kurbo::Vec2,
+    pub(crate) rule: FillRule,
+    pub(crate) own: bool,
     pub(crate) stamp: u64,
 }
 
@@ -69,11 +95,12 @@ pub(crate) type ClipPaintEntry = (Arc<Node>, Option<Arc<Node>>, Option<Arc<Node>
 /// ([`live::Found`]).
 pub(crate) type FxArtEntry = (Arc<Node>, Arc<Node>, Option<live::Found>);
 
-/// What symbol art placed by [`Renderer::placed_art`] is kept under: the art's address, the bits
-/// of the transform's coefficients, whether strokes scale with it, and the stain ([`stain_bits`]).
+/// What symbol art placed by [`Renderer::placed_art`] or [`Renderer::sliced_art`] is kept under:
+/// the art's address, the bits of the transform's coefficients, whether strokes scale with it, and
+/// the stain ([`stain_bits`]).
 pub(crate) type PlacedKey = (usize, [u64; 6], bool, [u32; 6]);
 
-/// Symbol art placed by [`Renderer::placed_art`].
+/// Symbol art placed by [`Renderer::placed_art`] or [`Renderer::sliced_art`].
 pub(crate) struct PlacedEntry {
     /// The symbol's art, held weakly: the reference keeps the art's allocation, so no other art can
     /// get its address while the entry exists, and does not keep the art's content.
@@ -83,6 +110,10 @@ pub(crate) struct PlacedEntry {
     /// The font generation ([`vectorcraft_text::FontDb::generation`]) the art was placed in, when
     /// it holds type: the art is placed again when the fonts change.
     pub(crate) fonts: Option<u64>,
+    /// The 9-slice map the art was placed through ([`Renderer::sliced_art`]), or `None` for art
+    /// placed by the transform alone ([`Renderer::placed_art`]). An entry is used only by the
+    /// function that made it, with the same map.
+    pub(crate) slice: Option<vectorcraft_doc::NineSliceMap>,
 }
 
 /// How deep inline graphics nest (text in a symbol shown inline in text…) before they draw nothing.
@@ -127,12 +158,24 @@ pub(crate) struct Frame<'a> {
     pub(crate) opts: &'a RenderOptions,
     /// What colours paint as: screen colours, or one ink plane of a CMYK document (see [`ink`]).
     pub(crate) ink: Ink,
+    /// With Separations Preview, the tables placed images show the visible plates through.
+    pub(crate) plates: Option<&'a crate::proof::PlateLut>,
 }
 
 impl Frame<'_> {
     /// Text space → device pixels when type is snapped to the pixel grid (Type anti-aliasing).
     pub(crate) fn text_snap(&self, t: &TextObject) -> Option<Affine> {
         (self.opts.anti_alias == AntiAlias::Type).then(|| self.view * t.xf)
+    }
+
+    /// Stroke `st` as this frame draws it: a copy without its dashes when the frame draws dashed
+    /// lines as solid lines ([`RenderOptions::solid_dashes`]), else `st` itself.
+    pub(crate) fn stroke<'s>(&self, st: &'s StrokeLayer) -> std::borrow::Cow<'s, StrokeLayer> {
+        if self.opts.solid_dashes && st.dash.is_some() {
+            std::borrow::Cow::Owned(StrokeLayer { dash: None, ..st.clone() })
+        } else {
+            std::borrow::Cow::Borrowed(st)
+        }
     }
 
     /// A render context for drawing this frame's art offscreen (on the calling thread), with its
