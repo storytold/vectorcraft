@@ -150,6 +150,8 @@ mod by_link_status {
         _dir: Folder,
     }
 
+    /// [`Links`] in a fresh folder named after `name`: the files placed, then one changed and two
+    /// removed.
     fn links(name: &str) -> Links {
         let dir = Folder::new(name);
         let (a, b, c, e, d) = (dir.file("ok.png"), dir.file("changes.png"), dir.file("goes.png"), dir.file("kept.png"), dir.file("page.vectorcraft"));
@@ -168,19 +170,23 @@ mod by_link_status {
         Links { s, ok, modified, missing, embedded, document, _dir: dir }
     }
 
+    /// Run the command with `p`, which must succeed.
     fn run(s: &mut Session, p: Value) -> Value {
         s.execute(C, &p).unwrap_or_else(|e| panic!("{p}: {e}"))
     }
 
+    /// `v` sorted.
     fn sorted(mut v: Vec<NodeId>) -> Vec<NodeId> {
         v.sort();
         v
     }
 
+    /// The selected objects, sorted.
     fn selection(s: &Session) -> Vec<NodeId> {
         sorted(s.doc().unwrap().selection.objects.clone())
     }
 
+    /// The ids of a JSON list, sorted.
     fn ids(v: &Value) -> Vec<NodeId> {
         sorted(v.as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect())
     }

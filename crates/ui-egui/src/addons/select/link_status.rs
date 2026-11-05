@@ -138,6 +138,7 @@ pub(crate) fn message(statuses: &[&str], count: u64, reasons: &[&str]) -> String
     };
     let Some(first) = reasons.first() else { return selected };
     // Hidden and locked go together; a template layer, or the isolated group, alone.
+    /// The group reason `r` is told in: hidden and locked are one.
     fn kind(r: &str) -> &str {
         match r {
             "hidden" | "locked" => "locked",
@@ -217,6 +218,8 @@ fn status_label(status: &str) -> &'static str {
     STATUSES.iter().find(|(s, ..)| *s == status).map_or("", |&(.., label)| tl!(label))
 }
 
+/// The dialog: the search, the Show filter, a checkbox row per image shown (name, status, format),
+/// All / None with the count chosen, and Zoom to Selection. Returns false: nothing to preview.
 fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let rows: Vec<Value> = d.fields.get("__rows").and_then(Value::as_array).cloned().unwrap_or_default();

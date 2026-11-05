@@ -25,6 +25,7 @@ pub const RELATIONS: [&str; 3] = ["overlap", "inside", "outside"];
 /// in the document, a file not found, a file changed since it was read.
 pub const LINK_STATUSES: [&str; 4] = ["linked", "embedded", "missing", "modified"];
 
+/// The add-on's commands: Select by Artboards and Select by Link Status.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -48,6 +49,8 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// `addon.select.byArtboards`: select the objects Select All takes that overlap, lie inside or lie
+/// outside the chosen artboards.
 fn by_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.select.byArtboards";
     let relation = text_param(p, "relation", C)?.unwrap_or("overlap");
@@ -151,6 +154,9 @@ fn skip_reason(st: &DocState, locks: &LockedArtboards, id: NodeId) -> Option<&'s
     })
 }
 
+/// `addon.select.byLinkStatus`: select the images and placed documents whose link has one of the
+/// statuses asked for (among `ids` when given), replacing the selection or adding to it, and list
+/// those left out with the reason ([`skip_reason`]).
 fn by_link_status(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.select.byLinkStatus";
     let wanted = link_statuses(p, C)?;

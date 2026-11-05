@@ -28,6 +28,7 @@ impl Drop for Folder {
     }
 }
 
+/// A `w` × `h` red PNG.
 fn png(w: u32, h: u32) -> Vec<u8> {
     let mut out = vec![];
     image::RgbaImage::from_pixel(w, h, image::Rgba([200, 40, 40, 255]))
@@ -53,6 +54,7 @@ fn app(dir: &Folder) -> (VectorcraftApp, u64, u64, u64) {
     (app, river, harbour, stamp)
 }
 
+/// The selected objects' ids, sorted.
 fn selected(app: &VectorcraftApp) -> Vec<u64> {
     let mut ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
     ids.sort_unstable();

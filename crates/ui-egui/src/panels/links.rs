@@ -535,6 +535,8 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
     row(ui, tl!("Status"), status.into());
 }
 
+/// The panel's flyout menu: the link commands for the selected rows, Select Linked / Embedded /
+/// Missing / Modified for the whole document, and the Show, Sort and thumbnail options.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let o = options(ui.ctx());
     // The rows the panel shows (the menu opens from it).
