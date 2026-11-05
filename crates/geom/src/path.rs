@@ -547,17 +547,30 @@ impl PathData {
     /// Tight geometric bounds (curve extrema, not control points), measured by [`curve_bounds`]: a
     /// segment with a control point that is not finite or past `f64::MAX / 16` in x or y is measured
     /// by its control points.
+    ///
+    /// Walks the segments in place, without building the path: the same segments in the same order,
+    /// so the result is bit for bit `curve_bounds(&self.to_bezpath())` (a path of lone anchors, with
+    /// no segment, is `Rect::ZERO`, as there).
     pub fn bounds(&self) -> Option<Rect> {
         if self.is_empty() {
             return None;
         }
-        let bp = self.to_bezpath();
         if self.anchor_count() == 1
             && let Some(a) = self.subpaths.iter().find_map(|s| s.anchors.first())
         {
             return Some(Rect::from_points(a.p, a.p));
         }
-        Some(curve_bounds(&bp))
+        let mut bbox: Option<Rect> = None;
+        for sp in &self.subpaths {
+            // (a closed subpath's last segment ends on its first anchor: its `ClosePath` adds no line)
+            for i in 0..sp.segment_count() {
+                let c = sp.segment(i);
+                // `to_bezpath_into` writes a line where neither handle is out, else a cubic.
+                let seg = segment_bounds(if sp.segment_is_line(i) { PathSeg::Line(kurbo::Line::new(c.p0, c.p3)) } else { PathSeg::Cubic(c) });
+                bbox = Some(bbox.map_or(seg, |bb| bb.union(seg)));
+            }
+        }
+        Some(bbox.unwrap_or_default())
     }
     /// Bounds including control handles (used for quick culling).
     pub fn control_bounds(&self) -> Option<Rect> {
@@ -719,6 +732,39 @@ fn push_curve(cur: &mut Option<SubPath>, last: Point, c1: Point, c2: Point, p: P
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `bounds` walks the anchors in place: bit for bit what the kurbo path it stands for gives,
+    /// for lines, curves, open and closed subpaths, lone anchors and empty subpaths.
+    #[test]
+    fn bounds_match_the_bezpath_bit_for_bit() {
+        use proptest::prelude::*;
+        fn reference(pd: &PathData) -> Option<Rect> {
+            if pd.is_empty() {
+                return None;
+            }
+            if pd.anchor_count() == 1 {
+                let a = pd.subpaths.iter().find_map(|s| s.anchors.first())?;
+                return Some(Rect::from_points(a.p, a.p));
+            }
+            Some(curve_bounds(&pd.to_bezpath()))
+        }
+        let bits = |r: Option<Rect>| r.map(|r| [r.x0, r.y0, r.x1, r.y1].map(f64::to_bits));
+        let coord = || prop_oneof![(-1e3f64..1e3), Just(0.0), Just(1e-300), Just(-7.25)];
+        let pt = move || (coord(), coord()).prop_map(|(x, y)| Point::new(x, y));
+        // Handles retracted (equal to the anchor) a third of the time: lines and curves mix.
+        let handle = move || prop_oneof![Just(None), pt().prop_map(Some)];
+        let anchor =
+            (pt(), handle(), handle()).prop_map(|(p, i, o)| Anchor { p, h_in: i.unwrap_or(p), h_out: o.unwrap_or(p), kind: AnchorKind::Corner });
+        let sub = (proptest::collection::vec(anchor, 0..6), any::<bool>()).prop_map(|(a, c)| SubPath::new(a, c));
+        let path = proptest::collection::vec(sub, 0..4).prop_map(PathData::new);
+        proptest!(ProptestConfig::with_cases(2000), |(pd in path)| {
+            prop_assert_eq!(bits(pd.bounds()), bits(reference(&pd)));
+        });
+        // Two lone anchors: no segment, as the path has none.
+        let lone = PathData::new(vec![SubPath::polyline(&[Point::new(5.0, 5.0)], false), SubPath::polyline(&[Point::new(9.0, 1.0)], true)]);
+        assert_eq!(lone.bounds(), Some(Rect::ZERO));
+        assert_eq!(bits(lone.bounds()), bits(reference(&lone)));
+    }
 
     fn square() -> PathData {
         PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)], true))
