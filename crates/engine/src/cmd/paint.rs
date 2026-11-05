@@ -206,11 +206,11 @@ impl Session {
     }
 }
 
-/// The fill or stroke a proxy shows for `n` ([`Node::proxy_paint`]: fill or stroke `item` when it
-/// is of that kind, type's first run, else the topmost one).
+/// The fill or stroke a proxy shows for `n` ([`Node::proxy_paint_only`]: fill or stroke `item` when
+/// it is of that kind, type's first run, else the topmost one).
 pub(crate) fn proxy_paint(n: &Node, stroke: bool, item: Option<usize>) -> Paint {
-    match n.proxy_paint(stroke, item) {
-        Some((p, ..)) => p.clone(),
+    match n.proxy_paint_only(stroke, item) {
+        Some(p) => p.clone(),
         // Type without runs shows the default character style.
         None if matches!(n.kind, NodeKind::Text(_)) => {
             let st = CharStyle::default();

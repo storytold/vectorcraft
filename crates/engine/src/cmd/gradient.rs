@@ -197,7 +197,8 @@ pub(crate) fn with_stored_stops<'a>(g: &'a Value, old: &Paint, stored: &StopColo
 /// Parse `stops` params: at least two, each with a numeric `offset` (clamped to 0..1) and a valid
 /// `color`; `opacity` is 0..1 (values above 1 are percentages) and `midpoint` is clamped to the
 /// diamond's range; `swatch` and `tint` (%) keep a stop's link as given (resolve them first with
-/// [`link_stops`]). The result is sorted by offset.
+/// [`link_stops`]), and `plates` (C, M, Y, K, 0..1) the process inks a linked stop prints with its
+/// spot ink. The result is sorted by offset.
 pub(crate) fn parse_stops(v: &Value) -> Parsed<Vec<GradientStop>> {
     let arr = v.as_array().ok_or("`stops` must be an array")?;
     if arr.len() < 2 {
@@ -213,6 +214,10 @@ pub(crate) fn parse_stops(v: &Value) -> Parsed<Vec<GradientStop>> {
             let opacity = num("opacity")?.map(|o| if o > 1.0 { o / 100.0 } else { o }).unwrap_or(1.0);
             let swatch = str_param(st, "swatch").map(str::to_string);
             let tint = num("tint")?.filter(|_| swatch.is_some()).map_or(1.0, |t| (t / 100.0).clamp(0.0, 1.0) as f32);
+            let plates = match st.get("plates").filter(|_| swatch.is_some()) {
+                None | Some(Value::Null) => None,
+                Some(p) => Some(plates_param(p).ok_or_else(|| format!("stop {i}: `plates` must be four numbers from 0 to 1 (C, M, Y, K)"))?),
+            };
             Ok(GradientStop {
                 offset: offset.clamp(0.0, 1.0) as f32,
                 color,
@@ -220,11 +225,23 @@ pub(crate) fn parse_stops(v: &Value) -> Parsed<Vec<GradientStop>> {
                 midpoint: num("midpoint")?.unwrap_or(0.5).clamp(0.13, 0.87) as f32,
                 swatch,
                 tint,
+                plates,
             })
         })
         .collect::<Parsed<Vec<_>>>()?;
     out.sort_by(|a, b| a.offset.total_cmp(&b.offset));
     Ok(out)
+}
+
+/// A stop's `plates` param: the process inks (C, M, Y, K, 0..1) printed with its spot swatch.
+fn plates_param(v: &Value) -> Option<[f32; 4]> {
+    let a = v.as_array().filter(|a| a.len() == 4)?;
+    let mut out = [0.0f32; 4];
+    for (o, x) in out.iter_mut().zip(a) {
+        let x = x.as_f64().filter(|x| x.is_finite())?;
+        *o = x.clamp(0.0, 1.0) as f32;
+    }
+    Some(out)
 }
 
 /// Parse a gradient paint object (the `gradient` param of `paint.setFill`). Lossless for everything

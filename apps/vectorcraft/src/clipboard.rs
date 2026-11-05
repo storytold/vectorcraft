@@ -249,6 +249,10 @@ mod win {
             self.seq.is_some() && raw::seq_num() == self.seq
         }
 
+        fn change_count(&mut self) -> Option<u64> {
+            raw::seq_num().map(|n| u64::from(n.get()))
+        }
+
         fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
             self.read_deferred(mimes)?.flavour()
         }

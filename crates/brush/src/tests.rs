@@ -764,6 +764,26 @@ fn stain_mixes_type_strokes_too() {
     assert_eq!(run_paints(&[art]), [(Paint::solid(blue), Paint::solid(blue))]);
 }
 
+/// An instance whose fill has an opacity of 0 does not stain its symbol's art, so the art keeps its
+/// swatch links.
+#[test]
+fn a_fill_with_no_opacity_leaves_the_symbol_art_linked() {
+    let spot = Paint::Solid { color: Color::cmyk(1.0, 0.7, 0.0, 0.4), swatch: Some("Spot".into()), tint: 1.0 };
+    let art = Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(spot.clone(), Paint::None, 0.0));
+    let mut inst = Node::new(NodeId(2), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY });
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    if let Some(f) = inst.appearance.fill_mut() {
+        f.opacity = 0.0;
+    }
+    assert_eq!(stain(&inst), None);
+    assert_eq!(instance_art(&art, &inst).appearance.fill_paint(), spot);
+    // Any opacity above 0 still stains.
+    if let Some(f) = inst.appearance.fill_mut() {
+        f.opacity = 0.01;
+    }
+    assert_ne!(instance_art(&art, &inst).appearance.fill_paint(), spot);
+}
+
 #[test]
 fn library_defaults_store_and_find() {
     let mut d = Document::new(100.0, 100.0);

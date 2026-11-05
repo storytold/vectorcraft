@@ -1355,3 +1355,215 @@ fn delete_empty_artboards_measures_clipped_art_through_the_clip() {
     assert_eq!(s.execute("artboard.deleteEmpty", &json!({})).unwrap(), json!({"deleted": [1, 3]}));
     assert_eq!(artboard_names(&s), ["Artboard 1", "Artboard 3"]);
 }
+
+/// Is Delete Empty Artboards enabled, and does running it then delete something? The two answers
+/// must agree.
+fn delete_empty_enabled_and_outcome(s: &mut Session) -> (bool, bool) {
+    let spec = crate::cmd::command_specs().iter().find(|c| c.id == "artboard.deleteEmpty").unwrap();
+    let enabled = (spec.enabled)(s).is_ok();
+    (enabled, s.execute("artboard.deleteEmpty", &json!({})).is_ok())
+}
+
+/// Delete Empty Artboards is enabled exactly when it deletes something: never with one artboard,
+/// with every artboard empty (all but artboard 1 go), with one empty, not when the only empty one
+/// is locked, and with art nested in groups and sublayers counted.
+#[test]
+fn delete_empty_artboards_is_enabled_exactly_when_it_deletes_something() {
+    /// What the case is, how its session is made, and whether the command deletes something.
+    type Case = (&'static str, fn() -> Session, bool);
+    let cases: [Case; 8] = [
+        ("one empty artboard", || row_of_artboards(1), false),
+        (
+            "one artboard with art",
+            || {
+                let mut s = row_of_artboards(1);
+                box_at(&mut s, 10.0, 20.0);
+                s
+            },
+            false,
+        ),
+        ("every artboard empty", || row_of_artboards(3), true),
+        (
+            "one empty",
+            || {
+                let mut s = row_of_artboards(2);
+                box_at(&mut s, 10.0, 20.0);
+                s
+            },
+            true,
+        ),
+        (
+            "the empty one locked",
+            || {
+                let mut s = row_of_artboards(2);
+                box_at(&mut s, 10.0, 20.0);
+                s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+                s
+            },
+            false,
+        ),
+        (
+            "every artboard empty and locked",
+            || {
+                let mut s = row_of_artboards(2);
+                s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+                s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+                s
+            },
+            false,
+        ),
+        (
+            "nested art on each",
+            || {
+                let mut s = row_of_artboards(2);
+                let a = box_at(&mut s, 10.0, 20.0);
+                let b = box_at(&mut s, 30.0, 20.0);
+                s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+                s.execute("object.group", &json!({})).unwrap();
+                s.execute("layer.newSublayer", &json!({})).unwrap();
+                box_at(&mut s, 410.0, 20.0);
+                s
+            },
+            false,
+        ),
+        (
+            "nested art on one",
+            || {
+                let mut s = row_of_artboards(3);
+                s.execute("layer.newSublayer", &json!({})).unwrap();
+                let a = box_at(&mut s, 410.0, 20.0);
+                s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+                s.execute("object.group", &json!({})).unwrap();
+                s
+            },
+            true,
+        ),
+    ];
+    for (why, make, deletes) in cases {
+        assert_eq!(delete_empty_enabled_and_outcome(&mut make()), (deletes, deletes), "{why}");
+    }
+}
+
+/// On documents made from a fixed seed (artboards in a row, some locked, boxes on, between and
+/// across them, some grouped), Delete Empty Artboards' enabled state matches what it does.
+#[test]
+fn delete_empty_artboards_enabled_state_matches_the_command_on_varied_documents() {
+    let mut seed: u64 = 0x5eed_a17b_0a2d;
+    let mut next = |n: u64| {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (seed >> 33) % n
+    };
+    let mut enabled_count = 0;
+    for _ in 0..60 {
+        let mut s = row_of_artboards(1 + next(4) as usize);
+        let artboards = s.doc().unwrap().doc.artboards.len();
+        for i in 0..artboards {
+            if next(4) == 0 {
+                s.execute("artboard.setProps", &json!({"index": i, "locked": true})).unwrap();
+            }
+        }
+        let mut ids = vec![];
+        for _ in 0..next(4) {
+            ids.push(box_at(&mut s, next(1700) as f64 - 50.0, 5.0 + next(300) as f64).0);
+        }
+        if ids.len() > 1 && next(2) == 0 {
+            s.execute("select.set", &json!({"ids": ids})).unwrap();
+            s.execute("object.group", &json!({})).unwrap();
+        }
+        let (enabled, deleted) = delete_empty_enabled_and_outcome(&mut s);
+        assert_eq!(enabled, deleted, "{:?}", s.doc().unwrap().doc.artboards.iter().map(|a| (a.rect, a.locked)).collect::<Vec<_>>());
+        enabled_count += usize::from(enabled);
+    }
+    assert!(enabled_count > 5 && enabled_count < 55, "both answers come up: {enabled_count} of 60 enabled");
+}
+
+/// On paths and compound paths made from a fixed seed (curves, open and closed, with strokes of
+/// every join, cap and alignment, miter limits, arrowheads, width profiles and dashes), an
+/// artboard has art exactly when an object's visual bounds meet it, for artboards just inside,
+/// on and just outside each object's visual box and far from it; and
+/// [`Document::any_artboard_without_art`] answers as asking [`Document::artboard_has_art`] of each.
+#[test]
+fn empty_artboard_checks_match_the_visual_bounds_on_varied_strokes() {
+    use vectorcraft_doc::{Appearance, AppearanceItem, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign, StrokeLayer, WidthProfile};
+    use vectorcraft_geom::Rect;
+    let mut seed: u64 = 0xa27b_0a2d_e6b7;
+    let mut next = |n: u64| {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (seed >> 33) % n
+    };
+    let (mut rects_checked, mut with_art) = (0, 0);
+    for _ in 0..40 {
+        let mut s = session();
+        let path = |s: &mut Session, next: &mut dyn FnMut(u64) -> u64| {
+            let mut d = format!("M {} {}", 100 + next(400), 100 + next(300));
+            for _ in 0..1 + next(4) {
+                let mut pt = || format!("{} {}", 100 + next(400), 100 + next(300));
+                d += &format!(" C {} {} {}", pt(), pt(), pt());
+            }
+            if next(2) == 0 {
+                d += " Z";
+            }
+            s.execute("path.create", &json!({"d": d})).unwrap()["id"].as_u64().unwrap()
+        };
+        let mut objects = vec![];
+        for _ in 0..1 + next(3) {
+            let id = if next(3) == 0 {
+                let ids = [path(&mut s, &mut next), path(&mut s, &mut next)];
+                s.execute("select.set", &json!({"ids": ids})).unwrap();
+                s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap()
+            } else {
+                path(&mut s, &mut next)
+            };
+            let mut look = Appearance::default();
+            for _ in 0..1 + next(2) {
+                let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 0.5 + next(30) as f64);
+                st.join = [LineJoin::Miter, LineJoin::Round, LineJoin::Bevel][next(3) as usize];
+                st.cap = [LineCap::Butt, LineCap::Round, LineCap::Square][next(3) as usize];
+                st.align = [StrokeAlign::Center, StrokeAlign::Inside, StrokeAlign::Outside][next(3) as usize];
+                st.miter_limit = 1.0 + next(20) as f64;
+                let mut head = || (next(3) == 0).then(|| Arrowhead::ALL[next(Arrowhead::ALL.len() as u64) as usize]);
+                (st.start_arrow, st.end_arrow) = (head(), head());
+                st.arrow_scale = (50.0 + next(250) as f64, 50.0 + next(250) as f64);
+                if next(3) == 0 {
+                    st.profile = Some(WidthProfile { points: vec![(0.0, next(3) as f64, 1.0), (0.5, 0.5, next(4) as f64), (1.0, 1.0, 0.25)] });
+                }
+                if next(3) == 0 {
+                    st.dash = Some(Dash { pattern: vec![1.0 + next(10) as f64, 1.0 + next(10) as f64], offset: 0.0, align_corners: false });
+                }
+                look.items.push(AppearanceItem::Stroke(st));
+            }
+            s.edit("Strokes", |d, _| {
+                d.node_mut(NodeId(id)).unwrap().appearance = look.into();
+                Ok(())
+            })
+            .unwrap();
+            objects.push(NodeId(id));
+        }
+        let d = &s.doc().unwrap().doc;
+        let symbols = d.symbol_boxes();
+        let boxes: Vec<Rect> = objects.iter().filter_map(|id| d.node(*id).unwrap().visual_bounds_with(&symbols)).collect();
+        let has_art = |r: Rect| {
+            let r = r.inflate(1e-6, 1e-6);
+            boxes.iter().any(|b| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1)
+        };
+        let mut rects = vec![Rect::new(5000.0, 5000.0, 5200.0, 5150.0)];
+        for b in &boxes {
+            for gap in [-0.01, 0.0, 5e-7, 2e-6, 0.01, 1.0] {
+                rects.push(Rect::new(b.x1 + gap, b.y0, b.x1 + gap + 10.0, b.y1));
+                rects.push(Rect::new(b.x0 - gap - 10.0, b.y0, b.x0 - gap, b.y1));
+                rects.push(Rect::new(b.x0, b.y1 + gap, b.x1, b.y1 + gap + 10.0));
+                rects.push(Rect::new(b.x0, b.y0 - gap - 10.0, b.x1, b.y0 - gap));
+            }
+        }
+        for r in &rects {
+            assert_eq!(d.artboard_has_art(*r), has_art(*r), "{r:?} against {boxes:?}");
+            rects_checked += 1;
+            with_art += usize::from(has_art(*r));
+        }
+        for _ in 0..20 {
+            let pick: Vec<Rect> = (0..1 + next(3)).map(|_| rects[next(rects.len() as u64) as usize]).collect();
+            assert_eq!(d.any_artboard_without_art(pick.iter().copied()), pick.iter().any(|r| !has_art(*r)), "{pick:?} against {boxes:?}");
+        }
+    }
+    assert!(with_art > rects_checked / 4 && with_art < rects_checked * 3 / 4, "both answers come up: {with_art} of {rects_checked}");
+}

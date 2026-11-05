@@ -334,13 +334,12 @@ fn tcp_connection_is_closed_after_junk() {
     let addr = listener.local_addr().unwrap();
     let server = std::thread::spawn(move || {
         let (s, _) = listener.accept().unwrap();
-        let read = s.try_clone().unwrap();
-        serve_lines(read, s, |_, _| Some(json!({"ok": true})));
+        serve_socket(s, ConnectionTimeouts::default(), |_, _| Some(json!({"ok": true})));
     });
     let mut c = TcpStream::connect(addr).unwrap();
     c.set_read_timeout(Some(WAIT)).unwrap();
-    // Nothing after the junk line: on Windows, closing a socket with unread input resets the
-    // connection, and the reset can discard the reply before the client reads it.
+    // The server closes gracefully ([`close_gracefully`]): the client reads both replies and then
+    // the end of the stream, not a reset.
     c.write_all(b"{\"id\":7,\"method\":\"x\"}\nhello\n").unwrap();
     let mut text = String::new();
     c.read_to_string(&mut text).unwrap(); // returns at EOF: the server closed the connection

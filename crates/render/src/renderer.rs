@@ -34,6 +34,7 @@ impl Renderer {
             clips: FrameCache::new(lru::CLIP_BUDGET, 256),
             threads: default_threads(),
             geom: PtrMap::default(),
+            kept: PtrMap::default(),
             symbols: vec![],
             plugin_revision: 0,
             strokes: PtrMap::default(),
@@ -180,6 +181,9 @@ impl Renderer {
         // them, a drag left up to that many old copies of the object alive, each with all its
         // members (and, for a compound path, its assembled path).
         self.geom.retain(|_, e| g - e.stamp <= 3);
+        // A kept path stays while its object is in `geom`, which keeps the objects still drawn.
+        let geom = &self.geom;
+        self.kept.retain(|_, e| g - e.stamp <= 3 || geom.get(&(Arc::as_ptr(&e.node) as usize)).is_some_and(|k| Arc::ptr_eq(&k.node, &e.node)));
         if self.strokes.len() > 1024 {
             self.strokes.retain(|_, e| g - e.stamp <= 3);
         }

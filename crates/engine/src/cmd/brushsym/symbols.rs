@@ -347,10 +347,8 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return None };
     let sym = d.symbols.iter().find(|s| &s.name == symbol)?;
     let mut art = if own { vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst) } else { (*sym.art).clone() };
-    if let Some(f) = inst.appearance.fill()
-        && let Some(c) = f.paint.color()
-    {
-        brush::tint_node(&mut art, &c, f.opacity);
+    if let Some((color, amount)) = brush::stain(inst) {
+        brush::tint_node(&mut art, &color, amount);
     }
     let art = d.place_symbol_art(symbol, &art, *xf)?;
     let mut art = d.reid(&art);

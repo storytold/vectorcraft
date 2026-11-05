@@ -2561,6 +2561,72 @@ fn the_default_glyph_chosen_in_overflowing_vertical_type_is_kept() {
     assert_eq!(held, [g('！')], "the default glyph is kept as the choice");
 }
 
+/// A character that overflows its area reports as `chosen` the glyph it is drawn with when it is
+/// shaped alone: the glyph `salt` draws, a chosen default glyph, and the `vert` glyph of vertical
+/// type.
+#[test]
+fn the_glyph_query_shapes_an_overflowing_character() {
+    use vectorcraft_text::test_fonts::{VERTICAL_PUNCTUATION_FAMILY, alternates_family, alternates_font, vertical_punctuation_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    db.add_font(vertical_punctuation_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let chosen = |s: &mut Session, id: NodeId, start: usize| {
+        s.execute("text.glyphAlternates", &json!({"id": id.0, "start": start})).unwrap()["chosen"].clone()
+    };
+
+    let area = json!({"x": 0, "y": 300, "text": "xa", "size": 20, "font": alternates_family(true), "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": 2, "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    assert_eq!(chosen(&mut s, boxed, 1), json!(g('b')), "the glyph salt draws");
+    s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 1, "gid": g('a')})).unwrap();
+    assert_eq!(chosen(&mut s, boxed, 1), json!(g('a')), "the chosen default glyph");
+
+    let vface = db.face(VERTICAL_PUNCTUATION_FAMILY, "Regular").expect("the test face");
+    let text =
+        json!({"x": 0, "y": 0, "text": "！！", "size": 20, "font": VERTICAL_PUNCTUATION_FAMILY, "vertical": true, "area": {"width": 4, "height": 4}});
+    let vertical = NodeId(s.execute("text.create", &text).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, vertical)).glyphs.is_empty(), "the text overflows");
+    assert_eq!(chosen(&mut s, vertical, 0), json!(vface.glyph_for('I')), "vert draws ！ as I");
+}
+
+/// A parenthesis set right to left is drawn mirrored: in a paragraph whose direction is right to
+/// left, and after Hebrew in a paragraph of automatic direction, but not when its character
+/// direction is left to right. When it overflows its area, the glyph query shapes it in the same
+/// direction and reports the glyph the text draws when it fits.
+#[test]
+fn the_glyph_query_shapes_an_overflowing_character_in_its_paragraph_direction() {
+    let db = vectorcraft_text::FontDb::global();
+    let face = db.face("Source Sans 3", "Regular").expect("the bundled face");
+    let mut s = session();
+    let create = |s: &mut Session, text: &str, rtl: bool, char_ltr: bool, height: f64| {
+        let spec = json!({"x": 0, "y": 0, "text": text, "size": 20, "font": "Source Sans 3", "area": {"width": 200, "height": height}});
+        let id = NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap());
+        if rtl {
+            s.execute("text.setFormat", &json!({"ids": [id.0], "direction": "rightToLeft", "start": 2, "end": 3})).unwrap();
+        }
+        if char_ltr {
+            s.execute("text.setFormat", &json!({"ids": [id.0], "charDirection": "leftToRight", "start": 2, "end": 3})).unwrap();
+        }
+        id
+    };
+    for (text, rtl, char_ltr, at, drawn) in [("a\n(", true, false, 2, ')'), ("a\n\u{5D0}(", false, false, 4, ')'), ("a\n(", true, true, 2, '(')] {
+        let open = create(&mut s, text, rtl, char_ltr, 200.0);
+        let lay = vectorcraft_text::layout(db, &obj(&s, open));
+        assert_eq!(lay.glyphs.iter().find(|g| g.byte == at).map(|g| g.gid), Some(face.glyph_for(drawn)), "{text:?}: the parenthesis drawn");
+
+        let boxed = create(&mut s, text, rtl, char_ltr, 30.0);
+        let lay = vectorcraft_text::layout(db, &obj(&s, boxed));
+        assert!(lay.glyphs.iter().all(|g| g.byte < 2), "{text:?}: the second paragraph overflows");
+        let r = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": at})).unwrap();
+        assert_eq!(r["chosen"], json!(face.glyph_for(drawn)), "{text:?}: the glyph drawn when it fits");
+    }
+}
+
 /// A vowel sign drawn before its consonant (Devanagari Ka with the vowel sign I) is in the
 /// consonant's cluster, drawn first: with `salt`, the glyph reported for the consonant is the one
 /// the feature draws, not the vowel sign's, and the default glyph chosen for it is drawn.
@@ -2587,6 +2653,61 @@ fn the_glyph_of_a_consonant_after_its_vowel_sign_is_reported() {
     assert_eq!(r["gid"], json!(g('a')));
     assert!(gids(&s).iter().any(|&(gl, byte, _)| (gl, byte) == (g('a'), 0)), "Ka draws its default glyph: {:?}", gids(&s));
     assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('a')));
+}
+
+/// Ka with a nukta and the vowel sign I is one cluster: the vowel sign drawn first, then the
+/// ligature of Ka and the nukta, which is neither Ka's default glyph nor one of its alternates. The
+/// glyph reported for Ka is the ligature, not the vowel sign.
+#[test]
+fn the_ligature_of_a_consonant_after_its_vowel_sign_is_reported() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93C}\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": MATRA_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('i'), 0, 9), (g('N'), 0, 9)], "the vowel sign is drawn first, then the ligature");
+
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('N')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('N')), "the ligature is drawn for Ka");
+}
+
+/// Ka, the halant, Ka again and the vowel sign I are one cluster: the vowel sign drawn first, the
+/// first Ka's half form, which the font lists as an alternate of Ka, then the second Ka's default
+/// glyph. The glyph reported for the first Ka is its half form, the first of its glyphs in the
+/// cluster, not the second Ka's default glyph. The font also lists the vowel sign's glyph as an
+/// alternate of Ka; drawn for the vowel sign, it is not reported for Ka.
+#[test]
+fn the_first_of_a_characters_glyphs_in_its_cluster_is_reported() {
+    use vectorcraft_text::test_fonts::{CONJUNCT_FAMILY, conjunct_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(conjunct_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{94D}क\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": CONJUNCT_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('i'), 0, 12), (g('k'), 0, 12), (g('K'), 0, 12)], "the vowel sign, the half form, then the second Ka");
+
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('k')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('k')), "the half form is drawn for the first Ka");
+
+    let text = "क\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 200, "text": text, "size": 20, "font": CONJUNCT_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('i'), 0, 6), (g('K'), 0, 6)], "the vowel sign, then Ka");
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('K')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('K')), "Ka's default glyph, not the vowel sign's");
 }
 
 /// A character that overflows its area is shaped with its grapheme: the nukta after Ka makes the
@@ -2672,4 +2793,44 @@ fn glyph_alternates_query_reports_the_fallback_glyph_that_is_drawn() {
     let query = s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap();
     assert_eq!(query["chosen"], json!(glyph.gid), "the query reports the visible fallback glyph");
     assert!(query["alternates"].as_array().unwrap().is_empty());
+
+    let area = json!({"x": 0, "y": 300, "text": ch.to_string(), "font": alternates_family(true), "area": {"width": 200, "height": 2}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let query = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(glyph.gid), "an overflowing character reports the fallback glyph it is drawn with");
+}
+
+/// A fallback face draws Ka with the vowel sign I in one cluster, the vowel sign first. The glyph
+/// reported for Ka is the fallback face's glyph for Ka, laid out or overflowing, not the vowel
+/// sign's.
+#[test]
+fn the_fallback_glyph_of_a_consonant_after_its_vowel_sign_is_reported() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, alternates_family, alternates_font, matra_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    db.add_font(matra_font().expect("the test font builds"));
+    let requested = db.face(alternates_family(true), "Regular").expect("the test face");
+    let text = "क\u{93F}";
+    assert_eq!(requested.glyph_for('क'), 0);
+    let mut s = session();
+    let create = |s: &mut Session, height: f64| {
+        let spec = json!({"x": 0, "y": 0, "text": text, "font": alternates_family(true), "area": {"width": 200, "height": height}});
+        NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap())
+    };
+    let open = create(&mut s, 200.0);
+    let glyphs = vectorcraft_text::layout(db, &obj(&s, open)).glyphs;
+    let fallback = db.face_by_id(glyphs[0].font_id).expect("the fallback face");
+    assert_ne!(fallback.id(), requested.id());
+    let (ka, sign) = (fallback.glyph_for('क'), fallback.glyph_for('\u{93F}'));
+    let drawn: Vec<_> = glyphs.iter().map(|g| (g.gid, g.byte)).collect();
+    assert_eq!(drawn, [(sign, 0), (ka, 0)], "the vowel sign is drawn first, in Ka's cluster ({} or {MATRA_FAMILY})", fallback.family);
+    let query = s.execute("text.glyphAlternates", &json!({"id": open.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(ka), "the fallback face's glyph for Ka");
+
+    let boxed = create(&mut s, 2.0);
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let query = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(ka), "an overflowing Ka reports the fallback face's glyph for Ka");
 }

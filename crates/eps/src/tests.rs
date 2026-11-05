@@ -352,6 +352,16 @@ fn gradients_mixing_spot_inks_with_other_inks_are_device_n_shadings() {
     assert!(page.contains("/C0 [0 0 1] /C1 [0.6 0 0]") && page.contains("/C0 [0.6 0 0] /C1 [0 0.4 0]"), "{page}");
     assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
 
+    // Gold Ink 0% to 100% over a constant 30% cyan plate (a DeviceN gradient read from a PDF,
+    // #3235): Cyan and Gold Ink.
+    let mut over = spot_stop(1.0, "Gold Ink", GOLD, 1.0);
+    over.plates = Some([0.3, 0.0, 0.0, 0.0]);
+    let plated = spot_gradient_doc(vec![GradientStop::new(0.0, Color::cmyk(0.3, 0.0, 0.0, 0.0)), over]);
+    let out = export(&plated, &opts(&plated), None, None).unwrap();
+    let ps = text(&out);
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Cyan (Gold Ink) cvn ] /DeviceCMYK {2 array astore"), "{ps}");
+    assert!(checked_page(&ps).contains("/C0 [0.3 0] /C1 [0.3 1]"), "{ps}");
+
     // Read back as bands, the tint transforms give each ink's CMYK equivalent.
     for (d, end) in [(&two, [0.5, 0.0, 0.5, 0.0]), (&mixed, [0.0, 0.0, 0.0, 0.4])] {
         let out = export(d, &EpsOptions { compatible_gradients: true, ..opts(d) }, None, None).unwrap();
