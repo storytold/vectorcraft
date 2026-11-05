@@ -94,7 +94,7 @@ pub(super) type Built = Result<(Document, Vec<String>), String>;
 /// `structure` (the editing copy `data` read) with nothing compared with the pages, when the file's
 /// text document makes the type of every text object (at least one shows, and none is type that a
 /// look draws), no object is unread or has another placement or drawn art that the page would
-/// choose, and its artboards are the pages, one for one and of their size, in points or in the pages'
+/// choose, no linked image shows a placeholder, and its artboards are the pages, one for one and of their size, in points or in the pages'
 /// units ([`page_scale_alone`]). The document is drawn at that scale. Else `Err(structure)`, for
 /// [`build_from`] with the page.
 pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f64, f64)], unit: f64) -> Result<Built, Box<Structure>> {
@@ -116,9 +116,11 @@ pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f6
 
 /// Is nothing in `structure` waiting on the page: no object unread (the page's art takes its
 /// place), no placed file with another placement, no live envelope with the drawn art it replaced
-/// (the comparison with the page chooses between them)?
+/// (the comparison with the page chooses between them), no linked image showing a placeholder
+/// where the page has its pixels?
 fn nothing_waits_on_page(structure: &Structure) -> bool {
-    structure.unread.is_empty()
+    structure.placeholders.is_empty()
+        && structure.unread.is_empty()
         && structure.unread_elsewhere.is_empty()
         && structure.placed_elsewhere.is_empty()
         && structure.envelopes_drawn.is_empty()
@@ -168,6 +170,16 @@ fn page_scale_alone(structure: &Structure, pages: &[(f64, f64)], unit: f64) -> O
     [1.0, unit].into_iter().find(|&k| k.is_finite() && k >= 1.0 && fits(k))
 }
 
+/// The areas left out of the comparisons with `page`: the `restyled` looks', and on a PostScript
+/// page, which draws nothing for them, the linked images' `placeholders`. A PDF part draws those
+/// images' pixels, which the placeholders don't match.
+fn left_out_of_comparisons(page: Page, mut restyled: Vec<Rect>, placeholders: Vec<Rect>) -> Vec<Rect> {
+    if matches!(page, Page::Art) {
+        restyled.extend(placeholders);
+    }
+    restyled
+}
+
 /// [`build`] from `structure`, the editing copy `data` already read.
 pub(super) fn build_from(
     structure: Structure,
@@ -189,6 +201,7 @@ pub(super) fn build_from(
         unread_elsewhere,
         slot_names,
         restyled,
+        placeholders,
         placed_elsewhere,
         envelopes_drawn,
         styles_read,
@@ -198,6 +211,7 @@ pub(super) fn build_from(
         bindings_skipped,
         warnings,
     } = structure;
+    let restyled = left_out_of_comparisons(page, restyled, placeholders);
     // Editing data in the units of the page's user space ([`in_units`]), or at its declared large
     // canvas scale ([`page_scale`]), is compared with the page scaled down to those units, and the
     // document read from it is scaled up by `unit`.
@@ -1598,6 +1612,19 @@ mod candidate_tests {
         let tiny_boards: Vec<vectorcraft_doc::Artboard> =
             boards.iter().zip(&tiny).map(|(b, r)| vectorcraft_doc::Artboard { rect: *r, ..b.clone() }).collect();
         assert_eq!(more_pages(Some(&tiny_boards), &tiny, 1).len() + 1, MAX_PAGES_COMPARED);
+    }
+
+    /// A linked image showing a placeholder (`XF`) waits on the page, whose PDF part draws its
+    /// pixels: the layers aren't used without it.
+    #[test]
+    fn a_linked_image_placeholder_waits_on_the_page() {
+        let raster = "%AI5_File:\n%AI5_BeginRaster\n(photo.tif) 0 XG\n[ 1 0 0 1 0 4 ] 0 0 4 4 4 4 8 3 0 0 0 0 XF\n%AI5_EndRaster\n";
+        let data = format!(
+            "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n{raster}LB\n%AI5_EndLayer--\n%%Trailer\n"
+        );
+        let structure = ai::read(data.as_bytes(), false).unwrap();
+        assert_eq!(structure.placeholders.len(), 1);
+        assert!(!nothing_waits_on_page(&structure));
     }
 
     /// The pages a box touches with a margin round it include those it only comes near.

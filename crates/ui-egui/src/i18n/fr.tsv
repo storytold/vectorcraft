@@ -4663,6 +4663,7 @@ axis	Both	Les deux
 @msg	graphs come in as plain art, without their data or settings	les graphes sont importés comme illustration ordinaire, sans leurs données ni leurs réglages
 @msg	an image whose data is cut short was left out	une image aux données tronquées a été ignorée
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les images liées affichent l’aperçu basse résolution enregistré dans le fichier tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les images liées sans aperçu dans le fichier affichent un espace réservé tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	le texte captif dans des cadres trop bas pour une ligne de la police dans laquelle il s’affiche a reçu des cadres plus hauts ({_1}) : il ne s’afficherait pas autrement
 @msg	its editing data doesn't say where its art is	ses données d’édition ne disent pas où se trouve son illustration
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ce fichier a été enregistré sans compatibilité PDF et ses données d’édition sont illisibles ({why})

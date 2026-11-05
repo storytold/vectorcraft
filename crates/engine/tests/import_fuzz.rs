@@ -3675,6 +3675,19 @@ proptest! {
         let text = mutate_text(&fixture, cut, &edits);
         survive("mutated PostScript-form .ai with placed files", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
     }
+
+    /// The same file with linked images in the version 7 form (`XG`, then `XF` with no samples),
+    /// one with an embedded image between its `XG` and `XF`, damaged.
+    #[test]
+    fn ps_form_ai_with_linked_images_never_panics(cut in 0usize..1_400, edits in prop::collection::vec((0usize..1_400, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '[', ']', '%', 'X', 'F', 'G'])), 0..12)) {
+        let linked = "%AI5_File:\n%AI5_BeginRaster\n(a.tif) 0 XG\n[ 2 0 0 3 10 80 ] 0 0 10 20 10 20 8 3 0 0 0 0 XF\n%AI5_EndRaster\n\
+            %AI5_File:\n%AI5_BeginRaster\n(b.tif) 1 XG\n[ 1 0 0 1 0 100 ] 0 0 1 1 1 1 8 3 0 0 0 0 XI\n%FF0000\n%AI5_EndRaster\n\
+            [ 0 1 -1 0 50 50 ] 0 0 4 4 4 4 8 3 0 0 0 0 XF\n";
+        let fixture = NAMED_PROLOG_AI.replacen("0 Ap\nu\n", &format!("0 Ap\n{linked}u\n"), 1);
+        prop_assert!(fixture.contains("(a.tif)"));
+        let text = mutate_text(&fixture, cut, &edits);
+        survive("mutated PostScript-form .ai with linked images", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
+    }
 }
 
 /// A `.ai` in the legacy format without layers (Illustrator 3) whose prolog is included: its
@@ -3878,6 +3891,12 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "[ 1 0 0 1 0 0 ] 0 0 2 2 2 2 8 3 1 0 1 0",
             "[ 1 0 0 1 0 0 ] 0 0 3 2 3 2 1 4 1 0 1 0",
             "[ 1 0 0 1 0 0 ] 0 0 99999 99999 99999 99999 1 1 0 0 0 0",
+            // A linked image in the version 7 form (§8.2, §8.3): `(path) modified XG`, then `XF`.
+            "XG",
+            "(a.tif) 0 XG",
+            "XF",
+            "[ 1 0 0 1 0 0 ] 0 0 2 2 2 2 8 3 0 0 0 0 XF",
+            "[ 1e308 0 0 1e308 0 0 ] 0 0 1e6 1e6 1e6 1e6 8 3 0 0 0 0 XF",
             "[",
             "]",
             "/Name",

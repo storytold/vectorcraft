@@ -371,6 +371,9 @@ impl<'a> Reader<'a> {
                     r.operands = Some(vals);
                 }
             }
+            // A linked image (§8.2, §8.3): `(path) modified XG` names the file of the `XF` image after
+            // it, which has `XI`'s operands and no samples.
+            "XG" | "XF" => self.image_link_op(w, vals, hidden)?,
             // A plugin group ends; a blend's record follows on `%` lines.
             "XP" => {
                 let name = vals.iter().find_map(V::text).unwrap_or_default();
