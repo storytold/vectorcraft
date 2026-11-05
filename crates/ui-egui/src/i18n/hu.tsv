@@ -554,12 +554,14 @@ font-technology	Variable	Változó
 	Character / Paragraph	Karakter / bekezdés
 	Character Alignment	Karakterigazítás
 	Character options	Karakterbeállítások
+	Paragraph options	Bekezdésbeállítások
 	Character Rotation	Karakterforgatás
 	Character Set:	Karakterkészlet:
 	Character Style	Karakterstílus
 	Character Style Options	Karakterstílus beállításai
 	Character Styles	Karakterstílusok
 	Character:	Karakter:
+	Paragraph:	Bekezdés:
 	Check Links	Csatolások ellenőrzése
 # Check Script (File › Scripts) and the report it shows on a script written for the reference app.
 	Check Script	Szkript ellenőrzése
