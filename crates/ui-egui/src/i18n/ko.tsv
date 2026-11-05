@@ -4247,6 +4247,8 @@ theme	Appearance	외관
 @msg	`{key}` must be one of {_1}	`{key}`은(는) {_1} 중 하나여야 합니다
 @msg	unknown preference `{key}`	알 수 없는 환경 설정 `{key}`
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	데이터 복구에 복사본을 보관할 곳이 없습니다. 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
+@msg	Data Recovery can't keep copies in {path}: {e}	데이터 복구가 {path}에 복사본을 보관할 수 없습니다: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	{path}에서 플러그인을 불러올 수 없습니다: {e}
 @msg	`{area}` is no recovery area name	`{area}`은(는) 복구 영역 이름이 아닙니다
 @msg	`{name}` is no recovery entry name	`{name}`은(는) 복구 항목 이름이 아닙니다
 @msg	no clock to keep a heartbeat by	하트비트를 유지할 시계가 없습니다
@@ -4329,6 +4331,7 @@ theme	Appearance	외관
 @msg	graphs come in as plain art, without their data or settings	그래프는 데이터와 설정 없이 일반 아트로 가져왔습니다
 @msg	an image whose data is cut short was left out	데이터가 잘린 이미지는 제외했습니다
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	파일에 미리 보기가 없는 연결된 그림은 해당 파일을 찾을 때까지 자리 표시자로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	표시되는 글꼴의 한 줄보다 낮은 프레임의 영역 문자는 프레임을 더 높였습니다({_1}). 그렇지 않으면 문자가 표시되지 않습니다
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	그레이디언트 “{name}”이(가) 파일에 정의되어 있지 않아 단색으로 대체했습니다
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft에서 아직 읽을 수 없는 브러시는 브러시 패널에서 제외되었습니다({_1})
@@ -5915,6 +5918,10 @@ breakText	Glyphs	글리프
 	Bow	활 모양
 	Spike	뾰족한 모양
 	Skip Spaces	공백 건너뛰기
+	Release Type on a Path…	패스 위 문자 해제…
+	Release Type on a Path	패스 위 문자 해제
+	Text and Path	문자와 패스
+	Path Only	패스만
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	아트워크가 너무 커서 이미지로 복사할 수 없습니다: 다른 앱에는 PNG가 전달되지 않습니다
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -5926,3 +5933,39 @@ breakText	Glyphs	글리프
 	Fully Outside	완전히 바깥쪽
 	No artboards match.	일치하는 아트보드가 없습니다.
 	Chosen: {n} of {total}	선택됨: {n} / {total}
+
+# Contour add-on
+	Contour	윤곽
+	Contour Tool	윤곽 도구
+	Sharp	뾰족하게
+	Bake	확장
+	Turn the Contour into plain paths	윤곽을 일반 패스로 바꿉니다
+	Set Corners…	모퉁이 설정…
+	All Anchors	모든 앵커
+	Odd-Numbered Anchors	홀수 번째 앵커
+	Even-Numbered Anchors	짝수 번째 앵커
+	Minimum angle	최소 각도
+	Maximum angle	최대 각도
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	연결됨 선택
+	Select Embedded	포함됨 선택
+	Select Missing	없는 이미지 선택
+	Select Modified	수정된 이미지 선택
+	Select by Link Status	링크 상태로 선택
+	Select by Link Status…	링크 상태로 선택…
+	Search images	이미지 검색
+	No images match.	일치하는 이미지가 없습니다.
+@msgplural	Selected {n} linked image|Selected {n} linked images	연결된 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	포함된 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} missing image|Selected {n} missing images	없는 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} modified image|Selected {n} modified images	수정된 이미지 {n}개를 선택했습니다
+@msgplural	Selected {n} image|Selected {n} images	이미지 {n}개를 선택했습니다
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}. {n}개는 숨겨졌거나 잠겨 있습니다
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}. {n}개는 템플릿 레이어에 있습니다
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}. {n}개는 격리된 그룹 밖에 있습니다
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}. {n}개는 지금 선택할 수 없습니다
+
+# Compound Shapes add-on
+	Compound Shapes	컴파운드 모양
+	Shape Mode Buttons Make Compound Shapes	모양 모드 버튼으로 컴파운드 모양 만들기

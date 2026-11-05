@@ -4320,6 +4320,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{key}` must be one of {_1}	`{key}` は {_1} のいずれかにしてください
 @msg	unknown preference `{key}`	`{key}` は不明な環境設定の項目です
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	データ復帰のコピーを保存する場所がありません: 環境設定 → ファイル管理 → データ復帰 → フォルダー (recoveryFolder) を設定してください
+@msg	Data Recovery can't keep copies in {path}: {e}	データ復帰は {path} にコピーを保存できません: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	{path} からプラグインを読み込めません: {e}
 @msg	`{area}` is no recovery area name	`{area}` は復帰用領域の名前として使えません
 @msg	`{name}` is no recovery entry name	`{name}` は復帰用エントリの名前として使えません
 @msg	no clock to keep a heartbeat by	ハートビートの記録に必要な時刻を取得できません
@@ -4402,6 +4404,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	graphs come in as plain art, without their data or settings	グラフは通常のアートとして読み込まれ、データと設定は保持されません
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ファイルにプレビューのないリンク画像は、元のファイルが見つかるまでプレースホルダーで表示されます：リンクパネルで再リンクしてください
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft がまだ読み込めないブラシ {_1} 個はブラシパネルに追加されませんでした
@@ -6019,6 +6022,10 @@ breakText	Glyphs	字形
 	Bow	弓形
 	Spike	山形
 	Skip Spaces	スペースをスキップ
+	Release Type on a Path…	パス上文字を解除…
+	Release Type on a Path	パス上文字を解除
+	Text and Path	テキストとパス
+	Path Only	パスのみ
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	アートワークが大きすぎるため画像としてコピーできません：他のアプリには PNG が渡されません
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6030,3 +6037,39 @@ breakText	Glyphs	字形
 	Fully Outside	完全に外側
 	No artboards match.	一致するアートボードはありません。
 	Chosen: {n} of {total}	選択中: {n} / {total}
+
+# Contour add-on
+	Contour	輪郭
+	Contour Tool	輪郭ツール
+	Sharp	鋭角
+	Bake	分割
+	Turn the Contour into plain paths	輪郭を通常のパスに変換します
+	Set Corners…	コーナーを設定…
+	All Anchors	すべてのアンカー
+	Odd-Numbered Anchors	奇数番目のアンカー
+	Even-Numbered Anchors	偶数番目のアンカー
+	Minimum angle	最小角度
+	Maximum angle	最大角度
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	リンク済みを選択
+	Select Embedded	埋め込みを選択
+	Select Missing	見つからない画像を選択
+	Select Modified	変更された画像を選択
+	Select by Link Status	リンクの状態で選択
+	Select by Link Status…	リンクの状態で選択…
+	Search images	画像を検索
+	No images match.	一致する画像はありません。
+@msgplural	Selected {n} linked image|Selected {n} linked images	リンク済みの画像を {n} 個選択しました
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	埋め込み画像を {n} 個選択しました
+@msgplural	Selected {n} missing image|Selected {n} missing images	見つからない画像を {n} 個選択しました
+@msgplural	Selected {n} modified image|Selected {n} modified images	変更された画像を {n} 個選択しました
+@msgplural	Selected {n} image|Selected {n} images	画像を {n} 個選択しました
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}。ほかに {n} 個が非表示またはロックされています
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}。ほかに {n} 個がテンプレートレイヤー上にあります
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}。ほかに {n} 個が分離したグループの外にあります
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}。ほかに {n} 個は今は選択できません
+
+# Compound Shapes add-on
+	Compound Shapes	複合シェイプ
+	Shape Mode Buttons Make Compound Shapes	シェイプモードボタンで複合シェイプを作成

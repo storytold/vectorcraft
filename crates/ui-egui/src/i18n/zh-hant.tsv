@@ -1932,6 +1932,8 @@ file-filter	Templates	範本
 @msg	`{key}` must be one of {_1}	`{key}` 必須是 {_1} 其中之一
 @msg	unknown preference `{key}`	未知的偏好設定 `{key}`
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	「資料復原」沒有可存放拷貝的位置：請設定「偏好設定 → 檔案處理 → 資料復原 → 資料夾」 (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	「資料復原」無法將拷貝存放到 {path}：{e}
+@msg	Plug-ins can't be loaded from {path}: {e}	無法從 {path} 載入增效模組：{e}
 @msg	`{area}` is no recovery area name	`{area}` 不是復原區域名稱
 @msg	`{name}` is no recovery entry name	`{name}` 不是復原項目名稱
 @msg	no clock to keep a heartbeat by	沒有可用來維持心跳的時鐘
@@ -4492,6 +4494,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Update Changed Links	更新已變更的連結
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	有 {n} 個連結影像已在磁碟上變更。要顯示新版本嗎？
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	連結的圖片在找到其檔案之前顯示檔案中儲存的低解析度預覽：請在「連結」面板中重新連結
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	檔案中沒有預覽的連結圖片在找到其檔案之前顯示預留位置：請在「連結」面板中重新連結
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	框架高度不足以容納所顯示字體一行的區域文字已加高框架 ({_1})：否則文字不會顯示
 	Update Modified Links	更新已修改的連結
 	UPPERCASE	全部大寫
@@ -5972,6 +5975,10 @@ breakText	Glyphs	字符
 	Bow	弓形
 	Spike	尖峰
 	Skip Spaces	略過空格
+	Release Type on a Path…	釋放路徑文字…
+	Release Type on a Path	釋放路徑文字
+	Text and Path	文字和路徑
+	Path Only	僅路徑
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	圖稿太大，無法作為圖片複製：其他應用程式不會取得它的 PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -5983,3 +5990,39 @@ breakText	Glyphs	字符
 	Fully Outside	完全在外
 	No artboards match.	沒有符合的工作區域。
 	Chosen: {n} of {total}	已選：{n} / {total}
+
+# Contour add-on
+	Contour	輪廓
+	Contour Tool	輪廓工具
+	Sharp	尖角
+	Bake	展開
+	Turn the Contour into plain paths	將輪廓轉為一般路徑
+	Set Corners…	設定轉角…
+	All Anchors	所有錨點
+	Odd-Numbered Anchors	奇數錨點
+	Even-Numbered Anchors	偶數錨點
+	Minimum angle	最小角度
+	Maximum angle	最大角度
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	選取已連結
+	Select Embedded	選取已內嵌
+	Select Missing	選取遺失
+	Select Modified	選取已修改
+	Select by Link Status	依連結狀態選取
+	Select by Link Status…	依連結狀態選取…
+	Search images	搜尋影像
+	No images match.	沒有符合的影像。
+@msgplural	Selected {n} linked image|Selected {n} linked images	已選取 {n} 個已連結的影像
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	已選取 {n} 個已內嵌的影像
+@msgplural	Selected {n} missing image|Selected {n} missing images	已選取 {n} 個遺失的影像
+@msgplural	Selected {n} modified image|Selected {n} modified images	已選取 {n} 個已修改的影像
+@msgplural	Selected {n} image|Selected {n} images	已選取 {n} 個影像
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}；另有 {n} 個已隱藏或鎖定
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}；另有 {n} 個位於範本圖層上
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}；另有 {n} 個位於隔離的群組之外
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}；另有 {n} 個現在無法選取
+
+# Compound Shapes add-on
+	Compound Shapes	複合形狀
+	Shape Mode Buttons Make Compound Shapes	形狀模式按鈕製作複合形狀

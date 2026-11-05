@@ -110,6 +110,80 @@ fn dashes_follow_arc_length_and_join_across_the_start_of_closed_paths() {
     assert!(dash(&line(0.0, 1e6), &dashed(&[0.001, 0.001], 0.0)).is_none());
 }
 
+/// The dashes of `d` as (start x, end x), for dashes along the x axis.
+fn spans_x(d: &Dashed) -> Vec<(f64, f64)> {
+    let mut out = vec![];
+    for el in d.path.elements() {
+        match el {
+            PathEl::MoveTo(p) => out.push((p.x, p.x)),
+            PathEl::LineTo(p) => {
+                if let Some(last) = out.last_mut() {
+                    last.1 = p.x;
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Ten segments of 10 pt along the x axis from 0 to 100.
+fn steps() -> BezPath {
+    let mut b = BezPath::new();
+    b.move_to((0.0, 0.0));
+    for i in 1..=10 {
+        b.line_to((f64::from(i) * 10.0, 0.0));
+    }
+    b
+}
+
+/// Whether a segment lies outside x 30..60.
+fn outside(s: &PathSeg) -> bool {
+    s.start().x >= 60.0 || s.end().x <= 30.0
+}
+
+#[test]
+fn dashes_kept_on_some_segments_keep_the_phase_of_the_whole_line() {
+    // A period of 7 starting 2 into it: dashes at -2..2, 5..9, 12..16, …
+    let pattern = dashed(&[4.0, 3.0], 2.0);
+    let all = dash(&steps(), &pattern).unwrap();
+    let kept = dash_kept(&steps(), &pattern, &|s| outside(s)).unwrap();
+    // The dashes of the whole line, cut at x 30 and 60.
+    let cut: Vec<(f64, f64)> =
+        spans_x(&all).into_iter().flat_map(|(a, b)| [(a, b.min(30.0)), (a.max(60.0), b)]).filter(|(a, b)| b - a > 1e-9).collect();
+    let got = spans_x(&kept);
+    assert_eq!(got.len(), cut.len(), "{got:?} against {cut:?}");
+    for ((a, b), (c, d)) in got.iter().zip(&cut) {
+        assert!(near(*a, *c, 1e-9) && near(*b, *d, 1e-9), "{got:?} against {cut:?}");
+    }
+    // The dash after the gap starts where the whole line's does, at 61, not at 60.
+    assert!(got.iter().any(|(a, _)| near(*a, 61.0, 1e-9)), "{got:?}");
+    // Dots on segments left out are left out (the dot at 60 ends a segment left out).
+    let dots = dash_kept(&steps(), &dashed(&[0.0, 5.0], 0.0), &|s| outside(s)).unwrap();
+    let xs: Vec<f64> = dots.dots.iter().map(|d| d.at.x).collect();
+    let want = [0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0];
+    assert!(xs.len() == want.len() && xs.iter().zip(want).all(|(x, w)| near(*x, w, 1e-9)), "{xs:?}");
+    // Keeping every segment is the whole line's dashing, and keeping none leaves nothing.
+    assert_eq!(dash_kept(&steps(), &pattern, &|_| true).unwrap().path, all.path);
+    let none = dash_kept(&steps(), &pattern, &|_| false).unwrap();
+    assert!(none.path.elements().is_empty() && none.dots.is_empty());
+    // A pattern too fine for the whole line draws it solid, however few segments are kept.
+    assert!(dash_kept(&line(0.0, 1e6), &dashed(&[0.001, 0.001], 0.0), &|s| s.start().x < 1.0).is_none());
+}
+
+#[test]
+fn a_closed_path_with_segments_left_out_is_dashed_in_open_pieces() {
+    // One dash all the way round: with the right side left out it is no longer closed.
+    let keep_left = |s: &PathSeg| s.start().x < 5.0 || s.end().x < 5.0;
+    let whole = dash_kept(&square(10.0), &dashed(&[100.0, 1.0], 0.0), &keep_left).unwrap();
+    assert!(!is_closed(&whole.path), "{:?}", whole.path.to_svg());
+    // The bottom side left out: of the 10 dashes, the one through the start point stays one dash,
+    // the one into the bottom side is cut and the two on it are left out.
+    let kept = dash_kept(&square(100.0), &dashed(&[20.0, 20.0], 10.0), &|s| s.start().y < 50.0 || s.end().y < 50.0).unwrap();
+    assert_eq!(moves(&kept.path), 8, "{}", kept.path.to_svg());
+    assert!(!kept.path.elements().iter().any(|e| matches!(e, PathEl::MoveTo(p) if p.distance(Point::ZERO) < 1e-9)), "{}", kept.path.to_svg());
+}
+
 #[test]
 fn dot_outlines_take_the_cap_shape_and_wind_like_stroked_dashes() {
     let dots = [Dot { at: Point::new(10.0, 0.0), dir: Vec2::new(1.0, 0.0), t: 0.0 }];

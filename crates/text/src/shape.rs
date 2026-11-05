@@ -80,6 +80,8 @@ pub(crate) struct SGlyph {
     /// decided for the whole segment it was shaped in ([`joins`]): on a curved path it is bent
     /// along the path so its joins meet.
     pub cursive: bool,
+    /// The glyph's language has hyphenation break points ([`crate::hyphen::language_has_patterns`]).
+    pub hyphenates: bool,
 }
 
 /// Does `script` join its letters (a cursive script, whose neighbouring glyphs touch)?
@@ -475,12 +477,17 @@ pub(crate) fn shape_range(
 type Profile = Vec<(f64, f64, f64, f64)>;
 type CachedProfile = (Profile, (f64, f64));
 
-fn outline_profile(db: &FontDb, g: &SGlyph, cache: &mut HashMap<(u32, u32), Option<Arc<CachedProfile>>>) -> Option<Arc<CachedProfile>> {
-    let key = (g.face.id(), g.gid);
+fn outline_profile(
+    db: &FontDb,
+    face: &FontFace,
+    gid: u32,
+    cache: &mut HashMap<(u32, u32), Option<Arc<CachedProfile>>>,
+) -> Option<Arc<CachedProfile>> {
+    let key = (face.id(), gid);
     cache
         .entry(key)
         .or_insert_with(|| {
-            let path = db.outline(&g.face, g.gid);
+            let path = db.outline(face, gid);
             let bounds = path.bounding_box();
             if path.elements().is_empty()
                 || path.elements().len() > 512
@@ -535,6 +542,65 @@ fn profile_edges(lines: &[(f64, f64, f64, f64)], y: f64, sx: f64, sy: f64, dx: f
     (left.is_finite() && right.is_finite()).then_some((left, right))
 }
 
+/// The ink gaps between glyph outline `a` and glyph outline `b` placed `advance` after it, at 24
+/// heights between `low` and `high` where both have ink, sorted. Each outline is placed by its
+/// (scale x, scale y, offset x, offset y).
+fn ink_gaps(
+    a: &[(f64, f64, f64, f64)],
+    b: &[(f64, f64, f64, f64)],
+    left: (f64, f64, f64, f64),
+    right: (f64, f64, f64, f64),
+    advance: f64,
+    low: f64,
+    high: f64,
+) -> Vec<f64> {
+    let mut gaps = Vec::new();
+    if !low.is_finite() || !high.is_finite() || high <= low || !advance.is_finite() {
+        return gaps;
+    }
+    for j in 0..24 {
+        let y = low + (high - low) * (f64::from(j) + 0.5) / 24.0;
+        if let (Some((_, ar)), Some((bl, _))) =
+            (profile_edges(a, y, left.0, left.1, left.2, left.3), profile_edges(b, y, right.0, right.1, right.2, right.3))
+        {
+            let gap = advance + bl - ar;
+            if gap.is_finite() {
+                gaps.push(gap);
+            }
+        }
+    }
+    gaps.sort_by(f64::total_cmp);
+    gaps
+}
+
+/// How far an Optical pair moves toward the reference gap (1 = all the way).
+const OPTICAL_PULL: f64 = 0.6;
+/// The narrowest ink gap an Optical correction leaves, as a fraction of the reference gap.
+const OPTICAL_FLOOR: f64 = 0.3;
+/// The most an Optical correction tightens and loosens a pair, in em.
+const OPTICAL_MAX_TIGHTEN: f64 = 0.12;
+const OPTICAL_MAX_LOOSEN: f64 = 0.06;
+/// The reference gap of a face that has none of the reference pairs, in em.
+const OPTICAL_FALLBACK_GAP: f64 = 0.08;
+
+/// The face's own spacing between two straight stems, in font units: the median ink gap of `nn`,
+/// or of `HH`, then `oo`, when the face doesn't map the letter. `None` when it has none of them.
+fn reference_gap(db: &FontDb, face: &FontFace, cache: &mut HashMap<(u32, u32), Option<Arc<CachedProfile>>>) -> Option<f64> {
+    let upem = face.units_per_em();
+    ['n', 'H', 'o'].into_iter().filter(|&c| face.covers(c)).find_map(|c| {
+        let gid = face.glyph_for(c);
+        let profile = outline_profile(db, face, gid, cache)?;
+        let place = (1.0, 1.0, 0.0, 0.0);
+        let gaps = ink_gaps(&profile.0, &profile.0, place, place, face.advance(gid), profile.1.0, profile.1.1);
+        let gap = gaps.get(gaps.len() / 2).copied()?;
+        (gap.is_finite() && gap > 0.0 && gap < upem).then_some(gap)
+    })
+}
+
+/// The correction to an Optical pair's advance: the pair's median ink gap moves part of the way
+/// ([`OPTICAL_PULL`]) toward `target`, the face's reference gap in the drawn size, its narrowest
+/// gap stays at least [`OPTICAL_FLOOR`] of `target` where the pair allows it, and the change is
+/// rounded to one font unit and limited to [`OPTICAL_MAX_TIGHTEN`] and [`OPTICAL_MAX_LOOSEN`].
 #[allow(clippy::too_many_arguments)]
 fn profile_correction(
     a: &[(f64, f64, f64, f64)],
@@ -542,40 +608,39 @@ fn profile_correction(
     left: (f64, f64, f64, f64),
     right: (f64, f64, f64, f64),
     advance: f64,
+    target: f64,
     em: f64,
     upem: f64,
     low: f64,
     high: f64,
 ) -> Option<f64> {
-    if !low.is_finite() || !high.is_finite() || high <= low || !em.is_finite() || em <= 0.0 || !upem.is_finite() || upem <= 0.0 {
+    if !em.is_finite() || em <= 0.0 || !upem.is_finite() || upem <= 0.0 || !target.is_finite() || target <= 0.0 {
         return None;
     }
-    let mut gaps = Vec::new();
-    for j in 0..24 {
-        let y = low + (high - low) * (f64::from(j) + 0.5) / 24.0;
-        if let (Some((_, ar)), Some((bl, _))) =
-            (profile_edges(a, y, left.0, left.1, left.2, left.3), profile_edges(b, y, right.0, right.1, right.2, right.3))
-        {
-            gaps.push(advance + bl - ar);
-        }
-    }
-    if gaps.is_empty() {
-        return None;
-    }
-    gaps.sort_by(f64::total_cmp);
-    let gap = gaps.get(gaps.len() / 2).copied().unwrap_or(0.0);
+    let gaps = ink_gaps(a, b, left, right, advance, low, high);
+    let (Some(&narrowest), Some(&gap)) = (gaps.first(), gaps.get(gaps.len() / 2)) else { return None };
+    let pulled = OPTICAL_PULL * (target - gap);
+    let correction = pulled.max(OPTICAL_FLOOR * target - narrowest).clamp(-OPTICAL_MAX_TIGHTEN * em, OPTICAL_MAX_LOOSEN * em);
     let unit = em / upem;
-    let correction = ((0.08 * em - gap).clamp(-0.25 * em, 0.25 * em) / unit).round() * unit;
-    let correction = correction.clamp(-0.25 * em, 0.25 * em);
+    let correction = ((correction / unit).round() * unit).clamp(-OPTICAL_MAX_TIGHTEN * em, OPTICAL_MAX_LOOSEN * em);
     correction.is_finite().then_some(correction)
 }
 
-/// Move each Optical pair toward an ink gap of 0.08 em, at 24 overlapping vertical slices.
-/// The median avoids a single narrow tip deciding the entire pair. Corrections are rounded to
-/// one font unit and limited to 1/4 em in either direction. Missing ink gives zero correction.
+/// Does `c` take part in Optical spacing? Ideographs, kana, hangul and the fullwidth and CJK
+/// punctuation forms sit on the em grid and dashes join end to end: they keep the font's spacing.
+fn optical_spaces(c: char) -> bool {
+    !matches!(c.script(), Script::Han | Script::Hiragana | Script::Katakana | Script::Hangul | Script::Bopomofo | Script::Yi)
+        && !matches!(c, '\u{3000}'..='\u{303F}' | '\u{3200}'..='\u{33FF}' | '\u{FE30}'..='\u{FE4F}' | '\u{FF00}'..='\u{FFEF}')
+        && !matches!(c, '-' | '\u{2010}'..='\u{2015}' | '\u{2E3A}' | '\u{2E3B}' | '\u{FE58}' | '\u{FE63}' | '\u{FF0D}')
+}
+
+/// Move each Optical pair part of the way toward the face's own stem spacing (see
+/// [`reference_gap`] and [`profile_correction`]), measured at 24 overlapping vertical slices. The
+/// median avoids a single narrow tip deciding the entire pair. Missing ink gives zero correction.
 fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<usize>, &CharStyle)]) {
     let mut cache = HashMap::new();
     let mut corrections: HashMap<[u64; 15], Option<f64>> = HashMap::new();
+    let mut references: HashMap<u32, Option<f64>> = HashMap::new();
     let shaped_advances: Vec<f64> = glyphs.iter().map(|g| g.adv).collect();
     for i in 0..glyphs.len().saturating_sub(1) {
         let Some((a, b)) = glyphs.get(i).zip(glyphs.get(i + 1)) else { continue };
@@ -628,6 +693,8 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
             || right.inline.is_some()
             || left.ch == '\n'
             || right.ch == '\n'
+            || !optical_spaces(left.ch)
+            || !optical_spaces(right.ch)
         {
             continue;
         }
@@ -660,7 +727,12 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
             left.face.upem.to_bits(),
         ];
         let correction = *corrections.entry(key).or_insert_with(|| {
-            let (Some(a), Some(b)) = (outline_profile(db, left, &mut cache), outline_profile(db, right, &mut cache)) else { return None };
+            let reference = *references.entry(left.face.id()).or_insert_with(|| reference_gap(db, &left.face, &mut cache));
+            let reference = reference.map_or(OPTICAL_FALLBACK_GAP * em, |gap| gap * left.sx);
+            let (Some(a), Some(b)) = (outline_profile(db, &left.face, left.gid, &mut cache), outline_profile(db, &right.face, right.gid, &mut cache))
+            else {
+                return None;
+            };
             let low = (a.1.0 * left.sy + left_y).max(b.1.0 * right.sy + right_y);
             let high = (a.1.1 * left.sy + left_y).min(b.1.1 * right.sy + right_y);
             profile_correction(
@@ -669,6 +741,7 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
                 (left.sx, left.sy, left_x, left_y),
                 (right.sx, right.sy, right_x, right_y),
                 advance,
+                reference,
                 em,
                 left.face.upem,
                 low,
@@ -876,6 +949,7 @@ fn inline_glyph(
         no_break: st.no_break,
         vertical_roman: false,
         cursive: false,
+        hyphenates: false,
     }
 }
 
@@ -1256,6 +1330,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             no_break: gst.no_break,
             vertical_roman: gst.standard_vertical_roman,
             cursive,
+            hyphenates: crate::hyphen::language_has_patterns(gst.language.as_deref()),
         });
     }
 }
@@ -1270,16 +1345,38 @@ mod optical_tests {
 
     #[test]
     fn optical_side_profiles_tighten_loosen_and_stay_bounded() {
+        // 100 pt in a 1000-unit font: one font unit is 0.1 pt; the reference gap is 8 pt.
         let a = box_profile(0.0, 80.0);
         let b = box_profile(0.0, 20.0);
         let place = (1.0, 1.0, 0.0, 0.0);
-        let tight = profile_correction(&a, &b, place, place, 120.0, 100.0, 1000.0, 0.0, 100.0).unwrap();
-        let loose = profile_correction(&a, &b, place, place, 60.0, 100.0, 1000.0, 0.0, 100.0).unwrap();
-        assert_eq!(tight, -25.0);
-        assert_eq!(loose, 25.0);
-        assert_eq!(profile_correction(&a, &b, place, place, 88.0, 100.0, 1000.0, 0.0, 100.0), Some(0.0));
-        assert_eq!(profile_correction(&a, &b, place, place, 120.0, 100.0, 1000.0, 0.0, 100.0), Some(tight));
-        assert_eq!(profile_correction(&a, &b, place, place, 120.0, 100.0, 1000.0, 100.0, 100.0), None);
-        assert_eq!(profile_correction(&[], &b, place, place, 120.0, 100.0, 1000.0, 0.0, 100.0), None);
+        let correct = |a: &[(f64, f64, f64, f64)], advance: f64, target: f64| {
+            profile_correction(a, &b, place, place, advance, target, 100.0, 1000.0, 0.0, 100.0)
+        };
+        assert_eq!(correct(&a, 120.0, 8.0), Some(-12.0), "a 40 pt gap tightens by at most 0.12 em");
+        assert_eq!(correct(&a, 60.0, 8.0), Some(6.0), "overlapping ink loosens by at most 0.06 em");
+        assert_eq!(correct(&a, 88.0, 8.0), Some(0.0), "the reference gap itself is left alone");
+        assert!((correct(&a, 98.0, 8.0).unwrap() - -6.0).abs() < 1e-9, "a pair moves 0.6 of the way toward the reference");
+        assert!((correct(&a, 84.0, 8.0).unwrap() - 2.4).abs() < 1e-9, "a tight pair opens 0.6 of the way");
+        assert_eq!(correct(&a, 88.0, 0.0), None);
+        assert_eq!(profile_correction(&a, &b, place, place, 120.0, 8.0, 100.0, 1000.0, 100.0, 100.0), None);
+        assert_eq!(profile_correction(&[], &b, place, place, 120.0, 8.0, 100.0, 1000.0, 0.0, 100.0), None);
+
+        // A right side slanting from x 60 at the bottom to x 100 at the top: the median gap is
+        // near the 20 pt reference, but the top nearly touches. The floor keeps 0.3 of it.
+        let slanted = vec![(0.0, 0.0, 0.0, 100.0), (60.0, 0.0, 100.0, 100.0)];
+        let correction = correct(&slanted, 100.0, 20.0).unwrap();
+        let narrowest = ink_gaps(&slanted, &b, place, place, 100.0, 0.0, 100.0)[0];
+        assert!(correction > 1.0, "the narrowest gap opens: {correction}");
+        assert!(narrowest + correction >= 0.3 * 20.0 - 0.1, "{narrowest} + {correction}");
+    }
+
+    #[test]
+    fn ideographs_kana_fullwidth_forms_and_dashes_keep_the_font_spacing() {
+        for c in ['日', 'カ', 'な', '한', '、', 'Ｗ', '-', '\u{2014}', '\u{FF0D}'] {
+            assert!(!optical_spaces(c), "{c:?}");
+        }
+        for c in ['A', 'v', '7', '.', 'Ω', 'Ж', 'א', 'ب', 'क'] {
+            assert!(optical_spaces(c), "{c:?}");
+        }
     }
 }

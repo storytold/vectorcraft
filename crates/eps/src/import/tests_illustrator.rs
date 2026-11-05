@@ -350,6 +350,35 @@ fn a_legacy_file_with_a_placed_eps_comes_in_through_its_layers() {
     assert!(r.warnings.iter().any(|w| w.contains("placed files")), "{:?}", r.warnings);
 }
 
+/// A legacy file with a linked image (version 7 specification §8.2, §8.3: `(path) modified XG`, then
+/// `XF` with no samples) comes in through its layers, the image as a linked image of that file
+/// showing a placeholder where the matrix puts the image.
+#[test]
+fn a_legacy_file_with_a_linked_image_comes_in_through_its_layers() {
+    let prolog = "/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /k {setcmykcolor} def\n\
+                  /XG {pop pop} def /XF {13 {pop} repeat} def";
+    let raster = "%AI5_File:\n%AI5_BeginRaster\n(photo.tif) 0 XG\n[2 0 0 3 20 80] 0 0 10 20 10 20 8 3 0 0 0 0 XF\n%AI5_EndRaster\n";
+    let body = format!("%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Back) Ln\n0 A\n0 0 0 1 k\n{}\n{raster}LB\n%AI5_EndLayer--\n", tri(10));
+    let file = String::from_utf8(ai(AI8, "", &body)).unwrap().replace("%%EndProlog", &format!("{prolog}\n%%EndProlog"));
+    let r = import(file.as_bytes()).unwrap();
+    assert!(!r.preview);
+    let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["Back"], "{:?}", r.warnings);
+    let art = r.document.layers[0].children().unwrap();
+    assert_eq!(art.len(), 2, "{:?}", r.warnings);
+    let NodeKind::Image(im) = &art[1].kind else { panic!("{:?}", art[1].kind) };
+    assert_eq!(im.link.as_ref().map(|l| l.path.as_str()), Some("photo.tif"));
+    // The image's 10 × 20 pixels from (20, 80) in art space, 2 and 3 points each: 20 20 40 80 on
+    // the page, y down.
+    assert_eq!((im.width, im.height), (10, 20));
+    let (top_left, bottom_right) = (im.xf * Point::ZERO, im.xf * Point::new(10.0, 20.0));
+    assert!(
+        (top_left - Point::new(20.0, 20.0)).hypot() < 0.01 && (bottom_right - Point::new(40.0, 80.0)).hypot() < 0.01,
+        "{top_left:?} {bottom_right:?}"
+    );
+    assert!(r.warnings.iter().any(|w| w.contains("show a placeholder")), "{:?}", r.warnings);
+}
+
 /// A file in the legacy format without layers (Illustrator 3) whose prolog is included: its prolog,
 /// a setup, and `art`.
 fn layerless(art: &str) -> Vec<u8> {
@@ -431,6 +460,26 @@ fn a_legacy_files_paths_keep_their_notes_and_show_center() {
     let attrs: Vec<_> = kids.iter().map(|n| n.extras().attrs.as_deref().map(|a| (a.note.clone(), a.show_center))).collect();
     assert_eq!(attrs, [Some(("first\nsecond line".into(), Some(true))), None], "{:?}", r.warnings);
     assert!(kids[0].shows_center() && !kids[1].shows_center());
+}
+
+/// A version 8 file's object tags open as each object's URL and data.
+#[test]
+fn a_legacy_files_object_tags_open_as_urls_and_data() {
+    let body = format!(
+        "%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Tags) Ln\n0 A\n0 0 0 1 k\n{}\n/AdobeURL (https://example.com) XT\n/sku (B-7) XT\n\
+         u\n{}\nU\n/part () XT\nLB\n%AI5_EndLayer--\n",
+        tri(10),
+        tri(40)
+    );
+    let r = import(&ai(AI8, "", &body)).unwrap();
+    let kids = r.document.layers[0].children().unwrap();
+    let attrs: Vec<_> = kids.iter().map(|n| n.extras().attrs.as_deref().map(|a| (a.url.clone(), a.data.clone()))).collect();
+    assert_eq!(
+        attrs,
+        [Some(("https://example.com".into(), vec![("sku".into(), "B-7".into())])), Some((String::new(), vec![("part".into(), String::new())]))],
+        "{:?}",
+        r.warnings
+    );
 }
 
 #[test]

@@ -5054,6 +5054,8 @@ digits	Malayalam	Malaiàlam
 @msg	Create Outlines: select text objects	Crea contorns: seleccioneu objectes de text
 @msg	damaged	malmès
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	La recuperació de dades no té cap lloc on guardar còpies: configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	La recuperació de dades no pot guardar còpies a {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	No es poden carregar complements des de {path}: {e}
 @msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	les dades que llegeix el programa estan malmeses o tallades, o el programa demana una posició en un fitxer que no en té
 @msg	decimals must be {_1}–{_2} (got {_3})	els decimals han de ser {_1}–{_2} (rebut {_3})
 @msg	Dimension point is outside the canvas	El punt de dimensió és fora del llenç
@@ -5179,6 +5181,7 @@ digits	Malayalam	Malaiàlam
 @msg	library panel `{given}` isn't missing its library	al panell de biblioteca `{given}` no li falta la biblioteca
 @msg	library panel `{given}` isn't open	el panell de biblioteca `{given}` no està obert
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les imatges enllaçades mostren la previsualització de baixa resolució desada al fitxer fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les imatges enllaçades sense previsualització al fitxer mostren un marcador de posició fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Fusió de pintura interactiva: seleccioneu un grup de pintura interactiva i els traçats que voleu afegir
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	La pintura interactiva accepta traçats i traçats compostos: convertiu abans el text, les imatges i altres objectes a traçats
 @msg	Live Paint: select paths or compound paths	Pintura interactiva: seleccioneu traçats o traçats compostos
@@ -6320,6 +6323,10 @@ breakText	Glyphs	Glifs
 	Bow	Arc
 	Spike	Pic
 	Skip Spaces	Omet els espais
+	Release Type on a Path…	Allibera el text sobre un traçat…
+	Release Type on a Path	Allibera el text sobre un traçat
+	Text and Path	Text i traçat
+	Path Only	Només traçat
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	La il·lustració és massa gran per copiar-la com a imatge: les altres aplicacions no en reben cap PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6331,3 +6338,39 @@ breakText	Glyphs	Glifs
 	Fully Outside	Totalment fora
 	No artboards match.	Cap tauler no coincideix.
 	Chosen: {n} of {total}	Triats: {n} de {total}
+
+# Contour add-on
+	Contour	Contorn
+	Contour Tool	Eina de contorn
+	Sharp	Punxegut
+	Bake	Expandeix
+	Turn the Contour into plain paths	Converteix el contorn en traçats simples
+	Set Corners…	Defineix les cantonades…
+	All Anchors	Tots els ancoratges
+	Odd-Numbered Anchors	Ancoratges senars
+	Even-Numbered Anchors	Ancoratges parells
+	Minimum angle	Angle mínim
+	Maximum angle	Angle màxim
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Selecciona les enllaçades
+	Select Embedded	Selecciona les incrustades
+	Select Missing	Selecciona les que falten
+	Select Modified	Selecciona les modificades
+	Select by Link Status	Selecciona per estat de l’enllaç
+	Select by Link Status…	Selecciona per estat de l’enllaç…
+	Search images	Cerca imatges
+	No images match.	Cap imatge no coincideix.
+@msgplural	Selected {n} linked image|Selected {n} linked images	S’ha seleccionat {n} imatge enllaçada|S’han seleccionat {n} imatges enllaçades
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	S’ha seleccionat {n} imatge incrustada|S’han seleccionat {n} imatges incrustades
+@msgplural	Selected {n} missing image|Selected {n} missing images	S’ha seleccionat {n} imatge que falta|S’han seleccionat {n} imatges que falten
+@msgplural	Selected {n} modified image|Selected {n} modified images	S’ha seleccionat {n} imatge modificada|S’han seleccionat {n} imatges modificades
+@msgplural	Selected {n} image|Selected {n} images	S’ha seleccionat {n} imatge|S’han seleccionat {n} imatges
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} més està oculta o bloquejada|{selected}; {n} més estan ocultes o bloquejades
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} més és en una capa de plantilla|{selected}; {n} més són en capes de plantilla
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} més és fora del grup aïllat|{selected}; {n} més són fora del grup aïllat
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} més no es pot seleccionar ara|{selected}; {n} més no es poden seleccionar ara
+
+# Compound Shapes add-on
+	Compound Shapes	Formes compostes
+	Shape Mode Buttons Make Compound Shapes	Els botons de mode de forma creen formes compostes

@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-01 · **Change:** minor (native format: dynamic symbols, #4938) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (PDF import: DeviceN gradients of a spot ink over process plates, #3235) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/formats.rs`). Illustrator's list comes from its public
@@ -18,7 +18,7 @@ from the public specifications, and users' own `.ai` files are used locally only
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
 | Formats opened or placed | ~30 | 29 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, PICT, PS |
-| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, artboards, transparency, opacity masks, clipping) or as legacy version 7 (layers and groups, one artboard per file) |
+| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, gradients, patterns, artboards, transparency, opacity masks, clipping) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 17 | missing: DWG, 3D (OBJ/USDA/glTF); extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
 
@@ -64,10 +64,20 @@ private editing data. VectorCraft:
   their fills and strokes (a compound path as one path of all its subpaths), process, spot and global colors, swatches and color groups, guides,
   hidden and locked objects, object names, every artboard with its name, the transparency of objects and layers
   (opacity, blending mode, isolation, knockout and knockout shape), objects' opacity masks, and clipping groups and
-  clipping layers clipped by a path or compound path. Type, gradients, patterns, images, symbols, other clipping
-  objects and live objects are written as plain filled and stroked paths, each with a warning; the opacity and
-  blending mode of single fills and strokes, opacity masks on layers and effects other than geometry effects are
-  left out.
+  clipping layers clipped by a path or compound path, linear and radial gradients on fills and strokes (with their
+  stops' opacity, midpoints and spot colors, elliptical radials and focal points) and gradient swatches, and
+  patterns whose tiles make a grid and hold their art within the tile, with no pattern fill in that art, as
+  pattern definitions with their fills, strokes and swatches. Embedded images are written with their pixels (gray,
+  RGB or CMYK ink amounts, and their alpha channel) and linked images as placed files with their path, their folder
+  relative to the document's and a preview; images that can't be decoded or have more than 33,554,432 pixels are
+  written as their outlines filled mid gray, images of 16 bits a channel at 8 bits, and linked images in opacity
+  masks and pattern tiles as embedded images, each with a warning. Type, other patterns, symbols, other clipping
+  objects and live objects (placed documents included) are written as plain filled and stroked paths, and freeform gradients, gradients along
+  or across a stroke and gradients without stops, with more than 256 stops or without extent as their average
+  color, each with a warning. Gradients that dither or mix their colors perceptually are written as classic
+  gradients, and gradient stops linked to global process colors as their colors, each with a warning. The opacity
+  and blending mode of single fills and strokes, opacity masks on layers, the placement of pattern swatches that
+  move, turn or scale their pattern, and effects other than geometry effects are left out.
 - **Writes** a legacy `.ai` of version 7 (Save As › `ai` › Version: Legacy (version 7), `aiVersion: "7"`): the
   PostScript form, from the published *Adobe Illustrator File Format Specification* version 7.0
   ([PRONOM fmt/423](https://www.nationalarchives.gov.uk/PRONOM/fmt/423)), which apps reading `.ai` open with its
@@ -115,6 +125,11 @@ private editing data. VectorCraft:
   and word spacing (`TC`, `TW`), hanging punctuation (`Tq`) and hyphenation (`Th`). Its patterns in
   the version 7 form (a list of `@` and `&` layers, `_ &` for the tile's background) open as pattern swatches,
   with a fill's offset, scale, rotation, reflection and shear applied before its matrix.
+  Its area type with several linked areas opens as threaded frames, one for each area with its own matrix,
+  and the story flows through them.
+  with a fill's offset, scale, rotation, reflection and shear applied before its matrix. Its linked images in
+  the version 7 form (`(path) modified XG`, then `XF` with no samples) come in as linked images of their files,
+  showing a placeholder where the image goes until the file is relinked in the Links panel.
 - Estimate: **~65%** for real exchange with Illustrator users (open: ~75%; save: PDF-compatible, or legacy
   version 7 with layers and groups; not yet tested by users who hand files back).
   Closing the open-side issues: 10–20 h with users' files.
@@ -169,6 +184,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | PDF import: the stops of an axial or radial shading in a DeviceN space of one spot ink and process plates link to the ink's swatch and keep the plates (`GradientStop.plates` in the native format); PDF and EPS export write them in a DeviceN space again (#3235) |
 | 2026-11-01 | minor | Native format: a symbol's Symbol Type (`dynamic`) and a dynamic symbol instance's appearance changes to objects of its art (`symbol_overrides`) round-trip; both are left out when unset, so other documents save unchanged (#4938). `.ai` reading and writing of dynamic symbols remains. |
 | 2026-11-01 | minor | Exports draw each artboard's background color behind its art (#4937): PNG, JPEG, GIF, TIFF, WebP, BMP, Targa and PSD (a layer of its own; on a transparent background too), PDF, SVG and EPS pages, a `.ai` file's PDF pages and PostScript and PDF print; `includeArtboardFill: false` leaves it out. Files with editing data (Preserve Editing, `.ai`, EPS, native) keep it as the artboard's color and reopen without extra art. Not read from the reference app's own `.ai` data, nor written to it. DXF, EMF and WMF leave it out |
 | 2026-10-31 | minor | PDF import finds an installed font whose PDF name holds hyphens (`Noto-Sans-Bold` is Noto Sans, Bold: the longest part before a hyphen that names an installed family) and a composite font by its CIDFont's name rather than its base name, which ends in the CMap's (`Name-Identity-H`, [ISO 32000-1 §9.7.6.1](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf)); a missing font is split only before a style part (`Helvetica-BoldOblique`), so it is reported as `MS PGothic`, not `MS`; scores unchanged (estimated) |

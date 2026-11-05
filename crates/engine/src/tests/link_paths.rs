@@ -77,11 +77,8 @@ fn linked_files_on_other_computers_are_never_read() {
         }
         s.execute("links.updateChanged", &json!({})).unwrap();
         s.start_link_scan();
-        let t0 = std::time::Instant::now();
-        while s.poll_link_scan().is_none() {
-            assert!(t0.elapsed().as_secs() < 10, "the look never finished");
-            std::thread::yield_now();
-        }
+        s.wait_link_scan();
+        assert!(s.poll_link_scan().is_some(), "no look ran");
     });
     assert_eq!(far_reads(&seen), Vec::<&String>::new());
     // The watch kept no stamp of them (`//tmp/…` would have one had it been looked at).

@@ -17,6 +17,7 @@ use crate::{CacheKey, VectorcraftApp, now_ms, widgets};
 
 mod artboards;
 mod context;
+mod contour_bar;
 mod cursor;
 mod drag;
 mod fill;
@@ -361,6 +362,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         task_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {
+        contour_bar::contour_bar(app, ui, &xf);
+    }
+    if app.ui.screen_mode < 3 {
         crate::free_transform::show(app, ui, xf.rect);
     }
     artboard_name_editor(app, ui, &xf);
@@ -460,11 +464,12 @@ fn canvas_cursor(app: &mut VectorcraftApp, ui: &Ui, view_info: vectorcraft_engin
             }
             Some(hp)
                 if custom
-                    && crate::cursors::paint_glyphs(crate::cursors::HIDES_ONLY_WHEN_KEY, ui.input(|i| i.focused))
+                    && crate::cursors::paint_glyphs(crate::cursors::HIDES_ONLY_WHEN_KEY, ui.input(|i| i.focused), app.services.no_cursor_theme)
                     && crate::cursors::paint(&painter, c, hp, 1.0 / ui_scale) =>
             {
-                // No cursor theme (Wayland): the glyph is painted, the system pointer stays (#2450).
-                if crate::cursors::hide_system_pointer(app.services.no_cursor_theme) { egui::CursorIcon::None } else { cursor_icon(c) }
+                // The painted glyph stands in for the hidden system pointer. Without a cursor theme
+                // (Wayland) none is painted: the system pointer can't be hidden there (#2450).
+                egui::CursorIcon::None
             }
             _ => cursor_icon(c),
         }

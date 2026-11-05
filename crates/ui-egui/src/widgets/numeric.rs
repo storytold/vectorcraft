@@ -20,10 +20,12 @@ pub(crate) fn typed_unit(ctx: &egui::Context, unit: Unit) -> Unit {
 }
 
 /// `text` typed in a numeric field, with a decimal comma read as a point: `0,1 mm` is `0.1 mm`
-/// (#3837). Text with a point keeps its commas, so `1,000.5` is still refused rather than read
-/// with two decimal separators, and so does a number that reads as thousands ([`thousands`]).
+/// (#3837), and each number of a sum reads its own separator, so `100.5 mm-0,5` (a comma typed
+/// after the value the field shows) is 100 mm (#5684). A number written with both separators has
+/// two points once read, so `1,000.5` and `1.234,5` are refused rather than guessed at; so is a
+/// number that reads as thousands ([`thousands`]).
 pub(super) fn decimal_point(text: &str) -> std::borrow::Cow<'_, str> {
-    if text.contains(',') && !text.contains('.') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
+    if text.contains(',') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
 }
 
 /// Is `text` a number written with a thousands comma, as `1,000` or `12,500 mm`: one to three
@@ -59,20 +61,35 @@ pub fn num_field_within(
     bounds: RangeInclusive<f64>,
 ) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], false)
+    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], false, "")
+}
+
+/// [`num_field_within`] whose empty value reads `empty` (Transform Each's Absolute scales read
+/// "Mixed" when the selected objects differ): typing replaces it, as it replaces the value shown.
+pub fn num_field_within_empty(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    value: Option<f64>,
+    empty: &str,
+    unit: Unit,
+    width: f32,
+    bounds: RangeInclusive<f64>,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], false, empty)
 }
 
 /// [`num_field`] for a row whose visible label is not an adjacent label widget (a grid cell with
 /// its label painted separately): screen readers name the field `name` (already translated).
 pub fn num_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, name, value, unit, width, false, ANY, &[], false)
+    unit_field(ui, id, label, name, value, unit, width, false, ANY, &[], false, "")
 }
 
 /// The field returns valid typed distances immediately and preserves the text being edited.
 pub fn num_field_live(ui: &mut Ui, id: impl std::hash::Hash, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     let label = take_previous_label(ui);
-    unit_field(ui, id, label, None, value, unit, width, false, ANY, &[], true)
+    unit_field(ui, id, label, None, value, unit, width, false, ANY, &[], true, "")
 }
 
 /// Any number: the bounds of a field that has none.
@@ -100,9 +117,10 @@ fn unit_field(
     bounds: RangeInclusive<f64>,
     stops: &[f64],
     live: bool,
+    empty: &str,
 ) -> Option<f64> {
     let id = id_with(ui.scope_id(), id);
-    let shown = value.map(|v| unit.format(v)).unwrap_or_default();
+    let shown = value.map(|v| unit.format(v)).unwrap_or_else(|| empty.to_string());
     take_dialog_focus(ui, id, &shown);
     let (mut buf, commit, resp, rect) = recessed_text(ui, id, &shown, width, 1, label, name);
     select_all_on_focus(ui, &resp, &buf);
@@ -116,7 +134,7 @@ fn unit_field(
     let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds_unit);
     let commit = commit && buf != shown;
     if commit {
-        match read(&buf).or_else(|| if share_of_value { share_of(&decimal_point(&buf), value?) } else { None }) {
+        match read(&buf).or_else(|| if share_of_value { share_of(&buf, value?) } else { None }) {
             Some(v) => {
                 let clamped = within(v, &bounds);
                 let formatted = unit.format(clamped);
@@ -152,9 +170,11 @@ fn unit_field(
 }
 
 /// A percentage typed alone (`50%`, `150 %`, `100/3%`) as that share of `value`; `None` for any
-/// other text. `Unit::parse` reads a bare percentage as nothing, having no value to take it of.
+/// other text. `Unit::parse` reads a bare percentage as nothing, having no value to take it of. A
+/// decimal comma is read ([`decimal_point`]) after the `%` is dropped, so `12,5%` is 12.5% and
+/// `1,000%` is refused as thousands rather than read as 1%.
 pub(super) fn share_of(text: &str, value: f64) -> Option<f64> {
-    let percent = vectorcraft_doc::parse_number(text.trim().strip_suffix('%')?)?;
+    let percent = vectorcraft_doc::parse_number(&decimal_point(text.trim().strip_suffix('%')?))?;
     Some(value * percent / 100.0)
 }
 
@@ -330,7 +350,7 @@ pub fn size_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str
             }
         });
     }
-    unit_field(ui, id, label, name, value, unit, width, true, ANY, &[], false)
+    unit_field(ui, id, label, name, value, unit, width, true, ANY, &[], false, "")
 }
 
 /// [`plain_field`] for a number kept within `range` (the values of dialogs, preferences and panels
@@ -598,7 +618,7 @@ pub fn spin_field_stops_named(
 ) -> Option<f64> {
     let label = take_previous_label(ui);
     spin_generic(ui, label, value, None, None, None, width, step, min, presets, presets, &|v| unit.format(v), &mut |ui, fw, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets, false)
+        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets, false, "")
     })
     .and_then(SpinPick::value)
 }
@@ -655,7 +675,7 @@ pub fn spin_field_auto_named(
 ) -> Option<SpinPick> {
     let label = take_previous_label(ui);
     spin_generic(ui, label, value, auto, None, None, width, step, min, presets, &[], &|v| unit.format(v), &mut |ui, fw, label| {
-        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[], false)
+        unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, &[], false, "")
     })
 }
 

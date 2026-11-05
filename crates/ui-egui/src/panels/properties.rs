@@ -462,7 +462,7 @@ fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
 /// Edit Artboards (the Artboard tool): the active artboard's name, which can be edited to rename
 /// it, and the Artboard Options icon; its position and size, its preset and
 /// orientation (#671) (with Scale Artwork with Artboard on, a new size scales its art, #602; a new
-/// W or H, preset or orientation goes to every selected artboard, in one undo step), its Fill (background color), Move
+/// W or H, preset or orientation goes to every selected artboard, in one undo step), its Fill (background color, also for every selected artboard), Move
 /// and Scale Artwork with Artboard, New Artboard and Delete Artboard, and Quick Actions: Rearrange All (#681) and
 /// Exit back to the Selection tool (#530).
 fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -681,8 +681,11 @@ fn artboard_fill_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, color: Opt
             None => {}
         }
     });
+    // A Fill chosen from the list goes to every selected artboard, in one undo step (#5698).
     if let Some(c) = set {
-        app.run("artboard.setProps", json!({"index": i, "color": c.as_ref().map(super::color_json)})).ok();
+        let color = c.as_ref().map(super::color_json);
+        let indices = super::artboards::renamed_with(app, i);
+        super::artboards::set_props(app, &indices, json!({}), |j, _| Some(json!({"index": j, "color": color}))).ok();
     }
     if pick {
         app.run("ui.colorPicker", json!({"artboard": i})).ok();

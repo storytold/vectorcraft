@@ -813,6 +813,12 @@ pub fn paragraph_is_rtl(text: &str, direction: Option<vectorcraft_doc::ParaDirec
     layout::is_rtl(layout::para_bidi(text, direction).as_ref())
 }
 
+/// Is the character at byte `at` of paragraph `text` set right to left: its bidi level is odd, with
+/// the paragraph's `direction` (None: from its first strong character)?
+pub fn char_is_rtl(text: &str, direction: Option<vectorcraft_doc::ParaDirection>, at: usize) -> bool {
+    layout::para_bidi(text, direction).is_some_and(|info| info.levels.get(at).is_some_and(|level| level.is_rtl()))
+}
+
 /// Text stored in visual order (as PDF content draws it, each glyph where it is drawn), back in
 /// logical order: the order of its characters (indices into `visual.chars()`) and whether its
 /// paragraph runs right to left; laid out that way, it reads as drawn. `None` when nothing in it is

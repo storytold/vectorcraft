@@ -160,8 +160,12 @@ impl<'a> Reader<'a> {
             return Ok(());
         }
         if line.starts_with("AI5_BeginRaster") {
+            // An `XG` outside a raster object names no image in it.
+            self.image_link = None;
             self.raster = Some(Raster::default());
         } else if line.starts_with("AI5_EndRaster") {
+            // A file `XG` named in this raster object is no later one's.
+            self.image_link = None;
             if let Some(Raster { operands: Some(vals), hex, .. }) = self.raster.take() {
                 return self.image_from(vals, &hex);
             }

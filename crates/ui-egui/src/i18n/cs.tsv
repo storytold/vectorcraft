@@ -4291,6 +4291,8 @@ imageTrace	Outline	Obrys
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Vytvořit z vodítek: vodítka vytvářejí více než {MAX_PIECES} řezů
 @msg	Create from Selection: the selection has no area	Vytvořit z výběru: výběr nemá žádnou plochu
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Obnovení dat nemá kam ukládat kopie: nastavte Předvolby → Práce se soubory → Obnovení dat → Složka (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	Obnovení dat nemůže ukládat kopie do {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Zásuvné moduly nelze načíst z {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	nástrojem Přímý výběr vyberte kotevní body, kde se má cesta rozdělit (ne koncové body otevřených cest)
 @msg	Divide Objects Below: select a path	Rozdělit objekty pod: vyberte cestu
 @msg	Divide Objects Below: select exactly one path	Rozdělit objekty pod: vyberte právě jednu cestu
@@ -4979,6 +4981,7 @@ imageTrace	Outline	Obrys
 @msg	graphs come in as plain art, without their data or settings	grafy se načtou jako obyčejná grafika, bez svých dat a nastavení
 @msg	an image whose data is cut short was left out	obrázek s useknutými daty byl vynechán
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	propojené obrázky se zobrazují jako náhled v nízkém rozlišení uložený v souboru, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	propojené obrázky bez náhledu v souboru se zobrazují jako zástupný symbol, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	text v oblasti v rámcích příliš nízkých pro řádek písma, ve kterém se zde zobrazuje, dostal vyšší rámce ({_1}): jinak by nebyl vidět
 @msg	its editing data doesn't say where its art is	z jeho dat pro úpravy není zřejmé, kde je kresba
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	tento soubor byl uložen bez kompatibility s PDF a jeho data pro úpravy nelze přečíst ({why})
@@ -6334,6 +6337,10 @@ breakText	Glyphs	Glyfy
 	Bow	Oblouk
 	Spike	Špička
 	Skip Spaces	Přeskočit mezery
+	Release Type on a Path…	Uvolnit text na cestě…
+	Release Type on a Path	Uvolnit text na cestě
+	Text and Path	Text a cesta
+	Path Only	Pouze cesta
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Kresba je příliš velká na zkopírování jako obrázek: ostatní aplikace z ní nedostanou PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6345,3 +6352,39 @@ breakText	Glyphs	Glyfy
 	Fully Outside	Zcela vně
 	No artboards match.	Žádná pracovní plocha neodpovídá.
 	Chosen: {n} of {total}	Zvoleno: {n} z {total}
+
+# Contour add-on
+	Contour	Obrys
+	Contour Tool	Nástroj Obrys
+	Sharp	Ostrý
+	Bake	Rozložit
+	Turn the Contour into plain paths	Převést obrys na běžné cesty
+	Set Corners…	Nastavit rohy…
+	All Anchors	Všechny kotevní body
+	Odd-Numbered Anchors	Liché kotevní body
+	Even-Numbered Anchors	Sudé kotevní body
+	Minimum angle	Minimální úhel
+	Maximum angle	Maximální úhel
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Vybrat propojené
+	Select Embedded	Vybrat vložené
+	Select Missing	Vybrat chybějící
+	Select Modified	Vybrat upravené
+	Select by Link Status	Vybrat podle stavu propojení
+	Select by Link Status…	Vybrat podle stavu propojení…
+	Search images	Hledat obrazy
+	No images match.	Žádný obraz neodpovídá.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Vybrán {n} propojený obraz|Vybrány {n} propojené obrazy|Vybráno {n} propojených obrazů
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Vybrán {n} vložený obraz|Vybrány {n} vložené obrazy|Vybráno {n} vložených obrazů
+@msgplural	Selected {n} missing image|Selected {n} missing images	Vybrán {n} chybějící obraz|Vybrány {n} chybějící obrazy|Vybráno {n} chybějících obrazů
+@msgplural	Selected {n} modified image|Selected {n} modified images	Vybrán {n} upravený obraz|Vybrány {n} upravené obrazy|Vybráno {n} upravených obrazů
+@msgplural	Selected {n} image|Selected {n} images	Vybrán {n} obraz|Vybrány {n} obrazy|Vybráno {n} obrazů
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; další {n} je skrytý nebo zamčený|{selected}; další {n} jsou skryté nebo zamčené|{selected}; dalších {n} je skrytých nebo zamčených
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; další {n} je na vrstvě šablony|{selected}; další {n} jsou na vrstvách šablony|{selected}; dalších {n} je na vrstvách šablony
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; další {n} je mimo izolovanou skupinu|{selected}; další {n} jsou mimo izolovanou skupinu|{selected}; dalších {n} je mimo izolovanou skupinu
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; další {n} teď nelze vybrat|{selected}; další {n} teď nelze vybrat|{selected}; dalších {n} teď nelze vybrat
+
+# Compound Shapes add-on
+	Compound Shapes	Složené tvary
+	Shape Mode Buttons Make Compound Shapes	Tlačítka režimů tvarů vytvářejí složené tvary

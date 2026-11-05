@@ -1,6 +1,9 @@
 use super::containers::close;
 use super::document::slot_of;
-use super::types::{BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, Place, line_width};
+use super::types::{
+    BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, MAX_TAG_TEXT, MAX_TAGS, Place, URL_TAG,
+    line_width,
+};
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
     Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, StrokeLayer, V, obj, paint,
@@ -71,6 +74,36 @@ impl<'a> Reader<'a> {
                 None => p.broken = true,
             }
         }
+    }
+
+    /// `/identifier (string) XT` (version 7 specification §7): a tag on the object before it. The
+    /// `AdobeURL` tag sets the object's URL, and every other tag is added to the object's data in
+    /// order, up to [`MAX_TAGS`]. A tag with no object before it, with an empty identifier, or with
+    /// an identifier or string longer than [`MAX_TAG_TEXT`] bytes is ignored, and so are tags in a
+    /// pattern's or brush's art, which is not an object of the document. A clipping path's tags are
+    /// its own, not those of the copy that paints its fill.
+    fn object_tag(&mut self, vals: &[V], hidden: bool) {
+        let [.., V::Name(id), V::Str(value)] = vals else {
+            self.note_unknown("XT", hidden);
+            return;
+        };
+        if id.is_empty() || id.len() > MAX_TAG_TEXT || value.len() > MAX_TAG_TEXT || !self.after_object || self.pattern.is_some() {
+            return;
+        }
+        let (id, value) = (id.clone(), obj::text(value));
+        let Some(kids) = self.frames.last_mut().map(|f| &mut f.children) else { return };
+        let Some(mut at) = kids.len().checked_sub(1) else { return };
+        if at > 0 && kids.get(at).is_some_and(|n| self.clip_fills.contains(&n.id)) {
+            at -= 1;
+        }
+        let Some(n) = kids.get_mut(at) else { return };
+        n.edit_attrs(|a| {
+            if id == URL_TAG {
+                a.url = value;
+            } else if a.data.len() < MAX_TAGS {
+                a.data.push((id, value));
+            }
+        });
     }
 
     pub(super) fn op(&mut self, w: &str, hidden: bool) -> Result<(), String> {
@@ -211,6 +244,12 @@ impl<'a> Reader<'a> {
                 Some(0.0) => self.gs.show_center = None,
                 _ => {}
             },
+            // Object tags (§7): `/identifier (string) XT` after the object it tags. The state written
+            // after a group or a mesh is still theirs after its tags.
+            "XT" => {
+                self.object_tag(&vals, hidden);
+                (self.group_ended, self.mesh_ended) = (group_ended, mesh_ended);
+            }
             "w" => {
                 if let Some(v) = Self::nums(&vals).last().filter(|v| v.is_finite() && **v >= 0.0) {
                     self.gs.width = *v;
@@ -332,6 +371,9 @@ impl<'a> Reader<'a> {
                     r.operands = Some(vals);
                 }
             }
+            // A linked image (§8.2, §8.3): `(path) modified XG` names the file of the `XF` image after
+            // it, which has `XI`'s operands and no samples.
+            "XG" | "XF" => self.image_link_op(w, vals, hidden)?,
             // A plugin group ends; a blend's record follows on `%` lines.
             "XP" => {
                 let name = vals.iter().find_map(V::text).unwrap_or_default();
@@ -496,8 +538,16 @@ impl<'a> Reader<'a> {
     /// The state block of a layer whose art ended (`Xy`, `Xd`, `XW`, then `LB`) is read at the
     /// `LB`, and can have the stroke style between its `Xy` and `Xd`: that keeps the layer's state,
     /// and what a mesh or blend before it had (`mesh_undo`).
+    /// After an image, the operators that end its raster (`XH`, `Xr` and the `N` after
+    /// `%AI5_EndRaster`) keep it the object its name and opacity mask go to.
     fn state_block_continues(&mut self, w: &str) {
-        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB") {
+        if self.image_tail && matches!(w, "XH" | "XT" | "Xr" | "N") {
+            return;
+        }
+        self.image_tail = false;
+        // An object's tags (`XT`) follow it one after another, and an image's follow the `XH` that
+        // ends its data.
+        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH") {
             return;
         }
         self.after_object = false;
@@ -714,6 +764,23 @@ impl<'a> Reader<'a> {
         look.name = object.name.clone().or(look.name.take());
         look.visible = object.visible;
         look.locked = object.locked;
+        // The object's note, Show Center, URL and data (object tags) stay with the look that stands
+        // for it, in place of the look's own where the object has them.
+        if let Some(a) = object.extras().attrs.as_deref().cloned() {
+            look.edit_attrs(|l| {
+                if a.show_center.is_some() {
+                    l.show_center = a.show_center;
+                }
+                if !a.url.is_empty() {
+                    l.url = a.url;
+                }
+                if !a.note.is_empty() {
+                    l.note = a.note;
+                }
+                let room = MAX_TAGS.saturating_sub(l.data.len());
+                l.data.extend(a.data.into_iter().take(room));
+            });
+        }
         if !hidden {
             self.drawn_looks += 1;
         }

@@ -1,8 +1,9 @@
 //! Type in the legacy format (version 7 specification §15): text objects `type To` … `TO`, their
-//! text path (`a b c d tx ty startPt Tp`, an area's frame or the path type runs along, `TP`), the
-//! modal character and paragraph attributes (`Tr Tf Ts Tz Tt TA Tl Ta Ti`, and §15.4.7 and §22's
-//! letter and word spacing `TC TW`, hanging punctuation `Tq` and hyphenation `Th`), the paint style, and
-//! the characters (`Tx`, `Tj`, overflow `TX`; `\r` ends a paragraph). Final-form operators (the
+//! text paths (`a b c d tx ty startPt Tp`, an area's frame, one for each linked area, or the path
+//! type runs along, `TP`), the modal character and paragraph attributes
+//! (`Tr Tf Ts Tz Tt TA Tl Ta Ti`, and §15.4.7 and §22's letter and word spacing `TC TW`, hanging
+//! punctuation `Tq` and hyphenation `Th`), the paint style, and the characters (`Tx`, `Tj`,
+//! overflow `TX`; `\r` ends a paragraph). Final-form operators (the
 //! computed positions, §15.1) are skipped: the type is laid out again. Strings are decoded by the
 //! file's `TE` encoding, else as Windows-1252; a re-encoded font `/_name` is the font its
 //! `%AI3_BeginEncoding` names (else `name`).
@@ -14,27 +15,46 @@ use vectorcraft_geom::AnchorKind;
 
 use super::super::obj::V;
 use super::art::path_data;
-use super::{FLIP, GState, Reader};
+use super::{FLIP, GState, HashSet, Node, NodeId, Reader};
 use crate::latin;
 
 /// Most characters of type read in one file.
 const MAX_CHARS: usize = 1 << 22;
 /// Largest type size and indent read (points).
 const MAX_SIZE: f64 = 1e4;
+/// Most text paths read in one text object (its linked areas); the frames of others are left out,
+/// with a warning.
+const MAX_TEXT_PATHS: usize = 4096;
+/// Most frames of linked areas times characters of their story: the story is laid out again
+/// through its frames when the file opens. The frames of the areas past it are left out, with a
+/// warning.
+const MAX_THREAD_WORK: usize = MAX_CHARS;
+/// The warning when [`MAX_TEXT_PATHS`] or [`MAX_THREAD_WORK`] leaves frames of linked areas out.
+const LINKED_AREAS_LEFT_OUT: &str = "linked type areas past VectorCraft's limits were left out";
+
+/// A text path (`Tp` … `TP`).
+#[derive(Debug, Default)]
+struct TextPath {
+    /// `Tp`'s matrix: text space (y up) → art space.
+    matrix: Option<Affine>,
+    /// Where type on a path starts: a segment's index plus how far along it.
+    start: f64,
+    /// The frame or path, in art space, and the kind of the anchor each of its segments ends on.
+    path: Option<(BezPath, Vec<AnchorKind>)>,
+}
 
 /// A text object being read.
 #[derive(Debug, Default)]
 pub(super) struct LegacyText {
     /// `To`'s type: 0 point type, 1 area type, 2 type on a path.
     kind: i64,
-    /// `Tp`'s matrix: text space (y up) → art space.
-    matrix: Option<Affine>,
-    /// Where type on a path starts: a segment's index plus how far along it.
-    start: f64,
+    /// Its text paths in file order: area type has one for each linked area (§15.5.3).
+    paths: Vec<TextPath>,
     /// Between `Tp` and `TP`: the path read is the text path.
     in_path: bool,
-    /// The frame or path, in art space, and the kind of the anchor each of its segments ends on.
-    path: Option<(BezPath, Vec<AnchorKind>)>,
+    /// It has more than [`MAX_TEXT_PATHS`] text paths: the paths read past them are left out.
+    past_limit: bool,
+    /// The story: the characters after every text path, in file order.
     runs: Vec<TextRun>,
     /// Each paragraph's attributes, as they were at its first character.
     paras: Vec<ParaStyle>,
@@ -144,27 +164,28 @@ impl Reader<'_> {
             6 => (nums::<6>(vals), None),
             _ => (None, None),
         };
-        if let Some(m) = m {
-            let m = Affine::new(m);
+        let matrix = m.map(Affine::new).filter(|m| {
             let det = m.determinant();
-            if det.is_finite() && det.abs() > 1e-12 {
-                t.matrix = Some(m);
-            }
+            det.is_finite() && det.abs() > 1e-12
+        });
+        let start = start.filter(|s| s.is_finite() && *s >= 0.0).unwrap_or(0.0);
+        t.past_limit |= t.paths.len() >= MAX_TEXT_PATHS;
+        if !t.past_limit {
+            t.paths.push(TextPath { matrix, start, path: None });
         }
-        t.start = start.filter(|s| s.is_finite() && *s >= 0.0).unwrap_or(0.0);
         t.in_path = true;
     }
 
-    /// The path painted (or `TP`, ending the text path): the text object's frame or path.
+    /// The path painted (or `TP`, ending the text path): the text path's frame or path.
     pub(super) fn text_path(&mut self) {
         let path = std::mem::take(&mut self.path);
         let kinds = std::mem::take(&mut self.path_kinds);
         self.end_path_quietly();
-        if let Some(t) = self.text.as_mut()
-            && t.path.is_none()
+        if let Some(p) = self.text.as_mut().filter(|t| !t.past_limit).and_then(|t| t.paths.last_mut())
+            && p.path.is_none()
             && !path.elements().is_empty()
         {
-            t.path = Some((path, kinds));
+            p.path = Some((path, kinds));
         }
     }
 
@@ -358,35 +379,92 @@ impl Reader<'_> {
         }
     }
 
-    /// `TO`: the text object ends.
+    /// `TO`: the text object ends. Area type with several linked areas becomes one frame for each
+    /// area, threaded in file order: the first frame holds the story, and the flow from area to
+    /// area (final-form, §15.1) is laid out again. The frames are added last to first, so the
+    /// object's dictionary that follows names the first one ([`Reader::each_linked_frame`]).
+    /// Point type is read at its first text path; area type and type on a path at the first one
+    /// that has a frame or path (else at the first one, as point type).
     pub(super) fn end_text(&mut self, hidden: bool) -> Result<(), String> {
         let Some(t) = self.text.take() else { return Ok(()) };
         if t.runs.is_empty() {
             return Ok(());
         }
-        let m = t.matrix.unwrap_or(Affine::IDENTITY);
         let to_doc = self.space();
-        // Art space → text space (y down).
-        let to_text = FLIP * m.inverse();
-        let kind = match (t.kind, &t.path) {
-            (1, Some((p, kinds))) => TextKind::Area { frame: path_data(&(to_text * p.clone()), kinds) },
-            (2, Some((p, kinds))) => {
-                TextKind::OnPath { path: path_data(&(to_text * p.clone()), kinds), start: start_fraction(p, t.start), end: None }
-            }
-            _ => TextKind::Point,
+        let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
+        let most = (MAX_THREAD_WORK / chars.max(1)).max(1);
+        let all_areas = t.paths.iter().filter(|p| p.path.is_some()).count();
+        let areas: Vec<&TextPath> = t.paths.iter().filter(|p| p.path.is_some()).take(most).collect();
+        let placed: Vec<(Affine, TextKind)> = match t.kind {
+            1 if areas.len() > 1 => areas.into_iter().map(|p| placed(1, Some(p))).collect(),
+            0 => vec![placed(0, t.paths.first())],
+            kind => vec![placed(kind, areas.first().copied().or(t.paths.first()))],
         };
-        let mut obj = TextObject::point(kurbo::Point::ZERO, "", CharStyle::default());
-        obj.kind = kind;
-        obj.xf = to_doc * m * FLIP;
-        obj.runs = t.runs;
+        if t.kind == 1 && (t.past_limit || all_areas > placed.len()) {
+            self.warn(LINKED_AREAS_LEFT_OUT);
+        }
         let mut paras = t.paras;
         if paras.is_empty() {
             paras.push(self.type_state.para.clone());
         }
-        obj.set_paragraph_styles(paras);
-        let node = self.new_node(NodeKind::Text(Box::new(obj)), &t.gs);
-        self.add(node, t.hidden || hidden)
+        let last_para = paras.last().cloned().unwrap_or_default();
+        let last_style = t.runs.last().map(|r| r.style.clone()).unwrap_or_default();
+        let mut story = Some((t.runs, paras));
+        let mut nodes = Vec::with_capacity(placed.len());
+        for (m, kind) in placed {
+            let mut obj = TextObject::point(kurbo::Point::ZERO, "", last_style.clone());
+            obj.kind = kind;
+            obj.xf = to_doc * m * FLIP;
+            match story.take() {
+                Some((runs, paras)) => {
+                    obj.runs = runs;
+                    obj.set_paragraph_styles(paras);
+                }
+                None => obj.set_paragraph_styles(vec![last_para.clone()]),
+            }
+            nodes.push(self.new_node(NodeKind::Text(Box::new(obj)), &t.gs));
+        }
+        let frames: Vec<NodeId> = nodes.iter().map(|n| n.id).collect();
+        for node in nodes.into_iter().rev() {
+            self.add(node, t.hidden || hidden)?;
+        }
+        if frames.len() > 1 {
+            self.doc.text_threads.push(frames);
+        }
+        Ok(())
     }
+
+    /// Call `f` on the other frames of the threaded text object just read, whose first frame is
+    /// the last object ([`Reader::end_text`]): the opacity mask and text wrap of the object's
+    /// dictionary apply to every frame.
+    pub(super) fn each_linked_frame(&mut self, mut f: impl FnMut(&mut Node)) {
+        if !self.after_object {
+            return;
+        }
+        let Some(first) = self.frames.last().and_then(|fr| fr.children.last()).map(|n| n.id) else { return };
+        let Some(thread) = self.doc.text_threads.last().filter(|t| t.first() == Some(&first)) else { return };
+        let rest: HashSet<NodeId> = thread.iter().skip(1).copied().collect();
+        let Some(fr) = self.frames.last_mut() else { return };
+        for n in fr.children.iter_mut().rev().skip(1).take(rest.len()).filter(|n| rest.contains(&n.id)) {
+            f(n);
+        }
+    }
+}
+
+/// A text object of type `kind` on text path `p` (none: at the origin): the matrix from text space
+/// (y up) to art space, and the kind of type with its frame or path in text space (y down).
+fn placed(kind: i64, p: Option<&TextPath>) -> (Affine, TextKind) {
+    let m = p.and_then(|p| p.matrix).unwrap_or(Affine::IDENTITY);
+    // Art space → text space (y down).
+    let to_text = FLIP * m.inverse();
+    let kind = match (kind, p.and_then(|p| p.path.as_ref().map(|path| (path, p.start)))) {
+        (1, Some(((path, kinds), _))) => TextKind::Area { frame: path_data(&(to_text * path.clone()), kinds) },
+        (2, Some(((path, kinds), start))) => {
+            TextKind::OnPath { path: path_data(&(to_text * path.clone()), kinds), start: start_fraction(path, start), end: None }
+        }
+        _ => TextKind::Point,
+    };
+    (m, kind)
 }
 
 /// Where type on `path` starts (`index.fraction`: a segment and how far along it, §15.5.2), as a

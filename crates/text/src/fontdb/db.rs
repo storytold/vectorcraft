@@ -218,6 +218,30 @@ impl FontDb {
         v.into_iter().map(|t| t.2).collect()
     }
 
+    /// The style a style-less request gets for `family`: its face nearest Regular upright, by the
+    /// catalog's or the loaded faces' metadata. Unlike [`FontDb::face`] it reads no font files, so
+    /// the closest styles of many families cost little.
+    pub fn closest_style(&self, family: &str) -> Option<String> {
+        let (family, _) = self.canonical(family, "");
+        let family = family.as_str();
+        let mut best: Option<(f32, String)> = None;
+        let consider = |best: &mut Option<(f32, String)>, weight: f32, italic: bool, style: &str| {
+            let d = super::build::weight_distance(weight, italic, 400.0, false);
+            if best.as_ref().is_none_or(|(b, _)| d < *b) {
+                *best = Some((d, style.to_string()));
+            }
+        };
+        for f in self.read_faces().iter().filter(|f| f.family.eq_ignore_ascii_case(family)) {
+            consider(&mut best, f.weight, f.italic, &f.style);
+        }
+        if let Some(c) = self.read_catalog().get(&family.to_ascii_lowercase()) {
+            for cf in &c.faces {
+                consider(&mut best, cf.weight, cf.italic, &cf.style);
+            }
+        }
+        best.map(|(_, style)| style)
+    }
+
     /// Add a user font (TTF/OTF/TTC bytes). Returns the number of faces added (0 if unparseable or
     /// every face was already present).
     pub fn add_font(&self, bytes: Vec<u8>) -> usize {

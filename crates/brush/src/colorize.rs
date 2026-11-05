@@ -132,9 +132,10 @@ pub fn tint_node(n: &mut Node, color: &Color, amount: f32) {
 }
 
 /// The stain instance `inst` puts on its symbol's art: its visible fill colour and that fill's
-/// opacity (how far the art mixes towards it). `None` for an unstained instance.
+/// opacity (how far the art mixes towards it). `None` for an unstained instance, including one
+/// whose fill has an opacity of 0, so its art keeps its paints and their swatch links.
 pub fn stain(inst: &Node) -> Option<(Color, f32)> {
-    let f = inst.appearance.fill().filter(|f| f.visible)?;
+    let f = inst.appearance.fill().filter(|f| f.visible && f.opacity > 0.0)?;
     Some((f.paint.color()?, f.opacity))
 }
 

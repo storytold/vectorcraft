@@ -10,7 +10,8 @@
 //! - `ui.contextMenu.list`: the canvas context menu for the current selection, flattened
 //! - `ui.tool.select {tool}`, `ui.tool.list`
 //! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick, x, y, backquote?, space?: "doc"|"screen"}], mods?, backquote?}`:
-//!   drive the active tool through the same path as the mouse
+//!   drive the active tool through the same path as the mouse, after the synthetic input sent
+//!   before it was applied
 //! - `ui.key {key, shift?, alt?, cmd?}` / `ui.text {text}`: synthetic keyboard input
 //! - `ui.move {x, y}` / `ui.click {x, y, button?, count?, shift?…}` / `ui.drag {x, y, toX, toY, steps?}`:
 //!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
@@ -33,7 +34,7 @@
 //!   Background Save or Background Export on. A `wait` other than true, false or null is refused
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 
 use serde_json::{Value, json};
@@ -100,7 +101,12 @@ pub struct ControlRequest {
     pub params: Value,
     pub reply: Sender<ControlResponse>,
     state: Arc<AtomicU8>,
+    /// Its place in the order requests were made ([`ControlRequest::next_seq`]).
+    seq: u64,
 }
+
+/// The sequence number of the next request made.
+static NEXT_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// A request's state: waiting to run, taken by the app ([`ControlRequest::claim`]), or given up
 /// by its caller before that ([`Ticket::give_up`]). It leaves `QUEUED` once, one way or the other.
@@ -123,12 +129,28 @@ impl Ticket {
 impl ControlRequest {
     pub fn new(method: impl Into<String>, params: Value) -> (Self, std::sync::mpsc::Receiver<ControlResponse>) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)) }, rx)
+        let seq = NEXT_SEQ.fetch_add(1, Ordering::SeqCst);
+        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)), seq }, rx)
+    }
+
+    /// The sequence number the next request made gets: every request made so far is before it.
+    pub fn next_seq() -> u64 {
+        NEXT_SEQ.load(Ordering::SeqCst)
+    }
+
+    /// Whether this request was made before the one numbered `seq`.
+    pub fn made_before(&self, seq: u64) -> bool {
+        self.seq < seq
     }
 
     /// The caller's handle on this request, to give it up with.
     pub fn ticket(&self) -> Ticket {
         Ticket(self.state.clone())
+    }
+
+    /// Whether its caller gave it up (it never runs), without taking it.
+    pub fn given_up(&self) -> bool {
+        self.state.load(Ordering::SeqCst) == GIVEN_UP
     }
 
     /// Take the request to run it → `false` when its caller gave it up meanwhile (don't run it).
@@ -579,7 +601,13 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
     let base_mods: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
     let view = app.view_info();
     let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
-    for e in events {
+    let held =
+        PointerEvent::json_backquote(p, false).and_then(|d| events.iter().map(|e| PointerEvent::json_backquote(e, d)).collect::<Result<Vec<_>, _>>());
+    let held = match held {
+        Ok(held) => held,
+        Err(e) => return err(e),
+    };
+    for (e, backquote) in events.iter().zip(held) {
         let kind = match e.get("kind").and_then(Value::as_str).unwrap_or("") {
             "down" => PointerKind::Down,
             "drag" => PointerKind::Drag,
@@ -605,7 +633,6 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
             Some(xf) if screen => crate::canvas::pose_on_page(q, &xf),
             _ => q,
         });
-        let backquote = e.get("backquote").and_then(Value::as_bool).unwrap_or_else(|| p.get("backquote").and_then(Value::as_bool).unwrap_or(false));
         crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, backquote, pressure: PointerEvent::json_pressure(e), pen }, view);
         let hold = PointerEvent::json_hold(e);
         if hold > 0.0 {

@@ -1023,6 +1023,46 @@ fn an_empty_page_with_type_as_outlines_outlines_the_editing_datas_type() {
     assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "the editing data's layers");
 }
 
+/// A story of a `.ai` file's text document with no character or paragraph runs is set in
+/// `[Normal Character Style]` and `[Normal Paragraph Style]`; the base attributes give only what
+/// those styles leave out.
+#[test]
+fn an_ai_story_without_runs_takes_the_normal_styles() {
+    let story = "<< /0 << /0 (Hi\r) >> \
+                 /1 << /0 [ << /0 0 >> ] /2 [ << /99 /PC /6 [ << /99 /F /0 << /0 [ 8191.5 8191.5 ] >> /6 [ << /99 /R /6 [ << /99 /R /6 [ << /99 /L /6 [ \
+                 << /99 /S /0 << /0 [ 0.0 0.0 ] >> /15 << /0 3 >> >> ] >> ] >> ] >> ] >> ] >> ] >> >>";
+    let char_sheets = "/5 << /0 [ << /0 << /0 ([Normal Character Style]) /6 << /0 0 /1 9.0 \
+                       /53 << /99 /SimplePaint /0 << /0 1 /1 [ 1.0 0.0 0.0 1.0 ] >> >> >> >> >> ] >>";
+    let para_sheets = "/6 << /0 [ << /0 << /0 ([Normal Paragraph Style]) /5 << /1 6.0 /9 false >> >> >> ] >>";
+    let document = format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> {char_sheets} {para_sheets} \
+         /8 << /0 [ << /0 << /0 [ 0 0 ] /2 << /2 [ 1 0 0 1 0 0 ] >> >> >> ] >> >>\n\
+         /1 << /1 [ {story} ] /2 << /1 12.0 /53 << /99 /SimplePaint /0 << /0 0 /1 [ 1.0 1.0 ] >> >> >> /3 << /1 2.0 /9 true >> >>\n"
+    );
+    let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    let text = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n2 /TextAntialiasing ,\n;\n";
+    let data = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
+         %AI5_NumLayers: 1\n{}%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n%%Trailer\n",
+        ai::layer("Art", text),
+        lines.join("\n")
+    );
+    let mut s = Session::new();
+    let r = open(&mut s, "plain.ai", &ai::ai(&compressed(data.as_bytes()), ""), json!({})).unwrap();
+    let mut texts = vec![];
+    s.doc().unwrap().doc.walk(|c| {
+        if let NodeKind::Text(t) = &c.kind {
+            texts.push((**t).clone());
+        }
+    });
+    let [t] = texts.as_slice() else { panic!("one text object: {r}") };
+    assert_eq!(t.plain_text(), "Hi");
+    let style = &t.runs[0].style;
+    assert_eq!(style.size, 9.0, "{r}");
+    assert_eq!(style.fill, vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!((t.para.first_line_indent, t.para.hyphenate), (6.0, false));
+}
+
 /// Type asked for as outlines in a `.ai` saved without PDF compatibility (its page only a
 /// placeholder): the editing data's type, outlined, as for an empty page.
 #[test]

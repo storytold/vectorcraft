@@ -293,6 +293,27 @@ impl Session {
         true
     }
 
+    /// Move the document in tab `from` to tab `to` (a document tab dragged along the strip,
+    /// `document.move`); the documents between them shift by one. The current document stays the
+    /// current one, wherever it moves to, and its tool keeps its state: no document is switched to.
+    /// False, changing nothing, when either index is past the last document.
+    pub fn move_document(&mut self, from: usize, to: usize) -> bool {
+        let n = self.docs.len();
+        if from >= n || to >= n {
+            return false;
+        }
+        if from == to {
+            return true;
+        }
+        let active = self.active().map(|d| d.uid);
+        let d = self.docs.remove(from);
+        self.docs.insert(to, d);
+        if let Some(uid) = active {
+            self.active = self.docs.iter().position(|d| d.uid == uid);
+        }
+        true
+    }
+
     /// Commands with enablement (for menus, palette, MCP `list_commands`).
     pub fn commands(&self) -> Vec<CommandInfo> {
         command_specs().iter().map(|c| c.info(self)).collect()

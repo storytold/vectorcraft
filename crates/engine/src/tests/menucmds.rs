@@ -1070,6 +1070,61 @@ fn transform_each_scales_each_about_its_own_center() {
     assert_eq!(undo_len(&s), n + 1);
 }
 
+/// The dialog's Absolute (`relative: false`): `scaleH` and `scaleV` are the width and height each
+/// object becomes, measured on its own bounds, so objects of different sizes come out alike about
+/// their own reference points. A side left out keeps its size, a side of 0 (a line) stays 0, and
+/// Absolute already at the size the objects have changes nothing and records no undo step.
+#[test]
+fn transform_each_absolute_takes_each_object_to_the_size_given() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    let b = rect(&mut s, 200.0, 0.0, 40.0, 80.0);
+    sel(&mut s, &[a, b]);
+    let n = undo_len(&s);
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 60, "scaleV": 20})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(20.0, 15.0, 80.0, 35.0));
+    assert_eq!(bounds(&s, b), Rect::new(190.0, 30.0, 250.0, 50.0));
+    assert_eq!(undo_len(&s), n + 1);
+    // A side left out keeps its size, and the reference point still holds the new size in place.
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 30, "reference": 0})).unwrap();
+    assert_eq!((bounds(&s, a), bounds(&s, b)), (Rect::new(20.0, 15.0, 50.0, 35.0), Rect::new(190.0, 30.0, 220.0, 50.0)));
+    let before = (undo_len(&s), bounds(&s, a), bounds(&s, b));
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 30, "scaleV": 20})).unwrap();
+    assert_eq!((undo_len(&s), bounds(&s, a), bounds(&s, b)), before, "already the size given");
+    // A line has no height to take: its side stays as it is.
+    let line = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 10}, {"x": 100, "y": 10}], "closed": false})).unwrap());
+    sel(&mut s, &[line]);
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 50, "scaleV": 80})).unwrap();
+    assert_eq!(bounds(&s, line), Rect::new(25.0, 10.0, 75.0, 10.0));
+    // A scale of 0 is refused in either mode, as it collapses the object.
+    for p in [json!({"relative": false, "scaleH": 0}), json!({"scaleH": 0})] {
+        let r = s.execute("object.transformEach", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg: m, .. }) if m == "scale must be non-zero"), "{p}: {r:?}");
+    }
+}
+
+/// Absolute measures each object's own box, rotated with it, as the Transform panel shows it: a
+/// square turned 45° keeps its size when the size it shows is applied, and a width applied is the
+/// square's own width, not its bounding box's.
+#[test]
+fn transform_each_absolute_measures_a_rotated_object_its_own_way() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let own = |s: &Session| s.doc().unwrap().doc.oriented_bounds(&[a], false).unwrap().rect;
+    let bbox = |s: &Session| bounds(s, a);
+    assert!((own(&s).width() - 100.0).abs() < 1e-6 && (bbox(&s).width() - 141.421).abs() < 0.01, "turned 45°");
+    // The size it shows, applied, changes nothing and records no undo step.
+    let before = (undo_len(&s), bbox(&s));
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 100, "scaleV": 100})).unwrap();
+    assert_eq!((undo_len(&s), bbox(&s)), before, "already the size it shows");
+    // A width is the square's own width.
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 200})).unwrap();
+    assert!((own(&s).width() - 200.0).abs() < 1e-6, "200 wide: {:?}", own(&s));
+    assert!((own(&s).height() - 100.0).abs() < 1e-6, "its height kept: {:?}", own(&s));
+}
+
 #[test]
 fn transform_each_move_reference_and_copy() {
     let mut s = session();
@@ -1144,9 +1199,10 @@ fn transform_each_refuses_a_number_given_as_text() {
     assert_eq!(bounds(&s, a), Rect::new(35.0, 25.0, 85.0, 75.0));
 }
 
-/// Transform Each refuses Reflect X, Reflect Y, Random, Copy, Scale Strokes & Effects, Scale
-/// Corners, Transform Objects or Transform Patterns given as text or as another value that is not
-/// true or false, and the object stays as it was and is not copied; true, false and null still work.
+/// Transform Each refuses Reflect X, Reflect Y, Random, Copy, Relative, Scale Strokes & Effects,
+/// Scale Corners, Transform Objects or Transform Patterns given as text or as another value that is
+/// not true or false, and the object stays as it was and is not copied; true, false and null still
+/// work.
 #[test]
 fn transform_each_refuses_a_boolean_given_as_text() {
     let mut s = session();
@@ -1160,6 +1216,8 @@ fn transform_each_refuses_a_boolean_given_as_text() {
         ("random", json!({"moveH": 10, "random": "false"})),
         ("copy", json!({"copy": "true"})),
         ("copy", json!({"moveH": 10, "copy": [true]})),
+        ("relative", json!({"relative": "false"})),
+        ("relative", json!({"relative": 0})),
         ("strokes", json!({"scaleH": 50, "scaleV": 50, "strokes": "false"})),
         ("corners", json!({"scaleH": 50, "corners": 1})),
         ("objects", json!({"moveH": 10, "objects": "false"})),

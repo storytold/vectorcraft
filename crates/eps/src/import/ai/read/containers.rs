@@ -573,6 +573,8 @@ impl<'a> Reader<'a> {
                 let mut blend = Node::new(self.doc.alloc_id(), kind);
                 (blend.name, blend.visible, blend.locked) = (steps.name.take(), steps.visible, steps.locked);
                 (blend.opacity, blend.blend, blend.isolate, blend.knockout) = (steps.opacity, steps.blend, steps.isolate, steps.knockout);
+                // Its note, URL and data (object tags) too.
+                blend.extras_mut().attrs = steps.extras_mut().attrs.take();
                 f.children.push(blend);
             }
             None => {

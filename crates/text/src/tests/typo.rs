@@ -229,6 +229,54 @@ fn optical_pair_after_rtl_separate_mark_uses_base_outline() {
     assert!((correction - plain_correction).abs() < 0.01, "the marked cluster uses the base outline");
 }
 
+/// Optical spaces pairs by the face's own stem spacing (#5336): straight pairs like `nn` keep the
+/// font's spacing, diagonal pairs close up, and a line of ordinary text is no narrower than it
+/// is with the font's spacing and no kerning.
+#[test]
+fn optical_keeps_the_fonts_stem_spacing_and_closes_diagonal_pairs() {
+    let st = CharStyle { font_family: "Source Sans 3".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let advances = |text: &str, kerning: Option<f64>| {
+        layout(db(), &TextObject::point(Point::ZERO, text, CharStyle { kerning, ..st.clone() })).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>()
+    };
+    let width = |text: &str, kerning: Option<f64>| advances(text, kerning).iter().sum::<f64>();
+    let (optical, zero) = (advances("nn", None), advances("nn", Some(0.0)));
+    assert!((optical[0] - zero[0]).abs() <= 0.11, "nn, the reference, keeps the font's spacing: {optical:?} {zero:?}");
+    for pair in ["HH", "ll", "nl"] {
+        let (optical, zero) = (advances(pair, None), advances(pair, Some(0.0)));
+        assert!((optical[0] - zero[0]).abs() <= 3.0, "{pair} stays within 0.03 em of the font's spacing: {optical:?} {zero:?}");
+    }
+    for pair in ["AV", "To", "Yo"] {
+        let (optical, zero) = (advances(pair, None), advances(pair, Some(0.0)));
+        assert!(optical[0] < zero[0] - 1.0, "{pair} closes up: {optical:?} {zero:?}");
+        assert!(optical[0] >= zero[0] - 12.0 - 0.01, "{pair} tightens by at most 0.12 em: {optical:?} {zero:?}");
+    }
+    for text in ["minimum", "Hamburgefonstiv", "illumination"] {
+        let (optical, zero) = (width(text, None), width(text, Some(0.0)));
+        assert!(optical >= zero * 0.97, "{text} is not squeezed: {optical} against {zero}");
+    }
+}
+
+/// Ideographs, kana and fullwidth forms keep the font's spacing under Optical, even where their
+/// outlines would be spaced (the test face draws them with Latin outlines).
+#[test]
+fn optical_leaves_ideographs_kana_and_fullwidth_forms_alone() {
+    use crate::test_fonts::{IDEOGRAPH_OPTICAL_FAMILY, ideograph_optical_font};
+
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(ideograph_optical_font().unwrap()), 1);
+    let st = CharStyle { font_family: IDEOGRAPH_OPTICAL_FAMILY.into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let advances = |kerning: Option<f64>| {
+        layout(&db, &TextObject::point(Point::ZERO, "日本カなＷ日", CharStyle { kerning, ..st.clone() }))
+            .glyphs
+            .iter()
+            .map(|g| g.advance)
+            .collect::<Vec<_>>()
+    };
+    let (optical, zero) = (advances(None), advances(Some(0.0)));
+    assert_eq!(optical.len(), 6);
+    assert_eq!(optical, zero, "no ideograph, kana or fullwidth pair is corrected");
+}
+
 #[test]
 fn recurring_optical_pairs_have_equal_corrections() {
     let st = CharStyle { font_family: "JetBrains Mono".into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
@@ -963,6 +1011,33 @@ fn hyphenation_rules() {
         let pts = hyphen::hyphen_points(w);
         assert!(pts.iter().all(|&p| p >= hyphen::MIN_BEFORE && p <= w.chars().count() - hyphen::MIN_AFTER), "{w}: {pts:?}");
     }
+}
+
+/// #394: each run hyphenates in its own language. English breaks words, a language without break
+/// points doesn't, and text saved without a language breaks as it always did.
+#[test]
+fn each_run_hyphenates_in_its_own_language() {
+    let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    let frame = Rect::new(0.0, 0.0, 120.0, 600.0);
+    let hyphens = |language: Option<&str>| {
+        let st = CharStyle { language: language.map(str::to_string), ..style(14.0) };
+        let mut t = area(text, st, frame, Justify::Left);
+        t.para.hyphenate = true;
+        layout(db(), &t).glyphs.iter().filter(|g| g.len == 0).count()
+    };
+    let saved_without_one = hyphens(None);
+    assert!(saved_without_one > 0, "some words hyphenated");
+    assert_eq!(hyphens(Some("en-GB")), saved_without_one);
+    assert_eq!(hyphens(Some("de")), 0, "German has no break points yet");
+    assert_eq!(hyphens(Some("x-from-a-file")), 0, "a tag that isn't known has no hyphenation");
+
+    // both in one paragraph: the English run breaks and the German one doesn't
+    let mut t = area(&format!("{text} {text}"), style(14.0), frame, Justify::Left);
+    t.para.hyphenate = true;
+    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("de".into()));
+    let l = layout(db(), &t);
+    let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
+    assert!(!at.is_empty() && at.iter().all(|b| *b < text.len()), "hyphens only in the English run: {at:?}");
 }
 
 #[test]

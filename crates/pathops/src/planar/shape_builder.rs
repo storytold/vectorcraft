@@ -19,8 +19,9 @@ pub struct BuilderArrangement {
     /// share one); only when asked for.
     pub edges: Vec<Shape>,
     /// The pieces of the paths with no closed subpath that lie under the outline of a closed path
-    /// in front of them, keyed by input index. No piece of `lines` covers them; there the edge is
-    /// the closed path's (in `edges`, when asked for).
+    /// in front of them, or along another such path in front of them, keyed by input index. No
+    /// piece of theirs is in `lines`; there the edge is the path's in front (in `edges` when it is
+    /// a closed path's and they were asked for, else in `lines`).
     pub lines_under: Vec<Shape>,
 }
 

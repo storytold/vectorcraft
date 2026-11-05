@@ -3898,6 +3898,8 @@ theme	Appearance	Erscheinungsbild
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Aus Hilfslinien erstellen: Die Hilfslinien ergeben mehr als {MAX_PIECES} Slices
 @msg	Create from Selection: the selection has no area	Aus Auswahl erstellen: Die Auswahl hat keine Fläche
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Die Datenwiederherstellung hat keinen Ort für ihre Kopien: Legen Sie Voreinstellungen → Dateihandhabung → Datenwiederherstellung → Ordner (recoveryFolder) fest
+@msg	Data Recovery can't keep copies in {path}: {e}	Die Datenwiederherstellung kann keine Kopien in {path} ablegen: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Aus {path} können keine Plug-ins geladen werden: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	wählen Sie mit der Direktauswahl die Ankerpunkte aus, an denen geschnitten werden soll (nicht die Endpunkte offener Pfade)
 @msg	Divide Objects Below: select a path	Darunterliegende Objekte aufteilen: Wählen Sie einen Pfad aus
 @msg	Divide Objects Below: select exactly one path	Darunterliegende Objekte aufteilen: Wählen Sie genau einen Pfad aus
@@ -4589,6 +4591,7 @@ theme	Appearance	Erscheinungsbild
 @msg	graphs come in as plain art, without their data or settings	Diagramme werden als einfache Grafik übernommen, ohne ihre Daten und Einstellungen
 @msg	an image whose data is cut short was left out	ein Bild mit abgeschnittenen Daten wurde ausgelassen
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	verknüpfte Bilder zeigen die in der Datei gespeicherte Vorschau in niedriger Auflösung, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	verknüpfte Bilder ohne Vorschau in der Datei zeigen einen Platzhalter, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	Flächentext in Rahmen, die für eine Zeile der Schrift, in der er hier erscheint, zu niedrig sind, hat höhere Rahmen bekommen ({_1}): Sonst wäre der Text nicht zu sehen
 @msg	its editing data doesn't say where its art is	seine Bearbeitungsdaten geben nicht an, wo seine Grafik liegt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	diese Datei wurde ohne PDF-Kompatibilität gespeichert, und ihre Bearbeitungsdaten können nicht gelesen werden ({why})
@@ -5920,6 +5923,10 @@ breakText	Glyphs	Glyphen
 	Bow	Bogen
 	Spike	Spitze
 	Skip Spaces	Leerzeichen überspringen
+	Release Type on a Path…	Pfadtext zurückwandeln…
+	Release Type on a Path	Pfadtext zurückwandeln
+	Text and Path	Text und Pfad
+	Path Only	Nur Pfad
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Das Bildmaterial ist zu groß, um es als Bild zu kopieren: Andere Apps erhalten kein PNG davon
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -5931,3 +5938,39 @@ breakText	Glyphs	Glyphen
 	Fully Outside	Vollständig außen
 	No artboards match.	Keine Zeichenfläche passt.
 	Chosen: {n} of {total}	Gewählt: {n} von {total}
+
+# Contour add-on
+	Contour	Umriss
+	Contour Tool	Umriss-Werkzeug
+	Sharp	Spitz
+	Bake	Umwandeln
+	Turn the Contour into plain paths	Wandelt den Umriss in einfache Pfade um
+	Set Corners…	Ecken festlegen…
+	All Anchors	Alle Ankerpunkte
+	Odd-Numbered Anchors	Ungerade Ankerpunkte
+	Even-Numbered Anchors	Gerade Ankerpunkte
+	Minimum angle	Minimaler Winkel
+	Maximum angle	Maximaler Winkel
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Verknüpfte auswählen
+	Select Embedded	Eingebettete auswählen
+	Select Missing	Fehlende auswählen
+	Select Modified	Geänderte auswählen
+	Select by Link Status	Nach Verknüpfungsstatus auswählen
+	Select by Link Status…	Nach Verknüpfungsstatus auswählen…
+	Search images	Bilder suchen
+	No images match.	Kein Bild passt.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} verknüpftes Bild ausgewählt|{n} verknüpfte Bilder ausgewählt
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} eingebettetes Bild ausgewählt|{n} eingebettete Bilder ausgewählt
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} fehlendes Bild ausgewählt|{n} fehlende Bilder ausgewählt
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} geändertes Bild ausgewählt|{n} geänderte Bilder ausgewählt
+@msgplural	Selected {n} image|Selected {n} images	{n} Bild ausgewählt|{n} Bilder ausgewählt
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} weiteres ist ausgeblendet oder gesperrt|{selected}; {n} weitere sind ausgeblendet oder gesperrt
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} weiteres liegt auf einer Vorlagenebene|{selected}; {n} weitere liegen auf Vorlagenebenen
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} weiteres liegt außerhalb der isolierten Gruppe|{selected}; {n} weitere liegen außerhalb der isolierten Gruppe
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} weiteres kann gerade nicht ausgewählt werden|{selected}; {n} weitere können gerade nicht ausgewählt werden
+
+# Compound Shapes add-on
+	Compound Shapes	Zusammengesetzte Formen
+	Shape Mode Buttons Make Compound Shapes	Formmodus-Schaltflächen erstellen zusammengesetzte Formen
