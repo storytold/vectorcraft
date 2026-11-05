@@ -127,6 +127,9 @@ impl<'a> Reader<'a> {
         }
         if m == "BeginEncoding" {
             self.type_state.encoding_comment(line);
+            let section = self.section("EndEncoding")?;
+            self.encoding_section(section);
+            return Ok(());
         }
         // Versioned content holds alternatives of the same art, the newest first: the first is
         // read, and the next one (`%AI17_Alternate_Content`, or `…_if_version_gt:` for a version

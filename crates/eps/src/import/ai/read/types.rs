@@ -292,7 +292,6 @@ pub(super) const IGNORED: &[&str] = &[
     "i",
     // Path resolution (`Ar`, §12): how finely curves print.
     "Ar",
-    "TZ",
     "Xs",
     "Xt",
     // A brushed path's width at each anchor (`(…) Xt n XD`), on its hidden source path.

@@ -369,6 +369,7 @@ impl<'a> Reader<'a> {
             // `Xb`/`XB` a tab definition (and the `Xe` tab descriptions between them).
             "XL" | "Xb" | "XB" | "Xe" => {}
             "TE" => self.te(&vals),
+            "TZ" => self.tz(&vals),
             // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).
             "XI" if self.raster.is_some() => {
                 if let Some(r) = self.raster.as_mut() {

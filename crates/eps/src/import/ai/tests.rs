@@ -2937,6 +2937,60 @@ fn legacy_texts(art: &str) -> Vec<vectorcraft_doc::TextObject> {
     art_texts(&doc)
 }
 
+/// The characters of each text object of a legacy-format file whose setup is `setup` and whose
+/// layer holds point type with the string `(chars)` in each font of `fonts`.
+fn legacy_chars(setup: &str, fonts: &[&str], chars: &str) -> Vec<String> {
+    let art: String = fonts.iter().map(|f| point_type("", chars).replace("/_Helvetica 12 Tf", &format!("/{f} 12 Tf"))).collect();
+    let data = type_stream7(&art).replace("%%BeginSetup\n%%EndSetup", &format!("%%BeginSetup\n{setup}%%EndSetup"));
+    let doc = match read(data.as_bytes()) {
+        Ok(r) => r.doc,
+        Err(e) => panic!("{e}"),
+    };
+    art_texts(&doc).iter().map(|t| t.runs.iter().map(|r| r.text.as_str()).collect()).collect()
+}
+
+/// `TZ` (§3.3.1) gives a re-encoded font encoding pairs of its own: its strings decode by them
+/// first, then by `TE`'s encoding when `useDefault` is 1, and other fonts' strings keep `TE`'s. `TZ` is read in an
+/// `%AI3_BeginEncoding` section and in an `%%BeginEncoding` one, with a Multiple Master weight
+/// vector after it, and without the direction operand.
+#[test]
+fn a_re_encoded_fonts_own_encoding_pairs_decode_only_its_strings() {
+    let setup = "[39/quoteright 96/grave 128/Adieresis\nTE\n\
+                 %AI3_BeginEncoding: _F F\n[ 39/quotesingle 200/eacute\n/_F/F 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n\
+                 %%BeginEncoding: _M M\n[ 39/quotesingle\n/_M/M 0 0 1 [0.5 0.25] TZ\n%%EndEncoding\n\
+                 %AI3_BeginEncoding: _N N\n[ 39/quotesingle\n/_N/N 0 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    let got = legacy_chars(setup, &["_F", "_M", "_N", "_G"], "\\047\\140\\200\\310");
+    assert_eq!(got, ["'`Äé", "'`ÄÈ", "'`ÄÈ", "’`ÄÈ"]);
+    // The re-encoded fonts are the fonts they were made from.
+    let data = type_stream7(&point_type("", "a").replace("/_Helvetica", "/_M"))
+        .replace("%%BeginSetup\n%%EndSetup", "%%BeginSetup\n%%BeginEncoding: _M Courier\n[/_M/Courier 0 0 1 TZ\n%%EndEncoding\n%%EndSetup");
+    let texts = art_texts(&read(data.as_bytes()).unwrap().doc);
+    assert_eq!(texts[0].runs[0].style.font_family, "Courier");
+}
+
+/// The reader does not use the pairs of a `TZ` whose font names aren't the last two operands, or
+/// are followed by other values. The first `TZ` for a font is used, also when it has no pairs.
+#[test]
+fn a_tz_of_another_shape_changes_no_encoding() {
+    let setup = "[39/quoteright\nTE\n\
+                 %AI3_BeginEncoding: _F F\n[ 39/quotesingle\n/_F/F (x) 1 TZ\n%AI3_EndEncoding AdobeType\n\
+                 %AI3_BeginEncoding: _G G\n[ 39/quotesingle\n/_G 0 /G 1 TZ\n%AI3_EndEncoding AdobeType\n\
+                 %AI3_BeginEncoding: _H H\n[ 39/grave\n/_H/H 0 0 1 TZ\n[ 39/quotesingle\n/_H/H 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n\
+                 %AI3_BeginEncoding: _K K\n[/_K/K 0 0 1 TZ\n[ 39/quotesingle\n/_K/K 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_F", "_G", "_H", "_K"], "\\047"), ["’", "’", "`", "’"]);
+}
+
+/// A `TZ` whose `useDefault` is 0 leaves `TE`'s encoding out for its font (§3.3.1): the codes its
+/// pairs leave out decode as Windows-1252.
+#[test]
+fn a_tz_with_use_default_0_leaves_te_out() {
+    let setup = "[39/quoteright 128/Adieresis\nTE\n\
+                 %AI3_BeginEncoding: _F F\n[ 96/grave\n/_F/F 0 0 0 TZ\n%AI3_EndEncoding TrueType\n\
+                 %AI3_BeginEncoding: _S S\n[/_S/S 0 0 0 TZ\n%AI3_EndEncoding AdobeType\n\
+                 %AI3_BeginEncoding: _M M\n[ 96/grave\n/_M/M 0 0 [0.5] TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_F", "_S", "_M", "_G"], "\\047\\140\\200"), ["'`€", "'`€", "'`€", "’`Ä"]);
+}
+
 fn art_texts(doc: &Document) -> Vec<vectorcraft_doc::TextObject> {
     art(doc).iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
 }
