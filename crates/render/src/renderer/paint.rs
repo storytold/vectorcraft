@@ -384,71 +384,99 @@ thread_local! {
     pub(crate) static STROKES_OUTLINED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// The offset that moves path `was` onto path `now`, when `now` is `was` moved (each coordinate
-/// within a few units in the last place of the moved one, the error that adding the offset and
-/// measuring it from the first points can make). `None` otherwise, and for an empty path.
+/// The offset that moves path `was` onto path `now`, when `now` is `was` moved (each point within
+/// the rounding that [`Offset::holds`] allows). `None` otherwise, and for an empty path.
 pub(crate) fn offset_between(was: &BezPath, now: &BezPath) -> Option<kurbo::Vec2> {
-    use kurbo::PathEl;
-    let (was, now) = (was.elements(), now.elements());
-    if was.len() != now.len() {
+    if !matches!(was.elements().first(), Some(kurbo::PathEl::MoveTo(_))) {
         return None;
     }
-    let (by, first) = match (was.first()?, now.first()?) {
-        (PathEl::MoveTo(a), PathEl::MoveTo(b)) => first_offset(*a, *b)?,
-        _ => return None,
-    };
-    let near = |a: &kurbo::Point, b: &kurbo::Point| moved_by(*a, *b, by, first);
-    let moved = was.iter().zip(now).all(|pair| match pair {
-        (PathEl::MoveTo(a), PathEl::MoveTo(b)) | (PathEl::LineTo(a), PathEl::LineTo(b)) => near(a, b),
-        (PathEl::QuadTo(a0, a1), PathEl::QuadTo(b0, b1)) => near(a0, b0) && near(a1, b1),
-        (PathEl::CurveTo(a0, a1, a2), PathEl::CurveTo(b0, b1, b2)) => near(a0, b0) && near(a1, b1) && near(a2, b2),
-        (PathEl::ClosePath, PathEl::ClosePath) => true,
-        _ => false,
-    });
-    moved.then_some(by)
+    let mut offset = Offset::new();
+    (path_pairs(was, now, |a, b| offset.takes(a, b)) && path_pairs(was, now, |a, b| offset.holds(a, b))).then(|| offset.by())
 }
 
-/// The offset from first point `a` to first point `b` and the largest size of their coordinates,
-/// which [`moved_by`] measures its tolerance with. `None` when the offset is not finite.
-fn first_offset(a: kurbo::Point, b: kurbo::Point) -> Option<(kurbo::Vec2, f64)> {
-    let by = b - a;
-    by.is_finite().then(|| (by, a.x.abs().max(b.x.abs()).max(a.y.abs()).max(b.y.abs())))
+/// Whether `was` and `now` have the same elements, and `f` holds for each pair of their points.
+/// Stops at the first pair for which `f` does not hold.
+fn path_pairs(was: &BezPath, now: &BezPath, mut f: impl FnMut(kurbo::Point, kurbo::Point) -> bool) -> bool {
+    use kurbo::PathEl;
+    let (was, now) = (was.elements(), now.elements());
+    was.len() == now.len()
+        && was.iter().zip(now).all(|pair| match pair {
+            (PathEl::MoveTo(a), PathEl::MoveTo(b)) | (PathEl::LineTo(a), PathEl::LineTo(b)) => f(*a, *b),
+            (PathEl::QuadTo(a0, a1), PathEl::QuadTo(b0, b1)) => f(*a0, *b0) && f(*a1, *b1),
+            (PathEl::CurveTo(a0, a1, a2), PathEl::CurveTo(b0, b1, b2)) => f(*a0, *b0) && f(*a1, *b1) && f(*a2, *b2),
+            (PathEl::ClosePath, PathEl::ClosePath) => true,
+            _ => false,
+        })
 }
 
-/// Whether `b` is `a` moved by `by`, each coordinate within a few units in the last place (see
-/// [`offset_between`]; `first` from [`first_offset`]).
-fn moved_by(a: kurbo::Point, b: kurbo::Point, by: kurbo::Vec2, first: f64) -> bool {
-    let close = |a: f64, by: f64, b: f64| (a + by - b).abs() <= 4.0 * f64::EPSILON * (a.abs() + b.abs() + first);
-    close(a.x, by.x, b.x) && close(a.y, by.y, b.y)
+/// One offset between pairs of points. Pairs are read once with [`Offset::takes`], which measures
+/// the offset on each axis at the pair with the smallest coordinates on that axis, and once more
+/// with [`Offset::holds`], which checks every pair against that offset.
+struct Offset {
+    by: [f64; 2],
+    size: [f64; 2],
+}
+
+impl Offset {
+    fn new() -> Self {
+        Self { by: [0.0; 2], size: [f64::INFINITY; 2] }
+    }
+
+    /// Whether `b` is `a` moved by the offset measured so far, on each axis within 3 units in the
+    /// last place of the larger of the pair's coordinates and those of the pair the offset was
+    /// measured at. A pair with smaller coordinates than any before it on an axis then measures the
+    /// offset on that axis.
+    fn takes(&mut self, a: kurbo::Point, b: kurbo::Point) -> bool {
+        [(a.x, b.x), (a.y, b.y)].into_iter().zip(self.by.iter_mut().zip(&mut self.size)).all(|((a, b), (by, size))| {
+            let at = a.abs().max(b.abs());
+            if at.is_nan() || at >= *size {
+                return (b - a - *by).abs() <= 3.0 * ulp(at);
+            }
+            let near = size.is_infinite() || (b - a - *by).abs() <= 3.0 * ulp(*size);
+            (*by, *size) = (b - a, at);
+            near && by.is_finite()
+        })
+    }
+
+    /// Whether `b` is `a` moved by the offset, on each axis within 3 units in the last place of the
+    /// larger of the pair's coordinates: the most that rounding `b`, the pair the offset was measured
+    /// at (whose coordinates are no larger), and the two offsets can make together.
+    fn holds(&self, a: kurbo::Point, b: kurbo::Point) -> bool {
+        let near = |a: f64, b: f64, by: f64| (b - a - by).abs() <= 3.0 * ulp(a.abs().max(b.abs()));
+        near(a.x, b.x, self.by[0]) && near(a.y, b.y, self.by[1])
+    }
+
+    fn by(&self) -> kurbo::Vec2 {
+        kurbo::Vec2::new(self.by[0], self.by[1])
+    }
+}
+
+/// The distance from `x`, which is 0 or more, to the next larger `f64`.
+fn ulp(x: f64) -> f64 {
+    f64::from_bits(x.to_bits() + 1) - x
 }
 
 /// Whether the anchors and handles of path `now` are those of path `was` moved by one offset,
 /// measured as [`offset_between`] measures it, with the same subpaths, anchor counts and closed
 /// subpaths. It reads the anchors without making either path ([`Node::stroke_path`]), and stops at
 /// the first anchor that differs. `false` for objects other than paths.
-fn anchors_moved(was: &Node, now: &Node) -> bool {
+pub(crate) fn anchors_moved(was: &Node, now: &Node) -> bool {
     let (vectorcraft_doc::NodeKind::Path { path: was, .. }, vectorcraft_doc::NodeKind::Path { path: now, .. }) = (&was.kind, &now.kind) else {
         return false;
     };
-    if was.subpaths.len() != now.subpaths.len() {
-        return false;
-    }
-    let mut offset = None;
-    for (a, b) in was.subpaths.iter().zip(&now.subpaths) {
-        if a.closed != b.closed || a.anchors.len() != b.anchors.len() {
-            return false;
-        }
-        for (a, b) in a.anchors.iter().zip(&b.anchors) {
-            if offset.is_none() {
-                offset = first_offset(a.p, b.p);
-            }
-            let Some((by, first)) = offset else { return false };
-            if !(moved_by(a.p, b.p, by, first) && moved_by(a.h_in, b.h_in, by, first) && moved_by(a.h_out, b.h_out, by, first)) {
-                return false;
-            }
-        }
-    }
-    true
+    let mut offset = Offset::new();
+    anchor_pairs(was, now, |a, b| offset.takes(a, b)) && anchor_pairs(was, now, |a, b| offset.holds(a, b))
+}
+
+/// Whether `was` and `now` have the same subpaths, anchor counts and closed subpaths, and `f` holds
+/// for each pair of their anchors and handles. Stops at the first pair for which `f` does not hold.
+fn anchor_pairs(was: &vectorcraft_geom::PathData, now: &vectorcraft_geom::PathData, mut f: impl FnMut(kurbo::Point, kurbo::Point) -> bool) -> bool {
+    was.subpaths.len() == now.subpaths.len()
+        && was.subpaths.iter().zip(&now.subpaths).all(|(a, b)| {
+            a.closed == b.closed
+                && a.anchors.len() == b.anchors.len()
+                && a.anchors.iter().zip(&b.anchors).all(|(a, b)| f(a.p, b.p) && f(a.h_in, b.h_in) && f(a.h_out, b.h_out))
+        })
 }
 
 fn crops() -> bool {
