@@ -49,6 +49,7 @@ pub fn default_threads() -> u16 {
 
 /// [`default_threads`] when automatic, on `cpus` processors of which the process may use `usable`
 /// (0 = all).
+#[cfg(any(test, not(target_arch = "wasm32")))]
 fn automatic_threads(cpus: usize, usable: usize) -> u16 {
     let cores = if usable == 0 { cpus } else { cpus.min(usable) };
     (cores.saturating_sub(1)).min(8) as u16

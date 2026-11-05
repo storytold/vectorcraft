@@ -1,6 +1,6 @@
 use super::options::{AntiAlias, RenderOptions};
 use super::threads::single_threaded_context;
-use super::{Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Rect, RenderContext, SymbolBoxes, TextObject, live};
+use super::{Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Rect, RenderContext, StrokeLayer, SymbolBoxes, TextObject, live};
 
 /// Hasher for pointer-keyed caches: a multiply-xorshift (SipHash showed up in frame profiles).
 #[derive(Default, Clone, Copy)]
@@ -30,11 +30,14 @@ pub(crate) type PtrMap<K, V> = HashMap<K, V, std::hash::BuildHasherDefault<PtrHa
 /// stroke's place in it, width bits, tolerance level).
 pub(crate) type StrokeKey = (usize, usize, u64, i32);
 
-/// A stroke expanded to a fill outline: (owning node, outline, last frame used).
+/// A stroke expanded to a fill outline: (owning node, outline, last frame used, and the region a
+/// frame must lie in to draw the outline, when the outline leaves out the segments far from that
+/// region; `None` when it has every segment).
 pub(crate) struct StrokeEntry {
     pub(crate) node: Arc<Node>,
     pub(crate) outline: Arc<BezPath>,
     pub(crate) stamp: u64,
+    pub(crate) crop: Option<Rect>,
 }
 
 /// The slices of a stroke whose gradient runs along or across it, each with its paint and bounds.
@@ -140,6 +143,16 @@ impl Frame<'_> {
     /// Text space → device pixels when type is snapped to the pixel grid (Type anti-aliasing).
     pub(crate) fn text_snap(&self, t: &TextObject) -> Option<Affine> {
         (self.opts.anti_alias == AntiAlias::Type).then(|| self.view * t.xf)
+    }
+
+    /// Stroke `st` as this frame draws it: a copy without its dashes when the frame draws dashed
+    /// lines as solid lines ([`RenderOptions::solid_dashes`]), else `st` itself.
+    pub(crate) fn stroke<'s>(&self, st: &'s StrokeLayer) -> std::borrow::Cow<'s, StrokeLayer> {
+        if self.opts.solid_dashes && st.dash.is_some() {
+            std::borrow::Cow::Owned(StrokeLayer { dash: None, ..st.clone() })
+        } else {
+            std::borrow::Cow::Borrowed(st)
+        }
     }
 
     /// A render context for drawing this frame's art offscreen (on the calling thread), with its

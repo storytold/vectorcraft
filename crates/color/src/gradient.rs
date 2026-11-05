@@ -86,6 +86,9 @@ const TINT_STEPS: u32 = 16;
 const MIN_INK_LIGHTNESS_SPAN: f64 = 1.0 / 255.0;
 /// Most stops on a gradient's curve that [`Gradient::ink_tints`] finds tints for.
 const MAX_INK_TINTS: usize = 4096;
+/// How many even steps [`Gradient::ink_mixes`] checks the lightness of two stops' display RGB mix
+/// at, to tell whether it moves steadily from one stop's lightness to the other's.
+const INK_MIX_STEPS: u32 = 64;
 
 /// The mix positions (0..1, after `v0`, before `v1`) between which display RGB mixed linearly
 /// stays within [`PERCEPTUAL_TOLERANCE`] of the perceptual mix of `a` and `b`: the span halved
@@ -175,6 +178,40 @@ fn between(a: &GradientStop, b: &GradientStop, t: f32, mix: &impl Fn(&Color, &Co
     (mix(&a.color, &b.color, v), a.opacity + (b.opacity - a.opacity) * v)
 }
 
+/// For each pair of neighbouring stops (`k`, `k + 1`), the largest offset among stops `1..=k + 1`.
+/// [`Gradient::sample_with`] picks the first pair whose end offset `t` doesn't pass; that is the
+/// first pair whose reach `t` doesn't pass, and the reaches never decrease, so the pair is found by
+/// binary search whether or not the stops are in order.
+struct StopReach(Vec<f32>);
+
+impl StopReach {
+    fn new(stops: &[GradientStop]) -> Self {
+        // `f32::max` skips a NaN offset, which `t <= offset` never chooses either.
+        let reach = stops.iter().skip(1).scan(f32::NEG_INFINITY, |m, s| {
+            *m = m.max(s.offset);
+            Some(*m)
+        });
+        Self(reach.collect())
+    }
+
+    /// What [`Gradient::sample_with`] gives at `t` for `stops`, the stops this was built from.
+    fn sample_with(&self, stops: &[GradientStop], t: f32, mix: &impl Fn(&Color, &Color, f32) -> Color) -> (Color, f32) {
+        let Some(first) = stops.first() else { return (Color::BLACK, 1.0) };
+        if t <= first.offset {
+            return (first.color, first.opacity);
+        }
+        let last = || stops.last().map_or((Color::BLACK, 1.0), |l| (l.color, l.opacity));
+        if t.is_nan() {
+            return last();
+        }
+        let k = self.0.partition_point(|r| *r < t);
+        match (stops.get(k), stops.get(k + 1)) {
+            (Some(a), Some(b)) => between(a, b, t, mix),
+            _ => last(),
+        }
+    }
+}
+
 fn one() -> f32 {
     1.0
 }
@@ -211,6 +248,12 @@ impl Gradient {
     pub fn sample(&self, t: f32) -> (Color, f32) {
         self.sample_with(t, |a, b, v| self.method.mix(a, b, v))
     }
+    /// [`Self::sample`] for many points in no order (a gradient drawn pixel by pixel): the stops
+    /// are prepared once, so each sample costs a binary search rather than a scan of the stops.
+    pub fn sampler(&self) -> impl Fn(f32) -> (Color, f32) + '_ {
+        let reach = StopReach::new(&self.stops);
+        move |t| reach.sample_with(&self.stops, t, &|a, b, v| self.method.mix(a, b, v))
+    }
     /// [`Self::sample`], a Classic gradient's neighbouring stop colours of one model mixed in it
     /// (CMYK stays CMYK; [`Color::lerp_keep_model`]) rather than in display RGB, a Perceptual
     /// gradient's as [`Self::sample`] mixes them.
@@ -245,9 +288,11 @@ impl Gradient {
     /// the one before it stopped, so the work is the samples plus the stops, not their product.
     pub fn sample_increasing_with(&self, ts: impl IntoIterator<Item = f32>, mix: impl Fn(&Color, &Color, f32) -> Color) -> Vec<(Color, f32)> {
         let stops = &self.stops;
-        // The shared index assumes ordered stops; others (a file's, unsorted) sample one by one.
+        // The shared cursor assumes ordered stops; others (a file's, unsorted) look each sample up
+        // in a [`StopReach`], so they cost a binary search each rather than a scan of the stops.
         if stops.windows(2).any(|w| w[1].offset < w[0].offset) {
-            return ts.into_iter().map(|t| self.sample_with(t, &mix)).collect();
+            let reach = StopReach::new(stops);
+            return ts.into_iter().map(|t| reach.sample_with(stops, t, &mix)).collect();
         }
         let mut j = 0;
         ts.into_iter()
@@ -284,6 +329,9 @@ impl Gradient {
     fn expanded_with_stops(&self) -> impl Iterator<Item = (f32, Color, f32, Option<f32>, Option<usize>)> + '_ {
         // Direct interpolation matches `sample` only for strictly increasing offsets.
         let increasing = self.stops.windows(2).all(|w| w[0].offset < w[1].offset);
+        // Otherwise (repeated or unsorted offsets) each midpoint is looked up as `sample` would
+        // find it, but by binary search: a scan of all the stops per midpoint cost their square.
+        let reach = if increasing || !self.method.is_classic() { None } else { Some(StopReach::new(&self.stops)) };
         self.stops.iter().enumerate().flat_map(move |(i, s)| {
             let next = self.stops.get(i + 1);
             let off_centre = (s.midpoint - 0.5).abs() > 1e-3;
@@ -293,7 +341,10 @@ impl Gradient {
                 // Mixed from the two stops it lies between, as `sample` would: searching all the
                 // stops again for each midpoint made many stops cost their square.
                 let mix = |a: &Color, b: &Color, v| self.method.mix(a, b, v);
-                let (c, o) = if increasing { between(s, n, t, &mix) } else { self.sample_with(t, mix) };
+                let (c, o) = match &reach {
+                    Some(reach) => reach.sample_with(&self.stops, t, &mix),
+                    None => between(s, n, t, &mix),
+                };
                 (t, c, o, Some(s.midpoint), None)
             });
             // Perceptual: stops along the mix (`v`) where a straight line would stray from it, the
@@ -353,8 +404,10 @@ impl Gradient {
     /// The weight is the one at which the two stops' colors mixed in display RGB have the OKLab
     /// lightness of the color on the curve there, found to [`TINT_STEPS`] halvings, or the mix
     /// position itself when the two colors' lightness differs by less than
-    /// [`MIN_INK_LIGHTNESS_SPAN`]. `None` for a Classic gradient, and when the curve has more than
-    /// [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
+    /// [`MIN_INK_LIGHTNESS_SPAN`], or when the display RGB mix's lightness turns back somewhere
+    /// on the way from one color's lightness to the other's (checked at [`INK_MIX_STEPS`] even
+    /// steps), as from red to blue. `None` for a Classic gradient, and when the curve has more
+    /// than [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
     pub fn ink_mixes(&self) -> Option<Vec<(f32, usize, f32, f32)>> {
         use crate::libraries::srgb_to_oklab;
         if self.method.is_classic() || !self.fits_ink_tints() {
@@ -366,8 +419,16 @@ impl Gradient {
             out.push((s.offset, i, 0.0, s.opacity));
             let Some(n) = self.stops.get(i + 1) else { continue };
             let (l0, l1) = (lightness(&s.color), lightness(&n.color));
+            let mixed_lightness = |w: f32| lightness(&GradientMethod::Classic.mix(&s.color, &n.color, w));
+            // The mix position itself when the lightness doesn't tell the mixes apart.
+            let by_position = (l1 - l0).abs() < MIN_INK_LIGHTNESS_SPAN
+                || !(0..=INK_MIX_STEPS)
+                    .map(|k| mixed_lightness(k as f32 / INK_MIX_STEPS as f32))
+                    .collect::<Vec<_>>()
+                    .windows(2)
+                    .all(|w| (w[1] - w[0]) * (l1 - l0) >= 0.0);
             for v in perceptual_mixes(s, n) {
-                let weight = if (l1 - l0).abs() < MIN_INK_LIGHTNESS_SPAN {
+                let weight = if by_position {
                     v
                 } else {
                     let want = lightness(&self.method.mix(&s.color, &n.color, v));
@@ -375,7 +436,7 @@ impl Gradient {
                     for _ in 0..TINT_STEPS {
                         let mid = (lo + hi) / 2.0;
                         // The mix at `mid` has not yet gone from stop `i`'s lightness to the wanted one.
-                        if (lightness(&GradientMethod::Classic.mix(&s.color, &n.color, mid)) - want) * (l1 - l0) < 0.0 {
+                        if (mixed_lightness(mid) - want) * (l1 - l0) < 0.0 {
                             lo = mid;
                         } else {
                             hi = mid;

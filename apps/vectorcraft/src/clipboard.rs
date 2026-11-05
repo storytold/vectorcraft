@@ -157,6 +157,10 @@ fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
             None if vectorcraft_engine::file_access::current().is_none() => {}
             None => return None,
         }
+        // A device or pipe may never end: only a regular file is read whole.
+        if !std::fs::metadata(&path).ok()?.is_file() {
+            return None;
+        }
         let mut head = Vec::with_capacity(FILE_HEAD);
         std::fs::File::open(&path).ok()?.take(FILE_HEAD as u64).read_to_end(&mut head).ok()?;
         let mime = file_flavour(&path.to_string_lossy(), &head, mimes)?;
@@ -172,8 +176,7 @@ mod win {
     use clipboard_win::{formats, options::NoClear, raw};
 
     use super::{
-        BITMAP, ClipboardRead, Cursor, Flavour, PNG, SVG, SystemClipboard, TEXT, copied_file, decode_png, dib_image, png_flavour, text_of,
-        windows_formats,
+        BITMAP, ClipboardRead, Cursor, Flavour, PNG, SVG, SystemClipboard, TEXT, copied_file, decode_png, dib_image, png_flavour, windows_formats,
     };
 
     /// The device-independent bitmaps, the one that carries alpha first. Each is there whenever the
@@ -207,8 +210,6 @@ mod win {
     pub struct Clipboard {
         /// The clipboard's sequence number right after our last write.
         seq: Option<NonZeroU32>,
-        /// The text of our last write.
-        text: Option<String>,
     }
 
     impl SystemClipboard for Clipboard {
@@ -239,18 +240,17 @@ mod win {
                 }
             }
             self.seq = raw::seq_num();
-            self.text = text_of(flavours);
             result
         }
 
         fn holds_ours(&mut self) -> bool {
-            if self.seq.is_some() && raw::seq_num() == self.seq {
-                return true;
-            }
-            // A clipboard manager may have copied our data again as its own.
-            let Some(ours) = self.text.as_deref() else { return false };
-            let Ok(_open) = clipboard_win::Clipboard::new_attempts(10) else { return false };
-            read_one(TEXT).and_then(ClipboardRead::flavour).is_some_and(|f| f.data == ours.as_bytes())
+            // The same text copied later by another app is a different clipboard entry. A
+            // clipboard manager that republishes our data is also a new entry.
+            self.seq.is_some() && raw::seq_num() == self.seq
+        }
+
+        fn change_count(&mut self) -> Option<u64> {
+            raw::seq_num().map(|n| u64::from(n.get()))
         }
 
         fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {

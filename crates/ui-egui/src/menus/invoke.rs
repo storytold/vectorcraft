@@ -71,6 +71,8 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
         crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
         crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
+        crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
+        crate::addons::select::COMMAND => (crate::addons::select::KIND, crate::addons::select::fields(app)),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
         _ => return None,
     })

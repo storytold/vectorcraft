@@ -61,7 +61,7 @@ use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 use overlays::selected_anchor;
 use overlays::{HandleLook, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
 pub use panes::Panes;
-pub(crate) use panes::{consolidate, tile, tiled_area};
+pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 use raster::{changed_pixels, pixel_region, upload};
 pub(crate) use raster::{color_image, color_image_owned};
 use task_bar::task_bar;
@@ -70,8 +70,8 @@ pub use tool_overlays::HiddenChars;
 #[cfg(test)]
 use tool_overlays::{DIAL_RADIUS, HiddenMarks};
 use tool_overlays::{
-    grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, original_path_overlay, print_tiling_overlay,
-    rotate_view_dial, shaper_widget_overlay, slice_overlay, thread_overlays,
+    grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, nine_slice_overlay, original_path_overlay,
+    print_tiling_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, thread_overlays,
 };
 pub(crate) use view::animated_zoom;
 pub use view::fit;
@@ -253,7 +253,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let doc = st.doc.clone();
     let mask_view = st.shown_mask();
 
-    paint_paper(app, st, ui, &painter, &xf, rect, &t);
+    paint_paper(app, st, ui, &painter, &xf, rect, (&t, app.outline_view()));
     // The grid behind the art (Guides & Grid › Grids In Back), else over it below.
     let grid_look = (app.ui.view.grid && !presenting).then(|| LineLook::grid(&app.session.prefs));
     let grids_in_back = app.session.prefs.grids_in_back;
@@ -325,6 +325,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if app.ui.view.guides {
             guide_lines(app, &painter, &xf, rect, &t);
         }
+        nine_slice_overlay(app, &painter, &xf);
 
         if !app.session.slices_hidden() {
             slice_overlay(app, &painter, &xf);
@@ -400,6 +401,11 @@ fn canvas_cursor(app: &mut VectorcraftApp, ui: &Ui, view_info: vectorcraft_engin
     let space = ui.input(|i| i.key_down(egui::Key::Space));
     let drag = ui.data(|d| d.get_temp::<Drag>(drag_id()));
     let panning = matches!(drag, Some(Drag::Pan { .. }));
+    let tool_holds = drag.is_some_and(drag::tool_holds);
+    // A tool that holds the press (Pencil, a brush, a shape) keeps Space out of the way: the drag
+    // began before Space went down, so Space pans nothing, and the hand would promise a pan the
+    // drag does not do.
+    let space = space && !tool_holds;
     // A zoom drag keeps its cursor when Space is pressed (with or without Shift) or Cmd is let go.
     let zoom_drag = matches!(drag, Some(Drag::ZoomBox { .. } | Drag::ZoomScrub { .. }));
     let zooming = zoom_drag || if space { m.command } else { app.session.tool_id() == "zoom" };
@@ -419,8 +425,15 @@ fn canvas_cursor(app: &mut VectorcraftApp, ui: &Ui, view_info: vectorcraft_engin
     } else {
         None
     };
+    // Cmd borrows a selection tool only at pointer-down. Pressed during another tool's drag, it
+    // cannot change the owner, so do not preview the borrowed tool's cursor. A drag that started
+    // with a borrowed selection tool keeps its Command modifier and cursor.
+    let mut cursor_mods = mods(m, space);
+    if tool_holds && !vectorcraft_tools::catalog::is_selection_tool(app.session.tool_id()) {
+        cursor_mods.cmd = false;
+    }
     // In Presentation Mode the pointer is the default one, with no tool cursor.
-    let tool_cursor = (app.ui.screen_mode < 3).then(|| view_cursor.or_else(|| hover_cursor(app, mods(m, space), view_info, hover_still)));
+    let tool_cursor = (app.ui.screen_mode < 3).then(|| view_cursor.or_else(|| hover_cursor(app, cursor_mods, view_info, hover_still)));
     let cur = if let Some(c) = tool_cursor.flatten() {
         let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("tool-cursor")));
         // The loaded place cursor carries the file's thumbnail.
@@ -573,7 +586,7 @@ fn frame_options(
     mask_view: Option<vectorcraft_doc::NodeId>,
     smooth_images: bool,
 ) -> vectorcraft_render::RenderOptions {
-    let opts = vectorcraft_render::RenderOptions { outline: app.outline_view(), background: None, artboards: false, ..Default::default() };
+    let opts = vectorcraft_render::RenderOptions { outline: key.outline, background: None, artboards: false, ..Default::default() };
     vectorcraft_render::RenderOptions {
         proof: vectorcraft_render::proof::active_proof(),
         overprint_preview: vectorcraft_render::proof::overprint_preview_on(),
@@ -653,7 +666,15 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             app.canvas.shown = Some((doc.clone(), opts.clone()));
             app.perf.render_ms = now_ms() - t0;
         }
-        (Some(worker), true, None) => worker.submit(crate::render_worker::Job { key: key.clone(), doc: doc.clone(), w, h, view, opts }),
+        (Some(worker), true, None) => worker.submit(crate::render_worker::Job {
+            key: key.clone(),
+            doc: doc.clone(),
+            w,
+            h,
+            view,
+            opts,
+            scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+        }),
         _ => {
             let t0 = now_ms();
             let img = app.canvas.renderer.render(doc, w, h, view, &opts);
@@ -669,8 +690,16 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
 }
 
 /// The pasteboard, the artboards' shadows and paper, and the outline mode's white artboards, of
-/// document `st`.
-fn paint_paper(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, ui: &Ui, painter: &egui::Painter, xf: &Xf, rect: egui::Rect, t: &Tokens) {
+/// document `st`, in Outline when `outline`.
+fn paint_paper(
+    app: &VectorcraftApp,
+    st: &vectorcraft_engine::DocState,
+    ui: &Ui,
+    painter: &egui::Painter,
+    xf: &Xf,
+    rect: egui::Rect,
+    (t, outline): (&Tokens, bool),
+) {
     let doc = &st.doc;
     // Pasteboard, artboard shadows and paper (Document Setup: the transparency grid's look, the
     // simulated paper colour; a white Background Contents hides the grid).
@@ -682,7 +711,7 @@ fn paint_paper(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, ui: &Ui,
         // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
         let setup = &doc.setup;
         painter.rect_filled(rect, 0.0, if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE });
-    } else if !app.outline_view() {
+    } else if !outline {
         let setup = &doc.setup;
         let grid = (st.transparency_grid && setup.background == vectorcraft_doc::Background::Transparent).then(|| checker_texture(ui.ctx(), setup));
         let paper = if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE };
@@ -700,7 +729,7 @@ fn paint_paper(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, ui: &Ui,
                 }
             }
         }
-    } else if app.outline_view() {
+    } else {
         for ab in &doc.artboards {
             painter.add(Shape::convex_polygon(xf.quad(ab.rect), Color32::WHITE, Stroke::NONE));
         }

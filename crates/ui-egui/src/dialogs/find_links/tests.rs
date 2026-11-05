@@ -63,6 +63,8 @@ fn opened_without(app: &mut VectorcraftApp, root: &Path, names: &[&str]) -> Vec<
     std::fs::create_dir_all(doc.parent().unwrap()).unwrap();
     app.run("document.save", json!({"path": doc})).unwrap();
     std::fs::remove_dir_all(root.join("orig")).unwrap();
+    // Reopened: an open file would only come to the front (#3455).
+    app.run("file.close", json!({})).unwrap();
     crate::io::open_path(app, &doc.to_string_lossy()).unwrap();
     files
 }
@@ -271,6 +273,7 @@ fn copy_leaves_placed_documents_where_they_are() {
     std::fs::create_dir_all(doc.parent().unwrap()).unwrap();
     app.run("document.save", json!({"path": doc})).unwrap();
     std::fs::remove_dir_all(root.join("orig")).unwrap();
+    app.run("file.close", json!({})).unwrap();
     crate::io::open_path(&mut app, &doc.to_string_lossy()).unwrap();
     super::super::cancel(&mut app);
     app.run("ui.findLinksInFolder", json!({"folder": root.join("found")})).unwrap();

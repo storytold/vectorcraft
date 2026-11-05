@@ -299,11 +299,16 @@ fn sweep_graph(inputs: &[(BezPath, usize)], eps: f64, precision: f64) -> Option<
         if ends[0] == ends[1] {
             continue;
         }
+        // Source attribution belongs to the sweep piece: pinning its endpoints can move the
+        // middle off the original outlines even though it still separates the same faces.
+        let mut sources = mid(&segs).map(|m| outlines.sources_at(m)).unwrap_or_default();
         // Every edge at a vertex starts or ends exactly on it, so faces meeting there share its
         // coordinates: merging them (a union) then cancels their common edge, which it can't when
         // each face carries its own rounding of the corner (#893).
         pin_ends(&mut segs, p0, p1);
-        let sources = mid(&segs).map(|m| outlines.sources_at(m)).unwrap_or_default();
+        if sources.is_empty() {
+            sources = mid(&segs).map(|m| outlines.sources_at(m)).unwrap_or_default();
+        }
         let Some(&source) = sources.last() else { continue };
         // Coincident pieces the sweep left apart are one edge (the front-most input's), lying on
         // the inputs of both.

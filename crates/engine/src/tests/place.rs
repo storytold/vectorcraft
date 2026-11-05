@@ -722,6 +722,39 @@ fn a_queue_of_3_with_click_drag_and_esc_places_2() {
     assert_eq!(s.doc().unwrap().history.undo.len(), 2, "one undo step per placement");
 }
 
+/// A place cursor loaded within automation roots places its files within them, even on a later
+/// click outside any roots (the person at the keyboard's): a queued file outside the roots, or
+/// one it links to, is not read then. One loaded outside any roots places as before.
+#[test]
+fn the_place_cursor_places_within_the_roots_it_was_loaded_in() {
+    let base = std::env::temp_dir().join(format!("vectorcraft-place-roots-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(base.join("in")).unwrap();
+    let outside = base.join("outside.png");
+    std::fs::write(&outside, png(40, 20, [9, 9, 9, 255], None)).unwrap();
+    let entry = json!({"params": {"path": outside.to_string_lossy()}, "name": "outside.png", "width": 40, "height": 20});
+    let roots = crate::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap().unwrap();
+    let view = ViewInfo::default();
+    let click = |s: &mut Session| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0), view)?;
+        s.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0), view)
+    };
+    let mut s = session();
+    s.select_tool("place", view).unwrap();
+    // Loaded within the roots (as a tool option, past the check tool.setOption makes of paths).
+    crate::file_access::confine(Some(&roots), || s.set_tool_option("queue", &json!({"entries": [entry]})));
+    assert!(s.place_queue_roots().is_some());
+    let placed = crate::file_access::unconfined(|| click(&mut s));
+    assert!(top_children(&s).is_empty(), "{placed:?}");
+    // Loaded outside any roots: the click places it.
+    s.select_tool("place", view).unwrap();
+    crate::file_access::unconfined(|| s.set_tool_option("queue", &json!({"entries": [entry]})));
+    assert!(s.place_queue_roots().is_none());
+    crate::file_access::unconfined(|| click(&mut s)).unwrap();
+    assert_eq!(top_children(&s).len(), 1);
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// With [`Session::place_cursor_requests`] set, a click of the place cursor asks the frontend to
 /// place its file ([`UiRequest::Place`]) and places nothing itself; the params it asks with place
 /// the file as the click places it without the flag.

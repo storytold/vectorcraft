@@ -65,6 +65,13 @@ fn rgb(hex: &str, fallback: [u8; 3]) -> [u8; 3] {
     })
 }
 
+/// Whether a tool preview of `cmd` with params `p` sets only a symbol's 9-slice guides: a
+/// `symbol.options` whose params hold `nineSliceGuides` and nothing besides `name`.
+fn nine_slice_guide_preview(cmd: &str, p: &Value) -> bool {
+    cmd == "symbol.options"
+        && p.as_object().is_some_and(|m| m.contains_key("nineSliceGuides") && m.keys().all(|k| k == "name" || k == "nineSliceGuides"))
+}
+
 /// Requests from tools that only the frontend can fulfil.
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiRequest {
@@ -328,6 +335,7 @@ impl Session {
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
             precise_cursors: self.precise_cursors(),
+            global_edit: st.global_edit.as_ref().map_or(&[], |g| g.members.as_slice()),
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
@@ -350,11 +358,91 @@ impl Session {
 
     /// Feed a pointer event to the active tool. Returns requests for the UI.
     pub fn pointer(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        self.pointer_event(ev, view, true)
+    }
+
+    /// Drop the press in progress (a long touch, a canceled touch, a second finger): nothing it
+    /// began is kept. Its interaction is undone, the tool drops the press ([`Tool::drop_press`]:
+    /// Escape, as during a drag, for most tools), and a release returns the tool to rest. Of what
+    /// the tool asks for along the way, only a cancel and a notify run, so a marquee selects
+    /// nothing and a click opens no size dialog. The tool gets back the persistent options it had
+    /// when the press began, and none of the press's changes to them are stored. A dropped Type
+    /// press restores the prior selection. The freeform gradient point selected once the tool
+    /// took the press is selected again.
+    pub fn drop_tool_press(&mut self, view: ViewInfo) -> Result<()> {
+        // Nothing to roll back without a document; the tool still drops the press and gets the release.
+        let _ = self.cancel_interaction();
+        let before = self.press_options.take();
+        let type_selection = self.press_type_selection.take();
+        let point = self.press_point.take();
+        let mut acts = self.with_tool_cx(view, |t, cx| t.drop_press(cx));
+        acts.retain(|a| matches!(a, Action::Cancel | Action::Notify(_)));
+        let dropped = self.take_tool_panic().and_then(|()| self.apply_actions(acts));
+        if let Some((selected, layer)) = type_selection {
+            if self.active().is_some_and(|st| st.selection != selected) {
+                if let Some(st) = self.active_mut() {
+                    st.selection = selected.clone();
+                }
+                self.select(|_, selection| *selection = selected)?;
+            }
+            if let Some(st) = self.active_mut()
+                && st.active_layer != layer
+            {
+                st.active_layer = layer;
+                st.layer_rows.clear();
+            }
+        }
+        let up = PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), backquote: false, pressure: 1.0, pen: None };
+        let r = dropped.and(self.pointer_event(&up, view, false));
+        // A drag out of the object previews the point's removal, which deselects it.
+        if let Some(p) = point {
+            self.freeform_point = p;
+        }
+        if let Some((id, opts)) = before
+            && id == self.tool.id()
+        {
+            let now = self.tool.options();
+            for (k, v) in &opts {
+                if now.get(k) != Some(v) {
+                    self.tool.set_option(k, v);
+                }
+            }
+        }
+        r.map(drop)
+    }
+
+    /// The options of `t` that [`Self::store_tool_settings`] stores.
+    fn persistent_options(t: &dyn Tool) -> Map<String, Value> {
+        let opts = t.options();
+        let radius = (t.id() == ROUNDED_RECTANGLE).then_some("cornerRadius");
+        let keys = settings::stores(t.id()).flat_map(|(_, keys)| keys.iter().copied()).chain(radius);
+        keys.filter_map(|k| opts.get(k).map(|v| (k.to_string(), v.clone()))).collect()
+    }
+
+    /// [`Self::pointer`]. Without `keep` (a dropped press's release), the tool's options are not
+    /// stored and only the tool's `Cancel` and `Notify` actions run.
+    fn pointer_event(&mut self, ev: &PointerEvent, view: ViewInfo, keep: bool) -> Result<Vec<UiRequest>> {
         self.last_view = view;
         match ev.kind {
             PointerKind::Down | PointerKind::Drag => self.pointer_held = true,
             PointerKind::Up | PointerKind::Move => self.pointer_held = false,
             PointerKind::DoubleClick => {}
+        }
+        match ev.kind {
+            PointerKind::Down => {
+                self.press_options = Some((self.tool.id().to_string(), Self::persistent_options(self.tool.as_ref())));
+                self.press_type_selection =
+                    if matches!(self.tool.id(), "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath") {
+                        self.active().map(|st| (st.selection.clone(), st.active_layer))
+                    } else {
+                        None
+                    };
+            }
+            PointerKind::Up => {
+                self.press_options = None;
+                self.press_type_selection = None;
+            }
+            _ => {}
         }
         // The Plane Switching Widget takes its clicks whatever the tool.
         if let Some(r) = self.plane_widget_pointer(ev, view) {
@@ -362,14 +450,22 @@ impl Session {
         }
         self.leave_draw_inside(ev, view)?;
         let ev = &self.lend_selection_tool(ev);
-        let acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
+        let mut acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
+        if !keep {
+            acts.retain(|a| matches!(a, Action::Cancel | Action::Notify(_)));
+        }
         let r = self.take_tool_panic().and_then(|()| {
             // A gesture may change options (Alt-drag sizes a Liquify brush): keep them.
-            if ev.kind == PointerKind::Up {
+            if keep && ev.kind == PointerKind::Up {
                 self.keep_tool_settings();
             }
             self.apply_actions(acts)
         });
+        match ev.kind {
+            PointerKind::Down => self.press_point = Some(self.freeform_point),
+            PointerKind::Up => self.press_point = None,
+            _ => {}
+        }
         if ev.kind == PointerKind::Up {
             self.give_back_tool(view)?;
         }
@@ -650,9 +746,25 @@ impl Session {
         self.tool.options()
     }
     pub fn set_tool_option(&mut self, key: &str, v: &Value) {
+        if key == "queue" && self.tool.id() == "place" {
+            self.note_place_queue_roots();
+        }
         self.tool.set_option(key, v);
         self.tool_set_since_reset = true;
         self.keep_tool_settings();
+    }
+
+    /// Keep the automation roots in force now as those the place cursor's queue, being loaded,
+    /// is placed under ([`Session::place_queue_roots`]).
+    fn note_place_queue_roots(&mut self) {
+        self.place_queue_roots = crate::file_access::current();
+    }
+
+    /// The automation roots the place cursor's files are placed under: those in force when it
+    /// was loaded. A frontend that places them itself ([`UiRequest::Place`]) reads them within
+    /// these roots ([`crate::file_access::confine`]).
+    pub fn place_queue_roots(&self) -> Option<std::sync::Arc<crate::file_access::AutomationRoots>> {
+        self.place_queue_roots.clone()
     }
 
     /// The options of tool `id`: the active tool's, or those it would have if chosen now.
@@ -665,6 +777,9 @@ impl Session {
     /// Liquify tools' Global Brush Dimensions, the Smooth tool's Fidelity for Pencil, Paintbrush
     /// and Blob Brush Alt smoothing). Returns the tool's options.
     pub fn set_tool_options(&mut self, id: Option<&str>, values: &Map<String, Value>) -> Value {
+        if values.contains_key("queue") && id.unwrap_or(self.tool.id()) == "place" {
+            self.note_place_queue_roots();
+        }
         let active = id.is_none_or(|id| id == self.tool.id());
         self.tool_set_since_reset |= active;
         let mut other = (!active).then(|| self.make_tool(id.unwrap_or_default()));
@@ -746,9 +861,22 @@ impl Session {
 
     /// End the Type tool's text editing before a command saves the art of an editing layer (pattern
     /// editing's Done, Stop Editing Opacity Mask): point type its click placed that is still empty is
-    /// discarded first, so it is not saved into the pattern tile or the mask.
+    /// discarded first, so it is not saved into the pattern tile or the mask. A selection tool that a
+    /// Cmd press lent is given back first, so the Type tool behind it ends its edit too; a drag of the
+    /// lent tool is kept as its own step, as its release would keep it.
     pub(crate) fn end_text_edit(&mut self) {
-        if self.in_tool_actions || !self.tool.wants_text() {
+        if self.in_tool_actions {
+            return;
+        }
+        if self.lender.is_some() {
+            if let Err(e) = self.apply_actions(vec![Action::Commit]) {
+                log::warn!("keeping the lent tool's drag before ending the text edit: {e}");
+            }
+            if let Err(e) = self.give_back_tool(self.last_view) {
+                log::warn!("giving back the lent tool before ending the text edit: {e}");
+            }
+        }
+        if !self.tool.wants_text() {
             return;
         }
         let acts = self.with_tool_cx(self.last_view, |t, cx| t.deactivate(cx));
@@ -784,8 +912,9 @@ impl Session {
                 Action::Preview(cmd, p) => {
                     // Performance › Real-time Drawing and Editing (#394): off, remember the latest
                     // params and apply them once on Commit instead of every move. A ruler guide
-                    // being dragged still shows: the guide is all there is to see (#4646).
-                    if !self.prefs.real_time_drawing && !matches!(cmd.as_str(), "guide.add" | "guide.move") {
+                    // being dragged still shows: the guide is all there is to see (#4646). So does a
+                    // symbol's 9-slice guide being dragged.
+                    if !self.prefs.real_time_drawing && !matches!(cmd.as_str(), "guide.add" | "guide.move") && !nine_slice_guide_preview(&cmd, &p) {
                         self.clear_deferred_overlay_cache();
                         let st = self.doc_mut()?;
                         if let Some(it) = &mut st.interaction {
@@ -833,6 +962,13 @@ impl Session {
                 }
                 // The place cursor's file, placed by the frontend that asked for it.
                 Action::Exec(cmd, p) if cmd == "file.place" && self.place_cursor_requests => ui.push(UiRequest::Place(p)),
+                // The place cursor's file, read within the roots of whoever loaded the cursor.
+                Action::Exec(cmd, p) if cmd == "file.place" => {
+                    let roots = self.place_queue_roots.clone();
+                    if let Some(w) = crate::file_access::confine(roots.as_ref(), || self.execute(&cmd, &p))?.get("warning").and_then(Value::as_str) {
+                        ui.push(UiRequest::Status(w.to_string()));
+                    }
+                }
                 Action::Exec(cmd, p) => {
                     // A command's warning (Crop Image's when the image couldn't be decoded) goes to the
                     // status bar too.

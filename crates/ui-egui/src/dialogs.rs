@@ -8,6 +8,8 @@
 
 mod about;
 pub mod action_batch;
+pub mod action_new;
+pub mod action_playback;
 pub mod action_set_options;
 pub mod artboard_options;
 pub mod blend_options;
@@ -62,6 +64,7 @@ pub mod live_paint_selection;
 pub mod missing_fonts;
 pub mod missing_links;
 pub(crate) mod modal;
+pub mod navigator_panel_options;
 pub mod new_brush;
 pub mod new_color_group;
 mod new_document;
@@ -139,7 +142,7 @@ pub(crate) use export_for_screens::{
     import_presets as screen_import_presets, open_assets as open_export_for_screens_assets, preset_list as screen_preset_list,
     saved_options as screen_saved_options, saved_rows as screen_saved_rows,
 };
-pub(crate) use form::{humanize, number_list_text, read_number_list, unit_suffix};
+pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
 pub(crate) use new_document::preset_name;
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
 pub use png_options::open as open_raster_options;
@@ -208,6 +211,9 @@ pub(crate) struct DialogSpec {
     pub ok_label: Option<fn(&VectorcraftApp) -> &'static str>,
     /// Can OK (or Enter) apply the dialog as it is? None: always. The body says why not.
     pub ok_enabled: Option<fn(&VectorcraftApp, &Dialog) -> bool>,
+    /// What a dialog draws at the left end of its button row, level with the buttons, instead of
+    /// in its body (Transform Each's Preview checkbox).
+    pub footer_left: Option<fn(&mut egui::Ui, &mut Dialog)>,
 }
 
 impl DialogSpec {
@@ -237,6 +243,7 @@ impl DialogSpec {
         passes: |_, _| false,
         ok_label: None,
         ok_enabled: None,
+        footer_left: None,
     };
 
     /// A dialog that draws its own window and confirms through its module.
@@ -297,6 +304,7 @@ registry! {
     Shortcuts: ["shortcuts"] => DialogSpec::window(crate::shortcut_editor::show, |app, _| crate::shortcut_editor::confirm(app)),
     Workspaces: ["newWorkspace", "manageWorkspaces"] => DialogSpec::window(crate::workspaces::show, |app, _| crate::workspaces::confirm(app)),
     NewToolbar: [crate::custom_toolbars::KIND] => DialogSpec::window(crate::custom_toolbars::show_dialog, |app, _| crate::custom_toolbars::confirm(app)),
+    ManageToolbars: [crate::custom_toolbars::MANAGE] => DialogSpec::window(crate::custom_toolbars::show_manage, |app, _| crate::custom_toolbars::confirm_manage(app)),
     FindFont: ["findFont"] => DialogSpec::window(crate::find_font::show, |app, _| crate::find_font::confirm(app)),
     SwatchOptions: [swatch_options::KIND] => swatch_options::SPEC,
     Confirm: [confirm::KIND] => confirm::SPEC,
@@ -361,6 +369,8 @@ registry! {
     Package: [package::KIND] => package::SPEC,
     ActionBatch: [action_batch::KIND] => action_batch::SPEC,
     ActionSetOptions: [action_set_options::KIND] => action_set_options::SPEC,
+    ActionNew: [action_new::KIND] => action_new::SPEC,
+    ActionPlayback: [action_playback::KIND] => action_playback::SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
@@ -402,12 +412,15 @@ registry! {
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
+    NavigatorPanelOptions: [navigator_panel_options::KIND] => navigator_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
     NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
     SwatchLegend: [crate::addons::color::legend::KIND] => crate::addons::color::legend::SPEC,
+    TextTweaker: [crate::addons::typetools::KIND] => crate::addons::typetools::SPEC,
+    SelectByArtboards: [crate::addons::select::KIND] => crate::addons::select::SPEC,
     ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE, crate::addons::arrange::OPACITY, crate::addons::arrange::SORT] => crate::addons::arrange::SPEC,
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
 }
@@ -449,13 +462,18 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 
 /// Set `field` of `d` to `value` for `ui.dialog.set`, as the dialog's own control for it does: a
 /// Pattern Brush Options corner tile set this way is saved by OK, as one chosen from its menu is,
-/// and an Edit Data Set field set this way is no longer the row's empty text value.
+/// an Edit Data Set field set this way is no longer the row's empty text value, and a Layer
+/// Options setting set this way for several rows is sent to every row (Template also sets Lock
+/// and Dim Images, as its checkbox does).
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
     }
     if d.kind == variables::KIND {
         variables::note_set(d, &field);
+    }
+    if d.kind == layer_options::KIND {
+        layer_options::note_set(d, &field, &value);
     }
     d.fields.insert(field, value);
 }
@@ -490,10 +508,14 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 }
 
 /// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
-/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), and a change
+/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
-/// the dialog.
+/// the dialog, and Transform Each's Relative / Absolute keeps the Scale fields' size.
 pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == transform_each::KIND) {
+        transform_each::field_set(app, field, old);
+        return Ok(());
+    }
     let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };
     match field {
         "exportPreset" => export_for_screens::preset_set(app),
@@ -704,6 +726,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if let Some(label) = spec.discard {
                 ui.add_space(28.0);
                 discard = widgets::secondary_button(ui, label).clicked();
+            }
+            // The row runs right to left: a left-to-right layout in the room left of the buttons
+            // puts its control at the row's left end.
+            if let Some(left) = spec.footer_left {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| left(ui, &mut d));
             }
         });
     });

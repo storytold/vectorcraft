@@ -1297,7 +1297,16 @@ fn headless_backend_methods() {
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(600), Some(400)));
     let cmds = h.call("engine.commands", json!({})).unwrap();
     assert!(cmds.as_array().unwrap().iter().any(|c| c["id"] == "file.export"));
-    assert!(h.call("ui.tool.list", json!({})).unwrap().is_array());
+    let listed = h.call("ui.tool.list", json!({})).unwrap();
+    let groups = listed.as_array().unwrap();
+    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
+        let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
+        assert_eq!(matching.len(), 1, "{}", tool.id);
+        assert_eq!(matching[0]["label"], tool.label);
+        assert!(matching[0]["shortcut"].is_null());
+        let selected = h.call("ui.tool.select", json!({"tool": tool.id})).unwrap();
+        assert_eq!(selected["tool"], tool.id);
+    }
     assert!(h.call("ui.resize", json!({})).is_err());
 }
 

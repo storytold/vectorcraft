@@ -36,18 +36,37 @@ impl Exporter<'_> {
         Some(SeparationSpace::new(SeparationColorant::Custom(ink), alt))
     }
 
-    /// The ink name of spot swatch `name` and its CMYK equivalent at 100% (a Lab spot color is
-    /// noted for [`crate::lab_spot`]); `None` when `name` isn't a spot color.
+    /// The ink name of spot swatch `name` ([`Self::colorant_name`]) and its CMYK equivalent at
+    /// 100% (a Lab spot color is noted for [`crate::lab_spot`]); `None` when `name` isn't a spot
+    /// color.
     pub(super) fn spot_ink(&mut self, name: &str) -> Option<(String, [f32; 4])> {
         let doc = self.doc;
         let sw = doc.swatch(name).filter(|s| s.spot)?;
         let color = doc.linked_color(sw.paint.color()?, true);
+        let ink = self.colorant_name(&sw.name);
         if let Color::Lab { l, a, b } = color
-            && !self.lab_spots.iter().any(|(n, _)| n == name)
+            && !self.lab_spots.iter().any(|(n, _)| *n == ink)
         {
-            self.lab_spots.push((name.to_string(), vectorcraft_color::cms::Lab::new(l, a, b)));
+            self.lab_spots.push((ink.clone(), vectorcraft_color::cms::Lab::new(l, a, b)));
         }
-        Some((sw.name.clone(), self.out.cmyk(&color, self.intent)))
+        Some((ink, self.out.cmyk(&color, self.intent)))
+    }
+
+    /// The colorant name spot swatch `name` is written under: its own name, except that `All`
+    /// (every plate in PDF) and `None` (no plate) become `All Spot` and `None Spot`, numbered
+    /// `All Spot 2`, `All Spot 3`, … past the names of the document's spot swatches.
+    fn colorant_name(&self, name: &str) -> String {
+        if name != "All" && name != "None" {
+            return name.to_string();
+        }
+        let taken = |c: &str| self.doc.swatches_iter().any(|s| s.spot && s.name == c);
+        let mut colorant = format!("{name} Spot");
+        let mut n = 2;
+        while taken(&colorant) {
+            colorant = format!("{name} Spot {n}");
+            n += 1;
+        }
+        colorant
     }
 
     /// A solid paint, in the Separation colour space at its tint when it's linked to a spot swatch
@@ -109,12 +128,13 @@ impl Exporter<'_> {
         fn spot_of<'s>(doc: &vectorcraft_doc::Document, s: &'s vectorcraft_color::GradientStop) -> Option<&'s str> {
             s.swatch.as_deref().filter(|n| doc.swatch(n).is_some_and(|w| w.spot))
         }
-        let mut spots: Vec<(String, [f32; 4])> = Vec::new();
+        // Each spot ink: its swatch's name, then its colorant name and CMYK equivalent.
+        let mut spots: Vec<(&str, (String, [f32; 4]))> = Vec::new();
         for s in &g.stops {
             if let Some(n) = spot_of(doc, s)
-                && !spots.iter().any(|(m, _)| m == n)
+                && !spots.iter().any(|(m, _)| *m == n)
             {
-                spots.push(self.spot_ink(n)?);
+                spots.push((n, self.spot_ink(n)?));
             }
         }
         // Each stop's ink coverage: the four process inks, then one tint per spot ink.
@@ -123,7 +143,7 @@ impl Exporter<'_> {
             let mut v = vec![0.0; 4 + spots.len()];
             match spot_of(doc, s) {
                 Some(n) => {
-                    let i = spots.iter().position(|(m, _)| m == n)?;
+                    let i = spots.iter().position(|(m, _)| *m == n)?;
                     v[4 + i] = s.tint;
                 }
                 None if self.paper_stop(s) => {}
@@ -142,7 +162,7 @@ impl Exporter<'_> {
         let colorants = process
             .iter()
             .map(|&i| Colorant::Process(Process::ALL[i]))
-            .chain(spots.iter().map(|(name, f)| Colorant::Spot { name: name.clone(), alternate: cmyk::Color::new_f32(f[0], f[1], f[2], f[3]) }));
+            .chain(spots.iter().map(|(_, (name, f))| Colorant::Spot { name: name.clone(), alternate: cmyk::Color::new_f32(f[0], f[1], f[2], f[3]) }));
         let Some(space) = DeviceNSpace::new(colorants) else {
             self.warn("gradients whose spot inks can't share a DeviceN color space are exported without the spot inks");
             return None;
@@ -411,7 +431,7 @@ impl Exporter<'_> {
     /// in process colors, so the spot inks have no plate of their own.
     fn warn_spot_image(&mut self, g: &vectorcraft_color::GradientPaint) {
         let doc = self.doc;
-        let from_stops = g.gradient.kind != GradientKind::Freeform || g.freeform.is_none();
+        let from_stops = g.gradient.kind != GradientKind::Freeform || !g.has_freeform_points();
         if from_stops && g.gradient.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))) {
             self.warn(
                 "spot colors in gradients exported as images (freeform or dithered gradients, and Perceptual ones with RGB or Lab stops or too many stops) are written in process colors",

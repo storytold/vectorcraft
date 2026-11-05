@@ -97,6 +97,13 @@ impl Renderer {
         chars: Option<(&Arc<TextGeom>, usize)>,
         bounds: Rect,
     ) {
+        // A stroke drawn without its dashes is a copy, not the document's stroke: its outline is
+        // made here and not kept with the document's outlines.
+        let drawn = f.stroke(st);
+        let (st, chars) = match &drawn {
+            std::borrow::Cow::Owned(solid) => (solid, None),
+            std::borrow::Cow::Borrowed(st) => (*st, chars),
+        };
         let pieces = effects::stroke::stroke_pieces(bp, st);
         // The line and its heads overlap: they take the opacity once, in one layer, instead of
         // each folding it into its paint.
@@ -253,14 +260,38 @@ impl Renderer {
         }
         let node = self.cur.clone().filter(|n| owns_stroke(n, st))?;
         let key = (self.stroke_owner(Arc::as_ptr(&node) as usize), st as *const StrokeLayer as usize, width.to_bits(), level);
+        let v = f.visible;
+        let holds = |crop: Option<Rect>| crop.is_none_or(|r| r.x0 <= v.x0 && r.y0 <= v.y0 && r.x1 >= v.x1 && r.y1 >= v.y1);
         if let Some(e) = self.strokes.get_mut(&key)
             && Arc::ptr_eq(&e.node, &node)
+            && holds(e.crop)
         {
             e.stamp = self.stamp;
             return Some(e.outline.clone());
         }
-        let outline = expand();
-        self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp });
+        // A long stroke without a width profile is outlined only in and around the view, with a
+        // margin of the view's own size on each side ([`crop_dashed`] for a dashed one,
+        // [`crop_line`] otherwise).
+        let region = v.inflate(v.width(), v.height());
+        let tol = 2f64.powi(level);
+        if crops()
+            && line.elements().len() > CROP_ELEMENTS
+            && st.dash.is_some()
+            && st.profile.is_none()
+            && let Some(outline) = crop_dashed(line, st, width, region, crop_reach(st, width, f.px, tol), tol)
+        {
+            let outline = Arc::new(outline);
+            self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop: Some(region) });
+            return Some(outline);
+        }
+        let cropped = (crops() && line.elements().len() > CROP_ELEMENTS && st.dash.is_none() && st.profile.is_none())
+            .then(|| crop_line(line, region, crop_reach(st, width, f.px, tol), width))
+            .flatten();
+        let (outline, crop) = match cropped {
+            Some(part) => (Arc::new(effects::stroke::line_outline(&part, st, width, tol)), Some(region)),
+            None => (expand(), None),
+        };
+        self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop });
         Some(outline)
     }
 
@@ -270,4 +301,117 @@ impl Renderer {
     fn stroke_owner(&self, address: usize) -> usize {
         if self.made_again { 0 } else { address }
     }
+}
+
+/// The stroke lines with more path elements than this are outlined in and around the view only
+/// ([`crop_line`]).
+pub(crate) const CROP_ELEMENTS: usize = 1024;
+
+#[cfg(test)]
+thread_local! {
+    /// Whether long strokes are outlined near the view only on this thread ([`crop_line`]).
+    pub(crate) static CROP_STROKES: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+fn crops() -> bool {
+    #[cfg(test)]
+    return CROP_STROKES.with(std::cell::Cell::get);
+    #[cfg(not(test))]
+    true
+}
+
+/// How far stroke `st` at `width` can paint from its path, at a join or a cap, with two output
+/// pixels (`px`) and the outline's tolerance `tol` added.
+pub(crate) fn crop_reach(st: &StrokeLayer, width: f64, px: f64, tol: f64) -> f64 {
+    let corner = if st.join == vectorcraft_doc::LineJoin::Miter { st.miter_limit.max(std::f64::consts::SQRT_2) } else { std::f64::consts::SQRT_2 };
+    width / 2.0 * corner + 2.0 * px + tol
+}
+
+/// Whether the box of segment `s`'s control points meets `near`. A coordinate that is not a number
+/// counts as near.
+fn is_near(s: &kurbo::PathSeg, near: Rect) -> bool {
+    use kurbo::PathSeg;
+    let pts: &[kurbo::Point] = match s {
+        PathSeg::Line(l) => &[l.p0, l.p1],
+        PathSeg::Quad(q) => &[q.p0, q.p1, q.p2],
+        PathSeg::Cubic(c) => &[c.p0, c.p1, c.p2, c.p3],
+    };
+    !(pts.iter().all(|p| p.x < near.x0)
+        || pts.iter().all(|p| p.x > near.x1)
+        || pts.iter().all(|p| p.y < near.y0)
+        || pts.iter().all(|p| p.y > near.y1))
+}
+
+/// The outline of the line `line` of dashed stroke `st` (without a width profile) at `width`,
+/// flattened to `tol`, made from the segments within `reach` of `region` only, for drawing in
+/// `region`. The dashes and dots on those segments sit where the whole line puts them
+/// ([`effects::stroke::dash_kept`]); a pattern that draws the stroke solid is outlined as a solid
+/// line along [`crop_line`]. `None` when every segment is kept.
+fn crop_dashed(line: &BezPath, st: &StrokeLayer, width: f64, region: Rect, reach: f64, tol: f64) -> Option<BezPath> {
+    let near = region.inflate(reach, reach);
+    if kurbo::segments(line.elements().iter().copied()).all(|s| is_near(&s, near)) {
+        return None;
+    }
+    if let Some(outline) = effects::stroke::dashed_line_outline_kept(line, st, width, tol, &|s| is_near(s, near)) {
+        return Some(outline);
+    }
+    let solid = StrokeLayer { dash: None, ..st.clone() };
+    crop_line(line, region, reach, width).map(|part| effects::stroke::line_outline(&part, &solid, width, tol))
+}
+
+/// The stroke line `line` without the segments whose control points' box lies more than `reach`
+/// from `region`, for outlining a stroke of `width` that is drawn only in `region`. A subpath that
+/// loses some of its segments is replaced by its runs of kept segments, each an open subpath; a
+/// closed one is walked from a removed segment, so that a run passes through the point where it
+/// starts and ends. A closed subpath that a stroke of `width` can cross over (`width` at least the
+/// smaller side of its bounds) keeps all its segments, and so does a subpath with no segments.
+/// `None` when every segment is kept.
+pub(crate) fn crop_line(line: &BezPath, region: Rect, reach: f64, width: f64) -> Option<BezPath> {
+    use kurbo::{PathEl, PathSeg};
+    let near = region.inflate(reach, reach);
+    let keep = |s: &PathSeg| is_near(s, near);
+    let els = line.elements();
+    let mut starts: Vec<usize> = els.iter().enumerate().filter(|(_, e)| matches!(e, PathEl::MoveTo(_))).map(|(i, _)| i).collect();
+    if starts.first() != Some(&0) {
+        starts.insert(0, 0);
+    }
+    let mut out = BezPath::new();
+    let mut cut = false;
+    for (k, &start) in starts.iter().enumerate() {
+        let Some(sub) = els.get(start..starts.get(k + 1).copied().unwrap_or(els.len())) else { continue };
+        let segs = || kurbo::segments(sub.iter().copied());
+        let (total, kept) = segs().fold((0, 0), |(t, n), s| (t + 1, n + usize::from(keep(&s))));
+        let closed = sub.iter().any(|e| matches!(e, PathEl::ClosePath));
+        let crosses = || {
+            let b = BezPath::from_vec(sub.to_vec()).bounding_box();
+            width >= b.width().min(b.height())
+        };
+        if kept == total || closed && crosses() {
+            out.extend(sub.iter().copied());
+            continue;
+        }
+        cut = true;
+        let first = if closed { segs().position(|s| !keep(&s)).map_or(0, |i| i + 1) } else { 0 };
+        let mut open = false;
+        for s in segs().skip(first).chain(segs().take(first)) {
+            if !keep(&s) {
+                open = false;
+                continue;
+            }
+            if !open {
+                out.move_to(match s {
+                    PathSeg::Line(l) => l.p0,
+                    PathSeg::Quad(q) => q.p0,
+                    PathSeg::Cubic(c) => c.p0,
+                });
+                open = true;
+            }
+            match s {
+                PathSeg::Line(l) => out.line_to(l.p1),
+                PathSeg::Quad(q) => out.quad_to(q.p1, q.p2),
+                PathSeg::Cubic(c) => out.curve_to(c.p1, c.p2, c.p3),
+            }
+        }
+    }
+    cut.then_some(out)
 }

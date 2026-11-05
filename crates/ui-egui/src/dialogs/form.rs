@@ -64,6 +64,24 @@ pub(crate) fn length_within(
     true
 }
 
+/// [`length_within`] for a value the selected objects may not share: with no value the field reads
+/// `empty` ("Mixed"), and typing a distance sets it.
+pub(crate) fn length_mixed(
+    ui: &mut egui::Ui,
+    d: &mut Dialog,
+    key: &str,
+    unit: Unit,
+    width: f32,
+    range: Option<std::ops::RangeInclusive<f64>>,
+    empty: &str,
+) -> bool {
+    let value = d.fields.contains_key(key).then(|| d.f64(key, 0.0));
+    let bounds = range.unwrap_or(crate::widgets::ANY);
+    let Some(v) = crate::widgets::num_field_within_empty(ui, ("dlg-len", key), value, empty, unit, width, bounds) else { return false };
+    d.fields.insert(key.into(), json!(v));
+    true
+}
+
 /// What [`length`] shows for `d.fields[key]`, as the screen-reader value of a rail over `range`
 /// (in points) beside it: the number in `unit` and the field's text. `None` while the field is
 /// blank.
@@ -153,6 +171,31 @@ fn choices(kind: &str, key: &str) -> Vec<(&'static str, &'static str)> {
 /// A text field `width` wide bound to `d.fields[key]`. Returns true when it changed.
 pub(super) fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> bool {
     text_edit(ui, d, key, width).changed()
+}
+
+/// A parameter value that is a color object (`{"model": "cmyk", …}`, as Document Color Mode or an
+/// imported file stores an effect's color), read as a color. `None` for any other value.
+pub(super) fn color_object(v: &Value) -> Option<vectorcraft_doc::color::Color> {
+    v.is_object().then(|| serde_json::from_value(v.clone()).ok()).flatten()
+}
+
+/// [`text`] for a color parameter `key`: a color object ([`color_object`]) shows as its hex and
+/// stays as it is until the text is edited; any other value that isn't text shows dimmed.
+pub(super) fn color_text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> bool {
+    let Some(v) = d.fields.get(key).cloned() else { return text(ui, d, key, width) };
+    if let Some(c) = color_object(&v) {
+        d.fields.insert(key.into(), json!(c.to_hex()));
+        let changed = text(ui, d, key, width);
+        if !changed {
+            d.fields.insert(key.into(), v);
+        }
+        return changed;
+    }
+    if v.is_string() {
+        return text(ui, d, key, width);
+    }
+    crate::widgets::dim_label(ui, &v.to_string());
+    false
 }
 
 /// [`text`] for a row whose visible meaning is not the immediately preceding label widget
@@ -432,9 +475,19 @@ pub(super) fn param_fields(
                             changed = true;
                         }
                     }
-                    other => {
-                        ui.label(egui::RichText::new(other.to_string()).color(t.text_dim).size(11.0));
-                    }
+                    // A color object shows as its hex; typing in the field stores the typed text.
+                    other => match color_object(&other) {
+                        Some(c) => {
+                            let mut s = c.to_hex();
+                            if ui.add(egui::TextEdit::singleline(&mut s).desired_width(140.0)).changed() {
+                                d.fields.insert(k.clone(), json!(s));
+                                changed = true;
+                            }
+                        }
+                        None => {
+                            ui.label(egui::RichText::new(other.to_string()).color(t.text_dim).size(11.0));
+                        }
+                    },
                 }
             });
             ui.end_row();
@@ -468,7 +521,10 @@ fn typed_number(x: f64) -> Value {
 /// the rows then scroll ([`super::modal::scrolled_rows`]).
 pub(super) fn schema_fields(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, m: &Manifest) -> bool {
     let (changed, help) = schema_rows(ui, d, m);
-    if let Some(url) = help {
+    // The browser is another app: a click automation sent opens nothing.
+    if let Some(url) = help
+        && app.refuse_automation("the plug-in help button").is_ok()
+    {
         app.open_url(&url);
     }
     changed
@@ -595,7 +651,19 @@ fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, cur: &
             let typed = crate::widgets::text_field_named(ui, ("plugin-list", k), Some(label), Some(&number_list_text(cur)), 160.0, 1);
             (typed.and_then(|text| read_number_list(&text, spec)), false)
         }
+        ParamSpec::Color { .. } => (plugin_color_button(ui, ("plugin-color", k), cur), false),
     }
+}
+
+/// A plug-in `color` parameter's button, showing `cur` (a color object or hex) and opening the color
+/// picker → the color picked, as the color object the plug-in gets: the picker's display sRGB in the
+/// working RGB space, so the color shows as it was picked whatever the working profile.
+pub(crate) fn plugin_color_button(ui: &mut egui::Ui, id: impl std::hash::Hash + std::fmt::Debug, cur: &Value) -> Option<Value> {
+    let [r, g, b, _] = vectorcraft_plugins::manifest::color_value(cur).unwrap_or_default().to_rgba8(1.0);
+    let mut rgb = [r, g, b];
+    let changed = ui.push_id(id, |ui| ui.color_edit_button_srgb(&mut rgb).changed()).inner;
+    let picked = || crate::screen_color::sampled(&vectorcraft_color::cms::active(), rgb.map(|v| f32::from(v) / 255.0));
+    changed.then(|| serde_json::to_value(picked()).unwrap_or_default())
 }
 
 /// A `numberList` value as its field shows it: "45, 135".
@@ -752,7 +820,8 @@ pub(super) fn slider_rail_named(
     range: std::ops::RangeInclusive<f64>,
     track: &dyn Fn(f32) -> egui::Color32,
 ) {
-    let shown = crate::widgets::SliderValue::number(d.f64(key, 0.0), range.clone());
+    // Whole numbers, as a drag sets them.
+    let shown = crate::widgets::SliderValue { decimals: Some(0), ..crate::widgets::SliderValue::number(d.f64(key, 0.0), range.clone()) };
     slider_rail_valued(ui, d, key, name, range, Some(shown), track);
 }
 
@@ -775,8 +844,9 @@ pub(super) fn slider_rail_valued(
     let units = shown.as_ref().map(|s| s.range.clone());
     let (dragged, _, keyed) =
         crate::widgets::color_slider_stepped(ui, ("dlg-slider", key), name, shown, ((v - min) / (max - min)) as f32, SLIDER_WIDTH, track);
-    let keyed =
-        keyed.zip(units).map(|(k, u)| if u == range { k } else { (min + (k - u.start()) / (u.end() - u.start()) * (max - min)).clamp(min, max) });
+    // Not clamped to the rail: a screen reader's set value can reach a number past it that the
+    // field holds.
+    let keyed = keyed.zip(units).map(|(k, u)| if u == range { k } else { min + (k - u.start()) / (u.end() - u.start()) * (max - min) });
     if let Some(n) = dragged.map(|x| (min + x as f64 * (max - min)).round()).or(keyed).filter(|n| *n != held) {
         d.fields.insert(key.into(), json!(n));
     }
@@ -831,15 +901,30 @@ pub(super) fn preview_result(
     cmd: &str,
     params: Value,
 ) -> Option<Value> {
-    const LAST: &str = PREVIEWED;
     ui.add_space(8.0);
-    let mut on = d.bool("preview");
+    preview_check(ui, d);
+    preview_or_rollback(app, d, label, cmd, params)
+}
+
+/// The Preview checkbox (field `preview`), for a dialog that draws it in its button row
+/// (`DialogSpec::footer_left`) instead of through [`preview`].
+pub(crate) fn preview_check(ui: &mut egui::Ui, d: &mut Dialog) {
+    let on = d.bool("preview");
     if crate::widgets::check(ui, tl!("Preview"), on, true) {
-        on = !on;
-        d.fields.insert("preview".into(), json!(on));
+        d.fields.insert("preview".into(), json!(!on));
     }
-    if !on {
-        if d.fields.remove(LAST).is_some() {
+}
+
+/// [`preview`] without its checkbox, which the dialog draws itself ([`preview_check`]): the preview
+/// runs while the field is on and rolls back when it is off.
+pub(crate) fn preview_without_check(app: &mut crate::VectorcraftApp, d: &mut Dialog, label: &str, cmd: &str, params: Value) {
+    let _ = preview_or_rollback(app, d, label, cmd, params);
+}
+
+/// [`preview_now`] while Preview is on; off, it rolls the preview back.
+fn preview_or_rollback(app: &mut crate::VectorcraftApp, d: &mut Dialog, label: &str, cmd: &str, params: Value) -> Option<Value> {
+    if !d.bool("preview") {
+        if d.fields.remove(PREVIEWED).is_some() {
             let _ = app.session.cancel_interaction();
         }
         return None;

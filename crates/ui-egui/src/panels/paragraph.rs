@@ -77,9 +77,15 @@ fn para_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
 pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Value) -> Result<Value, String> {
     if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
-        p["ids"] = json!([id.0]);
-        p["start"] = json!(a);
-        p["end"] = json!(b);
+        match super::character::text_story(app) {
+            // After Select All in threaded text: every paragraph of every frame.
+            Some(story) => p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>()),
+            None => {
+                p["ids"] = json!([id.0]);
+                p["start"] = json!(a);
+                p["end"] = json!(b);
+            }
+        }
     }
     app.run(cmd, p)
 }
@@ -164,9 +170,33 @@ fn collect_text_alignment(text: &vectorcraft_doc::TextObject, range: Option<(usi
     record(index, &plain, start, end) // Includes empty text and the paragraph after a final newline.
 }
 
+/// The frames of the threaded story whose whole text the Type tool has selected after Select All
+/// ([`super::character::text_story`]), in thread order.
+fn story_texts(app: &VectorcraftApp) -> Option<Vec<&vectorcraft_doc::TextObject>> {
+    let st = app.session.active()?;
+    let story = super::character::text_story(app)?;
+    Some(
+        story
+            .into_iter()
+            .filter_map(|id| match st.doc.node(id).map(|n| &n.kind) {
+                Some(NodeKind::Text(t)) => Some(t.as_ref()),
+                _ => None,
+            })
+            .collect(),
+    )
+}
+
 /// Visit every paragraph the Paragraph panel acts on.
 fn visit_paragraphs(app: &VectorcraftApp, mut f: impl FnMut(&ParaStyle)) {
     let Some(st) = app.session.active() else { return };
+    if let Some(texts) = story_texts(app) {
+        for t in texts {
+            for i in 0..t.paragraph_count() {
+                f(t.para_at(i));
+            }
+        }
+        return;
+    }
     if let Some((id, a, b)) = super::character::text_editing(app)
         && let Some(NodeKind::Text(text)) = st.doc.node(id).map(|n| &n.kind)
     {
@@ -288,6 +318,9 @@ fn selected_paragraph_direction(app: &VectorcraftApp, fallback: &ParaStyle) -> O
     let default = Some(resolved_rtl(app, fallback));
     let Some(st) = app.session.active() else { return default };
     let mut shared = None;
+    if let Some(texts) = story_texts(app) {
+        return if texts.into_iter().all(|t| collect_text_direction(t, None, &mut shared)) { shared.or(default) } else { None };
+    }
     if let Some((id, a, b)) = super::character::text_editing(app)
         && let Some(NodeKind::Text(text)) = st.doc.node(id).map(|n| &n.kind)
     {
@@ -322,6 +355,9 @@ fn selected_alignment(app: &VectorcraftApp, fallback: &ParaStyle) -> Option<Just
     let default = Some(shown_alignment(fallback.justify, fallback.direction == Some(ParaDirection::RightToLeft)));
     let Some(st) = app.session.active() else { return default };
     let mut shared = None;
+    if let Some(texts) = story_texts(app) {
+        return if texts.into_iter().all(|t| collect_text_alignment(t, None, &mut shared)) { shared.or(default) } else { None };
+    }
     if let Some((id, a, b)) = super::character::text_editing(app)
         && let Some(NodeKind::Text(text)) = st.doc.node(id).map(|n| &n.kind)
     {
