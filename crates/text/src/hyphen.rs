@@ -7,6 +7,11 @@
 //! Preferences › Hyphenation › Exceptions (comma separated) override the points for named words:
 //! `typography` never breaks, `ty-pog-ra-phy` breaks only where the hyphens mark. See
 //! [`set_hyphenation_exceptions`].
+//!
+//! Each run hyphenates in its own language ([`vectorcraft_doc::CharStyle::language`]). English is
+//! the only language with break points so far: text in any other language, or in a language a
+//! file names that isn't known, doesn't hyphenate, apart from the words in the Exceptions list
+//! ([`language_has_patterns`]).
 
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -144,6 +149,12 @@ fn onset_pair(a: char, b: char) -> bool {
     )
 }
 
+/// Whether text in `language` (a [`vectorcraft_doc::CharStyle::language`]: a BCP 47 tag, `None` for
+/// the default, English: USA) has break points of its own.
+pub fn language_has_patterns(language: Option<&str>) -> bool {
+    language.is_none_or(|l| l.get(..2).is_some_and(|p| p.eq_ignore_ascii_case("en")) && matches!(l.as_bytes().get(2), None | Some(b'-')))
+}
+
 /// Allowed hyphenation points in `word`, as char indices (a hyphen goes *before* the char), with
 /// the default Hyphenation options.
 pub fn hyphen_points(word: &str) -> Vec<usize> {
@@ -157,11 +168,20 @@ pub fn hyphen_points(word: &str) -> Vec<usize> {
 /// (other than a trailing apostrophe) are not hyphenated. Preferences exceptions override the
 /// pattern and these options for a matching word.
 pub fn hyphen_points_with(word: &str, opts: &HyphenationOptions) -> Vec<usize> {
+    hyphen_points_in(word, opts, true)
+}
+
+/// [`hyphen_points_with`] for a word in a language with or without break points of its own
+/// ([`language_has_patterns`]): without them, only a word in the Exceptions list breaks.
+pub fn hyphen_points_in(word: &str, opts: &HyphenationOptions, patterns: bool) -> Vec<usize> {
     if let Some(ex) = exception_for(word) {
         return match ex {
             Exception::Never => vec![],
             Exception::Only(pts) => lowercase_points_to_word(word, &pts),
         };
+    }
+    if !patterns {
+        return vec![];
     }
     let c: Vec<char> = word.chars().collect();
     let n = c.len();
@@ -233,6 +253,31 @@ mod tests {
 
     fn with_exceptions(source: &str, f: impl FnOnce()) {
         with_hyphenation_exceptions_for_test(source, f);
+    }
+
+    /// #394: English in any region has break points; other languages, and a tag from a file that
+    /// isn't a known language, have none.
+    #[test]
+    fn only_english_has_break_points() {
+        for l in [None, Some("en-US"), Some("en-GB"), Some("EN-gb"), Some("en")] {
+            assert!(language_has_patterns(l), "{l:?}");
+        }
+        for l in [Some("de"), Some("fr"), Some("pt"), Some("eng"), Some("x-unknown"), Some(""), Some("é")] {
+            assert!(!language_has_patterns(l), "{l:?}");
+        }
+    }
+
+    /// #394: a language without break points leaves words whole, but the Exceptions list is the
+    /// user's own and applies in every language.
+    #[test]
+    fn a_language_without_break_points_keeps_only_the_exceptions() {
+        let opts = HyphenationOptions::default();
+        assert_eq!(hyphen_points_in("typography", &opts, true), vec![4, 7]);
+        assert!(hyphen_points_in("typography", &opts, false).is_empty());
+        with_exceptions("ty-pog-ra-phy, happen", || {
+            assert_eq!(hyphen_points_in("typography", &opts, false), vec![2, 5, 7]);
+            assert!(hyphen_points_in("happen", &opts, false).is_empty());
+        });
     }
 
     /// #394 Preferences › Hyphenation › Exceptions contract (parse + override).

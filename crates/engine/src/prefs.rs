@@ -10,6 +10,14 @@ pub enum DrawMode {
     Inside,
 }
 
+/// A saved Default Language as its tag: older preferences hold the language's name, and one the list
+/// no longer has reads as the default.
+fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<String, D::Error> {
+    let saved = <String as serde::Deserialize>::deserialize(d)?;
+    let tag = vectorcraft_doc::setup::char_language(&saved).ok().flatten();
+    Ok(tag.or_else(|| vectorcraft_doc::setup::LANGUAGES.first().map(|(_, t, _)| *t)).unwrap_or_default().to_string())
+}
+
 /// Application preferences (Edit → Preferences). Every field is reachable through `prefs.get` /
 /// `prefs.set {key, value}` (camelCase keys, validated against [`cmd::prefscmds::PREF_SPECS`]).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -114,6 +122,9 @@ pub struct Prefs {
     pub show_slice_numbers: bool,
     pub slice_line_color: String,
     // Hyphenation
+    /// Default Language: the BCP 47 tag of the language new type takes when its document's language
+    /// is the default ([`vectorcraft_doc::setup::LANGUAGES`]).
+    #[serde(deserialize_with = "language_tag")]
     pub hyphenation_language: String,
     pub hyphenation_exceptions: String,
     /// Type › Options › Additional Fonts Folder: a folder (read with its subfolders) whose fonts
@@ -253,6 +264,10 @@ pub struct Prefs {
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/VectorCraft Templates`).
     pub templates_folder: String,
+    /// File Handling → Use System Defaults for Edit Original (#5236): Links panel › Edit Original
+    /// opens a linked file in the system's default app for it; off, in the app that made it
+    /// (PhotoCraft for a raster image, where it is installed; the system's app otherwise).
+    pub edit_original_system_defaults: bool,
     /// Open older native files as "<name> [Converted]" so Save asks for a new name.
     pub append_converted: bool,
     /// File Handling → Use Compression: native saves are gzip-compressed (`document.save
@@ -400,7 +415,7 @@ impl Default for Prefs {
             snap_perpendicular: true,
             show_slice_numbers: true,
             slice_line_color: s("#ff3f3f"),
-            hyphenation_language: s("English: USA"),
+            hyphenation_language: s("en-US"),
             hyphenation_exceptions: String::new(),
             fonts_folder: String::new(),
             plugins_folder: String::new(),
@@ -464,6 +479,7 @@ impl Default for Prefs {
             pdf_presets: vec![],
             screen_export_presets: vec![],
             templates_folder: String::new(),
+            edit_original_system_defaults: true,
             append_converted: true,
             use_compression: false,
             web_export_presets: vec![],

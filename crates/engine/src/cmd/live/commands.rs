@@ -245,7 +245,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Mesh Point Color",
             [],
             None,
-            "{id, index | points: [index…] | items: [{id, index | points}…], color?, keepModel?: bool (as paint.setFill), opacity?: 0..1} colour and/or opacity of gradient mesh points (one undo step; an index out of range changes nothing)",
+            "{id, index | points: [index…] | items: [{id, index | points}…], color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1} colour and/or opacity of gradient mesh points (one undo step; an index out of range changes nothing)",
             has_doc,
             mesh_set_color
         ),
@@ -272,7 +272,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Mesh Line",
             [],
             None,
-            "{id, x, y, color?, keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y) to a gradient mesh (new point in `color`) or a mesh envelope; a point outside within `tolerance` of the edge adds them through the nearest point of the edge → {index}",
+            "{id, x, y, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y) to a gradient mesh (new point in `color`) or a mesh envelope; a point outside within `tolerance` of the edge adds them through the nearest point of the edge → {index}",
             has_doc,
             mesh_add_line
         ),

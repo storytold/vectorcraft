@@ -448,6 +448,8 @@ fn clip(name: &mut String) {
 fn uniquify<'a>(names: impl Iterator<Item = &'a mut String>, fallback: &str, sep: &str, fold: bool) {
     let key = |n: &str| if fold { n.to_lowercase() } else { n.to_string() };
     let mut seen = HashSet::new();
+    // Per repeated name, the number to try next: a run of one name counts on instead of from 2.
+    let mut next: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for name in names {
         clip(name);
         if name.trim().is_empty() {
@@ -455,7 +457,12 @@ fn uniquify<'a>(names: impl Iterator<Item = &'a mut String>, fallback: &str, sep
         }
         if seen.contains(&key(name)) {
             let base = name.clone();
-            *name = (2..).map(|n| format!("{base}{sep}{n}")).find(|n| !seen.contains(&key(n))).unwrap_or_default();
+            let n = next.entry(key(&base)).or_insert(2);
+            while seen.contains(&key(&format!("{base}{sep}{n}"))) {
+                *n += 1;
+            }
+            *name = format!("{base}{sep}{n}");
+            *n += 1;
         }
         seen.insert(key(name));
     }
@@ -636,7 +643,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Library",
             [],
             None,
-            "{library?: id or name (default: the current library, made when there is none), kind: graphic|fillColor|strokeColor|fillGradient|strokeGradient|fillPattern|strokePattern|charStyle|paraStyle, ids?: objects (default: the selection), name?, color?: colour (a colour to add, instead of the selection's), swatch?: a gradient or pattern swatch of the document (fillGradient…strokePattern: added instead of the selection's paint), group?: name, before?: item | after?: item (an item of the same kind)} add an item from the selection: graphic: a copy of the objects with every resource they use; fillColor/strokeColor: the first selected object's solid fill/stroke colour (else the default fill/stroke); fillGradient/strokeGradient: the first selected object's fill/stroke gradient (else the default's), without its placement or swatch links, named after its swatch, else \"Gradient\"; fillPattern/strokePattern: the first selected object's fill/stroke pattern (else the default's) with the resources its art uses, named after it; charStyle/paraStyle: the selected text's character/paragraph attributes (the Type tool's range, else the first selected text object). A new item goes into `group` (default: none) and, with `before` or `after`, just before or after that item in the order its kind is shown in, as dropping it among the Libraries panel's items does; an item the library already has (same kind and contents) isn't added again, nor moved → {library, kind, name, id?: graphic id, existing: bool, group?: name or null (a new item's)}",
+            "{library?: id or name (default: the current library, made when there is none), kind: graphic|fillColor|strokeColor|fillGradient|strokeGradient|fillPattern|strokePattern|charStyle|paraStyle, ids?: objects (default: the selection), name?, color?: colour (a colour to add, instead of the selection's; #rrggbbaa and #rgba are refused), swatch?: a gradient or pattern swatch of the document (fillGradient…strokePattern: added instead of the selection's paint), group?: name, before?: item | after?: item (an item of the same kind)} add an item from the selection: graphic: a copy of the objects with every resource they use; fillColor/strokeColor: the first selected object's solid fill/stroke colour (else the default fill/stroke); fillGradient/strokeGradient: the first selected object's fill/stroke gradient (else the default's), without its placement or swatch links, named after its swatch, else \"Gradient\"; fillPattern/strokePattern: the first selected object's fill/stroke pattern (else the default's) with the resources its art uses, named after it; charStyle/paraStyle: the selected text's character/paragraph attributes (the Type tool's range, else the first selected text object). A new item goes into `group` (default: none) and, with `before` or `after`, just before or after that item in the order its kind is shown in, as dropping it among the Libraries panel's items does; an item the library already has (same kind and contents) isn't added again, nor moved → {library, kind, name, id?: graphic id, existing: bool, group?: name or null (a new item's)}",
             has_doc,
             add
         ),
@@ -935,7 +942,7 @@ fn graphic_of(s: &Session, p: &Value, cmd: &str) -> Result<LibraryGraphic> {
     if roots.is_empty() {
         return Err(bad(cmd, "select the art to add first"));
     }
-    let clip = Clipboard::copy(st, &roots);
+    let clip = Clipboard::copy(st, &roots, false);
     let bounds = clip.bounds().ok_or_else(|| bad(cmd, "the selection draws nothing"))?;
     let mut doc = clip.to_document();
     let board = bounds.inflate(1.0, 1.0);

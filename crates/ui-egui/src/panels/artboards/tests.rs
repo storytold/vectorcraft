@@ -156,10 +156,20 @@ fn shift_clicking_rows_selects_several_artboards() {
     frame(&mut app, 9.0, click(4, egui::Modifiers::NONE));
     assert_eq!(picked(&app, 4), [3]);
     assert_eq!(highlighted(frame(&mut app, 10.0, vec![])), 1);
-    // With another tool, a Shift-click makes the row's artboard active, as a plain click does.
+    // With another tool, a plain click makes the row's artboard active and keeps the tool.
     app.select_tool("selection");
-    frame(&mut app, 11.0, click(2, egui::Modifiers::SHIFT));
-    assert_eq!((picked(&app, 4), selected(&app, 4)), (vec![1], 1));
+    frame(&mut app, 11.0, click(2, egui::Modifiers::NONE));
+    assert_eq!((app.session.tool_id(), selected(&app, 4)), ("selection", 1));
+    // A Shift-click switches to the Artboard tool and selects the range (#5698).
+    frame(&mut app, 12.0, click(4, egui::Modifiers::SHIFT));
+    assert_eq!(app.session.tool_id(), "artboard");
+    assert_eq!((picked(&app, 4), selected(&app, 4)), (vec![1, 2, 3], 3));
+    // So does a Ctrl/Cmd-click, adding one artboard to the one active.
+    app.select_tool("selection");
+    frame(&mut app, 13.0, click(1, egui::Modifiers::NONE));
+    frame(&mut app, 14.0, click(3, egui::Modifiers::COMMAND));
+    assert_eq!(app.session.tool_id(), "artboard");
+    assert_eq!((picked(&app, 4), selected(&app, 4)), (vec![0, 2], 2));
 }
 
 /// Double-clicking a row's number goes to its artboard and its name renames it; a click on

@@ -9,8 +9,8 @@ pub struct HistoryEntry {
     pub doc: Arc<Document>,
     /// The selection as it was, shared with the neighbouring steps that have the same one.
     pub selection: Arc<Selection>,
-    /// Roughly the memory this step keeps of its own: what of `doc` the step after it (or the
-    /// document now) doesn't share ([`Document::retained_bytes`]).
+    /// Roughly the memory this step keeps of its own: the unshared document data
+    /// ([`Document::retained_bytes`]) plus owned color-mode paint snapshots.
     pub bytes: usize,
     /// The same the other way round: what that next state keeps that `doc` doesn't share. Undoing
     /// (redoing) this step makes a step that keeps the next state: this is its `bytes`.
@@ -19,6 +19,10 @@ pub struct HistoryEntry {
     next: usize,
     /// The template and name `label` was made from ([`Session::edit_named`]).
     pub(crate) named: Option<NamedStep>,
+    /// Original and converted new-art colors, only for steps that change document color mode.
+    pub(crate) color_mode_paints: Option<(vectorcraft_tools::PaintDefaults, vectorcraft_tools::PaintDefaults)>,
+    /// Owned new-art snapshots included in both directional estimates.
+    color_mode_bytes: usize,
 }
 
 /// A step name made by filling the `{name}` placeholder of a template with a name
@@ -45,7 +49,17 @@ impl HistoryEntry {
     pub(crate) fn kept(label: String, doc: Arc<Document>, selection: Arc<Selection>, next: &Document) -> Self {
         doc.drop_lookup_cache();
         let (bytes, next_bytes) = doc.retained_bytes_each(next);
-        HistoryEntry { label, doc, selection, bytes, next_bytes, next: std::ptr::from_ref(next) as usize, named: None }
+        HistoryEntry {
+            label,
+            doc,
+            selection,
+            bytes,
+            next_bytes,
+            next: std::ptr::from_ref(next) as usize,
+            named: None,
+            color_mode_paints: None,
+            color_mode_bytes: 0,
+        }
     }
 
     /// The template and name the step's label was made from, while the label is still the one
@@ -66,12 +80,42 @@ impl HistoryEntry {
             return Self::kept(label, doc, selection, now);
         }
         doc.drop_lookup_cache();
-        HistoryEntry { label, doc, selection, bytes: costs.next_bytes, next_bytes: costs.bytes, next: Arc::as_ptr(now) as usize, named: None }
+        HistoryEntry {
+            label,
+            doc,
+            selection,
+            bytes: costs.next_bytes,
+            next_bytes: costs.bytes,
+            next: Arc::as_ptr(now) as usize,
+            named: None,
+            color_mode_paints: None,
+            color_mode_bytes: 0,
+        }
     }
 
-    /// The figures [`HistoryEntry::turned`] reuses.
+    /// Recount the separately owned paints after a color-mode step or group changes them.
+    pub(crate) fn recost_paints(&mut self) {
+        let owned = |p: &vectorcraft_tools::PaintDefaults| {
+            std::mem::size_of::<vectorcraft_tools::PaintDefaults>()
+                + vectorcraft_doc::paint_heap_bytes(&p.fill)
+                + vectorcraft_doc::paint_heap_bytes(&p.stroke)
+                + p.appearance.as_ref().map_or(0, vectorcraft_doc::appearance_heap_bytes)
+                + p.style.as_ref().map_or(0, String::capacity)
+        };
+        let bytes = self.color_mode_paints.as_ref().map_or(0, |(before, after)| owned(before).saturating_add(owned(after)));
+        self.bytes = self.bytes.saturating_sub(self.color_mode_bytes).saturating_add(bytes);
+        self.next_bytes = self.next_bytes.saturating_sub(self.color_mode_bytes).saturating_add(bytes);
+        self.color_mode_bytes = bytes;
+    }
+
+    /// The document-only figures [`HistoryEntry::turned`] reuses. Its paint snapshots are
+    /// attached and counted separately, so swapping direction never doubles their cost.
     pub(crate) fn costs(&self) -> StepCosts {
-        StepCosts { bytes: self.bytes, next_bytes: self.next_bytes, next: self.next }
+        StepCosts {
+            bytes: self.bytes.saturating_sub(self.color_mode_bytes),
+            next_bytes: self.next_bytes.saturating_sub(self.color_mode_bytes),
+            next: self.next,
+        }
     }
 }
 
@@ -140,7 +184,9 @@ impl History {
     /// merged into it, or an undo group extended it).
     pub(crate) fn recost_last(&mut self, now: &Document) {
         if let Some(e) = self.undo.last_mut() {
-            (e.bytes, e.next_bytes) = e.doc.retained_bytes_each(now);
+            let (before, after) = e.doc.retained_bytes_each(now);
+            e.bytes = before.saturating_add(e.color_mode_bytes);
+            e.next_bytes = after.saturating_add(e.color_mode_bytes);
             e.next = std::ptr::from_ref(now) as usize;
         }
     }

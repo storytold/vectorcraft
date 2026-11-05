@@ -1110,7 +1110,7 @@ fn linked_param(st: &crate::DocState, p: &Value, cmd: &str) -> Result<NodeId> {
 
 /// Per linked image in the layers of `st`: its file's status, where it was found when away from
 /// its path, and whether the image shows its preview (each file probed once).
-fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, bool)> {
+pub(crate) fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, bool)> {
     let mut out = BTreeMap::new();
     for g in groups(&st.doc, None).iter().filter(|g| !g.ids.is_empty()) {
         let (status, found) = probe(g, st.path.as_deref());
@@ -1338,8 +1338,10 @@ fn placement_json(o: PlacementOptions) -> Value {
 
 /// Link Info's fields of the linked file `l` (of object `id` of `st`) into `out`.
 fn file_fields(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) {
-    // Within what the caller that opened the document may read, whoever asks.
-    crate::file_access::confine(st.opened_by.as_ref(), || file_fields_here(st, id, l, out));
+    // A confined caller reads within its own roots; anyone else within what the caller that
+    // opened the document may read (never wider than the caller asking now).
+    let roots = crate::file_access::current().or_else(|| st.opened_by.clone());
+    crate::file_access::confine(roots.as_ref(), || file_fields_here(st, id, l, out));
 }
 
 fn file_fields_here(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) {
@@ -1347,12 +1349,11 @@ fn file_fields_here(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Va
     let doc_path = st.path.as_deref();
     let path = fileio::document_path(&l.path, doc_path).ok();
     let stamp = path.as_deref().and_then(file_stamp);
-    let folder_len = l.path.len().saturating_sub(l.name().len());
     out["status"] = json!(status.as_str());
     note_refused(out, l, doc_path);
     out["path"] = json!(l.path);
     out["fileName"] = json!(l.name());
-    out["location"] = json!(l.path.get(..folder_len).unwrap_or_default().trim_end_matches(['/', '\\']));
+    out["location"] = json!(l.folder());
     for (k, v) in [
         ("page", l.page.map(u64::from)),
         ("fileSize", stamp.map(|s| s.0).or(l.size)),

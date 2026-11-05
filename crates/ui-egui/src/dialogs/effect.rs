@@ -43,6 +43,7 @@ fn heading_label(d: &Dialog) -> String {
 /// Fields: `__effect`, `__label`, `__item?` (as given to `effect.dialog`), `__target` and
 /// `__index` (the applied effect's item and position). OK edits it; `discard: true` then OK adds
 /// a new one.
+/// `__editTarget` stores the targets used when editing the applied effect.
 pub const EXISTS: &str = "effectExists";
 
 pub(super) const EXISTS_SPEC: DialogSpec = DialogSpec {
@@ -67,7 +68,8 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     // The list the effect goes to: `item` as given, else the active item's (the object's without
     // one). A new effect keeps `item` unresolved, so `effect.apply` targets each object as usual.
     let target = p.get("item").cloned().unwrap_or_else(|| json!(app.session.appearance_item()));
-    let applied = target_effects(app, &target);
+    let (edit_target, applied) = target_effects(app, p);
+    let target = edit_target.get("item").cloned().unwrap_or(target);
     let mut fields = Map::new();
     fields.insert("__effect".into(), json!(id));
     fields.insert("__label".into(), json!(info.label.trim_end_matches('…')));
@@ -85,12 +87,14 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
                 return Err(format!("effect {k} is `{}`, not `{id}`", e.id));
             }
             fields.insert("__item".into(), target);
+            fields.insert("__editTarget".into(), edit_target);
             fields.insert("__index".into(), json!(k));
             fields.extend(params_of(e));
         }
         None => {
             if let Some(k) = applied.iter().rposition(|e| e.id == id) {
                 fields.insert("__target".into(), target);
+                fields.insert("__editTarget".into(), edit_target);
                 fields.insert("__index".into(), json!(k));
                 app.ui.dialog = Some(Dialog { kind: EXISTS.into(), fields });
                 return Ok(json!({ "pending": EXISTS }));
@@ -106,11 +110,14 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// The effects of the first selected object that `item` (an index or null) addresses.
-fn target_effects(app: &VectorcraftApp, item: &Value) -> Vec<vectorcraft_doc::Effect> {
-    let Some(st) = app.session.active() else { return vec![] };
-    let node = st.selection.objects.first().and_then(|id| st.doc.node(*id));
-    node.and_then(|n| n.appearance.effects_at(item.as_u64().map(|i| i as usize))).cloned().unwrap_or_default()
+/// The function returns target parameters and effects at `item` (an index or null).
+/// An omitted `item` uses the active row.
+fn target_effects(app: &VectorcraftApp, p: &Value) -> (Value, Vec<vectorcraft_doc::Effect>) {
+    let mut params = json!({"aligned": p.get("aligned").and_then(Value::as_bool).unwrap_or(false)});
+    if let Some(item) = p.get("item") {
+        params["item"] = item.clone();
+    }
+    app.session.appearance_effect_target(&params).map(|(target, effects)| (target, effects.to_vec())).unwrap_or_else(|| (json!({}), vec![]))
 }
 
 /// An applied effect's values over its defaults.
@@ -128,6 +135,7 @@ fn confirm_exists(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
     let target = fields.remove("__target").unwrap_or(Value::Null);
     if d.bool("discard") {
         fields.remove("__index");
+        fields.remove("__editTarget");
         let id = d.str("__effect");
         let defaults = vectorcraft_effects::default_params(&id);
         fields.extend(defaults.and_then(|v| v.as_object().cloned()).unwrap_or_default());
@@ -136,7 +144,10 @@ fn confirm_exists(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
         }
     } else {
         let k = fields.get("__index").and_then(Value::as_u64).unwrap_or(0) as usize;
-        fields.extend(target_effects(app, &target).get(k).map(params_of).unwrap_or_default());
+        let edit_target = fields.get("__editTarget").cloned().unwrap_or_else(|| json!({"item": target}));
+        let applied = app.session.appearance_effect_target(&edit_target).map(|(_, effects)| effects.to_vec()).unwrap_or_default();
+        let params = applied.get(k).map(params_of).unwrap_or_default();
+        fields.extend(params);
         fields.insert("__item".into(), target);
     }
     fields.insert("preview".into(), json!(true));
@@ -467,7 +478,11 @@ fn adjust_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     for (key, label, width) in [("points", tl!("Points"), 220.0), ("color", tl!("Color"), 120.0)] {
         if d.fields.contains_key(key) {
             widgets::label_row(ui, label, LABEL_W, |ui| {
-                form::text(ui, d, key, width);
+                if key == "color" {
+                    form::color_text(ui, d, key, width);
+                } else {
+                    form::text(ui, d, key, width);
+                }
             });
         }
     }
@@ -550,7 +565,7 @@ fn scribble_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Uni
 /// last previewed.
 fn transform_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Unit) -> bool {
     ui.horizontal_top(|ui| {
-        ui.vertical(|ui| transform_each::sections(ui, d, unit));
+        ui.vertical(|ui| transform_each::sections(ui, d, unit, true));
         ui.add_space(16.0);
         ui.vertical(|ui| {
             widgets::subheader(ui, tl!("Options"));
@@ -560,7 +575,7 @@ fn transform_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
             form::check(ui, d, "strokes", tl!("Scale Strokes & Effects"));
             ui.horizontal(|ui| {
                 widgets::dim_label(ui, tl!("Copies:"));
-                if let Some(n) = widgets::range_field(ui, "fx-copies", d.f64("copies", 0.0), 0.0..=1000.0, "", 0, 50.0) {
+                if let Some(n) = widgets::range_field_live(ui, "fx-copies", d.f64("copies", 0.0), 0.0..=1000.0, "", 0, 50.0) {
                     d.fields.insert("copies".into(), json!(n));
                 }
             });
@@ -699,13 +714,8 @@ fn drop_shadow_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::
         if widgets::radio(ui, tl!("Color"), !darkness, true) {
             d.fields.insert("shade".into(), json!("color"));
         }
-        ui.add_enabled_ui(!darkness, |ui| match d.fields.get("color") {
-            Some(Value::String(_)) | None => {
-                form::text(ui, d, "color", 128.0);
-            }
-            Some(other) => {
-                widgets::dim_label(ui, &other.to_string());
-            }
+        ui.add_enabled_ui(!darkness, |ui| {
+            form::color_text(ui, d, "color", 128.0);
         });
         ui.end_row();
         if widgets::radio(ui, tl!("Darkness"), darkness, true) {
@@ -804,7 +814,10 @@ fn command(d: &Dialog) -> (&'static str, Value) {
     let params = form::params(d);
     let item = d.fields.get("__item").cloned();
     if let Some(index) = d.fields.get("__index") {
-        let mut p = json!({"index": index, "item": item.unwrap_or(Value::Null), "params": params});
+        let mut p = d.fields.get("__editTarget").filter(|p| p.is_object()).cloned().unwrap_or_else(|| json!({}));
+        p["index"] = index.clone();
+        p["item"] = item.unwrap_or(Value::Null);
+        p["params"] = params;
         let id = d.str("__effect");
         // The displayed style comes from the first target. Preserve other targets' Warp IDs
         // unless the user deliberately chooses Style, including after a preview rollback.

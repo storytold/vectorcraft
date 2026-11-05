@@ -104,6 +104,10 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Find Nearest Swatch…", nearest::COMMAND, Value::Null),
         Item::Cmd("Create Swatch Legend…", legend::COMMAND, Value::Null),
         Item::Sep,
+        // Each selected object's stroke takes its own fill, or the other way (#5530).
+        Item::Cmd("Apply Fill to Stroke", "addon.color.fillToStroke", json!({})),
+        Item::Cmd("Apply Stroke to Fill", "addon.color.strokeToFill", json!({})),
+        Item::Sep,
         Item::Sub(
             "Select by Color Kind",
             [

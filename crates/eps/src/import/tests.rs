@@ -392,6 +392,14 @@ fn work_on_the_longest_dash_pattern_ends_soon() {
 }
 
 #[test]
+fn a_chain_of_filters_over_the_program_is_bounded() {
+    let r = read_soon("0 0 10 10 rectfill currentfile 100 { 0 (x) /SubFileDecode filter } repeat pop 20 20 10 10 rectfill");
+    assert!(r.warnings.iter().any(|w| w.contains("too many filters")), "{:?}", r.warnings);
+    let r = read_soon("0 0 10 10 rectfill currentfile 3 { 0 (x) /SubFileDecode filter } repeat pop 20 20 10 10 rectfill");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
 fn procedures_bind_def_loops_and_dictionaries() {
     let r = read(
         "/bd {bind def} bind def /sq {newpath moveto 10 0 rlineto 0 10 rlineto -10 0 rlineto closepath fill} bd \
@@ -717,14 +725,20 @@ fn type_42_fonts_set_type_at_their_size() {
     }
 }
 
+/// The encrypted part of a font program is skipped up to its `cleartomark` in the file it is in:
+/// the program's own file, or a file being run (`cvx exec`), as Ghostscript's `eps2write` runs
+/// each Type 1 font it embeds.
 #[test]
 fn embedded_font_programs_are_skipped() {
     let body = "/MyFont 10 dict begin /FontName /MyFont def /FontMatrix [0.001 0 0 0.001 0 0] def currentdict end currentfile eexec\n\
                 0123456789abcdef garbage that is encrypted\n0000000000000000000000000000000000000000000000000000000000000000\ncleartomark\n\
                 /MyFont findfont 10 scalefont setfont 10 10 moveto (x) show";
-    let r = read(body);
-    let NodeKind::Text(t) = &objects(&r.document)[0].kind else { panic!("{:?}", r.warnings) };
-    assert_eq!(t.runs[0].style.font_family, "My Font");
+    for program in [body.to_string(), format!("currentfile 0 (endstream) /SubFileDecode filter cvx exec\n{body}\nendstream\n")] {
+        let r = read(&program);
+        let NodeKind::Text(t) = &objects(&r.document)[0].kind else { panic!("{program}: {:?}", r.warnings) };
+        assert_eq!(t.runs[0].style.font_family, "My Font");
+        assert!(r.warnings.is_empty(), "{program}: {:?}", r.warnings);
+    }
 }
 
 /// A document with what the writer writes in its own ways: gradients, type, an image with
@@ -892,6 +906,17 @@ fn the_generic_category_defines_new_categories() {
     check("{ /X 5 /Category defineresource } stopped");
 }
 
+/// The standard encodings are instances of the Encoding category, the same arrays as the names in
+/// `systemdict` (PLRM 3rd ed., §3.9.2 and `findencoding`, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>).
+/// Ghostscript's `eps2write` finds `StandardEncoding` that way for the fonts it embeds.
+#[test]
+fn the_standard_encodings_are_encoding_resources() {
+    check("/StandardEncoding /Encoding findresource StandardEncoding eq");
+    check("/ISOLatin1Encoding /Encoding findresource ISOLatin1Encoding eq");
+    check("/StandardEncoding /Encoding resourcestatus { pop pop true } { false } ifelse");
+    check("{ /Nope /Encoding findresource } stopped");
+}
+
 #[test]
 fn clipsave_and_cliprestore_bring_the_clip_back() {
     // #234.
@@ -983,6 +1008,18 @@ fn the_standard_dictionaries_are_dictionaries_in_systemdict() {
     check("userdict /x 5 put systemdict /userdict get /x get 5 eq");
     check("/errordict load /handleerror known errordict $error eq and");
     check("SharedFontDirectory type /dicttype eq");
+}
+
+/// A key may be any object but null (PLRM 3rd ed., §3.3.9, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>),
+/// so `known` answers for every other key.
+/// Ghostscript's `eps2write` looks an inline image's filter up in a dictionary of abbreviations,
+/// and the filter may be an array of them.
+#[test]
+fn known_answers_false_for_keys_no_dictionary_holds() {
+    check("<< /A85 /ASCII85Decode >> [ /A85 /LZW ] known not");
+    check("1 dict 1 dict known not 1 dict 1.5 known not and 1 dict mark known not and");
+    check("<< /A85 /ASCII85Decode >> /A85 known << 1 2 >> 1.0 known and");
+    check("{ 1 dict null known } stopped");
 }
 
 #[test]

@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LIBRARIES, builtin_library};
 use vectorcraft_color::palette_io::{self, PaletteFormat};
 use vectorcraft_color::recolor::Palette;
+use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Paint, Swatch, SwatchGroup, SwatchLibrary, default_swatches};
 use vectorcraft_doc::pattern::pattern_paint;
 
@@ -587,8 +588,9 @@ fn copy_to_user(s: &mut Session, p: &Value) -> Result<Value> {
 /// ungrouped): a group's name brings the group, a swatch's name the swatch alone; no names, all.
 fn picked<'a>(lib: &'a SwatchLibrary, names: &[String], cmd: &str) -> Result<Vec<(Option<&'a str>, &'a Swatch)>> {
     let mut out: Vec<(Option<&str>, &Swatch)> = vec![];
+    let mut seen: HashSet<&str> = HashSet::new();
     let mut push = |g: Option<&'a str>, w: &'a Swatch| {
-        if !out.iter().any(|(_, x)| x.name == w.name) {
+        if seen.insert(w.name.as_str()) {
             out.push((g, w));
         }
     };
@@ -606,6 +608,23 @@ fn picked<'a>(lib: &'a SwatchLibrary, names: &[String], cmd: &str) -> Result<Vec
     Ok(out)
 }
 
+/// Every name a swatch or colour group of `d` uses (they share one namespace, with the registration swatch).
+fn taken_names(d: &vectorcraft_doc::Document) -> HashSet<String> {
+    let names = d.swatches_iter().map(|w| &w.name).chain(d.swatch_groups.iter().map(|g| &g.name));
+    names.cloned().chain([REGISTRATION.to_string()]).collect()
+}
+
+/// [`vectorcraft_doc::Document::free_swatch_name`] against `taken`, which takes the name returned.
+fn free_in(taken: &mut HashSet<String>, base: &str) -> String {
+    let name = if taken.contains(base) {
+        (2..).map(|i| format!("{base} {i}")).find(|n| !taken.contains(n)).unwrap_or_else(|| base.to_string())
+    } else {
+        base.to_string()
+    };
+    taken.insert(name.clone());
+    name
+}
+
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.library.add";
     let (info, lib) = library_param(s, p, C)?;
@@ -621,11 +640,21 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // same pattern) are reused, not added again.
     let patterns = patternlib::library_doc(&info.id);
     let d = &s.doc()?.doc;
+    // The document's swatches by name (the first of a name wins, as in `Document::swatch`), looked
+    // up once so that a large palette takes linear time.
+    let mut by_name: std::collections::HashMap<&str, &Swatch> = std::collections::HashMap::new();
+    for w in d.swatches_iter() {
+        by_name.entry(w.name.as_str()).or_insert(w);
+    }
     let there = |w: &Swatch| match (&w.paint, &patterns) {
         (Paint::Pattern { pattern, .. }, Some(src)) => {
             patternlib::existing_pattern(d, src, pattern).and_then(|target| patternlib::pattern_swatch(d, &target))
         }
-        _ => d.swatch(&w.name).is_some_and(|x| x.paint == w.paint).then(|| w.name.clone()),
+        _ => match by_name.get(w.name.as_str()) {
+            Some(x) => x.paint == w.paint,
+            None => w.name == REGISTRATION && d.swatch(&w.name).is_some_and(|x| x.paint == w.paint),
+        }
+        .then(|| w.name.clone()),
     };
     // Library name → the name of the document's swatch.
     let mut existing: Vec<(String, String)> = vec![];
@@ -647,6 +676,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             // already had, or one made here.
             let before = d.swatch_groups.len();
             let mut placed: Vec<(&str, usize)> = vec![];
+            let mut taken = taken_names(d);
             for (group, w) in fresh {
                 if let (Paint::Pattern { pattern, .. }, Some(src)) = (&w.paint, &patterns) {
                     // The pattern comes with its swatch; a pattern the document has without one
@@ -661,9 +691,10 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                         }
                     };
                     out.push((w.name.clone(), name));
+                    taken = taken_names(d);
                     continue;
                 }
-                let name = d.free_swatch_name(&w.name);
+                let name = free_in(&mut taken, &w.name);
                 let sw = Swatch { name: name.clone(), ..(*w).clone() };
                 match group {
                     Some(g) => {
@@ -671,7 +702,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                         let i = match found.or_else(|| d.swatch_groups.iter().take(before).position(|x| x.name == *g)) {
                             Some(i) => i,
                             None => {
-                                let name = d.free_swatch_name(g);
+                                let name = free_in(&mut taken, g);
                                 d.swatch_groups.push(SwatchGroup { name, swatches: vec![] });
                                 d.swatch_groups.len() - 1
                             }

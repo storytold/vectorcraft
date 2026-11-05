@@ -324,7 +324,12 @@ fn stops_json(stops: &[TabStop]) -> Value {
 fn apply(app: &mut VectorcraftApp, stops: &[TabStop]) -> bool {
     if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
-        app.run("text.tabs.set", json!({"stops": stops_json(stops), "ids": [id.0], "start": a, "end": b})).is_ok()
+        let p = match super::character::text_story(app) {
+            // After Select All in threaded text: every paragraph of every frame.
+            Some(story) => json!({"stops": stops_json(stops), "ids": story.iter().map(|f| f.0).collect::<Vec<_>>()}),
+            None => json!({"stops": stops_json(stops), "ids": [id.0], "start": a, "end": b}),
+        };
+        app.run("text.tabs.set", p).is_ok()
     } else {
         app.run("text.tabs.set", json!({"stops": stops_json(stops)})).is_ok()
     }

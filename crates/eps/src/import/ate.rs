@@ -396,6 +396,9 @@ pub(super) struct Texts {
     /// The document's character styles (`[Normal Character Style]` first), each a name, the
     /// character style it is based on (key 5, an index into these) and its attributes (key 6).
     char_sheets: Vec<Val>,
+    /// The document's paragraph styles (`[Normal Paragraph Style]` first), each a name, its
+    /// attributes (key 5) and the paragraph style it is based on (key 6, an index into these).
+    para_sheets: Vec<Val>,
     frames: Vec<Val>,
 }
 
@@ -434,21 +437,17 @@ impl Texts {
             .map(|f| f.get("0").and_then(|f| f.get("0")).and_then(|f| f.get("0")).and_then(Val::str).unwrap_or_default().to_string())
             .collect();
         let main = doc.get("1")?;
+        let sheets = |key: &str| -> Vec<Val> {
+            let list = doc.get("0").and_then(|d| d.get(key)).and_then(|s| s.get("0")).map(Val::list).unwrap_or_default();
+            list.iter().take(MAX_SHEETS).map(|s| s.get("0").cloned().unwrap_or(Val::Dict(BTreeMap::new()))).collect()
+        };
         Some(Texts {
             stories: main.get("1")?.list().to_vec(),
             fonts,
             defaults: main.get("2")?.clone(),
             para_defaults: main.get("3").cloned().unwrap_or(Val::Dict(BTreeMap::new())),
-            char_sheets: doc
-                .get("0")?
-                .get("5")
-                .and_then(|s| s.get("0"))
-                .map(Val::list)
-                .unwrap_or_default()
-                .iter()
-                .take(MAX_SHEETS)
-                .map(|s| s.get("0").cloned().unwrap_or(Val::Dict(BTreeMap::new())))
-                .collect(),
+            char_sheets: sheets("5"),
+            para_sheets: sheets("6"),
             frames: doc.get("0")?.get("8")?.get("0")?.list().to_vec(),
         })
     }
@@ -541,8 +540,10 @@ impl Texts {
         let mut paras = vec![];
         for run in s.get("0")?.get("5").map(|p| p.get("0").map(Val::list).unwrap_or_default()).unwrap_or_default() {
             let n = run.get("1").and_then(Val::num)? as usize;
-            let props = run.get("0").and_then(|r| r.get("0")).and_then(|r| r.get("5"));
-            paras.push((n, self.para(props)));
+            paras.push((n, self.para(run.get("0").and_then(|r| r.get("0")))));
+        }
+        if paras.is_empty() {
+            paras.push((text.chars().count(), self.para(None)));
         }
         let mut runs = vec![];
         for run in s.get("0")?.get("6").map(|p| p.get("0").map(Val::list).unwrap_or_default()).unwrap_or_default() {
@@ -555,9 +556,19 @@ impl Texts {
         Some(Story { text, anchor, lines, frames, paras, runs, path_spacing, vertical })
     }
 
-    /// A paragraph's attributes: its own keys, else the document's.
-    fn para(&self, p: Option<&Val>) -> Para {
-        let pick = |k: &str| p.and_then(|p| p.get(k)).or_else(|| self.para_defaults.get(k));
+    /// A paragraph's attributes (`run`: its attributes, key 5, and the paragraph style it is based
+    /// on, key 6): its own keys, else those of its paragraph style and the ones that is based on,
+    /// else those of `[Normal Paragraph Style]`, else the document's.
+    fn para(&self, run: Option<&Val>) -> Para {
+        let mut chain = vec![];
+        let mut at = run;
+        for _ in 0..=MAX_SHEETS_BASED_ON {
+            let Some(style) = at else { break };
+            chain.extend(style.get("5"));
+            at = style.get("6").and_then(Val::num).filter(|i| i.is_finite() && *i >= 0.0).and_then(|i| self.para_sheets.get(i as usize));
+        }
+        chain.extend(self.para_sheets.first().and_then(|s| s.get("5")));
+        let pick = |k: &str| chain.iter().find_map(|s| s.get(k)).or_else(|| self.para_defaults.get(k));
         let num = |k: &str| pick(k).and_then(Val::num).filter(|v| v.abs() < 1e5).unwrap_or(0.0);
         Para {
             justify: pick("0").and_then(Val::num).map_or(0, |v| v.clamp(0.0, 6.0) as u8),
@@ -573,7 +584,7 @@ impl Texts {
 
     /// A run's character style (`run`: its attributes, key 6, and the character style it is based
     /// on, key 5): its own keys, else those of its character style and the ones that is based on,
-    /// else the document's.
+    /// else those of `[Normal Character Style]`, else the document's.
     fn style(&self, run: Option<&Val>) -> Style {
         // The run's attributes, then its character style's, then the styles each is based on.
         let mut chain = vec![];
@@ -583,6 +594,7 @@ impl Texts {
             chain.extend(style.get("6"));
             at = style.get("5").and_then(Val::num).filter(|i| i.is_finite() && *i >= 0.0).and_then(|i| self.char_sheets.get(i as usize));
         }
+        chain.extend(self.char_sheets.first().and_then(|s| s.get("6")));
         let pick = |k: &str| chain.iter().find_map(|s| s.get(k)).or_else(|| self.defaults.get(k));
         let num = |k: &str| pick(k).and_then(Val::num);
         let on = |k: &str| !matches!(pick(k), Some(Val::Bool(false)));
@@ -1074,9 +1086,10 @@ mod tests {
             defaults: Val::Dict(BTreeMap::new()),
             para_defaults: read(b"/33 1").unwrap(),
             char_sheets: vec![],
+            para_sheets: vec![],
             frames: vec![],
         };
-        let justify = |own: &[u8]| para_style(&texts.para(Some(&read(own).unwrap())), 1.0).justify;
+        let justify = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).justify;
         // Right to left from the document's defaults, or the paragraph's own.
         assert_eq!(justify(b"/0 0"), Justify::Right);
         assert_eq!(justify(b"/0 1 /33 1"), Justify::Left);
@@ -1096,6 +1109,7 @@ mod tests {
             defaults: Val::Dict(BTreeMap::new()),
             para_defaults: Val::Dict(BTreeMap::new()),
             char_sheets: vec![],
+            para_sheets: vec![],
             frames: vec![],
         }
         .para(None);
@@ -1142,6 +1156,7 @@ mod tests {
             defaults: Val::Dict(BTreeMap::new()),
             para_defaults: Val::Dict(BTreeMap::new()),
             char_sheets: vec![],
+            para_sheets: vec![],
             frames: cases.iter().map(|c| frame(c)).collect(),
         };
         let vertical: Vec<bool> = (0..cases.len() + 1).map(|i| texts.frame_vertical(i)).collect();
@@ -1157,13 +1172,14 @@ mod tests {
             fonts: vec![],
             defaults: read(b"/35 1").unwrap(),
             para_defaults: Val::Dict(BTreeMap::new()),
-            char_sheets: vec![read(b"/0 (Block) /6 << /35 3 >>").unwrap()],
+            char_sheets: vec![read(b"/0 ([Normal Character Style]) /6 << >>").unwrap(), read(b"/0 (Block) /6 << /35 3 >>").unwrap()],
+            para_sheets: vec![],
             frames: vec![],
         };
         let tcy = |run: &[u8]| texts.style(Some(&read(run).unwrap())).tate_chu_yoko;
         assert!(tcy(b"/6 << /35 3 >>"), "the run's own");
-        assert!(tcy(b"/5 0 /6 << >>"), "its character style's");
-        assert!(!tcy(b"/5 0 /6 << /35 1 >>"), "the run's own wins");
+        assert!(tcy(b"/5 1 /6 << >>"), "its character style's");
+        assert!(!tcy(b"/5 1 /6 << /35 1 >>"), "the run's own wins");
         for other in [&b"/6 << >>"[..], b"/6 << /35 2 >>", b"/6 << /35 3.5 >>", b"/6 << /35 (3) >>", b"/6 << /35 -3 >>", b"/6 << /35 1e308 >>"] {
             assert!(!tcy(other), "{}", String::from_utf8_lossy(other));
         }
@@ -1180,9 +1196,10 @@ mod tests {
             defaults: Val::Dict(BTreeMap::new()),
             para_defaults: read(b"/33 1").unwrap(),
             char_sheets: vec![],
+            para_sheets: vec![],
             frames: vec![],
         };
-        let direction = |own: &[u8]| para_style(&texts.para(Some(&read(own).unwrap())), 1.0).direction;
+        let direction = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).direction;
         assert_eq!(direction(b"/0 2"), Some(ParaDirection::RightToLeft), "from the document's defaults");
         assert_eq!(direction(b"/0 2 /33 0"), None, "the paragraph's own");
         let plain = Texts { para_defaults: Val::Dict(BTreeMap::new()), ..texts };
@@ -1221,6 +1238,7 @@ mod tests {
             defaults: Val::Dict(BTreeMap::new()),
             para_defaults: Val::Dict(BTreeMap::new()),
             char_sheets: vec![],
+            para_sheets: vec![],
             frames: vec![read(doc.as_bytes()).unwrap()],
         };
         texts.frame(0)
@@ -1520,6 +1538,7 @@ mod tests {
             defaults: Val::Dict(BTreeMap::new()),
             para_defaults: Val::Dict(BTreeMap::new()),
             char_sheets: vec![],
+            para_sheets: vec![],
             frames: vec![read(doc.as_bytes()).unwrap()],
         };
         texts.frame(0).unwrap()

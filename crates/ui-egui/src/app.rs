@@ -54,10 +54,13 @@ impl VectorcraftApp {
         // ([`place::place_from_cursor`]).
         session.place_cursor_requests = true;
         let views = session.documents().iter().map(View::of).collect();
+        let view_uids = session.documents().iter().map(|d| d.uid).collect();
+        let known = session.documents().iter().map(|d| d.uid).collect();
         Self {
             session,
             ui: UiState::default(),
             views,
+            view_uids,
             services,
             canvas: CanvasCache {
                 renderer: vectorcraft_render::Renderer::new(),
@@ -85,6 +88,7 @@ impl VectorcraftApp {
                 hover_cursor: None,
                 presented: None,
                 panes: Default::default(),
+                windows: crate::doc_windows::Windows::new(known),
             },
             perf: Perf::default(),
             dock_rt: Default::default(),
@@ -100,6 +104,8 @@ impl VectorcraftApp {
             clipboard_publishing: Default::default(),
             pending_url: None,
             control_rx: None,
+            deferred_control: None,
+            synthetic_dropped_before: 0,
             pending_screenshots: vec![],
             queued_screenshots: vec![],
             screenshot_token: 0,
@@ -190,6 +196,9 @@ impl VectorcraftApp {
         if let Some(read) = s.read.take() {
             s.read = Some(Box::new(move |p: &str| file_access::check_read(p).and_then(|()| read(p))));
         }
+        if let Some(read_head) = s.read_head.take() {
+            s.read_head = Some(Box::new(move |p: &str, max: usize| file_access::check_read(p).and_then(|()| read_head(p, max))));
+        }
         if let Some(mut write) = s.write.take() {
             s.write = Some(Box::new(move |p: &str, b: &[u8]| file_access::check_write(p).and_then(|()| write(p, b))));
         }
@@ -274,6 +283,7 @@ impl VectorcraftApp {
         let now = now_secs();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        self.refresh_replace_font_warning(false);
         updates_ui::tick(self, ctx);
         // Read the system clipboard only when that alone decides whether Paste is enabled. A
         // background thread reads it where the host installs one (an unresponsive owner must never
@@ -309,6 +319,7 @@ impl VectorcraftApp {
         placing::poll(self);
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
+        crate::addons::select::link_status::refresh(self, now);
         if !self.background.jobs.is_empty()
             || !self.opening.pending.is_empty()
             || !self.plugin_runs.running.is_empty()
@@ -348,6 +359,7 @@ impl VectorcraftApp {
         }
         crate::keymap::note_os(ctx);
         shortcut_editor::sync(&self.ui);
+        crate::panels::actions::sync_function_keys(&self.ui);
         prefs_dialog::apply_runtime(self, ctx);
         // The OS title bar (and the taskbar / Alt-Tab entry) follows the active file; with the
         // system title bar this is where the document name lives, as the in-app mark is hidden.
@@ -367,6 +379,12 @@ impl VectorcraftApp {
         }
         self.flush_clipboard_out(ctx);
         self.drain_inbox();
+        // An action playing at Step by Step or Pause For runs its next step when it is due, after
+        // the control requests and opened files above: a Stop or a document switch they bring
+        // comes first.
+        if let Some(wait) = crate::panels::actions::tick_playback(self, now) {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        }
         if self.viewport_hidden(ctx) && (self.needs_hidden_paint() || (!dialog_was_open && self.ui.dialog.is_some())) {
             // A plain repaint runs only logic in a hidden window: the ui that applies injected
             // input, shows a queued dialog or issues a capture needs this command. egui-winit
@@ -427,18 +445,32 @@ impl VectorcraftApp {
     }
 
     /// The canvas panel's body: the document tabs, the canvas (a pane for each document while
-    /// Window › Arrange › Tile is on) and the isolation bar over it.
+    /// Window › Arrange › Tile is on) and the isolation bar over it. While the current document is
+    /// in a floating window, the tab strip's document draws as a pane.
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let t = theme::Tokens::get(ui.ctx());
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.pasteboard);
+        self.canvas.windows.strip = None;
         if self.ui.screen_mode < 3 {
             chrome::doc_tabs(self, ui);
         }
+        self.canvas.windows.area = Some(ui.available_rect_before_wrap());
+        let floats = crate::doc_windows::current_floats(self);
         if !canvas::tiled_area(self, ui) {
-            canvas::show(self, ui);
+            if floats {
+                let rect = ui.available_rect_before_wrap();
+                if let Some(w) = crate::doc_windows::tab_window(self)
+                    && canvas::pane(self, ui, w, rect)
+                {
+                    crate::doc_windows::show_window(self, w);
+                }
+            } else {
+                canvas::show(self, ui);
+            }
         }
         // Over the canvas inside the rulers, so the rulers and scroll bars stay uncovered.
         if self.ui.screen_mode < 3
+            && !floats
             && !menus::home_showing(self)
             && let Some(area) = self.canvas_rect
         {
@@ -477,6 +509,8 @@ impl VectorcraftApp {
             return;
         }
         crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
+        // Whether this pass draws the last step of an action playing at Step by Step.
+        let step_held = crate::panels::actions::playback_held(self);
         let t0 = now_ms();
         widgets::set_dialog_open(&ctx, self.ui.dialog.is_some());
         // The canvas records this pass's IME caret geometry; a pass that draws no canvas has none.
@@ -510,6 +544,7 @@ impl VectorcraftApp {
         panels::library_panel::tidy(self);
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
+        crate::doc_windows::show(self, &ctx);
         dialogs::show(self, &ctx);
         updates_ui::show(self, &ctx);
         export_progress::show(self, &ctx);
@@ -540,6 +575,10 @@ impl VectorcraftApp {
         if !ctx.will_discard() {
             self.perf.frame_ms = now_ms() - t0;
             self.issue_screenshots(&ctx);
+            // A hidden window's pass shows nothing, so the step waits for a pass the user sees.
+            if step_held && !self.viewport_hidden(&ctx) {
+                crate::panels::actions::playback_drawn(self);
+            }
         }
         let _ = json!(null);
     }

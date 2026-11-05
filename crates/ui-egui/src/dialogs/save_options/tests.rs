@@ -268,6 +268,18 @@ fn the_ait_template_options_have_no_version_row() {
     assert!(!names("ait").contains(&"aiVersion"), "{:?}", names("ait"));
 }
 
+/// The native options dialog has no row for `precision`, which agents give with the save
+/// command; the rows it has stay.
+#[test]
+fn the_native_options_have_no_precision_row() {
+    for id in ["vectorcraft", "template"] {
+        let f = fileio::format(id).unwrap();
+        assert!(f.options.iter().any(|o| o.name == "precision"), "{id}");
+        let names: Vec<&str> = shown(f).map(|o| o.name).collect();
+        assert!(!names.contains(&"precision") && names.contains(&"version") && names.contains(&"compress"), "{id}: {names:?}");
+    }
+}
+
 /// A name typed in the Save as Template panel with a Save As format's extension has it
 /// replaced with the template's, as Save As replaces the extension of a format it doesn't write.
 #[test]

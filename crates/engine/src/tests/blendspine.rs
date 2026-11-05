@@ -144,6 +144,42 @@ fn converting_anchors_of_a_selected_blend_converts_its_spine() {
     assert_eq!(spec(&s, g).spine.unwrap().subpaths[0].anchors[1], middle, "one undo step");
 }
 
+/// Converting the points of a blend whose spine came from Replace Spine changes only the spine's
+/// handles: its points stay where they are, the keys are not pinned to points, and the steps stay
+/// spread along the spine instead of the spine's ends moving onto the keys.
+#[test]
+fn converting_anchors_of_a_replaced_spine_changes_only_its_handles() {
+    let mut s = session();
+    let (_, _, g) = blend(&mut s);
+    let spine = id_of(&s.execute("path.create", &json!({"d": "M100 300 L200 200 L300 300"})).unwrap());
+    s.execute("select.set", &json!({"ids": [g.0, spine.0]})).unwrap();
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let points = |s: &Session| spec(s, g).spine.unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect::<Vec<_>>();
+    let before = points(&s);
+    let ends = |s: &Session| {
+        let st = steps(s, g);
+        (center(&st[0]), center(&st[st.len() - 1]))
+    };
+    let ends_before = ends(&s);
+    s.execute("path.convertAnchors", &json!({"to": "smooth"})).unwrap();
+    let sp = spec(&s, g);
+    assert!(sp.key_anchors.is_empty(), "{:?}", sp.key_anchors);
+    assert_eq!(points(&s), before, "the spine's points stay put");
+    let middle = sp.spine.as_ref().unwrap().subpaths[0].anchors[1];
+    assert!(middle.has_in() && middle.has_out(), "{middle:?}");
+    assert_eq!(ends(&s), ends_before, "the end steps stay at the spine's ends");
+    assert!(center(&steps(&s, g)[1]).distance(Point::new(200.0, 200.0)) < 1e-6, "the step stays on the spine");
+
+    s.execute("path.convertAnchors", &json!({"to": "corner"})).unwrap();
+    let sp = spec(&s, g);
+    assert!(sp.key_anchors.is_empty(), "{:?}", sp.key_anchors);
+    assert!(sp.spine.unwrap().subpaths[0].anchors.iter().all(|a| !a.has_in() && !a.has_out()));
+    assert_eq!(points(&s), before);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, g).spine.unwrap().subpaths[0].anchors[1], middle, "one undo step");
+}
+
 #[test]
 fn moving_a_key_point_moves_the_key_and_the_other_way_round() {
     let mut s = session();

@@ -338,8 +338,9 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
         Cow::Owned(doc) => doc,
     };
     let mut need: Vec<PlacedDocument> = vec![];
+    let mut seen = std::collections::HashSet::new();
     doc.visit_placed(|_, p| {
-        if doc.images.get(&p.key).is_some_and(ImageBlob::is_proxy) && !need.iter().any(|n| n.key == p.key) {
+        if doc.images.get(&p.key).is_some_and(ImageBlob::is_proxy) && seen.insert(p.key.clone()) {
             need.push(p.clone());
         }
     });

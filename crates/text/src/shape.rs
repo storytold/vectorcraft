@@ -34,7 +34,8 @@ pub(crate) struct SGlyph {
     pub dx: f64,
     pub dy: f64,
     /// Right to left: the run's manual kerning, which moves the glyph right along the baseline,
-    /// outside its Character Rotation. 0 otherwise.
+    /// outside its Character Rotation; with whole-point advances, the difference the kerning makes
+    /// to the cluster's rounded advance. 0 otherwise.
     pub kern_shift: f64,
     /// Outline scale (font units -> points).
     pub sx: f64,
@@ -79,6 +80,8 @@ pub(crate) struct SGlyph {
     /// decided for the whole segment it was shaped in ([`joins`]): on a curved path it is bent
     /// along the path so its joins meet.
     pub cursive: bool,
+    /// The glyph's language has hyphenation break points ([`crate::hyphen::language_has_patterns`]).
+    pub hyphenates: bool,
 }
 
 /// Does `script` join its letters (a cursive script, whose neighbouring glyphs touch)?
@@ -375,7 +378,13 @@ pub(crate) fn shape_range(
         art: Option<&'a InlineArt>,
     }
     let mut spans: Vec<ShapeSpan<'_>> = Vec::new();
-    for (ri, (rr, st)) in runs.iter().enumerate() {
+    // The runs are in order: start at the first that ends inside the range and stop past it, so
+    // that each paragraph looks only at its own runs.
+    let first = runs.partition_point(|(rr, _)| rr.end <= range.start);
+    for (ri, (rr, st)) in runs.iter().enumerate().skip(first) {
+        if rr.start >= range.end {
+            break;
+        }
         let a = rr.start.max(range.start);
         let b = rr.end.min(range.end);
         if a >= b || text.get(a..b).is_none() {
@@ -401,7 +410,7 @@ pub(crate) fn shape_range(
         let b = bytes.end;
         if let Some(art) = art {
             if let Some(face) = db.style_face(st).or_else(|| db.face_covering('a')) {
-                out.push(inline_glyph(&face, st, art, source_runs.start, a..b, text, level_at(a)));
+                out.push(inline_glyph(&face, st, art, source_runs.start, a..b, text, level_at(a), feats.vertical));
             }
             continue;
         }
@@ -468,12 +477,17 @@ pub(crate) fn shape_range(
 type Profile = Vec<(f64, f64, f64, f64)>;
 type CachedProfile = (Profile, (f64, f64));
 
-fn outline_profile(db: &FontDb, g: &SGlyph, cache: &mut HashMap<(u32, u32), Option<Arc<CachedProfile>>>) -> Option<Arc<CachedProfile>> {
-    let key = (g.face.id(), g.gid);
+fn outline_profile(
+    db: &FontDb,
+    face: &FontFace,
+    gid: u32,
+    cache: &mut HashMap<(u32, u32), Option<Arc<CachedProfile>>>,
+) -> Option<Arc<CachedProfile>> {
+    let key = (face.id(), gid);
     cache
         .entry(key)
         .or_insert_with(|| {
-            let path = db.outline(&g.face, g.gid);
+            let path = db.outline(face, gid);
             let bounds = path.bounding_box();
             if path.elements().is_empty()
                 || path.elements().len() > 512
@@ -528,6 +542,65 @@ fn profile_edges(lines: &[(f64, f64, f64, f64)], y: f64, sx: f64, sy: f64, dx: f
     (left.is_finite() && right.is_finite()).then_some((left, right))
 }
 
+/// The ink gaps between glyph outline `a` and glyph outline `b` placed `advance` after it, at 24
+/// heights between `low` and `high` where both have ink, sorted. Each outline is placed by its
+/// (scale x, scale y, offset x, offset y).
+fn ink_gaps(
+    a: &[(f64, f64, f64, f64)],
+    b: &[(f64, f64, f64, f64)],
+    left: (f64, f64, f64, f64),
+    right: (f64, f64, f64, f64),
+    advance: f64,
+    low: f64,
+    high: f64,
+) -> Vec<f64> {
+    let mut gaps = Vec::new();
+    if !low.is_finite() || !high.is_finite() || high <= low || !advance.is_finite() {
+        return gaps;
+    }
+    for j in 0..24 {
+        let y = low + (high - low) * (f64::from(j) + 0.5) / 24.0;
+        if let (Some((_, ar)), Some((bl, _))) =
+            (profile_edges(a, y, left.0, left.1, left.2, left.3), profile_edges(b, y, right.0, right.1, right.2, right.3))
+        {
+            let gap = advance + bl - ar;
+            if gap.is_finite() {
+                gaps.push(gap);
+            }
+        }
+    }
+    gaps.sort_by(f64::total_cmp);
+    gaps
+}
+
+/// How far an Optical pair moves toward the reference gap (1 = all the way).
+const OPTICAL_PULL: f64 = 0.6;
+/// The narrowest ink gap an Optical correction leaves, as a fraction of the reference gap.
+const OPTICAL_FLOOR: f64 = 0.3;
+/// The most an Optical correction tightens and loosens a pair, in em.
+const OPTICAL_MAX_TIGHTEN: f64 = 0.12;
+const OPTICAL_MAX_LOOSEN: f64 = 0.06;
+/// The reference gap of a face that has none of the reference pairs, in em.
+const OPTICAL_FALLBACK_GAP: f64 = 0.08;
+
+/// The face's own spacing between two straight stems, in font units: the median ink gap of `nn`,
+/// or of `HH`, then `oo`, when the face doesn't map the letter. `None` when it has none of them.
+fn reference_gap(db: &FontDb, face: &FontFace, cache: &mut HashMap<(u32, u32), Option<Arc<CachedProfile>>>) -> Option<f64> {
+    let upem = face.units_per_em();
+    ['n', 'H', 'o'].into_iter().filter(|&c| face.covers(c)).find_map(|c| {
+        let gid = face.glyph_for(c);
+        let profile = outline_profile(db, face, gid, cache)?;
+        let place = (1.0, 1.0, 0.0, 0.0);
+        let gaps = ink_gaps(&profile.0, &profile.0, place, place, face.advance(gid), profile.1.0, profile.1.1);
+        let gap = gaps.get(gaps.len() / 2).copied()?;
+        (gap.is_finite() && gap > 0.0 && gap < upem).then_some(gap)
+    })
+}
+
+/// The correction to an Optical pair's advance: the pair's median ink gap moves part of the way
+/// ([`OPTICAL_PULL`]) toward `target`, the face's reference gap in the drawn size, its narrowest
+/// gap stays at least [`OPTICAL_FLOOR`] of `target` where the pair allows it, and the change is
+/// rounded to one font unit and limited to [`OPTICAL_MAX_TIGHTEN`] and [`OPTICAL_MAX_LOOSEN`].
 #[allow(clippy::too_many_arguments)]
 fn profile_correction(
     a: &[(f64, f64, f64, f64)],
@@ -535,40 +608,39 @@ fn profile_correction(
     left: (f64, f64, f64, f64),
     right: (f64, f64, f64, f64),
     advance: f64,
+    target: f64,
     em: f64,
     upem: f64,
     low: f64,
     high: f64,
 ) -> Option<f64> {
-    if !low.is_finite() || !high.is_finite() || high <= low || !em.is_finite() || em <= 0.0 || !upem.is_finite() || upem <= 0.0 {
+    if !em.is_finite() || em <= 0.0 || !upem.is_finite() || upem <= 0.0 || !target.is_finite() || target <= 0.0 {
         return None;
     }
-    let mut gaps = Vec::new();
-    for j in 0..24 {
-        let y = low + (high - low) * (f64::from(j) + 0.5) / 24.0;
-        if let (Some((_, ar)), Some((bl, _))) =
-            (profile_edges(a, y, left.0, left.1, left.2, left.3), profile_edges(b, y, right.0, right.1, right.2, right.3))
-        {
-            gaps.push(advance + bl - ar);
-        }
-    }
-    if gaps.is_empty() {
-        return None;
-    }
-    gaps.sort_by(f64::total_cmp);
-    let gap = gaps.get(gaps.len() / 2).copied().unwrap_or(0.0);
+    let gaps = ink_gaps(a, b, left, right, advance, low, high);
+    let (Some(&narrowest), Some(&gap)) = (gaps.first(), gaps.get(gaps.len() / 2)) else { return None };
+    let pulled = OPTICAL_PULL * (target - gap);
+    let correction = pulled.max(OPTICAL_FLOOR * target - narrowest).clamp(-OPTICAL_MAX_TIGHTEN * em, OPTICAL_MAX_LOOSEN * em);
     let unit = em / upem;
-    let correction = ((0.08 * em - gap).clamp(-0.25 * em, 0.25 * em) / unit).round() * unit;
-    let correction = correction.clamp(-0.25 * em, 0.25 * em);
+    let correction = ((correction / unit).round() * unit).clamp(-OPTICAL_MAX_TIGHTEN * em, OPTICAL_MAX_LOOSEN * em);
     correction.is_finite().then_some(correction)
 }
 
-/// Move each Optical pair toward an ink gap of 0.08 em, at 24 overlapping vertical slices.
-/// The median avoids a single narrow tip deciding the entire pair. Corrections are rounded to
-/// one font unit and limited to 1/4 em in either direction. Missing ink gives zero correction.
+/// Does `c` take part in Optical spacing? Ideographs, kana, hangul and the fullwidth and CJK
+/// punctuation forms sit on the em grid and dashes join end to end: they keep the font's spacing.
+fn optical_spaces(c: char) -> bool {
+    !matches!(c.script(), Script::Han | Script::Hiragana | Script::Katakana | Script::Hangul | Script::Bopomofo | Script::Yi)
+        && !matches!(c, '\u{3000}'..='\u{303F}' | '\u{3200}'..='\u{33FF}' | '\u{FE30}'..='\u{FE4F}' | '\u{FF00}'..='\u{FFEF}')
+        && !matches!(c, '-' | '\u{2010}'..='\u{2015}' | '\u{2E3A}' | '\u{2E3B}' | '\u{FE58}' | '\u{FE63}' | '\u{FF0D}')
+}
+
+/// Move each Optical pair part of the way toward the face's own stem spacing (see
+/// [`reference_gap`] and [`profile_correction`]), measured at 24 overlapping vertical slices. The
+/// median avoids a single narrow tip deciding the entire pair. Missing ink gives zero correction.
 fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<usize>, &CharStyle)]) {
     let mut cache = HashMap::new();
     let mut corrections: HashMap<[u64; 15], Option<f64>> = HashMap::new();
+    let mut references: HashMap<u32, Option<f64>> = HashMap::new();
     let shaped_advances: Vec<f64> = glyphs.iter().map(|g| g.adv).collect();
     for i in 0..glyphs.len().saturating_sub(1) {
         let Some((a, b)) = glyphs.get(i).zip(glyphs.get(i + 1)) else { continue };
@@ -621,6 +693,8 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
             || right.inline.is_some()
             || left.ch == '\n'
             || right.ch == '\n'
+            || !optical_spaces(left.ch)
+            || !optical_spaces(right.ch)
         {
             continue;
         }
@@ -653,7 +727,12 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
             left.face.upem.to_bits(),
         ];
         let correction = *corrections.entry(key).or_insert_with(|| {
-            let (Some(a), Some(b)) = (outline_profile(db, left, &mut cache), outline_profile(db, right, &mut cache)) else { return None };
+            let reference = *references.entry(left.face.id()).or_insert_with(|| reference_gap(db, &left.face, &mut cache));
+            let reference = reference.map_or(OPTICAL_FALLBACK_GAP * em, |gap| gap * left.sx);
+            let (Some(a), Some(b)) = (outline_profile(db, &left.face, left.gid, &mut cache), outline_profile(db, &right.face, right.gid, &mut cache))
+            else {
+                return None;
+            };
             let low = (a.1.0 * left.sy + left_y).max(b.1.0 * right.sy + right_y);
             let high = (a.1.1 * left.sy + left_y).min(b.1.1 * right.sy + right_y);
             profile_correction(
@@ -662,6 +741,7 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
                 (left.sx, left.sy, left_x, left_y),
                 (right.sx, right.sy, right_x, right_y),
                 advance,
+                reference,
                 em,
                 left.face.upem,
                 low,
@@ -688,7 +768,7 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
 /// They do when they differ only in paint and stroke, underline and strikethrough, overprint, the
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
-/// Direction (text is shaped apart where its bidi level changes), the kerning (each glyph takes its
+/// Direction (text is shaped apart where its bidi level changes), Kashidas, the kerning (each glyph takes its
 /// run's, see [`shape_segment`]) and the tracking, as long as the tracking keeps or drops standard
 /// ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
@@ -726,6 +806,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         small_caps,
         char_align: _,
         char_direction: _,
+        kashidas: _,
         proportional_metrics,
         tate_chu_yoko,
         tcy_up_down: _,
@@ -735,6 +816,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         font_height_reference,
         no_break,
         language,
+        glyph_alternate,
     } = a;
     *font_family == b.font_family
         && *font_style == b.font_style
@@ -753,6 +835,10 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         && *font_height_reference == b.font_height_reference
         && *no_break == b.no_break
         && *language == b.language
+        // A choice applies to the first character of its source run. Even equal choices on
+        // neighboring runs must shape separately so ligatures cannot absorb either character.
+        && glyph_alternate.is_none()
+        && b.glyph_alternate.is_none()
         && ligatures_suppressed_by(*tracking) == ligatures_suppressed_by(b.tracking)
 }
 
@@ -795,10 +881,21 @@ fn shaping_script(c: char) -> Script {
 ///
 /// The art is scaled uniformly to `scale` x the font size tall, its left edge on the pen and its
 /// vertical centre on the middle of the cap height raised by the inline's shift (see
-/// [`InlineArt`]). Its advance is the scaled art width plus tracking; the glyph's ascent and
-/// descent grow to the art's extent so a tall graphic opens up its line. A missing symbol takes a
-/// square of the same height and draws nothing.
-fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usize, range: Range<usize>, text: &str, level: Level) -> SGlyph {
+/// [`InlineArt`]). Its advance is the scaled art width plus tracking and its character's manual
+/// kerning, which right to left in horizontal type also moves the art right by the value, as it
+/// moves a letter's glyph. The glyph's ascent and descent grow to the art's extent so a tall
+/// graphic opens up its line. A missing symbol takes a square of the same height and draws nothing.
+#[allow(clippy::too_many_arguments)]
+fn inline_glyph(
+    face: &Arc<FontFace>,
+    st: &CharStyle,
+    art: &InlineArt,
+    run: usize,
+    range: Range<usize>,
+    text: &str,
+    level: Level,
+    vertical: bool,
+) -> SGlyph {
     let size = if st.size.is_finite() { st.size.max(0.0) } else { 0.0 };
     let vs = if st.v_scale.is_finite() { st.v_scale / 100.0 } else { 1.0 };
     let km = size / face.upem;
@@ -815,7 +912,8 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         _ => (kurbo::Affine::IDENTITY, h, None),
     };
     let tracking = st.tracking / 1000.0 * size;
-    let adv = width + if tracking.is_finite() { tracking } else { 0.0 };
+    let manual_kern = st.kerning.map(|v| v / 1000.0 * size).filter(|k| k.is_finite()).unwrap_or(0.0);
+    let adv = width + if tracking.is_finite() { tracking } else { 0.0 } + manual_kern;
     SGlyph {
         face: face.clone(),
         gid: 0,
@@ -825,7 +923,7 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         adv: if adv.is_finite() { adv } else { 0.0 },
         dx: 0.0,
         dy: 0.0,
-        kern_shift: 0.0,
+        kern_shift: if level.is_rtl() && !vertical { manual_kern } else { 0.0 },
         // Not used to draw (the art has its own transform), but they make the glyph's em box
         // its run's em: Character Alignment and Top-to-Top leading treat an inline graphic as a
         // character of its run's size, whatever its scale (see `layout::glyph_em`).
@@ -851,6 +949,7 @@ fn inline_glyph(face: &Arc<FontFace>, st: &CharStyle, art: &InlineArt, run: usiz
         no_break: st.no_break,
         vertical_roman: false,
         cursive: false,
+        hyphenates: false,
     }
 }
 
@@ -1116,15 +1215,75 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     if !inside_clusters.is_empty() {
         return shape_apart(inside_clusters, out);
     }
+    // A run's chosen character that the font joins with the characters after it in the run (an f
+    // with a chosen glyph in a `fi` ligature) is shaped apart from them, so the choice is drawn.
+    // A character that starts a longer grapheme (a letter with combining marks, a Hangul syllable
+    // of jamo) stays whole.
+    let ligated: Vec<usize> = runs
+        .get(source_runs.clone())
+        .unwrap_or_default()
+        .iter()
+        .filter(|(r, s)| {
+            let ch = first_char(r.start);
+            s.glyph_alternate.as_ref().is_some_and(|c| face.draws(c, ch)) && !upper && s.digits.map(ch) == ch && range.contains(&r.start)
+        })
+        .map(|(r, _)| {
+            let grapheme = text.get(r.start..).and_then(|s| s.graphemes(true).next()).map_or(0, str::len);
+            (r.start + first_char(r.start).len_utf8(), r.start + grapheme, r.end)
+        })
+        .filter(|&(b, grapheme_end, end)| b == grapheme_end && b < end && b < range.end && cluster_starts.binary_search(&b).is_err())
+        .map(|(b, ..)| b)
+        .collect();
+    if !ligated.is_empty() {
+        return shape_apart(ligated, out);
+    }
     let n = raw.len();
+    // Cluster end: the next larger cluster value in the segment, else the segment end.
+    let cluster_end = |cl: usize| cluster_starts.get(cluster_starts.partition_point(|&c| c <= cl)).copied().unwrap_or(range.end);
+    // A glyph chosen for the run's first character replaces the one glyph shaped for it alone,
+    // drawn as typed (not All Caps, Small Caps or another numeral system), in the face the choice
+    // names.
+    let chosen_at = |gi: usize| {
+        let cl = raw[gi].1 as usize;
+        let (run, gst) = run_at(cl);
+        let ch = first_char(cl);
+        let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
+        let alone = last_in_cluster && (gi == 0 || raw[gi - 1].1 as usize != cl) && cluster_end(cl).saturating_sub(cl) == ch.len_utf8();
+        gst.glyph_alternate
+            .as_ref()
+            .filter(|c| alone && !upper && gst.digits.map(ch) == ch && runs.get(run).is_some_and(|(r, _)| r.start == cl) && face.draws(c, ch))
+    };
+    // The font's positioning (pair kerning, mark placement) was applied to the default glyph, not
+    // to the chosen one: a character drawn with another glyph is shaped apart from its neighbors.
+    let mut chosen_apart: Vec<usize> = (0..n)
+        .filter(|&gi| chosen_at(gi).is_some_and(|c| c.gid != raw[gi].0))
+        .flat_map(|gi| {
+            let cl = raw[gi].1 as usize;
+            [cl, cl + first_char(cl).len_utf8()]
+        })
+        .filter(|&b| b > range.start && b < range.end)
+        .collect();
+    if !chosen_apart.is_empty() {
+        chosen_apart.sort_unstable();
+        chosen_apart.dedup();
+        return shape_apart(chosen_apart, out);
+    }
     for (gi, &(gid, cl, xa, xo, yo)) in raw.iter().enumerate() {
         let cl = cl as usize;
         let (run, gst) = run_at(cl);
-        // Cluster end: the next larger cluster value in the segment, else the segment end.
-        let end = cluster_starts.get(cluster_starts.partition_point(|&c| c <= cl)).copied().unwrap_or(range.end);
+        let end = cluster_end(cl);
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);
         let mut adv = xa as f64 * k * hs;
+        // The chosen glyph takes its own advance.
+        let chosen = chosen_at(gi);
+        let gid = match chosen {
+            Some(c) => {
+                adv += (face.advance(c.gid) - face.advance(gid)) * k * hs;
+                c.gid
+            }
+            None => gid,
+        };
         let mut kern_shift = 0.0;
         if ch == SOFT_HYPHEN || ch == '\u{2028}' {
             adv = 0.0;
@@ -1171,6 +1330,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             no_break: gst.no_break,
             vertical_roman: gst.standard_vertical_roman,
             cursive,
+            hyphenates: crate::hyphen::language_has_patterns(gst.language.as_deref()),
         });
     }
 }
@@ -1185,16 +1345,38 @@ mod optical_tests {
 
     #[test]
     fn optical_side_profiles_tighten_loosen_and_stay_bounded() {
+        // 100 pt in a 1000-unit font: one font unit is 0.1 pt; the reference gap is 8 pt.
         let a = box_profile(0.0, 80.0);
         let b = box_profile(0.0, 20.0);
         let place = (1.0, 1.0, 0.0, 0.0);
-        let tight = profile_correction(&a, &b, place, place, 120.0, 100.0, 1000.0, 0.0, 100.0).unwrap();
-        let loose = profile_correction(&a, &b, place, place, 60.0, 100.0, 1000.0, 0.0, 100.0).unwrap();
-        assert_eq!(tight, -25.0);
-        assert_eq!(loose, 25.0);
-        assert_eq!(profile_correction(&a, &b, place, place, 88.0, 100.0, 1000.0, 0.0, 100.0), Some(0.0));
-        assert_eq!(profile_correction(&a, &b, place, place, 120.0, 100.0, 1000.0, 0.0, 100.0), Some(tight));
-        assert_eq!(profile_correction(&a, &b, place, place, 120.0, 100.0, 1000.0, 100.0, 100.0), None);
-        assert_eq!(profile_correction(&[], &b, place, place, 120.0, 100.0, 1000.0, 0.0, 100.0), None);
+        let correct = |a: &[(f64, f64, f64, f64)], advance: f64, target: f64| {
+            profile_correction(a, &b, place, place, advance, target, 100.0, 1000.0, 0.0, 100.0)
+        };
+        assert_eq!(correct(&a, 120.0, 8.0), Some(-12.0), "a 40 pt gap tightens by at most 0.12 em");
+        assert_eq!(correct(&a, 60.0, 8.0), Some(6.0), "overlapping ink loosens by at most 0.06 em");
+        assert_eq!(correct(&a, 88.0, 8.0), Some(0.0), "the reference gap itself is left alone");
+        assert!((correct(&a, 98.0, 8.0).unwrap() - -6.0).abs() < 1e-9, "a pair moves 0.6 of the way toward the reference");
+        assert!((correct(&a, 84.0, 8.0).unwrap() - 2.4).abs() < 1e-9, "a tight pair opens 0.6 of the way");
+        assert_eq!(correct(&a, 88.0, 0.0), None);
+        assert_eq!(profile_correction(&a, &b, place, place, 120.0, 8.0, 100.0, 1000.0, 100.0, 100.0), None);
+        assert_eq!(profile_correction(&[], &b, place, place, 120.0, 8.0, 100.0, 1000.0, 0.0, 100.0), None);
+
+        // A right side slanting from x 60 at the bottom to x 100 at the top: the median gap is
+        // near the 20 pt reference, but the top nearly touches. The floor keeps 0.3 of it.
+        let slanted = vec![(0.0, 0.0, 0.0, 100.0), (60.0, 0.0, 100.0, 100.0)];
+        let correction = correct(&slanted, 100.0, 20.0).unwrap();
+        let narrowest = ink_gaps(&slanted, &b, place, place, 100.0, 0.0, 100.0)[0];
+        assert!(correction > 1.0, "the narrowest gap opens: {correction}");
+        assert!(narrowest + correction >= 0.3 * 20.0 - 0.1, "{narrowest} + {correction}");
+    }
+
+    #[test]
+    fn ideographs_kana_fullwidth_forms_and_dashes_keep_the_font_spacing() {
+        for c in ['日', 'カ', 'な', '한', '、', 'Ｗ', '-', '\u{2014}', '\u{FF0D}'] {
+            assert!(!optical_spaces(c), "{c:?}");
+        }
+        for c in ['A', 'v', '7', '.', 'Ω', 'Ж', 'א', 'ب', 'क'] {
+            assert!(optical_spaces(c), "{c:?}");
+        }
     }
 }

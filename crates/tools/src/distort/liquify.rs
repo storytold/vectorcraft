@@ -508,31 +508,46 @@ fn simplify(sp: &mut SubPath, tol: f64, region: Rect) {
     if tol <= 0.0 {
         return;
     }
+    let min = if sp.closed { 4 } else { 3 };
+    let src = std::mem::take(&mut sp.anchors);
+    let n = src.len();
+    // Compacted into `out`, each anchor moved once: removing them from the middle one by one
+    // shifts the rest every time.
+    let mut out: Vec<Anchor> = Vec::with_capacity(n);
+    let mut src = src.into_iter().peekable();
+    out.extend(src.next());
+    let last = if sp.closed { n } else { n.saturating_sub(1) };
     let mut i = 1;
-    loop {
-        let n = sp.anchors.len();
-        let min = if sp.closed { 4 } else { 3 };
-        if n < min {
-            return;
-        }
-        let last = if sp.closed { n } else { n - 1 };
-        if i >= last {
-            return;
-        }
-        let (pa, k, pb) = (sp.anchors[i - 1], sp.anchors[i], sp.anchors[(i + 1) % n]);
-        let flat = region.contains(k.p)
+    while let Some(k) = src.next() {
+        // Anchors left if `k` stays: those kept, `k`, and those not yet looked at.
+        let left = out.len() + 1 + src.len();
+        let Some(&pa) = out.last() else { break };
+        let pb = match src.peek() {
+            Some(pb) => *pb,
+            None => out[0],
+        };
+        let flat = i < last
+            && left >= min
+            && region.contains(k.p)
             && [k.p, k.h_in, k.h_out, pa.h_out, pb.h_in].iter().all(|q| dist_seg(*q, pa.p, pb.p) <= tol)
             && (k.p - pa.p).dot(pb.p - k.p) > 0.0;
-        if flat {
-            let lab = pa.p.distance(pb.p);
-            let (lak, lkb) = (pa.p.distance(k.p).max(1e-9), k.p.distance(pb.p).max(1e-9));
-            sp.anchors[i - 1].h_out = pa.p + (pa.h_out - pa.p) * (lab / lak);
-            sp.anchors[(i + 1) % n].h_in = pb.p + (pb.h_in - pb.p) * (lab / lkb);
-            sp.anchors.remove(i);
-        } else {
-            i += 1;
+        i += 1;
+        if !flat {
+            out.push(k);
+            continue;
+        }
+        let lab = pa.p.distance(pb.p);
+        let (lak, lkb) = (pa.p.distance(k.p).max(1e-9), k.p.distance(pb.p).max(1e-9));
+        if let Some(a) = out.last_mut() {
+            a.h_out = pa.p + (pa.h_out - pa.p) * (lab / lak);
+        }
+        let h_in = pb.p + (pb.h_in - pb.p) * (lab / lkb);
+        match src.peek_mut() {
+            Some(b) => b.h_in = h_in,
+            None => out[0].h_in = h_in,
         }
     }
+    sp.anchors = out;
 }
 
 /// Apply a liquify stroke (its dabs, at the brush's intensity) to `path`. `salt` decorrelates
@@ -886,6 +901,21 @@ mod tests {
 
     fn prm(kind: LiquifyKind) -> LiquifyParams {
         LiquifyParams { intensity: 1.0, ..LiquifyParams::new(kind) }
+    }
+
+    #[test]
+    fn simplify_drops_flat_anchors_and_keeps_the_ends() {
+        let pts: Vec<Point> = (0..200_000).map(|i| Point::new(i as f64, 0.0)).collect();
+        let mut open = SubPath::polyline(&pts, false);
+        let start = std::time::Instant::now();
+        simplify(&mut open, 0.5, Rect::new(-1.0, -1.0, 1e6, 1.0));
+        assert!(start.elapsed() < std::time::Duration::from_secs(5), "{:?}", start.elapsed());
+        assert_eq!(open.anchors.iter().map(|a| a.p).collect::<Vec<_>>(), [pts[0], pts[199_999]]);
+        // A closed square with a flat midpoint on each side keeps its four corners.
+        let ring = [(0.0, 0.0), (5.0, 0.0), (10.0, 0.0), (10.0, 5.0), (10.0, 10.0), (5.0, 10.0), (0.0, 10.0), (0.0, 5.0)];
+        let mut closed = SubPath::polyline(&ring.map(|(x, y)| Point::new(x, y)), true);
+        simplify(&mut closed, 0.5, Rect::new(-1.0, -1.0, 11.0, 11.0));
+        assert_eq!(closed.anchors.iter().map(|a| (a.p.x, a.p.y)).collect::<Vec<_>>(), [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
     }
 
     #[test]

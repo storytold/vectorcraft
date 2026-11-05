@@ -1213,6 +1213,13 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                         }
                         return;
                     }
+                    // A plug-in's color is the color button its dialog shows.
+                    if manifest.and_then(|m| m.param(key)).is_some_and(|p| matches!(p.spec, vectorcraft_plugins::manifest::ParamSpec::Color { .. })) {
+                        if let Some(c) = crate::dialogs::plugin_color_button(ui, ("fx-color", item, k, key.as_str()), v) {
+                            change = Some((key.clone(), c));
+                        }
+                        return;
+                    }
                     // Only our own effects show a `mode` parameter as the blend mode dropdown; a plug-in's `mode` stays a plain field.
                     if built_in && let Some(cur) = widgets::blend_param(key, v) {
                         if let Some(m) = widgets::blend_param_dropdown(ui, ("fx-blend", item, k, key.as_str()), cur) {
@@ -1231,6 +1238,8 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                             let suffix = ui_keys.and_then(|u| u.unit.as_deref()).map(crate::dialogs::unit_suffix).unwrap_or_default();
                             let nx = if vectorcraft_effects::is_length(&e.id, key, relative) {
                                 widgets::num_field(ui, id, Some(x), unit, 70.0)
+                            } else if let Some(range) = vectorcraft_effects::raster_px_range(&e.id, key) {
+                                widgets::range_field_named(ui, id, None, x, range, &crate::dialogs::unit_suffix("px"), 2, 70.0)
                             } else {
                                 widgets::plain_field(ui, id, x, &suffix, 2, 70.0)
                             };

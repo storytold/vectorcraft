@@ -280,7 +280,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     let shown_id = if slot.contains(&active) {
                         active.to_string()
                     } else {
-                        app.ui.slot_tool.get(slot[0]).cloned().unwrap_or_else(|| slot[0].to_string())
+                        app.ui.slot_tool.get(slot[0]).filter(|id| slot.contains(&id.as_str())).cloned().unwrap_or_else(|| slot[0].to_string())
                     };
                     let Some(shown) = tool_info(&shown_id).or_else(|| tool_info(slot[0])) else { continue };
                     let is_active = slot.contains(&active);
@@ -471,6 +471,9 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 /// Warp's mesh and pins (set through `tool.setOption`). The Artboard tool's options are drawn by
 /// [`crate::panels::artboards::control_bar`].
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if crate::addons::shapes::control_bar(app, ui) {
+        return;
+    }
     if app.session.tool_id() == "dimension" {
         return crate::dialogs::dimension::controls(app, ui);
     }

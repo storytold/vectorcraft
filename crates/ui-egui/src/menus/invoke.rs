@@ -15,10 +15,13 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
 
 /// What an in-window menu click on `target` (a [`click_target`]) runs with `held` held: Object ›
 /// Unlock All and Object › Show All chosen with Shift+Alt (Shift+Option) act only inside the groups
-/// that hold the selected objects (`scope: "group"`).
-pub(super) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
+/// that hold the selected objects (`scope: "group"`); Select Linked, Embedded, Missing and Modified
+/// chosen with Shift add to the selection (`add: true`).
+pub(crate) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
     match target.0.as_str() {
         "object.unlockAll" | "object.showAll" if held.shift && held.alt => (target.0, json!({"scope": "group"})),
+        // Select Linked, Embedded, Missing and Modified with Shift add to the selection.
+        crate::addons::select::link_status::COMMAND if held.shift => (target.0, crate::addons::select::link_status::with_shift(target.1)),
         _ => target,
     }
 }
@@ -68,9 +71,14 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             ("splitIntoGrid", crate::dialogs::path_ops::split_fields(size.0, size.1))
         }
         "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
+        crate::addons::pathtools::set_corners::COMMAND => {
+            (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
+        }
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
         crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
         crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
+        crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
+        crate::addons::select::COMMAND => (crate::addons::select::KIND, crate::addons::select::fields(app)),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
         _ => return None,
     })

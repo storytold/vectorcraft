@@ -16,6 +16,25 @@ pub(super) fn rename_id() -> egui::Id {
     egui::Id::unique("layers-rename")
 }
 
+/// Whether a row's name is italic: a layer whose Layer Options › Print is off does not print, and
+/// the panel shows that in its name, as the reference application does (a template layer's Print is
+/// off too).
+fn prints_italic(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Layer { printable: false, .. })
+}
+
+/// Paints the row name `name` at `pos` (left, vertically centred), italic when `italic`, and
+/// returns its rect. Row names are painted rather than widgets, so italics come from a layout job's
+/// text format: egui slants the glyphs itself, no italic face is needed.
+fn paint_name(painter: &egui::Painter, pos: egui::Pos2, name: &str, font: egui::FontId, color: Color32, italic: bool) -> egui::Rect {
+    let mut job = egui::text::LayoutJob::default();
+    job.append(name, 0.0, egui::TextFormat { font_id: font, color, italics: italic, ..Default::default() });
+    let galley = painter.layout_job(job);
+    let rect = egui::Align2::LEFT_CENTER.anchor_size(pos, galley.size());
+    painter.galley(rect.min, galley, color);
+    rect
+}
+
 /// The colour of the layer holding `id`.
 fn layer_colour(doc: &Document, id: NodeId) -> Color32 {
     let [r, g, b] = doc.layer_color(id);
@@ -57,7 +76,7 @@ pub(super) fn drag_ghost(ui: &Ui, view: &View, src: NodeId, pos: egui::Pos2) {
         }
         let label = n.identify_label(view.identify_xml_id);
         let name = if view.identify_xml_id { label } else { painted_name(n, &label, crate::i18n::current()) };
-        ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), t.text);
+        paint_name(ui.painter(), egui::pos2(x, r.center().y), &name, egui::FontId::proportional(13.0), t.text, prints_italic(n));
     });
 }
 
@@ -316,7 +335,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             } else {
                 painted_name(n, &n.display_name(), crate::i18n::current())
             };
-            let text = painter.text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, shown, font, if item.dim { t.text_dim } else { t.text });
+            let text = paint_name(&painter, egui::pos2(x, r.center().y), &shown, font, if item.dim { t.text_dim } else { t.text }, prints_italic(n));
             name_end = text.right();
             // A clipping path's name is underlined, a masked object's with a dashed line.
             if clip_path {

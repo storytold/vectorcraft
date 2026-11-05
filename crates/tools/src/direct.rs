@@ -51,13 +51,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::{HitKind, compound_part_at, hit_test, selected_hidden_at};
 use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind, Selection};
-use vectorcraft_geom::{Anchor, PathData, Point, Rect, Vec2};
+use vectorcraft_geom::{Anchor, PathData, PathSeg, Point, Rect, Vec2};
 
 use crate::bbox::move_delta;
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{HandleSnap, Leave, PointSnap, Targets};
 use crate::meshedit::{MeshEdit, grid_of};
-use crate::pathtype::{self, BracketDrag, over_bracket};
+use crate::pathtype::{self, BracketDrag, near_bracket};
 use crate::rulerguide::GuideEdit;
 use crate::select::{MoveSnap, hold_point, is_area_type, is_path_type, matrix_json, release_guide_at};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
@@ -215,8 +215,8 @@ pub struct DirectSelectionTool {
     click: Option<(NodeId, usize, usize)>,
     /// A click on a whole path picks the segment on release; a drag still moves the whole path.
     click_segment: Option<(NodeId, usize, usize)>,
-    /// An Alt-click on a path selected whole adds this enclosing group on release, as a Group
-    /// Selection click does; an Alt-drag still copies the selection.
+    /// A Group Selection click, or an Alt-click on a path selected whole, adds this enclosing
+    /// group on release. A drag keeps the selection; an Alt-drag still copies it.
     click_group: Option<NodeId>,
     /// The selected anchors of area type's frames, picked by a click or a marquee: they show
     /// filled, a drag of one moves them all, and the arrow keys nudge them. They stay selected
@@ -227,6 +227,8 @@ pub struct DirectSelectionTool {
     /// The already selected frame anchor the press landed on without Shift: a click (no drag)
     /// selects it alone, as a drag moves every selected frame anchor with it.
     frame_click: Option<(NodeId, AnchorRef)>,
+    /// Where the pointer last hovered: the type on a path bracket under it draws thicker.
+    bracket_hover: Option<Point>,
 }
 
 impl DirectSelectionTool {
@@ -253,6 +255,7 @@ impl DirectSelectionTool {
             frame: BTreeMap::new(),
             frame_revision: (0, 0),
             frame_click: None,
+            bracket_hover: None,
         }
     }
 
@@ -587,7 +590,17 @@ fn anchors_json(v: &[AnchorRef]) -> Value {
 /// The segments of `path` that marquee `r` crosses with neither of their anchors inside it, as
 /// (subpath, segment) pairs: the reference app selects a segment that a marquee is dragged "over
 /// part of" (<http://web.archive.org/web/20211230015528/https://helpx.adobe.com/illustrator/using/selecting-objects.html>).
+/// Each segment is judged as `hit::intersects_rect` judges a path of that segment alone. A segment
+/// whose anchors and handles all lie past one side of `r` is skipped without the exact test.
 fn crossed_segments(path: &PathData, r: Rect) -> Vec<AnchorRef> {
+    let (x0, x1, y0, y1) = (r.min_x(), r.max_x(), r.min_y(), r.max_y());
+    let edges = [
+        vectorcraft_geom::Line::new((r.x0, r.y0), (r.x1, r.y0)),
+        vectorcraft_geom::Line::new((r.x1, r.y0), (r.x1, r.y1)),
+        vectorcraft_geom::Line::new((r.x1, r.y1), (r.x0, r.y1)),
+        vectorcraft_geom::Line::new((r.x0, r.y1), (r.x0, r.y0)),
+    ];
+    let degenerate = |x: Rect| x.width() == 0.0 || x.height() == 0.0;
     let mut out = vec![];
     for (si, sp) in path.subpaths.iter().enumerate() {
         let n = sp.anchors.len();
@@ -597,8 +610,24 @@ fn crossed_segments(path: &PathData, r: Rect) -> Vec<AnchorRef> {
             if r.contains(a.p) || r.contains(b.p) {
                 continue;
             }
-            let piece = PathData::single(vectorcraft_geom::SubPath::new(vec![*a, *b], false));
-            if vectorcraft_geom::hit::intersects_rect(&piece, r) {
+            // A segment with no handles is drawn as a line, as `SubPath::to_bezpath_into` draws it.
+            let line = !a.has_out() && !b.has_in();
+            let pts = if line { [a.p, b.p, b.p, b.p] } else { [a.p, a.h_out, b.h_in, b.p] };
+            // A segment lies within the box of its anchors and handles. The comparisons are false
+            // for a NaN coordinate, so such a segment goes on to the exact test.
+            if pts.iter().all(|p| p.x < x0) || pts.iter().all(|p| p.x > x1) || pts.iter().all(|p| p.y < y0) || pts.iter().all(|p| p.y > y1) {
+                continue;
+            }
+            let piece = if line {
+                PathSeg::Line(vectorcraft_geom::Line::new(a.p, b.p))
+            } else {
+                PathSeg::Cubic(vectorcraft_geom::CubicBez::new(a.p, a.h_out, b.h_in, b.p))
+            };
+            let bounds = vectorcraft_geom::path::segment_bounds(piece);
+            if bounds.intersect(r).area() <= 0.0 && !degenerate(bounds) && !degenerate(r) {
+                continue;
+            }
+            if edges.iter().any(|e| !piece.intersect_line(*e).is_empty()) {
                 out.push((si, seg));
             }
         }
@@ -643,6 +672,11 @@ fn segment_at(cx: &ToolContext, id: NodeId, p: Point) -> Option<SegmentHit> {
 }
 
 impl Tool for DirectSelectionTool {
+    /// The pointer hovers nothing for the tool: no bracket is highlighted.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.bracket_hover = None;
+    }
+
     fn id(&self) -> &'static str {
         if self.group { "groupSelection" } else { "directSelection" }
     }
@@ -703,6 +737,7 @@ impl Tool for DirectSelectionTool {
         }
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
+        self.bracket_hover = (ev.kind == PointerKind::Move).then_some(ev.pos);
         if let Some(out) = self.guide.pointer(cx, ev) {
             return out;
         }
@@ -727,7 +762,7 @@ impl Tool for DirectSelectionTool {
                     return vec![];
                 }
                 if !over_path_type_anchor(cx, p)
-                    && let Some(b) = BracketDrag::hit(cx, ev)
+                    && let Some(b) = BracketDrag::hit_any(cx, ev)
                 {
                     self.state = State::Bracket(b);
                     return vec![];
@@ -915,7 +950,8 @@ impl Tool for DirectSelectionTool {
                 out.extend(self.mesh.overlays(cx, &|id| cx.selection.contains(id)));
                 if !self.group {
                     out.extend(frame_overlays(cx, &self.frame_anchors(cx)));
-                    out.extend(pathtype::overlays(cx));
+                    let drag = if let State::Bracket(b) = &self.state { Some(b) } else { None };
+                    out.extend(pathtype::overlays(cx, self.bracket_hover, drag));
                 }
                 if matches!(self.state, State::Handle { .. } | State::MoveAnchors { .. } | State::MoveObject { .. }) {
                     out.extend(self.guides.iter().cloned());
@@ -932,7 +968,7 @@ impl Tool for DirectSelectionTool {
         if !self.group && (matches!(self.state, State::Corner(_)) || over_widget(cx, p, true)) {
             return Cursor::CornerRadius;
         }
-        if !self.group && (matches!(self.state, State::Bracket(_)) || over_bracket(cx, p) && !over_path_type_anchor(cx, p)) {
+        if !self.group && (matches!(self.state, State::Bracket(_)) || near_bracket(cx, p) && !over_path_type_anchor(cx, p)) {
             return Cursor::PathBracket;
         }
         let rest = if self.group { Cursor::GroupSelection } else { Cursor::ArrowHollow };
@@ -1123,6 +1159,7 @@ impl DirectSelectionTool {
         Some(vec![])
     }
     fn press_group(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point, tol: f64) -> Vec<Action> {
+        self.click_group = None;
         if let Some(out) = self.guide.press(cx, ev) {
             self.state = State::Idle;
             return out;
@@ -1152,7 +1189,8 @@ impl DirectSelectionTool {
             }
         } else if !cx.selection.contains(target) {
             if cx.selection.contains(h.leaf) {
-                out.push(Action::Exec("select.add".into(), json!({"ids": [target.0]})));
+                // A completed click climbs the group; a drag moves only the selected art.
+                self.click_group = Some(target);
             } else {
                 out.push(Action::Exec("select.set".into(), json!({"ids": [target.0]})));
             }
