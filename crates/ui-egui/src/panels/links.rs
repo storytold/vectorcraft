@@ -316,6 +316,7 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, rows: &[Value], id: u64,
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let o = options(ui.ctx());
+    super::layers::show_thumbs_of(app.session.active().map(|st| st.uid));
     let Some(cache) = cached(app, ui.ctx(), &o) else {
         widgets::dim_label(ui, tl!("No document"));
         return;
