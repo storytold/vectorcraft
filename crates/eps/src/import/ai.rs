@@ -36,6 +36,7 @@ use crate::ps;
 
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
 pub(crate) use frames::text_frames;
+pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
 pub use read::{
     BindingRef, Brushes, IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, bindings_note, brushes, palette, read, read_beside, variables,
 };

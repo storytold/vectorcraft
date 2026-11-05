@@ -17,6 +17,24 @@ fn three_boards() -> Headless {
 }
 
 #[test]
+fn raster_export_uses_document_resolution_unless_overridden() {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 72, "height": 36, "rasterEffectsPpi": 300}})).unwrap();
+    for (args, size) in [
+        (json!({}), (300, 150)),
+        (json!({"scale": 1}), (72, 36)),
+        (json!({"options": {"scale": 2}}), (144, 72)),
+        (json!({"scale": 2, "options": {"ppi": 150}}), (150, 75)),
+    ] {
+        let mut params = args.clone();
+        params["format"] = json!("png");
+        let r = text(&call_tool(&mut h, "export", &params));
+        let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+        assert_eq!(image::load_from_memory(&bytes).unwrap().to_rgba8().dimensions(), size, "{args}");
+    }
+}
+
+#[test]
 fn export_with_a_range_writes_one_file_per_artboard() {
     let mut h = three_boards();
     let dir = std::env::temp_dir().join(format!("vectorcraft-mcp-exportas-{}", std::process::id()));

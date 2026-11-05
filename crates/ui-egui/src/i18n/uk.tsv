@@ -4702,6 +4702,7 @@ axis	Both	Обидві
 @msg	graphs come in as plain art, without their data or settings	діаграми імпортуються як звичайна графіка, без їхніх даних і налаштувань
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	пов’язані зображення показуються як збережений у файлі перегляд низької роздільності, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	пов’язані зображення без перегляду у файлі показуються як заповнювач, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в області в рамках, занизьких для рядка шрифту, яким він показується, отримав вищі рамки ({_1}): інакше його не було б видно
 @msg	its editing data doesn't say where its art is	у даних редагування не зазначено, де знаходиться графіка
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	цей файл збережений без сумісності з PDF, і його дані редагування не вдається прочитати ({why})

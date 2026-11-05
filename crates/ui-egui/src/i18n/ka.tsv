@@ -4780,6 +4780,7 @@ font-technology	Variable	ცვლადი
 	Even	თანაბრად
 	Stacked	დასტად
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები ფაილში შენახულ დაბალი გარჩევადობის მინიატურას აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები, რომელთა მინიატურაც ფაილში არ არის, ადგილის შემნახველს აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	არის ტექსტს ჩარჩოებში, რომლებიც მისი შრიფტის ერთი სტრიქონისთვის ზედმეტად დაბალი იყო, ჩარჩოები გაეზარდა ({_1}): სხვაგვარად ტექსტი არ გამოჩნდებოდა
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	მათზე არსებული ნახატი გვერდისგან {_1}%-ით განსხვავდება: მიუხედავად ამისა, ისინი რედაქტირების მონაცემებიდან აიღება
 @msg	every numbered name for {name} is taken in the document's folder	დოკუმენტის საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია

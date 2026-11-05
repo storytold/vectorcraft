@@ -427,7 +427,7 @@ opens the picker through `run_command` with the remote backend.
 | `inspect_ui` | `{}` | UI state. Remote mode only. |
 | `select_tool` | `{tool}` | `selection`, `directSelection`, `pen`, `rectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, … |
 | `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. |
-| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. |
+| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. |
 | `draw_path` | `{points \| d, closed?, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `points` is `[[x,y],…]` or `[{x,y,in?,out?,smooth?},…]`. `d` is SVG path data. The options are below. |
 | `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. `line`: `x1,y1,x2,y2`. |
 | `set_paint` | `{fill?, stroke?, strokeWidth?, ids?}` | Applies to the selection (or `ids`) and becomes the default for new art. Returns `{applied, objects}`: `objects` is the number of objects painted, as the `objects` of the `paint.setFill`, `paint.setStroke` and `stroke.set` replies (the largest of them): a selected group counts the objects inside it. When it is 0, a `note` says that only the paint for new art changed. |
@@ -708,6 +708,11 @@ or `range`), named `<file>-<artboard>.<ext>`, and returns `{path, files}` (a PDF
 SVG writes one file per artboard of a `range`); `useArtboards: false` exports the bounds of the visible art with what
 its effects paint, the effects of groups, type and images included. `artboard.fitToArt` measures the art the same
 way.
+
+Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
+point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
+`convert` follow the same rule and accept `--ppi N` (which wins over `--scale N`). Documents at the
+default 72 ppi still use 72 ppi; use `--ppi 300` for print output from those documents.
 
 Raster exports take more options in `options`: `ppi` (72, 150, 300…; stored in the file, except in GIF, WebP and
 Targa), `background` (`transparent`, `white`, `black` or `"#rrggbb"`; `#rrggbbaa` and `#rgba` are refused), `antiAlias` (`none`, `art`, `type`: text
@@ -4982,7 +4987,8 @@ thread's first frame that holds text (which is selected when it was not) with th
 and Cut take. Typing, Delete and Cut replace the whole story as one undo step (`text.editRange` with `clear`, the other
 frames whose text goes), and a fill, stroke, `type.step` or Character or Paragraph panel change applies to the text of
 every frame (the Character panel sends `text.setRangeStyle {id, story: true}`, which styles every frame's text in one
-undo step). A caret move or a click ends the story selection.
+undo step). Remove Line Breaks, Remove Paragraph Breaks and Convert to Text also act on the text of every frame, as
+one undo step. A caret move or a click ends the story selection.
 
 ```json
 {"name":"press_key","arguments":{"key":"A","mods":{"cmd":true}}}
@@ -5429,6 +5435,10 @@ the type it changed, how many paragraphs were `converted`, and the characters `i
 `id`, the byte `at` which they went in (counted in the text before the change) and their `length` in bytes. While the
 Type tool edits, `text.convertListToText` ends its typing first and moves its anchor and caret past the characters
 inserted at or before them, whether the call comes from the menu, MCP or the control channel.
+After Select All in a frame of threaded text, a call without `ids`, `id`, `start` or `end` converts every paragraph of
+the story's frames that are neither locked nor hidden. While the story is selected, its locked and hidden frames are
+not converted, even when `ids` names them, and neither is a paragraph whose text starts in one. When the call converts
+all of its other frames, the whole story stays selected.
 In threaded type, when the caret's character moved to another frame, the Type tool edits that frame with the caret
 next to the same character, and that frame becomes the selection when it was not selected.
 
@@ -6501,8 +6511,11 @@ glyph of its first character lands where it was drawn.
   line becomes a left-aligned paragraph whose leading is the distance from the baseline above, so the lines stay where
   they were. Character styles stay; the object takes the top-left piece's place and paint. Returns `{id, joined, lines}`.
 - `addon.cleanup.removeBreaks {kind, ids?}` removes the forced line breaks (`kind: "line"`) or paragraph returns
-  (`"paragraph"`) in the characters selected with a Type tool, else in all the text of the selected type. A break
-  between two words becomes a space; merged paragraphs take the first one's paragraph style.
+  (`"paragraph"`) in the characters selected with a Type tool, else in all the text of the selected type. After
+  Select All in a frame of threaded text, it removes them from the text of every frame of the story, as one undo step.
+  A break between two words becomes a space; merged paragraphs take the first one's paragraph style. The frames of a
+  threaded story, selected all together or through Select All, are read as one text, so a break at the end of one
+  frame before a word in the next one also becomes a space.
 - `addon.cleanup.splitText {}` works while a Type tool edits horizontal point or area type: the text before the
   selected characters, those characters and the text after them become point type objects (at a bare cursor, the text
   before and after it). Spaces at the ends of each piece go; a piece that starts inside a left-aligned line takes a

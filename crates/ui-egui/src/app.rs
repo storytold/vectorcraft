@@ -105,6 +105,7 @@ impl VectorcraftApp {
             pending_url: None,
             control_rx: None,
             deferred_control: None,
+            synthetic_dropped_before: 0,
             pending_screenshots: vec![],
             queued_screenshots: vec![],
             screenshot_token: 0,
@@ -279,6 +280,7 @@ impl VectorcraftApp {
         let now = now_secs();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        self.refresh_replace_font_warning(false);
         updates_ui::tick(self, ctx);
         // Read the system clipboard only when that alone decides whether Paste is enabled. A
         // background thread reads it where the host installs one (an unresponsive owner must never

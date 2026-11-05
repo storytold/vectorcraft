@@ -4412,6 +4412,7 @@ axis	Both	Her İkisi
 @msg	graphs come in as plain art, without their data or settings	grafikler, verileri ve ayarları olmadan düz çizim olarak içe aktarılır
 @msg	an image whose data is cut short was left out	verileri kısa kesilen bir resim dışarıda bırakıldı
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	bağlantılı resimler, dosyaları bulunana kadar dosyaya kaydedilen düşük çözünürlüklü önizlemeyi gösterir: bunları Bağlantılar panelinde yeniden bağlayın
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	dosyada önizlemesi olmayan bağlantılı resimler, dosyaları bulunana kadar bir yer tutucu gösterir: bunları Bağlantılar panelinde yeniden bağlayın
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	çerçevelerdeki alan türü, daha uzun çerçevelerde gösterdiği yazı tipinin bir satırı için çok kısa ({_1}): bunların türü aksi halde gösterilmez
 @msg	its editing data doesn't say where its art is	düzenleme verileri sanatın nerede olduğunu söylemiyor
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	bu dosya PDF uyumluluğu olmadan kaydedildi ve düzenleme verileri okunamıyor ({why})

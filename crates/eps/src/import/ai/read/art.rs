@@ -1,13 +1,14 @@
 use super::containers::close;
 use super::document::TEXT_SLOT;
 use super::types::{
-    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART,
+    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART,
     NON_NATIVE_ART_UNREAD, Place,
 };
 use super::{
     Affine, AnchorKind, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node,
     NodeId, NodeKind, Obj, OpacityMask, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
 };
+use vectorcraft_doc::links::missing_placeholder;
 
 impl<'a> Reader<'a> {
     /// A text object (`/AI11Text`): an empty group standing for it, named after its story.
@@ -383,18 +384,52 @@ impl<'a> Reader<'a> {
         self.image_from(vals, data)
     }
 
+    /// The matrix and the numbers of an image's operands (`[a b c d tx ty] llx lly urx ury w h bits
+    /// ImageType AlphaChannelCount reserved bin-ascii ImageMask`, as `XI` and `XF` take them); `None`
+    /// without a matrix or with fewer numbers than up to the encoding (bin-ascii).
+    fn image_operands(vals: &[V]) -> Option<(Vec<f64>, Vec<f64>)> {
+        let m = vals.iter().find_map(|v| if let V::Arr(a) = v { Some(Self::nums(a)) } else { None })?;
+        let n = Self::nums(vals);
+        (n.len() >= 11).then_some((m, n))
+    }
+
+    /// `XG` (`w`, which names the file of the image after it) or `XF` (that image), with their
+    /// operands `vals`. Before the art, the setup's procedures run: there they do nothing.
+    pub(super) fn image_link_op(&mut self, w: &str, vals: Vec<V>, hidden: bool) -> Result<(), String> {
+        if self.frames.is_empty() {
+            return Ok(());
+        }
+        if w == "XG" {
+            self.image_link = Self::image_link(&vals);
+            return Ok(());
+        }
+        self.linked_image(vals, hidden)
+    }
+
+    /// The file `XG`'s operands (`(path) modified`) name; `None` for operands of another shape or
+    /// an empty path.
+    fn image_link(vals: &[V]) -> Option<String> {
+        match vals {
+            [.., V::Str(path), V::Num(_)] if !path.is_empty() => Some(super::obj::text(path)),
+            _ => None,
+        }
+    }
+
     /// An image of operands `vals` and samples `data`.
     pub(super) fn image_from(&mut self, vals: Vec<V>, data: &[u8]) -> Result<(), String> {
+        // A file `XG` named before this image isn't the file of a later `XF`.
+        self.image_link = None;
         let space = self.raster.as_ref().and_then(|r| r.space.clone()).unwrap_or_default();
-        let Some(m) = vals.iter().find_map(|v| if let V::Arr(a) = v { Some(Self::nums(a)) } else { None }) else {
+        let Some((m, n)) = Self::image_operands(&vals) else {
             self.warn("an image VectorCraft can't read was left out");
             return Ok(());
         };
-        let n = Self::nums(&vals);
-        let [_, _, _, _, w, h, bits, kind, alpha, _, binary, ..] = n.as_slice() else {
+        let [_, _, _, _, w, h, bits, kind, alpha, _, binary, rest @ ..] = n.as_slice() else {
             self.warn("an image VectorCraft can't read was left out");
             return Ok(());
         };
+        // ImageMask 1: the image is transparent and takes a color (version 7 specification §8.1).
+        let image_mask = rest.first() == Some(&1.0);
         let (w, h) = (*w as u64, *h as u64);
         if w.saturating_mul(h) > MAX_PIXELS {
             self.warn(IMAGE_TOO_LARGE);
@@ -437,7 +472,10 @@ impl<'a> Reader<'a> {
             && *bits == 8.0
             && let Some(blob) = Inks::new(w as u32, h as u32, samples.to_vec()).and_then(|i| ImageBlob::cmyk_tiff(&i))
         {
-            return self.add_raster(blob, opacity, &m, (w as u32, h as u32));
+            return self.add_raster(blob, opacity, &m, (w as u32, h as u32), None);
+        }
+        if image_mask && channels == 1 && *bits == 1.0 {
+            return self.colorized_raster(samples, row, opacity, &m, (w as u32, h as u32));
         }
         let mut rgba = Vec::with_capacity((w * h * 4) as usize);
         for y in 0..h as usize {
@@ -473,13 +511,94 @@ impl<'a> Reader<'a> {
             self.warn("an image VectorCraft can't read was left out");
             return Ok(());
         }
-        self.add_raster(ImageBlob::new("image/png", png), None, &m, (w as u32, h as u32))
+        self.add_raster(ImageBlob::new("image/png", png), None, &m, (w as u32, h as u32), None)
+    }
+
+    /// A 1-bit gray image whose ImageMask is 1 (`samples`, `row` bytes a row): a grayscale image
+    /// colorized with the fill color. Its 0 bits, which open black with ImageMask 0, take that color,
+    /// and its 1 bits are transparent. A fill that isn't a solid color colorizes it black.
+    fn colorized_raster(&mut self, samples: &[u8], row: usize, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32)) -> Result<(), String> {
+        let mut gray = Vec::with_capacity(w as usize * h as usize);
+        for y in 0..h as usize {
+            let line = samples.get(y * row..(y + 1) * row).unwrap_or_default();
+            for x in 0..w as usize {
+                let v = line.get(x / 8).map_or(0, |b| ((b >> (7 - x % 8)) & 1) * 255);
+                gray.push(v);
+            }
+        }
+        let mut png = vec![];
+        let written = image::GrayImage::from_raw(w, h, gray).map(|img| img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png));
+        if !matches!(written, Some(Ok(()))) {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        }
+        let paint = self.mask_paint();
+        self.add_raster(ImageBlob::new("image/png", png), alpha, m, (w, h), Some(paint))
+    }
+
+    /// The color that colorizes an image mask: the fill color, or black when the fill isn't a
+    /// solid color.
+    fn mask_paint(&self) -> Paint {
+        match &self.gs.fill {
+            p @ Paint::Solid { .. } => p.clone(),
+            _ => Paint::solid(vectorcraft_color::Color::BLACK),
+        }
+    }
+
+    /// `XF` (§8.2): an image whose pixels are in the file the `XG` before it names becomes a linked
+    /// image of that file, of its `w` × `h` pixels placed as the matrix maps them, as `XI` places an
+    /// image. The data keeps no pixels or preview of it, so a placeholder is spread over those pixels
+    /// until its file is found. A 1-bit image mask is colorized as `XI` colorizes one. One without
+    /// that file name, or whose operands `XI` couldn't read (no
+    /// matrix, too few numbers, no pixels, or samples of other than 1 or 8 bits), is left out with a
+    /// warning. No pixels are read, so its size isn't held to the limit on `XI`'s samples.
+    fn linked_image(&mut self, vals: Vec<V>, hidden: bool) -> Result<(), String> {
+        let path = self.image_link.take();
+        let operands = Self::image_operands(&vals);
+        let (Some(path), Some((m, n))) = (path, operands) else {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
+        let (&[a, b, c, d, tx, ty], &[_, _, _, _, w, h, bits, ..]) = (m.as_slice(), n.as_slice()) else {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
+        if !(1.0..=MAX_SIDE).contains(&w) || !(1.0..=MAX_SIDE).contains(&h) || ![1.0, 8.0].contains(&bits) {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        }
+        let (w, h) = (w as u32, h as u32);
+        let xf = self.space() * Affine::new([a, b, c, d, tx, ty]) * FLIP;
+        if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        }
+        let Some(png) = missing_placeholder() else {
+            self.warn("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
+        // The placeholder is all the document has of the file: what a missing link shows.
+        let bytes = Arc::new(png);
+        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
+        let key = linked_key(&blob, &path);
+        self.doc.images.entry(key.clone()).or_insert(blob);
+        self.warn(LINKED_PLACEHOLDERS);
+        // A PostScript page doesn't draw the placeholder: there its pixels are left out of the
+        // comparisons with the page.
+        if !hidden && !self.gs.hidden && self.shown() {
+            self.placeholders.push(xf.transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(w), f64::from(h))));
+        }
+        let im = ImageObject { key, width: w, height: h, xf, link: Some(LinkInfo::new(path)), placement: Default::default(), pixels: None };
+        // A 1-bit image mask (ImageMask 1) keeps the color that colorizes it once its file is relinked.
+        let image_mask = bits == 1.0 && n.get(7) == Some(&1.0) && n.get(11) == Some(&1.0);
+        let colorize = image_mask.then(|| self.mask_paint());
+        self.add_image_colorized(im, None, colorize, hidden)
     }
 
     /// Add the image `blob` (`w` × `h` pixels), which the matrix `m` maps into art space, with
     /// `alpha` (its alpha channel, one byte a pixel) as its opacity mask when it hides part of the
-    /// image.
-    fn add_raster(&mut self, blob: ImageBlob, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32)) -> Result<(), String> {
+    /// image, and `colorize` as the color that colorizes it.
+    fn add_raster(&mut self, blob: ImageBlob, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32), colorize: Option<Paint>) -> Result<(), String> {
         // The matrix is an art-space matrix (y up) applied to the pixels with their rows running
         // downwards, (u, -v): pixels → (u, -v) → art space. Flipping the matrix's result instead
         // gives the same place only when the image isn't rotated (b = c = 0).
@@ -496,7 +615,8 @@ impl<'a> Reader<'a> {
         let mask = alpha.and_then(|a| self.alpha_mask(a, w, h, xf));
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
-        self.add_image_masked(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None }, mask, false)
+        let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
+        self.add_image_colorized(im, mask, colorize, false)
     }
 
     /// An image's alpha channel (`w` × `h` bytes) as a grayscale image over the image (`xf`): its
@@ -524,12 +644,21 @@ impl<'a> Reader<'a> {
 
     /// Add an image object with the state's transparency and `mask` as its opacity mask.
     fn add_image_masked(&mut self, im: ImageObject, mask: Option<OpacityMask>, hidden: bool) -> Result<(), String> {
+        self.add_image_colorized(im, mask, None, hidden)
+    }
+
+    /// Add an image object with the state's transparency, `mask` as its opacity mask and
+    /// `colorize` as the color that colorizes it.
+    fn add_image_colorized(&mut self, im: ImageObject, mask: Option<OpacityMask>, colorize: Option<Paint>, hidden: bool) -> Result<(), String> {
         let gs = self.gs.clone();
         let mut node = self.new_node(NodeKind::Image(Box::new(im)), &gs);
         node.opacity = gs.opacity;
         node.blend = gs.blend;
         node.extras_mut().mask = mask.map(Box::new);
-        self.add(node, hidden)
+        node.extras_mut().colorize = colorize.map(Box::new);
+        self.add(node, hidden)?;
+        self.image_tail = self.after_object;
+        Ok(())
     }
 
     /// `~`: the placed file read since `%AI5_BeginPlace` becomes a linked image in its place that
@@ -597,7 +726,7 @@ impl<'a> Reader<'a> {
         // The preview is all the document has of the file: what a missing link shows.
         let bytes = Arc::new(png);
         let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
-        let key = blob.content_key();
+        let key = linked_key(&blob, &path);
         self.doc.images.entry(key.clone()).or_insert(blob);
         self.warn(LINKED_PREVIEWS);
         if let Some(shift) = elsewhere
@@ -712,15 +841,26 @@ pub(super) fn preview_png(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
 }
 
 /// A placed file's path relative to the document's folder (`/` separators): its relative `folder`
-/// (`src/`, `..\art`) followed by its file `name`. `None` when the folder is empty, absolute, or
-/// holds control characters, or when there is no name.
+/// (`src/`, `..\art`) followed by its file `name`; the name alone when the folder is empty (the
+/// document's own folder). `None` when the folder is absolute or holds control characters, or
+/// when there is no name.
 pub(super) fn relative_path(folder: &str, name: &str) -> Option<String> {
     let folder = folder.replace('\\', "/");
     let absolute = folder.starts_with('/') || folder.as_bytes().get(1) == Some(&b':') || folder.contains("://");
-    if folder.is_empty() || absolute || name.is_empty() || folder.chars().chain(name.chars()).any(char::is_control) {
+    if absolute || name.is_empty() || folder.chars().chain(name.chars()).any(char::is_control) {
         return None;
     }
+    if folder.is_empty() {
+        return Some(name.to_string());
+    }
     Some(format!("{}/{name}", folder.trim_end_matches('/')))
+}
+
+/// The image key of a linked image of the file at `path` that shows `blob` (its preview or a
+/// placeholder): the blob's own key and the path's. Images of other files that show the same pixels
+/// have keys of their own, and reading one file's pixels in changes that file's images only.
+fn linked_key(blob: &ImageBlob, path: &str) -> String {
+    format!("{}-{}", blob.content_key(), vectorcraft_doc::links::hash_bytes(path.as_bytes()))
 }
 
 pub(super) fn sane(r: Rect) -> bool {

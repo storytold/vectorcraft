@@ -4808,6 +4808,7 @@ imageTrace	Outline	Kontur
 @msg	graphs come in as plain art, without their data or settings	wykresy są wczytywane jako zwykła grafika, bez ich danych i ustawień
 @msg	an image whose data is cut short was left out	pominięto obraz z uciętymi danymi
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	połączone obrazy pokazują zapisany w pliku podgląd niskiej rozdzielczości, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	połączone obrazy bez podglądu w pliku pokazują symbol zastępczy, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	tekst akapitowy w ramkach niższych niż wiersz wyświetlanej czcionki otrzymał wyższe ramki ({_1}): inaczej tekst nie byłby widoczny
 @msg	its editing data doesn't say where its art is	jego dane edycyjne nie określają położenia kompozycji
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ten plik zapisano bez zgodności z PDF, a jego danych edycyjnych nie można odczytać ({why})

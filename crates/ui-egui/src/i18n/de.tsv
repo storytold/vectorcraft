@@ -4592,6 +4592,7 @@ theme	Appearance	Erscheinungsbild
 @msg	graphs come in as plain art, without their data or settings	Diagramme werden als einfache Grafik übernommen, ohne ihre Daten und Einstellungen
 @msg	an image whose data is cut short was left out	ein Bild mit abgeschnittenen Daten wurde ausgelassen
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	verknüpfte Bilder zeigen die in der Datei gespeicherte Vorschau in niedriger Auflösung, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	verknüpfte Bilder ohne Vorschau in der Datei zeigen einen Platzhalter, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	Flächentext in Rahmen, die für eine Zeile der Schrift, in der er hier erscheint, zu niedrig sind, hat höhere Rahmen bekommen ({_1}): Sonst wäre der Text nicht zu sehen
 @msg	its editing data doesn't say where its art is	seine Bearbeitungsdaten geben nicht an, wo seine Grafik liegt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	diese Datei wurde ohne PDF-Kompatibilität gespeichert, und ihre Bearbeitungsdaten können nicht gelesen werden ({why})

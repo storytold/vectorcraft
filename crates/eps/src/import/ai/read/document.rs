@@ -495,9 +495,20 @@ fn text_wrap(o: &Obj, scale: f64) -> Option<TextWrap> {
 }
 
 impl<'a> Reader<'a> {
-    /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`), and the
-    /// opacity mask it may carry.
+    /// An object's dictionary: its name (`AIArtName`, or the XML id `AI10_ArtUID`), the opacity
+    /// mask it may carry, and in a pattern's definition the mark of the tile's box
+    /// (`AIPattern_Editor_Backing_Tile_Rect`), which leaves that box out of the art.
     pub(super) fn art_dictionary(&mut self, o: &Obj) {
+        // The unpainted box that a pattern's definition marks as its tile's box isn't art.
+        if self.pattern.is_some()
+            && o.nums("AIPattern_Editor_Backing_Tile_Rect").first().copied() == Some(1.0)
+            && self.after_object
+            && let Some(f) = self.frames.last_mut()
+            && f.children.last().is_some_and(|n| matches!(n.kind, NodeKind::Path { .. }) && n.appearance.items.iter().all(|i| i.paint().is_none()))
+        {
+            f.children.pop();
+            return;
+        }
         self.constraint_art(o);
         // A blend's key object or spine.
         if let Some(kind) = o.text("ShapeBlendPathType")
@@ -519,7 +530,8 @@ impl<'a> Reader<'a> {
                 let value =
                     OpacityMask { art: art.clone(), clip: on("Clipping"), invert: on("Inverted"), disabled: on("Disabled"), linked: on("Linked") };
                 if let Some(n) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. })) {
-                    n.extras_mut().mask = Some(Box::new(value));
+                    n.extras_mut().mask = Some(Box::new(value.clone()));
+                    self.each_linked_frame(|n| n.extras_mut().mask = Some(Box::new(value.clone())));
                 } else if !on("Disabled") {
                     self.unreadable("opacity masks without an owning object", false);
                 }
@@ -542,6 +554,7 @@ impl<'a> Reader<'a> {
             && let Some(n) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. }))
         {
             n.extras_mut().wrap = Some(wrap);
+            self.each_linked_frame(|n| n.extras_mut().wrap = Some(wrap));
         }
         // The object's XML id, which the variable library's bindings name it by.
         if let Some(uid) = o.obj("AI10_ArtUID").and_then(Obj::content_text).filter(|u| !u.is_empty())
@@ -883,6 +896,7 @@ impl<'a> Reader<'a> {
             unread_elsewhere: self.unread_elsewhere,
             slot_names: self.slot_names,
             restyled: self.restyled,
+            placeholders: self.placeholders,
             placed_elsewhere: self.placed_elsewhere,
             envelopes_drawn: self.envelopes_drawn,
             styles_read,

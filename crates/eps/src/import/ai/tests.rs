@@ -229,6 +229,163 @@ fn a_note_or_ap_in_a_skipped_section_does_not_reach_the_art_after_it() {
     assert!(!n.shows_center());
 }
 
+/// A node's URL and data (object tags), empty when it has no attributes.
+fn tags(n: &Node) -> (String, Vec<(String, String)>) {
+    n.extras().attrs.as_deref().map(|a| (a.url.clone(), a.data.clone())).unwrap_or_default()
+}
+
+fn tag(id: &str, value: &str) -> (String, String) {
+    (id.to_string(), value.to_string())
+}
+
+/// `/identifier (string) XT` tags the object before it (version 7 specification §7): `AdobeURL`
+/// is its URL, and other tags go to its data in order, an empty string included. Paths, groups,
+/// compound paths, text objects and images take tags.
+#[test]
+fn object_tags_are_kept_on_the_object_before_them() {
+    let [a, b, c, d] = [0.0, 20.0, 40.0, 60.0].map(|x| rect_path(x, 0.0, x + 10.0, 10.0));
+    let text = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(Hi) Tx\nTO\n";
+    let body = format!(
+        "{a}N\n/part_no (A-12) XT\n/AdobeURL (https://example.com/a) XT\n/part_no (A-13) XT\n\
+         u\n{b}f\nU\n/hand () XT\n*u\n{c}f\n{d}f\n*U\n/shape (two \\(parts\\)) XT\n{text}/AdobeURL (https://example.com/t) XT\n{a}f\n"
+    );
+    let r = read(stream7(&layer7("L", &body)).as_bytes()).unwrap();
+    let got: Vec<_> = art(&r.doc).iter().map(|n| tags(n)).collect();
+    assert_eq!(
+        got,
+        [
+            ("https://example.com/a".to_string(), vec![tag("part_no", "A-12"), tag("part_no", "A-13")]),
+            (String::new(), vec![tag("hand", "")]),
+            (String::new(), vec![tag("shape", "two (parts)")]),
+            ("https://example.com/t".to_string(), vec![]),
+            (String::new(), vec![]),
+        ]
+    );
+    assert!(r.warnings.is_empty() && r.unread.is_empty(), "{:?} {:?}", r.warnings, r.unread);
+    // The group's and the compound path's paths keep no tags of their own.
+    for n in &art(&r.doc)[1..3] {
+        assert!(n.children().unwrap().iter().all(|k| k.extras().attrs.is_none()));
+    }
+    // A later `AdobeURL` replaces an earlier one.
+    let body = format!("{a}f\n/AdobeURL (https://example.com/1) XT\n/AdobeURL (https://example.com/2) XT\n");
+    assert_eq!(tags(&art(&read7(&layer7("L", &body)).doc)[0]).0, "https://example.com/2");
+}
+
+/// A tag with no object right before it (at a layer's start, after a state change, after a group
+/// opens) and a tag with an empty identifier tag nothing; one with operands of another kind is an
+/// operator the reader doesn't know.
+#[test]
+fn object_tags_without_an_object_before_them_tag_nothing() {
+    let a = rect_path(0.0, 0.0, 10.0, 10.0);
+    for body in
+        [format!("/first (x) XT\n{a}f\n"), format!("{a}f\n1 w\n/late (x) XT\n"), format!("u\n/inside (x) XT\n{a}f\nU\n"), format!("{a}f\n/ (x) XT\n")]
+    {
+        let doc = read7(&layer7("L", &body)).doc;
+        let mut all = art(&doc);
+        all.extend(all.iter().flat_map(|n| n.children().cloned().unwrap_or_default()).collect::<Vec<_>>());
+        assert!(all.iter().all(|n| n.extras().attrs.is_none()), "{body}");
+    }
+    for bad in ["(x) (y) XT\n", "/id 3 XT\n", "XT\n"] {
+        let err = read(stream7(&layer7("L", &format!("{a}f\n{bad}"))).as_bytes()).unwrap_err();
+        assert!(err.contains("operators VectorCraft doesn't know"), "{bad}: {err}");
+    }
+    // Outside any layer too.
+    let err = read(stream7(&format!("(x) (y) XT\n{}", layer7("L", &format!("{a}f\n")))).as_bytes()).unwrap_err();
+    assert!(err.contains("operators VectorCraft doesn't know"), "{err}");
+}
+
+/// A clipping path's tags are its own, not those of the copy that paints its fill, and a clip
+/// group's tags after `Q` are the group's. One object keeps at most 64 tags in its data.
+#[test]
+fn object_tags_on_clipping_paths_and_the_tag_limit() {
+    let body = format!(
+        "0 Ae\nq\n{RED}{}W\nf\n/edge (clip) XT\n{}f\nQ\n/group (clipped) XT\n",
+        rect_path(5.0, 5.0, 25.0, 25.0),
+        rect_path(0.0, 0.0, 30.0, 30.0)
+    );
+    let doc = read_ok(&layer(&body)).doc;
+    let top = &art(&doc);
+    assert_eq!(top.len(), 1);
+    assert_eq!(tags(&top[0]).1, [tag("group", "clipped")]);
+    let tagged: Vec<_> = top[0].children().unwrap().iter().filter(|k| !tags(k).1.is_empty()).map(|k| k.kind.clone()).collect();
+    assert_eq!(tagged.len(), 1, "{tagged:?}");
+    assert!(matches!(tagged[0], NodeKind::Path { clipping: true, .. }), "{tagged:?}");
+    let many: String = (0..70).map(|i| format!("/t{i} ({i}) XT\n")).collect();
+    let body = format!("{}f\n{many}/AdobeURL (https://example.com) XT\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let (url, data) = tags(&art(&read_ok(&layer(&body)).doc)[0]);
+    assert_eq!(data.len(), 64);
+    assert_eq!(data.last(), Some(&tag("t63", "63")));
+    assert_eq!(url, "https://example.com", "the URL is kept past the limit");
+    // A tag whose identifier or string is longer than 64 KiB is ignored.
+    let long = "x".repeat(64 * 1024 + 1);
+    let body = format!("{}f\n/{long} (a) XT\n/b ({long}) XT\n/c (ok) XT\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    assert_eq!(tags(&art(&read_ok(&layer(&body)).doc)[0]).1, [tag("c", "ok")]);
+}
+
+/// An image takes the tags after it, as any other object does.
+#[test]
+fn object_tags_after_an_image_are_its_own() {
+    let mut data = image("[ 10 0 0 10 50 90 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 3);
+    let at = data.windows(6).position(|w| w == b"N\r\nLB\r").unwrap();
+    data.splice(at..at, b"/AdobeURL (https://example.com/i) XT\r\n/sku (I-1) XT\r\n".iter().copied());
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Image(_)), "{a:#?}");
+    assert_eq!(tags(&a[0]), ("https://example.com/i".to_string(), vec![tag("sku", "I-1")]));
+}
+
+/// The state written after a group's end or a gradient mesh's `/End X!` is still theirs when the
+/// object's tags come first.
+#[test]
+fn object_tags_before_a_group_or_mesh_state_leave_it_theirs() {
+    let body = format!("{RED}0 Ae\nu\n0 0.5 0 0 0 Xy\n{}f\nU\n/hand (x) XT\n0 0 Xd\n6 () XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&layer(&body)).doc;
+    assert_eq!((art(&doc)[0].opacity, tags(&art(&doc)[0]).1), (0.5, vec![tag("hand", "x")]));
+    let corner =
+        |x: i32, y: i32, next: (i32, i32), prev: (i32, i32)| format!("%_[1 1 1 1 {x} {y} {} {} 1 {} {} 1] /N X#\n", next.0, next.1, prev.0, prev.1);
+    let mesh = format!(
+        "/Mesh X!\n%_(DeviceRGB) /CS X#\n%_[0 0] /P X#\n{}{}{}{}%_0 /E X#\n/End X!\n",
+        corner(0, 0, (0, 10), (10, 0)),
+        corner(0, 40, (10, 40), (0, 30)),
+        corner(40, 40, (40, 30), (30, 40)),
+        corner(40, 0, (30, 0), (40, 10)),
+    );
+    let doc = read_ok(&layer(&format!("{mesh}/hand (y) XT\n1 0.35 0 0 0 Xy\n0 0 Xd\n6 () XW\n"))).doc;
+    let (m, l) = (&art(&doc)[0], &doc.layers[0]);
+    assert!(matches!(m.kind, NodeKind::Mesh(_)), "{m:#?}");
+    assert_eq!((m.opacity, m.blend, tags(m).1), (0.35, BlendMode::Multiply, vec![tag("hand", "y")]));
+    assert_eq!((l.opacity, l.blend), (1.0, BlendMode::Normal), "not the layer's");
+}
+
+/// The tags of an object whose drawn look stands for it (its style not found) stay with the look.
+#[test]
+fn a_drawn_look_keeps_its_objects_tags() {
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let body = format!(
+        "0 Ae\nu\n{RED}{}f\nU\n0 0 Xd\n6 () XW\n%_{hidden_rect}n\n%_/AdobeURL (https://example.com/n) XT\n%_/sku (N-1) XT\n1 (Gone style) XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0),
+    );
+    let r = read_ok(&layer(&body));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(tags(&a[0]), ("https://example.com/n".to_string(), vec![tag("sku", "N-1")]));
+    // A look with tags of its own keeps them, and takes the object's after them.
+    let a = art(&read_ok(&layer(&body.replace("U\n0 0 Xd", "U\n/own (L) XT\n0 0 Xd"))).doc);
+    assert_eq!(tags(&a[0]), ("https://example.com/n".to_string(), vec![tag("own", "L"), tag("sku", "N-1")]));
+}
+
+/// Tags in a brush's art don't keep it from being read, and stay out of the art: it isn't an object
+/// of the document.
+#[test]
+fn a_brushs_art_with_tags_is_read_without_them() {
+    let art_ = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n0 g\n{}f\n/sku (D-1) XT\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 4.0, 4.0));
+    let r = read_ok(&format!("{art_}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let vectorcraft_brush::BrushKind::Scatter(s) = brush_named(&lib, "Spray") else { panic!("scatter: {:?}", r.warnings) };
+    assert_eq!(s.art.geometric_bounds().map(|b| (b.width(), b.height())), Some((4.0, 4.0)));
+    assert!(s.art.extras().attrs.is_none(), "{:?}", s.art.extras().attrs);
+}
+
 #[test]
 fn paths_colours_and_strokes() {
     let art_ = format!(
@@ -453,6 +610,46 @@ fn a_gradient_stop_naming_a_process_colour_leaves_its_swatch_process() {
 /// stroke of no length), `E`.
 const DOTS: &str = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 8 8\n%_0 A\n%_0 Xw\n%_0 Ae\n%_u\n%_0 O\n%_0 8 m\n%_8 8 L\n%_8 0 L\n%_0 0 L\n%_0 8 L\n%_n\n\
                     %_0 R\n%_0 0 0 1 K\n%_1 J 0 j 2 w 4 M []0 d\n%_4 4 m\n%_4 4 L\n%_S\n%_U\n%_/ArtDictionary :\n%_;\n%_\n%_9 () XW\nE\n%AI3_EndPattern\n";
+
+/// An unpainted box that a pattern's definition marks as its tile's box isn't art; a painted one
+/// with the mark stays.
+#[test]
+fn a_patterns_marked_tile_box_is_not_art() {
+    let mark = "%_/ArtDictionary :\n%_1 /Bool (AIPattern_Editor_Backing_Tile_Rect) ,\n%_;\n%_\n";
+    let def = |paint: &str, op: &str| {
+        format!(
+            "%AI3_BeginPattern: (Box)\n(Box) 0 0 8 8\n%_0 A\n%_0 Xw\n%_{paint}0 XR\n%_0 8 m\n%_8 8 L\n%_8 0 L\n%_0 0 L\n%_0 8 L\n%_{op}\n{mark}\
+             %_0 0 0 1 k\n%_2 2 m\n%_6 2 L\n%_6 6 L\n%_2 6 L\n%_f\nE\n%AI3_EndPattern\n"
+        )
+    };
+    let layer = format!(
+        "%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n(Box) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\nLB\n%AI5_EndLayer--\n",
+        rect_path(10.0, 20.0, 70.0, 80.0)
+    );
+    let s = read_ok(&format!("{}{layer}", def("", "n")));
+    let art = &s.doc.pattern("Box").unwrap().art;
+    assert_eq!(art.len(), 1, "the square only");
+    assert_eq!(art[0].geometric_bounds(), Some(Rect::new(2.0, -6.0, 6.0, -2.0)));
+    let s = read_ok(&format!("{}{layer}", def("1 0 0 0 k\n%_", "f")));
+    assert_eq!(s.doc.pattern("Box").unwrap().art.len(), 2, "a painted box is art");
+    // The mark after a group or a compound path of an unpainted box leaves it in the art.
+    for (open, close, kind) in [("u", "U", "group"), ("*u", "*U", "compound path")] {
+        let def = format!(
+            "%AI3_BeginPattern: (Box)\n(Box) 0 0 8 8\n%_0 A\n%_0 Xw\n%_{open}\n%_0 8 m\n%_8 8 L\n%_8 0 L\n%_0 0 L\n%_0 8 L\n%_n\n%_{close}\n{mark}\
+             %_0 0 0 1 k\n%_2 2 m\n%_6 2 L\n%_6 6 L\n%_2 6 L\n%_f\nE\n%AI3_EndPattern\n"
+        );
+        let s = read_ok(&format!("{def}{layer}"));
+        assert_eq!(s.doc.pattern("Box").unwrap().art.len(), 2, "after a {kind}");
+    }
+    // Outside a pattern's definition the mark leaves the box in the art.
+    let marked = format!(
+        "%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n0 XR\n{}n\n{mark}0 0 0 1 k\n{}f\nLB\n%AI5_EndLayer--\n",
+        rect_path(10.0, 20.0, 70.0, 80.0),
+        rect_path(20.0, 30.0, 40.0, 50.0)
+    );
+    let s = read_ok(&marked);
+    assert_eq!(s.doc.layers[0].children().unwrap().len(), 2, "outside a pattern");
+}
 
 /// Patterns are read into pattern swatches, and `p` fills with one (#1025): the art keeps its
 /// layers, the fill places the tiles by its matrix.
@@ -863,18 +1060,132 @@ fn a_clipping_paths_stroke_stays_on_the_clipping_path() {
         children(&read_ok(&format!("{defs}{}", layer(&gradient))).doc),
         [(true, None, false, Some((blue, 3.0))), (false, None, true, None), (false, red, false, None)]
     );
-    // Several clipping paths clip as one compound path, which keeps their stroke when they all have the same one.
+    // Several clipping paths each keep their own stroke, opacity and blend mode: the second one clips a clipping group
+    // inside the first one's.
     let inner = rect_path(10.0, 10.0, 20.0, 20.0);
-    let compound_stroke = |first: &str, second: &str| {
+    let strokes = |first: &str, second: &str| {
         let body = format!("0 Ae\nq\n{RED}{under}f\n0 0 1 0 0 0 1 XA\n3 w\n{first}{clip}W\nS\n{second}{inner}W\nS\nQ\n");
         let doc = read_ok(&layer(&body)).doc;
         let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
-        assert!(matches!(children[0].kind, NodeKind::Compound { .. }), "{:?}", children[0].kind);
-        (children[0].appearance.stroke().map(|s| (s.paint.color(), s.width)), children[0].opacity, children[0].blend)
+        let NodeKind::Group { children: nested, clip: true } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+        [&children[0], &nested[0]].map(|c| {
+            assert!(matches!(c.kind, NodeKind::Path { clipping: true, .. }), "{:?}", c.kind);
+            (c.appearance.stroke().map(|s| (s.paint.color(), s.width)), c.opacity, c.blend)
+        })
     };
-    assert_eq!(compound_stroke("", ""), (Some((blue, 3.0)), 1.0, BlendMode::Normal));
-    assert_eq!(compound_stroke("9 0.5 0 0 0 Xy\n", ""), (Some((blue, 3.0)), 0.5, BlendMode::Lighten));
-    assert_eq!(compound_stroke("", "5 w\n"), (None, 1.0, BlendMode::Normal), "strokes that differ");
+    let plain = (Some((blue, 3.0)), 1.0, BlendMode::Normal);
+    assert_eq!(strokes("", ""), [plain, plain]);
+    assert_eq!(strokes("", "9 0.5 0 0 0 Xy\n"), [plain, (Some((blue, 3.0)), 0.5, BlendMode::Lighten)]);
+    assert_eq!(strokes("", "5 w\n"), [plain, (Some((blue, 5.0)), 1.0, BlendMode::Normal)], "strokes that differ");
+}
+
+/// Several clipping paths in a clipping group, a layer or an opacity mask's art clip to their intersection: each `W`
+/// reduces the clip set by the ones before it (AI7 spec §5.6.2). Each clipping path after the first clips a clipping
+/// group inside the one before it, and the innermost one holds the art; a clipping path's painted fill stays at its own
+/// level.
+#[test]
+fn several_clipping_paths_clip_to_their_intersection() {
+    let square = rect_path(0.0, 0.0, 80.0, 80.0);
+    let (a, b) = (rect_path(20.0, 20.0, 60.0, 60.0), rect_path(25.0, 25.0, 70.0, 55.0));
+    // (clipping, fill color, bounds) of a clipping group's children, with a nested clipping group's children listed
+    // after it.
+    type Level = Vec<(bool, Option<Color>, Option<Rect>)>;
+    fn levels(children: &[Arc<Node>]) -> Vec<Level> {
+        let mut out = vec![];
+        let mut at = children;
+        loop {
+            out.push(at.iter().map(|c| (matches!(c.kind, NodeKind::Path { clipping: true, .. }), fill(c).color(), c.geometric_bounds())).collect());
+            let Some(NodeKind::Group { children, clip: true }) = at.last().map(|c| &c.kind) else { return out };
+            at = children;
+        }
+    }
+    let red = Some(Color::rgb(1.0, 0.0, 0.0));
+    let blue = Some(Color::rgb(0.0, 0.0, 1.0));
+    // A rectangle as written, in the document's coordinates (y down from the 100 pt high page's top).
+    let r = |x0, y0, x1, y1| Some(Rect::new(x0, 100.0 - y1, x1, 100.0 - y0));
+    let (ra, rb) = (r(20.0, 20.0, 60.0, 60.0), r(25.0, 25.0, 70.0, 55.0));
+    let group = |body: &str| {
+        let doc = read_ok(&layer(body)).doc;
+        let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+        levels(children)
+    };
+    // The art after both clipping paths, in a clipping group of the second inside the first's.
+    let two = group(&format!("0 Ae\nq\n{a}h\nW\nn\n{b}h\nW\nn\n{RED}{square}f\nQ\n"));
+    assert_eq!((two.len(), two[0].len()), (2, 2), "{two:?}");
+    assert_eq!(two[0][0], (true, None, ra));
+    assert_eq!(two[1], [(true, None, rb), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
+    // Three clipping paths nest twice; a filled clipping path's painted copy is clipped by the paths before it only.
+    let three =
+        group(&format!("0 Ae\nq\n{a}h\nW\nn\n0 0 1 0 0 0 1 Xa\n{b}h\nW\nf\n{}h\nW\nn\n{RED}{square}f\nQ\n", rect_path(30.0, 10.0, 50.0, 90.0)));
+    assert_eq!(three.len(), 3, "{three:?}");
+    assert_eq!(three[1][..2], [(true, None, rb), (false, blue, rb)]);
+    assert_eq!(three[2], [(true, None, r(30.0, 10.0, 50.0, 90.0)), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
+    // As with one clipping path, every object in the group is clipped by all of them, in the order written, wherever
+    // it is written.
+    let small = rect_path(0.0, 0.0, 10.0, 10.0);
+    let before = group(&format!("0 Ae\nq\n{RED}{small}f\n{a}h\nW\nn\n{b}h\nW\nn\n0 0 1 0 0 0 1 Xa\n{square}f\nQ\n"));
+    assert_eq!(before.len(), 2, "{before:?}");
+    assert_eq!(before[1], [(true, None, rb), (false, red, r(0.0, 0.0, 10.0, 10.0)), (false, blue, r(0.0, 0.0, 80.0, 80.0))]);
+    let between = group(&format!("0 Ae\nq\n{RED}{small}f\n{a}h\nW\nn\n0 0 1 0 0 0 1 Xa\n{square}f\n{b}h\nW\nn\n{RED}{square}f\nQ\n"));
+    assert_eq!((between.len(), between[0].len()), (2, 2), "{between:?}");
+    assert_eq!(
+        between[1],
+        [(true, None, rb), (false, red, r(0.0, 0.0, 10.0, 10.0)), (false, blue, r(0.0, 0.0, 80.0, 80.0)), (false, red, r(0.0, 0.0, 80.0, 80.0))]
+    );
+    // A compound clipping path and a clipping path after it: their union, then that intersected with the second.
+    let c = rect_path(30.0, 10.0, 50.0, 90.0);
+    let mixed = format!("0 Ae\nq\n*u\n{a}h\nW\nn\n{b}h\nW\nn\n*U\n{c}h\nW\nn\n{RED}{square}f\nQ\n");
+    let doc = read_ok(&layer(&mixed)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Compound { .. }) && children.len() == 2, "{children:?}");
+    assert_eq!(levels(children)[1], [(true, None, r(30.0, 10.0, 50.0, 90.0)), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
+    // Clipping paths alone in a group (`u <path> W n <path> W n U`) clip the clipping group around it the same way.
+    let grouped = group(&format!("0 Ae\nq\n{RED}{square}f\n0 Ae\nu\n{a}h\nW\nn\n{b}h\nW\nn\nU\nQ\n"));
+    assert_eq!(grouped.len(), 2, "{grouped:?}");
+    assert_eq!(grouped[1], [(true, None, rb), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
+    // A compound path of clipping paths is still one clipping path, their union.
+    let compound = format!("0 Ae\nq\n*u\n{a}h\nW\nn\n{b}h\nW\nn\n*U\n{RED}{square}f\nQ\n");
+    let doc = read_ok(&layer(&compound)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Compound { .. }) && children.len() == 2, "{children:?}");
+    // Two clipping paths in a layer: the layer clips by the first, a clipping group in it by the second.
+    let doc = read_ok(&layer(&format!("{a}h\nW\nn\n{b}h\nW\nn\n{RED}{square}f\n"))).doc;
+    let NodeKind::Layer { clip: true, children, .. } = &doc.layers[0].kind else { panic!("{:?}", doc.layers[0].kind) };
+    let in_layer = levels(children);
+    assert_eq!(in_layer.len(), 2, "{in_layer:?}");
+    assert_eq!(in_layer[1], [(true, None, rb), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
+    // Two clipping paths in an opacity mask's art: the art clips by the first, a clipping group in it by the second.
+    let mask_art: String = format!("{a}h\nW\nn\n{b}h\nW\nn\n1 g\n{square}f\n").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let doc = read_ok(&layer(&format!("{RED}{square}f\n{mask}"))).doc;
+    let m = art(&doc)[0].extras().mask.clone().unwrap();
+    let NodeKind::Group { children, clip: true } = &m.art.kind else { panic!("{:?}", m.art.kind) };
+    let in_mask = levels(children);
+    assert_eq!(in_mask.len(), 2, "{in_mask:?}");
+    assert_eq!((in_mask[0][0].0, in_mask[0][0].2, in_mask[1][0]), (true, ra, (true, None, rb)));
+    assert_eq!(in_mask[1].len(), 2, "{in_mask:?}");
+    // Clipping paths are nested as far as the document's depth limit allows; past it they are refused rather than
+    // merged away, in a clipping group, a layer and an opacity mask's art.
+    let fits = |text: &dyn Fn(usize) -> String| (2..400).take_while(|n| read(stream(&layer(&text(*n))).as_bytes()).is_ok()).last().unwrap();
+    let deep = |n: usize, last: &str| format!("0 Ae\nq\n{}{last}{RED}{square}f\nQ\n", format!("{a}h\nW\nn\n").repeat(n));
+    // The layer is 1 deep, the clipping group 2, and the art in the innermost of `n` levels `n + 2`.
+    let in_group = fits(&|n| deep(n, ""));
+    assert_eq!(in_group, vectorcraft_doc::MAX_DEPTH - 2);
+    let r = read_ok(&layer(&deep(in_group, "")));
+    let NodeKind::Group { children, clip: true } = &art(&r.doc)[0].kind else { panic!("{:?}", art(&r.doc)[0].kind) };
+    assert_eq!(levels(children).len(), in_group, "{:?}", r.warnings);
+    assert!(read(stream(&layer(&deep(400, ""))).as_bytes()).unwrap_err().contains("nested too deeply"));
+    let in_layer = fits(&|n| format!("{}{RED}{square}f\n", format!("{a}h\nW\nn\n").repeat(n)));
+    assert_eq!(in_layer, vectorcraft_doc::MAX_DEPTH - 1);
+    let in_mask = fits(&|n| {
+        let art: String = format!("{}1 g\n{square}f\n", format!("{a}h\nW\nn\n").repeat(n)).lines().map(|l| format!("%_{l}\n")).collect();
+        format!("{RED}{square}f\n%_/ArtDictionary :\n%_/Mask :\n%_X=\n{art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n")
+    });
+    // The masked object is 2 deep and its mask's art 3.
+    assert_eq!(in_mask, vectorcraft_doc::MAX_DEPTH - 3);
+    // A compound clipping path holds its subpaths one level down: as the innermost one, it adds a level.
+    let compound_last = format!("*u\n{a}h\nW\nn\n{b}h\nW\nn\n*U\n");
+    assert!(read(stream(&layer(&deep(in_group - 1, &compound_last))).as_bytes()).unwrap_err().contains("nested too deeply"));
 }
 
 /// A clipping group's clipping path can sit alone in a group of its own, after the art it clips (`q … u <path> W n U
@@ -1799,6 +2110,35 @@ fn a_drawn_look_that_is_an_image_stands_for_its_object() {
     assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
 }
 
+/// The name and opacity mask after an image follow the operators that end its raster: `XH`, the
+/// versioned `Xr` and the `N` after `%AI5_EndRaster`.
+#[test]
+fn an_images_name_and_mask_follow_the_end_of_its_raster() {
+    let mask = "%_/ArtDictionary :\r\n%_/Mask :\r\n%_X=\r\n%_0 g\r\n%_0 0 m\r\n%_5 0 l\r\n%_5 5 l\r\n%_f\r\n%_X+\r\n%_ (Art) ,\r\n\
+                %_0 /Bool (Clipping) ,\r\n%_0 /Bool (Inverted) ,\r\n%_0 /Bool (Disabled) ,\r\n%_1 /Bool (Linked) ,\r\n%_; (AI9_Mask) ,\r\n\
+                %_/XMLUID : (Photo) ; (AI10_ArtUID) ,\r\n%_;\r\n%_\r\n";
+    for tail in [
+        "XH\r\n%AI5_EndRaster\r\nN\r\n",
+        "XH\r\n%AI17_Begin_Content_if_version_gt:24 17\r\n72 72 Xr\r\n%AI17_End_Versioned_Content\r\n%AI5_EndRaster\r\nN\r\n",
+    ] {
+        let mut data = image("[ 10 0 0 10 50 90 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 7);
+        let at = data.windows(6).position(|w| w == b"XH\r\n%A").unwrap();
+        let end = data.windows(6).position(|w| w == b"N\r\nLB\r").unwrap() + 3;
+        data.splice(at..end, [tail, mask].concat().into_bytes());
+        let r = read(&data).unwrap();
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Image(_)), "{:?}", a[0].kind);
+        assert_eq!(a[0].name.as_deref(), Some("Photo"));
+        assert!(a[0].extras().mask.is_some());
+    }
+    // An operator of another kind in between ends the image: the name has no object.
+    let mut data = image("[ 10 0 0 10 50 90 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 7);
+    let end = data.windows(6).position(|w| w == b"N\r\nLB\r").unwrap() + 3;
+    data.splice(end..end, b"0 A\r\n%_/ArtDictionary :\r\n%_/XMLUID : (Photo) ; (AI10_ArtUID) ,\r\n%_;\r\n%_\r\n".to_vec());
+    assert_eq!(art(&read(&data).unwrap().doc)[0].name, None);
+}
+
 fn pixels(doc: &Document) -> (image::RgbaImage, kurbo::Affine) {
     let a = art(doc);
     let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
@@ -1831,6 +2171,61 @@ fn one_bit_images_read_each_channel() {
     let doc = read(&one_bit(image("[ 1 0 0 1 0 100 ]", (3, 1), ("DeviceGray", 1, 0), b"a0", 5), 1)).unwrap().doc;
     let img = pixels(&doc).0;
     assert_eq!((0..3).map(|x| img.get_pixel(x, 0).0[0]).collect::<Vec<_>>(), [255, 0, 255]);
+}
+
+/// A gray image `w` × 1 in hex with ImageMask `mask` and `bits` bits a pixel, after the fill `fill`.
+fn masked_gray(fill: &str, bits: u32, mask: u32, w: u32, hex: &[u8]) -> Vec<u8> {
+    let text = String::from_utf8(image("[ 1 0 0 1 0 100 ]", (w, 1), ("DeviceGray", 1, 0), hex, hex.len())).unwrap();
+    text.replacen(" 8 1 0 0 1 0 ", &format!(" {bits} 1 0 0 0 {mask} "), 1).replacen("(L) Ln\n", &format!("(L) Ln\n{fill}"), 1).into_bytes()
+}
+
+/// ImageMask 1 on a 1-bit gray image: the image is colorized with the fill color, so its black
+/// pixels take the color and its white ones are transparent. ImageMask 0 keeps the opaque image.
+#[test]
+fn image_masks_are_colorized_with_the_fill() {
+    // 4 × 1 at 1 bit: black, white, white, black (0110).
+    let r = read(&masked_gray("0 0 1 0 k\n", 1, 1, 4, b"60")).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    let Some(Paint::Solid { color, .. }) = a[0].extras().colorize.as_deref() else { panic!("{:?}", a[0].extras().colorize) };
+    assert_eq!(color.to_rgba8(1.0), Color::cmyk(0.0, 0.0, 1.0, 0.0).to_rgba8(1.0));
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    let blob = &r.doc.images[&im.key];
+    assert!(blob.gray_source().is_some_and(|g| !g.alpha), "an image a fill color can colorize");
+    let img = pixels(&r.doc).0;
+    assert_eq!(
+        (0..4).map(|x| img.get_pixel(x, 0).0).collect::<Vec<_>>(),
+        [[0, 0, 0, 255], [255, 255, 255, 255], [255, 255, 255, 255], [0, 0, 0, 255]]
+    );
+    // How much of the color each pixel shows: the black ones only.
+    assert_eq!(blob.coverage().map(|c| c.2), Some(vec![255, 0, 0, 255]));
+    // A spot color keeps its swatch and tint.
+    let spot = "0 0 1 0 (Ink) 0.5 0 Xx\n";
+    let a = art(&read(&masked_gray(spot, 1, 1, 4, b"60")).unwrap().doc);
+    assert!(
+        matches!(a[0].extras().colorize.as_deref(), Some(Paint::Solid { swatch: Some(s), tint, .. }) if s == "Ink" && (*tint - 0.5).abs() < 1e-6),
+        "{:?}",
+        a[0].extras().colorize
+    );
+    // A fill that isn't a solid color (here a pattern) colorizes it black.
+    let patterned = String::from_utf8(masked_gray("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n", 1, 1, 4, b"60")).unwrap();
+    let doc = read(patterned.replacen("%AI5_BeginLayer", &format!("{DOTS}%AI5_BeginLayer"), 1).as_bytes()).unwrap().doc;
+    let a = art(&doc);
+    let Some(Paint::Solid { color, swatch: None, .. }) = a[0].extras().colorize.as_deref() else { panic!("{:?}", a[0].extras().colorize) };
+    assert_eq!(color.to_rgba8(1.0), Color::BLACK.to_rgba8(1.0));
+    // An 8-bit gray image with ImageMask 1 opens as before, with no color.
+    let doc = read(&masked_gray("0 1 0 0 k\n", 8, 1, 2, b"00ff")).unwrap().doc;
+    assert!(art(&doc)[0].extras().colorize.is_none());
+    assert_eq!(pixels(&doc).0.get_pixel(1, 0).0, [255, 255, 255, 255]);
+    // ImageMask 0: the opaque image, with no color.
+    let doc = read(&masked_gray("0 0 1 0 k\n", 1, 0, 4, b"60")).unwrap().doc;
+    assert!(art(&doc)[0].extras().colorize.is_none());
+    assert_eq!(pixels(&doc).0.get_pixel(0, 0).0, [0, 0, 0, 255]);
+    // An RGB image can't take a color: ImageMask 1 leaves it as it is.
+    let text = String::from_utf8(image("[ 1 0 0 1 0 100 ]", (1, 1), ("DeviceRGB", 3, 0), b"ff0000", 6)).unwrap();
+    let doc = read(text.replacen(" 8 3 0 0 1 0 ", " 8 3 0 0 0 1 ", 1).as_bytes()).unwrap().doc;
+    assert!(art(&doc)[0].extras().colorize.is_none());
+    assert_eq!(pixels(&doc).0.get_pixel(0, 0).0, [255, 0, 0, 255]);
 }
 
 #[test]
@@ -1913,6 +2308,111 @@ fn a_rotated_image_is_placed_as_its_matrix_maps_it() {
         let got = xf * Point::new(u, v);
         assert!((got - want).hypot() < 1e-9, "pixel ({u}, {v}): {got:?}, want {want:?}");
     }
+}
+
+/// A raster object in the version 7 form (§8): `%AI5_BeginRaster`, `head` (a link's `XG`, or
+/// nothing), the operands `[matrix] 0 0 w h w h 8 3 0 0 0 0`, the operator `op` and `tail` (an
+/// `XI`'s samples on `%` lines), `%AI5_EndRaster`.
+fn raster7(head: &str, matrix: &str, (w, h): (u32, u32), op: &str, tail: &str) -> String {
+    format!("%AI5_File:\n%AI5_BeginRaster\n{head}{matrix} 0 0 {w} {h} {w} {h} 8 3 0 0 0 0 {op}\n{tail}%AI5_EndRaster\n")
+}
+
+/// A linked 1-bit gray image with ImageMask 1 keeps the fill color as the color that colorizes it,
+/// as an embedded one does. Other linked images have no color.
+#[test]
+fn linked_image_masks_are_colorized_with_the_fill() {
+    let m = "[ 1 0 0 1 0 0 ]";
+    let linked = |bits_kind_mask: &str| {
+        let xf = raster7("(a.tif) 0 XG\n", m, (2, 2), "XF", "").replace(" 8 3 0 0 0 0 XF", &format!(" {bits_kind_mask} XF"));
+        let r = read(stream7(&layer7("L", &format!("0 0 1 0 (Ink) 0.5 0 Xx\n{xf}"))).as_bytes()).unwrap();
+        let a = art(&r.doc);
+        assert!(matches!(&a[0].kind, NodeKind::Image(im) if im.link.is_some()), "{:?} {:?}", a, r.warnings);
+        a[0].extras().colorize.as_deref().cloned()
+    };
+    assert!(
+        matches!(linked("1 1 0 0 0 1"), Some(Paint::Solid { swatch: Some(s), tint, .. }) if s == "Ink" && (tint - 0.5).abs() < 1e-6),
+        "a 1-bit image mask"
+    );
+    assert_eq!(linked("1 1 0 0 0 0"), None, "ImageMask 0");
+    assert_eq!(linked("8 1 0 0 0 1"), None, "8-bit gray");
+    assert_eq!(linked("8 3 0 0 0 1"), None, "RGB");
+}
+
+/// A linked image in the version 7 form (§8.2, §8.3), `(path) modified XG` and then `XF` with no
+/// samples, is a linked image of that file. The data keeps no pixels of it, so it shows a
+/// placeholder over the place the matrix maps the image's pixels to, as an embedded image (`XI`)
+/// of the same operands is placed.
+#[test]
+fn a_version_7_linked_image_shows_a_placeholder_where_the_image_is() {
+    let (s, c) = 30f64.to_radians().sin_cos();
+    for m in [[2.0, 0.0, 0.0, 3.0, 100.0, 400.0], [3.0 * c, 3.0 * s, -2.0 * s, 2.0 * c, 40.0, 60.0]] {
+        let matrix = format!("[ {} ]", m.map(|v| v.to_string()).join(" "));
+        let linked = raster7("(Macintosh HD:Images:photo.tif) 0 XG\n", &matrix, (10, 20), "XF", "");
+        let embedded = raster7("", &matrix, (10, 20), "XI", &"%FF0000\n".repeat(200));
+        let r = read(stream7(&layer7("L", &format!("{linked}{embedded}"))).as_bytes()).unwrap();
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 2, "{:?}", r.warnings);
+        let (NodeKind::Image(link), NodeKind::Image(emb)) = (&a[0].kind, &a[1].kind) else { panic!("{:?}", a) };
+        assert_eq!(link.link.as_ref().map(|l| l.path.as_str()), Some("Macintosh HD:Images:photo.tif"));
+        assert_eq!(emb.link, None, "an image whose samples follow stays embedded");
+        assert!(r.doc.images[&link.key].is_proxy(), "the placeholder is what a missing link shows");
+        // The file's pixels, placed as the embedded image's are: relinking keeps that size.
+        assert_eq!((link.width, link.height, link.xf), (emb.width, emb.height, emb.xf));
+        assert_eq!((link.width, link.height), (10, 20));
+        assert_eq!(r.warnings.iter().filter(|w| *w == read::LINKED_PLACEHOLDERS).count(), 1, "{:?}", r.warnings);
+        assert!(!r.warnings.iter().any(|w| w.contains("left out")), "{:?}", r.warnings);
+    }
+    // Images of other files keep images of their own, though each shows the same placeholder; two
+    // of one file share theirs.
+    let m = "[ 1 0 0 1 0 100 ]";
+    let three = ["(a.tif) 0 XG\n", "(b.tif) 0 XG\n", "(a.tif) 0 XG\n"].map(|xg| raster7(xg, m, (2, 2), "XF", "")).concat();
+    let r = read(stream7(&layer7("L", &three)).as_bytes()).unwrap();
+    let keys: Vec<_> = art(&r.doc).iter().filter_map(|n| if let NodeKind::Image(im) = &n.kind { Some(im.key.clone()) } else { None }).collect();
+    assert!(matches!(&keys[..], [a, b, c] if a != b && a == c), "{keys:?}");
+    assert_eq!(r.doc.images.len(), 2);
+}
+
+/// `XG` names the file of the `XF` after it only: an `XF` without a file name before it, after an
+/// `XG` with operands of another shape or an empty path, or after an image that took the name,
+/// is left out with a warning, as is one whose operands `XI` couldn't read. Of two `XG`s, the
+/// second names the file.
+#[test]
+fn a_version_7_linked_image_without_its_file_name_is_left_out_with_a_warning() {
+    let m = "[ 1 0 0 1 0 100 ]";
+    let embedded = raster7("() 1 XG\n", m, (1, 1), "XI", "%FF0000\n");
+    for (what, src) in [
+        ("no XG", raster7("", m, (2, 2), "XF", "")),
+        ("a name, not a string", raster7("/photo 0 XG\n", m, (2, 2), "XF", "")),
+        ("no modified flag", raster7("(a.tif) XG\n", m, (2, 2), "XF", "")),
+        ("an empty path", raster7("() 0 XG\n", m, (2, 2), "XF", "")),
+        ("taken by an embedded image", format!("{}{}", raster7("(a.tif) 0 XG\n", m, (1, 1), "XI", "%FF0000\n"), raster7("", m, (2, 2), "XF", ""))),
+        ("named in an earlier raster object", format!("%AI5_BeginRaster\n(a.tif) 0 XG\n%AI5_EndRaster\n{}", raster7("", m, (2, 2), "XF", ""))),
+        ("named outside a raster object", format!("(a.tif) 0 XG\n{}", raster7("", m, (2, 2), "XF", ""))),
+        ("too few operands", raster7("(a.tif) 0 XG\n", m, (2, 2), "XF", "").replace(" 8 3 0 0 0 0 XF", " 8 3 0 XF")),
+        ("no matrix", raster7("(a.tif) 0 XG\n", "", (2, 2), "XF", "")),
+        ("a matrix with no area", raster7("(a.tif) 0 XG\n", "[ 0 0 0 0 0 0 ]", (2, 2), "XF", "")),
+        ("no pixels", raster7("(a.tif) 0 XG\n", m, (0, 2), "XF", "")),
+        ("a side past the largest", raster7("(a.tif) 0 XG\n", m, (2_000_000, 2), "XF", "")),
+        ("samples of 7 bits", raster7("(a.tif) 0 XG\n", m, (2, 2), "XF", "").replace(" 8 3 0 0 0 0 XF", " 7 3 0 0 0 0 XF")),
+    ] {
+        let body = format!("{embedded}{src}");
+        let r = read(stream7(&layer7("L", &body)).as_bytes()).unwrap();
+        let a = art(&r.doc);
+        assert_eq!(a.len(), body.matches(" XI\n").count(), "{what}: {:?}", r.warnings);
+        assert!(a.iter().all(|n| matches!(&n.kind, NodeKind::Image(im) if im.link.is_none())), "{what}: the embedded images only");
+        let left_out = r.warnings.iter().filter(|w| *w == "an image VectorCraft can't read was left out").count();
+        assert_eq!(left_out, 1, "{what}: {:?}", r.warnings);
+        assert!(!r.warnings.iter().any(|w| w == read::LINKED_PLACEHOLDERS), "{what}: {:?}", r.warnings);
+    }
+    // More pixels than an embedded image may have: no pixels are read, so the linked image comes in.
+    let r = read(stream7(&layer7("L", &raster7("(a.tif) 0 XG\n", m, (100_000, 100_000), "XF", ""))).as_bytes()).unwrap();
+    let a = art(&r.doc);
+    assert!(matches!(&a[..], [n] if matches!(&n.kind, NodeKind::Image(im) if (im.width, im.height) == (100_000, 100_000))), "{a:?}");
+    assert!(!r.warnings.iter().any(|w| w == read::IMAGE_TOO_LARGE), "{:?}", r.warnings);
+    let twice = raster7("(a.tif) 0 XG\n(b.tif) 0 XG\n", m, (2, 2), "XF", "");
+    let r = read(stream7(&layer7("L", &twice)).as_bytes()).unwrap();
+    let a = art(&r.doc);
+    assert!(matches!(&a[..], [n] if matches!(&n.kind, NodeKind::Image(im) if im.link.as_ref().is_some_and(|l| l.path == "b.tif"))), "{a:?}");
 }
 
 /// CMYK images keep their ink amounts, as the file's PDF part keeps them, and an alpha channel
@@ -2039,10 +2539,11 @@ fn a_placed_file_keeps_its_folder_relative_to_the_document() {
     assert_eq!(relative_of(&placed_in("( art /)", path, &preview)).as_deref(), Some(" art /photo.png"), "spaces are part of names");
     // On `%_` lines too.
     assert_eq!(relative_of(&hide_placed(&placed_in("(src/)", path, &preview))).as_deref(), Some("src/photo.png"));
-    // No folder, an absolute one, one too long or not a string: the path alone, and the file still
-    // opens.
+    // An empty folder is the document's own: the file's name.
+    assert_eq!(relative_of(&placed_in("()", path, &preview)).as_deref(), Some("photo.png"));
+    // An absolute folder, one too long or not a string: the path alone, and the file still opens.
     let long = format!("({})", "a/".repeat(3000));
-    for folder in ["()", "(/elsewhere/)", "(C:\\\\art\\\\)", long.as_str(), "12", "/src"] {
+    for folder in ["(/elsewhere/)", "(C:\\\\art\\\\)", long.as_str(), "12", "/src"] {
         assert_eq!(relative_of(&placed_in(folder, path, &preview)), None, "{folder}");
     }
     // A section that doesn't end leaves the folder unread.
@@ -2285,6 +2786,25 @@ fn xml_ids_stay_within_their_byte_budget() {
     assert_eq!(bytes, super::read::MAX_XML_ID_BYTES);
 }
 
+/// Placed files of other paths keep images of their own though their previews are alike; two of
+/// one path share theirs.
+#[test]
+fn placed_files_of_other_paths_keep_images_of_their_own() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let object = |path: &str| {
+        let data = placed(true, "[5 0 0 -5 0 200]", path, Some(&preview), "");
+        let find = |s: &[u8]| data.windows(s.len()).position(|w| w == s).unwrap();
+        data[find(b"%AI5_BeginPlace")..find(b"%AI5_EndPlace\r") + 14].to_vec()
+    };
+    let mut data = placed(true, "[5 0 0 -5 0 200]", "a.png", Some(&preview), "");
+    let end = data.windows(14).position(|w| w == b"%AI5_EndPlace\r").unwrap() + 14;
+    data.splice(end..end, [object("b.png"), object("a.png")].concat());
+    let r = read(&data).unwrap();
+    let keys: Vec<_> = art(&r.doc).iter().filter_map(|n| if let NodeKind::Image(im) = &n.kind { Some(im.key.clone()) } else { None }).collect();
+    assert!(matches!(&keys[..], [a, b, c] if a != b && a == c), "{keys:?}");
+    assert_eq!(r.doc.images.len(), 2);
+}
+
 #[test]
 fn placed_files_are_linked_images_showing_their_preview() {
     // A 2×1 preview (premultiplied ARGB, a padded row) of a file of 4×2 pixels.
@@ -2505,6 +3025,188 @@ fn one_long_run_of_legacy_type_stops_at_the_allowance() {
     let long = "a".repeat(ALLOWANCE + 10);
     let texts = legacy_texts(&point_type("", &long));
     assert_eq!(texts[0].plain_text().chars().count(), ALLOWANCE);
+}
+
+/// A legacy-format file whose layer holds `art`, read.
+fn legacy_read(art: &str) -> Structure {
+    match read(type_stream7(art).as_bytes()) {
+        Ok(r) => r,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// The text objects of the first layer, with their ids, top to bottom: a threaded text object's
+/// frames in file order.
+fn art_frames(doc: &Document) -> Vec<(vectorcraft_doc::NodeId, vectorcraft_doc::TextObject)> {
+    art(doc).iter().rev().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((n.id, (**t).clone())) } else { None }).collect()
+}
+
+/// An area's frame in the document.
+fn frame_in_doc(t: &vectorcraft_doc::TextObject) -> Rect {
+    let vectorcraft_doc::TextKind::Area { frame } = &t.kind else { panic!("area type: {:?}", t.kind) };
+    kurbo::Shape::bounding_box(&(t.xf * frame.to_bezpath()))
+}
+
+/// Do two matrices match?
+fn same_matrix(a: Affine, b: Affine) -> bool {
+    a.as_coeffs().iter().zip(b.as_coeffs()).all(|(p, q)| (p - q).abs() < 1e-9)
+}
+
+/// Area type with linked areas (§15.5.3): each area's `Tp` … `TP` with its own matrix and frame,
+/// the characters after each, and overflow text. It opens as one frame for each area, threaded in
+/// file order, with the story in the first.
+#[test]
+fn legacy_area_type_with_linked_areas_is_threaded_frames() {
+    let text = format!(
+        "1 To\n1 0 0 1 0 40 0 Tp\n{}n\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(Linked ) Tx\n\
+         0 1 -1 0 150 20 0 Tp\n{}n\nTP\n(areas\\r) Tx\n(and more) TX\n(\\r) TX\nTO\n",
+        rect_path(0.0, 0.0, 50.0, 40.0),
+        rect_path(110.0, 20.0, 150.0, 80.0)
+    );
+    let r = legacy_read(&text);
+    let frames = art_frames(&r.doc);
+    let [(a, first), (b, second)] = frames.as_slice() else { panic!("two frames: {frames:?} {:?}", r.warnings) };
+    assert_eq!(r.doc.text_threads, [vec![*a, *b]], "threaded in file order");
+    let in_doc = |x0, y0, x1, y1| r.to_doc.transform_rect_bbox(Rect::new(x0, y0, x1, y1));
+    assert!(near(frame_in_doc(first), in_doc(0.0, 0.0, 50.0, 40.0)), "{:?}", frame_in_doc(first));
+    assert!(near(frame_in_doc(second), in_doc(110.0, 20.0, 150.0, 80.0)), "{:?}", frame_in_doc(second));
+    // Each frame keeps its own area's matrix: the second's type runs up the page.
+    let placed = |m: [f64; 6]| r.to_doc * Affine::new(m) * Affine::FLIP_Y;
+    assert!(same_matrix(first.xf, placed([1.0, 0.0, 0.0, 1.0, 0.0, 40.0])), "{:?}", first.xf);
+    assert!(same_matrix(second.xf, placed([0.0, 1.0, -1.0, 0.0, 150.0, 20.0])), "{:?}", second.xf);
+    // The story: the characters after every area and the overflow text, in the first frame.
+    assert_eq!(first.plain_text(), "Linked areas\nand more");
+    assert_eq!(first.paragraph_styles().len(), 2);
+    assert_eq!(second.plain_text(), "");
+}
+
+/// A linked area without a path is left out; a single area with a path is area type in no thread.
+#[test]
+fn legacy_area_type_leaves_out_a_linked_area_without_a_path() {
+    let area = |m: &str, path: Option<Rect>, chars: &str| {
+        let path = path.map(|p| format!("{}n\n", rect_path(p.x0, p.y0, p.x1, p.y1))).unwrap_or_default();
+        format!("{m} Tp\n{path}TP\n{chars}")
+    };
+    let style = "0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n";
+    let three = format!(
+        "1 To\n{}{}{}TO\n",
+        area("1 0 0 1 0 40 0", Some(Rect::new(0.0, 0.0, 50.0, 40.0)), &format!("{style}(One ) Tx\n")),
+        area("1 0 0 1 60 40 0", None, "(two ) Tx\n"),
+        area("1 0 0 1 110 40 0", Some(Rect::new(110.0, 0.0, 150.0, 40.0)), "(three) Tx\n"),
+    );
+    let r = legacy_read(&three);
+    let frames = art_frames(&r.doc);
+    let [(a, first), (b, second)] = frames.as_slice() else { panic!("two frames: {frames:?} {:?}", r.warnings) };
+    assert_eq!(r.doc.text_threads, [vec![*a, *b]]);
+    assert_eq!((first.plain_text().as_str(), second.plain_text().as_str()), ("One two three", ""));
+    let one = format!(
+        "1 To\n{}{}TO\n",
+        area("1 0 0 1 60 40 0", None, &format!("{style}(x) Tx\n")),
+        area("1 0 0 1 0 40 0", Some(Rect::new(0.0, 0.0, 50.0, 40.0)), "(y) Tx\n")
+    );
+    let r = legacy_read(&one);
+    let frames = art_frames(&r.doc);
+    let [(_, only)] = frames.as_slice() else { panic!("one frame: {frames:?}") };
+    assert!(r.doc.text_threads.is_empty());
+    assert_eq!(only.plain_text(), "xy");
+    // The frame's own matrix, not the pathless area's.
+    assert!(same_matrix(only.xf, r.to_doc * Affine::translate((0.0, 40.0)) * Affine::FLIP_Y), "{:?}", only.xf);
+}
+
+/// One text object reads at most 4,096 linked areas: the paths of the rest are left out, not read as
+/// art, and their characters stay in the story.
+#[test]
+fn legacy_area_type_reads_up_to_its_limit_of_linked_areas() {
+    const LIMIT: usize = 4096;
+    let area = format!("1 0 0 1 0 0 0 Tp\n{}n\nTP\n", rect_path(0.0, 0.0, 50.0, 40.0));
+    let text = format!("1 To\n{}0 Tr\n(a) Tx\n{area}(b) Tx\nTO\n", area.repeat(LIMIT));
+    let r = legacy_read(&text);
+    let frames = art_frames(&r.doc);
+    assert_eq!(frames.len(), LIMIT);
+    assert_eq!(art(&r.doc).len(), LIMIT, "no art paths");
+    assert_eq!(r.doc.text_threads.iter().map(Vec::len).collect::<Vec<_>>(), [LIMIT]);
+    assert_eq!(frames[0].1.plain_text(), "ab");
+    assert_eq!(r.warnings, [LINKED_AREAS_LEFT_OUT]);
+}
+
+/// The warning when linked areas are left out.
+const LINKED_AREAS_LEFT_OUT: &str = "linked type areas past VectorCraft's limits were left out";
+
+/// The frames of linked areas times the characters of their story are kept to the reader's
+/// allowance of characters: a story of more than half of it gets one frame, and of a third, two.
+#[test]
+fn legacy_area_type_keeps_its_frames_times_characters_to_the_allowance() {
+    const ALLOWANCE: usize = 1 << 22;
+    let area = |x: f64| format!("1 0 0 1 {x} 0 0 Tp\n{}n\nTP\n", rect_path(x, 0.0, x + 50.0, 40.0));
+    for (chars, kept) in [(ALLOWANCE / 2 + 1, 1), (ALLOWANCE / 3, 3), (ALLOWANCE / 3 + 1, 2)] {
+        let text = format!("1 To\n{}0 Tr\n({}) Tx\n{}{}TO\n", area(0.0), "a".repeat(chars), area(60.0), area(120.0));
+        let r = legacy_read(&text);
+        let frames = art_frames(&r.doc);
+        assert_eq!(frames.len(), kept, "{chars}");
+        assert_eq!(r.doc.text_threads.len(), usize::from(kept > 1), "{chars}");
+        assert_eq!(frames[0].1.plain_text().len(), chars);
+        assert_eq!(r.warnings.iter().any(|w| w == LINKED_AREAS_LEFT_OUT), kept < 3, "{chars}");
+    }
+}
+
+/// Point type and type on a path have one text path (§15.2): one with more is read at its first.
+#[test]
+fn legacy_point_and_path_type_with_several_text_paths_use_the_first() {
+    let point = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n(a) Tx\n1 0 0 1 90 20 0 Tp\nTP\n(b) Tx\nTO\n";
+    let r = legacy_read(point);
+    let frames = art_frames(&r.doc);
+    let [(_, only)] = frames.as_slice() else { panic!("one object: {frames:?}") };
+    assert!(matches!(only.kind, vectorcraft_doc::TextKind::Point) && r.doc.text_threads.is_empty());
+    assert_eq!(only.plain_text(), "ab");
+    assert!(same_matrix(only.xf, r.to_doc * Affine::translate((10.0, 50.0)) * Affine::FLIP_Y), "the first text path's matrix: {:?}", only.xf);
+    let on_path = "2 To\n1 0 0 1 0 0 0.5 Tp\n0 0 m\n100 0 L\nN\nTP\n0 Tr\n(a) Tx\n1 0 0 1 0 0 0 Tp\n0 50 m\n100 50 L\nN\nTP\n(b) Tx\nTO\n";
+    let r = legacy_read(on_path);
+    let frames = art_frames(&r.doc);
+    let [(_, only)] = frames.as_slice() else { panic!("one object: {frames:?}") };
+    let vectorcraft_doc::TextKind::OnPath { path, start, .. } = &only.kind else { panic!("{:?}", only.kind) };
+    assert!((start - 0.5).abs() < 1e-9, "the first text path's start: {start}");
+    let along = kurbo::Shape::bounding_box(&(only.xf * path.to_bezpath()));
+    assert!((along.y0 - r.to_doc.transform_rect_bbox(Rect::new(0.0, 0.0, 100.0, 0.0)).y0).abs() < 1e-9, "{along:?}");
+    assert!(same_matrix(only.xf, r.to_doc * Affine::FLIP_Y), "{:?}", only.xf);
+    // Type on a path whose first text path has no path: the first one with a path, its matrix and
+    // start included.
+    let later = "2 To\n1 0 0 1 30 30 0.25 Tp\nTP\n0 Tr\n(a) Tx\n1 0 0 1 5 0 0.5 Tp\n0 50 m\n100 50 L\nN\nTP\n(b) Tx\nTO\n";
+    let r = legacy_read(later);
+    let frames = art_frames(&r.doc);
+    let [(_, only)] = frames.as_slice() else { panic!("one object: {frames:?}") };
+    let vectorcraft_doc::TextKind::OnPath { start, .. } = &only.kind else { panic!("{:?}", only.kind) };
+    assert!((start - 0.5).abs() < 1e-9, "{start}");
+    assert!(same_matrix(only.xf, r.to_doc * Affine::translate((5.0, 0.0)) * Affine::FLIP_Y), "{:?}", only.xf);
+    // Area type with no frame at all: point type at its first text path.
+    let frameless = "1 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n(a) Tx\n1 0 0 1 90 20 0 Tp\nTP\n(b) Tx\nTO\n";
+    let r = legacy_read(frameless);
+    let frames = art_frames(&r.doc);
+    let [(_, only)] = frames.as_slice() else { panic!("one object: {frames:?}") };
+    assert!(matches!(only.kind, vectorcraft_doc::TextKind::Point), "{:?}", only.kind);
+    assert!(same_matrix(only.xf, r.to_doc * Affine::translate((10.0, 50.0)) * Affine::FLIP_Y), "{:?}", only.xf);
+}
+
+/// The dictionary that follows a threaded text object (version 9 and later): its opacity mask and
+/// text wrap go on every frame, and its name on the first frame, which holds the story.
+#[test]
+fn the_dictionary_after_linked_area_type_applies_to_its_frames() {
+    let dict = "%_/ArtDictionary :\n%_(Story) /String (AIArtName) ,\n%_12.5 /Real (AI11TextWrapOffset) ,\n\
+                %_0 /Bool (AI11TextWrapInvert) ,\n%_/Mask :\n%_1 /Bool (Linked) ,\n%_0 /Bool (Disabled) ,\n%_X=\n\
+                %_0 0 0 1 k\n%_0 0 m\n%_5 0 L\n%_5 5 L\n%_0 5 L\n%_0 0 L\n%_f\n%_X+\n%_ (Art) ,\n%_1 /Bool (Clipping) ,\n\
+                %_0 /Bool (Inverted) ,\n%_; (AI9_Mask) ,\n%_;\n";
+    let area = |x: f64| format!("1 0 0 1 {x} 40 0 Tp\n{}n\nTP\n", rect_path(x, 0.0, x + 50.0, 40.0));
+    let text = format!("1 To\n{}0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(a) Tx\n{}{}(b) Tx\nTO\n{dict}", area(0.0), area(60.0), area(120.0));
+    let r = read_ok(&layer(&text));
+    let ids: Vec<_> = art_frames(&r.doc).into_iter().map(|(id, _)| id).collect();
+    assert_eq!(r.doc.text_threads, std::slice::from_ref(&ids), "{:?}", r.warnings);
+    let nodes: Vec<&Node> = ids.iter().filter_map(|id| r.doc.node(*id)).collect();
+    assert_eq!(nodes.len(), 3);
+    for n in &nodes {
+        assert!(n.extras().mask.is_some(), "every frame is masked: {:?}", n.id);
+        assert_eq!(wrap_of(n), Some(vectorcraft_doc::TextWrap { offset: 12.5, invert: false }));
+    }
+    let names: Vec<_> = nodes.iter().map(|n| n.name.as_deref()).collect();
+    assert_eq!(names, [Some("Story"), None, None]);
 }
 
 #[test]
@@ -4510,6 +5212,15 @@ fn a_blend_comes_in_as_a_live_blend() {
     let [r, _, b] = color.to_rgb();
     assert!((r - 0.5).abs() < 0.02 && (b - 0.5).abs() < 0.02, "{r} {b}");
     assert!(!s.warnings.iter().any(|w| w == super::blend::DRAWN), "{:?}", s.warnings);
+}
+
+/// The tags after a blend's drawn steps are the live blend's.
+#[test]
+fn a_live_blend_keeps_the_tags_of_its_drawn_steps() {
+    let body = blend_file("%_10 50 m\n%_110 50 L\n", [Some("A"), Some("B")], &blend_record(&['A', 'B']));
+    let (blend, warnings) = read_blend(&body.replace("\nU\n9 () XW\n0 Ae\n", "\nU\n/sku (B-1) XT\n9 () XW\n0 Ae\n"));
+    assert!(matches!(blend.kind, NodeKind::Blend { .. }), "a live blend: {:?} {warnings:?}", blend.kind);
+    assert_eq!(tags(&blend).1, [tag("sku", "B-1")]);
 }
 
 /// A spine written from the right key to the left one keeps the keys in their order on it (the

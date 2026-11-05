@@ -4924,6 +4924,7 @@ imageTrace	Outline	Obris
 @msg	an image VectorCraft can't read was left out	izostavljena je slika koju VectorCraft ne može pročitati
 @msg	an image whose data is cut short was left out	izostavljena je slika čiji su podaci skraćeni
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	povezane slike prikazuju pregled niske rezolucije sačuvan u datoteci dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	povezane slike bez pregleda u datoteci prikazuju čuvar mjesta dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	tekst u području u okvirima prekratkim za red fonta u kojem se prikazuje dobio je više okvire ({_1}): inače se tekst ne bi prikazao
 @msg	its editing data doesn't say where its art is	njeni podaci za uređivanje ne govore gdje joj je crtež
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ova datoteka je sačuvana bez PDF kompatibilnosti, a njeni podaci za uređivanje se ne mogu pročitati ({why})

@@ -211,6 +211,41 @@ fn two_rects() -> (VectorcraftApp, NodeId, [NodeId; 2]) {
     (app, layer, [NodeId(a), NodeId(b)])
 }
 
+/// The painted names one headless frame of the panel draws italic.
+fn italic_names(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+    out.textures_delta.clear();
+    fn collect(shape: &egui::Shape, names: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(t) => {
+                if t.galley.job.sections.iter().any(|s| s.format.italics) {
+                    names.push(t.galley.text().to_string());
+                }
+            }
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, names)),
+            _ => {}
+        }
+    }
+    let mut names = Vec::new();
+    out.shapes.iter().for_each(|c| collect(&c.shape, &mut names));
+    names
+}
+
+/// A layer whose Layer Options › Print is off has its name italic in the panel (#5739), as the
+/// reference application shows it; a printing layer's name stays upright, and unticking Print again
+/// makes it upright.
+#[test]
+fn a_layer_that_does_not_print_has_its_name_italic() {
+    let (mut app, layer, _) = two_rects();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    assert!(!italic_names(&mut app, &ctx).iter().any(|n| n == "Layer 1"), "a printing layer's name is upright");
+    app.session.execute("layer.setProps", &json!({"ids": [layer.0], "printable": false})).unwrap();
+    assert!(italic_names(&mut app, &ctx).iter().any(|n| n == "Layer 1"), "Print off: its name is italic");
+    app.session.execute("layer.setProps", &json!({"ids": [layer.0], "printable": true})).unwrap();
+    assert!(!italic_names(&mut app, &ctx).iter().any(|n| n == "Layer 1"), "Print on again: upright again");
+}
+
 #[test]
 fn row_thumbnails_wait_for_the_end_of_a_drag() {
     let (mut app, _, _) = two_rects();

@@ -4525,6 +4525,7 @@ axis	Both	И двете
 @msg	an image VectorCraft can't read was left out	изображение, което VectorCraft не може да разчете, беше пропуснато
 @msg	an image whose data is cut short was left out	изображение с непълни данни беше пропуснато
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	свързаните картини показват записания във файла предварителен преглед с ниска резолюция, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	свързаните картини без предварителен преглед във файла показват заместител, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текстовите рамки за област в редове, твърде къси за шрифта, в който се показват, получиха по-високи рамки ({_1}): текстът им иначе нямаше да се види
 @msg	its editing data doesn't say where its art is	данните му за редактиране не посочват къде се намира неговата графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	този файл е записан без съвместимост с PDF и данните му за редактиране не могат да бъдат прочетени ({why})

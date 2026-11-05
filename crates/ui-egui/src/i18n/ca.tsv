@@ -5182,6 +5182,7 @@ digits	Malayalam	Malaiàlam
 @msg	library panel `{given}` isn't missing its library	al panell de biblioteca `{given}` no li falta la biblioteca
 @msg	library panel `{given}` isn't open	el panell de biblioteca `{given}` no està obert
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les imatges enllaçades mostren la previsualització de baixa resolució desada al fitxer fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les imatges enllaçades sense previsualització al fitxer mostren un marcador de posició fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Fusió de pintura interactiva: seleccioneu un grup de pintura interactiva i els traçats que voleu afegir
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	La pintura interactiva accepta traçats i traçats compostos: convertiu abans el text, les imatges i altres objectes a traçats
 @msg	Live Paint: select paths or compound paths	Pintura interactiva: seleccioneu traçats o traçats compostos
