@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Release Type on a Path in the Type Tools add-on, beyond Illustrator, #5532; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Release Type on a Path in the Type Tools add-on, beyond Illustrator, #5532; previously minor: Typographer's Quotes sets a lone typed `”` as the opening quote where one opens, for the macOS Serbian Cyrillic layout, which has no straight quote, #5247; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -78,6 +78,7 @@ Character Styles menu New/Redefine and footer New capture the first selected cha
 | Date | Change | Summary |
 |---|---|---|
 | 2026-11-05 | minor | Release Type on a Path joins the Type Tools add-on: type on a path splits into point type and its path (#5532, beyond Illustrator). Scores and estimates unchanged. |
+| 2026-11-04 | minor | Typographer's Quotes: a lone typed `”` (U+201D) is set like a straight `"` where a quote opens (at the start, after a space), taking the document's opening quote, and stays `”` where one closes: the macOS Serbian Cyrillic layout has no straight quote and types `”` on Shift+2, which now gives „…” (#5247). `“ „` and the single quotes `‘ ’ ‚` stay as typed (that layout's apostrophe key types `’`, and `’90s` keeps its apostrophe); pasted text keeps its quotes; with the option off `”` stays as typed. Evidence: `docsetup::a_typed_closing_double_quote_opens_where_a_quote_opens`; scores unchanged |
 | 2026-11-04 | minor | A Type-range Copy or Cut publishes styled art alongside plain text, so a later canvas Paste keeps its character formatting after editing ends (#5636). Scores and estimates unchanged. |
 | 2026-11-03 | minor | Glyphs panel adds Alternates for Current Selection. A chosen alternate changes one character's drawn glyph while keeping its Unicode text; character-style capture does not copy that per-character choice. Scores and estimates unchanged. |
 | 2026-11-04 | minor | Find Font's Replace With Font lists family and style rows, one click setting both, with a search over them; the list scrolls apart from the document's font list and refreshes after each replacement (#4972); scores and estimates unchanged. |

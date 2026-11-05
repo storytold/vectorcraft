@@ -176,6 +176,10 @@ pub struct ToolContext<'a> {
     /// Clipboard Handling → When pasting text: Keep Plain Text. Text pasted while typing takes
     /// the style at the caret, even the text the Type tool copied with its formatting.
     pub paste_plain_text: bool,
+    /// The text given to [`crate::Tool::text_input`] was typed on the keyboard (a key or an IME
+    /// commit), not inserted from the Glyphs panel or a paste: a lone typed `”` may then take the
+    /// document's opening quote ([`vectorcraft_doc::Quotes::typed_as_straight`]).
+    pub typed_from_keyboard: bool,
     /// View → Hide Slices: the Slice Selection tool can't pick hidden slices.
     pub slices_hidden: bool,
     /// View → Lock Slices: the Slice Selection tool leaves locked slices alone.

@@ -302,6 +302,7 @@ impl Session {
             unit,
             stroke_unit,
             paste_plain_text: self.prefs.paste_text_formatting == "plain",
+            typed_from_keyboard: self.keyboard_text,
             slices_hidden: self.menu.slices_hidden,
             slices_locked: self.menu.slices_locked,
             auto_add_delete: !self.prefs.disable_auto_add_delete,
@@ -573,11 +574,32 @@ impl Session {
         self.apply_actions(acts)
     }
 
+    /// Text typed on the keyboard (a key or an IME commit) for the active tool: as
+    /// [`Session::tool_text`], and Typographer's Quotes may also set a lone typed `”` as an opening
+    /// quote ([`vectorcraft_tools::ToolContext::typed_from_keyboard`]). The Glyphs panel and pastes
+    /// use [`Session::tool_text`], so their quotes stay as inserted.
+    pub fn tool_typed_text(&mut self, text: &str, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        self.keyboard_text = true;
+        let r = self.tool_text(text, view);
+        self.keyboard_text = false;
+        r
+    }
+
     /// Would [`Session::tool_text`] insert `text` unchanged (no control-character filtering,
     /// newline normalization or document formatting such as Typographer's Quotes)? An IME commit
     /// the application rewrites is an application edit, not an accepted IME insertion.
     pub fn tool_text_is_verbatim(&mut self, text: &str, view: ViewInfo) -> bool {
         self.with_tool_cx(view, |t, cx| t.text_input_is_verbatim(cx, text))
+    }
+
+    /// [`Session::tool_text_is_verbatim`] for text typed on the keyboard, as
+    /// [`Session::tool_typed_text`] would insert it: a lone typed `”` that Typographer's Quotes
+    /// turns into an opening quote is not verbatim.
+    pub fn tool_typed_text_is_verbatim(&mut self, text: &str, view: ViewInfo) -> bool {
+        self.keyboard_text = true;
+        let v = self.tool_text_is_verbatim(text, view);
+        self.keyboard_text = false;
+        v
     }
 
     /// Does the active tool's open typing session still match the document? An IME commit after
