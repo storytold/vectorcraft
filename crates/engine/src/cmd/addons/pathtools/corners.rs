@@ -20,7 +20,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Set Corners",
             [],
             None,
-            "{ids?: [id…] (the selection), anchors?: [index…] (of each path's outline with no corners cut; else its direct-selected anchors, or all of them), items?: [{id, anchors?}…] (instead of ids: each path with its own anchors), radius: pt 0..1000000 (drawn no larger than fits), kind?: \"round\"|\"invertedRound\"|\"chamfer\" (each corner's own)} cut live corners at the anchors that can have one, as one undo step → {ids, corners (how many)}",
+            "{ids?: [id…] (the selection), anchors?: [index…] (of each path's outline with no corners cut; else its direct-selected anchors, or all of them), items?: [{id, anchors?}…] (instead of ids: each path with its own anchors), radius: pt 0..1000000 (drawn no larger than fits), kind?: \"round\"|\"invertedRound\"|\"chamfer\" (each corner's own), every?: \"all\"|\"odd\"|\"even\" (default all: of those anchors, only the odd- or even-numbered ones, counting each path's anchors from 1)} cut live corners at the anchors that can have one, as one undo step → {ids, corners (how many)}",
             has_doc,
             corner_set
         ),
@@ -50,8 +50,53 @@ fn anchors_param(p: &Value, cmd: &str) -> Result<Option<BTreeSet<usize>>> {
         .map(Some)
 }
 
-/// The corners a request names: each path with the corners (anchor indices of its uncut outline).
-fn named_corners(s: &Session, p: &Value, cmd: &str) -> Result<Vec<(NodeId, BTreeSet<usize>)>> {
+/// Which of the chosen anchors `cornerSet` takes, by their number along the path's uncut outline
+/// (the first anchor is number 1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Every {
+    All,
+    /// The 1st, 3rd, 5th… anchors: indices 0, 2, 4….
+    Odd,
+    /// The 2nd, 4th, 6th… anchors: indices 1, 3, 5….
+    Even,
+}
+
+impl Every {
+    /// The `every` of `p` (default: all).
+    fn of(p: &Value, cmd: &str) -> Result<Self> {
+        match p.get("every").filter(|v| !v.is_null()) {
+            None => Ok(Self::All),
+            Some(v) => match v.as_str() {
+                Some("all") => Ok(Self::All),
+                Some("odd") => Ok(Self::Odd),
+                Some("even") => Ok(Self::Even),
+                _ => Err(bad(cmd, format!("`every` must be \"all\", \"odd\" or \"even\", not {v}"))),
+            },
+        }
+    }
+
+    /// Does it take the anchor at `index`? Anchors that take no corner still count.
+    fn takes(self, index: usize) -> bool {
+        match self {
+            Self::All => true,
+            Self::Odd => index.is_multiple_of(2),
+            Self::Even => !index.is_multiple_of(2),
+        }
+    }
+
+    /// The error when none of the chosen corners is one it takes.
+    fn none(self) -> &'static str {
+        match self {
+            Self::All => "choose anchors where two sides meet at an angle: only those take a corner",
+            Self::Odd => "none of the chosen corners is at an odd-numbered anchor (the 1st, 3rd, 5th…)",
+            Self::Even => "none of the chosen corners is at an even-numbered anchor (the 2nd, 4th, 6th…)",
+        }
+    }
+}
+
+/// The corners a request names: each path with the corners (anchor indices of its uncut outline)
+/// that `every` takes.
+fn named_corners(s: &Session, p: &Value, cmd: &str, every: Every) -> Result<Vec<(NodeId, BTreeSet<usize>)>> {
     let shared = anchors_param(p, cmd)?;
     // Each path with its own `anchors`, or sharing the request's.
     let mut own: Vec<Option<BTreeSet<usize>>> = vec![];
@@ -71,10 +116,10 @@ fn named_corners(s: &Session, p: &Value, cmd: &str) -> Result<Vec<(NodeId, BTree
     let d = &st.doc;
     check_size(ids.iter().filter_map(|id| d.node(*id)?.path_data()), cmd)?;
     let editable = d.editable();
-    let mut out = vec![];
+    let (mut out, mut chosen) = (vec![], false);
     for (i, id) in ids.iter().enumerate() {
         let Some(lc) = d.node(*id).filter(|_| editable(*id)).and_then(LiveCorners::of) else { continue };
-        let corners = match own.get(i).and_then(Option::as_ref).or(shared.as_ref()) {
+        let corners: BTreeSet<usize> = match own.get(i).and_then(Option::as_ref).or(shared.as_ref()) {
             Some(given) => {
                 let n = lc.base.anchor_count();
                 if let Some(past) = given.iter().find(|k| **k >= n) {
@@ -84,12 +129,14 @@ fn named_corners(s: &Session, p: &Value, cmd: &str) -> Result<Vec<(NodeId, BTree
             }
             None => st.selection.partial(*id).filter(|a| !a.is_empty()).map_or_else(|| lc.all(), |a| lc.corners_of(a)),
         };
+        chosen |= !corners.is_empty();
+        let corners: BTreeSet<usize> = corners.into_iter().filter(|k| every.takes(*k)).collect();
         if !corners.is_empty() {
             out.push((*id, corners));
         }
     }
     if out.is_empty() {
-        return Err(bad(cmd, "choose anchors where two sides meet at an angle: only those take a corner"));
+        return Err(bad(cmd, if chosen { every.none() } else { Every::All.none() }));
     }
     Ok(out)
 }
@@ -134,11 +181,12 @@ fn corner_set(s: &mut Session, p: &Value) -> Result<Value> {
                 .map_err(|_| bad(C, format!("`kind` must be \"round\", \"invertedRound\" or \"chamfer\", not {v}")))
         })
         .transpose()?;
-    let corners = named_corners(s, p, C)?;
+    let every = Every::of(p, C)?;
+    let corners = named_corners(s, p, C, every)?;
     edit_corners(s, "Set Corners", corners, radius, kind)
 }
 
 fn corner_remove(s: &mut Session, p: &Value) -> Result<Value> {
-    let corners = named_corners(s, p, "addon.pathtools.cornerRemove")?;
+    let corners = named_corners(s, p, "addon.pathtools.cornerRemove", Every::All)?;
     edit_corners(s, "Remove Corners", corners, 0.0, Some(CornerKind::Round))
 }

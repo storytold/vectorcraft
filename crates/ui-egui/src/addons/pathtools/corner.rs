@@ -1,5 +1,6 @@
 //! The Anchor Inspector panel's Corners section: the Corner Tool's radius and kind, how many corners
-//! the selection holds, and Apply (`addon.pathtools.cornerSet`).
+//! the selection holds, Apply (`addon.pathtools.cornerSet`) and Set Corners… (its dialog, which
+//! can also take every other anchor).
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -55,10 +56,14 @@ pub(super) fn section(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let width = ui.available_width();
     let apply = ui.add_enabled_ui(count > 0, |ui| widgets::flat_button(ui, tl!("Apply to Selected Anchors"), width).clicked()).inner;
+    let dialog = ui.add_enabled_ui(count > 0, |ui| widgets::flat_button(ui, tl!("Set Corners…"), width).clicked()).inner;
     if let Some(values) = set {
         run(app, "tool.setOption", json!({ "tool": ID, "values": values }));
     }
     if apply {
         run(app, "addon.pathtools.cornerSet", json!({ "radius": radius, "kind": kind }));
+    }
+    if dialog {
+        crate::menus::invoke(app, super::set_corners::COMMAND, json!({}));
     }
 }
