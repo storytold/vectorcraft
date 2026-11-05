@@ -366,6 +366,10 @@ pub struct UiState {
     /// starts under the selection at every launch.
     #[serde(skip)]
     pub task_bar_place: TaskBarPlace,
+    /// The Pathfinder panel's Shape Mode buttons make a compound shape on a click, and give the
+    /// permanent Pathfinder result on Alt-click (off, the default: the other way round).
+    #[serde(default)]
+    pub shape_modes_compound: bool,
     /// The locked objects under the pointer at the last right-click on the canvas, with the
     /// document's `uid`: the context menu's Unlock submenu lists them while the menu is open. Not
     /// saved.
@@ -935,6 +939,7 @@ impl Default for UiState {
             toolbar_advanced: false,
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
+            shape_modes_compound: false,
             context_locked: None,
             context_intertwine: None,
             slot_tool: Default::default(),

@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Contour add-on, beyond Illustrator; scores and estimates unchanged; Select by Artboards add-on selects by overlap, inside or outside several artboards; Cmd+Space keeps the active drawing cursor during its drag; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; Select by Artboards add-on selects by overlap, inside or outside several artboards; Cmd+Space keeps the active drawing cursor during its drag; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -442,6 +442,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-11-05 | minor | Document tabs are reordered by dragging them along the tab strip (`document.move`, #5663). |
 | 2026-11-04 | minor | Path Precision Tools add-on (a VectorCraft addition): Set Corners… rounds only the corners in an angle range (#5545); scores and estimates unchanged |
 | 2026-11-04 | minor | Path Precision Tools add-on (a VectorCraft addition): Set Corners… rounds all, the odd-numbered or the even-numbered anchors (#5546); scores and estimates unchanged |
+| 2026-11-05 | minor | Compound Shapes add-on (beyond Illustrator): Object › Plug-ins › Compound Shapes lists Make, Release and Expand Compound Shape, and holds a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons make a compound shape on a click and give the permanent result on Alt-click (the default is the reverse). Selected members of a compound shape always take the clicked mode. The setting is `window.pathfinder.compoundShapes`; no existing behavior changes while it is off. Scores and estimates unchanged. |
 | 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen document, as the pane's options are listed "for the selected preset" ([public source](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/start-a-new-file/create-and-save-custom-document-presets.html)); the chosen card shows them, every other Recent and Saved card keeps the units its document or preset was made in, and the built-in tabs still follow the chosen units (#2078); scores and estimates unchanged |
 | 2026-11-01 | minor | Object › Image Trace › Batch Trace Folder asks for a source and a destination folder and traces each image into it (#4921); scores and estimates unchanged |
 | 2026-11-01 | minor | Edit › Copy and Cut take the selected ruler guides, with the objects or alone; pasting puts them on the layer new art goes to, moved as the objects are (alone: where they were), Paste in Place onto the active artboard and Paste on All Artboards onto each (#3226); scores and estimates unchanged |

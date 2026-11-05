@@ -494,6 +494,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
     };
     let r = match id {
         "window.taskBar" => flag(&mut app.ui.task_bar),
+        "window.pathfinder.compoundShapes" => flag(&mut app.ui.shape_modes_compound),
         "window.taskBar.pin" => {
             let place = &mut app.ui.task_bar_place;
             opt_bool(p, "pinned").map(|pinned| {

@@ -6453,3 +6453,7 @@ shape	Open	Открытый
 	Even-Numbered Anchors	Чётные опорные точки
 	Minimum angle	Минимальный угол
 	Maximum angle	Максимальный угол
+
+# Compound Shapes add-on
+	Compound Shapes	Составные фигуры
+	Shape Mode Buttons Make Compound Shapes	Кнопки режимов фигур создают составные фигуры

@@ -5964,3 +5964,7 @@ breakText	Glyphs	Гліфи
 	Even-Numbered Anchors	Парні опорні точки
 	Minimum angle	Мінімальний кут
 	Maximum angle	Максимальний кут
+
+# Compound Shapes add-on
+	Compound Shapes	Складені фігури
+	Shape Mode Buttons Make Compound Shapes	Кнопки режимів фігур створюють складені фігури

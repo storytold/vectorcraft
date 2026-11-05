@@ -6219,3 +6219,7 @@ breakText	Glyphs	Glify
 	Even-Numbered Anchors	Punkty parzyste
 	Minimum angle	Kąt minimalny
 	Maximum angle	Kąt maksymalny
+
+# Compound Shapes add-on
+	Compound Shapes	Kształty złożone
+	Shape Mode Buttons Make Compound Shapes	Przyciski trybów kształtu tworzą kształty złożone
