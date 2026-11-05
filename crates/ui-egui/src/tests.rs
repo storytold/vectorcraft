@@ -51,6 +51,7 @@ mod sysclip_emf;
 mod sysclip_guides;
 mod sysclip_probe;
 mod tab_overflow;
+mod tab_reorder;
 mod taskbar;
 mod toolescape;
 mod trace_runs;

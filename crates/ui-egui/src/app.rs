@@ -54,11 +54,13 @@ impl VectorcraftApp {
         // ([`place::place_from_cursor`]).
         session.place_cursor_requests = true;
         let views = session.documents().iter().map(View::of).collect();
+        let view_uids = session.documents().iter().map(|d| d.uid).collect();
         let known = session.documents().iter().map(|d| d.uid).collect();
         Self {
             session,
             ui: UiState::default(),
             views,
+            view_uids,
             services,
             canvas: CanvasCache {
                 renderer: vectorcraft_render::Renderer::new(),
