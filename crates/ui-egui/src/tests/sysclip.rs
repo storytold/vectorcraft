@@ -38,6 +38,10 @@ pub(super) struct Board {
     race: Option<Flavour>,
     /// With `race`, the other app's copy also carries the app's formats other than text.
     race_with_our_formats: bool,
+    /// The app's writes fail and change nothing; reads still work.
+    refuse: bool,
+    /// `has` finds text only, as the Linux clipboard's does.
+    text_only_has: bool,
 }
 
 struct Fake(Rc<RefCell<Board>>);
@@ -56,7 +60,7 @@ impl Fake {
 impl SystemClipboard for Fake {
     fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
         let mut b = self.0.borrow_mut();
-        if b.locked {
+        if b.locked || b.refuse {
             return Err("another app has the clipboard open".into());
         }
         if let Some(copied) = b.race.take() {
@@ -87,6 +91,9 @@ impl SystemClipboard for Fake {
         self.find(mimes)
     }
     fn has(&mut self, mimes: &[&'static str]) -> bool {
+        if self.0.borrow().text_only_has {
+            return mimes.contains(&TEXT) && self.find(&[TEXT]).is_some();
+        }
         self.find(mimes).is_some()
     }
 }
@@ -117,6 +124,16 @@ pub(super) fn lock(board: &Rc<RefCell<Board>>, locked: bool) {
 /// The fake clipboard reports no change count, as on platforms that have none.
 pub(super) fn without_change_count(board: &Rc<RefCell<Board>>) {
     board.borrow_mut().uncounted = true;
+}
+
+/// The fake clipboard's `has` finds text only, as the Linux clipboard's does.
+pub(super) fn has_text_only(board: &Rc<RefCell<Board>>) {
+    board.borrow_mut().text_only_has = true;
+}
+
+/// The app's writes fail (`true`) and change nothing, while reads still work.
+pub(super) fn refuse_writes(board: &Rc<RefCell<Board>>, refuse: bool) {
+    board.borrow_mut().refuse = refuse;
 }
 
 /// The app's writes empty the clipboard and then fail, as when one format can't be written; with
