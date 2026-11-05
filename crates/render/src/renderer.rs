@@ -19,7 +19,7 @@ use super::{
 };
 
 #[cfg(test)]
-pub(crate) use paint::{STROKES_OUTLINED, offset_between};
+pub(crate) use paint::{STROKES_OUTLINED, anchors_moved, offset_between};
 
 mod images;
 mod nodes;

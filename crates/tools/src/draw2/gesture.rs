@@ -66,7 +66,9 @@ pub struct GestureTool {
     /// Pencil/Paintbrush starting on a selected path away from its ends: (path, Edit Selected
     /// Paths' distance in points); the stroke redraws the section it ends on (#2850).
     redraw: Option<(NodeId, f64)>,
-    /// Fit tolerance in points (Pencil/Paintbrush/Smooth/Blob Brush "Fidelity").
+    /// Fit tolerance (Pencil/Paintbrush/Smooth/Blob Brush "Fidelity"): in screen pixels for the
+    /// Pencil and the Paintbrush, so a stroke keeps as many points at any zoom (#5729), in points
+    /// for the others.
     pub fidelity: f64,
     /// Brush / eraser diameter in points (the Eraser's across its tip's long axis).
     pub size: f64,
@@ -453,11 +455,12 @@ impl GestureTool {
         self.draws_path() && !self.smoothing && !self.straight && self.extend.is_none() && self.redraw.is_none() && self.ends_near_start(cx, end)
     }
 
-    /// Parameters of `path.freehand` for the current stroke.
-    pub fn freehand_params(&self, closed: bool) -> Value {
+    /// Parameters of `path.freehand` for the current stroke, fitted at Fidelity on screen. Only the
+    /// Pencil and the Paintbrush (`draws_path`) send it; the Blob Brush's Fidelity stays in points.
+    pub fn freehand_params(&self, cx: &ToolContext, closed: bool) -> Value {
         let mut v = json!({
             "points": self.stroke_json(),
-            "fidelity": self.fidelity,
+            "fidelity": cx.tol(self.fidelity),
             "closed": closed,
             "style": if self.id == "paintbrush" { "brush" } else { "pencil" },
             "fill": self.fill,
@@ -494,7 +497,7 @@ impl GestureTool {
                 let near = pts.last().is_some_and(|&end| self.ends_near_start(cx, end));
                 // A straight line has two points: closing it would draw it back over itself.
                 let closed = !self.straight && ((m.alt && (self.id == "paintbrush" || !self.alt_smooth)) || (self.extend.is_none() && near));
-                let mut params = self.freehand_params(closed);
+                let mut params = self.freehand_params(cx, closed);
                 // A Pencil stroke that continues a selected path and ends on an open end of another
                 // path selected at the press connects the two.
                 let connect = pts.last().and_then(|&end| self.find_end(cx, end, &self.connect_to));
@@ -649,9 +652,9 @@ impl Tool for GestureTool {
                 }
                 // With the Pencil's Live preview off a thin line shows instead (`overlays`).
                 if self.previews() && crate::previews_at(self.points.len()) {
-                    let mut v = self.freehand_params(false);
-                    let fidelity = self.fidelity.max(cx.tol(PREVIEW_FIDELITY_PX));
-                    v["fidelity"] = json!(fidelity);
+                    let mut v = self.freehand_params(cx, false);
+                    let fidelity = self.fidelity.max(PREVIEW_FIDELITY_PX);
+                    v["fidelity"] = json!(cx.tol(fidelity));
                     // A preview fitted coarser than the stroke kept is stale (`deactivate`).
                     self.previewed = if fidelity > self.fidelity { 0 } else { self.points.len() };
                     if !self.live_fit {
@@ -748,13 +751,13 @@ impl Tool for GestureTool {
     fn hover_ended(&mut self, _cx: &ToolContext) {
         self.tip_at = None;
     }
-    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         let began = self.began;
         self.tip_at = None;
         // Drags past the last preview are in the stroke kept, too, and with Live curve fitting
         // off the stroke kept is fitted.
         let stale = (began && (self.previewed != self.points.len() || !self.live_fit) && self.draws_path() && !self.smoothing)
-            .then(|| Action::Preview("path.freehand".into(), self.freehand_params(false)));
+            .then(|| Action::Preview("path.freehand".into(), self.freehand_params(cx, false)));
         self.snap.clear();
         self.active = false;
         self.near_start = false;

@@ -1984,7 +1984,7 @@ fn dialog_sliders_report_the_numbers_their_fields_show() {
     app.run("tool.options", json!({"tool": "pencil"})).unwrap();
     set(&mut app, "fidelity", json!(2.5));
     let shown = tree(|ui| show(&mut app, ui.ctx()));
-    assert_eq!(slider_value(&shown, "Fidelity:"), v(2.5, (0.01, 20.0), "2.5pt"));
+    assert_eq!(slider_value(&shown, "Fidelity:"), v(2.5, (0.01, 20.0), "2.5px"), "the Pencil's Fidelity is on screen (#5729)");
     // The Smooth tool's rail starts at its own lowest Fidelity.
     app.ui.dialog = None;
     app.run("tool.options", json!({"tool": "smooth"})).unwrap();

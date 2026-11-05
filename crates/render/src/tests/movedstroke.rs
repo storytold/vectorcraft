@@ -8,7 +8,7 @@ use vectorcraft_doc::{
 };
 use vectorcraft_geom::{PathData, Point, Vec2};
 
-use crate::renderer::{STROKES_OUTLINED, offset_between};
+use crate::renderer::{STROKES_OUTLINED, anchors_moved, offset_between};
 use crate::*;
 
 const SIZE: u32 = 200;
@@ -246,16 +246,84 @@ fn another_width_profile_outlines_the_stroke_again() {
 
 #[test]
 fn a_small_edit_far_from_the_origin_is_not_taken_for_a_move() {
-    let far = Affine::translate((1e9, -1e9));
-    let was = far * zigzag(20);
+    for (far, edits) in [(1e9, &[0.5, 0.0005][..]), (1e15, &[0.5][..])] {
+        let was = Affine::translate((far, -far)) * zigzag(20);
+        let by = Vec2::new(0.25, 3.0);
+        let moved = Affine::translate(by) * was.clone();
+        assert_eq!(
+            offset_between(&was, &moved),
+            Some(moved.elements()[0].end_point().unwrap() - was.elements()[0].end_point().unwrap()),
+            "at {far}: moved"
+        );
+        let node = |bp: &BezPath| Node::path(NodeId(1), PathData::from_bezpath(bp), Appearance::default());
+        let mut moved_node = node(&was);
+        moved_node.transform(Affine::translate(by), true);
+        assert!(anchors_moved(&node(&was), &moved_node), "at {far}: anchors moved");
+        for &edit in edits {
+            let mut els = moved.elements().to_vec();
+            if let Some(kurbo::PathEl::LineTo(p)) = els.get_mut(2) {
+                p.y += edit;
+            }
+            let edited = BezPath::from_vec(els);
+            assert_eq!(offset_between(&was, &edited), None, "at {far}: an anchor moved by {edit} pt");
+            assert!(!anchors_moved(&node(&was), &node(&edited)), "at {far}: an anchor moved by {edit} pt, read from the anchors");
+            // The third segment is a curve: its first handle.
+            let mut els = moved.elements().to_vec();
+            if let Some(kurbo::PathEl::CurveTo(h, _, _)) = els.get_mut(3) {
+                h.x += edit;
+            }
+            assert!(!anchors_moved(&node(&was), &node(&BezPath::from_vec(els))), "at {far}: a handle moved by {edit} pt");
+        }
+    }
+}
+
+#[test]
+fn an_edit_near_the_origin_is_not_taken_for_a_move_when_the_path_starts_far_from_it() {
+    // A subpath at 1e16 pt, where coordinates step by 2 pt, then one near the origin.
+    let mut was = BezPath::new();
+    was.move_to((1e16, 1e16));
+    was.line_to((1e16 + 64.0, 1e16));
+    was.extend(zigzag(20));
     let by = Vec2::new(0.25, 3.0);
     let moved = Affine::translate(by) * was.clone();
-    assert_eq!(offset_between(&was, &moved), Some(moved.elements()[0].end_point().unwrap() - was.elements()[0].end_point().unwrap()));
-    let mut els = moved.elements().to_vec();
-    if let Some(kurbo::PathEl::LineTo(p)) = els.get_mut(2) {
-        p.y += 0.0005;
+    assert_eq!(offset_between(&was, &moved), Some(by), "moved: the offset of the subpath near the origin");
+    let node = |bp: &BezPath| Node::path(NodeId(1), PathData::from_bezpath(bp), Appearance::default());
+    let mut moved_node = node(&was);
+    moved_node.transform(Affine::translate(by), true);
+    assert!(anchors_moved(&node(&was), &moved_node), "anchors moved");
+    // The first and the third anchor of the subpath near the origin.
+    for at in [2, 4] {
+        for edit in [1.0, 0.5] {
+            let mut els = moved.elements().to_vec();
+            if let Some(kurbo::PathEl::MoveTo(p) | kurbo::PathEl::LineTo(p)) = els.get_mut(at) {
+                p.y += edit;
+            }
+            let edited = BezPath::from_vec(els);
+            assert_eq!(offset_between(&was, &edited), None, "element {at} moved by {edit} pt");
+            assert!(!anchors_moved(&node(&was), &node(&edited)), "element {at} moved by {edit} pt, read from the anchors");
+        }
     }
-    assert_eq!(offset_between(&was, &BezPath::from_vec(els)), None, "an anchor moved by 0.0005 pt");
+}
+
+#[test]
+fn points_each_near_the_one_before_are_checked_against_one_offset() {
+    let path = |xs: [f64; 3]| {
+        let mut bp = BezPath::new();
+        bp.move_to((xs[0], 0.0));
+        bp.line_to((xs[1], 0.0));
+        bp.line_to((xs[2], 0.0));
+        bp
+    };
+    let node = |bp: &BezPath| Node::path(NodeId(1), PathData::from_bezpath(bp), Appearance::default());
+    let was = path([1e16, 1e15, 1e14]);
+    // Coordinates step by 2, 0.125 and 0.015625 pt there.
+    let moved = Affine::translate((6.25, 0.0)) * was.clone();
+    assert_eq!(offset_between(&was, &moved), Some(Vec2::new(6.25, 0.0)), "moved");
+    assert!(anchors_moved(&node(&was), &node(&moved)), "anchors moved");
+    // Each point is within rounding of the one before it, but the first did not move.
+    let edited = path([1e16, 1e15 + 6.0, 1e14 + 6.25]);
+    assert_eq!(offset_between(&was, &edited), None);
+    assert!(!anchors_moved(&node(&was), &node(&edited)));
 }
 
 #[test]

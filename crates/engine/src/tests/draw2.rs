@@ -3999,11 +3999,17 @@ fn pen_continue_at_a_first_anchor_in_a_compound_reverses_only_that_subpath() {
 /// The anchors of a closed, slightly wobbly blob drawn at `fidelity`: samples half a point apart,
 /// with a small tremor on top of the outline.
 fn blob_anchors(s: &mut Session, fidelity: f64) -> usize {
+    scaled_blob_anchors(s, fidelity, 1.0)
+}
+
+/// [`blob_anchors`] with the blob scaled by `scale`: drawn the same on screen zoomed in 1 / `scale`
+/// times.
+fn scaled_blob_anchors(s: &mut Session, fidelity: f64, scale: f64) -> usize {
     let pts: Vec<_> = (0..1200)
         .map(|i| {
             let a = i as f64 / 1200.0 * std::f64::consts::TAU;
             let r = 90.0 + 12.0 * (3.0 * a).sin() + 0.15 * (97.0 * a).sin();
-            json!([400.0 + r * a.cos(), 300.0 + r * a.sin()])
+            json!([(400.0 + r * a.cos()) * scale, (300.0 + r * a.sin()) * scale])
         })
         .collect();
     let r = s.execute("path.freehand", &json!({"points": pts, "closed": true, "fidelity": fidelity, "keepSelected": false})).unwrap();
@@ -4018,9 +4024,26 @@ fn pencil_fidelity_goes_down_to_a_hundredth_and_lower_keeps_more() {
     assert!(counts.windows(2).all(|w| w[0] <= w[1]), "{counts:?}");
     // Below the old floor of 0.05 the stroke keeps more of itself.
     assert!(counts[4] > counts[2], "{counts:?}");
-    // Below 0.01 is read as 0.01.
-    assert_eq!(blob_anchors(&mut s, 0.001), counts[4]);
-    assert_eq!(blob_anchors(&mut s, 0.0), counts[4]);
+    // Below the floor, the lowest Fidelity (0.01 px) at the highest zoom (64000 %), is read as the
+    // floor (#5729).
+    let floor = vectorcraft_tools::draw2::MIN_FIDELITY / 640.0;
+    let at_floor = blob_anchors(&mut s, floor);
+    assert!(at_floor >= counts[4], "{counts:?}");
+    assert_eq!(blob_anchors(&mut s, floor / 10.0), at_floor);
+    assert_eq!(blob_anchors(&mut s, 0.0), at_floor);
+}
+
+/// #5729: the tools send Fidelity / zoom, so a stroke drawn the same on screen zoomed in keeps as
+/// many anchors, down to the lowest Fidelity at the highest zoom.
+#[test]
+fn pencil_fit_keeps_its_anchors_on_a_stroke_drawn_zoomed_in() {
+    let mut s = session();
+    for fidelity in [1.5, 0.1, 0.01] {
+        let want = blob_anchors(&mut s, fidelity);
+        for zoom in [4.0, 64.0, 640.0] {
+            assert_eq!(scaled_blob_anchors(&mut s, fidelity / zoom, 1.0 / zoom), want, "{fidelity} at {zoom}x");
+        }
+    }
 }
 
 /// At Fidelity 0.01 short, one-point and repeated-point strokes still draw or are refused, never
