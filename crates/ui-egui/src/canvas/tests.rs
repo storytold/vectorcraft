@@ -9223,7 +9223,9 @@ fn a_documents_first_frame_renders_on_the_worker() {
     let job = jobs.try_recv().expect("the first frame is queued on the worker");
     assert!(app.canvas.texture.is_none(), "not rendered on the UI thread");
     frame(&mut app);
-    assert!(jobs.try_recv().is_err(), "not queued again while it renders");
+    // A placed document of a test running beside this one moves the process-wide generation in
+    // the key: that makes a new frame, not this one again.
+    assert!(jobs.try_iter().all(|j| j.key.placed != job.key.placed), "not queued again while it renders");
     assert!(app.canvas.texture.is_none());
 
     done_tx.send(finished(&job)).unwrap();
