@@ -1735,6 +1735,35 @@ fn artboards() {
     assert_eq!(doc.artboards[0].rect, Rect::new(0.0, 0.0, 600.0, 400.0));
 }
 
+#[test]
+fn the_active_artboard_is_the_one_crop_area_active_names() {
+    let board = |x: i32, w: i32| {
+        format!(
+            "%_/Dictionary :\n%_{x} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            x + w
+        )
+    };
+    let square = layer(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    // Four artboards in the array, the second of no width (left out); `entry` follows the array.
+    let opened = |entry: &str| {
+        let boards = [board(0, 100), board(200, 0), board(400, 100), board(600, 100)].concat();
+        let data = format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n{boards}%_; (ArtboardArray) ,\n{entry}%_; /NotRecorded ,\n%_;\n{square}");
+        let doc = read_ok(&data).doc;
+        doc.opened_artboard.map(|id| doc.artboards.iter().position(|a| a.id == id))
+    };
+    // The index counts every entry of the array, the one left out too.
+    assert_eq!(opened("%_3 /Int (CropAreaActive) ,\n"), Some(Some(2)));
+    assert_eq!(opened("%_2 /Int (CropAreaActive) ,\n"), Some(Some(1)));
+    // After another entry of the dictionary that holds the array.
+    assert_eq!(opened("%_1 /Int (Other) ,\n%_3 /Int (CropAreaActive) ,\n"), Some(Some(2)));
+    // The first artboard, the one left out, one past the end, a value of another type, or none.
+    for entry in
+        ["%_0 /Int (CropAreaActive) ,\n", "%_1 /Int (CropAreaActive) ,\n", "%_4 /Int (CropAreaActive) ,\n", "%_2 /Real (CropAreaActive) ,\n", ""]
+    {
+        assert_eq!(opened(entry), None, "{entry}");
+    }
+}
+
 /// The document data of artboards side by side, 100 points wide, each with the entries `extra`.
 fn boards_with(extra: &[&str]) -> String {
     let boards: String = extra
@@ -4277,7 +4306,7 @@ fn artboards_after_what_stops_the_reading() {
     let array = format!("%_/Array :\n{}{}%_; (ArtboardArray) ,\n", board("one", 0), board("two", 200));
     // Art in the document's own data that the reader can't follow comes before the artboards.
     let data = format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n%_/Dictionary :\nLB\n{array}%_; /NotRecorded ,\n%_;\n");
-    let boards: Vec<_> = super::artboards(data.as_bytes()).into_iter().map(|(n, r)| (n, r.x0)).collect();
+    let boards: Vec<_> = super::artboards(data.as_bytes()).0.into_iter().map(|(n, r)| (n, r.x0)).collect();
     assert_eq!(boards, [("one".to_string(), 0.0), ("two".to_string(), 200.0)]);
 }
 

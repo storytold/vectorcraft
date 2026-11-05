@@ -361,6 +361,8 @@ struct Reader<'a> {
     to_doc: Option<Affine>,
     cropmarks: Option<Rect>,
     artboards: Vec<document::AiArtboard>,
+    /// The index in `artboards` of the active artboard (`CropAreaActive`).
+    active_board: Option<usize>,
     /// The user the header's `%%For` names.
     author: Option<String>,
     /// The custom colors the header's `%%CMYKCustomColor` and `%%RGBCustomColor` define.
@@ -571,6 +573,7 @@ impl<'a> Reader<'a> {
             to_doc: None,
             cropmarks: None,
             artboards: Vec::new(),
+            active_board: None,
             author: None,
             custom_colors: Vec::new(),
             custom_more: None,
