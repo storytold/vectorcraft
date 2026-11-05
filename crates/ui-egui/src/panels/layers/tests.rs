@@ -231,7 +231,7 @@ fn italic_names(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
     names
 }
 
-/// A layer whose Layer Options в†’ Print is off has its name italic in the panel (#5739), as the
+/// A layer whose Layer Options › Print is off has its name italic in the panel (#5739), as the
 /// reference application shows it; a printing layer's name stays upright, and unticking Print again
 /// makes it upright.
 #[test]

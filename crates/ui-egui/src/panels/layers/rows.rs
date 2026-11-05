@@ -16,7 +16,7 @@ pub(super) fn rename_id() -> egui::Id {
     egui::Id::unique("layers-rename")
 }
 
-/// Whether a row's name is italic: a layer whose Layer Options в†’ Print is off does not print, and
+/// Whether a row's name is italic: a layer whose Layer Options › Print is off does not print, and
 /// the panel shows that in its name, as the reference application does (a template layer's Print is
 /// off too).
 fn prints_italic(n: &Node) -> bool {
