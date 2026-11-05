@@ -31,6 +31,13 @@ pub(super) struct Board {
     uncounted: bool,
     /// The app's writes empty the clipboard and then fail.
     partial: bool,
+    /// With `partial`, the formats other than text are written before the failure.
+    partial_keeps_others: bool,
+    /// Another app copies this while the app's write tries to open the clipboard, and the write
+    /// fails.
+    race: Option<Flavour>,
+    /// With `race`, the other app's copy also carries the app's formats other than text.
+    race_with_our_formats: bool,
 }
 
 struct Fake(Rc<RefCell<Board>>);
@@ -52,8 +59,17 @@ impl SystemClipboard for Fake {
         if b.locked {
             return Err("another app has the clipboard open".into());
         }
+        if let Some(copied) = b.race.take() {
+            b.flavours = vec![copied];
+            if b.race_with_our_formats {
+                b.flavours.extend(flavours.iter().filter(|f| f.mime != TEXT).cloned());
+            }
+            b.ours = false;
+            b.changes += 1;
+            return Err("another app has the clipboard open".into());
+        }
         if b.partial {
-            b.flavours.clear();
+            b.flavours = if b.partial_keeps_others { flavours.iter().filter(|f| f.mime != TEXT).cloned().collect() } else { vec![] };
             b.changes += 1;
             return Err("a format could not be written".into());
         }
@@ -103,9 +119,21 @@ pub(super) fn without_change_count(board: &Rc<RefCell<Board>>) {
     board.borrow_mut().uncounted = true;
 }
 
-/// The app's writes empty the clipboard and then fail, as when one format can't be written.
-pub(super) fn fail_writes_after_emptying(board: &Rc<RefCell<Board>>) {
-    board.borrow_mut().partial = true;
+/// The app's writes empty the clipboard and then fail, as when one format can't be written; with
+/// `keep_others`, the formats other than text are written.
+pub(super) fn fail_writes_after_emptying(board: &Rc<RefCell<Board>>, keep_others: bool) {
+    let mut b = board.borrow_mut();
+    b.partial = true;
+    b.partial_keeps_others = keep_others;
+}
+
+/// Another app copies `data` of type `mime` while the app's next write tries to open the
+/// clipboard, and that write fails. With `our_formats`, its copy also carries the app's formats
+/// other than text.
+pub(super) fn copy_during_next_write(board: &Rc<RefCell<Board>>, mime: &'static str, data: Vec<u8>, our_formats: bool) {
+    let mut b = board.borrow_mut();
+    b.race = Some(Flavour { mime, data });
+    b.race_with_our_formats = our_formats;
 }
 
 pub(super) fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
