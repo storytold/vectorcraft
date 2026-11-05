@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Pencil and Paintbrush: a new stroke with Keep selected off leaves nothing selected, #5752; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -36,6 +36,7 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Effect dialogs: a colour swatch beside a hex colour field follows typed values, and a double-click opens the Color Picker over the dialog, whose OK fills the field (#5365); scores and estimates unchanged. |
 | 2026-11-05 | minor | Selection Tools add-on: Select Linked, Embedded, Missing and Modified select the images and placed documents with that link status (Object › Plug-ins › Selection Tools and the Links panel menu; Shift adds), and Select by Link Status… lists them by name, status and format to pick from, optionally zooming to them; what is hidden, locked, on a template layer or outside the isolated group is left out and the status bar says how many (#5526, a VectorCraft addition); scores and estimates unchanged (estimated). |
 | 2026-11-05 | minor | Pencil and Paintbrush: a new stroke with Keep selected off leaves nothing selected, the earlier selection included, while Keep selected on selects only the new path (#5752); scores and estimates unchanged. |
 | 2026-11-05 | minor | Layers panel: a layer whose Layer Options › Print is off shows its name italic, as the reference application shows non-printing layers, and keeps it while the row is dragged (#5739); scores and estimates unchanged. |
