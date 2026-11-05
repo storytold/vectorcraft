@@ -13,8 +13,9 @@ impl VectorcraftApp {
             // Synthetic input sent before this pointer request was dropped (see
             // `discard_stale_injected_batch`): its events would reach the tool without that input.
             if req.method == "ui.pointer" && req.made_before(self.synthetic_dropped_before) {
-                handled += 1;
+                // One its caller gave up is skipped without counting toward this frame's limit.
                 if req.claim() {
+                    handled += 1;
                     let _ = req.reply.send(json!({
                         "ok": false,
                         "error": "input sent before this pointer request was dropped because the document, dialog or focus changed"

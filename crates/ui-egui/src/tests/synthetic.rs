@@ -142,6 +142,27 @@ fn a_given_up_pointer_does_not_hold_back_later_requests() {
     assert!(up_reply.try_recv().is_err(), "the given-up pointer request did not run");
 }
 
+/// Given-up `ui.pointer` requests made before synthetic input was dropped do not count toward a
+/// frame's request limit: a request queued behind a frame's worth of them runs in that frame.
+#[test]
+fn given_up_stale_pointer_requests_do_not_use_up_the_frame() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    for _ in 0..crate::control::MAX_CONTROL_REQUESTS_PER_FRAME {
+        let (up, _up_reply) = ControlRequest::new("ui.pointer", json!({"events": [{"kind": "up", "x": 200, "y": 180}]}));
+        assert!(up.ticket().give_up(), "the pointer request had not started");
+        tx.send(up).unwrap();
+    }
+    app.synthetic_dropped_before = ControlRequest::next_seq();
+    let (list, list_reply) = ControlRequest::new("ui.tool.list", json!({}));
+    tx.send(list).unwrap();
+    app.drain_control(&ctx);
+    let r = list_reply.try_recv().expect("the list ran in the same frame");
+    assert_eq!(r["ok"], true, "{r}");
+}
+
 /// A `ui.pointer` release sent after a `ui.key` fails when the key's batch is discarded because a
 /// dialog opened before a UI pass took it, whether the release was waiting for the key
 /// (`waiting`) or still on the channel. A release made after the discard runs.
