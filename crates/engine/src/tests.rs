@@ -109,6 +109,7 @@ mod paintproxy;
 mod panelcmds;
 mod paragraphs;
 mod params;
+mod path_menu_enabled;
 mod pathops;
 mod pathtype;
 mod pattern;
