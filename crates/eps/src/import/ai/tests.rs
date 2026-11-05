@@ -6481,6 +6481,107 @@ fn a_gradients_br_is_not_a_brush() {
     assert_eq!(g.gradient.stops.len(), 2);
 }
 
+/// The Brush Options codes for how a Calligraphic brush's values vary: Tilt, Bearing and Rotation
+/// are the pen's other channels (#372: a 6D Art Pen brush varies its diameter with the pressure,
+/// its roundness with the bearing and its angle with the barrel's rotation). The stylus wheel isn't
+/// read: it varies at random, as an unknown code does.
+#[test]
+fn a_calligraphic_brushs_pen_channels_come_in_by_their_codes() {
+    use vectorcraft_brush::Variation::{Bearing, Fixed, Pressure, Random, Rotation, Tilt};
+    let modes = |params: &str| {
+        let d = brush::parse_tool_object(brush::Tool::Calligraphic, "Pen", params).unwrap();
+        let brush::DraftKind::Calligraphic(c) = d.kind else { panic!("{d:?}") };
+        c.modes.unwrap()
+    };
+    assert_eq!(modes("1 51 69 13 57 -346 14 2 5 6 0"), [Rotation, Bearing, Pressure]);
+    assert_eq!(modes("1 2 6 40 60 -30 10 4 4 4 0"), [Tilt, Tilt, Tilt]);
+    assert_eq!(modes("1 2 6 40 60 -30 10 3 3 3 0"), [Random, Random, Random], "the stylus wheel");
+    assert_eq!(modes("1 4 4 50 50 10 10 3 9 9 0"), [Fixed, Fixed, Fixed], "nothing to vary");
+}
+
+/// A 6D Art Pen brush: diameter 4 to 8 with the pressure, roundness 30 to 50 with the bearing and
+/// angle -150 to 210 with the barrel's rotation.
+const SIX_D: &str = "1 4 8 30 50 -150 210 2 5 6 0";
+
+/// The style `Inked`: a stroke in red of weight `weight` with the Calligraphic brush `brush` at
+/// diameter, roundness and angle `settings` (each its value and variation either side), varying by
+/// the codes `codes`, its angle relative to `relative` (0 the page).
+fn brushed_style(brush: &str, weight: f64, settings: [(f64, f64); 3], codes: [u8; 3], relative: u8) -> String {
+    let [(d, dv), (r, rv), (a, av)] = settings;
+    let [dm, rm, am] = codes;
+    format!(
+        "%AI9_BeginArtStyles\n/KnownStyle :\n(Inked) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n({CALLIGRAPHIC}) 1 0 /Filter ,\n1 /Visible ,\n(Calligraphic Brush) /Title ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+         /StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 1 0 0 0 Xy\n0 J 0 j {weight} w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n\
+         {d} /Real (Diameter) ,\n{dv} /Real (DiameterVariation) ,\n{dm} /Int (DiameterDependsOn) ,\n\
+         {r} /Real (Roundness) ,\n{rv} /Real (RoundnessVariation) ,\n{rm} /Int (RoundnessDependsOn) ,\n\
+         {a} /Real (Angle) ,\n{av} /Real (AngleVariation) ,\n{am} /Int (AngleDependsOn) ,\n{relative} /Int (AngleRelativeTo) ,\n\
+         ({brush}) /UnicodeString (DisplayString) ,\n/GObjRef : ({brush}) ({CALLIGRAPHIC}) /PluginObject ; (Brush) ,\n; /Dict ;\n /Part ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+         /FillStyle : 0 O\n0 0 0 0 k\n0 0 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+         ;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+    )
+}
+
+/// The settings [`SIX_D`] has, as an art style writes them.
+const SIX_D_SETTINGS: [(f64, f64); 3] = [(6.0, 2.0), (40.0, 10.0), (30.0, 180.0)];
+
+/// A brushed path as the file writes it: its drawn look (a filled outline) in a group, then the
+/// path itself on `%_` lines, unpainted, with the style `Inked`.
+fn brushed_path() -> String {
+    let line = "20 20 m\n100 60 L\n";
+    format!("0 Ae\nu\n{RED}{}f\nU\n0 0 Xd\n6 () XW\n%_{}n\n1 (Inked) XW\n", rect_path(20.0, 18.0, 100.0, 62.0), line.replace('\n', "\n%_"))
+}
+
+/// A path drawn with a Calligraphic brush comes in as the path, its stroke in that brush at its
+/// weight (the weight scales the brush), not as its drawn look: here a 6D Art Pen brush, whose
+/// channels the brush keeps (#372).
+#[test]
+fn a_path_with_a_calligraphic_brush_comes_in_brushed() {
+    let def = plugin_object(CALLIGRAPHIC, "Six D", SIX_D);
+    let style = brushed_style("Six D", 0.5, SIX_D_SETTINGS, [2, 5, 6], 0);
+    let r = read_ok(&format!("{def}{style}{}", layer(&brushed_path())));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the path, not its look: {a:#?}");
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let st = a[0].appearance.stroke().unwrap();
+    assert_eq!((st.brush.as_deref(), st.width, st.paint.color()), (Some("Six D"), 0.5, Some(Color::rgb(1.0, 0.0, 0.0))));
+    assert!(a[0].appearance.fill().is_none_or(|f| f.paint.is_none()), "{:?}", a[0].appearance);
+    use vectorcraft_brush::{BrushKind, Variation};
+    let lib = vectorcraft_brush::library(&r.doc);
+    let BrushKind::Calligraphic(c) = brush_named(&lib, "Six D") else { panic!("calligraphic") };
+    assert_eq!(c.modes, Some([Variation::Rotation, Variation::Bearing, Variation::Pressure]));
+    // With no pen recorded on the path, the nib is the brush's own at the stroke's weight.
+    let pieces = vectorcraft_brush::stroke_pieces(&r.doc, &lib[0], &a[0].path_data().unwrap().to_bezpath(), st);
+    let height = pieces.iter().filter_map(|n| n.geometric_bounds()).map(|b| b.height()).fold(0.0, f64::max);
+    assert!(height > 40.0 && height < 46.0, "the line's rise and about half the nib's 3 pt: {height}");
+}
+
+/// A brushed path keeps its drawn look when its stroke can't be read as the brush: the object's
+/// own settings differ from the brush's (Options of Selected Object), its angle follows the path,
+/// or the file defines no brush of its name.
+#[test]
+fn a_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
+    let def = plugin_object(CALLIGRAPHIC, "Six D", SIX_D);
+    let mut own = SIX_D_SETTINGS;
+    own[0] = (9.0, 2.0);
+    let cases = [
+        ("its own settings", def.clone(), brushed_style("Six D", 1.0, own, [2, 5, 6], 0)),
+        ("its own modes", def.clone(), brushed_style("Six D", 1.0, SIX_D_SETTINGS, [2, 5, 4], 0)),
+        ("an angle on the path", def.clone(), brushed_style("Six D", 1.0, SIX_D_SETTINGS, [2, 5, 6], 1)),
+        ("no such brush", def, brushed_style("Other", 1.0, SIX_D_SETTINGS, [2, 5, 6], 0)),
+    ];
+    for (why, def, style) in cases {
+        let r = read_ok(&format!("{def}{style}{}", layer(&brushed_path())));
+        let a = art(&r.doc);
+        assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{why}: the drawn look, {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
+    }
+}
+
 use read::{GRAPH_PLAIN, GRAPH_UNENDED};
 
 /// Editing data in the legacy format (version 7 specification, chapter 2): `%AI5_FileFormat 2.0`,
