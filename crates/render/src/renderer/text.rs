@@ -304,13 +304,14 @@ impl Renderer {
     /// decoded once and kept with the images' pixels.
     fn draw_glyph_image(&mut self, ctx: &mut RenderContext, f: &Frame, image: &vectorcraft_text::GlyphImage, xf: Affine) {
         let Some((key, pm)) = blob_pixmap(&image.blob, true) else { return };
-        let (key, pm) = ink::ink_image(&key, &pm, f.ink, Some(&image.blob), true);
-        let (key, pm) = match f.plates {
-            Some(lut) => proof::plate_image(lut, &key, &pm, Some(&image.blob), true),
-            None => (key, pm),
-        };
+        // Shrunk before it is inked, as images are (`draw_image_in`).
         let unit = f.view * xf * Affine::scale_non_uniform(image.width as f64, image.height as f64);
-        let pm = image_mip(&key, pm, unit);
+        let (key, pm) = image_mip(key, pm, unit);
+        let (key, pm) = ink::ink_image(&key, &pm, f.ink, Some(&image.blob), true);
+        let pm = match f.plates {
+            Some(lut) => proof::plate_image(lut, &key, &pm, Some(&image.blob), true).1,
+            None => pm,
+        };
         let sx = image.width as f64 / pm.width().max(1) as f64;
         let sy = image.height as f64 / pm.height().max(1) as f64;
         let quality = if f.opts.smooth_images { peniko::ImageQuality::Medium } else { peniko::ImageQuality::Low };
