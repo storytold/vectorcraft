@@ -5973,6 +5973,10 @@ breakText	Glyphs	字符
 	Bow	弓形
 	Spike	尖峰
 	Skip Spaces	略過空格
+	Release Type on a Path…	釋放路徑文字…
+	Release Type on a Path	釋放路徑文字
+	Text and Path	文字和路徑
+	Path Only	僅路徑
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	圖稿太大，無法作為圖片複製：其他應用程式不會取得它的 PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

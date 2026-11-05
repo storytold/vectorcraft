@@ -6391,6 +6391,10 @@ digits	Hindi	Hindi
 	Bow	Båge
 	Spike	Spets
 	Skip Spaces	Hoppa över mellanslag
+	Release Type on a Path…	Släpp text på bana…
+	Release Type on a Path	Släpp text på bana
+	Text and Path	Text och bana
+	Path Only	Endast bana
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Teckningen är för stor för att kopieras som en bild: andra appar får ingen PNG av den
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

@@ -6330,6 +6330,10 @@ breakText	Glyphs	Glyphes
 	Bow	Arc
 	Spike	Pointe
 	Skip Spaces	Ignorer les espaces
+	Release Type on a Path…	Libérer le texte curviligne…
+	Release Type on a Path	Libérer le texte curviligne
+	Text and Path	Texte et tracé
+	Path Only	Tracé uniquement
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	L’illustration est trop grande pour être copiée en tant qu’image : les autres applications n’en reçoivent pas de PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

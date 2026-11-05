@@ -6277,6 +6277,10 @@ breakText	Glyphs	Glifos
 	Bow	Arco
 	Spike	Pico
 	Skip Spaces	Omitir espacios
+	Release Type on a Path…	Soltar texto en trazado…
+	Release Type on a Path	Soltar texto en trazado
+	Text and Path	Texto y trazado
+	Path Only	Solo trazado
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	La ilustración es demasiado grande para copiarla como imagen: las demás aplicaciones no reciben un PNG de ella
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

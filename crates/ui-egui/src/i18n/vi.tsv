@@ -5936,6 +5936,10 @@ breakText	Glyphs	Glyph
 	Bow	Cung
 	Spike	Đỉnh nhọn
 	Skip Spaces	Bỏ qua khoảng trắng
+	Release Type on a Path…	Giải phóng chữ trên đường dẫn…
+	Release Type on a Path	Giải phóng chữ trên đường dẫn
+	Text and Path	Văn bản và đường dẫn
+	Path Only	Chỉ đường dẫn
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Hình vẽ quá lớn để sao chép dưới dạng ảnh: các ứng dụng khác không nhận được PNG của nó
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

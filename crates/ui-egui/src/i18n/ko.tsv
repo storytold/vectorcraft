@@ -5916,6 +5916,10 @@ breakText	Glyphs	글리프
 	Bow	활 모양
 	Spike	뾰족한 모양
 	Skip Spaces	공백 건너뛰기
+	Release Type on a Path…	패스 위 문자 해제…
+	Release Type on a Path	패스 위 문자 해제
+	Text and Path	문자와 패스
+	Path Only	패스만
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	아트워크가 너무 커서 이미지로 복사할 수 없습니다: 다른 앱에는 PNG가 전달되지 않습니다
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

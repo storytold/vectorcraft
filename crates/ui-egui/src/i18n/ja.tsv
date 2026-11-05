@@ -6020,6 +6020,10 @@ breakText	Glyphs	字形
 	Bow	弓形
 	Spike	山形
 	Skip Spaces	スペースをスキップ
+	Release Type on a Path…	パス上文字を解除…
+	Release Type on a Path	パス上文字を解除
+	Text and Path	テキストとパス
+	Path Only	パスのみ
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	アートワークが大きすぎるため画像としてコピーできません：他のアプリには PNG が渡されません
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

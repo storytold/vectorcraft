@@ -6346,6 +6346,10 @@ font-script	Japanese	იაპონური
 	Bow	რკალი
 	Spike	პიკი
 	Skip Spaces	ჰარების გამოტოვება
+	Release Type on a Path…	ტექსტის ტრაექტორიიდან მოხსნა…
+	Release Type on a Path	ტექსტის ტრაექტორიიდან მოხსნა
+	Text and Path	ტექსტი და ტრაექტორია
+	Path Only	მხოლოდ ტრაექტორია
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	ნახატი ზედმეტად დიდია სურათად დასაკოპირებლად: სხვა აპები მის PNG-ს ვერ მიიღებენ
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

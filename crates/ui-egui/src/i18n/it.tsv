@@ -5955,6 +5955,10 @@ breakText	Glyphs	Glifi
 	Bow	Arco
 	Spike	Picco
 	Skip Spaces	Salta gli spazi
+	Release Type on a Path…	Rilascia testo su tracciato…
+	Release Type on a Path	Rilascia testo su tracciato
+	Text and Path	Testo e tracciato
+	Path Only	Solo tracciato
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	La grafica è troppo grande per essere copiata come immagine: le altre app non ne ricevono un PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
