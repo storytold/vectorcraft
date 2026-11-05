@@ -5966,6 +5966,25 @@ breakText	Glyphs	Glyph
 	Minimum angle	Góc tối thiểu
 	Maximum angle	Góc tối đa
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Chọn ảnh đã liên kết
+	Select Embedded	Chọn ảnh đã nhúng
+	Select Missing	Chọn ảnh bị thiếu
+	Select Modified	Chọn ảnh đã sửa đổi
+	Select by Link Status	Chọn theo trạng thái liên kết
+	Select by Link Status…	Chọn theo trạng thái liên kết…
+	Search images	Tìm ảnh
+	No images match.	Không có ảnh nào khớp.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Đã chọn {n} ảnh đã liên kết
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Đã chọn {n} ảnh đã nhúng
+@msgplural	Selected {n} missing image|Selected {n} missing images	Đã chọn {n} ảnh bị thiếu
+@msgplural	Selected {n} modified image|Selected {n} modified images	Đã chọn {n} ảnh đã sửa đổi
+@msgplural	Selected {n} image|Selected {n} images	Đã chọn {n} ảnh
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; thêm {n} ảnh bị ẩn hoặc khóa
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; thêm {n} ảnh nằm trên lớp mẫu
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; thêm {n} ảnh nằm ngoài nhóm đã tách biệt
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; thêm {n} ảnh hiện không thể chọn
+
 # Compound Shapes add-on
 	Compound Shapes	Hình phức hợp
 	Shape Mode Buttons Make Compound Shapes	Nút chế độ hình dạng tạo hình phức hợp

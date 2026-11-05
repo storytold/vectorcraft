@@ -6220,6 +6220,25 @@ breakText	Glyphs	Glify
 	Minimum angle	Kąt minimalny
 	Maximum angle	Kąt maksymalny
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Zaznacz połączone
+	Select Embedded	Zaznacz osadzone
+	Select Missing	Zaznacz brakujące
+	Select Modified	Zaznacz zmodyfikowane
+	Select by Link Status	Zaznacz według stanu połączenia
+	Select by Link Status…	Zaznacz według stanu połączenia…
+	Search images	Szukaj obrazów
+	No images match.	Żaden obraz nie pasuje.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Zaznaczono {n} połączony obraz|Zaznaczono {n} połączone obrazy|Zaznaczono {n} połączonych obrazów
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Zaznaczono {n} osadzony obraz|Zaznaczono {n} osadzone obrazy|Zaznaczono {n} osadzonych obrazów
+@msgplural	Selected {n} missing image|Selected {n} missing images	Zaznaczono {n} brakujący obraz|Zaznaczono {n} brakujące obrazy|Zaznaczono {n} brakujących obrazów
+@msgplural	Selected {n} modified image|Selected {n} modified images	Zaznaczono {n} zmodyfikowany obraz|Zaznaczono {n} zmodyfikowane obrazy|Zaznaczono {n} zmodyfikowanych obrazów
+@msgplural	Selected {n} image|Selected {n} images	Zaznaczono {n} obraz|Zaznaczono {n} obrazy|Zaznaczono {n} obrazów
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; jeszcze {n} jest ukryty lub zablokowany|{selected}; jeszcze {n} są ukryte lub zablokowane|{selected}; jeszcze {n} jest ukrytych lub zablokowanych
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; jeszcze {n} jest na warstwie szablonu|{selected}; jeszcze {n} są na warstwach szablonu|{selected}; jeszcze {n} jest na warstwach szablonu
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; jeszcze {n} jest poza izolowaną grupą|{selected}; jeszcze {n} są poza izolowaną grupą|{selected}; jeszcze {n} jest poza izolowaną grupą
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; jeszcze {n} nie można teraz zaznaczyć|{selected}; jeszcze {n} nie można teraz zaznaczyć|{selected}; jeszcze {n} nie można teraz zaznaczyć
+
 # Compound Shapes add-on
 	Compound Shapes	Kształty złożone
 	Shape Mode Buttons Make Compound Shapes	Przyciski trybów kształtu tworzą kształty złożone

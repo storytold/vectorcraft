@@ -1110,7 +1110,7 @@ fn linked_param(st: &crate::DocState, p: &Value, cmd: &str) -> Result<NodeId> {
 
 /// Per linked image in the layers of `st`: its file's status, where it was found when away from
 /// its path, and whether the image shows its preview (each file probed once).
-fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, bool)> {
+pub(crate) fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, bool)> {
     let mut out = BTreeMap::new();
     for g in groups(&st.doc, None).iter().filter(|g| !g.ids.is_empty()) {
         let (status, found) = probe(g, st.path.as_deref());

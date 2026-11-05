@@ -6050,6 +6050,25 @@ breakText	Glyphs	字形
 	Minimum angle	最小角度
 	Maximum angle	最大角度
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	リンク済みを選択
+	Select Embedded	埋め込みを選択
+	Select Missing	見つからない画像を選択
+	Select Modified	変更された画像を選択
+	Select by Link Status	リンクの状態で選択
+	Select by Link Status…	リンクの状態で選択…
+	Search images	画像を検索
+	No images match.	一致する画像はありません。
+@msgplural	Selected {n} linked image|Selected {n} linked images	リンク済みの画像を {n} 個選択しました
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	埋め込み画像を {n} 個選択しました
+@msgplural	Selected {n} missing image|Selected {n} missing images	見つからない画像を {n} 個選択しました
+@msgplural	Selected {n} modified image|Selected {n} modified images	変更された画像を {n} 個選択しました
+@msgplural	Selected {n} image|Selected {n} images	画像を {n} 個選択しました
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}。ほかに {n} 個が非表示またはロックされています
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}。ほかに {n} 個がテンプレートレイヤー上にあります
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}。ほかに {n} 個が分離したグループの外にあります
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}。ほかに {n} 個は今は選択できません
+
 # Compound Shapes add-on
 	Compound Shapes	複合シェイプ
 	Shape Mode Buttons Make Compound Shapes	シェイプモードボタンで複合シェイプを作成

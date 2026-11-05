@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-04 · **Change:** minor (Select by Artboards add-on selects by overlap, inside or outside several artboards; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Selection Tools add-on: Select by Link Status selects images and placed documents that are linked, embedded, missing or modified, #5526; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -28,6 +28,7 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Selection Tools add-on: Select Linked, Embedded, Missing and Modified select the images and placed documents with that link status (Object › Plug-ins › Selection Tools and the Links panel menu; Shift adds), and Select by Link Status… lists them by name, status and format to pick from, optionally zooming to them; what is hidden, locked, on a template layer or outside the isolated group is left out and the status bar says how many (#5526, a VectorCraft addition); scores and estimates unchanged (estimated). |
 | 2026-11-04 | minor | M7: Find Font's Replace With Font lists family and style rows with a search, and the list and the document's font list scroll on their own (#4972); scores and estimates unchanged. |
 | 2026-11-04 | minor | Selection Tools add-on: Select by Artboards selects the objects overlapping, fully inside or fully outside several chosen artboards, from a dialog that lists, searches and multi-selects the artboards and fits one in the window on double-click (#5525, #5548, #5549, a VectorCraft addition); scores and estimates unchanged. |
 | 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen preset; Recent and Saved cards keep the units their document or preset was made in, and the built-in tabs still follow the chosen units (#2078). Scores and estimates unchanged. |

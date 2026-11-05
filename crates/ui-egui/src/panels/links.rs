@@ -4,7 +4,8 @@
 //! from the last row clicked without Shift to it (with Ctrl/Cmd, adds them); the buttons Relink,
 //! Go To, Update and Edit Original act on the selected rows; Link Info shows the details of the
 //! first. The flyout adds Relink to Folder, Find in Folder (Find Linked Files:
-//! `ui.findLinksInFolder`), Embed / Unembed, Placement Options, Show filters, Sort, thumbnail size
+//! `ui.findLinksInFolder`), Embed / Unembed, Placement Options, Select Linked / Embedded / Missing /
+//! Modified (`addon.select.byLinkStatus`, Shift adds), Show filters, Sort, thumbnail size
 //! and Show in Folder.
 //!
 //! Everything runs through the `links.*` commands (`links.editOriginal` and `links.reveal` are UI
@@ -595,6 +596,17 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Show in Folder"), sel.iter().any(|r| r["linked"] == true && !status_is(r, "missing")), false) {
         crate::menus::invoke(app, "links.reveal", json!({}));
+    }
+    ui.separator();
+    // Select Linked, Embedded, Missing and Modified: every such image in the document, not only
+    // the rows shown; with Shift, added to the selection.
+    use crate::addons::select::link_status;
+    for (i, (status, label, _)) in link_status::STATUSES.iter().enumerate() {
+        if menu_item(ui, tl!(label), app.ui.link_statuses.has.get(i).copied().unwrap_or(false), false) {
+            let p = json!({ "status": status });
+            let p = if ui.input(|i| i.modifiers.shift) { link_status::with_shift(p) } else { p };
+            crate::menus::invoke(app, link_status::COMMAND, p);
+        }
     }
     ui.separator();
     for (id, label) in SHOW {
