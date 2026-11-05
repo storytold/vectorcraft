@@ -1733,16 +1733,61 @@ fn convert_to_text_of_the_whole_story_leaves_a_locked_frame() {
         s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
         s.set_tool_option("textSelection", &json!({"editing": a.0, "anchor": 0, "caret": 0}));
         assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+        // The first frame ends with a paragraph return, so the paragraph that starts the locked
+        // frame takes in the first frame's empty last part and starts its text there.
+        let in_a = obj(&s, a).plain_text();
+        assert!(in_a.ends_with('\n'));
+        let own = in_a.split('\n').filter(|piece| !piece.is_empty()).count();
         let p = if named { json!({"ids": [a.0, b.0]}) } else { json!({}) };
-        s.execute("text.convertListToText", &p).unwrap();
+        let r = s.execute("text.convertListToText", &p).unwrap();
+        assert_eq!(r["ids"], json!([a.0]), "only the editable frame is changed (ids named: {named})");
+        assert_eq!(r["converted"], json!(own), "only the paragraphs whose text starts in the editable frame convert");
+        assert!(r["inserted"].as_array().unwrap().iter().all(|i| i["id"] == json!(a.0)));
         let (ta, tb) = (obj(&s, a), obj(&s, b));
         assert!(ta.plain_text().contains("\u{2022}\t"), "the editable frame is converted");
+        let markers = ta.plain_text().matches("\u{2022}\t").count() + tb.plain_text().matches("\u{2022}\t").count();
+        assert_eq!(markers, own, "the locked frame's first paragraph keeps its list");
         // The converted text is longer, so the story flows on into the locked frame; its own
         // paragraphs stay a list.
         let last = tb.paragraph_count() - 2;
         assert!(tb.para_at(last).list.is_some(), "the locked frame's paragraphs stay a list (ids named: {named})");
         assert!(!tb.plain_text().ends_with("\u{2022}\tAlpha beta.\n"));
         assert!(s.tool_options().get("story").is_some(), "the whole story stays selected");
+    }
+}
+
+#[test]
+fn convert_to_text_of_the_whole_story_leaves_a_paragraph_that_starts_in_a_locked_frame() {
+    for named in [false, true] {
+        let mut s = session();
+        let story = format!("Alpha beta.\nAlpha beta.\n{}end.\nAlpha beta.\nAlpha beta.\n", "Gamma delta ".repeat(40));
+        let a = NodeId(
+            s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        let b = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 900})).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [a.0, b.0], "list": "bullet"})).unwrap();
+        let in_a = obj(&s, a).plain_text();
+        assert!(!in_a.ends_with('\n') && !obj(&s, b).plain_text().starts_with('\n'), "a paragraph runs on from the first frame into the second");
+        s.execute("object.lock", &json!({"ids": [a.0]})).unwrap();
+        s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+        assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+        let p = if named { json!({"ids": [a.0, b.0]}) } else { json!({}) };
+        let r = s.execute("text.convertListToText", &p).unwrap();
+        assert_eq!(r["ids"], json!([b.0]), "only the editable frame is changed (ids named: {named})");
+        // The two paragraphs that start in the editable frame, and the empty one that ends the story.
+        assert_eq!(r["converted"], json!(3), "only the paragraphs that start in the editable frame convert");
+        let (ta, tb) = (obj(&s, a), obj(&s, b));
+        assert_eq!(ta.plain_text(), in_a, "the locked frame's text is as it was");
+        assert!((0..ta.paragraph_count()).all(|k| ta.para_at(k).list.is_some()), "the locked frame stays a list");
+        assert!(tb.para_at(0).list.is_some(), "the paragraph the locked frame starts stays a list");
+        assert!(!tb.plain_text().starts_with('\u{2022}'));
+        assert_eq!(tb.plain_text().matches("\u{2022}\t").count(), 2);
     }
 }
 

@@ -5432,8 +5432,8 @@ Type tool edits, `text.convertListToText` ends its typing first and moves its an
 inserted at or before them, whether the call comes from the menu, MCP or the control channel.
 After Select All in a frame of threaded text, a call without `ids`, `id`, `start` or `end` converts every paragraph of
 the story's frames that are neither locked nor hidden. While the story is selected, its locked and hidden frames are
-not converted, even when `ids` names them. When the call converts all of its other frames, the whole story stays
-selected.
+not converted, even when `ids` names them, and neither is a paragraph whose text starts in one. When the call converts
+all of its other frames, the whole story stays selected.
 In threaded type, when the caret's character moved to another frame, the Type tool edits that frame with the caret
 next to the same character, and that frame becomes the selection when it was not selected.
 
