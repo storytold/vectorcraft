@@ -5945,3 +5945,7 @@ breakText	Glyphs	글리프
 	Even-Numbered Anchors	짝수 번째 앵커
 	Minimum angle	최소 각도
 	Maximum angle	최대 각도
+
+# Compound Shapes add-on
+	Compound Shapes	컴파운드 모양
+	Shape Mode Buttons Make Compound Shapes	모양 모드 버튼으로 컴파운드 모양 만들기

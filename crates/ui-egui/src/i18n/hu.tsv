@@ -6348,3 +6348,7 @@ breakText	Glyphs	Glifák
 	Even-Numbered Anchors	Páros horgonypontok
 	Minimum angle	Legkisebb szög
 	Maximum angle	Legnagyobb szög
+
+# Compound Shapes add-on
+	Compound Shapes	Összetett alakzatok
+	Shape Mode Buttons Make Compound Shapes	Az alakzatmód-gombok összetett alakzatokat hoznak létre

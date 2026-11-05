@@ -6205,3 +6205,7 @@ breakText	Glyphs	字形
 	Even-Numbered Anchors	偶数锚点
 	Minimum angle	最小角度
 	Maximum angle	最大角度
+
+# Compound Shapes add-on
+	Compound Shapes	复合形状
+	Shape Mode Buttons Make Compound Shapes	形状模式按钮创建复合形状

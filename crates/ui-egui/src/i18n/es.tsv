@@ -6306,3 +6306,7 @@ breakText	Glyphs	Glifos
 	Even-Numbered Anchors	Anclas pares
 	Minimum angle	Ángulo mínimo
 	Maximum angle	Ángulo máximo
+
+# Compound Shapes add-on
+	Compound Shapes	Formas compuestas
+	Shape Mode Buttons Make Compound Shapes	Los botones de modo de forma crean formas compuestas
