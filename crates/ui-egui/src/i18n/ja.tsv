@@ -6036,6 +6036,13 @@ breakText	Glyphs	字形
 	Fully Outside	完全に外側
 	No artboards match.	一致するアートボードはありません。
 	Chosen: {n} of {total}	選択中: {n} / {total}
+
+# Contour add-on
+	Contour	輪郭
+	Contour Tool	輪郭ツール
+	Sharp	鋭角
+	Bake	分割
+	Turn the Contour into plain paths	輪郭を通常のパスに変換します
 	Set Corners…	コーナーを設定…
 	All Anchors	すべてのアンカー
 	Odd-Numbered Anchors	奇数番目のアンカー

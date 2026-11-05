@@ -5971,6 +5971,13 @@ breakText	Glyphs	Glifi
 	Fully Outside	Completamente esterno
 	No artboards match.	Nessuna tavola da disegno corrisponde.
 	Chosen: {n} of {total}	Scelte: {n} di {total}
+
+# Contour add-on
+	Contour	Contorno
+	Contour Tool	Strumento Contorno
+	Sharp	Appuntito
+	Bake	Espandi
+	Turn the Contour into plain paths	Trasforma il contorno in tracciati semplici
 	Set Corners…	Imposta angoli…
 	All Anchors	Tutti gli ancoraggi
 	Odd-Numbered Anchors	Ancoraggi dispari

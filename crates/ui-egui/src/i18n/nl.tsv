@@ -6261,6 +6261,13 @@ breakText	Glyphs	Glyphs
 	Fully Outside	Volledig buiten
 	No artboards match.	Geen tekengebied komt overeen.
 	Chosen: {n} of {total}	Gekozen: {n} van {total}
+
+# Contour add-on
+	Contour	Omtrek
+	Contour Tool	Omtrek-gereedschap
+	Sharp	Scherp
+	Bake	Uitbreiden
+	Turn the Contour into plain paths	Zet de omtrek om in gewone paden
 	Set Corners…	Hoeken instellen…
 	All Anchors	Alle ankerpunten
 	Odd-Numbered Anchors	Oneven ankerpunten

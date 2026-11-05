@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -28,6 +28,8 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-04 | minor | Contour add-on (beyond Illustrator): drag away from a selected shape's edge to grow a live copy of it, or toward the inside to shrink it; the copy carries a live Offset Path effect, so it stays editable until Bake (Expand Appearance), a second drag changes the same Contour instead of nesting one, and a floating bar sets the distance and the Sharp, Round or Square corners. `addon.contour.set` is the command behind it. It is a built-in add-on: Object › Plug-ins › Contour, and its own heading in All Tools, with no default shortcut or toolbar slot. A VectorCraft design built on Offset Path; no other application was inspected. Scores and estimates unchanged. |
+| 2026-11-04 | minor | Contour tool (beyond Illustrator): drag away from a selected shape's edge to grow a live copy of it, or toward the inside to shrink it; the copy carries a live Offset Path effect, so it stays editable until Bake (Expand Appearance), a second drag changes the same Contour instead of nesting one, and a floating bar sets the distance and the Sharp, Round or Square corners. `object.contour` is the command behind it. A VectorCraft design built on Offset Path; no other application was inspected. Scores and estimates unchanged. |
 | 2026-11-05 | minor | G12: Hyphenation › Default Language sets the language of new type unless Document Setup chose one, stored as a tag; each run hyphenates in its own language, English only so far, so 2 Preferences options stay unused (#394) |
 | 2026-11-03 | minor | New gradients use CMYK default stops in CMYK documents, including Gradient tool creation. Scores and estimates unchanged. |
 | 2026-11-02 | minor | Font-family fields step selected text with the mouse wheel (#5253); no scored gap or estimate reassessed. |
