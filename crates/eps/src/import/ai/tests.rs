@@ -229,6 +229,163 @@ fn a_note_or_ap_in_a_skipped_section_does_not_reach_the_art_after_it() {
     assert!(!n.shows_center());
 }
 
+/// A node's URL and data (object tags), empty when it has no attributes.
+fn tags(n: &Node) -> (String, Vec<(String, String)>) {
+    n.extras().attrs.as_deref().map(|a| (a.url.clone(), a.data.clone())).unwrap_or_default()
+}
+
+fn tag(id: &str, value: &str) -> (String, String) {
+    (id.to_string(), value.to_string())
+}
+
+/// `/identifier (string) XT` tags the object before it (version 7 specification §7): `AdobeURL`
+/// is its URL, and other tags go to its data in order, an empty string included. Paths, groups,
+/// compound paths, text objects and images take tags.
+#[test]
+fn object_tags_are_kept_on_the_object_before_them() {
+    let [a, b, c, d] = [0.0, 20.0, 40.0, 60.0].map(|x| rect_path(x, 0.0, x + 10.0, 10.0));
+    let text = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(Hi) Tx\nTO\n";
+    let body = format!(
+        "{a}N\n/part_no (A-12) XT\n/AdobeURL (https://example.com/a) XT\n/part_no (A-13) XT\n\
+         u\n{b}f\nU\n/hand () XT\n*u\n{c}f\n{d}f\n*U\n/shape (two \\(parts\\)) XT\n{text}/AdobeURL (https://example.com/t) XT\n{a}f\n"
+    );
+    let r = read(stream7(&layer7("L", &body)).as_bytes()).unwrap();
+    let got: Vec<_> = art(&r.doc).iter().map(|n| tags(n)).collect();
+    assert_eq!(
+        got,
+        [
+            ("https://example.com/a".to_string(), vec![tag("part_no", "A-12"), tag("part_no", "A-13")]),
+            (String::new(), vec![tag("hand", "")]),
+            (String::new(), vec![tag("shape", "two (parts)")]),
+            ("https://example.com/t".to_string(), vec![]),
+            (String::new(), vec![]),
+        ]
+    );
+    assert!(r.warnings.is_empty() && r.unread.is_empty(), "{:?} {:?}", r.warnings, r.unread);
+    // The group's and the compound path's paths keep no tags of their own.
+    for n in &art(&r.doc)[1..3] {
+        assert!(n.children().unwrap().iter().all(|k| k.extras().attrs.is_none()));
+    }
+    // A later `AdobeURL` replaces an earlier one.
+    let body = format!("{a}f\n/AdobeURL (https://example.com/1) XT\n/AdobeURL (https://example.com/2) XT\n");
+    assert_eq!(tags(&art(&read7(&layer7("L", &body)).doc)[0]).0, "https://example.com/2");
+}
+
+/// A tag with no object right before it (at a layer's start, after a state change, after a group
+/// opens) and a tag with an empty identifier tag nothing; one with operands of another kind is an
+/// operator the reader doesn't know.
+#[test]
+fn object_tags_without_an_object_before_them_tag_nothing() {
+    let a = rect_path(0.0, 0.0, 10.0, 10.0);
+    for body in
+        [format!("/first (x) XT\n{a}f\n"), format!("{a}f\n1 w\n/late (x) XT\n"), format!("u\n/inside (x) XT\n{a}f\nU\n"), format!("{a}f\n/ (x) XT\n")]
+    {
+        let doc = read7(&layer7("L", &body)).doc;
+        let mut all = art(&doc);
+        all.extend(all.iter().flat_map(|n| n.children().cloned().unwrap_or_default()).collect::<Vec<_>>());
+        assert!(all.iter().all(|n| n.extras().attrs.is_none()), "{body}");
+    }
+    for bad in ["(x) (y) XT\n", "/id 3 XT\n", "XT\n"] {
+        let err = read(stream7(&layer7("L", &format!("{a}f\n{bad}"))).as_bytes()).unwrap_err();
+        assert!(err.contains("operators VectorCraft doesn't know"), "{bad}: {err}");
+    }
+    // Outside any layer too.
+    let err = read(stream7(&format!("(x) (y) XT\n{}", layer7("L", &format!("{a}f\n")))).as_bytes()).unwrap_err();
+    assert!(err.contains("operators VectorCraft doesn't know"), "{err}");
+}
+
+/// A clipping path's tags are its own, not those of the copy that paints its fill, and a clip
+/// group's tags after `Q` are the group's. One object keeps at most 64 tags in its data.
+#[test]
+fn object_tags_on_clipping_paths_and_the_tag_limit() {
+    let body = format!(
+        "0 Ae\nq\n{RED}{}W\nf\n/edge (clip) XT\n{}f\nQ\n/group (clipped) XT\n",
+        rect_path(5.0, 5.0, 25.0, 25.0),
+        rect_path(0.0, 0.0, 30.0, 30.0)
+    );
+    let doc = read_ok(&layer(&body)).doc;
+    let top = &art(&doc);
+    assert_eq!(top.len(), 1);
+    assert_eq!(tags(&top[0]).1, [tag("group", "clipped")]);
+    let tagged: Vec<_> = top[0].children().unwrap().iter().filter(|k| !tags(k).1.is_empty()).map(|k| k.kind.clone()).collect();
+    assert_eq!(tagged.len(), 1, "{tagged:?}");
+    assert!(matches!(tagged[0], NodeKind::Path { clipping: true, .. }), "{tagged:?}");
+    let many: String = (0..70).map(|i| format!("/t{i} ({i}) XT\n")).collect();
+    let body = format!("{}f\n{many}/AdobeURL (https://example.com) XT\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let (url, data) = tags(&art(&read_ok(&layer(&body)).doc)[0]);
+    assert_eq!(data.len(), 64);
+    assert_eq!(data.last(), Some(&tag("t63", "63")));
+    assert_eq!(url, "https://example.com", "the URL is kept past the limit");
+    // A tag whose identifier or string is longer than 64 KiB is ignored.
+    let long = "x".repeat(64 * 1024 + 1);
+    let body = format!("{}f\n/{long} (a) XT\n/b ({long}) XT\n/c (ok) XT\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    assert_eq!(tags(&art(&read_ok(&layer(&body)).doc)[0]).1, [tag("c", "ok")]);
+}
+
+/// An image takes the tags after it, as any other object does.
+#[test]
+fn object_tags_after_an_image_are_its_own() {
+    let mut data = image("[ 10 0 0 10 50 90 ]", (1, 1), ("DeviceRGB", 3, 0), &[255, 0, 0], 3);
+    let at = data.windows(6).position(|w| w == b"N\r\nLB\r").unwrap();
+    data.splice(at..at, b"/AdobeURL (https://example.com/i) XT\r\n/sku (I-1) XT\r\n".iter().copied());
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Image(_)), "{a:#?}");
+    assert_eq!(tags(&a[0]), ("https://example.com/i".to_string(), vec![tag("sku", "I-1")]));
+}
+
+/// The state written after a group's end or a gradient mesh's `/End X!` is still theirs when the
+/// object's tags come first.
+#[test]
+fn object_tags_before_a_group_or_mesh_state_leave_it_theirs() {
+    let body = format!("{RED}0 Ae\nu\n0 0.5 0 0 0 Xy\n{}f\nU\n/hand (x) XT\n0 0 Xd\n6 () XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&layer(&body)).doc;
+    assert_eq!((art(&doc)[0].opacity, tags(&art(&doc)[0]).1), (0.5, vec![tag("hand", "x")]));
+    let corner =
+        |x: i32, y: i32, next: (i32, i32), prev: (i32, i32)| format!("%_[1 1 1 1 {x} {y} {} {} 1 {} {} 1] /N X#\n", next.0, next.1, prev.0, prev.1);
+    let mesh = format!(
+        "/Mesh X!\n%_(DeviceRGB) /CS X#\n%_[0 0] /P X#\n{}{}{}{}%_0 /E X#\n/End X!\n",
+        corner(0, 0, (0, 10), (10, 0)),
+        corner(0, 40, (10, 40), (0, 30)),
+        corner(40, 40, (40, 30), (30, 40)),
+        corner(40, 0, (30, 0), (40, 10)),
+    );
+    let doc = read_ok(&layer(&format!("{mesh}/hand (y) XT\n1 0.35 0 0 0 Xy\n0 0 Xd\n6 () XW\n"))).doc;
+    let (m, l) = (&art(&doc)[0], &doc.layers[0]);
+    assert!(matches!(m.kind, NodeKind::Mesh(_)), "{m:#?}");
+    assert_eq!((m.opacity, m.blend, tags(m).1), (0.35, BlendMode::Multiply, vec![tag("hand", "y")]));
+    assert_eq!((l.opacity, l.blend), (1.0, BlendMode::Normal), "not the layer's");
+}
+
+/// The tags of an object whose drawn look stands for it (its style not found) stay with the look.
+#[test]
+fn a_drawn_look_keeps_its_objects_tags() {
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let body = format!(
+        "0 Ae\nu\n{RED}{}f\nU\n0 0 Xd\n6 () XW\n%_{hidden_rect}n\n%_/AdobeURL (https://example.com/n) XT\n%_/sku (N-1) XT\n1 (Gone style) XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0),
+    );
+    let r = read_ok(&layer(&body));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!(tags(&a[0]), ("https://example.com/n".to_string(), vec![tag("sku", "N-1")]));
+    // A look with tags of its own keeps them, and takes the object's after them.
+    let a = art(&read_ok(&layer(&body.replace("U\n0 0 Xd", "U\n/own (L) XT\n0 0 Xd"))).doc);
+    assert_eq!(tags(&a[0]), ("https://example.com/n".to_string(), vec![tag("own", "L"), tag("sku", "N-1")]));
+}
+
+/// Tags in a brush's art don't keep it from being read, and stay out of the art: it isn't an object
+/// of the document.
+#[test]
+fn a_brushs_art_with_tags_is_read_without_them() {
+    let art_ = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n0 g\n{}f\n/sku (D-1) XT\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 4.0, 4.0));
+    let r = read_ok(&format!("{art_}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let vectorcraft_brush::BrushKind::Scatter(s) = brush_named(&lib, "Spray") else { panic!("scatter: {:?}", r.warnings) };
+    assert_eq!(s.art.geometric_bounds().map(|b| (b.width(), b.height())), Some((4.0, 4.0)));
+    assert!(s.art.extras().attrs.is_none(), "{:?}", s.art.extras().attrs);
+}
+
 #[test]
 fn paths_colours_and_strokes() {
     let art_ = format!(
@@ -4550,6 +4707,15 @@ fn a_blend_comes_in_as_a_live_blend() {
     let [r, _, b] = color.to_rgb();
     assert!((r - 0.5).abs() < 0.02 && (b - 0.5).abs() < 0.02, "{r} {b}");
     assert!(!s.warnings.iter().any(|w| w == super::blend::DRAWN), "{:?}", s.warnings);
+}
+
+/// The tags after a blend's drawn steps are the live blend's.
+#[test]
+fn a_live_blend_keeps_the_tags_of_its_drawn_steps() {
+    let body = blend_file("%_10 50 m\n%_110 50 L\n", [Some("A"), Some("B")], &blend_record(&['A', 'B']));
+    let (blend, warnings) = read_blend(&body.replace("\nU\n9 () XW\n0 Ae\n", "\nU\n/sku (B-1) XT\n9 () XW\n0 Ae\n"));
+    assert!(matches!(blend.kind, NodeKind::Blend { .. }), "a live blend: {:?} {warnings:?}", blend.kind);
+    assert_eq!(tags(&blend).1, [tag("sku", "B-1")]);
 }
 
 /// A spine written from the right key to the left one keeps the keys in their order on it (the

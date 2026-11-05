@@ -3834,6 +3834,12 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%AI3_Note:\n",
             "\n%AI5_NoteMore:more\n",
             "\n%%Note:old\n",
+            // Object tags (version 7 §7).
+            "XT",
+            "/AdobeURL (https://example.com) XT",
+            "/tag () XT",
+            "/ (x) XT",
+            "(x) (y) XT",
             "w",
             "J",
             "j",
