@@ -520,10 +520,16 @@ impl<'a> Reader<'a> {
             self.gs.fill = p;
             self.pending_fill = None;
             self.pending_unread_fill = false;
+            if let Some(head) = self.symbol.as_mut() {
+                head.missing_fill = false;
+            }
         } else {
             self.gs.stroke = p;
             self.pending_stroke = None;
             self.pending_unread_stroke = false;
+            if let Some(head) = self.symbol.as_mut() {
+                head.missing_stroke = false;
+            }
         }
     }
 
@@ -585,14 +591,18 @@ impl<'a> Reader<'a> {
         let gs = &self.gs;
         let state = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
         let Some(Frame { kind: Kind::Layer(_), children, .. }) = self.frames.last_mut() else { return };
-        let Some(n) = children.last_mut().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) else { return };
+        let Some(n) =
+            children.last_mut().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. } | NodeKind::SymbolInstance { .. }))
+        else {
+            return;
+        };
         (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = before;
         self.layer_state = Some(state);
     }
 
-    /// `mode opacity isolate knockout shape Xy`; after a group's end, the group's too, and right
-    /// after a gradient mesh's `/End X!` or a blend's record (before their `Xd` and `6 () XW`),
-    /// theirs, unless the layer's `LB` follows: then it is the layer's (see `end_layer`).
+    /// `mode opacity isolate knockout shape Xy`; after a group's end or a symbol instance, theirs
+    /// too, and right after a gradient mesh's `/End X!` or a blend's record (before their `Xd` and
+    /// `6 () XW`), theirs, unless the layer's `LB` follows: then it is the layer's (see `end_layer`).
     fn transparency(&mut self, vals: &[V], mesh_ended: bool) {
         let n = Self::nums(vals);
         let [mode, opacity, rest @ ..] = n.as_slice() else { return };
@@ -620,6 +630,12 @@ impl<'a> Reader<'a> {
             let before = (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape);
             (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
             // The layer's instead when the layer's `7 () XW` follows (`layer_state_block`).
+            self.container_undo = in_layer.then_some(before);
+            self.layer_state = None;
+        } else if let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })) {
+            // A symbol instance's, as a group's.
+            let before = (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape);
+            (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
             self.container_undo = in_layer.then_some(before);
             self.layer_state = None;
         } else {
@@ -969,7 +985,9 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     use crate::import::ai::style::StyleItem;
     // A text object's slot (an empty group standing for it) takes the style as the type will.
     let slot = slot_of(object.name.as_deref()).is_some();
+    // A symbol instance draws its symbol's art: it keeps its drawn look.
     if !st.plain
+        || matches!(object.kind, NodeKind::SymbolInstance { .. })
         || (!slot && !st.simple)
         || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
         || (st.pathfinder

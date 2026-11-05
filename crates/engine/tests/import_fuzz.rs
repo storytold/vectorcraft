@@ -3621,6 +3621,114 @@ proptest! {
             Some(d)
         })?;
     }
+
+    /// A `.ai` whose symbols are damaged or hostile: their definitions, the symbol list and the
+    /// instances (on the page and in a symbol's art), cut short or edited.
+    #[test]
+    fn ai_symbols_never_panic(cut in 0usize..2_000, edits in prop::collection::vec((0usize..2_000, prop::sample::select(vec!['0', '9', '-', '.', 'e', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', 'u', 'U', 'A', 'Z'])), 0..12)) {
+        let text = mutate_text(&symbols_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai symbols", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        survive("mutated .ai symbols, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
+    }
+}
+
+/// Editing data with two symbols (S2's art holds an instance of S1), the symbol list and a layer of
+/// instances, as the format writes them.
+fn symbols_text() -> String {
+    use vectorcraft_testkit::ai;
+    let def = |name: &str, art: &str, reg: u32| {
+        format!(
+            "%AI14_BeginSymbol\n({name})\n0 A\n0 Xw\n0 Ae\nu\n{art}U\n%_/ArtDictionary :\n%_{reg} /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n"
+        )
+    };
+    let inst = |name: &str, m: &str| format!("/SymbolInstance :\n({name}) /SymbolRef ,\n{m} /RTransformMatrix\n;\n9 () XW\n");
+    let defs = def("S1", "0 1 1 0 1 0 0 Xa\n-2 -2 m\n2 -2 L\n2 2 L\n-2 2 L\nf\n", 5) + &def("S2", &inst("S1", "1 0 0 -1 -8081 8237"), 1);
+    let list = "%AI24_BeginSymbolList\n(S2)\n(S1)\n%AI24_EndSymbolList\n";
+    let page = ai::layer(
+        "L",
+        &format!(
+            "1 Xw\n{}0 Xw\n{}1 0.5 0 2 0 Xy\n0 0 Xd\n6 () XW\n0 Ae\nq\n{}10 10 m\n30 10 L\n30 30 L\nh\nW\nn\nQ\n",
+            inst("S1", "1 0 0 -1 20 50"),
+            inst("S2", "2 0 0 -2 100 50"),
+            inst("S1", "1 0 0 -1 20 20")
+        ),
+    );
+    let data = ai::editing_data(
+        200.0,
+        100.0,
+        &format!("%AI5_Begin_NonPrinting\n{defs}%AI5_End_NonPrinting--\n%AI5_Begin_NonPrinting\n{list}%AI5_End_NonPrinting--\n{page}"),
+    );
+    data.replacen("%%EndComments", "%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n%%EndComments", 1)
+}
+
+/// The data [`ai_symbols_never_panic`] damages, as it is, opens with its symbols and instances live.
+#[test]
+fn the_symbols_fuzz_data_opens_live() {
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&symbols_text())].concat();
+    let (doc, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
+    assert!(layered, "{warnings:?}");
+    let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["S2", "S1"]);
+    let mut instances = 0;
+    doc.walk(|n| instances += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })));
+    assert_eq!(instances, 3);
+}
+
+/// Symbols the reader must stop at: sections that don't end, references and matrices it can't
+/// use, definitions nested deeper than it reads, and symbols that hold each other.
+#[test]
+fn ai_symbol_limits_never_panic() {
+    use vectorcraft_testkit::ai;
+    let inst = |name: &str, m: &str| format!("/SymbolInstance :\n{name} /SymbolRef ,\n{m} /RTransformMatrix\n;\n");
+    let def = |name: &str, art: &str| format!("%AI14_BeginSymbol\n({name})\n0 A\n0 Xw\n0 Ae\nu\n{art}U\n%AI10_EndSymbol\n");
+    let mut nested = String::new();
+    for i in 0..400 {
+        nested.push_str(&format!("%AI14_BeginSymbol\n(N{i})\n0 Ae\nu\n"));
+    }
+    for _ in 0..400 {
+        nested.push_str("U\n%AI10_EndSymbol\n");
+    }
+    let mut chain = String::new();
+    for i in 0..300 {
+        chain.push_str(&def(&format!("C{i}"), &inst(&format!("(C{})", i + 1), "1 0 0 -1 0 0")));
+    }
+    let cases = [
+        format!("%AI14_BeginSymbol\n(Open)\n0 Ae\nu\n{}", ai::layer("L", &inst("(Open)", "1 0 0 -1 20 50"))),
+        format!("%AI24_BeginSymbolList\n(A)\n(B)\n{}", ai::layer("L", "")),
+        format!(
+            "{}{}",
+            def("S", "-2 -2 m\n2 2 L\nS\n"),
+            ai::layer("L", &(inst("", "1 0 0 -1 20 50") + &inst("/SymbolRef", "1 0 0 -1 20 50") + &inst("(S)", "")))
+        ),
+        format!(
+            "{}{}",
+            def("S", "-2 -2 m\n2 2 L\nS\n"),
+            ai::layer(
+                "L",
+                &(inst("(S)", "1 0 0") + &inst("(S)", "1 0 0 -1 20 50 7") + &inst("(S)", "1e400 0 0 -1 20 50") + &inst("(S)", "0 0 0 0 20 50"))
+            )
+        ),
+        format!("{nested}{}", ai::layer("L", &inst("(N0)", "1 0 0 -1 20 50"))),
+        format!("{chain}{}", ai::layer("L", &inst("(C0)", "1 0 0 -1 20 50"))),
+        format!(
+            "{}{}{}",
+            def("S1", &inst("(S2)", "1 0 0 -1 0 0")),
+            def("S2", &inst("(S1)", "1 0 0 -1 0 0")),
+            ai::layer("L", &inst("(S1)", "1 0 0 -1 20 50"))
+        ),
+        format!("{}{}", def("S1", &inst("(S2)", "1 0 0 -1 0 0")), def("S2", &inst("(S1)", "1 0 0 -1 0 0"))),
+    ];
+    for body in cases {
+        let data = ai::editing_data(200.0, 100.0, &body).replacen("%%EndComments", "%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n%%EndComments", 1);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
+        survive("hostile .ai symbols", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))
+            .unwrap();
+        survive("hostile .ai symbols, trusted", || {
+            Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0)
+        })
+        .unwrap();
+    }
 }
 
 /// The data [`ai_objects_on_path_never_panics`] damages, as it is, opens with its Objects on Path group.
@@ -4329,6 +4437,15 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%\n",
             "\n%AI5_EndPlace\n",
             "\n%%PageTrailer\n",
+            "\n%AI14_BeginSymbol\n(S1)\n0 A 0 Xw 0 Ae\n",
+            "\n%AI10_EndSymbol\n",
+            "\n%AI24_BeginSymbolList\n(S1)\n",
+            "\n%AI24_EndSymbolList\n",
+            "/SymbolInstance :",
+            "(S1) /SymbolRef ,",
+            "/RTransformMatrix",
+            "5 /Int (AI13PatternRegistrationType) ,",
+            "; (AI19SymbolAppearanceMap) ,",
         ])
         .prop_map(str::to_string),
     ]

@@ -3953,6 +3953,362 @@ fn sections_it_skips() {
                 %_/Document :\n%_/Binary : /ASCII85Decode ,\n%_(]<[%\n%;;;~>\n%_; (Profile) ,\n%_;\n";
     let doc = read_ok(&format!("{body}{}", layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n")))).doc;
     assert_eq!(art(&doc).len(), 1);
+    // A symbol whose art can't be read isn't kept.
+    assert!(doc.symbols.is_empty());
+}
+
+/// Symbol definitions as the editing data writes them, in a section that doesn't print.
+fn symbols(defs: &str) -> String {
+    format!("%AI5_Begin_NonPrinting\n{defs}%AI5_End_NonPrinting--\n")
+}
+
+/// A symbol named `name` whose art is `art` (in the symbol's space, y down), with the registration
+/// point `registration` (1 to 9 from the top left, row by row).
+fn symbol(name: &str, art: &str, registration: u32) -> String {
+    format!(
+        "%AI14_BeginSymbol\n({name})\n0 A\n0 Xw\n0 Ae\nu\n{art}U\n%_/ArtDictionary :\n%_{registration} /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n"
+    )
+}
+
+/// An instance of the symbol named `name`, `m` taking the symbol's art to art space.
+fn instance(name: &str, m: [f64; 6]) -> String {
+    let [a, b, c, d, e, f] = m;
+    format!("/SymbolInstance :\n({name}) /SymbolRef ,\n{a} {b} {c} {d} {e} {f} /RTransformMatrix\n;\n")
+}
+
+/// A red square of 4 points about the origin, as a symbol's art.
+fn dot() -> String {
+    format!("{RED}{}f\n", rect_path(-2.0, -2.0, 2.0, 2.0))
+}
+
+/// The visual box of `n` in `doc`, its instances measured by their symbols' art.
+fn instance_box(doc: &Document, n: &Node) -> Rect {
+    n.visual_bounds_with(&doc.symbol_boxes()).expect("a box")
+}
+
+#[test]
+fn a_symbol_comes_in_once_and_its_instances_stay_live() {
+    let body = symbols(&symbol("Dot", &dot(), 5))
+        + &layer(&(instance("Dot", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]) + &instance("Dot", [2.0, 0.0, 0.0, -2.0, 100.0, 50.0])));
+    let mut doc = read_ok(&body).doc;
+    assert_eq!(doc.symbols.len(), 1);
+    assert_eq!(doc.symbols[0].name, "Dot");
+    assert!(doc.symbol_registration("Dot").is_center());
+    let a = art(&doc);
+    assert_eq!(a.len(), 2);
+    let xfs: Vec<_> = a
+        .iter()
+        .map(|n| if let NodeKind::SymbolInstance { symbol, xf } = &n.kind { (symbol.clone(), *xf) } else { panic!("{:?}", n.kind) })
+        .collect();
+    assert_eq!(xfs[0].0, "Dot");
+    assert_ne!(xfs[0].1, xfs[1].1);
+    assert_eq!(instance_box(&doc, &a[0]), Rect::new(18.0, 48.0, 22.0, 52.0));
+    assert_eq!(instance_box(&doc, &a[1]), Rect::new(96.0, 46.0, 104.0, 54.0));
+    // Editing the symbol's art changes both instances.
+    let wider = read_ok(&(symbols(&symbol("Dot", &format!("{RED}{}f\n", rect_path(-4.0, -2.0, 4.0, 2.0)), 5)) + &layer(""))).doc;
+    doc.symbols[0].art = wider.symbols[0].art.clone();
+    assert_eq!(instance_box(&doc, &a[0]), Rect::new(16.0, 48.0, 24.0, 52.0));
+    assert_eq!(instance_box(&doc, &a[1]), Rect::new(92.0, 46.0, 108.0, 54.0));
+}
+
+#[test]
+fn an_instance_in_a_symbols_art_is_placed_from_the_canvas() {
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242).
+    let nested = instance("Dot", [1.0, 0.0, 0.0, -1.0, -8081.0, 8237.0]);
+    let defs = symbols(&(symbol("Dot", &dot(), 5) + &symbol("Pair", &nested, 1)));
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{defs}{}", layer(&instance("Pair", [1.0, 0.0, 0.0, -1.0, 50.0, 50.0])));
+    let doc = read_ok(&body).doc;
+    let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["Dot", "Pair"]);
+    assert_eq!(doc.symbol_registration("Pair"), vectorcraft_doc::SymbolRegistration(0));
+    // Dot sits at (10, 5) in Pair's art, which the page instance puts at (50, 50).
+    let a = art(&doc);
+    assert_eq!(instance_box(&doc, &a[0]), Rect::new(58.0, 53.0, 62.0, 57.0));
+}
+
+#[test]
+fn an_image_in_a_symbols_art_is_placed_from_the_canvas() {
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242). The
+    // image's matrix is in the canvas's space turned y up about that point, as an instance's in a
+    // symbol's art is: its top left pixel goes to (-5, -2.5) in the symbol's art.
+    let m = "[ 5 0 0 5 -8096 8244.5 ]";
+    let raster = format!(
+        "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n{m} 2 1 0 Xh\n{m} 0 0 2 1 2 1 8 3 0 0 1 0 4 4 0 0\n\
+         %%BeginData: 6\rXI\nABCDEF%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\n"
+    );
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Pic", &raster, 5)), layer(""));
+    let doc = read_ok(&body).doc;
+    assert_eq!(doc.symbols.len(), 1);
+    let NodeKind::Image(im) = &doc.symbols[0].art.kind else { panic!("{:?}", doc.symbols[0].art.kind) };
+    for ((u, v), want) in [((0.0, 0.0), (-5.0, -2.5)), ((2.0, 0.0), (5.0, -2.5)), ((0.0, 1.0), (-5.0, 2.5))] {
+        let got = im.xf * Point::new(u, v);
+        assert!((got - Point::new(want.0, want.1)).hypot() < 1e-9, "pixel ({u}, {v}): {got:?}, want {want:?}");
+    }
+    // A linked image (`XG` and `XF`) is placed the same way.
+    let linked = raster7("(a.tif) 0 XG\n", m, (2, 1), "XF", "");
+    let doc = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Link", &linked, 5)), layer(""))).doc;
+    let NodeKind::Image(link) = &doc.symbols[0].art.kind else { panic!("{:?}", doc.symbols[0].art.kind) };
+    assert!(link.link.is_some());
+    assert!((link.xf * Point::new(0.0, 0.0) - Point::new(-5.0, -2.5)).hypot() < 1e-9, "{:?}", link.xf);
+    // Without a template box the image can't be placed, so the symbol isn't read whole: its
+    // instance comes in as the page draws it.
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Pic", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&symbol("Pic", &raster, 5)) + &layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert_eq!(r.unread.len(), 1, "{:?}", r.warnings);
+}
+
+#[test]
+fn an_instance_keeps_its_hide_lock_transparency_and_clip() {
+    let m = [1.0, 0.0, 0.0, -1.0, 20.0, 50.0];
+    let art_ = format!(
+        "1 Xw\n{}0 Xw\n1 A\n{}0 A\n{}1 0.5 1 1 1 Xy\n0 0 Xd\n6 () XW\n0 Ae\nq\n{}{}h\nW\nn\nQ\n0 0.25 0 0 0 Xy\n{}",
+        instance("Dot", m),
+        instance("Dot", m),
+        instance("Dot", m),
+        instance("Dot", m),
+        rect_path(19.0, 49.0, 21.0, 51.0),
+        instance("Dot", m),
+    );
+    let doc = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&art_))).doc;
+    let a = art(&doc);
+    assert_eq!(a.len(), 5);
+    assert!(!a[0].visible && !a[0].locked);
+    assert!(a[1].visible && a[1].locked);
+    // An instance's transparency is the `Xy` after it, as a group's is; one set before it isn't its.
+    assert_eq!((a[2].opacity, a[2].blend, a[2].isolate, a[2].knockout, a[2].knockout_shape), (0.5, BlendMode::Multiply, true, Knockout::On, true));
+    assert_eq!((a[1].opacity, a[1].blend, a[1].isolate, a[1].knockout), (1.0, BlendMode::Normal, false, Knockout::Neutral));
+    assert_eq!((a[3].opacity, a[4].opacity), (0.25, 1.0));
+    let NodeKind::Group { children, clip: true } = &a[3].kind else { panic!("a clipping group: {:?}", a[3].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
+    assert!(matches!(children[1].kind, NodeKind::SymbolInstance { .. }));
+}
+
+/// The art of an opacity mask in a symbol's art takes ids of the document, as the rest of the art
+/// does: no two objects of the document, in its layers or its symbols, share an id.
+#[test]
+fn a_symbols_opacity_mask_art_takes_ids_of_the_document() {
+    fn ids(n: &Node, out: &mut Vec<vectorcraft_doc::NodeId>) {
+        out.push(n.id);
+        if let Some(m) = n.extras().mask.as_ref() {
+            ids(&m.art, out);
+        }
+        for c in n.children().into_iter().flatten() {
+            ids(c, out);
+        }
+    }
+    let square = rect_path(-2.0, -2.0, 2.0, 2.0);
+    let mask_art: String = format!("1 g\n{square}f\n").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let defs = symbols(&symbol("Masked", &format!("{RED}{square}f\n{mask}{}", dot()), 5));
+    let shapes: String = (0..6).map(|i| format!("{RED}{}f\n", rect_path(f64::from(i) * 10.0, 0.0, f64::from(i) * 10.0 + 4.0, 4.0))).collect();
+    let doc = read_ok(&(defs + &layer(&format!("{shapes}{}", instance("Masked", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))))).doc;
+    let mut all = Vec::new();
+    for n in doc.layers.iter().chain(doc.symbols.iter().map(|s| &s.art)) {
+        ids(n, &mut all);
+    }
+    assert!(doc.symbols.iter().any(|s| s.art.children().into_iter().flatten().any(|c| c.extras().mask.is_some())), "the mask is read");
+    let unique: std::collections::HashSet<_> = all.iter().copied().collect();
+    assert_eq!(unique.len(), all.len(), "{all:?}");
+}
+
+/// A layer's `Xy` right after its last object, an instance, before the layer's `0 0 Xd` and
+/// `7 () XW`, is the layer's; the instance's own state block (`6 () XW`) keeps it the instance's.
+#[test]
+fn a_layers_state_after_its_last_symbol_instance_is_the_layers() {
+    let last = instance("Dot", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]);
+    let doc = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&format!("{last}1 0.6 0 2 0 Xy\n0 0 Xd\n7 () XW\n")))).doc;
+    assert_eq!((doc.layers[0].opacity, doc.layers[0].blend), (0.6, BlendMode::Multiply));
+    assert_eq!((art(&doc)[0].opacity, art(&doc)[0].blend), (1.0, BlendMode::Normal));
+    let doc = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&format!("{last}1 0.6 0 2 0 Xy\n0 0 Xd\n6 () XW\n")))).doc;
+    assert_eq!(doc.layers[0].opacity, 1.0);
+    assert_eq!((art(&doc)[0].opacity, art(&doc)[0].blend), (0.6, BlendMode::Multiply));
+}
+
+#[test]
+fn the_symbol_list_orders_the_symbols_and_names_stay_apart() {
+    let defs = symbol("A", &dot(), 5) + &symbol("B", &dot(), 5) + &symbol("A", &dot(), 5) + &symbol("C", &dot(), 9);
+    for list in [
+        "%AI24_BeginSymbolList\n(C)\n(Ghost)\n(B)\n(C)\n%AI24_EndSymbolList\n",
+        "%AI10_BeginSymbolList\n(C)\n(Ghost)\n(B)\n(C)\n%AI10_EndSymbolList\n",
+    ] {
+        let doc = read_ok(&(symbols(&format!("{defs}{list}")) + &layer(&instance("A", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])))).doc;
+        let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["C", "B", "A", "A 2"], "{list}");
+        assert_eq!(doc.symbol_registration("C"), vectorcraft_doc::SymbolRegistration(8));
+        // An instance names the first symbol the file gives that name.
+        assert!(matches!(&art(&doc)[0].kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "A"));
+    }
+}
+
+/// A symbol whose art is filled with a pattern isn't kept: its instances come in as the page draws
+/// them, within the box of its art. The pattern keeps the name it was numbered with.
+#[test]
+fn a_symbol_with_a_pattern_fill_isnt_kept() {
+    let pattern = DOTS.replace("(Dots)", "(Red\\n1)");
+    let lawn = symbol("Lawn", &format!("(Red\\n1) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(-2.0, -2.0, 2.0, 2.0)), 5);
+    let r = read_ok(&format!("{pattern}{}{}", symbols(&lawn), layer(&instance("Lawn", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))));
+    assert_eq!(r.doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Red 2"]);
+    assert!(r.doc.symbols.is_empty());
+    assert_unread(&r, "symbols");
+    let (id, _) = &r.unread[0];
+    assert_eq!(r.doc.node(*id).and_then(|n| n.geometric_bounds()), Some(Rect::new(18.0, 48.0, 22.0, 52.0)));
+    // A pattern chosen and then replaced by a color before the art is painted fills nothing.
+    let solid = symbol("Solid", &format!("(Red\\n1) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{RED}{}f\n", rect_path(-2.0, -2.0, 2.0, 2.0)), 5);
+    let r = read_ok(&format!("{pattern}{}{}", symbols(&solid), layer(&instance("Solid", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))));
+    assert_eq!(r.doc.symbols.len(), 1);
+    assert!(r.unread.is_empty());
+}
+
+#[test]
+fn an_instance_of_a_symbol_it_doesnt_have_is_the_unread_object() {
+    let missing = instance("Absent", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]);
+    // Alone on the layer, the file isn't read: the page has no box for it.
+    let e = read(stream(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&missing))).as_bytes()).unwrap_err();
+    assert!(e.contains("symbols"), "{e}");
+    // In a group, the group is the unread object.
+    let group = format!("0 Ae\nu\n{missing}{RED}{}f\nU\n", rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&group)));
+    assert_unread(&r, "symbols");
+    // Nor is a symbol whose art holds an instance of one the file doesn't have: the page has no box
+    // for its instances.
+    let holder = symbol("Holder", &(dot() + &instance("Absent", [1.0, 0.0, 0.0, -1.0, 0.0, 0.0])), 5);
+    let body =
+        format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&holder), layer(&instance("Holder", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])));
+    let e = read(stream(&body).as_bytes()).unwrap_err();
+    assert!(e.contains("symbols"), "{e}");
+    // An instance whose matrix doesn't have six finite numbers isn't read either.
+    let bad = "/SymbolInstance :\n(Dot) /SymbolRef ,\n1 0 0 -1 20 /RTransformMatrix\n;\n";
+    let r = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&format!("0 Ae\nu\n{bad}U\n"))));
+    assert_unread(&r, "symbols");
+}
+
+#[test]
+fn an_instance_whose_appearance_differs_from_its_symbols_comes_in_as_the_page_draws_it() {
+    let edited = "/SymbolInstance :\n(Dot) /SymbolRef ,\n1 0 0 -1 20 50 /RTransformMatrix\n,\n/Dictionary :\n; (AI19SymbolAppearanceMap) ,\n;\n";
+    let r = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(edited)));
+    assert_unread(&r, "symbols");
+    let (id, _) = &r.unread[0];
+    assert_eq!(r.doc.node(*id).and_then(|n| n.geometric_bounds()), Some(Rect::new(18.0, 48.0, 22.0, 52.0)), "the box is the symbol's, placed");
+    // The appearance changes are found in a dictionary that an array holds as a value without a key.
+    let in_array = "/SymbolInstance :\n(Dot) /SymbolRef ,\n1 0 0 -1 20 50 /RTransformMatrix\n,\n\
+                    /Array :\n/Dictionary :\n/Dictionary :\n; (AI19SymbolAppearanceMap) ,\n;\n;\n; (Edits) ,\n;\n";
+    let r = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(in_array)));
+    assert_unread(&r, "symbols");
+    // So does an instance of a symbol whose art isn't read whole, within that art's box.
+    let partial = symbol("Partial", &format!("{}f\n1 Xw\n1 2 frobnicate\n0 Xw\n", rect_path(-2.0, -2.0, 2.0, 2.0)), 5);
+    let r = read_ok(&(symbols(&partial) + &layer(&instance("Partial", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))));
+    assert!(r.doc.symbols.is_empty());
+    assert_unread(&r, "symbols");
+    let (id, _) = &r.unread[0];
+    assert_eq!(r.doc.node(*id).and_then(|n| n.geometric_bounds()), Some(Rect::new(18.0, 48.0, 22.0, 52.0)));
+}
+
+/// A symbol whose art holds an image that is left out (no matrix, a matrix with no area, data cut
+/// short) isn't kept, so its instances don't draw it without the image.
+#[test]
+fn a_symbol_with_an_image_it_leaves_out_isnt_kept() {
+    for (what, image) in [
+        ("no matrix", raster7("", "", (1, 1), "XI", "%FF0000\n")),
+        ("a matrix with no area", raster7("", "[ 0 0 0 0 0 0 ]", (1, 1), "XI", "%FF0000\n")),
+        ("data cut short", raster7("", "[ 1 0 0 1 0 0 ]", (2, 2), "XI", "%FF0000\n")),
+        ("no end", raster7("", "[ 1 0 0 1 0 0 ]", (1, 1), "XI", "%FF0000\n").replace("%AI5_EndRaster\n", "")),
+        ("art after a trailer", format!("%%PageTrailer\n{}", raster7("", "[ 1 0 0 1 0 0 ]", (1, 1), "XI", "%FF0000\n"))),
+    ] {
+        // With a template box, so that the image could be placed.
+        let defs = symbols(&symbol("Photo", &(dot() + &image), 5));
+        let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Photo", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+        let r = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{defs}{}", layer(&group)));
+        assert!(r.doc.symbols.is_empty(), "{what}");
+        assert_eq!(r.unread.len(), 1, "{what}: {:?}", r.warnings);
+    }
+}
+
+/// A symbol's art written as a group holding one object stays that group when the group is tagged
+/// (`XT`), so the tag isn't lost.
+#[test]
+fn a_symbols_tagged_group_keeps_its_tag() {
+    let def = format!(
+        "%AI14_BeginSymbol\n(Tagged)\n0 A\n0 Xw\n0 Ae\nu\n{}U\n/AdobeURL (https://example.com/a) XT\n%_/ArtDictionary :\n%_5 /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n",
+        dot()
+    );
+    let doc = read_ok(&(symbols(&def) + &layer(&instance("Tagged", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])))).doc;
+    let art = &doc.symbols[0].art;
+    assert!(matches!(art.kind, NodeKind::Group { .. }), "{:?}", art.kind);
+    assert_eq!(tags(art).0, "https://example.com/a");
+}
+
+/// A definition whose art a trailer stops isn't kept, though the art before the trailer is whole.
+#[test]
+fn a_symbol_cut_off_by_a_trailer_isnt_kept() {
+    let cut = format!("%AI14_BeginSymbol\n(Cut)\n0 A\n0 Xw\n0 Ae\n{}%%PageTrailer\n{}%AI10_EndSymbol\n", dot(), dot());
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Cut", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&cut) + &layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert_unread(&r, "symbols");
+}
+
+/// A symbol whose art holds type, a placed file, non-native art, an image it can't place or a
+/// gradient the file doesn't define isn't kept. Its instances come in as the page draws them, within the box of the rest of its art, an
+/// instance right on a layer as well as one in a group.
+#[test]
+fn a_symbols_art_it_leaves_out_gives_its_instances_the_box_of_the_rest() {
+    let typed = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n".to_string();
+    let placed = "%AI5_BeginPlace\n%AI5_EndPlace\n".to_string();
+    let foreign =
+        "/ForeignObject :\n1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data ,\n%,u@!!/MSk8%41#ocdN=10d&\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n"
+            .to_string();
+    let image = raster7("", "[ 1 0 0 1 0 0 ]", (1, 1), "XI", "%FF0000\n");
+    let gradient = format!("Bb\n1 (Nowhere) 0 0 0 10 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", rect_path(-2.0, -2.0, 2.0, 2.0));
+    let template = "%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n";
+    for (what, left, head) in [
+        ("type", typed, template),
+        ("a placed file", placed, template),
+        ("non-native art", foreign, template),
+        ("an image without a template box", image, ""),
+        ("a gradient the file doesn't define", gradient, template),
+    ] {
+        let defs = symbols(&symbol("Mixed", &(dot() + &left), 5));
+        let body = format!("{head}{defs}{}", layer(&instance("Mixed", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])));
+        let r = read(stream(&body).as_bytes()).unwrap_or_else(|e| panic!("{what}: {e}"));
+        assert!(r.doc.symbols.is_empty(), "{what}");
+        assert_unread(&r, "symbols");
+        let (id, _) = &r.unread[0];
+        assert_eq!(r.doc.node(*id).and_then(|n| n.geometric_bounds()), Some(Rect::new(18.0, 48.0, 22.0, 52.0)), "{what}");
+    }
+    // A gradient the file doesn't define on a path that isn't painted paints nothing.
+    // Nor does one on a path that a group's start drops, for the paths after it.
+    let square = rect_path(-2.0, -2.0, 2.0, 2.0);
+    for (what, unpainted) in [
+        ("not painted", format!("Bb\n1 (Nowhere) 0 0 0 10 1 0 0 1 0 0 Bg\n{square}n\n0 BB\n")),
+        ("dropped", format!("Bb\n1 (Nowhere) 0 0 0 10 1 0 0 1 0 0 Bg\n{square}0 BB\nu\n{square}f\nU\n")),
+    ] {
+        let defs = symbols(&symbol("Kept", &(dot() + &unpainted), 5));
+        let r = read_ok(&format!("{template}{defs}{}", layer(&instance("Kept", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))));
+        assert_eq!(r.doc.symbols.len(), 1, "{what}: {:?}", r.warnings);
+        assert!(r.unread.is_empty(), "{what}");
+    }
+}
+
+#[test]
+fn symbols_that_hold_each_other_lose_the_instances_that_close_the_loop() {
+    let m = [1.0, 0.0, 0.0, -1.0, 0.0, 0.0];
+    let defs = symbols(&(symbol("S1", &instance("S2", m), 5) + &symbol("S2", &instance("S1", m), 5)));
+    let r =
+        read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{defs}{}", layer(&(dot() + &instance("S1", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])))));
+    assert!(r.warnings.contains(&vectorcraft_doc::depth::symbols_note()), "{:?}", r.warnings);
+    assert!(!r.doc.clone().limit_depth(), "nothing is left that draws itself");
+}
+
+/// A definition after the first layer isn't read: the symbols were checked before that layer, and
+/// one read later could hold an instance of a symbol the file doesn't have.
+#[test]
+fn a_symbol_defined_after_the_first_layer_is_not_read() {
+    let late = symbols(&symbol("Late", &(dot() + &instance("Absent", [1.0, 0.0, 0.0, -1.0, 0.0, 0.0])), 5));
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Late", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{late}{}", layer(&dot()), layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert_unread(&r, "symbols");
 }
 
 /// A filled square at x = `10 × i` (5 pt wide), to tell the alternatives of versioned content apart.
@@ -4571,6 +4927,35 @@ fn a_style_name_outside_ascii_links_its_objects() {
     let r = read_ok(&format!("{}{}", styles_and_list(&defs, &["Caf\\303\\251 \\316\\251"]), layer(&styled_square("Caf\u{e9} \u{3a9}"))));
     assert_eq!(style_names(&r.doc), [("Caf\u{e9} \u{3a9}".to_string(), 1)]);
     assert_eq!(art(&r.doc)[0].extras().graphic_style, Some(1));
+}
+
+#[test]
+fn an_object_in_a_symbols_art_with_a_listed_style_is_linked() {
+    let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    let body =
+        format!("{defs}{}{}", symbols(&symbol("Tile", &styled_square("Blue"), 5)), layer(&instance("Tile", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])));
+    let r = read_ok(&body);
+    assert_eq!(style_names(&r.doc), [("Blue".to_string(), 1)]);
+    let tile = &r.doc.symbols[0].art;
+    assert!(matches!(tile.kind, NodeKind::Path { .. }), "{tile:#?}");
+    assert_eq!(fill(tile).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(tile.extras().graphic_style, Some(1), "{tile:#?}");
+    // A symbol's art written as a group holding one object stays that group when the group is
+    // linked to the style.
+    let empty = "/KnownStyle :\n(Empty) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                 /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n";
+    let defs = styles_and_list(&[empty.to_string()], &["Empty"]);
+    let square = rect_path(0.0, 0.0, 10.0, 10.0);
+    let hidden = square.replace('\n', "\n%_");
+    // The styled group is the definition's own group, without one around it.
+    let group = format!(
+        "%AI14_BeginSymbol\n(Group)\n0 A\n0 Xw\n0 Ae\nu\n{RED}{square}f\nU\n%_u\n%_{hidden}f\n%_U\n1 (Empty) XW\n\
+         %_/ArtDictionary :\n%_5 /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n%AI10_EndSymbol\n"
+    );
+    let body = format!("{defs}{}{}", symbols(&group), layer(&instance("Group", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])));
+    let art = &read_ok(&body).doc.symbols[0].art;
+    assert!(matches!(art.kind, NodeKind::Group { .. }), "{art:#?}");
+    assert_eq!(art.extras().graphic_style, Some(1), "{art:#?}");
 }
 
 #[test]
