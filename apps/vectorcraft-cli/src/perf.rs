@@ -190,8 +190,8 @@ fn budget_row(name: &str, ms: f64, budget: f64, ok: bool) -> String {
 /// Tracked rows for pointing at things in an n-path document: what hovering, clicking, marquee
 /// selection and snapping cost when nothing narrows the search.
 fn pointing(n: usize, rows: &mut Vec<(String, f64)>) -> Result<(), String> {
-    let err = |e: vectorcraft_engine::EngineError| e.to_string();
     use vectorcraft_engine::tools::{Mods, PointerEvent, PointerKind};
+    let err = |e: vectorcraft_engine::EngineError| e.to_string();
     let mut s = vectorcraft_engine::Session::new();
     s.add_document(synthetic(n)?, None);
     let view = vectorcraft_engine::ViewInfo { zoom: 1.0, ..Default::default() };
