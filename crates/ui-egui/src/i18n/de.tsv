@@ -5938,6 +5938,13 @@ breakText	Glyphs	Glyphen
 	Fully Outside	Vollständig außen
 	No artboards match.	Keine Zeichenfläche passt.
 	Chosen: {n} of {total}	Gewählt: {n} von {total}
+
+# Contour add-on
+	Contour	Umriss
+	Contour Tool	Umriss-Werkzeug
+	Sharp	Spitz
+	Bake	Umwandeln
+	Turn the Contour into plain paths	Wandelt den Umriss in einfache Pfade um
 	Set Corners…	Ecken festlegen…
 	All Anchors	Alle Ankerpunkte
 	Odd-Numbered Anchors	Ungerade Ankerpunkte

@@ -582,6 +582,60 @@ fn set_pref(s: &mut Session, key: &str, value: Value) {
     s.execute("prefs.set", &json!({"key": key, "value": value})).unwrap();
 }
 
+/// New type with the session's defaults: its id and language.
+fn new_type(s: &mut Session) -> (NodeId, Option<String>) {
+    let id = NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hello"})).unwrap()["id"].as_u64().unwrap());
+    (id, type_language(s, id))
+}
+
+fn type_language(s: &Session, id: NodeId) -> Option<String> {
+    let Some(NodeKind::Text(t)) = s.doc().unwrap().doc.node(id).map(|n| &n.kind) else { panic!("not text") };
+    t.runs[0].style.language.clone()
+}
+
+/// Preferences › Hyphenation › Default Language (#394) is the language of new type, stored as its
+/// tag. Type already there keeps its language, and a language chosen in Document Setup comes first.
+#[test]
+fn default_language_is_the_language_of_new_type() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let (before, language) = new_type(&mut s);
+    assert_eq!(language, None, "the default language isn't stored");
+
+    set_pref(&mut s, "hyphenationLanguage", json!("German"));
+    assert_eq!(s.prefs.hyphenation_language, "de", "a name is stored as its tag");
+    assert_eq!(new_type(&mut s).1.as_deref(), Some("de"));
+    assert_eq!(type_language(&s, before), None, "type already there stays as it is");
+
+    s.execute("document.setup", &json!({"language": "French"})).unwrap();
+    assert_eq!(new_type(&mut s).1.as_deref(), Some("fr"), "the document's own language comes first");
+
+    set_pref(&mut s, "hyphenationLanguage", json!("en-US"));
+    s.execute("document.setup", &json!({"language": "English: USA"})).unwrap();
+    assert_eq!(new_type(&mut s).1, None);
+}
+
+/// Preferences saved before the language was a tag hold its name; a language no longer in the list
+/// reads as the default.
+#[test]
+fn a_saved_default_language_reads_as_its_tag() {
+    let read = |v: &str| serde_json::from_value::<Prefs>(json!({"hyphenationLanguage": v})).unwrap().hyphenation_language;
+    assert_eq!(read("German"), "de");
+    assert_eq!(read("English: USA"), "en-US");
+    assert_eq!(read("de"), "de");
+    assert_eq!(read("Klingon"), "en-US");
+    assert_eq!(Prefs::default().hyphenation_language, "en-US");
+}
+
+/// The preference offers every language the Character panel and Document Setup do.
+#[test]
+fn default_language_offers_every_language() {
+    let spec = PREF_SPECS.iter().find(|p| p.key == "hyphenationLanguage").unwrap();
+    let crate::cmd::prefscmds::PrefKind::Choice(options) = spec.kind else { panic!("a choice") };
+    let languages: Vec<(&str, &str)> = vectorcraft_doc::setup::LANGUAGES.iter().map(|(name, tag, _)| (*tag, *name)).collect();
+    assert_eq!(options, languages.as_slice());
+}
+
 fn gesture(s: &mut Session, v: ViewInfo, events: &[(vectorcraft_tools::PointerKind, f64, f64)]) {
     for (k, x, y) in events {
         s.pointer(&vectorcraft_tools::PointerEvent::new(*k, *x, *y), v).unwrap();

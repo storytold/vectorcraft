@@ -6780,6 +6780,27 @@ The panel sets the next segment and runs Remove Points Keep Shape (`addon.pathto
 {"name":"run_command","arguments":{"command":"addon.pen.reshape","params":{"id":12,"segment":0,"t":0.3,"dx":0,"dy":-25}}}
 ```
 
+## Contour add-on
+
+Contour is a built-in add-on: it grows or shrinks a copy of a path or shape by a distance, live. Its command is
+`addon.contour.set`; in the desktop app it lives in Object › Plug-ins › Contour and in the Contour Tool (`contour`), which
+the toolbars don't show until it is added from the All Tools drawer (or chosen with `tool.select`); it has no shortcut. A
+floating bar over the selection (the distance, Sharp / Round / Square and Bake) acts through the same commands.
+
+`addon.contour.set {offset, corners?, miterLimit?}` puts a copy of each selected path, shape or compound path directly above
+it with a live Offset Path effect of `offset` points (negative insets), and selects the copies. `corners` is `"sharp"`
+(default), `"round"` or `"square"` (corners cut off flat), `miterLimit` 1 to 500 (4; sharp corners). A selected object that
+already has that effect (a Contour made earlier) has its effect changed instead of getting another, so the same call
+adjusts a Contour. The original is kept, and nothing is baked: `effect.expandAppearance` turns a Contour into plain paths.
+Type, images and groups are left alone; with nothing to offset it says "select paths or shapes". One undo step. Result:
+`{ids, created, updated}`.
+
+The tool (`contour`) drags a distance from the selected shape's edge, outward to grow and inward to shrink: the press
+changes nothing until the pointer moves, a Contour that already stands at a distance continues from it, Shift rounds to
+whole points and Escape cancels. A drag keeps a Contour's own corners and miter limit; a new Contour takes the tool's
+options `corners` and `miterLimit` (`tool.setOption`). A border with a gap is two Contours of one shape (the gap first, so
+it ends up in front), baked with `effect.expandAppearance`, then `object.pathfinder.minusFront`.
+
 ## Color Effects add-on
 
 Color Effects is a built-in add-on: its effects are colour adjustments in Effect › Color Effects, its command is

@@ -6347,6 +6347,13 @@ breakText	Glyphs	Glyphes
 	Fully Outside	Entièrement à l’extérieur
 	No artboards match.	Aucun plan de travail ne correspond.
 	Chosen: {n} of {total}	Choisis : {n} sur {total}
+
+# Contour add-on
+	Contour	Pourtour
+	Contour Tool	Outil Pourtour
+	Sharp	Pointu
+	Bake	Décomposer
+	Turn the Contour into plain paths	Transforme le pourtour en tracés simples
 	Set Corners…	Définir les angles…
 	All Anchors	Tous les points d’ancrage
 	Odd-Numbered Anchors	Points d’ancrage impairs

@@ -1013,6 +1013,33 @@ fn hyphenation_rules() {
     }
 }
 
+/// #394: each run hyphenates in its own language. English breaks words, a language without break
+/// points doesn't, and text saved without a language breaks as it always did.
+#[test]
+fn each_run_hyphenates_in_its_own_language() {
+    let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    let frame = Rect::new(0.0, 0.0, 120.0, 600.0);
+    let hyphens = |language: Option<&str>| {
+        let st = CharStyle { language: language.map(str::to_string), ..style(14.0) };
+        let mut t = area(text, st, frame, Justify::Left);
+        t.para.hyphenate = true;
+        layout(db(), &t).glyphs.iter().filter(|g| g.len == 0).count()
+    };
+    let saved_without_one = hyphens(None);
+    assert!(saved_without_one > 0, "some words hyphenated");
+    assert_eq!(hyphens(Some("en-GB")), saved_without_one);
+    assert_eq!(hyphens(Some("de")), 0, "German has no break points yet");
+    assert_eq!(hyphens(Some("x-from-a-file")), 0, "a tag that isn't known has no hyphenation");
+
+    // both in one paragraph: the English run breaks and the German one doesn't
+    let mut t = area(&format!("{text} {text}"), style(14.0), frame, Justify::Left);
+    t.para.hyphenate = true;
+    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("de".into()));
+    let l = layout(db(), &t);
+    let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
+    assert!(!at.is_empty() && at.iter().all(|b| *b < text.len()), "hyphens only in the English run: {at:?}");
+}
+
 #[test]
 fn hyphenated_layout_adds_hyphens() {
     let text = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";

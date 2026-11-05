@@ -6202,6 +6202,13 @@ breakText	Glyphs	Глифи
 	Fully Outside	Изцяло извън
 	No artboards match.	Няма съвпадащи работни области.
 	Chosen: {n} of {total}	Избрани: {n} от {total}
+
+# Contour add-on
+	Contour	Очертание
+	Contour Tool	Инструмент „Очертание“
+	Sharp	Заостряне
+	Bake	Разшири
+	Turn the Contour into plain paths	Превръща очертанието в обикновени пътища
 	Set Corners…	Задаване на ъгли…
 	All Anchors	Всички опорни точки
 	Odd-Numbered Anchors	Нечетни опорни точки

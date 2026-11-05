@@ -6338,6 +6338,13 @@ breakText	Glyphs	Glifs
 	Fully Outside	Totalment fora
 	No artboards match.	Cap tauler no coincideix.
 	Chosen: {n} of {total}	Triats: {n} de {total}
+
+# Contour add-on
+	Contour	Contorn
+	Contour Tool	Eina de contorn
+	Sharp	Punxegut
+	Bake	Expandeix
+	Turn the Contour into plain paths	Converteix el contorn en traçats simples
 	Set Corners…	Defineix les cantonades…
 	All Anchors	Tots els ancoratges
 	Odd-Numbered Anchors	Ancoratges senars

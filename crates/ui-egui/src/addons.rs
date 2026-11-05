@@ -3,6 +3,7 @@
 pub mod arrange;
 pub mod cleanup;
 pub mod color;
+pub mod contour;
 pub mod document;
 pub mod enclosing_lasso;
 pub mod pathtools;
@@ -18,6 +19,7 @@ pub fn plugin_menu() -> Vec<Item> {
         Item::Sub("Arrange Tools", arrange::menu()),
         Item::Sub("Artwork Cleanup", cleanup::menu()),
         Item::Sub("Color Effects", color::menu()),
+        Item::Sub("Contour", contour::menu()),
         Item::Sub("Document Tools", document::menu()),
         Item::Sub("Enclosing Lasso", enclosing_lasso::menu()),
         Item::Sub("Path Precision Tools", pathtools::menu()),

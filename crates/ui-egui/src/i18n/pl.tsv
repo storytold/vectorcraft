@@ -6207,6 +6207,13 @@ breakText	Glyphs	Glify
 	Fully Outside	Całkowicie na zewnątrz
 	No artboards match.	Żaden obszar kompozycji nie pasuje.
 	Chosen: {n} of {total}	Wybrano: {n} z {total}
+
+# Contour add-on
+	Contour	Kontur
+	Contour Tool	Narzędzie Kontur
+	Sharp	Ostry
+	Bake	Rozszerz
+	Turn the Contour into plain paths	Zamienia kontur w zwykłe ścieżki
 	Set Corners…	Ustaw narożniki…
 	All Anchors	Wszystkie punkty
 	Odd-Numbered Anchors	Punkty nieparzyste

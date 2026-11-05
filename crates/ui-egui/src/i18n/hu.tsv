@@ -6336,6 +6336,13 @@ breakText	Glyphs	Glifák
 	Fully Outside	Teljesen kívül
 	No artboards match.	Nincs egyező rajztábla.
 	Chosen: {n} of {total}	Kiválasztva: {n} / {total}
+
+# Contour add-on
+	Contour	Kontúr
+	Contour Tool	Kontúr eszköz
+	Sharp	Hegyes
+	Bake	Kibontás
+	Turn the Contour into plain paths	A kontúrt egyszerű útvonalakká alakítja
 	Set Corners…	Sarkok beállítása…
 	All Anchors	Összes horgonypont
 	Odd-Numbered Anchors	Páratlan horgonypontok

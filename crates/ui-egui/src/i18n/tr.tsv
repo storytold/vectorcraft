@@ -6309,6 +6309,13 @@ breakText	Glyphs	Glifler
 	Fully Outside	Tamamen dışarıda
 	No artboards match.	Eşleşen çalışma yüzeyi yok.
 	Chosen: {n} of {total}	Seçilen: {n}/{total}
+
+# Contour add-on
+	Contour	Dış Hat
+	Contour Tool	Dış Hat Aracı
+	Sharp	Keskin
+	Bake	Genişlet
+	Turn the Contour into plain paths	Dış hattı sade yollara dönüştürür
 	Set Corners…	Köşeleri Ayarla…
 	All Anchors	Tüm Çapalar
 	Odd-Numbered Anchors	Tek Numaralı Çapalar

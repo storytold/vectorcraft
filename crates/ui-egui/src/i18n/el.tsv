@@ -6304,6 +6304,13 @@ breakText	Glyphs	Γλύφοι
 	Fully Outside	Πλήρως εκτός
 	No artboards match.	Κανένας πίνακας σχεδίασης δεν ταιριάζει.
 	Chosen: {n} of {total}	Επιλεγμένοι: {n} από {total}
+
+# Contour add-on
+	Contour	Παράλληλο περίγραμμα
+	Contour Tool	Εργαλείο παράλληλου περιγράμματος
+	Sharp	Οξεία
+	Bake	Επέκταση
+	Turn the Contour into plain paths	Μετατρέπει το παράλληλο περίγραμμα σε απλές διαδρομές
 	Set Corners…	Ορισμός γωνιών…
 	All Anchors	Όλα τα σημεία αγκύρωσης
 	Odd-Numbered Anchors	Μονά σημεία αγκύρωσης

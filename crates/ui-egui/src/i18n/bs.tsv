@@ -6237,6 +6237,13 @@ shape	Open	Otvoren
 	Fully Outside	Potpuno vani
 	No artboards match.	Nijedna radna ploča ne odgovara.
 	Chosen: {n} of {total}	Odabrano: {n} od {total}
+
+# Contour add-on
+	Contour	Kontura
+	Contour Tool	Alat kontura
+	Sharp	Oštro
+	Bake	Proširi
+	Turn the Contour into plain paths	Pretvori konturu u obične putanje
 	Set Corners…	Postavi uglove…
 	All Anchors	Sva sidra
 	Odd-Numbered Anchors	Neparna sidra

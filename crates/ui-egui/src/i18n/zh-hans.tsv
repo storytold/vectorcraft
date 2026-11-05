@@ -6193,6 +6193,13 @@ breakText	Glyphs	字形
 	Fully Outside	完全在外
 	No artboards match.	没有匹配的画板。
 	Chosen: {n} of {total}	已选：{n} / {total}
+
+# Contour add-on
+	Contour	轮廓
+	Contour Tool	轮廓工具
+	Sharp	尖角
+	Bake	扩展
+	Turn the Contour into plain paths	将轮廓转为普通路径
 	Set Corners…	设置转角…
 	All Anchors	所有锚点
 	Odd-Numbered Anchors	奇数锚点

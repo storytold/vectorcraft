@@ -5952,6 +5952,13 @@ breakText	Glyphs	Гліфи
 	Fully Outside	Повністю зовні
 	No artboards match.	Немає відповідних монтажних областей.
 	Chosen: {n} of {total}	Вибрано: {n} з {total}
+
+# Contour add-on
+	Contour	Еквідистанта
+	Contour Tool	Інструмент «Еквідистанта»
+	Sharp	Гострий
+	Bake	Розібрати
+	Turn the Contour into plain paths	Перетворює еквідистанту на звичайні контури
 	Set Corners…	Задати кути…
 	All Anchors	Усі опорні точки
 	Odd-Numbered Anchors	Непарні опорні точки

@@ -6218,6 +6218,13 @@ breakText	Glyphs	Glif
 	Fully Outside	Sepenuhnya di luar
 	No artboards match.	Tidak ada artboard yang cocok.
 	Chosen: {n} of {total}	Dipilih: {n} dari {total}
+
+# Contour add-on
+	Contour	Kontur
+	Contour Tool	Alat kontur
+	Sharp	Tajam
+	Bake	Perluas
+	Turn the Contour into plain paths	Ubah kontur menjadi jalur biasa
 	Set Corners…	Atur sudut…
 	All Anchors	Semua jangkar
 	Odd-Numbered Anchors	Jangkar bernomor ganjil

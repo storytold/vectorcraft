@@ -6408,6 +6408,13 @@ digits	Hindi	Hindi
 	Fully Outside	Helt utanför
 	No artboards match.	Ingen rityta matchar.
 	Chosen: {n} of {total}	Valda: {n} av {total}
+
+# Contour add-on
+	Contour	Kantlinje
+	Contour Tool	Kantlinjeverktyg
+	Sharp	Spetsig
+	Bake	Expandera
+	Turn the Contour into plain paths	Gör om kantlinjen till vanliga banor
 	Set Corners…	Ange hörn…
 	All Anchors	Alla ankare
 	Odd-Numbered Anchors	Udda ankare

@@ -5990,6 +5990,13 @@ breakText	Glyphs	字符
 	Fully Outside	完全在外
 	No artboards match.	沒有符合的工作區域。
 	Chosen: {n} of {total}	已選：{n} / {total}
+
+# Contour add-on
+	Contour	輪廓
+	Contour Tool	輪廓工具
+	Sharp	尖角
+	Bake	展開
+	Turn the Contour into plain paths	將輪廓轉為一般路徑
 	Set Corners…	設定轉角…
 	All Anchors	所有錨點
 	Odd-Numbered Anchors	奇數錨點
