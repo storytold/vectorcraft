@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -649,11 +649,14 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G15 Performance budgets and a GPU renderer
 
+- **Improved (#4155):** a document's first frame renders on the render worker, not the UI thread: opening the file
+  of #4155 kept the UI thread busy for 8.7 s at a stretch, now at most 64 ms, and a 50,000-path SVG 1.4 s, now
+  62 ms (measured in the app, M3 Pro, one run each). A light document's frame, ready within 16 ms, still shows at once.
 - **Improved (#4155):** the canvas shrinks a reduced image to the mip it draws before separating it into ink planes,
   colorizing it or proofing it, so that work is done at the size the image shows, not at its own. On the
   141-megapixel image of #4155 the first frame went from 9.2 s to 1.6 s and the sharp frame after a pan from 3.9 s
-  to 8 ms (measured in the app, M3 Pro, one run each). Still to do: the first frame still renders on the UI thread,
-  and at 100% zoom or more an image is still separated whole; tiles would bound that by the view.
+  to 8 ms (measured in the app, M3 Pro, one run each). Still to do: at 100% zoom or more an image is still separated
+  whole; tiles would bound that by the view.
 - **Improved (2026-11-02):** the renderer keeps a compound path's assembled path with the node, as it keeps a plain
   path's, instead of assembling its members again in every frame; the path is assembled into a buffer sized up front.
   Unused geometry entries are dropped after a few frames however few there are (before, only past 1,024 entries), so
@@ -764,6 +767,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | G15: a document's first frame renders on the render worker (#4155); the longest UI-thread stall opening that file went from 8.7 s to 64 ms. Estimate unchanged. |
 | 2026-11-05 | minor | G15: a reduced image is shrunk before it is separated into ink planes (#4155); first frame 9.2 s → 1.6 s, sharp frame after a pan 3.9 s → 8 ms on that file. Estimate unchanged. |
 | 2026-11-05 | minor | G7: document tabs are dragged along the tab strip to reorder them (`document.move`, #5663). Estimate unchanged. |
 | 2026-11-02 | minor | G15: the renderer keeps a compound path's assembled path between frames and drops unused geometry entries after a few frames however few there are. Estimate unchanged. |
