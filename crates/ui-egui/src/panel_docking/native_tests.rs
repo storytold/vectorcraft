@@ -829,6 +829,66 @@ fn a_closed_overlay_does_not_replay_its_wheel_into_the_panel() {
 }
 
 #[test]
+fn a_wheel_before_opening_a_floating_font_menu_changes_the_font() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+        Event::PointerButton { pos: pointer, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() },
+        Event::PointerButton { pos: pointer, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() },
+    ]);
+    h.frames(3);
+    assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
+fn a_delayed_wheel_does_not_change_a_font_field_that_moved() {
+    let mut h = Harness::new();
+    h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
+    let viewport = h.float("character");
+    let field = h
+        .host
+        .borrow()
+        .windows
+        .get(&viewport)
+        .and_then(|w| w.texts.iter().find(|(text, _)| text == "Source Sans 3").map(|(_, rect)| *rect))
+        .expect("the Character panel's font family field");
+    let pointer = pos2(field.min.x + 4.0, field.center().y);
+    let before = h.app.run("text.fonts", json!({})).unwrap();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(pointer),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frame(vec![]);
+    crate::font_menu::offset_wheel_fields_for_test(&h.ctx, viewport, vec2(300.0, 0.0));
+    h.frame(vec![]);
+    assert_eq!(h.app.run("text.fonts", json!({})).unwrap(), before);
+}
+
+#[test]
 fn wheel_events_on_both_sides_of_an_overlay_are_checked_separately() {
     let mut h = Harness::new();
     h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();

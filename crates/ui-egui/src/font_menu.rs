@@ -363,6 +363,7 @@ pub fn font_menu(
                     // These turns preceded the opener. The popup cancels back to the newly
                     // applied family, and any preview drawn this pass has not been applied.
                     st.current.clone_from(&own);
+                    st.highlight = st.rows.iter().position(|row| matches!(row, Row::Family(f) if f.eq_ignore_ascii_case(&own)));
                     st.previewed = None;
                 }
                 out = Some(FontPick::Wheel(steps));
@@ -444,6 +445,7 @@ struct WheelField {
 struct QueuedWheel {
     frame: u64,
     field: egui::Id,
+    menu: egui::Id,
     position: egui::Pos2,
     rect: egui::Rect,
     event: egui::Event,
@@ -506,8 +508,12 @@ impl egui::Plugin for WheelLayerSnapshot {
         });
         let replayed = fields.replay.len();
         for event in ready {
-            let layer = fields.fields.iter().find(|field| field.id == event.field).map(|field| field.layer);
-            let active = layer.is_some_and(|layer| ctx.layer_id_at(event.position) == Some(layer));
+            let current = fields.fields.iter().find(|field| field.id == event.field);
+            let layer = current.map(|field| field.layer);
+            let opened_after_wheel = current.is_none()
+                && ctx.data(|d| d.get_temp::<MenuState>(event.menu)).is_some_and(|menu| menu.opened > 0 && menu.opened == fields.pass);
+            let active = opened_after_wheel
+                || current.is_some_and(|field| field.rect.contains(event.position) && ctx.layer_id_at(event.position) == Some(field.layer));
             let left = !active || event.reset_after || event.positions_after.iter().any(|position| ctx.layer_id_at(*position) != layer);
             let id = event.field.with("wheel");
             if !active {
@@ -591,6 +597,18 @@ fn mark_queued_wheel_leaves(fields: &mut WheelFields, point: Option<egui::Pos2>)
 pub(crate) fn wheel_field_layer_for_test(ctx: &egui::Context, viewport: egui::ViewportId, point: egui::Pos2) -> Option<egui::LayerId> {
     ctx.data(|data| data.get_temp::<WheelFields>(wheel_fields_id(viewport)))
         .and_then(|fields| fields.fields.iter().find(|field| field.rect.contains(point)).map(|field| field.layer))
+}
+
+#[cfg(test)]
+pub(crate) fn offset_wheel_fields_for_test(ctx: &egui::Context, viewport: egui::ViewportId, offset: egui::Vec2) {
+    let key = wheel_fields_id(viewport);
+    ctx.data_mut(|data| {
+        let mut fields = data.get_temp::<WheelFields>(key).expect("registered wheel fields");
+        for field in &mut fields.fields {
+            field.rect = field.rect.translate(offset);
+        }
+        data.insert_temp(key, fields);
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -777,6 +795,7 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
                             fields.queued.push(QueuedWheel {
                                 frame,
                                 field: field.id,
+                                menu: field.menu,
                                 position,
                                 rect: field.rect,
                                 event: event.clone(),
