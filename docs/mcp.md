@@ -2338,7 +2338,8 @@ its bounds.
 the styles unlinked from swatches, with their opacity, blend mode, isolate and knockout, and the patterns they paint
 with); without `path` it returns `{data}`, and `user: true` saves into the user library folder of the desktop app
 (category `user`, User Defined). `graphicStyle.loadLibrary {path? | data? | dataBase64?, name?}` loads a `.vcstyles`
-file, or another document's graphic styles, as a library to add from; a file in the user library folder, or a file
+file, or another document's graphic styles, as a library to add from (a `.ai` or EPS whose editing data holds graphic
+styles and no layers gives the styles of its style list, in that order); a file in the user library folder, or a file
 with the same extension and bytes as one there, loads as that User Defined library.
 
 ## Symbol libraries

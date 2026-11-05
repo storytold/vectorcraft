@@ -124,7 +124,7 @@ mod types;
 
 pub(crate) use art::join_and;
 use art::preview_png;
-pub use document::{BindingRef, Brushes, PaletteSwatches, VariableRead, artboards, bindings_note, brushes, palette, variables};
+pub use document::{BindingRef, Brushes, PaletteSwatches, VariableRead, artboards, bindings_note, brushes, graphic_styles, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
 use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster};

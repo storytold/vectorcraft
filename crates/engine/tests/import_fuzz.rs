@@ -3523,6 +3523,7 @@ proptest! {
         ], 0..12),
         ended in any::<bool>(),
         objects in prop::collection::vec((prop_oneof![arb_num(), prop::sample::select(vec!["1".to_string(), "6".into(), "9".into()])], prop::sample::select(vec!["A", "B", "", "Caf\u{e9}", "Missing"]), any::<bool>()), 0..6),
+        unit in prop::sample::select(vec![1.0, 2.0, 0.0, -1.0, f64::NAN, f64::INFINITY]),
     ) {
         use vectorcraft_testkit::ai;
         let style = |name: &str| {
@@ -3551,6 +3552,11 @@ proptest! {
         survive("style lists and links", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
         let eps = ai::eps(data.as_bytes(), ai::page_ps());
         survive("style lists and links in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+        // A graphic style library: the styles and their list, no layers.
+        let library = ai::editing_data(200.0, 100.0, &header);
+        survive("style library", || Some(vectorcraft_eps::layered_ai(library.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, unit).0))?;
+        let eps = ai::eps(library.as_bytes(), ai::page_ps());
+        survive("style library in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
     }
 
     /// Objects on Path records of any shape: ids in any order, repeated or missing, any number of
