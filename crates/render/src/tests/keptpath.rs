@@ -384,6 +384,186 @@ fn deleting_an_anchor_of_an_open_path_and_clearing_the_handles_past_its_ends_mea
     assert_eq!(changed, vec![1499 / crate::kept_paths::RUN], "only the run that held the anchor changed: {before:?} -> {after:?}");
 }
 
+/// Numbers from a fixed seed (a linear congruential generator).
+struct Seeded(u64);
+
+impl Seeded {
+    /// A number below `m` (0 when `m` is 0).
+    fn below(&mut self, m: usize) -> usize {
+        self.0 = self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        (self.0 >> 33) as usize % m.max(1)
+    }
+
+    /// A whole number of points from -`r` to `r`.
+    fn offset(&mut self, r: usize) -> f64 {
+        self.below(2 * r + 1) as f64 - r as f64
+    }
+
+    /// Where in a subpath of `n` anchors to edit: at the start, at the end, where a run of segments
+    /// ends, or anywhere.
+    fn at(&mut self, n: usize) -> usize {
+        match self.below(4) {
+            0 => self.below(3).min(n),
+            1 => n.saturating_sub(self.below(3)),
+            2 => (crate::kept_paths::RUN * (1 + self.below(24)) + self.below(3)).min(n),
+            _ => self.below(n + 1),
+        }
+    }
+}
+
+/// An anchor to add after `before`: on it (a segment without length), a corner near it, or a
+/// smooth anchor near it.
+fn anchor_after(g: &mut Seeded, before: Point) -> Anchor {
+    let p = before + Vec2::new(g.offset(20), g.offset(40));
+    match g.below(5) {
+        0 => Anchor::corner(before),
+        1 => Anchor::smooth(p, p + Vec2::new(g.offset(6), g.offset(6))),
+        _ => Anchor::corner(p),
+    }
+}
+
+/// Edit `p` at random: anchors added or deleted at the start, middle or end of a subpath, a
+/// subpath closed or opened, an anchor or a handle moved, or many anchors moved. Says what it did.
+fn random_edit(g: &mut Seeded, p: &mut PathData) -> String {
+    let s = g.below(p.subpaths.len());
+    let Some(sp) = p.subpaths.get_mut(s) else { return "nothing".into() };
+    let n = sp.anchors.len();
+    match g.below(6) {
+        0 | 1 => {
+            let (at, k) = (g.at(n), 1 + g.below(3));
+            for j in 0..k {
+                let before = sp.anchors.get((at + j).saturating_sub(1)).map_or(Point::new(12_000.0, 15.0), |a| a.p);
+                let a = anchor_after(g, before);
+                sp.anchors.insert(at + j, a);
+            }
+            format!("{k} anchors added at {at} of subpath {s} of {n}")
+        }
+        2 | 3 if n > 0 => {
+            let at = g.at(n - 1);
+            let k = (1 + g.below(3)).min(n - at);
+            sp.anchors.drain(at..at + k);
+            format!("{k} anchors deleted at {at} of subpath {s} of {n}")
+        }
+        4 => {
+            sp.closed = !sp.closed;
+            format!("subpath {s} of {n} closed: {}", sp.closed)
+        }
+        _ if n > 0 => {
+            let at = g.below(n);
+            match g.below(3) {
+                0 => moved(&mut sp.anchors[at], Vec2::new(g.offset(30), g.offset(30))),
+                1 => sp.anchors[at].h_out = sp.anchors[at].p + Vec2::new(g.offset(10), g.offset(10)),
+                _ => sp.anchors[at..].iter_mut().take(n / 10).for_each(|a| moved(a, Vec2::new(1.0, -1.0))),
+            }
+            format!("anchors moved at {at} of subpath {s} of {n}")
+        }
+        _ => "nothing".into(),
+    }
+}
+
+/// Bring `k` up to date with `n` and check that it holds what [`KeptPath::new`] makes from `n`:
+/// the same path elements and subpaths, runs that hold each subpath's segments, the boxes and miter
+/// tips of `st` measured again over its runs, and the same bounds and tips in all.
+fn same_as_made_again(k: &mut crate::kept_paths::KeptPath, n: &Arc<Node>, st: &StrokeLayer, what: &str) {
+    assert!(k.update(n), "{what}: brought up to date");
+    let mut fresh = crate::kept_paths::KeptPath::new(n, 0).unwrap_or_else(|| panic!("{what}: kept"));
+    assert!(*k.path == *fresh.path, "{what}: the same path elements");
+    let (layout, whole) = (k.layout(), fresh.layout());
+    assert!(layout.iter().map(|l| l.0).eq(whole.iter().map(|l| l.0)), "{what}: the same subpaths: {layout:?}");
+    for ((sub, runs), ((_, segs, ..), _)) in layout.iter().zip(&whole) {
+        assert_eq!(runs.iter().sum::<usize>(), *segs, "{what}: the runs of {sub:?} hold its segments");
+        assert!(runs.iter().all(|&s| (1..=2 * crate::kept_paths::RUN).contains(&s)), "{what}: the runs of {sub:?}: {runs:?}");
+    }
+    let (runs, again, _) = k.runs();
+    assert!(runs == again, "{what}: the same boxes and tips as measured again");
+    assert_eq!(k.geometric(), fresh.geometric(), "{what}: the same bounds");
+    assert_eq!(k.tips(st), fresh.tips(st), "{what}: the same miter tips");
+}
+
+#[test]
+fn random_edits_of_a_long_path_keep_what_making_its_path_again_makes() {
+    let st = stroke(6.0, LineJoin::Miter, LineCap::Butt);
+    let mut g = Seeded(5744);
+    let closed = |sp: SubPath| SubPath::new(sp.anchors, true);
+    let path = PathData::new(vec![
+        zigzag(2, 11_990.0),
+        closed(zigzag(3, 12_000.0)),
+        zigzag(7, 11_960.0),
+        closed(zigzag(40, 11_800.0)),
+        ring(300, Point::new(12_000.0, 15.0), 60.0),
+        zigzag(3000, 0.0),
+        closed(zigzag(2000, 4000.0)),
+    ]);
+    let mut n = Arc::new(Node::path(NodeId(1), path, look(vec![st.clone()])));
+    let mut k = crate::kept_paths::KeptPath::new(&n, 0).unwrap();
+    k.tips(&st);
+    for step in 0..300 {
+        let mut next = (*n).clone();
+        let what = random_edit(&mut g, next.path_data_mut().unwrap());
+        n = Arc::new(next);
+        same_as_made_again(&mut k, &n, &st, &format!("step {step}, {what}"));
+    }
+}
+
+#[test]
+fn random_edits_of_a_long_compound_path_keep_what_making_its_path_again_makes() {
+    let st = stroke(4.0, LineJoin::Miter, LineCap::Square);
+    let mut g = Seeded(1050);
+    let ids = std::cell::Cell::new(10);
+    let member = |p: PathData| {
+        ids.set(ids.get() + 1);
+        Arc::new(Node::path(NodeId(ids.get()), p, Appearance::default()))
+    };
+    let children = vec![
+        member(PathData::new(vec![SubPath::new(zigzag(3, 11_990.0).anchors, true), zigzag(5, 12_010.0)])),
+        member(PathData::single(zigzag(3000, 0.0))),
+        member(PathData::single(ring(40, Point::new(12_000.0, 15.0), 30.0))),
+        member(PathData::single(zigzag(2, 12_020.0))),
+    ];
+    let mut n = Node::new(NodeId(1), NodeKind::Compound { children, rule: FillRule::EvenOdd });
+    n.appearance = look(vec![st.clone()]).into();
+    let mut n = Arc::new(n);
+    let mut k = crate::kept_paths::KeptPath::new(&n, 0).unwrap();
+    k.tips(&st);
+    for step in 0..300 {
+        let mut next = (*n).clone();
+        let NodeKind::Compound { children, .. } = &mut next.kind else { panic!("a compound path") };
+        let what = match g.below(8) {
+            0 => {
+                let at = [0, children.len(), g.below(children.len() + 1)][g.below(3)];
+                let size = [1, 2, 4, 30, 200][g.below(5)];
+                let mut sp = zigzag(size, 11_900.0 + g.offset(100));
+                sp.closed = g.below(2) == 0;
+                children.insert(at, member(PathData::single(sp)));
+                format!("a member of {size} anchors added at {at}")
+            }
+            // The member of 3,000 anchors stays, so that the path stays kept.
+            1 if children.len() > 2 => {
+                let at = [0, children.len() - 1, g.below(children.len())][g.below(3)];
+                if children[at].path_data().is_some_and(|p| p.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>() > 1000) {
+                    "nothing".into()
+                } else {
+                    children.remove(at);
+                    format!("member {at} removed")
+                }
+            }
+            2 => {
+                let at = g.below(children.len());
+                let m = Arc::make_mut(&mut children[at]).path_data_mut().unwrap();
+                m.subpaths.push(zigzag(1 + g.below(4), 12_030.0));
+                format!("a subpath added to member {at}")
+            }
+            _ => {
+                let at = g.below(children.len());
+                let what = random_edit(&mut g, Arc::make_mut(&mut children[at]).path_data_mut().unwrap());
+                format!("member {at}: {what}")
+            }
+        };
+        n = Arc::new(next);
+        same_as_made_again(&mut k, &n, &st, &format!("step {step}, {what}"));
+    }
+}
+
 #[test]
 fn moving_one_anchor_of_a_long_path_changes_its_kept_path_in_place() {
     let mut d = Document::new(1000.0, 1000.0);
