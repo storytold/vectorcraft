@@ -260,8 +260,11 @@ fn closing_a_document_releases_only_its_layer_thumbnails() {
     frame(&mut app, &ctx, vec![], false);
     assert!(THUMBS.with(|c| c.borrow().cached(second)));
 
-    app.session.execute("file.close", &json!({"index": 0})).unwrap();
-    app.sync_views();
+    // Close the first document the way File › Close does (Don't Save), with no panel drawn after.
+    assert_eq!(app.run("file.close", json!({"index": 0})).unwrap(), json!({"pending": crate::unsaved::KIND}));
+    app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.session.documents().iter().all(|d| d.uid != first), "the first document closed");
     THUMBS.with(|c| {
         let thumbs = c.borrow();
         assert!(!thumbs.cached(first), "closed document textures are released");

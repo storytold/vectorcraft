@@ -258,18 +258,32 @@ impl Thumbs {
     }
 
     /// Release thumbnails and queued jobs for documents that have closed, keeping the cache for
-    /// other open documents even when the panels are hidden or another document is active.
+    /// other open documents even when the panels are hidden or another document is active. When a
+    /// document closes, the worker drops its jobs, the one running included, and the images it
+    /// finished that the panels have not collected yet.
     fn retain_open(&mut self, uids: &[u64]) {
         if self.open_docs.as_ref().is_some_and(|open| open.len() == uids.len() && uids.iter().all(|uid| open.contains(uid))) {
             return;
         }
         let open: HashSet<u64> = uids.iter().copied().collect();
+        let closed = self.open_docs.as_ref().is_some_and(|before| before.iter().any(|uid| !open.contains(uid)));
         let stale =
             self.entries.keys().chain(self.pending.keys()).any(|key| !open.contains(&key.0)) || self.showing.is_some_and(|uid| !open.contains(&uid));
         self.entries.retain(|key, _| open.contains(&key.0));
         self.pending.retain(|key, _| open.contains(&key.0));
         self.showing = self.showing.filter(|uid| open.contains(uid));
-        if stale
+        if closed {
+            // Images finished before now are dropped with the rest of the queue: the open
+            // documents' rows are asked for again.
+            if let Some(w) = &self.worker {
+                let open = open.clone();
+                w.forget(move |key| !open.contains(&key.0));
+                if w.poll().is_none() {
+                    self.worker = None;
+                }
+            }
+            self.pending.clear();
+        } else if stale
             && let Some(w) = &self.worker
             && !w.discard({
                 let open = open.clone();
@@ -490,6 +504,36 @@ mod tests {
         assert!(thumbs.entries.is_empty(), "a closed document's late result is discarded");
         thumbs.receive(&ctx, Done { key: ((2, NodeId(2)), Weak::new(), 16), img: None, ms: 0.0 });
         assert!(thumbs.entries.contains_key(&(2, NodeId(2))), "an open document's result is kept");
+    }
+
+    #[test]
+    fn closing_a_document_drops_the_image_its_running_job_finishes_while_the_panels_are_hidden() {
+        let ctx = egui::Context::default();
+        let Some(worker) = ThumbWorker::start(&ctx, "test") else { return };
+        let mut thumbs = Thumbs { worker: Some(worker), worker_started: true, ..Default::default() };
+        thumbs.retain_open(&[1, 2]);
+        // A job of document 1 is running, so discarding the queue cannot drop it.
+        let (started, running) = std::sync::mpsc::channel::<()>();
+        let (release, held) = std::sync::mpsc::channel::<()>();
+        let key = (1, NodeId(1));
+        let job: crate::thumb_worker::JobFn = Box::new(move |_| {
+            started.send(()).ok();
+            held.recv().ok();
+            None
+        });
+        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(key, (key, Weak::new(), 1), job)));
+        running.recv().expect("the job starts");
+        // Another row of document 1 waits behind it.
+        let queued = (1, NodeId(3));
+        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(queued, (queued, Weak::new(), 1), Box::new(|_| None))));
+        // Document 1 closes while no panel collects results, then its running job finishes.
+        thumbs.retain_open(&[2]);
+        release.send(()).ok();
+        // A job of document 2 queued after them comes back first: document 1's images were dropped.
+        let next = (2, NodeId(2));
+        assert!(thumbs.worker.as_ref().is_some_and(|w| w.submit(next, (next, Weak::new(), 1), Box::new(|_| None))));
+        let done = thumbs.worker.as_ref().and_then(ThumbWorker::wait).expect("the same worker finishes document 2's job");
+        assert_eq!(done.key.0, next, "no worker keeps the closed document's image");
     }
 
     /// An open zigzag of `anchors` anchors.
