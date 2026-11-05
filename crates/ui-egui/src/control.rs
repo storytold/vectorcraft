@@ -34,7 +34,7 @@
 //!   Background Save or Background Export on. A `wait` other than true, false or null is refused
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 
 use serde_json::{Value, json};
@@ -101,7 +101,12 @@ pub struct ControlRequest {
     pub params: Value,
     pub reply: Sender<ControlResponse>,
     state: Arc<AtomicU8>,
+    /// Its place in the order requests were made ([`ControlRequest::next_seq`]).
+    seq: u64,
 }
+
+/// The sequence number of the next request made.
+static NEXT_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// A request's state: waiting to run, taken by the app ([`ControlRequest::claim`]), or given up
 /// by its caller before that ([`Ticket::give_up`]). It leaves `QUEUED` once, one way or the other.
@@ -124,7 +129,18 @@ impl Ticket {
 impl ControlRequest {
     pub fn new(method: impl Into<String>, params: Value) -> (Self, std::sync::mpsc::Receiver<ControlResponse>) {
         let (tx, rx) = std::sync::mpsc::channel();
-        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)) }, rx)
+        let seq = NEXT_SEQ.fetch_add(1, Ordering::SeqCst);
+        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)), seq }, rx)
+    }
+
+    /// The sequence number the next request made gets: every request made so far is before it.
+    pub fn next_seq() -> u64 {
+        NEXT_SEQ.load(Ordering::SeqCst)
+    }
+
+    /// Whether this request was made before the one numbered `seq`.
+    pub fn made_before(&self, seq: u64) -> bool {
+        self.seq < seq
     }
 
     /// The caller's handle on this request, to give it up with.
