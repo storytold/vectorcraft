@@ -117,6 +117,31 @@ fn a_pointer_release_after_a_key_waits_for_the_key() {
     assert!(closed, "C reached the Arc tool before the release");
 }
 
+/// A waiting `ui.pointer` request whose caller gave it up is dropped at once: the requests sent
+/// after it run without waiting for the input sent before it to be applied.
+#[test]
+fn a_given_up_pointer_does_not_hold_back_later_requests() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    let (key, _key_reply) = ControlRequest::new("ui.key", json!({"key": "c"}));
+    let (up, up_reply) = ControlRequest::new("ui.pointer", json!({"events": [{"kind": "up", "x": 200, "y": 180}]}));
+    let ticket = up.ticket();
+    let (list, list_reply) = ControlRequest::new("ui.tool.list", json!({}));
+    tx.send(key).unwrap();
+    tx.send(up).unwrap();
+    tx.send(list).unwrap();
+    app.drain_control(&ctx);
+    assert!(list_reply.try_recv().is_err(), "the pointer request waits for the key, ahead of the list");
+    assert!(ticket.give_up(), "the waiting pointer request had not started");
+    // The key is still queued: no UI pass ran.
+    app.drain_control(&ctx);
+    let r = list_reply.try_recv().expect("the list ran past the given-up pointer request");
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(up_reply.try_recv().is_err(), "the given-up pointer request did not run");
+}
+
 #[test]
 fn a_drag_holds_its_modifiers_from_the_press_to_the_release() {
     let (mut app, _) = one_square();

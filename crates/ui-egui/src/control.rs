@@ -132,6 +132,11 @@ impl ControlRequest {
         Ticket(self.state.clone())
     }
 
+    /// Whether its caller gave it up (it never runs), without taking it.
+    pub fn given_up(&self) -> bool {
+        self.state.load(Ordering::SeqCst) == GIVEN_UP
+    }
+
     /// Take the request to run it → `false` when its caller gave it up meanwhile (don't run it).
     pub fn claim(&self) -> bool {
         self.state.compare_exchange(QUEUED, STARTED, Ordering::SeqCst, Ordering::SeqCst).is_ok()
