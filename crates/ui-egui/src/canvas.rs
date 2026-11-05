@@ -463,8 +463,9 @@ fn canvas_cursor(app: &mut VectorcraftApp, ui: &Ui, view_info: vectorcraft_engin
                     && crate::cursors::paint_glyphs(crate::cursors::HIDES_ONLY_WHEN_KEY, ui.input(|i| i.focused), app.services.no_cursor_theme)
                     && crate::cursors::paint(&painter, c, hp, 1.0 / ui_scale) =>
             {
-                // No cursor theme (Wayland): the glyph is painted, the system pointer stays (#2450).
-                if crate::cursors::hide_system_pointer(app.services.no_cursor_theme) { egui::CursorIcon::None } else { cursor_icon(c) }
+                // The painted glyph stands in for the hidden system pointer. Without a cursor theme
+                // (Wayland) none is painted: the system pointer can't be hidden there (#2450).
+                egui::CursorIcon::None
             }
             _ => cursor_icon(c),
         }

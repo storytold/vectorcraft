@@ -387,8 +387,6 @@ fn a_wayland_window_paints_the_tool_cursor() {
 /// Without a cursor theme the canvas keeps the system pointer visible (#2450).
 #[test]
 fn no_cursor_theme_keeps_the_system_pointer() {
-    assert!(!hide_system_pointer(true));
-    assert!(hide_system_pointer(false));
     let mut app = VectorcraftApp::new(Session::new(), crate::Services { wayland: true, no_cursor_theme: true, ..Default::default() });
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     let ctx = egui::Context::default();

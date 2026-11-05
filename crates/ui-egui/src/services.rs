@@ -150,7 +150,7 @@ pub struct Services {
     pub wayland: bool,
     /// On Wayland, no cursor theme can be loaded, so winit sets no pointer and the compositor's
     /// default one would never come back once the canvas hid it: the canvas keeps the system
-    /// pointer visible next to the tool glyph ([`cursors::hide_system_pointer`], #2450).
+    /// pointer and paints no tool glyph ([`cursors::paint_glyphs`], #2450).
     pub no_cursor_theme: bool,
     /// The pen pressure and pen end the host reads from the system itself (desktop Linux under
     /// X11 and XWayland, macOS and Windows). The canvas uses the pressure when a frame's events carry no touch force,
