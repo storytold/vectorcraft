@@ -26,6 +26,7 @@ impl VectorcraftApp {
             view.artboard = view.artboard.min(doc.doc.artboards.len().saturating_sub(1));
         }
         self.view_uids = docs.iter().map(|d| d.uid).collect();
+        panels::layers::retain_open_thumbs(&self.view_uids);
         crate::doc_windows::retain_views(self);
         crate::doc_windows::opened(self);
         // Undo can remove the Artboard tool's active or additionally selected boards. Repair only
