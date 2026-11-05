@@ -356,11 +356,15 @@ impl<'a> Reader<'a> {
             "Tp" => self.begin_text_path(&vals),
             "TP" => self.end_text_path(),
             "TO" => self.end_text(hidden)?,
-            "Tx" | "Tj" | "TX" => self.text_body(w, &vals),
+            // `(text) justified TS`, special characters (§22.6): the reader adds its characters like `Tx`.
+            "Tx" | "Tj" | "TX" | "TS" => self.text_body(w, &vals),
             "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" | "TC" | "TW" | "Tq" | "Th" => self.text_attr(w, &vals),
             // Attributes the reader doesn't keep (kerning pairs, Far-Eastern type) and final-form
             // positions (§15.3).
             "Tk" | "TK" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TV" | "Tv" | "Ty" | "TY" | "TG" | "Tg" | "Tu" | "Xu" => {}
+            // `TM` (pop text matrix) and `Te` (end render), listed in §22.6, keep nothing either; the
+            // reader takes `Te` with any number of operands.
+            "TM" | "Te" => {}
             // The hyphenation language and tab rulers, which the reader doesn't keep either (§22): `XL`,
             // `Xb`/`XB` a tab definition (and the `Xe` tab descriptions between them).
             "XL" | "Xb" | "XB" | "Xe" => {}

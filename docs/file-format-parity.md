@@ -122,7 +122,8 @@ private editing data. VectorCraft:
   without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868. Graphs (`%_Gs` … `%_GS`)
   come in as their drawn art, as plain groups, paths and type, without their data or settings, with a note.
   without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868, with its paragraphs' letter
-  and word spacing (`TC`, `TW`), hanging punctuation (`Tq`) and hyphenation (`Th`). Its patterns in
+  and word spacing (`TC`, `TW`), hanging punctuation (`Tq`) and hyphenation (`Th`); its special characters
+  (`TS`) join the story, and end render (`Te`) and pop text matrix (`TM`) are read and ignored. Its patterns in
   the version 7 form (a list of `@` and `&` layers, `_ &` for the tile's background) open as pattern swatches,
   with a fill's offset, scale, rotation, reflection and shear applied before its matrix.
   Its area type with several linked areas opens as threaded frames, one for each area with its own matrix,
