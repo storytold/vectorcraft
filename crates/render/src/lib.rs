@@ -168,7 +168,11 @@ pub struct Renderer {
     clip_paints: FrameCache<usize, ClipPaintEntry>,
     /// Gradients along or across strokes (see [`Self::fill_path_gradient`]), keyed by
     /// ([`Self::stroke_owner`], stroke layer address, tolerance level).
-    stroke_slices: PtrMap<(usize, usize, i32), SliceEntry>,
+    stroke_slices: PtrMap<frame::SliceKey, SliceEntry>,
+    /// The key in `stroke_slices` of the latest slices of each stroke of an object, under its
+    /// [`frame::MovedSliceKey`]: a moved copy of the object draws those slices moved
+    /// ([`Self::moved_slices`]).
+    moved_slices: PtrMap<frame::MovedSliceKey, frame::SliceKey>,
     /// What the image keys colour adjustments give their recoloured images name: the image
     /// recoloured and the adjustment, with its hash (see [`Self::adjusted_image`]).
     adjusts: HashMap<String, (String, u64, vectorcraft_effects::ColorMap)>,
