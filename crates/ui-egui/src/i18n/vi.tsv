@@ -4535,6 +4535,9 @@ theme	Appearance	Giao diện
 @msg	line {line}: value for `{var}` must be true or false	dòng {line}: giá trị của `{var}` phải là true hoặc false
 @msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	dòng {line}: giá trị của `{var}` dài hơn {MAX_GRAPH_CSV} byte
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	ảnh liên kết hiển thị bản xem trước độ phân giải thấp đã lưu trong tệp cho đến khi tìm thấy tệp gốc: liên kết lại trong bảng Liên kết
+@msg	linked type areas past VectorCraft's limits were left out	các vùng chữ liên kết vượt quá giới hạn của VectorCraft đã bị bỏ qua
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	chữ dùng làm mặt nạ trong các vùng liên kết, chữ bao quanh hoặc đường dẫn phức không cắt xén
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ảnh liên kết không có bản xem trước trong tệp hiển thị ô giữ chỗ cho đến khi tìm thấy tệp gốc: liên kết lại trong bảng Liên kết
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Hợp nhất tô trực tiếp: chọn nhóm tô trực tiếp và các đường dẫn để thêm
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Tô trực tiếp nhận đường dẫn và đường dẫn phức: hãy chuyển văn bản, hình ảnh và các đối tượng khác thành đường dẫn trước
 @msg	Live Paint: select paths or compound paths	Tô trực tiếp: chọn đường dẫn hoặc đường dẫn phức
@@ -5703,6 +5706,9 @@ anchor	Points:	Điểm:
 	Find Nearest Swatch…	Tìm mẫu màu gần nhất…
 	Find Nearest Swatch	Tìm mẫu màu gần nhất
 	Apply Nearest Swatch	Áp dụng mẫu màu gần nhất
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Áp dụng màu tô cho nét
+	Apply Stroke to Fill	Áp dụng nét cho màu tô
 	Select objects to find the swatches nearest their colors.	Chọn đối tượng để tìm các mẫu màu gần nhất với màu của chúng.
 @msg	select objects or give `color`	chọn đối tượng hoặc cung cấp `color`
 @msg	`color` is not a colour	`color` không phải là màu
@@ -5991,3 +5997,7 @@ breakText	Glyphs	Glyph
 # Compound Shapes add-on
 	Compound Shapes	Hình phức hợp
 	Shape Mode Buttons Make Compound Shapes	Nút chế độ hình dạng tạo hình phức hợp
+
+# 3D Box add-on
+	3D Box	Hộp 3D
+	3D Box Tool	Công cụ Hộp 3D

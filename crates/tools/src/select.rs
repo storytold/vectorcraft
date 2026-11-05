@@ -379,6 +379,8 @@ struct MemoState {
     entry: Option<Measured>,
     /// How many measurements the memo has made.
     measurements: u64,
+    /// How many times the memo has checked its key.
+    checks: u64,
 }
 
 /// The measurements for one key; a slot holds `None` until it is measured.
@@ -404,8 +406,15 @@ impl PreviewMemo {
         self.0.try_borrow().map_or(0, |st| st.measurements)
     }
 
+    /// How many times the memo has checked its key against the document. A check compares the whole
+    /// selection, so a hover has to make the same few however many objects are selected.
+    pub fn checks(&self) -> u64 {
+        self.0.try_borrow().map_or(0, |st| st.checks)
+    }
+
     /// The measurements for the state `cx` shows, after the ones for any other state are dropped.
     fn current<'m>(st: &'m mut MemoState, cx: &ToolContext) -> &'m mut Measured {
+        st.checks += 1;
         let fresh = || Measured {
             revision: cx.revision,
             objects: cx.selection.objects.clone(),
@@ -466,7 +475,27 @@ fn shown_box(cx: &ToolContext) -> Option<OrientedBox> {
 
 /// The bounds of object `id`, measured as [`selection_bounds`] measures the selection.
 fn object_bounds(cx: &ToolContext, id: NodeId) -> Option<Rect> {
-    remembered(cx, |m| m.by_object.entry(id).or_insert(None), || vectorcraft_effects::preview::bounds_of(cx.doc, &[id], cx.preview_bounds))
+    with_object_bounds(cx, |bounds| bounds(id))
+}
+
+/// Runs `walk` with a lookup of [`object_bounds`]. The lookups share one check of the memo's key,
+/// which compares the whole selection: a walk of every selected object checking it each time takes
+/// time in the square of their number.
+fn with_object_bounds<R>(cx: &ToolContext, walk: impl FnOnce(&mut dyn FnMut(NodeId) -> Option<Rect>) -> R) -> R {
+    let mut measure = |id: NodeId| vectorcraft_effects::preview::bounds_of(cx.doc, &[id], cx.preview_bounds);
+    let Some(mut st) = cx.preview_memo.and_then(|memo| memo.0.try_borrow_mut().ok()) else {
+        return walk(&mut measure);
+    };
+    let mut measured = 0;
+    let by_object = &mut PreviewMemo::current(&mut st, cx).by_object;
+    let out = walk(&mut |id| {
+        *by_object.entry(id).or_insert(None).get_or_insert_with(|| {
+            measured += 1;
+            measure(id)
+        })
+    });
+    st.measurements += measured;
+    out
 }
 
 /// The objects of `ids` that lie entirely inside marquee `r`, edges included, measured by their
@@ -560,15 +589,17 @@ impl SelectionTool {
         };
         // A press on an unselected object selects it alone: the selected ones stay behind.
         let selected = if under.is_none_or(|u| cx.selection.contains(u)) { &cx.selection.objects[..] } else { &[] };
-        under.into_iter().chain(selected.iter().copied()).find_map(|id| {
-            let n = cx.doc.node(id)?;
-            let anchor = n.path_data().and_then(|pd| nearest(&mut pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))));
-            anchor.map(|q| (q, "anchor")).or_else(|| {
-                if !cx.smart_guides {
-                    return None;
-                }
-                let c = object_bounds(cx, id)?.center();
-                (c.distance(p) <= reach).then_some((c, "center"))
+        with_object_bounds(cx, |bounds| {
+            under.into_iter().chain(selected.iter().copied()).find_map(|id| {
+                let n = cx.doc.node(id)?;
+                let anchor = n.path_data().and_then(|pd| nearest(&mut pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))));
+                anchor.map(|q| (q, "anchor")).or_else(|| {
+                    if !cx.smart_guides {
+                        return None;
+                    }
+                    let c = bounds(id)?.center();
+                    (c.distance(p) <= reach).then_some((c, "center"))
+                })
             })
         })
     }

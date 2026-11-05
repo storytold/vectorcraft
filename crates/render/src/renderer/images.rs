@@ -1,14 +1,20 @@
 use super::{
-    Affine, Arc, BezPath, Document, FillRule, Frame, HashMap, Ink, Node, Pixmap, Rect, RenderContext, Renderer, Shape, blob_key, blob_pixmap,
-    fill_rule, image_mip, ink, lookup, mip_level, peniko, proof, vello_cpu,
+    Affine, Arc, BezPath, Document, FillRule, Frame, HashMap, Ink, Node, NodeKind, Pixmap, Rect, RenderContext, Renderer, Shape, blob_key,
+    blob_pixmap, fill_rule, image_mip, ink, lookup, mip_level, peniko, proof, vello_cpu,
 };
 use crate::images;
 
-/// The color image node `n` is colorized with ([`vectorcraft_doc::NodeExtras::colorize`]), if it
-/// is, as `ink` paints it: the display color, or on an ink plane the color's own inks, as a fill
-/// of that color paints them.
-pub(super) fn image_tint(n: &Node, ink: Ink) -> Option<[u8; 3]> {
+/// The color image node `n` of `doc` is colorized with ([`vectorcraft_doc::NodeExtras::colorize`]),
+/// if it is and its pixels take it ([`vectorcraft_doc::ImageBlob::takes_colorize`]), as `ink`
+/// paints it: the display color, or on an ink plane the color's own inks, as a fill of that color
+/// paints them.
+pub(super) fn image_tint(doc: &Document, n: &Node, ink: Ink) -> Option<[u8; 3]> {
     let c = n.extras().colorize.as_deref()?.color()?;
+    if let NodeKind::Image(im) = &n.kind
+        && doc.image_blob(im).is_some_and(|b| !b.takes_colorize())
+    {
+        return None;
+    }
     Some(ink.rgb(&c).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8))
 }
 

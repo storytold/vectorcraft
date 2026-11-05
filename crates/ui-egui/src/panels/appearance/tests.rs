@@ -85,6 +85,47 @@ fn removing_items_keeps_a_surviving_item_opacity_row_selected() {
     assert_eq!(app.session.appearance_item(), None);
 }
 
+/// #5742: Delete Selected Item on an Opacity row sets it back to Default (100%, Normal): the
+/// object's own, or a fill's, leaving the other untouched. Duplicate stays off for it.
+#[test]
+fn deleting_an_opacity_row_sets_it_back_to_default() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    app.run("transparency.set", json!({"item": null, "opacity": 50, "blend": "Multiply"})).unwrap();
+    app.run("transparency.set", json!({"item": 0, "opacity": 40, "blend": "Screen"})).unwrap();
+    let owner = Some(NodeId(id));
+    let ctx = egui::Context::default();
+    let delete = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let node = first_subject(app);
+            let sel = current_sel(app, ui.ctx(), node.as_ref());
+            assert!(sel.deletable() && !sel.editable(), "{sel:?}");
+            delete_selected(app, ui, node.as_ref(), sel);
+        });
+        out.textures_delta.clear();
+    };
+    let node = |app: &VectorcraftApp| first_subject(app).unwrap();
+    // The fill's Opacity row: only the fill goes back to Default.
+    app.run("appearance.setActiveItem", json!({ "index": 0 })).unwrap();
+    set_pstate(&ctx, "ap-sel", (owner, Sel::ItemOpacity(0)));
+    delete(&mut app);
+    let n = node(&app);
+    assert_eq!((n.appearance.items[0].opacity(), n.appearance.items[0].blend()), (1.0, BlendMode::Normal));
+    assert_eq!((n.opacity, n.blend), (0.5, BlendMode::Multiply));
+    assert_eq!(pstate::<(Option<NodeId>, Sel)>(&ctx, "ap-sel").1, Sel::ItemOpacity(0));
+    // The object's Opacity row.
+    app.run("appearance.setActiveItem", json!({ "index": null })).unwrap();
+    set_pstate(&ctx, "ap-sel", (owner, Sel::Opacity));
+    delete(&mut app);
+    let n = node(&app);
+    assert_eq!(opacity_text(n.opacity, n.blend), "Default");
+    // One step, so Undo brings the object's opacity back.
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(node(&app).opacity, 0.5);
+}
+
 #[test]
 fn opacity_labels() {
     assert_eq!(opacity_text(1.0, BlendMode::Normal), "Default");

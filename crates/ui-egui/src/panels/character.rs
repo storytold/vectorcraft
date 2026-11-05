@@ -994,6 +994,9 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// The panel state key of the panel menu's Show Snap to Glyph Options.
 const SNAP_TO_GLYPH_OPTIONS: &str = "ch-snap-to-glyph-options";
+/// Set when Show Snap to Glyph Options is chosen: the next frame scrolls the panel to the options,
+/// which come after every character attribute (#5273).
+const SNAP_TO_GLYPH_REVEAL: &str = "ch-snap-to-glyph-reveal";
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     show_owned(app, ui, crate::font_menu::WheelOwner::Character);
@@ -1007,13 +1010,18 @@ fn show_owned(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::Wh
     }
 }
 
-/// The Snap to Glyph options (Show Snap to Glyph Options): which guides View › Snap to Glyph gives,
-/// each a checkbox running `view.snapToGlyph.options`. Dimmed while Snap to Glyph is off.
+/// The Snap to Glyph options (Show Snap to Glyph Options): View › Snap to Glyph itself, then which
+/// guides it gives, each a checkbox running `view.snapToGlyph.options` (dimmed while Snap to Glyph
+/// is off). Shown from the panel menu, the panel scrolls to them (#5273).
 fn snap_to_glyph_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     ui.separator();
-    widgets::section_header(ui, "Snap to Glyph");
+    let top = ui.cursor().min;
     let (o, enabled) = (app.session.prefs.glyph_snap, app.ui.view.snap_to_glyph);
+    // A UI command that takes no params: it can't refuse.
+    if widgets::check(ui, "Snap to Glyph", enabled, true) {
+        app.run("view.snapToGlyph", json!({})).ok();
+    }
     egui::Grid::new("ch-snap-to-glyph").num_columns(2).show(ui, |ui| {
         for (i, (label, key, on)) in [
             ("Baseline", "baseline", o.baseline),
@@ -1035,6 +1043,10 @@ fn snap_to_glyph_options(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     });
+    if pstate::<bool>(ui.ctx(), SNAP_TO_GLYPH_REVEAL) {
+        set_pstate(ui.ctx(), SNAP_TO_GLYPH_REVEAL, false);
+        ui.scroll_to_rect(egui::Rect::from_min_max(top, ui.min_rect().max), Some(egui::Align::BOTTOM));
+    }
 }
 
 /// The character attributes of the type selected (an empty state without any).
@@ -1224,6 +1236,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let glyph = pstate::<bool>(ui.ctx(), SNAP_TO_GLYPH_OPTIONS);
     if menu_item(ui, if glyph { tl!("Hide Snap to Glyph Options") } else { tl!("Show Snap to Glyph Options") }, true, false) {
         set_pstate(ui.ctx(), SNAP_TO_GLYPH_OPTIONS, !glyph);
+        set_pstate(ui.ctx(), SNAP_TO_GLYPH_REVEAL, !glyph);
     }
     // Show Font Height Options shows the Set Font Height Reference dropdown under Font Size.
     let heights: bool = pstate(ui.ctx(), FONT_HEIGHT_OPTIONS);

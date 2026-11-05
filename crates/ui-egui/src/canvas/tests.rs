@@ -1466,9 +1466,10 @@ fn a_huge_selection_of_type_images_symbols_or_meshes_shows_its_bounds() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
         app.ui.task_bar = false;
-        // The Rectangle tool draws nothing of its own (no bounding box, no type on a path
-        // brackets): only the selection's overlay changes the frame.
-        app.select_tool("rectangle");
+        // The Line Segment tool draws nothing of its own (no bounding box, no type on a path
+        // brackets; the box-drawing shape tools show the bounding box, #5477): only the
+        // selection's overlay changes the frame.
+        app.select_tool("lineSegment");
         match kind {
             "point type" => {
                 app.session.execute("text.create", &json!({"x": 20, "y": 40, "text": "Type"})).unwrap();

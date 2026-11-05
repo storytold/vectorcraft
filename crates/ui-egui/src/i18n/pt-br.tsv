@@ -4901,6 +4901,9 @@ axis	Both	Ambos
 @msg	object {id} is not a selected top-level object	o objeto {id} não é um objeto selecionado de nível superior
 @msg	{path}: not a file	{path}: não é um arquivo
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	as imagens vinculadas mostram a visualização de baixa resolução salva no arquivo até que seus arquivos sejam encontrados: revincule-as no painel Links
+@msg	linked type areas past VectorCraft's limits were left out	as áreas de texto encadeadas além dos limites do VectorCraft foram omitidas
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	o texto usado como máscara em áreas encadeadas, texto com quebra ou um caminho composto não recorta
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	as imagens vinculadas sem visualização no arquivo mostram um espaço reservado até que seus arquivos sejam encontrados: revincule-as no painel Links
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	o texto de área em molduras baixas demais para uma linha da fonte em que aparece recebeu molduras mais altas ({_1}): senão o texto não apareceria
 @msg	every numbered name for {name} is taken in the document's folder	todos os nomes numerados para {name} já existem na pasta do documento
 @msg	No linked files to look for	Nenhum arquivo vinculado para procurar
@@ -6019,6 +6022,9 @@ anchor	Points:	Pontos:
 	Find Nearest Swatch…	Localizar Amostra Mais Próxima…
 	Find Nearest Swatch	Localizar Amostra Mais Próxima
 	Apply Nearest Swatch	Aplicar Amostra Mais Próxima
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Aplicar Preenchimento ao Traçado
+	Apply Stroke to Fill	Aplicar Traçado ao Preenchimento
 	Select objects to find the swatches nearest their colors.	Selecione objetos para localizar as amostras mais próximas de suas cores.
 @msg	select objects or give `color`	selecione objetos ou informe `color`
 @msg	`color` is not a colour	`color` não é uma cor
@@ -6463,3 +6469,7 @@ swatch	Yellow Green	Verde-amarelado
 # Compound Shapes add-on
 	Compound Shapes	Formas Compostas
 	Shape Mode Buttons Make Compound Shapes	Os Botões de Modo de Forma Criam Formas Compostas
+
+# 3D Box add-on
+	3D Box	Caixa 3D
+	3D Box Tool	Ferramenta Caixa 3D

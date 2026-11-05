@@ -5,17 +5,13 @@ impl VectorcraftApp {
     /// opens in a floating window while Open Documents As Tabs is cleared). The views Window › New
     /// Window opened go with their documents.
     ///
-    /// A view stays with its document when the documents change order (`document.move`, also in a
-    /// recording or a batch, #5663): while every view still has the document it was synced with,
-    /// they are put in the documents' order by uid. Code that removed a view by hand (closing a
-    /// document) leaves them aligned by index, as before.
+    /// A view stays with its document when documents change order or close (`document.move`,
+    /// `file.close`, also several of them in one recording or batch, #5663): the views are matched
+    /// to the documents by the uid each was synced with, a closed document's view is dropped and a
+    /// new document gets its saved view.
     pub fn sync_views(&mut self) {
         let docs = self.session.documents();
-        if self.view_uids.len() == self.views.len()
-            && docs.len() == self.views.len()
-            && docs.iter().map(|d| d.uid).ne(self.view_uids.iter().copied())
-            && docs.iter().all(|d| self.view_uids.contains(&d.uid))
-        {
+        if self.view_uids.len() == self.views.len() && docs.iter().map(|d| d.uid).ne(self.view_uids.iter().copied()) {
             let mut old: Vec<Option<View>> = std::mem::take(&mut self.views).into_iter().map(Some).collect();
             self.views = docs
                 .iter()
@@ -30,6 +26,7 @@ impl VectorcraftApp {
             view.artboard = view.artboard.min(doc.doc.artboards.len().saturating_sub(1));
         }
         self.view_uids = docs.iter().map(|d| d.uid).collect();
+        panels::layers::retain_open_thumbs(&self.view_uids);
         crate::doc_windows::retain_views(self);
         crate::doc_windows::opened(self);
         // Undo can remove the Artboard tool's active or additionally selected boards. Repair only

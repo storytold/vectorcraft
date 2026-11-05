@@ -58,6 +58,7 @@ mod tree;
 mod ui_commands;
 
 pub use bar::menu_bar;
+pub(crate) use bar::menu_open;
 pub(crate) use bar::{home_key, home_showing};
 #[cfg(test)]
 use bar::{menu_body, pointer_reaches_title};

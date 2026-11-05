@@ -136,7 +136,7 @@ impl Renderer {
             ctx.set_fill_rule(peniko::Fill::NonZero);
             match self.cached_stroke(f, chars, bp, &pieces.line, st, width) {
                 Some(o) => ctx.fill_path(&o),
-                None => ctx.fill_path(&effects::stroke::line_outline(&pieces.line, st, width, f.px * 0.25)),
+                None => ctx.fill_path(&crate::stroke::outline(&pieces.line, st, width, f.px * 0.25)),
             }
             for head in &pieces.heads {
                 ctx.fill_path(&head.outline);
@@ -231,7 +231,7 @@ impl Renderer {
         };
         let line = match self.cached_stroke(f, chars, bp, &pieces.line, st, width) {
             Some(o) => o,
-            None => Arc::new(effects::stroke::line_outline(&pieces.line, st, width, f.px * 0.25)),
+            None => Arc::new(crate::stroke::outline(&pieces.line, st, width, f.px * 0.25)),
         };
         ctx.set_fill_rule(peniko::Fill::NonZero);
         for clip in std::iter::once(&*line).chain(pieces.heads.iter().map(|h| &h.outline)) {
@@ -277,7 +277,7 @@ impl Renderer {
         width: f64,
     ) -> Option<Arc<BezPath>> {
         let level = (f.px * 0.25).log2().floor() as i32;
-        let expand = || Arc::new(effects::stroke::line_outline(line, st, width, 2f64.powi(level)));
+        let expand = || Arc::new(crate::stroke::outline(line, st, width, 2f64.powi(level)));
         if let Some((g, run)) = chars {
             let key = (self.stroke_owner(Arc::as_ptr(g) as usize), run, width.to_bits(), level);
             if let Some((kept, outline)) = self.char_strokes.get(&key, self.stamp)
@@ -332,7 +332,7 @@ impl Renderer {
             .then(|| crop_line(line, region, crop_reach(st, width, f.px, tol), width))
             .flatten();
         let (outline, crop) = match cropped {
-            Some(part) => (Arc::new(effects::stroke::line_outline(&part, st, width, tol)), Some(region)),
+            Some(part) => (Arc::new(crate::stroke::outline(&part, st, width, tol)), Some(region)),
             None => (expand(), None),
         };
         self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, own }, moved);

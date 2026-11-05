@@ -69,7 +69,7 @@ use model::{push_rows, rows_of_doc};
 use rows::{drag_ghost, key, rename_id, resolve_click, row};
 #[cfg(test)]
 use thumbs::THUMBS;
-pub(crate) use thumbs::{ThumbSource, node_arc, real_thumb, show_thumbs_of, thumb_options};
+pub(crate) use thumbs::{ThumbSource, node_arc, real_thumb, retain_open_thumbs, show_thumbs_of, thumb_options};
 
 /// Width of the eye and the lock columns.
 const COLUMN: f32 = 25.0;

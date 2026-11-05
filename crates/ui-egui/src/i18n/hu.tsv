@@ -4689,6 +4689,9 @@ imageTrace	Outline	Körvonal
 @msg	graphs come in as plain art, without their data or settings	a diagramok egyszerű grafikaként kerülnek be, adataik és beállításaik nélkül
 @msg	an image whose data is cut short was left out	kimaradt egy csonka adatú kép
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	a csatolt képek a fájlban mentett kis felbontású előnézetet mutatják, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
+@msg	linked type areas past VectorCraft's limits were left out	a VectorCraft korlátain túli csatolt szövegterületek kimaradtak
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	a csatolt területeken, körbefuttatott szövegben vagy összetett útvonalban maszkként használt szöveg nem vág ki
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	a fájlban előnézet nélküli csatolt képek helyőrzőt mutatnak, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	a túl alacsony keretben lévő területszöveg, amelybe a megjelenítő betűtípus egy sora sem fér el, magasabb keretet kapott ({_1}): különben nem látszana
 @msg	an object can't be read	egy objektum nem olvasható
 @msg	an object in perspective would leave the edited grid	egy perspektivikus objektum kikerülne a szerkesztett rácsból
@@ -6087,6 +6090,9 @@ anchor	Points:	Pontok:
 	Find Nearest Swatch…	Legközelebbi színminta keresése…
 	Find Nearest Swatch	Legközelebbi színminta keresése
 	Apply Nearest Swatch	Legközelebbi színminta alkalmazása
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Kitöltés alkalmazása a körvonalra
+	Apply Stroke to Fill	Körvonal alkalmazása a kitöltésre
 	Select objects to find the swatches nearest their colors.	Jelöljön ki objektumokat a színeikhez legközelebbi színminták megkereséséhez.
 @msg	select objects or give `color`	jelöljön ki objektumokat, vagy adja meg ezt: `color`
 @msg	`color` is not a colour	a(z) `color` nem szín
@@ -6374,3 +6380,7 @@ breakText	Glyphs	Glifák
 # Compound Shapes add-on
 	Compound Shapes	Összetett alakzatok
 	Shape Mode Buttons Make Compound Shapes	Az alakzatmód-gombok összetett alakzatokat hoznak létre
+
+# 3D Box add-on
+	3D Box	3D doboz
+	3D Box Tool	3D doboz eszköz

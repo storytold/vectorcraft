@@ -8,9 +8,9 @@ use serde_json::json;
 
 #[cfg(not(target_arch = "wasm32"))]
 use super::super::super::fileio;
-use super::super::super::{Result, Session, bad};
 #[cfg(not(target_arch = "wasm32"))]
-use super::super::super::{bool_or, str_param};
+use super::super::super::str_param;
+use super::super::super::{Result, Session, bad};
 
 /// The command id.
 pub(super) const ID: &str = "addon.document.batchTraceFolder";
@@ -69,20 +69,39 @@ fn images(folder: &str, deep: bool, depth: usize, out: &mut Vec<String>) -> Resu
 pub(super) fn batch_trace_folder(s: &mut Session, p: &Value) -> Result<Value> {
     let folder = str_param(p, "folder").map(fileio::absolute_path).ok_or_else(|| bad(ID, "missing `folder`"))?;
     let dest = str_param(p, "destinationFolder").map(fileio::absolute_path).ok_or_else(|| bad(ID, "missing `destinationFolder`"))?;
-    let format = str_param(p, "format").unwrap_or("vectorcraft");
+    let format = match p.get("format") {
+        None => "vectorcraft",
+        Some(Value::String(value)) => value.as_str(),
+        Some(_) => return Err(bad(ID, "`format` must be a string")),
+    };
+    let preset = match p.get("preset") {
+        None => "Default",
+        Some(Value::String(value)) => value.as_str(),
+        Some(_) => return Err(bad(ID, "`preset` must be a string")),
+    };
+    let expand = match p.get("expand") {
+        None => false,
+        Some(Value::Bool(value)) => *value,
+        Some(_) => return Err(bad(ID, "`expand` must be true or false")),
+    };
+    let include_subdirs = match p.get("includeSubdirs") {
+        None => false,
+        Some(Value::Bool(value)) => *value,
+        Some(_) => return Err(bad(ID, "`includeSubdirs` must be true or false")),
+    };
     if !FORMATS.contains(&format) {
         return Err(bad(ID, format!("`format` must be one of {}", FORMATS.join(", "))));
     }
-    let preset = str_param(p, "preset").unwrap_or("Default").to_string();
+    let preset = preset.to_string();
     let presets = s.execute("imageTrace.presets", &json!({}))?;
     if !presets["presets"].as_array().into_iter().flatten().any(|q| q["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(&preset))) {
         return Err(bad(ID, format!("no tracing preset `{preset}` (see imageTrace.presets)")));
     }
-    let trace = if bool_or(p, "expand", false) { "imageTrace.makeAndExpand" } else { "imageTrace.make" };
+    let trace = if expand { "imageTrace.makeAndExpand" } else { "imageTrace.make" };
     fileio::may_read(&folder)?;
     fileio::may_write(&dest)?;
     let mut files = vec![];
-    images(&folder, bool_or(p, "includeSubdirs", false), 0, &mut files)?;
+    images(&folder, include_subdirs, 0, &mut files)?;
     files.sort();
     if files.is_empty() {
         return Err(bad(ID, "no images in the folder"));

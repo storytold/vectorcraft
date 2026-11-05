@@ -1370,6 +1370,43 @@ fn snap_to_glyph_options_show_from_the_menu_and_set_the_options() {
     assert!(!section(&mut app).iter().any(|(t, _)| t == "Proximity Guides"));
 }
 
+/// #5273: the Snap to Glyph options come after every character attribute, so showing them from the
+/// panel menu scrolls a short panel down to them; their first checkbox turns View › Snap to Glyph
+/// on and off, which undims the others.
+#[test]
+fn snap_to_glyph_options_scroll_into_view_and_turn_snapping_on() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Glyphs"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    const VIEW: f32 = 160.0;
+    // The panel as a short dock shows it: in a scroll area.
+    let panel = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+        egui::ScrollArea::vertical().max_height(VIEW).show(ui, |ui| show(app, ui));
+    };
+    let texts = frame_events(&ctx, &mut app, vec![], menu);
+    let item = texts.iter().find(|(t, _)| t.trim() == "Show Snap to Glyph Options").unwrap().1;
+    click(&ctx, &mut app, item.center(), menu);
+    // The scroll is animated: it lands over the next second.
+    let mut texts = vec![];
+    for i in 0..30 {
+        let raw = egui::RawInput { time: Some(10.0 + f64::from(i) * 0.1), ..Default::default() };
+        texts = super::super::tests_appearance::frame_raw(&ctx, &mut app, raw, panel);
+    }
+    for label in ["Snap to Glyph", "Anchor Point"] {
+        let r = text_rect(&texts, label);
+        assert!(r.top() >= 0.0 && r.bottom() <= VIEW + 1.0, "{label} at {r:?} is outside the panel");
+    }
+    assert!(!app.ui.view.snap_to_glyph);
+    click(&ctx, &mut app, text_rect(&texts, "Snap to Glyph").center(), panel);
+    assert!(app.ui.view.snap_to_glyph, "the first checkbox turns Snap to Glyph on");
+    let texts = frame_events(&ctx, &mut app, vec![], panel);
+    click(&ctx, &mut app, text_rect(&texts, "Anchor Point").center(), panel);
+    assert!(!app.session.prefs.glyph_snap.anchors, "the options take clicks once it is on");
+}
+
 /// After Select All in a frame of threaded text, the Character and Paragraph panels and Copy act on
 /// the text of every frame of the story.
 #[test]

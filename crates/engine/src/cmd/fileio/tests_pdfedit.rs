@@ -739,6 +739,70 @@ fn paint_outline(doc: &vectorcraft_doc::Document) -> Vec<String> {
     out
 }
 
+/// The images of `doc`'s art, one line each: its pixel size, where its corners land (rounded to
+/// hundredths), its link's path and relative path, and its pixels (RGBA).
+fn image_outline(doc: &vectorcraft_doc::Document) -> Vec<String> {
+    use vectorcraft_doc::NodeKind;
+    let mut out = vec![];
+    doc.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            let r = vectorcraft_geom::Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height));
+            let corners = [(r.x0, r.y0), (r.x1, r.y0), (r.x0, r.y1)].map(|(x, y)| {
+                let p = im.xf * vectorcraft_geom::Point::new(x, y);
+                ((p.x * 100.0).round() / 100.0, (p.y * 100.0).round() / 100.0)
+            });
+            let link = im.link.as_ref().map(|l| (l.path.clone(), l.relative.clone()));
+            let pixels = doc.image_blob(im).and_then(|b| image::load_from_memory(&b.bytes).ok()).map(|i| i.to_rgba8().into_raw());
+            out.push(format!("{}x{} {corners:?} {link:?} {pixels:?}", im.width, im.height));
+        }
+    });
+    out
+}
+
+/// An embedded image (RGBA, part of it see-through, turned) and a linked one come back from the
+/// editing copy for other apps alone, pixel for pixel, with every save option that writes the copy;
+/// the linked image keeps its path and its path relative to the document's folder.
+#[test]
+fn images_come_back_from_the_editing_copy() {
+    let dir = tmp("ai-images");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(format!("{dir}/art")).unwrap();
+    let png = |w: u32, h: u32, f: &dyn Fn(u32, u32) -> [u8; 4]| {
+        let mut out = vec![];
+        image::RgbaImage::from_fn(w, h, |x, y| image::Rgba(f(x, y))).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+        out
+    };
+    let linked = format!("{dir}/art/linked.png");
+    std::fs::write(&linked, png(5, 4, &|x, y| [(x * 50) as u8, (y * 60) as u8, 90, 255])).unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+    let data = vectorcraft_format::base64_encode(&png(6, 3, &|x, y| [200, (x * 40) as u8, (y * 80) as u8, if x < 2 { 100 } else { 255 }]));
+    s.execute("file.place", &json!({"name": "embedded.png", "dataBase64": data})).unwrap();
+    // The placed image is selected.
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    s.execute("file.place", &json!({"path": linked, "link": true})).unwrap();
+    let path = format!("{dir}/images.ai");
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    let before = image_outline(&s.doc().unwrap().doc);
+    assert_eq!(before.len(), 2, "{before:#?}");
+    assert!(before[1].contains("art/linked.png"), "{before:#?}");
+    for opts in [
+        json!({"format": "ai"}),
+        json!({"format": "ai", "compress": false}),
+        json!({"format": "ai", "embedProfiles": false}),
+        json!({"format": "ai", "includeLinked": true}),
+        json!({"format": "ai", "range": "all"}),
+        json!({"format": "ai", "pdfCompatible": false}),
+    ] {
+        let r = s.execute("document.export", &opts).unwrap();
+        assert!(!r["warnings"].to_string().contains("image"), "{r}");
+        let copy = load::load_with(&path, &b64(&r), &LoadOptions { native: false, ..Default::default() }).unwrap();
+        assert!(copy.editing_data && !copy.restored, "{opts} {:?}", copy.warnings);
+        assert!(!copy.warnings.iter().any(|w| w.contains("editing data")), "{opts} {:?}", copy.warnings);
+        assert_eq!(image_outline(&copy.doc), before, "{opts}");
+    }
+}
+
 /// A document of two artboards (the art on the first): a rectangle filled with a linear gradient of
 /// three stops placed across part of it, an ellipse filled with an elliptical radial gradient whose
 /// focal point is off its center, a rectangle stroked with a gradient, rectangles filled and

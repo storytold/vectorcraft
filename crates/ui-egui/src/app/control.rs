@@ -10,23 +10,25 @@ impl VectorcraftApp {
         let mut handled = 0;
         while handled < control::MAX_CONTROL_REQUESTS_PER_FRAME {
             let Some(req) = self.deferred_control.take().or_else(|| rx.try_recv().ok()) else { break };
-            // Synthetic input sent before this pointer request was dropped (see
-            // `discard_stale_injected_batch`): its events would reach the tool without that input.
-            if req.method == "ui.pointer" && req.made_before(self.synthetic_dropped_before) {
-                handled += 1;
+            // Synthetic input sent before this tool action was dropped (see
+            // `discard_stale_injected_batch`): it would reach the tool without that input.
+            let tool_action = matches!(req.method.as_str(), "ui.pointer" | "ui.tool.select");
+            if tool_action && req.made_before(self.synthetic_dropped_before) {
+                // One its caller gave up is skipped without counting toward this frame's limit.
                 if req.claim() {
+                    handled += 1;
                     let _ = req.reply.send(json!({
                         "ok": false,
-                        "error": "input sent before this pointer request was dropped because the document, dialog or focus changed"
+                        "error": "input sent before this tool action was dropped because the document, dialog or focus changed"
                     }));
                 }
                 continue;
             }
-            // `ui.pointer` drives the tool at once, while `ui.key` and the other synthetic input
-            // reach it in a later UI pass: a pointer request waits until the input sent before it
-            // was applied, so a key pressed during a drag changes the drag before its release.
+            // `ui.pointer` and `ui.tool.select` act at once, while `ui.key` and other synthetic
+            // input reach the tool in a later UI pass. Wait for that earlier input, so a key
+            // pressed during a drag reaches its tool before a pointer event or tool switch.
             // One its caller gave up meanwhile is dropped below instead of holding back the rest.
-            if req.method == "ui.pointer" && !req.given_up() && (!self.synthetic.is_empty() || self.synthetic_injected) {
+            if tool_action && !req.given_up() && (!self.synthetic.is_empty() || self.synthetic_injected) {
                 self.deferred_control = Some(req);
                 ctx.request_repaint();
                 break;

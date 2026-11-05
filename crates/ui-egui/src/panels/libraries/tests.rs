@@ -375,6 +375,29 @@ fn gradients_and_patterns_come_from_swatches_and_paint_the_selection() {
     assert!(matches!(fill(&app), Paint::Pattern { ref pattern, .. } if pattern == "Checks"), "{:?}", fill(&app));
 }
 
+/// A spot swatch dropped on the list (as the Swatches panel drags it, with its name) is added as
+/// a spot colour of that ink, at its tint (#5812).
+#[test]
+fn a_spot_swatch_dropped_on_the_list_stays_spot() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("library.create", json!({"name": "Brand"})).unwrap();
+    app.run("swatch.new", json!({"name": "Kiss-cut", "color": "#ff00ff", "spot": true})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::panels::set_pstate(&ctx, LIST_VIEW, true);
+    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    let into = at(&texts, "Brand").center() + vec2(0.0, 80.0);
+    for tint in [1.0, 0.5] {
+        let paint = app.session.active().unwrap().doc.tint_paint("Kiss-cut", tint).unwrap();
+        let drag = PanelDrag::Paint { params: crate::panels::paint_params(&paint), paint, rows: None, library: None };
+        drop_at(&mut app, &ctx, drag, into);
+    }
+    let lib = app.session.libraries.get("Brand").unwrap();
+    let inks: Vec<_> = lib.colors.iter().map(|c| (c.spot.as_deref(), c.tint)).collect();
+    assert_eq!(inks, [(Some("Kiss-cut"), 1.0), (Some("Kiss-cut"), 0.5)]);
+}
+
 /// New Group… and Rename Group… ask for a name and act on the library and group they came
 /// from; the dialog shows only the name.
 #[test]

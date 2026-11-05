@@ -9,25 +9,25 @@ use vectorcraft_color::swatch::{REGISTRATION, Swatch};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Knockout, LAYER_COLORS, LayerColor, Node, NodeKind, OpacityMask, StrokeLayer};
 use vectorcraft_effects::stroke;
-use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Shape, SubPath};
+use vectorcraft_geom::{Affine, FillRule, PathData, Shape, SubPath};
 use vectorcraft_pathops::BoolOp;
 
 use crate::ai_ops::{self, unit};
 use crate::ps;
 
+mod images;
 mod paints;
 
+pub(super) use images::PAYLOAD;
 #[cfg(test)]
-pub(super) use paints::{GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT};
+pub(super) use images::{IMAGE_DEPTH, IMAGES, LINKS_EMBEDDED};
+#[cfg(test)]
+pub(super) use paints::{GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT, free_gradient_name};
 
 /// How deep symbols, live objects and pattern tiles may nest in one another (deeper art is left
 /// out). Groups and layers need no limit of their own: a document is never deeper than
 /// [`vectorcraft_doc::MAX_DEPTH`].
 const MAX_NEST: u32 = 8;
-/// The side of the image whose pixels are averaged (larger ones are scaled down to it first).
-const AVERAGE_SIDE: u32 = 64;
-/// Most pixels an image may have to be decoded and averaged (more: mid gray).
-const MAX_AVERAGED_PIXELS: u64 = 1 << 24;
 
 pub(super) const TYPE: &str = "type is written as its outlines in the editing data for other apps";
 pub(super) const PATTERNS: &str = "pattern fills whose tiles aren't a grid or whose art reaches past the tile, pattern fills in another pattern's tile and pattern fills nested more than 8 deep are written as their tiles cut to the shape in the editing data for other apps";
@@ -35,7 +35,6 @@ pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fil
 pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose clipping object isn't a path, and the clipping groups inside them, are written as their art cut to that object in the editing data for other apps";
 pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths that a plain fill and line can't draw are written as paths of their own inside the clipping (fills under the clipped art, strokes over it) in the editing data for other apps";
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
-pub(super) const IMAGES: &str = "images are written as their outlines filled with their average color in the editing data for other apps";
 pub(super) const LIVE: &str =
     "symbols, blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
 const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
@@ -142,12 +141,22 @@ pub(super) struct Writer<'a> {
     canvas: Affine,
     /// The gradient definitions, in the order they are first used.
     gradients: Vec<paints::GradientDef>,
+    /// The number the next new gradient definition's name tries first (1 is `Gradient`).
+    next_gradient: u64,
     /// The pattern definitions written, each after those its art uses.
     patterns: Vec<paints::PatternOut>,
     /// The patterns whose definitions are being written.
     defining: Vec<String>,
     /// Writing the palette: the definitions it adds are for its swatches only.
     in_palette: bool,
+    /// Art space's origin on the canvas (y down), where a placed file's box starts.
+    canvas_origin: (f64, f64),
+    /// The binary parts of the program (images' samples, placed files' previews), each in the
+    /// text as a mark ([`PAYLOAD`], its index, [`PAYLOAD`]).
+    pub(super) payloads: Vec<Vec<u8>>,
+    /// How many parts of the data written on `%_` lines (opacity masks' art, patterns' tiles) the
+    /// art being written is in.
+    hidden: u32,
 }
 
 impl<'a> Writer<'a> {
@@ -160,9 +169,13 @@ impl<'a> Writer<'a> {
             tile_grad_space: Affine::translate((-origin.0, origin.1)),
             canvas: Affine::new([1.0, 0.0, 0.0, -1.0, origin.0, origin.1]) * to_art,
             gradients: vec![],
+            next_gradient: 1,
             patterns: vec![],
             defining: vec![],
             in_palette: false,
+            canvas_origin: origin,
+            payloads: vec![],
+            hidden: 0,
             cms: vectorcraft_color::cms::active(),
             body: String::new(),
             warnings: vec![],
@@ -387,12 +400,7 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Compound { rule, .. } => self.shape(n, &compound_path(n), *rule, xy),
             NodeKind::Text(_) => self.text(n, xy),
-            NodeKind::Image(im) => {
-                let bounds = PathData::from_bezpath(&(im.xf * Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1)));
-                let color = image_average(self.doc.image_blob(im).map(|b| b.bytes.as_slice()));
-                self.warn(IMAGES);
-                self.fill_object(&bounds, FillRule::NonZero, &FillLayer::new(Paint::solid(color)), xy);
-            }
+            NodeKind::Image(im) => self.image(im, xy),
             NodeKind::SymbolInstance { symbol, xf } => {
                 self.warn(LIVE);
                 self.line("u");
@@ -527,19 +535,15 @@ impl<'a> Writer<'a> {
             _ => std::slice::from_ref(art),
         };
         self.nest += 1;
+        self.hidden += 1;
         for c in members {
             self.node(c);
         }
+        self.hidden -= 1;
         self.nest -= 1;
         let lines = std::mem::replace(&mut self.body, outer);
         self.body.push_str("%_/Mask :\n%_X=\n");
-        for l in lines.lines() {
-            if !l.starts_with("%_") {
-                self.body.push_str("%_");
-            }
-            self.body.push_str(l);
-            self.body.push('\n');
-        }
+        hide(&lines, &mut self.body);
         self.body.push_str("%_X+\n%_(Art) ,\n");
         for (key, on) in [("Clipping", m.clip), ("Inverted", m.invert), ("Disabled", m.disabled), ("Linked", m.linked)] {
             let _ = writeln!(self.body, "%_{} /Bool ({key}) ,", u8::from(on));
@@ -1158,42 +1162,43 @@ fn clip_path(n: &Node) -> Option<(PathData, FillRule)> {
     path.subpaths.iter().any(|sp| !sp.anchors.is_empty()).then_some((path, rule))
 }
 
-/// The image `bytes` decoded, when its header gives at most [`MAX_AVERAGED_PIXELS`] pixels; the
-/// decoder may allocate at most 8 bytes a pixel.
-fn decode_bounded(bytes: &[u8]) -> Option<image::DynamicImage> {
+/// `text`'s lines on `%_` lines, as a part of the data that readers of the printed form skip (an
+/// opacity mask's art, a pattern's tile) has them. An image's samples stay as they are after an
+/// `XI` without `%_`, and `%_%%EndData` ends them, as in the files users sent. Samples hidden
+/// already (an opacity mask's art in a pattern's tile) keep their one `%_`.
+pub(super) fn hide(text: &str, out: &mut String) {
+    for l in text.lines() {
+        if l.starts_with(images::SAMPLES_LINE) {
+            match l.strip_suffix("%%EndData") {
+                Some(samples) if !samples.ends_with("%_") => {
+                    out.push_str(samples);
+                    out.push_str("%_%%EndData");
+                }
+                _ => out.push_str(l),
+            }
+        } else {
+            if !l.starts_with("%_") {
+                out.push_str("%_");
+            }
+            out.push_str(l);
+        }
+        out.push('\n');
+    }
+}
+
+/// The image `bytes` decoded, when its header gives at most `max` pixels; the decoder may allocate
+/// at most 8 bytes a pixel.
+fn decode_bounded(bytes: &[u8], max: u64) -> Option<image::DynamicImage> {
     let reader = || -> image::ImageResult<image::ImageReader<std::io::Cursor<&[u8]>>> {
         let mut r = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
         let mut limits = image::Limits::default();
-        limits.max_alloc = Some(MAX_AVERAGED_PIXELS * 8);
+        limits.max_alloc = Some(max * 8);
         r.limits(limits);
         Ok(r)
     };
     let (w, h) = reader().and_then(|r| r.into_dimensions()).ok()?;
-    if u64::from(w) * u64::from(h) > MAX_AVERAGED_PIXELS {
+    if u64::from(w) * u64::from(h) > max {
         return None;
     }
     reader().and_then(|r| r.decode()).ok()
-}
-
-/// The average color of the image `bytes` (scaled down first), transparent pixels over white;
-/// mid gray when it can't be decoded or has more than [`MAX_AVERAGED_PIXELS`] pixels.
-fn image_average(bytes: Option<&[u8]>) -> Color {
-    let Some(img) = bytes.and_then(decode_bounded) else { return Color::gray(0.5) };
-    let img = if img.width() > AVERAGE_SIDE || img.height() > AVERAGE_SIDE { img.thumbnail(AVERAGE_SIDE, AVERAGE_SIDE) } else { img };
-    let rgba = img.to_rgba8();
-    let mut sum = [0u64; 3];
-    let mut n = 0u64;
-    for px in rgba.pixels() {
-        let [r, g, b, a] = px.0;
-        let over = |c: u8| (u64::from(c) * u64::from(a) + 255 * (255 - u64::from(a))) / 255;
-        sum[0] += over(r);
-        sum[1] += over(g);
-        sum[2] += over(b);
-        n += 1;
-    }
-    if n == 0 {
-        return Color::gray(0.5);
-    }
-    let c = |v: u64| (v as f32 / n as f32 / 255.0).clamp(0.0, 1.0);
-    Color::rgb(c(sum[0]), c(sum[1]), c(sum[2]))
 }
