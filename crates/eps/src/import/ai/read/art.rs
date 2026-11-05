@@ -361,7 +361,7 @@ impl<'a> Reader<'a> {
             let (cx, cy) = ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0);
             to_doc *= Affine::new([1.0, 0.0, 0.0, -1.0, CANVAS_CENTRE - cx, CANVAS_CENTRE + cy]);
         }
-        match i.paint(&self.gradients, to_doc) {
+        match i.paint(&self.gradients, &self.global_names, to_doc) {
             Some(p) if i.stroke => self.pending_stroke = Some(p),
             Some(p) => self.pending_fill = Some(p),
             None => {

@@ -4,7 +4,7 @@ use super::containers::drop_commented_copies;
 use super::ops::appearance_from_art_style;
 use super::types::{FLIP, Kind, MAX_DEPTH};
 use super::{
-    Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, HashMap, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect,
+    Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, Global, HashMap, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect,
     Structure, Swatch, Unit, V, obj,
 };
 use vectorcraft_doc::{DataSet, DataValue, GraphicStyle, Guide, ImageBlob, PatternDef, TextWrap, Variable, VariableKind, Variables};
@@ -231,7 +231,7 @@ fn repoint(n: &mut Node, renamed: &std::collections::BTreeMap<String, String>) {
 /// editing data defines, which are named apart from `patterns` ([`beside`]); `None` when the
 /// palette is empty or reading stops before it.
 pub fn palette(data: &[u8], patterns: &[PatternDef]) -> Option<PaletteSwatches> {
-    let mut r = Reader::new(data);
+    let mut r = Reader::with_names(data);
     // The palette, the gradients and the patterns it names come before the art, so an error in the
     // art leaves them read.
     let _ = r.run();
@@ -281,7 +281,7 @@ pub struct Brushes {
 pub fn brushes(data: &[u8], patterns: &[PatternDef]) -> Option<Brushes> {
     // Brush objects are plug-in objects: data without one isn't read again.
     memchr::memmem::find(data, b"BeginPluginObject")?;
-    let mut r = Reader::new(data);
+    let mut r = Reader::with_names(data);
     // The brushes come before the art, so an error in the art leaves them read.
     let _ = r.run();
     let (mut lib, unread) = r.brush_library()?;
@@ -406,10 +406,23 @@ pub fn variables(data: &[u8]) -> VariableRead {
 }
 
 impl<'a> Reader<'a> {
-    /// Take the author and custom colors that the header of the program `ps` gives (its comment
-    /// lines up to `%%EndComments`), where the editing data's own header gives none: the program of
-    /// an EPS whose editing data is kept apart from it.
-    pub(super) fn program_header(&mut self, ps: &[u8]) {
+    /// Take the author and custom colors that the header of a program gives (`outer`, from
+    /// [`Self::header_of`]), where the editing data's own header gives none: the program of an EPS
+    /// whose editing data is kept apart from it.
+    pub(super) fn program_header(&mut self, outer: Reader<'_>) {
+        if self.author.is_none() {
+            self.author = outer.author;
+        }
+        for n in outer.custom_colors {
+            if self.custom_colors.len() < super::directives::MAX_CUSTOM_COLORS && !self.custom_colors.iter().any(|c| c.name == n.name) {
+                self.custom_colors.push(n);
+            }
+        }
+    }
+
+    /// A reader that has read the header of the program `ps` (its comment lines up to
+    /// `%%EndComments`).
+    pub(super) fn header_of(ps: &[u8]) -> Reader<'_> {
         let mut end = 0;
         for line in ps.split_inclusive(|&b| b == b'\n' || b == b'\r') {
             if !line.starts_with(b"%") && !line.trim_ascii().is_empty() {
@@ -422,14 +435,7 @@ impl<'a> Reader<'a> {
         }
         let mut outer = Reader::new(ps.get(..end).unwrap_or_default());
         let _ = outer.run();
-        if self.author.is_none() {
-            self.author = outer.author;
-        }
-        for n in outer.custom_colors {
-            if self.custom_colors.len() < super::directives::MAX_CUSTOM_COLORS && !self.custom_colors.iter().any(|c| c.name == n.name) {
-                self.custom_colors.push(n);
-            }
-        }
+        outer
     }
 }
 
@@ -665,18 +671,26 @@ impl<'a> Reader<'a> {
             return None;
         }
         let palette = std::mem::take(&mut self.palette);
-        let swatch = |e: crate::import::ai::palette::Entry| -> Option<Swatch> {
+        let swatch = |mut e: crate::import::ai::palette::Entry| -> Option<Swatch> {
             use crate::import::ai::palette::Cell;
             let (paint, global, spot) = match e.cell {
                 Cell::Color { color, global, spot } => (Paint::solid(color), global, spot),
+                // A swatch named by its gradient or pattern takes the name that got in the document.
                 Cell::Gradient(g) => {
                     let mut gp = vectorcraft_color::gradient::GradientPaint::new(self.gradients.get(&g)?.clone());
+                    if e.name == g {
+                        e.name = self.global_names.get(Global::Gradient, &g).to_string();
+                    }
                     gp.swatch = Some(e.name.clone());
                     (Paint::Gradient(Box::new(gp)), false, false)
                 }
                 Cell::Pattern(p) => {
-                    patterns.iter().find(|d| d.name == p)?;
-                    (Paint::Pattern { pattern: p, xf: Affine::IDENTITY }, false, false)
+                    let pattern = self.global_names.get(Global::Pattern, &p).to_string();
+                    patterns.iter().find(|d| d.name == pattern)?;
+                    if e.name == p {
+                        e.name.clone_from(&pattern);
+                    }
+                    (Paint::Pattern { pattern, xf: Affine::IDENTITY }, false, false)
                 }
             };
             Some(Swatch { name: e.name, paint, global, spot })

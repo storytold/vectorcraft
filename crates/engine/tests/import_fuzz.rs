@@ -3346,6 +3346,34 @@ proptest! {
         survive("hostile .ai patterns", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose gradients and patterns have names with newlines (blank before one, several,
+    /// repeated, one shown like another's numbered name), used by fills and a palette, damaged or
+    /// hostile.
+    #[test]
+    fn ai_global_names_with_newlines_never_panic(
+        names in prop::collection::vec(prop::sample::select(vec!["Sky\\n1", "Sky\\n2", "Sky", "Sky 2", "\\n3", "\\n", "Sky\\n\\n1", "\\012x"]), 1..6),
+        cut in 0usize..3_000,
+        edits in prop::collection::vec((0usize..3_000, prop::sample::select(vec!['\\', 'n', '(', ')', ' ', '\n', 'B', 'p', 'E', '%'])), 0..10),
+    ) {
+        use vectorcraft_testkit::ai;
+        let mut setup = String::new();
+        let mut art = String::new();
+        let mut cells = String::new();
+        for name in &names {
+            setup.push_str(&format!(
+                "%AI5_BeginGradient: ({name})\n({name}) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n\
+                 %AI3_BeginPattern: ({name})\n({name}) 0 0 6 6\n%_0 A\n%_0 0 m\n%_0 6 L\n%_6 6 L\n%_6 0 L\n%_0 0 0 1 k\n%_f\nE\n%AI3_EndPattern\n"
+            ));
+            art.push_str(&format!("Bb\n1 ({name}) 0 0 0 50 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", ai::rect(10.0, 10.0, 40.0, 40.0)));
+            art.push_str(&format!("({name}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", ai::rect(50.0, 50.0, 90.0, 90.0)));
+            cells.push_str(&format!("Bb\n2 ({name}) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\nPc\n({name}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\nPc\n"));
+        }
+        setup.push_str(&format!("%AI5_BeginPalette\n0 0 Pb\n{cells}PB\n%AI5_EndPalette\n"));
+        let data = mutate_text(&ai::editing_data(100.0, 100.0, &format!("{setup}{}", ai::layer("L", &art))), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
+        survive("hostile .ai global names", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose images (binary samples with an alpha channel, the operators that end a raster,
     /// then a name and an opacity mask) and placed file (an empty relative folder, a preview) are
     /// damaged or hostile, bytes of the samples included.
