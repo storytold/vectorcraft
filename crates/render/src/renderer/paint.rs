@@ -1,8 +1,9 @@
 use super::{
-    Affine, AppearanceItem, Arc, BezPath, BlendMode, Compose, FillRule, Frame, Ink, Mix, MovedKey, Node, Rect, RenderContext, Renderer, Shape,
-    SliceEntry, Slices, StrokeAlign, StrokeEntry, StrokeLayer, TextGeom, blend_mode, drawable, effects, fill_rule, fx, kurbo, lru, owns_stroke,
-    peniko, rects_overlap,
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, Compose, FillRule, Frame, Ink, Mix, Node, Rect, RenderContext, Renderer, Shape, SliceEntry,
+    Slices, StrokeAlign, StrokeEntry, StrokeLayer, TextGeom, blend_mode, drawable, effects, fill_rule, fx, kurbo, lru, owns_stroke, peniko,
+    rects_overlap,
 };
+use crate::frame::{MovedKey, StrokeKey};
 use crate::paint;
 
 impl Renderer {
@@ -277,8 +278,7 @@ impl Renderer {
         if let Some(mk) = moved
             && let Some((outline, crop)) = self.moved_outline(mk, &node, st, line, v)
         {
-            self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, line: kept });
-            self.keep_latest(mk, key);
+            self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, line: kept }, moved);
             return Some(outline);
         }
         #[cfg(test)]
@@ -288,33 +288,34 @@ impl Renderer {
         // [`crop_line`] otherwise).
         let region = v.inflate(v.width(), v.height());
         let tol = 2f64.powi(level);
-        let (outline, crop) = if crops()
+        if crops()
             && line.elements().len() > CROP_ELEMENTS
             && st.dash.is_some()
             && st.profile.is_none()
             && let Some(outline) = crop_dashed(line, st, width, region, crop_reach(st, width, f.px, tol), tol)
         {
-            (Arc::new(outline), Some(region))
-        } else {
-            let cropped = (crops() && line.elements().len() > CROP_ELEMENTS && st.dash.is_none() && st.profile.is_none())
-                .then(|| crop_line(line, region, crop_reach(st, width, f.px, tol), width))
-                .flatten();
-            match cropped {
-                Some(part) => (Arc::new(effects::stroke::line_outline(&part, st, width, tol)), Some(region)),
-                None => (expand(), None),
-            }
-        };
-        self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, line: kept });
-        if let Some(mk) = moved {
-            self.keep_latest(mk, key);
+            let outline = Arc::new(outline);
+            self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop: Some(region), line: kept }, moved);
+            return Some(outline);
         }
+        let cropped = (crops() && line.elements().len() > CROP_ELEMENTS && st.dash.is_none() && st.profile.is_none())
+            .then(|| crop_line(line, region, crop_reach(st, width, f.px, tol), width))
+            .flatten();
+        let (outline, crop) = match cropped {
+            Some(part) => (Arc::new(effects::stroke::line_outline(&part, st, width, tol)), Some(region)),
+            None => (expand(), None),
+        };
+        self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, line: kept }, moved);
         Some(outline)
     }
 
-    /// Lists `key` as the latest outline under `mk`, and drops the line kept with the outline listed
-    /// there before, which no moved copy draws from any more: one line is kept per [`MovedKey`].
-    fn keep_latest(&mut self, mk: MovedKey, key: crate::frame::StrokeKey) {
-        if let Some(before) = self.moved_strokes.insert(mk, key)
+    /// Keeps outline `e` in `strokes` under `key`, and lists `key` as the latest outline under
+    /// `moved` ([`MovedKey`]), dropping the line kept with the outline listed there before, which
+    /// no moved copy draws from any more: one line is kept per [`MovedKey`].
+    fn keep_stroke(&mut self, key: StrokeKey, e: StrokeEntry, moved: Option<MovedKey>) {
+        self.strokes.insert(key, e);
+        if let Some(mk) = moved
+            && let Some(before) = self.moved_strokes.insert(mk, key)
             && before != key
             && let Some(e) = self.strokes.get_mut(&before)
         {

@@ -1,8 +1,8 @@
 use super::blobs::{blob_key, blob_pixmap, image_mip, lookup, mask_value, mip_level, plain_image, shape_masked_image, white_shape_mask};
 use super::clock::now;
 use super::frame::{
-    ClipEntry, ClipPaintEntry, Frame, FrameStats, GeomEntry, MAX_INLINE_DEPTH, MISSING_INLINE_LOGGED, MovedKey, PlacedEntry, PlacedKey, PtrMap,
-    SliceEntry, Slices, StrokeEntry,
+    ClipEntry, ClipPaintEntry, Frame, FrameStats, GeomEntry, MAX_INLINE_DEPTH, MISSING_INLINE_LOGGED, PlacedEntry, PlacedKey, PtrMap, SliceEntry,
+    Slices, StrokeEntry,
 };
 use super::geometry::{MAX_GUIDE_DASHES, polygon_length, rects_overlap, region_pixels};
 use super::node_checks::{
@@ -18,13 +18,16 @@ use super::{
     group, ink, kurbo, live, lru, peniko, proof, vello_cpu,
 };
 
+#[cfg(test)]
+pub(crate) use paint::{STROKES_OUTLINED, offset_between};
+
 mod images;
 mod nodes;
 mod paint;
 mod text;
 
 #[cfg(test)]
-pub(crate) use paint::{CROP_STROKES, STROKES_OUTLINED, crop_line, offset_between};
+pub(crate) use paint::{CROP_STROKES, crop_line};
 
 impl Renderer {
     pub fn new() -> Self {
