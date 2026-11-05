@@ -173,11 +173,11 @@ pub fn has_selection(s: &Session) -> std::result::Result<(), String> {
 pub fn has_selected_path(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     let st = s.active().ok_or("no document open")?;
-    let mut found = false;
-    for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-        n.walk(&mut |c| found |= matches!(c.kind, vectorcraft_doc::NodeKind::Path { guide: false, .. }));
+    // Stops at the first path: menus ask this every frame, and a selected group can hold many.
+    fn holds_path(n: &vectorcraft_doc::Node) -> bool {
+        matches!(n.kind, vectorcraft_doc::NodeKind::Path { guide: false, .. }) || n.children().is_some_and(|c| c.iter().any(|c| holds_path(c)))
     }
-    if found { Ok(()) } else { Err("select a path".into()) }
+    if st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).any(holds_path) { Ok(()) } else { Err("select a path".into()) }
 }
 /// Objects or ruler guides are selected, or the Artboard tool is chosen (what Copy and Cut take).
 pub fn has_selection_guides_or_artboard_tool(s: &Session) -> std::result::Result<(), String> {
