@@ -6203,6 +6203,10 @@ breakText	Glyphs	Glyffer
 	Bow	Bue
 	Spike	Spids
 	Skip Spaces	Spring mellemrum over
+	Release Type on a Path…	Frigør tekst på kurve…
+	Release Type on a Path	Frigør tekst på kurve
+	Text and Path	Tekst og kurve
+	Path Only	Kun kurve
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafikken er for stor til at blive kopieret som et billede: andre programmer får ingen PNG af den
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

@@ -6221,6 +6221,11 @@ shape	Open	Otvoren
 	Bow	Luk
 	Spike	Šiljak
 	Skip Spaces	Preskoči razmake
+	Release Type on a Path…	Oslobodi tekst na putanji…
+	Release Type on a Path	Oslobodi tekst na putanji
+	Text and Path	Tekst i putanja
+	Path Only	Samo putanja
+	Text Only	Samo tekst
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika je prevelika da bi se kopirala kao slika: druge aplikacije ne dobijaju njen PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

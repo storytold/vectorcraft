@@ -4249,6 +4249,7 @@ theme	Appearance	외관
 @msg	unknown preference `{key}`	알 수 없는 환경 설정 `{key}`
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	데이터 복구에 복사본을 보관할 곳이 없습니다. 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
 @msg	Data Recovery can't keep copies in {path}: {e}	데이터 복구가 {path}에 복사본을 보관할 수 없습니다: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	{path}에서 플러그인을 불러올 수 없습니다: {e}
 @msg	`{area}` is no recovery area name	`{area}`은(는) 복구 영역 이름이 아닙니다
 @msg	`{name}` is no recovery entry name	`{name}`은(는) 복구 항목 이름이 아닙니다
 @msg	no clock to keep a heartbeat by	하트비트를 유지할 시계가 없습니다
@@ -5917,6 +5918,10 @@ breakText	Glyphs	글리프
 	Bow	활 모양
 	Spike	뾰족한 모양
 	Skip Spaces	공백 건너뛰기
+	Release Type on a Path…	패스 위 문자 해제…
+	Release Type on a Path	패스 위 문자 해제
+	Text and Path	문자와 패스
+	Path Only	패스만
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	아트워크가 너무 커서 이미지로 복사할 수 없습니다: 다른 앱에는 PNG가 전달되지 않습니다
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

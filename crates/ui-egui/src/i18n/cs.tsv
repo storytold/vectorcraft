@@ -4293,6 +4293,7 @@ imageTrace	Outline	Obrys
 @msg	Create from Selection: the selection has no area	Vytvořit z výběru: výběr nemá žádnou plochu
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Obnovení dat nemá kam ukládat kopie: nastavte Předvolby → Práce se soubory → Obnovení dat → Složka (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Obnovení dat nemůže ukládat kopie do {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Zásuvné moduly nelze načíst z {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	nástrojem Přímý výběr vyberte kotevní body, kde se má cesta rozdělit (ne koncové body otevřených cest)
 @msg	Divide Objects Below: select a path	Rozdělit objekty pod: vyberte cestu
 @msg	Divide Objects Below: select exactly one path	Rozdělit objekty pod: vyberte právě jednu cestu
@@ -6336,6 +6337,10 @@ breakText	Glyphs	Glyfy
 	Bow	Oblouk
 	Spike	Špička
 	Skip Spaces	Přeskočit mezery
+	Release Type on a Path…	Uvolnit text na cestě…
+	Release Type on a Path	Uvolnit text na cestě
+	Text and Path	Text a cesta
+	Path Only	Pouze cesta
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Kresba je příliš velká na zkopírování jako obrázek: ostatní aplikace z ní nedostanou PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

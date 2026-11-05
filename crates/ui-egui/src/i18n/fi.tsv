@@ -4207,6 +4207,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Create from Selection: the selection has no area	Luo valinnasta: valinnalla ei ole pinta-alaa
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tietojen palautuksella ei ole paikkaa kopioille: määritä Asetukset → Tiedostojen käsittely → Tietojen palautus → Kansio (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Tietojen palautus ei voi tallentaa kopioita kansioon {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Laajennuksia ei voi ladata kansiosta {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	valitse suoravalinnalla ankkuripisteet, joista leikataan (ei avoimien polkujen päätepisteitä)
 @msg	Divide Objects Below: select a path	Jaa alla olevat objektit: valitse polku
 @msg	Divide Objects Below: select exactly one path	Jaa alla olevat objektit: valitse tasan yksi polku
@@ -6366,6 +6367,10 @@ breakText	Glyphs	Merkit
 	Bow	Kaari
 	Spike	Piikki
 	Skip Spaces	Ohita välilyönnit
+	Release Type on a Path…	Vapauta teksti polulta…
+	Release Type on a Path	Vapauta teksti polulta
+	Text and Path	Teksti ja polku
+	Path Only	Vain polku
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafiikka on liian suuri kopioitavaksi kuvana: muut sovellukset eivät saa siitä PNG-kuvaa
 	Check for Updates…	Tarkista päivitykset…
 	VectorCraft Updates	VectorCraft-päivitykset

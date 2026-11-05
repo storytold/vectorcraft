@@ -5056,6 +5056,7 @@ digits	Malayalam	Malaiàlam
 @msg	damaged	malmès
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	La recuperació de dades no té cap lloc on guardar còpies: configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	La recuperació de dades no pot guardar còpies a {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	No es poden carregar complements des de {path}: {e}
 @msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	les dades que llegeix el programa estan malmeses o tallades, o el programa demana una posició en un fitxer que no en té
 @msg	decimals must be {_1}–{_2} (got {_3})	els decimals han de ser {_1}–{_2} (rebut {_3})
 @msg	Dimension point is outside the canvas	El punt de dimensió és fora del llenç
@@ -6322,6 +6323,10 @@ breakText	Glyphs	Glifs
 	Bow	Arc
 	Spike	Pic
 	Skip Spaces	Omet els espais
+	Release Type on a Path…	Allibera el text sobre un traçat…
+	Release Type on a Path	Allibera el text sobre un traçat
+	Text and Path	Text i traçat
+	Path Only	Només traçat
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	La il·lustració és massa gran per copiar-la com a imatge: les altres aplicacions no en reben cap PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

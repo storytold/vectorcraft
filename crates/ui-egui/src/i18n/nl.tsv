@@ -6247,6 +6247,10 @@ breakText	Glyphs	Glyphs
 	Bow	Boog
 	Spike	Piek
 	Skip Spaces	Spaties overslaan
+	Release Type on a Path…	Tekst op pad vrijgeven…
+	Release Type on a Path	Tekst op pad vrijgeven
+	Text and Path	Tekst en pad
+	Path Only	Alleen pad
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Het illustratiewerk is te groot om als afbeelding te kopiëren: andere apps krijgen er geen PNG van
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

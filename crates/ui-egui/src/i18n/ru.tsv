@@ -4022,6 +4022,7 @@ axis	Both	Оба
 @msg	Create from Selection: the selection has no area	Создание из выделения: у выделения нет области
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Восстановлению данных негде хранить копии: задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Восстановление данных не может хранить копии в {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Не удается загрузить модули из {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	выделите прямым выделением опорные точки для разреза (не конечные точки открытых контуров)
 @msg	Divide Objects Below: select a path	Разделение объектов ниже: выделите контур
 @msg	Divide Objects Below: select exactly one path	Разделение объектов ниже: выделите ровно один контур
@@ -6425,6 +6426,10 @@ shape	Open	Открытый
 	Bow	Дуга
 	Spike	Пик
 	Skip Spaces	Пропускать пробелы
+	Release Type on a Path…	Освободить текст по контуру…
+	Release Type on a Path	Освободить текст по контуру
+	Text and Path	Текст и контур
+	Path Only	Только контур
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графика слишком велика для копирования в виде изображения: другие приложения не получат её PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).

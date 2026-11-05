@@ -3574,6 +3574,7 @@ axis	Both	Ambos
 @msg	Create from Selection: the selection has no area	Criar a partir da seleção: a seleção não tem área
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	A recuperação de dados não tem onde guardar cópias: defina Preferências → Manipulação de arquivos → Recuperação de dados → Pasta (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	A recuperação de dados não pode guardar cópias em {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Não é possível carregar plug-ins de {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecione diretamente os pontos de ancoragem onde cortar (não as extremidades de traçados abertos)
 @msg	Divide Objects Below: select a path	Dividir objetos abaixo: selecione um traçado
 @msg	Divide Objects Below: select exactly one path	Dividir objetos abaixo: selecione exatamente um traçado
@@ -6409,6 +6410,10 @@ swatch	Yellow Green	Verde-amarelado
 	Bow	Arco
 	Spike	Pico
 	Skip Spaces	Ignorar espaços
+	Release Type on a Path…	Liberar Texto em um Caminho…
+	Release Type on a Path	Liberar Texto em um Caminho
+	Text and Path	Texto e caminho
+	Path Only	Somente caminho
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	A arte é grande demais para ser copiada como imagem: outros aplicativos não recebem um PNG dela
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
