@@ -7,8 +7,18 @@
 //! - One object, the brush manager's order, has the order of the Brushes panel: its parameters
 //!   are the plug-in name and brush name of each brush, each one after a `/` and a space.
 //! - A Calligraphic brush's parameters are 11 numbers: the first is 1; the diameter, roundness and
-//!   angle as (low, high) pairs; how the diameter, roundness and angle vary (0 Fixed, 1 Random, 2
-//!   Pressure, other codes the pen's other channels); a last number.
+//!   angle as (low, high) pairs; how the diameter, roundness and angle vary; a last number. The
+//!   codes follow the order of the Brush Options menu: 0 Fixed, 1 Random, 2 Pressure, 3 Stylus
+//!   Wheel, 4 Tilt, 5 Bearing, 6 Rotation. A user's 6D Art Pen brushes (#372) vary the diameter
+//!   with 2, the roundness with 5 and the angle with 6, the angle over a whole turn, as the barrel
+//!   rotation turns the nib. VectorCraft reads no stylus wheel: 3 is read as Random when the value
+//!   varies, as an unknown code is.
+//! - A path with a Calligraphic brush is a stroke in its art style ([`super::style`]): the filter
+//!   `(Adobe Calligraphic Brush Tool)`, its stroke's paint and weight (the weight scales the brush:
+//!   1 pt draws it at its own size), the brush by name (`/GObjRef : (name) (plug-in)
+//!   /PluginObject`), and the brush's settings for this path as entries: `Diameter`, `Roundness`,
+//!   `Angle`, their `…Variation` either side and `…DependsOn` codes, and `AngleRelativeTo` (0 the
+//!   page).
 //! - A Scatter, Art or Pattern brush's parameters are fields split by `/`: a number, the art's
 //!   section names (one for Scatter, five for Art and Pattern, empty where there is none, each
 //!   after a space for Art and Pattern), more fields, and last 15 numbers.
@@ -168,12 +178,15 @@ fn numbers(s: &str) -> Option<Vec<f64>> {
     s.split_whitespace().map(|w| w.parse::<f64>().ok().filter(|v| v.is_finite())).collect()
 }
 
-/// How a value varies, by its code: `None` for a code that isn't Fixed, Random or Pressure.
+/// How a value varies, by its code: `None` for the stylus wheel and codes that aren't known.
 fn variation(code: f64) -> Option<Variation> {
     match code {
         0.0 => Some(Variation::Fixed),
         1.0 => Some(Variation::Random),
         2.0 => Some(Variation::Pressure),
+        4.0 => Some(Variation::Tilt),
+        5.0 => Some(Variation::Bearing),
+        6.0 => Some(Variation::Rotation),
         _ => None,
     }
 }
@@ -181,6 +194,27 @@ fn variation(code: f64) -> Option<Variation> {
 /// [`variation`], or for another code, Random when the value varies and Fixed when it doesn't.
 fn mode(code: f64, varies: bool) -> Variation {
     variation(code).unwrap_or(if varies { Variation::Random } else { Variation::Fixed })
+}
+
+/// A Calligraphic brush of angle, roundness and size `values`, each varying `variation` either side
+/// as its code in `codes` says.
+pub(super) fn calligraphic(values: [f64; 3], variation: [f64; 3], codes: [f64; 3]) -> Calligraphic {
+    let [angle, roundness, size] = values;
+    let modes = [0, 1, 2].map(|i| mode(codes[i], variation[i] != 0.0));
+    Calligraphic { angle, roundness, size, variation, modes: Some(modes) }
+}
+
+/// Does the brush `draft` draw as `c`, the settings a path's art style gives it? A path whose
+/// settings differ (Options of Selected Object) keeps its drawn look: a stroke names a brush, and
+/// has no settings of its own.
+pub(super) fn draws_as(draft: &BrushDraft, c: &Calligraphic) -> bool {
+    let DraftKind::Calligraphic(d) = &draft.kind else { return false };
+    let close = |a: f64, b: f64| (a - b).abs() <= 1e-3 * a.abs().max(b.abs()).max(1.0);
+    close(d.angle, c.angle)
+        && close(d.roundness, c.roundness)
+        && close(d.size, c.size)
+        && d.variation.iter().zip(&c.variation).all(|(a, b)| close(*a, *b))
+        && d.modes() == c.modes()
 }
 
 /// The brush named `name` of kind `kind` from its parameters `params`.
@@ -191,15 +225,11 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
             let [_, d0, d1, r0, r1, a0, a1, dm, rm, am, ..] = n.as_slice() else { return Err(BrushError::Values) };
             let mid = |a: f64, b: f64| (a + b) / 2.0;
             let half = |a: f64, b: f64| (b - a).abs() / 2.0;
-            let variation = [half(*a0, *a1), half(*r0, *r1), half(*d0, *d1)];
-            let modes = [mode(*am, variation[0] != 0.0), mode(*rm, variation[1] != 0.0), mode(*dm, variation[2] != 0.0)];
-            DraftKind::Calligraphic(Calligraphic {
-                angle: mid(*a0, *a1),
-                roundness: mid(*r0, *r1),
-                size: mid(*d0, *d1),
-                variation,
-                modes: Some(modes),
-            })
+            DraftKind::Calligraphic(calligraphic(
+                [mid(*a0, *a1), mid(*r0, *r1), mid(*d0, *d1)],
+                [half(*a0, *a1), half(*r0, *r1), half(*d0, *d1)],
+                [*am, *rm, *dm],
+            ))
         }
         Tool::Scatter | Tool::Art | Tool::Pattern => {
             let fields: Vec<&str> = params.split('/').collect();

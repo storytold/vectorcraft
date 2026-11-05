@@ -712,6 +712,7 @@ impl<'a> Reader<'a> {
                     patterns: &self.pattern_tiles,
                     names: &self.global_names,
                     v7_patterns: &self.v7_patterns,
+                    brushes: &self.brush_drafts,
                     space,
                 },
             )
@@ -854,6 +855,8 @@ struct StylePaints<'a> {
     patterns: &'a HashMap<String, Rect>,
     names: &'a ShownNames,
     v7_patterns: &'a HashSet<String>,
+    /// The brushes the file defines, which a brushed stroke names.
+    brushes: &'a [super::super::brush::BrushDraft],
     space: Affine,
 }
 
@@ -950,7 +953,17 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                     AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: paints.names.get(Global::Pattern, name).to_string(), xf }))
                 }
             },
-            StyleItem::Stroke { .. } => stroke_layer(item)?,
+            StyleItem::Stroke { brush, .. } => {
+                // A brushed stroke draws as its look only with the brush the file defines (the
+                // first of its name, as the Brushes panel keeps it) at the object's settings.
+                if let Some((name, settings)) = brush {
+                    let draft = paints.brushes.iter().find(|d| &d.name == name)?;
+                    if !super::super::brush::draws_as(draft, settings) {
+                        return None;
+                    }
+                }
+                stroke_layer(item)?
+            }
         };
         if let Some(look) = st.looks.get(n) {
             with_look(&mut layer, look);
@@ -976,6 +989,8 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle)
     for (n, item) in st.items.iter().enumerate() {
         let mut layer = match item {
             StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
+            // A graphic style's brush isn't checked against the file's brushes: it is left out.
+            StyleItem::Stroke { brush: Some(_), .. } => return None,
             StyleItem::Stroke { .. } => stroke_layer(item)?,
             StyleItem::Gradient { .. } | StyleItem::Pattern { .. } => return None,
         };
@@ -989,9 +1004,10 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle)
 
 /// A style's stroke as an appearance item (`None` for a fill).
 fn stroke_layer(item: &crate::import::ai::style::StyleItem) -> Option<AppearanceItem> {
-    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile } = item else { return None };
+    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, brush } = item else { return None };
     let mut layer = StrokeLayer::new(paint.clone(), line_width(*width));
     (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile) = (*cap, *join, *miter, dash.clone(), profile.clone());
+    layer.brush = brush.as_ref().map(|(name, _)| name.clone());
     Some(AppearanceItem::Stroke(layer))
 }
 
