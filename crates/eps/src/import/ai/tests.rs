@@ -3261,6 +3261,58 @@ fn legacy_special_characters_join_the_story() {
     assert_eq!(t.plain_text(), "Hi");
 }
 
+/// A tab definition (`Xb`, `Xe`, `XB`, §22.6) sets the paragraph's tab stops, sorted by position
+/// with one stop at each position; each paragraph keeps the stops in force at its first character,
+/// and they last into the next text object. A definition with no stops leaves the default ones.
+#[test]
+fn legacy_tab_definitions_set_the_paragraph_tab_stops() {
+    use vectorcraft_doc::TabAlign;
+    let stops = |p: &vectorcraft_doc::ParaStyle| p.tabs.iter().map(|t| (t.position, t.align)).collect::<Vec<_>>();
+    let ruler = "36 5 Xb\n0 0 3 144 Xe\n0 0 1 72 Xe\n0 0 2 200.5 Xe\n0 0 4 250 Xe\n0 0 2 72 Xe\nXB";
+    let two_paragraphs = point_type(ruler, "A\\tB\\r").replace("TO\n", "36 0 Xb\nXB\n(C\\tD) Tx\nTO\n");
+    let texts = legacy_texts(&format!("{two_paragraphs}{}", point_type("", "E")));
+    assert_eq!(texts.len(), 2);
+    let want = vec![(72.0, TabAlign::Left), (144.0, TabAlign::Right), (200.5, TabAlign::Center), (250.0, TabAlign::Decimal)];
+    let one = texts[0].para_at(0);
+    assert_eq!(stops(one), want);
+    assert!(one.tabs.iter().all(|t| t.leader.is_empty() && t.align_on == '.'));
+    assert!(texts[0].para_at(1).tabs.is_empty(), "an empty definition leaves the default stops");
+    assert!(texts[1].para_at(0).tabs.is_empty(), "the next text object keeps the empty definition");
+    let texts = legacy_texts(&format!("{}{}", point_type(ruler, "A"), point_type("", "B")));
+    assert_eq!(stops(texts[1].para_at(0)), want, "the next text object keeps the stops");
+}
+
+/// A tab description whose type is not 1 to 4 or whose position is missing, not a number,
+/// negative or past 100,000 pt is skipped; so is one outside a tab definition, and an `XB` without
+/// an `Xb` leaves the stops as they were.
+#[test]
+fn legacy_tab_descriptions_out_of_range_are_skipped() {
+    let bad = "0 0 5 90 Xe\n0 0 0 90 Xe\n0 0 1.5 90 Xe\n0 0 1 -1 Xe\n0 0 1 100001 Xe\n0 0 1 /x Xe\n1 Xe";
+    let texts = legacy_texts(&point_type(&format!("0 0 1 10 Xe\n36 2 Xb\n{bad}\n0 0 3 100000 Xe\n0 0 1 0 Xe\nXB\nXB\n0 0 1 50 Xe"), "Hi"));
+    let tabs: Vec<f64> = texts[0].para_at(0).tabs.iter().map(|t| t.position).collect();
+    assert_eq!(tabs, [0.0, 100_000.0]);
+}
+
+/// A tab definition whose descriptions were all skipped leaves the default stops; a definition
+/// keeps its first 1024 stops; and a definition left open (an `Xb` with no `XB`) ends at the next
+/// text object's `To`, so that object's descriptions outside a definition are skipped.
+#[test]
+fn legacy_tab_definitions_skipped_capped_and_left_open() {
+    let positions = |t: &vectorcraft_doc::TextObject| t.para_at(0).tabs.iter().map(|t| t.position).collect::<Vec<f64>>();
+    let all_skipped = format!("{}{}", point_type("36 1 Xb\n0 0 1 72 Xe\nXB", "A"), point_type("36 1 Xb\n0 0 9 90 Xe\nXB", "B"));
+    let texts = legacy_texts(&all_skipped);
+    assert_eq!(positions(&texts[0]), [72.0]);
+    assert!(texts[1].para_at(0).tabs.is_empty(), "a definition with every stop skipped leaves the default stops");
+    let many: String = (0..1100).map(|i| format!("0 0 1 {i} Xe\n")).collect();
+    let texts = legacy_texts(&point_type(&format!("36 1100 Xb\n{many}XB"), "C"));
+    assert_eq!(positions(&texts[0]).len(), 1024);
+    assert_eq!(positions(&texts[0]).last(), Some(&1023.0));
+    let open = format!("{}{}", point_type("36 1 Xb\n0 0 1 72 Xe", "D"), point_type("0 0 1 90 Xe\nXB", "E"));
+    let texts = legacy_texts(&open);
+    assert!(texts[0].para_at(0).tabs.is_empty(), "an unended definition sets no stops");
+    assert!(texts[1].para_at(0).tabs.is_empty(), "the next object's `To` ends the open definition");
+}
+
 /// `Te` (end render, §22.6) reads in a text object with no operands and with four, inside a tab
 /// definition too, and keeps nothing; so does `TM` (pop text matrix, §22.6).
 #[test]

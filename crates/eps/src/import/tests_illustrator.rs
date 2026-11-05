@@ -209,14 +209,14 @@ fn a_postscript_ai_with_a_multi_layer_mask_opens_with_its_layers() {
 }
 
 /// A `.ai` in PostScript form (read through its layers) whose text carries hyphenation and
-/// tab-ruler attributes: `XL` (hyphenation language), `Xb`/`XB` (a tab definition) and `Th`
-/// (hyphen control). These keep no geometry, so the reader drops them rather than failing the
-/// file the way it did before — the symptom seen on Illustrator 6/8 EPS files whose
-/// `Adobe_level2_AI5` program can't be run.
+/// tab-ruler attributes: `XL` (hyphenation language), `Xb`/`Xe`/`XB` (a tab definition) and `Th`
+/// (hyphen control). The reader drops `XL` and keeps the tab definition as the paragraph's tab
+/// stops rather than failing the file the way it did before (the symptom seen on Illustrator 6/8
+/// EPS files whose `Adobe_level2_AI5` program can't be run).
 #[test]
 fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let text = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 9 Tf\n\
-        %_ 0 XL\n36 0 Xb\nXB\n0 1 2 2 99 Th\n0 Ta\n(hi) Tx\nTO\n";
+        %_ 0 XL\n36 1 Xb\n0 0 3 72 Xe\nXB\n0 1 2 2 99 Th\n0 Ta\n(hi) Tx\nTO\n";
     // The operators sit on a visible layer (so they'd be reported as unknown, not quietly skipped
     // on a hidden one), beside the square so the layer is never empty.
     let src = NAMED_PROLOG.replace("S\nLB\n%AI5_EndLayer--\n%AI5_BeginLayer", &format!("S\n{text}LB\n%AI5_EndLayer--\n%AI5_BeginLayer"));
@@ -234,6 +234,8 @@ fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let [p] = texts.as_slice() else { panic!("{texts:?}") };
     assert!(!p.hyphenate);
     assert_eq!((p.hyphenation.after_first, p.hyphenation.before_last, p.hyphenation.hyphen_limit), (2, 2, 25));
+    let tabs: Vec<_> = p.tabs.iter().map(|t| (t.position, t.align)).collect();
+    assert_eq!(tabs, [(72.0, vectorcraft_doc::TabAlign::Right)]);
 }
 
 /// An Illustrator 3 file of paths alone, as image editors export their paths (storytold/photocraft#6036):
