@@ -2807,6 +2807,188 @@ fn one_long_run_of_legacy_type_stops_at_the_allowance() {
     assert_eq!(texts[0].plain_text().chars().count(), ALLOWANCE);
 }
 
+/// A legacy-format file whose layer holds `art`, read.
+fn legacy_read(art: &str) -> Structure {
+    match read(type_stream7(art).as_bytes()) {
+        Ok(r) => r,
+        Err(e) => panic!("{e}"),
+    }
+}
+
+/// The text objects of the first layer, with their ids, top to bottom: a threaded text object's
+/// frames in file order.
+fn art_frames(doc: &Document) -> Vec<(vectorcraft_doc::NodeId, vectorcraft_doc::TextObject)> {
+    art(doc).iter().rev().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((n.id, (**t).clone())) } else { None }).collect()
+}
+
+/// An area's frame in the document.
+fn frame_in_doc(t: &vectorcraft_doc::TextObject) -> Rect {
+    let vectorcraft_doc::TextKind::Area { frame } = &t.kind else { panic!("area type: {:?}", t.kind) };
+    kurbo::Shape::bounding_box(&(t.xf * frame.to_bezpath()))
+}
+
+/// Do two matrices match?
+fn same_matrix(a: Affine, b: Affine) -> bool {
+    a.as_coeffs().iter().zip(b.as_coeffs()).all(|(p, q)| (p - q).abs() < 1e-9)
+}
+
+/// Area type with linked areas (§15.5.3): each area's `Tp` … `TP` with its own matrix and frame,
+/// the characters after each, and overflow text. It opens as one frame for each area, threaded in
+/// file order, with the story in the first.
+#[test]
+fn legacy_area_type_with_linked_areas_is_threaded_frames() {
+    let text = format!(
+        "1 To\n1 0 0 1 0 40 0 Tp\n{}n\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(Linked ) Tx\n\
+         0 1 -1 0 150 20 0 Tp\n{}n\nTP\n(areas\\r) Tx\n(and more) TX\n(\\r) TX\nTO\n",
+        rect_path(0.0, 0.0, 50.0, 40.0),
+        rect_path(110.0, 20.0, 150.0, 80.0)
+    );
+    let r = legacy_read(&text);
+    let frames = art_frames(&r.doc);
+    let [(a, first), (b, second)] = frames.as_slice() else { panic!("two frames: {frames:?} {:?}", r.warnings) };
+    assert_eq!(r.doc.text_threads, [vec![*a, *b]], "threaded in file order");
+    let in_doc = |x0, y0, x1, y1| r.to_doc.transform_rect_bbox(Rect::new(x0, y0, x1, y1));
+    assert!(near(frame_in_doc(first), in_doc(0.0, 0.0, 50.0, 40.0)), "{:?}", frame_in_doc(first));
+    assert!(near(frame_in_doc(second), in_doc(110.0, 20.0, 150.0, 80.0)), "{:?}", frame_in_doc(second));
+    // Each frame keeps its own area's matrix: the second's type runs up the page.
+    let placed = |m: [f64; 6]| r.to_doc * Affine::new(m) * Affine::FLIP_Y;
+    assert!(same_matrix(first.xf, placed([1.0, 0.0, 0.0, 1.0, 0.0, 40.0])), "{:?}", first.xf);
+    assert!(same_matrix(second.xf, placed([0.0, 1.0, -1.0, 0.0, 150.0, 20.0])), "{:?}", second.xf);
+    // The story: the characters after every area and the overflow text, in the first frame.
+    assert_eq!(first.plain_text(), "Linked areas\nand more");
+    assert_eq!(first.paragraph_styles().len(), 2);
+    assert_eq!(second.plain_text(), "");
+}
+
+/// A linked area without a path is left out; a single area with a path is area type in no thread.
+#[test]
+fn legacy_area_type_leaves_out_a_linked_area_without_a_path() {
+    let area = |m: &str, path: Option<Rect>, chars: &str| {
+        let path = path.map(|p| format!("{}n\n", rect_path(p.x0, p.y0, p.x1, p.y1))).unwrap_or_default();
+        format!("{m} Tp\n{path}TP\n{chars}")
+    };
+    let style = "0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n";
+    let three = format!(
+        "1 To\n{}{}{}TO\n",
+        area("1 0 0 1 0 40 0", Some(Rect::new(0.0, 0.0, 50.0, 40.0)), &format!("{style}(One ) Tx\n")),
+        area("1 0 0 1 60 40 0", None, "(two ) Tx\n"),
+        area("1 0 0 1 110 40 0", Some(Rect::new(110.0, 0.0, 150.0, 40.0)), "(three) Tx\n"),
+    );
+    let r = legacy_read(&three);
+    let frames = art_frames(&r.doc);
+    let [(a, first), (b, second)] = frames.as_slice() else { panic!("two frames: {frames:?} {:?}", r.warnings) };
+    assert_eq!(r.doc.text_threads, [vec![*a, *b]]);
+    assert_eq!((first.plain_text().as_str(), second.plain_text().as_str()), ("One two three", ""));
+    let one = format!(
+        "1 To\n{}{}TO\n",
+        area("1 0 0 1 60 40 0", None, &format!("{style}(x) Tx\n")),
+        area("1 0 0 1 0 40 0", Some(Rect::new(0.0, 0.0, 50.0, 40.0)), "(y) Tx\n")
+    );
+    let r = legacy_read(&one);
+    let frames = art_frames(&r.doc);
+    let [(_, only)] = frames.as_slice() else { panic!("one frame: {frames:?}") };
+    assert!(r.doc.text_threads.is_empty());
+    assert_eq!(only.plain_text(), "xy");
+    // The frame's own matrix, not the pathless area's.
+    assert!(same_matrix(only.xf, r.to_doc * Affine::translate((0.0, 40.0)) * Affine::FLIP_Y), "{:?}", only.xf);
+}
+
+/// One text object reads at most 4,096 linked areas: the paths of the rest are left out, not read as
+/// art, and their characters stay in the story.
+#[test]
+fn legacy_area_type_reads_up_to_its_limit_of_linked_areas() {
+    const LIMIT: usize = 4096;
+    let area = format!("1 0 0 1 0 0 0 Tp\n{}n\nTP\n", rect_path(0.0, 0.0, 50.0, 40.0));
+    let text = format!("1 To\n{}0 Tr\n(a) Tx\n{area}(b) Tx\nTO\n", area.repeat(LIMIT));
+    let r = legacy_read(&text);
+    let frames = art_frames(&r.doc);
+    assert_eq!(frames.len(), LIMIT);
+    assert_eq!(art(&r.doc).len(), LIMIT, "no art paths");
+    assert_eq!(r.doc.text_threads.iter().map(Vec::len).collect::<Vec<_>>(), [LIMIT]);
+    assert_eq!(frames[0].1.plain_text(), "ab");
+    assert_eq!(r.warnings, [LINKED_AREAS_LEFT_OUT]);
+}
+
+/// The warning when linked areas are left out.
+const LINKED_AREAS_LEFT_OUT: &str = "linked type areas past VectorCraft's limits were left out";
+
+/// The frames of linked areas times the characters of their story are kept to the reader's
+/// allowance of characters: a story of more than half of it gets one frame, and of a third, two.
+#[test]
+fn legacy_area_type_keeps_its_frames_times_characters_to_the_allowance() {
+    const ALLOWANCE: usize = 1 << 22;
+    let area = |x: f64| format!("1 0 0 1 {x} 0 0 Tp\n{}n\nTP\n", rect_path(x, 0.0, x + 50.0, 40.0));
+    for (chars, kept) in [(ALLOWANCE / 2 + 1, 1), (ALLOWANCE / 3, 3), (ALLOWANCE / 3 + 1, 2)] {
+        let text = format!("1 To\n{}0 Tr\n({}) Tx\n{}{}TO\n", area(0.0), "a".repeat(chars), area(60.0), area(120.0));
+        let r = legacy_read(&text);
+        let frames = art_frames(&r.doc);
+        assert_eq!(frames.len(), kept, "{chars}");
+        assert_eq!(r.doc.text_threads.len(), usize::from(kept > 1), "{chars}");
+        assert_eq!(frames[0].1.plain_text().len(), chars);
+        assert_eq!(r.warnings.iter().any(|w| w == LINKED_AREAS_LEFT_OUT), kept < 3, "{chars}");
+    }
+}
+
+/// Point type and type on a path have one text path (§15.2): one with more is read at its first.
+#[test]
+fn legacy_point_and_path_type_with_several_text_paths_use_the_first() {
+    let point = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n(a) Tx\n1 0 0 1 90 20 0 Tp\nTP\n(b) Tx\nTO\n";
+    let r = legacy_read(point);
+    let frames = art_frames(&r.doc);
+    let [(_, only)] = frames.as_slice() else { panic!("one object: {frames:?}") };
+    assert!(matches!(only.kind, vectorcraft_doc::TextKind::Point) && r.doc.text_threads.is_empty());
+    assert_eq!(only.plain_text(), "ab");
+    assert!(same_matrix(only.xf, r.to_doc * Affine::translate((10.0, 50.0)) * Affine::FLIP_Y), "the first text path's matrix: {:?}", only.xf);
+    let on_path = "2 To\n1 0 0 1 0 0 0.5 Tp\n0 0 m\n100 0 L\nN\nTP\n0 Tr\n(a) Tx\n1 0 0 1 0 0 0 Tp\n0 50 m\n100 50 L\nN\nTP\n(b) Tx\nTO\n";
+    let r = legacy_read(on_path);
+    let frames = art_frames(&r.doc);
+    let [(_, only)] = frames.as_slice() else { panic!("one object: {frames:?}") };
+    let vectorcraft_doc::TextKind::OnPath { path, start, .. } = &only.kind else { panic!("{:?}", only.kind) };
+    assert!((start - 0.5).abs() < 1e-9, "the first text path's start: {start}");
+    let along = kurbo::Shape::bounding_box(&(only.xf * path.to_bezpath()));
+    assert!((along.y0 - r.to_doc.transform_rect_bbox(Rect::new(0.0, 0.0, 100.0, 0.0)).y0).abs() < 1e-9, "{along:?}");
+    assert!(same_matrix(only.xf, r.to_doc * Affine::FLIP_Y), "{:?}", only.xf);
+    // Type on a path whose first text path has no path: the first one with a path, its matrix and
+    // start included.
+    let later = "2 To\n1 0 0 1 30 30 0.25 Tp\nTP\n0 Tr\n(a) Tx\n1 0 0 1 5 0 0.5 Tp\n0 50 m\n100 50 L\nN\nTP\n(b) Tx\nTO\n";
+    let r = legacy_read(later);
+    let frames = art_frames(&r.doc);
+    let [(_, only)] = frames.as_slice() else { panic!("one object: {frames:?}") };
+    let vectorcraft_doc::TextKind::OnPath { start, .. } = &only.kind else { panic!("{:?}", only.kind) };
+    assert!((start - 0.5).abs() < 1e-9, "{start}");
+    assert!(same_matrix(only.xf, r.to_doc * Affine::translate((5.0, 0.0)) * Affine::FLIP_Y), "{:?}", only.xf);
+    // Area type with no frame at all: point type at its first text path.
+    let frameless = "1 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n(a) Tx\n1 0 0 1 90 20 0 Tp\nTP\n(b) Tx\nTO\n";
+    let r = legacy_read(frameless);
+    let frames = art_frames(&r.doc);
+    let [(_, only)] = frames.as_slice() else { panic!("one object: {frames:?}") };
+    assert!(matches!(only.kind, vectorcraft_doc::TextKind::Point), "{:?}", only.kind);
+    assert!(same_matrix(only.xf, r.to_doc * Affine::translate((10.0, 50.0)) * Affine::FLIP_Y), "{:?}", only.xf);
+}
+
+/// The dictionary that follows a threaded text object (version 9 and later): its opacity mask and
+/// text wrap go on every frame, and its name on the first frame, which holds the story.
+#[test]
+fn the_dictionary_after_linked_area_type_applies_to_its_frames() {
+    let dict = "%_/ArtDictionary :\n%_(Story) /String (AIArtName) ,\n%_12.5 /Real (AI11TextWrapOffset) ,\n\
+                %_0 /Bool (AI11TextWrapInvert) ,\n%_/Mask :\n%_1 /Bool (Linked) ,\n%_0 /Bool (Disabled) ,\n%_X=\n\
+                %_0 0 0 1 k\n%_0 0 m\n%_5 0 L\n%_5 5 L\n%_0 5 L\n%_0 0 L\n%_f\n%_X+\n%_ (Art) ,\n%_1 /Bool (Clipping) ,\n\
+                %_0 /Bool (Inverted) ,\n%_; (AI9_Mask) ,\n%_;\n";
+    let area = |x: f64| format!("1 0 0 1 {x} 40 0 Tp\n{}n\nTP\n", rect_path(x, 0.0, x + 50.0, 40.0));
+    let text = format!("1 To\n{}0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(a) Tx\n{}{}(b) Tx\nTO\n{dict}", area(0.0), area(60.0), area(120.0));
+    let r = read_ok(&layer(&text));
+    let ids: Vec<_> = art_frames(&r.doc).into_iter().map(|(id, _)| id).collect();
+    assert_eq!(r.doc.text_threads, std::slice::from_ref(&ids), "{:?}", r.warnings);
+    let nodes: Vec<&Node> = ids.iter().filter_map(|id| r.doc.node(*id)).collect();
+    assert_eq!(nodes.len(), 3);
+    for n in &nodes {
+        assert!(n.extras().mask.is_some(), "every frame is masked: {:?}", n.id);
+        assert_eq!(wrap_of(n), Some(vectorcraft_doc::TextWrap { offset: 12.5, invert: false }));
+    }
+    let names: Vec<_> = nodes.iter().map(|n| n.name.as_deref()).collect();
+    assert_eq!(names, [Some("Story"), None, None]);
+}
+
 #[test]
 fn what_it_doesnt_read_is_an_error_where_it_shows() {
     let e = read(stream(&layer("1 2 frobnicate\n")).as_bytes()).unwrap_err();

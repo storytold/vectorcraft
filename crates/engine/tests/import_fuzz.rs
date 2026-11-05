@@ -3753,6 +3753,47 @@ proptest! {
     }
 }
 
+/// Area type in the version 7 form (§15.5.3) whose story flows through two linked areas: a small
+/// one, and one a quarter turn round, each area's characters after its `TP`.
+const LINKED_AREAS: &str = "1 To\n1 0 0 1 120 90 0 Tp\n120 60 m\n120 90 L\n180 90 L\n180 60 L\n120 60 L\nn\nTP\n0 Tr\n0 g\n/_Helvetica 9 Tf\n\
+    (one two three four five six seven eight nine ten ) Tx\n0 1 -1 0 190 10 0 Tp\n130 10 m\n130 55 L\n190 55 L\n190 10 L\n130 10 L\nn\nTP\n\
+    (eleven twelve thirteen fourteen fifteen) Tx\n(\\r) TX\nTO\n";
+
+/// [`NAMED_PROLOG_AI`] with `text` on its layer.
+fn linked_areas_ai(text: &str) -> String {
+    NAMED_PROLOG_AI.replace("u\n0.5 g\n", &format!("{text}u\n0.5 g\n"))
+}
+
+/// The fixture, as it is, opens with its area type as two threaded frames, the story flowing from
+/// the first into the second.
+#[test]
+fn the_linked_areas_fixture_opens_as_threaded_frames() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.ai", linked_areas_ai(LINKED_AREAS).as_bytes()).unwrap();
+    let [thread] = &l.doc.text_threads[..] else { panic!("one thread: {:?} {:?}", l.doc.text_threads, l.warnings) };
+    let texts: Vec<String> = thread
+        .iter()
+        .map(|id| match &l.doc.node(*id).unwrap().kind {
+            vectorcraft_doc::NodeKind::Text(t) => t.plain_text(),
+            k => panic!("type: {k:?}"),
+        })
+        .collect();
+    let [first, second] = texts.as_slice() else { panic!("two frames: {texts:?}") };
+    assert!(!first.is_empty() && !second.is_empty(), "the story flows on into the second frame: {texts:?}");
+    assert_eq!(format!("{first}{second}"), "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen");
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// That `.ai` with its linked areas damaged (their text paths, frames and characters): read, or
+    /// refused.
+    #[test]
+    fn ps_form_ai_linked_areas_never_panic(cut in 0usize..400, edits in prop::collection::vec((0usize..400, prop::sample::select(vec!['0', '1', '-', '.', ' ', '\n', '(', ')', '\\', 'T', 'p', 'P', 'O', 'o', 'x', 'X', 'm', 'L', 'n'])), 0..12)) {
+        let text = linked_areas_ai(&mutate_text(LINKED_AREAS, cut, &edits));
+        survive("PostScript-form .ai with damaged linked areas", || vectorcraft_engine::cmd::fileio::load("x.ai", text.as_bytes()).ok().map(|l| l.doc))?;
+    }
+}
+
 /// An operand of a layer's options (`Lb`): a flag, a colour index or component, a percentage, or
 /// anything else.
 fn arb_layer_operand() -> impl Strategy<Value = String> {

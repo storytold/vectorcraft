@@ -530,7 +530,8 @@ impl<'a> Reader<'a> {
                 let value =
                     OpacityMask { art: art.clone(), clip: on("Clipping"), invert: on("Inverted"), disabled: on("Disabled"), linked: on("Linked") };
                 if let Some(n) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. })) {
-                    n.extras_mut().mask = Some(Box::new(value));
+                    n.extras_mut().mask = Some(Box::new(value.clone()));
+                    self.each_linked_frame(|n| n.extras_mut().mask = Some(Box::new(value.clone())));
                 } else if !on("Disabled") {
                     self.unreadable("opacity masks without an owning object", false);
                 }
@@ -553,6 +554,7 @@ impl<'a> Reader<'a> {
             && let Some(n) = self.last_object().filter(|n| !matches!(n.kind, NodeKind::Layer { .. }))
         {
             n.extras_mut().wrap = Some(wrap);
+            self.each_linked_frame(|n| n.extras_mut().wrap = Some(wrap));
         }
         // The object's XML id, which the variable library's bindings name it by.
         if let Some(uid) = o.obj("AI10_ArtUID").and_then(Obj::content_text).filter(|u| !u.is_empty())
