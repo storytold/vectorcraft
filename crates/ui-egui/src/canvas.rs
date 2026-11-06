@@ -64,7 +64,7 @@ use overlays::{HandleLook, draw_inside_overlay, draw_overlays, hover_highlight, 
 pub use panes::Panes;
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 use raster::{changed_pixels, pixel_region, upload};
-pub(crate) use raster::{color_image, color_image_owned};
+pub(crate) use raster::{color_image, color_image_owned, render_job};
 use task_bar::task_bar;
 pub(crate) use task_bar::{has_colors, task_bar_rect};
 pub use tool_overlays::HiddenChars;
@@ -293,7 +293,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(secs) = wait {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(secs));
     }
-    if wait.is_none() && (app.canvas.key.as_ref() != Some(&key) || app.canvas.texture.is_none()) {
+    // A frame with copied pixels renders whole once the view has stopped for STILL_SECS.
+    let same_frame = app.canvas.key.as_ref() == Some(&key);
+    let settle = app.canvas.reused.filter(|_| same_frame).is_some_and(|at| {
+        let waited = ui.input(|i| i.time) - at;
+        // The clock went back (a new egui context): don't wait for it to catch up.
+        let waiting = (0.0..STILL_SECS).contains(&waited);
+        if waiting {
+            ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(STILL_SECS - waited));
+        }
+        !waiting
+    });
+    if wait.is_none() && (!same_frame || app.canvas.texture.is_none() || settle) {
         let (w, h, view) = frame_view(pixel, (w, h), &v, ppp);
         let opts = frame_options(app, &key, mask_view, smooth_images);
         draw_frame(app, ui, Frame { key: &key, doc: &doc, size: (w, h), view, opts, pixel });
@@ -567,7 +578,11 @@ fn show_worker_frame(app: &mut VectorcraftApp, ctx: &egui::Context, done: crate:
     app.canvas.key = Some(done.key);
     app.canvas.shown = Some((done.doc, done.opts));
     app.perf.render_ms = done.ms;
-    app.canvas.last_ms = done.ms;
+    // A frame with copied pixels leaves `last_ms` at the whole frame's.
+    if !done.reused {
+        app.canvas.last_ms = done.ms;
+    }
+    app.canvas.reused = done.reused.then(|| ctx.input(|i| i.time));
     app.canvas.moved = done.moved > 0;
     app.canvas.from_worker = true;
 }
@@ -667,6 +682,8 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     let first = app.canvas.texture.is_none() || !same_doc;
     let heavy = first || app.canvas.last_ms > 8.0 || settling || staying;
     let changed = changed_pixels(app, key, doc, &opts, view, w, h);
+    // A new view can copy from the worker's last frame. The frame shown asked for again renders whole.
+    let reuse = app.canvas.key.as_ref() != Some(key);
     let mut landed = None;
     match (&mut app.canvas.worker, heavy, changed) {
         // Only the document changed since the frame shown, in a part of it: that part is
@@ -693,6 +710,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
                 view,
                 opts,
                 scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+                reuse,
             });
             // A light document's first frame is ready within the grace and shows in this frame,
             // with no frame of bare paper. Waited for once, when the frame is queued.
@@ -710,6 +728,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             app.canvas.last_ms = app.perf.render_ms;
             app.canvas.moved = app.canvas.renderer.stats.moved > 0;
             app.canvas.from_worker = false;
+            app.canvas.reused = None;
         }
     }
     if let Some(done) = landed {

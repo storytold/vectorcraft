@@ -24,6 +24,9 @@ pub struct Job {
     /// The automation roots in force where the job was made: the render reads linked files under
     /// them, as it would on that thread.
     pub scope: ScopeHandle,
+    /// The render may copy pixels from the worker's last frame ([`crate::canvas::render_job`]).
+    /// Off: it renders the whole frame.
+    pub reuse: bool,
 }
 
 pub struct Done {
@@ -35,6 +38,9 @@ pub struct Done {
     pub ms: f64,
     /// [`vectorcraft_render::FrameStats::moved`] of the frame.
     pub moved: usize,
+    /// The frame holds pixels copied from the worker's last frame ([`crate::canvas::render_job`]),
+    /// and `ms` is the time of the copy and of the parts rendered.
+    pub reused: bool,
 }
 
 pub struct Worker {
@@ -55,15 +61,17 @@ impl Worker {
             .name("vectorcraft-render".into())
             .spawn(move || {
                 let mut r = Renderer::new();
+                let mut kept = None;
                 while let Ok(mut job) = jobs.recv() {
                     // Skip stale jobs: only the newest matters.
                     while let Ok(newer) = jobs.try_recv() {
                         job = newer;
                     }
                     let t0 = crate::now_ms();
-                    let img = job.scope.clone().run(|| r.render(&job.doc, job.w, job.h, job.view, &job.opts));
-                    if done_tx.send(Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: crate::now_ms() - t0, moved: r.stats.moved }).is_err()
-                    {
+                    let frame = job.scope.clone().run(|| crate::canvas::render_job(&mut r, &mut kept, &job));
+                    let ms = crate::now_ms() - t0;
+                    let done = Done { key: job.key, doc: job.doc, opts: job.opts, img: frame.img, ms, moved: frame.moved, reused: frame.reused };
+                    if done_tx.send(done).is_err() {
                         break;
                     }
                     ctx.request_repaint();

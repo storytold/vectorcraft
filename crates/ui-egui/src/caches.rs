@@ -17,6 +17,10 @@ pub struct CanvasCache {
     /// The frame shown was rendered on the worker: an interaction's frames stay there
     /// ([`canvas::show`]).
     pub from_worker: bool,
+    /// The frame shown holds pixels the worker copied from its last frame, and when it was shown
+    /// (seconds, egui's input time): it renders whole once the view has been still for
+    /// [`canvas::STILL_SECS`].
+    pub reused: Option<f64>,
     /// Set in the web build, which has no render worker: while the view changes on a document whose
     /// last render took more than 8 ms, the canvas draws the frame shown reprojected and renders
     /// once the view has been still for [`canvas::STILL_SECS`].

@@ -2435,7 +2435,7 @@ fn cached_frames_keep_their_scale_during_resize_rotation_and_dpi_changes() {
         // Deliver the actual replacement and verify that it replaces the cached key.
         let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let expected = job.key.clone();
-        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0 }).unwrap();
+        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false }).unwrap();
         frame(&mut app, size, new_ppp);
         assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame arrived");
     }
@@ -2582,7 +2582,7 @@ fn pan_fills_the_area_the_last_frame_leaves() {
     // The fill arrives; the next frame draws it, and asks for no other fill.
     let img = app.canvas.renderer.render(&fill_job.doc, fill_job.w, fill_job.h, fill_job.view, &fill_job.opts);
     let (doc, opts) = (fill_job.doc, fill_job.opts);
-    fill_completed.send(crate::render_worker::Done { key: fill_job.key, doc, opts, img, ms: 5.0, moved: 0 }).unwrap();
+    fill_completed.send(crate::render_worker::Done { key: fill_job.key, doc, opts, img, ms: 5.0, moved: 0, reused: false }).unwrap();
     let (meshes, pixels) = frame(&mut app);
     assert!(fill_jobs.try_recv().is_err(), "the fill covers the canvas");
     assert_eq!(app.canvas.key.as_ref(), Some(&old), "the last frame is still shown");
@@ -2627,11 +2627,11 @@ fn pan_fills_the_area_the_last_frame_leaves() {
     app.view_mut().unwrap().center = Point::new(250.0, 150.0);
     // That fill finishes after the worker's frame: it is taken and not kept.
     let img = app.canvas.renderer.render(&next.doc, next.w, next.h, next.view, &next.opts);
-    fill_completed.send(crate::render_worker::Done { key: next.key, doc: next.doc, opts: next.opts, img, ms: 5.0, moved: 0 }).unwrap();
+    fill_completed.send(crate::render_worker::Done { key: next.key, doc: next.doc, opts: next.opts, img, ms: 5.0, moved: 0, reused: false }).unwrap();
     // The worker's frame arrives: it covers the canvas, and the fill is no longer drawn or kept.
     let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
     let expected = job.key.clone();
-    completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0 }).unwrap();
+    completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false }).unwrap();
     let (meshes, _) = frame(&mut app);
     assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame is shown");
     assert!(app.canvas.fill.is_none() && meshes.iter().all(|m| m.texture_id != fill_tex), "the fill is dropped");
@@ -9052,6 +9052,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             img: img5,
             ms: 2.5,
             moved: 0,
+            reused: false,
         })
         .unwrap();
 
@@ -9074,6 +9075,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             img: img3,
             ms: 2.5,
             moved: 0,
+            reused: false,
         })
         .unwrap();
 
@@ -9095,6 +9097,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             img: img8,
             ms: 2.5,
             moved: 0,
+            reused: false,
         })
         .unwrap();
 
@@ -9116,6 +9119,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             img: img10,
             ms: 2.5,
             moved: 0,
+            reused: false,
         })
         .unwrap();
 
@@ -9203,7 +9207,324 @@ fn the_contour_bar_sets_corners_and_bakes() {
 /// A frame the render worker finished for `job`: white pixels of the job's size.
 fn finished(job: &crate::render_worker::Job) -> crate::render_worker::Done {
     let img = vectorcraft_render::Rendered { width: job.w, height: job.h, pixels: vec![255; job.w as usize * job.h as usize * 4] };
-    crate::render_worker::Done { key: job.key.clone(), doc: job.doc.clone(), opts: job.opts.clone(), img, ms: 40.0, moved: 0 }
+    crate::render_worker::Done { key: job.key.clone(), doc: job.doc.clone(), opts: job.opts.clone(), img, ms: 40.0, moved: 0, reused: false }
+}
+
+/// A job for the render worker to pan over a document of `doc`: a view at 100% moved by `(dx, dy)`
+/// device pixels, in a 256×128 frame.
+fn pan_job(doc: &std::sync::Arc<vectorcraft_doc::Document>, key: &CacheKey, (dx, dy): (f64, f64)) -> crate::render_worker::Job {
+    crate::render_worker::Job {
+        key: CacheKey { cx: 128.0 - dx, cy: 64.0 - dy, w: 256, h: 128, ..key.clone() },
+        doc: doc.clone(),
+        w: 256,
+        h: 128,
+        view: Affine::translate((dx, dy)),
+        opts: vectorcraft_render::RenderOptions::default(),
+        scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+        reuse: true,
+    }
+}
+
+/// The document and the canvas key the render worker tests start from: rectangles on whole pixels.
+fn pan_doc() -> (std::sync::Arc<vectorcraft_doc::Document>, CacheKey) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 256, "height": 128})).unwrap();
+    for (x, color) in [(16, "#c02040"), (96, "#2040c0"), (176, "#20a040")] {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 16, "width": 64, "height": 96})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": color})).unwrap();
+    }
+    app.canvas.worker_started = true;
+    shapes(&mut app, &egui::Context::default());
+    let key = app.canvas.key.clone().expect("a frame was rendered");
+    (app.session.active().unwrap().doc.clone(), CacheKey { zoom: 1.0, rot: 0.0, ppp: 1.0, pixel: None, ..key })
+}
+
+/// A pan by whole device pixels takes the pixels that stay on screen from the last frame: a mark
+/// put in that frame moves with the pan, and the frame matches a whole render where the mark is not.
+#[test]
+fn a_whole_pixel_pan_copies_the_pixels_that_stay_on_screen() {
+    let (doc, key) = pan_doc();
+    for pan in [(10.0, 0.0), (-10.0, 0.0), (0.0, 7.0), (0.0, -7.0), (-13.0, 5.0)] {
+        let mut r = vectorcraft_render::Renderer::new();
+        let mut kept = None;
+        let first = render_job(&mut r, &mut kept, &pan_job(&doc, &key, (0.0, 0.0)));
+        assert!(!first.reused, "the first frame renders whole");
+        let k = kept.as_mut().expect("the frame is kept");
+        // The middle of the frame, which stays on screen.
+        k.pixels[(64 * 256 + 128) * 4..(64 * 256 + 128) * 4 + 4].copy_from_slice(&[1, 2, 3, 4]);
+        let job = pan_job(&doc, &key, pan);
+        let frame = render_job(&mut r, &mut kept, &job);
+        assert!(frame.reused, "{pan:?}");
+        let at = ((64 + pan.1 as i64) * 256 + 128 + pan.0 as i64) as usize * 4;
+        assert_eq!(frame.img.pixels[at..at + 4], [1, 2, 3, 4], "{pan:?}: the marked pixel moved with the art");
+        let whole = vectorcraft_render::Renderer::new().render(&doc, 256, 128, job.view, &job.opts);
+        let mut img = frame.img.pixels;
+        img[at..at + 4].copy_from_slice(&whole.pixels[at..at + 4]);
+        assert_eq!(img, whole.pixels, "{pan:?}: the same picture as a whole render");
+    }
+}
+
+/// A frame does not copy from the last one when anything but the position of the view changes the
+/// pixels, or the view moves by part of a pixel: each such frame matches a whole render.
+#[test]
+fn a_frame_renders_whole_when_anything_but_a_whole_pixel_pan_changed() {
+    let (doc, key) = pan_doc();
+    let other_opts = |f: &dyn Fn(&mut vectorcraft_render::RenderOptions)| {
+        let mut job = pan_job(&doc, &key, (10.0, 0.0));
+        f(&mut job.opts);
+        job
+    };
+    let other_key = |f: &dyn Fn(&mut CacheKey)| {
+        let mut job = pan_job(&doc, &key, (10.0, 0.0));
+        f(&mut job.key);
+        job
+    };
+    let mut other_doc = (*doc).clone();
+    other_doc.layers.clear();
+    let scaled = {
+        let mut job = pan_job(&doc, &key, (10.0, 0.0));
+        job.key.zoom = 2.0;
+        job.view = Affine::translate((10.0, 0.0)) * Affine::scale(2.0);
+        job
+    };
+    let turned = {
+        let mut job = pan_job(&doc, &key, (10.0, 0.0));
+        job.key.rot = 30.0;
+        job.view = Affine::translate((10.0, 0.0)) * Affine::rotate(30f64.to_radians());
+        job
+    };
+    let resized = {
+        let mut job = pan_job(&doc, &key, (10.0, 0.0));
+        (job.key.w, job.w) = (200, 200);
+        job
+    };
+    let denser = other_key(&|k| k.ppp = 2.0);
+    let not_allowed = crate::render_worker::Job { reuse: false, ..pan_job(&doc, &key, (10.0, 0.0)) };
+    let cases: Vec<(&str, crate::render_worker::Job)> = vec![
+        ("part of a pixel across", pan_job(&doc, &key, (10.5, 0.0))),
+        ("part of a pixel down", pan_job(&doc, &key, (0.0, 0.25))),
+        ("too far to keep half", pan_job(&doc, &key, (250.0, 0.0))),
+        ("zoom", scaled),
+        ("rotation", turned),
+        ("canvas size", resized),
+        ("device scale", denser),
+        ("not allowed", not_allowed),
+        ("document", other_key(&|k| k.doc += 1)),
+        ("revision", crate::render_worker::Job { doc: std::sync::Arc::new(other_doc), ..other_key(&|k| k.revision += 1) }),
+        ("interaction", other_key(&|k| k.interacting = true)),
+        ("outline key", other_key(&|k| k.outline = true)),
+        ("Pixel Preview", other_key(&|k| k.pixel = Some([0, 0, 256, 128]))),
+        ("placed bitmaps", other_key(&|k| k.placed += 1)),
+        ("outline", other_opts(&|o| o.outline = true)),
+        ("proof", other_opts(&|o| o.proof = Some(Default::default()))),
+        ("overprint preview", other_opts(&|o| o.overprint_preview = true)),
+        ("rich black", other_opts(&|o| o.rich_black = true)),
+        ("trim", other_opts(&|o| o.trim = true)),
+        ("anti-alias", other_opts(&|o| o.anti_alias = vectorcraft_render::AntiAlias::None)),
+        ("smooth images", other_opts(&|o| o.smooth_images = false)),
+        ("opacity mask view", other_opts(&|o| o.mask_view = Some(vectorcraft_doc::NodeId(1)))),
+    ];
+    let mut copied = vec![];
+    for (name, job) in cases {
+        let mut r = vectorcraft_render::Renderer::new();
+        let mut kept = None;
+        render_job(&mut r, &mut kept, &pan_job(&doc, &key, (0.0, 0.0)));
+        let frame = render_job(&mut r, &mut kept, &job);
+        if frame.reused {
+            copied.push(name);
+        }
+        let whole = vectorcraft_render::Renderer::new().render(&job.doc, job.w, job.h, job.view, &job.opts);
+        assert_eq!((frame.img.width, frame.img.height), (whole.width, whole.height), "{name}");
+    }
+    assert!(copied.is_empty(), "copied from the last frame: {copied:?}");
+}
+
+/// The worker keeps its last frame only when the next one can copy it: a frame that does not allow
+/// reuse, a frame over the limit and a frame that drew a raster from before its object moved are
+/// not kept.
+#[test]
+fn the_render_worker_keeps_one_frame_up_to_its_limit() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 256, "height": 128})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 16, "y": 16, "width": 64, "height": 64})).unwrap()["id"].clone();
+    app.run("effect.apply", json!({"effect": "stylize.dropShadow", "ids": [id]})).unwrap();
+    let before = app.session.active().unwrap().doc.clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("object.move", json!({"dx": 8, "dy": 0})).unwrap();
+    let after = app.session.active().unwrap().doc.clone();
+    let (_, key) = pan_doc();
+    let mut r = vectorcraft_render::Renderer::new();
+    let mut kept = None;
+    render_job(&mut r, &mut kept, &pan_job(&before, &key, (0.0, 0.0)));
+    assert!(kept.is_some(), "kept");
+    let mut moved = pan_job(&after, &CacheKey { revision: key.revision + 1, interacting: true, ..key.clone() }, (0.0, 0.0));
+    moved.opts.interacting = true;
+    let frame = render_job(&mut r, &mut kept, &moved);
+    assert!(frame.moved > 0, "the shadow drew from the raster made before the move");
+    let mut wrong = vec![];
+    if kept.is_some() {
+        wrong.push("a frame that drew a raster from before its object moved");
+    }
+
+    let (doc, key) = pan_doc();
+    render_job(&mut r, &mut kept, &pan_job(&doc, &key, (0.0, 0.0)));
+    assert!(kept.is_some(), "kept");
+    let off = crate::render_worker::Job { reuse: false, ..pan_job(&doc, &key, (0.0, 0.0)) };
+    render_job(&mut r, &mut kept, &off);
+    if kept.is_some() {
+        wrong.push("a frame that does not allow reuse");
+    }
+    render_job(&mut r, &mut kept, &pan_job(&doc, &key, (0.0, 0.0)));
+    let mut big = pan_job(&doc, &key, (0.0, 0.0));
+    (big.key.w, big.key.h, big.w, big.h) = (4097, 4097, 4097, 4097);
+    render_job(&mut r, &mut kept, &big);
+    if kept.is_some() {
+        wrong.push("a frame over 64 MiB");
+    }
+    assert!(wrong.is_empty(), "kept: {wrong:?}");
+}
+
+/// Through a pan, an edit, an undo, a zoom, a resize, a view mode and a color setting, each frame the
+/// worker renders whole matches a fresh render, and each copied frame is within one level of it.
+#[test]
+fn worker_frames_match_a_fresh_render_through_a_session() {
+    let (doc, key) = pan_doc();
+    let mut edited = (*doc).clone();
+    edited.layers.reverse();
+    let edited = std::sync::Arc::new(edited);
+    let pan = |at: (f64, f64)| pan_job(&doc, &key, at);
+    let changed = |f: &dyn Fn(&mut crate::render_worker::Job)| {
+        let mut job = pan((4.5, -4.0));
+        f(&mut job);
+        job
+    };
+    let steps: Vec<(&str, crate::render_worker::Job, bool)> = vec![
+        ("still", pan((0.0, 0.0)), false),
+        ("pan", pan((10.0, 0.0)), true),
+        ("pan back", pan((3.0, -4.0)), true),
+        ("part of a pixel", pan((3.5, -4.0)), false),
+        ("whole again", pan((4.5, -4.0)), true),
+        (
+            "edit",
+            changed(&|j| {
+                j.doc = edited.clone();
+                j.key.revision += 1;
+            }),
+            false,
+        ),
+        ("undo", pan((4.5, -4.0)), false),
+        (
+            "zoom",
+            changed(&|j| {
+                j.key.zoom = 2.0;
+                j.view = Affine::translate((4.5, -4.0)) * Affine::scale(2.0);
+            }),
+            false,
+        ),
+        (
+            "resize",
+            changed(&|j| {
+                (j.key.w, j.key.h, j.w, j.h) = (200, 100, 200, 100);
+            }),
+            false,
+        ),
+        (
+            "outline",
+            changed(&|j| {
+                j.key.outline = true;
+                j.opts.outline = true;
+            }),
+            false,
+        ),
+        (
+            "rich black",
+            changed(&|j| {
+                j.key.rich_black = true;
+                j.opts.rich_black = true;
+            }),
+            false,
+        ),
+        ("settled", changed(&|j| j.reuse = false), false),
+    ];
+    let mut r = vectorcraft_render::Renderer::new();
+    let mut kept = None;
+    for (name, job, copies) in steps {
+        let frame = render_job(&mut r, &mut kept, &job);
+        assert_eq!(frame.reused, copies, "{name}");
+        let whole = vectorcraft_render::Renderer::new().render(&job.doc, job.w, job.h, job.view, &job.opts);
+        if copies {
+            let off = frame.img.pixels.iter().zip(&whole.pixels).map(|(a, b)| a.abs_diff(*b)).max();
+            assert!(off.is_some_and(|d| d <= 1), "{name}: {off:?}");
+        } else {
+            assert_eq!(frame.img.pixels, whole.pixels, "{name}");
+        }
+    }
+}
+
+/// The canvas asks the worker for a frame that may copy pixels when the view moves, keeps the whole
+/// frame's time, and renders the frame whole once the view has been still for STILL_SECS, not
+/// before and only once.
+#[test]
+fn a_frame_with_copied_pixels_renders_whole_once_the_view_stops() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp, t: f64| {
+        let raw =
+            egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(t), ..Default::default() };
+        ctx.run_ui(raw, |ui| show(app, ui)).textures_delta.clear();
+    };
+    frame(&mut app, 1.0);
+    done_tx.send(finished(&jobs.try_recv().expect("the first frame"))).unwrap();
+    frame(&mut app, 1.0);
+    assert_eq!(app.canvas.last_ms, 40.0);
+    assert!(app.canvas.reused.is_none());
+
+    app.view_mut().unwrap().center.x += 5.0;
+    frame(&mut app, 2.0);
+    let pan = jobs.try_recv().expect("the pan's frame goes to the worker");
+    assert!(pan.reuse, "a new view may copy");
+    done_tx.send(crate::render_worker::Done { ms: 2.0, reused: true, ..finished(&pan) }).unwrap();
+    frame(&mut app, 3.0);
+    assert_eq!(app.canvas.reused, Some(3.0));
+    assert_eq!(app.canvas.last_ms, 40.0, "a frame with copied pixels keeps the whole frame's time");
+    assert_eq!(app.perf.render_ms, 2.0);
+
+    frame(&mut app, 3.0 + STILL_SECS / 2.0);
+    assert!(jobs.try_recv().is_err(), "the view has not been still long enough");
+    frame(&mut app, 3.0 + STILL_SECS);
+    let settle = jobs.try_recv().expect("the frame renders whole");
+    assert!(!settle.reuse, "the settling frame copies nothing");
+    assert_eq!(settle.key, pan.key);
+    frame(&mut app, 3.0 + STILL_SECS * 2.0);
+    assert!(jobs.try_recv().is_err(), "queued once");
+    done_tx.send(finished(&settle)).unwrap();
+    frame(&mut app, 4.0);
+    assert!(app.canvas.reused.is_none());
+    frame(&mut app, 5.0);
+    assert!(jobs.try_recv().is_err(), "nothing to render after it");
+}
+
+/// The worker thread itself copies pixels on a pan and reports it.
+#[test]
+fn the_render_worker_thread_copies_a_pan() {
+    let (doc, key) = pan_doc();
+    let mut worker = crate::render_worker::Worker::spawn(egui::Context::default()).expect("a worker");
+    let wait = |worker: &mut crate::render_worker::Worker| {
+        for _ in 0..600 {
+            if let Some(done) = worker.wait(std::time::Duration::from_millis(100)) {
+                return done;
+            }
+        }
+        panic!("the worker finished no frame");
+    };
+    worker.submit(pan_job(&doc, &key, (0.0, 0.0)));
+    assert!(!wait(&mut worker).reused);
+    worker.submit(pan_job(&doc, &key, (10.0, 0.0)));
+    assert!(wait(&mut worker).reused);
 }
 
 /// #4155: a document's first frame renders on the render worker, not on the UI thread, where a
