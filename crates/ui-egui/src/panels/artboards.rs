@@ -67,8 +67,8 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() else { return true };
     let r = ab.rect;
     super::properties::artboard_size_row(app, ui, i, r.width(), r.height());
-    if widgets::icon_button(ui, "dc-new-item", tl!("New Artboard"), false, 24.0).clicked() && app.run("artboard.new", json!({})).is_ok() {
-        select(app, n);
+    if widgets::icon_button(ui, "dc-new-item", tl!("New Artboard"), false, 24.0).clicked() {
+        add_new(app);
     }
     if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1, 24.0).clicked() {
         delete_selected(app);
@@ -370,6 +370,15 @@ pub(crate) fn select(app: &mut VectorcraftApp, i: usize) {
     }
 }
 
+/// Add an artboard with the default settings (`artboard.new`) and make it the active artboard.
+pub(crate) fn add_new(app: &mut VectorcraftApp) {
+    if let Ok(r) = app.run("artboard.new", json!({}))
+        && let Some(new) = r["index"].as_u64()
+    {
+        select(app, new as usize);
+    }
+}
+
 /// A row dragged in the list: the artboard's index.
 #[derive(Clone, Copy)]
 struct RowDrag(usize);
@@ -577,8 +586,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else if new.clicked() && alt_held(ui) {
             // Alt-click: Artboard Options for the new artboard, which OK adds.
             app.run("ui.newArtboard", json!({})).ok();
-        } else if new.clicked() && app.run("artboard.new", json!({})).is_ok() {
-            select(app, n);
+        } else if new.clicked() {
+            add_new(app);
         }
         if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1 && !deletable(app, n).is_empty(), 24.0).clicked() {
             delete_selected(app);
@@ -595,7 +604,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
     let sel = selected(app, n);
     if menu_item(ui, tl!("New Artboard"), n > 0, false) {
-        app.run("artboard.new", json!({})).ok();
+        add_new(app);
     }
     if menu_item(ui, tl!("Duplicate Artboards"), n > 0, false) {
         duplicate_picked(app);
