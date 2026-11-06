@@ -124,7 +124,7 @@ fn enter(s: &mut Session, p: &Value) -> Result<Value> {
     if st.doc.mask_edit.is_some() {
         return Err(bad(C, "already editing an opacity mask"));
     }
-    if p.get("id").is_none() {
+    if id_param(p, "id").is_none() {
         super::edit::refuse_symbol_part(s)?;
     }
     let id = id_param(p, "id").or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
@@ -155,7 +155,7 @@ fn view_mask(s: &mut Session, p: &Value) -> Result<Value> {
         st.revision += 1;
         return Ok(json!({ "on": false, "id": id.map(|i| i.0) }));
     }
-    if p.get("id").is_none() && editing.is_none() {
+    if id_param(p, "id").is_none() && editing.is_none() {
         super::edit::refuse_symbol_part(s)?;
     }
     let id = id_param(p, "id").or(editing).or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;

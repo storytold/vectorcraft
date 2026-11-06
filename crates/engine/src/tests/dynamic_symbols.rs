@@ -358,6 +358,11 @@ fn commands_on_the_selection_leave_a_picked_objects_instance_alone() {
         ("paint.setGradientGeom", json!({"start": [62, 30], "end": [98, 30]})),
         ("paint.swap", json!({})),
         ("stroke.set", json!({"weight": 3})),
+        ("path.moveAnchors", json!({"dx": 5, "dy": 5})),
+        ("file.place", json!({"name": "a.svg", "dataBase64": vectorcraft_format::base64_encode(b"<svg xmlns='http://www.w3.org/2000/svg' width='9' height='9'><rect width='9' height='9'/></svg>"), "replace": true})),
+        ("object.intertwine.arrange", json!({"at": [80, 30]})),
+        ("transparency.editOpacityMask", json!({"id": null})),
+        ("transparency.viewOpacityMask", json!({"on": true, "id": null})),
     ] {
         let (mut t, ..) = setup();
         let (doc, undo) = (t.doc().unwrap().doc.clone(), undo_steps(&t));
@@ -867,4 +872,106 @@ fn a_swatch_edit_recolors_a_picked_objects_own_paints() {
     let fill = s.doc().unwrap().selected_symbol_part().unwrap().appearance.fill_paint();
     assert_eq!(fill.color().map(|c| c.to_hex()), Some("#00ff00".into()), "{fill:?}");
     assert_eq!(pixel(&s, 80, 30), [0, 255, 0, 255]);
+}
+
+#[test]
+fn a_swatch_or_color_only_a_picked_objects_paint_uses_counts_as_used() {
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#ff0000", "global": true})).unwrap();
+    let inst = pair(&mut s, "dynamic");
+    let unused = |s: &mut Session| s.execute("swatch.unused", &json!({})).unwrap()["names"].clone();
+    assert!(unused(&mut s).as_array().unwrap().contains(&json!("Brand")));
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Brand"})).unwrap();
+    assert!(!unused(&mut s).as_array().unwrap().contains(&json!("Brand")), "only the object's own paint uses it");
+    let colors = s.execute("recolor.colors", &json!({"ids": [inst.0]})).unwrap();
+    assert!(colors["colors"].as_array().unwrap().iter().any(|c| c["hex"] == "#ff0000" && c["swatch"] == "Brand"), "{colors}");
+    // A swatch edit maps the same paint once.
+    s.execute("swatch.edit", &json!({"name": "Brand", "color": "#00ff00"})).unwrap();
+    assert_eq!(symbol_part_fill(&s, inst), "#00ff00");
+}
+
+/// The Eyedropper takes a picked object's paints only from a path, compound path or type.
+#[test]
+fn the_eyedropper_refuses_a_source_that_is_not_painted_art() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    let other = id(&s.execute("symbol.place", &json!({"name": "Pair", "x": 55, "y": 80})).unwrap());
+    let (a, b) = (square(&mut s, 150.0), square(&mut s, 150.0));
+    let group = id(&s.execute("object.group", &json!({"ids": [a.0, b.0]})).unwrap());
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let (fill, stroke, own, undo) = (s.paint.fill.clone(), s.paint.stroke.clone(), node(&s, inst).extras().symbol_overrides.clone(), undo_steps(&s));
+    s.eyedropper_sample = None;
+    for source in [inst, other, group] {
+        let e = s.execute("appearance.copyFrom", &json!({"source": source.0})).unwrap_err().to_string();
+        assert!(e.contains(REFUSED), "{e}");
+    }
+    // A click with the tool on an instance, the picked one included.
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.select_tool("eyedropper", v).unwrap();
+    let e = s.pointer(&PointerEvent::new(PointerKind::Down, 80.0, 30.0), v).unwrap_err().to_string();
+    assert!(e.contains(REFUSED), "{e}");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 80.0, 30.0), v).unwrap();
+    assert_eq!(node(&s, inst).extras().symbol_overrides, own, "the object keeps its paints");
+    assert_eq!(undo_steps(&s), undo, "no undo step");
+    assert_eq!((&s.paint.fill, &s.paint.stroke), (&fill, &stroke), "the defaults for new art stay");
+    assert!(s.eyedropper_sample.is_none(), "nothing was sampled");
+    assert_eq!(pixel(&s, 80, 30), RED);
+}
+
+/// A path of a compound path gives the paint of the compound path, which holds it.
+#[test]
+fn the_eyedropper_samples_a_compound_path_through_its_member() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    let (a, b) = (square(&mut s, 120.0), square(&mut s, 170.0));
+    let compound = id(&s.execute("object.compoundPath.make", &json!({"ids": [a.0, b.0]})).unwrap());
+    s.execute("paint.setFill", &json!({"ids": [compound.0], "color": "#00ff00"})).unwrap();
+    let member = node(&s, compound).children().unwrap()[0].id;
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": member.0})).unwrap();
+    assert_eq!(symbol_part_fill(&s, inst), "#00ff00");
+    assert_eq!(pixel(&s, 80, 30), [0, 255, 0, 255]);
+}
+
+/// A Cmd-drag lends the Selection tool, or with Alt Group Selection, which act on the whole instance.
+#[test]
+fn a_lent_selection_tool_moves_the_instance_of_a_picked_object() {
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    direct(&mut s, (80.0, 30.0), (80.0, 30.0), Mods::default());
+    assert!(s.doc().unwrap().selection.symbol_part.is_some());
+    let before = node(&s, inst).kind.clone();
+    direct(&mut s, (80.0, 30.0), (100.0, 40.0), cmd);
+    assert!(s.doc().unwrap().selection.symbol_part.is_none());
+    assert_ne!(node(&s, inst).kind, before, "the instance moves");
+
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    direct(&mut s, (80.0, 30.0), (80.0, 30.0), Mods::default());
+    direct(&mut s, (80.0, 30.0), (80.0, 30.0), Mods { alt: true, ..cmd });
+    assert!(s.doc().unwrap().selection.symbol_part.is_none(), "Group Selection selects the instance whole");
+    assert_eq!(s.doc().unwrap().selection.objects, [inst]);
+    // A plain Direct Selection click picks the object again once the tool is back.
+    direct(&mut s, (80.0, 30.0), (80.0, 30.0), Mods::default());
+    assert!(s.doc().unwrap().selection.symbol_part.is_some());
+}
+
+/// An object picked while Replace read its file: the instance selected when Place started is
+/// selected again first, so a replay of the journal replaces it.
+#[test]
+fn a_replace_that_finishes_after_an_object_was_picked_selects_the_instance_again() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    s.execute("select.set", &json!({"ids": [inst.0]})).unwrap();
+    let svg = "<svg xmlns='http://www.w3.org/2000/svg' width='9' height='9'><rect width='9' height='9'/></svg>";
+    let p = json!({"name": "a.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes()), "replace": true});
+    let read = s.prepare_place(&p).unwrap().read().unwrap();
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    s.place_read(read).unwrap();
+    assert!(s.doc().unwrap().doc.node(inst).is_none());
+    let last: Vec<_> = s.journal.iter().rev().take(2).rev().map(|(id, _)| id.clone()).collect();
+    assert_eq!(last, ["select.set", "file.place"]);
 }

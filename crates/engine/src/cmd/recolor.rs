@@ -9,7 +9,7 @@ use std::collections::{BTreeSet, HashMap};
 use serde_json::{Value, json};
 use vectorcraft_color::recolor::{ColorKey, GlobalAdjust, Method, Preserve, Rng, RowMap, cluster, same_ink};
 use vectorcraft_color::{Color, Paint, Swatch};
-use vectorcraft_doc::swatches::{node_colors, node_paints};
+use vectorcraft_doc::swatches::{node_colors, node_paints, override_paints};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::colorcmds::{Recolor, Scope};
@@ -99,7 +99,7 @@ fn used_colors(d: &Document, ids: &[NodeId], only: Option<&BTreeSet<NodeId>>) ->
         read(n, only, &mut nodes);
     }
     for m in nodes {
-        for p in node_paints(m) {
+        for p in node_paints(m).chain(override_paints(m)) {
             match p {
                 Paint::Solid { color, swatch, .. } => count(color, swatch.as_deref()),
                 Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| count(&s.color, s.swatch.as_deref())),

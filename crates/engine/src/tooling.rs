@@ -215,6 +215,8 @@ impl Session {
             // Fails only without a document, and then there is no typing to keep.
             let _ = crate::cmd::settle_interaction(self);
         }
+        // The Selection and Group Selection tools act on the instance whole.
+        self.select_whole_instance(id);
         let lent = self.make_tool(id);
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
         PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }

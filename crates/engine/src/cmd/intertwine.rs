@@ -380,11 +380,14 @@ fn arrange(s: &mut Session, p: &Value) -> Result<Value> {
             }
             id
         }
-        None => match selected_groups(s).as_slice() {
-            [g] => *g,
-            [] => return Err(bad(C, "select an Intertwine group")),
-            _ => return Err(bad(C, "select one Intertwine group")),
-        },
+        None => {
+            super::edit::refuse_symbol_part(s)?;
+            match selected_groups(s).as_slice() {
+                [g] => *g,
+                [] => return Err(bad(C, "select an Intertwine group")),
+                _ => return Err(bad(C, "select one Intertwine group")),
+            }
+        }
     };
     let at = match p.get("at") {
         Some(_) => Some(point_param(p, "at").filter(|q| q.x.is_finite() && q.y.is_finite()).ok_or_else(|| bad(C, "at must be [x, y]"))?),
