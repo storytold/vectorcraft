@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Properties: Quick Actions has Repeat Options for one selected repeat, #5181; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Properties: Quick Actions has Repeat Options for one selected repeat, #5181; Direct Selection: Shift-click picks several blend spine points, which drag together, #5285; Direct Selection: Cmd/Ctrl held lends the Selection tool and shows its bounding box, #3901; Join tool trims two crossing open paths and joins them at the crossing, #5844; Control bar: Paragraph: link and Align left/center/right while type is selected, #5372; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
