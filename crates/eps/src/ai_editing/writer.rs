@@ -543,8 +543,19 @@ impl<'a> Writer<'a> {
         let outer = std::mem::take(&mut self.body);
         let (state, clip) = (self.state, self.clip.take());
         (self.state, self.gs) = (Some((false, false)), Some(Xy::OPAQUE));
-        // A plain group holding the art is the group the art is read into.
-        let art = &m.art;
+        // The canvas draws the art's root even when it is hidden, and the reader puts a hidden object
+        // in a group that doesn't draw it, so a hidden root is written shown.
+        let shown;
+        let art = if m.art.visible {
+            &m.art
+        } else {
+            let mut a = (*m.art).clone();
+            a.visible = true;
+            shown = Arc::new(a);
+            &shown
+        };
+        // A plain group of two or more objects, or of none, is the group the art is read into. A group
+        // of one object is written as a group, because the reader makes one shown object the art.
         let plain = matches!(art.kind, NodeKind::Group { clip: false, .. })
             && Xy::of(art) == Xy::PLAIN
             && art.visible
@@ -552,7 +563,7 @@ impl<'a> Writer<'a> {
             && art.name.as_deref().is_none_or(str::is_empty)
             && art.extras().mask.is_none();
         let members = match art.children() {
-            Some(c) if plain => c.as_slice(),
+            Some(c) if plain && c.len() != 1 => c.as_slice(),
             _ => std::slice::from_ref(art),
         };
         self.nest += 1;
