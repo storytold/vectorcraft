@@ -87,8 +87,18 @@
 //!   style's appearance and transparency is linked to it. A `1` naming a style the list doesn't
 //!   have is the object's own appearance, not a link.
 //!
-//! Sections the reader doesn't need (symbols, styles, filters) are skipped;
-//! type, symbols, fills with a pattern it can't read, placed files without a preview and operators
+//! - Symbols: `%AI14_BeginSymbol` (or `%AI10_`), `(name)`, `0 A 0 Xw 0 Ae`, the art (in the
+//!   symbol's space, y down), a dictionary whose `AI13PatternRegistrationType` is the registration
+//!   point (1 to 9, from the top left, row by row), `%AI10_EndSymbol`; each is read by a reader of
+//!   its own into the document's symbols. `%AI24_BeginSymbolList` (or `%AI10_`) lists their names
+//!   in the Symbols panel's order. An instance: `/SymbolInstance : (name) /SymbolRef , a b c d tx
+//!   ty /RTransformMatrix ;`, the matrix taking the symbol's art to art space; in a symbol's art,
+//!   it takes it to art space about the canvas point of art space's origin, as a pattern's
+//!   gradients are. Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after
+//!   it.
+//!
+//! Sections the reader doesn't need (styles, filters) are skipped; type, instances of symbols it
+//! can't read, fills with a pattern it can't read, placed files without a preview and operators
 //! it doesn't know are errors. So is data that ends inside a layer, a group or a compound path.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -124,10 +134,10 @@ mod types;
 
 pub(crate) use art::join_and;
 use art::preview_png;
-pub use document::{BindingRef, Brushes, PaletteSwatches, VariableRead, artboards, bindings_note, brushes, palette, variables};
+pub use document::{BindingRef, Brushes, PaletteSwatches, VariableRead, artboards, bindings_note, brushes, graphic_styles, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
-use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster};
+use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
@@ -405,7 +415,24 @@ struct Reader<'a> {
     /// What layers that don't show have that this reader doesn't read.
     hidden_unread: BTreeSet<String>,
     unread: Vec<(NodeId, Vec<String>)>,
+    /// The art boxes (symbol space) of symbols whose definition can be measured but not read
+    /// whole, by their name in the file: their instances come in as the page draws them.
     symbol_bounds: HashMap<String, Rect>,
+    /// The symbols read, by their name in the file → their name in the document.
+    symbol_names: HashMap<String, String>,
+    /// The names the symbols read have in the document, and for each name read more than once,
+    /// the number its next copy is tried with.
+    symbol_taken: HashSet<String>,
+    symbol_suffix: HashMap<String, usize>,
+    /// The art boxes (symbol space) of symbols read, by their name in the file, once measured for
+    /// an instance that comes in as the page draws it.
+    symbol_art_bounds: HashMap<String, Option<Rect>>,
+    /// The symbol list's names, in the Symbols panel's order (`%AI24_BeginSymbolList`).
+    symbol_list: Option<Vec<String>>,
+    /// The symbols read were checked for instances of symbols the file doesn't have.
+    symbols_checked: bool,
+    /// This reader reads a symbol's definition (see [`Reader::define_symbol`]).
+    symbol: Option<SymbolHead>,
     /// Depth shared by pattern and symbol readers.
     subreader_depth: usize,
     pending_unread_fill: bool,
@@ -600,6 +627,13 @@ impl<'a> Reader<'a> {
             hidden_unread: BTreeSet::new(),
             unread: Vec::new(),
             symbol_bounds: HashMap::new(),
+            symbol_names: HashMap::new(),
+            symbol_taken: HashSet::new(),
+            symbol_suffix: HashMap::new(),
+            symbol_art_bounds: HashMap::new(),
+            symbol_list: None,
+            symbols_checked: false,
+            symbol: None,
             subreader_depth: 0,
             pending_unread_fill: false,
             pending_unread_stroke: false,

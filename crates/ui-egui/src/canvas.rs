@@ -550,23 +550,26 @@ fn poll_worker(app: &mut VectorcraftApp, ui: &Ui, key_doc: usize) {
             app.canvas.fill_worker = crate::render_worker::Worker::spawn(ui.ctx().clone());
         }
     }
-    // Upload finished background renders whenever they are not older than what is currently
-    // displayed on screen. This prevents canvas freezes during continuous edits (drags, arrow
-    // nudges, MCP command bursts) while ensuring obsolete out-of-order frames are dropped.
-    if let Some(done) = app.canvas.worker.as_mut().and_then(|w| w.poll())
-        && done.key.doc == key_doc
-    {
-        let not_older = app.canvas.key.as_ref().filter(|k| k.doc == done.key.doc).is_none_or(|k| done.key.revision >= k.revision);
-        if not_older {
-            upload(app, ui.ctx(), done.img, done.key.pixel.is_some());
-            app.canvas.key = Some(done.key);
-            app.canvas.shown = Some((done.doc, done.opts));
-            app.perf.render_ms = done.ms;
-            app.canvas.last_ms = done.ms;
-            app.canvas.moved = done.moved > 0;
-            app.canvas.from_worker = true;
-        }
+    if let Some(done) = app.canvas.worker.as_mut().and_then(|w| w.poll()) {
+        show_worker_frame(app, ui.ctx(), done, key_doc);
     }
+}
+
+/// Upload frame `done` from the render worker when it is of document `key_doc` and not older than
+/// the frame shown. This prevents canvas freezes during continuous edits (drags, arrow nudges, MCP
+/// command bursts) while ensuring obsolete out-of-order frames are dropped.
+fn show_worker_frame(app: &mut VectorcraftApp, ctx: &egui::Context, done: crate::render_worker::Done, key_doc: usize) {
+    let not_older = app.canvas.key.as_ref().filter(|k| k.doc == done.key.doc).is_none_or(|k| done.key.revision >= k.revision);
+    if done.key.doc != key_doc || !not_older {
+        return;
+    }
+    upload(app, ctx, done.img, done.key.pixel.is_some());
+    app.canvas.key = Some(done.key);
+    app.canvas.shown = Some((done.doc, done.opts));
+    app.perf.render_ms = done.ms;
+    app.canvas.last_ms = done.ms;
+    app.canvas.moved = done.moved > 0;
+    app.canvas.from_worker = true;
 }
 
 /// The size and view matrix of the frame to render: the pixel region in Pixel Preview, else the whole canvas.
@@ -645,16 +648,26 @@ struct Frame<'a> {
     pixel: Option<[i64; 4]>,
 }
 
+/// How long the UI thread waits for a document's first frame from the render worker before it
+/// shows the document's paper without the art: about a frame at 60 Hz.
+pub(crate) const FIRST_FRAME_GRACE: std::time::Duration = std::time::Duration::from_millis(16);
+
 fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     let Frame { key, doc, size: (w, h), view, opts, pixel } = frame;
+    // Frames that would be slow on this thread (the last one took over 8 ms) go
     // to the worker. An interaction's frames stay on the worker once it drew the frame shown:
     // its renderer keeps the rasters of the art's effects that make those frames fast, and this
     // thread's renderer has none, so a frame fast on the worker would be slow here.
     let same_doc = app.canvas.key.as_ref().is_some_and(|k| k.doc == key.doc);
     let settling = app.canvas.moved && !key.interacting;
     let staying = key.interacting && app.canvas.from_worker;
-    let heavy = (app.canvas.last_ms > 8.0 || settling || staying) && app.canvas.texture.is_some() && same_doc;
+    // A document's first frame (opened, or its tab chosen) renders on the worker too: how long it
+    // takes is not known yet, and a heavy one froze the window for seconds (#4155). Its paper and
+    // artboards show meanwhile.
+    let first = app.canvas.texture.is_none() || !same_doc;
+    let heavy = first || app.canvas.last_ms > 8.0 || settling || staying;
     let changed = changed_pixels(app, key, doc, &opts, view, w, h);
+    let mut landed = None;
     match (&mut app.canvas.worker, heavy, changed) {
         // Only the document changed since the frame shown, in a part of it: that part is
         // rendered again, here, into the texture. `last_ms` stays the whole frame's.
@@ -671,15 +684,22 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             app.canvas.shown = Some((doc.clone(), opts.clone()));
             app.perf.render_ms = now_ms() - t0;
         }
-        (Some(worker), true, None) => worker.submit(crate::render_worker::Job {
-            key: key.clone(),
-            doc: doc.clone(),
-            w,
-            h,
-            view,
-            opts,
-            scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
-        }),
+        (Some(worker), true, None) => {
+            let queued = worker.submit(crate::render_worker::Job {
+                key: key.clone(),
+                doc: doc.clone(),
+                w,
+                h,
+                view,
+                opts,
+                scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+            });
+            // A light document's first frame is ready within the grace and shows in this frame,
+            // with no frame of bare paper. Waited for once, when the frame is queued.
+            if first && queued {
+                landed = worker.wait(FIRST_FRAME_GRACE);
+            }
+        }
         _ => {
             let t0 = now_ms();
             let img = app.canvas.renderer.render(doc, w, h, view, &opts);
@@ -691,6 +711,9 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             app.canvas.moved = app.canvas.renderer.stats.moved > 0;
             app.canvas.from_worker = false;
         }
+    }
+    if let Some(done) = landed {
+        show_worker_frame(app, ui.ctx(), done, key.doc);
     }
 }
 

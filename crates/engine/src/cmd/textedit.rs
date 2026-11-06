@@ -1585,7 +1585,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let kind = if on_path { TextKind::OnPath { path: path.clone(), start, end: None } } else { TextKind::Area { frame: path.clone() } };
     let mut t = TextObject {
-        vertical: p.get("vertical").and_then(Value::as_bool).unwrap_or(false),
+        vertical: switch_or(p, "vertical", false, C)?,
         kind,
         xf: Affine::IDENTITY,
         runs: vec![TextRun { text, style, inline: None }],

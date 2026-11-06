@@ -74,7 +74,7 @@ pub(super) fn hard_edged(chain: &[&RasterFx], px: f64) -> bool {
 /// document's raster grid lines `line` apart; `None` when anywhere in the object.
 pub(super) fn looks_around(fx: &RasterFx, line: f64) -> Option<f64> {
     match fx {
-        RasterFx::Feather { radius } | RasterFx::GaussianBlur { radius } => Some(1.5 * radius),
+        RasterFx::Feather { radius } | RasterFx::GaussianBlur { radius, .. } => Some(1.5 * radius),
         RasterFx::Pixel(p) => p.reach(line),
         RasterFx::Rasterize(r) => Some(r.reach()),
         _ => Some(0.0),

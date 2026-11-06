@@ -1191,7 +1191,7 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
-    let with_guides = p.get("guides").and_then(Value::as_bool).unwrap_or(false);
+    let with_guides = switch_or(p, "guides", false, "path.deleteAnchors")?;
     let st = s.doc()?;
     let sel = st.selection.anchors.clone();
     let segments = st.selection.segments.clone();

@@ -493,6 +493,36 @@ fn a_heavy_filter_installs_once_the_user_agrees() {
     assert!(install(&mut s, DESATURATE).get("budget").is_none());
 }
 
+#[test]
+fn invalid_install_flags_are_refused() {
+    let mut s = session();
+    let id = "test.engine.heavy.flags";
+    let data = vectorcraft_format::base64_encode(&heavy(id, 1));
+    for allow in [json!("true"), json!(1)] {
+        let e = s.execute("plugin.install", &json!({"dataBase64": data, "allowHeavy": allow})).unwrap_err().to_string();
+        assert!(e.contains("`allowHeavy` must be true or false"), "allowHeavy {allow}: {e}");
+        assert!(vectorcraft_plugins::registry::get(id).is_none(), "installed with allowHeavy {allow}");
+    }
+    // Null, as for every command, is the same as leaving the flag out.
+    let e = s.execute("plugin.install", &json!({"dataBase64": data, "allowHeavy": null})).unwrap_err().to_string();
+    assert!(e.contains("heavy budget"), "{e}");
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "allowHeavy": true}));
+    for replace in [json!("false"), json!(0)] {
+        let e = s.execute("plugin.install", &json!({"dataBase64": data, "allowHeavy": true, "replace": replace})).unwrap_err().to_string();
+        assert!(e.contains("`replace` must be true or false"), "replace {replace}: {e}");
+    }
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "allowHeavy": true, "replace": null}));
+    assert!(vectorcraft_plugins::registry::get(id).is_some());
+    // A plug-in with the usual budget is refused too.
+    let light = "test.engine.light.flags";
+    let manifest = format!(r#"{{"id":"{light}","name":"Test {light}","version":"1","kind":"filter"}}"#);
+    let output = json!({"objects": [{"path": triangle(), "name": "Plug-in"}]});
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::spinning(&manifest, 1, &output.to_string())).unwrap());
+    let e = s.execute("plugin.install", &json!({"dataBase64": data, "allowHeavy": "false"})).unwrap_err().to_string();
+    assert!(e.contains("`allowHeavy` must be true or false"), "{e}");
+    assert!(vectorcraft_plugins::registry::get(light).is_none());
+}
+
 /// The user agreed once: a heavy filter kept in the plug-in store is installed again at the next
 /// start without asking, with its budget.
 #[test]

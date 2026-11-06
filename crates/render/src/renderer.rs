@@ -33,6 +33,7 @@ impl Renderer {
     pub fn new() -> Self {
         Self {
             texts: FrameCache::new(lru::TEXT_BUDGET, 1024),
+            text_ids: PtrMap::default(),
             text_fonts: 0,
             clips: FrameCache::new(lru::CLIP_BUDGET, 256),
             threads: default_threads(),
@@ -208,6 +209,7 @@ impl Renderer {
         // Filtered rasters are large: only those of the last frame stay.
         self.pixel_fx.retain(|_, e| e.stamp == g);
         self.texts.sweep(g);
+        self.text_ids.retain(|_, key| self.texts.contains_key(key));
         self.char_strokes.sweep(g);
         self.clips.sweep(g);
         self.clip_paints.sweep(g);

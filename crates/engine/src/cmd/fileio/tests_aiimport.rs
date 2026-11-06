@@ -366,6 +366,38 @@ fn a_swatch_library_in_a_ai_file_without_layers_loads_its_palette() {
     assert!(matches!(sky, Some(vectorcraft_color::Paint::Gradient(_))), "{sky:?}");
 }
 
+/// Other Library… on a `.ai` graphic style library (art styles, their list and no layers) gives the
+/// library the styles of its list, in the list's order, not the default styles; the file opens with
+/// them too.
+#[test]
+fn a_graphic_style_library_in_a_ai_file_without_layers_loads_its_styles() {
+    let style = |name: &str, xa: &str| {
+        format!(
+            "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{xa}0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n"
+        )
+    };
+    let styles = format!(
+        "%AI9_BeginArtStyles\n{}{}{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Red)\n(Green)\n(Blue)\n%AI9_EndArtStyleList\n",
+        style("Blue", "0 0 0 0 0 0 1 Xa\n"),
+        style("Green", "0 0 0 0 0 1 0 Xa\n"),
+        style("Red", "0 0 0 0 1 0 0 Xa\n")
+    );
+    let data = ai::editing_data(200.0, 100.0, &styles);
+    let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "fills.ai"});
+    let r = s.execute("graphicStyle.loadLibrary", &p).unwrap();
+    assert_eq!((&r["name"], &r["count"]), (&json!("fills"), &json!(3)), "{r}");
+    let lib = s.execute("graphicStyle.library", &json!({"library": r["library"]})).unwrap();
+    let names: Vec<&str> = lib["styles"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Red", "Green", "Blue"], "{lib}");
+    let r = open(&mut s, "fills.ai", &file, json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let styles: Vec<(&str, u32)> = doc.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect();
+    assert_eq!(styles, [("Red", 1), ("Green", 2), ("Blue", 3)], "{r}");
+}
+
 /// A 1-bit RGB image opens from the editing data in the colors its PDF part shows.
 #[test]
 fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {

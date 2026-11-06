@@ -818,6 +818,71 @@ fn pattern_names_are_numbered_around_the_documents_swatches() {
     assert_eq!(names(&d), ["Sea 2"]);
 }
 
+/// A pattern whose name has no newline keeps it, and its swatch takes the first free "Name 2" when
+/// another swatch has the name: a default swatch, a named color the art uses, or a color of the
+/// palette. A pattern a swatch already paints with gets no other.
+#[test]
+fn a_pattern_swatch_named_as_another_swatch_is_numbered() {
+    let def = |name: &str| DOTS.replace("(Dots)", &format!("({name})"));
+    let filled = |name: &str| format!("({name}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(10.0, 20.0, 70.0, 80.0));
+    let ink = format!("0 1 1 0 (Ink) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let paints = |d: &Document, name: &str| d.swatches_iter().find(|s| s.name == name).map(|s| s.paint.clone());
+    let doc = read_ok(&format!("{}{}{}", def("White"), def("Ink"), layer(&format!("{}{}{ink}", filled("White"), filled("Ink"))))).doc;
+    assert_eq!(doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["White", "Ink"]);
+    for name in ["White", "Ink"] {
+        assert!(matches!(paints(&doc, name), Some(Paint::Solid { .. })), "{name}");
+        let numbered = format!("{name} 2");
+        assert!(matches!(paints(&doc, &numbered), Some(Paint::Pattern { pattern, .. }) if pattern == name), "{numbered}");
+    }
+    let fills: Vec<_> = art(&doc).iter().map(|n| fill(n)).collect();
+    assert!(matches!(&fills[..2], [Paint::Pattern { pattern: a, .. }, Paint::Pattern { pattern: b, .. }] if a == "White" && b == "Ink"));
+    // A pattern defined later under the numbered name keeps its swatch's name.
+    let doc = read_ok(&format!("{}{}{}", def("White"), def("White 2"), layer(&filled("White")))).doc;
+    assert!(matches!(paints(&doc, "White 2"), Some(Paint::Pattern { pattern, .. }) if pattern == "White 2"));
+    assert!(matches!(paints(&doc, "White 3"), Some(Paint::Pattern { pattern, .. }) if pattern == "White"));
+    // A color of the palette.
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0.5 k\n(Mist)\nPc\nPB\n%AI5_EndPalette\n";
+    let doc = read_ok(&format!("{}{palette}{}", def("Mist"), layer(&filled("Mist")))).doc;
+    assert!(matches!(paints(&doc, "Mist"), Some(Paint::Solid { .. })));
+    assert!(matches!(paints(&doc, "Mist 2"), Some(Paint::Pattern { pattern, .. }) if pattern == "Mist"));
+    // A palette swatch under another name already paints with the pattern.
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0.5 k\n(Mist)\nPc\n(Mist) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Fog)\nPc\nPB\n%AI5_EndPalette\n";
+    let doc = read_ok(&format!("{}{palette}{}", def("Mist"), layer(&filled("Mist")))).doc;
+    let names: Vec<&str> = doc.swatches_iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["[None]", "Mist", "Fog"]);
+}
+
+/// A named color whose name a gradient or pattern swatch of the palette has takes the first free
+/// "Name 2", and the fills and gradient stops linked to it follow it.
+#[test]
+fn a_color_named_as_a_palette_gradient_or_pattern_is_numbered() {
+    let gradient = "%AI5_BeginGradient: (Brand)\n(Brand) 0 2 Bd\n[\n\
+                    %_0 1 1 0 (Brand) 0 0 5 1 6 50 0 Bs\n%_0 0 0 0 1 0 0 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let palette = "%AI5_BeginPalette\n0 0 Pb\nBb\n2 (Brand) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Brand)\nPc\n\
+                   (Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Ink)\nPc\nPB\n%AI5_EndPalette\n";
+    let colored = |name: &str| format!("0 1 1 0 ({name}) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let doc = read_ok(&format!("{gradient}{DOTS}{palette}{}", layer(&format!("{}{}", colored("Brand"), colored("Ink"))))).doc;
+    let paints = |name: &str| doc.swatches_iter().find(|s| s.name == name).map(|s| s.paint.clone());
+    assert!(matches!(paints("Brand"), Some(Paint::Gradient(_))));
+    assert!(matches!(paints("Ink"), Some(Paint::Pattern { .. })));
+    for name in ["Brand 2", "Ink 2"] {
+        let sw = doc.swatches_iter().find(|s| s.name == name).unwrap_or_else(|| panic!("{name}"));
+        assert!(matches!(sw.paint, Paint::Solid { .. }) && sw.global && sw.spot, "{sw:?}");
+    }
+    let links: Vec<_> = art(&doc).iter().map(|n| if let Paint::Solid { swatch, .. } = fill(n) { swatch } else { None }).collect();
+    assert_eq!(links, [Some("Brand 2".to_string()), Some("Ink 2".to_string())]);
+    let Some(Paint::Gradient(g)) = paints("Brand") else { panic!() };
+    assert_eq!(g.gradient.stops[0].swatch.as_deref(), Some("Brand 2"), "the stop's link");
+    // A color defined later under the numbered name keeps it and its links.
+    let later = format!("0 0 1 0 (Brand 2) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let doc = read_ok(&format!("{gradient}{DOTS}{palette}{}", layer(&format!("{}{later}", colored("Brand"))))).doc;
+    let color = |name: &str| doc.swatches_iter().find(|s| s.name == name).and_then(|s| s.paint.color());
+    assert_eq!(color("Brand 2"), Some(Color::cmyk(0.0, 0.0, 1.0, 0.0)));
+    assert_eq!(color("Brand 3"), Some(Color::cmyk(0.0, 1.0, 1.0, 0.0)));
+    let links: Vec<_> = art(&doc).iter().map(|n| if let Paint::Solid { swatch, .. } = fill(n) { swatch } else { None }).collect();
+    assert_eq!(links, [Some("Brand 3".to_string()), Some("Brand 2".to_string())]);
+}
+
 /// A palette's pattern swatch named by its pattern takes the name the pattern is shown with.
 #[test]
 fn a_palette_pattern_swatch_takes_its_patterns_shown_name() {
@@ -3313,6 +3378,44 @@ fn legacy_tab_definitions_skipped_capped_and_left_open() {
     assert!(texts[1].para_at(0).tabs.is_empty(), "the next object's `To` ends the open definition");
 }
 
+/// Point type whose 1024 tab stops are followed by 2048 paragraph breaks, each after `attrs(i)`.
+fn paragraphs_after_many_tabs(attrs: impl Fn(usize) -> String) -> String {
+    let many: String = (0..1024).map(|i| format!("0 0 1 {i} Xe\n")).collect();
+    let breaks: String = (0..2048).map(|i| format!("{}(x\\r) Tx\n", attrs(i))).collect();
+    point_type(&format!("36 1024 Xb\n{many}XB"), "A").replace("TO\n", &format!("{breaks}TO\n"))
+}
+
+/// Paragraphs that start with the same attributes all keep the same tab stops, however many
+/// there are, also when an attribute is set again to the value it has.
+#[test]
+fn legacy_tab_stops_last_through_many_paragraphs() {
+    for again in ["", "0 Ta\n"] {
+        let r = legacy_read(&paragraphs_after_many_tabs(|_| again.to_string()));
+        let texts = art_texts(&r.doc);
+        let [t] = texts.as_slice() else { panic!("{texts:?}") };
+        assert_eq!(t.paragraph_count(), 2049);
+        assert!((0..2049).all(|i| t.para_at(i).tabs.len() == 1024), "{again}");
+        assert!(r.warnings.is_empty(), "{again}: {:?}", r.warnings);
+    }
+}
+
+/// Each paragraph whose attributes differ from the paragraph before it holds its own copy of its
+/// tab stops, and a text object's paragraphs hold no more than 1,048,576 stops: the paragraphs
+/// past them take the default stops and keep their other attributes, with a warning.
+#[test]
+fn legacy_tab_stops_copied_into_paragraphs_are_capped() {
+    let r = legacy_read(&paragraphs_after_many_tabs(|i| format!("{} Ta\n", i % 2)));
+    let texts = art_texts(&r.doc);
+    let [t] = texts.as_slice() else { panic!("{texts:?}") };
+    let paras = t.paragraph_styles();
+    assert_eq!(paras.len(), 2049);
+    assert_eq!(paras.iter().map(|p| p.tabs.len()).sum::<usize>(), 1 << 20);
+    assert!(paras[..1024].iter().all(|p| p.tabs.len() == 1024));
+    assert!(paras[1024..].iter().all(|p| p.tabs.is_empty()));
+    assert_eq!((paras[2046].justify, paras[2047].justify), (vectorcraft_doc::Justify::Left, vectorcraft_doc::Justify::Center));
+    assert_eq!(r.warnings, ["tab stops past VectorCraft's limits were left out"]);
+}
+
 /// `Te` (end render, §22.6) reads in a text object with no operands and with four, inside a tab
 /// definition too, and keeps nothing; so does `TM` (pop text matrix, §22.6).
 #[test]
@@ -3623,6 +3726,23 @@ fn legacy_area_type_reads_up_to_its_limit_of_linked_areas() {
     assert_eq!(r.doc.text_threads.iter().map(Vec::len).collect::<Vec<_>>(), [LIMIT]);
     assert_eq!(frames[0].1.plain_text(), "ab");
     assert_eq!(r.warnings, [LINKED_AREAS_LEFT_OUT]);
+}
+
+/// The frames of linked areas after the first copy the story's last paragraph attributes, and
+/// those copies hold no more than 1,048,576 tab stops: the frames past them take the default
+/// stops, with a warning.
+#[test]
+fn legacy_linked_area_frames_cap_their_copied_tab_stops() {
+    let many: String = (0..1024).map(|i| format!("0 0 1 {i} Xe\n")).collect();
+    let area = format!("1 0 0 1 0 0 0 Tp\n{}n\nTP\n", rect_path(0.0, 0.0, 50.0, 40.0));
+    let text = format!("1 To\n{}0 Tr\n36 1024 Xb\n{many}XB\n(a) Tx\nTO\n", area.repeat(4096));
+    let r = legacy_read(&text);
+    let frames = art_frames(&r.doc);
+    assert_eq!(frames.len(), 4096);
+    let stops: Vec<usize> = frames.iter().map(|(_, f)| f.para_at(0).tabs.len()).collect();
+    assert_eq!(stops.iter().filter(|&&n| n == 1024).count(), 1025);
+    assert_eq!(stops.iter().filter(|&&n| n == 0).count(), 3071);
+    assert_eq!(r.warnings, ["tab stops past VectorCraft's limits were left out"]);
 }
 
 /// The warning when linked areas are left out.
@@ -3953,6 +4073,362 @@ fn sections_it_skips() {
                 %_/Document :\n%_/Binary : /ASCII85Decode ,\n%_(]<[%\n%;;;~>\n%_; (Profile) ,\n%_;\n";
     let doc = read_ok(&format!("{body}{}", layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n")))).doc;
     assert_eq!(art(&doc).len(), 1);
+    // A symbol whose art can't be read isn't kept.
+    assert!(doc.symbols.is_empty());
+}
+
+/// Symbol definitions as the editing data writes them, in a section that doesn't print.
+fn symbols(defs: &str) -> String {
+    format!("%AI5_Begin_NonPrinting\n{defs}%AI5_End_NonPrinting--\n")
+}
+
+/// A symbol named `name` whose art is `art` (in the symbol's space, y down), with the registration
+/// point `registration` (1 to 9 from the top left, row by row).
+fn symbol(name: &str, art: &str, registration: u32) -> String {
+    format!(
+        "%AI14_BeginSymbol\n({name})\n0 A\n0 Xw\n0 Ae\nu\n{art}U\n%_/ArtDictionary :\n%_{registration} /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n"
+    )
+}
+
+/// An instance of the symbol named `name`, `m` taking the symbol's art to art space.
+fn instance(name: &str, m: [f64; 6]) -> String {
+    let [a, b, c, d, e, f] = m;
+    format!("/SymbolInstance :\n({name}) /SymbolRef ,\n{a} {b} {c} {d} {e} {f} /RTransformMatrix\n;\n")
+}
+
+/// A red square of 4 points about the origin, as a symbol's art.
+fn dot() -> String {
+    format!("{RED}{}f\n", rect_path(-2.0, -2.0, 2.0, 2.0))
+}
+
+/// The visual box of `n` in `doc`, its instances measured by their symbols' art.
+fn instance_box(doc: &Document, n: &Node) -> Rect {
+    n.visual_bounds_with(&doc.symbol_boxes()).expect("a box")
+}
+
+#[test]
+fn a_symbol_comes_in_once_and_its_instances_stay_live() {
+    let body = symbols(&symbol("Dot", &dot(), 5))
+        + &layer(&(instance("Dot", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]) + &instance("Dot", [2.0, 0.0, 0.0, -2.0, 100.0, 50.0])));
+    let mut doc = read_ok(&body).doc;
+    assert_eq!(doc.symbols.len(), 1);
+    assert_eq!(doc.symbols[0].name, "Dot");
+    assert!(doc.symbol_registration("Dot").is_center());
+    let a = art(&doc);
+    assert_eq!(a.len(), 2);
+    let xfs: Vec<_> = a
+        .iter()
+        .map(|n| if let NodeKind::SymbolInstance { symbol, xf } = &n.kind { (symbol.clone(), *xf) } else { panic!("{:?}", n.kind) })
+        .collect();
+    assert_eq!(xfs[0].0, "Dot");
+    assert_ne!(xfs[0].1, xfs[1].1);
+    assert_eq!(instance_box(&doc, &a[0]), Rect::new(18.0, 48.0, 22.0, 52.0));
+    assert_eq!(instance_box(&doc, &a[1]), Rect::new(96.0, 46.0, 104.0, 54.0));
+    // Editing the symbol's art changes both instances.
+    let wider = read_ok(&(symbols(&symbol("Dot", &format!("{RED}{}f\n", rect_path(-4.0, -2.0, 4.0, 2.0)), 5)) + &layer(""))).doc;
+    doc.symbols[0].art = wider.symbols[0].art.clone();
+    assert_eq!(instance_box(&doc, &a[0]), Rect::new(16.0, 48.0, 24.0, 52.0));
+    assert_eq!(instance_box(&doc, &a[1]), Rect::new(92.0, 46.0, 108.0, 54.0));
+}
+
+#[test]
+fn an_instance_in_a_symbols_art_is_placed_from_the_canvas() {
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242).
+    let nested = instance("Dot", [1.0, 0.0, 0.0, -1.0, -8081.0, 8237.0]);
+    let defs = symbols(&(symbol("Dot", &dot(), 5) + &symbol("Pair", &nested, 1)));
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{defs}{}", layer(&instance("Pair", [1.0, 0.0, 0.0, -1.0, 50.0, 50.0])));
+    let doc = read_ok(&body).doc;
+    let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["Dot", "Pair"]);
+    assert_eq!(doc.symbol_registration("Pair"), vectorcraft_doc::SymbolRegistration(0));
+    // Dot sits at (10, 5) in Pair's art, which the page instance puts at (50, 50).
+    let a = art(&doc);
+    assert_eq!(instance_box(&doc, &a[0]), Rect::new(58.0, 53.0, 62.0, 57.0));
+}
+
+#[test]
+fn an_image_in_a_symbols_art_is_placed_from_the_canvas() {
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242). The
+    // image's matrix is in the canvas's space turned y up about that point, as an instance's in a
+    // symbol's art is: its top left pixel goes to (-5, -2.5) in the symbol's art.
+    let m = "[ 5 0 0 5 -8096 8244.5 ]";
+    let raster = format!(
+        "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n{m} 2 1 0 Xh\n{m} 0 0 2 1 2 1 8 3 0 0 1 0 4 4 0 0\n\
+         %%BeginData: 6\rXI\nABCDEF%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\n"
+    );
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Pic", &raster, 5)), layer(""));
+    let doc = read_ok(&body).doc;
+    assert_eq!(doc.symbols.len(), 1);
+    let NodeKind::Image(im) = &doc.symbols[0].art.kind else { panic!("{:?}", doc.symbols[0].art.kind) };
+    for ((u, v), want) in [((0.0, 0.0), (-5.0, -2.5)), ((2.0, 0.0), (5.0, -2.5)), ((0.0, 1.0), (-5.0, 2.5))] {
+        let got = im.xf * Point::new(u, v);
+        assert!((got - Point::new(want.0, want.1)).hypot() < 1e-9, "pixel ({u}, {v}): {got:?}, want {want:?}");
+    }
+    // A linked image (`XG` and `XF`) is placed the same way.
+    let linked = raster7("(a.tif) 0 XG\n", m, (2, 1), "XF", "");
+    let doc = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Link", &linked, 5)), layer(""))).doc;
+    let NodeKind::Image(link) = &doc.symbols[0].art.kind else { panic!("{:?}", doc.symbols[0].art.kind) };
+    assert!(link.link.is_some());
+    assert!((link.xf * Point::new(0.0, 0.0) - Point::new(-5.0, -2.5)).hypot() < 1e-9, "{:?}", link.xf);
+    // Without a template box the image can't be placed, so the symbol isn't read whole: its
+    // instance comes in as the page draws it.
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Pic", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&symbol("Pic", &raster, 5)) + &layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert_eq!(r.unread.len(), 1, "{:?}", r.warnings);
+}
+
+#[test]
+fn an_instance_keeps_its_hide_lock_transparency_and_clip() {
+    let m = [1.0, 0.0, 0.0, -1.0, 20.0, 50.0];
+    let art_ = format!(
+        "1 Xw\n{}0 Xw\n1 A\n{}0 A\n{}1 0.5 1 1 1 Xy\n0 0 Xd\n6 () XW\n0 Ae\nq\n{}{}h\nW\nn\nQ\n0 0.25 0 0 0 Xy\n{}",
+        instance("Dot", m),
+        instance("Dot", m),
+        instance("Dot", m),
+        instance("Dot", m),
+        rect_path(19.0, 49.0, 21.0, 51.0),
+        instance("Dot", m),
+    );
+    let doc = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&art_))).doc;
+    let a = art(&doc);
+    assert_eq!(a.len(), 5);
+    assert!(!a[0].visible && !a[0].locked);
+    assert!(a[1].visible && a[1].locked);
+    // An instance's transparency is the `Xy` after it, as a group's is; one set before it isn't its.
+    assert_eq!((a[2].opacity, a[2].blend, a[2].isolate, a[2].knockout, a[2].knockout_shape), (0.5, BlendMode::Multiply, true, Knockout::On, true));
+    assert_eq!((a[1].opacity, a[1].blend, a[1].isolate, a[1].knockout), (1.0, BlendMode::Normal, false, Knockout::Neutral));
+    assert_eq!((a[3].opacity, a[4].opacity), (0.25, 1.0));
+    let NodeKind::Group { children, clip: true } = &a[3].kind else { panic!("a clipping group: {:?}", a[3].kind) };
+    assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
+    assert!(matches!(children[1].kind, NodeKind::SymbolInstance { .. }));
+}
+
+/// The art of an opacity mask in a symbol's art takes ids of the document, as the rest of the art
+/// does: no two objects of the document, in its layers or its symbols, share an id.
+#[test]
+fn a_symbols_opacity_mask_art_takes_ids_of_the_document() {
+    fn ids(n: &Node, out: &mut Vec<vectorcraft_doc::NodeId>) {
+        out.push(n.id);
+        if let Some(m) = n.extras().mask.as_ref() {
+            ids(&m.art, out);
+        }
+        for c in n.children().into_iter().flatten() {
+            ids(c, out);
+        }
+    }
+    let square = rect_path(-2.0, -2.0, 2.0, 2.0);
+    let mask_art: String = format!("1 g\n{square}f\n").lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let defs = symbols(&symbol("Masked", &format!("{RED}{square}f\n{mask}{}", dot()), 5));
+    let shapes: String = (0..6).map(|i| format!("{RED}{}f\n", rect_path(f64::from(i) * 10.0, 0.0, f64::from(i) * 10.0 + 4.0, 4.0))).collect();
+    let doc = read_ok(&(defs + &layer(&format!("{shapes}{}", instance("Masked", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))))).doc;
+    let mut all = Vec::new();
+    for n in doc.layers.iter().chain(doc.symbols.iter().map(|s| &s.art)) {
+        ids(n, &mut all);
+    }
+    assert!(doc.symbols.iter().any(|s| s.art.children().into_iter().flatten().any(|c| c.extras().mask.is_some())), "the mask is read");
+    let unique: std::collections::HashSet<_> = all.iter().copied().collect();
+    assert_eq!(unique.len(), all.len(), "{all:?}");
+}
+
+/// A layer's `Xy` right after its last object, an instance, before the layer's `0 0 Xd` and
+/// `7 () XW`, is the layer's; the instance's own state block (`6 () XW`) keeps it the instance's.
+#[test]
+fn a_layers_state_after_its_last_symbol_instance_is_the_layers() {
+    let last = instance("Dot", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]);
+    let doc = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&format!("{last}1 0.6 0 2 0 Xy\n0 0 Xd\n7 () XW\n")))).doc;
+    assert_eq!((doc.layers[0].opacity, doc.layers[0].blend), (0.6, BlendMode::Multiply));
+    assert_eq!((art(&doc)[0].opacity, art(&doc)[0].blend), (1.0, BlendMode::Normal));
+    let doc = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&format!("{last}1 0.6 0 2 0 Xy\n0 0 Xd\n6 () XW\n")))).doc;
+    assert_eq!(doc.layers[0].opacity, 1.0);
+    assert_eq!((art(&doc)[0].opacity, art(&doc)[0].blend), (0.6, BlendMode::Multiply));
+}
+
+#[test]
+fn the_symbol_list_orders_the_symbols_and_names_stay_apart() {
+    let defs = symbol("A", &dot(), 5) + &symbol("B", &dot(), 5) + &symbol("A", &dot(), 5) + &symbol("C", &dot(), 9);
+    for list in [
+        "%AI24_BeginSymbolList\n(C)\n(Ghost)\n(B)\n(C)\n%AI24_EndSymbolList\n",
+        "%AI10_BeginSymbolList\n(C)\n(Ghost)\n(B)\n(C)\n%AI10_EndSymbolList\n",
+    ] {
+        let doc = read_ok(&(symbols(&format!("{defs}{list}")) + &layer(&instance("A", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])))).doc;
+        let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["C", "B", "A", "A 2"], "{list}");
+        assert_eq!(doc.symbol_registration("C"), vectorcraft_doc::SymbolRegistration(8));
+        // An instance names the first symbol the file gives that name.
+        assert!(matches!(&art(&doc)[0].kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "A"));
+    }
+}
+
+/// A symbol whose art is filled with a pattern isn't kept: its instances come in as the page draws
+/// them, within the box of its art. The pattern keeps the name it was numbered with.
+#[test]
+fn a_symbol_with_a_pattern_fill_isnt_kept() {
+    let pattern = DOTS.replace("(Dots)", "(Red\\n1)");
+    let lawn = symbol("Lawn", &format!("(Red\\n1) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(-2.0, -2.0, 2.0, 2.0)), 5);
+    let r = read_ok(&format!("{pattern}{}{}", symbols(&lawn), layer(&instance("Lawn", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))));
+    assert_eq!(r.doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Red 2"]);
+    assert!(r.doc.symbols.is_empty());
+    assert_unread(&r, "symbols");
+    let (id, _) = &r.unread[0];
+    assert_eq!(r.doc.node(*id).and_then(|n| n.geometric_bounds()), Some(Rect::new(18.0, 48.0, 22.0, 52.0)));
+    // A pattern chosen and then replaced by a color before the art is painted fills nothing.
+    let solid = symbol("Solid", &format!("(Red\\n1) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{RED}{}f\n", rect_path(-2.0, -2.0, 2.0, 2.0)), 5);
+    let r = read_ok(&format!("{pattern}{}{}", symbols(&solid), layer(&instance("Solid", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))));
+    assert_eq!(r.doc.symbols.len(), 1);
+    assert!(r.unread.is_empty());
+}
+
+#[test]
+fn an_instance_of_a_symbol_it_doesnt_have_is_the_unread_object() {
+    let missing = instance("Absent", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]);
+    // Alone on the layer, the file isn't read: the page has no box for it.
+    let e = read(stream(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&missing))).as_bytes()).unwrap_err();
+    assert!(e.contains("symbols"), "{e}");
+    // In a group, the group is the unread object.
+    let group = format!("0 Ae\nu\n{missing}{RED}{}f\nU\n", rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&group)));
+    assert_unread(&r, "symbols");
+    // Nor is a symbol whose art holds an instance of one the file doesn't have: the page has no box
+    // for its instances.
+    let holder = symbol("Holder", &(dot() + &instance("Absent", [1.0, 0.0, 0.0, -1.0, 0.0, 0.0])), 5);
+    let body =
+        format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&holder), layer(&instance("Holder", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])));
+    let e = read(stream(&body).as_bytes()).unwrap_err();
+    assert!(e.contains("symbols"), "{e}");
+    // An instance whose matrix doesn't have six finite numbers isn't read either.
+    let bad = "/SymbolInstance :\n(Dot) /SymbolRef ,\n1 0 0 -1 20 /RTransformMatrix\n;\n";
+    let r = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(&format!("0 Ae\nu\n{bad}U\n"))));
+    assert_unread(&r, "symbols");
+}
+
+#[test]
+fn an_instance_whose_appearance_differs_from_its_symbols_comes_in_as_the_page_draws_it() {
+    let edited = "/SymbolInstance :\n(Dot) /SymbolRef ,\n1 0 0 -1 20 50 /RTransformMatrix\n,\n/Dictionary :\n; (AI19SymbolAppearanceMap) ,\n;\n";
+    let r = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(edited)));
+    assert_unread(&r, "symbols");
+    let (id, _) = &r.unread[0];
+    assert_eq!(r.doc.node(*id).and_then(|n| n.geometric_bounds()), Some(Rect::new(18.0, 48.0, 22.0, 52.0)), "the box is the symbol's, placed");
+    // The appearance changes are found in a dictionary that an array holds as a value without a key.
+    let in_array = "/SymbolInstance :\n(Dot) /SymbolRef ,\n1 0 0 -1 20 50 /RTransformMatrix\n,\n\
+                    /Array :\n/Dictionary :\n/Dictionary :\n; (AI19SymbolAppearanceMap) ,\n;\n;\n; (Edits) ,\n;\n";
+    let r = read_ok(&(symbols(&symbol("Dot", &dot(), 5)) + &layer(in_array)));
+    assert_unread(&r, "symbols");
+    // So does an instance of a symbol whose art isn't read whole, within that art's box.
+    let partial = symbol("Partial", &format!("{}f\n1 Xw\n1 2 frobnicate\n0 Xw\n", rect_path(-2.0, -2.0, 2.0, 2.0)), 5);
+    let r = read_ok(&(symbols(&partial) + &layer(&instance("Partial", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))));
+    assert!(r.doc.symbols.is_empty());
+    assert_unread(&r, "symbols");
+    let (id, _) = &r.unread[0];
+    assert_eq!(r.doc.node(*id).and_then(|n| n.geometric_bounds()), Some(Rect::new(18.0, 48.0, 22.0, 52.0)));
+}
+
+/// A symbol whose art holds an image that is left out (no matrix, a matrix with no area, data cut
+/// short) isn't kept, so its instances don't draw it without the image.
+#[test]
+fn a_symbol_with_an_image_it_leaves_out_isnt_kept() {
+    for (what, image) in [
+        ("no matrix", raster7("", "", (1, 1), "XI", "%FF0000\n")),
+        ("a matrix with no area", raster7("", "[ 0 0 0 0 0 0 ]", (1, 1), "XI", "%FF0000\n")),
+        ("data cut short", raster7("", "[ 1 0 0 1 0 0 ]", (2, 2), "XI", "%FF0000\n")),
+        ("no end", raster7("", "[ 1 0 0 1 0 0 ]", (1, 1), "XI", "%FF0000\n").replace("%AI5_EndRaster\n", "")),
+        ("art after a trailer", format!("%%PageTrailer\n{}", raster7("", "[ 1 0 0 1 0 0 ]", (1, 1), "XI", "%FF0000\n"))),
+    ] {
+        // With a template box, so that the image could be placed.
+        let defs = symbols(&symbol("Photo", &(dot() + &image), 5));
+        let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Photo", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+        let r = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{defs}{}", layer(&group)));
+        assert!(r.doc.symbols.is_empty(), "{what}");
+        assert_eq!(r.unread.len(), 1, "{what}: {:?}", r.warnings);
+    }
+}
+
+/// A symbol's art written as a group holding one object stays that group when the group is tagged
+/// (`XT`), so the tag isn't lost.
+#[test]
+fn a_symbols_tagged_group_keeps_its_tag() {
+    let def = format!(
+        "%AI14_BeginSymbol\n(Tagged)\n0 A\n0 Xw\n0 Ae\nu\n{}U\n/AdobeURL (https://example.com/a) XT\n%_/ArtDictionary :\n%_5 /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n9 () XW\n%AI10_EndSymbol\n",
+        dot()
+    );
+    let doc = read_ok(&(symbols(&def) + &layer(&instance("Tagged", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])))).doc;
+    let art = &doc.symbols[0].art;
+    assert!(matches!(art.kind, NodeKind::Group { .. }), "{:?}", art.kind);
+    assert_eq!(tags(art).0, "https://example.com/a");
+}
+
+/// A definition whose art a trailer stops isn't kept, though the art before the trailer is whole.
+#[test]
+fn a_symbol_cut_off_by_a_trailer_isnt_kept() {
+    let cut = format!("%AI14_BeginSymbol\n(Cut)\n0 A\n0 Xw\n0 Ae\n{}%%PageTrailer\n{}%AI10_EndSymbol\n", dot(), dot());
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Cut", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&cut) + &layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert_unread(&r, "symbols");
+}
+
+/// A symbol whose art holds type, a placed file, non-native art, an image it can't place or a
+/// gradient the file doesn't define isn't kept. Its instances come in as the page draws them, within the box of the rest of its art, an
+/// instance right on a layer as well as one in a group.
+#[test]
+fn a_symbols_art_it_leaves_out_gives_its_instances_the_box_of_the_rest() {
+    let typed = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n".to_string();
+    let placed = "%AI5_BeginPlace\n%AI5_EndPlace\n".to_string();
+    let foreign =
+        "/ForeignObject :\n1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data ,\n%,u@!!/MSk8%41#ocdN=10d&\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n"
+            .to_string();
+    let image = raster7("", "[ 1 0 0 1 0 0 ]", (1, 1), "XI", "%FF0000\n");
+    let gradient = format!("Bb\n1 (Nowhere) 0 0 0 10 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", rect_path(-2.0, -2.0, 2.0, 2.0));
+    let template = "%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n";
+    for (what, left, head) in [
+        ("type", typed, template),
+        ("a placed file", placed, template),
+        ("non-native art", foreign, template),
+        ("an image without a template box", image, ""),
+        ("a gradient the file doesn't define", gradient, template),
+    ] {
+        let defs = symbols(&symbol("Mixed", &(dot() + &left), 5));
+        let body = format!("{head}{defs}{}", layer(&instance("Mixed", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])));
+        let r = read(stream(&body).as_bytes()).unwrap_or_else(|e| panic!("{what}: {e}"));
+        assert!(r.doc.symbols.is_empty(), "{what}");
+        assert_unread(&r, "symbols");
+        let (id, _) = &r.unread[0];
+        assert_eq!(r.doc.node(*id).and_then(|n| n.geometric_bounds()), Some(Rect::new(18.0, 48.0, 22.0, 52.0)), "{what}");
+    }
+    // A gradient the file doesn't define on a path that isn't painted paints nothing.
+    // Nor does one on a path that a group's start drops, for the paths after it.
+    let square = rect_path(-2.0, -2.0, 2.0, 2.0);
+    for (what, unpainted) in [
+        ("not painted", format!("Bb\n1 (Nowhere) 0 0 0 10 1 0 0 1 0 0 Bg\n{square}n\n0 BB\n")),
+        ("dropped", format!("Bb\n1 (Nowhere) 0 0 0 10 1 0 0 1 0 0 Bg\n{square}0 BB\nu\n{square}f\nU\n")),
+    ] {
+        let defs = symbols(&symbol("Kept", &(dot() + &unpainted), 5));
+        let r = read_ok(&format!("{template}{defs}{}", layer(&instance("Kept", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))));
+        assert_eq!(r.doc.symbols.len(), 1, "{what}: {:?}", r.warnings);
+        assert!(r.unread.is_empty(), "{what}");
+    }
+}
+
+#[test]
+fn symbols_that_hold_each_other_lose_the_instances_that_close_the_loop() {
+    let m = [1.0, 0.0, 0.0, -1.0, 0.0, 0.0];
+    let defs = symbols(&(symbol("S1", &instance("S2", m), 5) + &symbol("S2", &instance("S1", m), 5)));
+    let r =
+        read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{defs}{}", layer(&(dot() + &instance("S1", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])))));
+    assert!(r.warnings.contains(&vectorcraft_doc::depth::symbols_note()), "{:?}", r.warnings);
+    assert!(!r.doc.clone().limit_depth(), "nothing is left that draws itself");
+}
+
+/// A definition after the first layer isn't read: the symbols were checked before that layer, and
+/// one read later could hold an instance of a symbol the file doesn't have.
+#[test]
+fn a_symbol_defined_after_the_first_layer_is_not_read() {
+    let late = symbols(&symbol("Late", &(dot() + &instance("Absent", [1.0, 0.0, 0.0, -1.0, 0.0, 0.0])), 5));
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Late", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{late}{}", layer(&dot()), layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert_unread(&r, "symbols");
 }
 
 /// A filled square at x = `10 × i` (5 pt wide), to tell the alternatives of versioned content apart.
@@ -4574,6 +5050,35 @@ fn a_style_name_outside_ascii_links_its_objects() {
 }
 
 #[test]
+fn an_object_in_a_symbols_art_with_a_listed_style_is_linked() {
+    let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    let body =
+        format!("{defs}{}{}", symbols(&symbol("Tile", &styled_square("Blue"), 5)), layer(&instance("Tile", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])));
+    let r = read_ok(&body);
+    assert_eq!(style_names(&r.doc), [("Blue".to_string(), 1)]);
+    let tile = &r.doc.symbols[0].art;
+    assert!(matches!(tile.kind, NodeKind::Path { .. }), "{tile:#?}");
+    assert_eq!(fill(tile).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(tile.extras().graphic_style, Some(1), "{tile:#?}");
+    // A symbol's art written as a group holding one object stays that group when the group is
+    // linked to the style.
+    let empty = "/KnownStyle :\n(Empty) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                 /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n";
+    let defs = styles_and_list(&[empty.to_string()], &["Empty"]);
+    let square = rect_path(0.0, 0.0, 10.0, 10.0);
+    let hidden = square.replace('\n', "\n%_");
+    // The styled group is the definition's own group, without one around it.
+    let group = format!(
+        "%AI14_BeginSymbol\n(Group)\n0 A\n0 Xw\n0 Ae\nu\n{RED}{square}f\nU\n%_u\n%_{hidden}f\n%_U\n1 (Empty) XW\n\
+         %_/ArtDictionary :\n%_5 /Int (AI13PatternRegistrationType) ,\n%_;\n%_\n%AI10_EndSymbol\n"
+    );
+    let body = format!("{defs}{}{}", symbols(&group), layer(&instance("Group", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0])));
+    let art = &read_ok(&body).doc.symbols[0].art;
+    assert!(matches!(art.kind, NodeKind::Group { .. }), "{art:#?}");
+    assert_eq!(art.extras().graphic_style, Some(1), "{art:#?}");
+}
+
+#[test]
 fn without_a_style_list_the_default_graphic_styles_stay() {
     let defaults = style_names(&Document::new(1.0, 1.0));
     let r = read_ok(&format!("{ART_STYLES}{}", layer(&styled_square("Blue"))));
@@ -4759,6 +5264,206 @@ fn an_object_with_path_effects_comes_in_as_itself_with_them_live() {
     assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// The paint of a blue fill in a style.
+const BLUE_FILL: Option<&str> = Some("0 0 0 0 0 0 1 Xa\n");
+
+/// An art style section with style `Bent`: effect `name` with dictionary `keys` on the whole
+/// object, over a fill painting with `paint`, or over a fill and stroke that paint nothing.
+fn distort_styles(name: &str, keys: &str, paint: Option<&str>) -> String {
+    let (paints, color) = match paint {
+        Some(p) => ("0 1", p),
+        None => ("0 0", ""),
+    };
+    format!(
+        "%AI9_BeginArtStyles\n/KnownStyle :\n(Bent) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n({name}) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{keys}; /Dict ;\n /Part ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/StrokeStyle : 0 1 0 0 0 Xy\n0 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{color}{paints} Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+         ;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+    )
+}
+
+/// Free Distort's 16 entries for a 40 × 30 pt object whose source frame is its own box, with its
+/// destination corners `dst` (top left, top right, bottom left, bottom right, art space).
+fn free_distort_keys(dst: [[f64; 2]; 4]) -> String {
+    let src = [[20.0, 50.0], [60.0, 50.0], [20.0, 20.0], [60.0, 20.0]];
+    let mut out = String::new();
+    for (which, c) in [("src", src), ("dst", dst)] {
+        for (i, [h, v]) in c.into_iter().enumerate() {
+            out += &format!("{h} /Real ({which}{i}h) ,\n{v} /Real ({which}{i}v) ,\n");
+        }
+    }
+    out
+}
+
+#[test]
+fn an_object_with_a_distort_effect_that_draws_alike_comes_in_as_itself_with_it_live() {
+    // GUARDS: only type took Distort & Transform effects; a path with Transform, Twist, a still Tweak,
+    // Pucker & Bloat at 0 or an affine Free Distort came in as its drawn look.
+    let hidden_rect = rect_path(20.0, 20.0, 60.0, 50.0).replace('\n', "\n%_");
+    let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{hidden_rect}f\n%_0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0));
+    // A slanted box: its corners make a parallelogram.
+    let slanted = free_distort_keys([[25.0, 50.0], [65.0, 50.0], [20.0, 20.0], [60.0, 20.0]]);
+    for (name, keys, id) in [
+        ("Adobe Transform", "5 /Real (moveH_Pts) ,\n0.5 /Real (rotate_Radians) ,\n0 /Bool (transformPatterns) ,\n", "distort.transform"),
+        ("Adobe Twirl", "45 /Real (angle) ,\n", "distort.twist"),
+        ("Adobe Scribble and Tweak", "30 /Real (horz) ,\n0 /Bool (anch) ,\n0 /Bool (in) ,\n0 /Bool (out) ,\n", "distort.tweak"),
+        ("Adobe Punk and Bloat", "0 /Real (d_factor) ,\n", "distort.puckerBloat"),
+        ("Adobe Free Distort", slanted.as_str(), "distort.freeDistort"),
+        ("Adobe Free Distort", "", "distort.freeDistort"),
+    ] {
+        let r = read_ok(&format!("{}{}", distort_styles(name, keys, BLUE_FILL), layer(&art_)));
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{name}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{name}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Path { .. }), "{name}: the object, not its look: {a:#?}");
+        let b = a[0].geometric_bounds().unwrap();
+        assert_eq!((b.width(), b.height()), (40.0, 30.0), "{name}: the object keeps its own path");
+        assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)), "{name}");
+        let ids: Vec<_> = a[0].appearance.effects.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids, [id], "{name}");
+    }
+}
+
+#[test]
+fn an_object_with_a_distort_effect_drawn_another_way_keeps_its_drawn_look() {
+    // Pucker & Bloat and Zig Zag draw other outlines than the file's, a Free Distort whose corners
+    // aren't a parallelogram bends the curves differently, and Transform's copies paint as one path.
+    let hidden_rect = rect_path(20.0, 20.0, 60.0, 50.0).replace('\n', "\n%_");
+    let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{hidden_rect}f\n%_0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0));
+    let bent = free_distort_keys([[25.0, 50.0], [65.0, 52.0], [20.0, 20.0], [60.0, 20.0]]);
+    for (name, keys) in [
+        ("Adobe Punk and Bloat", "-50 /Real (d_factor) ,\n"),
+        ("Adobe Zigzag", "3 /Real (amount) ,\n1 /Real (absoluteness) ,\n"),
+        ("Adobe Free Distort", bent.as_str()),
+        ("Adobe Scribble and Tweak", "30 /Real (horz) ,\n"),
+        ("Adobe Transform", "1 /Bool (randomize) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformPatterns) ,\n"),
+        ("Adobe Transform", "5 /Real (moveH_Pts) ,\n2 /Int (numCopies) ,\n0 /Bool (transformPatterns) ,\n"),
+    ] {
+        let r = read_ok(&format!("{}{}", distort_styles(name, keys, BLUE_FILL), layer(&art_)));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{name}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{name}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{name}: {:?}", r.warnings);
+    }
+}
+
+/// The gradient `G`, white to black, defined for a document.
+const GRADIENT_G: &str = "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n";
+
+#[test]
+fn an_object_whose_outline_moves_away_from_its_gradient_keeps_its_drawn_look() {
+    // GUARDS: a gradient stays where it is placed while Transform, Twist or Free Distort moves the
+    // outline, so the live object lost the gradient its drawn look shows.
+    let gradient = Some("Bb\n0 0 0 0 Bh\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n");
+    let hidden_rect = rect_path(20.0, 20.0, 60.0, 50.0).replace('\n', "\n%_");
+    let object = format!(
+        "0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_1 (G) 20 35 0 40 1 0 0 1 0 0 Bg\n%_{hidden_rect}f\n%_0 BB\n1 (Bent) XW\n",
+        rect_path(16.0, 16.0, 64.0, 54.0)
+    );
+    let hidden = |color: &str, x: f64| format!("{color}{}f\n", rect_path(x, 0.0, x + 10.0, 10.0)).replace('\n', "\n%_");
+    let shaded = format!("Bb\n1 (G) 5 5 0 10 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", rect_path(5.0, 0.0, 15.0, 10.0)).replace('\n', "\n%_");
+    let group = format!("0 Ae\nu\n{RED}{}f\nU\n%_0 Ae\n%_u\n%_{}{shaded}U\n1 (Bent) XW\n", rect_path(0.0, 0.0, 15.0, 10.0), hidden(RED, 0.0));
+    let slanted = free_distort_keys([[25.0, 50.0], [65.0, 50.0], [20.0, 20.0], [60.0, 20.0]]);
+    let moves = [
+        ("Adobe Transform", "5 /Real (moveH_Pts) ,\n0 /Bool (transformPatterns) ,\n"),
+        ("Adobe Twirl", "45 /Real (angle) ,\n"),
+        ("Adobe Free Distort", slanted.as_str()),
+    ];
+    for (name, keys) in moves {
+        // A gradient in the style, and one on a member of a group.
+        for (paint, art_) in [(gradient, &object), (None, &group)] {
+            let r = read_ok(&format!("{GRADIENT_G}{}{}", distort_styles(name, keys, paint), layer(art_)));
+            let a = art(&r.doc);
+            assert_eq!(a.len(), 1, "{name}: {a:#?}");
+            assert!(a[0].appearance.effects.is_empty(), "{name}: the drawn look: {a:#?}");
+            assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{name}: {:?}", r.warnings);
+        }
+    }
+    // An effect that leaves the outline where it is keeps the gradient under it.
+    let r = read_ok(&format!("{GRADIENT_G}{}{}", distort_styles("Adobe Punk and Bloat", "", gradient), layer(&object)));
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "{a:#?}");
+    assert!(matches!(fill(&a[0]), Paint::Gradient(_)), "{:?}", fill(&a[0]));
+}
+
+/// A group with style `Bent`, its drawn look one path, holding a red and a blue square.
+fn distort_group() -> String {
+    let hidden = |color: &str, x: f64| format!("{color}{}f\n", rect_path(x, 0.0, x + 10.0, 10.0)).replace('\n', "\n%_");
+    format!(
+        "0 Ae\nu\n{RED}{}f\nU\n%_0 Ae\n%_u\n%_{}{}U\n1 (Bent) XW\n",
+        rect_path(0.0, 0.0, 15.0, 10.0),
+        hidden(RED, 0.0),
+        hidden("0 0 1 0 0 0 1 Xa\n", 5.0)
+    )
+}
+
+#[test]
+fn a_group_with_a_transform_keeps_its_members_and_the_effect() {
+    // GUARDS: the group came in as its drawn look, one path with no effect.
+    let keys = "5 /Real (moveH_Pts) ,\n0 /Bool (transformPatterns) ,\n";
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Transform", keys, None), layer(&distort_group())));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let members = a[0].children().cloned().unwrap_or_default();
+    assert_eq!(members.len(), 2, "the squares, not the look: {a:#?}");
+    let [e] = a[0].appearance.effects.as_slice() else { panic!("{:?}", a[0].appearance) };
+    assert_eq!((e.id.as_str(), e.params["moveH"].as_f64()), ("distort.transform", Some(5.0)));
+    assert!(a[0].appearance.items.is_empty(), "{:?}", a[0].appearance);
+}
+
+/// `styles` (from [`distort_styles`]) with a red stroke 2 pt wide in place of the stroke that
+/// paints nothing.
+fn with_red_stroke(styles: &str) -> String {
+    styles.replace("/StrokeStyle : 0 1 0 0 0 Xy\n0 0 Xd", "/StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 1 0 0 0 Xy\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd")
+}
+
+#[test]
+fn twist_and_a_scaling_transform_are_read_only_where_their_outline_is_known() {
+    // GUARDS: Twist was read on curves, strokes and groups, and Transform scaling a stroked object,
+    // where the outline VectorCraft draws hasn't been checked.
+    let object = |hidden: &str| {
+        format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}f\n%_0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0), hidden.replace('\n', "\n%_"))
+    };
+    let square = object(&rect_path(20.0, 20.0, 60.0, 50.0));
+    let curved = object("20 35 m\n20 45 60 45 60 35 c\n60 25 20 25 20 35 c\n");
+    let twist = distort_styles("Adobe Twirl", "45 /Real (angle) ,\n", BLUE_FILL);
+    let scale = "0.5 /Real (scaleH_Factor) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformPatterns) ,\n";
+    let corner = distort_styles("Adobe Transform", &format!("0 /Int (pinPoint) ,\n{scale}"), BLUE_FILL);
+    let center = distort_styles("Adobe Transform", scale, BLUE_FILL);
+    let moved = distort_styles("Adobe Transform", "0 /Int (pinPoint) ,\n5 /Real (moveH_Pts) ,\n0 /Bool (transformPatterns) ,\n", BLUE_FILL);
+    let read = |styles: &str, art_: &str| read_ok(&format!("{styles}{}", layer(art_)));
+    for (what, r) in [
+        ("a twisted curve", read(&twist, &curved)),
+        ("a twisted stroke", read(&with_red_stroke(&twist), &square)),
+        ("a twisted group", read(&distort_styles("Adobe Twirl", "45 /Real (angle) ,\n", None), &distort_group())),
+        ("a stroke scaled from a corner", read(&with_red_stroke(&corner), &square)),
+        ("a stroke scaled from the center", read(&with_red_stroke(&center), &square)),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty(), "{what}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+    }
+    for (what, r) in [
+        ("a twisted square", read(&twist, &square)),
+        ("a stroke moved from a corner", read(&with_red_stroke(&moved), &square)),
+        ("a fill scaled from a corner", read(&corner, &square)),
+        ("a fill scaled from the center", read(&center, &square)),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Path { .. }) && a[0].appearance.effects.len() == 1, "{what}: {a:#?}");
+    }
+    let r = read(&twist, &square);
+    let a = art(&r.doc);
+    let [e] = a[0].appearance.effects.as_slice() else { panic!("{:?}", a[0].appearance) };
+    assert_eq!((e.id.as_str(), e.params["angle"].as_f64()), ("distort.twist", Some(45.0)));
+}
+
 #[test]
 fn a_bare_comment_line_in_a_prolog_leaves_its_end_alone() {
     // GUARDS: a bare `%` line's empty marker matched the empty begin marker of a section that has none.
@@ -4910,7 +5615,7 @@ fn envelope_parts(before: &str, keys: &str, block: &str, kind: u32, drawn: &str)
 
 /// An envelope of `content` (in the plain group the editing data puts round it) shaped by the mesh
 /// `shape`.
-fn envelope_of(shape: &str, keys: &str, content: &str, kind: u32, drawn: &str) -> String {
+pub(super) fn envelope_of(shape: &str, keys: &str, content: &str, kind: u32, drawn: &str) -> String {
     envelope_parts(shape, keys, &format!("u\n{content}U\n9 () XW\n"), kind, drawn)
 }
 
@@ -4942,7 +5647,7 @@ fn mesh_text(cols: usize, rows: usize, at: MeshAt<'_>, handle: MeshHandle<'_>, a
 }
 
 /// A grid in art space, its points `step` apart from (40, 20), handles a third of the way.
-fn straight_mesh(cols: usize, rows: usize, step: (f64, f64)) -> String {
+pub(super) fn straight_mesh(cols: usize, rows: usize, step: (f64, f64)) -> String {
     let at = move |(i, j): (usize, usize)| (40.0 + i as f64 * step.0, 20.0 + j as f64 * step.1);
     let third = move |p: (usize, usize), q: (usize, usize)| {
         let ((x, y), (u, v)) = (at(p), at(q));
@@ -4952,13 +5657,13 @@ fn straight_mesh(cols: usize, rows: usize, step: (f64, f64)) -> String {
 }
 
 /// The red rectangle 40 20 160 80 in art space, which is the same box in the document's.
-fn envelope_content() -> String {
+pub(super) fn envelope_content() -> String {
     format!("{RED}{}f\n", rect_path(40.0, 20.0, 160.0, 80.0))
 }
 
 /// What envelope `kind` draws of [`envelope_content`]: the rectangle's edges, many points to a
 /// side, mapped as VectorCraft maps them, as a red path in art space.
-fn drawn_content(kind: &vectorcraft_doc::live::EnvelopeKind) -> String {
+pub(super) fn drawn_content(kind: &vectorcraft_doc::live::EnvelopeKind) -> String {
     let rect = Rect::new(40.0, 20.0, 160.0, 80.0);
     let map = vectorcraft_doc::live::envelope_mapper(kind, rect);
     let corners = [Point::new(40.0, 20.0), Point::new(160.0, 20.0), Point::new(160.0, 80.0), Point::new(40.0, 80.0)];
@@ -4986,7 +5691,7 @@ fn live_envelope(n: &Node) -> (&[Arc<Node>], &vectorcraft_doc::live::EnvelopeKin
 
 /// A warp's dictionary keys: style number `style`, bend, horizontal and vertical distortion as
 /// fractions, and the orientation (vertical with `rotate` 1).
-fn warp_keys(style: u32, bend: f64, h: f64, v: f64, rotate: u32) -> String {
+pub(super) fn warp_keys(style: u32, bend: f64, h: f64, v: f64, rotate: u32) -> String {
     format!(
         "{ENVELOPE_KEYS}{style} /Int (DeformStyle) ,\n{h} /Real (DeformHoriz) ,\n{bend} /Real (DeformValue) ,\n{v} /Real (DeformVert) ,\n{rotate} /Bool (Rotate) ,\n(Warp) /UnicodeString (DisplayString) ,\n"
     )
@@ -5624,7 +6329,7 @@ fn layer_options_of_nine_to_twelve_operands() {
 /// A blend's record as the editing data writes it after `(Adobe Path Blends) 1 0 n XP`: `DCBA`,
 /// Specified Steps, then (as far as the reader reads it) the number of keys at word 10 and a record
 /// of six words per key starting with its id. Hand-written; the other words are zero.
-fn blend_record(ids: &[char]) -> String {
+pub(super) fn blend_record(ids: &[char]) -> String {
     blend_record_spaced(ids, 1, 0.0, 0)
 }
 
@@ -5656,7 +6361,7 @@ fn blend_part(kind: &str, id: Option<&str>) -> String {
 /// A blend of two 20 pt squares, red on the left (key `A`) and blue on the right (`B`), along
 /// `spine` (path operators, `%_` lines), with its drawn steps (three between the keys) and the
 /// record `record`.
-fn blend_file(spine: &str, ids: [Option<&str>; 2], record: &str) -> String {
+pub(super) fn blend_file(spine: &str, ids: [Option<&str>; 2], record: &str) -> String {
     blend_file_colored(spine, ids, record, [1.0, 0.0, 0.0], [0.0, 0.0, 1.0])
 }
 
