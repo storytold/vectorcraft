@@ -36,6 +36,8 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | G15: long open strokes with an undashed width profile are outlined near the view while keeping profile positions on the full path; a 200,000-segment outline took 59.95 ms before and 8.44 ms after in local median runs. Closed and dashed profile strokes remain whole; estimate unchanged. |
+| 2026-11-05 | minor | G15: Direct Selection reuses one document hit result when choosing the cursor over a path; a 200,000-anchor path's segment cursor took 58.15 ms before and 29.33 ms after in local median runs. Cursor behavior is unchanged; estimate unchanged. |
 | 2026-11-05 | minor | G15: Selection skips building corner and pie widgets when the pointer is well outside a large selection; empty-canvas hover with 20,000 selected paths took 28.72 ms before and 16.41 ms after in local median runs. Other cursor targets remain active; estimate unchanged. |
 | 2026-11-05 | minor | G15: Direct Selection reuses one document hit result when choosing the cursor over a path; after the path hit-test improvement, a 200,000-anchor path's segment cursor took 3.72 ms before and 2.66 ms after in local median runs. Cursor behavior is unchanged; estimate unchanged. |
 | 2026-11-05 | minor | G15: large-selection transforms reuse object locations found during command validation; a 20,000-object nudge took 58.07 ms before and 51.26 ms after in paired median runs. Estimate unchanged. |
@@ -653,6 +655,12 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G15 Performance budgets and a GPU renderer
 
+- **Improved (2026-11-05):** after an edit, a long open stroke with an undashed width profile
+  outlines the part near the view and keeps each point's original position along the profile.
+  A 200,000-segment outline took 59.95 ms whole and 8.44 ms cropped in local median runs; this
+  measures outline construction, not a complete frame. Closed and dashed profile strokes still
+  use their full outline. Pixel comparisons cover curved and straight open paths, their ends,
+  asymmetric profiles, two subpaths, and the closed-path fallback. The idle budget remains open.
 - **Improved (2026-11-05):** when more than 128 objects are selected, Selection skips making
   corner and pie widgets if the pointer is farther than their reach from the selected art.
   Empty-canvas hover with 20,000 selected paths took 28.72 ms before and 16.41 ms after in

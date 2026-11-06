@@ -313,11 +313,25 @@ impl Renderer {
         }
         #[cfg(test)]
         STROKES_OUTLINED.with(|n| n.set(n.get() + 1));
-        // A long stroke without a width profile is outlined only in and around the view, with a
-        // margin of the view's own size on each side ([`crop_dashed`] for a dashed one,
-        // [`crop_line`] otherwise).
+        // A long stroke is outlined only in and around the view, with a margin of the view's
+        // own size on each side. Width profiles keep their positions on the whole path.
         let region = v.inflate(v.width(), v.height());
         let tol = 2f64.powi(level);
+        if crops()
+            && line.elements().len() > CROP_ELEMENTS
+            && st.dash.is_none()
+            && width >= tol * 4.0
+            && let Some(profile) = &st.profile
+            && profile.points.iter().all(|(t, l, r)| t.is_finite() && l.is_finite() && r.is_finite())
+        {
+            let side = profile.points.iter().flat_map(|&(_, l, r)| [l, r]).fold(1.0_f64, f64::max);
+            let reach = crop_reach(st, width * side, f.px, tol);
+            if let Some(outline) = effects::stroke::line_outline_profile_near(line, st, width, tol, region.inflate(reach, reach)) {
+                let outline = Arc::new(outline);
+                self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop: Some(region), own }, moved);
+                return Some(outline);
+            }
+        }
         if crops()
             && line.elements().len() > CROP_ELEMENTS
             && st.dash.is_some()
