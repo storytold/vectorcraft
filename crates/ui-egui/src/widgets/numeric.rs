@@ -647,6 +647,53 @@ pub fn spin_field_stops_named(
     .and_then(SpinPick::value)
 }
 
+/// A distance field with spinner arrows kept within `bounds` (points), as the Drop Shadow and
+/// Outer Glow dialogs show their offsets and blur: the spinner steps one `unit` at a time
+/// (Shift ×10, Ctrl/Cmd ÷10), and it, ↑/↓, the wheel, a scrub and a typed value stop at both
+/// ends. Returns the committed or stepped value in points.
+pub fn spin_length_within(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + Copy,
+    value: Option<f64>,
+    unit: Unit,
+    width: f32,
+    bounds: RangeInclusive<f64>,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    let step = Some(unit.to_pt(1.0)).filter(|s| s.is_finite() && *s > 0.0).unwrap_or(1.0);
+    let field = bounds.clone();
+    spin_generic(ui, label, value, None, None, None, width, step, *bounds.start(), &[], &[], &|v| unit.format(v), &mut |ui, fw, corners, label| {
+        unit_field(ui, id, label, None, value, unit, fw, false, field.clone(), &[], corners, false, "")
+    })
+    .and_then(SpinPick::value)
+    .map(|v| within(v, &bounds))
+}
+
+/// [`range_field`] with spinner arrows (Opacity and Darkness in the Drop Shadow and Outer Glow
+/// dialogs): the spinner steps by `step` (Shift ×10, Ctrl/Cmd ÷10) and, like ↑/↓, the wheel, a
+/// scrub and a typed value, stops at the ends of `range`.
+#[allow(clippy::too_many_arguments)]
+pub fn spin_range(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + Copy,
+    value: Option<f64>,
+    range: RangeInclusive<f64>,
+    suffix: &str,
+    decimals: usize,
+    width: f32,
+    step: f64,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    let places = decimals.min(6) as i32;
+    let value = value.map(|v| within(v, &range));
+    let fmt = |v: f64| format!("{v}{suffix}");
+    spin_generic(ui, label, value, None, None, None, width, step, *range.start(), &[], &[], &fmt, &mut |ui, fw, corners, label| {
+        bounded_field(ui, id, label, None, value, suffix, decimals, fw, &range, None, corners, false, false)
+    })
+    .and_then(SpinPick::value)
+    .map(|v| within(round_to(v, places), &range))
+}
+
 /// What a [`spin_field_auto`] returns: a value (points), or its Auto entry.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SpinPick {

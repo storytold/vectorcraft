@@ -722,7 +722,7 @@ fn drop_shadow_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::
             d.fields.insert("shade".into(), json!("darkness"));
         }
         ui.add_enabled_ui(darkness, |ui| {
-            if let Some(v) = widgets::range_field(ui, "fx-darkness", d.f64("darkness", 100.0), 0.0..=100.0, "%", 0, 70.0) {
+            if let Some(v) = widgets::spin_range(ui, "fx-darkness", Some(d.f64("darkness", 100.0)), 0.0..=100.0, "%", 0, 86.0, 1.0) {
                 d.fields.insert("darkness".into(), json!(v));
             }
         });
@@ -1040,5 +1040,83 @@ mod tests {
         let st = app.session.doc().unwrap();
         let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
         assert_eq!(fx.params.get("color"), Some(&json!("#00ff00")), "Outer Glow takes the picked colour");
+    }
+
+    /// Effect > Stylize > Drop Shadow and Outer Glow: Opacity, the offsets, Blur and Darkness have
+    /// spinner arrows (#5367, #5368). A click on the top half steps up, on the bottom half down;
+    /// Opacity stops at 100 % and Blur at 0, and OK applies the stepped values.
+    #[test]
+    fn drop_shadow_and_outer_glow_fields_have_spinner_arrows() {
+        for (effect, count) in [("stylize.dropShadow", 5), ("stylize.outerGlow", 2)] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+            app.run("select.all", json!({})).unwrap();
+            app.run("effect.dialog", json!({"effect": effect})).unwrap();
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            crate::theme::install_fonts(&ctx);
+            crate::theme::apply(&ctx, Default::default());
+            let time = std::cell::Cell::new(0.0);
+            // One frame → the spinners' bounds, top to bottom.
+            let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+                time.set(time.get() + 0.05);
+                let mut out =
+                    ctx.run_ui(egui::RawInput { time: Some(time.get()), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+                out.textures_delta.clear();
+                let mut spinners: Vec<egui::Rect> = out
+                    .platform_output
+                    .accesskit_update
+                    .map(|u| u.nodes)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter(|(_, n)| n.label() == Some("Step up or down"))
+                    .filter_map(|(_, n)| n.bounds())
+                    .map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+                    .collect();
+                spinners.sort_by(|a, b| a.top().total_cmp(&b.top()));
+                spinners
+            };
+            for _ in 0..6 {
+                frame(&mut app, vec![]);
+            }
+            let spinners = frame(&mut app, vec![]);
+            assert_eq!(spinners.len(), count, "{effect}: a spinner beside each number field: {spinners:?}");
+            let click = |app: &mut VectorcraftApp, r: egui::Rect, up: bool| {
+                let pos = r.center() + egui::vec2(0.0, if up { -r.height() / 4.0 } else { r.height() / 4.0 });
+                let button =
+                    |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+                frame(app, vec![egui::Event::PointerMoved(pos), button(true)]);
+                frame(app, vec![button(false)]);
+                frame(app, vec![]);
+            };
+            let (opacity, blur) = (spinners[0], spinners[count - 1 - usize::from(count == 5)]);
+            click(&mut app, opacity, true);
+            let field = |app: &VectorcraftApp, k: &str| app.ui.dialog.as_ref().unwrap().fields.get(k).and_then(Value::as_f64);
+            assert_eq!(field(&app, "opacity"), Some(76.0), "{effect}: the up arrow steps Opacity up");
+            click(&mut app, blur, false);
+            assert_eq!(field(&app, "blur"), Some(4.0), "{effect}: the down arrow steps Blur down");
+            app.ui.dialog.as_mut().unwrap().fields.insert("opacity".into(), json!(100.0));
+            app.ui.dialog.as_mut().unwrap().fields.insert("blur".into(), json!(0.0));
+            frame(&mut app, vec![]);
+            click(&mut app, opacity, true);
+            click(&mut app, blur, false);
+            assert_eq!((field(&app, "opacity"), field(&app, "blur")), (Some(100.0), Some(0.0)), "{effect}: the arrows stop at the ends");
+            click(&mut app, opacity, false);
+            if count == 5 {
+                click(&mut app, spinners[1], true);
+                assert_eq!(field(&app, "x"), Some(8.0), "the X offset steps up");
+                let darkness = spinners[4];
+                app.ui.dialog.as_mut().unwrap().fields.insert("shade".into(), json!("darkness"));
+                frame(&mut app, vec![]);
+                click(&mut app, darkness, false);
+                assert_eq!(field(&app, "darkness"), Some(99.0), "Darkness steps down");
+            }
+            super::super::confirm(&mut app).unwrap();
+            let st = app.session.doc().unwrap();
+            let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
+            let param = |k: &str| fx.params.get(k).and_then(Value::as_f64);
+            assert_eq!((param("opacity"), param("blur")), (Some(99.0), Some(0.0)), "{effect}: OK applies them");
+        }
     }
 }
