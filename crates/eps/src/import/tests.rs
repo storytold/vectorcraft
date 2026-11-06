@@ -1400,3 +1400,10 @@ fn stored_graphics_states_use_up_the_memory_budget() {
         assert!(r.warnings.iter().any(|w| w.contains("uses too much memory")), "{body}: {:?}", r.warnings);
     }
 }
+
+/// `bitshift` by the most negative integer shifts right by everything, not a negation overflow.
+#[test]
+fn bitshift_by_the_most_negative_integer_does_not_panic() {
+    let r = read("0 0 10 10 rectfill 1 -9223372036854775808 bitshift pop -1 -9223372036854775808 bitshift pop");
+    assert_eq!(objects(&r.document).len(), 1, "{:?}", r.warnings);
+}
