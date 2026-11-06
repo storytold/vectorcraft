@@ -391,9 +391,13 @@ impl Tool for ShapeTool {
     fn id(&self) -> &'static str {
         self.id
     }
+    /// A shape being drawn, a Live Shape widget dragged, or the selection moved or turned is a
+    /// gesture in progress.
     fn busy(&self) -> bool {
         self.start.is_some() || self.widget.is_some() || self.selection.is_some()
     }
+    /// A widget or selection drag takes the pointer; otherwise a press draws, unless it lands on
+    /// the selection's centre point or in the rotate zone just outside its box's corner.
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         if let Some(out) = self.widget_pointer(cx, ev) {
             return out;
@@ -469,6 +473,8 @@ impl Tool for ShapeTool {
             _ => vec![],
         }
     }
+    /// ↑/↓ change a polygon's sides, a star's points or the rounded rectangle's radius while it is
+    /// drawn; Escape turns a widget or selection drag back.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         // A drag of the selection: Escape turns it back, as with the Selection tool.
         if self.selection.is_some() {
@@ -540,6 +546,8 @@ impl Tool for ShapeTool {
             },
         }
     }
+    /// ↑/↓ step a corner's kind while its widget is dragged, and Escape ends a drag of the
+    /// selection.
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
         match (&self.widget, &self.selection) {
             (Some(WidgetDrag::Corner(_)), _) => matches!(key, ToolKey::Up | ToolKey::Down),
@@ -547,6 +555,8 @@ impl Tool for ShapeTool {
             _ => false,
         }
     }
+    /// The widget being dragged, the Smart Guides of the shape being drawn or the selection being
+    /// moved, and its size, angle or offset label.
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         match &self.widget {
             Some(WidgetDrag::Corner(c)) => return c.overlays(cx),
@@ -588,6 +598,9 @@ impl Tool for ShapeTool {
         }
         o
     }
+    /// The Selection tool's pointer over a Live Shape widget, the selection's centre point or the
+    /// rotate zone just outside its box's corner; the crosshair everywhere else, where a press
+    /// draws.
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         // Over a widget a press would drag (or dragging one), the Selection tool's pointer for it.
         let idle = self.start.is_none();

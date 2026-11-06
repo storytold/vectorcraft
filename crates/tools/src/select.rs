@@ -804,6 +804,8 @@ impl Tool for SelectionTool {
         }
     }
 
+    /// A press takes the selection's widgets, a ruler guide, a selected object's centre point or
+    /// the art; the drags then move, scale, rotate, marquee or drag what it took.
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.note_loaded_at_press(ev.kind);
         let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
@@ -1061,6 +1063,8 @@ impl Tool for SelectionTool {
         o
     }
 
+    /// The pointer for the drag in progress, else the one for what a press would take: a widget,
+    /// a ruler guide, the box's handles or rotate zone, a selected object's centre point or the art.
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         if let State::Mirror(d) = &self.state {
             return d.cursor(cx, p);
