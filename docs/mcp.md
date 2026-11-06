@@ -1359,6 +1359,7 @@ mask first". Pattern editing mode does not count as isolation mode here.
 `view.transparencyGrid {on?}` (View → Show Transparency Grid; default: toggle) is view state of each open document,
 like the mask view: the grid shows behind the artboards of the documents that turn it on, on the canvas and in
 `ui.screenshot`, never in exports. It returns `{on}`, isn't undoable and doesn't mark the document changed.
+The command rejects an `on` value that is not a boolean. Omitting `on` toggles the current value.
 
 `view.globalRulers {global?}` (View → Rulers → Change to Global / Artboard Rulers, Cmd+Alt+R; default: toggle) is
 saved with the document and undoable. With artboard rulers (a new document's) the rulers count from the active
