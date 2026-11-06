@@ -1569,6 +1569,29 @@ fn transparency_of_objects_and_groups() {
     assert_eq!((a[2].opacity, a[2].blend), (1.0, BlendMode::Normal), "the next object's state isn't the group's");
 }
 
+/// A mesh's opacity defines the knockout shape when an `Xy` says so before it or right after its
+/// end, whether its patches make one mesh or a group of patches. An `Xy` that is the layer's leaves
+/// the mesh's as it was.
+#[test]
+fn a_gradient_mesh_keeps_its_knockout_shape() {
+    let one = straight_mesh(2, 2, (10.0, 10.0));
+    let patches = one.replace("[2 2] /Size X#\n", "");
+    let shape = "0 0.5 0 0 1 Xy\n";
+    for (mesh, is_mesh) in [(&one, true), (&patches, false)] {
+        let doc = read_ok(&layer(&format!("{shape}{mesh}"))).doc;
+        assert_eq!(matches!(art(&doc)[0].kind, NodeKind::Mesh(_)), is_mesh, "{:?}", art(&doc)[0].kind);
+        assert_eq!((art(&doc)[0].opacity, art(&doc)[0].knockout_shape), (0.5, true), "{is_mesh}");
+    }
+    let doc = read_ok(&layer(&format!("{one}{shape}0 0 Xd\n6 () XW\n"))).doc;
+    assert_eq!((art(&doc)[0].opacity, art(&doc)[0].knockout_shape), (0.5, true), "written after its end");
+    let doc = read_ok(&layer(&format!("{shape}{one}1 0.35 0 0 0 Xy\n0 0 Xd\n7 () XW\n"))).doc;
+    assert_eq!((art(&doc)[0].opacity, art(&doc)[0].knockout_shape), (0.5, true), "the mesh's own");
+    assert_eq!((doc.layers[0].opacity, doc.layers[0].knockout_shape), (0.35, false), "the layer's own");
+    let doc = read_ok(&layer(&format!("{one}1 0.35 0 0 1 Xy\n0 0 Xd\n7 () XW\n"))).doc;
+    assert_eq!((art(&doc)[0].opacity, art(&doc)[0].knockout_shape), (1.0, false), "the mesh's own");
+    assert_eq!((doc.layers[0].opacity, doc.layers[0].knockout_shape), (0.35, true), "the layer's own");
+}
+
 #[test]
 fn a_gradient_mesh_takes_the_transparency_written_after_it() {
     // GUARDS: a mesh's own state (`Xy`) comes right after its `/End X!`, before `Xd` and `XW`, as a
@@ -5741,6 +5764,30 @@ fn a_styled_object_keeps_the_transparency_written_on_its_look() {
     assert_eq!(a.len(), 1, "{a:#?}");
     assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
     assert_eq!((a[0].opacity, a[0].blend), (0.6, BlendMode::Multiply));
+    assert!(!a[0].knockout_shape);
+    let r = read_ok(&format!("{ART_STYLES}{}", layer(&art_.replace("1 0.6 0 2 0 Xy", "1 0.6 0 2 1 Xy"))));
+    assert!(art(&r.doc)[0].knockout_shape, "written on the look");
+}
+
+/// The knockout shape flag written on a text object's look goes to the object, or, where the look
+/// draws more than the type, opaque or not, to the group that holds the look and the object.
+#[test]
+fn a_text_objects_look_gives_it_the_knockout_shape() {
+    let look = "0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nU\n1 0.2 0 1 1 Xy\n0 0 Xd\n6 () XW\n";
+    let own = "%_/AI11Text :\n%_0 /FreeUndo ,\n%_0 /FrameIndex ,\n%_0 /StoryIndex ,\n%_;\n";
+    let doc = read_ok(&layer(&format!("{look}{own}1 (Style) XW\n"))).doc;
+    let a = art(&doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert_eq!((a[0].opacity, a[0].knockout_shape), (0.2, true));
+    let drawing = look.replace("U\n", &format!("{RED}{}f\nU\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    for (state, opacity) in [("1 0.2 0 1 1 Xy", 0.2), ("0 1 0 1 1 Xy", 1.0)] {
+        let drawn = drawing.replace("1 0.2 0 1 1 Xy", state);
+        let doc = read_ok(&layer(&format!("{drawn}{own}1 (Style) XW\n"))).doc;
+        let a = art(&doc);
+        assert_eq!(a.len(), 1, "{state}: {a:#?}");
+        assert_eq!((a[0].opacity, a[0].knockout_shape), (opacity, true), "{state}");
+        assert!(a[0].children().unwrap().iter().all(|n| !n.knockout_shape), "{state}: {a:#?}");
+    }
 }
 
 /// An envelope is written on `%_` lines as a group holding the mesh that shapes it, with its
@@ -6952,6 +6999,33 @@ fn a_blend_it_cant_read_keeps_its_drawn_steps() {
         assert_eq!(objects[0].children().map(|c| c.len()), Some(5), "the five drawn squares");
         assert!(s.warnings.iter().any(|w| w == super::blend::DRAWN), "{:?}", s.warnings);
     }
+}
+
+/// A blend's opacity defines the knockout shape when the state block after its record says so,
+/// live or as its drawn steps. An `Xy` that is the layer's leaves the blend's as it was.
+#[test]
+fn a_blend_keeps_its_knockout_shape() {
+    let straight = "%_10 50 m\n%_110 50 L\n";
+    let keys = [Some("A"), Some("B")];
+    let record = blend_record(&['A', 'B']);
+    let garbled = "(Adobe Path Blends) 1 0 16 XP\n%00112233445566778899AABBCCDDEEFF\n".to_string();
+    for (record, live) in [(&record, true), (&garbled, false)] {
+        let body = format!("{}0 0.6 0 1 1 Xy\n0 0 Xd\n6 () XW\n", blend_file(straight, keys, record));
+        let doc = read_ok(&layer(&body)).doc;
+        assert_eq!(matches!(art(&doc)[0].kind, NodeKind::Blend { .. }), live, "{:?}", art(&doc)[0].kind);
+        assert!(art(&doc)[0].knockout_shape, "live: {live}");
+    }
+    let blend = blend_file(straight, keys, &record);
+    // Written after its drawn steps, before the record.
+    let doc = read_ok(&layer(&blend.replace("\nU\n9 () XW\n0 Ae\n", "\nU\n0 0.6 0 1 1 Xy\n9 () XW\n0 Ae\n"))).doc;
+    assert!(matches!(art(&doc)[0].kind, NodeKind::Blend { .. }), "{:?}", art(&doc)[0].kind);
+    assert_eq!((art(&doc)[0].opacity, art(&doc)[0].knockout_shape), (0.6, true));
+    let doc = read_ok(&layer(&format!("{blend}0 0.6 0 1 1 Xy\n1 0.35 0 0 0 Xy\n0 0 Xd\n7 () XW\n"))).doc;
+    assert!(art(&doc)[0].knockout_shape, "the blend's own");
+    assert!(!doc.layers[0].knockout_shape, "the layer's own");
+    let doc = read_ok(&layer(&format!("{blend}1 0.35 0 0 1 Xy\n0 0 Xd\n7 () XW\n"))).doc;
+    assert!(!art(&doc)[0].knockout_shape, "the blend's own");
+    assert!(doc.layers[0].knockout_shape, "the layer's own");
 }
 
 /// A blend's transparency (here knockout on, as blends are written) is the state block after its

@@ -2682,6 +2682,30 @@ fn images_come_back_with_their_pixels_and_places() {
     assert_eq!(lines(&back).len(), lines(&doc).len(), "{:?}", lines(&back));
 }
 
+/// An image whose opacity defines the knockout shape comes back with it, embedded or linked. The
+/// image after it and their layer do not take it.
+#[test]
+fn an_images_knockout_shape_comes_back() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let at = |x: f64| Affine::new([10.0, 0.0, 0.0, 10.0, x, 10.0]);
+    let mut shaped = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), at(10.0), None);
+    (shaped.opacity, shaped.knockout_shape) = (0.5, true);
+    doc.insert(Some(layer), usize::MAX, shaped).unwrap();
+    let plain = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), at(50.0), None);
+    doc.insert(Some(layer), usize::MAX, plain).unwrap();
+    let mut link = vectorcraft_doc::LinkInfo::new("/Users/someone/Job/art/pic.png");
+    link.relative = Some("art/pic.png".into());
+    let mut linked = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), at(90.0), Some(link));
+    linked.knockout_shape = true;
+    doc.insert(Some(layer), usize::MAX, linked).unwrap();
+    let back = read_back(&doc);
+    let art = back.layers[0].children().unwrap();
+    let got: Vec<_> = art.iter().map(|n| (matches!(n.kind, NodeKind::Image(_)), n.opacity, n.knockout_shape)).collect();
+    assert_eq!(got, [(true, 0.5, true), (true, 1.0, false), (true, 1.0, true)]);
+    assert_eq!((back.layers[0].opacity, back.layers[0].knockout_shape), (1.0, false));
+}
+
 #[test]
 fn images_are_written_again_as_the_same_bytes() {
     let mut doc = images_doc();

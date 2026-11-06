@@ -312,7 +312,7 @@ impl<'a> Reader<'a> {
         if let (Some(_), Some(before)) = (state, self.mesh_undo.take())
             && let Some(mesh) = f.children.last_mut().filter(|n| matches!(n.kind, NodeKind::Mesh(_) | NodeKind::Blend { .. }))
         {
-            (mesh.opacity, mesh.blend, mesh.isolate, mesh.knockout) = before;
+            (mesh.opacity, mesh.blend, mesh.isolate, mesh.knockout, mesh.knockout_shape) = before;
         }
         let Kind::Layer(a) = f.kind else { return Ok(()) };
         let (children, clip) = self.clip_first(f.children, &f.clips, false, self.nesting() + 1)?;
@@ -760,7 +760,8 @@ impl<'a> Reader<'a> {
                 // did (they were counted as read).
                 let mut blend = Node::new(self.doc.alloc_id(), kind);
                 (blend.name, blend.visible, blend.locked) = (steps.name.take(), steps.visible, steps.locked);
-                (blend.opacity, blend.blend, blend.isolate, blend.knockout) = (steps.opacity, steps.blend, steps.isolate, steps.knockout);
+                (blend.opacity, blend.blend, blend.isolate, blend.knockout, blend.knockout_shape) =
+                    (steps.opacity, steps.blend, steps.isolate, steps.knockout, steps.knockout_shape);
                 // Its note, URL and data (object tags) too.
                 blend.extras_mut().attrs = steps.extras_mut().attrs.take();
                 f.children.push(blend);

@@ -623,8 +623,8 @@ impl<'a> Reader<'a> {
             self.last_object().filter(|n| (mesh_ended && matches!(n.kind, NodeKind::Mesh(_))) || matches!(n.kind, NodeKind::Blend { .. }))
         {
             // The mesh's or blend's, or the layer's when it is the layer's last object: kept for either.
-            let before = (n.opacity, n.blend, n.isolate, n.knockout);
-            (n.opacity, n.blend, n.isolate, n.knockout) = (gs.opacity, gs.blend, gs.isolate, gs.knockout);
+            let before = (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape);
+            (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
             self.mesh_undo = Some(before);
             self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape));
         } else if let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
@@ -763,7 +763,8 @@ impl<'a> Reader<'a> {
             }
             object.appearance = appearance.into();
             // The object's transparency is written on its look, after the look's group ends.
-            (object.opacity, object.blend, object.isolate, object.knockout) = (look.opacity, look.blend, look.isolate, look.knockout);
+            (object.opacity, object.blend, object.isolate, object.knockout, object.knockout_shape) =
+                (look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape);
             // Now the object itself, not a copy an enclosing look's `strip` would remove.
             self.hidden_ids.remove(&object.id);
             // Linked to the style when the style list has its name ([`Reader::finish`]).
@@ -784,8 +785,9 @@ impl<'a> Reader<'a> {
             // A text object stays the type it is: over what else its look draws, or in place of a
             // look that was only its type. Its transparency is written on its look.
             let empty = look.children().is_some_and(|c| c.is_empty());
-            if empty || (look.opacity >= 1.0 && look.blend == BlendMode::Normal && !look.isolate) {
-                (object.opacity, object.blend, object.isolate, object.knockout) = (look.opacity, look.blend, look.isolate, look.knockout);
+            if empty || (look.opacity >= 1.0 && look.blend == BlendMode::Normal && !look.isolate && !look.knockout_shape) {
+                (object.opacity, object.blend, object.isolate, object.knockout, object.knockout_shape) =
+                    (look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape);
                 if empty {
                     *look = object;
                 } else {
@@ -795,11 +797,11 @@ impl<'a> Reader<'a> {
             }
             // The look and the type go into a group that has the transparency.
             let Some(mut look) = f.children.pop() else { return };
-            let state = (look.opacity, look.blend, look.isolate, look.knockout);
-            (look.opacity, look.blend, look.isolate, look.knockout) = (1.0, BlendMode::Normal, false, Knockout::Neutral);
-            (object.opacity, object.blend, object.isolate) = (1.0, BlendMode::Normal, false);
+            let state = (look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape);
+            (look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape) = (1.0, BlendMode::Normal, false, Knockout::Neutral, false);
+            (object.opacity, object.blend, object.isolate, object.knockout_shape) = (1.0, BlendMode::Normal, false, false);
             let mut group = Node::group(self.doc.alloc_id(), vec![Arc::new(look), Arc::new(object)]);
-            (group.opacity, group.blend, group.isolate, group.knockout) = state;
+            (group.opacity, group.blend, group.isolate, group.knockout, group.knockout_shape) = state;
             self.text_looks.insert(group.id);
             if let Some(f) = self.frames.last_mut() {
                 f.children.push(group);
