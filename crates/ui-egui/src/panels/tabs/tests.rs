@@ -464,6 +464,80 @@ fn indent_markers_after_select_all_keep_each_story_paragraphs_indents() {
     }
 }
 
+/// After Select All in threaded text with mixed indents, a marker change that makes the first
+/// frame's paragraphs wrap onto more lines pushes text into the next frame while the change is
+/// applied. Every paragraph of the story still gets the new position: the upper marker keeps each
+/// left indent, and the lower marker keeps each first-line position.
+#[test]
+fn indent_markers_after_select_all_follow_text_that_reflows_into_the_next_frame() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 1000})).unwrap();
+    let story = (1..=12).map(|i| format!("p{i} aaa bbb ccc")).collect::<Vec<_>>().join("\n");
+    let a = app.run("text.create", json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 200, "height": 60}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = app.run("text.thread.add", json!({"from": a, "rect": [300, 10, 200, 950]})).unwrap()["id"].as_u64().unwrap();
+    app.run("text.setFormat", json!({"ids": [b], "leftIndent": 10})).unwrap();
+    // Each paragraph of the story by its first word, with its left indent and first-line position;
+    // a paragraph continued from the frame before is counted once. No paragraph of the story is
+    // empty, so an empty piece (after a frame's last line break) is not one.
+    let paragraphs = |app: &VectorcraftApp| -> Vec<(String, f64, f64)> {
+        let st = app.session.active().unwrap();
+        [a, b]
+            .into_iter()
+            .flat_map(|id| match &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+                NodeKind::Text(t) => t
+                    .plain_text()
+                    .split('\n')
+                    .enumerate()
+                    .filter(|(i, text)| !text.is_empty() && (*i > 0 || !t.first_para_continues))
+                    .map(|(i, text)| {
+                        let p = t.para_at(i);
+                        (text.split(' ').next().unwrap_or_default().to_string(), p.left_indent, p.left_indent + p.first_line_indent)
+                    })
+                    .collect::<Vec<_>>(),
+                _ => panic!("not text"),
+            })
+            .collect()
+    };
+    let in_a = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(a)).unwrap().kind {
+        NodeKind::Text(t) => t.plain_text().len(),
+        _ => panic!("not text"),
+    };
+    // Select All in the first frame and move `marker` to `to` → the story's paragraphs before and
+    // after.
+    let apply = |app: &mut VectorcraftApp, marker, to| {
+        let before = paragraphs(app);
+        assert_eq!(before.len(), 12, "{before:?}");
+        let shown = in_a(app);
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+        app.run("select.all", json!({})).unwrap();
+        let (node, para, span) = current_para(app).unwrap();
+        let targets = indent_targets(app, &node);
+        set_marker(app, marker, to, &para, span, &targets, false);
+        let after = paragraphs(app);
+        assert!(in_a(app) < shown, "the first frame holds less text once it wraps: {} of {shown} bytes, {after:?}", in_a(app));
+        assert_eq!(after.iter().map(|p| &p.0).collect::<Vec<_>>(), before.iter().map(|p| &p.0).collect::<Vec<_>>());
+        (before, after)
+    };
+    let (before, after) = apply(&mut app, IndentMarker::Upper, 150.0);
+    assert!(before.iter().any(|p| p.1 == 0.0) && before.iter().any(|p| p.1 == 10.0), "{before:?}");
+    for (was, now) in before.iter().zip(&after) {
+        assert_eq!((now.1, now.2), (was.1, 150.0), "{} keeps its left indent and starts at 150 pt: {after:?}", now.0);
+    }
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(paragraphs(&app), before);
+    // First lines at 150 and 160 pt; a left indent of 180 pt leaves room for one word a line.
+    app.run("text.setFormat", json!({"ids": [a, b], "firstLineIndent": 150})).unwrap();
+    let (before, after) = apply(&mut app, IndentMarker::Lower, 180.0);
+    assert!(before.iter().any(|p| p.2 == 150.0) && before.iter().any(|p| p.2 == 160.0), "{before:?}");
+    for (was, now) in before.iter().zip(&after) {
+        assert_eq!((now.1, now.2), (180.0, was.2), "{} is indented 180 pt and keeps its first-line position: {after:?}", now.0);
+    }
+}
+
 #[test]
 fn lower_marker_bounds_cover_each_touched_first_line() {
     let targets = [IndentTarget { id: 1, start: 0, left: 24.0, first_line: -20.0 }, IndentTarget { id: 1, start: 4, left: 24.0, first_line: 280.0 }];

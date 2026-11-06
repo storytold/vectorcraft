@@ -181,7 +181,9 @@ fn paint_markers(ui: &mut Ui, painter: &egui::Painter, tokens: &Tokens, view: Ma
     }
 }
 
-/// Apply an absolute ruler position through paragraph-format commands.
+/// Apply an absolute ruler position through paragraph-format commands. Paragraphs that need values
+/// of their own get one command each, the story's last paragraph first: threaded text re-flows
+/// after each command, and a re-flow moves only text after the paragraph that changed.
 fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para: &ParaStyle, span: f64, targets: &[IndentTarget], both: bool) {
     if targets.is_empty() || !target.is_finite() {
         return;
@@ -196,6 +198,7 @@ fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para:
             super::character::end_typing(app);
             let commands: Vec<Value> = targets
                 .iter()
+                .rev()
                 .map(|p| {
                     json!({"command": "text.setFormat", "params": {
                         "ids": [p.id], "start": p.start, "end": p.start, "firstLineIndent": target - p.left
@@ -222,6 +225,7 @@ fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para:
         super::character::end_typing(app);
         let commands: Vec<Value> = targets
             .iter()
+            .rev()
             .map(|p| {
                 json!({"command": "text.setFormat", "params": {
                     "ids": [p.id], "start": p.start, "end": p.start,
