@@ -76,8 +76,9 @@ pub fn specs() -> Vec<CommandSpec> {
 // ---------- predicates ----------
 
 /// The Intertwine groups of the selection: selected ones, and those around a selected object.
+/// None while an object of a dynamic symbol instance's art is selected.
 fn selected_groups(s: &Session) -> Vec<NodeId> {
-    let Some(st) = s.active() else { return vec![] };
+    let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) else { return vec![] };
     let mut out = vec![];
     for id in &st.selection.objects {
         let group = st.doc.ancestry(*id).unwrap_or_default().into_iter().rev().find(|a| st.doc.node(*a).is_some_and(is_intertwine));
@@ -92,6 +93,7 @@ fn selected_groups(s: &Session) -> Vec<NodeId> {
 
 fn has_intertwine(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
+    super::edit::no_symbol_part(s)?;
     if selected_groups(s).is_empty() { Err("select an Intertwine group".into()) } else { Ok(()) }
 }
 

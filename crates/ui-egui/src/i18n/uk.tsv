@@ -5904,6 +5904,7 @@ breakText	Glyphs	Гліфи
 	Reset Symbol Instance	Скинути екземпляр символу
 @msg	type must be static or dynamic, not {v}	type має бути static або dynamic, а не {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` — статичний символ: спершу встановіть для нього тип символу «Динамічний»
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	У контуру, складеного контуру або тексту, виділеного в екземплярі символу, можна змінити лише суцільний колір заливки й обведення
 @msg	path must be a list of child indices	path має бути списком індексів дочірніх об’єктів
 @msg	no object at path {shown} in the symbol's art	у графіці символу немає об’єкта за шляхом {shown}
 @msg	give fill, stroke, opacity and/or blend	вкажіть fill, stroke, opacity та/або blend

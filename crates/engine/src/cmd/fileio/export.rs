@@ -203,10 +203,11 @@ fn selection(s: &mut Session, cmd: &str) -> Result<(Document, vectorcraft_geom::
 }
 
 /// The selected objects (their top-most selected ancestors) that are artwork: those on template
-/// layers are guides and are left out.
+/// layers are guides and are left out. With an object of a dynamic symbol instance's art selected,
+/// the instance is exported whole.
 pub(crate) fn selected_artwork(s: &Session) -> Result<Vec<NodeId>> {
-    let ids = edit::selected_roots(s)?;
     let st = s.doc()?;
+    let ids = edit::roots_of(&st.doc, st.selection.in_paint_order(&st.doc));
     let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
     // On a template layer or sublayer, at any depth.
     let on_template = |id| st.doc.ancestry(id).is_some_and(|a| a.into_iter().any(is_template));

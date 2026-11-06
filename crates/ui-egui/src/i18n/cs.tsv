@@ -6304,6 +6304,7 @@ breakText	Glyphs	Glyfy
 	Reset Symbol Instance	Obnovit instanci symbolu
 @msg	type must be static or dynamic, not {v}	type musí být static nebo dynamic, ne {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` je statický symbol: nejprve nastavte jeho typ symbolu na Dynamický
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	U cesty, složené cesty nebo textu vybraného v instanci symbolu lze měnit jen plnou barvu výplně a tahu
 @msg	path must be a list of child indices	path musí být seznam indexů potomků
 @msg	no object at path {shown} in the symbol's art	v kresbě symbolu není na cestě {shown} žádný objekt
 @msg	give fill, stroke, opacity and/or blend	zadejte fill, stroke, opacity a/nebo blend

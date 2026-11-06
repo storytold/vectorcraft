@@ -5885,6 +5885,7 @@ breakText	Glyphs	글리프
 	Reset Symbol Instance	심볼 인스턴스 재설정
 @msg	type must be static or dynamic, not {v}	type은 static 또는 dynamic이어야 합니다({v}는 안 됨)
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}`은(는) 정적 심볼입니다. 먼저 심볼 유형을 동적으로 설정하세요
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	심볼 인스턴스에서 선택한 패스, 컴파운드 패스 또는 문자는 칠과 선의 단색만 변경할 수 있습니다
 @msg	path must be a list of child indices	path는 자식 인덱스 목록이어야 합니다
 @msg	no object at path {shown} in the symbol's art	심볼 아트의 경로 {shown}에 개체가 없습니다
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity 및/또는 blend를 지정하세요

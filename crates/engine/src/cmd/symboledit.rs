@@ -78,6 +78,10 @@ pub(crate) fn enter(s: &mut Session, p: &Value) -> Result<Value> {
             (name, xf, ids.first().copied())
         }
         None => {
+            // Refused while an object of a dynamic instance's art is selected, unless `name` is given.
+            if str_param(p, "name").is_none() && st.selection.symbol_part.is_some() {
+                return Err(super::brushsym::part_only());
+            }
             let picked = if str_param(p, "name").is_some() { vec![] } else { selected_instances(st) };
             let symbols: Vec<(String, Affine)> = picked.iter().filter_map(|id| instance_of(&st.doc, *id)).collect();
             match symbols.first() {

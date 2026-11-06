@@ -522,6 +522,9 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let row_swatches: Vec<Option<Swatch>> =
         rows.iter().map(|r| r.new_color().and_then(|c| lib_swatches.iter().find(|w| w.paint.color() == Some(c)).cloned())).collect();
+    // While an object of a dynamic symbol instance's art is selected, the selection is refused, as
+    // `selected_roots` refuses it.
+    super::edit::refuse_symbol_part(s)?;
     let ids = s.doc()?.selection.objects.clone();
     let group = text_param(p, "group", C)?;
     if ids.is_empty() && group.is_none() {

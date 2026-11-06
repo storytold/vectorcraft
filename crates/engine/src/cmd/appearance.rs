@@ -126,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art) → {ids}",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's solid fill and stroke for this instance only, as the Eyedropper Options allow, and a sampled gradient or pattern, or options that pick up neither color, are refused → {ids}",
             has_doc,
             copy_from
         ),
@@ -1069,6 +1069,37 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`"));
     }
     let attrs = s.prefs.eyedropper.attrs(p).map_err(|e| bad(C, e))?;
+    // An object of a dynamic symbol instance's art selected with Direct Selection takes the clicked
+    // object's solid fill and stroke, as the Eyedropper Options allow, for this instance only. A
+    // gradient or pattern sampled for it, and options that pick up neither color, are refused.
+    if !reverse
+        && !append
+        && !defaults_only
+        && p.get("ids").is_none()
+        && let Some((id, path)) = super::brushsym::selected_part(s)?
+    {
+        let src = Arc::new(s.doc()?.doc.node(clicked).ok_or(EngineError::NoNode(clicked))?.clone());
+        let (fill, stroke) = (super::paint::proxy_paint(&src, false, None), super::paint::proxy_paint(&src, true, None));
+        let a = attrs.appearance;
+        if !(a.fill.color || a.stroke.color)
+            || (a.fill.color && !super::paint::part_takes(&fill))
+            || (a.stroke.color && !super::paint::part_takes(&stroke))
+        {
+            return Err(super::brushsym::part_only());
+        }
+        super::brushsym::edit_part(s, id, &path, "Eyedropper", |o| {
+            if a.fill.color {
+                o.fill = Some(fill);
+            }
+            if a.stroke.color {
+                o.stroke = Some(stroke);
+            }
+        })?;
+        // The clicked object becomes the Eyedropper's sample, and new art takes its paint.
+        Picked::of(&src).to_defaults(s, &attrs.appearance);
+        s.eyedropper_sample = Some(src);
+        return Ok(json!({ "ids": [id.0] }));
+    }
     let range = if !defaults_only && !reverse && !append && p.get("ids").is_none() {
         super::textedit::editing_range(s)?.filter(|(_, a, b)| a != b)
     } else {

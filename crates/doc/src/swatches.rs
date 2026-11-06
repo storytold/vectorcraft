@@ -300,6 +300,20 @@ fn map_node(n: &Node, f: &mut LinkFn) -> Option<(Node, usize)> {
         }
         out = Some(m);
     }
+    // A dynamic symbol instance's own paints for objects of its art (`symbol_overrides`).
+    if !n.extras().symbol_overrides.is_empty() {
+        let mut overrides = n.extras().symbol_overrides.clone();
+        let mut k = 0;
+        for p in overrides.iter_mut().flat_map(|o| [&mut o.fill, &mut o.stroke]).flatten() {
+            if matches!(p, Paint::Solid { .. } | Paint::Gradient(_)) && p.map_links(f) {
+                k += 1;
+            }
+        }
+        if k > 0 {
+            out.get_or_insert_with(|| n.clone()).extras_mut().symbol_overrides = overrides;
+            count += k;
+        }
+    }
     if let Some(ch) = n.children() {
         for (i, c) in ch.iter().enumerate() {
             if let Some((new, k)) = map_node(c, f) {
