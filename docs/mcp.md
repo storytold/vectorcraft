@@ -1790,8 +1790,10 @@ already walks Image Trace. Short agent entry points:
   `dataset.import`, adds no undo step when it leaves the variables and data sets as they were. The library
   is XML whose `variableSets` element holds `variableSet` elements, each with a `variables` element of `variable`
   elements (`varName`, `trait`) and a `sampleDataSets` element of `sampleDataSet` elements (`dataSetName`). Every
-  variable of the document is deleted with its bindings and values, and every data set is deleted. Then the library's
-  variables whose `trait` is `textcontent` are defined as text variables, unbound. In each data set, the element named
+  data set is deleted, and every variable of the document is deleted with its bindings and values, except a text
+  variable the library also declares: it keeps its bindings, so selecting one of the library's data sets changes the
+  objects bound to it. Then the library's other variables whose `trait` is `textcontent` are defined as text
+  variables, unbound. In each data set, the element named
   after a text variable gives its value: the text of its `p` elements, one paragraph each. An element without a `p`
   element gives no value. Variables of other kinds are left out with their values: the reply lists them in `skipped`
   (`name`, `trait`), and its `warning` names each `trait` with its count. The reply's `deleted` and `deletedDataSets`
