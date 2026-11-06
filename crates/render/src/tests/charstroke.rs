@@ -164,6 +164,28 @@ fn character_stroke_outlines_are_kept_between_frames() {
     assert!(changed.len() == 1 && !Arc::ptr_eq(&changed[0], &first[0]), "the changed text is expanded again");
 }
 
+#[test]
+fn moving_type_reuses_character_strokes_without_changing_pixels() {
+    let _fonts = fonts_steady();
+    let (mut d, id) = stroked_text_doc("Type");
+    let opts = RenderOptions::default();
+    let mut r = Renderer::new();
+    r.render(&d, SIZE, SIZE, Affine::IDENTITY, &opts);
+    let first = character_outlines(&r);
+    assert_eq!(first.len(), 1);
+    if let Some(Node { kind: NodeKind::Text(t), .. }) = d.node_mut(id) {
+        t.xf = Affine::translate((10.0, 0.0)) * t.xf;
+    }
+    let moved = r.render(&d, SIZE, SIZE, Affine::IDENTITY, &opts);
+    let again = character_outlines(&r);
+    assert!(again.len() == 1 && Arc::ptr_eq(&again[0], &first[0]), "a move reuses the character stroke outline");
+    assert_eq!(moved.pixels, Renderer::new().render(&d, SIZE, SIZE, Affine::IDENTITY, &opts).pixels);
+    // The entry moved to the node shown, so the next frames find it without comparing the text.
+    let node = d.node_arc(id).unwrap();
+    assert!(r.texts.contains_key(&(Arc::as_ptr(node) as usize)), "kept under the moved node");
+    assert_eq!(r.texts.len(), 1, "and not also under the old one");
+}
+
 /// Frames that draw character strokes from the cache draw the same pixels, and what a renderer
 /// draws whose glyph cache has no room, so that it expands them in every frame: exactly at 100%,
 /// where both take a tolerance of 1/4 device pixel, and within antialiasing at 105% and 150%,

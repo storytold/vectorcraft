@@ -323,6 +323,41 @@ impl<'p> Colors<'p> {
         }
     }
 
+    /// A gradient stop's colour that paints one spot ink together with process plates (a
+    /// DeviceN colour of an ink and process colorants): the ink's swatch (marked used), its tint
+    /// and the process plates (C, M, Y, K). `None` for any other colour ([`Colors::native`] takes
+    /// it).
+    pub fn ink_with_plates(&mut self, space: Space, comps: &[f32]) -> Option<(String, f32, [f32; 4])> {
+        let Space::Inks(i) = space else { return None };
+        let colorants = &self.spaces.get(i)?.colorants;
+        let mut cmyk = [0.0f32; 4];
+        let mut ink = None;
+        for (c, t) in colorants.iter().zip(comps) {
+            let t = round3(t.clamp(0.0, 1.0));
+            match *c {
+                Colorant::Unknown => return None,
+                Colorant::None => {}
+                Colorant::Process(ch) => {
+                    if let Some(v) = cmyk.get_mut(ch) {
+                        *v = v.max(t);
+                    }
+                }
+                // A second ink (or every plate) painting too can't be one stop.
+                Colorant::Ink(_) | Colorant::All if t > 0.0 && ink.is_some() => return None,
+                Colorant::All if t > 0.0 => return None,
+                Colorant::Ink(k) if t > 0.0 => ink = Some((k, t)),
+                Colorant::Ink(_) | Colorant::All => {}
+            }
+        }
+        let (k, t) = ink?;
+        if cmyk.iter().all(|v| *v <= 0.0) {
+            return None;
+        }
+        let ink = self.inks.get_mut(k)?;
+        ink.used = true;
+        Some((ink.name.clone(), t, cmyk))
+    }
+
     /// Mark each ink that components `comps` of `space` paint with (a tint above 0) as used, so it
     /// becomes a spot swatch; nothing for a space with a colorant that can't be read.
     pub fn mark_inks(&mut self, space: Space, comps: &[f32]) {

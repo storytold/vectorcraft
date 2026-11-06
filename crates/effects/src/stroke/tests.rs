@@ -501,3 +501,45 @@ fn a_stroke_narrower_than_the_shape_keeps_its_hole() {
         assert_eq!(moves(&outline), 3, "{join:?}: two contours for the ring, one for the blob");
     }
 }
+
+/// A subpixel stroke must retain its geometric thickness even when the normal display tolerance
+/// is close to its weight. Original uneven circular arcs, independent of any user fixture.
+#[test]
+fn thin_curved_strokes_keep_their_width_between_notches() {
+    use kurbo::{CubicBez, ParamCurve, ParamCurveDeriv, Shape};
+    for (radius, degrees) in [(450.0, 47.0_f64), (438.0, 77.0), (450.0, 54.0)] {
+        let a = degrees.to_radians();
+        let k = 4.0 / 3.0 * (a / 4.0).tan();
+        let curve = CubicBez::new(
+            (radius, 0.0),
+            (radius, k * radius),
+            (radius * a.cos() + k * radius * a.sin(), radius * a.sin() - k * radius * a.cos()),
+            (radius * a.cos(), radius * a.sin()),
+        );
+        let mut line = BezPath::new();
+        line.move_to(curve.p0);
+        line.curve_to(curve.p1, curve.p2, curve.p3);
+        for width in [0.25, 1.0 / 3.0, 0.5, 1.0] {
+            let st = StrokeLayer::new(Paint::solid(Color::BLACK), width);
+            let outline = line_outline(&line, &st, width, 0.25);
+            for step in 1..40 {
+                let t = step as f64 / 40.0;
+                let p = curve.eval(t);
+                let tangent = curve.deriv().eval(t).to_vec2().normalize();
+                let normal = kurbo::Vec2::new(-tangent.y, tangent.x);
+                for side in [-1.0, 1.0] {
+                    assert_ne!(
+                        outline.winding(p + normal * (side * width * 0.45)),
+                        0,
+                        "missing inner band at radius {radius}, {degrees} degrees, width {width}, t {t}"
+                    );
+                    assert_eq!(
+                        outline.winding(p + normal * (side * width * 0.55)),
+                        0,
+                        "outside intended band at radius {radius}, {degrees} degrees, width {width}, t {t}"
+                    );
+                }
+            }
+        }
+    }
+}

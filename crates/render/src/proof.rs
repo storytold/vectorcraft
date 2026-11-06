@@ -135,7 +135,7 @@ pub(crate) fn plate_image(lut: &PlateLut, key: &ImageKey, pm: &Pixmap, blob: Opt
         return (want, p);
     }
     let size = (u32::from(pm.width()), u32::from(pm.height()));
-    let raw = blob.filter(|_| key.luts.0 != 0 && key.adjust.is_none() && !key.grey).and_then(ImageBlob::cmyk).filter(|i| (i.width, i.height) == size);
+    let raw = crate::ink::key_inks(key, blob).filter(|i| (i.width, i.height) == size);
     let mut out = pm.clone();
     match raw {
         Some(inks) => {

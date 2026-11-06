@@ -3284,7 +3284,9 @@ digits	Malayalam	Malayalam
 	Patterns	Motifs
 	Stroke Options	Options de contour
 	Character:	Caractère :
+	Paragraph:	Paragraphe :
 	Character options	Options de caractère
+	Paragraph options	Options de paragraphe
 	Stroke options	Options de contour
 	Transform options	Options de transformation
 	Stroke Weight	Épaisseur du contour
@@ -3975,6 +3977,7 @@ axis	Both	Les deux
 @msg	Create from Selection: the selection has no area	Créer d’après la sélection : la sélection n’a pas de surface
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	La récupération des données n’a aucun emplacement où conserver les copies : définissez Préférences → Gestion des fichiers → Récupération des données → Dossier (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	La récupération des données ne peut pas conserver de copies dans {path} ({e})
+@msg	Plug-ins can't be loaded from {path}: {e}	Impossible de charger les plug-ins depuis {path} ({e})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	sélectionnez avec l’outil Sélection directe les points d’ancrage où couper (pas les extrémités des tracés ouverts)
 @msg	Divide Objects Below: select a path	Diviser les objets inférieurs : sélectionnez un tracé
 @msg	Divide Objects Below: select exactly one path	Diviser les objets inférieurs : sélectionnez exactement un tracé
@@ -4320,6 +4323,8 @@ axis	Both	Les deux
 @msg	no such saved selection	sélection enregistrée inexistante
 @msg	no such segment	segment inexistant
 @msg	no such spine point	point de la dorsale inexistant
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` doit être une liste d’au plus 10000 indices de points de la dorsale
+@msg	`with` moves points, not a handle	`with` déplace des points, pas une poignée
 @msg	no such spine segment	segment de la dorsale inexistant
 @msg	no such subpath	sous-tracé inexistant
 @msg	no such user library	bibliothèque utilisateur inexistante
@@ -4663,6 +4668,9 @@ axis	Both	Les deux
 @msg	graphs come in as plain art, without their data or settings	les graphes sont importés comme illustration ordinaire, sans leurs données ni leurs réglages
 @msg	an image whose data is cut short was left out	une image aux données tronquées a été ignorée
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les images liées affichent l’aperçu basse résolution enregistré dans le fichier tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
+@msg	linked type areas past VectorCraft's limits were left out	les zones de texte liées au-delà des limites de VectorCraft ont été omises
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	le texte utilisé comme masque dans des zones liées, un habillage de texte ou un tracé transparent ne découpe pas
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les images liées sans aperçu dans le fichier affichent un espace réservé tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	le texte captif dans des cadres trop bas pour une ligne de la police dans laquelle il s’affiche a reçu des cadres plus hauts ({_1}) : il ne s’afficherait pas autrement
 @msg	its editing data doesn't say where its art is	ses données d’édition ne disent pas où se trouve son illustration
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ce fichier a été enregistré sans compatibilité PDF et ses données d’édition sont illisibles ({why})
@@ -6095,6 +6103,9 @@ anchor	Points:	Points :
 	Find Nearest Swatch…	Rechercher la nuance la plus proche…
 	Find Nearest Swatch	Rechercher la nuance la plus proche
 	Apply Nearest Swatch	Appliquer la nuance la plus proche
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Appliquer le fond au contour
+	Apply Stroke to Fill	Appliquer le contour au fond
 	Select objects to find the swatches nearest their colors.	Sélectionnez des objets pour trouver les nuances les plus proches de leurs couleurs.
 @msg	select objects or give `color`	sélectionnez des objets ou indiquez `color`
 @msg	`color` is not a colour	`color` n’est pas une couleur
@@ -6331,6 +6342,10 @@ breakText	Glyphs	Glyphes
 	Bow	Arc
 	Spike	Pointe
 	Skip Spaces	Ignorer les espaces
+	Release Type on a Path…	Libérer le texte curviligne…
+	Release Type on a Path	Libérer le texte curviligne
+	Text and Path	Texte et tracé
+	Path Only	Tracé uniquement
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	L’illustration est trop grande pour être copiée en tant qu’image : les autres applications n’en reçoivent pas de PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6342,3 +6357,43 @@ breakText	Glyphs	Glyphes
 	Fully Outside	Entièrement à l’extérieur
 	No artboards match.	Aucun plan de travail ne correspond.
 	Chosen: {n} of {total}	Choisis : {n} sur {total}
+
+# Contour add-on
+	Contour	Pourtour
+	Contour Tool	Outil Pourtour
+	Sharp	Pointu
+	Bake	Décomposer
+	Turn the Contour into plain paths	Transforme le pourtour en tracés simples
+	Set Corners…	Définir les angles…
+	All Anchors	Tous les points d’ancrage
+	Odd-Numbered Anchors	Points d’ancrage impairs
+	Even-Numbered Anchors	Points d’ancrage pairs
+	Minimum angle	Angle minimal
+	Maximum angle	Angle maximal
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Sélectionner les images liées
+	Select Embedded	Sélectionner les images incorporées
+	Select Missing	Sélectionner les images manquantes
+	Select Modified	Sélectionner les images modifiées
+	Select by Link Status	Sélectionner par état de lien
+	Select by Link Status…	Sélectionner par état de lien…
+	Search images	Rechercher des images
+	No images match.	Aucune image ne correspond.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} image liée sélectionnée|{n} images liées sélectionnées
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} image incorporée sélectionnée|{n} images incorporées sélectionnées
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} image manquante sélectionnée|{n} images manquantes sélectionnées
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} image modifiée sélectionnée|{n} images modifiées sélectionnées
+@msgplural	Selected {n} image|Selected {n} images	{n} image sélectionnée|{n} images sélectionnées
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected} ; {n} autre est masquée ou verrouillée|{selected} ; {n} autres sont masquées ou verrouillées
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected} ; {n} autre est sur un calque modèle|{selected} ; {n} autres sont sur des calques modèles
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected} ; {n} autre est hors du groupe isolé|{selected} ; {n} autres sont hors du groupe isolé
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected} ; {n} autre ne peut pas être sélectionnée pour l’instant|{selected} ; {n} autres ne peuvent pas être sélectionnées pour l’instant
+
+# Compound Shapes add-on
+	Compound Shapes	Formes composées
+	Shape Mode Buttons Make Compound Shapes	Les boutons de mode de forme créent des formes composées
+
+# 3D Box add-on
+	3D Box	Boîte 3D
+	3D Box Tool	Outil Boîte 3D

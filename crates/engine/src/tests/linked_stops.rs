@@ -193,6 +193,27 @@ fn spot_gradients_mixed_with_other_inks_export_as_device_n_shadings() {
 }
 
 #[test]
+fn spot_stops_with_process_plates_export_both_in_device_n_shadings() {
+    // #3235: Ink 0 % to 100 % over a constant 30 % cyan plate, as a DeviceN gradient imported
+    // from a PDF has it.
+    let (mut s, id) = setup();
+    let cyan = json!({"c": 0.3, "m": 0, "y": 0, "k": 0});
+    run(&mut s, "paint.editGradient", json!({"stops": [{"offset": 0, "color": cyan}, {"offset": 1, "swatch": "Ink", "plates": [0.3, 0, 0, 0]}]}));
+    let (pdf, warnings) = pdf_of(&s);
+    assert!(pdf.contains("/DeviceN[/Cyan/Ink]/DeviceCMYK"), "a DeviceN shading of Cyan and Ink");
+    assert!(pdf.contains("/C0[0.3 0]/C1[0.3 1]"), "the cyan plate runs under the whole gradient");
+    assert!(!warnings.iter().any(|w| w.contains("spot")), "{warnings:?}");
+    let stops = gradient(&s, id).gradient.stops;
+    assert_eq!((stops[1].swatch.as_deref(), stops[1].plates), (Some("Ink"), Some([0.3, 0.0, 0.0, 0.0])), "{stops:?}");
+    // The plates are part of the stop's params, so moving the vector keeps them.
+    run(&mut s, "paint.editGradient", json!({"angle": 45}));
+    assert_eq!(gradient(&s, id).gradient.stops[1].plates, Some([0.3, 0.0, 0.0, 0.0]));
+    // An unlinked stop has none.
+    run(&mut s, "paint.editGradient", json!({"stops": [{"offset": 0, "color": cyan}, {"offset": 1, "color": "#ffffff", "plates": [0.3, 0, 0, 0]}]}));
+    assert_eq!(gradient(&s, id).gradient.stops[1].plates, None);
+}
+
+#[test]
 fn radial_spot_gradients_mixed_with_other_inks_export_as_device_n_shadings() {
     let (mut s, _) = setup();
     run(

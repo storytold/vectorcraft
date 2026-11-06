@@ -1403,7 +1403,9 @@ digits	Malayalam	Malayalam
 	Standard Vertical Roman Alignment	Standard lodret romersk justering
 	Strikethrough	Gennemstreget
 	Character:	Tegn:
+	Paragraph:	Afsnit:
 	Character options	Tegnindstillinger
+	Paragraph options	Afsnitsindstillinger
 	Subscript	Sænket skrift
 	Subscript (on the roadmap)	Sænket skrift (på vejkortet)
 	Superscript	Hævet skrift
@@ -4612,6 +4614,9 @@ imageTrace	Outline	Kontur
 @msg	an image VectorCraft can't read was left out	et billede, som VectorCraft ikke kan læse, blev udeladt
 @msg	an image whose data is cut short was left out	et billede, hvis data er afkortet, blev udeladt
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkede billeder viser den gemte forhåndsvisning i lav opløsning, indtil deres filer findes: link dem igen i Links-panelet
+@msg	linked type areas past VectorCraft's limits were left out	sammenkædede tekstområder ud over VectorCrafts grænser blev udeladt
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst brugt som maske i sammenkædede områder, ombrudt tekst eller en sammensat kurve beskærer ikke
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	linkede billeder uden forhåndsvisning i filen viser en pladsholder, indtil deres filer findes: link dem igen i Links-panelet
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	rammetekst i rammer, der er for lave til en tekstlinje i den skrifttype, den viser i, fik højere rammer ({_1}): teksten ville ellers ikke blive vist
 @msg	its editing data doesn't say where its art is	dens redigeringsdata siger ikke, hvor dens grafik er
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	denne fil blev gemt uden PDF-kompatibilitet, og dens redigeringsdata kan ikke læses ({why})
@@ -5967,6 +5972,9 @@ anchor	Points:	Punkter:
 	Find Nearest Swatch…	Find nærmeste farveprøve…
 	Find Nearest Swatch	Find nærmeste farveprøve
 	Apply Nearest Swatch	Anvend nærmeste farveprøve
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Anvend udfyldning på kontur
+	Apply Stroke to Fill	Anvend kontur på udfyldning
 	Select objects to find the swatches nearest their colors.	Markér objekter for at finde de farveprøver, der ligger tættest på deres farver.
 @msg	select objects or give `color`	markér objekter, eller angiv `color`
 @msg	`color` is not a colour	`color` er ikke en farve
@@ -6203,6 +6211,10 @@ breakText	Glyphs	Glyffer
 	Bow	Bue
 	Spike	Spids
 	Skip Spaces	Spring mellemrum over
+	Release Type on a Path…	Frigør tekst på kurve…
+	Release Type on a Path	Frigør tekst på kurve
+	Text and Path	Tekst og kurve
+	Path Only	Kun kurve
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafikken er for stor til at blive kopieret som et billede: andre programmer får ingen PNG af den
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6214,3 +6226,43 @@ breakText	Glyphs	Glyffer
 	Fully Outside	Helt udenfor
 	No artboards match.	Ingen tegneflader passer.
 	Chosen: {n} of {total}	Valgt: {n} af {total}
+
+# Contour add-on
+	Contour	Kontur
+	Contour Tool	Kontur-værktøj
+	Sharp	Spids
+	Bake	Udvid
+	Turn the Contour into plain paths	Gør konturen til almindelige stier
+	Set Corners…	Angiv hjørner…
+	All Anchors	Alle ankre
+	Odd-Numbered Anchors	Ulige ankre
+	Even-Numbered Anchors	Lige ankre
+	Minimum angle	Mindste vinkel
+	Maximum angle	Største vinkel
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Markér linkede
+	Select Embedded	Markér integrerede
+	Select Missing	Markér manglende
+	Select Modified	Markér ændrede
+	Select by Link Status	Markér efter linkstatus
+	Select by Link Status…	Markér efter linkstatus…
+	Search images	Søg i billeder
+	No images match.	Ingen billeder passer.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Markerede {n} linket billede|Markerede {n} linkede billeder
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Markerede {n} integreret billede|Markerede {n} integrerede billeder
+@msgplural	Selected {n} missing image|Selected {n} missing images	Markerede {n} manglende billede|Markerede {n} manglende billeder
+@msgplural	Selected {n} modified image|Selected {n} modified images	Markerede {n} ændret billede|Markerede {n} ændrede billeder
+@msgplural	Selected {n} image|Selected {n} images	Markerede {n} billede|Markerede {n} billeder
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} mere er skjult eller låst|{selected}; {n} mere er skjult eller låst
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} mere er på et skabelonlag|{selected}; {n} mere er på skabelonlag
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} mere er uden for den isolerede gruppe|{selected}; {n} mere er uden for den isolerede gruppe
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} mere kan ikke markeres nu|{selected}; {n} mere kan ikke markeres nu
+
+# Compound Shapes add-on
+	Compound Shapes	Sammensatte figurer
+	Shape Mode Buttons Make Compound Shapes	Knapper til formtilstande opretter sammensatte figurer
+
+# 3D Box add-on
+	3D Box	3D-boks
+	3D Box Tool	3D-boksværktøj

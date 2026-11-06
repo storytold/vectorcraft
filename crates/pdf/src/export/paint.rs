@@ -92,7 +92,8 @@ impl Exporter<'_> {
             .stops
             .iter()
             .map(|s| match s.swatch.as_deref() {
-                Some(n) if n == ink => Some(s.tint),
+                // A stop that also prints process plates needs a DeviceN space.
+                Some(n) if n == ink && s.plates.is_none() => Some(s.tint),
                 _ if self.paper_stop(s) => Some(0.0),
                 _ => None,
             })
@@ -119,7 +120,8 @@ impl Exporter<'_> {
     /// a DeviceN space of the process inks the stops use (in CMYK order) and the spot inks (in
     /// the order the stops name them), with midpoints as explicit stops (the tints and opacity
     /// there are halfway), or for a Perceptual gradient the stops on its curve
-    /// ([`vectorcraft_color::Gradient::ink_mixes`]). Paper white adds no ink. `None`, with a
+    /// ([`vectorcraft_color::Gradient::ink_mixes`]). Paper white adds no ink; a spot stop with
+    /// process plates ([`vectorcraft_color::GradientStop::plates`]) prints them too. `None`, with a
     /// warning, when a stop is written in RGB or Lab or the spot inks can't share a DeviceN space;
     /// the gradient is then written in the colors of its stops.
     fn device_n_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
@@ -145,6 +147,9 @@ impl Exporter<'_> {
                 Some(n) => {
                     let i = spots.iter().position(|(m, _)| *m == n)?;
                     v[4 + i] = s.tint;
+                    if let Some(p) = s.plates {
+                        v[..4].copy_from_slice(&p.map(|t| t.clamp(0.0, 1.0)));
+                    }
                 }
                 None if self.paper_stop(s) => {}
                 None => match self.page_color(&s.color) {
@@ -379,7 +384,7 @@ impl Exporter<'_> {
     fn one_spot_ink<'g>(&self, g: &'g vectorcraft_color::Gradient) -> Option<&'g str> {
         let spot = |s: &'g vectorcraft_color::GradientStop| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot));
         let ink = g.stops.iter().find_map(spot)?;
-        g.stops.iter().all(|s| spot(s) == Some(ink) || self.paper_stop(s)).then_some(ink)
+        g.stops.iter().all(|s| (spot(s) == Some(ink) && s.plates.is_none()) || self.paper_stop(s)).then_some(ink)
     }
 
     /// Can every stop of `g` be inks of a DeviceN space ([`Self::device_n_stops`]): is a stop

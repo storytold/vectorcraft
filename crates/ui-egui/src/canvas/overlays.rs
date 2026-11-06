@@ -90,12 +90,21 @@ fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f
 }
 
 pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
-    // The Selection tool's bounding box (rotated with the objects after a rotation). It hides while
-    // a drag moves or resizes the selection, so only the art is seen going with the pointer (#712).
+    // The Selection tool's bounding box (rotated with the objects after a rotation), also shown by
+    // the shape tools that keep a shape just drawn ready to adjust while they draw none (#5477). It
+    // hides while a drag moves or resizes the selection, so only the art is seen going with the
+    // pointer (#712).
     // With Real-time Drawing off the art waits for the release of a move drag, and the box moves
     // with the pointer instead.
     let moved = app.session.deferred_move();
-    let show_box = app.session.tool_id() == "selection"
+    let shape_tool = vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id());
+    // A shape tool drawing a shape shows none of this; adjusting a widget, it shows the widgets.
+    let drawing = shape_tool && app.session.tool_busy() && !app.session.tool_transforming();
+    // Cmd held lends the Selection tool to a press (Direct Selection's included, #3901): its box
+    // shows while the key is down, where its handles take that press.
+    let held = super::drag::mods(p.ctx().input(|i| i.modifiers), false);
+    let lends_selection = !app.session.tool_busy() && app.session.lent_tool_id(&held) == Some("selection");
+    let show_box = (app.session.tool_id() == "selection" || lends_selection || (shape_tool && !app.session.tool_busy()))
         && (!app.session.tool_transforming() || moved.is_some())
         && app.ui.view.bounding_box
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
@@ -250,8 +259,9 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             anchor_square(p, xf.to_screen(a.p), color, false, anchor(direct));
         }
     }
-    // Live Corners widgets (Selection on a live rectangle or polygon, Direct Selection on any path).
-    if matches!(tool, "selection" | "directSelection")
+    // Live Corners widgets (Selection and the shape tools on a live rectangle or polygon, Direct
+    // Selection on any path).
+    if (matches!(tool, "selection" | "directSelection") || (shape_tool && !drawing))
         && let Some(w) = vectorcraft_tools::corners::CornerWidgets::showing(
             &st.doc,
             &st.selection,
@@ -287,7 +297,7 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     }
     // Pie widgets (Selection tool, with View › Show Bounding Box, on live ellipses): each joined
     // by a line to the outline's point at its angle. They stay while one is dragged.
-    if tool == "selection" && app.ui.view.bounding_box {
+    if (tool == "selection" || (shape_tool && !drawing)) && app.ui.view.bounding_box {
         for w in vectorcraft_tools::pie::PieWidget::of(&st.doc, &st.selection, xf.zoom) {
             let (on, c, r, color) = (xf.to_screen(w.on), xf.to_screen(w.at), vectorcraft_tools::pie::RADIUS_PX, c32(st.doc.layer_color(w.id)));
             p.line_segment([on, c], Stroke::new(1.0, color));

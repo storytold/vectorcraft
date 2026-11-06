@@ -206,7 +206,7 @@ fn newer_keys_and_legacy_profiles_survive_open_and_save() {
 
 /// A version 1 document saved before VectorCraft 0.21.0 turned its Twist effects counterclockwise
 /// for a positive angle. It opens with the angles negated, so its art turns as it did; saved
-/// again it is a version 2 document, and saved for an older file version it is version 1 again.
+/// again it is a document of the current version, and saved for an older file version it is version 1 again.
 #[test]
 fn a_version_1_documents_twist_turns_as_it_was_saved() {
     use vectorcraft_doc::{Appearance, Document, Effect, Node};
@@ -230,7 +230,7 @@ fn a_version_1_documents_twist_turns_as_it_was_saved() {
     let p = turned.subpaths[0].anchors[0].p;
     assert!(p.y < 49.5, "{p:?}");
     let again = json_of(&saved(&mut s, json!({})));
-    assert_eq!(again["document"]["version"], 2);
+    assert_eq!(again["document"]["version"], vectorcraft_doc::FORMAT_VERSION);
     assert!(again.to_string().contains(r#""angle":-45.0"#), "{again}");
     // Saved for an older file version, it is version 1 with its angle as 0.20.0 saved it.
     let older = json_of(&saved(&mut s, json!({"version": 3})));

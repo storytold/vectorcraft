@@ -1406,7 +1406,9 @@ digits	Malayalam	Malajalam
 	Standard Vertical Roman Alignment	Standardowe pionowe wyrównanie łacińskie
 	Strikethrough	Przekreślenie
 	Character:	Znak:
+	Paragraph:	Akapit:
 	Character options	Opcje znaków
+	Paragraph options	Opcje akapitu
 	Subscript	Indeks dolny
 	Subscript (on the roadmap)	Indeks dolny (w planach)
 	Superscript	Indeks górny
@@ -4116,6 +4118,7 @@ imageTrace	Outline	Kontur
 @msg	Create from Selection: the selection has no area	Utwórz z zaznaczenia: zaznaczenie nie ma powierzchni
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Odzyskiwanie danych nie ma gdzie przechowywać kopii: ustaw Preferencje → Obsługa plików → Odzyskiwanie danych → Folder (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Odzyskiwanie danych nie może przechowywać kopii w {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Nie można wczytać wtyczek z {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	zaznacz bezpośrednio punkty kontrolne, w których ma nastąpić cięcie (nie punkty końcowe otwartych ścieżek)
 @msg	Divide Objects Below: select a path	Podziel obiekty poniżej: zaznacz ścieżkę
 @msg	Divide Objects Below: select exactly one path	Podziel obiekty poniżej: zaznacz dokładnie jedną ścieżkę
@@ -4460,6 +4463,8 @@ imageTrace	Outline	Kontur
 @msg	no such saved selection	brak takiego zapisanego zaznaczenia
 @msg	no such segment	brak takiego segmentu
 @msg	no such spine point	brak takiego punktu grzbietu
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` musi być listą co najwyżej 10000 indeksów punktów grzbietu
+@msg	`with` moves points, not a handle	`with` przesuwa punkty, nie uchwyt
 @msg	no such spine segment	brak takiego segmentu grzbietu
 @msg	no such subpath	brak takiej ścieżki podrzędnej
 @msg	no such user library	brak takiej biblioteki użytkownika
@@ -4807,6 +4812,9 @@ imageTrace	Outline	Kontur
 @msg	graphs come in as plain art, without their data or settings	wykresy są wczytywane jako zwykła grafika, bez ich danych i ustawień
 @msg	an image whose data is cut short was left out	pominięto obraz z uciętymi danymi
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	połączone obrazy pokazują zapisany w pliku podgląd niskiej rozdzielczości, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
+@msg	linked type areas past VectorCraft's limits were left out	połączone obszary tekstu poza limitami VectorCraft zostały pominięte
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst użyty jako maska w połączonych obszarach, oblewanym tekście lub ścieżce złożonej nie przycina
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	połączone obrazy bez podglądu w pliku pokazują symbol zastępczy, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	tekst akapitowy w ramkach niższych niż wiersz wyświetlanej czcionki otrzymał wyższe ramki ({_1}): inaczej tekst nie byłby widoczny
 @msg	its editing data doesn't say where its art is	jego dane edycyjne nie określają położenia kompozycji
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ten plik zapisano bez zgodności z PDF, a jego danych edycyjnych nie można odczytać ({why})
@@ -5954,6 +5962,9 @@ anchor	Points:	Punkty:
 	Find Nearest Swatch…	Znajdź najbliższą próbkę…
 	Find Nearest Swatch	Znajdź najbliższą próbkę
 	Apply Nearest Swatch	Zastosuj najbliższą próbkę
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Zastosuj wypełnienie do obrysu
+	Apply Stroke to Fill	Zastosuj obrys do wypełnienia
 	Select objects to find the swatches nearest their colors.	Zaznacz obiekty, aby znaleźć próbki najbliższe ich kolorom.
 @msg	select objects or give `color`	zaznacz obiekty lub podaj `color`
 @msg	`color` is not a colour	`color` nie jest kolorem
@@ -6191,6 +6202,10 @@ breakText	Glyphs	Glify
 	Bow	Łuk
 	Spike	Szpic
 	Skip Spaces	Pomiń spacje
+	Release Type on a Path…	Uwolnij tekst na ścieżce…
+	Release Type on a Path	Uwolnij tekst na ścieżce
+	Text and Path	Tekst i ścieżka
+	Path Only	Tylko ścieżka
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika jest zbyt duża, aby skopiować ją jako obraz: inne aplikacje nie otrzymają jej w formacie PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6202,3 +6217,43 @@ breakText	Glyphs	Glify
 	Fully Outside	Całkowicie na zewnątrz
 	No artboards match.	Żaden obszar kompozycji nie pasuje.
 	Chosen: {n} of {total}	Wybrano: {n} z {total}
+
+# Contour add-on
+	Contour	Kontur
+	Contour Tool	Narzędzie Kontur
+	Sharp	Ostry
+	Bake	Rozszerz
+	Turn the Contour into plain paths	Zamienia kontur w zwykłe ścieżki
+	Set Corners…	Ustaw narożniki…
+	All Anchors	Wszystkie punkty
+	Odd-Numbered Anchors	Punkty nieparzyste
+	Even-Numbered Anchors	Punkty parzyste
+	Minimum angle	Kąt minimalny
+	Maximum angle	Kąt maksymalny
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Zaznacz połączone
+	Select Embedded	Zaznacz osadzone
+	Select Missing	Zaznacz brakujące
+	Select Modified	Zaznacz zmodyfikowane
+	Select by Link Status	Zaznacz według stanu połączenia
+	Select by Link Status…	Zaznacz według stanu połączenia…
+	Search images	Szukaj obrazów
+	No images match.	Żaden obraz nie pasuje.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Zaznaczono {n} połączony obraz|Zaznaczono {n} połączone obrazy|Zaznaczono {n} połączonych obrazów
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Zaznaczono {n} osadzony obraz|Zaznaczono {n} osadzone obrazy|Zaznaczono {n} osadzonych obrazów
+@msgplural	Selected {n} missing image|Selected {n} missing images	Zaznaczono {n} brakujący obraz|Zaznaczono {n} brakujące obrazy|Zaznaczono {n} brakujących obrazów
+@msgplural	Selected {n} modified image|Selected {n} modified images	Zaznaczono {n} zmodyfikowany obraz|Zaznaczono {n} zmodyfikowane obrazy|Zaznaczono {n} zmodyfikowanych obrazów
+@msgplural	Selected {n} image|Selected {n} images	Zaznaczono {n} obraz|Zaznaczono {n} obrazy|Zaznaczono {n} obrazów
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; jeszcze {n} jest ukryty lub zablokowany|{selected}; jeszcze {n} są ukryte lub zablokowane|{selected}; jeszcze {n} jest ukrytych lub zablokowanych
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; jeszcze {n} jest na warstwie szablonu|{selected}; jeszcze {n} są na warstwach szablonu|{selected}; jeszcze {n} jest na warstwach szablonu
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; jeszcze {n} jest poza izolowaną grupą|{selected}; jeszcze {n} są poza izolowaną grupą|{selected}; jeszcze {n} jest poza izolowaną grupą
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; jeszcze {n} nie można teraz zaznaczyć|{selected}; jeszcze {n} nie można teraz zaznaczyć|{selected}; jeszcze {n} nie można teraz zaznaczyć
+
+# Compound Shapes add-on
+	Compound Shapes	Kształty złożone
+	Shape Mode Buttons Make Compound Shapes	Przyciski trybów kształtu tworzą kształty złożone
+
+# 3D Box add-on
+	3D Box	Bryła 3D
+	3D Box Tool	Narzędzie Bryła 3D

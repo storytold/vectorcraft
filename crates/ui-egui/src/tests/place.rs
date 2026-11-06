@@ -488,6 +488,29 @@ fn the_control_bar_shows_the_image_file_link_colour_mode_and_ppi() {
     assert!(text.contains("Embedded"), "{text}");
 }
 
+/// The Control bar's label is read from the first selected object each frame, so it follows an
+/// edit, Undo, a switch to another document and back, and a selection change.
+#[test]
+fn the_control_bar_label_follows_edits_undo_documents_and_selection() {
+    let mut app = app();
+    let path = temp_file("label.png", &png(30, 30, 72.0));
+    app.run("file.place", json!({"path": path})).unwrap();
+    let text = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, crate::chrome::control_bar);
+    assert!(text(&mut app).contains("Linked File"));
+    app.run("links.embed", json!({})).unwrap();
+    let embedded = text(&mut app);
+    assert!(embedded.contains("Embedded") && !embedded.contains("Linked File"), "{embedded}");
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(text(&mut app).contains("Linked File"));
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    assert!(!text(&mut app).contains("Linked File"), "the new document has nothing selected");
+    app.session.set_active(0);
+    assert!(text(&mut app).contains("Linked File"));
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap();
+    let rect = text(&mut app);
+    assert!(!rect.contains("Linked File") && !rect.contains("Embedded"), "{rect}");
+}
+
 /// Click the Control bar's `label`.
 fn click_label(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
     use crate::tests_removeanchors::{at, click_control, control_frame};

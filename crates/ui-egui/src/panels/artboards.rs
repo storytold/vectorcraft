@@ -5,7 +5,8 @@
 //! Artboard duplicates its artboard (as Duplicate Artboards does, with
 //! its art when the Artboard tool's Move/Copy Artwork with Artboard is on). The highlighted row is the active artboard, the one the status bar's navigator shows and
 //! Fit Artboard in Window fits: clicking a row makes it active, double-clicking its number also
-//! fits it in the window. The options icon at a row's right end opens Artboard Options: a click on
+//! fits it in the window. Shift-click selects a range of artboards and Ctrl/Cmd-click adds or
+//! removes one, with any tool: another tool gives way to the Artboard tool first (#5698). The options icon at a row's right end opens Artboard Options: a click on
 //! the active artboard's icon, or a double-click on another row's icon. The lock column left of it
 //! shows a lock on a locked artboard, and a click there locks or unlocks the artboard
 //! (`artboard.setProps` with `locked`); Delete leaves locked artboards.
@@ -488,6 +489,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                 }
                 let m = ui.input(|inp| inp.modifiers);
+                // A Shift- or Ctrl/Cmd-click selects several artboards with any tool: it first
+                // switches to the Artboard tool, which holds the selection, so Properties and the
+                // Control bar then show the controls that change every selected artboard.
+                if resp.clicked() && (m.shift || m.command) && app.session.tool_id() != "artboard" {
+                    app.select_tool("artboard");
+                }
                 let tool = app.session.tool_id() == "artboard";
                 row_clicked |= resp.clicked();
                 if resp.clicked() && tool && m.shift {

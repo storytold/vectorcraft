@@ -26,9 +26,13 @@ pub use gesture::GestureTool;
 /// Colour of tool feedback (Illustrator's selection blue).
 pub const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];
 
-/// The lowest Fidelity (points) the Pencil and Paintbrush take (#3328); the Smooth tool keeps
-/// [`SMOOTH_MIN_FIDELITY`].
+/// The lowest Fidelity the Pencil and Paintbrush take (#3328; screen pixels, points for the Blob
+/// Brush); the Smooth tool keeps [`SMOOTH_MIN_FIDELITY`].
 pub const MIN_FIDELITY: f64 = 0.01;
+
+/// The finest tolerance (points) `path.freehand` fits a Pencil or Paintbrush stroke at: the lowest
+/// Fidelity at the highest zoom (64000 %), whose screen pixels the tools send in points (#5729).
+pub const MIN_FIT_TOLERANCE: f64 = MIN_FIDELITY / 640.0;
 
 /// The lowest Fidelity (points) the Smooth tool takes.
 pub const SMOOTH_MIN_FIDELITY: f64 = 0.05;

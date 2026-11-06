@@ -9,6 +9,7 @@
 
 use std::collections::VecDeque;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
+use std::sync::{Arc, Mutex};
 
 use vectorcraft_render::{Rendered, Renderer};
 
@@ -32,12 +33,25 @@ struct Job<S, K> {
     run: JobFn,
 }
 
+/// Which slots' jobs [`ThumbWorker::discard`] or [`ThumbWorker::forget`] drops.
+type SlotTest<S> = Box<dyn Fn(&S) -> bool + Send>;
+
+/// The slots [`ThumbWorker::forget`] picked since the worker was last idle.
+type Forgotten<S> = Arc<Mutex<Vec<SlotTest<S>>>>;
+
+/// What a panel sends its worker: a job, or the slots whose jobs not started yet are dropped.
+enum Msg<S, K> {
+    Job(Job<S, K>),
+    Discard(SlotTest<S>),
+}
+
 /// A render thread for one panel's thumbnails. Jobs go in by slot (the Navigator has one, the
 /// Layers panel one per row): a job not started yet is replaced by a newer one for its slot, so
 /// only the latest image of anything is drawn.
 pub struct ThumbWorker<S, K> {
-    tx: Sender<Job<S, K>>,
+    tx: Sender<Msg<S, K>>,
     rx: Receiver<Done<K>>,
+    forgotten: Forgotten<S>,
 }
 
 impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
@@ -53,45 +67,98 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
 
     /// Spawn the thread.
     pub(crate) fn start(ctx: &egui::Context, name: &str) -> Option<Self> {
-        let (tx, jobs) = channel::<Job<S, K>>();
+        let (tx, jobs) = channel::<Msg<S, K>>();
         let (done_tx, rx) = channel::<Done<K>>();
+        let forgotten: Forgotten<S> = Arc::default();
+        let gone = forgotten.clone();
         let ctx = ctx.clone();
         std::thread::Builder::new()
             .name(format!("vectorcraft-{name}"))
             .spawn(move || {
                 let mut r = Renderer::new();
                 let mut queue: VecDeque<Job<S, K>> = VecDeque::new();
-                let add = |queue: &mut VecDeque<Job<S, K>>, job: Job<S, K>| match queue.iter_mut().find(|j| j.slot == job.slot) {
-                    Some(old) => *old = job,
-                    None => queue.push_back(job),
+                let add = |queue: &mut VecDeque<Job<S, K>>, msg: Msg<S, K>| match msg {
+                    Msg::Job(job) => match queue.iter_mut().find(|j| j.slot == job.slot) {
+                        Some(old) => *old = job,
+                        None => queue.push_back(job),
+                    },
+                    Msg::Discard(which) => queue.retain(|j| !which(&j.slot)),
                 };
                 loop {
                     if queue.is_empty() {
-                        // The panel is gone (its sender dropped): end the thread.
-                        let Ok(job) = jobs.recv() else { break };
-                        add(&mut queue, job);
+                        // With no job here or on its way (checked under the lock, since a panel
+                        // sends a job before it forgets that job's slot), what `forget` picked
+                        // has no job left to drop.
+                        let waiting = match gone.lock() {
+                            Ok(mut f) => match jobs.try_recv() {
+                                Ok(msg) => Some(msg),
+                                Err(_) => {
+                                    f.clear();
+                                    None
+                                }
+                            },
+                            Err(_) => break,
+                        };
+                        let msg = match waiting {
+                            Some(msg) => msg,
+                            // The panel is gone (its sender dropped): end the thread.
+                            None => match jobs.recv() {
+                                Ok(msg) => msg,
+                                Err(_) => break,
+                            },
+                        };
+                        add(&mut queue, msg);
                     }
                     while let Ok(job) = jobs.try_recv() {
                         add(&mut queue, job);
                     }
                     let Some(job) = queue.pop_front() else { continue };
+                    let Ok(skip) = gone.lock().map(|f| f.iter().any(|which| which(&job.slot))) else { break };
+                    if skip {
+                        continue;
+                    }
                     let t0 = crate::now_ms();
                     let img = (job.run)(&mut r);
-                    if done_tx.send(Done { key: job.key, img, ms: crate::now_ms() - t0 }).is_err() {
+                    let done = Done { key: job.key, img, ms: crate::now_ms() - t0 };
+                    // Sent under the lock, so a `forget` either drops it here or comes after it
+                    // and finds it in the next `poll`.
+                    let Ok(f) = gone.lock() else { break };
+                    if f.iter().any(|which| which(&job.slot)) {
+                        continue;
+                    }
+                    if done_tx.send(done).is_err() {
                         break;
                     }
+                    drop(f);
                     ctx.request_repaint();
                 }
             })
             .ok()?;
-        Some(Self { tx, rx })
+        Some(Self { tx, rx, forgotten })
     }
 
     /// Queue `run` for `slot` (replacing a job for the slot that hasn't started). False when the
     /// thread is gone: the caller renders on the UI thread from now on.
     #[must_use]
     pub fn submit(&self, slot: S, key: K, run: JobFn) -> bool {
-        self.tx.send(Job { slot, key, run }).is_ok()
+        self.tx.send(Msg::Job(Job { slot, key, run })).is_ok()
+    }
+
+    /// Drop the jobs not started yet whose slot `which` picks, so they don't hold up the jobs
+    /// submitted after them; they never come back from [`ThumbWorker::poll`]. A job already
+    /// running still finishes. False when the thread is gone, as for [`ThumbWorker::submit`].
+    #[must_use]
+    pub fn discard(&self, which: impl Fn(&S) -> bool + Send + 'static) -> bool {
+        self.tx.send(Msg::Discard(Box::new(which))).is_ok()
+    }
+
+    /// Drop the jobs whose slot `which` picks, queued or running: their images never come back
+    /// from [`ThumbWorker::poll`], except those finished before this call, which the next poll
+    /// returns. The panel must not submit jobs for those slots again.
+    pub fn forget(&self, which: impl Fn(&S) -> bool + Send + 'static) {
+        if let Ok(mut f) = self.forgotten.lock() {
+            f.push(Box::new(which));
+        }
     }
 
     /// The jobs finished since the last call, oldest first; None when the thread is gone (the
@@ -167,6 +234,31 @@ mod tests {
         assert!(slot0.windows(2).all(|p| p[0] < p[1]), "{got:?}");
         assert!(got.contains(&10));
         drop(w);
+    }
+
+    #[test]
+    fn discarded_jobs_do_not_run_and_the_running_one_finishes() {
+        let Some(w) = ThumbWorker::<u8, u32>::start(&egui::Context::default(), "test") else { return };
+        let job = |n: u32| -> JobFn { Box::new(move |_| Some(Rendered { width: n, height: 1, pixels: vec![0; 4] })) };
+        // A job that holds the thread until it is let go, so the others queue behind it.
+        let (started, running) = channel::<()>();
+        let (release, held) = channel::<()>();
+        let blocker: JobFn = Box::new(move |_| {
+            started.send(()).ok();
+            held.recv().ok();
+            None
+        });
+        assert!(w.submit(0, 0, blocker));
+        running.recv().expect("the first job starts");
+        assert!(w.submit(1, 1, job(1)));
+        assert!(w.submit(2, 2, job(2)));
+        assert!(w.submit(1, 3, job(3)));
+        assert!(w.discard(|slot| *slot == 0 || *slot == 1));
+        assert!(w.submit(3, 4, job(4)));
+        release.send(()).expect("the first job is waiting");
+        assert_eq!(w.wait().map(|d| d.key), Some(0), "the running job finishes");
+        assert_eq!(w.wait().map(|d| d.key), Some(2), "slot 1's jobs were dropped");
+        assert_eq!(w.wait().map(|d| d.key), Some(4), "a job submitted after the discard runs");
     }
 
     #[test]

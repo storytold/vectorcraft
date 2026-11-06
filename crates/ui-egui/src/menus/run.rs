@@ -494,6 +494,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
     };
     let r = match id {
         "window.taskBar" => flag(&mut app.ui.task_bar),
+        "window.pathfinder.compoundShapes" => flag(&mut app.ui.shape_modes_compound),
         "window.taskBar.pin" => {
             let place = &mut app.ui.task_bar_place;
             opt_bool(p, "pinned").map(|pinned| {
@@ -577,6 +578,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
         crate::addons::arrange::ZOOM => crate::addons::arrange::zoom(app),
+        crate::addons::select::link_status::COMMAND => crate::addons::select::link_status::run(app, p),
         crate::addons::document::SAVE_COPY => crate::addons::document::save_copy(app, p),
         crate::addons::document::EXPORT_ALL => crate::addons::document::export_all(app, p),
         crate::addons::document::BATCH_TRACE => crate::addons::document::batch_trace(app, p),

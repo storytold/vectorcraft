@@ -1,5 +1,8 @@
 # VectorCraft Roadmap
 
+- Contour add-on (beyond Illustrator): drag a selected shape's edge outward or inward for a live, editable offset copy, with a floating bar for distance and Sharp, Round or Square corners; Bake turns it into paths. Scores and estimates unchanged.
+- Compound Shapes add-on (beyond Illustrator): a menu for Make, Release and Expand Compound Shape and a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons create compound shapes on a click. Scores and estimates unchanged.
+
 - Paint: new gradients use the document's color model for default stops, including Gradient tool creation. Scores and estimates unchanged.
 
 - PDF.R1: editable PDF import uses the shared reader, scans page content in windows, and rejects known incomplete input before returning a document.
@@ -11,7 +14,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (macOS Quick Look thumbnails and previews of native files (#663); previously: new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (macOS Quick Look thumbnails and previews of native files (#663); previously: Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -131,7 +134,8 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 ## Progress log
 
-- 2026-11-05: macOS Quick Look (#663): Finder thumbnails and Space-bar previews of `.vectorcraft` and `.drawcraft` files, through two app extensions written in Rust (`apps/vectorcraft-ql`, their read path `crates/quicklook`), packaged in `VectorCraft.app/Contents/PlugIns`; native saves embed the preview by default (File Handling › Embed Preview). The thumbnail is the embedded preview, so files saved before keep the icon until saved again. Thumbnails checked on a macOS 15 runner (`packaging/macos/quicklook/check-thumbnails.sh`, ad-hoc signed: good files in 0.05–0.25 s, bad ones an error in under 0.2 s); the Space-bar preview and a notarised build on a real Mac are still to check. Headline numbers unchanged.
+- 2026-11-06: macOS Quick Look (#663): Finder thumbnails and Space-bar previews of `.vectorcraft` and `.drawcraft` files, through two app extensions written in Rust (`apps/vectorcraft-ql`, their read path `crates/quicklook`), packaged in `VectorCraft.app/Contents/PlugIns`; native saves embed the preview by default (File Handling › Embed Preview). The thumbnail is the embedded preview, so files saved before keep the icon until saved again. Thumbnails checked on a macOS 15 runner (`packaging/macos/quicklook/check-thumbnails.sh`, ad-hoc signed: good files in 0.05–0.25 s, bad ones an error in under 0.2 s); the Space-bar preview and a notarised build on a real Mac are still to check. Headline numbers unchanged.
+- 2026-11-05: Release Type on a Path joins the Type Tools add-on (Object › Plug-ins › Type Tools): each selected type on a path splits into point type with the same text and attributes, on one straight line starting where its first character sat, and the plain path it was set on, with its exact shape and place in the stacking order and no paint; or keeps only the path or only the text, optionally leaving the original. A dialog with Preview, one undo step (`addon.type.releasePath`, #5532). A VectorCraft addition: headline numbers unchanged.
 - 2026-11-04: New Document: the units chosen in Preset Details now belong to the chosen document, as the pane's options are listed for the selected preset; the chosen card shows them, every other Recent and Saved card keeps the units its document or preset was made in, and the built-in tabs still follow the chosen units, so switching between inches and millimetres no longer restyles every recent template. Scores and estimates unchanged.
 - 2026-11-02: Mouse wheel over a closed font-family field in Character, Properties or Control changes selected text through the family list using saved font filters (excluding search text), one undo step per notch, stopping at the ends (#5253). Scores and estimates unchanged.
 - 2026-10-31: Pattern libraries: Window › Swatch Libraries › Patterns and the Swatches panel's library menu open Geometric Patterns, a built-in library of eleven pattern swatches (dots, stripes, checks, a grid and shapes); clicking one adds its pattern and swatch to the document, once, and applies it to the active fill or stroke (`swatch.library.add`).
@@ -220,7 +224,8 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-04 | minor | Progress log row for macOS Quick Look (#663); headline numbers unchanged. |
+| 2026-11-06 | minor | Progress log row for macOS Quick Look (#663); headline numbers unchanged. |
+| 2026-11-05 | minor | Progress log row for the Type Tools add-on's Release Type on a Path (#5532); headline numbers unchanged. |
 | 2026-11-03 | minor | Progress log row for the Type Tools add-on's Text Tweaker (#4924); headline numbers unchanged. |
 | 2026-11-02 | minor | Closed font-family fields accept wheel input for selected text in Character, Properties and Control (#5253); scores and estimates unchanged. |
 | 2026-11-01 | minor | Progress log row for the Color Effects add-on's Find Nearest Swatch (#4923); headline numbers unchanged. |
