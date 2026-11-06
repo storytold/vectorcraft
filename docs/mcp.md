@@ -3398,7 +3398,8 @@ the art on that artboard, in one undo step. The art is what an export draws, mea
 effects on paths, compound paths and symbol instances. An object counts for every artboard its bounds overlap, also
 when it reaches past the artboard's edge, and a group or a clipping layer counts whole. An artboard with no art on it,
 or a locked one, keeps its size and place. The call fails with `the artboard is locked` when every artboard it names is
-locked, and with `no artwork` when none of the others has art.
+locked, and with `no artwork` when none of the others has art. When every artboard already fits its art, no undo step
+is recorded.
 `artboard.fitToSelection {index?}` (Object › Artboards › Fit to Selected Art) fits artboard `index` to the selected
 art. Both commands take 0-based indexes and resize the first artboard when the call names none. The desktop app adds
 the selected artboards (those the Artboard tool has selected, else the active one) as `indices` to the
@@ -3941,7 +3942,8 @@ Then `edit.paste` adds a copy of each artboard, together right of the last one a
 in the layers it came from, in one undo step (`edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack` put
 them where they were; `edit.pasteOnAllArtboards` pastes only the art), in this document or another; the result's
 `artboards` lists the new artboards' indices and `artboard` is the first of them, and the Artboard tool, when chosen,
-selects them. `artboard.duplicate {index? | indices?, art?}` does the same in one step → `{index, indices, ids}`.
+selects them. `edit.paste {artboardsAt: [x, y]}` instead centers the copied artboards on that point, as they lay, and a
+value that is not `[x, y]` fails with `` `artboardsAt` must be [x, y] ``. `artboard.duplicate {index? | indices?, art?}` does the same in one step → `{index, indices, ids}`.
 Window › Artboards › Duplicate Artboards passes the selected artboards (those the Artboard tool has selected, else the
 active one) as `indices`, and a row dragged onto New Artboard passes its artboard as `index`.
 `artboard.move {copy: true, moveArt: true}` is the Artboard tool's Alt-drag. `artboard.duplicate` and `artboard.move`
@@ -4001,6 +4003,52 @@ artwork when an object (hidden, locked and template art included; guides not) ha
 it; a group counts by its members, a clip group or clipping layer by its members inside the clip. Locked artboards stay; when every artboard is empty and none is locked, artboard 1 stays (with a locked
 artboard left, artboard 1 can go). With
 nothing to delete the command is disabled and fails with `no empty artboards to delete`.
+
+Rename Artboards: `artboard.rename {index? | indices?, name}` renames artboards in one undo step, by default those the
+Artboard tool has selected, else its active one. One artboard takes `name`, trimmed. Several take it numbered in artboard
+order, `name-1`, `name-2` and so on. A locked artboard is renamed too. An empty name fails with
+`` `name` must not be empty ``, a name that is not a string fails with `` `name` must be a string ``, and an artboard
+that is not in the document fails with `no such artboard`. When every artboard already has its new name, the command
+records no undo step → `{renamed: [index…]}`. With no params, a menu click opens the `renameArtboards` dialog (fields
+`name` and `indices`), and OK with an empty name changes nothing. The Artboards panel's name field runs this command too.
+
+Switch Orientation: `artboard.switchOrientation {index? | indices?, scaleArt?, patterns?, lockedAndHidden?}` swaps the width and height of each
+artboard in one undo step, by default those the Artboard tool has selected, else its active one. Each top-left corner
+stays put, as with the Properties panel's Portrait and Landscape buttons. This rule for several artboards is VectorCraft's
+own. A square artboard and a locked one stay as they are, and the call fails with `the artboard is locked` when every
+artboard it names is locked. When no artboard changes, the command records no undo step → `{switched: [index…]}`.
+`scaleArt` scales the art with each artboard and defaults to the Artboard tool's Scale Artwork with Artboard option.
+`patterns` and `lockedAndHidden` work as they do on `artboard.setProps`.
+
+When a call to `artboard.duplicate`, `artboard.copy`, `artboard.cut`, `artboard.rename` or `artboard.switchOrientation`
+names no artboard, its journal entry records the artboards it acted on as `selectedArtboards`. A replay of the journal
+acts on those artboards, and a recorded action leaves the value out and acts on the selection when it plays.
+
+`artboard.selectAll {}` chooses the Artboard tool when another tool is in use and selects every artboard. The active
+artboard stays active, the art's selection stays as it is, and no undo step is recorded → `{selected: [index…]}`, the
+active artboard first.
+
+The canvas context menu with the Artboard tool lists the entries of the public
+[Use the artboard context menu](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/use-artboard-context-menu.html)
+page in the page's order, and no entries for objects or the view: Cut (`artboard.cut`), Copy (`artboard.copy`), Paste
+(`edit.paste`), Undo, Redo, New Artboard (`artboard.new`), Duplicate Artboards (`artboard.duplicate`), Rename
+(`artboard.rename`), Delete Artboards (`artboard.delete` with `indices`), Delete Empty Artboards
+(`artboard.deleteEmpty`), Select All Artboards (`artboard.selectAll`), Lock Artboards and Unlock Artboards
+(`artboard.setProps` with `locked`), Rearrange (`artboard.rearrange`), Fit to Artwork Bounds (`artboard.fitToArt`),
+Switch Orientation (`artboard.switchOrientation`), Artboard Options (`tool.options {tool: "artboard"}`) and Export
+(`file.exportForScreens`). Exit Isolation Mode and the Unlock submenu for locked objects under the pointer follow them.
+Cut, Copy, Duplicate Artboards, Rename, Delete Artboards, Lock Selected, Unlock Selected, Fit to Artwork Bounds, Switch
+Orientation and Export act on the artboards the tool has selected, else the active one. Artboard Options opens on the
+active artboard. New Artboard, Paste, Undo, Redo, Delete Empty Artboards, Select All Artboards and Rearrange do not act on
+the selected artboards. Lock All and Unlock All act on every artboard, and Lock All Except Selected acts on the artboards
+that are not selected. A right-click on an artboard that is not selected first selects it alone. An entry that cannot
+run is left out: Cut with a locked artboard or every artboard selected, Delete Artboards with no artboard to delete, Select All Artboards with every artboard selected, Rearrange with
+one artboard, Fit to Artwork Bounds with no art on a selected unlocked artboard, Switch Orientation with no selected
+artboard to change, and a lock entry with no artboard to change. The menu measures the art for Delete Empty Artboards and
+Fit to Artwork Bounds once, at the right-click. Paste centers copied artboards on the right-click's point
+(`edit.paste {artboardsAt: [x, y]}`) and centers copied objects there too (`center`). Chosen from a menu or the command
+palette with the tool in use, `artboard.new` makes the new artboard active, `artboard.duplicate` selects the copies,
+and `artboard.delete` and `artboard.deleteEmpty` make a remaining artboard active.
 
 Locked artboards: `artboard.setProps {index, locked: true}` locks an artboard and `{index, locked: false}` unlocks it,
 each in one undo step. The Artboards panel's lock column, left of a row's options icon, shows a lock on a locked

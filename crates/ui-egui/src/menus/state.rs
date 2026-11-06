@@ -187,6 +187,12 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     if SUBJECT_COMMANDS.contains(&id) {
         return has_subject(app);
     }
+    // The Artboard tool's canvas menu measured this when it opened.
+    if id == "artboard.deleteEmpty"
+        && let Some(facts) = crate::panels::artboards::open_menu_facts(app)
+    {
+        return facts.any_empty;
+    }
     if let Some(c) = vectorcraft_engine::find_command(id) {
         // The system clipboard's contents can be pasted with an empty internal clipboard.
         return (c.enabled)(&app.session).is_ok() || app.system_paste && id.starts_with("edit.paste");
@@ -245,7 +251,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             (d.kind == crate::dialogs::char_style_options::KIND || (d.kind == crate::dialogs::new_text_style::KIND && !d.bool("__para")))
                 && crate::dialogs::char_style_options::can_reset(d)
         }),
-        "ui.newArtboard" => app.session.active().is_some(),
+        "ui.newArtboard" | "artboard.selectAll" => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),

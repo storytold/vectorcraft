@@ -91,6 +91,7 @@ pub mod raster_effects;
 pub mod rearrange_artboards;
 pub mod recolor;
 mod recovery;
+pub mod rename_artboards;
 mod revolve;
 pub(crate) mod revolve_gizmo;
 pub mod saturate;
@@ -415,6 +416,7 @@ registry! {
     NavigatorPanelOptions: [navigator_panel_options::KIND] => navigator_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
+    RenameArtboards: [rename_artboards::KIND] => rename_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
     SetCorners: [crate::addons::pathtools::set_corners::KIND] => crate::addons::pathtools::set_corners::SPEC,
