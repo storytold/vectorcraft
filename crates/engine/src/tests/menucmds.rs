@@ -3827,6 +3827,30 @@ fn guides_and_art_are_shift_selected_together() {
     assert_eq!(guides(&s).len(), 2);
 }
 
+#[test]
+fn invalid_clear_guides_parameters_delete_nothing() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 40.0, 20.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    let n = undo_len(&s);
+    for params in [json!({"ids": [a.0], "guides": "true"}), json!({"guides": 1})] {
+        assert!(s.execute("edit.clear", &params).is_err(), "accepted {params}");
+        assert!(s.doc().unwrap().doc.node(a).is_some(), "deleted the art for {params}");
+        assert_eq!((guides(&s).len(), undo_len(&s)), (1, n), "changed the document for {params}");
+    }
+    // Direct-selected anchors take the same check.
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    assert!(s.execute("edit.clear", &json!({"guides": "false"})).is_err());
+    assert!(!s.doc().unwrap().selection.anchors.is_empty());
+    assert_eq!(undo_len(&s), n);
+    // Null, as for every command, is the same as leaving `guides` out: with ids, the guides stay.
+    s.execute("edit.clear", &json!({"ids": [a.0], "guides": null})).unwrap();
+    assert!(s.doc().unwrap().doc.node(a).is_none());
+    assert_eq!(guides(&s).len(), 1);
+}
+
 /// When ruler guides and art are selected together, moving the art moves the guides as well;
 /// copy leaves both in place and moves the copies; single undo reverts both.
 #[test]

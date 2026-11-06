@@ -1349,6 +1349,7 @@ then composite against the art below it). SVG has no non-isolated groups, so the
 (default: the mask being edited, else the first selected masked object) as greyscale coverage (white = opaque) and the
 mask is edited; called again it shows the artwork, still editing. It is view state of the open document: the canvas
 (and `ui.screenshot`) shows it, exports never do, and it ends when mask editing ends.
+The command rejects an `on` value that is not a boolean. Omitting `on` toggles the current value.
 
 Isolation mode and mask editing exclude each other. In isolation mode `transparency.editOpacityMask` and
 `transparency.viewOpacityMask` are off, and `transparency.makeOpacityMask` refuses one target, an object or a layer,
@@ -1433,6 +1434,8 @@ or unknown id leaves the document unchanged. An empty `ids` array does nothing. 
 are kept, and selecting an ancestor together with its descendants deletes that subtree once.
 Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
 Cut still removes the objects it copied, including a whole compound when a member is selected.
+With `ids`, `guides: true` also deletes the selected ruler guides. The command rejects a `guides` value that is not a
+boolean.
 
 `object.setProps` with `visible: false` or `locked: true` deselects every selected object that is hidden or
 locked after the call: the selected objects it hides or locks, selected objects inside them, and selected objects
@@ -2058,6 +2061,8 @@ it (Alt-drag). `appearance.duplicateItem {index, to?}` / `{indices}` and `appear
 act on several fills/strokes at once, and `appearance.showAllHidden` makes every hidden fill, stroke and effect
 visible again. In remote mode, `effect.dialog {effect, index, item}` opens an applied effect's dialog prefilled
 (`ui.dialog.confirm` runs `effect.setParams`); see the control protocol for the "already applied" question.
+`effect.move` rejects a `copy` value that is not a boolean, and every command that takes `aligned` rejects an `aligned`
+value that is not a boolean.
 
 Effect dialogs use the targeted object, group, or layer shown in Appearance. The Transform dialog previews valid
 numbers as they are typed, including Copies, distances with units, and rotation. With Preview off, changes apply
@@ -4940,6 +4945,7 @@ outside `tileRange` dimmer). The Print Tiling tool (`printTiling`) shows them to
 what is drawn, from the layout `print.preview` and both writers (PDF and PostScript) use, so the canvas and the
 printed job agree: `{tileOrigin, pages: [{artboard, number, printed, page, imageable}]}` (`[x0, y0, x1, y1]` in document space; every tile when tiling, else
 each page once, not once per ink).
+`view.printTiling` rejects an `on` value that is not a boolean. Omitting `on` toggles the current value.
 
 Dragging with the tool puts the top-left corner of the first page's imageable area where the pointer is (snapping to
 the artboard's edges): `print.tiling.set {origin: [x, y], artboard?}` saves it with the print settings as
@@ -5834,6 +5840,7 @@ that no built-in format has. A failing plug-in returns an error and leaves the d
 no file). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
 `plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`
 runs it where it is called, so the call may take minutes; `notifications/cancelled` stops it.
+`plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean.
 
 ```json
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
