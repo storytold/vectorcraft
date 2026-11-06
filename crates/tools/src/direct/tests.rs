@@ -182,6 +182,45 @@ fn dragging_a_spine_point_moves_it() {
     assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Anchor { filled: true, .. })), "the clicked point shows");
 }
 
+/// #5285: Shift-click picks several points of a blend's spine, as of a path; dragging one of them
+/// moves them all (`with`), and Shift-click on a picked point takes it away again.
+#[test]
+fn shift_click_picks_several_spine_points_which_drag_together() {
+    let (mut d, g, _) = blend_doc();
+    let sp = vectorcraft_geom::SubPath::polyline(&[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)], false);
+    let Some(NodeKind::Blend { spec, .. }) = d.node_mut(g).map(|n| &mut n.kind) else { panic!("blend") };
+    (spec.spine, spec.key_anchors) = (Some(PathData::single(sp)), vec![0, 2]);
+    let mut s = Selection::default();
+    s.set([g]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let filled = |t: &DirectSelectionTool| t.overlays(&cx).iter().filter(|o| matches!(o, Overlay::Anchor { filled: true, .. })).count();
+    let mut t = DirectSelectionTool::new(false);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 210.0, 310.0).with_mods(shift));
+    assert_eq!(filled(&t), 2, "both picked points show");
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 210.0, 330.0));
+    assert_eq!(
+        a.last(),
+        Some(&Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": g.0, "anchor": 2, "x": 210.0, "y": 330.0, "with": [1]})))
+    );
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 210.0, 330.0)), vec![Action::Commit]);
+    // A plain press on a picked point keeps both.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 160.0, 300.0));
+    assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["anchor"] == 1 && v["with"] == json!([2])), "{a:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 300.0));
+    // Shift-click takes one away; a plain click on another point picks it alone.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 210.0, 310.0).with_mods(shift));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 210.0, 310.0).with_mods(shift));
+    assert_eq!(filled(&t), 1);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 110.0, 310.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 110.0, 330.0));
+    assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["anchor"] == 0 && v.get("with").is_none()), "{a:?}");
+}
+
 /// #1111: the Anchor Point tool bends a selected blend's straight spine; Direct Selection
 /// reshapes a curved spine segment and leaves a straight one alone, as it does a path's.
 #[test]

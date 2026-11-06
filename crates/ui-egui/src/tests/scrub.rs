@@ -365,3 +365,64 @@ fn a_scrub_closes_its_group_in_its_own_document_after_a_switch() {
     assert_eq!(second.history.undo.len(), undo + 1, "one undo step for the drag");
     assert!(app.session.documents()[0].undo_group.is_some(), "the active document's group stays open");
 }
+
+/// Press at `at`, move by `dx` in four frames and release, in the app.
+fn drag_at(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2, dx: f32) {
+    let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    app_frame(app, ctx, vec![Event::PointerMoved(at)], "");
+    app_frame(app, ctx, vec![button(at, true)], "");
+    for i in 1..=4 {
+        app_frame(app, ctx, vec![Event::PointerMoved(at + vec2(dx * i as f32 / 4.0, 0.0))], "");
+    }
+    app_frame(app, ctx, vec![button(at + vec2(dx, 0.0), false)], "");
+    app_frame(app, ctx, vec![], "");
+}
+
+/// #4088: the Control bar's "Stroke:" and "Opacity:" are links to their panels, and they scrub the
+/// field after them as the other labels do: a drag steps the weight or the opacity in one undo
+/// step, while a click still follows the link and leaves the value and the keyboard focus alone.
+#[test]
+fn the_control_bars_stroke_and_opacity_links_scrub_their_fields() {
+    let (mut app, ctx) = app_with_rect();
+    app.ui.control_bar = true;
+    let opacity = |app: &VectorcraftApp| crate::panels::current_transparency(app).unwrap().0;
+    let weight = |app: &VectorcraftApp| crate::panels::current_stroke(app).unwrap().width;
+    let find = |app: &mut VectorcraftApp, text: &str| {
+        let mut at = None;
+        for _ in 0..4 {
+            at = app_frame(app, &ctx, vec![], text);
+        }
+        at.unwrap_or_else(|| panic!("{text} is shown")).center()
+    };
+    let (w0, undo) = (weight(&app), undo_len(&app));
+
+    // A click on a link opens its panel: no value changes and no field takes the keyboard.
+    let (o, w) = (opacity(&app), weight(&app));
+    let at = find(&mut app, "Opacity:");
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    app_frame(&mut app, &ctx, vec![Event::PointerMoved(at), button(true)], "");
+    app_frame(&mut app, &ctx, vec![button(false)], "");
+    assert_eq!(app.ui.open_panel.as_deref(), Some("transparency"), "the link opens the Transparency panel");
+    assert_eq!((opacity(&app), weight(&app)), (o, w));
+    assert!(ctx.memory(|m| m.focused()).is_none(), "no field took the focus");
+
+    // Hovering the link keeps its pointing hand.
+    let at = find(&mut app, "Opacity:");
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0)));
+    let mut out = ctx.run_ui(egui::RawInput { events: vec![Event::PointerMoved(at)], screen_rect, ..Default::default() }, |ui| {
+        app.logic(ui.ctx());
+        app.ui(ui);
+    });
+    out.textures_delta.clear();
+    assert_ne!(out.platform_output.cursor_icon, CursorIcon::ResizeHorizontal, "the link keeps its cursor while hovered");
+
+    drag_at(&mut app, &ctx, at, -40.0);
+    // 40 points left: 40 / PX_PER_STEP steps of 1% down from 100%.
+    assert!((opacity(&app) as f64 - (1.0 - 40.0 / scrub::PX_PER_STEP as f64 / 100.0)).abs() < 1e-4, "{}", opacity(&app));
+    assert_eq!(undo_len(&app), undo + 1, "one undo step");
+
+    let at = find(&mut app, "Stroke:");
+    drag_at(&mut app, &ctx, at, 40.0);
+    assert!((weight(&app) - (w0 + 40.0 / scrub::PX_PER_STEP as f64)).abs() < 1e-6, "{}", weight(&app));
+    assert_eq!(undo_len(&app), undo + 2, "one undo step");
+}

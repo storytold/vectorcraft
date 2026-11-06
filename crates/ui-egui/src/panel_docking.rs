@@ -271,8 +271,25 @@ pub(crate) fn showing(ui: &UiState, panel: &str) -> bool {
 }
 
 /// Can either panel that uses row thumbnails be seen, including in a floating window or flyout?
-fn thumbnail_panel_showing(ui: &UiState) -> bool {
-    ui.dock && ui.screen_mode < 3 && (showing(ui, "layers") || showing(ui, "links"))
+/// An iconic group's open flyout is named for the icon that opened it; its active tab can differ.
+fn thumbnail_panel_showing(ui: &UiState, ctx: &egui::Context) -> bool {
+    if !ui.dock || ui.screen_mode >= 3 {
+        return false;
+    }
+    let layout = layout_of(ui);
+    let regular = ["layers", "links"]
+        .iter()
+        .any(|panel| !in_iconic_column(&layout, panel) && layout.panel_state(&(*panel).to_string()) == craft_ui::docking::PanelState::Front);
+    let flyout = craft_ui::docking::flyout::<String>(ctx, area_id());
+    let iconic = flyout.as_ref().and_then(|anchor| {
+        dock_columns(&layout)
+            .into_iter()
+            .filter(|column| column.iconic)
+            .flat_map(|column| &column.groups)
+            .find(|group| group.panels.contains(anchor))
+            .and_then(|group| group.active_panel())
+    });
+    regular || iconic.is_some_and(|panel| matches!(panel.as_str(), "layers" | "links"))
 }
 
 /// Where a panel with no other destination goes: a panel of the first expanded dock column,
@@ -1178,7 +1195,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.open_dropped_files(window.dropped, None, shift);
     }
     forward_keys(app, &ctx, output.forwarded_events, output.forwarded_modifiers);
-    if !thumbnail_panel_showing(&app.ui) {
+    if !thumbnail_panel_showing(&app.ui, &ctx) {
         // No panel can ask for these rows again this pass. Keep the cache of open documents, but
         // discard worker jobs queued behind the one already rendering.
         crate::panels::layers::show_thumbs_of(None);

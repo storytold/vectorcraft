@@ -9,6 +9,7 @@ mod document;
 mod pathtools;
 mod pen;
 mod select;
+mod shapes;
 mod typetools;
 
 use super::CommandSpec;
@@ -23,6 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(pathtools::specs());
     v.extend(pen::specs());
     v.extend(select::specs());
+    v.extend(shapes::specs());
     v.extend(typetools::specs());
     v
 }

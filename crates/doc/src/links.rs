@@ -180,6 +180,13 @@ impl ImageBlob {
     pub fn is_proxy(&self) -> bool {
         self.proxy.as_ref().is_some_and(|p| Arc::ptr_eq(p, &self.bytes))
     }
+
+    /// Does a colorize paint ([`crate::NodeExtras::colorize`]) show on these bytes? Not while
+    /// they are a preview whose pixels aren't grayscale, such as [`missing_placeholder`]: until
+    /// the file is relinked the image shows the preview as it is, and keeps the paint.
+    pub fn takes_colorize(&self) -> bool {
+        !self.is_proxy() || self.gray_source().is_some()
+    }
 }
 
 /// The side of [`missing_placeholder`]'s image, in pixels.

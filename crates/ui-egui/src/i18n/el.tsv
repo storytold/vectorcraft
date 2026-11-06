@@ -1991,6 +1991,7 @@ font-technology	Variable	Μεταβλητές
 	Patterns	Μοτίβα
 	Stroke Options	Επιλογές περιγράμματος
 	Character:	Χαρακτήρας:
+	Paragraph:	Παράγραφος:
 	Stroke:	Περίγραμμα:
 	Style	Στυλ
 	Style:	Στυλ:
@@ -3655,6 +3656,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Stray Points	Μεμονωμένα σημεία
 	Stroke (X), double-click for the Color Picker	Περίγραμμα (X), διπλό κλικ για επιλογέα χρώματος
 	Character options	Επιλογές χαρακτήρων
+	Paragraph options	Επιλογές παραγράφου
 	Stroke options	Επιλογές περιγράμματος
 	Transform options	Επιλογές μετασχηματισμού
 	Stroke Weight	Πάχος περιγράμματος
@@ -4285,6 +4287,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no such saved selection	δεν υπάρχει τέτοια αποθηκευμένη επιλογή
 @msg	no such segment	δεν υπάρχει τέτοιο τμήμα
 @msg	no such spine point	δεν υπάρχει τέτοιο σημείο κεντρικής καμπύλης
+@msg	`with` must be a list of at most 10000 spine point indexes	το `with` πρέπει να είναι λίστα με έως 10000 δείκτες σημείων κεντρικής καμπύλης
+@msg	`with` moves points, not a handle	το `with` μετακινεί σημεία, όχι λαβή
 @msg	no such spine segment	δεν υπάρχει τέτοιο τμήμα κεντρικής καμπύλης
 @msg	no such subpath	δεν υπάρχει τέτοια υποδιαδρομή
 @msg	no such user library	δεν υπάρχει τέτοια βιβλιοθήκη χρήστη
@@ -6345,3 +6349,7 @@ breakText	Glyphs	Γλύφοι
 # Compound Shapes add-on
 	Compound Shapes	Σύνθετα σχήματα
 	Shape Mode Buttons Make Compound Shapes	Τα κουμπιά λειτουργιών σχημάτων δημιουργούν σύνθετα σχήματα
+
+# 3D Box add-on
+	3D Box	Κουτί 3D
+	3D Box Tool	Εργαλείο κουτιού 3D

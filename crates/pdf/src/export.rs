@@ -33,6 +33,7 @@ use crate::{Compatibility, ExportReport, PdfError, PdfOptions, Standard};
 mod entry;
 mod exporter;
 mod images;
+mod links;
 mod nodes;
 mod paint;
 mod text;

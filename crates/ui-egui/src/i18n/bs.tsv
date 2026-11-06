@@ -1469,7 +1469,9 @@ digits	Malayalam	Malajalam
 	Standard Vertical Roman Alignment	Standardno okomito latinično poravnanje
 	Strikethrough	Precrtano
 	Character:	Znak:
+	Paragraph:	Pasus:
 	Character options	Opcije znakova
+	Paragraph options	Opcije pasusa
 	Subscript	Indeks
 	Subscript (on the roadmap)	Indeks (u planu)
 	Superscript	Eksponent
@@ -4589,6 +4591,8 @@ imageTrace	Outline	Obris
 @msg	no such saved selection	nema takvog sačuvanog odabira
 @msg	no such segment	nema takvog segmenta
 @msg	no such spine point	nema takve tačke kičme
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` mora biti lista od najviše 10000 indeksa tačaka kičme
+@msg	`with` moves points, not a handle	`with` pomjera tačke, ne ručicu
 @msg	no such spine segment	nema takvog segmenta kičme
 @msg	no such subpath	nema takve podputanje
 @msg	no such user library	nema takve korisničke biblioteke
@@ -6278,3 +6282,7 @@ shape	Open	Otvoren
 # Compound Shapes add-on
 	Compound Shapes	Složeni oblici
 	Shape Mode Buttons Make Compound Shapes	Tasteri načina oblika prave složene oblike
+
+# 3D Box add-on
+	3D Box	3D kutija
+	3D Box Tool	Alat za 3D kutiju

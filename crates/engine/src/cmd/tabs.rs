@@ -13,7 +13,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Tab Stops",
             ["Window", "Tabs"],
             None,
-            "{stops: [{position: pt, align?: left|center|right|decimal, leader?: \". \", alignOn?: \".\"}], ids?|id?, start?: byte, end?: byte} replace the tab stops of the selected text (with a range: of the paragraphs it touches)",
+            "{stops: [{position: pt, align?: left|center|right|decimal, leader?: \". \", alignOn?: \".\"}], ids?|id?, start?: byte, end?: byte} replace the tab stops of the selected text (with a range: of the paragraphs it touches); supplied align, leader and alignOn must be strings, and alignOn cannot be empty",
             has_selection,
             set
         ),
@@ -44,15 +44,31 @@ fn parse_stops(p: &Value) -> Result<Vec<TabStop>> {
         if !(0.0..=100_000.0).contains(&position) {
             return Err(bad(C, "positions must be between 0 and 100000 pt"));
         }
-        let align = match s.get("align").and_then(Value::as_str).unwrap_or("left").to_ascii_lowercase().as_str() {
+        let align = match s.get("align") {
+            None | Some(Value::Null) => "left",
+            Some(Value::String(value)) => value.as_str(),
+            Some(_) => return Err(bad(C, "`align` must be a string")),
+        };
+        let align = match align.to_ascii_lowercase().as_str() {
             "left" => TabAlign::Left,
             "center" | "centre" => TabAlign::Center,
             "right" => TabAlign::Right,
             "decimal" => TabAlign::Decimal,
             other => return Err(bad(C, format!("unknown align `{other}`"))),
         };
-        let leader = s.get("leader").and_then(Value::as_str).unwrap_or("").chars().take(8).collect();
-        let align_on = s.get("alignOn").and_then(Value::as_str).and_then(|a| a.chars().next()).unwrap_or('.');
+        let leader = match s.get("leader") {
+            None | Some(Value::Null) => "",
+            Some(Value::String(value)) => value.as_str(),
+            Some(_) => return Err(bad(C, "`leader` must be a string")),
+        }
+        .chars()
+        .take(8)
+        .collect();
+        let align_on = match s.get("alignOn") {
+            None | Some(Value::Null) => '.',
+            Some(Value::String(value)) => value.chars().next().ok_or_else(|| bad(C, "`alignOn` cannot be empty"))?,
+            Some(_) => return Err(bad(C, "`alignOn` must be a string")),
+        };
         stops.push(TabStop { position, align, leader, align_on });
     }
     stops.sort_by(|a, b| a.position.total_cmp(&b.position));
@@ -115,6 +131,13 @@ mod tests {
     use serde_json::json;
 
     use crate::Session;
+
+    #[test]
+    fn supplied_tab_stop_fields_require_strings() {
+        for stop in [json!({"position": 40, "align": false}), json!({"position": 40, "leader": 1}), json!({"position": 40, "alignOn": ""})] {
+            assert!(super::parse_stops(&json!({"stops": [stop.clone()]})).is_err(), "accepted {stop}");
+        }
+    }
 
     #[test]
     fn set_get_clear_tabs() {

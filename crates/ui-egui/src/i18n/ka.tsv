@@ -1329,7 +1329,9 @@ digits	Malayalam	მალაიალამური
 	Standard Vertical Roman Alignment	სტანდარტული ვერტიკალური ლათინური სწორება
 	Strikethrough	გადახაზული
 	Character:	სიმბოლო:
+	Paragraph:	აბზაცი:
 	Character options	სიმბოლოს პარამეტრები
+	Paragraph options	აბზაცის პარამეტრები
 	Subscript	ქვედა ინდექსი
 	Subscript (on the roadmap)	ქვედა ინდექსი (სამომავლო გეგმაშია)
 	Superscript	ზედა ინდექსი
@@ -5527,6 +5529,8 @@ imageTrace	Outline	კონტური
 @msg	missing number `{key}`	აკლია რიცხვი `{key}`
 @msg	missing integer `{key}`	აკლია მთელი რიცხვი `{key}`
 @msg	no such spine point	ხერხემლის ასეთი წერტილი არ არსებობს
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` უნდა იყოს ხერხემლის წერტილების არაუმეტეს 10000 ინდექსის სია
+@msg	`with` moves points, not a handle	`with` წერტილებს გადაადგილებს და არა სახელურს
 @msg	no such spine segment	ხერხემლის ასეთი სეგმენტი არ არსებობს
 @msg	not a blend	ეს გადასვლა არ არის
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	ბრაუზერში მხოლოდ http, https და mailto URL-ები იხსნება და არა „{url}“
@@ -6405,3 +6409,7 @@ font-script	Japanese	იაპონური
 # Compound Shapes add-on
 	Compound Shapes	შედგენილი ფიგურები
 	Shape Mode Buttons Make Compound Shapes	ფიგურის რეჟიმის ღილაკები ქმნის შედგენილ ფიგურებს
+
+# 3D Box add-on
+	3D Box	3D ყუთი
+	3D Box Tool	3D ყუთის ხელსაწყო
