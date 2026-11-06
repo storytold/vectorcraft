@@ -3219,6 +3219,9 @@ proptest! {
         fidelity in prop::sample::select(vec!["50", "0", "100", "101", "-1", "1e308", "nan"]),
         size in prop::sample::select(vec!["[1 1]", "[3 2]", "[0 0]", "[51 1]", "[100000 100000]", "[-1 2]", "[1e308 1]"]),
         corner in prop::sample::select(vec!["10 10", "1e308 -1e308", "nan 0", "10 10 10 10", "0"]),
+        art_width in prop::sample::select(vec!["81", "80", "0", "-5", "1e308", "nan"]),
+        art_height in prop::sample::select(vec!["81", "80", "0", "-5", "1e308", "nan"]),
+        weight in prop::sample::select(vec!["1", "0", "1e308", "-1"]),
         edit in 0i64..2,
         cut in 0usize..2_000,
         edits in prop::collection::vec((0usize..2_000, prop::sample::select(vec!['0', '9', '-', ' ', '\n', '(', ')', '/', ':', ';', ',', '[', ']', '%', '_', 'X', 'u', 'U'])), 0..8),
@@ -3231,9 +3234,9 @@ proptest! {
             n("10", "90"),
             n("90", "90")
         );
-        let content = "%_u\n%_1 0 0 1 0 0 Xa\n%_10 10 m\n%_10 90 L\n%_90 90 L\n%_90 10 L\n%_f\n%_U\n";
+        let content = format!("%_u\n%_1 0 0 1 0 0 Xa\n%_0 1 1 0 1 0 0 XA\n%_{weight} w\n%_10 10 m\n%_10 90 L\n%_90 90 L\n%_90 10 L\n%_b\n%_U\n");
         let keys = format!(
-            "%_{word} /Int (AIDeformOptionsKey) ,\n%_{fidelity} /Int (AIDeformFidelityKey) ,\n%_{edit} /Bool (AIDeformEditModeKey) ,\n%_{style} /Int (DeformStyle) ,\n%_0.5 /Real (DeformValue) ,\n%_1 /Bool (Rotate) ,\n"
+            "%_{word} /Int (AIDeformOptionsKey) ,\n%_{fidelity} /Int (AIDeformFidelityKey) ,\n%_{edit} /Bool (AIDeformEditModeKey) ,\n%_{style} /Int (DeformStyle) ,\n%_0.5 /Real (DeformValue) ,\n%_1 /Bool (Rotate) ,\n%_{art_width} /Real (AIDeformArtWidthKey) ,\n%_{art_height} /Real (AIDeformArtHeightKey) ,\n"
         );
         let art = format!(
             "%_u\n{mesh}%_U\n%_/ArtDictionary :\n{keys}%_X=\n{content}%_X+\n%_ (AIDeformArtKey) ,\n%_{kind} /Int (AIDeformStyle) ,\n%_;\n%_\nu\n1 0 0 1 0 0 Xa\n12 12 m\n12 88 L\n88 88 L\nf\nU\n(Adobe Deform Plugin) 1 0 0 XP\n0 0 1 1 0 0 Xa\n0 0 m\n5 5 L\nf\n"
