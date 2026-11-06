@@ -73,6 +73,9 @@ pub(crate) struct Interp<'a> {
     pub fault: Option<Fault>,
     /// The width a Type 3 glyph procedure gave (`setcachedevice`, `setcharwidth`).
     pub glyph_width: Option<[f64; 2]>,
+    /// The TrueType data of the Type 42 fonts drawn so far, by their `sfnts` array (see
+    /// `type42`), the most recent last.
+    pub type42: Vec<(Shared<Obj>, Rc<Vec<u8>>)>,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
@@ -189,6 +192,7 @@ impl<'a> Interp<'a> {
             journal: vec![],
             fault: None,
             glyph_width: None,
+            type42: vec![],
             g,
             saved: vec![],
             out,
