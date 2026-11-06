@@ -128,7 +128,40 @@ fn heading(d: &Dialog) -> String {
     crate::i18n::fmt(tl!("{format} Options"), &[("format", format_of(d).map_or(tl!("Export"), |f| f.label))])
 }
 
-fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+/// A byte count as the estimated-size row shows it (Save for Web uses the same bands).
+fn size_label(bytes: usize) -> String {
+    if bytes < 1024 {
+        format!("{bytes} bytes")
+    } else if bytes < 1 << 20 {
+        format!("{:.1}K", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.2}M", bytes as f64 / f64::from(1 << 20))
+    }
+}
+
+/// Encode with the current options (no file written) and remember the size on the dialog.
+fn refresh_estimated_size(app: &mut VectorcraftApp, d: &mut Dialog) {
+    let raster = format_of(d).is_some_and(|f| matches!(f.id, "png" | "jpg" | "webp" | "gif" | "png8" | "tiff" | "bmp" | "tga" | "psd"));
+    if !raster {
+        d.fields.remove("__estimateKey");
+        d.fields.remove("__estimatedBytes");
+        return;
+    }
+    let mut params = form::params(d);
+    if let Some(o) = params.as_object_mut() {
+        o.remove("path");
+    }
+    let key = params.to_string();
+    if d.str("__estimateKey") == key && d.fields.contains_key("__estimatedBytes") {
+        return;
+    }
+    let bytes = app.run("document.export", params).ok().and_then(|r| r.get("bytes").and_then(Value::as_u64));
+    d.fields.insert("__estimateKey".into(), json!(key));
+    d.fields.insert("__estimatedBytes".into(), json!(bytes));
+}
+
+fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    refresh_estimated_size(app, d);
     let t = Tokens::get(ui.ctx());
     let id = format_of(d).map_or("png", |f| f.id);
     let label = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(tl!(text)).color(t.text_dim));
@@ -159,6 +192,11 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             label(ui, tl!("Size:"));
             let (pw, ph) = vectorcraft_render::region_pixels(vectorcraft_geom::Rect::new(0.0, 0.0, w, h), d.f64("ppi", 72.0) / 72.0);
             ui.label(egui::RichText::new(format!("{pw} × {ph} px")).color(t.text));
+            ui.end_row();
+        }
+        if let Some(bytes) = d.fields.get("__estimatedBytes").and_then(Value::as_u64) {
+            label(ui, tl!("Estimated File Size:"));
+            ui.label(egui::RichText::new(size_label(bytes as usize)).color(t.text));
             ui.end_row();
         }
     });
