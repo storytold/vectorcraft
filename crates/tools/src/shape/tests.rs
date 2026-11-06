@@ -462,6 +462,15 @@ fn a_shape_tool_moves_the_selection_by_its_centre_point_and_turns_it_from_a_corn
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 170.0, 160.0)), vec![Action::Commit], "{id}");
         assert!(!t.busy() && !t.transforming(), "{id}");
     }
+    // Alt pressed once the drag has begun copies, and the copy cursor shows, as the Selection
+    // tool's do.
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, centre.x, centre.y));
+    t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 150.0));
+    let alt = Mods { alt: true, ..Mods::default() };
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 150.0).with_mods(alt));
+    assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["copy"] == json!(true)), "{a:?}");
+    assert_eq!(t.cursor(&c, Point::new(170.0, 150.0), alt), Cursor::SelectionCopy);
     // View › Hide Bounding Box hides the box, not the centre point: a press there still moves.
     let hidden = ToolContext { show_bbox: false, ..cx(&d, &s, &p) };
     let mut t = ShapeTool::new("rectangle");
@@ -496,4 +505,48 @@ fn a_shape_tool_moves_the_selection_by_its_centre_point_and_turns_it_from_a_corn
     t.pointer(&c, &PointerEvent::new(PointerKind::Down, away.x, away.y));
     let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 350.0, 340.0));
     assert_eq!(a.first(), Some(&Action::Begin("Rectangle".into())), "{a:?}");
+}
+
+/// Two selected live rectangles, the second placed so that its top-left Live Corners widget (10 pt
+/// in along the corner's bisector) lands on the first one's centre point.
+fn two_live_rects() -> (vectorcraft_doc::Document, Selection) {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let (mut d, first) = doc_with_live_rect();
+    let inside = 10.0 / std::f64::consts::SQRT_2;
+    let shape = LiveShape::Rectangle {
+        w: 100.0,
+        h: 100.0,
+        radii: [0.0; 4],
+        kinds: Default::default(),
+        radii_relative: false,
+        xf: Affine::translate((150.0 - inside, 150.0 - inside)),
+    };
+    let (layer, id) = (d.layers[0].id, d.alloc_id());
+    let mut n = Node::path(id, shape.to_path(), Appearance::default());
+    if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+        *slot = Some(Box::new(shape));
+    }
+    d.insert(Some(layer), 1, n).unwrap();
+    let mut s = Selection::default();
+    s.add(first);
+    s.add(id);
+    (d, s)
+}
+
+/// A press takes a Live Corners widget before a centre point, as the Selection tool does: with two
+/// shapes selected, one's corner widget may sit on another's centre, and it rounds rather than
+/// moving the selection.
+#[test]
+fn a_live_corner_widget_wins_over_another_shapes_centre_point() {
+    let (d, s) = two_live_rects();
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let at = Point::new(150.0, 150.0);
+    assert!(corners::over_widget(&c, at, false), "a widget is on the centre point");
+    assert!(hit_center(&c, at, c.point_tol()).is_some(), "and so is the centre point");
+    let mut t = ShapeTool::new("rectangle");
+    assert_eq!(t.cursor(&c, at, Mods::default()), Cursor::CornerRadius, "the widget takes the pointer");
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y)).is_empty());
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 160.0));
+    assert_eq!(a.first(), Some(&Action::Begin("Corner Radius".into())), "{a:?}");
 }

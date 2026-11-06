@@ -26,7 +26,7 @@ id = "Arrow"
 group = "Selection"
 shown_when = [
     "The Selection tool over empty canvas or over an unselected object (no Alt).",
-    "Dragging with the Selection tool (a move), or with Direct Selection (an anchor, a segment or a handle).",
+    "Dragging with the Selection tool (a move), with Direct Selection (an anchor, a segment or a handle), or with a shape tool (from the selection's centre point).",
     "Any tool with no cursor of its own (Touch Type, Rotate View).",
     "The resting state of Live Paint Selection, Reshape (away from a path), Free Transform, Puppet Warp and Crop Image (nothing selected or outside the box), the Perspective Grid (locked or away from handles) and Perspective Selection.",
 ]
@@ -94,7 +94,7 @@ id = "Move"
 group = "Selection"
 shown_when = [
     "The Selection tool over a selected object, or over any object with Alt held (once an Alt-drag starts, SelectionCopy shows).",
-    "The shape tools over a selected object's centre point (Attributes › Show Center), and while dragging it (SelectionCopy with Alt, ArrowHollow while it snaps).",
+    "The shape tools over a selected object's centre point (Attributes › Show Center), before a press there moves it (while the drag runs the arrow is plain, SelectionCopy with Alt, ArrowHollow while it snaps).",
     "Reshape over a path or while dragging.",
     "Inside the Free Transform and Crop Image boxes.",
     "Puppet Warp over a pin.",

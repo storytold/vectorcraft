@@ -64,14 +64,23 @@ fn a_shape_tool_moves_the_shape_from_its_centre_point() {
     assert_eq!(undo_steps(&s), steps + 1, "one undo step");
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(bounds(&s, id), before);
-    // Alt-dragging from the centre leaves a copy where the original was.
+    // Alt-dragging from the centre leaves a copy where the original was, in one undo step.
+    let steps = undo_steps(&s);
     gesture(
         &mut s,
         Mods { alt: true, ..NONE },
         &[(PointerKind::Down, 150.0, 140.0), (PointerKind::Drag, 200.0, 140.0), (PointerKind::Up, 200.0, 140.0)],
     );
-    let objects = s.doc().unwrap().doc.layers[0].children().map(|c| c.len()).unwrap_or_default();
-    assert_eq!(objects, 2, "a copy");
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map(|c| c.len()).unwrap_or_default();
+    assert_eq!(objects(&s), 2, "a copy");
+    assert_eq!(undo_steps(&s), steps + 1, "one undo step for the copy");
+    let copy = *s.doc().unwrap().selection.objects.first().expect("the copy is selected");
+    assert_eq!(bounds(&s, id), before, "the original stays");
+    assert_eq!(bounds(&s, copy), before + Vec2::new(50.0, 0.0), "the copy moved");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(objects(&s), 1, "undone");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(objects(&s), 2, "redone");
     // Escape turns the drag back, and the release leaves the art alone.
     let steps = undo_steps(&s);
     let moved = s.doc().unwrap().selection.objects.clone();
@@ -101,6 +110,12 @@ fn a_shape_tool_turns_the_shape_from_just_outside_a_corner() {
     assert!(turned.abs() > 1.0, "turned: {turned}");
     let centre = bounds(&s, id).center();
     assert!((centre - Point::new(150.0, 140.0)).hypot() < 1e-6, "about its centre: {centre:?}");
+    // One undo step for the turn, and Redo turns it again.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(angle(&s, id), 0.0, "undone");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!((angle(&s, id) - turned).abs() < 1e-9, "redone");
+    s.execute("edit.undo", &json!({})).unwrap();
     // A press on a Live Corners widget rounds it, as before (#5477): the widget keeps the corner,
     // and sits 10 pt inside it.
     let mut s = new_doc();

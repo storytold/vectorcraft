@@ -1109,11 +1109,6 @@ impl Tool for SelectionTool {
         if near_selected && pie::over_widget(cx, p) {
             return Cursor::ArrowHollow;
         }
-        // A selected object's centre point (Show Center): a press there moves it, where the art
-        // may not reach.
-        if near_selected && hit_center(cx, p, cx.point_tol()).is_some() {
-            return Cursor::Move;
-        }
         if over_rotate_all(cx, p) {
             return Cursor::Rotate;
         }
@@ -1132,6 +1127,12 @@ impl Tool for SelectionTool {
                 Some(BoxHit::Rotate) => return Cursor::rotate_about_in_view(bx.center(), p, cx.view_angle()),
                 None => {}
             }
+        }
+        // A selected object's centre point (Show Center): a press there moves it, where the art
+        // may not reach. The box's handles take a press before it, so they take the pointer too
+        // (on a thin box the centre lies within their reach).
+        if near_selected && hit_center(cx, p, cx.point_tol()).is_some() {
+            return Cursor::Move;
         }
         if let Some(c) = self.guide.cursor(cx, p) {
             return c;
