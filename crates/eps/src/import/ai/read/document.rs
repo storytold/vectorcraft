@@ -22,6 +22,19 @@ fn ruler_unit(v: u8) -> Option<Unit> {
     })
 }
 
+/// `base`, or the first of "base 2", "base 3"… not in `taken`, as [`Document::free_swatch_name`]
+/// gives it when `taken` holds the document's swatch and colour group names; `taken` takes the
+/// name returned.
+fn free_swatch_name(taken: &mut std::collections::HashSet<String>, base: &str) -> String {
+    let name = if taken.contains(base) {
+        (2..).map(|i| format!("{base} {i}")).find(|n| !taken.contains(n)).unwrap_or_else(|| base.to_string())
+    } else {
+        base.to_string()
+    };
+    taken.insert(name.clone());
+    name
+}
+
 /// An artboard of the `/Document`'s `ArtboardArray`: its name, its rect in art space and its
 /// display options.
 #[derive(Clone, Debug)]
@@ -820,6 +833,86 @@ impl<'a> Reader<'a> {
         Some((swatches, groups))
     }
 
+    /// The swatches of the file's named colors and patterns, added to `doc`'s, and the new name of
+    /// each color that took a numbered one.
+    ///
+    /// The colour operators' definitions come first: a gradient, defined before the art, names a
+    /// global process colour as a stop and would otherwise make it an ink (#1771). The header's
+    /// custom colors follow. The first definition of a name makes its swatch, and takes the place
+    /// of a default swatch of that name when the file has no palette of its own (`own_palette`; a
+    /// reserved name in brackets, such as `[None]`, keeps its swatch). Then each pattern gets a
+    /// swatch. A color whose name a gradient or pattern swatch of the palette has, and a pattern
+    /// whose name another swatch has, take the first free "Name 2", "Name 3"…
+    /// ([`Document::free_swatch_name`]) once the other colors and the patterns have their swatches;
+    /// a pattern a swatch already paints with gets no other.
+    fn file_swatches(&self, doc: &mut Document, own_palette: bool) -> HashMap<String, String> {
+        let mut defined = std::collections::HashSet::new();
+        let mut clashes = vec![];
+        // The swatch names there are, looked up rather than scanned for each name a file defines
+        // (`Document::swatch` also knows the registration colour).
+        let mut have: std::collections::HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).collect();
+        have.insert(vectorcraft_color::swatch::REGISTRATION.to_string());
+        // The names a swatch of another kind than a gradient or pattern has.
+        let mut solid: std::collections::HashSet<String> =
+            doc.swatches_iter().filter(|s| !matches!(s.paint, Paint::Gradient(_) | Paint::Pattern { .. })).map(|s| s.name.clone()).collect();
+        let colors = self.spots.iter().chain(&self.stop_spots).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
+        for (n, spot) in colors {
+            let first = defined.insert(n.name.clone());
+            let swatch = Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot };
+            let reserved = n.name.starts_with('[') && n.name.ends_with(']');
+            if have.insert(n.name.clone()) {
+                solid.insert(n.name.clone());
+                doc.swatches.push(swatch);
+            } else if first && !reserved {
+                if !own_palette && let Some(default) = doc.swatch_mut(&n.name) {
+                    *default = swatch;
+                    solid.insert(n.name.clone());
+                } else if !solid.contains(&n.name) {
+                    clashes.push(swatch);
+                }
+            }
+        }
+        let mut unnamed = vec![];
+        for pattern in doc.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>() {
+            if have.insert(pattern.clone()) {
+                doc.swatches.push(Swatch {
+                    paint: Paint::Pattern { pattern: pattern.clone(), xf: Affine::IDENTITY },
+                    name: pattern,
+                    global: false,
+                    spot: false,
+                });
+            } else {
+                unnamed.push(pattern);
+            }
+        }
+        // Every color and pattern name now has a swatch, so a numbered name takes none of them. The
+        // names taken and the patterns painted with are looked up rather than scanned for each one.
+        let mut taken: std::collections::HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).collect();
+        taken.extend(doc.swatch_groups.iter().map(|g| g.name.clone()));
+        taken.insert(vectorcraft_color::swatch::REGISTRATION.to_string());
+        let mut painted: std::collections::HashSet<String> = doc
+            .swatches_iter()
+            .filter_map(|s| match &s.paint {
+                Paint::Pattern { pattern, .. } => Some(pattern.clone()),
+                _ => None,
+            })
+            .collect();
+        let mut renamed = HashMap::new();
+        for swatch in clashes {
+            let name = free_swatch_name(&mut taken, &swatch.name);
+            renamed.insert(swatch.name.clone(), name.clone());
+            doc.swatches.push(Swatch { name, ..swatch });
+        }
+        for pattern in unnamed {
+            if !painted.insert(pattern.clone()) {
+                continue;
+            }
+            let name = free_swatch_name(&mut taken, &pattern);
+            doc.swatches.push(Swatch { paint: Paint::Pattern { pattern, xf: Affine::IDENTITY }, name, global: false, spot: false });
+        }
+        renamed
+    }
+
     /// The brushes read ([`brush::finish_brushes`]) and how many weren't; `None` when the file has
     /// no brush objects (the document keeps the default brushes).
     fn brush_library(&mut self) -> Option<(Vec<vectorcraft_brush::Brush>, usize)> {
@@ -957,39 +1050,11 @@ impl<'a> Reader<'a> {
             }
             None => false,
         };
-        // The colour operators' definitions first: a gradient, defined before the art, names a
-        // global process colour as a stop and would otherwise make it an ink (#1771). The header's
-        // custom colors follow. The first definition of a name makes its swatch, and takes the place
-        // of a default swatch of that name when the file has no palette of its own (a reserved name
-        // in brackets, such as `[None]`, keeps its swatch).
-        let mut defined = std::collections::HashSet::new();
-        // The swatch names there are, looked up rather than scanned for each name a file defines
-        // (`Document::swatch` also knows the registration colour).
-        let mut have: std::collections::HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).collect();
-        have.insert(vectorcraft_color::swatch::REGISTRATION.to_string());
-        let colors = self.spots.iter().chain(&self.stop_spots).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
-        for (n, spot) in colors {
-            let first = defined.insert(n.name.clone());
-            let swatch = Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot };
-            if have.insert(n.name.clone()) {
-                doc.swatches.push(swatch);
-            } else if first
-                && !own_palette
-                && !(n.name.starts_with('[') && n.name.ends_with(']'))
-                && let Some(default) = doc.swatch_mut(&n.name)
-            {
-                *default = swatch;
-            }
-        }
+        let renamed = self.file_swatches(&mut doc, own_palette);
         if let Some(author) = self.author.take() {
             doc.metadata.author = author;
         }
-        for name in doc.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>() {
-            if have.insert(name.clone()) {
-                doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
-            }
-        }
-        let brushes = self.brush_library();
+        let mut brushes = self.brush_library();
         // The file's graphic styles in place of the defaults, and the objects linked to them.
         let (styles, ids) = self.graphic_styles();
         let styles_read = !styles.is_empty();
@@ -1002,6 +1067,18 @@ impl<'a> Reader<'a> {
                 }
             }
             doc.graphic_styles = styles.into();
+        }
+        // The colors linked to a color that took a free name follow it.
+        if !renamed.is_empty() {
+            let mut follow = |_: &mut vectorcraft_color::Color, link: &mut Option<String>, _: &mut f32| {
+                let Some(new) = link.as_ref().and_then(|l| renamed.get(l)) else { return false };
+                *link = Some(new.clone());
+                true
+            };
+            doc.map_solid_paints(&mut follow);
+            for a in brushes.iter_mut().flat_map(|(lib, _)| lib.iter_mut().flat_map(|b| b.art_mut())) {
+                vectorcraft_doc::swatches::map_node_solid_paints(a, &mut follow);
+            }
         }
         let mut warnings = self.warnings;
         if let Some((lib, unread)) = brushes {

@@ -3539,6 +3539,23 @@ fn ruler_guides_and_lock() {
     assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
 }
 
+#[test]
+fn invalid_guide_lock_parameters_keep_guides_selected() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let before_undo = s.doc().unwrap().history.undo.len();
+    for params in [json!({"locked": "false"}), json!({"locked": 1})] {
+        assert!(s.execute("view.guides.lock", &params).is_err(), "accepted {params}");
+        assert!(!s.guides_locked(), "locked guides for {params}");
+        assert_eq!(s.doc().unwrap().selection.guides, vec![0], "cleared selection for {params}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), before_undo, "recorded undo for {params}");
+    }
+    // Left out, or null as for every command, it toggles.
+    assert_eq!(s.execute("view.guides.lock", &json!(null)).unwrap(), json!({"locked": true}));
+    assert_eq!(s.execute("view.guides.lock", &json!({"locked": null})).unwrap(), json!({"locked": false}));
+}
+
 /// #1534: Lock Guides locks the paths made into guides too: they can't be selected (so neither
 /// moved, reshaped nor deleted), by a click, a marquee or Select All, and locking lets them go.
 #[test]
@@ -3808,6 +3825,30 @@ fn guides_and_art_are_shift_selected_together() {
     s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
     s.execute("edit.clear", &json!({"ids": [b.0]})).unwrap();
     assert_eq!(guides(&s).len(), 2);
+}
+
+#[test]
+fn invalid_clear_guides_parameters_delete_nothing() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 40.0, 20.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    let n = undo_len(&s);
+    for params in [json!({"ids": [a.0], "guides": "true"}), json!({"guides": 1})] {
+        assert!(s.execute("edit.clear", &params).is_err(), "accepted {params}");
+        assert!(s.doc().unwrap().doc.node(a).is_some(), "deleted the art for {params}");
+        assert_eq!((guides(&s).len(), undo_len(&s)), (1, n), "changed the document for {params}");
+    }
+    // Direct-selected anchors take the same check.
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    assert!(s.execute("edit.clear", &json!({"guides": "false"})).is_err());
+    assert!(!s.doc().unwrap().selection.anchors.is_empty());
+    assert_eq!(undo_len(&s), n);
+    // Null, as for every command, is the same as leaving `guides` out: with ids, the guides stay.
+    s.execute("edit.clear", &json!({"ids": [a.0], "guides": null})).unwrap();
+    assert!(s.doc().unwrap().doc.node(a).is_none());
+    assert_eq!(guides(&s).len(), 1);
 }
 
 /// When ruler guides and art are selected together, moving the art moves the guides as well;

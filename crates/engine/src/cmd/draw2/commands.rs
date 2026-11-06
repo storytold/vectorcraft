@@ -119,7 +119,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Join",
             [],
             None,
-            "{points: [[x,y]…], tolerance?: pt (12)} join the open-path endpoints scrubbed over → {id}",
+            "{points: [[x,y]…], tolerance?: pt (12)} join the open-path endpoints scrubbed over, or trim two crossing open paths whose overhanging ends are scrubbed and join them at the crossing → {id}",
             has_doc,
             join_scrub
         ),

@@ -14,7 +14,7 @@ use super::pathops::Beside;
 use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
 use super::{
     CommandSpec, EngineError, Point, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ok,
-    str_param,
+    str_param, switch_or,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -716,7 +716,7 @@ fn release_guides(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn lock_guides(s: &mut Session, p: &Value) -> Result<Value> {
-    let v = p.get("locked").and_then(Value::as_bool).unwrap_or(!s.menu.guides_locked);
+    let v = switch_or(p, "locked", !s.menu.guides_locked, "view.guides.lock")?;
     s.menu.guides_locked = v;
     // Locked guides can't stay selected, ruler guides or guide paths, in any open document
     // ([`Session::select`] lets those go in the active one).

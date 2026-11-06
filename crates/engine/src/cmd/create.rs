@@ -721,7 +721,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     if rotation != 0.0 {
         t.xf *= vectorcraft_geom::rotate_deg(rotation);
     }
-    t.vertical = p.get("vertical").and_then(Value::as_bool).unwrap_or(false);
+    t.vertical = switch_or(p, "vertical", false, "text.create")?;
     t.para = new_type_para();
     new_type_alignment(s, p, "text.create", &mut t)?;
     if let Some(a) = p.get("area") {

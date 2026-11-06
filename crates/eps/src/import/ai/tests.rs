@@ -818,6 +818,71 @@ fn pattern_names_are_numbered_around_the_documents_swatches() {
     assert_eq!(names(&d), ["Sea 2"]);
 }
 
+/// A pattern whose name has no newline keeps it, and its swatch takes the first free "Name 2" when
+/// another swatch has the name: a default swatch, a named color the art uses, or a color of the
+/// palette. A pattern a swatch already paints with gets no other.
+#[test]
+fn a_pattern_swatch_named_as_another_swatch_is_numbered() {
+    let def = |name: &str| DOTS.replace("(Dots)", &format!("({name})"));
+    let filled = |name: &str| format!("({name}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(10.0, 20.0, 70.0, 80.0));
+    let ink = format!("0 1 1 0 (Ink) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let paints = |d: &Document, name: &str| d.swatches_iter().find(|s| s.name == name).map(|s| s.paint.clone());
+    let doc = read_ok(&format!("{}{}{}", def("White"), def("Ink"), layer(&format!("{}{}{ink}", filled("White"), filled("Ink"))))).doc;
+    assert_eq!(doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["White", "Ink"]);
+    for name in ["White", "Ink"] {
+        assert!(matches!(paints(&doc, name), Some(Paint::Solid { .. })), "{name}");
+        let numbered = format!("{name} 2");
+        assert!(matches!(paints(&doc, &numbered), Some(Paint::Pattern { pattern, .. }) if pattern == name), "{numbered}");
+    }
+    let fills: Vec<_> = art(&doc).iter().map(|n| fill(n)).collect();
+    assert!(matches!(&fills[..2], [Paint::Pattern { pattern: a, .. }, Paint::Pattern { pattern: b, .. }] if a == "White" && b == "Ink"));
+    // A pattern defined later under the numbered name keeps its swatch's name.
+    let doc = read_ok(&format!("{}{}{}", def("White"), def("White 2"), layer(&filled("White")))).doc;
+    assert!(matches!(paints(&doc, "White 2"), Some(Paint::Pattern { pattern, .. }) if pattern == "White 2"));
+    assert!(matches!(paints(&doc, "White 3"), Some(Paint::Pattern { pattern, .. }) if pattern == "White"));
+    // A color of the palette.
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0.5 k\n(Mist)\nPc\nPB\n%AI5_EndPalette\n";
+    let doc = read_ok(&format!("{}{palette}{}", def("Mist"), layer(&filled("Mist")))).doc;
+    assert!(matches!(paints(&doc, "Mist"), Some(Paint::Solid { .. })));
+    assert!(matches!(paints(&doc, "Mist 2"), Some(Paint::Pattern { pattern, .. }) if pattern == "Mist"));
+    // A palette swatch under another name already paints with the pattern.
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0.5 k\n(Mist)\nPc\n(Mist) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Fog)\nPc\nPB\n%AI5_EndPalette\n";
+    let doc = read_ok(&format!("{}{palette}{}", def("Mist"), layer(&filled("Mist")))).doc;
+    let names: Vec<&str> = doc.swatches_iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["[None]", "Mist", "Fog"]);
+}
+
+/// A named color whose name a gradient or pattern swatch of the palette has takes the first free
+/// "Name 2", and the fills and gradient stops linked to it follow it.
+#[test]
+fn a_color_named_as_a_palette_gradient_or_pattern_is_numbered() {
+    let gradient = "%AI5_BeginGradient: (Brand)\n(Brand) 0 2 Bd\n[\n\
+                    %_0 1 1 0 (Brand) 0 0 5 1 6 50 0 Bs\n%_0 0 0 0 1 0 0 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let palette = "%AI5_BeginPalette\n0 0 Pb\nBb\n2 (Brand) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Brand)\nPc\n\
+                   (Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Ink)\nPc\nPB\n%AI5_EndPalette\n";
+    let colored = |name: &str| format!("0 1 1 0 ({name}) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let doc = read_ok(&format!("{gradient}{DOTS}{palette}{}", layer(&format!("{}{}", colored("Brand"), colored("Ink"))))).doc;
+    let paints = |name: &str| doc.swatches_iter().find(|s| s.name == name).map(|s| s.paint.clone());
+    assert!(matches!(paints("Brand"), Some(Paint::Gradient(_))));
+    assert!(matches!(paints("Ink"), Some(Paint::Pattern { .. })));
+    for name in ["Brand 2", "Ink 2"] {
+        let sw = doc.swatches_iter().find(|s| s.name == name).unwrap_or_else(|| panic!("{name}"));
+        assert!(matches!(sw.paint, Paint::Solid { .. }) && sw.global && sw.spot, "{sw:?}");
+    }
+    let links: Vec<_> = art(&doc).iter().map(|n| if let Paint::Solid { swatch, .. } = fill(n) { swatch } else { None }).collect();
+    assert_eq!(links, [Some("Brand 2".to_string()), Some("Ink 2".to_string())]);
+    let Some(Paint::Gradient(g)) = paints("Brand") else { panic!() };
+    assert_eq!(g.gradient.stops[0].swatch.as_deref(), Some("Brand 2"), "the stop's link");
+    // A color defined later under the numbered name keeps it and its links.
+    let later = format!("0 0 1 0 (Brand 2) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let doc = read_ok(&format!("{gradient}{DOTS}{palette}{}", layer(&format!("{}{later}", colored("Brand"))))).doc;
+    let color = |name: &str| doc.swatches_iter().find(|s| s.name == name).and_then(|s| s.paint.color());
+    assert_eq!(color("Brand 2"), Some(Color::cmyk(0.0, 0.0, 1.0, 0.0)));
+    assert_eq!(color("Brand 3"), Some(Color::cmyk(0.0, 1.0, 1.0, 0.0)));
+    let links: Vec<_> = art(&doc).iter().map(|n| if let Paint::Solid { swatch, .. } = fill(n) { swatch } else { None }).collect();
+    assert_eq!(links, [Some("Brand 3".to_string()), Some("Brand 2".to_string())]);
+}
+
 /// A palette's pattern swatch named by its pattern takes the name the pattern is shown with.
 #[test]
 fn a_palette_pattern_swatch_takes_its_patterns_shown_name() {
@@ -3313,6 +3378,44 @@ fn legacy_tab_definitions_skipped_capped_and_left_open() {
     assert!(texts[1].para_at(0).tabs.is_empty(), "the next object's `To` ends the open definition");
 }
 
+/// Point type whose 1024 tab stops are followed by 2048 paragraph breaks, each after `attrs(i)`.
+fn paragraphs_after_many_tabs(attrs: impl Fn(usize) -> String) -> String {
+    let many: String = (0..1024).map(|i| format!("0 0 1 {i} Xe\n")).collect();
+    let breaks: String = (0..2048).map(|i| format!("{}(x\\r) Tx\n", attrs(i))).collect();
+    point_type(&format!("36 1024 Xb\n{many}XB"), "A").replace("TO\n", &format!("{breaks}TO\n"))
+}
+
+/// Paragraphs that start with the same attributes all keep the same tab stops, however many
+/// there are, also when an attribute is set again to the value it has.
+#[test]
+fn legacy_tab_stops_last_through_many_paragraphs() {
+    for again in ["", "0 Ta\n"] {
+        let r = legacy_read(&paragraphs_after_many_tabs(|_| again.to_string()));
+        let texts = art_texts(&r.doc);
+        let [t] = texts.as_slice() else { panic!("{texts:?}") };
+        assert_eq!(t.paragraph_count(), 2049);
+        assert!((0..2049).all(|i| t.para_at(i).tabs.len() == 1024), "{again}");
+        assert!(r.warnings.is_empty(), "{again}: {:?}", r.warnings);
+    }
+}
+
+/// Each paragraph whose attributes differ from the paragraph before it holds its own copy of its
+/// tab stops, and a text object's paragraphs hold no more than 1,048,576 stops: the paragraphs
+/// past them take the default stops and keep their other attributes, with a warning.
+#[test]
+fn legacy_tab_stops_copied_into_paragraphs_are_capped() {
+    let r = legacy_read(&paragraphs_after_many_tabs(|i| format!("{} Ta\n", i % 2)));
+    let texts = art_texts(&r.doc);
+    let [t] = texts.as_slice() else { panic!("{texts:?}") };
+    let paras = t.paragraph_styles();
+    assert_eq!(paras.len(), 2049);
+    assert_eq!(paras.iter().map(|p| p.tabs.len()).sum::<usize>(), 1 << 20);
+    assert!(paras[..1024].iter().all(|p| p.tabs.len() == 1024));
+    assert!(paras[1024..].iter().all(|p| p.tabs.is_empty()));
+    assert_eq!((paras[2046].justify, paras[2047].justify), (vectorcraft_doc::Justify::Left, vectorcraft_doc::Justify::Center));
+    assert_eq!(r.warnings, ["tab stops past VectorCraft's limits were left out"]);
+}
+
 /// `Te` (end render, §22.6) reads in a text object with no operands and with four, inside a tab
 /// definition too, and keeps nothing; so does `TM` (pop text matrix, §22.6).
 #[test]
@@ -3623,6 +3726,23 @@ fn legacy_area_type_reads_up_to_its_limit_of_linked_areas() {
     assert_eq!(r.doc.text_threads.iter().map(Vec::len).collect::<Vec<_>>(), [LIMIT]);
     assert_eq!(frames[0].1.plain_text(), "ab");
     assert_eq!(r.warnings, [LINKED_AREAS_LEFT_OUT]);
+}
+
+/// The frames of linked areas after the first copy the story's last paragraph attributes, and
+/// those copies hold no more than 1,048,576 tab stops: the frames past them take the default
+/// stops, with a warning.
+#[test]
+fn legacy_linked_area_frames_cap_their_copied_tab_stops() {
+    let many: String = (0..1024).map(|i| format!("0 0 1 {i} Xe\n")).collect();
+    let area = format!("1 0 0 1 0 0 0 Tp\n{}n\nTP\n", rect_path(0.0, 0.0, 50.0, 40.0));
+    let text = format!("1 To\n{}0 Tr\n36 1024 Xb\n{many}XB\n(a) Tx\nTO\n", area.repeat(4096));
+    let r = legacy_read(&text);
+    let frames = art_frames(&r.doc);
+    assert_eq!(frames.len(), 4096);
+    let stops: Vec<usize> = frames.iter().map(|(_, f)| f.para_at(0).tabs.len()).collect();
+    assert_eq!(stops.iter().filter(|&&n| n == 1024).count(), 1025);
+    assert_eq!(stops.iter().filter(|&&n| n == 0).count(), 3071);
+    assert_eq!(r.warnings, ["tab stops past VectorCraft's limits were left out"]);
 }
 
 /// The warning when linked areas are left out.
@@ -5495,7 +5615,7 @@ fn envelope_parts(before: &str, keys: &str, block: &str, kind: u32, drawn: &str)
 
 /// An envelope of `content` (in the plain group the editing data puts round it) shaped by the mesh
 /// `shape`.
-fn envelope_of(shape: &str, keys: &str, content: &str, kind: u32, drawn: &str) -> String {
+pub(super) fn envelope_of(shape: &str, keys: &str, content: &str, kind: u32, drawn: &str) -> String {
     envelope_parts(shape, keys, &format!("u\n{content}U\n9 () XW\n"), kind, drawn)
 }
 
@@ -5527,7 +5647,7 @@ fn mesh_text(cols: usize, rows: usize, at: MeshAt<'_>, handle: MeshHandle<'_>, a
 }
 
 /// A grid in art space, its points `step` apart from (40, 20), handles a third of the way.
-fn straight_mesh(cols: usize, rows: usize, step: (f64, f64)) -> String {
+pub(super) fn straight_mesh(cols: usize, rows: usize, step: (f64, f64)) -> String {
     let at = move |(i, j): (usize, usize)| (40.0 + i as f64 * step.0, 20.0 + j as f64 * step.1);
     let third = move |p: (usize, usize), q: (usize, usize)| {
         let ((x, y), (u, v)) = (at(p), at(q));
@@ -5537,13 +5657,13 @@ fn straight_mesh(cols: usize, rows: usize, step: (f64, f64)) -> String {
 }
 
 /// The red rectangle 40 20 160 80 in art space, which is the same box in the document's.
-fn envelope_content() -> String {
+pub(super) fn envelope_content() -> String {
     format!("{RED}{}f\n", rect_path(40.0, 20.0, 160.0, 80.0))
 }
 
 /// What envelope `kind` draws of [`envelope_content`]: the rectangle's edges, many points to a
 /// side, mapped as VectorCraft maps them, as a red path in art space.
-fn drawn_content(kind: &vectorcraft_doc::live::EnvelopeKind) -> String {
+pub(super) fn drawn_content(kind: &vectorcraft_doc::live::EnvelopeKind) -> String {
     let rect = Rect::new(40.0, 20.0, 160.0, 80.0);
     let map = vectorcraft_doc::live::envelope_mapper(kind, rect);
     let corners = [Point::new(40.0, 20.0), Point::new(160.0, 20.0), Point::new(160.0, 80.0), Point::new(40.0, 80.0)];
@@ -5571,7 +5691,7 @@ fn live_envelope(n: &Node) -> (&[Arc<Node>], &vectorcraft_doc::live::EnvelopeKin
 
 /// A warp's dictionary keys: style number `style`, bend, horizontal and vertical distortion as
 /// fractions, and the orientation (vertical with `rotate` 1).
-fn warp_keys(style: u32, bend: f64, h: f64, v: f64, rotate: u32) -> String {
+pub(super) fn warp_keys(style: u32, bend: f64, h: f64, v: f64, rotate: u32) -> String {
     format!(
         "{ENVELOPE_KEYS}{style} /Int (DeformStyle) ,\n{h} /Real (DeformHoriz) ,\n{bend} /Real (DeformValue) ,\n{v} /Real (DeformVert) ,\n{rotate} /Bool (Rotate) ,\n(Warp) /UnicodeString (DisplayString) ,\n"
     )
@@ -6209,7 +6329,7 @@ fn layer_options_of_nine_to_twelve_operands() {
 /// A blend's record as the editing data writes it after `(Adobe Path Blends) 1 0 n XP`: `DCBA`,
 /// Specified Steps, then (as far as the reader reads it) the number of keys at word 10 and a record
 /// of six words per key starting with its id. Hand-written; the other words are zero.
-fn blend_record(ids: &[char]) -> String {
+pub(super) fn blend_record(ids: &[char]) -> String {
     blend_record_spaced(ids, 1, 0.0, 0)
 }
 
@@ -6241,7 +6361,7 @@ fn blend_part(kind: &str, id: Option<&str>) -> String {
 /// A blend of two 20 pt squares, red on the left (key `A`) and blue on the right (`B`), along
 /// `spine` (path operators, `%_` lines), with its drawn steps (three between the keys) and the
 /// record `record`.
-fn blend_file(spine: &str, ids: [Option<&str>; 2], record: &str) -> String {
+pub(super) fn blend_file(spine: &str, ids: [Option<&str>; 2], record: &str) -> String {
     blend_file_colored(spine, ids, record, [1.0, 0.0, 0.0], [0.0, 0.0, 1.0])
 }
 

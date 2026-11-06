@@ -21,6 +21,7 @@ pub(crate) fn blob_key(blob: &vectorcraft_doc::ImageBlob) -> (images::ImageKey, 
         luts: (lut.as_ref().map_or(0, |l| l.1), 0),
         plates: 0,
         mip: 0,
+        tile: None,
     };
     (key, lut.map(|l| l.0), id.size)
 }

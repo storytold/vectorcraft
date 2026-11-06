@@ -8,11 +8,12 @@ use super::{
 // ---------- symbols ----------
 
 pub(crate) fn natural_size(d: &Document, name: &str) -> (f64, f64) {
-    d.unknown
-        .get(SIZES_KEY)
-        .and_then(|m| m.get(name))
-        .and_then(|v| Some((v.get(0)?.as_f64()?, v.get(1)?.as_f64()?)))
-        .unwrap_or((2.0 * HALF, 2.0 * HALF))
+    stored_natural_size(d, name).unwrap_or((2.0 * HALF, 2.0 * HALF))
+}
+
+/// The natural size `d` records for symbol `name` (`None` when it records none).
+pub(crate) fn stored_natural_size(d: &Document, name: &str) -> Option<(f64, f64)> {
+    d.unknown.get(SIZES_KEY).and_then(|m| m.get(name)).and_then(|v| Some((v.get(0)?.as_f64()?, v.get(1)?.as_f64()?)))
 }
 
 pub(crate) fn set_natural_size(d: &mut Document, name: &str, size: Option<(f64, f64)>) {

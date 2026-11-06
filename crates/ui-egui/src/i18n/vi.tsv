@@ -468,12 +468,14 @@ font-technology	Variable	Biến thiên
 	Character / Paragraph	Ký tự / Đoạn văn
 	Character Alignment	Căn chỉnh ký tự
 	Character options	Tùy chọn ký tự
+	Paragraph options	Tùy chọn đoạn văn
 	Character Rotation	Xoay ký tự
 	Character Set:	Bộ ký tự:
 	Character Style	Kiểu ký tự
 	Character Style Options	Tùy chọn kiểu ký tự
 	Character Styles	Các kiểu ký tự
 	Character:	Ký tự:
+	Paragraph:	Đoạn văn:
 	Check Links	Kiểm tra liên kết
 # Check Script (File › Scripts) and the report it shows on a script written for the reference app.
 	Check Script	Kiểm tra script
@@ -4659,6 +4661,8 @@ theme	Appearance	Giao diện
 @msg	no such saved selection	không có vùng chọn đã lưu như vậy
 @msg	no such segment	không có đoạn như vậy
 @msg	no such spine point	không có điểm trục như vậy
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` phải là danh sách tối đa 10000 chỉ số điểm trục
+@msg	`with` moves points, not a handle	`with` di chuyển các điểm, không phải tay nắm
 @msg	no such spine segment	không có đoạn trục như vậy
 @msg	no such subpath	không có nhánh con như vậy
 @msg	no such user library	không có thư viện người dùng như vậy

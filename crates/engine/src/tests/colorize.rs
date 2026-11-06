@@ -370,13 +370,21 @@ fn colorized_gray_image_is_flattened_for_pdf_x_1a() {
     assert!(!String::from_utf8_lossy(&bytes).contains("/SMask"), "PDF/X-1a has no soft mask");
 }
 
+/// A colorized image with a gray pixel is left out; one of black and white pixels is written as an
+/// image mask and kept.
 #[test]
 fn colorized_gray_image_is_omitted_from_legacy_ai_when_requested() {
+    let mut s = session();
+    let mid = png(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 128]).unwrap()));
+    let id = image(&mut s, "mid", mid);
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": [id.0]})).unwrap();
+    let out = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "transparentImages": "omit"})).unwrap();
+    assert!(out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("are left out")), "{}", out["warnings"]);
     let mut s = session();
     let id = image(&mut s, "gray", gray(false));
     s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": [id.0]})).unwrap();
     let out = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "transparentImages": "omit"})).unwrap();
-    assert!(out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("are left out")), "{}", out["warnings"]);
+    assert!(!out["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("are left out")), "{}", out["warnings"]);
 }
 
 #[test]

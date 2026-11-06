@@ -3327,7 +3327,9 @@ digits	Malayalam	Malayalam
 	Patterns	Motivi
 	Stroke Options	Opzioni traccia
 	Character:	Carattere:
+	Paragraph:	Paragrafo:
 	Character options	Opzioni carattere
+	Paragraph options	Opzioni di paragrafo
 	Stroke options	Opzioni traccia
 	Transform options	Opzioni di trasformazione
 	Stroke Weight	Spessore traccia
@@ -4372,6 +4374,8 @@ axis	Both	Entrambi
 @msg	no such saved selection	selezione salvata inesistente
 @msg	no such segment	segmento inesistente
 @msg	no such spine point	punto della dorsale inesistente
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` deve essere un elenco di al massimo 10000 indici di punti della dorsale
+@msg	`with` moves points, not a handle	`with` sposta punti, non una maniglia
 @msg	no such spine segment	segmento della dorsale inesistente
 @msg	no such subpath	sottotracciato inesistente
 @msg	no such user library	libreria utente inesistente

@@ -2494,3 +2494,53 @@ fn a_reduced_image_on_the_ink_planes_shows_its_average() {
         assert!(px.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 2), "pixel {i}: {px:?}, the full frame averages {want:?}");
     }
 }
+
+/// A `w`×`h` PNG with a different colour in every pixel, so a pixel drawn from the wrong place
+/// shows; its pixels depend on `seed` (each test its own image: the store is shared).
+fn varied_png(w: u32, h: u32, seed: u8) -> Vec<u8> {
+    let img = image::RgbaImage::from_fn(w, h, |x, y| image::Rgba([(x * 5 + y) as u8, (x / 3 + y * 7) as u8, (x ^ y) as u8 ^ seed, 255]));
+    let mut out = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out
+}
+
+/// #4155: an image drawn larger than a tile with its colours made again (here separated into ink
+/// planes) has them made only for the tiles in view. Zoomed in on a 141-megapixel photo, the whole
+/// photo was separated for every view, taking seconds each time.
+#[test]
+fn a_zoomed_in_image_is_separated_only_where_it_shows() {
+    let _fonts = fonts_steady();
+    let (w, h) = (2 * images::TILE + 100, 40);
+    let d = cmyk_doc_with("wide", ImageBlob::new("image/png", varied_png(w, h, 1)), w, h);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let _ = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 300.0, 40.0), 1.0, &on);
+    let full = blob_key(&d.images["wide"]).0;
+    let s = images::store();
+    for plane in [Ink::Cmy, Ink::K] {
+        assert!(s.peek(&ink::ink_key(&full, plane)).is_none(), "the whole {plane:?} plane was made");
+        let tile = |col: u16| ink::ink_key(&images::ImageKey { tile: Some((col, 0)), ..full.clone() }, plane);
+        assert!(s.peek(&tile(0)).is_some(), "the {plane:?} plane of the tile in view was made");
+        assert!(s.peek(&tile(1)).is_none() && s.peek(&tile(2)).is_none(), "tiles out of view were made");
+    }
+}
+
+/// An image drawn from tiles draws the pixels it draws whole, across the tiles' edges too.
+#[test]
+fn a_tiled_image_draws_what_the_whole_image_draws() {
+    let _fonts = fonts_steady();
+    let (w, h) = (2 * images::TILE + 100, 40);
+    let d = cmyk_doc_with("seams", ImageBlob::new("image/png", varied_png(w, h, 2)), w, h);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    // Across the edge between the first two tiles.
+    let (x0, x1) = (f64::from(images::TILE) - 150.0, f64::from(images::TILE) + 150.0);
+    let drawn = Renderer::new().render_region_inks(&d, Rect::new(x0, 0.0, x1, 40.0), 1.0, &on);
+    let (key, full) = crate::blobs::blob_pixmap(&d.images["seams"], false).unwrap();
+    let plane = |ink| ink::ink_image(&key, &full, ink, d.images.get("seams"), false).1;
+    let bytes = |pm: &Pixmap| pm.data().iter().flat_map(|p| [p.r, p.g, p.b, p.a]).collect::<Vec<u8>>();
+    let whole = ink::amounts(&bytes(&plane(Ink::Cmy)), &bytes(&plane(Ink::K)));
+    for (i, got) in drawn.as_chunks::<4>().0.iter().enumerate() {
+        let (x, y) = (x0 as usize + i % 300, i / 300);
+        let want = &whole[(y * w as usize + x) * 4..][..4];
+        assert!(got.iter().zip(want).all(|(a, b)| a.abs_diff(*b) <= 1), "pixel ({x}, {y}): {got:?}, whole {want:?}");
+    }
+}
