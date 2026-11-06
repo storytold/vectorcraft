@@ -181,9 +181,10 @@ fn pans_within_a_cropped_rasters_margin_draw_it_kept() {
 }
 
 /// A frame counts the art it draws in a way that depends on its size: an effect raster cropped to
-/// it, drawn from the raster kept as well as made; a filter layer cropped to it or made at a lower
-/// resolution; on a single-threaded renderer any filter layer; and a mesh past the mesh buffer. Art
-/// with a raster of its own whole, and a filter layer that stays inside the frame, are not counted.
+/// it or made at a lower resolution, drawn from the raster kept as well as made; a filter layer
+/// cropped to it or made at a lower resolution; on a single-threaded renderer any filter layer; and
+/// a mesh past the mesh buffer. Art with a raster of its own whole, and a filter layer that stays
+/// inside the frame, are not counted.
 #[test]
 fn a_frame_counts_the_art_it_draws_by_its_size() {
     let effect = |id: &str, params: serde_json::Value| backdrop(&[(id, params)]).0;
@@ -199,13 +200,16 @@ fn a_frame_counts_the_art_it_draws_by_its_size() {
     };
     let blur = effect("blur.gaussian", json!({"radius": 8}));
     let shadow = effect("stylize.dropShadow", json!({"blur": 8, "x": 4, "y": 4}));
+    let outer_glow = effect("stylize.outerGlow", json!({"blur": 8}));
     let glow = effect("stylize.innerGlow", json!({"blur": 8}));
     let wide_glow = effect("stylize.innerGlow", json!({"blur": 2000}));
     let cases = [
         ("a whole blur raster", &blur, 1.0, (640, 900), 2, false),
         ("a blur raster cropped to the frame", &blur, 10.0, (256, 128), 2, true),
+        ("a blur raster at a lower resolution", &blur, 5.0, (3200, 4400), 2, true),
         ("a whole shadow raster", &shadow, 1.0, (640, 900), 2, false),
         ("a shadow raster cropped to the frame", &shadow, 40.0, (256, 128), 2, true),
+        ("an outer glow raster at a lower resolution", &outer_glow, 5.0, (3200, 4400), 2, true),
         ("a filter layer inside the frame", &glow, 1.0, (640, 900), 2, false),
         ("a filter layer past the frame's edge", &glow, 1.0, (256, 128), 2, true),
         ("a filter layer at a lower resolution", &wide_glow, 1.0, (640, 900), 2, true),

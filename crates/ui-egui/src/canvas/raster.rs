@@ -194,13 +194,12 @@ fn composed_frame(
 /// Render the frame of `job`. A pan by whole device pixels copies the pixels that stay on screen
 /// from `kept`, the frame before it, and renders only the parts it exposes. Any other frame renders
 /// whole, and so does a pan when a part it exposes draws art in a way that depends on the frame's
-/// size ([`vectorcraft_render::FrameStats::view_sized`]). A copied frame is within one level of the
-/// same frame rendered whole, because the art's edges are computed from coordinates at the new
-/// position, so the canvas renders a frame whole once the view has stopped
-/// ([`crate::CanvasCache::reused`]). `kept` becomes this frame when `job` allows keeping it, it is
-/// at most [`MAX_KEPT_BYTES`], it draws no raster from before its object moved, and it draws nothing
-/// in a way that depends on its size. A frame that renders whole once the view has stopped is kept
-/// too, so the first step of the next pan copies from it.
+/// size ([`vectorcraft_render::FrameStats::view_sized`]). A copied frame can differ from the same
+/// frame rendered whole (by at most one level in the tests), so the canvas renders a frame whole
+/// once the view has stopped ([`crate::CanvasCache::reused`]). `kept` becomes this frame when `job`
+/// allows keeping it, it is at most [`MAX_KEPT_BYTES`], it draws no raster from before its object
+/// moved, and it draws nothing in a way that depends on its size. A frame that renders whole once
+/// the view has stopped is kept too, so the first step of the next pan copies from it.
 pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option<KeptFrame>, job: &crate::render_worker::Job) -> WorkerFrame {
     let copied = kept.as_ref().and_then(|k| {
         let pan = whole_pixel_pan(k, job)?;
