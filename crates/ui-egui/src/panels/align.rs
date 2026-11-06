@@ -10,8 +10,8 @@ use super::{pstate, selection_len, set_pstate};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
-/// What Align aligns to. The Align To choice kept with the UI state ([`crate::UiState::align_to`])
-/// is Selection or Artboard: Align to Key Object stores no choice.
+/// What Align aligns to, and the Align To choice kept with the UI state
+/// ([`crate::UiState::align_to`]) until another is chosen (#3718).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AlignTo {
@@ -32,10 +32,14 @@ impl AlignTo {
 }
 
 /// Serde reader for the saved Align To choice ([`crate::UiState::align_to`]): `"artboard"` is
-/// Artboard, and any other value, `"key"` included, is Selection.
+/// Artboard, `"key"` is Key Object, and any other value is Selection.
 pub fn deserialize_align_to<'de, D: serde::Deserializer<'de>>(d: D) -> Result<AlignTo, D::Error> {
     let v = <Value as serde::Deserialize>::deserialize(d)?;
-    Ok(if v == "artboard" { AlignTo::Artboard } else { AlignTo::Selection })
+    Ok(match v.as_str() {
+        Some("artboard") => AlignTo::Artboard,
+        Some("key") => AlignTo::Key,
+        _ => AlignTo::Selection,
+    })
 }
 
 /// What Align aligns to with `n_selected` objects selected: the artboard for a single object
@@ -55,8 +59,31 @@ pub fn align_params(base: Value, to: AlignTo, n_selected: usize) -> Value {
 /// bar and the Properties panel send: the key while there is one (a key object, or a key guide:
 /// #2143), else the artboard for a single selected object, else the Align To choice. Object → Align
 /// sends it too while every selected object is selected whole ([`crate::menus::invoke`]).
+/// Callers that run the align first call [`ensure_key`], so that Align To Key Object has a key.
 pub fn with_align_to(app: &VectorcraftApp, base: Value) -> Value {
     align_params(base, align_to(app), objects_aligned(app))
+}
+
+/// With Align To Key Object chosen and no key set (the selection changed since, or the key was
+/// clicked off), makes the key what a click on Align to Key Object makes it: the topmost of two
+/// or more selected objects, or a ruler guide selected with a single object. Align, Distribute
+/// and Object → Align run it before they align, so the choice holds across selections (#3718).
+pub fn ensure_key(app: &mut VectorcraftApp) {
+    if app.ui.align_to == AlignTo::Key && !has_key(app) && !has_anchors(app) {
+        make_key(app);
+    }
+}
+
+/// Makes the topmost of two or more selected objects the key object, or else the first ruler
+/// guide selected with a single object; nothing when neither is selected.
+fn make_key(app: &mut VectorcraftApp) {
+    let n = selection_len(app);
+    // The key may fail to set (say, the object is locked); Align then aligns to the selection.
+    let _ = match (topmost(app).filter(|_| n >= 2), guide_for_key(app)) {
+        (Some(id), _) => app.run("select.key", json!({"id": id.0})).ok(),
+        (None, Some(g)) => app.run("select.key", json!({"guide": g})).ok(),
+        (None, None) => None,
+    };
 }
 
 /// The selected objects that Align aligns as objects: none while anchor points are selected
@@ -145,6 +172,7 @@ pub(crate) fn button(id: &str) -> Option<Button> {
 /// [`with_align_to`]. A Distribute Objects or Distribute Spacing button sends the key while there
 /// is one, else the Align To choice, and the Distribute Spacing value while there is a key.
 pub fn run_button(app: &mut VectorcraftApp, b: Button) -> Result<Value, String> {
+    ensure_key(app);
     let to = align_to(app).param();
     let p = match b {
         Button::Align(axis, v) => with_align_to(app, json!({axis: v})),
@@ -184,10 +212,10 @@ pub fn align_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     .enumerate()
     {
         if i == 3 && widgets::icon_button(ui, "dc-al-center", tl!("Horizontal & Vertical Align Center"), false, size).clicked() {
-            app.run("object.align", with_align_to(app, json!({"horizontal": "center", "vertical": "center"}))).ok();
+            run_button(app, Button::AlignCenters).ok();
         }
         if widgets::icon_button(ui, icon, tl!(tip), false, size).clicked() {
-            app.run("object.align", with_align_to(app, json!({axis: v}))).ok();
+            run_button(app, Button::Align(axis, v)).ok();
         }
     }
 }
@@ -226,16 +254,31 @@ fn topmost(app: &VectorcraftApp) -> Option<vectorcraft_doc::NodeId> {
 /// What Align aligns to: the key object or the key guide (#2143) while there is one (a click on
 /// an object of the selection makes it the key, and Align to Key Object makes the topmost one the
 /// key, or a guide selected with a single object), else the stored Align To choice, Selection or
-/// Artboard. The Distribute Objects and Distribute Spacing buttons send it as their `to`.
+/// Artboard (Key Object with no key to align to aligns to the selection). The Distribute Objects
+/// and Distribute Spacing buttons send it as their `to`.
 fn align_to(app: &VectorcraftApp) -> AlignTo {
-    if has_key(app) { AlignTo::Key } else { app.ui.align_to }
+    match app.ui.align_to {
+        _ if has_key(app) => AlignTo::Key,
+        AlignTo::Key => AlignTo::Selection,
+        to => to,
+    }
+}
+
+/// What Align To shows: the key while there is one, else the stored choice, which is kept until
+/// another is chosen (#3718); with one object selected and no key, Artboard, which it aligns to.
+fn shown_align_to(app: &VectorcraftApp) -> AlignTo {
+    let n = objects_aligned(app);
+    match app.ui.align_to {
+        _ if has_key(app) => AlignTo::Key,
+        AlignTo::Key if n == 1 => AlignTo::Artboard,
+        to => aligns_to(to, n),
+    }
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = selection_len(app);
     let guides = selected_guides(app);
     let can_align = n + guides >= 1;
-    let to = align_to(app);
     // `spacing` is the Distribute Spacing value. The Distribute Objects and Distribute Spacing
     // buttons send it while there is a key object or a key guide (#2143).
     let spacing = app.ui.align_spacing;
@@ -297,7 +340,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.vertical(|ui| {
             widgets::subheader(ui, tl!("Align To:"));
             // With one object selected the buttons align it to the artboard, and Align To shows Artboard.
-            let shown = aligns_to(to, objects_aligned(app));
+            let shown = shown_align_to(app);
             ui.horizontal(|ui| {
                 for (v, icon, tip) in [
                     (AlignTo::Selection, "dc-alignto-selection", tl!("Align to Selection")),
@@ -305,20 +348,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     (AlignTo::Artboard, "dc-alignto-artboard", tl!("Align to Artboard")),
                 ] {
                     // A key object is one of two or more selected objects, or a guide selected
-                    // with objects.
-                    let on = v != AlignTo::Key || n >= 2 || has_key(app) || guide_for_key(app).is_some();
+                    // with objects. Align to Key Object stays on while it is the choice, so it
+                    // shows as chosen whatever is selected (#3718).
+                    let on = v != AlignTo::Key || n >= 2 || has_key(app) || guide_for_key(app).is_some() || app.ui.align_to == AlignTo::Key;
                     if widgets::icon_button_enabled(ui, icon, tl!(tip), shown == v, on, 28.0).clicked() {
                         if v == AlignTo::Key {
-                            // The topmost selected object becomes the key object, unless
-                            // there is one already. The Align To choice stays as it was, and
-                            // Align To shows it again once the key is cleared.
-                            // With one object, a guide selected with it becomes the key.
+                            // Align To Key Object is kept as the choice (#3718). The topmost
+                            // selected object becomes the key object, unless there is one
+                            // already; with one object, a guide selected with it does.
+                            app.ui.align_to = AlignTo::Key;
                             if !has_key(app) {
-                                match (topmost(app).filter(|_| n >= 2), guide_for_key(app)) {
-                                    (Some(id), _) => app.run("select.key", json!({"id": id.0})).ok(),
-                                    (None, Some(g)) => app.run("select.key", json!({"guide": g})).ok(),
-                                    (None, None) => None,
-                                };
+                                make_key(app);
                             }
                         } else {
                             app.ui.align_to = v;
@@ -343,8 +383,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Use Preview Bounds"), true, pb) {
         super::transform::set_pref(app, "usePreviewBounds", !pb);
     }
-    // Cancel Key Object clears the key, and Align To shows its stored choice again.
-    if menu_item(ui, tl!("Cancel Key Object"), align_to(app) == AlignTo::Key, false) {
+    // Cancel Key Object clears the key and, with Align To Key Object chosen, goes back to Align
+    // to Selection, so the next Align doesn't make a new key.
+    if menu_item(ui, tl!("Cancel Key Object"), align_to(app) == AlignTo::Key || app.ui.align_to == AlignTo::Key, false) {
+        if app.ui.align_to == AlignTo::Key {
+            app.ui.align_to = AlignTo::Selection;
+        }
         app.run("select.key", json!({})).ok();
     }
     // Indented like the items beside it (their check column).
