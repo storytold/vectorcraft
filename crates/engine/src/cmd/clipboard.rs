@@ -24,7 +24,7 @@ use vectorcraft_geom::{PathData, Rect};
 pub use flavours::{AI, BITMAP, EMF, EPS, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture};
 pub use flavours::{ImageRead, read_image};
 pub(crate) use resources::SwatchChoices;
-pub use resources::{ArtResources, art_resources};
+pub use resources::{ArtResources, SymbolOptions, art_resources};
 
 use super::{CommandSpec, Result, Session, always, bad, cmd, f64_or, has_doc, point_param, str_param};
 use crate::DocState;
@@ -70,6 +70,8 @@ pub struct Clipboard {
     pub images: BTreeMap<String, ImageBlob>,
     /// Symbols the objects place (also inside other symbols and patterns).
     pub symbols: Vec<Symbol>,
+    /// The Symbol Options of [`Self::symbols`] (which the document keeps by name), by symbol name.
+    pub symbol_options: BTreeMap<String, SymbolOptions>,
     /// Patterns the objects paint with (pasting makes their swatches again).
     pub patterns: Vec<PatternDef>,
     /// Global and spot swatches the objects' colours link to, the tint swatches of the tints they
