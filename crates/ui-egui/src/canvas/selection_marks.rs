@@ -4,10 +4,13 @@
 //! color and set of selected anchors. The marks of all objects are joined into one mesh, in the
 //! order they are drawn. A frame with nothing changed draws that mesh again. A pan moves the
 //! triangles of outlines and handles, and places the anchor squares again, because a square's edges
-//! are rounded to whole pixels where it lands. A frame with a new zoom, rotation or display scale
-//! draws plain shapes and keeps nothing, and the next frame with the same view builds the marks.
+//! are rounded to whole pixels where it lands. Each subpath, handle and square is tested against the
+//! view on its own: one out of view adds nothing to the mesh, and a subpath or handle gets its
+//! triangles the first time it is in view. A frame with a new zoom, rotation or display scale draws
+//! plain shapes and keeps nothing, and the next frame with the same view builds the marks.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::ops::Range;
 use std::sync::{Arc, Weak};
 
 use egui::emath::{GuiRounding as _, TSTransform};
@@ -101,17 +104,42 @@ impl ViewMap {
     }
 }
 
+/// The triangles of one item in its run's mesh.
+#[derive(Clone)]
+struct Span {
+    vertices: Range<u32>,
+    indices: Range<u32>,
+}
+
+/// A polyline, disc or slanted line in a [`Mark::Rigid`].
+struct RigidPiece {
+    /// The shape, in screen coordinates at the object's `base`, until it is first on screen.
+    shape: Option<Shape>,
+    /// Where the shape draws at the object's `base`.
+    bounds: egui::Rect,
+    span: Span,
+}
+
+/// A direction handle in a [`Mark::Handles`]: the line from its anchor and the dot at its end.
+struct HandleLine {
+    from: [f64; 2],
+    to: [f64; 2],
+    /// Whether the line is, or is nearly, level or upright. Its triangles then move only by whole
+    /// pixels, and any other move draws it again.
+    rounded: bool,
+    /// The offset its triangles were drawn for.
+    at: [f64; 2],
+    /// Its triangles, from the first time it is on screen.
+    span: Option<Span>,
+}
+
 /// One run of an object's marks.
 enum Mark {
     /// Marks whose triangles keep their form when moved: polylines, discs and slanted lines.
-    /// `shapes` are in screen coordinates at the object's `base` and become `mesh` the first time
-    /// the run is on screen. Discs need the frame's own tessellator (`discs`).
-    Rigid { shapes: Vec<Shape>, mesh: Mesh, bounds: egui::Rect, points: usize, discs: bool },
-    /// Direction handles of one color, from [`ViewMap::view`]: the line from each anchor and the dot
-    /// at its end. They become `mesh` for the offset `at` the first time the run is on screen. With a
-    /// line that is, or is nearly, level or upright (`rounded`), `mesh` moves only by whole pixels,
-    /// and any other move draws the run again.
-    Handles { color: Color32, lines: Vec<[[f64; 2]; 2]>, rounded: bool, mesh: Mesh, at: [f64; 2], bounds: ([f64; 2], [f64; 2]) },
+    /// `mesh` holds the triangles of the pieces that have been on screen.
+    Rigid { pieces: Vec<RigidPiece>, mesh: Mesh, points: usize },
+    /// Direction handles of one color. `mesh` holds the triangles of those that have been on screen.
+    Handles { color: Color32, lines: Vec<HandleLine>, mesh: Mesh },
     /// Anchor squares in one style, at positions from [`ViewMap::view`].
     Squares { color: Color32, filled: bool, size: f32, at: Vec<[f64; 2]> },
     /// A line that is, or is nearly, level or upright: the tessellator rounds those to whole pixels.
@@ -141,43 +169,30 @@ impl<'a> MarkList<'a> {
     }
 
     fn rigid(&mut self, shape: Shape) {
-        let rect = shape.visual_bounding_rect();
         let count = match &shape {
             Shape::Path(path) => path.points.len(),
             _ => 1,
         };
-        let disc = matches!(shape, Shape::Circle(_));
-        if let Some(Mark::Rigid { shapes, bounds, points, discs, .. }) = self.marks.last_mut() {
-            *bounds = bounds.union(rect);
+        let piece = RigidPiece { bounds: shape.visual_bounding_rect(), shape: Some(shape), span: Span { vertices: 0..0, indices: 0..0 } };
+        if let Some(Mark::Rigid { pieces, points, .. }) = self.marks.last_mut() {
             *points += count;
-            *discs |= disc;
-            shapes.push(shape);
+            pieces.push(piece);
         } else {
-            self.marks.push(Mark::Rigid { shapes: vec![shape], mesh: Mesh::default(), bounds: rect, points: count, discs: disc });
+            self.marks.push(Mark::Rigid { pieces: vec![piece], mesh: Mesh::default(), points: count });
         }
     }
 
     /// A direction handle: its line from `from` and the dot at `to`.
     fn handle(&mut self, from: Point, to: Point, color: Color32) {
         let (a, b) = (self.map.view(from), self.map.view(to));
-        let is_rounded = is_rounded_line(self.map.screen(a), self.map.screen(b));
-        let least = [a[0].min(b[0]), a[1].min(b[1])];
-        let most = [a[0].max(b[0]), a[1].max(b[1])];
-        if let Some(Mark::Handles { color: c, lines, rounded, bounds, .. }) = self.marks.last_mut()
+        let rounded = is_rounded_line(self.map.screen(a), self.map.screen(b));
+        let line = HandleLine { from: a, to: b, rounded, at: [0.0; 2], span: None };
+        if let Some(Mark::Handles { color: c, lines, .. }) = self.marks.last_mut()
             && *c == color
         {
-            *bounds = ([bounds.0[0].min(least[0]), bounds.0[1].min(least[1])], [bounds.1[0].max(most[0]), bounds.1[1].max(most[1])]);
-            *rounded |= is_rounded;
-            lines.push([a, b]);
+            lines.push(line);
         } else {
-            self.marks.push(Mark::Handles {
-                color,
-                lines: vec![[a, b]],
-                rounded: is_rounded,
-                mesh: Mesh::default(),
-                at: [0.0; 2],
-                bounds: (least, most),
-            });
+            self.marks.push(Mark::Handles { color, lines: vec![line], mesh: Mesh::default() });
         }
     }
 
@@ -269,6 +284,14 @@ struct Dot {
     mesh: Mesh,
 }
 
+/// A disc in one style, around the origin.
+struct Disc {
+    radius: f32,
+    fill: Color32,
+    stroke: Stroke,
+    mesh: Mesh,
+}
+
 /// What one anchor square draws: the fill, then the stroke of a hollow one.
 fn square_shapes(rect: egui::Rect, color: Color32, filled: bool) -> [Option<RectShape>; 2] {
     if filled {
@@ -307,7 +330,7 @@ struct Composer<'a> {
     /// Draws lines and squares that rounding keeps from being reused, culled by `clip`.
     tessellator: Tessellator,
     /// Draws what is kept for later frames, with nothing culled. Like `tessellator`, it has no discs,
-    /// so neither draws circles.
+    /// so neither draws circles: those come from `discs`, stamped where they land.
     keeper: Tessellator,
     /// Draws filled squares without the soft edge, when that edge falls between pixel centers: on a
     /// square rounded to whole pixels, each pixel center is then fully in or fully out.
@@ -317,6 +340,7 @@ struct Composer<'a> {
     look: HandleLook<'a>,
     templates: &'a mut Vec<Template>,
     dots: &'a mut Vec<Dot>,
+    discs: &'a mut Vec<Disc>,
     out: Mesh,
 }
 
@@ -327,50 +351,41 @@ fn stamp(out: &mut Mesh, mesh: &Mesh, delta: Vec2) {
     out.indices.extend(mesh.indices.iter().map(|i| i + first));
 }
 
+/// Append the triangles of `span` in `mesh` to `out`, moved by `delta`.
+fn stamp_span(out: &mut Mesh, mesh: &Mesh, span: &Span, delta: Vec2) {
+    let vertices = mesh.vertices.get(span.vertices.start as usize..span.vertices.end as usize);
+    let indices = mesh.indices.get(span.indices.start as usize..span.indices.end as usize);
+    let (Some(vertices), Some(indices)) = (vertices, indices) else { return };
+    let first = out.vertices.len() as u32;
+    out.vertices.extend(vertices.iter().map(|v| Vertex { pos: v.pos + delta, ..*v }));
+    out.indices.extend(indices.iter().map(|i| i - span.vertices.start + first));
+}
+
+/// Run `draw` on `mesh`, and return the triangles it added.
+fn drawn_span(mesh: &mut Mesh, draw: impl FnOnce(&mut Mesh)) -> Span {
+    let (vertices, indices) = (mesh.vertices.len() as u32, mesh.indices.len() as u32);
+    draw(mesh);
+    Span { vertices: vertices..mesh.vertices.len() as u32, indices: indices..mesh.indices.len() as u32 }
+}
+
 impl Composer<'_> {
     fn marks(&mut self, marks: &mut [Mark], base: [f64; 2]) {
         let delta = vec2((self.map.offset[0] - base[0]) as f32, (self.map.offset[1] - base[1]) as f32);
         let margin = 2.0 / self.pixels_per_point;
         for mark in marks {
             match mark {
-                Mark::Rigid { shapes, mesh, bounds, discs, .. } => {
-                    if !bounds.translate(delta).expand(margin).intersects(self.clip) {
-                        continue;
-                    }
-                    if !shapes.is_empty() {
-                        let shapes = std::mem::take(shapes);
-                        if *discs {
-                            *mesh = tessellated(self.ctx, shapes, self.pixels_per_point);
-                        } else {
-                            for shape in shapes {
-                                self.keeper.tessellate_shape(shape, mesh);
-                            }
+                Mark::Rigid { pieces, mesh, .. } => {
+                    for piece in pieces {
+                        if !piece.bounds.translate(delta).expand(margin).intersects(self.clip) {
+                            continue;
                         }
-                    }
-                    stamp(&mut self.out, mesh, delta);
-                }
-                Mark::Handles { color, lines, rounded, mesh, at, bounds } => {
-                    let onscreen = egui::Rect::from_two_pos(self.map.screen(bounds.0), self.map.screen(bounds.1))
-                        .expand(HANDLE_REACH + self.look.grow.max(0.0) / 2.0);
-                    if !onscreen.intersects(self.clip) {
-                        continue;
-                    }
-                    let moved = vec2((self.map.offset[0] - at[0]) as f32, (self.map.offset[1] - at[1]) as f32);
-                    let whole_pixels = (moved * self.pixels_per_point).round() == moved * self.pixels_per_point;
-                    if *rounded && !mesh.is_empty() && !whole_pixels {
-                        let mut out = std::mem::take(&mut self.out);
-                        self.handles(*color, lines, &mut out);
-                        self.out = out;
-                        continue;
-                    }
-                    if mesh.is_empty() {
-                        self.handles(*color, lines, mesh);
-                        *at = self.map.offset;
-                        stamp(&mut self.out, mesh, Vec2::ZERO);
-                    } else {
-                        stamp(&mut self.out, mesh, moved);
+                        if let Some(shape) = piece.shape.take() {
+                            piece.span = self.rigid_span(shape, mesh);
+                        }
+                        stamp_span(&mut self.out, mesh, &piece.span, delta);
                     }
                 }
+                Mark::Handles { color, lines, mesh } => self.handles(*color, lines, mesh),
                 Mark::Squares { color, filled, size, at } => self.squares(*color, *filled, *size, at),
                 Mark::Segment { a, b, stroke } => {
                     let points = [self.map.screen(*a), self.map.screen(*b)];
@@ -380,8 +395,36 @@ impl Composer<'_> {
         }
     }
 
-    /// Draw direction handles into `mesh`.
-    fn handles(&mut self, color: Color32, lines: &[[[f64; 2]; 2]], mesh: &mut Mesh) {
+    /// Draw `shape` into `mesh`.
+    fn rigid_span(&mut self, shape: Shape, mesh: &mut Mesh) -> Span {
+        drawn_span(mesh, |mesh| match shape {
+            Shape::Circle(circle) => {
+                let index = self.disc(&circle);
+                if let Some(disc) = self.discs.get(index) {
+                    stamp(mesh, &disc.mesh, circle.center.to_vec2());
+                }
+            }
+            shape => self.keeper.tessellate_shape(shape, mesh),
+        })
+    }
+
+    /// The index of the disc in the style of `circle`, made when there is none.
+    fn disc(&mut self, circle: &egui::epaint::CircleShape) -> usize {
+        let same = |d: &Disc| d.radius == circle.radius && d.fill == circle.fill && d.stroke == circle.stroke;
+        if let Some(index) = self.discs.iter().position(same) {
+            return index;
+        }
+        let shape = Shape::Circle(egui::epaint::CircleShape { center: Pos2::ZERO, ..*circle });
+        let mesh = tessellated(self.ctx, vec![shape], self.pixels_per_point);
+        if self.discs.len() >= MAX_TEMPLATES {
+            self.discs.clear();
+        }
+        self.discs.push(Disc { radius: circle.radius, fill: circle.fill, stroke: circle.stroke, mesh });
+        self.discs.len() - 1
+    }
+
+    /// Add the direction handles in view to the frame, drawing those not yet in `mesh` into it.
+    fn handles(&mut self, color: Color32, lines: &mut [HandleLine], mesh: &mut Mesh) {
         let index = match self.dots.iter().position(|d| d.color == color) {
             Some(index) => index,
             None => {
@@ -396,10 +439,29 @@ impl Composer<'_> {
         };
         let Some(dot) = self.dots.get(index) else { return };
         let stroke = Stroke::new(1.0, color);
-        for [from, to] in lines {
-            let (from, to) = (self.map.screen(*from), self.map.screen(*to));
-            self.keeper.tessellate_line_segment([from, to], stroke, mesh);
-            stamp(mesh, &dot.mesh, to.to_vec2());
+        let reach = HANDLE_REACH + self.look.grow.max(0.0) / 2.0;
+        for line in lines {
+            let (from, to) = (self.map.screen(line.from), self.map.screen(line.to));
+            if !egui::Rect::from_two_pos(from, to).expand(reach).intersects(self.clip) {
+                continue;
+            }
+            let moved = vec2((self.map.offset[0] - line.at[0]) as f32, (self.map.offset[1] - line.at[1]) as f32);
+            let whole_pixels = (moved * self.pixels_per_point).round() == moved * self.pixels_per_point;
+            let keeper = &mut self.keeper;
+            let mut draw = |mesh: &mut Mesh| {
+                keeper.tessellate_line_segment([from, to], stroke, mesh);
+                stamp(mesh, &dot.mesh, to.to_vec2());
+            };
+            match &line.span {
+                Some(span) if !line.rounded || whole_pixels => stamp_span(&mut self.out, mesh, span, moved),
+                Some(_) => draw(&mut self.out),
+                None => {
+                    let span = drawn_span(mesh, draw);
+                    stamp_span(&mut self.out, mesh, &span, Vec2::ZERO);
+                    line.at = self.map.offset;
+                    line.span = Some(span);
+                }
+            }
         }
     }
 
@@ -477,6 +539,7 @@ pub struct SelectionMarks {
     key: Option<(NodeId, ObjectMarks)>,
     templates: Vec<Template>,
     dots: Vec<Dot>,
+    discs: Vec<Disc>,
     frame: Arc<Mesh>,
     shown: Option<Shown>,
     order: Vec<NodeId>,
@@ -599,7 +662,7 @@ impl SelectionMarks {
         {
             self.composes += 1;
         }
-        let Self { objects, key, templates, dots, frame, order, kept, .. } = self;
+        let Self { objects, key, templates, dots, discs, frame, order, kept, .. } = self;
         let all_handles = options.all_handles;
         let mut out = Arc::try_unwrap(std::mem::take(frame)).unwrap_or_default();
         out.clear();
@@ -623,6 +686,7 @@ impl SelectionMarks {
             look: options.look,
             templates,
             dots,
+            discs,
             out,
         };
         if let Some((_, entry)) = key {
@@ -715,14 +779,14 @@ fn draw_once(st: &vectorcraft_engine::DocState, p: &egui::Painter, xf: &Xf, opti
 fn add_marks(p: &egui::Painter, map: &ViewMap, look: HandleLook, marks: Vec<Mark>) {
     for mark in marks {
         match mark {
-            Mark::Rigid { shapes, .. } => {
-                for shape in shapes {
+            Mark::Rigid { pieces, .. } => {
+                for shape in pieces.into_iter().filter_map(|piece| piece.shape) {
                     p.add(shape);
                 }
             }
             Mark::Handles { color, lines, .. } => {
-                for [from, to] in lines {
-                    let (from, to) = (map.screen(from), map.screen(to));
+                for line in lines {
+                    let (from, to) = (map.screen(line.from), map.screen(line.to));
                     p.line_segment([from, to], Stroke::new(1.0, color));
                     look.draw(p, to, color);
                 }

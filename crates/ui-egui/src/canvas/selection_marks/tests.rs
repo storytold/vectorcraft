@@ -376,6 +376,92 @@ fn a_zoom_keeps_nothing_until_the_view_stays() {
     assert!(marks.builds > builds && !marks.objects.is_empty(), "the same view again builds the marks");
 }
 
+/// Whether every vertex of the kept frame lies within a few pixels of the picture.
+fn all_near_the_picture(marks: &SelectionMarks) -> bool {
+    let near = egui::Rect::from_min_size(Pos2::ZERO, vec2(SIZE.0, SIZE.1)).expand(8.0);
+    marks.frame.vertices.iter().all(|v| near.contains(v.pos))
+}
+
+/// A group of rectangles 1,000 points apart keeps triangles only for the ones in view. One that
+/// comes into view gets its triangles then.
+#[test]
+fn a_frame_holds_no_triangles_of_a_groups_subpaths_out_of_view() {
+    for tool in ["selection", "directSelection"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        for i in 0..12 {
+            app.run("shape.rectangle", json!({"x": 40 + i * 1000, "y": 40, "width": 60, "height": 40})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+        app.run("object.group", json!({})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.select_tool(tool);
+        let ctx = egui::Context::default();
+        let mut marks = SelectionMarks::default();
+        for (dx, seen) in [(0.0, 1), (1000.0, 2), (1000.37, 2), (11_000.0, 3), (0.0, 3)] {
+            let view = xf(1.0, (VIEW.0 + dx, VIEW.1), 0.0);
+            assert_matches_plain(&ctx, &mut marks, &app, &view, 1.0, &format!("{tool}, pan {dx}"));
+            assert!(!marks.frame.is_empty(), "{tool}, pan {dx}: a rectangle is in view");
+            assert!(all_near_the_picture(&marks), "{tool}, pan {dx}: triangles of a rectangle out of view");
+            let waiting: usize = marks
+                .objects
+                .values()
+                .flat_map(|entry| &entry.marks)
+                .map(|mark| match mark {
+                    Mark::Rigid { pieces, .. } => pieces.iter().filter(|piece| piece.shape.is_some()).count(),
+                    _ => 0,
+                })
+                .sum();
+            assert_eq!(waiting, 12 - seen, "{tool}, pan {dx}: rectangles not yet in view get no triangles");
+        }
+    }
+}
+
+/// How many triangles the direction handles add to a frame of a direct-selected path with `anchors`
+/// anchors 1,000 points apart.
+fn handle_triangles(anchors: usize, view: &Xf) -> (usize, VectorcraftApp, SelectionMarks, egui::Context) {
+    let mut d = String::from("M40 150");
+    for i in 0..anchors - 1 {
+        let (from, to) = (40 + i * 1000, 40 + (i + 1) * 1000);
+        // Handles alternate between level, which the tessellator rounds to whole pixels, and slanted.
+        let y = if i % 2 == 0 { 150 } else { 110 };
+        d += &format!(" C{} {y} {} 190 {to} 150", from + 30, to - 30);
+    }
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("path.create", json!({"d": d})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.select_tool("directSelection");
+    let ctx = egui::Context::default();
+    let mut marks = SelectionMarks::default();
+    let mut triangles = |app: &mut VectorcraftApp, all_handles: bool| {
+        app.session.prefs.show_handles_multiple_anchors = all_handles;
+        for _ in 0..2 {
+            picture(&ctx, 1.0, |p| paint(&mut marks, app, p, view, false));
+        }
+        marks.frame.indices.len() / 3
+    };
+    let without = triangles(&mut app, false);
+    let with = triangles(&mut app, true);
+    (with - without, app, marks, ctx)
+}
+
+/// A frame of a long path shows the handles in view and holds the triangles of those alone, exactly
+/// as many as a path that ends just past the view. Handles that come into view draw correctly, level
+/// ones after a move by a fraction of a pixel too.
+#[test]
+fn a_frame_holds_no_triangles_of_handles_out_of_view() {
+    let view = xf(1.0, VIEW, 0.0);
+    let (short, ..) = handle_triangles(2, &view);
+    let (long, app, mut marks, ctx) = handle_triangles(40, &view);
+    assert!(short > 0, "the handle in view draws");
+    assert_eq!(long, short, "the long path's handles out of view add nothing");
+    for (dx, dy) in [(0.0, 0.0), (0.0, 0.37), (1000.0, 0.0), (1000.61, 0.61), (2000.0, 0.0), (2000.0, 0.5), (5000.5, 0.25), (0.0, 0.0)] {
+        let view = xf(1.0, (VIEW.0 + dx, VIEW.1 + dy), 0.0);
+        assert_matches_plain(&ctx, &mut marks, &app, &view, 1.0, &format!("pan {dx} {dy}"));
+    }
+}
+
 #[test]
 fn no_stale_marks_after_a_change_with_the_selection_tool() {
     no_stale_marks_after_a_change("selection");
