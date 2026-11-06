@@ -96,7 +96,8 @@ pub struct SavePlan {
     /// stamps; `None`: the time it is written.
     pub modified: Option<Option<i64>>,
     /// Warnings about the params themselves: each native option (`compress`, `version`,
-    /// `preview`) given beside the path that the format doesn't read.
+    /// `preview`, `precision`) given beside the path, and each key of `options`, that the format
+    /// doesn't read, naming the file the save writes.
     pub notes: Vec<String>,
 }
 
@@ -289,9 +290,11 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         super::check_not_lossy_overwrite(st, path, p, cmd)?;
     }
     let written = written_as(cmd, format, &Value::Object(options.clone()));
-    let notes = NATIVE_OPTIONS
-        .iter()
-        .filter(|k| p.get(**k).is_some_and(|v| !v.is_null()) && !reads_option(format, k))
+    let top = NATIVE_OPTIONS.iter().filter(|k| p.get(**k).is_some_and(|v| !v.is_null())).map(|k| k.to_string());
+    let nested = p.get("options").and_then(Value::as_object).into_iter().flatten().filter(|(_, v)| !v.is_null()).map(|(k, _)| k);
+    let notes = top
+        .filter(|k| !reads_option(format, k))
+        .chain(nested.filter(|k| !reads_option(format, k)).map(|k| format!("options.{k}")))
         .map(|k| format!("`{k}` was not used: {} files don't read it", written.label))
         .collect();
     Ok(SavePlan { mode, path, format, options, name, folder, modified, notes })
