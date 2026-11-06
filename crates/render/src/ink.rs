@@ -395,11 +395,17 @@ pub(crate) fn cmyk_pixmap(blob: &ImageBlob, lut: &InkLut) -> Option<Pixmap> {
     inks_pixmap(&blob.cmyk()?, lut)
 }
 
+/// Whether image pixels `key` are a CMYK image's inks as shown (not adjusted or greyscale), so
+/// they paint those inks ([`key_inks`]).
+pub(crate) fn shows_own_inks(key: &ImageKey) -> bool {
+    key.luts.0 != 0 && key.adjust.is_none() && !key.grey
+}
+
 /// The ink amounts behind image pixels `key` when they are CMYK image `blob`'s inks as shown (not
 /// adjusted or greyscale): its own inks, halved as its pixels are to `key`'s mip
 /// ([`images::half_inks`]). `None` for other pixels.
 pub(crate) fn key_inks(key: &ImageKey, blob: Option<&ImageBlob>) -> Option<Inks> {
-    if key.luts.0 == 0 || key.adjust.is_some() || key.grey {
+    if !shows_own_inks(key) {
         return None;
     }
     (0..key.mip).try_fold(blob?.cmyk()?, |inks, _| images::half_inks(&inks))
@@ -538,6 +544,7 @@ mod tests {
             luts: (0, 0),
             plates: 0,
             mip: 0,
+            tile: None,
         };
         let pm =
             Arc::new(Pixmap::from_parts(vec![PremulRgba8 { r: 204, g: 102, b: 51, a: 255 }, PremulRgba8 { r: 102, g: 51, b: 26, a: 128 }], 2, 1));
