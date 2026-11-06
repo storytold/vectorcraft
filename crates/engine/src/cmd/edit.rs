@@ -627,16 +627,17 @@ pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
 }
 
 /// [`super::brushsym::part_only`] while an object of a dynamic symbol instance's art is selected:
-/// for the commands that read the selected objects without [`selected_roots`].
+/// for the commands that read the selected objects without [`selected_roots`]. A command that
+/// changes nothing in the document ([`Session::reading`]) reads the instance instead.
 pub(crate) fn refuse_symbol_part(s: &Session) -> Result<()> {
-    if s.doc()?.selection.symbol_part.is_some() { Err(super::brushsym::part_only()) } else { Ok(()) }
+    if !s.reading && s.doc()?.selection.symbol_part.is_some() { Err(super::brushsym::part_only()) } else { Ok(()) }
 }
 
 /// [`refuse_symbol_part`] as a command's `enabled` check: the command is dimmed, and refused with
 /// [`super::brushsym::part_only`]'s message, while an object of a dynamic symbol instance's art is
 /// selected.
 pub(crate) fn no_symbol_part(s: &Session) -> std::result::Result<(), String> {
-    if s.active().is_some_and(|st| st.selection.symbol_part.is_some()) { Err(super::brushsym::part_only().to_string()) } else { Ok(()) }
+    if !s.reading && s.active().is_some_and(|st| st.selection.symbol_part.is_some()) { Err(super::brushsym::part_only().to_string()) } else { Ok(()) }
 }
 
 /// [`selected_roots`] for the commands that move or reshape the art (Move, Transform, Rotate…): a

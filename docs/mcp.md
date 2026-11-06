@@ -1712,7 +1712,8 @@ already walks Image Trace. Short agent entry points:
   Recolor Artwork, plug-in filters, effects, the gradient commands, `gradient.selectStop`, the Appearance panel's rows and
   `symbol.instance.setAppearance`. A Cmd-drag that lends the Selection or Group Selection tool selects the instance whole
   first and moves it. `swatch.unused` and `recolor.colors` count the fills and strokes an instance keeps for objects of its
-  art. These commands do not check for a selected object and use the instance:
+  art. Commands that change nothing in the document, such as `attributes.info`, `css.selection`, `effect.list` and
+  `object.expand.info`, read the instance. These commands do not check for a selected object and use the instance:
   `edit.copy` copies the instance whole; `document.exportSelection`, `document.export` with `selectionOnly` and
   selection-mode `document.exportForScreens` export it whole; `artboard.fitToSelection` fits the artboard to the whole instance;
   `object.liquify` without `ids` takes the instance as its target and, since it reshapes paths only, leaves it as it is

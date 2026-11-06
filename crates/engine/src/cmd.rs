@@ -591,11 +591,8 @@ pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
         // effect's).
         Some(Value::String(r)) if r.starts_with('$') => Err(unresolved_reference(r)),
         _ => {
-            let sel = &s.doc()?.selection;
-            if sel.symbol_part.is_some() {
-                return Err(brushsym::part_only());
-            }
-            Ok(sel.objects.clone())
+            edit::refuse_symbol_part(s)?;
+            Ok(s.doc()?.selection.objects.clone())
         }
     }
 }
