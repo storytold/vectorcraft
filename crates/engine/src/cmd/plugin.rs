@@ -20,7 +20,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
 use vectorcraft_plugins::{Budget, Kind, Plugin, effect, export, objects, registry};
 
-use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param};
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
 
 /// What a plug-in error looks like to the user. A run the caller cancelled changed nothing.
 fn err(e: vectorcraft_plugins::Error) -> EngineError {
@@ -288,12 +288,13 @@ fn load_given(c: &str, p: &Value) -> Result<(Plugin, Vec<u8>)> {
 /// `plugin.list` entry.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.install";
+    let (replace, allow_heavy) = (switch_or(p, "replace", true, C)?, switch_or(p, "allowHeavy", false, C)?);
     let (plugin, bytes) = load_given(C, p)?;
-    if !p.get("replace").and_then(Value::as_bool).unwrap_or(true) && registry::get(plugin.id()).is_some() {
+    if !replace && registry::get(plugin.id()).is_some() {
         return Err(bad(C, format!("a plug-in with id {:?} is already installed", plugin.id())));
     }
     // A heavy plug-in is installed once the user agrees: whoever installs it asks them first.
-    if plugin.manifest().budget == Budget::Heavy && !p.get("allowHeavy").and_then(Value::as_bool).unwrap_or(false) {
+    if plugin.manifest().budget == Budget::Heavy && !allow_heavy {
         let (minutes, times) = vectorcraft_plugins::heavy_terms();
         return Err(bad(
             C,
