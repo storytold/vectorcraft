@@ -4308,7 +4308,9 @@ layer's objects hidden, or the page's objects when `document.open` would not use
 compatibility comes in from its editing data the same way with or without `editingData`), `clipboard.importEps
 {dataBase64}` (an EPS or other PostScript picture's objects, as `document.open` reads one, a hidden layer's objects
 hidden), `clipboard.importImage {dataBase64, mime?}` (an embedded image at 100% of its physical size) or
-`clipboard.importText {text}` (point text in the default type style), each centred on `center`
+`clipboard.importText {text, table?}` (point text in the default type style; cells copied from a spreadsheet,
+tab-separated rows with the same number of cells, become a group `Table` of point type per cell over 0.5 pt
+`Gridlines`, unless `table: false`), each centred on `center`
 (default: the first artboard); then any `edit.paste*` command pastes it. The desktop app does this itself: Copy and
 Cut publish the formats to the system clipboard, and a Paste outside text editing first reads what another app
 copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG). A background thread makes the
