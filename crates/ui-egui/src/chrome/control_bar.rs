@@ -338,7 +338,8 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     ui.add_space(4.0);
                     ui.separator();
                 }
-                if ui.link(egui::RichText::new(tl!("Opacity:")).size(12.0).color(t.text).underline()).clicked() {
+                // A click opens the Transparency panel; a drag scrubs the field (#4088).
+                if crate::scrub::link_label(ui, egui::RichText::new(tl!("Opacity:")).size(12.0).color(t.text).underline()).clicked() {
                     app.ui.open_panel = Some("transparency".into());
                 }
                 if let Some(o) = widgets::plain_field(ui, "cb-opacity", opacity as f64 * 100.0, "%", 0, 56.0)
