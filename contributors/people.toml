@@ -213,3 +213,6 @@ sync_github_name = false
 [people.adikshan11]
 real_name = "Adithya Shankaran"
 sync_github_name = true
+
+[people.slafebre]
+real_name = "Sven Lafebre"
