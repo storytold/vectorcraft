@@ -218,16 +218,22 @@ fn new_width_point_without_adjoining_preserves_neighbours() {
 fn new_width_point_adjust_adjoining_uses_sampled_widths() {
     for indexed in [false, true] {
         let (mut s, id) = line_session();
-        s.execute("stroke.widthProfile.set", &json!({"ids": [id.0], "points": [[0, 9, 9], [0.25, 1, 0], [0.75, 3, 0], [1, 7, 7]]})).unwrap();
-        // At t=0.5 the old sides are 10pt and 0pt. Indexed editing of that sampled
-        // point is the existing convention: scale the nonzero side, add from zero.
-        let index = if indexed { Some(set(&mut s, json!({"id": id.0, "t": 0.5, "left": 10, "right": 0}))) } else { None };
+        let original = vec![(0.0, 9.0, 9.0), (0.25, 1.0, 0.0), (0.75, 3.0, 0.0), (1.0, 7.0, 7.0)];
+        s.execute("stroke.widthProfile.set", &json!({"ids": [id.0], "points": original})).unwrap();
+        // At t=0.5 the old left side is where the profile's curve is there (#5714) and the right
+        // side is 0pt. Indexed editing of that sampled point is the existing convention: scale the
+        // nonzero side, add from zero.
+        let sampled = vectorcraft_doc::WidthProfile { points: original }.at(0.5).0;
+        let index = if indexed { Some(set(&mut s, json!({"id": id.0, "t": 0.5, "left": sampled * 5.0, "right": 0}))) } else { None };
         set(&mut s, json!({"id": id.0, "index": index, "t": 0.5, "left": 20, "right": 5, "adjustAdjoining": true}));
-        assert_eq!(
-            points(&s, id),
-            vec![(0.0, 9.0, 9.0), (0.25, 2.0, 1.0), (0.5, 4.0, 1.0), (0.75, 6.0, 1.0), (1.0, 7.0, 7.0)],
-            "only nearest neighbours change, using the sampled sides; indexed={indexed}"
-        );
+        let scale = 4.0 / sampled;
+        let got = points(&s, id);
+        let want = [(0.0, 9.0, 9.0), (0.25, scale, 1.0), (0.5, 4.0, 1.0), (0.75, 3.0 * scale, 1.0), (1.0, 7.0, 7.0)];
+        assert_eq!(got.len(), want.len(), "{got:?}; indexed={indexed}");
+        for (g, w) in got.iter().zip(want) {
+            let close = (g.0 - w.0).abs() < 1e-9 && (g.1 - w.1).abs() < 1e-9 && (g.2 - w.2).abs() < 1e-9;
+            assert!(close, "only nearest neighbours change, using the sampled sides; indexed={indexed}: {got:?} vs {want:?}");
+        }
     }
 }
 
