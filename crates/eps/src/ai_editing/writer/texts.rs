@@ -197,7 +197,7 @@ pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
     let xf = t.xf.as_coeffs();
     let shape_ok = match &t.kind {
         TextKind::Point => xf.iter().all(|v| v.is_finite()) && t.xf.determinant() > 1e-12,
-        TextKind::Area { .. } => shape(t).as_ref().and_then(segments).is_some_and(|s| closed(&s)),
+        TextKind::Area { .. } => closed_frame(t),
         // An open path whose ends meet would be read back closed.
         TextKind::OnPath { path, .. } => {
             let open = path.subpaths.iter().any(|sp| !sp.anchors.is_empty() && !sp.closed);
@@ -212,6 +212,12 @@ pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
         && runs_held(t)
         && plain(n)
         && within_reader(t, story_scale(t))
+}
+
+/// Is the frame of area type `t` one closed part? An open frame whose ends meet would be read back
+/// closed.
+fn closed_frame(t: &TextObject) -> bool {
+    shape(t).filter(|p| p.subpaths.iter().all(|sp| sp.anchors.is_empty() || sp.closed)).as_ref().and_then(segments).is_some_and(|s| closed(&s))
 }
 
 /// Document points to a unit of the story of type `t`: its scale is put into its lengths.
@@ -839,7 +845,7 @@ impl TextDoc {
                         && runs_held(t)
                         && (story_scale(t) / scale - 1.0).abs() <= 1e-9
                         && within_reader(t, scale)
-                        && shape(t).as_ref().and_then(segments).is_some_and(|s| closed(&s))
+                        && closed_frame(t)
                 }
                 _ => false,
             };

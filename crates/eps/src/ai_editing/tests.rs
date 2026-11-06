@@ -3479,6 +3479,43 @@ fn a_thread_of_horizontal_and_vertical_frames_is_written_as_its_outlines() {
     assert!(!program(&doc).contains("/AI11Text"));
 }
 
+/// Area type in an open frame whose ends meet is written as its outlines, alone or as a frame of a
+/// thread: as text it would be read back in a closed frame.
+#[test]
+fn an_open_frame_whose_ends_meet_is_written_as_its_outlines() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let open = |r: Rect| {
+        let mut frame = shapes::rectangle(r);
+        frame.subpaths[0].closed = false;
+        let start = frame.subpaths[0].anchors[0].clone();
+        frame.subpaths[0].anchors.push(start);
+        frame
+    };
+    let mut alone = TextObject::point(vectorcraft_geom::Point::ZERO, "Open", style(10.0, Color::BLACK));
+    alone.kind = TextKind::Area { frame: open(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+    alone.xf = Affine::IDENTITY;
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let n = text_node(&mut doc, alone.clone());
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::TYPE]);
+    assert!(!program(&doc).contains("/AI11Text"));
+
+    let mut first = alone;
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+    let mut second = first.clone();
+    second.runs[0].text.clear();
+    second.kind = TextKind::Area { frame: open(Rect::new(110.0, 10.0, 190.0, 90.0)) };
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, second).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::TYPE]);
+    assert!(!program(&doc).contains("/AI11Text"));
+}
+
 /// A thread with a frame in art cut to a clipping object that isn't a path is written as its
 /// outlines, every frame of it; so is type whose size is past what the reader reads.
 #[test]
