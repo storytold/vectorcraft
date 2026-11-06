@@ -7797,6 +7797,56 @@ fn a_brushs_art_takes_the_patterns_defined_before_it() {
     assert!(matches!(fill(&s.art), Paint::Pattern { ref pattern, .. } if pattern == "Dots"), "{:?}", r.warnings);
 }
 
+/// A spot color that only a brush's art uses comes in as a swatch, and the art's process colors
+/// count toward the document's color mode, as a pattern's do.
+#[test]
+fn a_brushs_art_brings_its_spot_colors_and_color_mode() {
+    let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n0 1 1 0 (Ink) 0 x\n{}f\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 4.0, 4.0));
+    let r = read_ok(&format!("{section}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    assert!(matches!(brush_named(&lib, "Spray"), vectorcraft_brush::BrushKind::Scatter(_)), "{:?}", r.warnings);
+    let ink = r.doc.swatch("Ink").map(|s| (s.paint.color(), s.global, s.spot));
+    assert_eq!(ink, Some((Some(Color::cmyk(0.0, 1.0, 1.0, 0.0)), true, true)), "{:?}", r.warnings);
+    assert_eq!(r.doc.color_mode, ColorMode::Cmyk);
+    // Art that isn't kept brings nothing.
+    let odd = "%AI8_BeginBrushPattern\n(Odd art)\n0 1 1 0 (Lost ink) 0 x\n0 0 m\n1 1 L\nnotanoperator\nf\n%AI8_EndBrushPattern\n";
+    let r = read_ok(&format!("{odd}{}{}", plugin_object(SCATTER, "Odd", &SPRAY.replace("Dot art", "Odd art")), layer("")));
+    assert!(r.doc.swatch("Lost ink").is_none());
+    assert_eq!(r.doc.color_mode, ColorMode::Rgb);
+    // Nor does art that only a brush left out uses (a pattern brush).
+    let tile = "%AI8_BeginBrushPattern\n(Tile one)\n0 A\n0 1 1 0 (Fence ink) 0 x\n0 0 m\n4 0 L\n4 4 L\nf\n%AI8_EndBrushPattern\n";
+    let r = read_ok(&format!("{tile}{}{}", plugin_object(PATTERN_BRUSH, "Fence", FENCE), layer("")));
+    assert!(vectorcraft_brush::library(&r.doc).is_empty(), "{:?}", r.warnings);
+    assert!(r.doc.swatch("Fence ink").is_none());
+    assert_eq!(r.doc.color_mode, ColorMode::Rgb);
+}
+
+/// A spot color that the page's art and a brush's art both define keeps the page's value, and a
+/// brush art section that a later one of the same name replaces brings none of its colors.
+#[test]
+fn a_brushs_art_colors_come_after_the_pages_and_a_replaced_sections_bring_nothing() {
+    let section = |ink: &str, color: &str| {
+        format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{color} ({ink}) 0 x\n{}f\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 4.0, 4.0))
+    };
+    let page = layer(&format!("0 0 1 0 (Ink) 0 x\n{}f", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let body = format!("{}{}{}{page}", section("Gone ink", "1 0 0 0"), section("Ink", "0 1 1 0"), plugin_object(SCATTER, "Spray", SPRAY));
+    let r = read_ok(&body);
+    assert!(matches!(brush_named(&vectorcraft_brush::library(&r.doc), "Spray"), vectorcraft_brush::BrushKind::Scatter(_)));
+    assert_eq!(r.doc.swatch("Ink").and_then(|s| s.paint.color()), Some(Color::cmyk(0.0, 0.0, 1.0, 0.0)), "{:?}", r.warnings);
+    assert!(r.doc.swatch("Gone ink").is_none());
+}
+
+/// A brush art section inside a symbol's definition isn't kept, so its spot colors make no swatch.
+#[test]
+fn brush_art_inside_a_symbol_brings_no_colors() {
+    let section =
+        format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n0 1 1 0 (Hidden ink) 0 x\n{}f\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 4.0, 4.0));
+    let body = format!("{}{}{}", symbol("S", &format!("{section}{}", dot()), 5), plugin_object(SCATTER, "Spray", SPRAY), layer(""));
+    let r = read_ok(&body);
+    assert!(r.doc.symbols.iter().any(|s| s.name == "S"), "{:?}", r.warnings);
+    assert!(r.doc.swatch("Hidden ink").is_none());
+}
+
 /// A brush's art filled with a pattern defined in the version 7 form places the tiles with the
 /// fill's offset, scale, rotation, reflection and shear operands, and a brush whose art has such a
 /// fill without all nine of them isn't read.
