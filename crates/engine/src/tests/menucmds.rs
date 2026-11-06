@@ -2017,6 +2017,32 @@ fn find_and_replace_that_changes_nothing_records_no_undo_step() {
     assert_eq!((history(&s), plain(&s, a)), ((before.0 + 1, 0, true), "dog dog".to_string()));
 }
 
+/// Find and Replace with no ids leaves the type inside a locked or hidden group as it is, however
+/// deep, as it does for type locked or hidden itself or by its layer (#5900). Find Next skips it
+/// too. Unlocked and shown again, the group's type is found and replaced.
+#[test]
+fn find_and_replace_leaves_type_in_a_locked_or_hidden_group() {
+    for prop in ["locked", "hidden"] {
+        let mut s = session();
+        let free = text(&mut s, "Audit cat");
+        let inner = text(&mut s, "Audit cat");
+        sel(&mut s, &[inner]);
+        let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+        sel(&mut s, &[g]);
+        let outer = id_of(&s.execute("object.group", &json!({})).unwrap());
+        let props = |on: bool| if prop == "locked" { json!({"id": outer.0, "locked": on}) } else { json!({"id": outer.0, "visible": !on}) };
+        s.execute("object.setProps", &props(true)).unwrap();
+        assert!(node(&s, inner).visible && !node(&s, inner).locked, "{prop}: the type itself is shown and unlocked");
+        let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap();
+        assert_eq!((r["count"].as_u64(), plain(&s, free), plain(&s, inner)), (Some(1), "Audit dog".to_string(), "Audit cat".to_string()), "{prop}");
+        s.execute("select.none", &json!({})).unwrap();
+        assert!(s.execute("edit.findNext", &json!({"find": "cat"})).unwrap()["id"].is_null(), "{prop}: Find Next skips it");
+        s.execute("object.setProps", &props(false)).unwrap();
+        let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap();
+        assert_eq!((r["count"].as_u64(), plain(&s, inner)), (Some(1), "Audit dog".to_string()), "{prop}: once the group is {prop} no more");
+    }
+}
+
 #[test]
 fn find_next_cycles_through_text_objects() {
     let mut s = session();
