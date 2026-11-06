@@ -1107,7 +1107,7 @@ mod tests {
         assert!(nodes > 0);
         let draft = |i: usize| brush::BrushDraft {
             name: format!("Brush {i}"),
-            kind: brush::DraftKind::Art { brush: vectorcraft_brush::ArtBrush::default(), art: "A".to_string() },
+            kind: brush::DraftKind::Art { brush: vectorcraft_brush::ArtBrush::default(), art: "A".to_string(), plain: false },
         };
         let drafts: Vec<_> = (0..5).map(draft).collect();
         let (kept, left_out) = brush::finish_brushes_within(drafts.clone(), &reader.brush_art, None, 3 * nodes);
@@ -1117,6 +1117,7 @@ mod tests {
         // A second brush of the same name is left out without using the budget.
         let mut repeated: Vec<_> = (0..2).map(draft).collect();
         repeated.insert(1, draft(0));
+        assert_eq!(brush::kept_brushes(&repeated, &reader.brush_art, 2 * nodes), [true, false, true]);
         let (kept, left_out) = brush::finish_brushes_within(repeated, &reader.brush_art, None, 2 * nodes);
         assert_eq!((kept.len(), left_out), (2, 1));
     }

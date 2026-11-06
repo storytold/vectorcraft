@@ -193,10 +193,14 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   weight, where the object's brush settings are the brush's own and its angle is on the page (#372, from a
   user's file of 6D Art Pen strokes: all 455 of its brushed styles), and a Calligraphic brush's Tilt, Bearing and
   Rotation (codes 4, 5 and 6) come in as those channels instead of Random. Others keep their drawn look.
+  Paths with an Art brush open the same way when the brush stretches art of solid-filled paths along the path,
+  unflipped, at 100% in Tints, and the path has none of its own settings, variable width, effects or a swatch
+  stroke. Other Art brushes (None or another colorization, another width, Proportional, between guides, flipped,
+  art with strokes, gradients or patterns) and type with an Art brush keep the drawn look.
 
 - **Missing:** faithful layer and group structure from the editing data in real files (#951: 109 layers instead
-  of 14), open speed on large files (#758), live effects, Scatter, Art, Pattern and Bristle brushes on paths, a
-  path's own Calligraphic brush settings, and symbols as live objects (#637; plain art styles read Drop Shadow, Outer Glow and Feather as live effects; pattern fills and global colours are read since #1025, placed (linked) files since #1264). Writing Illustrator's own editing data is out of scope
+  of 14), open speed on large files (#758), live effects, Scatter, Pattern and Bristle brushes on paths, the Art
+  brushes listed above as keeping the drawn look, a path's own Calligraphic or Art brush settings, and symbols as live objects (#637; plain art styles read Drop Shadow, Outer Glow and Feather as live effects; pattern fills and global colours are read since #1025, placed (linked) files since #1264). Writing Illustrator's own editing data is out of scope
   (undocumented): a PDF-compatible `.ai` opens in Illustrator 2018 without its layers and groups (#868). Save As
   `.ai` › Version: Legacy (version 7) writes the PostScript form from the published version 7 specification
   instead, keeping layers (names, order, visibility, lock), groups, compound paths, clipping groups, gradients and

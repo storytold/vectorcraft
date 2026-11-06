@@ -361,6 +361,17 @@ fn swatch_names(data: &[u8]) -> ShownNames {
     names
 }
 
+/// What the brushes and brush art read so far give a brushed stroke.
+#[derive(Default)]
+struct BrushesKept {
+    /// The counts of brushes and art sections when this was worked out.
+    read: (usize, usize),
+    /// Which of [`Reader::brush_drafts`] are kept as brushes.
+    kept: Vec<bool>,
+    /// The art an Art brush draws as the file does.
+    bending: HashSet<String>,
+}
+
 struct Reader<'a> {
     lex: Lexer<'a>,
     stack: Vec<V>,
@@ -562,6 +573,8 @@ struct Reader<'a> {
     brush_art: HashMap<String, Node>,
     /// The brush art sections read so far, repeated names included.
     brush_art_sections: usize,
+    /// What the brushes and brush art read so far give a brushed stroke.
+    brushes_kept: BrushesKept,
     /// Brush objects that weren't read.
     brushes_unread: usize,
     /// The graph being read (see [`Reader::graph_record`]).
@@ -702,6 +715,7 @@ impl<'a> Reader<'a> {
             brush_drafts: Vec::new(),
             brush_art: HashMap::new(),
             brush_art_sections: 0,
+            brushes_kept: BrushesKept::default(),
             brushes_unread: 0,
             graph: None,
             multi_mask: None,
