@@ -236,7 +236,10 @@ impl Renderer {
             bounds = fx.spread(before, space.line);
             let outline = image_outline.as_ref().map(|g| (g, FillRule::NonZero)).or(content.outline);
             match fx {
-                RasterFx::GaussianBlur { radius } => effects::pixel::gaussian_rgba(pm.data_as_u8_slice_mut(), wz, hz, radius / 2.0 / px),
+                RasterFx::GaussianBlur { radius, linear } => {
+                    let blur = if *linear { effects::pixel::gaussian_rgba_linear } else { effects::pixel::gaussian_rgba };
+                    blur(pm.data_as_u8_slice_mut(), wz, hz, radius / 2.0 / px)
+                }
                 RasterFx::Feather { radius } => {
                     effects::pixel::gaussian_rgba(pm.data_as_u8_slice_mut(), wz, hz, radius / 2.0 / px);
                     if let Some((g, rule)) = outline {
