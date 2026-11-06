@@ -225,7 +225,7 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
     }
     let options = app.ui.action_playback;
     if options.speed == PlaybackSpeed::Accelerated {
-        return app.run("command.batch", json!({"label": a.name, "commands": commands}));
+        return app.replay("command.batch", json!({"label": a.name, "commands": commands}));
     }
     let mut steps: std::collections::VecDeque<Value> = commands.into();
     let Some(first) = steps.pop_front() else { return Err("the action has no included steps".into()) };
@@ -245,7 +245,7 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
 
 /// Runs one step of a paced playback as its own undo step, named `label` → the step's result.
 fn play_step(app: &mut VectorcraftApp, label: &str, step: Value) -> Result<Value, String> {
-    let r = app.run("command.batch", json!({"label": label, "commands": [step]}))?;
+    let r = app.replay("command.batch", json!({"label": label, "commands": [step]}))?;
     Ok(r.get("results").and_then(|r| r.get(0)).cloned().unwrap_or(Value::Null))
 }
 
@@ -1275,6 +1275,30 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// An action recorded with a key its command no longer reads still plays, accelerated and one
+    /// step at a time, though the same command run by itself is refused.
+    #[test]
+    fn an_action_with_a_key_no_longer_read_still_plays() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let id = vectorcraft_doc::NodeId(
+            app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap(),
+        );
+        app.run("select.set", json!({"ids": [id.0]})).unwrap();
+        let old = json!({"dx": 5, "dy": 0, "dyy": 1});
+        assert!(app.run("object.move", old.clone()).is_err());
+        app.ui.action_sets =
+            vec![ActionSet::new("Test", vec![Action::new("Move", vec![("object.move".into(), old.clone()), ("object.move".into(), old)])])];
+        let x = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0;
+        let before = x(&app);
+        play(&mut app, 0, 0).unwrap();
+        assert!((x(&app) - before - 10.0).abs() < 1e-9, "both moves ran");
+        app.ui.action_playback.speed = PlaybackSpeed::Step;
+        assert_eq!(play(&mut app, 0, 0).unwrap()["pending"], json!(1));
+        assert!((x(&app) - before - 15.0).abs() < 1e-9, "the first step ran");
+        assert!(!app.session.replaying());
     }
 
     #[test]
