@@ -71,6 +71,7 @@ fn arrowheads_are_part_of_the_outline() {
     assert_eq!(path_of(&n).subpaths.len(), 1, "line and head are one shape");
 }
 
+/// Outline Stroke of a Lens-profile line covers 7/12 of the full-width rectangle.
 #[test]
 fn a_lens_profile_outlines_to_seven_twelfths_of_the_rectangle() {
     let mut s = session();

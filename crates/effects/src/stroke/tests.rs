@@ -225,6 +225,7 @@ fn expand_stroke_region_of_a_round_line_stays_compact() {
     assert_eq!(dense_anchors, anchors, "colinear spine points should not add outline anchors");
 }
 
+/// A line's outline takes its width profile, its dashes (each reading the profile where it sits) or neither.
 #[test]
 fn line_outline_uses_the_profile_dashes_or_a_plain_stroke() {
     let l = line(0.0, 100.0);

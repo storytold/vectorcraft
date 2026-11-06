@@ -214,6 +214,7 @@ fn new_width_point_without_adjoining_preserves_neighbours() {
     new_point_adjoining(false);
 }
 
+/// A new width point with Adjust Adjoining scales only its nearest neighbours, by the widths sampled where it goes.
 #[test]
 fn new_width_point_adjust_adjoining_uses_sampled_widths() {
     for indexed in [false, true] {

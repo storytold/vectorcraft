@@ -395,6 +395,7 @@ pub struct SavedProfile {
 mod tests {
     use super::*;
 
+    /// Widths and steps are found by search, at the ends, between points and at a step.
     #[test]
     fn width_profile_lookups_by_search() {
         let p = WidthProfile { points: vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (0.5, 0.5, 0.25), (1.0, 0.0, 0.0)] };
@@ -441,6 +442,7 @@ mod tests {
         }
     }
 
+    /// Neither side of a profile goes wider or narrower than the two points of the span it is in.
     #[test]
     fn widths_never_pass_the_points_either_side() {
         for preset in WidthProfile::PRESETS {
@@ -474,6 +476,7 @@ mod tests {
         assert!((p.at(0.25).0 - 2.0).abs() < 1e-12 && (p.at(0.75).0 - 1.5).abs() < 1e-12);
     }
 
+    /// `widest()` is at least the stroke's width anywhere along the profile, even where the sides peak apart.
     #[test]
     fn widest_covers_every_width_along_the_profile() {
         let profiles = [

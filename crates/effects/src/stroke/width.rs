@@ -423,6 +423,7 @@ mod tests {
         assert!((area(&width_outline(&line(), 10.0, &p, &capped(LineCap::Square), 0.01)) - 1100.0).abs() < 1e-6);
     }
 
+    /// The Lens outline swells on its curve, and a profile with one side at zero paints only the other side.
     #[test]
     fn lens_profile_swells_smoothly_and_one_sided_profiles_stay_on_their_side() {
         // Each half of the lens rises on a cubic from 0 to full width, flat at the middle: it

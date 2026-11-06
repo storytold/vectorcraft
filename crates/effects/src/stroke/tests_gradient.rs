@@ -117,6 +117,7 @@ fn along_keeps_a_corners_colour_round_its_outside() {
     assert!((param(&sl, Point::new(95.0, 8.0)).unwrap() - 0.54).abs() < 1e-6);
 }
 
+/// An Across stroke gradient runs from the stroke's left edge to its right edge, also where a width profile moves them.
 #[test]
 fn across_runs_from_the_left_edge_to_the_right() {
     let st = stroke(10.0, StrokeGradientMode::Across);
@@ -163,6 +164,7 @@ fn an_aligned_stroke_spans_the_gradient_across_the_side_it_shows_on() {
     }
 }
 
+/// The gradient slices cover every point the stroke paints, with each join, caps, arrowheads, a profile and dashes.
 #[test]
 fn slices_cover_everything_the_stroke_paints() {
     let zig = poly(&[(0.0, 0.0), (60.0, 40.0), (0.0, 80.0), (70.0, 90.0), (75.0, 20.0)], false);
