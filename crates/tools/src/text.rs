@@ -441,8 +441,8 @@ impl TypeTool {
     }
 
     /// The other frames whose whole text is selected along with the edited frame's after Select
-    /// All in threaded text ([`Self::story`]): none once the selection is not all of the edited
-    /// frame's text.
+    /// All in threaded text ([`Self::story`]) that are still threaded with it: none once the
+    /// selection is not all of the edited frame's text.
     fn story_others(&self, cx: &ToolContext) -> Vec<NodeId> {
         let Some(id) = self.editing.filter(|id| self.story.contains(id)) else { return vec![] };
         let Some(t) = Self::text(cx, id) else { return vec![] };
@@ -450,7 +450,8 @@ impl TypeTool {
         if a != 0 || b < edit::runs_len(&t.runs) {
             return vec![];
         }
-        self.story.iter().copied().filter(|f| *f != id && Self::text(cx, *f).is_some()).collect()
+        let Some(thread) = cx.doc.text_threads.iter().find(|t| t.contains(&id)) else { return vec![] };
+        self.story.iter().copied().filter(|f| *f != id && thread.contains(f) && Self::text(cx, *f).is_some()).collect()
     }
 
     /// Move the caret (Shift keeps the anchor). Moving ends the typing session.

@@ -546,6 +546,12 @@ impl Tool for TypeTool {
                 {
                     self.start_editing(NodeId(id), b);
                     self.anchor = a;
+                    // The frames of a threaded story whose whole text Select All selected.
+                    let story: Vec<NodeId> =
+                        v.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+                    if story.len() >= 2 && story.contains(&NodeId(id)) {
+                        self.story = story;
+                    }
                 }
             }
             "prevTool" | "previousTool" => {

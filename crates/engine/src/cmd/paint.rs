@@ -433,10 +433,15 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
         && let Some((id, a, b)) = super::textedit::editing_range(s)?
         && a != b
     {
-        // After Select All in threaded text, every frame's text takes it.
+        // After Select All in threaded text, the text of every frame that is not locked, hidden or
+        // on a locked artboard takes it.
         let story = super::textedit::editing_story(s);
-        let ranges: Vec<(NodeId, usize, usize)> =
-            if story.is_empty() { vec![(id, a, b)] } else { story.iter().map(|f| (*f, 0, usize::MAX)).collect() };
+        let ranges: Vec<(NodeId, usize, usize)> = if story.is_empty() {
+            vec![(id, a, b)]
+        } else {
+            let editable = s.doc()?.doc.editable();
+            story.iter().copied().filter(|f| editable(*f)).map(|f| (f, 0, usize::MAX)).collect()
+        };
         let ids: Vec<NodeId> = ranges.iter().map(|(f, _, _)| *f).collect();
         // When the type comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
