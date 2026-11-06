@@ -816,7 +816,7 @@ impl<'a> Interp<'a> {
             },
             Bitshift => {
                 let (s, v) = (self.pop_int()?, self.pop_int()?);
-                let r = if s >= 0 { v.checked_shl(s.min(63) as u32) } else { v.checked_shr((-s).min(63) as u32) };
+                let r = if s >= 0 { v.checked_shl(s.min(63) as u32) } else { v.checked_shr(s.saturating_neg().min(63) as u32) };
                 self.push(Obj::Int(r.unwrap_or(0)))?;
             }
             True => self.push(Obj::Bool(true))?,

@@ -50,7 +50,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{HitKind, compound_part_at, hit_test, selected_hidden_at};
+use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, selected_hidden_at};
 use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::{Anchor, PathData, PathSeg, Point, Rect, Vec2};
 
@@ -1061,7 +1061,8 @@ impl DirectSelectionTool {
         }
         // A selected path's anchors or the anchors of the path under the pointer, as Highlight
         // anchors on mouse over finds them: walking every path on each hover is too slow.
-        if let Some((id, _)) = hovered_anchor(cx, p) {
+        let hit = hit_test(cx.doc, p, cx.selection_hit_options());
+        if let Some((id, _)) = hovered_anchor_with_hit(cx, p, hit.as_ref()) {
             return Some(if cx.selection.contains(id) { Cursor::DirectAnchorSelected } else { Cursor::DirectAnchor });
         }
         if hit_frame_edge(cx, p, tol).is_some() {
@@ -1073,7 +1074,7 @@ impl DirectSelectionTool {
         if m.shift || self.guide.cursor(cx, p).is_some() {
             return None;
         }
-        let h = hit_test(cx.doc, p, cx.selection_hit_options())?;
+        let h = hit?;
         let whole = cx.selection.contains(h.leaf) && cx.selection.partial(h.leaf).is_none();
         let curved = matches!(h.kind, HitKind::Stroke | HitKind::Outline) && segment_at(cx, h.leaf, p).is_some_and(|s| s.curved);
         (!whole && curved).then_some(Cursor::ReshapeSegment)
@@ -1083,9 +1084,13 @@ impl DirectSelectionTool {
 /// The anchor within a press's reach of `p` ([`ToolContext::point_tol`]), of a selected path or the
 /// path under `p`: what Highlight anchors on mouse over marks (a press there picks it).
 fn hovered_anchor(cx: &ToolContext, p: Point) -> Option<(NodeId, Point)> {
+    let hit = hit_test(cx.doc, p, cx.selection_hit_options());
+    hovered_anchor_with_hit(cx, p, hit.as_ref())
+}
+
+fn hovered_anchor_with_hit(cx: &ToolContext, p: Point, hit: Option<&Hit>) -> Option<(NodeId, Point)> {
     let tol = cx.point_tol();
-    let under =
-        hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| cx.doc.node(h.leaf).and_then(|n| compound_part_at(n, p, tol)).unwrap_or(h.leaf));
+    let under = hit.map(|h| cx.doc.node(h.leaf).and_then(|n| compound_part_at(n, p, tol)).unwrap_or(h.leaf));
     cx.selection.objects.iter().copied().filter(|id| in_scope(cx.doc, cx.isolation, *id)).chain(under).find_map(|id| {
         let path = cx.doc.node(id).and_then(editable_path)?;
         nearest_anchor(&path, p, tol).map(|(.., a)| (id, a))

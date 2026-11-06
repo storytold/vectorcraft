@@ -174,6 +174,31 @@ mod tests {
     }
 
     #[test]
+    fn hindi_ui_loads_a_devanagari_fallback_in_every_family() {
+        if FontDb::global().face_covering('ह').is_none() {
+            eprintln!("skipped: install a Devanagari font to check the native Hindi UI fallback");
+            return;
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut fonts = UiFonts::default();
+        // Conjuncts, pre-base matras, reph, nukta and mixed Latin/numeric labels.
+        let text = "हिन्दी क्षि त्रि क्रि प्रिंट फ़ाइल लेयर RGB 123";
+        frame(&ctx, &mut fonts, text);
+        fonts.finish(&ctx);
+        frame(&ctx, &mut fonts, text);
+        let families: Vec<_> = ctx.fonts(|f| f.definitions().families.keys().cloned().collect());
+        for family in families {
+            let id = FontId::new(13.0, family.clone());
+            for c in text.chars().filter(|c| !c.is_whitespace()) {
+                assert!(ctx.fonts_mut(|f| f.has_glyph(&id, c)), "{family:?}: missing {c}");
+            }
+            let galley = ctx.fonts_mut(|f| f.layout_no_wrap(text.into(), id, egui::Color32::WHITE));
+            assert!(galley.rect.width().is_finite() && galley.rect.width() > 0.0);
+        }
+    }
+
+    #[test]
     fn japanese_renders_with_the_craft_fonts_without_installed_fonts() {
         if !vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_japanese()) {
             eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");

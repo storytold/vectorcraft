@@ -981,3 +981,36 @@ fn removing_shared_and_unshared_rows_removes_only_the_shared_ones_elsewhere() {
     assert!(node(&s, a).appearance.items.is_empty(), "a loses both");
     assert_eq!(node(&s, b).appearance.items, fills_b, "b loses only its stroke, keeping both fills");
 }
+
+#[test]
+fn invalid_aligned_flags_leave_the_appearance_alone() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist"}));
+    let before = node(&s, id);
+    let before_undo = s.doc().unwrap().history.undo.len();
+    for (command, params) in [
+        ("appearance.setItem", json!({"index": 0, "opacity": 50, "aligned": "true"})),
+        ("appearance.removeItem", json!({"index": 0, "aligned": 1})),
+        ("appearance.duplicateItem", json!({"index": 0, "aligned": "false"})),
+        ("appearance.moveItem", json!({"from": 0, "to": 1, "aligned": 0})),
+        ("stroke.set", json!({"item": 1, "weight": 5, "aligned": "true"})),
+        ("stroke.set", json!({"weight": 5, "aligned": "true"})),
+        ("transparency.set", json!({"item": 0, "opacity": 50, "aligned": "true"})),
+        ("effect.apply", json!({"effect": "distort.roughen", "item": 0, "aligned": "true"})),
+        ("effect.remove", json!({"index": 0, "aligned": "true"})),
+    ] {
+        assert!(s.execute(command, &params).is_err(), "{command} accepted {params}");
+        assert_eq!(node(&s, id), before, "{command} changed the object");
+        assert_eq!(s.doc().unwrap().history.undo.len(), before_undo, "{command} recorded an undo step");
+    }
+    // Null, as for every command, is the same as leaving `aligned` out.
+    run(&mut s, "appearance.removeItem", json!({"index": 0, "aligned": null}));
+    assert_eq!(node(&s, id).appearance.items.len(), before.appearance.items.len() - 1);
+    // A Pathfinder effect on loose objects groups them first: the flag is checked before that.
+    let other = rect(&mut s, 250.0);
+    run(&mut s, "select.set", json!({"ids": [id.0, other.0]}));
+    let before_undo = s.doc().unwrap().history.undo.len();
+    assert!(s.execute("effect.apply", &json!({"effect": "pathfinder.add", "aligned": "true"})).is_err());
+    assert_eq!(s.doc().unwrap().history.undo.len(), before_undo, "grouped the objects");
+}
