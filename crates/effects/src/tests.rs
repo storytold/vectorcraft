@@ -1238,6 +1238,17 @@ fn a_distance_parameters_range_comes_from_its_documentation() {
     assert_eq!(length_range("no.such", "edgeWidth"), None);
 }
 
+/// A number documented with a range and no unit (Radial Blur's `amount: 1..100`) has that range
+/// (#5936); a distance or a pixel size, and a number documented without one, have none here.
+#[test]
+fn a_number_parameters_range_comes_from_its_documentation() {
+    assert_eq!(number_range("blur.radial", "amount"), Some(1.0..=100.0));
+    assert_eq!(number_range("stylize.glowingEdges", "edgeWidth"), None, "a distance in pt");
+    assert_eq!(number_range("pixelate.colorHalftone", "maxRadius"), None, "a size in px");
+    assert_eq!(number_range("blur.gaussian", "radius"), None);
+    assert_eq!(number_range("no.such", "amount"), None);
+}
+
 #[test]
 fn color_halftones_radius_is_in_raster_pixels_not_a_distance() {
     // Pixels of the Document Raster Effects resolution, as public documentation gives it (#3260):

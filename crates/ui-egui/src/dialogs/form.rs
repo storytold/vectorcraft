@@ -411,9 +411,10 @@ pub(crate) fn params(d: &Dialog) -> Value {
 pub(super) type Choices = &'static [(&'static str, &'static str)];
 
 /// Effects whose dialogs give their number fields spinner arrows (#5367, #5368): Drop Shadow's
-/// and the glows' Opacity, offsets and Blur, which are stepped more than typed.
+/// and the glows' Opacity, offsets and Blur, and the Gaussian Blur's Radius and Radial Blur's
+/// Amount (#5935, #5936), which are stepped more than typed.
 pub(super) fn has_spinners(effect: &str) -> bool {
-    matches!(effect, "stylize.dropShadow" | "stylize.outerGlow" | "stylize.innerGlow")
+    matches!(effect, "stylize.dropShadow" | "stylize.outerGlow" | "stylize.innerGlow" | "blur.gaussian" | "blur.radial")
 }
 
 /// Generic editor for command/effect parameters: numbers, booleans, strings and colours; the
@@ -454,7 +455,8 @@ pub(super) fn param_fields(
                     // An effect's documented range keeps the field to the distance it applies.
                     let range = vectorcraft_effects::length_range(&d.str("__effect"), &k);
                     if spinners {
-                        let bounds = range.unwrap_or(if k == "blur" { 0.0..=f64::INFINITY } else { crate::widgets::ANY });
+                        // A blur or a blur radius stops at 0.
+                        let bounds = range.unwrap_or(if matches!(k.as_str(), "blur" | "radius") { 0.0..=f64::INFINITY } else { crate::widgets::ANY });
                         let value = d.fields.contains_key(&k).then(|| d.f64(&k, 0.0));
                         if let Some(x) = crate::widgets::spin_length_within(ui, ("dlg-len", k.as_str()), value, unit, 140.0, bounds) {
                             d.fields.insert(k.clone(), json!(x));
@@ -489,7 +491,13 @@ pub(super) fn param_fields(
                 }
                 match v {
                     Value::Number(n) if spinners => {
-                        let range = if k == "opacity" { 0.0..=100.0 } else { crate::widgets::ANY };
+                        // Opacity is a percentage; another number stops at the ends its effect
+                        // documents (Radial Blur's Amount, 1..100).
+                        let range = if k == "opacity" {
+                            0.0..=100.0
+                        } else {
+                            vectorcraft_effects::number_range(&d.str("__effect"), &k).unwrap_or(crate::widgets::ANY)
+                        };
                         if let Some(x) = crate::widgets::spin_range(ui, ("fx-num", k.as_str()), n.as_f64(), range, "", 3, 140.0, 1.0) {
                             d.fields.insert(k.clone(), typed_number(x));
                             changed = true;

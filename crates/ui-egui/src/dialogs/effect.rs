@@ -1042,6 +1042,78 @@ mod tests {
         assert_eq!(fx.params.get("color"), Some(&json!("#00ff00")), "Outer Glow takes the picked colour");
     }
 
+    /// Gaussian Blur's Radius and Radial Blur's Amount have spinner arrows too (#5935, #5936): one
+    /// each, beside the only number field. The radius steps by one unit and stops at 0; the amount
+    /// steps by one and stops at the 1 and 100 its effect documents. OK applies the stepped value.
+    #[test]
+    fn blur_dialogs_have_spinner_arrows() {
+        for (effect, key, start, up, low, high) in
+            [("blur.gaussian", "radius", 5.0, 6.0, 0.0, None), ("blur.radial", "amount", 10.0, 11.0, 1.0, Some(100.0))]
+        {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+            app.run("select.all", json!({})).unwrap();
+            app.run("effect.dialog", json!({"effect": effect})).unwrap();
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            crate::theme::install_fonts(&ctx);
+            crate::theme::apply(&ctx, Default::default());
+            let time = std::cell::Cell::new(0.0);
+            let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+                time.set(time.get() + 0.05);
+                let mut out =
+                    ctx.run_ui(egui::RawInput { time: Some(time.get()), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+                out.textures_delta.clear();
+                let spinners: Vec<egui::Rect> = out
+                    .platform_output
+                    .accesskit_update
+                    .map(|u| u.nodes)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter(|(_, n)| n.label() == Some("Step up or down"))
+                    .filter_map(|(_, n)| n.bounds())
+                    .map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+                    .collect();
+                spinners
+            };
+            for _ in 0..6 {
+                frame(&mut app, vec![]);
+            }
+            let spinners = frame(&mut app, vec![]);
+            assert_eq!(spinners.len(), 1, "{effect}: a spinner beside its number field: {spinners:?}");
+            let arrows = spinners[0];
+            let click = |app: &mut VectorcraftApp, up: bool| {
+                let pos = arrows.center() + egui::vec2(0.0, if up { -arrows.height() / 4.0 } else { arrows.height() / 4.0 });
+                let button =
+                    |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+                frame(app, vec![egui::Event::PointerMoved(pos), button(true)]);
+                frame(app, vec![button(false)]);
+                frame(app, vec![]);
+            };
+            let field = |app: &VectorcraftApp| app.ui.dialog.as_ref().unwrap().fields.get(key).and_then(Value::as_f64);
+            assert_eq!(field(&app), Some(start), "{effect}: the default");
+            click(&mut app, true);
+            assert_eq!(field(&app), Some(up), "{effect}: the up arrow steps {key} up");
+            app.ui.dialog.as_mut().unwrap().fields.insert(key.into(), json!(low));
+            frame(&mut app, vec![]);
+            click(&mut app, false);
+            assert_eq!(field(&app), Some(low), "{effect}: {key} stops at {low}");
+            if let Some(high) = high {
+                app.ui.dialog.as_mut().unwrap().fields.insert(key.into(), json!(high));
+                frame(&mut app, vec![]);
+                click(&mut app, true);
+                assert_eq!(field(&app), Some(high), "{effect}: {key} stops at {high}");
+            }
+            click(&mut app, false);
+            let applied = field(&app);
+            super::super::confirm(&mut app).unwrap();
+            let st = app.session.doc().unwrap();
+            let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
+            assert_eq!(fx.params.get(key).and_then(Value::as_f64), applied, "{effect}: OK applies it");
+        }
+    }
+
     /// Effect > Stylize > Drop Shadow and Outer Glow: Opacity, the offsets, Blur and Darkness have
     /// spinner arrows (#5367, #5368). A click on the top half steps up, on the bottom half down;
     /// Opacity stops at 100 % and Blur at 0, and OK applies the stepped values.

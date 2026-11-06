@@ -55,13 +55,21 @@ pub fn raster_px_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f
     documented_range(id, key, "px")
 }
 
-/// The range parameter `key` of effect `id` is documented with in `unit` (`key: unit lo..hi`).
+/// The range of number parameter `key` of effect `id` when its documentation gives one with no
+/// unit (`{amount: 1..100 (10; …), …}`); `None` otherwise.
+pub fn number_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    documented_range(id, key, "")
+}
+
+/// The range parameter `key` of effect `id` is documented with in `unit` (`key: unit lo..hi`;
+/// `key: lo..hi` for an empty `unit`).
 fn documented_range(id: &str, key: &str, unit: &str) -> Option<std::ops::RangeInclusive<f64>> {
     let doc = catalog_index().get(id)?.params;
     let starts = |at: usize| doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| c == '{' || c == ' ');
     let rest = doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
         let rest = doc.get(at + key.len()..)?;
-        rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?.strip_prefix(unit)?.strip_prefix(' ')
+        let rest = rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?;
+        if unit.is_empty() { Some(rest) } else { rest.strip_prefix(unit)?.strip_prefix(' ') }
     })?;
     let (lo, hi) = rest.split_whitespace().next()?.split_once("..")?;
     let (lo, hi) = (lo.parse::<f64>().ok()?, hi.trim_end_matches(',').parse::<f64>().ok()?);
