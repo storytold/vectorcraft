@@ -962,6 +962,18 @@ fn a_lent_selection_tool_moves_the_instance_of_a_picked_object() {
     assert!(s.doc().unwrap().selection.symbol_part.is_some());
 }
 
+/// A drag that moved nothing leaves Transform Again repeating the last real transformation.
+#[test]
+fn a_refused_drag_of_a_picked_object_is_not_kept_for_transform_again() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    direct(&mut s, (80.0, 30.0), (80.0, 30.0), Mods::default());
+    assert!(s.doc().unwrap().selection.symbol_part.is_some());
+    direct(&mut s, (80.0, 30.0), (120.0, 60.0), Mods::default());
+    assert!(s.doc().unwrap().last_transform.is_none(), "{:?}", s.doc().unwrap().last_transform);
+    assert_eq!(s.doc().unwrap().selection.objects, [inst]);
+}
+
 /// A bad `target` or `aligned` on a paint command is refused with an object picked too.
 #[test]
 fn bad_paint_parameters_leave_a_picked_object_alone() {
