@@ -492,11 +492,14 @@ pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// [`constrain_link`]'s toggle, made over `at`: the Control bar keeps the link's place between W
-/// and H but makes it after H, so Tab goes from W straight to H and finds the link after it.
+/// and H but makes it after H, so Tab goes from W straight to H and finds the link after it. With
+/// the keyboard on it, Space or Enter toggles it, as a dialog's button takes them.
 pub fn constrain_link_at(app: &mut VectorcraftApp, ui: &mut Ui, at: egui::Response) {
     let on = app.session.prefs.constrain_proportions;
     let tip = tl!("Constrain Width and Height Proportions");
-    if widgets::paint_icon_button(ui, at, if on { "link" } else { "link-2-off" }, tip, on).clicked() {
+    let keyed = at.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space) | i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    if widgets::paint_icon_button(ui, at, if on { "link" } else { "link-2-off" }, tip, on).clicked() || keyed {
         set_pref(app, "constrainProportions", !on);
     }
 }

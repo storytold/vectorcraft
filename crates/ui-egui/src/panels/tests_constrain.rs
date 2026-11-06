@@ -322,6 +322,12 @@ fn one_tab_moves_from_a_field_to_the_next() {
     let mut app = rect_app();
     tab_then_type(&mut app, crate::chrome::control_bar, "100 pt", "200");
     assert_eq!(size(&app), (100.0, 200.0), "Control bar: Tab went from W to H");
+    // The Artboard tool's Control bar puts the link after its fields too: Tab goes from W to H.
+    let mut app = rect_app();
+    app.select_tool("artboard");
+    tab_then_type(&mut app, crate::chrome::control_bar, "400 pt", "200");
+    let r = app.session.doc().unwrap().doc.artboards[0].rect;
+    assert_eq!((r.width().round(), r.height().round()), (400.0, 200.0), "Artboard Control bar: Tab went from W to H");
     // Shift+Tab goes back one field, one press too: from W to X in the panels.
     for (name, draw) in [("Transform panel", transform::show as Draw), ("Properties", properties::transform_section as Draw)] {
         let mut app = rect_app();
@@ -356,6 +362,16 @@ fn the_control_bar_link_toggles_by_click() {
         frame(&mut app, events);
     }
     assert!(app.session.prefs.constrain_proportions, "the click toggled the link");
+    // Tab from H finds the link, and Space or Enter toggles it, as a dialog's button takes them.
+    let h = at("50 pt").center();
+    let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    let tab = Event::Key { key: Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    let enter = Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    for events in [vec![Event::PointerMoved(h), button(h, true), button(h, false)], vec![], vec![tab], vec![], vec![enter], vec![]] {
+        frame(&mut app, events);
+    }
+    assert!(!app.session.prefs.constrain_proportions, "Enter on the focused link toggled it");
+    assert_eq!(size(&app), (100.0, 50.0), "and the fields kept their values");
 }
 
 /// Type `value` into the field of what `draw` shows that shows `field` after one Tab, and press
