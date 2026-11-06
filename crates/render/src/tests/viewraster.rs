@@ -182,9 +182,10 @@ fn pans_within_a_cropped_rasters_margin_draw_it_kept() {
 
 /// A frame counts the art it draws in a way that depends on its size: an effect raster cropped to
 /// it or made at a lower resolution, drawn from the raster kept as well as made; a filter layer
-/// cropped to it or made at a lower resolution; on a single-threaded renderer any filter layer; and
-/// a mesh past the mesh buffer. Art with a raster of its own whole, and a filter layer that stays
-/// inside the frame, are not counted.
+/// cropped to it or made at a lower resolution; any filter layer drawn on a single-threaded context,
+/// as on a single-threaded renderer or in a group drawn offscreen; and a mesh past the mesh buffer.
+/// Art with a raster of its own whole, and a filter layer that stays inside the frame, are not
+/// counted.
 #[test]
 fn a_frame_counts_the_art_it_draws_by_its_size() {
     let effect = |id: &str, params: serde_json::Value| backdrop(&[(id, params)]).0;
@@ -203,6 +204,19 @@ fn a_frame_counts_the_art_it_draws_by_its_size() {
     let outer_glow = effect("stylize.outerGlow", json!({"blur": 8}));
     let glow = effect("stylize.innerGlow", json!({"blur": 8}));
     let wide_glow = effect("stylize.innerGlow", json!({"blur": 2000}));
+    let group_glow = {
+        let mut d = Document::new(595.0, 842.0);
+        let basic = |c: Color| Appearance::basic(Paint::solid(c), Paint::None, 0.0);
+        let wide = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 595.0, 842.0)), basic(Color::rgb(0.9, 0.8, 0.3)));
+        let mut child = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(200.0, 200.0, 330.0, 500.0)), basic(Color::rgb(0.1, 0.3, 0.9)));
+        child.appearance.effects = vec![Effect { id: "stylize.innerGlow".into(), params: json!({"blur": 40}), visible: true }];
+        child.blend = vectorcraft_doc::color::BlendMode::Multiply;
+        let mut group = Node::group(d.alloc_id(), vec![std::sync::Arc::new(wide), std::sync::Arc::new(child)]);
+        group.isolate = true;
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, group).unwrap();
+        d
+    };
     let cases = [
         ("a whole blur raster", &blur, 1.0, (640, 900), 2, false),
         ("a blur raster cropped to the frame", &blur, 10.0, (256, 128), 2, true),
@@ -214,6 +228,7 @@ fn a_frame_counts_the_art_it_draws_by_its_size() {
         ("a filter layer past the frame's edge", &glow, 1.0, (256, 128), 2, true),
         ("a filter layer at a lower resolution", &wide_glow, 1.0, (640, 900), 2, true),
         ("a filter layer on a single-threaded renderer", &glow, 1.0, (640, 900), 0, true),
+        ("a filter layer in a group drawn offscreen", &group_glow, 1.0, (640, 900), 2, true),
     ];
     for (name, d, zoom, size, threads, counted) in cases {
         let opts = RenderOptions::default();

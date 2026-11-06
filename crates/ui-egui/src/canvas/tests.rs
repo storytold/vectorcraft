@@ -9468,25 +9468,46 @@ fn worker_frames_match_a_fresh_render_through_a_session() {
 
 /// A pan over art the frame's size decides stays within one level of a fresh render of the frame,
 /// because it renders whole: a full-page raster effect whose raster a part of the frame would make
-/// at another scale, and which the worker does not keep for the pan to copy from.
+/// at another scale, and a group drawn offscreen across the exposed part's edge with an Inner Glow
+/// child inside the part, whose filter layer starts at another pixel in the part. The worker does
+/// not keep such a frame for the pan to copy from.
 #[test]
 fn a_pan_over_art_the_frame_size_decides_renders_whole() {
     let (_, key) = pan_doc();
-    let cases = [
-        ("Gaussian Blur 500 pt", "blur.gaussian", json!({"radius": 500}), 2.0, (1440, 870)),
-        ("Craquelure", "texture.craquelure", json!({}), 10.0, (3840, 2160)),
-    ];
-    for (name, effect, params, zoom, (w, h)) in cases {
+    let effect = |effect: &str, params: serde_json::Value| {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 595, "height": 842})).unwrap();
         let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 595, "height": 842})).unwrap()["id"].clone();
         app.run("paint.setFill", json!({"ids": [id], "color": "#1a4de6"})).unwrap();
         app.run("effect.apply", json!({"effect": effect, "ids": [id], "params": params})).unwrap();
-        let doc = app.session.active().unwrap().doc.clone();
+        app.session.active().unwrap().doc.clone()
+    };
+    let group_glow = {
+        use vectorcraft_doc::Appearance;
+        use vectorcraft_doc::color::{BlendMode, Color, Paint};
+        use vectorcraft_geom::{Rect, shapes::rectangle};
+        let mut d = vectorcraft_doc::Document::new(1600.0, 1200.0);
+        let basic = |c: Color| Appearance::basic(Paint::solid(c), Paint::None, 0.0);
+        let wide = Node::path(d.alloc_id(), rectangle(Rect::new(100.0, 100.0, 1590.0, 900.0)), basic(Color::rgb(0.9, 0.8, 0.3)));
+        let mut child = Node::path(d.alloc_id(), rectangle(Rect::new(1453.0, 200.0, 1583.0, 500.0)), basic(Color::rgb(0.1, 0.3, 0.9)));
+        child.appearance.effects = vec![vectorcraft_doc::Effect { id: "stylize.innerGlow".into(), params: json!({"blur": 40}), visible: true }];
+        child.blend = BlendMode::Multiply;
+        let mut group = Node::group(d.alloc_id(), vec![std::sync::Arc::new(wide), std::sync::Arc::new(child)]);
+        group.isolate = true;
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, group).unwrap();
+        std::sync::Arc::new(d)
+    };
+    let cases = [
+        ("Gaussian Blur 500 pt", effect("blur.gaussian", json!({"radius": 500})), (-200.0, -200.0), 2.0, (1440, 870)),
+        ("Craquelure", effect("texture.craquelure", json!({})), (-200.0, -200.0), 10.0, (3840, 2160)),
+        ("Inner Glow in a group drawn offscreen", group_glow, (0.0, 0.0), 1.0, (1600, 1200)),
+    ];
+    for (name, doc, (x, y), zoom, (w, h)) in cases {
         let job = |dx: f64| {
             let mut job = pan_job(&doc, &key, (dx, 0.0));
             (job.key.w, job.key.h, job.w, job.h, job.key.zoom) = (w, h, w, h, zoom);
-            job.view = Affine::translate((-200.0 + dx, -200.0)) * Affine::scale(zoom);
+            job.view = Affine::translate((x + dx, y)) * Affine::scale(zoom);
             job
         };
         let mut r = vectorcraft_render::Renderer::new();

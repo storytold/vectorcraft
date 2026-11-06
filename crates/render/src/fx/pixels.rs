@@ -575,10 +575,10 @@ impl Renderer {
         composite: Option<(vectorcraft_doc::color::BlendMode, f32)>,
         draw: impl FnOnce(&mut Self, &mut RenderContext, &Frame, Option<(vectorcraft_doc::color::BlendMode, f32)>),
     ) {
-        // A filter layer's coarser grid starts where its context does: at the corner of a frame
+        // A filter layer's coarser grid starts where its context does: at the corner of a context
         // drawn single-threaded, and at the frame's edge for a region cropped to the frame.
         let screen = Rect::new(0.0, 0.0, f64::from(ctx.width()), f64::from(ctx.height()));
-        self.stats.view_sized += usize::from(self.threads == 0 || f.view.transform_rect_bbox(reach).union(screen) != screen);
+        self.stats.view_sized += usize::from(!f.mt || f.view.transform_rect_bbox(reach).union(screen) != screen);
         if !f.mt {
             return self.inside_layer(|r| draw(r, ctx, f, composite));
         }
