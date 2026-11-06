@@ -4632,6 +4632,25 @@ fn swatch_names_are_found_past_data_in_versioned_content_that_does_not_end() {
     }
 }
 
+/// A search for where data stops that found nothing outside a section doesn't stop a later
+/// section's data at that section's end, so the named color after it still takes its name first.
+/// The `/Binary` holds a group, where the reader doesn't take what follows its key as data.
+#[test]
+fn swatch_names_are_found_past_data_in_a_section_after_a_search_outside_sections_found_nothing() {
+    let sea = format!("0 1 1 0 (Sea) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let before = "/Binary :\nu\n/ASCII85Decode ,\nU\n;\n";
+    for section in [
+        "%AI17_Begin_Content_if_version_gt:24 4\n%AI17_Alternate_Content\n/Binary : /ASCII85Decode ,\n%_(]<[%\n%AI17_End_Versioned_Content\n",
+        "%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n%_(]<[%\n%AI11_EndTextDocument\n",
+    ] {
+        let art_text = format!("{before}{section}{sea}");
+        let body = format!("{}{}", DOTS.replace("(Dots)", "(Sea\\n1)"), layer(&art_text));
+        let d = read(stream(&body).as_bytes()).unwrap().doc;
+        let names: Vec<&str> = d.patterns.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["Sea 2"], "{art_text}");
+    }
+}
+
 /// The names the swatches take are found past the same data: a named color after it still takes
 /// its name first, and the pattern named after it is numbered.
 #[test]

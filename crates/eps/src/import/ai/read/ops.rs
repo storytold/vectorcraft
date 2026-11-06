@@ -1143,8 +1143,9 @@ pub(super) struct Dictionaries<'s> {
     name: Option<&'s [u8]>,
     /// Whether the string just before the token taken is a key that ASCII85 data follows.
     string_key: bool,
-    /// The rest of the data has no `~>` or marker to stop at, so they aren't searched for again.
-    no_end: bool,
+    /// The end markers of the sections being scanned (`None`: no section) where the rest of the data
+    /// had no `~>` or marker to stop at, so they aren't searched for again in those sections.
+    no_end: Vec<Option<String>>,
 }
 
 /// Where the ASCII85 data at the start of `rest` stops: just past its `~>`, or at the comment that
@@ -1176,10 +1177,11 @@ impl<'s> Dictionaries<'s> {
     /// Take `tok`, the token `lex` just gave, and skip the ASCII85 data that follows it, up to where
     /// [`data_end`] stops for `section`, so the scan still finds that section's markers.
     pub(super) fn pass(&mut self, tok: &super::Tok<'s>, lex: &mut super::Lexer<'s>, section: Option<(&str, &str)>) {
-        if self.data_follows(tok) && !self.no_end {
+        let end = section.map(|(_, end)| end);
+        if self.data_follows(tok) && !self.no_end.iter().any(|e| e.as_deref() == end) {
             match data_end(lex.rest(), section) {
                 Some(stop) => lex.seek(lex.offset() + stop),
-                None => self.no_end = true,
+                None => self.no_end.push(end.map(str::to_owned)),
             }
         }
     }
