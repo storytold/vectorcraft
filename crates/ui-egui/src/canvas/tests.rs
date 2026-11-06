@@ -2879,6 +2879,7 @@ fn pixel_grid_shows_in_pixel_preview_from_600_percent() {
 #[test]
 fn grid_and_guides_take_their_preferences() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.canvas.worker_started = true; // render on this thread
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
     app.ui.view.grid = true;
