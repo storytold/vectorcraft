@@ -3487,7 +3487,7 @@ fn an_open_frame_whose_ends_meet_is_written_as_its_outlines() {
     let open = |r: Rect| {
         let mut frame = shapes::rectangle(r);
         frame.subpaths[0].closed = false;
-        let start = frame.subpaths[0].anchors[0].clone();
+        let start = frame.subpaths[0].anchors[0];
         frame.subpaths[0].anchors.push(start);
         frame
     };

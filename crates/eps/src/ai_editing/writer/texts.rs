@@ -445,7 +445,7 @@ fn strong_direction(c: char) -> Option<bool> {
 /// document is one path), of no more segments than the reader reads.
 fn segments(path: &PathData) -> Option<Vec<[f64; 8]>> {
     let mut drawn = path.subpaths.iter().filter(|sp| !sp.anchors.is_empty());
-    let sp = drawn.next().filter(|sp| sp.anchors.len() > 1)?;
+    let sp = drawn.next().filter(|sp| sp.anchors.len() > 1 && sp.segment_count() <= crate::import::MAX_SEGMENTS)?;
     if drawn.next().is_some() {
         return None;
     }
