@@ -164,8 +164,11 @@ impl Renderer {
                 .texts
                 .get_if(&previous, self.stamp, |(node, _)| {
                     let NodeKind::Text(old) = &node.kind else { return false };
-                    // Layout and character stroke outlines are in text space. Only the transform
-                    // changed when the remaining text attributes still compare equal.
+                    // Shrink Text to Fit searches document-point sizes, so a scale change can
+                    // alter layout. Translation leaves the glyphs in text space unchanged.
+                    if old.xf.as_coeffs()[..4] != t.xf.as_coeffs()[..4] {
+                        return false;
+                    }
                     let mut comparable = (**old).clone();
                     comparable.xf = t.xf;
                     comparable == *t
