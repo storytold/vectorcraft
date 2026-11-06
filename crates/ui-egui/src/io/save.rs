@@ -172,7 +172,7 @@ pub(super) fn target_path_keeping(
 }
 
 /// Keep the active document's saved view current before a save (native files reopen at it), and
-/// its active artboard ([`remember_active_artboard`]).
+/// each document's active artboard ([`remember_active_artboard`]).
 pub fn remember_view(app: &mut VectorcraftApp) {
     remember_active_artboard(app);
     let Some(v) = app.view().copied().filter(|v| v.fitted) else { return };
@@ -181,14 +181,17 @@ pub fn remember_view(app: &mut VectorcraftApp) {
     }
 }
 
-/// Keep the active document's active artboard current (a `.ai` file saved or exported names it
-/// as its active one): the view's, an index past the last artboard being the last one as in the
-/// Artboards panel; `None` without a view.
+/// Keep every open document's active artboard current (a `.ai` file saved or exported names it as
+/// its active one, also in Export All Open Documents): its own view's, an index past the last
+/// artboard being the last one as in the Artboards panel; `None` without a view.
 pub fn remember_active_artboard(app: &mut VectorcraftApp) {
-    let index = app.view().map(|v| v.artboard);
-    if let Some(st) = app.session.active_mut() {
-        let last = st.doc.artboards.len().saturating_sub(1);
-        st.active_artboard = index.and_then(|i| st.doc.artboards.get(i.min(last))).map(|a| a.id);
+    let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+    for uid in uids {
+        let index = app.view_uids.iter().position(|u| *u == uid).and_then(|k| app.views.get(k)).map(|v| v.artboard);
+        if let Some(st) = app.session.document_mut(uid) {
+            let last = st.doc.artboards.len().saturating_sub(1);
+            st.active_artboard = index.and_then(|i| st.doc.artboards.get(i.min(last))).map(|a| a.id);
+        }
     }
 }
 

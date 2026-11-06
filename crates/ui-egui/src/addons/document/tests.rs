@@ -71,6 +71,39 @@ fn ai_copies_name_the_views_active_artboard() {
     }
 }
 
+/// Export All Open Documents as `.ai` names each document's own active artboard, also for a
+/// document whose artboard changed in its view after the last command and that is not active.
+#[test]
+fn export_all_names_each_documents_active_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    for name in ["first", "second"] {
+        app.run("file.new", json!({"width": 60, "height": 40, "artboards": 3, "name": name})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    }
+    app.sync_views();
+    // Choosing a tab and an artboard runs no command.
+    assert!(app.session.set_active(0));
+    if let Some(v) = app.view_mut() {
+        v.artboard = 2;
+    }
+    assert!(app.session.set_active(1));
+    if let Some(v) = app.view_mut() {
+        v.artboard = 1;
+    }
+    let dir = folder("export-all-active-artboards");
+    let r = app.run(EXPORT_ALL, json!({"folder": dir, "format": "ai"})).unwrap();
+    let opts = vectorcraft_engine::cmd::fileio::LoadOptions { native: false, ..Default::default() };
+    let written = r["files"].as_array().unwrap();
+    assert_eq!(written.len(), 2, "{r}");
+    for (f, artboard) in written.iter().zip([2, 1]) {
+        let bytes = std::fs::read(f["path"].as_str().unwrap()).unwrap();
+        let l = vectorcraft_engine::cmd::fileio::load_with("a.ai", &bytes, &opts).unwrap();
+        assert!(l.editing_data && !l.restored, "{:?}", l.warnings);
+        assert_eq!(l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id)), Some(artboard), "{}", f["title"]);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn an_unsaved_document_asks_for_a_folder() {
     let dir = folder("picked");
