@@ -404,6 +404,66 @@ fn lower_marker_keeps_each_first_line_position_in_one_undo_step() {
     assert_eq!(indent_values(&app, 1), (40.0, 28.0));
 }
 
+/// After Select All in threaded text, a marker change keeps the left indent and first-line position
+/// of each paragraph in every frame of the story, when the edited frame's paragraphs agree and
+/// another frame's differ.
+#[test]
+fn indent_markers_after_select_all_keep_each_story_paragraphs_indents() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+    let story = (1..=12).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+    let a = app.run("text.create", json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 200, "height": 60}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    app.run("text.setFormat", json!({"ids": [a], "leftIndent": 24, "firstLineIndent": 12})).unwrap();
+    let b = app.run("text.thread.add", json!({"from": a, "rect": [300, 10, 200, 250]})).unwrap()["id"].as_u64().unwrap();
+    app.run("text.setFormat", json!({"ids": [b], "leftIndent": 60, "firstLineIndent": -10})).unwrap();
+    let paragraphs = |app: &VectorcraftApp| -> Vec<(u64, f64, f64)> {
+        let st = app.session.active().unwrap();
+        [a, b]
+            .into_iter()
+            .flat_map(|id| match &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+                NodeKind::Text(t) => {
+                    (0..t.paragraph_count()).map(|i| (id, t.para_at(i).left_indent, t.para_at(i).first_line_indent)).collect::<Vec<_>>()
+                }
+                _ => panic!("not text"),
+            })
+            .collect()
+    };
+    assert!(paragraphs(&app).iter().any(|p| p.1 == 24.0) && paragraphs(&app).iter().any(|p| p.1 == 60.0), "{:?}", paragraphs(&app));
+    let select_all = |app: &mut VectorcraftApp| {
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+        app.run("select.all", json!({})).unwrap();
+        assert_eq!(super::super::character::text_story(app), Some(vec![vectorcraft_doc::NodeId(a), vectorcraft_doc::NodeId(b)]));
+    };
+    select_all(&mut app);
+
+    let before = paragraphs(&app);
+    let (node, para, span) = current_para(&app).unwrap();
+    assert_eq!(node.id.0, a);
+    let targets = indent_targets(&app, &node);
+    set_marker(&mut app, IndentMarker::Upper, 70.0, &para, span, &targets, false);
+    let after = paragraphs(&app);
+    assert_eq!(after.len(), before.len());
+    for (was, now) in before.iter().zip(&after) {
+        assert_eq!((now.1, now.1 + now.2), (was.1, 70.0), "a paragraph of frame {} keeps its left indent: {after:?}", now.0);
+    }
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(paragraphs(&app), before);
+
+    select_all(&mut app);
+    let (node, para, span) = current_para(&app).unwrap();
+    let targets = indent_targets(&app, &node);
+    set_marker(&mut app, IndentMarker::Lower, 40.0, &para, span, &targets, false);
+    let after = paragraphs(&app);
+    assert_eq!(after.len(), before.len());
+    for (was, now) in before.iter().zip(&after) {
+        assert_eq!((now.1, now.1 + now.2), (40.0, was.1 + was.2), "a paragraph of frame {} keeps its first-line position: {after:?}", now.0);
+    }
+}
+
 #[test]
 fn lower_marker_bounds_cover_each_touched_first_line() {
     let targets = [IndentTarget { id: 1, start: 0, left: 24.0, first_line: -20.0 }, IndentTarget { id: 1, start: 4, left: 24.0, first_line: 280.0 }];

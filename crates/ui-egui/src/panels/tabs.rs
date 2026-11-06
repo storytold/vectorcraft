@@ -72,11 +72,18 @@ fn append_indent_targets(node: &Node, range: std::ops::Range<usize>, targets: &m
     }));
 }
 
-/// Paragraphs touched by the Type selection, or all paragraphs of selected text objects.
+/// Paragraphs touched by the Type selection (every paragraph of every frame after Select All in
+/// threaded text), or all paragraphs of selected text objects.
 fn indent_targets(app: &VectorcraftApp, node: &Node) -> Vec<IndentTarget> {
     let mut targets = Vec::new();
     if let Some((_, a, b)) = super::character::text_editing(app) {
-        if let NodeKind::Text(text) = &node.kind {
+        if let (Some(story), Some(st)) = (super::character::text_story(app), app.session.active()) {
+            for frame in story.iter().filter_map(|id| st.doc.node(*id)) {
+                if let NodeKind::Text(text) = &frame.kind {
+                    append_indent_targets(frame, 0..text.paragraph_count(), &mut targets);
+                }
+            }
+        } else if let NodeKind::Text(text) = &node.kind {
             append_indent_targets(node, text.paragraphs_in(a, b), &mut targets);
         }
     } else if let Some(st) = app.session.active() {

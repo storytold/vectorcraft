@@ -9,7 +9,8 @@
 //! Fields: `wordMin`, `wordDesired`, `wordMax` (0..1000), `letterMin`, `letterDesired`,
 //! `letterMax` (-100..500), `glyphMin`, `glyphDesired`, `glyphMax` (50..200), `autoLeading`
 //! (0..500), `singleWord` (`fullJustify`, `alignLeft`, `alignCenter`, `alignRight`) and `preview`,
-//! with `__initial` (the values it opened with) and `__targets` (the type and range it acts on).
+//! with `__initial` (the values it opened with), `__targets` (the type and range it acts on) and,
+//! after Select All in threaded text, `__story` (the edited frame, whose story it acts on).
 //!
 //! Behaviour reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/adjust-word-and-letterspacing-in-justified-text.html>.
@@ -29,6 +30,9 @@ pub const KIND: &str = "justification";
 const INITIAL: &str = "__initial";
 /// The field holding the `ids`, `start` and `end` the dialog's `text.setFormat` acts on.
 const TARGETS: &str = "__targets";
+/// The field holding the frame the Type tool edits when the dialog opened after Select All in
+/// threaded text: the dialog then acts on that frame's story as the document holds it.
+const STORY: &str = "__story";
 const CMD: &str = "text.setFormat";
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
@@ -85,13 +89,12 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     crate::panels::character::text_style(app).ok_or("select some type first")?;
     // While typing, the dialog acts on the paragraphs of the text being edited.
     let mut targets = json!({});
+    let mut story = None;
     if let Some((id, a, b)) = crate::panels::character::text_editing(app) {
         crate::panels::character::end_typing(app);
-        targets = match crate::panels::character::text_story(app) {
-            // After Select All in threaded text: every paragraph of every frame.
-            Some(story) => json!({"ids": story.iter().map(|f| f.0).collect::<Vec<_>>()}),
-            None => json!({"ids": [id.0], "start": a, "end": b}),
-        };
+        targets = json!({"ids": [id.0], "start": a, "end": b});
+        // After Select All in threaded text: every paragraph of every frame ([`params`]).
+        story = crate::panels::character::text_story(app).map(|_| id.0);
     }
     let mut values = Map::new();
     for (_, prefix, _) in ROWS {
@@ -115,6 +118,9 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let mut fields = Value::Object(values.clone());
     fields[INITIAL] = Value::Object(values);
     fields[TARGETS] = targets;
+    if let Some(id) = story {
+        fields[STORY] = json!(id);
+    }
     fields["preview"] = json!(false);
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(Value::Null)
@@ -179,17 +185,30 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             ui.add_space(6.0);
             ui.colored_label(crate::theme::Tokens::get(ui.ctx()).error, why);
         }
-        None => form::preview(app, ui, d, tl!("Justification"), CMD, Value::Object(params(d))),
+        None => {
+            let p = params(app, d);
+            form::preview(app, ui, d, tl!("Justification"), CMD, Value::Object(p));
+        }
     }
     false
 }
 
 /// `text.setFormat` parameters: the fields that differ from the values the dialog opened with,
-/// on the dialog's type and range.
-fn params(d: &Dialog) -> Map<String, Value> {
+/// on the dialog's type and range. After Select All in threaded text the type is every frame of
+/// the edited frame's thread as the document holds it now; when that frame is no longer threaded,
+/// the range in that frame.
+fn params(app: &VectorcraftApp, d: &Dialog) -> Map<String, Value> {
     let initial = d.fields.get(INITIAL).and_then(Value::as_object);
     let was = |key: &str| initial.and_then(|m| m.get(key)).and_then(Value::as_f64);
     let mut p = d.fields.get(TARGETS).and_then(Value::as_object).cloned().unwrap_or_default();
+    if let (Some(id), Some(st)) = (d.fields.get(STORY).and_then(Value::as_u64), app.session.active()) {
+        let story = st.doc.story_of(vectorcraft_doc::NodeId(id));
+        if story.len() >= 2 {
+            p.remove("start");
+            p.remove("end");
+            p.insert("ids".into(), json!(story.iter().map(|f| f.0).collect::<Vec<_>>()));
+        }
+    }
     for (param, prefix, _) in ROWS {
         let mut changed = Map::new();
         for (suffix, name) in COLUMNS {
@@ -229,7 +248,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if let Some(why) = problem(d) {
         return Err(why.into());
     }
-    let p = params(d);
+    let p = params(app, d);
     if !changes(&p) {
         if app.session.in_interaction() {
             let _ = app.session.cancel_interaction();
@@ -350,6 +369,33 @@ mod tests {
         super::super::cancel(&mut app);
         assert!(app.ui.dialog.is_none());
         assert_eq!(paras(&app, id).0.justification.auto_leading, 120.0);
+    }
+
+    /// After Select All in threaded text, OK changes the frames in the edited frame's thread when OK
+    /// is pressed: not a frame that left the thread while the dialog was open, and a frame that
+    /// joined it.
+    #[test]
+    fn justification_dialog_follows_the_story_thread_at_ok() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame.\n".repeat(6);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+        app.run("select.all", json!({})).unwrap();
+        app.run("ui.justification", json!({})).unwrap();
+        app.run("text.thread.break", json!({"id": b, "port": "out"})).unwrap();
+        let d = app.run("text.thread.add", json!({"from": a, "rect": [600, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        set(&mut app, "autoLeading", json!(140));
+        super::super::confirm(&mut app).unwrap();
+        for id in [a, d, b] {
+            assert_eq!(paras(&app, id).0.justification.auto_leading, 140.0, "frame {id} takes the change");
+        }
+        assert_eq!(paras(&app, c).0.justification.auto_leading, 120.0, "the frame that left keeps its paragraphs");
     }
 
     /// When paragraphs in scope disagree, only shared justification values are filled in.
