@@ -111,9 +111,13 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             None => io::open_dialog(app).map(|_| Value::Null),
         },
         // Saves write through the app (save panel, download); with no path known the panel and the
-        // format's options dialog ask first.
+        // format's options dialog ask first. A drawing that came from the cloud has no file on this
+        // computer, so Save writes back to the cloud file it came from.
+        "file.save" if p.get("path").is_none() && crate::cloud::has_target(app) => crate::cloud::save(app),
         "file.save" => io::save(app, SaveMode::Save, p, true),
-        "file.saveAs" => io::save(app, SaveMode::SaveAs, p, true),
+        // With a cloud service wired, Save As asks whether the drawing is going to this computer or
+        // to the user's account. Without one it is the file panel it always was.
+        "file.saveAs" => crate::dialogs::cloud::save_as(app, p),
         "file.saveCopy" => io::save(app, SaveMode::Copy, p, true),
         "file.saveAsTemplate" => io::save(app, SaveMode::Template, p, true),
         "document.exportSelection" => {
@@ -129,6 +133,78 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
         },
+        // ---- cloud storage (File › Open from the Cloud, File › Save to the Cloud)
+        "cloud.status" => Ok(crate::cloud::status(app)),
+        "cloud.open" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
+            // The Home screen is this application's Open page: the Cloud section sits on it,
+            // beside Recent Files.
+            app.ui.home = Some(home_key(app));
+            crate::cloud::start(app);
+            Ok(crate::cloud::status(app))
+        }
+        "cloud.browse" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
+            let path = p.get("path").and_then(Value::as_str).unwrap_or("");
+            crate::cloud::browse(app, path);
+            Ok(json!({"folder": path}))
+        }
+        "cloud.shared" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
+            crate::cloud::load_shared(app);
+            Ok(Value::Null)
+        }
+        "cloud.link" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
+            crate::cloud::link(app);
+            Ok(crate::cloud::status(app))
+        }
+        "cloud.share" => crate::cloud::open_share(app).map(|_| crate::cloud::status(app)),
+        // Opens something already listed, by handle or by name. The listing is what the user can
+        // see, which keeps a scripted open and a clicked one on the same footing.
+        "cloud.openFile" => {
+            if !crate::cloud::available(app) {
+                return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+            }
+            let id = p.get("id").and_then(Value::as_str);
+            let name = p.get("name").and_then(Value::as_str).unwrap_or("");
+            let found = app
+                .cloud
+                .mine
+                .entries
+                .iter()
+                .chain(app.cloud.shared.entries.iter())
+                .find(|e| id.is_some_and(|id| e.id == id) || (!name.is_empty() && e.name == name))
+                .cloned();
+            match found {
+                Some(entry) if crate::cloud::opens(&entry) => {
+                    crate::cloud::open_entry(app, entry, None);
+                    Ok(crate::cloud::status(app))
+                }
+                Some(entry) => return Some(Err(format!("VectorCraft cannot open {}", entry.name))),
+                None => return Some(Err("no such file in the cloud listing".to_owned())),
+            }
+        }
+        "cloud.save" => crate::cloud::save(app),
+        "cloud.saveAs" => match (p.get("folder").and_then(Value::as_str), p.get("name").and_then(Value::as_str)) {
+            (Some(folder), Some(name)) => crate::cloud::save_as(app, folder, name),
+            _ => {
+                if !crate::cloud::available(app) {
+                    return Some(Err(crate::cloud::UNAVAILABLE.to_owned()));
+                }
+                crate::dialogs::cloud::open(app, true);
+                Ok(crate::cloud::status(app))
+            }
+        },
+        "cloud.reload" => crate::cloud::reload_active(app),
         "type.findFont" => {
             crate::find_font::open(app);
             Ok(Value::Null)

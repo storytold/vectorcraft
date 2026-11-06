@@ -21,6 +21,7 @@
 
 #[cfg(target_arch = "wasm32")]
 mod api;
+mod cloud;
 #[cfg(target_arch = "wasm32")]
 mod fonts;
 #[cfg(any(target_arch = "wasm32", test))]

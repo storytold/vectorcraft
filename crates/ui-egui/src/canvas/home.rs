@@ -1,4 +1,4 @@
-use super::{CornerRadius, Tokens, Ui, VectorcraftApp, json, theme, vec2, widgets};
+use super::{Tokens, Ui, VectorcraftApp, json, theme, vec2, widgets};
 
 /// The Home screen (`app.home`; with no document open, unless its preference is off).
 pub(super) fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
@@ -33,12 +33,9 @@ fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::primary_button(ui, tl!("New file")).clicked() {
             app.run("file.newDialog", json!({})).ok();
         }
-        ui.add_space(8.0);
-        if widgets::secondary_button(ui, tl!("Open")).clicked() {
-            app.run("file.open", json!({})).ok();
-        }
     });
-    recent(app, ui);
+    ui.add_space(18.0);
+    crate::cloud::open_page(app, ui);
     ui.add_space(28.0);
     ui.label(egui::RichText::new(tl!("Quickly start a new file")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
@@ -57,65 +54,4 @@ fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.label(egui::RichText::new(tl!("Community")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
     crate::community::links(app, ui);
-}
-
-/// The Home screen's Recent Files (#663): the first of File › Open Recent Files, each its name and
-/// folder; a click opens it. Nothing when there are none.
-fn recent(app: &mut VectorcraftApp, ui: &mut Ui) {
-    const SHOWN: usize = 6;
-    let files: Vec<String> = crate::io::recent_files(app).iter().take(SHOWN).cloned().collect();
-    if files.is_empty() {
-        return;
-    }
-    let t = Tokens::get(ui.ctx());
-    ui.add_space(28.0);
-    ui.label(egui::RichText::new(tl!("Recent Files")).font(theme::semibold(14.0)).color(t.text));
-    ui.add_space(8.0);
-    for path in files {
-        if recent_row(ui, &path).clicked() {
-            // A failure is reported to the user there.
-            let _ = crate::io::open_reporting(app, &path);
-        }
-    }
-}
-
-/// One Recent Files row across the Home screen: history icon, name (accent) and folder (dim,
-/// truncated). The whole row is one button that lights up under the pointer; its tooltip is the
-/// full path.
-fn recent_row(ui: &mut Ui, path: &str) -> egui::Response {
-    const PAD: f32 = 6.0;
-    const ICON: f32 = 16.0;
-    let t = Tokens::get(ui.ctx());
-    let p = std::path::Path::new(path);
-    let name = p.file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
-    let folder = p.parent().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
-    if ui.is_rect_visible(rect) {
-        if resp.hovered() {
-            ui.painter().rect_filled(rect, CornerRadius::same(4), t.hover);
-        }
-        let icon = egui::Rect::from_center_size(egui::pos2(rect.left() + PAD + ICON / 2.0, rect.center().y), vec2(ICON, ICON));
-        crate::icons::paint(ui, "history", icon, t.icon);
-        let x = icon.right() + 8.0;
-        let name_galley = egui::WidgetText::from(egui::RichText::new(&name).size(13.0).color(t.accent)).into_galley(
-            ui,
-            Some(egui::TextWrapMode::Truncate),
-            (rect.right() - PAD - x).max(0.0),
-            egui::TextStyle::Body,
-        );
-        let folder_x = x + name_galley.size().x + 10.0;
-        ui.painter().galley(egui::pos2(x, rect.center().y - name_galley.size().y / 2.0), name_galley, t.accent);
-        let room = rect.right() - PAD - folder_x;
-        if room > 0.0 && !folder.is_empty() {
-            let folder_galley = egui::WidgetText::from(egui::RichText::new(&folder).size(12.0).color(t.text_dim)).into_galley(
-                ui,
-                Some(egui::TextWrapMode::Truncate),
-                room,
-                egui::TextStyle::Body,
-            );
-            ui.painter().galley(egui::pos2(folder_x, rect.center().y - folder_galley.size().y / 2.0), folder_galley, t.text_dim);
-        }
-    }
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
-    resp.on_hover_text(path).on_hover_cursor(egui::CursorIcon::PointingHand)
 }

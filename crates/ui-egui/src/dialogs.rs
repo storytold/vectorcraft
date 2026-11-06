@@ -17,6 +17,7 @@ mod brush_art_options;
 pub mod brush_delete;
 pub mod brush_options;
 pub mod char_style_options;
+pub mod cloud;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
@@ -425,6 +426,7 @@ registry! {
     SelectByLinkStatus: [crate::addons::select::link_status::KIND] => crate::addons::select::link_status::SPEC,
     ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE, crate::addons::arrange::OPACITY, crate::addons::arrange::SORT] => crate::addons::arrange::SPEC,
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
+    CloudSave: [cloud::KIND] => cloud::SPEC,
 }
 
 /// The button labels the shared dialog frame can show (OK, discard, the fixed Cancel/Close and
