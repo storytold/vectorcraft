@@ -39,6 +39,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 | Date | Change | Summary |
 |---|---|---|
 | 2026-11-05 | minor | Selection tool: Cmd/Ctrl-dragging a bounding-box handle moves the selection, unscaled, with the handle as the point that snaps; without the modifier the handle still scales (#5482, a VectorCraft addition); scores and estimates unchanged |
+| 2026-11-06 | minor | Rename (`ui.rename`, no default key) opens the Layers panel's name field on the selected layer, group or object's row, as double-clicking its name does; a key can be assigned in Keyboard Shortcuts (#5324, a VectorCraft addition); scores and estimates unchanged |
 | 2026-11-06 | minor | Properties panel in Edit Artboards (Shift+O): a Transform section with the shared reference point, X, Y, W and H, the preset and orientation, and Move and Scale Artwork with Artboard, above the Artboards section with the name, Artboard Options and Fill (#5219); scores and estimates unchanged |
 | 2026-11-06 | minor | Scrubby labels: the Control bar's Stroke: and Opacity: and the Properties panel's Stroke, links to their panels, scrub the field after them as other labels do; a click still opens the panel (#4088); scores and estimates unchanged |
 | 2026-11-05 | minor | Direct Selection: Shift-click picks several points of a blend's spine and dragging one moves them all, with the key objects on them, in one undo step (#5285); scores and estimates unchanged |
@@ -307,13 +308,16 @@ Cmd/Ctrl+/ (`appearance.addFill`) and Cmd/Ctrl+Alt+/ (`appearance.addStroke`) ad
 selected objects, as the Appearance panel's Add New Fill and Add New Stroke buttons do.
 
 ~110 distinct modified shortcuts on menu commands plus single-key tool shortcuts for the default toolbar
-(`crates/tools/src/catalog.rs`), a shortcut editor with chords, and saved sets. Cmd/Ctrl+Alt+L (`ui.newLayer`) opens Layer Options for a new layer, as an Alt-click on the Layers panel's New Layer button does, and Cmd/Ctrl+L still adds a layer without the dialog. F8 (`ui.symbolOptions`) opens Symbol Options for a new symbol made from the selection, as the Symbols panel's New Symbol button does. Not yet diffed item by item
+(`crates/tools/src/catalog.rs`), a shortcut editor with chords, and saved sets. Cmd/Ctrl+Alt+L (`ui.newLayer`) opens Layer Options for a new layer, as an Alt-click on the Layers panel's New Layer button does, and Cmd/Ctrl+L still adds a layer without the dialog. F8 (`ui.symbolOptions`) opens Symbol Options for a new symbol made from the selection, as the Symbols panel's New Symbol button does. Rename (`ui.rename`, in the shortcut editor with no default key; a VectorCraft addition, #5324) opens the Layers panel's name field on the selected layer, group or object's row, as double-clicking its name does: Enter renames it in one undo step and Escape keeps the name; several selected objects, or a row the panel's search, filter or Show Layers Only hides, is refused with a message. Not yet diffed item by item
 against Illustrator's published default shortcut list; estimated ~70% of it. Remaining: other panel shortcuts,
 the type shortcuts (tracking/kerning/leading/baseline steps with Alt/Shift), and selection shortcuts in the
 Layers panel. The shortcut editor also lists the commands that are in no menu but run without parameters (Edit › Duplicate,
 panel-menu commands such as Break Link to Symbol), so they can be given shortcuts (#1539). It lists each button of the
 Align panel's Align Objects, Distribute Objects and Distribute Spacing rows under Align, with no default shortcut, and a
 shortcut set there runs what a click on the button runs, with the panel's Align To choice and Distribute Spacing value. The [ and ] keys reach the Blob Brush, the Eraser and the Symbolism tools in the app (#1734, part of #1661).
+
+Cmd/Ctrl+Alt+. (`stroke.weightUp`, Stroke Weight Up) and Cmd/Ctrl+Alt+, (`stroke.weightDown`, Stroke Weight Down), the keys a [public feature request reply](https://illustrator.uservoice.com/forums/333657-illustrator-desktop-feature-requests/suggestions/32307397-increment-decrement-stroke-weight-key-commands) gives them, step the weight of each selected stroke from its own weight: by a quarter unit of Units › Stroke up to one
+unit, then by whole units, down to a quarter unit; with nothing selected they step the weight of the next object drawn (#5797).
 
 Cmd/Ctrl+Alt+N (`file.newWithoutDialog`, New Without Dialog in the shortcut editor) makes a document with the
 settings the New Document dialog opens on (the first Recent entry, or the Print category's Letter while Recent is
@@ -465,6 +469,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | Keyboard shortcuts: Cmd/Ctrl+Alt+. and Cmd/Ctrl+Alt+, (Stroke Weight Up and Down) step each selected stroke's weight, or the next object drawn's (#5797); scores and estimates unchanged |
 | 2026-11-06 | minor | Properties: Quick Actions has Repeat Options for one selected radial, grid or mirror repeat, opening Object › Repeat › Options with its values (#5181); scores and estimates unchanged |
 | 2026-11-06 | minor | Control bar: with type selected, a Paragraph: link (the Paragraph panel in a popover) and the Align left, Align center and Align right buttons follow the Character controls; the bar leaves them out from its right end when short of room, after X/Y/W/H and the Align buttons (#5372); scores and estimates unchanged |
 | 2026-11-04 | minor | Contour add-on (beyond Illustrator): drag away from a selected shape's edge to grow a live copy of it, or toward the inside to shrink it; the copy carries a live Offset Path effect, so it stays editable until Bake (Expand Appearance), a second drag changes the same Contour instead of nesting one, and a floating bar sets the distance and the Sharp, Round or Square corners. `addon.contour.set` is the command behind it. It is a built-in add-on: Object › Plug-ins › Contour, and its own heading in All Tools, with no default shortcut or toolbar slot. A VectorCraft design built on Offset Path; no other application was inspected. Scores and estimates unchanged. |
