@@ -14,6 +14,10 @@ use super::{ARCLEN_ACCURACY, kink, push_seg, segments, subpaths, tangent};
 
 /// More dashes than this (a tiny pattern on a long path) draws the line solid instead.
 const MAX_DASHES: f64 = 200_000.0;
+/// Pattern entries walked in all (every subpath and every corner restart starts the pattern over, and
+/// zero-length entries cost no path length, so a long pattern is walked in full even on a short
+/// run); past this the line is drawn solid. About 100x what real art needs.
+const MAX_STEPS: f64 = 20_000_000.0;
 /// A pattern whose longest entry is shorter than this can't advance along the path (each entry
 /// ends within the generator's tolerance of where it starts), so it draws the line solid.
 const MIN_ENTRY: f64 = 1e-6;
@@ -78,6 +82,10 @@ pub fn dash_kept(bp: &BezPath, d: &Dash, keep: &dyn Fn(&PathSeg) -> bool) -> Opt
         })
         .collect();
     if plans.iter().map(|p| p.periods).sum::<f64>() * pat.len() as f64 > MAX_DASHES {
+        return None;
+    }
+    let restarts = |p: &Plan| p.restart.iter().filter(|r| **r).count() as f64;
+    if plans.iter().map(|p| (p.periods.ceil().max(1.0) + restarts(p)) * pat.len() as f64).sum::<f64>() > MAX_STEPS {
         return None;
     }
     // Where an exact pattern starts: `offset` into it.
