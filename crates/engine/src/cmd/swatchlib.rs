@@ -104,9 +104,19 @@ pub struct Libraries<L = SwatchLibrary> {
     /// Loaded libraries copied into the user library folder ([`Libraries::copy_to_user`]): the
     /// loaded id and the User Defined id [`Libraries::get`] finds for it.
     copied: Vec<(String, String)>,
-    /// The name each User Defined file was saved under ([`Libraries::write`]), lower case id first:
-    /// a format that keeps no title (`.ase`) reads its name from the file name instead.
-    saved_as: HashMap<String, String>,
+    /// The name each User Defined file was saved under ([`Libraries::write`]), lower case id first,
+    /// with a hash of the bytes written. A format that keeps no title (`.ase`) reads its name from
+    /// the file name instead. [`Libraries::rescan`] drops an entry whose file no longer holds those
+    /// bytes, and keeps one whose file is missing so a file put back can be checked.
+    saved_as: HashMap<String, SavedAs>,
+}
+
+/// A User Defined file this session wrote: the library's name, and [`vectorcraft_doc::links::hash_bytes`]
+/// of what was written, so a file replaced since then is no longer that library's.
+#[derive(Clone, Debug)]
+struct SavedAs {
+    name: String,
+    hash: String,
 }
 
 #[derive(Clone, Debug)]
@@ -162,14 +172,23 @@ impl<L: LibraryFile> Libraries<L> {
     /// Re-read the library files of the user library folder (unreadable ones are skipped). The
     /// folder is the app's own: automation roots don't apply to it ([`crate::file_access`]). Each
     /// file is read inside [`crate::guard::catch_panic`], and a file whose reading panics is
-    /// skipped too.
+    /// skipped too. A file this session saved, whose bytes are no longer the ones written, is
+    /// forgotten ([`Libraries::write`]); a missing file is left remembered until it is back.
     pub fn rescan(&mut self) {
         self.extra.retain(|e| e.info.category != "user");
         let Some(dir) = self.user_dir.clone() else { return };
         for path in library_files(&dir, L::EXTS) {
             let file = file_name(&path);
-            let read = || crate::file_access::unconfined(|| read_file(&path)).ok().and_then(|b| L::read(&b, stem(&file)).ok());
-            let Some(lib) = crate::guard::catch_panic(read).ok().flatten() else { continue };
+            let read = || crate::file_access::unconfined(|| read_file(&path)).ok();
+            let Some(bytes) = crate::guard::catch_panic(read).ok().flatten() else { continue };
+            let id = format!("user/{file}").to_lowercase();
+            // Compared before parsing, so a file that no longer reads as a library is forgotten too.
+            let hash = vectorcraft_doc::links::hash_bytes(&bytes);
+            if self.saved_as.get(&id).is_some_and(|saved| saved.hash != hash) {
+                self.saved_as.remove(&id);
+            }
+            let parsed = || L::read(&bytes, stem(&file)).ok();
+            let Some(lib) = crate::guard::catch_panic(parsed).ok().flatten() else { continue };
             let info = LibraryInfo { id: format!("user/{file}"), name: library_tab_name(&file, lib.name()), category: "user" };
             self.extra.push(Extra { info, path: Some(path), lib: Arc::new(lib) });
         }
@@ -218,6 +237,9 @@ impl<L: LibraryFile> Libraries<L> {
             let mut file = library_file_name(name, ext);
             // `COM¹` is saved as `COM¹-`, which can be another library's own name, and a library put
             // under a numbered name holds a file another name can ask for: such a file is kept.
+            // `saved_as` is that memory for this run, and only while the file still holds what was
+            // written. A file that could not be read has no name to trust: one a device name could
+            // make is kept too. Any other unreadable file is replaced, as it was before.
             self.rescan();
             let device = crate::file_access::is_device_name;
             let id = format!("user/{file}").to_lowercase();
@@ -226,13 +248,19 @@ impl<L: LibraryFile> Libraries<L> {
             // have made has no known owner until it is saved here.
             let untitled = L::read(bytes, "\0").is_ok_and(|lib| lib.name() == "\0");
             let owner = |e: &Extra<L>| match self.saved_as.get(&e.info.id.to_lowercase()) {
-                Some(saved) => Some(saved.clone()),
+                Some(saved) => Some(saved.name.clone()),
                 None if untitled && device_file_name(e.lib.name()) => None,
                 None => Some(e.lib.name().to_string()),
             };
-            let held = self.extra.iter().any(|e| {
-                e.info.id.to_lowercase() == id && owner(e).is_none_or(|other| other != name && (device(name) || device(&other) || fallback(&other)))
-            });
+            let file_key = file.to_lowercase();
+            let on_disk = library_files(&dir, L::EXTS).iter().any(|p| file_name(p).to_lowercase() == file_key);
+            let listed = self.extra.iter().any(|e| e.info.category == "user" && e.info.id.to_lowercase() == id);
+            let unread = on_disk && !listed && (device(name) || device_file_name(stem(&file)));
+            let held = unread
+                || self.extra.iter().any(|e| {
+                    e.info.id.to_lowercase() == id
+                        && owner(e).is_none_or(|other| other != name && (device(name) || device(&other) || fallback(&other)))
+                });
             if held {
                 // Saved again, it goes back to the file it was given the first time.
                 let own = self
@@ -250,7 +278,8 @@ impl<L: LibraryFile> Libraries<L> {
             let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
             // The app's own folder, under a name made safe: no root applies.
             crate::file_access::unconfined(|| create_dir(&dir).and_then(|()| write_file(&path, bytes)))?;
-            self.saved_as.insert(format!("user/{file}").to_lowercase(), name.to_string());
+            self.saved_as
+                .insert(format!("user/{file}").to_lowercase(), SavedAs { name: name.to_string(), hash: vectorcraft_doc::links::hash_bytes(bytes) });
             self.rescan();
             out["path"] = json!(path);
             out["library"] = json!(format!("user/{file}"));

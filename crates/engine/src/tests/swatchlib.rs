@@ -832,6 +832,94 @@ fn device_named_libraries_without_a_title_keep_their_own_files() {
     }
 }
 
+/// A file this session saved for `COM¹`, then replaced, is not written over. The next save goes to
+/// a new file and stays there. That holds for `.ase` and `.gpl`, for bytes that still read as a
+/// library and for bytes that don't, including the file the library moved to. A file removed and
+/// put back is still its library's when the bytes are the ones written, and is kept when they are
+/// not. A name that is not a device name still replaces a file that cannot be read.
+#[test]
+fn a_replaced_device_library_file_is_kept() {
+    for format in ["ase", "gpl"] {
+        let other: Vec<u8> = if format == "ase" {
+            vectorcraft_testkit::ase::ase(&[vectorcraft_testkit::ase::Block::Color("Only", b"RGB ", &[1.0, 0.0, 0.0], 2)])
+        } else {
+            b"GIMP Palette\nName: Other\n0 0 0 Black\n".to_vec()
+        };
+        let save = |s: &mut Session| run(s, "swatch.library.save", json!({"user": true, "name": "COM¹", "format": format}));
+        let open = |name: &str| {
+            let dir = temp_dir(name);
+            let mut s = session();
+            s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+            (dir, s)
+        };
+
+        // Replaced with another library.
+        let (dir, mut s) = open(&format!("replaced-lib-{format}"));
+        let first = save(&mut s);
+        let first_id = first["library"].as_str().unwrap().to_string();
+        let first_path = first["path"].as_str().unwrap().to_string();
+        assert_ne!(std::fs::read(&first_path).unwrap(), other);
+        std::fs::write(&first_path, &other).unwrap();
+        let moved = save(&mut s);
+        let moved_id = moved["library"].as_str().unwrap().to_string();
+        assert_ne!(moved_id, first_id);
+        assert_eq!(std::fs::read(&first_path).unwrap(), other, "{format}: the replaced file is left as it is");
+        assert_eq!(save(&mut s)["library"].as_str(), Some(moved_id.as_str()), "{format}: saving again replaces the new file");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // Replaced with bytes that are not a library, first the file it had, then the one it moved to.
+        let (dir, mut s) = open(&format!("replaced-unread-{format}"));
+        let first = save(&mut s);
+        let first_path = first["path"].as_str().unwrap().to_string();
+        std::fs::write(&first_path, b"not a library").unwrap();
+        let moved = save(&mut s);
+        let moved_id = moved["library"].as_str().unwrap().to_string();
+        let first_id = first["library"].as_str().unwrap();
+        assert_ne!(moved_id, first_id);
+        assert_eq!(std::fs::read(&first_path).unwrap(), b"not a library");
+        assert_eq!(save(&mut s)["library"].as_str(), Some(moved_id.as_str()), "{format}: saving again stays on the new file");
+        let moved_path = moved["path"].as_str().unwrap().to_string();
+        std::fs::write(&moved_path, b"still not").unwrap();
+        let again = save(&mut s);
+        let again_id = again["library"].as_str().unwrap().to_string();
+        assert!(again_id != moved_id && again_id != first_id);
+        assert_eq!(std::fs::read(&moved_path).unwrap(), b"still not");
+        assert_eq!(save(&mut s)["library"].as_str(), Some(again_id.as_str()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // Removed, the folder listed again, then put back: the hash is checked when it reappears.
+        let (dir, mut s) = open(&format!("replaced-reappear-{format}"));
+        let first = save(&mut s);
+        let first_id = first["library"].as_str().unwrap().to_string();
+        let first_path = first["path"].as_str().unwrap().to_string();
+        let written = std::fs::read(&first_path).unwrap();
+        std::fs::remove_file(&first_path).unwrap();
+        run(&mut s, "swatch.library.list", json!({}));
+        std::fs::write(&first_path, &written).unwrap();
+        assert_eq!(save(&mut s)["library"].as_str(), Some(first_id.as_str()), "{format}: the same bytes are still this library");
+        std::fs::remove_file(&first_path).unwrap();
+        run(&mut s, "swatch.library.list", json!({}));
+        std::fs::write(&first_path, &other).unwrap();
+        let moved = save(&mut s);
+        let moved_id = moved["library"].as_str().unwrap().to_string();
+        assert_ne!(moved_id, first_id);
+        assert_eq!(std::fs::read(&first_path).unwrap(), other, "{format}: different bytes put back are kept");
+        assert_eq!(save(&mut s)["library"].as_str(), Some(moved_id.as_str()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    let dir = temp_dir("replaced-ordinary");
+    let mut s = session();
+    s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+    let first = run(&mut s, "swatch.library.save", json!({"user": true, "name": "Greys", "format": "gpl"}));
+    let path = first["path"].as_str().unwrap().to_string();
+    std::fs::write(&path, b"not a library").unwrap();
+    let again = run(&mut s, "swatch.library.save", json!({"user": true, "name": "Greys", "format": "gpl"}));
+    assert_eq!(again["library"], first["library"], "a name that is not a device name replaces its own unreadable file");
+    assert!(std::fs::read(&path).unwrap().starts_with(b"GIMP Palette"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// #3602: a library titled with a Windows device name is saved under a name that is not one.
 #[test]
 fn a_library_file_name_is_never_a_windows_device_name() {
