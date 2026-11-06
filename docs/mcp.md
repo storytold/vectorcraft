@@ -3721,6 +3721,7 @@ style; `add: true` stacks it) set that template instead of editing art. With the
 Appearance off (`appearance.setNewArtBasic {on: false}`, the preference `newArtBasic`) new art takes the whole
 appearance of the last selected object. `appearance.newArt` reports what the next object gets; `paint.default`
 resets it.
+`appearance.setNewArtBasic` rejects an `on` value that is not a boolean. Omitting `on` toggles the current preference.
 
 ```json
 {"name":"run_command","arguments":{"command":"select.none","params":{}}}

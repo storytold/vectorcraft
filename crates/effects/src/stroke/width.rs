@@ -10,7 +10,7 @@
 
 use std::f64::consts::PI;
 
-use kurbo::{BezPath, ParamCurve, PathEl, PathSeg, Point, Vec2};
+use kurbo::{BezPath, ParamCurve, PathEl, PathSeg, Point, Rect, Vec2};
 use vectorcraft_doc::{LineCap, LineJoin, StrokeLayer, WidthProfile};
 
 use super::{kink, segments, subpaths, unit};
@@ -19,6 +19,70 @@ use super::{kink, segments, subpaths, unit};
 /// limit of `st`, flattened to `tol`.
 pub fn width_outline(bp: &BezPath, width: f64, profile: &WidthProfile, st: &StrokeLayer, tol: f64) -> BezPath {
     outline_spans(bp, &[], width, profile, st, tol)
+}
+
+/// Outline only flattened segments near `near`, retaining each run's original fractions of its
+/// whole subpath for the width profile. `None` means no segments could be omitted.
+pub(super) fn width_outline_near(bp: &BezPath, width: f64, profile: &WidthProfile, st: &StrokeLayer, tol: f64, near: Rect) -> Option<BezPath> {
+    let ctx = Ctx { half: width / 2.0, profile, cap: st.cap, join: st.join, miter_limit: st.miter_limit, tol: tol.max(1e-4) };
+    let mut out = BezPath::new();
+    let mut cut = false;
+    for (r, closed) in subpaths(bp) {
+        if closed {
+            return None;
+        }
+        let (pts, corner) = flatten(&segments(&bp.elements()[r]), closed, ctx.tol);
+        let n = pts.len();
+        if n < 2 {
+            continue;
+        }
+        let count = n - 1;
+        let mut lengths = Vec::with_capacity(count);
+        let mut kept = Vec::with_capacity(count);
+        let mut total = 0.0;
+        for i in 0..count {
+            let (a, b) = (pts[i], pts[i + 1]);
+            let len = a.distance(b);
+            if !len.is_finite() {
+                return None;
+            }
+            total += len;
+            lengths.push(len);
+            kept.push(!(a.x.max(b.x) < near.x0 || a.x.min(b.x) > near.x1 || a.y.max(b.y) < near.y0 || a.y.min(b.y) > near.y1));
+        }
+        if kept.iter().all(|v| *v) {
+            ctx.subpath(&mut out, &pts, &corner, closed, (0.0, 1.0));
+            continue;
+        }
+        cut = true;
+        if total <= 1e-12 {
+            continue;
+        }
+        let mut walked = 0.0;
+        let mut run = Vec::new();
+        let mut run_corner = Vec::new();
+        let mut from = 0.0;
+        for i in 0..count {
+            if kept[i] {
+                if run.is_empty() {
+                    from = walked / total;
+                    run.push(pts[i]);
+                    run_corner.push(corner[i]);
+                }
+                run.push(pts[i + 1]);
+                run_corner.push(corner[i + 1]);
+            } else if run.len() > 1 {
+                ctx.subpath(&mut out, &run, &run_corner, false, (from, walked / total));
+                run.clear();
+                run_corner.clear();
+            }
+            walked += lengths[i];
+        }
+        if run.len() > 1 {
+            ctx.subpath(&mut out, &run, &run_corner, false, (from, walked / total));
+        }
+    }
+    cut.then_some(out)
 }
 
 /// [`width_outline`] of pieces of longer subpaths: subpath `i` of `bp` covers the fractions

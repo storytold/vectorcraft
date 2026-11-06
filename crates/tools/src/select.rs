@@ -1059,10 +1059,16 @@ impl Tool for SelectionTool {
         if self.guide.busy() {
             return self.guide.cursor(cx, p).unwrap_or_default();
         }
-        if over_widget(cx, p, false) {
+        // Corner widgets sit inside selected art, and pie widgets extend at most 17 screen
+        // pixels beyond it. A distant pointer cannot take either one, so avoid building their
+        // widgets for every selected object on each cursor move.
+        let near_selected = cx.selection.objects.len() <= 128
+            || cx.preview_bounds
+            || selection_bounds(cx).is_none_or(|b| b.inflate(cx.tol(32.0), cx.tol(32.0)).contains(p));
+        if near_selected && over_widget(cx, p, false) {
             return Cursor::CornerRadius;
         }
-        if pie::over_widget(cx, p) {
+        if near_selected && pie::over_widget(cx, p) {
             return Cursor::ArrowHollow;
         }
         if over_rotate_all(cx, p) {

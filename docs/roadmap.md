@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Hindi catalog and contributor loanword preferences; full wording review in progress; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -90,6 +90,9 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 | Print production: CMYK and spot colour, bleed and marks, PDF/X out, separations preview | yes | PDF/X-1a/3/4, presets, marks and bleed, ICC output intent, Separations Preview, Print with PostScript output | 0 |
 | Exchange files with Illustrator users: open their `.ai`/EPS/PDF, hand back a file they can open | partial (doesn't block alpha) | `.ai`, EPS and PDF open as editable art, but real files can get the wrong layer structure (#951); Save As `.ai` is PDF-compatible, which Illustrator opens without its own editing data (#868), or legacy version 7, which keeps layers, groups and type as text, one artboard per file, and waits for users' testing. EPS legacy mesh corners, vector opacity masks and raster print-page comparison now preserve editable art under synthetic regressions. This is the beta main-format gap ([gaps.md](gaps.md) G9) | 10–20 (for beta) |
 
+Hindi interface follow-up (2026-11-06): the catalog and zero/one plural rule are implemented;
+native wording review, layout checks and a web Devanagari font remain. [Notes](localization-hi.md).
+
 ## Current focus
 
 1. **Interaction-fidelity pass** (G1) by tool, from [ui-parity.md](ui-parity.md): Pen and Curvature, Direct
@@ -175,6 +178,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen preset; Recent and Saved cards keep their own units; scores and estimates unchanged. |
 | 2026-11-03 | minor | M7: the OpenType panel offers the selected font's available Stylistic Sets with custom or numbered names; estimates unchanged. |
 | 2026-11-03 | minor | M1: Enclosing Lasso adds freehand whole-object selection under Object › Plug-ins; estimates unchanged. |

@@ -104,39 +104,27 @@ private editing data. VectorCraft:
   opens a file with that prolog from its program, as the format.
 - **Known failures in users' files:** layer structure flattened or multiplied (#951: 109 layers instead of
   14; #868: round trip with Illustrator 2018 loses layers and groups), some files 4× slower to open since the
-  editing data is read whole (#758), live effects and brushes come in as their drawn look (#637;
-  pattern fills are read since #1025, and symbols and their instances open live); legacy `.ai` without the
-  prolog opens since #1027, its legacy type (`To` … `TO`) since #868; guides open as ruler guides and guide paths since #5057 (#779).
-  14; #868: round trip with Illustrator 2018 loses layers and groups), guides and non-printing construction
-  lines lost (#779), some files 4× slower to open since the editing data is read whole (#758), unmapped live
-  effects and brushes come in as their drawn look (#637; pattern fills are read since #1025); legacy `.ai`
-  without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868.
-  lines lost (#779), some files 4× slower to open since the editing data is read whole (#758), live effects
-  that are not read or have settings that are not read, and brushes come in as their drawn look (#637; pattern fills are read since #1025); legacy `.ai`
-  without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868.
-  lines lost (#779), some files 4× slower to open since the editing data is read whole (#758), live effects
-  and brushes come in as their drawn look (#637; pattern fills are read since #1025); legacy `.ai`
-  without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868, and its placed EPS files
-  in the version 7 form (`` ` `` … `~` with no `%AI5_BeginPlace`) are read like other placed files without a
-  preview: as the page's art in their box.
-  without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868. Graphs (`%_Gs` … `%_GS`)
-  come in as their drawn art, as plain groups, paths and type, without their data or settings, with a note.
-  without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868, with its paragraphs' letter
-  and word spacing (`TC`, `TW`), hanging punctuation (`Tq`) and hyphenation (`Th`). Its type in a font
-  re-encoded with encoding pairs of its own (`TZ`) is decoded with those pairs, and with the file's encoding
-  (`TE`) for the codes they leave out unless the `TZ` sets `useDefault` to 0. Its patterns in
-  and word spacing (`TC`, `TW`), hanging punctuation (`Tq`) and hyphenation (`Th`); its tab definitions
-  (`Xb` … `XB`) set its paragraphs' tab stops; its special characters (`TS`) join the story, and end render
-  (`Te`) and pop text matrix (`TM`) are read and ignored. Its patterns in
-  the version 7 form (a list of `@` and `&` layers, `_ &` for the tile's background) open as pattern swatches,
-  with a fill's offset, scale, rotation, reflection and shear applied before its matrix.
+  editing data is read whole (#758), live effects that are not read or have settings that are not read, and
+  brushes come in as their drawn look (#637; pattern fills are read since #1025, and symbols and their instances
+  open live); legacy `.ai` without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868; guides
+  open as ruler guides and guide paths since #5057 (#779).
+  Legacy `.ai` type keeps its paragraphs' letter and word spacing (`TC`, `TW`), hanging punctuation (`Tq`) and
+  hyphenation (`Th`); its tab definitions (`Xb` … `XB`) set its paragraphs' tab stops; its special characters
+  (`TS`) join the story, and end render (`Te`) and pop text matrix (`TM`) are read and ignored. Its type in a
+  font re-encoded with encoding pairs of its own (`TZ`) is decoded with those pairs, and with the file's encoding
+  (`TE`) for the codes they leave out unless the `TZ` sets `useDefault` to 0.
   Its area type with several linked areas opens as threaded frames, one for each area with its own matrix,
   and the story flows through them.
   Legacy `.ai` type set in rendering modes 4 to 7 (`Tr`, text used as a mask) is a clipping path of its
   clipping group, as a `W` path is, and the mode lasts into later text objects. Type in linked areas, in
   wraparound text or in a compound path doesn't clip, with a warning. A `Tr` operand that is not a whole number
   from 0 to 9 leaves the mode as it was.
-  with a fill's offset, scale, rotation, reflection and shear applied before its matrix. Its linked images in
+  Legacy `.ai` placed EPS files in the version 7 form (`` ` `` … `~` with no `%AI5_BeginPlace`) are read like
+  other placed files without a preview: as the page's art in their box. Graphs (`%_Gs` … `%_GS`) come in as their
+  drawn art, as plain groups, paths and type, without their data or settings, with a note.
+  Legacy `.ai` patterns in the version 7 form (a list of `@` and `&` layers, `_ &` for the tile's background)
+  open as pattern swatches, with a fill's offset, scale, rotation, reflection and shear applied before its
+  matrix. Legacy `.ai` linked images in
   the version 7 form (`(path) modified XG`, then `XF` with no samples) come in as linked images of their files,
   showing a placeholder where the image goes until the file is relinked in the Links panel. A path stored in
   the classic Mac OS form (`Disk:Folder:file.tif`, with a colon and no `/` or `\`) is named by its last part, and
