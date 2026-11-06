@@ -1,6 +1,6 @@
 # Parity with Adobe Illustrator
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Hindi catalog and contributor loanword preferences; full wording review in progress; Properties in Edit Artboards: a Transform section with the reference point above the Artboards section, #5219; the Control bar's Stroke: and Opacity: links scrub their fields, #4088; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window, #4155; Control bar Paragraph section with type selected, #5372; translating unchanged type reuses its glyph and character-stroke outlines; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Stroke Weight Up and Down shortcuts, #5797; Hindi catalog and contributor loanword preferences; full wording review in progress; Properties in Edit Artboards: a Transform section with the reference point above the Artboards section, #5219; the Control bar's Stroke: and Opacity: links scrub their fields, #4088; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window, #4155; Control bar Paragraph section with type selected, #5372; translating unchanged type reuses its glyph and character-stroke outlines; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; public release notes through 30.7, August 2026)
 
 ## Feature submission evidence
 
@@ -1670,6 +1670,10 @@ A VectorCraft addition, not a feature of the reference app, so no area score mov
 
 A VectorCraft addition (it replaces a script some users ran), so no area score moves. Object › Plug-ins › Color Effects › Create Swatch Legend… (`addon.color.swatchLegend`) opens a dialog (columns, chip size, gap, values, selected swatches only, with a preview) and draws a chip per colour swatch (the selected ones, else all) filled with and linked to its swatch, labelled with its name and values (HEX, RGB, CMYK, Lab or Grayscale; by default its own model; spot swatches marked), black on light chips and white on dark ones, in a grid of chosen columns, chip size and spacing, as one selected group in one undo step (#4919). Tests: `cmd::addons::color::legend::tests` (engine), `addons::color::legend::tests::create_swatch_legend_opens_its_dialog_previews_and_runs_on_ok` (ui-egui).
 
+## Stroke Weight Up and Down shortcuts (2026-11-06)
+
+Cmd/Ctrl+Alt+. (`stroke.weightUp`) and Cmd/Ctrl+Alt+, (`stroke.weightDown`) raise and lower the weight of each selected stroke from its own weight, with the keys a [public feature request reply](https://illustrator.uservoice.com/forums/333657-illustrator-desktop-feature-requests/suggestions/32307397-increment-decrement-stroke-weight-key-commands) names: a quarter unit of Units › Stroke at a time up to one unit, whole units above it, no lower than a quarter unit and no higher than 1000 pt. Type steps its stroked characters; objects without a stroke are left alone; with nothing selected the weight of the next object drawn steps. Each press is one undo step (#5797). Evidence: `tests::strokeux::stroke_weight_up_and_down_step_each_selected_stroke`, `stroke_weight_up_with_nothing_selected_sets_up_new_art`, `cmd::stroke::tests::weight_steps_follow_units_and_stop_at_their_bounds`. Scores unchanged.
+
 ## Keyboard shortcuts for Effect menu items (2026-11-01)
 
 Edit › Keyboard Shortcuts lists every item of the Effect menu under its menu path (Effect › Distort & Transform › Transform…) and gives each one a shortcut of its own (stored as `effect:<id>`; they all run `effect.dialog {effect}`, or `effect.apply` for an effect without options, so a shortcut on the command alone couldn't tell them apart). The menu shows the shortcut, and pressing it opens that effect's dialog for the selection (#3296). Test: `shortcuts::tests::an_effect_menu_item_takes_a_shortcut_of_its_own`.
@@ -1698,6 +1702,7 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | Stroke Weight Up and Down (Cmd/Ctrl+Alt+. and ,) step each selected stroke's weight (#5797); evidence added; scores unchanged. |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-06 | minor | Properties in Edit Artboards: a Transform section (reference point, X, Y, W, H, preset, orientation, Move and Scale Artwork) above the Artboards section (name, Artboard Options, Fill), X and Y of the shared reference point (#5219); evidence updated; scores unchanged. |
 | 2026-11-06 | minor | Scrubby labels: the Control bar's Stroke: and Opacity: links and the Properties panel's Stroke link scrub their fields; a click still opens the panel (#4088); evidence updated; scores unchanged. |
