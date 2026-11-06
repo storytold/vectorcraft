@@ -21,9 +21,11 @@ mod ops;
 mod paint;
 mod path;
 mod state;
+mod strips;
 
 pub(crate) use paint::collapse;
 pub(crate) use state::{GState, Out, Space, process};
+pub(crate) use strips::merge_strips;
 
 /// Most objects one file makes.
 const MAX_NODES: usize = 1 << 20;

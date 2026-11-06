@@ -1407,3 +1407,72 @@ fn bitshift_by_the_most_negative_integer_does_not_panic() {
     let r = read("0 0 10 10 rectfill 1 -9223372036854775808 bitshift pop -1 -9223372036854775808 bitshift pop");
     assert_eq!(objects(&r.document).len(), 1, "{:?}", r.warnings);
 }
+
+/// The stops (offset, grey's black ink or red) and the start and end of the linear gradient `n` is
+/// filled with.
+fn linear_stops(n: &Node) -> (Vec<(f32, f32)>, Point, Point) {
+    let Some(Paint::Gradient(g)) = fill(n) else { panic!("not a gradient: {:?}", fill(n)) };
+    assert_eq!(g.gradient.kind, GradientKind::Linear);
+    let level = |c: &Color| match *c {
+        Color::Gray { k } => k,
+        Color::Rgb { r, .. } => r,
+        other => panic!("{other:?}"),
+    };
+    let geom = g.geom.unwrap();
+    (g.gradient.stops.iter().map(|s| (s.offset, level(&s.color))).collect(), geom.start, geom.end)
+}
+
+#[test]
+fn abutting_strips_of_a_gradient_become_one_gradient() {
+    // A grey ramp drawn right to left as 40 strips 2 pt wide under a clip, after a strip of no
+    // width on its right edge: the clip path filled with one linear gradient, without seams.
+    let r = read(
+        "gsave 10 10 80 80 rectclip 90 10 0 80 rectfill
+         0 1 39 { /i exch def i 39 div setgray 88 i 2 mul sub 10 2 80 rectfill } for grestore",
+    );
+    let o = objects(&r.document);
+    assert_eq!(o.len(), 1, "{o:#?}");
+    let n = &o[0];
+    assert!(matches!(n.kind, NodeKind::Path { .. }));
+    assert!(near(bounds(n), Rect::new(10.0, 10.0, 90.0, 90.0)), "{:?}", bounds(n));
+    let (stops, start, end) = linear_stops(n);
+    // A straight ramp needs only its two ends, at the middles of the end strips: black on the
+    // right, white on the left.
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    let x = |t: f32| start.x + (end.x - start.x) * f64::from(t);
+    assert!((start.y - end.y).abs() < 1e-6);
+    let ((t0, k0), (t1, k1)) = (stops[0], stops[1]);
+    // A grey's level is its black ink: 1 for black.
+    let (dark, light) = if k0 > k1 { ((x(t0), k0), (x(t1), k1)) } else { ((x(t1), k1), (x(t0), k0)) };
+    assert!((dark.0 - 89.0).abs() < 0.01 && (dark.1 - 1.0).abs() < 1e-6, "{dark:?}");
+    assert!((light.0 - 11.0).abs() < 0.01 && light.1.abs() < 1e-6, "{light:?}");
+}
+
+#[test]
+fn turned_strips_become_a_gradient_across_them() {
+    // Strips drawn in a turned space: the gradient runs square to them.
+    let r = read("50 50 translate 30 rotate 0 1 19 { /i exch def i 19 div 0 0 setrgbcolor i 2 mul 20 sub -20 2 40 rectfill } for");
+    let o = objects(&r.document);
+    assert_eq!(o.len(), 1, "{o:#?}");
+    let (stops, start, end) = linear_stops(&o[0]);
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    let d = end - start;
+    // 30° in PostScript's y-up space is −30° in the document's y-down one.
+    let angle = d.y.atan2(d.x).to_degrees();
+    assert!((angle + 30.0).abs() < 0.01 || (angle - 150.0).abs() < 0.01, "{angle}");
+    assert!((d.hypot() - 40.0).abs() < 0.01, "{}", d.hypot());
+}
+
+#[test]
+fn abutting_blocks_of_distinct_colours_stay_apart() {
+    // Side by side but each a different colour (a row of swatches): not a gradient.
+    let blocks: String =
+        (0..8).map(|i| format!("{} {} {} setrgbcolor {} 10 10 80 rectfill ", i % 2, (i / 2) % 2, (i / 4) % 2, 10 + i * 10)).collect();
+    assert_eq!(objects(&read(&blocks).document).len(), 8);
+    // Too few strips to be sure of.
+    let few: String = (0..5).map(|i| format!("{} setgray {} 10 2 80 rectfill ", f64::from(i) / 40.0, 10 + i * 2)).collect();
+    assert_eq!(objects(&read(&few).document).len(), 5);
+    // Strips with gaps between them.
+    let gaps: String = (0..10).map(|i| format!("{} setgray {} 10 2 80 rectfill ", f64::from(i) / 40.0, 10 + i * 3)).collect();
+    assert_eq!(objects(&read(&gaps).document).len(), 10);
+}
