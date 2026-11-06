@@ -36,7 +36,8 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-05 | minor | G15: Direct Selection reuses one document hit result when choosing the cursor over a path; a 200,000-anchor path's segment cursor took 58.15 ms before and 29.33 ms after in local median runs. Cursor behavior is unchanged; estimate unchanged. |
+| 2026-11-05 | minor | G15: Selection skips building corner and pie widgets when the pointer is well outside a large selection; empty-canvas hover with 20,000 selected paths took 28.72 ms before and 16.41 ms after in local median runs. Other cursor targets remain active; estimate unchanged. |
+| 2026-11-05 | minor | G15: Direct Selection reuses one document hit result when choosing the cursor over a path; after the path hit-test improvement, a 200,000-anchor path's segment cursor took 3.72 ms before and 2.66 ms after in local median runs. Cursor behavior is unchanged; estimate unchanged. |
 | 2026-11-05 | minor | G15: large-selection transforms reuse object locations found during command validation; a 20,000-object nudge took 58.07 ms before and 51.26 ms after in paired median runs. Estimate unchanged. |
 | 2026-11-05 | minor | G9, G14: `.ai` paths with a Calligraphic brush open brushed (the brush on the stroke, at its weight) where the object's settings are the brush's own, and the brush's Tilt, Bearing and Rotation codes come in as those channels; Windows reads the pen's tilt and barrel rotation from Windows Ink (#372). Checked against a user's file of 6D Art Pen strokes, used locally; not tried with a pen. Scores and estimates unchanged. |
 | 2026-11-04 | minor | Contour add-on (beyond Illustrator): drag away from a selected shape's edge to grow a live copy of it, or toward the inside to shrink it; the copy carries a live Offset Path effect, so it stays editable until Bake (Expand Appearance), a second drag changes the same Contour instead of nesting one, and a floating bar sets the distance and the Sharp, Round or Square corners. `addon.contour.set` is the command behind it. It is a built-in add-on: Object › Plug-ins › Contour, and its own heading in All Tools, with no default shortcut or toolbar slot. A VectorCraft design built on Offset Path; no other application was inspected. Scores and estimates unchanged. |
@@ -652,9 +653,15 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G15 Performance budgets and a GPU renderer
 
+- **Improved (2026-11-05):** when more than 128 objects are selected, Selection skips making
+  corner and pie widgets if the pointer is farther than their reach from the selected art.
+  Empty-canvas hover with 20,000 selected paths took 28.72 ms before and 16.41 ms after in
+  local median runs. Pie widgets just beyond the art and rotated bounding-box handles still
+  take the cursor. This is a directional measurement, not an idle performance-budget result.
 - **Improved (2026-11-05):** Direct Selection reuses its document hit result when choosing the
-  cursor over a path. The cursor over a segment of a 200,000-anchor path took 58.15 ms before
-  and 29.33 ms after in local median runs; a nearby point took 56.21 ms before and 29.81 ms after.
+  cursor over a path. With the path hit-test improvement below, the cursor over a segment of a
+  200,000-anchor path took 3.72 ms before and 2.66 ms after in local median runs; a nearby point
+  took 4.04 ms before and 2.98 ms after.
   Anchor, segment and plain cursor choices remain the same. The idle-frame budget remains open.
 - **Improved (2026-11-05):** hovering over a nearby plain stroke or path outline checks the
   candidate segments directly. On a 200,000-anchor open path, a hit near its middle took about
