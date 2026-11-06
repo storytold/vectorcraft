@@ -93,7 +93,7 @@ fn selected_only_exports_the_selection_in_its_layers() {
     let line = s.execute("shape.line", &json!({"x1": 0, "y1": 90, "x2": 90, "y2": 90})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [line]})).unwrap();
     let dxf = text(&s.execute("document.export", &json!({"format": "dxf", "selectedOnly": true})).unwrap());
-    assert_eq!(entities(&dxf), ["LWPOLYLINE"]);
+    assert_eq!(entities(&dxf), ["LINE"]);
     assert!(dxf.contains("\n  2\nTop\n") && !dxf.contains("\n  2\nLayer 1\n"), "only the selection's layer");
     s.execute("select.none", &json!({})).unwrap();
     let e = s.execute("document.export", &json!({"format": "dxf", "selectedOnly": true})).unwrap_err().to_string();
@@ -101,7 +101,7 @@ fn selected_only_exports_the_selection_in_its_layers() {
     // Other formats take it too.
     s.execute("select.set", &json!({"ids": [line]})).unwrap();
     let svg = s.execute("document.serialize", &json!({"format": "svg", "selectedOnly": true})).unwrap()["text"].as_str().unwrap().to_string();
-    assert_eq!((svg.matches("<path").count(), svg.matches("<rect").count()), (1, 0), "{svg}");
+    assert_eq!((vectorcraft_testkit::svg_shapes(&svg), svg.matches("<line ").count()), (1, 1), "{svg}");
     assert!(svg.contains("id=\"Top\"") && !svg.contains("Layer"), "{svg}");
 }
 

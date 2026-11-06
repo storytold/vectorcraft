@@ -110,6 +110,40 @@ Full CI remains incomplete: the fresh 120-second run stopped during workspace Cl
 and WASM remains blocked by the missing target standard library. Current-main conflicts
 were not resolved as part of this follow-up.
 
+## Upstream refresh (2026-11-06)
+
+This reconciliation uses upstream `36c73f7bb91dacca649360e5ac5b53875242ea89`.
+It retains the KDE bridge alongside the new host Caps Lock state and the custom-toolbar
+module. Upstream's automatic tablet fallback and `VECTORCRAFT_NATIVE_WAYLAND` override
+are preserved; the pinned winit fork still provides native Wayland file drops.
+The egui and winit revisions are unchanged, while the upstream craft-libs revisions advance.
+
+Formatting and `git diff --check MERGE_HEAD` passed after resolving the four merge
+conflicts. The initial sandbox dependency restriction was removed with user approval;
+compilation succeeded with the restored Cargo cache and network access.
+The host now publishes menu changes after logic-only ticks, with a regression for
+native-menu and control-channel toggles without drawing. That regression passed
+(one test, no failures). Fresh native Wayland and XWayland smoke runs passed:
+`window.control` changed application state and the exported checkmark, screenshots
+were inspected, and both processes exited normally with their D-Bus services removed.
+The screenshots contain the ordinary startup update dialog; no update was downloaded.
+These runs use an unlocked Plasma Wayland session, not a separate Plasma X11 session.
+The real `plasmashell` D-Bus peer also requested the exported layout in both runs
+(22 requests on Wayland, 21 on XWayland); this is not a claim of physical panel clicks.
+After the full workspace build replaced the executable, both native smokes were
+repeated successfully on that artifact (SHA256
+`6495340a64306d7e12cd3dd1e1dd2feb9dc7a85a6c3b514acd4242d702449746`).
+The exact `cargo xtask ci` passed all 12 stages: workspace/all-target Clippy,
+14,403 workspace tests (15 ignored), including 3,273 UI unit tests, doctests,
+the no-bundled-fonts matrix, dependency/resource checks, i18n report, layering
+and WASM (23 crates). All 338 assets are attributed; 28 crates passed layering.
+The pinned font checkout matches the workflow. Existing optional web-font gaps,
+translation gaps and four upstream WASM-only unused-code warnings remain;
+this is not a claim of warning-free WASM or complete translation coverage.
+The earlier CI and GUI results below apply
+only to their stated baseline. Packaged Flatpak, physical monitor/theme transitions
+and physical file dragging remain unverified here.
+
 ## Migration verification (2026-10-30)
 
 The isolated reconciliation with upstream baseline `e256c4c43` preserves the split host modules,

@@ -1,15 +1,87 @@
 use super::fonts::MAX_RECENT_FONTS;
 use super::{Value, VectorcraftApp, dialogs, fileio, io, menus, panels, picks, toolbar};
+use crate::placing;
+use crate::state::ReplaceFontWarning;
+
+/// The last repeatable Pathfinder operation completed by a command or atomic batch.
+fn completed_pathfinder_operation<'a>(id: &'a str, params: &'a Value) -> Option<&'a str> {
+    let tracked = |id: &'a str| id.strip_prefix("object.pathfinder.").filter(|op| panels::pathfinder::operation_label(op).is_some());
+    if id == "command.batch" {
+        params.get("commands")?.as_array()?.iter().rev().find_map(|step| step.get("command").and_then(Value::as_str).and_then(tracked))
+    } else {
+        tracked(id)
+    }
+}
+
+fn substitute_style_description(font: &Value) -> Option<String> {
+    if font["status"] != "substitute" {
+        return None;
+    }
+    let family = font["family"].as_str()?;
+    let style = font["style"].as_str()?;
+    let resolved_family = font["resolved"]["family"].as_str()?;
+    let resolved_style = font["resolved"]["style"].as_str()?;
+    Some(format!("{family} {style} is drawn in {resolved_family} {resolved_style}"))
+}
+
+fn substitute_warnings(fonts: &[Value], styles: &[(String, String)]) -> (Vec<String>, Vec<String>) {
+    let mut missing = Vec::new();
+    let mut live_styles = Vec::new();
+    for font in fonts.iter().filter(|font| {
+        styles.iter().any(|(family, style)| {
+            font["family"].as_str().is_some_and(|name| name.eq_ignore_ascii_case(family))
+                && font["style"].as_str().is_some_and(|name| name.eq_ignore_ascii_case(style))
+        })
+    }) {
+        match font["status"].as_str() {
+            Some("missing") => {
+                if let Some(family) = font["family"].as_str() {
+                    missing.push(family.to_string());
+                }
+            }
+            Some("substitute") => {
+                if let Some(description) = substitute_style_description(font) {
+                    live_styles.push(description);
+                }
+            }
+            _ => {}
+        }
+    }
+    missing.sort();
+    missing.dedup();
+    live_styles.sort();
+    live_styles.dedup();
+    (missing, live_styles)
+}
+
+#[cfg(test)]
+#[test]
+fn substitute_warnings_follow_current_font_inventory() {
+    let styles = vec![("Source Sans 3".to_string(), "Black Wide".to_string())];
+    let replaced_face = serde_json::json!([{
+        "family": "Source Sans 3", "style": "Black Wide", "status": "substitute",
+        "resolved": {"family": "Inter", "style": "Bold"}
+    }]);
+    assert_eq!(
+        substitute_warnings(replaced_face.as_array().unwrap(), &styles),
+        (Vec::<String>::new(), vec!["Source Sans 3 Black Wide is drawn in Inter Bold".to_string()])
+    );
+    let removed_family = serde_json::json!([{"family": "Source Sans 3", "style": "Black Wide", "status": "missing"}]);
+    assert_eq!(substitute_warnings(removed_family.as_array().unwrap(), &styles), (vec!["Source Sans 3".to_string()], Vec::<String>::new()));
+}
 
 impl VectorcraftApp {
     /// Run a UI or engine command by id. The single entry point for every frontend path.
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
         // A file dialog it shows off the UI thread runs it again with the path picked.
-        if self.picks.is_entry_free() {
+        let result = if self.picks.is_entry_free() {
             let entry = picks::Entry::Command(id.to_string(), params.clone());
-            return picks::as_entry(self, move || entry, |app| app.run_now(id, params));
-        }
-        self.run_now(id, params)
+            picks::as_entry(self, move || entry, |app| app.run_now(id, params))
+        } else {
+            self.run_now(id, params)
+        };
+        placing::settle_swatch_paste(self);
+        result
     }
 
     /// [`Self::run`] it, inside what asks for file dialogs.
@@ -28,8 +100,9 @@ impl VectorcraftApp {
         }
         let mut params = params;
         // Paste in place, in front and in back (#693), Select › All on Active Artboard (#1006), and Align,
-        // Distribute Objects and Distribute Spacing with Align to Artboard act on the active artboard, the
-        // view's, which the app passes as `artboard`. A batch passes it on to those steps.
+        // Distribute Objects and Distribute Spacing with Align to Artboard, and Edit Symbol from the Symbols
+        // panel act on the active artboard, the view's, which the app passes as `artboard`. A batch passes
+        // it on to those steps.
         if (vectorcraft_engine::ON_ACTIVE_ARTBOARD.contains(&id) || id == "command.batch")
             && params.get("artboard").is_none()
             && self.view().is_some()
@@ -37,6 +110,29 @@ impl VectorcraftApp {
             && let Some(p) = params.as_object_mut()
         {
             p.insert("artboard".into(), serde_json::json!(panels::artboards::selected(self, n)));
+        }
+        // Edit Symbol from the Symbols panel in a document without artboards centers the symbol's
+        // art in the view, whose center the app passes as `viewCenter`, to a batch's symbol.edit
+        // steps too.
+        if matches!(id, "symbol.edit" | "command.batch")
+            && let Some(c) = self.view().map(|v| v.center)
+        {
+            let fill = |p: &mut serde_json::Value| {
+                if let Some(p) = p.as_object_mut() {
+                    p.entry("viewCenter").or_insert(serde_json::json!([c.x, c.y]));
+                }
+            };
+            if id == "symbol.edit" {
+                fill(&mut params);
+            } else if let Some(serde_json::Value::Array(steps)) = params.get_mut("commands") {
+                for step in steps {
+                    if step.get("command").and_then(serde_json::Value::as_str) == Some("symbol.edit")
+                        && let Some(step) = step.as_object_mut()
+                    {
+                        fill(step.entry("params").or_insert_with(|| serde_json::json!({})));
+                    }
+                }
+            }
         }
         // Object › Artboards › Fit to Artwork Bounds resizes the selected artboards (the Artboard
         // tool's, else the active one), which the app passes as its `indices`, and Fit to Selected
@@ -55,10 +151,6 @@ impl VectorcraftApp {
             }
         }
         if id.starts_with("edit.paste") {
-            if let Err(e) = self.adopt_system_clipboard() {
-                self.ui.status = e.clone();
-                return Err(e);
-            }
             // Paste (also without formatting) goes to the centre of the view.
             if matches!(id, "edit.paste" | "edit.pasteWithoutFormatting")
                 && ["center", "dx", "dy"].iter().all(|k| params.get(k).is_none())
@@ -66,6 +158,16 @@ impl VectorcraftApp {
                 && let Some(p) = params.as_object_mut()
             {
                 p.insert("center".into(), serde_json::json!([c.x, c.y]));
+            }
+            // A Paste the user gives decodes a bitmap off the UI thread ([`placing::adopt_for_paste`]),
+            // and runs with these params once it is decoded.
+            match placing::adopt_for_paste(self, id, &params) {
+                Err(e) => {
+                    self.ui.status = e.clone();
+                    return Err(e);
+                }
+                Ok(Some(started)) => return Ok(started),
+                Ok(None) => {}
             }
             if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
                 return r;
@@ -82,16 +184,26 @@ impl VectorcraftApp {
         let ime_view = self.view_info();
         let ime_target = crate::ime::target(&mut self.session, ime_view);
         let ime_before = crate::ime::stamp(&mut self.session, ime_view);
+        let cursor_settings = (self.session.caps_lock, self.session.prefs.use_precise_cursors);
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
+        if r.is_ok() && cursor_settings != (self.session.caps_lock, self.session.prefs.use_precise_cursors) {
+            self.canvas.hover_cursor = None;
+        }
         if r.is_ok()
             && let Some(ctx) = self.ui_ctx.clone()
         {
             crate::ime::note_application_edit(self, &ctx, ime_view, ime_target, ime_before);
         }
+        if r.is_ok()
+            && let Some(op) = completed_pathfinder_operation(id, &params)
+        {
+            self.last_pathfinder = Some(op.to_string());
+        }
         if r.is_ok() && matches!(id, "edit.copy" | "edit.cut") {
             self.publish_clipboard();
         }
         self.sync_views();
+        self.refresh_replace_font_warning(false);
         // File › Revert replaces the document in its tab, keeps the tab's view and starts the tool afresh.
         self.follow_artboard_tool(artboards);
         match &r {
@@ -115,22 +227,131 @@ impl VectorcraftApp {
                 if matches!(id, "dataset.select" | "dataset.next" | "dataset.prev") {
                     self.ui.status.clear();
                 }
-                if matches!(id, "text.setStyle" | "text.setRangeStyle")
-                    && let Some(font) = params.get("font").and_then(Value::as_str)
-                {
+                // A font applied with Character's font menu or Find Font's Change becomes the newest recent font.
+                // Find Font's Change records the family the text now carries (any name of it is stored as its
+                // own name), and only when it changed some text.
+                let applied = match id {
+                    "text.setStyle" | "text.setRangeStyle" => params.get("font").and_then(Value::as_str).map(str::to_string),
+                    "text.replaceFont" if v["runs"].as_u64().is_some_and(|n| n > 0) => {
+                        let to = &params["to"];
+                        to["family"].as_str().and_then(|family| {
+                            let style = to["style"].as_str().unwrap_or("Regular");
+                            vectorcraft_text::FontDb::global().resolve(family, style).map(|(face, _)| face.family.clone())
+                        })
+                    }
+                    _ => None,
+                };
+                if let Some(font) = applied.as_deref() {
                     let r = &mut self.ui.recent_fonts;
                     r.retain(|f| !f.eq_ignore_ascii_case(font));
                     r.insert(0, font.to_string());
                     r.truncate(MAX_RECENT_FONTS);
                 }
+                if id == "text.replaceFont" {
+                    self.update_replace_font_status(&params, v);
+                }
                 // A command's warning (Rasterize's when an image couldn't be decoded) shows in the
                 // status bar, as a tool preview's does.
                 if let Some(w) = v.get("warning").and_then(Value::as_str) {
-                    self.ui.status = w.to_string();
+                    self.set_command_warning(id, w);
                 }
             }
         }
         r
+    }
+
+    fn set_command_warning(&mut self, id: &str, warning: &str) {
+        self.ui.status = warning.to_string();
+        if id != "text.replaceFont" {
+            self.ui.replace_font_warning = None;
+        }
+    }
+
+    fn update_replace_font_status(&mut self, params: &Value, result: &Value) {
+        if let Some(warning) = result.get("warning").and_then(Value::as_str) {
+            let Some((document_uid, revision)) = self.session.active().map(|doc| (doc.uid, doc.revision)) else {
+                return;
+            };
+            let styles = self
+                .session
+                .execute("text.fonts", &serde_json::json!({}))
+                .ok()
+                .and_then(|value| value.as_array().cloned())
+                .map(|fonts| {
+                    fonts
+                        .iter()
+                        .filter_map(|font| {
+                            let description = substitute_style_description(font)?;
+                            if !warning.contains(&description) {
+                                return None;
+                            }
+                            Some((font["family"].as_str()?.to_string(), font["style"].as_str()?.to_string()))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let selection: Option<Vec<u64>> = (params["selectionOnly"] == true)
+                .then(|| self.session.active().map(|doc| doc.selection.objects.iter().map(|id| id.0).collect()).unwrap_or_default());
+            self.ui.replace_font_warning =
+                Some(ReplaceFontWarning { document_uid, revision, request: params.clone(), selection, text: warning.to_string(), styles });
+            return;
+        }
+        self.refresh_replace_font_warning(true);
+    }
+
+    pub(super) fn refresh_replace_font_warning(&mut self, force: bool) {
+        const SKIPPED: &str = "some text is hidden or locked, so its font wasn't replaced";
+        const STYLE_PREFIX: &str = "font styles that aren't available are drawn in the closest style: ";
+        const STYLE_SUFFIX: &str = " (pick a style the family has)";
+        let Some(previous) = self.ui.replace_font_warning.as_ref() else {
+            return;
+        };
+        let Some(revision) = self.session.active().filter(|doc| doc.uid == previous.document_uid).map(|doc| doc.revision) else {
+            return;
+        };
+        if (!force && revision == previous.revision) || previous.text != self.ui.status {
+            return;
+        }
+        let had_skipped = self.ui.status.starts_with(SKIPPED);
+        let had_style = !previous.styles.is_empty();
+        if !had_skipped && !had_style {
+            return;
+        }
+        let scoped_selection = previous.selection.as_ref().map(|selected| selected.iter().copied().map(vectorcraft_doc::NodeId).collect::<Vec<_>>());
+        let skipped_remains = if had_skipped {
+            self.session.skipped_font_ids(&previous.request, scoped_selection.as_deref()).is_ok_and(|ids| !ids.is_empty())
+        } else {
+            false
+        };
+        let (missing, live_styles) = if had_style {
+            let Some(fonts) = self.session.font_inventory(scoped_selection.as_deref()).ok().and_then(|value| value.as_array().cloned()) else {
+                return;
+            };
+            substitute_warnings(&fonts, &previous.styles)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+        let mut parts = Vec::new();
+        if skipped_remains {
+            parts.push(SKIPPED.to_string());
+        }
+        if !missing.is_empty() {
+            parts.push(format!(
+                "fonts that aren't available are drawn in the fallback font, {}: {} (install them, or replace them with Find Font)",
+                vectorcraft_text::FALLBACK_FAMILY,
+                missing.join(", ")
+            ));
+        }
+        if !live_styles.is_empty() {
+            parts.push(format!("{STYLE_PREFIX}{}{STYLE_SUFFIX}", live_styles.join(", ")));
+        }
+        self.ui.status = parts.join("; ");
+        if self.ui.status.is_empty() {
+            self.ui.replace_font_warning = None;
+        } else if let Some(warning) = &mut self.ui.replace_font_warning {
+            warning.revision = revision;
+            warning.text.clone_from(&self.ui.status);
+        }
     }
 
     /// Select a tool (also used by the toolbar and shortcuts).

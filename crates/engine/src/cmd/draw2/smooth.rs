@@ -9,7 +9,7 @@ use super::{
 /// Refit the anchors of an open run `a[lo..=hi]` keeping its end points and outer handles.
 fn refit_run(anchors: &[Anchor], tol: f64) -> Vec<Anchor> {
     let piece = PathData::single(SubPath::new(anchors.to_vec(), false));
-    let fitted = po::simplify_with(&piece, &SimplifyOptions { tolerance: tol, corner_angle_deg: 179.0, straight_lines: false });
+    let fitted = po::simplify_with(&piece, &SimplifyOptions { tolerance: tol, corner_angle_deg: 179.0, straight_lines: false, ..Default::default() });
     let Some(mut out) = fitted.subpaths.into_iter().next().map(|s| s.anchors).filter(|a| a.len() >= 2) else { return anchors.to_vec() };
     let (f, l) = (anchors[0], anchors[anchors.len() - 1]);
     let last = out.len() - 1;
@@ -32,8 +32,10 @@ fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64) -> Optio
     if sp.closed {
         let Some(k) = marked.iter().position(|m| !m) else {
             // Everything is in range: smooth the whole closed path.
-            let f =
-                po::simplify_with(&PathData::single(sp.clone()), &SimplifyOptions { tolerance: tol, corner_angle_deg: 179.0, straight_lines: false });
+            let f = po::simplify_with(
+                &PathData::single(sp.clone()),
+                &SimplifyOptions { tolerance: tol, corner_angle_deg: 179.0, straight_lines: false, ..Default::default() },
+            );
             return f.subpaths.into_iter().next();
         };
         // Rotate so an untouched anchor comes first, duplicate it at the end and treat as open.

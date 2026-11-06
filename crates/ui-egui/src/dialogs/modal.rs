@@ -1,8 +1,9 @@
 //! The modal dialog window: a backdrop that keeps the rest of the app from taking clicks, and a
 //! window with no title bar that opens centred and moves by dragging its heading (the band from its
-//! top edge down to the heading), as a title bar would. Where it was moved to stays, per window, for
-//! the session, and the window never leaves the screen. Rows too many for the screen's height
-//! scroll inside it ([`scrolled_rows`]), so its heading and buttons stay in view.
+//! top edge down to the heading), as a title bar would, showing the arrow until it is dragged. Where
+//! it was moved to stays, per window, for the session, and the window never leaves the screen. Rows
+//! too many for the screen's height scroll inside it ([`scrolled_rows`]), so its heading and buttons
+//! stay in view.
 
 use egui::{Id, Rect, Vec2};
 
@@ -21,7 +22,8 @@ pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2
     let dim = backdrop();
     egui::Area::new(dim.id).order(dim.order).fixed_pos(egui::Pos2::ZERO).show(ctx, |ui| {
         // Modal, but the canvas isn't dimmed so previews stay readable (as in the reference app).
-        ui.allocate_rect(ctx.content_rect(), egui::Sense::click());
+        // Not focusable (`Sense::click()` is): Tab goes through the dialog's controls, not the backdrop.
+        ui.allocate_rect(ctx.content_rect(), egui::Sense::CLICK);
     });
     let shown = egui::Window::new(title)
         .id(id)
@@ -57,16 +59,17 @@ pub(crate) fn drag_band(ui: &mut egui::Ui, bottom: f32) {
     // Last frame's rectangle: none while the window measures itself the first time it shows.
     let Some(outer) = ui.ctx().memory(|m| m.area_rect(id)) else { return };
     let band = Rect::from_x_y_ranges(outer.x_range(), outer.top()..=bottom.max(outer.top()));
-    let r = ui.interact(band, handle(id), egui::Sense::drag());
+    // Not focusable (`Sense::drag()` is): Tab goes through the dialog's controls, not the band.
+    let r = ui.interact(band, handle(id), egui::Sense::DRAG);
+    // Hovered, it keeps the arrow, as a title bar does (the grab cursor is Windows' four-way move
+    // arrows: #5246); only while it is dragged does it show the window being carried.
     if r.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-    } else if r.hovered() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
     }
 }
 
 /// The drag handle of window `id`.
-fn handle(id: Id) -> Id {
+pub(super) fn handle(id: Id) -> Id {
     id.with("modal-drag")
 }
 

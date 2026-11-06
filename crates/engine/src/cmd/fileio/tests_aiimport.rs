@@ -6,7 +6,7 @@ use std::io::Write as _;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{Node, NodeId, NodeKind};
 use vectorcraft_testkit::ai;
 use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with};
 
@@ -82,6 +82,133 @@ fn an_illustrator_ai_file_opens_from_its_editing_data() {
     assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
 }
 
+/// Opening a `.ai` or a PDF whose PDF part reads, or a `.ai` saved without PDF compatibility,
+/// reads and checks the file once, on any thread, for the document it may carry, its pages, its
+/// editing data and its File Info, with pages picked or not.
+#[test]
+fn an_ai_or_pdf_file_is_read_once_when_it_opens() {
+    let ai_file = ai::ai(&compressed(&ai::sample_data()), ai::page_pdf());
+    let pdf_file = pdf_with(&[PdfPage::new(100.0, 100.0, "0 0 1 rg 10 10 50 50 re f")], &[], None);
+    let placeholder = ai::ai(&compressed(&ai::sample_data()), PLACEHOLDER);
+    for (name, file) in [("art.ai", &ai_file), ("art.pdf", &pdf_file), ("placeholder.ai", &placeholder)] {
+        for opts in [LoadOptions::default(), LoadOptions { pages: Some("1".into()), ..Default::default() }] {
+            let before = vectorcraft_pdf::reads_of(file);
+            let loaded = load_with(name, file, &opts).unwrap();
+            assert_eq!(vectorcraft_pdf::reads_of(file) - before, 1, "{name}, pages {:?}", opts.pages);
+            let editing_data = name == "placeholder.ai" || (name == "art.ai" && opts.pages.is_none());
+            assert_eq!(loaded.editing_data, editing_data, "{name}, pages {:?}", opts.pages);
+        }
+    }
+}
+
+#[test]
+fn an_ai_file_opens_with_its_artboard_options_raster_settings_and_author() {
+    let document = "%_/Document :\n%_/Dictionary :\n%_/Dictionary :\n%_150 /Int (dpi.) ,\n%_1 /Bool (mask) ,\n%_; (AI Auto Rasterize) ,\n\
+                    %_/Array :\n%_/Dictionary :\n%_3 /Int (DisplayMark) ,\n%_1.33 /Real (PAR) ,\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n\
+                    %_200 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_(Board) /UnicodeString (Name) ,\n%_; ,\n%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    // The sample (it holds binary samples) with `insert` before the first `at`.
+    let before = |data: Vec<u8>, at: &[u8], insert: &str| {
+        let i = data.windows(at.len()).position(|w| w == at).unwrap();
+        [&data[..i], insert.as_bytes(), &data[i..]].concat()
+    };
+    let data = before(before(ai::sample_data(), b"%%EndComments", "%%For: (Ann Lee) (Studio)\n"), b"%AI5_BeginLayer", document);
+    let mut s = Session::new();
+    let r = open(&mut s, "art.ai", &ai::ai(&data, ai::page_pdf()), json!({})).unwrap();
+    check_sample(&s);
+    let d = &s.doc().unwrap().doc;
+    assert!(r["warnings"].as_array().unwrap().iter().all(|w| !w.as_str().unwrap().contains("weren't read")), "{r}");
+    let b = &d.artboards[0];
+    assert_eq!((b.name.as_str(), b.show_center_mark, b.show_cross_hairs, b.show_video_safe_areas), ("Board", true, true, false));
+    assert_eq!(b.video_ruler_pixel_aspect_ratio, 1.33);
+    assert_eq!((d.raster_effects_ppi, d.raster_effects.clipping_mask), (150.0, true));
+    assert_eq!(d.metadata.author, "Ann Lee");
+}
+
+#[test]
+fn an_ai_file_opens_with_its_active_artboard() {
+    let board = |x: i32, name: &str| {
+        format!(
+            "%_/Dictionary :\n%_{x} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_({name}) /UnicodeString (Name) ,\n%_; ,\n",
+            x + 200
+        )
+    };
+    let document = format!(
+        "%_/Document :\n%_/Dictionary :\n%_/Array :\n{}{}%_; (ArtboardArray) ,\n%_1 /Int (CropAreaActive) ,\n%_; /NotRecorded ,\n%_;\n",
+        board(0, "One"),
+        board(300, "Two")
+    );
+    let data = ai::sample_data();
+    let at = data.windows(15).position(|w| w == b"%AI5_BeginLayer").unwrap();
+    let data = [&data[..at], document.as_bytes(), &data[at..]].concat();
+    let mut s = Session::new();
+    let r = open(&mut s, "art.ai", &ai::ai(&compressed(&data), PLACEHOLDER), json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let names: Vec<&str> = d.artboards.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(names, ["One", "Two"], "{r}");
+    assert_eq!(d.opened_artboard, Some(d.artboards[1].id), "{r}");
+}
+
+#[test]
+fn an_ai_unread_group_keeps_its_layers_and_live_neighbor() {
+    let live = format!("0 0 1 0 k\n{}f", ai::rect(10.0, 10.0, 14.0, 14.0));
+    let unread = format!("u\n0 0 1 0 k\n{}f\nZZ\nU\n{}", ai::rect(50.0, 10.0, 54.0, 14.0), ai::named("Unread"));
+    let data = ai::editing_data(200.0, 100.0, &(ai::layer("Live", &live) + &ai::layer("Mixed", &unread)));
+    let page = "0 0 1 0 k 10 10 4 4 re f 1 0 0 0 k 50 10 4 4 re f";
+    let mut session = Session::new();
+    let result = open(&mut session, "unread.ai", &ai::ai(&compressed(data.as_bytes()), page), json!({})).unwrap();
+    let doc = &session.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Live", "Mixed"], "{result}");
+    assert!(matches!(doc.layers[0].children().unwrap()[0].kind, NodeKind::Path { .. }), "{result}");
+    assert!(matches!(doc.layers[1].children().unwrap()[0].kind, NodeKind::Group { .. }), "{result}");
+    assert_eq!(doc.layers[1].children().unwrap()[0].name.as_deref(), Some("Unread"), "{result}");
+    let replacement = &doc.layers[1].children().unwrap()[0].children().unwrap()[0];
+    assert!(
+        matches!(replacement.appearance.items.first(), Some(vectorcraft_doc::AppearanceItem::Fill(fill))
+        if fill.paint == vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(1.0, 0.0, 0.0, 0.0))),
+        "{result}"
+    );
+    assert!(result["warnings"].to_string().contains("`ZZ` (1)"), "{result}");
+}
+
+#[test]
+fn a_differing_object_keeps_the_layers_with_a_note() {
+    let square = |cmyk: &str, x: f64| format!("{cmyk} k\n{}f\n", ai::rect(x, 40.0, x + 16.0, 56.0));
+    let front = square("0 0 0 1", 90.0) + &square("0 0 1 0", 160.0);
+    let data = ai::editing_data(200.0, 100.0, &(ai::layer("Back", &square("0 0 1 0", 20.0)) + &ai::layer("Front", &front)));
+    let page = "0 0 1 0 k 20 40 16 16 re f 1 0 0 0 k 90 40 16 16 re f 0 0 1 0 k 160 40 16 16 re f";
+    let mut session = Session::new();
+    let result = open(&mut session, "differs.ai", &ai::ai(&compressed(data.as_bytes()), page), json!({})).unwrap();
+    let doc = &session.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Back", "Front"], "{result}");
+    let front = doc.layers[1].children().unwrap();
+    assert!(matches!(front[0].kind, NodeKind::Group { .. }) && matches!(front[1].kind, NodeKind::Path { .. }), "{result}");
+    let replacement = &front[0].children().unwrap()[0];
+    assert!(
+        matches!(replacement.appearance.items.first(), Some(vectorcraft_doc::AppearanceItem::Fill(fill))
+        if fill.paint == vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(1.0, 0.0, 0.0, 0.0))),
+        "{result}"
+    );
+    assert!(
+        result["warnings"].to_string().contains("objects that drew differently from the file's own page came in as its art: Front (1)"),
+        "{result}"
+    );
+    // An export to the file's own path is refused unless it is given `acknowledgeLoss`.
+    let d = std::env::temp_dir().join(format!("vc-aidiffers-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("differs.ai");
+    let file = ai::ai(&compressed(data.as_bytes()), page);
+    std::fs::write(&path, &file).unwrap();
+    let path = path.to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    let e = s.execute("document.export", &json!({"path": path})).unwrap_err().to_string();
+    assert!(e.contains("left things out") && e.contains("objects that drew differently"), "{e}");
+    assert_eq!(std::fs::read(&path).unwrap(), file);
+    s.execute("document.export", &json!({"path": path, "acknowledgeLoss": true})).unwrap();
+    assert_ne!(std::fs::read(&path).unwrap(), file);
+    std::fs::remove_dir_all(d).ok();
+}
+
 /// A palette of three swatches and a color group `Inks` holding a fourth.
 const INKS_PALETTE: &str = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0 1 1 1 Xa\n(White)\nPc\n0.04 0.3 0 0 81.96 21 -8 (Pink ink) 0 2 Xx\n(Pink ink)\nPc\n\
                             0.06 0.98 1 0 (Red ink) 0 x\n(Red ink)\nPc\n1 (Inks) 1 Pg\n0.02 0.1 1 0 (Yellow ink) 0 x\n(Yellow ink)\nPc\nPB\n%AI5_EndPalette\n";
@@ -113,6 +240,36 @@ fn an_ai_file_opens_with_the_swatches_of_its_palette() {
         "{:?}",
         red.appearance.fill()
     );
+}
+
+/// A `.ai` opens with the graphic styles of its style list, in the list's order, and an object read
+/// as itself with a listed style is linked to it.
+#[test]
+fn an_ai_file_opens_with_the_graphic_styles_of_its_style_list() {
+    let style = |name: &str, xa: &str| {
+        format!(
+            "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{xa}0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+             /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n"
+        )
+    };
+    let styles = format!(
+        "%AI9_BeginArtStyles\n{}{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Red)\n(Blue)\n%AI9_EndArtStyleList\n",
+        style("Blue", "0 0 0 0 0 0 1 Xa\n"),
+        style("Red", "0 0 0 0 1 0 0 Xa\n")
+    );
+    let hidden = ai::rect(10.0, 50.0, 40.0, 90.0).replace('\n', "\n%_");
+    let art = format!("0 Ae\nu\n0 0 0 0 1 0 0 Xa\n{}f\nU\n%_{hidden}f\n1 (Red) XW\n", ai::rect(10.0, 50.0, 40.0, 90.0));
+    let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("Art", &art)));
+    let mut s = Session::new();
+    let r = open(&mut s, "styles.ai", &ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Art"], "opened from the editing data: {r}");
+    let styles: Vec<(&str, u32)> = doc.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect();
+    assert_eq!(styles, [("Red", 1), ("Blue", 2)]);
+    let square = &doc.layers[0].children().unwrap()[0];
+    assert_eq!(square.extras().graphic_style, Some(1), "{square:#?}");
 }
 
 /// A `.ai` whose editing data has a palette and no layers, as a swatch library is saved, opens as its
@@ -154,6 +311,38 @@ fn a_swatch_library_in_a_ai_file_without_layers_loads_its_palette() {
     assert!(matches!(sky, Some(vectorcraft_color::Paint::Gradient(_))), "{sky:?}");
 }
 
+/// Other Library… on a `.ai` graphic style library (art styles, their list and no layers) gives the
+/// library the styles of its list, in the list's order, not the default styles; the file opens with
+/// them too.
+#[test]
+fn a_graphic_style_library_in_a_ai_file_without_layers_loads_its_styles() {
+    let style = |name: &str, xa: &str| {
+        format!(
+            "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{xa}0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n"
+        )
+    };
+    let styles = format!(
+        "%AI9_BeginArtStyles\n{}{}{}%AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(Red)\n(Green)\n(Blue)\n%AI9_EndArtStyleList\n",
+        style("Blue", "0 0 0 0 0 0 1 Xa\n"),
+        style("Green", "0 0 0 0 0 1 0 Xa\n"),
+        style("Red", "0 0 0 0 1 0 0 Xa\n")
+    );
+    let data = ai::editing_data(200.0, 100.0, &styles);
+    let file = ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
+    let mut s = Session::new();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "fills.ai"});
+    let r = s.execute("graphicStyle.loadLibrary", &p).unwrap();
+    assert_eq!((&r["name"], &r["count"]), (&json!("fills"), &json!(3)), "{r}");
+    let lib = s.execute("graphicStyle.library", &json!({"library": r["library"]})).unwrap();
+    let names: Vec<&str> = lib["styles"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Red", "Green", "Blue"], "{lib}");
+    let r = open(&mut s, "fills.ai", &file, json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let styles: Vec<(&str, u32)> = doc.graphic_styles.iter().map(|g| (g.name.as_str(), g.id)).collect();
+    assert_eq!(styles, [("Red", 1), ("Green", 2), ("Blue", 3)], "{r}");
+}
+
 /// A 1-bit RGB image opens from the editing data in the colors its PDF part shows.
 #[test]
 fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {
@@ -173,6 +362,24 @@ fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {
         found.push(img.pixels().map(|p| p.0).collect::<Vec<_>>());
     });
     assert_eq!(found, [[[255, 0, 0], [0, 255, 0], [0, 0, 255]]], "{r}");
+}
+
+/// A stroke of width 0 (`0 w`) in the editing data is the thinnest line the device draws: the
+/// opened `.ai` shows a hairline where the same path without its stroke shows nothing.
+#[test]
+fn a_zero_width_stroke_in_the_editing_data_draws_a_hairline() {
+    let drawn = |art: &str| {
+        let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", art));
+        let file = ai::ai(&compressed(data.as_bytes()), "");
+        let mut s = Session::new();
+        let r = open(&mut s, "zero.ai", &file, json!({})).unwrap();
+        assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
+        let v = s.execute("document.export", &json!({"format": "png", "background": "transparent"})).unwrap();
+        let png = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
+        image::load_from_memory(&png).unwrap().to_rgba8().pixels().filter(|p| p.0[3] > 0).count()
+    };
+    assert!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nS\n") > 0, "the hairline draws");
+    assert_eq!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nN\n"), 0, "the unstroked path draws nothing");
 }
 
 /// A page of a square and a line of type, as a `.ai`'s PDF part draws them.
@@ -326,6 +533,167 @@ fn editing_data_that_cant_be_read_keeps_the_pdf_parts_notes() {
     assert_eq!(r["warnings"], json!([vectorcraft_pdf::PAST_PAGE_NOTE, unread]), "{r}");
 }
 
+/// Decode parameters the import refuses, for the page's content stream (#4366).
+const REFUSED_CONTENT: &str = "/DecodeParms << /Predictor 12 /Columns 0 >>";
+
+/// A `.ai` and a PDF saved with the editing data, carrying `private`, whose page's content stream
+/// the import refuses.
+fn refused_files(private: &[u8], page: &str) -> [(&'static str, Vec<u8>); 2] {
+    [("art.ai", ai::ai_with_content(private, page, REFUSED_CONTENT)), ("art.pdf", ai::pdf_with_content(private, page, REFUSED_CONTENT))]
+}
+
+/// The note of a file opened from its editing data because its PDF part fails with `e`.
+fn unread_pdf_part(e: &str) -> String {
+    format!("the PDF part couldn't be read ({e}): the file opened from its editing data")
+}
+
+/// #4366: a `.ai`, or a PDF saved with the editing data, whose PDF part can't be read opens from
+/// its editing data, with a first note saying why. Pages picked, layers off or the editing data
+/// off keep the error, and so does editing data that can't be read.
+#[test]
+fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
+    let mut s = Session::new();
+    for (name, file) in refused_files(&compressed(&ai::sample_data()), ai::page_pdf()) {
+        let e = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
+        assert!(e.contains("a page's content in it (object 4) has decode parameters that can't be applied"), "{name}: {e}");
+        let r = open(&mut s, name, &file, json!({})).unwrap();
+        assert_eq!(r["format"], json!(&name[4..]), "{name}: {r}");
+        assert_eq!(r["warnings"], json!([unread_pdf_part(&e)]), "{name}: {r}");
+        check_sample(&s);
+        assert!(load(name, &file).unwrap().editing_data, "{name}");
+        for p in [json!({"pages": "1"}), json!({"layers": false})] {
+            assert_eq!(open(&mut s, name, &file, p.clone()).unwrap_err().to_string(), e, "{name}: {p}");
+        }
+    }
+    for (name, file) in refused_files(b"%AI12_CompressedData not zlib", ai::page_pdf()) {
+        let plain = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
+        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), plain, "{name}");
+    }
+}
+
+/// A file saved in units of 10 points (`/UserUnit 10`, as in
+/// `an_ai_file_with_a_user_unit_opens_at_its_size_in_points`) whose PDF part can't be read opens
+/// from its editing data at its size in points.
+#[test]
+fn a_file_whose_pdf_part_cant_be_read_opens_at_its_size_in_points() {
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &format!("0 1 1 0 1 0 0 Xa\n{}f\n", ai::rect(20.0, 20.0, 60.0, 50.0))));
+    let file = ai::ai_with_entries_and_content(&compressed(data.as_bytes()), "1 0 0 rg 20 20 40 30 re f", "/UserUnit 10", REFUSED_CONTENT);
+    let near = |r: vectorcraft_geom::Rect, want: [f64; 4]| [r.x0, r.y0, r.x1, r.y1].iter().zip(want).all(|(a, b)| (a - b).abs() < 0.01);
+    let mut s = Session::new();
+    let r = open(&mut s, "large.ai", &file, json!({})).unwrap();
+    assert!(r["warnings"][0].as_str().unwrap().starts_with("the PDF part couldn't be read ("), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    assert!(near(doc.artboards[0].rect, [0.0, 0.0, 2000.0, 1000.0]), "{:?}", doc.artboards[0].rect);
+    let art = doc.art_bounds().unwrap();
+    assert!(near(art, [200.0, 500.0, 600.0, 800.0]), "{art:?}");
+    // On a page turned a quarter, the same.
+    let file = ai::ai_with_entries_and_content(&compressed(data.as_bytes()), "", "/UserUnit 10 /Rotate 90", REFUSED_CONTENT);
+    open(&mut s, "turned.ai", &file, json!({})).unwrap();
+    assert!(near(s.doc().unwrap().doc.artboards[0].rect, [0.0, 0.0, 2000.0, 1000.0]), "{:?}", s.doc().unwrap().doc.artboards[0].rect);
+    // A page cropped to the art: its box has the art's size in those units.
+    let art = format!("0 1 1 0 1 0 0 Xa\n{}f\n", ai::rect(20.0, 20.0, 60.0, 50.0));
+    let cropped = ai::editing_data_in([20.0, 20.0, 60.0, 50.0], [0.0, 0.0, 200.0, 100.0], &ai::layer("Art", &art));
+    let file = ai::ai_with_entries_and_content(&compressed(cropped.as_bytes()), "", "/UserUnit 10 /TrimBox [20 20 60 50]", REFUSED_CONTENT);
+    open(&mut s, "cropped.ai", &file, json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert!(near(doc.artboards[0].rect, [0.0, 0.0, 2000.0, 1000.0]), "{:?}", doc.artboards[0].rect);
+    assert!(near(doc.art_bounds().unwrap(), [200.0, 500.0, 600.0, 800.0]), "{:?}", doc.art_bounds());
+    // Saved in points, it opens as it is.
+    let file = ai::ai_with_entries_and_content(&compressed(data.as_bytes()), "", "", REFUSED_CONTENT);
+    open(&mut s, "points.ai", &file, json!({})).unwrap();
+    assert!(near(s.doc().unwrap().doc.artboards[0].rect, [0.0, 0.0, 200.0, 100.0]));
+}
+
+/// Type asked for as outlines in a file whose PDF part can't be read: the editing data's type,
+/// outlined, as for a file saved without its PDF part.
+#[test]
+fn a_file_whose_pdf_part_cant_be_read_outlines_its_type_when_asked() {
+    let [(name, file), _] = refused_files(&typed_data(), "");
+    let mut s = Session::new();
+    let r = open(&mut s, name, &file, json!({})).unwrap();
+    assert_eq!(texts_and_paths(&s).0, 1, "by default the editing data's type is type: {r}");
+    let r = open(&mut s, name, &file, json!({"textAs": "outlines"})).unwrap();
+    let (texts, paths) = texts_and_paths(&s);
+    assert_eq!(texts, 0, "no type left: {r}");
+    assert!(paths > 0, "the outlines are there: {r}");
+}
+
+/// An image too large to read from the editing data of a file whose PDF part can't be read is
+/// left out, and both notes say so.
+#[test]
+fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
+    let data = String::from_utf8_lossy(&ai::sample_data()).replace("] 0 0 2 1 2 1 8 3", "] 0 0 6000 6000 6000 6000 8 3");
+    let [(name, file), _] = refused_files(&compressed(data.as_bytes()), ai::page_pdf());
+    let mut s = Session::new();
+    let e = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
+    let r = open(&mut s, name, &file, json!({})).unwrap();
+    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image too large to read from the editing data was left out"]), "{r}");
+}
+
+/// A copied file whose PDF part can't be read pastes the objects of its editing data when asked
+/// for them, with the note; without `editingData` its page can't be read.
+#[test]
+fn a_copied_file_whose_pdf_part_cant_be_read_pastes_from_its_editing_data() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    for (name, file) in refused_files(&compressed(&ai::sample_data()), ai::page_pdf()) {
+        let (r, pasted) = paste(&mut s, &file, true);
+        assert_eq!(r["count"], 7, "{name}: {r}");
+        let pasted: Vec<String> = pasted.iter().map(|n| n.name.clone().unwrap_or_default()).collect();
+        assert_eq!(pasted, ["Pair", "Ring", "Window", "Shaded", "", "Sub", ""], "{name}");
+        assert!(r["warnings"][0].as_str().unwrap().starts_with("the PDF part couldn't be read (cannot read PDF: "), "{name}: {r}");
+        let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file)});
+        let e = s.execute("clipboard.importPdf", &p).unwrap_err().to_string();
+        assert!(e.contains("decode parameters"), "{name}: {e}");
+    }
+}
+
+/// A file whose PDF part can't be read places its first artboard from its editing data, with the
+/// note; any other page keeps the error.
+#[test]
+fn a_file_whose_pdf_part_cant_be_read_places_from_its_editing_data() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    for (name, file) in refused_files(&compressed(&ai::sample_data()), ai::page_pdf()) {
+        let data = vectorcraft_format::base64_encode(&file);
+        let r = s.execute("file.place", &json!({"name": name, "dataBase64": data, "link": false})).unwrap();
+        assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(200.0), Some(100.0)), "{name}: {r}");
+        assert!(r["warnings"][0].as_str().unwrap().starts_with("the PDF part couldn't be read ("), "{name}: {r}");
+        let placed = s.doc().unwrap().doc.layers[0].children().unwrap().last().unwrap().clone();
+        assert_eq!(names(&placed.children().unwrap()[1..]), ["Pair", "Ring", "Window"], "{name}: after the clipping path");
+        for off in [json!({"editingData": false}), json!({"layers": false})] {
+            let mut p = json!({"name": name, "dataBase64": data, "link": false});
+            p.as_object_mut().unwrap().extend(off.as_object().unwrap().clone());
+            let e = s.execute("file.place", &p).unwrap_err().to_string();
+            assert!(e.contains("decode parameters"), "{name}: {off}: {e}");
+        }
+    }
+    let [(name, file), _] = refused_files(&typed_data(), "");
+    let data = vectorcraft_format::base64_encode(&file);
+    let r = s.execute("file.place", &json!({"name": name, "dataBase64": data, "link": false, "textAs": "outlines", "crop": "bounding"})).unwrap();
+    assert!(r["warnings"][0].as_str().unwrap().starts_with("the PDF part couldn't be read ("), "{r}");
+    let placed = s.doc().unwrap().doc.layers[0].children().unwrap().last().unwrap().clone();
+    let mut texts = 0;
+    placed.walk(&mut |n| texts += usize::from(matches!(n.kind, NodeKind::Text(_))));
+    assert_eq!(texts, 0, "placed with its type outlined: {r}");
+    // Two artboards: the second can't be placed.
+    let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+        %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_/Dictionary :\n%_0 -50 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 -150 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let art = format!("0 g\n{}f\n{}f\n", ai::rect(10.0, 10.0, 50.0, 50.0), ai::rect(10.0, -140.0, 70.0, -100.0));
+    let paged = ai::editing_data(100.0, 100.0, &(boards.to_string() + &ai::layer("Art", &art)));
+    let [(name, file), _] = refused_files(&compressed(paged.as_bytes()), ai::page_pdf());
+    let data = vectorcraft_format::base64_encode(&file);
+    let size = |s: &mut Session, page: u64| {
+        let r = s.execute("file.place.info", &json!({"name": name, "dataBase64": data, "page": page, "crop": "bounding"}));
+        r.map(|r| (r["width"].as_f64(), r["height"].as_f64())).map_err(|e| e.to_string())
+    };
+    assert_eq!(size(&mut s, 1), Ok((Some(40.0), Some(40.0))));
+    let second = size(&mut s, 2);
+    assert!(second.as_ref().is_err_and(|e| e.contains("decode parameters")), "{second:?}");
+}
+
 /// A copied `.ai` whose editing data can't be read, or isn't there, pastes its page as a PDF
 /// does: the same objects as without `editingData`.
 #[test]
@@ -360,32 +728,107 @@ fn what_the_reader_doesnt_read_opens_as_before_with_a_warning() {
     assert!(r["warnings"].to_string().contains("symbols") && r["warnings"].to_string().contains("PDF part"), "{r}");
 }
 
-/// A `.ai` whose document data has a variable library opens with a note that its variables and
-/// data sets weren't read, whether its layers are read or it comes in as its PDF part.
+/// A `.ai` whose document data has a variable library opens with its variables, data sets, active
+/// data set and lock, whether its layers are read or it comes in as its PDF part: `variable.list`
+/// and `dataset.list` report them. A variable of unknown kind can't be bound. What of the library
+/// can't be read is noted. With its layers read, the object a variable is bound to comes in bound,
+/// and selecting a data set changes it; the bindings to objects the file doesn't have are noted.
 #[test]
-fn an_ai_file_with_a_variable_library_says_its_variables_werent_read() {
-    const NOTE: &str = "the file's variables and data sets weren't read (variables: 2, data sets: 3): the Variables panel doesn't list them";
-    let library = ai::variable_library(&["Name", "Number"], &["One", "Two", "Three"]);
-    let square = format!("0 1 1 0 1 0 0 Xa\n{}f\n", ai::rect(10.0, 50.0, 40.0, 90.0));
-    let notes =
-        |r: &Value| r["warnings"].as_array().unwrap().iter().filter(|w| w.as_str().unwrap().contains("variables")).cloned().collect::<Vec<_>>();
+fn an_ai_file_opens_its_variable_library() {
+    let library = ai::variable_library_data(&ai::sample_variable_sets("variableAndTypes", &[]));
+    let square = format!("0 1 1 0 1 0 0 Xa\n{}f\n{}", ai::rect(10.0, 50.0, 40.0, 90.0), ai::named("path_x5F_1"));
+    let notes = |r: &Value| {
+        r["warnings"].as_array().map_or(vec![], |w| w.iter().filter(|w| w.as_str().unwrap().contains("variable")).cloned().collect::<Vec<_>>())
+    };
+    let skipped = |n: usize| {
+        json!(format!("the file's variable bindings weren't all read (bindings skipped: {n}): those objects aren't bound to their variables"))
+    };
+    let check = |s: &mut Session, bound: usize| {
+        let r = s.execute("variable.list", &json!({})).unwrap();
+        assert_eq!(
+            r,
+            json!({"variables": [
+                {"name": "v_text", "kind": "text", "bindings": 0},
+                {"name": "v_visible", "kind": "visibility", "bindings": bound},
+                {"name": "v_file", "kind": "image", "bindings": 0},
+                {"name": "v_graph", "kind": "graph", "bindings": 0},
+                {"name": "v_unbound", "kind": "unknown", "bindings": 0},
+            ], "locked": true})
+        );
+        let r = s.execute("dataset.list", &json!({})).unwrap();
+        assert_eq!(r["active"], "ds_two", "{r}");
+        let names: Vec<&str> = r["datasets"].as_array().unwrap().iter().map(|d| d["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["ds_one", "ds_two", "ds_three"]);
+        assert_eq!(
+            r["datasets"][1]["values"],
+            json!({"v_text": {"text": "line one\nline two & < é"}, "v_visible": {"visible": false}, "v_file": {"image": ai::SAMPLE_MISSING_FILE}})
+        );
+    };
     let mut s = Session::new();
     let layered = ai::editing_data(200.0, 100.0, &format!("{library}{}", ai::layer("Art", &square)));
     let file = ai::ai(&compressed(layered.as_bytes()), "1 0 0 rg 10 50 30 40 re f");
     let r = open(&mut s, "variables.ai", &file, json!({})).unwrap();
     assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
-    assert_eq!(notes(&r), [json!(NOTE)], "{r}");
-    let r = s.execute("variable.list", &json!({})).unwrap();
-    assert_eq!(r["variables"], json!([]), "{r}");
-    // Its layers can't be read (a symbol): it comes in as its PDF part, with the note.
+    // The library's text and image variables are bound to objects the file doesn't have.
+    assert_eq!(notes(&r), [skipped(2)], "{r}");
+    check(&mut s, 1);
+    let id = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id;
+    assert_eq!(s.doc().unwrap().doc.variables.objects_of("v_visible"), [id]);
+    s.execute("dataset.select", &json!({"name": "ds_two"})).unwrap();
+    assert!(!s.doc().unwrap().doc.node(id).unwrap().visible, "ds_two hides the square");
+    s.execute("dataset.select", &json!({"name": "ds_one"})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).unwrap().visible, "ds_one shows it");
+    let e = s.execute("variable.bind", &json!({"variable": "v_unbound", "ids": [id.0]})).unwrap_err();
+    assert!(e.to_string().contains("a variable of unknown kind can't be bound to objects"), "{e}");
+    // Its layers can't be read (a symbol): it comes in as its PDF part, with the library and none
+    // of its bindings.
     let symbols = ai::editing_data(200.0, 100.0, &format!("{library}{}", ai::layer("Art", "/SymbolInstance :\n(Dot) /SymbolRef ,\n;\n")));
     let r = open(&mut s, "symbols.ai", &ai::ai(&compressed(symbols.as_bytes()), ai::page_pdf()), json!({})).unwrap();
     assert!(r["warnings"].to_string().contains("PDF part"), "{r}");
-    assert_eq!(notes(&r), [json!(NOTE)], "{r}");
-    // Without a library, no note.
+    assert_eq!(notes(&r), [skipped(3)], "{r}");
+    check(&mut s, 0);
+    // A graph value isn't read: the note says how many entries were left out.
+    let graph = ai::xml_element("v_graph", &[], &[ai::xml_text(ai::XmlValue::Str("a,b"))]);
+    let partly = ai::variable_library_data(&ai::sample_variable_sets("none", &[graph]));
+    let layered = ai::editing_data(200.0, 100.0, &format!("{partly}{}", ai::layer("Art", &square)));
+    let r = open(&mut s, "graph.ai", &ai::ai(&compressed(layered.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();
+    assert_eq!(
+        notes(&r),
+        [json!("the file's variable library was partly read (entries skipped: 1): the Variables panel lists the rest"), skipped(2)],
+        "{r}"
+    );
+    // Without a library, no note and no variables.
     let plain = ai::editing_data(200.0, 100.0, &ai::layer("Art", &square));
     let r = open(&mut s, "plain.ai", &ai::ai(&compressed(plain.as_bytes()), "1 0 0 rg 10 50 30 40 re f"), json!({})).unwrap();
     assert!(notes(&r).is_empty(), "{r}");
+    assert_eq!(s.execute("variable.list", &json!({})).unwrap()["variables"], json!([]));
+}
+
+/// An Objects on Path group in a `.ai` file opens as one: its record names the group's children by
+/// their ids in the opened document.
+#[test]
+fn an_ai_file_opens_its_objects_on_path_group_live() {
+    let ids = ["9b1c0e7a-0000-4000-8000-000000000001", "9b1c0e7a-0000-4000-8000-000000000002", "9b1c0e7a-0000-4000-8000-000000000003"];
+    let options = ai::on_path_options(2, 4, std::f64::consts::FRAC_PI_2, "");
+    let record = ai::on_path_record("Adobe Align On Path", &ids, &options); // brand-ok: the record's name in the files
+    let group = format!(
+        "0 Ae\nu\n/ConstraintGroup :\n128 /GroupType ,\n;\n0 0 1 0 0 0 1 XA\n10 50 m\n190 50 L\nS\n{}0 1 1 0 1 0 0 Xa\n{}f\n{}{}f\n{}U\n",
+        ai::on_path_member(ids[0], None, 0.0),
+        ai::rect(5.0, 45.0, 15.0, 55.0),
+        ai::on_path_member(ids[1], Some(0), 0.0),
+        ai::rect(185.0, 45.0, 195.0, 55.0),
+        ai::on_path_member(ids[2], Some(1), 0.0),
+    );
+    let data = ai::editing_data(200.0, 100.0, &format!("{record}{}", ai::layer("Art", &group)));
+    let mut s = Session::new();
+    let r = open(&mut s, "on-path.ai", &ai::ai(&compressed(data.as_bytes()), "1 0 0 rg 5 45 10 10 re f 185 45 10 10 re f"), json!({})).unwrap();
+    assert_eq!(r["format"], json!("ai"), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    let g = &doc.layers[0].children().unwrap()[0];
+    let rec = g.extras().objects_on_path.as_deref().expect("an Objects on Path group");
+    let kids: Vec<NodeId> = g.children().unwrap().iter().map(|c| c.id).collect();
+    assert!(kids.contains(&rec.path) && rec.members.iter().all(|m| kids.contains(&m.id)), "{rec:?} {kids:?}");
+    assert_eq!((rec.members.len(), rec.pivot, rec.rotate.round()), (2, 4, 90.0));
 }
 
 /// A page showing only a placeholder line, as a `.ai` saved without PDF compatibility has.
@@ -482,7 +925,7 @@ fn an_ai_file_saved_without_its_pdf_part_places_from_its_editing_data() {
     assert_eq!(size(1), Ok((Some(40.0), Some(40.0))));
     assert_eq!(size(2), Ok((Some(60.0), Some(40.0))));
     let third = size(3);
-    assert!(third.as_ref().is_err_and(|e| e.contains("has 2 page(s)")), "{third:?}");
+    assert!(third.as_ref().is_err_and(|e| e.contains("has 2 pages")), "{third:?}");
     let e = s.execute("file.place", &json!({"name": "damaged.ai", "dataBase64": damaged})).unwrap_err().to_string();
     assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
     let e = s.execute("file.place", &json!({"name": "plain.ai", "dataBase64": plain})).unwrap_err().to_string();
@@ -533,6 +976,234 @@ fn an_ai_file_whose_pdf_part_is_only_text_still_opens_from_editing_data_that_rea
     let mut s = Session::new();
     open(&mut s, "art.ai", &ai::ai_with(&compressed(&ai::sample_data()), TEXT_ART, "/ArtBox [0 0 200 100]"), json!({})).unwrap();
     check_sample(&s);
+}
+
+#[test]
+fn an_ai_file_whose_pdf_part_is_cropped_to_its_art_opens_from_its_layers() {
+    // A 400 × 200 pt artboard with two red bars across (100, 50)–(300, 150). The PDF part's page
+    // is that art's box, 200 × 100 pt (the editing data's bounding box), not the artboard.
+    let red = "0 1 1 0 1 0 0 Xa\n";
+    let art = ai::layer("Art", &format!("{red}{}f\n{red}{}f\n", ai::rect(100.0, 50.0, 180.0, 150.0), ai::rect(220.0, 50.0, 300.0, 150.0)));
+    let data = ai::editing_data_in([100.0, 50.0, 300.0, 150.0], [0.0, 0.0, 400.0, 200.0], &art);
+    let page = "1 0 0 rg 0 0 80 100 re f 120 0 80 100 re f";
+    let mut s = Session::new();
+    let r = open(&mut s, "cropped.ai", &ai::ai(&compressed(data.as_bytes()), page), json!({})).unwrap();
+    assert!(!r["warnings"].to_string().contains("weren't read"), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(names(&doc.layers), ["Art"]);
+    assert_eq!(doc.artboards.len(), 1);
+    assert_eq!(doc.artboards[0].rect, vectorcraft_geom::Rect::new(0.0, 0.0, 400.0, 200.0), "the file's artboard, not its page");
+    let bars = doc.layers[0].children().unwrap();
+    assert_eq!(bars.len(), 2);
+    let b = bars[0].geometric_bounds().unwrap();
+    assert!((b.x0 - 100.0).abs() < 0.01 && (b.y0 - 50.0).abs() < 0.01, "where the artboard has it: {b:?}");
+}
+
+#[test]
+fn an_ai_file_whose_pdf_part_draws_nothing_opens_from_its_editing_data() {
+    // A PDF-compatible `.ai` whose PDF part is a page with nothing on it (no notice text either),
+    // with or without the boxes that say where its art is: its editing data is the art.
+    for boxed in ["", "/ArtBox [0 0 200 100] /TrimBox [0 0 200 100]"] {
+        let mut s = Session::new();
+        let r = open(&mut s, "blank.ai", &ai::ai_with(&compressed(&ai::sample_data()), "", boxed), json!({})).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{boxed:?}: {r}");
+        check_sample(&s);
+        // The PDF part alone, as asked: its empty page.
+        open(&mut s, "blank.ai", &ai::ai_with(&compressed(&ai::sample_data()), "", boxed), json!({"editingData": false})).unwrap();
+        let layers = &s.doc().unwrap().doc.layers;
+        assert!(layers.iter().all(|l| l.children().is_none_or(|c| c.is_empty())), "{boxed:?}");
+    }
+    // Editing data that can't be read leaves the empty page, as before.
+    let mut s = Session::new();
+    open(&mut s, "blank.ai", &ai::ai(b"%AI24_ZStandard_Data\0\0\0\0\0\0\0\0", ""), json!({})).unwrap();
+    assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
+}
+
+/// A page that draws nothing only because what it holds couldn't be read (an image that can't be
+/// decoded) isn't an empty page: its notes stay, and the editing data isn't taken in its place
+/// unchecked.
+#[test]
+fn a_page_whose_content_was_skipped_is_not_taken_for_an_empty_one() {
+    let broken = "q 100 0 0 50 0 0 cm BI /W 2 /H 2 /CS /RGB /BPC 8 /F /DCT ID notajpeg EI Q";
+    let mut s = Session::new();
+    let r = open(&mut s, "broken.ai", &ai::ai(&compressed(&ai::sample_data()), broken), json!({})).unwrap();
+    let warnings = r["warnings"].to_string();
+    assert_ne!(r["warnings"], json!([]), "the skipped image is told: {r}");
+    assert!(!warnings.contains("saved without PDF compatibility"), "{r}");
+}
+
+/// Editing data with one layer, "Art", holding one left-aligned story, "Hi", 14 pt Helvetica,
+/// anchored at the canvas centre (the template box's centre), as the editing data's text document
+/// gives it; compressed.
+fn typed_data() -> Vec<u8> {
+    let story = "<< /0 << /0 (Hi\r) /5 << /0 [ << /0 << /0 << /0 () /5 << /0 0 >> /6 0 >> >> /1 3 >> ] >> \
+                 /6 << /0 [ << /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 3 >> ] >> >> \
+                 /1 << /0 [ << /0 0 >> ] /2 [ << /99 /PC /6 [ << /99 /F /0 << /0 [ 8191.5 8191.5 ] >> /6 [ << /99 /R /6 [ << /99 /R /6 [ << /99 /L /6 [ \
+                 << /99 /S /0 << /0 [ 0.0 0.0 ] >> /15 << /0 3 >> >> ] >> ] >> ] >> ] >> ] >> ] >> >>";
+    let document = format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> /8 << /0 [ << /0 << /0 [ 0 0 ] /2 << /2 [ 1 0 0 1 0 0 ] >> >> >> ] >> >>\n/1 << /1 [ {story} ] /2 << /1 12.0 >> >>\n"
+    );
+    let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    let text = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n2 /TextAntialiasing ,\n;\n";
+    let data = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
+         %AI5_NumLayers: 1\n{}%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n%%Trailer\n",
+        ai::layer("Art", text),
+        lines.join("\n")
+    );
+    compressed(data.as_bytes())
+}
+
+/// How many text objects and how many paths the open document holds.
+fn texts_and_paths(s: &Session) -> (usize, usize) {
+    let (mut texts, mut paths) = (0, 0);
+    s.doc().unwrap().doc.walk(|c| {
+        texts += usize::from(matches!(c.kind, NodeKind::Text(_)));
+        paths += usize::from(matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }));
+    });
+    (texts, paths)
+}
+
+/// Type asked for as outlines on a page that draws nothing: the editing data's type, outlined (the
+/// page has none to give).
+#[test]
+fn an_empty_page_with_type_as_outlines_outlines_the_editing_datas_type() {
+    let file = ai::ai(&typed_data(), "");
+    let mut s = Session::new();
+    let r = open(&mut s, "typed.ai", &file, json!({})).unwrap();
+    assert_eq!(texts_and_paths(&s).0, 1, "by default the editing data's type is type: {r}");
+    let r = open(&mut s, "typed.ai", &file, json!({"textAs": "outlines"})).unwrap();
+    let (texts, paths) = texts_and_paths(&s);
+    assert_eq!(texts, 0, "no type left: {r}");
+    assert!(paths > 0, "the outlines are there: {r}");
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "the editing data's layers");
+}
+
+/// A story of a `.ai` file's text document with no character or paragraph runs is set in
+/// `[Normal Character Style]` and `[Normal Paragraph Style]`; the base attributes give only what
+/// those styles leave out.
+#[test]
+fn an_ai_story_without_runs_takes_the_normal_styles() {
+    let story = "<< /0 << /0 (Hi\r) >> \
+                 /1 << /0 [ << /0 0 >> ] /2 [ << /99 /PC /6 [ << /99 /F /0 << /0 [ 8191.5 8191.5 ] >> /6 [ << /99 /R /6 [ << /99 /R /6 [ << /99 /L /6 [ \
+                 << /99 /S /0 << /0 [ 0.0 0.0 ] >> /15 << /0 3 >> >> ] >> ] >> ] >> ] >> ] >> ] >> >>";
+    let char_sheets = "/5 << /0 [ << /0 << /0 ([Normal Character Style]) /6 << /0 0 /1 9.0 \
+                       /53 << /99 /SimplePaint /0 << /0 1 /1 [ 1.0 0.0 0.0 1.0 ] >> >> >> >> >> ] >>";
+    let para_sheets = "/6 << /0 [ << /0 << /0 ([Normal Paragraph Style]) /5 << /1 6.0 /9 false >> >> >> ] >>";
+    let document = format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> {char_sheets} {para_sheets} \
+         /8 << /0 [ << /0 << /0 [ 0 0 ] /2 << /2 [ 1 0 0 1 0 0 ] >> >> >> ] >> >>\n\
+         /1 << /1 [ {story} ] /2 << /1 12.0 /53 << /99 /SimplePaint /0 << /0 0 /1 [ 1.0 1.0 ] >> >> >> /3 << /1 2.0 /9 true >> >>\n"
+    );
+    let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    let text = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n2 /TextAntialiasing ,\n;\n";
+    let data = format!(
+        "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
+         %AI5_NumLayers: 1\n{}%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n%%Trailer\n",
+        ai::layer("Art", text),
+        lines.join("\n")
+    );
+    let mut s = Session::new();
+    let r = open(&mut s, "plain.ai", &ai::ai(&compressed(data.as_bytes()), ""), json!({})).unwrap();
+    let mut texts = vec![];
+    s.doc().unwrap().doc.walk(|c| {
+        if let NodeKind::Text(t) = &c.kind {
+            texts.push((**t).clone());
+        }
+    });
+    let [t] = texts.as_slice() else { panic!("one text object: {r}") };
+    assert_eq!(t.plain_text(), "Hi");
+    let style = &t.runs[0].style;
+    assert_eq!(style.size, 9.0, "{r}");
+    assert_eq!(style.fill, vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!((t.para.first_line_indent, t.para.hyphenate), (6.0, false));
+}
+
+/// Type asked for as outlines in a `.ai` saved without PDF compatibility (its page only a
+/// placeholder): the editing data's type, outlined, as for an empty page.
+#[test]
+fn a_file_saved_without_its_pdf_part_with_type_as_outlines_outlines_its_type() {
+    let file = ai::ai(&typed_data(), PLACEHOLDER);
+    let mut s = Session::new();
+    let r = open(&mut s, "typed.ai", &file, json!({})).unwrap();
+    assert_eq!(texts_and_paths(&s).0, 1, "by default the editing data's type is type: {r}");
+    let r = open(&mut s, "typed.ai", &file, json!({"textAs": "outlines"})).unwrap();
+    let (texts, paths) = texts_and_paths(&s);
+    assert_eq!(texts, 0, "no type left: {r}");
+    assert!(paths > 0, "the outlines are there: {r}");
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "the editing data's layers");
+}
+
+/// Type of the editing data outlined keeps its transparency, opacity mask and effects, and is
+/// shown and locked as the type was.
+#[test]
+fn outlined_type_of_the_editing_data_keeps_its_transparency_and_effects() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    let id = NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    let mut doc = s.doc().unwrap().doc.as_ref().clone();
+    let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: json!({}), visible: true };
+    {
+        let t = doc.node_mut(id).unwrap();
+        t.opacity = 0.5;
+        t.blend = vectorcraft_color::BlendMode::Multiply;
+        t.isolate = true;
+        t.locked = true;
+        t.name = Some("Title".into());
+        t.appearance.effects = vec![shadow.clone()];
+    }
+    let opts = LoadOptions { text_as: vectorcraft_pdf::TextAs::Outlines, ..Default::default() };
+    let (doc, _) = load::outlined_if_asked(doc, vec![], &opts);
+    let mut outlines = vec![];
+    doc.walk(|n| {
+        if n.extras().type_outlines {
+            outlines.push(n.clone());
+        }
+    });
+    let [o] = &outlines[..] else { panic!("one group of outlines: {outlines:?}") };
+    assert_eq!((o.opacity, o.blend, o.isolate), (0.5, vectorcraft_color::BlendMode::Multiply, true));
+    assert_eq!(o.appearance.effects, [shadow]);
+    assert!(o.locked && o.visible);
+    assert_eq!(o.name.as_deref(), Some("Title"));
+}
+
+/// Threaded type of the editing data, its story all in its first frame as the editing data gives
+/// it, outlined: each frame's outlines show the text that flows into it.
+#[test]
+fn outlined_threaded_type_of_the_editing_data_shows_the_text_of_every_frame() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    // As the editing data gives it: the first frame holds the story, the second nothing yet.
+    let mut doc = s.doc().unwrap().doc.as_ref().clone();
+    let runs = |id: u64| match &doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("area type"),
+    };
+    let (shown, flowed) = (runs(a), runs(b));
+    let empty: Vec<_> = flowed.iter().take(1).map(|r| vectorcraft_doc::TextRun { text: String::new(), ..r.clone() }).collect();
+    for (id, put) in [(a, [shown, flowed].concat()), (b, empty)] {
+        if let NodeKind::Text(t) = &mut doc.node_mut(NodeId(id)).unwrap().kind {
+            t.runs = put;
+            t.cached_bounds = None;
+            t.cached_baselines.clear();
+        }
+    }
+    let opts = LoadOptions { text_as: vectorcraft_pdf::TextAs::Outlines, ..Default::default() };
+    let (doc, _) = load::outlined_if_asked(doc, vec![], &opts);
+    let mut right = 0;
+    doc.walk(|n| {
+        if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && n.geometric_bounds().is_some_and(|r| r.x0 >= 190.0) {
+            right += 1;
+        }
+    });
+    assert!(right > 0, "the second frame's text is outlined where it flows");
+    assert!(doc.text_threads.is_empty(), "outlined frames are in no thread: {:?}", doc.text_threads);
 }
 
 #[test]
@@ -646,10 +1317,16 @@ fn half_outlined_line(y: f64, rest: &str, mode: u8) -> String {
 /// text document (a line starting at (14, 65)), then `more` of a story the text document doesn't
 /// have. Without `story` the file has no text document.
 fn half_outlined_ai(story: Option<&str>, more: usize, type_content: &str) -> Vec<u8> {
+    half_outlined_ai_on(story, more, type_content, "", |page| page)
+}
+
+/// [`half_outlined_ai`] with the editing data's comments `head` before its art, whose page is
+/// `page_of` the 200 × 100 pt page it draws on (other boxes, more entries).
+fn half_outlined_ai_on(story: Option<&str>, more: usize, type_content: &str, head: &str, page_of: impl FnOnce(PdfPage) -> PdfPage) -> Vec<u8> {
     let text = |story: u32| format!("/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n{story} /StoryIndex ,\n;\n");
     let texts: String = std::iter::once(text(0)).chain((0..more).map(|_| text(99))).collect();
     let mut body =
-        format!("%AI3_TemplateBox: 100 50 100 50\n{}", ai::layer("Art", &format!("0.5 g\n{}f\n{texts}", ai::rect(120.0, 20.0, 160.0, 60.0))));
+        format!("{head}%AI3_TemplateBox: 100 50 100 50\n{}", ai::layer("Art", &format!("0.5 g\n{}f\n{texts}", ai::rect(120.0, 20.0, 160.0, 60.0))));
     if let Some(story) = story {
         // The story's one line starts at the canvas center (8191.5, the template box's center) moved
         // to (14, 65): its y runs down the page.
@@ -680,7 +1357,7 @@ fn half_outlined_ai(story: Option<&str>, more: usize, type_content: &str) -> Vec
     };
     let cmap = "begincmap\n1 begincodespacerange\n<00> <FF>\nendcodespacerange\n1 beginbfchar\n<41> <FFFD>\nendbfchar\nendcmap\n";
     pdf_with(
-        &[page],
+        &[page_of(page)],
         &[&format!("<< /Length {} >>\nstream\n{data}\nendstream", data.len()), &format!("<< /Length {} >>\nstream\n{cmap}endstream", cmap.len())],
         None,
     )
@@ -708,6 +1385,99 @@ fn texts(s: &Session) -> Vec<String> {
     art.iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.plain_text()) } else { None }).collect()
 }
 
+/// A `.ai` saved without its PDF part whose layer `Art` holds a story in two area type frames
+/// (art x 10 to 90 and 110 to 190, y 10 to 90), then a band across the first frame (y 30 to 70),
+/// made a wrap object with no offset when `wrap` is set.
+fn wrapped_thread_ai(wrap: bool) -> Vec<u8> {
+    ai::ai(&wrapped_thread_data(wrap.then_some(0.0)), PLACEHOLDER)
+}
+
+/// The editing data of [`wrapped_thread_ai`], compressed, with the band a wrap object of `offset`
+/// when one is given.
+fn wrapped_thread_data(offset: Option<f64>) -> Vec<u8> {
+    // The template box is centred at (100, 50), the canvas centre 8191.5: y runs down the canvas.
+    let canvas = |x: f64, y: f64| (x + 8091.5, 8241.5 - y);
+    let rect = |x0: f64, y0: f64, x1: f64, y1: f64| {
+        let corners = [canvas(x0, y1), canvas(x0, y0), canvas(x1, y0), canvas(x1, y1), canvas(x0, y1)];
+        let segments: Vec<String> =
+            corners.windows(2).map(|w| format!("{} {} {} {} {} {} {} {}", w[0].0, w[0].1, w[0].0, w[0].1, w[1].0, w[1].1, w[1].0, w[1].1)).collect();
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 >> >> >>", segments.join(" "))
+    };
+    let story = "Words keep flowing from the first frame into the second one, line after line, until the story ends here. ".repeat(3);
+    let n = story.chars().count() + 1;
+    let document = format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 (Helvetica) >> >> >> ] >> /8 << /0 [ {} {} ] >> >>\n\
+         /1 << /1 [ << /0 << /0 ({story}\r) /5 << /0 [ << /0 << /0 << /0 () /5 << /0 0 >> /6 0 >> >> /1 {n} >> ] >> \
+         /6 << /0 [ << /0 << /0 << /0 () /5 0 /6 << /1 10.0 >> >> >> /1 {n} >> ] >> >> /1 << /0 [ << /0 0 >> << /0 1 >> ] >> >> ] /2 << /1 12.0 >> >>\n",
+        rect(10.0, 10.0, 90.0, 90.0),
+        rect(110.0, 10.0, 190.0, 90.0)
+    );
+    let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    let frame = |f: u32| format!("/AI11Text :\n0 /FreeUndo ,\n{f} /FrameIndex ,\n0 /StoryIndex ,\n;\n");
+    let dict = offset
+        .map(|o| format!("%_/ArtDictionary :\n%_{o} /Real (AI11TextWrapOffset) ,\n%_0 /Bool (AI11TextWrapInvert) ,\n%_;\n%_\n"))
+        .unwrap_or_default();
+    let art = format!("{}{}0.5 g\n{}f\n{dict}", frame(0), frame(1), ai::rect(10.0, 30.0, 90.0, 70.0));
+    let body = format!(
+        "%AI3_TemplateBox: 100 50 100 50\n{}%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n",
+        ai::layer("Art", &art),
+        lines.join("\n")
+    );
+    compressed(ai::editing_data(200.0, 100.0, &body).as_bytes())
+}
+
+/// The wrap offset of the first frame of `doc`'s threaded type, as its text resolves it.
+fn first_frame_wrap_offset(doc: &vectorcraft_doc::Document) -> f64 {
+    match &doc.node(doc.text_threads[0][0]).unwrap().kind {
+        NodeKind::Text(t) => t.wrap[0].wrap.offset,
+        _ => panic!("area type"),
+    }
+}
+
+/// A `.ai` in units of 10 points whose threaded area type flows around a wrap object of a 2 unit
+/// offset opens with the type flowing round it 20 pt off, its PDF part read or not, and when its
+/// PDF part can't be read. The default graphic styles of a file without its own aren't scaled.
+#[test]
+fn wrapped_type_in_units_of_ten_points_flows_round_the_wrap_at_its_size_in_points() {
+    let private = wrapped_thread_data(Some(2.0));
+    let page = "0.5 g 10 30 80 40 re f";
+    let refused = ai::ai_with_entries_and_content(&private, page, "/UserUnit 10", REFUSED_CONTENT);
+    // On the trim boxes the PDF part is imported, and the refused stream stops it.
+    let trim = LoadOptions { crop: vectorcraft_pdf::CropTo::Trim, ..Default::default() };
+    let files = [(ai::ai_with(&private, page, "/UserUnit 10"), LoadOptions::default()), (refused, trim)];
+    for (file, opts) in &files {
+        let loaded = load_with("thread.ai", file, opts).unwrap();
+        assert!(loaded.editing_data, "{:?}", loaded.warnings);
+        assert!((first_frame_wrap_offset(&loaded.doc) - 20.0).abs() < 0.01, "{:?}", loaded.warnings);
+    }
+    let loaded = load_with("thread.ai", &files[1].0, &files[1].1).unwrap();
+    assert!(loaded.warnings.iter().any(|w| w.starts_with("the PDF part couldn't be read")), "{:?}", loaded.warnings);
+    // The file has no graphic styles of its own: the default ones aren't scaled either way.
+    let read = load_with("thread.ai", &files[0].0, &files[0].1).unwrap();
+    assert_eq!(loaded.doc.graphic_styles, read.doc.graphic_styles);
+}
+
+/// Threaded area type below a wrap object flows around it when the file opens: the text the wrap
+/// object pushes out of the first frame goes on in the second.
+#[test]
+fn wrap_threaded_area_after_open() {
+    let second = |wrap: bool| {
+        let mut s = Session::new();
+        let r = open(&mut s, "thread.ai", &wrapped_thread_ai(wrap), json!({})).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        assert_eq!(doc.text_threads.len(), 1, "{r}");
+        let text = |id: NodeId| match &doc.node(id).unwrap().kind {
+            NodeKind::Text(t) => t.clone(),
+            _ => panic!("area type"),
+        };
+        let (first, second) = (text(doc.text_threads[0][0]), text(doc.text_threads[0][1]));
+        assert_eq!(first.wrap.len(), usize::from(wrap), "{r}");
+        second.plain_text().chars().count()
+    };
+    let (plain, wrapped) = (second(false), second(true));
+    assert!(wrapped > plain, "the second frame holds more of the story: {plain} → {wrapped}");
+}
+
 /// The note that glyphs were kept as outlines is dropped when the type comes from the editing data's
 /// text document, and stays with the PDF part alone.
 #[test]
@@ -727,6 +1497,77 @@ fn type_from_the_text_document_opens_without_the_pdf_parts_note_on_outlines() {
     assert_eq!(texts(&s), ["first draft", "notes"], "{r}");
     assert_eq!(outlines_notes(&r), Vec::<String>::new(), "{r}");
     assert!(!r["warnings"].as_array().unwrap().contains(&without_outlines_note(1)), "{r}");
+}
+
+/// A `.ai` whose text document makes all of its type, with nothing unread, opens from its layers
+/// without its PDF part being imported: a page that draws more than the layers isn't compared with
+/// them. On its trim box it takes the pages' bleed, and pages in units of 10 points draw it ten
+/// times as large, as when its PDF part is imported. With type the text document can't make,
+/// editing data on a large canvas, its type asked for as outlines, another box or pages picked, the
+/// PDF part is imported as before.
+#[test]
+fn type_all_from_the_text_document_opens_without_importing_the_pdf_part() {
+    let line = half_outlined_line(65.0, "rst draft", 0);
+    // The page draws a red square the layers don't have.
+    let differs = half_outlined_ai(Some("first draft"), 0, &format!("{line} 1 0 0 rg 20 20 30 30 re f"));
+    let mut s = Session::new();
+    let before = vectorcraft_pdf::imports_of(&differs);
+    let loaded = load_with("draft.ai", &differs, &LoadOptions::default()).unwrap();
+    assert_eq!(vectorcraft_pdf::imports_of(&differs), before, "{:?}", loaded.warnings);
+    assert!(loaded.editing_data, "{:?}", loaded.warnings);
+    assert!(!loaded.warnings.iter().any(|w| w.contains("differently")), "{:?}", loaded.warnings);
+    let r = open(&mut s, "draft.ai", &differs, json!({})).unwrap();
+    assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
+    assert_eq!(texts(&s), ["first draft"], "{r}");
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 2, "the square and the type, without the page's red square: {r}");
+    // A 10 pt bleed round the trim box, the art drawn in the trim box.
+    let bled = half_outlined_ai_on(Some("first draft"), 0, &line, "", |p| PdfPage {
+        media: [0.0, 0.0, 220.0, 120.0],
+        bleed: Some([0.0, 0.0, 220.0, 120.0]),
+        trim: Some([10.0, 10.0, 210.0, 110.0]),
+        content: format!("1 0 0 1 10 10 cm {}", p.content),
+        ..p
+    });
+    let before = vectorcraft_pdf::imports_of(&bled);
+    let loaded = load_with("bled.ai", &bled, &LoadOptions::default()).unwrap();
+    assert_eq!(vectorcraft_pdf::imports_of(&bled), before);
+    assert_eq!(loaded.doc.setup.bleed, [10.0; 4]);
+    // Pages of 10 pt units.
+    let large = half_outlined_ai_on(Some("first draft"), 0, &line, "", |p| PdfPage { entries: format!("{} /UserUnit 10", p.entries), ..p });
+    let before = vectorcraft_pdf::imports_of(&large);
+    let loaded = load_with("large.ai", &large, &LoadOptions::default()).unwrap();
+    assert_eq!(vectorcraft_pdf::imports_of(&large), before);
+    let board = loaded.doc.artboards[0].rect;
+    assert!((board.width() - 2000.0).abs() < 0.01 && (board.height() - 1000.0).abs() < 0.01, "{board:?}");
+    // Opened on the trim boxes with the PDF part imported and compared, as before, both files have
+    // the same artboards and bleed.
+    for file in [&bled, &large] {
+        let alone = load_with("draft.ai", file, &LoadOptions::default()).unwrap();
+        let compared = load_with("draft.ai", file, &LoadOptions { crop: vectorcraft_pdf::CropTo::Trim, ..Default::default() }).unwrap();
+        assert!(compared.editing_data, "{:?}", compared.warnings);
+        let boards = |d: &vectorcraft_doc::Document| d.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+        assert_eq!(boards(&alone.doc), boards(&compared.doc));
+        assert_eq!(alone.doc.setup.bleed, compared.doc.setup.bleed);
+        assert_eq!(names(&alone.doc.layers), names(&compared.doc.layers));
+        // The file has no graphic styles of its own: the default ones aren't scaled.
+        assert_eq!(alone.doc.graphic_styles, compared.doc.graphic_styles);
+    }
+    // The PDF part is imported, once.
+    let unmade = half_outlined_ai(Some("first draft"), 1, &line);
+    // Editing data on a large canvas reads at its own scale when the file has no PDF part.
+    let canvas = half_outlined_ai_on(Some("first draft"), 0, &line, "%AI24_LargeCanvasScale: 2\n", |p| p);
+    let cases = [
+        (&unmade, LoadOptions::default()),
+        (&canvas, LoadOptions::default()),
+        (&differs, LoadOptions { text_as: vectorcraft_pdf::TextAs::Outlines, ..Default::default() }),
+        (&differs, LoadOptions { crop: vectorcraft_pdf::CropTo::Trim, ..Default::default() }),
+        (&differs, LoadOptions { pages: Some("1".into()), ..Default::default() }),
+    ];
+    for (file, opts) in cases {
+        let before = vectorcraft_pdf::imports_of(file);
+        load_with("draft.ai", file, &opts).unwrap();
+        assert_eq!(vectorcraft_pdf::imports_of(file) - before, 1, "{opts:?}");
+    }
 }
 
 /// A text object that takes the page's type lacks the glyphs next to it that the page kept as

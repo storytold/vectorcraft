@@ -12,16 +12,20 @@
 //! colours, gradients, transparency and images of the art.
 //!
 //! Text objects are slots in that document: their characters, fonts and places are in the file's
-//! text document (see `ate`). Type that shows comes from the page, which draws it, into the slot
-//! whose text is where the page has it. Type that doesn't show (a hidden layer or object, or off
-//! the page) is made from the text document; where that can't be read (area type, type on a path)
-//! it's left out, with a warning.
+//! text document (see `ate`). When the text document has the type of every text object that shows,
+//! all the type is made from it, each text object in its own place, and the page's type is only
+//! compared with it. Otherwise the type it has is still made from it, and the page's type that
+//! lies elsewhere goes into the text objects it can't make, by where the text document puts their
+//! lines or else in painting order. A text object whose type neither has (a frame of a kind it
+//! doesn't read, on a hidden layer or object) is left out, with a warning.
 //!
 //! What a layer that shows has that `ai` doesn't read makes the file come in as its page, as it did
 //! before; on a layer that doesn't show it is left out of that layer, with a warning. The page is
 //! also the safety net: when the layers' art looks different from it (one draws an object the
 //! other doesn't, or much of it differs; an EPS whose page is its art's box has nothing printed
-//! outside it), the page is used.
+//! outside it), the page is used. A `.ai` whose text document makes all of its type, with no
+//! object unread and nothing else that the page would decide, opens from its layers without its
+//! PDF part being imported, so nothing is compared ([`ai_layers_alone`]).
 //!
 //! Where a file doesn't match what this module expects, it is left alone and its page is imported.
 
@@ -30,7 +34,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, Scaling, TextKind, Unit};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, Scaling, TextKind, Unit, VariableKind};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, Vec2};
 
 use super::Imported;
@@ -38,16 +42,19 @@ use super::ai::{self, Structure, slot_of};
 use super::ate::{Story, Texts};
 
 mod build;
-mod compare;
+pub(super) mod compare;
 mod layers;
 mod plan;
 mod slots;
 
+pub(crate) use build::scale_document;
 #[cfg(test)]
 use build::{Frame, MADE, prune_unseen};
 #[cfg(test)]
-use compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, compare, compared, comparison_render, comparison_samples, differ, differ_in_colour};
-pub use layers::{ai_alone, layered_ai};
+use compare::{
+    MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, Shares, compare, compared, comparison_render, comparison_samples, differ, differ_in_colour,
+};
+pub use layers::{AiLayers, ai_alone, ai_alone_on_page, ai_layers_alone, layered_ai, layered_ai_from};
 pub(super) use layers::{layered, program_alone};
 pub use slots::is_loss;
 #[cfg(test)]
@@ -86,9 +93,9 @@ mod tests {
         ring(&mut layers, Some(MADE), red, 6.0, square);
         ring(&mut layers, Some(MADE), red, 2.0, Rect::new(40.0, 40.0, 60.0, 60.0));
         let rect = page.artboards[0].rect;
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let mut view = PageView::new(&frame);
-        assert_eq!(prune_unseen(&frame, &mut view, &mut layers), 1, "only the ring the page doesn't draw");
+        assert_eq!(prune_unseen(&frame, &mut view, &mut layers, false), 1, "only the ring the page doesn't draw");
         let widths: Vec<f64> = layers.layers[0].children().unwrap().iter().filter_map(|n| n.appearance.stroke().map(|s| s.width)).collect();
         assert_eq!(widths, [12.0, 6.0]);
         // Taken by lightness alone, the red and the dark red are alike.
@@ -97,6 +104,33 @@ mod tests {
             [r, g, b, 255]
         };
         assert!(!differ(&px(dark), &px(red)) && differ_in_colour(&px(dark), &px(red)));
+    }
+
+    /// The share of a rectangle's pixels in the areas, however many areas there are: none for one
+    /// that only shares their edge, lies off the drawing or isn't a number.
+    #[test]
+    fn the_share_of_a_rectangle_in_the_areas_counts_its_pixels() {
+        let in_areas = |areas: &[Rect], w: usize, h: usize| {
+            let marks: Vec<bool> = (0..w * h)
+                .map(|k| {
+                    let (x, y) = ((k % w) as f64 + 0.5, (k / w) as f64 + 0.5);
+                    areas.iter().any(|a| a.contains(Point::new(x, y)))
+                })
+                .collect();
+            let shares = Shares::of(&marks, w, h);
+            move |r: &Rect| shares.share(r)
+        };
+        let share = in_areas(&[Rect::new(10.0, 10.0, 20.0, 20.0), Rect::new(30.0, 0.0, 31.0, 1.0)], 40, 40);
+        assert_eq!((share(&Rect::new(12.0, 12.0, 22.0, 18.0)), share(&Rect::new(10.0, 10.0, 30.0, 20.0))), (0.8, 0.5));
+        assert_eq!((share(&Rect::new(15.0, 15.0, 30.0, 30.0)), share(&Rect::new(30.2, 0.2, 30.8, 0.8))), (25.0 / 225.0, 1.0));
+        assert_eq!(
+            [share(&Rect::new(20.0, 20.0, 30.0, 30.0)), share(&Rect::new(0.0, 0.0, 5.0, 5.0)), share(&Rect::new(50.0, 50.0, 60.0, 60.0))],
+            [0.0; 3]
+        );
+        assert_eq!(share(&Rect::new(f64::NAN, 0.0, 39.0, 39.0)), 0.0);
+        let many: Vec<Rect> = (0..5000).map(|i| Rect::new(f64::from(i % 70), 50.0, f64::from(i % 70) + 1.0, 51.0)).collect();
+        let share = in_areas(&many, 80, 80);
+        assert_eq!((share(&Rect::new(60.0, 50.0, 75.0, 51.0)), share(&Rect::new(70.0, 50.0, 75.0, 51.0))), (10.0 / 15.0, 0.0));
     }
 
     fn piece(text: &str, x: f64, y: f64) -> Arc<Node> {
@@ -161,11 +195,73 @@ mod tests {
         let a = comparison_render(&mut renderer, &page, rect, 0.4, 1);
         let b = comparison_render(&mut vectorcraft_render::Renderer::new(), &vector, rect, 0.4, 1);
         assert!(compared(&a, &b, &[], &[]).solid > MAX_SOLID_DIFFERENCE, "the old point sampling falsely refused this page");
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let mut view = PageView::new(&frame);
-        assert!(compare(&frame, &mut view, &vector).is_ok());
-        assert!(compare(&frame, &mut view, &Document::new(1000.0, 500.0)).is_err(), "missing artwork remains an error");
+        assert!(compare(&frame, &mut view, &vector, false).is_ok());
+        assert!(compare(&frame, &mut view, &Document::new(1000.0, 500.0), false).is_err(), "missing artwork remains an error");
         let shifted = Rect::new(0.0, 0.0, 500.0, 500.0);
-        assert!(view.difference(&vector, shifted).any > MAX_DIFFERENCE, "wrong framing remains an error");
+        assert!(view.difference_on_every_page(&vector, shifted, false).any > MAX_DIFFERENCE, "wrong framing remains an error");
+    }
+
+    /// The boxes `solid_regions_on_every_page` gives for a page of images are in the page's points: the
+    /// comparison is drawn at a multiple of the scale and resized, and the two sizes round
+    /// differently on the short side, so a box at the far edge does not drift out of the object
+    /// that makes it.
+    #[test]
+    fn solid_regions_of_a_raster_page_lie_in_the_object_that_differs() {
+        for bottom in (884..=900).map(f64::from) {
+            let object = Rect::new(1000.0, 0.0, 3000.0, bottom);
+            for r in raster_page_regions(object, 4000.0, 1006.0) {
+                assert!(
+                    r.x0 >= object.x0 - 1.0 && r.y0 >= object.y0 - 1.0 && r.x1 <= object.x1 + 1.0 && r.y1 <= object.y1 + 1.0,
+                    "{r:?} lies outside {object:?}"
+                );
+            }
+        }
+    }
+
+    /// The boxes `solid_regions_on_every_page` gives for a `width` × `height` page that is one image of a black
+    /// `object`, compared with layers that hold nothing.
+    fn raster_page_regions(object: Rect, width: f64, height: f64) -> Vec<Rect> {
+        use vectorcraft_color::{Color, Paint};
+        use vectorcraft_doc::{Appearance, ImageBlob, ImageObject};
+        let mut vector = Document::new(width, height);
+        let layer = vector.layers[0].id;
+        let n = Node::path(
+            vector.alloc_id(),
+            vectorcraft_geom::shapes::rectangle(object),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        vector.insert(Some(layer), usize::MAX, n).unwrap();
+        let rect = vector.artboards[0].rect;
+        let source = vectorcraft_render::Renderer::new().render_region(&vector, rect, 1.0, true);
+        let mut png = Vec::new();
+        image::RgbaImage::from_raw(source.width, source.height, source.to_straight())
+            .unwrap()
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let blob = ImageBlob::new("image/png", png);
+        let key = blob.content_key();
+        let mut page = Document::new(width, height);
+        page.images.insert(key.clone(), blob);
+        let image = Node::new(
+            page.alloc_id(),
+            NodeKind::Image(Box::new(ImageObject {
+                key,
+                width: source.width,
+                height: source.height,
+                xf: Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            })),
+        );
+        page.insert(Some(page.layers[0].id), usize::MAX, image).unwrap();
+        assert_eq!(comparison_samples(&page), 4);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
+        let mut view = PageView::new(&frame);
+        let (_, regions) = view.solid_regions_on_every_page(&Document::new(width, height), false).unwrap();
+        assert!(!regions.is_empty());
+        regions
     }
 }

@@ -146,6 +146,21 @@ pub(super) fn art_over(doc: &Document, rect: vectorcraft_geom::Rect) -> Document
     d
 }
 
+/// `doc` with the background colors of `artboards` drawn behind its art
+/// ([`Document::with_artboard_fills`]), what exports and print draw, unless `p` turns
+/// `includeArtboardFill` off (Export for Screens › Include Artboard Fill; on by default).
+pub(crate) fn with_artboard_fills<'a>(
+    doc: &'a Document,
+    p: &Value,
+    artboards: impl IntoIterator<Item = usize>,
+) -> std::result::Result<Cow<'a, Document>, String> {
+    let include = match p.get("includeArtboardFill") {
+        None | Some(Value::Null) => true,
+        Some(v) => v.as_bool().ok_or("`includeArtboardFill` must be true or false")?,
+    };
+    Ok(include.then(|| doc.with_artboard_fills(artboards)).flatten().map_or(Cow::Borrowed(doc), Cow::Owned))
+}
+
 /// `p` without its artboard choice, also inside its SVG options (for documents made of one
 /// synthetic artboard, and for callers that pick the artboard themselves).
 pub(super) fn without_artboards(p: &Value) -> Value {

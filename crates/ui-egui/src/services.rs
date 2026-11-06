@@ -37,6 +37,10 @@ pub type PickSave = Box<dyn FnMut(&FilePick) -> Option<String>>;
 
 pub type ReadFn = Box<dyn Fn(&str) -> Result<Vec<u8>, String>>;
 
+/// The first `max` bytes of the file at a path (all of it when it is shorter); the rest of the file
+/// is not read.
+pub type ReadHeadFn = Box<dyn Fn(&str, usize) -> Result<Vec<u8>, String>>;
+
 pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 
 pub type ExistsFn = Box<dyn Fn(&str) -> bool>;
@@ -65,6 +69,9 @@ pub(crate) fn browsable_url(url: &str) -> Result<(), String> {
 /// Shows a file in the system file manager, or opens it in its app.
 pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
 
+/// Opens a file in a fixed app; `Ok(false)` when that app isn't installed.
+pub type OpenInFn = Box<dyn FnMut(&str) -> Result<bool, String>>;
+
 /// Platform services injected by the host app (desktop or web).
 #[derive(Default)]
 pub struct Services {
@@ -73,6 +80,10 @@ pub struct Services {
     /// Show a save dialog (suggested name, folder, file types); returns a path.
     pub pick_save: Option<PickSave>,
     pub read: Option<ReadFn>,
+    /// Read at most a number of bytes from a file (desktop). A file with a size limit is read one
+    /// byte past the limit, so a larger file is refused without reading all of it. Without it, the
+    /// whole file is read with `read`.
+    pub read_head: Option<ReadHeadFn>,
     pub write: Option<WriteFn>,
     /// Is there a file or folder at a path (desktop)? The app asks before replacing a file that a
     /// save panel's name names once the app gives it an extension ([`picks::ask_to_replace`]).
@@ -116,6 +127,10 @@ pub struct Services {
     /// Open a file (or a folder) in the system's default app for it (desktop: Edit Original, Show
     /// Package). Without it (the web) those answer with an error.
     pub open_file: Option<RevealFn>,
+    /// Open a file in PhotoCraft where it is installed (desktop: Edit Original of a raster image
+    /// with Preferences › File Handling › Use System Defaults for Edit Original off); `Ok(false)`
+    /// when it isn't. Without it Edit Original uses `open_file`.
+    pub open_in_photocraft: Option<OpenInFn>,
     /// Show a folder picker; returns its path (desktop: Relink to Folder, Package).
     pub pick_folder: Option<Box<dyn FnMut() -> Option<String>>>,
     /// Show the system's color sampler, which picks a color anywhere on the screen (macOS, and
@@ -146,7 +161,7 @@ pub struct Services {
     pub wayland: bool,
     /// On Wayland, no cursor theme can be loaded, so winit sets no pointer and the compositor's
     /// default one would never come back once the canvas hid it: the canvas keeps the system
-    /// pointer visible next to the tool glyph ([`cursors::hide_system_pointer`], #2450).
+    /// pointer and paints no tool glyph ([`cursors::paint_glyphs`], #2450).
     pub no_cursor_theme: bool,
     /// The pen pressure and pen end the host reads from the system itself (desktop Linux under
     /// X11 and XWayland, macOS and Windows). The canvas uses the pressure when a frame's events carry no touch force,

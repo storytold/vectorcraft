@@ -40,6 +40,47 @@ fn thread_flows_reflows_on_edit_and_survives_delete() {
     assert_eq!(s.doc().unwrap().doc.text_threads.len(), 1);
 }
 
+/// A file that lists a frame more than once, in its own thread or in another, flows the story
+/// through each frame once: repeated places would copy its text again and again.
+#[test]
+fn frames_listed_twice_flow_the_story_once() {
+    let (mut s, a, b) = setup();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let (fa, fb) = (NodeId(a), NodeId(b));
+    d.text_threads = vec![vec![fa, fb, fa, fb, fa], vec![fb, fa], vec![fa, fb]];
+    reflow(&Document::new(1.0, 1.0), &mut d);
+    assert_eq!(d.text_threads, vec![vec![fa, fb]]);
+    let plain = |id: NodeId| match &d.node(id).unwrap().kind {
+        NodeKind::Text(t) => t.plain_text(),
+        _ => panic!("not text"),
+    };
+    assert_eq!(format!("{}{}", plain(fa), plain(fb)), TEXT.repeat(4));
+}
+
+/// A frame left alone when a repeated listing is dropped (`[[a, b], [b, c]]` → `[[a, b], [c]]`)
+/// is flowed again as a story of its own, even when no frame changed: it no longer continues a
+/// paragraph from the frame before it.
+#[test]
+fn a_frame_left_alone_by_a_dropped_repeat_stops_continuing() {
+    let (mut s, a, b) = setup();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let c =
+        s.execute("text.create", &json!({"x": 400, "y": 10, "text": "Tail", "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let (fa, fb, fc) = (NodeId(a), NodeId(b), NodeId(c));
+    d.text_threads = vec![vec![fa, fb], vec![fb, fc]];
+    if let Some(NodeKind::Text(t)) = d.node_mut(fc).map(|n| &mut n.kind) {
+        t.first_para_continues = true;
+    }
+    let before = d.clone();
+    reflow(&before, &mut d);
+    assert_eq!(d.text_threads, vec![vec![fa, fb]]);
+    let NodeKind::Text(t) = &d.node(fc).unwrap().kind else { panic!("not text") };
+    assert!(!t.first_para_continues, "an unthreaded frame continues nothing");
+    assert_eq!(t.plain_text(), "Tail");
+}
+
 #[test]
 fn edits_copy_only_the_stories_of_threads_whose_frames_changed() {
     let (mut s, a, b) = setup();

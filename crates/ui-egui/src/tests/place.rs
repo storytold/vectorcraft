@@ -151,7 +151,8 @@ fn libraries_presets_and_plugins_open_wherever_they_are_dropped() {
     let rect = laid_out(&mut app, &ctx);
     let on_canvas = rect.center() + vec2(60.0, -40.0);
     let libraries = ["a.vcswatches", "a.gpl", "a.ase", "a.acb", "a.vcstyles", "a.vclibrary"];
-    let presets_and_plugins = ["a.vcflattener", "a.vcpdfpresets", "a.vcprintpresets", "a.vcperspective", "a.wasm", "a.jsx", "a.jsxinc", "a.jsxbin"];
+    let presets_and_plugins =
+        ["a.vcflattener", "a.vcpdfpresets", "a.vcprintpresets", "a.vcperspective", "a.vcexportpresets", "a.wasm", "a.jsx", "a.jsxinc", "a.jsxbin"];
     for name in libraries.into_iter().chain(presets_and_plugins) {
         assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name}");
         assert_eq!(app.drop_target(name, Some(on_canvas), true), DropTarget::Open, "{name} on the canvas");
@@ -487,6 +488,29 @@ fn the_control_bar_shows_the_image_file_link_colour_mode_and_ppi() {
     assert!(text.contains("Embedded"), "{text}");
 }
 
+/// The Control bar's label is read from the first selected object each frame, so it follows an
+/// edit, Undo, a switch to another document and back, and a selection change.
+#[test]
+fn the_control_bar_label_follows_edits_undo_documents_and_selection() {
+    let mut app = app();
+    let path = temp_file("label.png", &png(30, 30, 72.0));
+    app.run("file.place", json!({"path": path})).unwrap();
+    let text = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, crate::chrome::control_bar);
+    assert!(text(&mut app).contains("Linked File"));
+    app.run("links.embed", json!({})).unwrap();
+    let embedded = text(&mut app);
+    assert!(embedded.contains("Embedded") && !embedded.contains("Linked File"), "{embedded}");
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(text(&mut app).contains("Linked File"));
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    assert!(!text(&mut app).contains("Linked File"), "the new document has nothing selected");
+    app.session.set_active(0);
+    assert!(text(&mut app).contains("Linked File"));
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap();
+    let rect = text(&mut app);
+    assert!(!rect.contains("Linked File") && !rect.contains("Embedded"), "{rect}");
+}
+
 /// Click the Control bar's `label`.
 fn click_label(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
     use crate::tests_removeanchors::{at, click_control, control_frame};
@@ -757,7 +781,8 @@ fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> std::ti
 /// for) or until `done` → whether it was.
 fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64, done: &dyn Fn(&VectorcraftApp) -> bool) -> bool {
     let end = *time + secs;
-    let real_end = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    // The look last waited for: one that a frame after the wait still holds ended without stamps.
+    let mut waited: Option<vectorcraft_engine::link_watch::LinkScan> = None;
     loop {
         let wait = frame_at(app, ctx, *time);
         if done(app) {
@@ -768,10 +793,13 @@ fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64
             *time = end;
             return false;
         }
-        // The look runs on a worker thread, in real time: the clock waits for it, else a busy
-        // machine's slow look outlasts the simulated seconds and the test fails at random.
-        if app.session.link_scan.is_some() && std::time::Instant::now() < real_end {
-            std::thread::sleep(std::time::Duration::from_millis(5));
+        // The look runs on a worker thread, in real time: the clock waits for it to finish, else a
+        // busy machine's slow look outlasts the simulated seconds and the test fails at random.
+        if let Some(scan) = app.session.link_scan.clone()
+            && !waited.as_ref().is_some_and(|w| std::sync::Arc::ptr_eq(w, &scan))
+        {
+            app.session.wait_link_scan();
+            waited = Some(scan);
             continue;
         }
         *time = next;
@@ -785,6 +813,9 @@ fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64
 #[test]
 fn a_file_placed_while_idle_follows_its_changes() {
     let mut app = app();
+    // Every frame renders on this thread, however long it takes: a frame finished by the render
+    // worker during the idle frames asks for a repaint.
+    app.canvas.worker_started = true;
     app.run("prefs.set", json!({"key": "updateLinks", "value": "automatically"})).unwrap();
     let ctx = egui::Context::default();
     let mut time = 0.0;
@@ -798,9 +829,12 @@ fn a_file_placed_while_idle_follows_its_changes() {
     app.run("file.place", json!({"path": path})).unwrap();
     let id = app.session.active().unwrap().selection.objects[0];
     idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
-    std::thread::sleep(std::time::Duration::from_millis(30));
+    let stamp = std::fs::metadata(&path).unwrap().modified().unwrap();
     let changed = png(60, 30, 72.0);
     std::fs::write(&path, &changed).unwrap();
+    // The rewritten file is dated 2 s later, however fast it was written.
+    let later = std::fs::FileTimes::new().set_modified(stamp + std::time::Duration::from_secs(2));
+    std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_times(later).unwrap();
     let hash = vectorcraft_doc::links::hash_bytes(&changed);
     let updated = |app: &VectorcraftApp| {
         let st = app.session.active().unwrap();

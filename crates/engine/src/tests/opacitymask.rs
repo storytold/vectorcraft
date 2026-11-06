@@ -6,7 +6,7 @@
 use serde_json::{Value, json};
 use vectorcraft_geom::Affine;
 use vectorcraft_render::{RenderOptions, Renderer};
-use vectorcraft_tools::{PointerEvent, PointerKind};
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use crate::cmd::maskedit::MASK_EDIT_LAYER;
 use crate::tests::{history, select_with_a_step_to_redo};
@@ -231,6 +231,31 @@ fn empty_point_type_is_not_saved_into_the_mask() {
         let labels = s.doc().unwrap().history.undo.iter().map(|e| e.label.as_str()).collect::<Vec<_>>();
         // The mask took the type in when it was placed, so its removal is a step of its own.
         assert_eq!(labels[labels.len() - 3..], ["Type", "Discard Empty Type", "Stop Editing Opacity Mask"], "{cmd}");
+    }
+}
+
+/// The same while a Cmd/Ctrl press has lent the Selection tool to the Type tool: the command before
+/// the release gives the Type tool back first, so the empty point type is still discarded.
+#[test]
+fn empty_point_type_is_not_saved_into_the_mask_during_a_cmd_press() {
+    for cmd in ["transparency.stopEditingOpacityMask", "object.exitIsolation"] {
+        let mut s = session();
+        s.prefs.placeholder_text = false;
+        let obj = editing_mask(&mut s);
+        let v = ViewInfo::default();
+        s.select_tool("type", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 250.0, 250.0), v).unwrap();
+        }
+        let press = Mods { cmd: true, ..Mods::default() };
+        s.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 280.0).with_mods(press), v).unwrap();
+        assert_eq!(s.tool_id(), "selection", "{cmd}: the press lends the Selection tool");
+        s.execute(cmd, &json!({})).unwrap();
+        assert_eq!(s.tool_id(), "type", "{cmd}: the Type tool is back");
+        assert!(!s.tool_wants_text(), "{cmd}");
+        s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 280.0).with_mods(press), v).unwrap();
+        let art = &mask(&s, obj).unwrap().art;
+        assert!(art.children().is_none() && !matches!(art.kind, vectorcraft_doc::NodeKind::Text(_)), "{cmd}: the mask keeps only the square");
     }
 }
 

@@ -15,6 +15,21 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
     if st.isolation.is_some() {
         v.extend([c("Exit Isolation Mode", "object.exitIsolation"), Sep]);
     }
+    // With the Intertwine tool, where three or more objects overlap: the object nearest to the
+    // right-click moves in that overlap area only (`object.intertwine.arrange`), in place of the
+    // Arrange submenu, which moves objects in the whole group.
+    let intertwine = app.ui.context_intertwine.filter(|(uid, ..)| *uid == st.uid && app.session.tool_id() == "intertwine");
+    if let Some((_, group, at, member)) = intertwine {
+        let item =
+            |label, order| cp(label, "object.intertwine.arrange", json!({"id": group.0, "at": [at.x, at.y], "order": order, "member": member.0}));
+        v.extend([
+            item("Bring to Front", "front"),
+            item("Bring Forward", "forward"),
+            item("Send Backward", "backward"),
+            item("Send to Back", "back"),
+            Sep,
+        ]);
+    }
     // Managing artboards from the canvas: with the Artboard tool, the menu locks and unlocks them
     // (`artboard.setProps` with `locked` for each artboard named; an entry with none to change is left out).
     if app.session.tool_id() == "artboard" {
@@ -107,11 +122,11 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         if crate::panels::character::text_style(app).is_some() {
             v.push(sub("Bullets and Numbering", vec![c("Apply Bullets", "type.applyBullets"), c("Apply Numbers", "type.applyNumbers")]));
         }
+        v.extend([c("Make Guides", "view.guides.make"), Sep, sub("Transform", transform_items())]);
+        if intertwine.is_none() {
+            v.push(sub("Arrange", arrange_items()));
+        }
         v.extend([
-            c("Make Guides", "view.guides.make"),
-            Sep,
-            sub("Transform", transform_items()),
-            sub("Arrange", arrange_items()),
             sub(
                 "Select",
                 vec![c("Next Object Above", "select.nextAbove"), c("Next Object Below", "select.nextBelow"), Sep, c("Deselect", "select.none")],

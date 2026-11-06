@@ -126,20 +126,70 @@ pub fn preferred_compositor(pref: Option<&str>, env: Option<PowerPreference>) ->
     if automatic(pref, env) { crate::compositor_gpu::compositor_gpu() } else { None }
 }
 
-/// The graphics backends the window starts with: on Windows Direct3D 12, falling back to OpenGL,
-/// unless `WGPU_BACKEND` names others (`env_set`; `default` then holds them). Creating a Vulkan
-/// instance loads every installed Vulkan driver into the process, and a faulty one (Intel's
-/// `igvk64.dll`, #806) crashed the app before its window appeared. DX12 is Windows' own backend,
-/// as in PdfCraft. Elsewhere, `default`.
-pub fn backends(default: Backends, env_set: bool) -> Backends {
-    if cfg!(windows) && !env_set { Backends::DX12 | Backends::GL } else { default }
+/// The graphics backends the window starts with: on Windows Direct3D 12, with OpenGL beside it
+/// only when `opengl` ([`windows_opengl`]), unless `WGPU_BACKEND` names others (`env_set`;
+/// `default` then holds them). Creating a Vulkan instance loads every installed Vulkan driver into
+/// the process, and a faulty one (Intel's `igvk64.dll`, #806) crashed the app before its window
+/// appeared. DX12 is Windows' own backend, as in PdfCraft. Elsewhere, `default`.
+pub fn backends(default: Backends, env_set: bool, opengl: bool) -> Backends {
+    match (cfg!(windows) && !env_set, opengl) {
+        (true, true) => Backends::DX12 | Backends::GL,
+        (true, false) => Backends::DX12,
+        (false, _) => default,
+    }
 }
 
-/// The largest texture side to ask the device for, which bounds the window's surface: the
-/// adapter's own limit when it is above eframe's `default` (8192 px), so a window larger than
-/// that keeps its surface (#1459). Never below `default`, which is what was asked for before.
-pub fn surface_limit(default: u32, adapter: u32) -> u32 {
-    default.max(adapter)
+/// Whether a Windows start lists OpenGL's adapters beside Direct3D 12's: only when it leaves an
+/// adapter out (an earlier start crashed on it, or a restart failed on it), when
+/// `WGPU_ADAPTER_NAME` names one (it may be an OpenGL adapter), or when DX12 lists no hardware
+/// adapter (Windows 7, or a GPU without a DX12 driver, which then draws through OpenGL as before
+/// rather than on the CPU with WARP). wgpu's OpenGL backend keeps a hidden window on a thread that
+/// pumps no messages, and Windows waits on it when the input language changes, so the whole app
+/// hung on a switch to another keyboard layout (#4150, gfx-rs/wgpu#10504), even drawing with DX12.
+pub fn windows_opengl(left_out: &LeftOut) -> bool {
+    opengl_needed(left_out, !skipped().is_empty(), std::env::var_os(NAME_ENV).is_some(), dx12_lists_hardware)
+}
+
+/// [`windows_opengl`], with a restart leaving adapters out (`skipping`) and an adapter named
+/// (`named`): `dx12_hardware` is asked only when nothing else decides.
+fn opengl_needed(left_out: &LeftOut, skipping: bool, named: bool, dx12_hardware: impl FnOnce() -> bool) -> bool {
+    left_out.opengl_only || !left_out.adapters.is_empty() || skipping || named || !dx12_hardware()
+}
+
+/// Whether Direct3D 12 lists a hardware adapter; WARP, its software one, doesn't count. A driver
+/// that crashes here crashes a start while it lists the adapters, which the next start answers with
+/// OpenGL alone.
+#[cfg(windows)]
+fn dx12_lists_hardware() -> bool {
+    let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+    descriptor.backends = Backends::DX12;
+    // The shader compiler the window's own instance takes (#1194).
+    descriptor.backend_options.dx12.shader_compiler = wgpu::Dx12Compiler::from_env().unwrap_or(wgpu::Dx12Compiler::Fxc);
+    let instance = wgpu::Instance::new(descriptor);
+    let kinds: Vec<DeviceType> = pollster::block_on(instance.enumerate_adapters(Backends::DX12)).iter().map(|a| a.get_info().device_type).collect();
+    log::info!("Direct3D 12 lists these graphics adapters: {kinds:?}");
+    any_hardware(&kinds)
+}
+
+#[cfg(not(windows))]
+fn dx12_lists_hardware() -> bool {
+    false
+}
+
+/// Is one of the adapters of these kinds hardware, not software such as WARP?
+#[cfg(any(windows, test))]
+fn any_hardware(kinds: &[DeviceType]) -> bool {
+    kinds.iter().any(|k| *k != DeviceType::Cpu)
+}
+
+/// The limits to ask the device for: what eframe `asked` for, lowered to what the `adapter` offers
+/// wherever it offers less, so a GPU short of one of them still gets a device (#2105). The texture
+/// side, which bounds the window's surface, is the adapter's own, above eframe's 8192 px when the
+/// adapter allows more, so a window larger than that keeps its surface (#1459).
+pub fn device_limits(asked: wgpu::Limits, adapter: &wgpu::Limits) -> wgpu::Limits {
+    let mut limits = asked.or_worse_values_from(adapter);
+    limits.max_texture_dimension_2d = adapter.max_texture_dimension_2d;
+    limits
 }
 
 /// One adapter, as [`adapter_order`] sees it.
@@ -703,13 +753,22 @@ enum FirstFrame {
     Shown,
     /// Overdue.
     Hung,
+    /// Overdue, but the UI is still building the first frame: the app's own work (on a slow
+    /// machine, or with antivirus reading every font file), not the adapter, which has been given
+    /// nothing to show yet.
+    Busy,
 }
 
-/// The window's start after `frames` frames run, `since` its first frame was due.
-fn first_frame(frames: u64, since: Duration, minimized: bool) -> FirstFrame {
+/// The window's start after `frames` frames run, `since` its first frame was due and
+/// `since_built` the first frame's UI pass ended (`None` while it runs). A frame counts once its
+/// UI pass ends, before it is painted, so the adapter's time starts there: with no frame run, the
+/// UI thread is in the app's code, and starting again without the adapter wouldn't help (#5160).
+fn first_frame(frames: u64, since: Duration, since_built: Option<Duration>, minimized: bool) -> FirstFrame {
     if frames >= 2 || minimized {
         FirstFrame::Shown
-    } else if since >= FIRST_FRAME_TIMEOUT {
+    } else if frames == 0 {
+        if since >= FIRST_FRAME_TIMEOUT { FirstFrame::Busy } else { FirstFrame::Wait }
+    } else if since_built.unwrap_or(since) >= FIRST_FRAME_TIMEOUT {
         FirstFrame::Hung
     } else {
         FirstFrame::Wait
@@ -717,18 +776,34 @@ fn first_frame(frames: u64, since: Duration, minimized: bool) -> FirstFrame {
 }
 
 /// Watch the window's first frame from another thread: once it reaches the screen, clear the start
-/// from [`START_FILE`]; when it hasn't reached the screen [`FIRST_FRAME_TIMEOUT`] after the app was
-/// created ([`Startup::ready`]), start the app again without the adapter, as [`finish`] does for
-/// one that failed, and end this process, whose UI thread is stuck in the graphics driver.
+/// from [`START_FILE`]; when it hasn't reached the screen [`FIRST_FRAME_TIMEOUT`] after its UI pass
+/// ended, start the app again without the adapter, as [`finish`] does for one that failed, and end
+/// this process, whose UI thread is stuck in the graphics driver. A first frame still being built
+/// that long is waited for, with a note in the log.
 pub fn watch_first_frame(startup: Arc<Startup>) {
+    let mut built: Option<Instant> = None;
+    let mut noted = false;
     let watch = move || loop {
         std::thread::sleep(Duration::from_millis(250));
         let Some(due) = startup.ready.get() else { continue };
         let ui = startup.ui.get();
         let frames = ui.map_or(0, egui::Context::cumulative_frame_nr);
+        if frames >= 1 && built.is_none() {
+            built = Some(Instant::now());
+        }
         let minimized = ui.and_then(|c| c.input(|i| i.viewport().minimized)).unwrap_or(false);
-        match first_frame(frames, due.elapsed(), minimized) {
+        match first_frame(frames, due.elapsed(), built.map(|t| t.elapsed()), minimized) {
             FirstFrame::Wait => continue,
+            FirstFrame::Busy => {
+                if !noted {
+                    log::warn!(
+                        "the window's first frame is still being built after {}s: waiting for it (the app's work, not the graphics adapter)",
+                        FIRST_FRAME_TIMEOUT.as_secs()
+                    );
+                    noted = true;
+                }
+                continue;
+            }
             FirstFrame::Shown => {
                 startup.presented();
                 return;

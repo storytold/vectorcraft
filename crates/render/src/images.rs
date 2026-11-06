@@ -4,7 +4,8 @@
 //! pixels cached per renderer, a 24-megapixel photo would take 96 MB in each. Here they are kept
 //! once, keyed by the image's content (not the document's key for it, which another document may
 //! use for other pixels) and by what was made of them: greyscale (outline mode), recoloured by a
-//! colour adjustment, separated into ink planes, or shrunk ([`RenderOptions::image_mips`](crate::RenderOptions::image_mips)).
+//! colour adjustment, separated into ink planes, shown through Separations Preview's plates, or
+//! shrunk ([`RenderOptions::image_mips`](crate::RenderOptions::image_mips)).
 //!
 //! The store holds at most [`ImageStore::budget`] bytes, dropping the least recently used entries
 //! beyond that, except ones still held elsewhere (a render context drawing them): dropping those
@@ -14,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard, Weak};
 
 use vectorcraft_doc::ImageBlob;
+use vectorcraft_doc::cmyk::Inks;
 use vello_cpu::Pixmap;
 use vello_cpu::color::PremulRgba8;
 
@@ -39,6 +41,15 @@ fn default_budget() -> usize {
 #[cfg(not(target_arch = "wasm32"))]
 fn budget_for(memory: u64) -> usize {
     usize::try_from(memory / 8).unwrap_or(usize::MAX).min(IMAGE_CACHE_MAX)
+}
+
+/// Installed memory in bytes, `None` where it isn't known (the web, other systems). Other crates
+/// size their own budgets from it.
+pub fn installed_memory() -> Option<u64> {
+    #[cfg(target_arch = "wasm32")]
+    return None;
+    #[cfg(not(target_arch = "wasm32"))]
+    physical_memory()
 }
 
 /// Installed memory in bytes (`MemTotal` in `/proc/meminfo`).
@@ -85,11 +96,16 @@ pub(crate) struct ImageKey {
     pub adjust: Option<u64>,
     /// Greyscale (outline mode).
     pub grey: bool,
+    /// Colorized with this display color ([`colorized`]).
+    pub tint: Option<[u8; 3]>,
     /// The ink plane painted ([`Ink::Display`]: the colours themselves).
     pub ink: Ink,
     /// Generations of the colour tables the pixels were made with (0 = none): a CMYK image's
     /// display table, and the separation table of ink planes (see `ink`).
     pub luts: (u64, u64),
+    /// Generation of the Separations Preview table the pixels show the visible plates through
+    /// (`proof::PlateLut`; 0 = none).
+    pub plates: u64,
     /// Halved this many times ([`half`]).
     pub mip: u8,
 }
@@ -360,21 +376,56 @@ pub fn newly_undecodable<'a>(blobs: impl IntoIterator<Item = &'a ImageBlob>) -> 
 /// `pm` at half the size (rounded up), each pixel the mean of the 2×2 it covers (the last row and
 /// column repeat on odd sizes).
 pub(crate) fn half(pm: &Pixmap) -> Pixmap {
-    let (w, h) = (pm.width() as usize, pm.height() as usize);
-    let (ow, oh) = (w.div_ceil(2).max(1), h.div_ceil(2).max(1));
-    let src = pm.data();
-    let at = |x: usize, y: usize| {
-        src.get(y.min(h.saturating_sub(1)) * w + x.min(w.saturating_sub(1))).copied().unwrap_or(PremulRgba8 { r: 0, g: 0, b: 0, a: 0 })
-    };
-    let mut data = Vec::with_capacity(ow * oh);
-    for y in 0..oh {
-        for x in 0..ow {
-            let q = [at(2 * x, 2 * y), at(2 * x + 1, 2 * y), at(2 * x, 2 * y + 1), at(2 * x + 1, 2 * y + 1)];
-            let mean = |c: fn(&PremulRgba8) -> u8| ((q.iter().map(|p| u32::from(c(p))).sum::<u32>() + 2) / 4) as u8;
-            data.push(PremulRgba8 { r: mean(|p| p.r), g: mean(|p| p.g), b: mean(|p| p.b), a: mean(|p| p.a) });
-        }
-    }
+    let (data, ow, oh) = half_with(pm.data(), pm.width().into(), pm.height().into(), PremulRgba8 { r: 0, g: 0, b: 0, a: 0 }, |q| PremulRgba8 {
+        r: mean(q.map(|p| p.r)),
+        g: mean(q.map(|p| p.g)),
+        b: mean(q.map(|p| p.b)),
+        a: mean(q.map(|p| p.a)),
+    });
     Pixmap::from_parts(data, ow as u16, oh as u16)
+}
+
+/// CMYK image ink amounts `inks` at half the size, as [`half`] halves pixels: each ink the mean
+/// of the 2×2 it covers. `None` only if the halved size were no CMYK image's, which a halved
+/// image's never is.
+pub(crate) fn half_inks(inks: &Inks) -> Option<Inks> {
+    let (w, h) = (usize::try_from(inks.width).ok()?, usize::try_from(inks.height).ok()?);
+    let (data, ow, oh) =
+        half_with(inks.data.as_chunks::<4>().0, w, h, [0; 4], |q| std::array::from_fn(|c| mean(q.map(|p| p.get(c).copied().unwrap_or(0)))));
+    Inks::new(u32::try_from(ow).ok()?, u32::try_from(oh).ok()?, data.into_flattened())
+}
+
+/// `w`×`h` texels `src` at half the size (rounded up, at least 1×1), each the `mean` of the 2×2
+/// it covers (the last row and column repeat on odd sizes; `blank` stands in for texels `src`
+/// is short of), and that size.
+fn half_with<T: Copy>(src: &[T], w: usize, h: usize, blank: T, mean: impl Fn([T; 4]) -> T) -> (Vec<T>, usize, usize) {
+    let (ow, oh) = (w.div_ceil(2).max(1), h.div_ceil(2).max(1));
+    let at = |x: usize, y: usize| src.get(y.min(h.saturating_sub(1)) * w + x.min(w.saturating_sub(1))).copied().unwrap_or(blank);
+    let data = (0..oh)
+        .flat_map(|y| (0..ow).map(move |x| (x, y)))
+        .map(|(x, y)| mean([at(2 * x, 2 * y), at(2 * x + 1, 2 * y), at(2 * x, 2 * y + 1), at(2 * x + 1, 2 * y + 1)]))
+        .collect();
+    (data, ow, oh)
+}
+
+/// The mean of four channel values, rounded to nearest.
+fn mean(v: [u8; 4]) -> u8 {
+    ((v.iter().map(|&c| u32::from(c)).sum::<u32>() + 2) / 4) as u8
+}
+
+/// Pixels `pm` colorized with `rgb`: each pixel takes the color, as opaque as the pixel is dark
+/// (255 less its Rec. 709 luma) times its alpha, so white pixels are transparent.
+pub(crate) fn colorized(pm: &Pixmap, [r, g, b]: [u8; 3]) -> Pixmap {
+    let mut out = pm.clone();
+    for px in out.data_mut() {
+        // The luma of premultiplied components is the premultiplied luma: the alpha less it is
+        // the darkness times the alpha.
+        let luma = 0.2126 * px.r as f32 + 0.7152 * px.g as f32 + 0.0722 * px.b as f32;
+        let a = (px.a as f32 - luma).clamp(0.0, 255.0);
+        let mul = |c: u8| (c as f32 * a / 255.0).round() as u8;
+        *px = PremulRgba8 { r: mul(r), g: mul(g), b: mul(b), a: a.round() as u8 };
+    }
+    out
 }
 
 /// How many times to halve an image drawn with `m` (image pixels → device pixels): while a pixel
@@ -397,7 +448,7 @@ mod tests {
     use super::*;
 
     fn key(content: &str) -> ImageKey {
-        ImageKey { content: content.into(), adjust: None, grey: false, ink: Ink::Display, luts: (0, 0), mip: 0 }
+        ImageKey { content: content.into(), adjust: None, grey: false, tint: None, ink: Ink::Display, luts: (0, 0), plates: 0, mip: 0 }
     }
 
     #[test]

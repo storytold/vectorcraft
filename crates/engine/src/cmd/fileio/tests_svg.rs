@@ -50,7 +50,7 @@ fn every_option_changes_the_output() {
     changed(&mut s, json!({"svg": {"styling": "css"}}), &|o| o.contains("<style>") && o.contains("class=\"cls-1\""));
     changed(&mut s, json!({"objectIds": "minimal"}), &|o| !o.contains(" id=\""));
     changed(&mut s, json!({"objectIds": "unique"}), &|o| o.contains(" id=\"u") && o.contains("-Layer_1\""));
-    changed(&mut s, json!({"decimals": 1}), &|o| o.contains("M10.1 ") && !o.contains("10.123"));
+    changed(&mut s, json!({"decimals": 1}), &|o| o.contains("x=\"10.1\"") && !o.contains("10.123"));
     changed(&mut s, json!({"decimals": 6}), &|o| o.contains("10.123456"));
     changed(&mut s, json!({"minify": true}), &|o| !o.trim_end().contains('\n') && !o.contains("<?xml"));
     changed(&mut s, json!({"responsive": true}), &|o| !o.contains(" width=\"200\"") && o.contains("viewBox=\"0 0 200 100\""));
@@ -218,7 +218,7 @@ fn save_writes_svg_and_remembers_its_options() {
     s.execute("shape.ellipse", &json!({"x": 100, "y": 10, "width": 30, "height": 30})).unwrap();
     s.execute("document.save", &json!({})).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
-    assert!(text.contains("<style>") && text.matches("<path").count() == 2, "Save reuses the options: {text}");
+    assert!(text.contains("<style>") && vectorcraft_testkit::svg_shapes(&text) == 2, "Save reuses the options: {text}");
     assert!(s.execute("document.save", &json!({"path": dir.join("x.png").to_string_lossy()})).is_err(), "PNG is an export");
     // A native save switches back.
     let native = dir.join("doc.vectorcraft").to_string_lossy().to_string();

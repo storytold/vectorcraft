@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+
 use vectorcraft_color::Swatch;
+use vectorcraft_doc::ImageObject;
 
 use super::{
     Appearance, AppearanceItem, Arc, Beside, Color, Document, EngineError, LineCap, LineJoin, LiveShape, Node, NodeId, NodeKind, Paint, Point,
@@ -219,18 +222,16 @@ fn trace_params(s: &Session, c: &str, p: &Value) -> Result<tr::TraceParams> {
     Ok(params)
 }
 
-/// Document swatch `w`'s solid color with the paint a trace fills with it: a global or spot color,
-/// or a tint of one, linked to its swatch as `swatch_solid` (paint.rs) links it; any other color
-/// unlinked. The color is the one the paint shows (a Lab spot color's CMYK equivalent when the Spot
-/// Colors options use CMYK values).
+/// Document swatch `w`'s displayed solid color and unlinked trace paint. A tint uses its tinted
+/// color; a Lab spot color uses its CMYK equivalent when the Spot Colors options use CMYK values.
 fn trace_swatch_paint(d: &Document, w: &Swatch) -> Option<(Color, Paint)> {
     let linked = d.swatch_link(&w.name).and_then(|(base, tint)| d.tint_paint(&base, tint));
     let color = linked.as_ref().and_then(Paint::color).or_else(|| w.paint.color())?;
-    Some((color, linked.unwrap_or_else(|| Paint::solid(color))))
+    Some((color, Paint::solid(color)))
 }
 
 /// Document Library with `colorGroup`: the solid colors of the active document's color group
-/// `name` (so named exactly, else ignoring case), each with its paint ([`trace_swatch_paint`]).
+/// `name` (so named exactly, else ignoring case), each with its unlinked paint ([`trace_swatch_paint`]).
 /// Errors name command `c`. ([`trace_params`] has checked that the library is the document's
 /// swatches.)
 fn trace_group_colors(c: &str, s: &Session, name: &str) -> Result<Vec<(Color, Paint)>> {
@@ -246,9 +247,7 @@ fn trace_group_colors(c: &str, s: &Session, name: &str) -> Result<Vec<(Color, Pa
 }
 
 /// Document Library in Color mode: look the library's colors (or its color group's) up into
-/// `params.swatches` → each one as traced (sRGB) with the paint to fill with. The document's
-/// global and spot colors fill linked to their swatches ([`trace_swatch_paint`]); a swatch
-/// library's colors fill unlinked. Errors name command `c`.
+/// `params.swatches` → each one as traced (sRGB) with its unlinked paint. Errors name command `c`.
 fn trace_library(c: &str, s: &Session, params: &mut tr::TraceParams) -> Result<Vec<([u8; 3], Paint)>> {
     if params.mode != tr::Mode::Color || params.palette != tr::Palette::DocumentLibrary {
         return Ok(vec![]);
@@ -369,8 +368,34 @@ fn grouped(d: &mut Document, nodes: Vec<Node>, parents: &[Option<usize>]) -> Vec
     roots.iter().filter_map(|&r| built.get_mut(r)?.take()).chain(ring).collect()
 }
 
-pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
-    let c = if expand { "imageTrace.makeAndExpand" } else { "imageTrace.make" };
+/// What a trace depends on: the object traced (an image, or an Image Trace object traced again),
+/// its image, and the settings it is traced with. The tracer makes the same paths of the same
+/// inputs, so a trace made away from the command ([`TraceRun`]) stands in for the command's own.
+#[derive(Clone, Debug, PartialEq)]
+struct TraceInputs {
+    target: NodeId,
+    image: Box<ImageObject>,
+    /// The settings traced with, as JSON.
+    params: Value,
+    /// Document Library: the library's colours, which the JSON leaves out
+    /// ([`tr::TraceParams::swatches`]).
+    swatches: Vec<[u8; 3]>,
+}
+
+/// What `imageTrace.make` and `imageTrace.makeAndExpand` take from the session before they trace.
+struct Prepared {
+    inputs: TraceInputs,
+    trace: tr::TraceParams,
+    view: Option<TraceView>,
+    /// The settings asked for, which the Image Trace object keeps.
+    params_json: Value,
+    preset_label: String,
+    library: Vec<([u8; 3], Paint)>,
+    bytes: Arc<Vec<u8>>,
+}
+
+/// What command `c` with params `p` traces, and how, from the session: everything but the trace.
+fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
     let mut params = trace_params(s, c, p)?;
     let view = view_param(c, p)?;
     let params_json = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
@@ -384,15 +409,9 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
         None if is(tr::preset(named)) || is(tr::enhanced_preset(named)) => named.to_string(),
         None => "Custom".to_string(),
     };
-    // A saved preset's settings join the journal entry, so a replay traces as this run did after
-    // the preset is changed, renamed or deleted.
-    if let Some(q) = s.trace_preset(named).filter(|_| tr::preset(named).is_none()) {
-        let recorded = serde_json::to_value(&q.params).map_err(|e| EngineError::Other(e.to_string()))?;
-        s.note_journal("savedPreset", recorded);
-    }
     let roots = root_ids(s, p)?;
     // The image (inside a trace group, or selected directly).
-    let (target, img) = {
+    let (target, image) = {
         let d = &s.doc()?.doc;
         roots
             .iter()
@@ -409,20 +428,139 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
             })
             .ok_or_else(|| bad(c, "select an image (or an Image Trace group)"))?
     };
-    let blob = s.doc()?.doc.images.get(&img.key).ok_or_else(|| EngineError::Other(format!("image data `{}` is missing", img.key)))?;
-    // An image over the tracer's size is traced scaled down (the paths are scaled back below).
-    let raster = tr::Raster::decode_to_fit(&blob.bytes).map_err(|e| EngineError::Other(e.to_string()))?;
+    let blob = s.doc()?.doc.images.get(&image.key).ok_or_else(|| EngineError::Other(format!("image data `{}` is missing", image.key)))?;
+    let bytes = Arc::clone(&blob.bytes);
     let library = trace_library(c, s, &mut params)?;
-    let res = tr::trace_within(&raster, &params, MAX_TRACE_ANCHORS).map_err(|e| EngineError::Other(e.to_string()))?;
-    let warnings = trace_warnings((img.width, img.height), (raster.width, raster.height), res.worked_at);
+    let traced_with = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
+    let inputs = TraceInputs { target, image, params: traced_with, swatches: params.swatches.clone() };
+    Ok(Prepared { inputs, trace: params, view, params_json, preset_label, library, bytes })
+}
+
+/// What a trace made of an image: the size in pixels it was decoded at, and the paths.
+pub struct Traced {
+    inputs: TraceInputs,
+    raster: (u32, u32),
+    res: tr::TraceResult,
+}
+
+impl Traced {
+    /// Hand it to the next run of its command with the same inputs ([`TraceRun::params`]), which
+    /// applies it as one undo step instead of tracing again. Any other trace drops it.
+    pub fn hand_in(self, s: &mut Session) {
+        s.trace_hand_off = Some(self);
+    }
+}
+
+/// Decode the image `bytes` and trace it with `params`, telling `steps` how far it has got
+/// ([`tr::trace_watched`]); [`EngineError::Cancelled`] once `steps` answers `false`.
+fn trace_now(inputs: &TraceInputs, params: &tr::TraceParams, bytes: &[u8], steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<Traced> {
+    // An image over the tracer's size is traced scaled down (the paths are scaled back).
+    let raster = tr::Raster::decode_to_fit(bytes).map_err(|e| EngineError::Other(e.to_string()))?;
+    if !steps(0, 0) {
+        return Err(EngineError::Cancelled);
+    }
+    let res = tr::trace_watched(&raster, params, MAX_TRACE_ANCHORS, steps).map_err(|e| match e {
+        tr::TraceError::Cancelled => EngineError::Cancelled,
+        e => EngineError::Other(e.to_string()),
+    })?;
+    Ok(Traced { inputs: inputs.clone(), raster: (raster.width, raster.height), res })
+}
+
+/// An Image Trace made away from its command, off the UI thread (#3098). [`TraceRun::prepare`]
+/// takes what `imageTrace.make` or `imageTrace.makeAndExpand` traces from the session, checked as
+/// the command checks it; [`TraceRun::run`] decodes and traces the image without the session, on
+/// any thread; [`Traced::hand_in`] gives the result to the command.
+pub struct TraceRun {
+    command: &'static str,
+    params: Value,
+    prepared: Prepared,
+}
+
+impl TraceRun {
+    /// The trace `command` (`imageTrace.make` or `imageTrace.makeAndExpand`) with params `p` makes
+    /// in the active document.
+    pub fn prepare(s: &Session, command: &str, p: &Value) -> Result<TraceRun> {
+        let command = match command {
+            "imageTrace.make" => "imageTrace.make",
+            "imageTrace.makeAndExpand" => "imageTrace.makeAndExpand",
+            other => return Err(EngineError::Other(format!("`{other}` doesn't trace an image"))),
+        };
+        let prepared = prepare(s, command, p)?;
+        // The object traced is named, so the command applies the trace to it whatever is
+        // selected by then.
+        let mut params = if p.is_object() { p.clone() } else { json!({}) };
+        if let Some(o) = params.as_object_mut() {
+            o.remove("ids");
+            o.insert("id".into(), json!(prepared.inputs.target.0));
+        }
+        Ok(TraceRun { command, params, prepared })
+    }
+
+    /// `imageTrace.make` or `imageTrace.makeAndExpand`.
+    pub fn command(&self) -> &'static str {
+        self.command
+    }
+
+    /// The command's params that apply this trace: those it was prepared with, the object traced
+    /// in `id`.
+    pub fn params(&self) -> &Value {
+        &self.params
+    }
+
+    /// The object it traces: an image, or an Image Trace object traced again.
+    pub fn target(&self) -> NodeId {
+        self.prepared.inputs.target
+    }
+
+    /// The size in pixels of the image it traces.
+    pub fn image_size(&self) -> (u32, u32) {
+        (self.prepared.inputs.image.width, self.prepared.inputs.image.height)
+    }
+
+    /// Does it still apply: would the command trace the same object, image and settings now?
+    pub fn current(&self, s: &Session) -> bool {
+        prepare(s, self.command, &self.params).is_ok_and(|now| now.inputs == self.prepared.inputs)
+    }
+
+    /// Decode and trace the image, telling `steps` how far it has got → what it traced, or why it
+    /// failed or stopped ([`EngineError::Cancelled`] once `steps` answers `false`). It touches no
+    /// document, so it can run on any thread.
+    pub fn run(&self, steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<Traced> {
+        trace_now(&self.prepared.inputs, &self.prepared.trace, &self.prepared.bytes, steps)
+    }
+}
+
+pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
+    let c = if expand { "imageTrace.makeAndExpand" } else { "imageTrace.make" };
+    let Prepared { inputs, trace, view, params_json, preset_label, library, bytes } = prepare(s, c, p)?;
+    // A saved preset's settings join the journal entry, so a replay traces as this run did after
+    // the preset is changed, renamed or deleted.
+    let named = str_param(p, "preset").unwrap_or("Default");
+    if let Some(q) = s.trace_preset(named).filter(|_| tr::preset(named).is_none()) {
+        let recorded = serde_json::to_value(&q.params).map_err(|e| EngineError::Other(e.to_string()))?;
+        s.note_journal("savedPreset", recorded);
+    }
+    // A trace handed in for these very inputs ([`TraceRun`]), else one made now.
+    let Traced { raster, res, .. } = match s.trace_hand_off.take() {
+        Some(traced) if traced.inputs == inputs => traced,
+        _ => trace_now(&inputs, &trace, &bytes, &|_, _| true)?,
+    };
+    let TraceInputs { target, image: img, .. } = inputs;
+    let warnings = trace_warnings((img.width, img.height), raster, res.worked_at);
     // Pixel space of the decoded raster → the image object's pixel space → document.
-    let sx = img.width.max(1) as f64 / raster.width.max(1) as f64;
-    let sy = img.height.max(1) as f64 / raster.height.max(1) as f64;
+    let sx = img.width.max(1) as f64 / raster.0.max(1) as f64;
+    let sy = img.height.max(1) as f64 / raster.1.max(1) as f64;
     let xf = img.xf * vectorcraft_geom::Affine::scale_non_uniform(sx, sy);
     // Document units per raster pixel (stroke widths).
     let unit = xf.determinant().abs().sqrt();
     let (npaths, anchors, colors) = (res.paths.len(), res.anchor_count(), res.palette.len());
     let label = if expand { "Image Trace (Make and Expand)" } else { "Image Trace" };
+    // A library color fills with the swatch's displayed color (its model kept), unlinked.
+    // Keep the first swatch that traces as a given color. Build the lookup once per trace.
+    let mut by_color: HashMap<[u8; 3], &Paint> = HashMap::new();
+    for (rgb, paint) in &library {
+        by_color.entry(*rgb).or_insert(paint);
+    }
     let id = s.edit(label, |d, sel| {
         let src = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
         let mut image = if is_trace_group(&src) {
@@ -450,12 +588,8 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
                 *path = shape.to_path();
                 *live = Some(Box::new(shape));
             }
-            // A library color fills with the swatch's own color (its model kept), linked to a
-            // global or spot swatch of the document.
-            let solid = library
-                .iter()
-                .find(|(rgb, _)| *rgb == tp.color)
-                .map_or_else(|| Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2])), |l| l.1.clone());
+            let solid =
+                by_color.get(&tp.color).map_or_else(|| Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2])), |paint| (*paint).clone());
             // Gradients: a path the tracer found to be a linear gradient is filled with it.
             let paint = tp.gradient.as_ref().map_or(solid, |g| traced_gradient(g, xf));
             n.appearance = match tp.stroke {

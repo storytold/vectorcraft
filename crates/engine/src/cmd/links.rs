@@ -335,7 +335,8 @@ pub(crate) fn linked_files(d: &Document, doc_path: Option<&str>) -> Vec<LinkedFi
         .into_iter()
         .filter(|g| seen.insert(g.link.path.clone()))
         .map(|g| {
-            let own = |b: &&ImageBlob| !b.is_proxy() && fileio::format_for_name(g.link.name()).is_some_and(|f| f.mime == b.mime);
+            let named = fileio::format_for_name(g.link.name()).or_else(|| fileio::readable_format_for_name(g.link.name()));
+            let own = |b: &&ImageBlob| !b.is_proxy() && named.is_some_and(|f| f.mime == b.mime);
             let found = locate(&g.link, doc_path);
             let found_path = found.as_ref().map(|f| f.path.clone());
             let bytes = found.and_then(|mut f| f.read().ok()).or_else(|| d.images.get(&g.key).filter(own).map(|b| b.bytes.to_vec()));
@@ -374,13 +375,18 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, doc_path: Option<&str>) ->
             continue;
         };
         let preview = d.images.get(&key).map(|b| b.bytes.clone());
-        let mime = fileio::format_for_name(g.link.name()).map(|f| f.mime.to_string()).unwrap_or_else(|| img.blob.mime.clone());
+        // A file read as it is keeps its own type; one turned upright (EXIF orientation) is the PNG it became.
+        let mime = match fileio::format_for_name(g.link.name()) {
+            Some(f) if img.blob.bytes.as_slice() == bytes.as_slice() => f.mime.to_string(),
+            _ => img.blob.mime.clone(),
+        };
         out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview });
     }
     let mut warnings = vec![];
-    if !previews.is_empty() {
-        warnings
-            .push(format!("{} linked image(s) output as their previews: their files can't be found or read (relink or update them)", previews.len()));
+    match previews.len() {
+        0 => {}
+        1 => warnings.push("1 linked image output as its preview: its file can't be found or read (relink or update it)".to_string()),
+        n => warnings.push(format!("{n} linked images output as their previews: their files can't be found or read (relink or update them)")),
     }
     (Cow::Owned(out), warnings)
 }
@@ -1104,7 +1110,7 @@ fn linked_param(st: &crate::DocState, p: &Value, cmd: &str) -> Result<NodeId> {
 
 /// Per linked image in the layers of `st`: its file's status, where it was found when away from
 /// its path, and whether the image shows its preview (each file probed once).
-fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, bool)> {
+pub(crate) fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, bool)> {
     let mut out = BTreeMap::new();
     for g in groups(&st.doc, None).iter().filter(|g| !g.ids.is_empty()) {
         let (status, found) = probe(g, st.path.as_deref());
@@ -1119,7 +1125,7 @@ fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, b
 fn format_label(d: &Document, im: &ImageObject) -> &'static str {
     im.link
         .as_ref()
-        .and_then(|l| fileio::format_for_name(l.name()))
+        .and_then(|l| fileio::format_for_name(l.name()).or_else(|| fileio::readable_format_for_name(l.name())))
         .or_else(|| d.images.get(&im.key).and_then(|b| fileio::FORMATS.iter().find(|f| f.raster && f.mime == b.mime)))
         .map_or("Image", |f| f.label)
 }
@@ -1332,8 +1338,10 @@ fn placement_json(o: PlacementOptions) -> Value {
 
 /// Link Info's fields of the linked file `l` (of object `id` of `st`) into `out`.
 fn file_fields(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) {
-    // Within what the caller that opened the document may read, whoever asks.
-    crate::file_access::confine(st.opened_by.as_ref(), || file_fields_here(st, id, l, out));
+    // A confined caller reads within its own roots; anyone else within what the caller that
+    // opened the document may read (never wider than the caller asking now).
+    let roots = crate::file_access::current().or_else(|| st.opened_by.clone());
+    crate::file_access::confine(roots.as_ref(), || file_fields_here(st, id, l, out));
 }
 
 fn file_fields_here(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) {
@@ -1341,12 +1349,11 @@ fn file_fields_here(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Va
     let doc_path = st.path.as_deref();
     let path = fileio::document_path(&l.path, doc_path).ok();
     let stamp = path.as_deref().and_then(file_stamp);
-    let folder_len = l.path.len().saturating_sub(l.name().len());
     out["status"] = json!(status.as_str());
     note_refused(out, l, doc_path);
     out["path"] = json!(l.path);
     out["fileName"] = json!(l.name());
-    out["location"] = json!(l.path.get(..folder_len).unwrap_or_default().trim_end_matches(['/', '\\']));
+    out["location"] = json!(l.folder());
     for (k, v) in [
         ("page", l.page.map(u64::from)),
         ("fileSize", stamp.map(|s| s.0).or(l.size)),

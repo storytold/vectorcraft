@@ -220,7 +220,7 @@ fn an_unchanged_document_changes_nothing_and_a_new_symbol_everything() {
     assert_eq!(redraw(&old, &old.clone()), Changed::Nothing);
     let mut new = old.clone();
     let art = Arc::new(rect(&mut new, Rect::new(0.0, 0.0, 5.0, 5.0), Color::BLACK));
-    new.symbols.push(vectorcraft_doc::Symbol { name: "Dot".into(), art });
+    new.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Dot".into(), art });
     assert_eq!(redraw(&old, &new), Changed::Everything);
 }
 

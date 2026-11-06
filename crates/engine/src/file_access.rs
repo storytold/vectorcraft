@@ -99,9 +99,14 @@ impl AutomationRoots {
                 Access::Write => Err(format!("automation filesystem access is not granted: write authority is absent: {path}")),
             };
         }
-        let resolved = resolve(path)?;
-        if roots.iter().any(|r| inside(&resolved, &r.resolved)) {
-            return Ok(());
+        // Resolving a path on another computer connects to it: unless a root is on a network
+        // share, such a path is refused by its name before anything is looked up.
+        let remote = cfg!(windows) && network_path(path) && !roots.iter().any(|r| network_path(&r.resolved.to_string_lossy()));
+        if !remote {
+            let resolved = resolve(path)?;
+            if roots.iter().any(|r| inside(&resolved, &r.resolved)) {
+                return Ok(());
+            }
         }
         let shown: Vec<String> = roots.iter().map(|r| r.shown.display().to_string()).collect();
         match (shown.as_slice(), access) {
@@ -213,8 +218,10 @@ fn resolve(path: &str) -> Result<PathBuf, String> {
         return Err("automation path rejected: path is empty".into());
     }
     // Checked as given: making `…\NUL` absolute gives the device path `\\.\NUL` on Windows.
-    if cfg!(windows) && Path::new(path).components().any(|c| matches!(c, Component::Normal(n) if is_device_name(&n.to_string_lossy()))) {
-        return Err(format!("automation path rejected: reserved device names are not allowed: {path}"));
+    if cfg!(windows)
+        && let Some(why) = windows_name_refusal(path)
+    {
+        return Err(format!("automation path rejected: {why}: {path}"));
     }
     let absolute = std::path::absolute(path).map_err(|e| format!("automation path rejected: cannot resolve {path}: {e}"))?;
     // The names below the nearest existing folder, last first.
@@ -274,10 +281,30 @@ fn same_component(a: Component, b: Component) -> bool {
 }
 
 /// A Windows device name (`CON`, `NUL`, `COM1`… also with an extension), which names no file.
-fn is_device_name(component: &str) -> bool {
+pub(crate) fn is_device_name(component: &str) -> bool {
     let stem = component.split('.').next().unwrap_or(component).trim_end_matches(' ').to_ascii_uppercase();
     let numbered = |prefix: &str| stem.strip_prefix(prefix).is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"));
     matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$" | "CONIN$" | "CONOUT$") || numbered("COM") || numbered("LPT")
+}
+
+/// Is `path` a Windows name of a file on another computer (`\\server\share\…`, `\\?\UNC\…`)?
+/// (Judged by name alone, so it can be tested on any platform; `check` applies it on Windows only.)
+fn network_path(path: &str) -> bool {
+    let p = path.replace('/', "\\");
+    let upper = p.to_ascii_uppercase();
+    upper.starts_with(r"\\?\UNC\") || upper.starts_with(r"\\.\UNC\") || (p.starts_with(r"\\") && !p.starts_with(r"\\?\") && !p.starts_with(r"\\.\"))
+}
+
+/// Why Windows would not take `path` as an ordinary file name, for the first of its components
+/// that is a device name, or holds a `:` (a drive letter's own colon belongs to the prefix, not to
+/// a name, so only a stream such as `x.svg:evil` has one). (Judged by name alone, so it can be
+/// tested on any platform; `resolve` applies it on Windows only.)
+fn windows_name_refusal(path: &str) -> Option<&'static str> {
+    Path::new(path).components().find_map(|c| match c {
+        Component::Normal(n) if is_device_name(&n.to_string_lossy()) => Some("reserved device names are not allowed"),
+        Component::Normal(n) if n.to_string_lossy().contains(':') => Some("alternate data streams are not allowed"),
+        _ => None,
+    })
 }
 
 #[cfg(test)]
@@ -299,6 +326,16 @@ mod tests {
 
     fn s(p: PathBuf) -> String {
         p.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn network_paths_are_told_by_name() {
+        for p in [r"\\server\share\x.svg", "//server/share/x.svg", r"\\?\UNC\server\share\x.svg", r"\\?\unc\server\share"] {
+            assert!(network_path(p), "{p}");
+        }
+        for p in [r"C:\art\x.svg", r"\\?\C:\art\x.svg", r"\\.\C:\x", "/home/me/x.svg", "x.svg"] {
+            assert!(!network_path(p), "{p}");
+        }
     }
 
     #[test]
@@ -496,5 +533,30 @@ mod tests {
         for f in ["console", "com10", "COM0", "lpt", "a.svg", "nul-x"] {
             assert!(!is_device_name(f), "{f}");
         }
+    }
+
+    /// #3604: on Windows `x.svg:evil` writes a hidden NTFS alternate data stream of `x.svg`, which
+    /// stays inside the root yet shows in no folder listing, so a `:` in any component after the
+    /// drive is refused (a drive letter's own colon is not a component).
+    #[test]
+    fn alternate_data_streams_are_refused() {
+        for p in ["x.svg:evil", "out/x.svg:evil", "out/x.svg:evil:$DATA", "out/sub:evil/x.svg", "out/x.svg::$DATA", "out/:evil"] {
+            assert_eq!(windows_name_refusal(p), Some("alternate data streams are not allowed"), "{p}");
+        }
+        for p in ["x.svg", "out/x.svg", "out/a b.svg", "out/x.svg.evil", "out/NUL"] {
+            assert_ne!(windows_name_refusal(p), Some("alternate data streams are not allowed"), "{p}");
+        }
+        assert_eq!(windows_name_refusal("out/NUL"), Some("reserved device names are not allowed"));
+        assert_eq!(windows_name_refusal("out/x.svg"), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_refuses_a_stream_inside_a_write_root() {
+        let (base, roots) = folders("streams");
+        let e = roots.check(&s(base.join("out").join("x.svg:evil")), Access::Write).unwrap_err();
+        assert!(e.contains("alternate data streams"), "{e}");
+        assert_eq!(roots.check(&s(base.join("out/x.svg")), Access::Write), Ok(()));
+        let _ = std::fs::remove_dir_all(base);
     }
 }

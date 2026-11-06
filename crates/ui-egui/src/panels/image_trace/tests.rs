@@ -1,4 +1,5 @@
 use super::*;
+use crate::panels::library_panel;
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
 
 /// One headless frame of the panel (and its menu) with `events`: the texts drawn, with where.
@@ -1212,4 +1213,43 @@ fn ignore_color_rejects_signs_in_hex() {
     assert_eq!(ignore_color(&json!({"ignoreColor": "#+f+f+f"})), [255; 3]);
     assert_eq!(ignore_color(&json!({"ignoreColor": "+0+0+0"})), [255; 3]);
     assert_eq!(ignore_color(&json!({"ignoreColor": "#ff00ff"})), [255, 0, 255]);
+}
+
+/// #3098: a trace the panel starts off the UI thread is the panel's own once it lands: its counts
+/// show, and nothing waits for the object it replaced, so Undo with Preview on shows that object's
+/// own settings and traces nothing.
+#[test]
+fn a_trace_off_the_ui_thread_is_adopted_when_it_lands() {
+    let mut app = traced_app();
+    app.trace_runs.off_the_ui_thread = true;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.adopt_context(&ctx);
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let strokes = |app: &VectorcraftApp| target(app).2.map(|t| t["params"]["strokes"].clone());
+    let steps = undo(&app);
+    click(&mut app, &ctx, "Preview");
+    click(&mut app, &ctx, "Strokes");
+    click(&mut app, &ctx, "Trace");
+    assert_eq!(app.trace_runs.running.len(), 1);
+    assert_eq!(undo(&app), steps, "not traced yet");
+    let t0 = std::time::Instant::now();
+    while !app.trace_runs.running.is_empty() && t0.elapsed() < std::time::Duration::from_secs(30) {
+        crate::trace_runs::poll(&mut app);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(undo(&app), steps + 1, "one undo step");
+    assert_eq!(strokes(&app), Some(json!(true)));
+    let st: TraceUi = pstate(&ctx, "image-trace");
+    assert!(st.info.is_some(), "its counts show");
+    assert_eq!(st.object, target_key(&app));
+    assert!(st.drafts.is_empty(), "nothing waits for the object it replaced");
+    app.ui.image_trace_preview = true;
+    frame(&mut app, &ctx, vec![]);
+    app.run("edit.undo", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.trace_runs.running.is_empty(), "Undo traces nothing");
+    assert_eq!(strokes(&app), Some(json!(false)), "the object's own settings");
+    assert_eq!(undo(&app), steps);
 }

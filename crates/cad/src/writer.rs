@@ -564,7 +564,10 @@ impl Drawing {
             c.handle(350, fixed::PLOT_NORMAL);
             c.raw(100, "AcDbDictionaryWithDefault");
             c.handle(340, fixed::PLOT_NORMAL);
-            c.object("ACDBPLACEHOLDER", fixed::PLOT_NORMAL, fixed::PLOT_STYLES, "AcDbPlaceHolder");
+            // A placeholder has no data and no subclass marker of its own.
+            c.raw(0, "ACDBPLACEHOLDER");
+            c.handle(5, fixed::PLOT_NORMAL);
+            c.handle(330, fixed::PLOT_STYLES);
             self.layout(c, fixed::MODEL_LAYOUT, "Model", 0, fixed::MODEL_RECORD);
             self.layout(c, fixed::PAPER_LAYOUT, "Layout1", 1, fixed::PAPER_RECORD);
         }
@@ -618,14 +621,23 @@ impl Drawing {
         c.num(141, 0.0);
         c.num(142, 1.0);
         c.num(143, 1.0);
-        c.int(70, 688);
+        // Plot flags; 1024 marks the model space layout.
+        c.int(70, if record == fixed::MODEL_RECORD { 688 | 1024 } else { 688 });
         c.int(72, 1);
         c.int(73, 0);
         c.int(74, 5);
         c.raw(7, "");
         c.int(75, 16);
+        if self.version.true_color() {
+            // Shade plot mode (as displayed), resolution level (normal) and custom DPI.
+            c.int(76, 0);
+            c.int(77, 2);
+            c.int(78, 300);
+        }
         c.num(147, 1.0);
-        c.xy(148, 0.0, 0.0);
+        // The paper image origin is 148 (x) and 149 (y), not a point at 148 and 158.
+        c.num(148, 0.0);
+        c.num(149, 0.0);
         c.raw(100, "AcDbLayout");
         c.raw(1, name);
         c.int(70, 1);

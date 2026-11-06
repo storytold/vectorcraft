@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Swatch",
             ["Window", "Swatches"],
             None,
-            "{name?, color? | colors?: [colour] (one swatch each, in one undo step) | swatch? | gradient? | pattern?: name (default: the current fill), tint?: 0..100 (% of the global or spot `swatch`, or of the one the current fill links to), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour; lab: CIE L*a*b*, how spot colours are usually defined), global?, spot? (a spot colour, always global), group?: colour group name (solid colours only; default: ungrouped), none?: true (the None paint), paint?: paint.setFill params, keepModel?: bool (as paint.setFill)} save a colour, gradient or pattern as a swatch. A tint of a global or spot colour (below 100%, without mode, global or spot) becomes a tint swatch, \"Name 40%\", linked to its base: it follows edits to the base and applies as that tint of it. Names are unique (\"Sky 2\"); a colour's default name is its values (\"C=10 M=20 Y=30 K=0\", \"R=255 G=128 B=0\", \"Gray K=40\", \"L=55 a=60 b=40\") → {name, names: [every new swatch]}",
+            "{name?, color? | colors?: [colour] (one swatch each, in one undo step; #rrggbbaa and #rgba are refused) | swatch? | gradient? | pattern?: name (default: the current fill), tint?: 0..100 (% of the global or spot `swatch`, or of the one the current fill links to), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour; lab: CIE L*a*b*, how spot colours are usually defined), global?, spot? (a spot colour, always global), group?: colour group name (solid colours only; default: ungrouped), none?: true (the None paint), paint?: paint.setFill params, keepModel?: bool (as paint.setFill)} save a colour, gradient or pattern as a swatch. A tint of a global or spot colour (below 100%, without mode, global or spot) becomes a tint swatch, \"Name 40%\", linked to its base: it follows edits to the base and applies as that tint of it. Names are unique (\"Sky 2\"); a colour's default name is its values (\"C=10 M=20 Y=30 K=0\", \"R=255 G=128 B=0\", \"Gray K=40\", \"L=55 a=60 b=40\") → {name, names: [every new swatch]}",
             has_doc,
             swatch_new
         ),
@@ -38,7 +38,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Color Group",
             ["Window", "Swatches"],
             None,
-            "{name?, swatches?: [names] (solid colours move into the group; gradients, patterns and None stay), colors?: [colour] (added as new swatches), keepModel?: bool (as paint.setFill), fromArtwork?: false (add the unique colours of the selected art: fills, strokes, text, gradient stops and mesh points; a colour linked to a global swatch moves that swatch into the group), toGlobal?: true (with fromArtwork: the new swatches are global and the selected art's matching unlinked colours link to them), includeTints?: false (with fromArtwork: tints of global swatches also get swatches of their own)} → {name, swatches: [names in the group], linked: paints linked}",
+            "{name?, swatches?: [names] (solid colours move into the group; gradients, patterns and None stay), colors?: [colour] (added as new swatches; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), fromArtwork?: false (add the unique colours of the selected art: fills, strokes, text, gradient stops and mesh points; a colour linked to a global swatch moves that swatch into the group), toGlobal?: true (with fromArtwork: the new swatches are global and the selected art's matching unlinked colours link to them), includeTints?: false (with fromArtwork: tints of global swatches also get swatches of their own)} → {name, swatches: [names in the group], linked: paints linked}",
             has_doc,
             swatch_new_group
         ),
@@ -49,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Options",
             ["Window", "Swatches"],
             None,
-            "{name, newName?, color? (e.g. {l, a, b} for a Lab colour), keepModel?: bool (as paint.setFill; the swatch's own color and a color given with mode keep their model), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global), paint?: paint.setFill params ({color}, {gradient}, {swatch} or {pattern}) replacing the swatch's colour; gradient or pattern with one of the same kind} edit a swatch in any colour group, as one undo step. Fills, strokes, text, gradient stops and tint swatches linked to a global swatch take its new colour (at their own tint) and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only; a tint swatch only takes a new name (edit its base) → {name, relinked: paints changed}",
+            "{name, newName?, color? (e.g. {l, a, b} for a Lab colour; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill; the swatch's own color and a color given with mode keep their model), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global), paint?: paint.setFill params ({color}, {gradient}, {swatch} or {pattern}) replacing the swatch's colour; gradient or pattern with one of the same kind} edit a swatch in any colour group, as one undo step. Fills, strokes, text, gradient stops and tint swatches linked to a global swatch take its new colour (at their own tint) and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only; a tint swatch only takes a new name (edit its base) → {name, relinked: paints changed}",
             has_doc,
             swatch_edit
         ),
@@ -130,7 +130,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Color Group",
             ["Window", "Swatches"],
             None,
-            "{group: colour group, colors: [colour] (hex, key, {c,m,y,k} or {l,a,b}; the group's swatches take them in order, extra colours become new swatches, swatches past the end are removed; built-in swatches can't change; a color the swatch already has keeps its model), keepModel?: bool (as paint.setFill), rename?: new group name} rewrite a colour group as one undo step; art linked to its global swatches takes their new colours (and keeps its colour, unlinked, when its swatch goes) → {name, swatches: [names], relinked}",
+            "{group: colour group, colors: [colour] (hex, key, {c,m,y,k} or {l,a,b}; #rrggbbaa and #rgba are refused; the group's swatches take them in order, extra colours become new swatches, swatches past the end are removed; built-in swatches can't change; a color the swatch already has keeps its model), keepModel?: bool (as paint.setFill), rename?: new group name} rewrite a colour group as one undo step; art linked to its global swatches takes their new colours (and keeps its colour, unlinked, when its swatch goes) → {name, swatches: [names], relinked}",
             has_doc,
             swatch_edit_group
         ),
@@ -252,12 +252,15 @@ fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let mut unlink =
         |_: &mut Color, link: &mut Option<String>, _: &mut f32| link.as_ref().is_some_and(|l| global.contains(l)) && link.take().is_some();
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let unlinked = s.edit("Delete Swatch", |d, _| {
         d.swatch_groups.retain(|g| !names.contains(&g.name));
         for n in &names {
             d.remove_swatch(n);
         }
-        Ok(map_swatch_links(d, &mut unlink))
+        let unlinked = map_swatch_links(d, &mut unlink);
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
+        Ok(unlinked)
     })?;
     map_default_paints(s, &mut unlink);
     Ok(json!({"deleted": names, "unlinked": unlinked}))
@@ -313,7 +316,8 @@ fn swatch_new_group(s: &mut Session, p: &Value) -> Result<Value> {
     let colors: Vec<Color> = p
         .get("colors")
         .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(color_value).map(|c| super::paint::new_color(s, p, c)).collect())
+        .map(|a| a.iter().map(|v| color_value(v).map(|c| super::paint::new_color(s, p, c)).ok_or_else(|| bad(C, format!("bad color {v}")))).collect())
+        .transpose()?
         .unwrap_or_default();
     let from_art = bool_or(p, "fromArtwork", false);
     let to_global = from_art && bool_or(p, "toGlobal", true);
@@ -598,7 +602,7 @@ pub(super) fn map_swatch_links(d: &mut Document, f: &mut LinkFn) -> usize {
 /// keeps the fields of `raw` that `base` leaves out, and drops the fields that `base` holds and
 /// `new` leaves out. An array takes the length of `new`, each element merged with the element at
 /// the same index in `raw`.
-fn merge_stored(raw: Value, base: &Value, new: Value) -> Value {
+pub(super) fn merge_stored(raw: Value, base: &Value, new: Value) -> Value {
     match (raw, new) {
         (Value::Object(mut raw), Value::Object(new)) => {
             let mut out = serde_json::Map::new();
@@ -703,6 +707,7 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
     let global = spot || bool_or(p, "global", sw.global);
     let to = name_param(p, "newName").filter(|n| *n != name).map_or_else(|| name.clone(), |n| d.free_swatch_name(&n));
     let relink = Relink { from: name.clone(), to: to.clone(), color: color.filter(|_| global).map(|c| d.linked_color(c, spot)), keep: global };
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let relinked = s.edit("Swatch Options", |d, _| {
         let w = d.swatch_mut(&name).ok_or_else(|| bad(C, format!("no swatch `{name}`")))?;
         w.name = to.clone();
@@ -716,7 +721,9 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        Ok(map_swatch_links(d, &mut |c, l, t| relink.apply(c, l, t)))
+        let relinked = map_swatch_links(d, &mut |c, l, t| relink.apply(c, l, t));
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
+        Ok(relinked)
     })?;
     relink.defaults(s);
     Ok(json!({"name": to, "relinked": relinked}))
@@ -812,7 +819,7 @@ fn swatch_unused(s: &mut Session, _: &Value) -> Result<Value> {
         Some(l) if d.swatch(l).is_some() => links.push((l.clone(), tint)),
         _ => colors.push(*c),
     };
-    d.visit_paints(&mut |p| match p {
+    let mut paint = |p: &Paint| match p {
         Paint::Solid { color: c, swatch, tint } => color(c, swatch.as_ref(), *tint),
         Paint::Gradient(g) => {
             g.gradient.stops.iter().for_each(|s| color(&s.color, s.swatch.as_ref(), s.tint));
@@ -821,7 +828,16 @@ fn swatch_unused(s: &mut Session, _: &Value) -> Result<Value> {
         }
         Paint::Pattern { pattern, .. } => patterns.push(pattern.clone()),
         Paint::None => {}
-    });
+    };
+    d.visit_paints(&mut paint);
+    // A character style's fill and stroke use their swatches even while no text uses the style.
+    for attrs in d.char_styles.iter().map(|def| &def.attrs) {
+        for key in ["fill", "stroke"] {
+            if let Some(p) = attrs.get(key).and_then(|v| serde_json::from_value::<Paint>(v.clone()).ok()) {
+                paint(&p);
+            }
+        }
+    }
     let used = |w: &Swatch| {
         gradient_links.contains(&w.name)
             || links.iter().any(|(l, t)| match w.tint_of() {
@@ -867,11 +883,14 @@ fn swatch_merge(s: &mut Session, p: &Value) -> Result<Value> {
         *l = link.clone();
         true
     };
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let relinked = s.edit("Merge Swatches", |d, _| {
         for n in merged {
             d.remove_swatch(n);
         }
-        Ok(map_swatch_links(d, &mut relink))
+        let relinked = map_swatch_links(d, &mut relink);
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
+        Ok(relinked)
     })?;
     map_default_paints(s, &mut relink);
     Ok(json!({"name": keep, "merged": merged, "relinked": relinked}))
@@ -980,6 +999,7 @@ pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Color], ren
     {
         return Err(bad(cmd, format!("`{}` can't be edited or removed", w.name)));
     }
+    let colorized_ok = super::paint::check_colorized(d).is_ok();
     let mut relinks = vec![];
     let mut swatches = std::mem::take(&mut d.swatch_groups[gi].swatches);
     for gone in swatches.split_off(colors.len().min(swatches.len())) {
@@ -1005,6 +1025,7 @@ pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Color], ren
     (g.name, g.swatches) = (name.clone(), swatches);
     let names = g.swatches.iter().map(|w| w.name.clone()).collect();
     let relinked = if relinks.is_empty() { 0 } else { map_swatch_links(d, &mut |c, l, t| relinks.iter().any(|r| r.apply(c, l, t))) };
+    super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(cmd, e))?;
     Ok(GroupEdit { name, swatches: names, relinks, relinked })
 }
 

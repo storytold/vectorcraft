@@ -23,7 +23,7 @@ pub fn weight_presets(unit: Unit) -> [f64; 22] {
         Unit::Inches => IN_PRESETS,
         Unit::Pixels => PX_PRESETS,
         Unit::Picas => return PC_PRESETS,
-        Unit::Points | Unit::FeetInches | Unit::Feet | Unit::Meters | Unit::Yards => return PT_PRESETS,
+        Unit::Points | Unit::FeetInches | Unit::Feet | Unit::Meters | Unit::Yards | Unit::Q | Unit::Ha => return PT_PRESETS,
     };
     native.map(|v| unit.to_pt(v))
 }

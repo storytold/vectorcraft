@@ -115,6 +115,71 @@ fn spine_conversion_rejects_invalid_arguments_without_mutation() {
     }
 }
 
+/// #4819: Convert Selected Anchor Points to Smooth or Corner (the Control bar's and the Contextual
+/// Task Bar's buttons) converts the points of a selected blend's spine, as it converts every
+/// anchor of a path selected whole, in one undo step, the keys staying put.
+#[test]
+fn converting_anchors_of_a_selected_blend_converts_its_spine() {
+    let mut s = session();
+    let (a, b, g) = blend(&mut s);
+    s.execute("object.blend.spine.addAnchor", &json!({"id": g.0, "x": 55, "y": 5})).unwrap();
+    s.execute("object.blend.spine.moveAnchor", &json!({"id": g.0, "anchor": 1, "x": 55, "y": 105})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let keys = spec(&s, g).key_anchors;
+    s.execute("path.convertAnchors", &json!({"to": "smooth"})).unwrap();
+    let sp = spec(&s, g);
+    assert_eq!(sp.key_anchors, keys);
+    let middle = sp.spine.as_ref().unwrap().subpaths[0].anchors[1];
+    assert_eq!(middle.p, Point::new(55.0, 105.0));
+    assert!(middle.has_in() && middle.has_out(), "{middle:?}");
+    assert!((middle.h_in.y - 105.0).abs() < 1e-9 && (middle.h_out.y - 105.0).abs() < 1e-9, "tangent to the chord between its neighbors: {middle:?}");
+    assert!(middle.h_in.x < 55.0 && middle.h_out.x > 55.0, "{middle:?}");
+    assert_eq!(center(&node(&s, a)), Point::new(5.0, 5.0));
+    assert_eq!(center(&node(&s, b)), Point::new(105.0, 5.0));
+
+    s.execute("path.convertAnchors", &json!({"to": "corner"})).unwrap();
+    let corner = spec(&s, g).spine.unwrap().subpaths[0].anchors.clone();
+    assert!(corner.iter().all(|a| !a.has_in() && !a.has_out()), "{corner:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, g).spine.unwrap().subpaths[0].anchors[1], middle, "one undo step");
+}
+
+/// Converting the points of a blend whose spine came from Replace Spine changes only the spine's
+/// handles: its points stay where they are, the keys are not pinned to points, and the steps stay
+/// spread along the spine instead of the spine's ends moving onto the keys.
+#[test]
+fn converting_anchors_of_a_replaced_spine_changes_only_its_handles() {
+    let mut s = session();
+    let (_, _, g) = blend(&mut s);
+    let spine = id_of(&s.execute("path.create", &json!({"d": "M100 300 L200 200 L300 300"})).unwrap());
+    s.execute("select.set", &json!({"ids": [g.0, spine.0]})).unwrap();
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let points = |s: &Session| spec(s, g).spine.unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect::<Vec<_>>();
+    let before = points(&s);
+    let ends = |s: &Session| {
+        let st = steps(s, g);
+        (center(&st[0]), center(&st[st.len() - 1]))
+    };
+    let ends_before = ends(&s);
+    s.execute("path.convertAnchors", &json!({"to": "smooth"})).unwrap();
+    let sp = spec(&s, g);
+    assert!(sp.key_anchors.is_empty(), "{:?}", sp.key_anchors);
+    assert_eq!(points(&s), before, "the spine's points stay put");
+    let middle = sp.spine.as_ref().unwrap().subpaths[0].anchors[1];
+    assert!(middle.has_in() && middle.has_out(), "{middle:?}");
+    assert_eq!(ends(&s), ends_before, "the end steps stay at the spine's ends");
+    assert!(center(&steps(&s, g)[1]).distance(Point::new(200.0, 200.0)) < 1e-6, "the step stays on the spine");
+
+    s.execute("path.convertAnchors", &json!({"to": "corner"})).unwrap();
+    let sp = spec(&s, g);
+    assert!(sp.key_anchors.is_empty(), "{:?}", sp.key_anchors);
+    assert!(sp.spine.unwrap().subpaths[0].anchors.iter().all(|a| !a.has_in() && !a.has_out()));
+    assert_eq!(points(&s), before);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, g).spine.unwrap().subpaths[0].anchors[1], middle, "one undo step");
+}
+
 #[test]
 fn moving_a_key_point_moves_the_key_and_the_other_way_round() {
     let mut s = session();

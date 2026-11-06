@@ -1,11 +1,12 @@
 //! Artboards panel: numbered list with inline rename (double-click the name, or the panel menu's
 //! Rename; while several artboards are selected, the name typed goes to all of them, numbered),
-//! move up / down, new
+//! move up / down (or drag a row above or below another), new
 //! (Alt-click: Artboard Options for the new artboard first), delete; a row dragged onto New
 //! Artboard duplicates its artboard (as Duplicate Artboards does, with
 //! its art when the Artboard tool's Move/Copy Artwork with Artboard is on). The highlighted row is the active artboard, the one the status bar's navigator shows and
 //! Fit Artboard in Window fits: clicking a row makes it active, double-clicking its number also
-//! fits it in the window. The options icon at a row's right end opens Artboard Options: a click on
+//! fits it in the window. Shift-click selects a range of artboards and Ctrl/Cmd-click adds or
+//! removes one, with any tool: another tool gives way to the Artboard tool first (#5698). The options icon at a row's right end opens Artboard Options: a click on
 //! the active artboard's icon, or a double-click on another row's icon. The lock column left of it
 //! shows a lock on a locked artboard, and a click there locks or unlocks the artboard
 //! (`artboard.setProps` with `locked`); Delete leaves locked artboards.
@@ -308,7 +309,7 @@ fn select_range(app: &mut VectorcraftApp, anchor: Option<usize>, i: usize, n: us
 /// Ctrl/Cmd-click on artboard `i`'s row while the Artboard tool is in use: adds its artboard to the
 /// tool's selection and makes it the active one, or takes it out and makes the lowest-numbered
 /// remaining artboard active. The only selected artboard stays selected.
-fn toggle(app: &mut VectorcraftApp, i: usize, n: usize) {
+pub(crate) fn toggle(app: &mut VectorcraftApp, i: usize, n: usize) {
     let mut all = picked(app, n);
     match all.iter().position(|j| *j == i) {
         Some(at) if all.len() > 1 => {
@@ -405,6 +406,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let all = picked(app, abs.len());
     let editing: Option<usize> = pstate(ui.ctx(), "ab-edit");
     let mut row_clicked = false;
+    // A row dropped on another row: (from, to), the index it lands at.
+    let mut dropped = None;
     let list_rect = widgets::list_box(ui, |ui| {
         ui.set_min_height(110.0);
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -486,6 +489,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                 }
                 let m = ui.input(|inp| inp.modifiers);
+                // A Shift- or Ctrl/Cmd-click selects several artboards with any tool: it first
+                // switches to the Artboard tool, which holds the selection, so Properties and the
+                // Control bar then show the controls that change every selected artboard.
+                if resp.clicked() && (m.shift || m.command) && app.session.tool_id() != "artboard" {
+                    app.select_tool("artboard");
+                }
                 let tool = app.session.tool_id() == "artboard";
                 row_clicked |= resp.clicked();
                 if resp.clicked() && tool && m.shift {
@@ -512,10 +521,26 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 } else if resp.double_clicked() {
                     start_rename(ui.ctx(), app, i);
                 }
+                // Another row dragged over this one lands above or below it by the pointer's half,
+                // a line showing where.
+                if let Some(from) = resp.dnd_hover_payload::<RowDrag>().map(|d| d.0).filter(|from| *from != i) {
+                    let after = ui.input(|inp| inp.pointer.interact_pos()).is_some_and(|p| p.y > r.center().y);
+                    let y = if after { r.bottom() } else { r.top() };
+                    ui.painter().line_segment([pos2(r.left(), y), pos2(r.right(), y)], egui::Stroke::new(2.0, t.accent));
+                    if resp.dnd_release_payload::<RowDrag>().is_some() {
+                        let to = i + usize::from(after);
+                        dropped = Some((from, if from < to { to - 1 } else { to }));
+                    }
+                }
             }
         });
         scrolled.inner_rect
     });
+    if let Some((from, to)) = dropped.filter(|(from, to)| from != to)
+        && app.run("artboard.reorder", json!({"index": from, "to": to})).is_ok()
+    {
+        select(app, to);
+    }
     // Keyboard: the panel takes it with a click on a row and gives it up when the pointer is
     // pressed outside the list or the panel is not drawn (`ab-keys`: the frame it last had it in).
     let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));

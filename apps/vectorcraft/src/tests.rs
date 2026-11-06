@@ -1,5 +1,40 @@
 use super::*;
 
+/// Both native-menu clicks and control commands must update exported checkmarks without ui().
+#[cfg(target_os = "linux")]
+#[test]
+fn global_menu_state_is_published_after_logic_without_drawing() {
+    use vectorcraft_ui_egui::{control::ControlRequest, desktop_menu};
+    fn control_bar(items: &[craft_desktop::Item]) -> &craft_desktop::Item {
+        fn find(items: &[craft_desktop::Item]) -> Option<&craft_desktop::Item> {
+            items.iter().find_map(
+                |item| {
+                    if item.action.as_ref().is_some_and(|a| a.command == "window.control") { Some(item) } else { find(&item.children) }
+                },
+            )
+        }
+        find(items).unwrap()
+    }
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", serde_json::json!({"width":64,"height":64})).unwrap();
+    let ctx = egui::Context::default();
+    let initial = desktop_menu::snapshot(&app);
+    let row = control_bar(&initial.items);
+    let checked = row.checked.unwrap();
+    let click = craft_desktop::Click { document: initial.document, action: row.action.clone().unwrap() };
+    app.raw_input_hook(&ctx, &mut egui::RawInput::default());
+    let (state, snapshot) = app::run_linux_logic(&mut app, &ctx, [click], None).unwrap();
+    assert_eq!(control_bar(&snapshot.items).checked, Some(!checked));
+
+    let (request, response) = ControlRequest::new("engine.execute", serde_json::json!({"command":"window.control"}));
+    tx.send(request).unwrap();
+    app.raw_input_hook(&ctx, &mut egui::RawInput::default());
+    let (_, snapshot) = app::run_linux_logic(&mut app, &ctx, [], Some(state)).unwrap();
+    assert_eq!(response.try_recv().unwrap()["ok"], true);
+    assert_eq!(control_bar(&snapshot.items).checked, Some(checked));
+}
+
 fn ui_state_with_prefs(engine_prefs: serde_json::Value) -> vectorcraft_ui_egui::UiState {
     vectorcraft_ui_egui::UiState { engine_prefs, ..Default::default() }
 }
@@ -99,9 +134,8 @@ fn unreadable_saved_docking_keeps_preferences_and_every_workspace() {
 
 #[test]
 fn an_unreadable_ui_json_is_kept_beside_it() {
-    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-    let dir = std::env::temp_dir().join(format!("vectorcraft-ui-prefs-{}-{stamp}", std::process::id()));
-    std::fs::create_dir(&dir).unwrap();
+    let temp = tempfile::Builder::new().prefix("vectorcraft-ui-prefs-").tempdir().unwrap();
+    let dir = temp.path();
     let path = dir.join("ui.json");
     super::keep_prefs_copy(&path, b"{\"docking\": {\"root\": {\"FutureNode\": {}}}}", "ui.unreadable");
     super::keep_prefs_copy(&path, b"not json", "ui.unreadable");
@@ -109,7 +143,6 @@ fn an_unreadable_ui_json_is_kept_beside_it() {
     let first = std::fs::read(dir.join("ui.unreadable.json")).unwrap();
     let second = std::fs::read(dir.join("ui.unreadable-2.json")).unwrap();
     let before = std::fs::read(dir.join("ui.before-layout-migration.json")).unwrap();
-    let _ = std::fs::remove_dir_all(&dir);
     assert!(first.starts_with(b"{\"docking\""), "the first copy is not replaced");
     assert_eq!(second, b"not json");
     assert_eq!(before, b"{}");

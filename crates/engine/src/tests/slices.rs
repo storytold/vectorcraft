@@ -86,6 +86,19 @@ fn releasing_a_user_slice_leaves_an_unpainted_rectangle() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![NodeId(rid)]);
 }
 
+/// Guides cutting more pieces than a document takes are refused before the grid is made.
+#[test]
+fn too_many_guide_pieces_are_refused() {
+    let mut s = session();
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    for i in 1..3000 {
+        for vertical in [true, false] {
+            doc.guides.push(vectorcraft_doc::Guide::new(vertical, f64::from(i) * 0.1));
+        }
+    }
+    assert!(s.execute("object.slice.fromGuides", &json!({})).unwrap_err().to_string().contains("more than"));
+}
+
 #[test]
 fn guides_give_nine_slices() {
     let mut s = session();
@@ -186,6 +199,8 @@ fn slice_options_set_read_and_undo_in_one_step() {
     assert_eq!(slices(&mut s)[0]["name"], "cell");
     assert!(s.execute("object.slice.options", &json!({"kind": "htmlText"})).is_err(), "HTML Text is for type");
     assert!(s.execute("object.slice.options", &json!({"background": "pink-ish"})).is_err());
+    assert!(s.execute("object.slice.options", &json!({"background": "#00ff0080"})).is_err(), "a hex color with an alpha part");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(s.doc().unwrap().doc.slices[0].options, Default::default());
     // An object slice of type can be HTML Text.
