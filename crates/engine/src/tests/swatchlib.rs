@@ -765,6 +765,33 @@ fn a_pattern_library_adds_only_the_picked_pattern_and_it_undoes_and_saves() {
     assert_eq!(back.swatch("Checkerboard").map(|w| &w.paint), doc(&s).swatch("Checkerboard").map(|w| &w.paint));
 }
 
+/// A device name is saved with a `-` after it, which can be another library's own name: neither
+/// library replaces the other, and saving either again replaces only itself.
+#[test]
+fn a_library_named_like_a_device_keeps_the_library_with_its_file_name() {
+    for (first, second) in [("COM¹", "COM¹-"), ("COM¹-", "COM¹"), ("com¹", "COM¹-")] {
+        let dir = temp_dir("device-collision");
+        let mut s = session();
+        s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+        let save =
+            |s: &mut Session, name: &str| run(s, "swatch.library.save", json!({"user": true, "name": name}))["library"].as_str().unwrap().to_string();
+        let a = save(&mut s, first);
+        let b = save(&mut s, second);
+        assert_ne!(a, b);
+        assert_eq!(save(&mut s, first), a, "saving {first} again replaces {first}");
+        assert_eq!(save(&mut s, second), b, "saving {second} again replaces {second}");
+        assert_eq!(s.swatch_libraries.get(&a).unwrap().1.name, first);
+        assert_eq!(s.swatch_libraries.get(&b).unwrap().1.name, second);
+        // The name of the numbered file the second one got is a third library's own name.
+        let third = b.strip_prefix("user/").unwrap().strip_suffix(".vcswatches").unwrap().to_string();
+        let c = save(&mut s, &third);
+        assert!(c != a && c != b, "{third}: {c}");
+        assert_eq!(save(&mut s, &third), c, "saving {third} again replaces {third}");
+        assert_eq!(s.swatch_libraries.get(&b).unwrap().1.name, second);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
 /// #3602: a library titled with a Windows device name is saved under a name that is not one.
 #[test]
 fn a_library_file_name_is_never_a_windows_device_name() {

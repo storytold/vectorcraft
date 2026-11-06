@@ -818,6 +818,71 @@ fn pattern_names_are_numbered_around_the_documents_swatches() {
     assert_eq!(names(&d), ["Sea 2"]);
 }
 
+/// A pattern whose name has no newline keeps it, and its swatch takes the first free "Name 2" when
+/// another swatch has the name: a default swatch, a named color the art uses, or a color of the
+/// palette. A pattern a swatch already paints with gets no other.
+#[test]
+fn a_pattern_swatch_named_as_another_swatch_is_numbered() {
+    let def = |name: &str| DOTS.replace("(Dots)", &format!("({name})"));
+    let filled = |name: &str| format!("({name}) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", rect_path(10.0, 20.0, 70.0, 80.0));
+    let ink = format!("0 1 1 0 (Ink) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let paints = |d: &Document, name: &str| d.swatches_iter().find(|s| s.name == name).map(|s| s.paint.clone());
+    let doc = read_ok(&format!("{}{}{}", def("White"), def("Ink"), layer(&format!("{}{}{ink}", filled("White"), filled("Ink"))))).doc;
+    assert_eq!(doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["White", "Ink"]);
+    for name in ["White", "Ink"] {
+        assert!(matches!(paints(&doc, name), Some(Paint::Solid { .. })), "{name}");
+        let numbered = format!("{name} 2");
+        assert!(matches!(paints(&doc, &numbered), Some(Paint::Pattern { pattern, .. }) if pattern == name), "{numbered}");
+    }
+    let fills: Vec<_> = art(&doc).iter().map(|n| fill(n)).collect();
+    assert!(matches!(&fills[..2], [Paint::Pattern { pattern: a, .. }, Paint::Pattern { pattern: b, .. }] if a == "White" && b == "Ink"));
+    // A pattern defined later under the numbered name keeps its swatch's name.
+    let doc = read_ok(&format!("{}{}{}", def("White"), def("White 2"), layer(&filled("White")))).doc;
+    assert!(matches!(paints(&doc, "White 2"), Some(Paint::Pattern { pattern, .. }) if pattern == "White 2"));
+    assert!(matches!(paints(&doc, "White 3"), Some(Paint::Pattern { pattern, .. }) if pattern == "White"));
+    // A color of the palette.
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0.5 k\n(Mist)\nPc\nPB\n%AI5_EndPalette\n";
+    let doc = read_ok(&format!("{}{palette}{}", def("Mist"), layer(&filled("Mist")))).doc;
+    assert!(matches!(paints(&doc, "Mist"), Some(Paint::Solid { .. })));
+    assert!(matches!(paints(&doc, "Mist 2"), Some(Paint::Pattern { pattern, .. }) if pattern == "Mist"));
+    // A palette swatch under another name already paints with the pattern.
+    let palette = "%AI5_BeginPalette\n0 0 Pb\n0 0 0 0.5 k\n(Mist)\nPc\n(Mist) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Fog)\nPc\nPB\n%AI5_EndPalette\n";
+    let doc = read_ok(&format!("{}{palette}{}", def("Mist"), layer(&filled("Mist")))).doc;
+    let names: Vec<&str> = doc.swatches_iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["[None]", "Mist", "Fog"]);
+}
+
+/// A named color whose name a gradient or pattern swatch of the palette has takes the first free
+/// "Name 2", and the fills and gradient stops linked to it follow it.
+#[test]
+fn a_color_named_as_a_palette_gradient_or_pattern_is_numbered() {
+    let gradient = "%AI5_BeginGradient: (Brand)\n(Brand) 0 2 Bd\n[\n\
+                    %_0 1 1 0 (Brand) 0 0 5 1 6 50 0 Bs\n%_0 0 0 0 1 0 0 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let palette = "%AI5_BeginPalette\n0 0 Pb\nBb\n2 (Brand) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Brand)\nPc\n\
+                   (Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n(Ink)\nPc\nPB\n%AI5_EndPalette\n";
+    let colored = |name: &str| format!("0 1 1 0 ({name}) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let doc = read_ok(&format!("{gradient}{DOTS}{palette}{}", layer(&format!("{}{}", colored("Brand"), colored("Ink"))))).doc;
+    let paints = |name: &str| doc.swatches_iter().find(|s| s.name == name).map(|s| s.paint.clone());
+    assert!(matches!(paints("Brand"), Some(Paint::Gradient(_))));
+    assert!(matches!(paints("Ink"), Some(Paint::Pattern { .. })));
+    for name in ["Brand 2", "Ink 2"] {
+        let sw = doc.swatches_iter().find(|s| s.name == name).unwrap_or_else(|| panic!("{name}"));
+        assert!(matches!(sw.paint, Paint::Solid { .. }) && sw.global && sw.spot, "{sw:?}");
+    }
+    let links: Vec<_> = art(&doc).iter().map(|n| if let Paint::Solid { swatch, .. } = fill(n) { swatch } else { None }).collect();
+    assert_eq!(links, [Some("Brand 2".to_string()), Some("Ink 2".to_string())]);
+    let Some(Paint::Gradient(g)) = paints("Brand") else { panic!() };
+    assert_eq!(g.gradient.stops[0].swatch.as_deref(), Some("Brand 2"), "the stop's link");
+    // A color defined later under the numbered name keeps it and its links.
+    let later = format!("0 0 1 0 (Brand 2) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let doc = read_ok(&format!("{gradient}{DOTS}{palette}{}", layer(&format!("{}{later}", colored("Brand"))))).doc;
+    let color = |name: &str| doc.swatches_iter().find(|s| s.name == name).and_then(|s| s.paint.color());
+    assert_eq!(color("Brand 2"), Some(Color::cmyk(0.0, 0.0, 1.0, 0.0)));
+    assert_eq!(color("Brand 3"), Some(Color::cmyk(0.0, 1.0, 1.0, 0.0)));
+    let links: Vec<_> = art(&doc).iter().map(|n| if let Paint::Solid { swatch, .. } = fill(n) { swatch } else { None }).collect();
+    assert_eq!(links, [Some("Brand 3".to_string()), Some("Brand 2".to_string())]);
+}
+
 /// A palette's pattern swatch named by its pattern takes the name the pattern is shown with.
 #[test]
 fn a_palette_pattern_swatch_takes_its_patterns_shown_name() {
