@@ -2199,3 +2199,54 @@ fn a_shift_press_on_the_centre_point_moves_or_deselects() {
         vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))]
     );
 }
+
+/// On a box too thin for its centre point to clear the handles, the handles take the pointer and
+/// the press, as they take the press itself: the centre is within their 5 pt reach.
+#[test]
+fn a_thin_shapes_centre_point_gives_the_handles_the_pointer() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let shape = LiveShape::Rectangle {
+        w: 100.0,
+        h: 8.0,
+        radii: [0.0; 4],
+        kinds: Default::default(),
+        radii_relative: false,
+        xf: vectorcraft_geom::Affine::translate((100.0, 100.0)),
+    };
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let (layer, id) = (d.layers[0].id, d.alloc_id());
+    let mut n = Node::path(id, shape.to_path(), Appearance::default());
+    if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+        *slot = Some(Box::new(shape));
+    }
+    d.insert(Some(layer), 0, n).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let centre = Point::new(150.0, 104.0);
+    assert!(hit_center(&c, centre, c.point_tol()).is_some(), "the centre point is there");
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, centre, Mods::default()), Cursor::ResizeV, "the top and bottom handles take it");
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y)), vec![Action::Begin("Scale".into())]);
+}
+
+/// A ruler guide under a selected object's centre point keeps the pointer and the press, as it
+/// keeps them over the art.
+#[test]
+fn a_ruler_guide_under_the_centre_point_keeps_the_pointer() {
+    let (mut d, id) = doc_with_live_rect();
+    d.guides.push(vectorcraft_doc::Guide::new(true, 150.0));
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let centre = Point::new(150.0, 150.0);
+    assert!(hit_center(&c, centre, c.point_tol()).is_some());
+    let mut t = SelectionTool::default();
+    let cursor = t.cursor(&c, centre, Mods::default());
+    assert_ne!(cursor, Cursor::Move, "the guide's cursor, not the move arrow");
+    let down = t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y));
+    let drag = t.pointer(&c, &ev(PointerKind::Drag, 170.0, 150.0));
+    assert!(drag.iter().any(|a| matches!(a, Action::Preview(cmd, _) if cmd == "guide.move")), "the guide drags: {down:?} {drag:?}");
+}

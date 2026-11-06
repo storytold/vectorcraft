@@ -94,6 +94,20 @@ fn a_shape_tool_moves_the_shape_from_its_centre_point() {
     assert_eq!(bounds(&s, copy), at, "back where it was");
 }
 
+/// Alt pressed once the drag has begun turns the move into a copy, as the Selection tool's.
+#[test]
+fn alt_pressed_mid_drag_copies_the_shape() {
+    let mut s = new_doc();
+    let id = drawn_rect(&mut s);
+    let before = bounds(&s, id);
+    gesture(&mut s, NONE, &[(PointerKind::Down, 150.0, 140.0), (PointerKind::Drag, 170.0, 140.0)]);
+    gesture(&mut s, Mods { alt: true, ..NONE }, &[(PointerKind::Drag, 200.0, 140.0), (PointerKind::Up, 200.0, 140.0)]);
+    assert_eq!(s.doc().unwrap().doc.layers[0].children().map(|c| c.len()).unwrap_or_default(), 2, "a copy");
+    assert_eq!(bounds(&s, id), before, "the original stays");
+    let copy = *s.doc().unwrap().selection.objects.first().expect("the copy is selected");
+    assert_eq!(bounds(&s, copy), before + Vec2::new(50.0, 0.0), "the copy moved by the whole drag");
+}
+
 /// A press in the rotate zone just outside a corner of the shape's box turns it about that box's
 /// centre, as the Selection tool's does; a press on the corner itself still rounds it.
 #[test]

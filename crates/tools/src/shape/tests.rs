@@ -550,3 +550,29 @@ fn a_live_corner_widget_wins_over_another_shapes_centre_point() {
     let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 160.0));
     assert_eq!(a.first(), Some(&Action::Begin("Corner Radius".into())), "{a:?}");
 }
+
+/// A move of the selection from the centre point snaps like the Selection tool's, and the arrow
+/// turns hollow while it does.
+#[test]
+fn a_move_from_the_centre_point_snaps_and_shows_the_hollow_arrow() {
+    use vectorcraft_doc::{Appearance, Node};
+    let (mut d, s) = unfilled_live_rect();
+    // Another rectangle whose left edge is at x = 300: the moved selection's right edge lands 4 pt
+    // short of it, within the Smart Guides' reach.
+    let (layer, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(layer), 1, Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 100.0, 350.0, 180.0)), Appearance::default_art()))
+        .unwrap();
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 246.0, 150.0));
+    assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["matrix"][4] == json!(100.0)), "snapped to the edge: {a:?}");
+    assert_eq!(t.cursor(&c, Point::new(246.0, 150.0), Mods::default()), Cursor::ArrowHollow);
+    // Away from the neighbour, the move is the pointer's own and the arrow is plain.
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 150.0));
+    assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["matrix"][4] == json!(10.0)), "{a:?}");
+    assert_eq!(t.cursor(&c, Point::new(160.0, 150.0), Mods::default()), Cursor::Arrow);
+}

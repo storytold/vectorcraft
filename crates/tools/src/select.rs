@@ -1128,14 +1128,14 @@ impl Tool for SelectionTool {
                 None => {}
             }
         }
-        // A selected object's centre point (Show Center): a press there moves it, where the art
-        // may not reach. The box's handles take a press before it, so they take the pointer too
-        // (on a thin box the centre lies within their reach).
-        if near_selected && hit_center(cx, p, cx.point_tol()).is_some() {
-            return Cursor::Move;
-        }
         if let Some(c) = self.guide.cursor(cx, p) {
             return c;
+        }
+        // A selected object's centre point (Show Center): a press there moves it, where the art
+        // may not reach. The box's handles and the ruler guides take a press before it, so they
+        // take the pointer too (on a thin box the centre lies within a handle's reach).
+        if near_selected && hit_center(cx, p, cx.point_tol()).is_some() {
+            return Cursor::Move;
         }
         // View → Snap to Point: over an anchor a press would grab the object by, the arrow turns
         // hollow.
