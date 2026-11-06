@@ -396,8 +396,13 @@ fn hit_spine_handle(cx: &ToolContext, sel: (NodeId, usize), p: Point, tol: f64) 
 
 /// Anchor `sel.1` of blend `sel.0`'s spine.
 fn spine_anchor(cx: &ToolContext, (id, ai): (NodeId, usize)) -> Option<vectorcraft_geom::Anchor> {
+    spine_path(cx, id)?.subpaths.first()?.anchors.get(ai).copied()
+}
+
+/// Blend `id`'s spine, built once for callers that look up several of its points.
+fn spine_path(cx: &ToolContext, id: NodeId) -> Option<PathData> {
     match &cx.doc.node(id)?.kind {
-        NodeKind::Blend { children, spec } => vectorcraft_doc::live::blend_spine(children, spec)?.0.subpaths.first()?.anchors.get(ai).copied(),
+        NodeKind::Blend { children, spec } => Some(vectorcraft_doc::live::blend_spine(children, spec)?.0),
         _ => None,
     }
 }
@@ -897,7 +902,9 @@ impl Tool for DirectSelectionTool {
                 }
                 let q = from + move_delta(start, p, ev.mods.shift, cx.constrain_angle);
                 let mut params = json!({"id": id.0, "anchor": anchor, "x": q.x, "y": q.y});
-                let with: Vec<usize> = self.spine_more.iter().copied().filter(|a| spine_anchor(cx, (id, *a)).is_some()).collect();
+                let spine = spine_path(cx, id);
+                let count = spine.as_ref().and_then(|sp| sp.subpaths.first()).map_or(0, |sp| sp.anchors.len());
+                let with: Vec<usize> = self.spine_more.iter().copied().filter(|a| *a < count).collect();
                 if !with.is_empty() {
                     params["with"] = json!(with);
                 }
@@ -1164,7 +1171,9 @@ impl DirectSelectionTool {
     /// The clicked spine point, filled, with its handles.
     fn spine_overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let Some(sel) = self.spine.filter(|(id, _)| cx.selection.contains(*id)) else { return vec![] };
-        let Some(a) = spine_anchor(cx, sel) else { return vec![] };
+        let Some(spine) = spine_path(cx, sel.0) else { return vec![] };
+        let Some(points) = spine.subpaths.first().map(|sp| &sp.anchors) else { return vec![] };
+        let Some(a) = points.get(sel.1).copied() else { return vec![] };
         let color = cx.doc.layer_color(sel.0);
         let mut out = vec![];
         for h in [a.h_in, a.h_out].into_iter().filter(|h| h.distance(a.p) > 1e-6) {
@@ -1172,12 +1181,7 @@ impl DirectSelectionTool {
             out.push(Overlay::Handle { p: h, color });
         }
         out.push(Overlay::Anchor { p: a.p, color, filled: true, size: 5.0 });
-        out.extend(self.spine_more.iter().filter_map(|i| spine_anchor(cx, (sel.0, *i))).map(|m| Overlay::Anchor {
-            p: m.p,
-            color,
-            filled: true,
-            size: 5.0,
-        }));
+        out.extend(self.spine_more.iter().filter_map(|i| points.get(*i)).map(|m| Overlay::Anchor { p: m.p, color, filled: true, size: 5.0 }));
         out
     }
 }

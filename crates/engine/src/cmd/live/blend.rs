@@ -205,7 +205,8 @@ pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let independent = switch_or(p, "independent", false, C)?;
     let with = spine_points_param(p, C)?;
-    if handle.is_some() && !with.is_empty() {
+    // Any `with`, even an empty list, asks to move points, which a handle drag doesn't.
+    if handle.is_some() && p.get("with").is_some_and(|v| !v.is_null()) {
         return Err(bad(C, "`with` moves points, not a handle"));
     }
     edit_spine(s, p, C, "Reshape Spine", |sp, anchors, keys| {
