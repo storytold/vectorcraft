@@ -103,7 +103,8 @@ fn layer_tree(nodes: &[Arc<Node>]) -> Vec<Arc<Node>> {
 /// data was decompressed but its layers can't be read, and its swatches, brushes, graphic styles and
 /// variables those of the editing data's palette ([`use_palette`]), brushes ([`use_brushes`]), styles
 /// ([`use_styles`]) and variable library ([`use_variables`]) when it was decompressed: a graphic
-/// style library, which has no layers, opens with its styles. `outlined`: the PDF part's type was
+/// style library, which has no layers, opens with its styles, and editing data with no layers opens
+/// on the page of its active artboard under the checks of `place_pages`. `outlined`: the PDF part's type was
 /// read as outlines (a file whose type shows then comes in as its PDF part).
 /// `trust`: layers that draw differently from the PDF part are used all the same, with a warning.
 /// `unit`: the size in points of a unit of the PDF part's user space, its first page's `UserUnit`,
@@ -134,10 +135,14 @@ pub fn layered_ai_from(
     };
     if !has_layers(&data) {
         let (mut visible, mut warnings) = (visible, warnings);
+        let (boards, active) = ai::artboards(&data);
+        if board_scale(&boards, &visible, unit).is_some() {
+            visible.opened_artboard = active_page(active, &visible);
+        }
         let have = visible.patterns.len();
         use_palette(&data, &mut visible);
         use_brushes(&data, &mut visible, have, &mut warnings);
-        use_styles(&data, &mut visible, false, unit, None);
+        use_styles(&data, &mut visible, false, unit, Some(&boards));
         use_variables(&data, &mut visible, &mut warnings);
         return (visible, warnings, false);
     }
@@ -347,7 +352,7 @@ fn place_pages(boards: &[(String, Rect)], active: Option<usize>, doc: &mut Docum
     for ((name, _), a) in boards.iter().zip(&mut doc.artboards) {
         a.name.clone_from(name);
     }
-    doc.opened_artboard = active.filter(|i| *i > 0).and_then(|i| doc.artboards.get(i)).map(|a| a.id);
+    doc.opened_artboard = active_page(active, doc);
     let [(_, first), _, ..] = boards else { return };
     // Art space (y up) → the document, the first artboard's top left at the origin, as `read` has it,
     // `k` points a unit.
@@ -360,6 +365,13 @@ fn place_pages(boards: &[(String, Rect)], active: Option<usize>, doc: &mut Docum
     for (a, v) in doc.artboards.iter_mut().zip(&moves) {
         a.rect = a.rect + *v;
     }
+}
+
+/// The id of the page of `doc` (a `.ai` read as its PDF part: a page per artboard) for the artboard
+/// at `active` among those of its editing data, to open the file on: `None` for the first, which a
+/// file opens on anyway, or when `doc` has no such page.
+fn active_page(active: Option<usize>, doc: &Document) -> Option<u32> {
+    active.filter(|i| *i > 0).and_then(|i| doc.artboards.get(i)).map(|a| a.id)
 }
 
 /// The objects in `layer` (and its sublayers) moved by the move of the page they are on.

@@ -1883,6 +1883,8 @@ file-filter	Templates	模板
 @msg	the blend has no spine	混合对象没有脊线
 @msg	the spine has no segments	脊线没有线段
 @msg	no such spine point	没有此脊线点
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` 必须是最多 10000 个脊线点索引的列表
+@msg	`with` moves points, not a handle	`with` 移动的是点，不是手柄
 @msg	no such spine segment	没有此脊线线段
 @msg	a key object sits on that point	该点上有关键对象
 @msg	a spine keeps at least two points	脊线至少保留两个点
@@ -3158,7 +3160,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Patterns	图案
 	Stroke Options	描边选项
 	Character:	字符：
+	Paragraph:	段落：
 	Character options	字符选项
+	Paragraph options	段落选项
 	Stroke options	描边选项
 	Transform options	变换选项
 	Stroke Weight	描边粗细

@@ -178,8 +178,10 @@ pub fn set_artboard(app: &mut VectorcraftApp, index: usize, refi: usize, xywh: [
     }
 }
 
-/// The Artboard tool's view of the panel: the active artboard's position and size ([`set_artboard`]).
-fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect) {
+/// The Artboard tool's view of the panel, and the Properties panel's Transform section in Edit
+/// Artboards: the reference point, artboard `index`'s position and size at `r` in fields
+/// `fw` wide ([`set_artboard`]), and the Constrain Width and Height Proportions link.
+pub(crate) fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect, fw: f32) {
     let units = app.session.general_unit();
     let origin = app.ruler_origin();
     let refi = reference_index(ui);
@@ -191,20 +193,20 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
         ui.add_space(4.0);
         egui::Grid::new("xfp-ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             widgets::dim_label(ui, "X:");
-            if let Some(v) = widgets::num_field_named(ui, "xfp-ab-x", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, 80.0) {
+            if let Some(v) = widgets::num_field_named(ui, "xfp-ab-x", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, fw) {
                 set(app, Some(v + origin.x), None, None, None);
             }
             widgets::dim_label(ui, "W:");
-            if let Some(v) = widgets::size_field_named(ui, "xfp-ab-w", Some(tl!("W:")), Some(r.width()), units, 80.0) {
+            if let Some(v) = widgets::size_field_named(ui, "xfp-ab-w", Some(tl!("W:")), Some(r.width()), units, fw) {
                 set(app, None, None, Some(v), None);
             }
             ui.end_row();
             widgets::dim_label(ui, "Y:");
-            if let Some(v) = widgets::num_field_named(ui, "xfp-ab-y", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, 80.0) {
+            if let Some(v) = widgets::num_field_named(ui, "xfp-ab-y", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, fw) {
                 set(app, None, Some(v + origin.y), None, None);
             }
             widgets::dim_label(ui, "H:");
-            if let Some(v) = widgets::size_field_named(ui, "xfp-ab-h", Some(tl!("H:")), Some(r.height()), units, 80.0) {
+            if let Some(v) = widgets::size_field_named(ui, "xfp-ab-h", Some(tl!("H:")), Some(r.height()), units, fw) {
                 set(app, None, None, None, Some(v));
             }
             ui.end_row();
@@ -254,7 +256,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     if let Some((i, r)) = tool_artboard(app) {
-        artboard_fields(app, ui, i, r);
+        artboard_fields(app, ui, i, r, 80.0);
         return;
     }
     if let Some(guides) = selected_guides(app) {
@@ -461,12 +463,21 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
 /// The Control bar's underlined "Transform" link: a click toggles the Transform panel in a
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let resp = ui.link(egui::RichText::new(tl!("Transform")).size(12.0).color(t.text).underline()).on_hover_text(tl!("Transform options"));
+    let resp = ui.link(link_text(ui)).on_hover_text(tl!("Transform options"));
     widgets::popover(&resp, resp.clicked(), |ui| {
         ui.set_width(300.0);
         show(app, ui);
     });
+}
+
+/// The Transform link's text, as [`link`] draws it and [`link_width`] measures it.
+fn link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Transform")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The width of the Transform [`link`] in `ui`.
+pub fn link_width(ui: &Ui) -> f32 {
+    widgets::text_width(ui, link_text(ui))
 }
 
 /// The width and height of [`constrain_link`]'s button.

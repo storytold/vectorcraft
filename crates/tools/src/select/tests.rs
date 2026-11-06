@@ -546,6 +546,65 @@ fn the_rotate_cursor_wraps_the_corner_it_is_at() {
 }
 
 #[test]
+fn a_rotated_large_selection_keeps_handles_outside_its_axis_aligned_bounds() {
+    use vectorcraft_doc::{Appearance, Node};
+    use vectorcraft_geom::shapes;
+
+    let mut d = vectorcraft_doc::Document::new(4000.0, 500.0);
+    let layer = d.layers[0].id;
+    let mut ids = vec![];
+    for i in 0..129 {
+        let id = d.alloc_id();
+        let x = 100.0 + i as f64 * 25.0;
+        let mut node = Node::path(id, shapes::rectangle(Rect::new(x, 100.0, x + 20.0, 120.0)), Appearance::default_art());
+        node.bbox_angle = 45.0;
+        d.insert(Some(layer), usize::MAX, node).unwrap();
+        ids.push(id);
+    }
+    let mut selection = Selection::default();
+    selection.set(ids);
+    let paint = paint();
+    let cx = cx(&d, &selection, &paint);
+    let bx = selection_box(&cx).unwrap();
+    let bounds = selection_bounds(&cx).unwrap().inflate(cx.tol(32.0), cx.tol(32.0));
+    let p = [Point::new(bx.rect.x0, bx.rect.y0), Point::new(bx.rect.x1, bx.rect.y0), Point::new(bx.rect.x1, bx.rect.y1)]
+        .into_iter()
+        .map(|q| bx.to_doc() * q)
+        .find(|q| !bounds.contains(*q))
+        .unwrap();
+    assert!(matches!(box_hit(&cx, &bx, p), Some(BoxHit::Handle(_))));
+    assert_ne!(SelectionTool::default().cursor(&cx, p, Mods::default()), Cursor::Arrow);
+}
+
+#[test]
+fn a_large_selection_keeps_a_pie_widget_just_outside_the_art() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    use vectorcraft_geom::{Affine, shapes};
+
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let layer = d.layers[0].id;
+    let live = LiveShape::Ellipse { w: 200.0, h: 100.0, pie: (0.0, 360.0), xf: Affine::translate((100.0, 100.0)) };
+    let id = d.alloc_id();
+    let mut ellipse = Node::path(id, live.to_path(), Appearance::default_art());
+    if let NodeKind::Path { live: slot, .. } = &mut ellipse.kind {
+        *slot = Some(Box::new(live));
+    }
+    d.insert(Some(layer), 0, ellipse).unwrap();
+    let mut ids = vec![id];
+    for _ in 0..128 {
+        let id = d.alloc_id();
+        d.insert(Some(layer), usize::MAX, Node::path(id, shapes::rectangle(Rect::new(120.0, 120.0, 140.0, 140.0)), Appearance::default_art()))
+            .unwrap();
+        ids.push(id);
+    }
+    let mut selection = Selection::default();
+    selection.set(ids);
+    let paint = paint();
+    let cx = cx(&d, &selection, &paint);
+    assert_eq!(SelectionTool::default().cursor(&cx, Point::new(312.0, 150.0), Mods::default()), Cursor::ArrowHollow);
+}
+
+#[test]
 fn turned_cursors_step_with_the_view() {
     assert_eq!(Cursor::ResizeH.turned(90.0), Cursor::ResizeV);
     assert_eq!(Cursor::ResizeNeSw.turned(45.0), Cursor::ResizeH);

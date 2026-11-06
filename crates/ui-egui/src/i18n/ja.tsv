@@ -3090,7 +3090,9 @@ mark-style	Japanese	日本式
 	Strikethrough	打ち消し線
 	Stroke Options	線オプション
 	Character:	文字:
+	Paragraph:	段落:
 	Character options	文字オプション
+	Paragraph options	段落オプション
 	Stroke options	線オプション
 	Transform options	変形オプション
 	Stroke:	線:
@@ -4151,6 +4153,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no such anchor	指定されたアンカーポイントが見つかりません
 @msg	no such segment	指定されたセグメントが見つかりません
 @msg	no such spine point	指定されたスパインポイントが見つかりません
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` には最大 10000 個のスパインポイントのインデックスのリストを指定してください
+@msg	`with` moves points, not a handle	`with` はポイントを移動します。ハンドルには使えません
 @msg	no such spine segment	指定されたスパインセグメントが見つかりません
 @msg	no such subpath	指定されたサブパスが見つかりません
 @msg	object {id} is not a path	オブジェクト {id} はパスではありません

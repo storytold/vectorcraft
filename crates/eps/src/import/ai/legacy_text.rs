@@ -30,6 +30,13 @@ const MAX_FONTS: usize = 4096;
 const MAX_TABS: usize = 1024;
 /// Largest tab stop position read (points), as `text.tabs.set` takes it.
 const MAX_TAB_POSITION: f64 = 100_000.0;
+/// Most tab stops copied in one text object into its runs of paragraphs with the same attributes
+/// while it is read, and again, counted apart, into each of its paragraphs when it has more than one
+/// run and into the frames of its linked areas after the first. The runs, paragraphs and frames past
+/// it take the default stops, with a warning.
+const MAX_STORY_TABS: usize = 1 << 20;
+/// The warning when [`MAX_STORY_TABS`] leaves tab stops out.
+const TABS_LEFT_OUT: &str = "tab stops past VectorCraft's limits were left out";
 /// Most values read before one operator in a re-encoding section.
 const MAX_ENCODING_VALUES: usize = 1024;
 /// Most text paths read in one text object (its linked areas); the frames of others are left out,
@@ -56,6 +63,17 @@ struct TextPath {
     path: Option<(BezPath, Vec<AnchorKind>)>,
 }
 
+/// Paragraphs in a row that start with the same attributes.
+#[derive(Debug)]
+struct ParaRun {
+    /// The attributes, as they were at the first character of each paragraph.
+    style: ParaStyle,
+    /// How many paragraphs.
+    count: usize,
+    /// [`TypeState::tabs_version`] when the last of them started.
+    tabs_version: u64,
+}
+
 /// A text object being read.
 #[derive(Debug, Default)]
 pub(super) struct LegacyText {
@@ -69,8 +87,13 @@ pub(super) struct LegacyText {
     past_limit: bool,
     /// The story: the characters after every text path, in file order.
     runs: Vec<TextRun>,
-    /// Each paragraph's attributes, as they were at its first character.
-    paras: Vec<ParaStyle>,
+    /// The paragraphs' attributes, as they were at the first character of each, by runs of
+    /// paragraphs with the same attributes.
+    paras: Vec<ParaRun>,
+    /// The tab stops that the runs in `paras` hold.
+    tab_stops: usize,
+    /// [`MAX_STORY_TABS`] left tab stops out.
+    tabs_left_out: bool,
     /// The current paragraph's attributes are in `paras`.
     para_taken: bool,
     /// An overflow paragraph break (`(\r) TX`) not yet followed by type: the story's end.
@@ -83,11 +106,74 @@ pub(super) struct LegacyText {
     hidden: bool,
 }
 
+impl LegacyText {
+    /// A paragraph starts, with the attributes `para` at [`TypeState::tabs_version`]
+    /// `tabs_version`. When they are those of the paragraph before it, it joins that paragraph's
+    /// run; else a new run starts, with the tab stops that [`MAX_STORY_TABS`] leaves room for.
+    fn begin_para(&mut self, para: &mut ParaStyle, tabs_version: u64) {
+        if let Some(run) = self.paras.last_mut() {
+            // No tab definition since the run's last paragraph started: the stops are the same.
+            let same = if run.tabs_version == tabs_version { same_but_tabs(&mut run.style, para) } else { run.style == *para };
+            if same {
+                run.count += 1;
+                run.tabs_version = tabs_version;
+                return;
+            }
+        }
+        let style = within_tabs(para, &mut self.tab_stops, &mut self.tabs_left_out);
+        self.paras.push(ParaRun { style, count: 1, tabs_version });
+    }
+}
+
+/// Are `a` and `b` the same, leaving their tab stops out?
+fn same_but_tabs(a: &mut ParaStyle, b: &mut ParaStyle) -> bool {
+    let (a_tabs, b_tabs) = (std::mem::take(&mut a.tabs), std::mem::take(&mut b.tabs));
+    let same = a == b;
+    (a.tabs, b.tabs) = (a_tabs, b_tabs);
+    same
+}
+
+/// A copy of `para`, with its tab stops when `copied` (the tab stops copied so far) has room for
+/// them within [`MAX_STORY_TABS`], else with the default stops and `left_out` set.
+fn within_tabs(para: &ParaStyle, copied: &mut usize, left_out: &mut bool) -> ParaStyle {
+    let mut style = para.clone();
+    if MAX_STORY_TABS.saturating_sub(*copied) >= style.tabs.len() {
+        *copied += style.tabs.len();
+    } else {
+        *left_out = true;
+        style.tabs = Vec::new();
+    }
+    style
+}
+
+/// The attributes of each paragraph of the runs `runs`, in order. A paragraph keeps its tab stops
+/// while `copied` (the tab stops copied so far) has room for them within [`MAX_STORY_TABS`]; the
+/// paragraphs past it take the default stops, and `left_out` is set.
+fn each_paragraph(runs: Vec<ParaRun>, copied: &mut usize, left_out: &mut bool) -> Vec<ParaStyle> {
+    let mut each = Vec::with_capacity(runs.iter().map(|r| r.count).sum());
+    for run in runs {
+        let stops = run.style.tabs.len();
+        let room = MAX_STORY_TABS.saturating_sub(*copied);
+        let kept = room.checked_div(stops).map_or(run.count, |n| run.count.min(n));
+        *copied += kept * stops;
+        let bare = (kept < run.count).then(|| ParaStyle { tabs: Vec::new(), ..run.style.clone() });
+        each.extend(std::iter::repeat_n(run.style, kept));
+        if let Some(bare) = bare {
+            *left_out = true;
+            each.extend(std::iter::repeat_n(bare, run.count - kept));
+        }
+    }
+    each
+}
+
 /// The modal type attributes of the legacy format, which last from one text object to the next.
 #[derive(Debug)]
 pub(super) struct TypeState {
     style: CharStyle,
     para: ParaStyle,
+    /// How many tab definitions set `para`'s tab stops: paragraphs that start at the same count
+    /// start with the same stops.
+    tabs_version: u64,
     /// `Tr`.
     render: i64,
     /// The encoding strings are in, by code (`TE`); None where it says nothing.
@@ -109,6 +195,7 @@ impl Default for TypeState {
         Self {
             style: CharStyle::default(),
             para: ParaStyle::default(),
+            tabs_version: 0,
             render: 0,
             encoding: vec![None; 256],
             fonts: vec![],
@@ -488,6 +575,7 @@ impl Reader<'_> {
                     tabs.sort_by(|a, b| a.position.total_cmp(&b.position));
                     tabs.dedup_by(|a, b| (a.position - b.position).abs() < 1e-6);
                     st.para.tabs = tabs;
+                    st.tabs_version = st.tabs_version.wrapping_add(1);
                 }
             }
             _ => {}
@@ -538,13 +626,13 @@ impl Reader<'_> {
         }
         for c in decoded.chars() {
             if c != '\n' && !t.para_taken {
-                t.paras.push(st.para.clone());
+                t.begin_para(&mut st.para, st.tabs_version);
                 t.para_taken = true;
             }
             text.push(c);
             if c == '\n' {
                 if !t.para_taken {
-                    t.paras.push(st.para.clone());
+                    t.begin_para(&mut st.para, st.tabs_version);
                 }
                 t.para_taken = false;
             }
@@ -562,7 +650,7 @@ impl Reader<'_> {
     /// Point type is read at its first text path; area type and type on a path at the first one
     /// that has a frame or path (else at the first one, as point type).
     pub(super) fn end_text(&mut self, hidden: bool) -> Result<(), String> {
-        let Some(t) = self.text.take() else { return Ok(()) };
+        let Some(mut t) = self.text.take() else { return Ok(()) };
         if t.runs.is_empty() {
             return Ok(());
         }
@@ -581,13 +669,15 @@ impl Reader<'_> {
         if t.kind == 1 && (t.past_limit || all_areas > placed.len()) {
             self.warn(LINKED_AREAS_LEFT_OUT);
         }
-        let mut paras = t.paras;
+        let mut paras = std::mem::take(&mut t.paras);
         if paras.is_empty() {
-            paras.push(self.type_state.para.clone());
+            paras.push(ParaRun { style: self.type_state.para.clone(), count: 1, tabs_version: 0 });
         }
-        let last_para = paras.last().cloned().unwrap_or_default();
+        let last_para = paras.last().map(|r| r.style.clone()).unwrap_or_default();
         let last_style = t.runs.last().map(|r| r.style.clone()).unwrap_or_default();
-        let mut story = Some((t.runs, paras));
+        let mut story = Some((std::mem::take(&mut t.runs), paras));
+        // The tab stops copied into the paragraphs and frames.
+        let mut copied = 0;
         let mut nodes = Vec::with_capacity(placed.len());
         for (m, kind) in placed {
             let mut obj = TextObject::point(kurbo::Point::ZERO, "", last_style.clone());
@@ -596,11 +686,18 @@ impl Reader<'_> {
             match story.take() {
                 Some((runs, paras)) => {
                     obj.runs = runs;
-                    obj.set_paragraph_styles(paras);
+                    // Paragraphs that all have the same attributes share one copy of them.
+                    match <[ParaRun; 1]>::try_from(paras) {
+                        Ok([one]) => obj.set_all_paras(one.style),
+                        Err(paras) => obj.set_paragraph_styles(each_paragraph(paras, &mut copied, &mut t.tabs_left_out)),
+                    }
                 }
-                None => obj.set_paragraph_styles(vec![last_para.clone()]),
+                None => obj.set_all_paras(within_tabs(&last_para, &mut copied, &mut t.tabs_left_out)),
             }
             nodes.push(self.new_node(NodeKind::Text(Box::new(obj)), &t.gs));
+        }
+        if t.tabs_left_out {
+            self.warn(TABS_LEFT_OUT);
         }
         let frames: Vec<NodeId> = nodes.iter().map(|n| n.id).collect();
         // Type used as a mask clips the objects of its clipping group, as a `W` path does. A

@@ -601,7 +601,10 @@ impl Writer<'_> {
                     "<feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"{}\" result=\"soft\"/><feComposite in=\"SourceGraphic\" in2=\"soft\" operator=\"in\" result=\"f\"/><feComposite in=\"f\" in2=\"SourceAlpha\" operator=\"in\"/>",
                     sd(*radius)
                 ),
-                RasterFx::GaussianBlur { radius } => format!("<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"{}\"/>", sd(*radius)),
+                RasterFx::GaussianBlur { radius, linear } => {
+                    let space = if *linear { " color-interpolation-filters=\"linearRGB\"" } else { "" };
+                    format!("<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"{}\"{space}/>", sd(*radius))
+                }
                 RasterFx::Pixel(_) | RasterFx::Rasterize(_) => continue,
             };
             // Filters composite normally: a shadow's or glow's other blend mode is recorded for import.

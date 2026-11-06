@@ -2748,7 +2748,9 @@ digits	Malayalam	Malaiala
 	Stroke Options	Opções de Traçado
 	Stroke Weight	Peso do Traçado
 	Character:	Caractere:
+	Paragraph:	Parágrafo:
 	Character options	Opções de caractere
+	Paragraph options	Opções de parágrafo
 	Stroke options	Opções de traçado
 	Transform options	Opções de transformação
 	Stroke:	Traçado:
@@ -3910,6 +3912,8 @@ axis	Both	Ambos
 @msg	no such saved selection	seleção salva inexistente
 @msg	no such segment	segmento inexistente
 @msg	no such spine point	ponto da coluna inexistente
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` deve ser uma lista de no máximo 10000 índices de pontos da coluna
+@msg	`with` moves points, not a handle	`with` move pontos, não uma alça
 @msg	no such spine segment	segmento da coluna inexistente
 @msg	no such subpath	subtraçado inexistente
 @msg	no such user library	biblioteca do usuário inexistente

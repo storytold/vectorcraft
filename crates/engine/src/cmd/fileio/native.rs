@@ -121,7 +121,7 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         name: "transparentImages",
         ty: "string",
         default: "\"flatten\"",
-        description: "with aiVersion 7, the images version 7 can't hold (see-through pixels, opacity or a blending mode): flatten (the default: each becomes an opaque image of itself and the art under it, clipped to where it changes what shows; that art stays as it is) or omit (left out)",
+        description: "with aiVersion 7, the images version 7 can't hold (see-through pixels, opacity, a blending mode, or a colorize color unless every pixel is black or white): flatten (the default: each becomes an opaque image of itself and the art under it, clipped to where it changes what shows; that art stays as it is) or omit (left out)",
     },
     FormatOption {
         name: "hiddenObjects",

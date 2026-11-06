@@ -554,12 +554,14 @@ font-technology	Variable	Változó
 	Character / Paragraph	Karakter / bekezdés
 	Character Alignment	Karakterigazítás
 	Character options	Karakterbeállítások
+	Paragraph options	Bekezdésbeállítások
 	Character Rotation	Karakterforgatás
 	Character Set:	Karakterkészlet:
 	Character Style	Karakterstílus
 	Character Style Options	Karakterstílus beállításai
 	Character Styles	Karakterstílusok
 	Character:	Karakter:
+	Paragraph:	Bekezdés:
 	Check Links	Csatolások ellenőrzése
 # Check Script (File › Scripts) and the report it shows on a script written for the reference app.
 	Check Script	Szkript ellenőrzése
@@ -5007,6 +5009,8 @@ imageTrace	Outline	Körvonal
 @msg	no such saved selection	nincs ilyen mentett kijelölés
 @msg	no such segment	nincs ilyen szakasz
 @msg	no such spine point	nincs ilyen gerincpont
+@msg	`with` must be a list of at most 10000 spine point indexes	`with`: legfeljebb 10000 gerincpont-indexből álló lista kell
+@msg	`with` moves points, not a handle	`with` pontokat mozgat, nem fogantyút
 @msg	no such spine segment	nincs ilyen gerincszakasz
 @msg	no such subpath	nincs ilyen részútvonal
 @msg	no such user library	nincs ilyen felhasználói könyvtár

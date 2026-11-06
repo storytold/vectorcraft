@@ -19,7 +19,7 @@ mod width;
 
 use std::borrow::Cow;
 
-use kurbo::{BezPath, ParamCurve, ParamCurveNearest, PathEl, PathSeg, Shape};
+use kurbo::{BezPath, ParamCurve, ParamCurveNearest, PathEl, PathSeg, Rect, Shape};
 use vectorcraft_doc::{LineCap, LineJoin, StrokeAlign, StrokeLayer};
 pub(crate) use vectorcraft_geom::bez::{kink, segments, subpaths, tangent, unit};
 
@@ -118,6 +118,15 @@ pub fn line_outline(line: &BezPath, st: &StrokeLayer, width: f64, tol: f64) -> B
             out
         }
     }
+}
+
+/// The variable-width outline near `near`, with its profile positions measured on the whole
+/// undashed line. Returns `None` when no segment is omitted or the stroke is dashed.
+pub fn line_outline_profile_near(line: &BezPath, st: &StrokeLayer, width: f64, tol: f64, near: Rect) -> Option<BezPath> {
+    if st.dash.is_some() || line.elements().is_empty() || width <= 0.0 || !width.is_finite() {
+        return None;
+    }
+    width::width_outline_near(line, width, st.profile.as_ref()?, st, tol, near)
 }
 
 /// [`line_outline`] of a dashed line without a width profile, made of only the dashes and dots on
