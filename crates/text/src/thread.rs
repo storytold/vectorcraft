@@ -34,7 +34,11 @@ pub fn story_paras(frames: &[&TextObject], later_wins: &[bool]) -> Vec<ParaStyle
         }
         out.extend(styles);
         let text = f.plain_text();
-        prev_empty_tail = text.is_empty() || text.ends_with('\n') || out.is_empty();
+        // An empty frame has no paragraph boundary of its own. Keep the preceding frame's
+        // boundary state so another empty frame cannot replace a paragraph's edited style.
+        if !text.is_empty() {
+            prev_empty_tail = text.ends_with('\n') || out.is_empty();
+        }
     }
     out
 }

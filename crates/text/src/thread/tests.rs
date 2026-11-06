@@ -144,6 +144,25 @@ fn paragraph_styles_flow_with_their_paragraphs() {
     assert_eq!(story_paras(&[&fa, &fb], &[false, false])[0].justify, Left);
 }
 
+#[test]
+fn empty_frames_do_not_replace_an_earlier_paragraph_style() {
+    let mut first = frame(0.0);
+    first.runs = vec![TextRun { text: "First".into(), style: CharStyle::default(), inline: None }];
+    first.set_all_paras(ParaStyle { justify: Justify::Right, ..Default::default() });
+    let middle = frame(200.0);
+    let last = frame(400.0);
+    assert_eq!(story_paras(&[&first, &middle, &last], &[true, false, false])[0].justify, Justify::Right);
+
+    // An empty frame between two parts of the same paragraph changes no style either.
+    let mut last_with_text = last.clone();
+    last_with_text.runs = vec![TextRun { text: "Tail".into(), style: CharStyle::default(), inline: None }];
+    assert_eq!(story_paras(&[&first, &middle, &last_with_text], &[true, false, false])[0].justify, Justify::Right);
+
+    let mut restyled_middle = middle.clone();
+    restyled_middle.set_all_paras(ParaStyle { justify: Justify::Center, ..Default::default() });
+    assert_eq!(story_paras(&[&first, &restyled_middle, &last], &[false, true, false])[0].justify, Justify::Center);
+}
+
 /// Numbered list paragraphs count on from one frame to the next: the second frame's first
 /// whole paragraph takes the next number. A paragraph split between the frames has its number
 /// in the first frame only, and the paragraph after it takes the next number.
