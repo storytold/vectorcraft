@@ -426,7 +426,8 @@ opens the picker through `run_command` with the remote backend.
 | `inspect_document` | `{depth?, childLimit?, ids?, kind?, limit?, offset?}` | Artboards (with `color`, `#rrggbb`, for one with a background color), layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. Paint comes as a label (`"#ff0000"`, `"None"`, `"G1 40% (#ff9999)"` for a swatch at a tint); `paint.proxies` gives it as an object. |
 | `inspect_ui` | `{}` | UI state. Remote mode only. |
 | `select_tool` | `{tool}` | `selection`, `directSelection`, `pen`, `rectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, … |
-| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. |
+| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. |
+| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. |
 | `draw_path` | `{points \| d, closed?, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `points` is `[[x,y],…]` or `[{x,y,in?,out?,smooth?},…]`. `d` is SVG path data. The options are below. |
 | `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. `line`: `x1,y1,x2,y2`. |
 | `set_paint` | `{fill?, stroke?, strokeWidth?, ids?}` | Applies to the selection (or `ids`) and becomes the default for new art. Returns `{applied, objects}`: `objects` is the number of objects painted, as the `objects` of the `paint.setFill`, `paint.setStroke` and `stroke.set` replies (the largest of them): a selected group counts the objects inside it. When it is 0, a `note` says that only the paint for new art changed. |
@@ -707,6 +708,11 @@ or `range`), named `<file>-<artboard>.<ext>`, and returns `{path, files}` (a PDF
 SVG writes one file per artboard of a `range`); `useArtboards: false` exports the bounds of the visible art with what
 its effects paint, the effects of groups, type and images included. `artboard.fitToArt` measures the art the same
 way.
+
+Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
+point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
+`convert` follow the same rule and accept `--ppi N` (which wins over `--scale N`). Documents at the
+default 72 ppi still use 72 ppi; use `--ppi 300` for print output from those documents.
 
 Raster exports take more options in `options`: `ppi` (72, 150, 300…; stored in the file, except in GIF, WebP and
 Targa), `background` (`transparent`, `white`, `black` or `"#rrggbb"`; `#rrggbbaa` and `#rgba` are refused), `antiAlias` (`none`, `art`, `type`: text
@@ -2332,7 +2338,8 @@ its bounds.
 the styles unlinked from swatches, with their opacity, blend mode, isolate and knockout, and the patterns they paint
 with); without `path` it returns `{data}`, and `user: true` saves into the user library folder of the desktop app
 (category `user`, User Defined). `graphicStyle.loadLibrary {path? | data? | dataBase64?, name?}` loads a `.vcstyles`
-file, or another document's graphic styles, as a library to add from; a file in the user library folder, or a file
+file, or another document's graphic styles, as a library to add from (a `.ai` or EPS whose editing data holds graphic
+styles and no layers gives the styles of its style list, in that order); a file in the user library folder, or a file
 with the same extension and bytes as one there, loads as that User Defined library.
 
 ## Symbol libraries
@@ -4157,16 +4164,21 @@ comes back to the front, following the same preference. `links.check` reports ev
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. A PNG, JPEG,
 GIF or WebP file whose pixels can't be read is not shown: `links.relink` fails with "the image's pixels can't be
 read", and `links.update`, or `document.open` when it reads the file, lists it as missing, its images keeping what they
-showed. Without a file system (the web), linked images show their previews.
+showed. Without a file system (the web), linked images show their previews. A link whose path has a colon and no `/`
+or `\` is read as a classic Mac OS path (`Disk:Folder:file.tif`), a form that older `.ai` files can hold. The link
+keeps that path and is named by its last part. `links.info` gives that part as `fileName` and the rest as `location`,
+and `links.relink {folder}`, the search of the document's folder and `links.findFiles` look for a file of that name.
 
 `links.findFiles {folder}` looks in an absolute folder and its subfolders, on separate threads, for the files of the
 active document's missing links, or of the images and placed documents `ids` whatever their status, and returns at once
 with an `id` and the search's `state` (`searching` while it runs). It finds the files with each linked file's name, in
 any letter case, and lists them best first as `{path, size, match, caseDiffers?}`: `same` when the file has the size and
-hash saved with the link, `size` when it has the saved size and the link saved no hash (or the file is larger than 1 GB,
+hash saved with the link, `size` when it has the saved size and the link saved no hash (or the file is larger than 1 GiB,
 which a search doesn't hash), else `name`. Within each kind, a file whose name has the link's letter case comes first.
 Then each file's folder names are compared with the saved path's, from the innermost outward up to the first one that
-differs, and a file with more matching names comes first; files that still tie are listed by path. `links.findFiles {}`
+differs, and a file with more matching names comes first; files that still tie are listed by path. Before the
+comparison, the saved path's parent-folder steps (`..`, or the empty components of a classic Mac `::` run) are resolved,
+and `.` components in a slash path are skipped. `links.findFiles {}`
 returns the last search's state, and `{stop: true}` stops it. A search looks for at most 1,000 linked files, keeps the
 first 10 files of each one's name and up to 10 that are the same file, and ends once every linked file has its same
 file; it searches only the folders `text.findFontFiles` may search, with the same `maxSeconds`, depth and count limits.
@@ -4981,7 +4993,8 @@ thread's first frame that holds text (which is selected when it was not) with th
 and Cut take. Typing, Delete and Cut replace the whole story as one undo step (`text.editRange` with `clear`, the other
 frames whose text goes), and a fill, stroke, `type.step` or Character or Paragraph panel change applies to the text of
 every frame (the Character panel sends `text.setRangeStyle {id, story: true}`, which styles every frame's text in one
-undo step). A caret move or a click ends the story selection.
+undo step). Remove Line Breaks, Remove Paragraph Breaks and Convert to Text also act on the text of every frame, as
+one undo step. A caret move or a click ends the story selection.
 
 ```json
 {"name":"press_key","arguments":{"key":"A","mods":{"cmd":true}}}
@@ -5428,6 +5441,10 @@ the type it changed, how many paragraphs were `converted`, and the characters `i
 `id`, the byte `at` which they went in (counted in the text before the change) and their `length` in bytes. While the
 Type tool edits, `text.convertListToText` ends its typing first and moves its anchor and caret past the characters
 inserted at or before them, whether the call comes from the menu, MCP or the control channel.
+After Select All in a frame of threaded text, a call without `ids`, `id`, `start` or `end` converts every paragraph of
+the story's frames that are neither locked nor hidden. While the story is selected, its locked and hidden frames are
+not converted, even when `ids` names them, and neither is a paragraph whose text starts in one. When the call converts
+all of its other frames, the whole story stays selected.
 In threaded type, when the caret's character moved to another frame, the Type tool edits that frame with the caret
 next to the same character, and that frame becomes the selection when it was not selected.
 
@@ -6500,8 +6517,11 @@ glyph of its first character lands where it was drawn.
   line becomes a left-aligned paragraph whose leading is the distance from the baseline above, so the lines stay where
   they were. Character styles stay; the object takes the top-left piece's place and paint. Returns `{id, joined, lines}`.
 - `addon.cleanup.removeBreaks {kind, ids?}` removes the forced line breaks (`kind: "line"`) or paragraph returns
-  (`"paragraph"`) in the characters selected with a Type tool, else in all the text of the selected type. A break
-  between two words becomes a space; merged paragraphs take the first one's paragraph style.
+  (`"paragraph"`) in the characters selected with a Type tool, else in all the text of the selected type. After
+  Select All in a frame of threaded text, it removes them from the text of every frame of the story, as one undo step.
+  A break between two words becomes a space; merged paragraphs take the first one's paragraph style. The frames of a
+  threaded story, selected all together or through Select All, are read as one text, so a break at the end of one
+  frame before a word in the next one also becomes a space.
 - `addon.cleanup.splitText {}` works while a Type tool edits horizontal point or area type: the text before the
   selected characters, those characters and the text after them become point type objects (at a bare cursor, the text
   before and after it). Spaces at the ends of each piece go; a piece that starts inside a left-aligned line takes a
@@ -6864,6 +6884,30 @@ The dialog lists every artboard with its number, name and size in the document's
 name; a click chooses one artboard, Shift-click adds a range and Cmd/Ctrl-click toggles one, and Select All / None act
 on the rows shown (rows hidden by the search stay chosen). It opens with the active artboard chosen and Overlapping.
 
+`addon.select.byLinkStatus {status, ids?, add?, zoom?}` (Select Linked / Embedded / Missing / Modified and Select by
+Link Status…, #5526) selects the image objects and placed documents whose link has a status, as `links.list` reports
+it: `linked` (its file found unchanged; `links.list` says `ok`), `embedded`, `missing` or `modified` (its file changed
+since it was read). `status` is one of them or a list of them (at least one; one listed twice counts once). `ids` picks
+only among those objects (other objects among them are passed over); `add: true` adds them to the selection instead of
+replacing it; `zoom: true` asks for Zoom to Selection afterwards, which the desktop app runs (`addon.arrange.zoomSelection`)
+when something was selected, and which other callers get back as `zoom: true`. Objects that are hidden or locked, inside
+a hidden or locked object or layer, on a template layer, on a locked artboard while nothing is isolated, or outside the
+isolated group or layer are left out and listed with the reason. Only the selection changes, so there is nothing to
+undo. It returns `{count, selected: [ids] (bottom first), skipped: [{id, reason: hidden|locked|template|isolation}]}`.
+A missing or unknown status, an id naming no object, or a value of the wrong type is an error, and the selection is left
+as it was.
+
+```json
+{"name":"run_command","arguments":{"command":"addon.select.byLinkStatus","params":{"status":["missing","modified"],"zoom":true}}}
+```
+
+In the desktop app, Object › Plug-ins › Selection Tools and the Links panel menu have Select Linked, Select Embedded,
+Select Missing and Select Modified, each off when no image has that status; with Shift held they add to the selection.
+The status bar says what was selected and what was left out, e.g. "Selected 9 missing images; 3 more are hidden or
+locked". Select by Link Status… lists every image and placed document with its name, status and format, searches by
+name and filters by status (Show), chooses rows with checkboxes (All / None act on the rows shown), and on Select
+selects the rows chosen, zooming to them when Zoom to Selection is on (the default).
+
 ### Vector Halftone (live)
 
 `addon.color.halftone` (Effect › Color Effects › Vector Halftone…, also in Object › Plug-ins › Color Effects) draws its
@@ -7040,8 +7084,10 @@ image in `folder` (PNG, JPEG, TIFF, BMP, GIF, WebP, PSD; with `includeSubdirs`, 
 `preset` (an `imageTrace.presets` name; Default by default; with `expand`, as Make and Expand), saves it into
 `destinationFolder` as `<name>.<ext>` in `format` (`vectorcraft` by default; `svg`, `pdf`, `ai`, `eps`), with `-2`,
 `-3`… added when the name is taken so no file is replaced, and closes it again whether it traced or not; the active
-document stays active. Images that can't be traced are listed in `failed` and the others are still traced. Up to 500
-images and 8 folder levels (a folder with more than 1,000 entries is refused); not on the web. The desktop app's Batch
+document stays active. Images that can't be traced are listed in `failed` and the others are still traced. Optional
+`format` and `preset` accept strings; `expand` and `includeSubdirs` accept true or false. Null and values of another
+type return an error before any image is opened. Up to 500 images and 8 folder levels (a folder with more than 1,000
+entries is refused); not on the web. The desktop app's Batch
 Trace Folder asks for both folders (#4921). → `{traced: [{path, output}], failed: [{path, error}], format}`
 
 ```json

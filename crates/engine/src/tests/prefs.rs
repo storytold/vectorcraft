@@ -1126,8 +1126,8 @@ fn a_drag_from_a_fill_moves_only_the_selected_anchors_of_partly_selected_paths()
 }
 
 /// A path selected whole inside a selected group moves once, with the group, when the selection
-/// also holds a direct-selected anchor: a Group Selection drag from the path's fill (which adds
-/// the group) and an arrow key move both by 10 pt.
+/// also holds a direct-selected anchor: a completed Group Selection click adds the group, then
+/// a drag and an arrow key move both by 10 pt. A leaf drag before that click keeps its sibling still.
 #[test]
 fn a_path_in_a_selected_group_moves_once_with_selected_anchors() {
     use vectorcraft_tools::PointerKind::{Down, Drag, Up};
@@ -1142,7 +1142,14 @@ fn a_path_in_a_selected_group_moves_once_with_selected_anchors() {
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
     gesture(&mut s, v, &[(Down, 125.0, 125.0), (Drag, 130.0, 125.0), (Drag, 135.0, 125.0), (Up, 135.0, 125.0)]);
-    assert!(s.doc().unwrap().selection.contains(g), "the press added the group");
+    assert!(!s.doc().unwrap().selection.contains(g), "the leaf drag keeps its selection");
+    assert_eq!((top_left(&s, a), top_left(&s, b), first_x(&s)), ((110.0, 100.0), (160.0, 100.0), 310.0), "the leaf and selected anchor move");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    gesture(&mut s, v, &[(Down, 125.0, 125.0), (Up, 125.0, 125.0)]);
+    assert!(s.doc().unwrap().selection.contains(g), "the completed click added the group");
+    gesture(&mut s, v, &[(Down, 125.0, 125.0), (Drag, 130.0, 125.0), (Drag, 135.0, 125.0), (Up, 135.0, 125.0)]);
     assert_eq!((top_left(&s, a), top_left(&s, b), first_x(&s)), ((110.0, 100.0), (170.0, 100.0), 310.0), "the drag");
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("select.set", &json!({"ids": [g.0, a.0]})).unwrap();

@@ -336,7 +336,13 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(st) = look.appearance.stroke_mut() {
         pen.write(st);
     }
-    insert_look(s, if brush { "Paintbrush" } else { "Pencil" }, path_kind(PathData::single(sp)), look, None, keep_selected)
+    let out = insert_look(s, if brush { "Paintbrush" } else { "Pencil" }, path_kind(PathData::single(sp)), look, None, keep_selected)?;
+    if !keep_selected {
+        // A new stroke with Keep selected off leaves nothing selected: Illustrator starts the stroke
+        // by dropping the earlier selection, it does not keep it (#5752).
+        s.select(|_, sel| sel.clear())?;
+    }
+    Ok(out)
 }
 
 // ---------- Blob Brush ----------

@@ -3322,7 +3322,9 @@ digits	Malayalam	Малаялам
 	Patterns	Узоры
 	Stroke Options	Параметры обводки
 	Character:	Символ:
+	Paragraph:	Абзац:
 	Character options	Параметры символа
+	Paragraph options	Параметры абзаца
 	Stroke options	Параметры обводки
 	Transform options	Параметры трансформирования
 	Stroke Weight	Толщина обводки
@@ -4367,6 +4369,8 @@ axis	Both	Оба
 @msg	no such saved selection	такого сохранённого выделения нет
 @msg	no such segment	такого сегмента нет
 @msg	no such spine point	такой точки остова нет
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` должен быть списком не более чем из 10000 индексов точек остова
+@msg	`with` moves points, not a handle	`with` перемещает точки, а не маркер
 @msg	no such spine segment	такого сегмента остова нет
 @msg	no such subpath	такого вложенного контура нет
 @msg	no such user library	такой пользовательской библиотеки нет
@@ -4712,6 +4716,9 @@ axis	Both	Оба
 @msg	graphs come in as plain art, without their data or settings	диаграммы импортируются как обычная графика, без их данных и настроек
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	связанные изображения показываются как сохранённый в файле просмотр низкого разрешения, пока их файлы не найдены: восстановите связи на панели «Связи»
+@msg	linked type areas past VectorCraft's limits were left out	связанные текстовые области за пределами ограничений VectorCraft пропущены
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, используемый как маска в связанных областях, обтекающем тексте или составном контуре, не обрезает
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	связанные изображения без просмотра в файле показываются как заполнитель, пока их файлы не найдены: восстановите связи на панели «Связи»
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в области в рамках, слишком низких для строки шрифта, которым он отображается, получил более высокие рамки ({_1}): иначе он не был бы виден
 @msg	its editing data doesn't say where its art is	в его данных редактирования не указано, где находится графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	этот файл сохранён без совместимости с PDF, и его данные редактирования не удаётся прочитать ({why})
@@ -6077,6 +6084,9 @@ anchor	Points:	Точки:
 	Find Nearest Swatch…	Найти ближайший образец…
 	Find Nearest Swatch	Найти ближайший образец
 	Apply Nearest Swatch	Применить ближайший образец
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Применить заливку к обводке
+	Apply Stroke to Fill	Применить обводку к заливке
 	Select objects to find the swatches nearest their colors.	Выделите объекты, чтобы найти образцы, ближайшие к их цветам.
 @msg	select objects or give `color`	выделите объекты или укажите `color`
 @msg	`color` is not a colour	`color` не является цветом
@@ -6454,6 +6464,29 @@ shape	Open	Открытый
 	Minimum angle	Минимальный угол
 	Maximum angle	Максимальный угол
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Выделить связанные
+	Select Embedded	Выделить внедрённые
+	Select Missing	Выделить отсутствующие
+	Select Modified	Выделить изменённые
+	Select by Link Status	Выделить по состоянию связи
+	Select by Link Status…	Выделить по состоянию связи…
+	Search images	Поиск изображений
+	No images match.	Нет подходящих изображений.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Выделено {n} связанное изображение|Выделено {n} связанных изображения|Выделено {n} связанных изображений
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Выделено {n} внедрённое изображение|Выделено {n} внедрённых изображения|Выделено {n} внедрённых изображений
+@msgplural	Selected {n} missing image|Selected {n} missing images	Выделено {n} отсутствующее изображение|Выделено {n} отсутствующих изображения|Выделено {n} отсутствующих изображений
+@msgplural	Selected {n} modified image|Selected {n} modified images	Выделено {n} изменённое изображение|Выделено {n} изменённых изображения|Выделено {n} изменённых изображений
+@msgplural	Selected {n} image|Selected {n} images	Выделено {n} изображение|Выделено {n} изображения|Выделено {n} изображений
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; ещё {n} скрыто или заблокировано|{selected}; ещё {n} скрыты или заблокированы|{selected}; ещё {n} скрыты или заблокированы
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; ещё {n} на слое-шаблоне|{selected}; ещё {n} на слоях-шаблонах|{selected}; ещё {n} на слоях-шаблонах
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; ещё {n} вне изолированной группы|{selected}; ещё {n} вне изолированной группы|{selected}; ещё {n} вне изолированной группы
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; ещё {n} сейчас нельзя выделить|{selected}; ещё {n} сейчас нельзя выделить|{selected}; ещё {n} сейчас нельзя выделить
+
 # Compound Shapes add-on
 	Compound Shapes	Составные фигуры
 	Shape Mode Buttons Make Compound Shapes	Кнопки режимов фигур создают составные фигуры
+
+# 3D Box add-on
+	3D Box	3D-параллелепипед
+	3D Box Tool	Инструмент «3D-параллелепипед»

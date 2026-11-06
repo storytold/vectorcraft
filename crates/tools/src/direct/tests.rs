@@ -182,6 +182,45 @@ fn dragging_a_spine_point_moves_it() {
     assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Anchor { filled: true, .. })), "the clicked point shows");
 }
 
+/// #5285: Shift-click picks several points of a blend's spine, as of a path; dragging one of them
+/// moves them all (`with`), and Shift-click on a picked point takes it away again.
+#[test]
+fn shift_click_picks_several_spine_points_which_drag_together() {
+    let (mut d, g, _) = blend_doc();
+    let sp = vectorcraft_geom::SubPath::polyline(&[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)], false);
+    let Some(NodeKind::Blend { spec, .. }) = d.node_mut(g).map(|n| &mut n.kind) else { panic!("blend") };
+    (spec.spine, spec.key_anchors) = (Some(PathData::single(sp)), vec![0, 2]);
+    let mut s = Selection::default();
+    s.set([g]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let filled = |t: &DirectSelectionTool| t.overlays(&cx).iter().filter(|o| matches!(o, Overlay::Anchor { filled: true, .. })).count();
+    let mut t = DirectSelectionTool::new(false);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 210.0, 310.0).with_mods(shift));
+    assert_eq!(filled(&t), 2, "both picked points show");
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 210.0, 330.0));
+    assert_eq!(
+        a.last(),
+        Some(&Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": g.0, "anchor": 2, "x": 210.0, "y": 330.0, "with": [1]})))
+    );
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 210.0, 330.0)), vec![Action::Commit]);
+    // A plain press on a picked point keeps both.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 160.0, 300.0));
+    assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["anchor"] == 1 && v["with"] == json!([2])), "{a:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 300.0));
+    // Shift-click takes one away; a plain click on another point picks it alone.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 210.0, 310.0).with_mods(shift));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 210.0, 310.0).with_mods(shift));
+    assert_eq!(filled(&t), 1);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 110.0, 310.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 110.0, 330.0));
+    assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["anchor"] == 0 && v.get("with").is_none()), "{a:?}");
+}
+
 /// #1111: the Anchor Point tool bends a selected blend's straight spine; Direct Selection
 /// reshapes a curved spine segment and leaves a straight one alone, as it does a path's.
 #[test]
@@ -755,11 +794,17 @@ fn group_selection_picks_a_path_of_a_compound_path() {
     d.insert(Some(l), 0, c).unwrap();
     let p = paint();
     let none = Selection::default();
-    let click = |s: &Selection, x, y| DirectSelectionTool::new(true).pointer(&cx(&d, s, &p), &PointerEvent::new(PointerKind::Down, x, y));
+    let click = |s: &Selection, x, y| {
+        let mut t = DirectSelectionTool::new(true);
+        let context = cx(&d, s, &p);
+        let mut actions = t.pointer(&context, &PointerEvent::new(PointerKind::Down, x, y));
+        actions.extend(t.pointer(&context, &PointerEvent::new(PointerKind::Up, x, y)));
+        actions
+    };
     let set = |id: NodeId| vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))];
     assert_eq!(click(&none, 25.0, 100.0), set(outer), "the fill between the outline and the hole");
     assert_eq!(click(&none, 50.0, 100.0), set(hole), "the hole's outline");
-    assert!(click(&none, 100.0, 100.0).is_empty(), "inside the hole nothing is hit");
+    assert_eq!(click(&none, 100.0, 100.0), vec![Action::Exec("select.none".into(), json!({}))], "a click inside the hole clears selection");
     let mut s = Selection::default();
     s.set([outer]);
     assert_eq!(click(&s, 25.0, 100.0), vec![Action::Exec("select.add".into(), json!({"ids": [compound.0]}))]);
@@ -811,6 +856,30 @@ fn nested_group_doc() -> (vectorcraft_doc::Document, NodeId, NodeId, NodeId, Nod
     let outer_g = vectorcraft_doc::Node::group(outer, vec![std::sync::Arc::new(inner_g), path(outside, 300.0)]);
     d.insert(Some(l), 0, outer_g).unwrap();
     (d, inside, outside, inner, outer)
+}
+
+/// A selected component drags independently; only a completed click adds its group.
+#[test]
+fn group_selection_distinguishes_selected_leaf_drags_from_clicks() {
+    let (d, inside, _, inner, _) = nested_group_doc();
+    let paint = paint();
+    let mut selected = Selection::default();
+    selected.set([inside]);
+    let context = cx(&d, &selected, &paint);
+    let mut t = DirectSelectionTool::new(true);
+    let down = PointerEvent::new(PointerKind::Down, 150.0, 150.0);
+    assert!(t.pointer(&context, &down).is_empty());
+    let actions = t.pointer(&context, &PointerEvent::new(PointerKind::Drag, 180.0, 165.0));
+    assert!(matches!(actions.as_slice(), [Action::Begin(_), Action::Preview(command, _)] if command=="object.transform"));
+    assert_eq!(t.pointer(&context, &PointerEvent::new(PointerKind::Up, 180.0, 165.0)), vec![Action::Commit]);
+    assert!(t.pointer(&context, &down).is_empty());
+    assert_eq!(
+        t.pointer(&context, &PointerEvent::new(PointerKind::Up, 150.0, 150.0)),
+        vec![Action::Exec("select.add".into(), json!({"ids":[inner.0]}))]
+    );
+    assert!(t.pointer(&context, &down).is_empty());
+    assert_eq!(t.key(&context, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.pointer(&context, &PointerEvent::new(PointerKind::Up, 150.0, 150.0)).is_empty());
 }
 
 /// Isolation mode: a marquee and an anchor click take the path inside the isolated group and

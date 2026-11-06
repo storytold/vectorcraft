@@ -25,8 +25,9 @@
 //! Both pick the key objects of a blend, and click or drag ruler guides ([`crate::rulerguide`]).
 //! A Cmd/Ctrl+Shift double-click with either one releases the ruler guide or guide path under the
 //! pointer ([`release_guide_at`]).
-//! Direct Selection also edits a blend's spine: drag its points (a key object on a point moves
-//! with it) and, once a point is clicked, its handles; and the points of selected gradient meshes
+//! Direct Selection also edits a blend's spine: drag its points (Shift-click picks several, which
+//! drag together; a key object on a point moves with it) and, once a point is clicked, its
+//! handles; and the points of selected gradient meshes
 //! and mesh envelopes and their handles ([`MeshEdit`]): Shift-clicks and the marquee pick several,
 //! a click on a gradient mesh's line picks its two ends and one inside a patch the four points
 //! around it, a drag of picked points moves them all, the arrow keys nudge them, and a solid fill
@@ -182,6 +183,9 @@ pub struct DirectSelectionTool {
     state: State,
     /// The spine point last clicked (blend, anchor): its handles show and can be dragged.
     spine: Option<(NodeId, usize)>,
+    /// Other points of that spine picked with it (Shift-click adds or takes one away); dragging
+    /// a picked point moves them all (#5285).
+    spine_more: Vec<usize>,
     mesh: MeshEdit,
     /// Smart guides of the handle, anchors or objects being dragged.
     guides: Vec<Overlay>,
@@ -215,8 +219,8 @@ pub struct DirectSelectionTool {
     click: Option<(NodeId, usize, usize)>,
     /// A click on a whole path picks the segment on release; a drag still moves the whole path.
     click_segment: Option<(NodeId, usize, usize)>,
-    /// An Alt-click on a path selected whole adds this enclosing group on release, as a Group
-    /// Selection click does; an Alt-drag still copies the selection.
+    /// A Group Selection click, or an Alt-click on a path selected whole, adds this enclosing
+    /// group on release. A drag keeps the selection; an Alt-drag still copies it.
     click_group: Option<NodeId>,
     /// The selected anchors of area type's frames, picked by a click or a marquee: they show
     /// filled, a drag of one moves them all, and the arrow keys nudge them. They stay selected
@@ -237,6 +241,7 @@ impl DirectSelectionTool {
             group,
             state: State::Idle,
             spine: None,
+            spine_more: vec![],
             mesh: MeshEdit::default(),
             guides: vec![],
             anchor_snap: None,
@@ -773,7 +778,8 @@ impl Tool for DirectSelectionTool {
                     self.state = State::SpineHandle { id: sel.0, anchor: sel.1, out };
                     return vec![Action::Begin("Reshape Spine".into())];
                 }
-                self.spine = None;
+                let held = self.spine.take().filter(|(id, _)| cx.selection.contains(*id));
+                let more = std::mem::take(&mut self.spine_more);
                 self.snapped = false;
                 if let Some(g) = self.mesh.hit(cx, &cx.selection.objects, p) {
                     self.state = State::Mesh;
@@ -789,7 +795,24 @@ impl Tool for DirectSelectionTool {
                     return vec![Action::Begin("Reshape".into())];
                 }
                 if let Some((id, anchor, from)) = hit_spine_point(cx, p, point) {
+                    // The points of this spine picked before: Shift-click adds the point or takes
+                    // it away; a plain click on one of them keeps them all, to drag together.
+                    let mut picked: Vec<usize> =
+                        held.filter(|(h, _)| *h == id).map(|(_, a)| more.into_iter().chain([a]).collect()).unwrap_or_default();
+                    if ev.mods.shift
+                        && let Some(k) = picked.iter().position(|a| *a == anchor)
+                    {
+                        picked.remove(k);
+                        self.spine = picked.pop().map(|a| (id, a));
+                        self.spine_more = picked;
+                        return vec![];
+                    }
+                    if !ev.mods.shift && !picked.contains(&anchor) {
+                        picked.clear();
+                    }
+                    picked.retain(|a| *a != anchor);
                     self.spine = Some((id, anchor));
+                    self.spine_more = picked;
                     self.state = State::SpinePoint { id, anchor, from, start: p, began: false };
                     return if cx.selection.contains(id) { vec![] } else { vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))] };
                 }
@@ -873,7 +896,12 @@ impl Tool for DirectSelectionTool {
                     self.state = State::SpinePoint { id, anchor, from, start, began: true };
                 }
                 let q = from + move_delta(start, p, ev.mods.shift, cx.constrain_angle);
-                out.push(Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": id.0, "anchor": anchor, "x": q.x, "y": q.y})));
+                let mut params = json!({"id": id.0, "anchor": anchor, "x": q.x, "y": q.y});
+                let with: Vec<usize> = self.spine_more.iter().copied().filter(|a| spine_anchor(cx, (id, *a)).is_some()).collect();
+                if !with.is_empty() {
+                    params["with"] = json!(with);
+                }
+                out.push(Action::Preview("object.blend.spine.moveAnchor".into(), params));
                 out
             }
             (PointerKind::Drag, State::SpineSegment { id, seg, t, start, began }) => {
@@ -1139,6 +1167,12 @@ impl DirectSelectionTool {
             out.push(Overlay::Handle { p: h, color });
         }
         out.push(Overlay::Anchor { p: a.p, color, filled: true, size: 5.0 });
+        out.extend(self.spine_more.iter().filter_map(|i| spine_anchor(cx, (sel.0, *i))).map(|m| Overlay::Anchor {
+            p: m.p,
+            color,
+            filled: true,
+            size: 5.0,
+        }));
         out
     }
 }
@@ -1159,6 +1193,7 @@ impl DirectSelectionTool {
         Some(vec![])
     }
     fn press_group(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point, tol: f64) -> Vec<Action> {
+        self.click_group = None;
         if let Some(out) = self.guide.press(cx, ev) {
             self.state = State::Idle;
             return out;
@@ -1188,7 +1223,8 @@ impl DirectSelectionTool {
             }
         } else if !cx.selection.contains(target) {
             if cx.selection.contains(h.leaf) {
-                out.push(Action::Exec("select.add".into(), json!({"ids": [target.0]})));
+                // A completed click climbs the group; a drag moves only the selected art.
+                self.click_group = Some(target);
             } else {
                 out.push(Action::Exec("select.set".into(), json!({"ids": [target.0]})));
             }

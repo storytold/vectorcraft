@@ -196,7 +196,7 @@ impl Exporter<'_> {
             }
             NodeKind::Text(t) => self.text(s, n, t, page),
             NodeKind::Image(im) => match n.extras().colorize.as_deref() {
-                Some(p @ Paint::Solid { .. }) => {
+                Some(p @ Paint::Solid { .. }) if self.doc.image_blob(im).is_none_or(vectorcraft_doc::ImageBlob::takes_colorize) => {
                     if writable(s, im.xf, Rect::new(0.0, 0.0, im.width.max(1).into(), im.height.max(1).into())) {
                         if let Some(colorized) = self.colorized_image(im, p, !n.extras().pixelated) {
                             self.image(s, im, Some(colorized), n.extras().pixelated);

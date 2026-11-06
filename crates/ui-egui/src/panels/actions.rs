@@ -2291,6 +2291,29 @@ mod tests {
         assert_eq!(set_names(&app), before, "no set added");
     }
 
+    /// Where the host can read part of a file, Load Actions… reads one byte past 8 MiB: a larger
+    /// file is refused without reading all of it, and a smaller one loads.
+    #[test]
+    fn load_actions_reads_a_file_no_further_than_one_byte_past_its_limit() {
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/big.vcactions");
+        app.run(SAVE_SET, json!({"set": 1, "path": "/sets/small.vcactions"})).unwrap();
+        files.borrow_mut().insert("/sets/big.vcactions".into(), vec![b' '; files::MAX_SET_FILE + 100]);
+        app.services.read = Some(Box::new(|_: &str| Err("the whole file was read".to_string())));
+        let asked = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
+        let (f, a) = (files.clone(), asked.clone());
+        app.services.read_head = Some(Box::new(move |path: &str, max: usize| {
+            a.borrow_mut().push(max);
+            let bytes = f.borrow().get(path).cloned().ok_or_else(|| "no such file".to_string())?;
+            Ok(bytes.into_iter().take(max).collect())
+        }));
+        let before = set_names(&app);
+        assert_eq!(app.run(LOAD_SET, json!({"path": "/sets/big.vcactions"})).unwrap_err(), "the action set file is larger than 8 MiB");
+        assert_eq!(set_names(&app), before, "no set added");
+        assert_eq!(app.run(LOAD_SET, json!({"path": "/sets/small.vcactions"})).unwrap()["name"], json!("Mine 2"));
+        assert_eq!(*asked.borrow(), [files::MAX_SET_FILE + 1; 2], "each read stops one byte past the limit");
+    }
+
     /// Save Actions… does not write a set that Load Actions… would refuse: more than 1,000 actions.
     #[test]
     fn save_actions_does_not_write_a_set_load_actions_refuses() {

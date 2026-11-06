@@ -461,12 +461,21 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
 /// The Control bar's underlined "Transform" link: a click toggles the Transform panel in a
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let resp = ui.link(egui::RichText::new(tl!("Transform")).size(12.0).color(t.text).underline()).on_hover_text(tl!("Transform options"));
+    let resp = ui.link(link_text(ui)).on_hover_text(tl!("Transform options"));
     widgets::popover(&resp, resp.clicked(), |ui| {
         ui.set_width(300.0);
         show(app, ui);
     });
+}
+
+/// The Transform link's text, as [`link`] draws it and [`link_width`] measures it.
+fn link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Transform")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The width of the Transform [`link`] in `ui`.
+pub fn link_width(ui: &Ui) -> f32 {
+    widgets::text_width(ui, link_text(ui))
 }
 
 /// The width and height of [`constrain_link`]'s button.

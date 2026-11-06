@@ -105,6 +105,7 @@ impl VectorcraftApp {
             pending_url: None,
             control_rx: None,
             deferred_control: None,
+            synthetic_dropped_before: 0,
             pending_screenshots: vec![],
             queued_screenshots: vec![],
             screenshot_token: 0,
@@ -195,6 +196,9 @@ impl VectorcraftApp {
         if let Some(read) = s.read.take() {
             s.read = Some(Box::new(move |p: &str| file_access::check_read(p).and_then(|()| read(p))));
         }
+        if let Some(read_head) = s.read_head.take() {
+            s.read_head = Some(Box::new(move |p: &str, max: usize| file_access::check_read(p).and_then(|()| read_head(p, max))));
+        }
         if let Some(mut write) = s.write.take() {
             s.write = Some(Box::new(move |p: &str, b: &[u8]| file_access::check_write(p).and_then(|()| write(p, b))));
         }
@@ -279,6 +283,7 @@ impl VectorcraftApp {
         let now = now_secs();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        self.refresh_replace_font_warning(false);
         updates_ui::tick(self, ctx);
         // Read the system clipboard only when that alone decides whether Paste is enabled. A
         // background thread reads it where the host installs one (an unresponsive owner must never
@@ -314,6 +319,7 @@ impl VectorcraftApp {
         placing::poll(self);
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
+        crate::addons::select::link_status::refresh(self, now);
         if !self.background.jobs.is_empty()
             || !self.opening.pending.is_empty()
             || !self.plugin_runs.running.is_empty()

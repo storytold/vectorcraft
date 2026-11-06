@@ -3327,7 +3327,9 @@ digits	Malayalam	Malayalam
 	Patterns	Motivi
 	Stroke Options	Opzioni traccia
 	Character:	Carattere:
+	Paragraph:	Paragrafo:
 	Character options	Opzioni carattere
+	Paragraph options	Opzioni di paragrafo
 	Stroke options	Opzioni traccia
 	Transform options	Opzioni di trasformazione
 	Stroke Weight	Spessore traccia
@@ -4372,6 +4374,8 @@ axis	Both	Entrambi
 @msg	no such saved selection	selezione salvata inesistente
 @msg	no such segment	segmento inesistente
 @msg	no such spine point	punto della dorsale inesistente
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` deve essere un elenco di al massimo 10000 indici di punti della dorsale
+@msg	`with` moves points, not a handle	`with` sposta punti, non una maniglia
 @msg	no such spine segment	segmento della dorsale inesistente
 @msg	no such subpath	sottotracciato inesistente
 @msg	no such user library	libreria utente inesistente
@@ -4717,6 +4721,9 @@ axis	Both	Entrambi
 @msg	graphs come in as plain art, without their data or settings	i grafici vengono importati come grafica semplice, senza i loro dati e le loro impostazioni
 @msg	an image whose data is cut short was left out	un'immagine con dati incompleti è stata omessa
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	le immagini collegate mostrano l'anteprima a bassa risoluzione salvata nel file finché i loro file non vengono trovati: ricollegale nel pannello Collegamenti
+@msg	linked type areas past VectorCraft's limits were left out	le aree di testo concatenate oltre i limiti di VectorCraft sono state omesse
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	il testo usato come maschera in aree concatenate, testo attorno o un tracciato composto non ritaglia
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	le immagini collegate senza anteprima nel file mostrano un segnaposto finché i loro file non vengono trovati: ricollegale nel pannello Collegamenti
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	il testo in area in cornici troppo basse per una riga del font in cui viene mostrato ha ricevuto cornici più alte ({_1}): altrimenti non sarebbe visibile
 @msg	its editing data doesn't say where its art is	i suoi dati di modifica non dicono dove si trova la grafica
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	questo file è stato salvato senza compatibilità PDF e i suoi dati di modifica non si possono leggere ({why})
@@ -5719,6 +5726,9 @@ anchor	Points:	Punti:
 	Find Nearest Swatch…	Trova campione più vicino…
 	Find Nearest Swatch	Trova campione più vicino
 	Apply Nearest Swatch	Applica campione più vicino
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Applica riempimento alla traccia
+	Apply Stroke to Fill	Applica traccia al riempimento
 	Select objects to find the swatches nearest their colors.	Seleziona gli oggetti per trovare i campioni più vicini ai loro colori.
 @msg	select objects or give `color`	seleziona gli oggetti o indica `color`
 @msg	`color` is not a colour	`color` non è un colore
@@ -5985,6 +5995,29 @@ breakText	Glyphs	Glifi
 	Minimum angle	Angolo minimo
 	Maximum angle	Angolo massimo
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Seleziona collegate
+	Select Embedded	Seleziona incorporate
+	Select Missing	Seleziona mancanti
+	Select Modified	Seleziona modificate
+	Select by Link Status	Seleziona per stato del collegamento
+	Select by Link Status…	Seleziona per stato del collegamento…
+	Search images	Cerca immagini
+	No images match.	Nessuna immagine corrisponde.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Selezionata {n} immagine collegata|Selezionate {n} immagini collegate
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Selezionata {n} immagine incorporata|Selezionate {n} immagini incorporate
+@msgplural	Selected {n} missing image|Selected {n} missing images	Selezionata {n} immagine mancante|Selezionate {n} immagini mancanti
+@msgplural	Selected {n} modified image|Selected {n} modified images	Selezionata {n} immagine modificata|Selezionate {n} immagini modificate
+@msgplural	Selected {n} image|Selected {n} images	Selezionata {n} immagine|Selezionate {n} immagini
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; altra {n} è nascosta o bloccata|{selected}; altre {n} sono nascoste o bloccate
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; altra {n} è su un livello modello|{selected}; altre {n} sono su livelli modello
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; altra {n} è fuori dal gruppo isolato|{selected}; altre {n} sono fuori dal gruppo isolato
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; altra {n} non può essere selezionata ora|{selected}; altre {n} non possono essere selezionate ora
+
 # Compound Shapes add-on
 	Compound Shapes	Forme composte
 	Shape Mode Buttons Make Compound Shapes	I pulsanti dei metodi forma creano forme composte
+
+# 3D Box add-on
+	3D Box	Scatola 3D
+	3D Box Tool	Strumento Scatola 3D

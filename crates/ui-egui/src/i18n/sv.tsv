@@ -3213,7 +3213,9 @@ digits	Malayalam	Malayalam
 	Patterns	Mönster
 	Stroke Options	Konturalternativ
 	Character:	Tecken:
+	Paragraph:	Stycke:
 	Character options	Teckenalternativ
+	Paragraph options	Styckealternativ
 	Stroke options	Konturalternativ
 	Transform options	Transformeringsalternativ
 	Stroke Weight	Konturtjocklek
@@ -4235,6 +4237,8 @@ axis	Both	Båda
 @msg	no such saved selection	den sparade markeringen finns inte
 @msg	no such segment	segmentet finns inte
 @msg	no such spine point	ryggradspunkten finns inte
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` måste vara en lista med högst 10000 ryggradspunktsindex
+@msg	`with` moves points, not a handle	`with` flyttar punkter, inte ett handtag
 @msg	no such spine segment	ryggradssegmentet finns inte
 @msg	no such subpath	delbanan finns inte
 @msg	no such user library	användarbiblioteket finns inte
@@ -4574,6 +4578,9 @@ axis	Both	Båda
 @msg	graphs come in as plain art, without their data or settings	diagram läses in som vanlig grafik, utan sina data och inställningar
 @msg	an image whose data is cut short was left out	en bild med avkortade data utelämnades
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	länkade bilder visar förhandsgranskningen med låg upplösning som sparats i filen tills deras filer hittas: länka om dem i panelen Länkar
+@msg	linked type areas past VectorCraft's limits were left out	länkade textområden utöver VectorCrafts gränser utelämnades
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	text som används som mask i länkade områden, ombruten text eller en sammansatt bana beskär inte
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	länkade bilder utan förhandsgranskning i filen visar en platshållare tills deras filer hittas: länka om dem i panelen Länkar
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	områdestext i ramar som var för låga för en rad i det typsnitt den visas med fick högre ramar ({_1}): annars skulle texten inte synas
 @msg	its editing data doesn't say where its art is	dess redigeringsdata anger inte var dess grafik finns
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	den här filen sparades utan PDF-kompatibilitet och dess redigeringsdata kan inte läsas ({why})
@@ -6152,6 +6159,9 @@ shape	Open	Öppen
 	Find Nearest Swatch…	Sök närmaste färgruta…
 	Find Nearest Swatch	Sök närmaste färgruta
 	Apply Nearest Swatch	Använd närmaste färgruta
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Använd fyllning på kontur
+	Apply Stroke to Fill	Använd kontur på fyllning
 	Select objects to find the swatches nearest their colors.	Markera objekt för att hitta de färgrutor som ligger närmast deras färger.
 @msg	select objects or give `color`	markera objekt eller ange `color`
 @msg	`color` is not a colour	`color` är ingen färg
@@ -6421,6 +6431,29 @@ digits	Hindi	Hindi
 	Minimum angle	Minsta vinkel
 	Maximum angle	Största vinkel
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Markera länkade
+	Select Embedded	Markera inbäddade
+	Select Missing	Markera saknade
+	Select Modified	Markera ändrade
+	Select by Link Status	Markera efter länkstatus
+	Select by Link Status…	Markera efter länkstatus…
+	Search images	Sök bilder
+	No images match.	Ingen bild matchar.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Markerade {n} länkad bild|Markerade {n} länkade bilder
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Markerade {n} inbäddad bild|Markerade {n} inbäddade bilder
+@msgplural	Selected {n} missing image|Selected {n} missing images	Markerade {n} saknad bild|Markerade {n} saknade bilder
+@msgplural	Selected {n} modified image|Selected {n} modified images	Markerade {n} ändrad bild|Markerade {n} ändrade bilder
+@msgplural	Selected {n} image|Selected {n} images	Markerade {n} bild|Markerade {n} bilder
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} till är dold eller låst|{selected}; {n} till är dolda eller låsta
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} till ligger på ett mallager|{selected}; {n} till ligger på mallager
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} till ligger utanför den isolerade gruppen|{selected}; {n} till ligger utanför den isolerade gruppen
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} till kan inte markeras nu|{selected}; {n} till kan inte markeras nu
+
 # Compound Shapes add-on
 	Compound Shapes	Sammansatta former
 	Shape Mode Buttons Make Compound Shapes	Formlägesknapparna skapar sammansatta former
+
+# 3D Box add-on
+	3D Box	3D-låda
+	3D Box Tool	3D-lådverktyg

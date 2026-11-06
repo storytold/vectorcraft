@@ -10,6 +10,7 @@ pub mod enclosing_lasso;
 pub mod pathtools;
 pub mod pen;
 pub mod select;
+pub mod shapes;
 pub mod typetools;
 
 use crate::menus::Item;
@@ -17,6 +18,7 @@ use crate::menus::Item;
 /// The add-ons' submenus, then a separator: the head of Object › Plug-ins.
 pub fn plugin_menu() -> Vec<Item> {
     vec![
+        Item::Sub("3D Box", shapes::menu()),
         Item::Sub("Arrange Tools", arrange::menu()),
         Item::Sub("Artwork Cleanup", cleanup::menu()),
         Item::Sub("Color Effects", color::menu()),

@@ -353,3 +353,73 @@ fn line_segment_options_and_fill_line() {
     );
     assert_eq!(t.command(a, b, Mods::default()).1["fill"], json!(true));
 }
+
+/// #5477: with a shape tool, a drag on a selected live rectangle's corner widget rounds its
+/// corners (one undo step) and a drag on a live ellipse's pie widget sets its pie angle, as with
+/// the Selection tool; the pointer over a widget is the Selection tool's. A press anywhere else, or
+/// with Line Segment, draws.
+#[test]
+fn a_shape_tool_drags_the_selected_shapes_widgets() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let live = |shape: LiveShape| {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut n = Node::path(id, shape.to_path(), Appearance::default_art());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(shape));
+        }
+        d.insert(Some(l), 0, n).unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        (d, s)
+    };
+    let xf = Affine::translate((100.0, 100.0));
+    let (d, s) = live(LiveShape::Rectangle { w: 100.0, h: 100.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf });
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let at = Point::new(110.0, 110.0);
+    for id in ["rectangle", "roundedRectangle", "polygon", "star", "ellipse"] {
+        let mut t = ShapeTool::new(id);
+        assert_eq!(t.cursor(&c, at, Mods::default()), Cursor::CornerRadius, "{id}");
+        // Hovering a widget shows no Smart Guide for a new shape.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+        assert!(t.overlays(&c).is_empty(), "{id}");
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y)).is_empty(), "{id}");
+        assert!(t.busy(), "{id}");
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 130.0));
+        assert_eq!(a.first(), Some(&Action::Begin("Corner Radius".into())), "{id}: {a:?}");
+        assert!(
+            matches!(a.last(), Some(Action::Preview(cmd, v)) if cmd == "object.setLiveShape" && v["radius"].as_f64().is_some_and(|r| r > 0.0)),
+            "{id}: {a:?}"
+        );
+        assert!(t.transforming(), "{id}");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 130.0, 130.0)), vec![Action::Commit], "{id}");
+        assert!(!t.busy() && !t.transforming(), "{id}");
+        // Escape cancels a widget drag.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 130.0));
+        assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{id}");
+        assert!(!t.busy(), "{id}");
+        // Away from the widgets the tool draws.
+        assert_eq!(t.cursor(&c, Point::new(300.0, 300.0), Mods::default()), Cursor::Crosshair, "{id}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 350.0, 340.0));
+        assert!(matches!(a.last(), Some(Action::Preview(cmd, _)) if cmd.starts_with("shape.")), "{id}: {a:?}");
+    }
+    // Line Segment draws from a widget, as it always did.
+    let mut t = ShapeTool::new("lineSegment");
+    assert_eq!(t.cursor(&c, at, Mods::default()), Cursor::Crosshair);
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 130.0));
+    assert!(matches!(a.last(), Some(Action::Preview(cmd, _)) if cmd == "shape.line"), "{a:?}");
+    // A whole live ellipse's pie widgets sit 12 px right of (300, 150).
+    let (d, s) = live(LiveShape::Ellipse { w: 200.0, h: 100.0, pie: (0.0, 360.0), xf });
+    let c = cx(&d, &s, &p);
+    let mut t = ShapeTool::new("ellipse");
+    assert_eq!(t.cursor(&c, Point::new(312.0, 150.0), Mods::default()), Cursor::ArrowHollow);
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 312.0, 150.0)).is_empty());
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 200.0, 20.0));
+    assert_eq!(a.first(), Some(&Action::Begin("Live Shape".into())), "{a:?}");
+    assert!(matches!(a.last(), Some(Action::Preview(cmd, v)) if cmd == "object.setLiveShape" && v.get("pieEnd").is_some()), "{a:?}");
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 200.0, 20.0)), vec![Action::Commit]);
+}

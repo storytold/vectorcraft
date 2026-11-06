@@ -34,9 +34,12 @@ impl Default for View {
 }
 
 impl View {
-    /// The view a document opens at: the one it was saved with, else fitted on first display.
+    /// The view a document opens at: the one it was saved with, else fitted on first display, on
+    /// the artboard the opened file names as its active one ([`vectorcraft_doc::Document::opened_artboard`]),
+    /// else the first.
     pub fn of(st: &vectorcraft_engine::DocState) -> Self {
-        st.view.as_ref().and_then(Self::saved).unwrap_or_default()
+        let artboard = st.doc.opened_artboard.and_then(|id| st.doc.artboards.iter().position(|a| a.id == id)).unwrap_or(0);
+        Self { artboard, ..st.view.as_ref().and_then(Self::saved).unwrap_or_default() }
     }
 
     /// The view `v` saved (the one a document was saved with, or a View → New View… one), within
@@ -325,6 +328,18 @@ impl Dialog {
     }
 }
 
+/// The last Replace Font request whose warning the status bar shows, to refresh it as the
+/// document changes.
+#[derive(Clone, Debug)]
+pub struct ReplaceFontWarning {
+    pub document_uid: u64,
+    pub revision: u64,
+    pub request: serde_json::Value,
+    pub selection: Option<Vec<u64>>,
+    pub text: String,
+    pub styles: Vec<(String, String)>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
@@ -382,6 +397,11 @@ pub struct UiState {
     /// is open. Not saved.
     #[serde(skip)]
     pub context_intertwine: Option<(u64, vectorcraft_doc::NodeId, vectorcraft_geom::Point, vectorcraft_doc::NodeId)>,
+    /// Which link statuses the active document's images and placed documents have, for Select ›
+    /// Linked, Embedded, Missing and Modified to be on only when some do (refreshed by
+    /// [`crate::addons::select::link_status::refresh`]). Not saved.
+    #[serde(skip)]
+    pub link_statuses: crate::addons::select::link_status::Present,
     /// Last tool shown in each toolbar slot (keyed by the slot's first tool id).
     #[serde(default)]
     pub slot_tool: std::collections::BTreeMap<String, String>,
@@ -456,6 +476,9 @@ pub struct UiState {
     /// Last tool shown for each toolbar group (flyout selection sticks).
     pub group_tool: Vec<String>,
     pub status: String,
+    /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
+    #[serde(skip)]
+    pub replace_font_warning: Option<ReplaceFontWarning>,
     pub palette_open: bool,
     pub palette_query: String,
     /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation. Not saved:
@@ -942,6 +965,7 @@ impl Default for UiState {
             shape_modes_compound: false,
             context_locked: None,
             context_intertwine: None,
+            link_statuses: Default::default(),
             slot_tool: Default::default(),
             floating_flyouts: vec![],
             toolbar_edits: ToolbarEdits::default(),
@@ -968,6 +992,7 @@ impl Default for UiState {
             flyout: None,
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
             status: String::new(),
+            replace_font_warning: None,
             palette_open: false,
             palette_query: String::new(),
             screen_mode: 0,
@@ -1174,6 +1199,30 @@ mod tests {
         assert_eq!(zoom_from_display_percent(100.0, false), 1.0);
         assert_eq!(zoom_label(b, true), "100%");
         assert_eq!(next_zoom_with_display(b, true, true), zoom_from_display_percent(150.0, true));
+    }
+
+    #[test]
+    fn a_document_opens_on_the_artboard_its_file_names_as_active() {
+        let mut doc = vectorcraft_doc::Document::new(100.0, 100.0);
+        let first = doc.artboards[0].clone();
+        for id in [2, 3] {
+            let x0 = f64::from(id - 1) * 150.0;
+            doc.artboards.push(vectorcraft_doc::Artboard { id, rect: vectorcraft_geom::Rect::new(x0, 0.0, x0 + 100.0, 100.0), ..first.clone() });
+        }
+        let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        for (opened, active) in [(Some(3), 2), (None, 0), (Some(9), 0)] {
+            let mut d = doc.clone();
+            d.opened_artboard = opened;
+            app.session.add_document(d, None);
+            app.sync_views();
+            assert_eq!(app.view().map(|v| v.artboard), Some(active), "{opened:?}");
+        }
+        // With the view the document was saved with too.
+        doc.opened_artboard = Some(2);
+        doc.last_view = Some(vectorcraft_doc::SavedView { name: String::new(), center: Point::new(400.0, 50.0), zoom: 2.0, rotation: 0.0 });
+        app.session.add_document(doc, None);
+        app.sync_views();
+        assert_eq!(app.view().map(|v| (v.artboard, v.zoom)), Some((1, 2.0)));
     }
 
     #[test]

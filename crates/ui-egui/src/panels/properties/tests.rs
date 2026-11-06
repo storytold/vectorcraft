@@ -1339,6 +1339,34 @@ fn blend_options_is_a_quick_action_for_one_blend() {
     assert!(!shows(&tall(&mut app, &ctx, vec![]), "Blend Options"), "a rectangle");
 }
 
+/// One selected repeat, radial, grid or mirror, has Repeat Options in Quick Actions (#5181), which
+/// opens the Repeat Options dialog with its values; a plain rectangle, or a repeat selected with
+/// another object, does not.
+#[test]
+fn repeat_options_is_a_quick_action_for_one_repeat() {
+    let ctx = egui::Context::default();
+    for (cmd, field) in [("object.repeat.radial", "instances"), ("object.repeat.grid", "rows"), ("object.repeat.mirror", "angle")] {
+        let mut app = new_app();
+        let a = rect(&mut app, 20.0, 20.0, 40.0, 40.0);
+        let repeat = app.run(cmd, json!({"ids": [a]})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [repeat]})).unwrap();
+        let texts = tall(&mut app, &ctx, vec![]);
+        assert!(shows(&texts, "Repeat Options"), "{cmd}");
+        let depth = undo_depth(&app);
+        press(&mut app, &ctx, text_at(&texts, "Repeat Options").center());
+        let d = app.ui.dialog.as_ref().expect("the Repeat Options dialog opens");
+        assert_eq!(d.kind, "command", "{cmd}");
+        assert!(d.fields.contains_key(field), "{cmd}: the dialog has the repeat's {field}");
+        assert_eq!(undo_depth(&app), depth, "opening the dialog changes nothing");
+        app.ui.dialog = None;
+        let c = rect(&mut app, 20.0, 200.0, 40.0, 40.0);
+        app.run("select.set", json!({"ids": [repeat, c]})).unwrap();
+        assert!(!shows(&tall(&mut app, &ctx, vec![]), "Repeat Options"), "{cmd}: a repeat and another object");
+        app.run("select.set", json!({"ids": [c]})).unwrap();
+        assert!(!shows(&tall(&mut app, &ctx, vec![]), "Repeat Options"), "a rectangle");
+    }
+}
+
 /// Quick Actions offer Lock for a selected member in isolation and for a selected group outside it.
 #[test]
 fn lock_is_a_quick_action_in_and_outside_isolation_mode() {

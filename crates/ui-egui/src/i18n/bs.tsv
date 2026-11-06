@@ -1469,7 +1469,9 @@ digits	Malayalam	Malajalam
 	Standard Vertical Roman Alignment	Standardno okomito latinično poravnanje
 	Strikethrough	Precrtano
 	Character:	Znak:
+	Paragraph:	Pasus:
 	Character options	Opcije znakova
+	Paragraph options	Opcije pasusa
 	Subscript	Indeks
 	Subscript (on the roadmap)	Indeks (u planu)
 	Superscript	Eksponent
@@ -4589,6 +4591,8 @@ imageTrace	Outline	Obris
 @msg	no such saved selection	nema takvog sačuvanog odabira
 @msg	no such segment	nema takvog segmenta
 @msg	no such spine point	nema takve tačke kičme
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` mora biti lista od najviše 10000 indeksa tačaka kičme
+@msg	`with` moves points, not a handle	`with` pomjera tačke, ne ručicu
 @msg	no such spine segment	nema takvog segmenta kičme
 @msg	no such subpath	nema takve podputanje
 @msg	no such user library	nema takve korisničke biblioteke
@@ -4923,6 +4927,9 @@ imageTrace	Outline	Obris
 @msg	an image VectorCraft can't read was left out	izostavljena je slika koju VectorCraft ne može pročitati
 @msg	an image whose data is cut short was left out	izostavljena je slika čiji su podaci skraćeni
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	povezane slike prikazuju pregled niske rezolucije sačuvan u datoteci dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
+@msg	linked type areas past VectorCraft's limits were left out	povezana područja teksta izvan ograničenja programa VectorCraft su izostavljena
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst korišten kao maska u povezanim područjima, omotanom tekstu ili složenoj putanji ne odsijeca
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	povezane slike bez pregleda u datoteci prikazuju čuvar mjesta dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	tekst u području u okvirima prekratkim za red fonta u kojem se prikazuje dobio je više okvire ({_1}): inače se tekst ne bi prikazao
 @msg	its editing data doesn't say where its art is	njeni podaci za uređivanje ne govore gdje joj je crtež
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ova datoteka je sačuvana bez PDF kompatibilnosti, a njeni podaci za uređivanje se ne mogu pročitati ({why})
@@ -6075,6 +6082,9 @@ shape	Open	Otvoren
 	Find Nearest Swatch…	Pronađi najbliži uzorak boje…
 	Find Nearest Swatch	Pronađi najbliži uzorak boje
 	Apply Nearest Swatch	Primijeni najbliži uzorak boje
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Primijeni ispunu na potez
+	Apply Stroke to Fill	Primijeni potez na ispunu
 	Select objects to find the swatches nearest their colors.	Odaberite objekte da pronađete uzorke boja najbliže njihovim bojama.
 @msg	select objects or give `color`	odaberite objekte ili navedite `color`
 @msg	`color` is not a colour	`color` nije boja
@@ -6250,6 +6260,29 @@ shape	Open	Otvoren
 	Minimum angle	Najmanji ugao
 	Maximum angle	Najveći ugao
 
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Odaberi povezane
+	Select Embedded	Odaberi ugrađene
+	Select Missing	Odaberi nedostajuće
+	Select Modified	Odaberi izmijenjene
+	Select by Link Status	Odabir po statusu veze
+	Select by Link Status…	Odabir po statusu veze…
+	Search images	Pretraži slike
+	No images match.	Nijedna slika ne odgovara.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Odabrana je {n} povezana slika|Odabrane su {n} povezane slike|Odabrano je {n} povezanih slika
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Odabrana je {n} ugrađena slika|Odabrane su {n} ugrađene slike|Odabrano je {n} ugrađenih slika
+@msgplural	Selected {n} missing image|Selected {n} missing images	Odabrana je {n} nedostajuća slika|Odabrane su {n} nedostajuće slike|Odabrano je {n} nedostajućih slika
+@msgplural	Selected {n} modified image|Selected {n} modified images	Odabrana je {n} izmijenjena slika|Odabrane su {n} izmijenjene slike|Odabrano je {n} izmijenjenih slika
+@msgplural	Selected {n} image|Selected {n} images	Odabrana je {n} slika|Odabrane su {n} slike|Odabrano je {n} slika
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; još {n} je skrivena ili zaključana|{selected}; još {n} su skrivene ili zaključane|{selected}; još {n} je skriveno ili zaključano
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; još {n} je na sloju predloška|{selected}; još {n} su na slojevima predloška|{selected}; još {n} je na slojevima predloška
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; još {n} je izvan izolirane grupe|{selected}; još {n} su izvan izolirane grupe|{selected}; još {n} je izvan izolirane grupe
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; još {n} se sada ne može odabrati|{selected}; još {n} se sada ne mogu odabrati|{selected}; još {n} se sada ne može odabrati
+
 # Compound Shapes add-on
 	Compound Shapes	Složeni oblici
 	Shape Mode Buttons Make Compound Shapes	Tasteri načina oblika prave složene oblike
+
+# 3D Box add-on
+	3D Box	3D kutija
+	3D Box Tool	Alat za 3D kutiju
