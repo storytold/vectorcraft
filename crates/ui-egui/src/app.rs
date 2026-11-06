@@ -550,6 +550,7 @@ impl VectorcraftApp {
         export_progress::show(self, &ctx);
         plugin_runs::show(self, &ctx);
         trace_runs::show(self, &ctx);
+        opening::show(self, &ctx);
         palette::show(self, &ctx);
         if self.custom_titlebar {
             titlebar::resize_zones(ui);

@@ -1188,6 +1188,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} close the export progress dialog; the exports go on, shown in the status bar → {hidden: n}",
     ),
     (
+        "file.cancelOpen",
+        "Cancel Opening",
+        "",
+        "{} stop opening every file being read in the background (its progress window's Cancel): the files don't open → {cancelled: n}",
+    ),
+    (
+        "file.openInBackground",
+        "Continue in Background",
+        "",
+        "{} close the progress window of the files being opened; they go on being read, shown in the status bar → {hidden: n}",
+    ),
+    (
         "ui.dxfOptionsDialog",
         "DXF Options Dialog",
         "",
