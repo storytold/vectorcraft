@@ -122,6 +122,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // any tool (<https://helpx.adobe.com/illustrator/using/blending-objects.html>, #4817).
     let blend_options = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Blend { .. }));
     let merge_live_paint = n_sel > 1 && can_merge_live_paint(app);
+    // Repeat Options for one selected repeat (radial, grid or mirror), or one object of its source
+    // art in isolation mode: Object › Repeat › Options, the dialog of the repeat options pages
+    // (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-radial-repeat-options.html>,
+    // #5181).
+    let repeat_options = n_sel == 1 && crate::menus::enabled(app, "object.repeat.options");
     let mut actions: Vec<(&str, &str)> = vec![];
     if n_sel > 1 {
         actions.push((tl!("Group"), "object.group"));
@@ -132,6 +137,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if blend_options {
         actions.push((tl!("Blend Options"), "ui.blendOptions"));
+    }
+    if repeat_options {
+        actions.push((tl!("Repeat Options"), "object.repeat.options"));
     }
     if is_group {
         actions.push((tl!("Ungroup"), "object.ungroup"));
