@@ -1417,7 +1417,9 @@ digits	Malayalam	Malayalam
 	Standard Vertical Roman Alignment	Standaard verticale Romeinse uitlijning
 	Strikethrough	Doorhalen
 	Character:	Teken:
+	Paragraph:	Alinea:
 	Character options	Tekenopties
+	Paragraph options	Alineaopties
 	Subscript	Subscript
 	Subscript (on the roadmap)	Subscript (op de roadmap)
 	Superscript	Superscript
@@ -5583,6 +5585,8 @@ swatch	Bright Violet	Felviolet
 @msg	missing number `{key}`	getal `{key}` ontbreekt
 @msg	missing integer `{key}`	geheel getal `{key}` ontbreekt
 @msg	no such spine point	dat aspunt bestaat niet
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` moet een lijst van hoogstens 10000 aspuntindexen zijn
+@msg	`with` moves points, not a handle	`with` verplaatst punten, geen handgreep
 @msg	no such spine segment	dat assegment bestaat niet
 @msg	not a blend	geen vermenging
 @msg	select a blend or give `id`	selecteer een vermenging of geef `id` op
@@ -6303,3 +6307,7 @@ breakText	Glyphs	Glyphs
 # Compound Shapes add-on
 	Compound Shapes	Samengestelde vormen
 	Shape Mode Buttons Make Compound Shapes	Vormmodus-knoppen maken samengestelde vormen
+
+# 3D Box add-on
+	3D Box	3D-doos
+	3D Box Tool	3D-doosgereedschap

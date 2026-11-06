@@ -276,7 +276,12 @@ fn paint_sample(s: &mut Sampler, levels: &mut [Option<Document>], n: &Node, on_s
     // path's strokes, only the ones that reach `p` count, when any does (a click within the hit
     // tolerance of a stroke may reach none).
     let mut visible: Vec<usize> = items.into_iter().filter(|&i| n.appearance.items.get(i).is_some_and(|it| it.visible())).collect();
-    if stroke && let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }, Some(bp)) = (&n.kind, n.stroke_path()) {
+    // With at most one visible stroke, reach testing cannot change which paint is sampled.
+    // Avoid rebuilding a long path just to keep that same stroke in the list.
+    if stroke
+        && visible.len() > 1
+        && let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }, Some(bp)) = (&n.kind, n.stroke_path())
+    {
         let reach =
             |i: &usize| matches!(n.appearance.items.get(*i), Some(vectorcraft_doc::AppearanceItem::Stroke(st)) if st.hits(&bp, *rule, p, 0.0));
         if visible.iter().any(&reach) {

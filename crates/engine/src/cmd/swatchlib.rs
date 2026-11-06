@@ -211,7 +211,28 @@ impl<L: LibraryFile> Libraries<L> {
                 .user_dir()
                 .ok_or_else(|| bad(cmd, "no user library folder here (save with a path, or without one to get the data)"))?
                 .to_string();
-            let file = library_file_name(name, ext);
+            let mut file = library_file_name(name, ext);
+            // `COM¹` is saved as `COM¹-`, which can be another library's own name, and a library put
+            // under a numbered name holds a file another name can ask for: such a file is kept.
+            self.rescan();
+            let device = crate::file_access::is_device_name;
+            let id = format!("user/{file}").to_lowercase();
+            let fallback = |other: &str| library_file_name(other, ext).to_lowercase() != file.to_lowercase();
+            if self
+                .extra
+                .iter()
+                .any(|e| e.info.id.to_lowercase() == id && e.lib.name() != name && (device(name) || device(e.lib.name()) || fallback(e.lib.name())))
+            {
+                // Saved again, it goes back to the file it was given the first time.
+                let own = self.extra.iter().find(|e| e.info.category == "user" && e.lib.name() == name && extension(&e.info.id) == extension(&file));
+                file = match own.and_then(|e| e.info.id.strip_prefix("user/")) {
+                    Some(own) => own.to_string(),
+                    None => {
+                        let mut taken: HashSet<String> = library_files(&dir, L::EXTS).iter().map(|p| file_name(p).to_lowercase()).collect();
+                        free_name(&file, &mut taken)
+                    }
+                };
+            }
             let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
             // The app's own folder, under a name made safe: no root applies.
             crate::file_access::unconfined(|| create_dir(&dir).and_then(|()| write_file(&path, bytes)))?;

@@ -214,22 +214,9 @@ fn read_file_head(path: &str, max: usize) -> Result<Vec<u8>, String> {
 #[test]
 fn read_file_head_reads_no_more_than_it_is_asked_for() {
     use std::io::Write as _;
-    /// Removes the file when the test ends, a failed assertion included.
-    struct Remove(std::path::PathBuf);
-    impl Drop for Remove {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_file(&self.0);
-        }
-    }
-    let path = std::env::temp_dir().join(format!("vectorcraft-read-head-{}", std::process::id()));
-    // A leftover file or link at the path is removed (never followed), and the new file is created
-    // exclusively.
-    let _ = std::fs::remove_file(&path);
-    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
-    let guard = Remove(path);
+    let mut f = tempfile::Builder::new().prefix("vectorcraft-read-head-").tempfile().unwrap();
     f.write_all(b"0123456789").unwrap();
-    drop(f);
-    let p = guard.0.to_string_lossy();
+    let p = f.path().to_string_lossy();
     assert_eq!(read_file_head(&p, 4).unwrap(), b"0123");
     assert_eq!(read_file_head(&p, 20).unwrap(), b"0123456789", "a shorter file is read whole");
     assert!(read_file_head(&std::env::temp_dir().to_string_lossy(), 4).is_err(), "a folder is not read");
@@ -608,22 +595,20 @@ mod open_with_tests {
     use super::{check_app, find_photocraft, photocraft_candidates, registered_path, windows_candidates};
 
     /// A fresh, empty folder under the system's temporary folder.
-    fn scratch(name: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("vc-open-with-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    fn scratch(name: &str) -> tempfile::TempDir {
+        tempfile::Builder::new().prefix(&format!("vc-open-with-{name}-")).tempdir().unwrap()
     }
 
     /// #5236: only an application counts as PhotoCraft, never a document, a folder or a missing
     /// path.
     #[test]
     fn only_applications_are_started() {
-        let d = scratch("check");
+        let temp = scratch("check");
+        let d = temp.path();
         let doc = d.join("notes.txt");
         std::fs::write(&doc, "hi").unwrap();
         assert!(check_app(&doc).is_err(), "a document");
-        assert!(check_app(&d).is_err(), "a folder");
+        assert!(check_app(d).is_err(), "a folder");
         assert!(check_app(&d.join("Missing.app")).is_err(), "a missing path");
         if cfg!(target_os = "macos") {
             let app = d.join("Editor.app");
@@ -639,19 +624,19 @@ mod open_with_tests {
             std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
             assert!(check_app(&tool).is_ok(), "an executable file");
         }
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// PhotoCraft is looked for only where it installs.
     #[test]
     fn photocraft_is_found_where_it_installs() {
-        let d = scratch("find");
+        let temp = scratch("find");
+        let d = temp.path();
         if cfg!(target_os = "macos") {
-            let candidates = photocraft_candidates(Some(&d), None);
+            let candidates = photocraft_candidates(Some(d), None);
             assert_eq!(candidates.first().map(|p| p.to_string_lossy().into_owned()).as_deref(), Some("/Applications/PhotoCraft.app"));
             assert!(candidates.contains(&d.join("Applications/PhotoCraft.app")), "{candidates:?}");
             std::fs::create_dir_all(d.join("Applications/PhotoCraft.app")).unwrap();
-            assert!(find_photocraft(Some(&d), None).unwrap().ends_with("PhotoCraft.app"));
+            assert!(find_photocraft(Some(d), None).unwrap().ends_with("PhotoCraft.app"));
         } else {
             let bin = d.join("bin");
             std::fs::create_dir_all(&bin).unwrap();
@@ -675,7 +660,6 @@ mod open_with_tests {
                 assert_eq!(find_photocraft(None, Some(&path_var)), Some(exe));
             }
         }
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// #5327 review: on Windows PhotoCraft is looked for where its installer puts it: the path it

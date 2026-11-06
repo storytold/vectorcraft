@@ -190,7 +190,7 @@ impl Session {
         let ids: Vec<u64> = ids.into_iter().map(|id| id.0).collect();
         let aligned = match item {
             ItemTarget::Item { aligned, .. } => aligned,
-            ItemTarget::Top => aligned(params),
+            ItemTarget::Top => aligned(params, "effect.apply").ok()?,
         };
         Some((json!({"ids": ids, "item": at, "aligned": aligned}), effects.as_slice()))
     }
@@ -241,11 +241,12 @@ pub(crate) fn item_target(s: &Session, p: &Value, cmd: &str) -> Result<ItemTarge
 
 /// [`item_target`] read from param `key` (e.g. `fromItem`).
 pub(crate) fn item_target_at(s: &Session, p: &Value, key: &str, cmd: &str) -> Result<ItemTarget> {
+    let aligned = aligned(p, cmd)?;
     match p.get(key) {
         Some(Value::Null) => Ok(ItemTarget::Top),
         Some(v) => v
             .as_u64()
-            .map(|i| ItemTarget::Item { index: index(i), explicit: true, aligned: aligned(p) })
+            .map(|i| ItemTarget::Item { index: index(i), explicit: true, aligned })
             .ok_or_else(|| bad(cmd, format!("`{key}` must be an appearance item index (paint order) or null"))),
         // The active item is a row of the first selected object's own stack.
         None if p.get("ids").is_some() || p.get("id").is_some() || targets_contents(p)? => Ok(ItemTarget::Top),
@@ -337,8 +338,8 @@ impl ItemTarget {
 
 /// Does `p` say its item and effect indices are rows of the first target's stack (`aligned`),
 /// which each other target edits where it has them (see [`ItemTarget::per_target`])?
-pub(crate) fn aligned(p: &Value) -> bool {
-    p.get("aligned").and_then(Value::as_bool).unwrap_or(false)
+pub(crate) fn aligned(p: &Value, cmd: &str) -> Result<bool> {
+    switch_or(p, "aligned", false, cmd)
 }
 
 /// What the appearances of `ids` share, when there are several of them and they all exist.
@@ -745,7 +746,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     // When every object comes out as it was (for example, when none has item `index`), the document
     // and its undo history stay as they are.
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &[idx], aligned(p));
+    let per = items_per_target(&before, &ids, &[idx], aligned(p, "appearance.setItem")?);
     super::overprint::edit_counted(s, "Appearance", |d| {
         let mut edited = Vec::new();
         for (id, at) in ids.iter().zip(&per) {
@@ -818,7 +819,7 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
     // When no object has an item at any of the indices, the document and its undo history stay as
     // they are.
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &idx, aligned(p));
+    let per = items_per_target(&before, &ids, &idx, aligned(p, "appearance.removeItem")?);
     super::overprint::edit_counted(s, "Remove Item", |d| {
         for (id, idx) in ids.iter().zip(&per) {
             if let Some(n) = d.node_mut(*id) {
@@ -854,11 +855,11 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
     let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
     let mut active_at = None;
     // Aligned rows of a mixed selection are copied right above themselves in each object.
-    if aligned(p) && to.is_some() && shared_stack(&s.doc()?.doc, &ids).is_some() {
+    if aligned(p, C)? && to.is_some() && shared_stack(&s.doc()?.doc, &ids).is_some() {
         return Err(bad(C, "`to` takes the rows of one object's stack, not aligned rows"));
     }
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &idx, aligned(p));
+    let per = items_per_target(&before, &ids, &idx, aligned(p, C)?);
     s.edit("Duplicate Item", |d, _| {
         let mut any = false;
         for (id, idx) in ids.iter().zip(&per) {
@@ -932,11 +933,12 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "appearance.moveItem";
     let to = index_param(p, "to", C)?;
     let ids = require_targets(s, p, C)?;
+    let aligned = aligned(p, C)?;
     if p.get("from").and_then(Value::as_str) == Some("contents") {
         return move_contents(s, &ids, to);
     }
     // Where an aligned row would go in each of several different stacks isn't one place.
-    if aligned(p) && appearances_differ(&s.doc()?.doc, &ids) {
+    if aligned && appearances_differ(&s.doc()?.doc, &ids) {
         return Err(bad(C, "rows of objects whose appearances differ can't be reordered together"));
     }
     if p.get("indices").is_some() {

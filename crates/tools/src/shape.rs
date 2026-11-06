@@ -6,17 +6,37 @@
 //! Ctrl/Cmd keeps the inner radius where it is while the outer one follows the pointer, and Alt
 //! keeps the star's shoulders straight (#812). The start point and
 //! the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering before the press too.
+//!
+//! The selection keeps its bounding box and its Live Shape widgets on show with the Rectangle,
+//! Rounded Rectangle, Ellipse, Polygon and Star tools, so a shape just drawn can be adjusted at
+//! once: a drag on a live rectangle's or polygon's corner widget rounds its corners and a drag on
+//! a live ellipse's pie widget sets its pie angle, as with the Selection tool; a press anywhere
+//! else draws a new shape (#5477).
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
+use crate::corners::{self, CornerDrag};
 use crate::guides::{DrawSnap, Leave, square};
+use crate::pie::{self, PieDrag};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// The largest corner radius the Rounded Rectangle tool draws, points: the range of General ›
 /// Corner Radius, which the tool's radius is (its `prefs.list` spec), so ↑ and a Tool Options
 /// value stop there too.
 pub const MAX_CORNER_RADIUS: f64 = 1296.0;
+
+/// Does tool `id` keep the selection's bounding box and Live Shape widgets on show and let its
+/// corner and pie widgets be dragged (#5477)? The shape tools that draw a box: not Line Segment.
+pub fn shows_shape_widgets(id: &str) -> bool {
+    matches!(id, "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star")
+}
+
+/// A drag on a Live Shape widget of the selection, taken by a shape tool.
+enum WidgetDrag {
+    Corner(CornerDrag),
+    Pie(PieDrag),
+}
 
 pub struct ShapeTool {
     id: &'static str,
@@ -37,6 +57,8 @@ pub struct ShapeTool {
     pub line_angle: f64,
     pub fill_line: bool,
     snap: DrawSnap,
+    /// A widget of the selection is being dragged instead of a shape drawn.
+    widget: Option<WidgetDrag>,
 }
 
 /// The inner-to-outer radius ratio that keeps a star of `points` points' shoulders straight (each
@@ -72,7 +94,39 @@ impl ShapeTool {
             line_length: 100.0,
             line_angle: 0.0,
             fill_line: false,
+            widget: None,
         }
+    }
+
+    /// A press on a corner or pie widget of the selection: the drag adjusts it.
+    fn press_widget(&mut self, cx: &ToolContext, ev: &PointerEvent) -> bool {
+        if !shows_shape_widgets(self.id) {
+            return false;
+        }
+        self.widget = CornerDrag::hit(cx, ev, false).map(WidgetDrag::Corner).or_else(|| PieDrag::hit(cx, ev).map(WidgetDrag::Pie));
+        self.widget.is_some()
+    }
+
+    /// Is `p` over a corner or pie widget of the selection that a press would drag?
+    fn over_widget(&self, cx: &ToolContext, p: Point) -> bool {
+        shows_shape_widgets(self.id) && (corners::over_widget(cx, p, false) || pie::over_widget(cx, p))
+    }
+
+    /// The pointer and keys while a widget is dragged: `None` when none is.
+    fn widget_pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
+        let w = self.widget.as_mut()?;
+        Some(match ev.kind {
+            PointerKind::Drag => match w {
+                WidgetDrag::Corner(c) => c.drag(cx, ev.pos),
+                WidgetDrag::Pie(d) => d.drag(cx, ev.pos),
+            },
+            PointerKind::Up => match self.widget.take() {
+                Some(WidgetDrag::Corner(c)) => c.finish(),
+                Some(WidgetDrag::Pie(d)) => d.finish(),
+                None => vec![],
+            },
+            _ => vec![],
+        })
     }
 
     /// Ctrl/Cmd in a star drag from `start` to `p`, where the last drag showed a star with the inner
@@ -214,15 +268,27 @@ impl Tool for ShapeTool {
         self.id
     }
     fn busy(&self) -> bool {
-        self.start.is_some()
+        self.start.is_some() || self.widget.is_some()
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
+        if let Some(out) = self.widget_pointer(cx, ev) {
+            return out;
+        }
         match ev.kind {
             PointerKind::Move => {
-                self.snap.hover(cx, ev.pos, &[], None);
+                // Over a widget a press would drag, no Smart Guide for a new shape's start.
+                if self.over_widget(cx, ev.pos) {
+                    self.snap.clear();
+                } else {
+                    self.snap.hover(cx, ev.pos, &[], None);
+                }
                 vec![]
             }
             PointerKind::Down => {
+                if self.press_widget(cx, ev) {
+                    self.snap.clear();
+                    return vec![];
+                }
                 let p = self.snap.press(cx, ev.pos, &[], None);
                 self.start = Some(p);
                 self.last = ev.pos;
@@ -274,6 +340,19 @@ impl Tool for ShapeTool {
         }
     }
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        // A widget drag: Up and Down step a corner's kind; Escape cancels it, as with the
+        // Selection tool.
+        if let Some(w) = &mut self.widget {
+            return match (key, w) {
+                (ToolKey::Up | ToolKey::Down, WidgetDrag::Corner(c)) => c.step_kind(key == ToolKey::Up),
+                (ToolKey::Escape, _) => match self.widget.take() {
+                    Some(WidgetDrag::Corner(c)) if c.adjusting() => vec![Action::Cancel],
+                    Some(WidgetDrag::Pie(d)) if d.adjusting() => vec![Action::Cancel],
+                    _ => vec![],
+                },
+                _ => vec![],
+            };
+        }
         let Some(s) = self.start.filter(|_| self.began) else { return vec![] };
         let changed = match (self.id, key) {
             ("polygon", ToolKey::Up) => {
@@ -315,7 +394,23 @@ impl Tool for ShapeTool {
             vec![]
         }
     }
+    /// Adjusting a widget (the canvas hides the bounding box meanwhile, as for the Selection tool).
+    fn transforming(&self) -> bool {
+        match &self.widget {
+            Some(WidgetDrag::Corner(c)) => c.adjusting(),
+            Some(WidgetDrag::Pie(d)) => d.adjusting(),
+            None => false,
+        }
+    }
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        matches!(self.widget, Some(WidgetDrag::Corner(_))) && matches!(key, ToolKey::Up | ToolKey::Down)
+    }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        match &self.widget {
+            Some(WidgetDrag::Corner(c)) => return c.overlays(cx),
+            Some(WidgetDrag::Pie(d)) => return d.overlays(cx),
+            None => {}
+        }
         let mut o = self.snap.guides().to_vec();
         if let Some(s) = self.start.filter(|_| self.began && cx.measurement_labels) {
             let p = self.last + Vec2::new(cx.tol(12.0), cx.tol(12.0));
@@ -347,8 +442,16 @@ impl Tool for ShapeTool {
         }
         o
     }
-    fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        Cursor::Crosshair
+    fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
+        // Over a widget a press would drag (or dragging one), the Selection tool's pointer for it.
+        let idle = self.start.is_none();
+        match &self.widget {
+            Some(WidgetDrag::Corner(_)) => Cursor::CornerRadius,
+            Some(WidgetDrag::Pie(_)) => Cursor::ArrowHollow,
+            None if idle && shows_shape_widgets(self.id) && corners::over_widget(cx, p, false) => Cursor::CornerRadius,
+            None if idle && self.over_widget(cx, p) => Cursor::ArrowHollow,
+            None => Cursor::Crosshair,
+        }
     }
     fn options(&self) -> Value {
         json!({

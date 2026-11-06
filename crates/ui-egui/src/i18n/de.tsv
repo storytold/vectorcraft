@@ -3252,7 +3252,9 @@ effect	Points	Punkte
 	Patterns	Muster
 	Stroke Options	Konturoptionen
 	Character:	Zeichen:
+	Paragraph:	Absatz:
 	Character options	Zeichenoptionen
+	Paragraph options	Absatzoptionen
 	Stroke options	Konturoptionen
 	Transform options	Transformationsoptionen
 	Stroke Weight	Konturstärke
@@ -4246,6 +4248,8 @@ theme	Appearance	Erscheinungsbild
 @msg	no such saved selection	keine solche gespeicherte Auswahl
 @msg	no such segment	kein solches Segment
 @msg	no such spine point	kein solcher Achsenpunkt
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` muss eine Liste von höchstens 10000 Achsenpunkt-Indizes sein
+@msg	`with` moves points, not a handle	`with` verschiebt Punkte, keinen Griff
 @msg	no such spine segment	kein solches Achsensegment
 @msg	no such subpath	kein solcher Teilpfad
 @msg	no such user library	keine solche Benutzerbibliothek
@@ -5979,3 +5983,7 @@ breakText	Glyphs	Glyphen
 # Compound Shapes add-on
 	Compound Shapes	Zusammengesetzte Formen
 	Shape Mode Buttons Make Compound Shapes	Formmodus-Schaltflächen erstellen zusammengesetzte Formen
+
+# 3D Box add-on
+	3D Box	3D-Quader
+	3D Box Tool	3D-Quader-Werkzeug

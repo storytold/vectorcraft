@@ -426,6 +426,9 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 /// Warp's mesh and pins (set through `tool.setOption`). The Artboard tool's options are drawn by
 /// [`crate::panels::artboards::control_bar`].
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if crate::addons::shapes::control_bar(app, ui) {
+        return;
+    }
     if app.session.tool_id() == "dimension" {
         return crate::dialogs::dimension::controls(app, ui);
     }

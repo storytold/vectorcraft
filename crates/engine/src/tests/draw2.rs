@@ -386,10 +386,11 @@ fn pencil_redraws_the_shorter_way_round_a_closed_path() {
     assert!(s.execute("path.freehand", &json!({"points": [[0, 0], [1, 1]], "redraw": {"id": id.0, "within": -1}})).is_err());
 }
 
-/// With Keep selected off, the path a stroke draws or continues is not selected afterwards, the
-/// rest of the selection stays, and the stroke is one undo step.
+/// With Keep selected off, a new stroke leaves nothing selected (the earlier selection goes too,
+/// as Illustrator starts the stroke by dropping it, #5752); a continued or redrawn path is
+/// deselected and the rest of the selection stays. The stroke is one undo step.
 #[test]
-fn pencil_with_keep_selected_off_leaves_the_new_path_unselected() {
+fn pencil_with_keep_selected_off_leaves_nothing_selected() {
     let mut s = session();
     let r = rect(&mut s, 400.0, 400.0, 50.0, 50.0);
     let selected = |s: &Session| s.doc().unwrap().selection.objects.clone();
@@ -401,7 +402,7 @@ fn pencil_with_keep_selected_off_leaves_the_new_path_unselected() {
     let off = s.execute("path.freehand", &json!({"points": [[100, 200], [150, 220], [200, 200]], "keepSelected": false})).unwrap();
     let off = NodeId(off["id"].as_u64().unwrap());
     assert!(s.doc().unwrap().doc.node(off).is_some());
-    assert_eq!(selected(&s), vec![r]);
+    assert!(selected(&s).is_empty(), "a new stroke with Keep selected off leaves nothing selected, the rectangle included");
     assert_eq!(undo_steps(&s), undo + 1);
     // Continuing a selected open path deselects it and keeps the rest.
     let l = line(&mut s, 100.0, 300.0, 200.0, 300.0);
@@ -1340,6 +1341,54 @@ fn join_tool_joins_endpoints_near_the_scrub_ends() {
     let p = path(&s, a);
     assert_eq!(p.anchor_count(), 3);
     assert_eq!(p.subpaths[0].anchors[1].p, Point::new(202.5, 100.0));
+}
+
+/// #5844: scrubbing over the ends of two crossing open paths that run past the crossing trims
+/// those ends and joins the paths there with a corner, rather than drawing a segment between the
+/// ends.
+#[test]
+fn join_tool_trims_crossing_paths_and_joins_them_at_the_crossing() {
+    let mut s = session();
+    let a = line(&mut s, 100.0, 300.0, 400.0, 300.0);
+    let b = line(&mut s, 300.0, 100.0, 300.0, 380.0);
+    s.execute("select.all", &json!({})).unwrap();
+    drag(&mut s, "join", &[(380.0, 285.0), (285.0, 365.0)], Mods::default());
+    let ps = paths(&s);
+    assert_eq!(ps.len(), 1, "one path is left: {ps:?}");
+    let (id, p) = &ps[0];
+    assert!(*id == a || *id == b);
+    assert_eq!(p.subpaths.len(), 1);
+    let mut got: Vec<Point> = p.subpaths[0].anchors.iter().map(|x| x.p).collect();
+    if got.first() != Some(&Point::new(100.0, 300.0)) {
+        got.reverse();
+    }
+    let near = |q: Point, r: Point| q.distance(r) < 1e-6;
+    assert_eq!(got.len(), 3, "{got:?}");
+    assert!(near(got[0], Point::new(100.0, 300.0)) && near(got[1], Point::new(300.0, 300.0)) && near(got[2], Point::new(300.0, 100.0)), "{got:?}");
+    assert!(!p.subpaths[0].closed);
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 1);
+}
+
+/// #5844: a curve with a hook past a straight line (the report's case) is trimmed at the crossing
+/// and joined to the line's kept part; nothing of either overhang is left.
+#[test]
+fn join_tool_trims_a_curve_hooking_past_a_line() {
+    let mut s = session();
+    line(&mut s, 0.0, 300.0, 480.0, 300.0);
+    s.execute("path.create", &json!({"anchors": [{"x": 260, "y": 0, "out": [290, 150]}, {"x": 378, "y": 368, "in": [310, 380]}]})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    drag(&mut s, "join", &[(470.0, 280.0), (420.0, 330.0), (370.0, 380.0)], Mods::default());
+    let ps = paths(&s);
+    assert_eq!(ps.len(), 1, "{ps:?}");
+    let sp = &ps[0].1.subpaths[0];
+    assert!(!sp.closed);
+    // Every anchor is on the kept sides: the line left of the crossing, the curve above it.
+    let joint = sp.anchors.iter().find(|x| (x.p.y - 300.0).abs() < 1e-6 && x.p.x > 100.0).expect("an anchor at the crossing");
+    for x in &sp.anchors {
+        assert!(x.p.y <= 300.0 + 1e-6 && x.p.x <= joint.p.x + 1e-6, "{x:?} is past the crossing at {joint:?}");
+    }
+    let bounds = ps[0].1.bounds().unwrap();
+    assert!(bounds.y1 <= 300.0 + 1e-6 && bounds.x1 <= joint.p.x + 1e-6, "{bounds:?}");
 }
 
 #[test]
@@ -2706,6 +2755,42 @@ fn cmd_alt_lends_group_selection_while_direct_selection_is_active() {
     s.pointer(&PointerEvent::new(PointerKind::Down, 80.0, 80.0).with_mods(cmd_alt), v).unwrap();
     assert_eq!(s.tool_id(), "selection");
     s.pointer(&PointerEvent::new(PointerKind::Up, 80.0, 80.0).with_mods(cmd_alt), v).unwrap();
+}
+
+#[test]
+fn cmd_lends_the_selection_tool_and_its_bounding_box_to_direct_selection() {
+    // #3901: with Direct Selection, Cmd held gives the Selection tool for the press: its cursor,
+    // and its bounding box's handles scale the object; Direct Selection is back on the release.
+    let (none, cmd) = (Mods::default(), Mods { cmd: true, ..Mods::default() });
+    let v = view();
+    let mut s = session();
+    let anchors = json!([{"x": 100, "y": 100}, {"x": 200, "y": 100}, {"x": 200, "y": 200}, {"x": 100, "y": 200}]);
+    let id = NodeId(s.execute("path.create", &json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap());
+    s.select_tool("directSelection", v).unwrap();
+    assert_eq!(s.lent_tool_id(&none), None);
+    assert_eq!(s.lent_tool_id(&cmd), Some("selection"));
+    // The path selected whole: the bottom-right handle scales it.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(s.cursor(Point::new(200.0, 200.0), cmd, v), vectorcraft_tools::Cursor::ResizeNwSe);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+    for at in [250.0, 300.0] {
+        s.pointer(&PointerEvent::new(PointerKind::Drag, at, at).with_mods(cmd), v).unwrap();
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 300.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+    assert!((b.x0 - 100.0).abs() < 1e-6 && (b.x1 - 300.0).abs() < 1e-6 && (b.y1 - 300.0).abs() < 1e-6, "{b:?}");
+    // An anchor selected: a Cmd drag inside moves the whole path and the anchor stays selected.
+    gesture(&mut s, &[(300.0, 300.0)], none);
+    let picked = s.doc().unwrap().selection.anchors.clone();
+    assert!(!picked.is_empty(), "Direct Selection picked the anchor");
+    let before: Vec<_> = path(&s, id).subpaths[0].anchors.iter().map(|a| a.p).collect();
+    gesture(&mut s, &[(150.0, 150.0), (160.0, 160.0), (170.0, 150.0)], cmd);
+    let after: Vec<_> = path(&s, id).subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(after, before.iter().map(|p| *p + kurbo::Vec2::new(20.0, 0.0)).collect::<Vec<_>>());
+    assert_eq!(s.doc().unwrap().selection.anchors, picked, "the anchor is still selected");
+    assert_eq!(s.tool_id(), "directSelection");
 }
 
 #[test]

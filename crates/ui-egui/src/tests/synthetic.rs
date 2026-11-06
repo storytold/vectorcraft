@@ -117,6 +117,70 @@ fn a_pointer_release_after_a_key_waits_for_the_key() {
     assert!(closed, "C reached the Arc tool before the release");
 }
 
+/// An MCP pointer gesture can select a tool just before sending its pointer events. A key queued
+/// by the previous call must reach the old tool before that selection changes it.
+#[test]
+fn tool_selection_after_a_key_waits_for_the_key() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("tool.select", json!({"tool": "pen"})).unwrap();
+    let ctx = egui::Context::default();
+    let (key, _key_reply) = ControlRequest::new("ui.key", json!({"key": "B", "shift": true, "text": "B"}));
+    let (select, select_reply) = ControlRequest::new("ui.tool.select", json!({"tool": "arc"}));
+    tx.send(key).unwrap();
+    tx.send(select).unwrap();
+
+    app.drain_control(&ctx);
+    assert!(select_reply.try_recv().is_err(), "selection waits while Shift+B is queued");
+    assert_eq!(app.session.tool_id(), "pen");
+    let mut key_reached_tool = false;
+    let mut selected = None;
+    for _ in 0..8 {
+        let mut raw = egui::RawInput::default();
+        app.raw_input_hook(&ctx, &mut raw);
+        app.drain_control(&ctx);
+        if let Ok(reply) = select_reply.try_recv() {
+            selected = Some(reply);
+            break;
+        }
+        let mut out = ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        key_reached_tool |= app.session.tool_id() == "blobBrush";
+    }
+    assert!(key_reached_tool, "Shift+B reaches the old tool before the explicit selection");
+    let selected = selected.expect("the later tool selection runs");
+    assert_eq!(selected["ok"], true, "{selected}");
+    assert_eq!(app.session.tool_id(), "arc");
+}
+
+#[test]
+fn tool_selection_after_a_discarded_key_does_not_run() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("tool.select", json!({"tool": "pen"})).unwrap();
+    let ctx = egui::Context::default();
+    let (key, _key_reply) = ControlRequest::new("ui.key", json!({"key": "B", "shift": true, "text": "B"}));
+    let (select, select_reply) = ControlRequest::new("ui.tool.select", json!({"tool": "arc"}));
+    tx.send(key).unwrap();
+    tx.send(select).unwrap();
+    for _ in 0..2 {
+        let mut raw = egui::RawInput::default();
+        app.raw_input_hook(&ctx, &mut raw);
+        app.drain_control(&ctx);
+        assert!(select_reply.try_recv().is_err(), "selection waits for the key");
+    }
+    assert!(app.synthetic_injected);
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    let mut raw = egui::RawInput::default();
+    app.raw_input_hook(&ctx, &mut raw);
+    app.drain_control(&ctx);
+    let selected = select_reply.try_recv().expect("the waiting selection is answered");
+    assert_eq!(selected["ok"], false, "{selected}");
+    assert_eq!(app.session.tool_id(), "pen", "the discarded key cannot precede a tool switch");
+}
+
 /// A waiting `ui.pointer` request whose caller gave it up is dropped at once: the requests sent
 /// after it run without waiting for the input sent before it to be applied.
 #[test]

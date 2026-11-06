@@ -154,6 +154,8 @@ impl Session {
     /// Direct Selection to the tools that edit anchors (the Pen) and Selection to the others.
     /// Cmd+Alt lends Group Selection while Direct Selection is active. Cmd still lends the last
     /// selection tool from other tools (Alt on the lent Direct Selection gesture stays copy/subtract).
+    /// Cmd alone lends Direct Selection the Selection tool, whose bounding box transforms the
+    /// object (#3901; <https://community.adobe.com/t5/illustrator-discussions/handles-disappar-on-shape-with-direct-selection-tool/m-p/14848662>).
     /// Perspective Selection keeps Cmd+Alt drags to copy objects on their perspective plane.
     /// None for the other selection tools and the view tools.
     fn lent_tool(&self, id: &str, mods: &Mods) -> Option<&'static str> {
@@ -161,8 +163,8 @@ impl Session {
         if matches!(id, "hand" | "zoom" | "rotateView") {
             return None;
         }
-        if id == "directSelection" && mods.cmd && mods.alt {
-            return Some("groupSelection");
+        if id == "directSelection" && mods.cmd {
+            return Some(if mods.alt { "groupSelection" } else { "selection" });
         }
         if id == "perspectiveSelection" && mods.cmd && mods.alt {
             return None;
@@ -171,6 +173,16 @@ impl Session {
             return None;
         }
         Some(self.last_selection_tool.unwrap_or(if edits_anchors(id) { "directSelection" } else { "selection" }))
+    }
+
+    /// The selection tool a press with `mods` would borrow from the active tool
+    /// ([`Self::lend_selection_tool`]), as [`Self::cursor`] shows it: the canvas also shows what
+    /// that tool shows (Direct Selection with Cmd held shows the bounding box).
+    pub fn lent_tool_id(&self, mods: &Mods) -> Option<&'static str> {
+        if !mods.cmd || self.lender.is_some() {
+            return None;
+        }
+        self.lent_tool(self.tool.id(), mods)
     }
 
     /// A press with Cmd held (Ctrl elsewhere) and any other tool than a selection tool: the

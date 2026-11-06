@@ -1403,7 +1403,9 @@ digits	Malayalam	Malayalam
 	Standard Vertical Roman Alignment	Standard lodret romersk justering
 	Strikethrough	Gennemstreget
 	Character:	Tegn:
+	Paragraph:	Afsnit:
 	Character options	Tegnindstillinger
+	Paragraph options	Afsnitsindstillinger
 	Subscript	Sænket skrift
 	Subscript (on the roadmap)	Sænket skrift (på vejkortet)
 	Superscript	Hævet skrift
@@ -6259,3 +6261,7 @@ breakText	Glyphs	Glyffer
 # Compound Shapes add-on
 	Compound Shapes	Sammensatte figurer
 	Shape Mode Buttons Make Compound Shapes	Knapper til formtilstande opretter sammensatte figurer
+
+# 3D Box add-on
+	3D Box	3D-boks
+	3D Box Tool	3D-boksværktøj

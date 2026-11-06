@@ -879,7 +879,9 @@ document, takes the PDF options and keeps its path when reopened, so Save writes
 without giving the document a path. `options: {aiVersion: "7"}` writes legacy `.ai` files of version 7 instead (the
 PostScript form, which keeps layers, groups, compound paths and clipping groups in apps that read it), one per artboard
 of `range` (default all; `{name}-{artboard}.ai` when several, listed in the result's `files`), with
-`transparentImages: "flatten"` (default) or `"omit"` for images with see-through pixels, opacity or a blending mode,
+`transparentImages: "flatten"` (default) or `"omit"` for images with see-through pixels, opacity, a blending mode
+or a colorize color (except a colorized image of black and white pixels, which is written as a 1-bit image mask in
+its color with its white pixels clear),
 `hiddenObjects: "layer"` (default: a hidden layer of each layer's hidden objects), `"omit"` or `"visible"`, and
 `outlineText: true` to write type as outlines instead of text objects. Type with rotated characters (Character
 Rotation) is always written as outlines, which keep the rotation; without `outlineText: true` this gives the warning "type with rotated characters is
@@ -1349,6 +1351,7 @@ then composite against the art below it). SVG has no non-isolated groups, so the
 (default: the mask being edited, else the first selected masked object) as greyscale coverage (white = opaque) and the
 mask is edited; called again it shows the artwork, still editing. It is view state of the open document: the canvas
 (and `ui.screenshot`) shows it, exports never do, and it ends when mask editing ends.
+The command rejects an `on` value that is not a boolean. Omitting `on` toggles the current value.
 
 Isolation mode and mask editing exclude each other. In isolation mode `transparency.editOpacityMask` and
 `transparency.viewOpacityMask` are off, and `transparency.makeOpacityMask` refuses one target, an object or a layer,
@@ -1359,6 +1362,7 @@ mask first". Pattern editing mode does not count as isolation mode here.
 `view.transparencyGrid {on?}` (View → Show Transparency Grid; default: toggle) is view state of each open document,
 like the mask view: the grid shows behind the artboards of the documents that turn it on, on the canvas and in
 `ui.screenshot`, never in exports. It returns `{on}`, isn't undoable and doesn't mark the document changed.
+The command rejects an `on` value that is not a boolean. Omitting `on` toggles the current value.
 
 `view.globalRulers {global?}` (View → Rulers → Change to Global / Artboard Rulers, Cmd+Alt+R; default: toggle) is
 saved with the document and undoable. With artboard rulers (a new document's) the rulers count from the active
@@ -1432,6 +1436,8 @@ or unknown id leaves the document unchanged. An empty `ids` array does nothing. 
 are kept, and selecting an ancestor together with its descendants deletes that subtree once.
 Without `ids`, direct-selected anchors or selected ruler guides retain their usual Clear behavior.
 Cut still removes the objects it copied, including a whole compound when a member is selected.
+With `ids`, `guides: true` also deletes the selected ruler guides. The command rejects a `guides` value that is not a
+boolean.
 
 `object.setProps` with `visible: false` or `locked: true` deselects every selected object that is hidden or
 locked after the call: the selected objects it hides or locks, selected objects inside them, and selected objects
@@ -1630,6 +1636,7 @@ step. With guides selected, `edit.clear` (Delete) deletes them and `object.nudge
 View › Guides › Lock Guides (`view.guides.lock`) deselects them and the paths made into guides, in every open
 document, and refuses these commands until unlocked. While it is on, a command that selects art, such as `edit.undo`,
 `edit.redo`, `object.exitIsolation`, `object.unlockAll`, `object.showAll` or `edit.paste`, leaves the guides out.
+`view.guides.lock` rejects a `locked` value that is not a boolean. Omitting `locked` toggles the current value.
 
 `view.guides.release {index?, ids?}` (View › Guides › Release Guides) turns guides into paths → `{count}`. With
 `index` it releases that ruler guide, and with `ids` it releases those guide paths (and the guide paths inside them).
@@ -1790,8 +1797,10 @@ already walks Image Trace. Short agent entry points:
   `dataset.import`, adds no undo step when it leaves the variables and data sets as they were. The library
   is XML whose `variableSets` element holds `variableSet` elements, each with a `variables` element of `variable`
   elements (`varName`, `trait`) and a `sampleDataSets` element of `sampleDataSet` elements (`dataSetName`). Every
-  variable of the document is deleted with its bindings and values, and every data set is deleted. Then the library's
-  variables whose `trait` is `textcontent` are defined as text variables, unbound. In each data set, the element named
+  data set is deleted, and every variable of the document is deleted with its bindings and values, except a text
+  variable the library also declares: it keeps its bindings, so selecting one of the library's data sets changes the
+  objects bound to it. Then the library's other variables whose `trait` is `textcontent` are defined as text
+  variables, unbound. In each data set, the element named
   after a text variable gives its value: the text of its `p` elements, one paragraph each. An element without a `p`
   element gives no value. Variables of other kinds are left out with their values: the reply lists them in `skipped`
   (`name`, `trait`), and its `warning` names each `trait` with its count. The reply's `deleted` and `deletedDataSets`
@@ -2054,6 +2063,8 @@ it (Alt-drag). `appearance.duplicateItem {index, to?}` / `{indices}` and `appear
 act on several fills/strokes at once, and `appearance.showAllHidden` makes every hidden fill, stroke and effect
 visible again. In remote mode, `effect.dialog {effect, index, item}` opens an applied effect's dialog prefilled
 (`ui.dialog.confirm` runs `effect.setParams`); see the control protocol for the "already applied" question.
+`effect.move` rejects a `copy` value that is not a boolean, and every command that takes `aligned` rejects an `aligned`
+value that is not a boolean.
 
 Effect dialogs use the targeted object, group, or layer shown in Appearance. The Transform dialog previews valid
 numbers as they are typed, including Copies, distances with units, and rotation. With Preview off, changes apply
@@ -2338,7 +2349,8 @@ its bounds.
 the styles unlinked from swatches, with their opacity, blend mode, isolate and knockout, and the patterns they paint
 with); without `path` it returns `{data}`, and `user: true` saves into the user library folder of the desktop app
 (category `user`, User Defined). `graphicStyle.loadLibrary {path? | data? | dataBase64?, name?}` loads a `.vcstyles`
-file, or another document's graphic styles, as a library to add from; a file in the user library folder, or a file
+file, or another document's graphic styles, as a library to add from (a `.ai` or EPS whose editing data holds graphic
+styles and no layers gives the styles of its style list, in that order); a file in the user library folder, or a file
 with the same extension and bytes as one there, loads as that User Defined library.
 
 ## Symbol libraries
@@ -3716,6 +3728,7 @@ style; `add: true` stacks it) set that template instead of editing art. With the
 Appearance off (`appearance.setNewArtBasic {on: false}`, the preference `newArtBasic`) new art takes the whole
 appearance of the last selected object. `appearance.newArt` reports what the next object gets; `paint.default`
 resets it.
+`appearance.setNewArtBasic` rejects an `on` value that is not a boolean. Omitting `on` toggles the current preference.
 
 ```json
 {"name":"run_command","arguments":{"command":"select.none","params":{}}}
@@ -4172,10 +4185,12 @@ and `links.relink {folder}`, the search of the document's folder and `links.find
 active document's missing links, or of the images and placed documents `ids` whatever their status, and returns at once
 with an `id` and the search's `state` (`searching` while it runs). It finds the files with each linked file's name, in
 any letter case, and lists them best first as `{path, size, match, caseDiffers?}`: `same` when the file has the size and
-hash saved with the link, `size` when it has the saved size and the link saved no hash (or the file is larger than 1 GB,
+hash saved with the link, `size` when it has the saved size and the link saved no hash (or the file is larger than 1 GiB,
 which a search doesn't hash), else `name`. Within each kind, a file whose name has the link's letter case comes first.
 Then each file's folder names are compared with the saved path's, from the innermost outward up to the first one that
-differs, and a file with more matching names comes first; files that still tie are listed by path. `links.findFiles {}`
+differs, and a file with more matching names comes first; files that still tie are listed by path. Before the
+comparison, the saved path's parent-folder steps (`..`, or the empty components of a classic Mac `::` run) are resolved,
+and `.` components in a slash path are skipped. `links.findFiles {}`
 returns the last search's state, and `{stop: true}` stops it. A search looks for at most 1,000 linked files, keeps the
 first 10 files of each one's name and up to 10 that are the same file, and ends once every linked file has its same
 file; it searches only the folders `text.findFontFiles` may search, with the same `maxSeconds`, depth and count limits.
@@ -4461,6 +4476,7 @@ deselects the slices in every open document; unlocking or showing them again lea
 restore the selection that was cleared. While the slices are locked or hidden, a command that selects slices, such as
 `select.object.slices` (which replies `count: 0`), `object.slice.select`, `object.slice.create`, `edit.undo` or
 `edit.redo`, leaves them out; a selected object that is an object slice stays selected.
+`object.slice.clipToArtboard`, `view.slices.hide`, and `view.slices.lock` reject a flag that is not a boolean. Omitting the flag toggles its current value.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.slice.make","params":{}}}
@@ -4494,7 +4510,7 @@ row's files in a sub-folder (its size or format, or its own `folder`; `folders: 
 sub-folders) replaces the rows, and `settings: {png: {…}, jpg: {…}, svg: {…}, pdf: {preset}}` gives every row of a
 format its options. On every platform, `/`, `\`, `:`, `<`, `>`, `"`, `|`, `?`, `*` and control characters from a
 prefix, a suffix, a name pattern or an item's name become `-` in file and folder names, a folder name ends without
-periods or spaces, and a Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`) that
+periods or spaces, and a Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `COM¹` to `COM³`, `LPT1` to `LPT9`, `LPT¹` to `LPT³`) that
 is the whole name or comes before its first period gets a `-` after it (`CON-.png`). When a row's file would take a
 name another row's file already has, compared without case (two PNG rows with different backgrounds and no suffix),
 the later file is written as `-2`, `-3`… (`Artboard-1-2.png`) and listed under that name in `files`; two identical
@@ -4931,6 +4947,7 @@ outside `tileRange` dimmer). The Print Tiling tool (`printTiling`) shows them to
 what is drawn, from the layout `print.preview` and both writers (PDF and PostScript) use, so the canvas and the
 printed job agree: `{tileOrigin, pages: [{artboard, number, printed, page, imageable}]}` (`[x0, y0, x1, y1]` in document space; every tile when tiling, else
 each page once, not once per ink).
+`view.printTiling` rejects an `on` value that is not a boolean. Omitting `on` toggles the current value.
 
 Dragging with the tool puts the top-left corner of the first page's imageable area where the pointer is (snapping to
 the artboard's edges): `print.tiling.set {origin: [x, y], artboard?}` saves it with the print settings as
@@ -5703,7 +5720,10 @@ spaceBefore, spaceAfter, hyphenate, mojikumi, burasagari, direction, leadingMode
 touches (a caret, `start == end`, touches its paragraph). Without a range they change every paragraph of the
 targeted objects, as before. With a range, the character attributes of `text.setStyle` and `text.setFormat` style
 that range of characters. When every paragraph that `text.tabs.set` or `text.tabs.clear` targets already has those
-stops, the command changes nothing and records no undo step. `text.tabs.get {start?}` and `paraStyle.new` / `paraStyle.redefine {id, start?}` read the
+stops, the command changes nothing and records no undo step. `text.tabs.set` rejects a supplied `align`, `leader`, or
+`alignOn` value that is not a string, and an empty `alignOn` value.
+
+`text.tabs.get {start?}` and `paraStyle.new` / `paraStyle.redefine {id, start?}` read the
 paragraph at `start`; `paraStyle.list` counts paragraphs as uses, and `charStyle.list` counts runs; both count the type in
 the layers, opacity masks, symbols, graph designs, pattern tiles and the art of brushes. `charStyle.unused` and
 `paraStyle.unused` (Select All Unused in the Character Styles and Paragraph Styles panel menus) list the styles with no
@@ -5825,6 +5845,7 @@ that no built-in format has. A failing plug-in returns an error and leaves the d
 no file). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
 `plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`
 runs it where it is called, so the call may take minutes; `notifications/cancelled` stops it.
+`plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean.
 
 ```json
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}

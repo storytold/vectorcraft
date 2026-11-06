@@ -2856,6 +2856,8 @@ file-filter	Templates	範本
 @msg	the blend has no spine	漸變物件沒有脊線
 @msg	the spine has no segments	脊線沒有線段
 @msg	no such spine point	沒有這個脊線點
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` 必須是最多 10000 個脊線點索引的清單
+@msg	`with` moves points, not a handle	`with` 移動的是點，不是控制把手
 @msg	no such spine segment	沒有這個脊線線段
 @msg	a key object sits on that point	該點上有關鍵物件
 @msg	a spine keeps at least two points	脊線至少要保留兩個點
@@ -4185,7 +4187,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Patterns	圖樣
 	Stroke Options	筆畫選項
 	Character:	字元：
+	Paragraph:	段落：
 	Character options	字元選項
+	Paragraph options	段落選項
 	Stroke options	筆畫選項
 	Transform options	變形選項
 	Stroke Weight	筆畫寬度
@@ -6031,3 +6035,7 @@ breakText	Glyphs	字符
 # Compound Shapes add-on
 	Compound Shapes	複合形狀
 	Shape Mode Buttons Make Compound Shapes	形狀模式按鈕製作複合形狀
+
+# 3D Box add-on
+	3D Box	3D 盒子
+	3D Box Tool	3D 盒子工具

@@ -1,5 +1,11 @@
 use super::{Pos2, Rect, Response, Sense, Stroke, Tokens, Ui, icons, pos2, scrub, theme, vec2};
 
+/// The width `text` takes on one line, as a label or link in `ui` draws it: its galley, which has
+/// no padding around it.
+pub(crate) fn text_width(ui: &Ui, text: egui::RichText) -> f32 {
+    egui::WidgetText::from(text).into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Body).size().x
+}
+
 /// Bold section header (Properties panel).
 pub fn section_header(ui: &mut Ui, text: &str) {
     let t = Tokens::get(ui.ctx());

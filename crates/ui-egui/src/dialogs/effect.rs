@@ -985,4 +985,60 @@ mod tests {
         assert_eq!((&params["texture"], &params["textureImage"]), (&json!("loaded"), &json!(stored)));
         let _ = std::fs::remove_dir_all(&dir);
     }
+    /// Effect > Stylize > Outer Glow: a swatch beside Color shows the effect's colour, typing a
+    /// hex recolours it, and a double-click opens the Color Picker over the dialog; its OK fills
+    /// Color, and the effect applies that colour.
+    #[test]
+    fn outer_glow_colour_swatch_opens_the_color_picker() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.dialog", json!({"effect": "stylize.outerGlow"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        let frame = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out
+        };
+        for n in 0..6 {
+            frame(&mut app, f64::from(n) * 0.01, vec![]);
+        }
+        let rect = ctx.read_response(form::colour_swatch_id("color")).expect("the colour swatch is drawn").rect;
+        // The colour of the swatch drawn at `rect`.
+        let swatch = |out: &egui::FullOutput| {
+            out.shapes.iter().find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.rect == rect => Some(r.fill),
+                _ => None,
+            })
+        };
+        let yellow = egui::Color32::from_rgb(255, 255, 0);
+        assert_eq!(swatch(&frame(&mut app, 0.2, vec![])), Some(yellow), "the swatch shows the effect's #ffff00");
+        // Typing a colour recolours the swatch.
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
+        assert_eq!(swatch(&frame(&mut app, 0.25, vec![])), Some(egui::Color32::from_rgb(255, 0, 0)), "typing a hex recolours the swatch");
+        // A double-click opens the Color Picker on the field's colour.
+        let pos = rect.center();
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        frame(&mut app, 0.3, vec![egui::Event::PointerMoved(pos), button(true)]);
+        frame(&mut app, 0.35, vec![button(false)]);
+        frame(&mut app, 0.4, vec![button(true)]);
+        frame(&mut app, 0.45, vec![button(false)]);
+        frame(&mut app, 0.5, vec![]);
+        let d = app.ui.dialog.as_ref().expect("a dialog");
+        assert_eq!(d.kind, "colorPicker", "a double-click opens the Color Picker over the effect dialog");
+        assert_eq!(d.fields.get("color").and_then(vectorcraft_engine::cmd::color_value), Some(Color::rgb(1.0, 0.0, 0.0)), "on the field's colour");
+        // Its OK fills the effect's Color, and the effect applies it.
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#00ff00"));
+        super::super::confirm(&mut app).unwrap();
+        let d = app.ui.dialog.as_ref().expect("the effect dialog is back");
+        assert_eq!((d.kind.as_str(), d.fields.get("color")), ("effect", Some(&json!("#00ff00"))), "OK fills Color and comes back");
+        frame(&mut app, 0.6, vec![]);
+        super::super::confirm(&mut app).unwrap();
+        let st = app.session.doc().unwrap();
+        let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
+        assert_eq!(fx.params.get("color"), Some(&json!("#00ff00")), "Outer Glow takes the picked colour");
+    }
 }
