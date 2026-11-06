@@ -206,7 +206,7 @@ pub(crate) struct MoveSnap {
     copy_targets: Option<Targets>,
     copy_points: Option<Targets>,
     /// With Smart Guides on, the ruler guides View › Snap to Point still pulls the grabbed point
-    /// onto (#1534); `points` holds them with Smart Guides off.
+    /// onto (#1534), and lines the bounds up with (#5746); `points` holds them with Smart Guides off.
     rulers: Option<Targets>,
 }
 
@@ -245,6 +245,8 @@ impl MoveSnap {
             d = q - start;
             guides = ov;
         }
+        // The axes (x, y) Smart Guides already put in line with other art.
+        let mut taken = [false; 2];
         if let (Some(t), Some(b)) = (targets, self.bounds) {
             // The point the selection was grabbed by, near another object's anchor or centre,
             // lands on it, rather than the bounds lining up a little beside it (#955).
@@ -252,18 +254,26 @@ impl MoveSnap {
                 let (q, ov) = t.snap_point(start + d, cx.snap_tol());
                 d = q - start;
                 guides = ov;
+                taken = [true; 2];
             } else {
-                let (adj, ov) = t.snap_rect(b + d, cx.snap_tol());
+                let (adj, ov, axes) = t.snap_rects_axes(&[b + d], cx.snap_tol());
                 d += adj;
                 guides = ov;
+                taken = axes;
             }
         }
-        // A ruler guide within reach of the grabbed point wins over lining the bounds up.
+        // A ruler guide within reach of the grabbed point wins over lining the bounds up; on an
+        // axis without one that Smart Guides left free, the bounds line up with the ruler guides
+        // (#5746), alongside the Smart Guides.
         if let Some(t) = &self.rulers {
-            let (q, ov) = t.snap_point(start + d, cx.tol(cx.snap_tolerance));
-            if q != start + d {
-                d = q - start;
-                guides = ov;
+            let (adj, ov, held) = t.snap_moved_to_rulers(start + d, self.bounds.map(|b| b + d), cx.tol(cx.snap_tolerance), taken);
+            if adj != Vec2::ZERO {
+                d += adj;
+                if held {
+                    guides = ov;
+                } else {
+                    guides.extend(ov);
+                }
             }
         }
         if cx.snap_to_pixel
@@ -369,6 +379,8 @@ struct MemoState {
     entry: Option<Measured>,
     /// How many measurements the memo has made.
     measurements: u64,
+    /// How many times the memo has checked its key.
+    checks: u64,
 }
 
 /// The measurements for one key; a slot holds `None` until it is measured.
@@ -394,8 +406,15 @@ impl PreviewMemo {
         self.0.try_borrow().map_or(0, |st| st.measurements)
     }
 
+    /// How many times the memo has checked its key against the document. A check compares the whole
+    /// selection, so a hover has to make the same few however many objects are selected.
+    pub fn checks(&self) -> u64 {
+        self.0.try_borrow().map_or(0, |st| st.checks)
+    }
+
     /// The measurements for the state `cx` shows, after the ones for any other state are dropped.
     fn current<'m>(st: &'m mut MemoState, cx: &ToolContext) -> &'m mut Measured {
+        st.checks += 1;
         let fresh = || Measured {
             revision: cx.revision,
             objects: cx.selection.objects.clone(),
@@ -456,7 +475,27 @@ fn shown_box(cx: &ToolContext) -> Option<OrientedBox> {
 
 /// The bounds of object `id`, measured as [`selection_bounds`] measures the selection.
 fn object_bounds(cx: &ToolContext, id: NodeId) -> Option<Rect> {
-    remembered(cx, |m| m.by_object.entry(id).or_insert(None), || vectorcraft_effects::preview::bounds_of(cx.doc, &[id], cx.preview_bounds))
+    with_object_bounds(cx, |bounds| bounds(id))
+}
+
+/// Runs `walk` with a lookup of [`object_bounds`]. The lookups share one check of the memo's key,
+/// which compares the whole selection: a walk of every selected object checking it each time takes
+/// time in the square of their number.
+fn with_object_bounds<R>(cx: &ToolContext, walk: impl FnOnce(&mut dyn FnMut(NodeId) -> Option<Rect>) -> R) -> R {
+    let mut measure = |id: NodeId| vectorcraft_effects::preview::bounds_of(cx.doc, &[id], cx.preview_bounds);
+    let Some(mut st) = cx.preview_memo.and_then(|memo| memo.0.try_borrow_mut().ok()) else {
+        return walk(&mut measure);
+    };
+    let mut measured = 0;
+    let by_object = &mut PreviewMemo::current(&mut st, cx).by_object;
+    let out = walk(&mut |id| {
+        *by_object.entry(id).or_insert(None).get_or_insert_with(|| {
+            measured += 1;
+            measure(id)
+        })
+    });
+    st.measurements += measured;
+    out
 }
 
 /// The objects of `ids` that lie entirely inside marquee `r`, edges included, measured by their
@@ -550,15 +589,17 @@ impl SelectionTool {
         };
         // A press on an unselected object selects it alone: the selected ones stay behind.
         let selected = if under.is_none_or(|u| cx.selection.contains(u)) { &cx.selection.objects[..] } else { &[] };
-        under.into_iter().chain(selected.iter().copied()).find_map(|id| {
-            let n = cx.doc.node(id)?;
-            let anchor = n.path_data().and_then(|pd| nearest(&mut pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))));
-            anchor.map(|q| (q, "anchor")).or_else(|| {
-                if !cx.smart_guides {
-                    return None;
-                }
-                let c = object_bounds(cx, id)?.center();
-                (c.distance(p) <= reach).then_some((c, "center"))
+        with_object_bounds(cx, |bounds| {
+            under.into_iter().chain(selected.iter().copied()).find_map(|id| {
+                let n = cx.doc.node(id)?;
+                let anchor = n.path_data().and_then(|pd| nearest(&mut pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))));
+                anchor.map(|q| (q, "anchor")).or_else(|| {
+                    if !cx.smart_guides {
+                        return None;
+                    }
+                    let c = bounds(id)?.center();
+                    (c.distance(p) <= reach).then_some((c, "center"))
+                })
             })
         })
     }
@@ -1018,10 +1059,16 @@ impl Tool for SelectionTool {
         if self.guide.busy() {
             return self.guide.cursor(cx, p).unwrap_or_default();
         }
-        if over_widget(cx, p, false) {
+        // Corner widgets sit inside selected art, and pie widgets extend at most 17 screen
+        // pixels beyond it. A distant pointer cannot take either one, so avoid building their
+        // widgets for every selected object on each cursor move.
+        let near_selected = cx.selection.objects.len() <= 128
+            || cx.preview_bounds
+            || selection_bounds(cx).is_none_or(|b| b.inflate(cx.tol(32.0), cx.tol(32.0)).contains(p));
+        if near_selected && over_widget(cx, p, false) {
             return Cursor::CornerRadius;
         }
-        if pie::over_widget(cx, p) {
+        if near_selected && pie::over_widget(cx, p) {
             return Cursor::ArrowHollow;
         }
         if over_rotate_all(cx, p) {

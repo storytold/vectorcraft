@@ -209,14 +209,14 @@ fn a_postscript_ai_with_a_multi_layer_mask_opens_with_its_layers() {
 }
 
 /// A `.ai` in PostScript form (read through its layers) whose text carries hyphenation and
-/// tab-ruler attributes: `XL` (hyphenation language), `Xb`/`XB` (a tab definition) and `Th`
-/// (hyphen control). These keep no geometry, so the reader drops them rather than failing the
-/// file the way it did before — the symptom seen on Illustrator 6/8 EPS files whose
-/// `Adobe_level2_AI5` program can't be run.
+/// tab-ruler attributes: `XL` (hyphenation language), `Xb`/`Xe`/`XB` (a tab definition) and `Th`
+/// (hyphen control). The reader drops `XL` and keeps the tab definition as the paragraph's tab
+/// stops rather than failing the file the way it did before (the symptom seen on Illustrator 6/8
+/// EPS files whose `Adobe_level2_AI5` program can't be run).
 #[test]
 fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let text = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 9 Tf\n\
-        %_ 0 XL\n36 0 Xb\nXB\n0 1 2 2 99 Th\n0 Ta\n(hi) Tx\nTO\n";
+        %_ 0 XL\n36 1 Xb\n0 0 3 72 Xe\nXB\n0 1 2 2 99 Th\n0 Ta\n(hi) Tx\nTO\n";
     // The operators sit on a visible layer (so they'd be reported as unknown, not quietly skipped
     // on a hidden one), beside the square so the layer is never empty.
     let src = NAMED_PROLOG.replace("S\nLB\n%AI5_EndLayer--\n%AI5_BeginLayer", &format!("S\n{text}LB\n%AI5_EndLayer--\n%AI5_BeginLayer"));
@@ -234,6 +234,8 @@ fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let [p] = texts.as_slice() else { panic!("{texts:?}") };
     assert!(!p.hyphenate);
     assert_eq!((p.hyphenation.after_first, p.hyphenation.before_last, p.hyphenation.hyphen_limit), (2, 2, 25));
+    let tabs: Vec<_> = p.tabs.iter().map(|t| (t.position, t.align)).collect();
+    assert_eq!(tabs, [(72.0, vectorcraft_doc::TabAlign::Right)]);
 }
 
 /// An Illustrator 3 file of paths alone, as image editors export their paths (storytold/photocraft#6036):
@@ -350,6 +352,35 @@ fn a_legacy_file_with_a_placed_eps_comes_in_through_its_layers() {
     assert!(r.warnings.iter().any(|w| w.contains("placed files")), "{:?}", r.warnings);
 }
 
+/// A legacy file with a linked image (version 7 specification §8.2, §8.3: `(path) modified XG`, then
+/// `XF` with no samples) comes in through its layers, the image as a linked image of that file
+/// showing a placeholder where the matrix puts the image.
+#[test]
+fn a_legacy_file_with_a_linked_image_comes_in_through_its_layers() {
+    let prolog = "/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /k {setcmykcolor} def\n\
+                  /XG {pop pop} def /XF {13 {pop} repeat} def";
+    let raster = "%AI5_File:\n%AI5_BeginRaster\n(photo.tif) 0 XG\n[2 0 0 3 20 80] 0 0 10 20 10 20 8 3 0 0 0 0 XF\n%AI5_EndRaster\n";
+    let body = format!("%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Back) Ln\n0 A\n0 0 0 1 k\n{}\n{raster}LB\n%AI5_EndLayer--\n", tri(10));
+    let file = String::from_utf8(ai(AI8, "", &body)).unwrap().replace("%%EndProlog", &format!("{prolog}\n%%EndProlog"));
+    let r = import(file.as_bytes()).unwrap();
+    assert!(!r.preview);
+    let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["Back"], "{:?}", r.warnings);
+    let art = r.document.layers[0].children().unwrap();
+    assert_eq!(art.len(), 2, "{:?}", r.warnings);
+    let NodeKind::Image(im) = &art[1].kind else { panic!("{:?}", art[1].kind) };
+    assert_eq!(im.link.as_ref().map(|l| l.path.as_str()), Some("photo.tif"));
+    // The image's 10 × 20 pixels from (20, 80) in art space, 2 and 3 points each: 20 20 40 80 on
+    // the page, y down.
+    assert_eq!((im.width, im.height), (10, 20));
+    let (top_left, bottom_right) = (im.xf * Point::ZERO, im.xf * Point::new(10.0, 20.0));
+    assert!(
+        (top_left - Point::new(20.0, 20.0)).hypot() < 0.01 && (bottom_right - Point::new(40.0, 80.0)).hypot() < 0.01,
+        "{top_left:?} {bottom_right:?}"
+    );
+    assert!(r.warnings.iter().any(|w| w.contains("show a placeholder")), "{:?}", r.warnings);
+}
+
 /// A file in the legacy format without layers (Illustrator 3) whose prolog is included: its prolog,
 /// a setup, and `art`.
 fn layerless(art: &str) -> Vec<u8> {
@@ -417,6 +448,47 @@ fn a_version_7_palette_keeps_its_swatches_without_names() {
     assert_eq!(d.swatch("Gray K=0").unwrap().paint.color(), Some(Color::gray(0.0)), "1 g is white");
 }
 
+/// A gradient's name in the file is shown up to its newline (the AI7 spec's §4): two gradients
+/// named `Sky` apart from what follows the newline come in as swatches "Sky" and "Sky 2", and each
+/// object keeps its own gradient, linked to its own swatch. A palette swatch that has the name
+/// "Sky" of its own keeps it, and the gradients take the next free names.
+#[test]
+fn gradient_names_are_shown_up_to_their_newline() {
+    let gradient = |name: &str, gray: f64| {
+        format!("%AI5_BeginGradient: ({name})\n({name}) 0 2 Bd\n[\n%_{gray} 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n")
+    };
+    let cell = |name: &str| format!("Bb\n2 ({name}) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\nPc\n");
+    let fill = |name: &str, x: u32| format!("Bb\n1 ({name}) 0 0 0 100 1 0 0 1 0 0 Bg\n{}\n0 BB\n", tri(x));
+    let body = format!(
+        "%AI5_BeginLayer\n1 1 1 1 0 0 1 -1 79 128 255 0 50 0 Lb\n(Art) Ln\n0 A\n0 Xw\n{}{}LB\n%AI5_EndLayer--\n",
+        fill("Sky\\n2", 10),
+        fill("Sky\\n1", 30)
+    );
+    let first_stop = |p: &Paint| match p {
+        Paint::Gradient(g) => (g.swatch.clone(), g.gradient.stops.first().map(|s| s.color)),
+        _ => panic!("{p:?}"),
+    };
+    for (own, first, second) in [("", "Sky", "Sky 2"), ("0 1 1 0 (Sky) 0 x\nPc\n", "Sky 2", "Sky 3")] {
+        let setup = format!(
+            "{}{}%AI5_BeginPalette\n0 0 Pb\nPn\nPc\n{own}{}{}PB\n%AI5_EndPalette\n",
+            gradient("Sky\\n1", 1.0),
+            gradient("Sky\\n2", 0.5),
+            cell("Sky\\n1"),
+            cell("Sky\\n2")
+        );
+        let r = import(&stream7(&setup, &body)).unwrap();
+        let d = &r.document;
+        let names: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
+        let expected: Vec<&str> = ["[None]"].into_iter().chain((!own.is_empty()).then_some("Sky")).chain([first, second]).collect();
+        assert_eq!(names, expected, "{:?}", r.warnings);
+        assert_eq!(first_stop(&d.swatch(first).unwrap().paint), (Some(first.into()), Some(Color::gray(0.0))));
+        assert_eq!(first_stop(&d.swatch(second).unwrap().paint), (Some(second.into()), Some(Color::gray(0.5))));
+        let art = d.layers[0].children().unwrap();
+        let fills: Vec<_> = art.iter().map(|n| first_stop(&n.appearance.fill().unwrap().paint)).collect();
+        assert_eq!(fills, [(Some(second.into()), Some(Color::gray(0.5))), (Some(first.into()), Some(Color::gray(0.0)))]);
+    }
+}
+
 /// A version 8 file's paths keep their notes and Show Center.
 #[test]
 fn a_legacy_files_paths_keep_their_notes_and_show_center() {
@@ -431,6 +503,26 @@ fn a_legacy_files_paths_keep_their_notes_and_show_center() {
     let attrs: Vec<_> = kids.iter().map(|n| n.extras().attrs.as_deref().map(|a| (a.note.clone(), a.show_center))).collect();
     assert_eq!(attrs, [Some(("first\nsecond line".into(), Some(true))), None], "{:?}", r.warnings);
     assert!(kids[0].shows_center() && !kids[1].shows_center());
+}
+
+/// A version 8 file's object tags open as each object's URL and data.
+#[test]
+fn a_legacy_files_object_tags_open_as_urls_and_data() {
+    let body = format!(
+        "%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Tags) Ln\n0 A\n0 0 0 1 k\n{}\n/AdobeURL (https://example.com) XT\n/sku (B-7) XT\n\
+         u\n{}\nU\n/part () XT\nLB\n%AI5_EndLayer--\n",
+        tri(10),
+        tri(40)
+    );
+    let r = import(&ai(AI8, "", &body)).unwrap();
+    let kids = r.document.layers[0].children().unwrap();
+    let attrs: Vec<_> = kids.iter().map(|n| n.extras().attrs.as_deref().map(|a| (a.url.clone(), a.data.clone()))).collect();
+    assert_eq!(
+        attrs,
+        [Some(("https://example.com".into(), vec![("sku".into(), "B-7".into())])), Some((String::new(), vec![("part".into(), String::new())]))],
+        "{:?}",
+        r.warnings
+    );
 }
 
 #[test]

@@ -13,7 +13,8 @@
 //! (dropped on its row) or onto the object; Alt copies instead. Dropped on Duplicate Selected Item
 //! or Delete Selected Item, a fill/stroke row (with the other selected rows, when it is one of
 //! them) or an effect row is copied or removed. Cmd-click and Shift-click select several
-//! fills/strokes for Duplicate and Delete.
+//! fills/strokes for Duplicate and Delete. Delete on a selected Opacity row sets it back to
+//! Default (100%, Normal).
 
 use std::sync::OnceLock;
 
@@ -59,10 +60,15 @@ impl Sel {
             Sel::None | Sel::Effect(_) | Sel::Contents | Sel::Opacity => None,
         }
     }
-    /// Is a fill/stroke or effect row selected (what Duplicate and Delete act on)? An Opacity row
-    /// is not an item: it can't be copied or removed.
+    /// Is a fill/stroke or effect row selected (what Duplicate acts on)? An Opacity row is not an
+    /// item: it can't be copied.
     fn editable(self) -> bool {
         matches!(self, Sel::Item(_) | Sel::Effect(_) | Sel::ItemEffect(..))
+    }
+    /// Does Delete act on the selected row? A fill/stroke or effect row is removed; deleting an
+    /// Opacity row sets it back to Default (100%, Normal) (#5742).
+    fn deletable(self) -> bool {
+        self.editable() || matches!(self, Sel::Opacity | Sel::ItemOpacity(_))
     }
 }
 
@@ -490,7 +496,7 @@ fn delete_key(app: &mut VectorcraftApp, ui: &mut Ui) {
     let node = first_subject(app);
     let sel = current_sel(app, &ctx, node.as_ref());
     if keys
-        && sel.editable()
+        && sel.deletable()
         && ctx.memory(|m| m.focused().is_none())
         && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
     {
@@ -1088,7 +1094,8 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, opaci
     let link = name_link(ui, pos2(lx, r.center().y), ("ap-op-link", item), tl!("Opacity:")).clicked();
     if link || resp.clicked() {
         select_row(app, ui.ctx(), this);
-        // The panel has the keyboard (Delete then removes nothing, rather than the object).
+        // The panel has the keyboard (Delete then sets the row back to Default, rather than
+        // deleting the object).
         super::set_row_keys(ui.ctx(), ROW_KEYS, true);
     }
     if link {
@@ -1238,6 +1245,8 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                             let suffix = ui_keys.and_then(|u| u.unit.as_deref()).map(crate::dialogs::unit_suffix).unwrap_or_default();
                             let nx = if vectorcraft_effects::is_length(&e.id, key, relative) {
                                 widgets::num_field(ui, id, Some(x), unit, 70.0)
+                            } else if let Some(range) = vectorcraft_effects::raster_px_range(&e.id, key) {
+                                widgets::range_field_named(ui, id, None, x, range, &crate::dialogs::unit_suffix("px"), 2, 70.0)
                             } else {
                                 widgets::plain_field(ui, id, x, &suffix, 2, 70.0)
                             };
@@ -1413,7 +1422,8 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, node: Option<&Node>, sel: Sel) 
         if duplicate.clicked() {
             duplicate_selected(app, ui, node, sel);
         }
-        let delete = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Selected Item"), false, can, 24.0);
+        let can_delete = can || (has && sel.deletable());
+        let delete = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Selected Item"), false, can_delete, 24.0);
         if delete.clicked() {
             delete_selected(app, ui, node, sel);
         }
@@ -1556,8 +1566,20 @@ fn highlight_copies(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, sel
     set_pstate(ctx, "ap-multi", Highlight { owner: Some(n.id), rows, order, anchor, active });
 }
 
-/// Remove the highlighted fills/strokes or effects; a removed item effect leaves its fill/stroke selected.
+/// Remove the highlighted fills/strokes or effects; a removed item effect leaves its fill/stroke
+/// selected. A selected Opacity row is set back to Default (100%, Normal) and stays selected.
 fn delete_selected(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: Sel) {
+    match sel {
+        Sel::Opacity => {
+            app.run("transparency.set", json!({"item": null, "opacity": 100, "blend": "Normal"})).ok();
+            return;
+        }
+        Sel::ItemOpacity(i) => {
+            app.run("transparency.set", aligned(app, json!({"item": i, "opacity": 100, "blend": "Normal"}))).ok();
+            return;
+        }
+        _ => {}
+    }
     let ok = match selected_effects(ui.ctx(), node, sel) {
         Some((item, ks)) => app.run("effect.remove", aligned(app, json!({"item": item, "indices": ks}))).is_ok(),
         None if matches!(sel, Sel::Item(_)) => {
@@ -1614,7 +1636,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Duplicate Item"), has && sel.editable(), false) {
         duplicate_selected(app, ui, node.as_ref(), sel);
     }
-    if menu_item(ui, tl!("Remove Item"), has && sel.editable(), false) {
+    if menu_item(ui, tl!("Remove Item"), has && sel.deletable(), false) {
         delete_selected(app, ui, node.as_ref(), sel);
     }
     if menu_item(ui, tl!("Clear Appearance"), has, false) {

@@ -892,6 +892,48 @@ fn pucker_and_twist_keep_their_sense() {
 }
 
 #[test]
+fn any_object_takes_the_distort_effects_that_draw_as_its_drawn_look() {
+    // GUARDS: `simple` left out every Distort & Transform effect, so only type took them.
+    let simple = |name: &str, keys: &str| {
+        let st = distort_effect_style(name, keys);
+        assert!(st.plain, "{name}: {st:?}");
+        st.simple
+    };
+    assert!(simple("Adobe Twirl", "45 /Real (angle) ,\n"));
+    assert!(simple("Adobe Transform", &format!("0.5 /Real (scaleH_Factor) ,\n{SWITCHES}")));
+    assert!(simple("Adobe Scribble and Tweak", ""));
+    assert!(simple("Adobe Punk and Bloat", ""));
+    assert!(simple("Adobe Free Distort", ""));
+    // A slant: the bottom edge moved as far as the top one.
+    let src = [[0.0, 0.0], [1.0, 0.0], [0.0, -1.0], [1.0, -1.0]];
+    assert!(simple("Adobe Free Distort", &corners(src, [[0.2, 0.0], [1.2, 0.0], [0.0, -1.0], [1.0, -1.0]])));
+    assert!(!simple("Adobe Free Distort", &corners(src, [[0.2, 0.0], [1.2, 0.1], [0.0, -1.0], [1.0, -1.0]])));
+    assert!(!simple("Adobe Punk and Bloat", "-35 /Real (d_factor) ,\n"));
+    assert!(!simple("Adobe Zigzag", ""));
+    assert!(!simple("Adobe Transform", &format!("1 /Int (numCopies) ,\n{SWITCHES}")));
+    // With another effect, only type takes it.
+    let chain = [basic("Adobe Twirl", "45 /Real (angle) ,\n"), basic("Adobe Offset Path", "4 /Real (ofst) ,\n0 /Int (jntp) ,\n4 /Real (mlim) ,\n")];
+    let data = format!("/KnownStyle :\n(Fx) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &chain));
+    let st = art_styles(data.as_bytes()).remove("Fx").unwrap_or_default();
+    assert!(st.plain && !st.simple, "{st:?}");
+}
+
+#[test]
+fn affine_corners_are_a_parallelogram_however_far_they_reach() {
+    assert!(affine(&json!({"corners": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]})));
+    assert!(affine(&json!({"corners": [[180.0, -310.0], [320.0, -300.0], [330.0, -250.0], [190.0, -260.0]]})));
+    assert!(!affine(&json!({"corners": [[180.0, -310.0], [320.0, -300.0], [330.0, -250.01], [190.0, -260.0]]})));
+    // Far from the box, a small shape is held to its own size.
+    assert!(!affine(&json!({"corners": [[9999.0, 0.0], [10000.0, 0.0], [10000.05, 1.0], [9999.0, 1.0]]})));
+    // GUARDS: a slant written in rounded decimals, in a frame of 33.333 pt, missed by a hair.
+    let src = [[0.0, 0.0], [33.333, 0.0], [0.0, -33.333], [33.333, -33.333]];
+    let slant = distort_effect_style("Adobe Free Distort", &corners(src, [[6.6667, 0.0], [40.0, 0.0], [0.0, -33.333], [33.333, -33.333]]));
+    assert!(slant.plain && slant.simple, "{slant:?}");
+    assert!(!affine(&json!({"corners": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]})));
+    assert!(!affine(&json!({})));
+}
+
+#[test]
 fn roughen_keeps_the_drawn_look() {
     // Its outline is random and the file holds no seed; at a size of 0 the effect still redraws the
     // path's segments.

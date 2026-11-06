@@ -402,6 +402,12 @@ Bar Position (`window.taskBar.reset`), which unpins it and puts it back under th
 Panel. As in Illustrator, neither the position nor the pin is saved: each launch starts with the bar under the
 selection.
 
+The Compound Shapes add-on's setting, `window.pathfinder.compoundShapes` (omitted params toggle; checked while on; kept with the
+preferences; off by default), swaps what a click and an Alt-click do on the Pathfinder panel's Shape Mode buttons: on, a click makes a
+compound shape (`object.compoundShape.make`) and Alt-click gives the permanent Pathfinder result. Selected members of a compound
+shape always take the clicked mode (`object.compoundShape.setMode`). Its submenu, Object › Plug-ins › Compound Shapes, also lists
+Make, Release and Expand Compound Shape.
+
 The Free Transform widget: while the Free Transform tool (E) is active, a small box at the canvas's top left holds
 Constrain over the tool's three modes, Free Transform, Perspective Distort and Free Distort. The buttons set the tool's
 options, as `tool.setOption {key: "mode", value: "free"|"perspective"|"distort"}` and `{key: "constrain", value}` do:
@@ -861,7 +867,7 @@ events take `pressure` (0..1, default 1): it is the Liquify intensity while Use 
 
 Freehand Tool Options: double-clicking the Pencil, Paintbrush, Smooth, Blob Brush or Eraser tool
 (`tool.options {tool: "pencil"}`) opens a `freehandOptions` dialog. Its fields are `tool` and the options the tool
-keeps: `fidelity` (pt; Pencil, Paintbrush, Smooth, Blob Brush), `fill` (Pencil, Paintbrush), `keepSelected` (Pencil,
+keeps: `fidelity` (screen pixels for the Pencil and Paintbrush, the same at any zoom; pt for Smooth and Blob Brush), `fill` (Pencil, Paintbrush), `keepSelected` (Pencil,
 Paintbrush, Blob Brush; on by default for the Pencil and Paintbrush and off for the Blob Brush, and while it is off
 the path a stroke draws, continues or merges into is not selected afterwards), `mergeOnlySelection` (Blob Brush;
 off by default, and while it is on a stroke merges only with selected blobs), `closeWithin` and `editWithin`

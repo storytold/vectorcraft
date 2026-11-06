@@ -55,6 +55,56 @@ const RELATIVE: [&[u8]; 2] = [b"%AI28_BeginPlacedRelativePath", b"%AI28_EndPlace
 /// A document included whole: (begin, end) markers.
 const DOCUMENT: (&[u8], &[u8]) = (b"%%BeginDocument", b"%%EndDocument");
 
+/// The line of `src` before the one that starts at `at`, without its line end, when it ends within
+/// [`OPERAND_LINE`] bytes of `at` and is no longer than that.
+fn previous_line(src: &[u8], at: usize) -> Option<&[u8]> {
+    let before = src.get(at.saturating_sub(OPERAND_LINE)..at)?;
+    let end = before.iter().rposition(|b| !is_eol(*b))? + 1;
+    let start = before.get(..end)?.iter().rposition(|b| is_eol(*b))? + 1;
+    before.get(start..end)
+}
+
+/// The longest line of an image's `XI` operands looked at.
+const OPERAND_LINE: usize = 1024;
+
+/// How many bytes the alpha channel of an image whose `XI` operands are on `line` takes (`[matrix]
+/// llx lly urx ury w h bits type alpha …`, `%_` before them in a hidden object): a byte a pixel when
+/// the alpha count isn't 0, else none (or when the operands aren't of that shape).
+fn alpha_bytes(line: &[u8]) -> usize {
+    let line = line.strip_prefix(b"%_").unwrap_or(line);
+    let Some(after) = line.iter().rposition(|b| *b == b']').and_then(|i| line.get(i + 1..)) else { return 0 };
+    let nums: Vec<f64> = std::str::from_utf8(after).unwrap_or_default().split_whitespace().take(9).map_while(|w| w.parse().ok()).collect();
+    match (nums.get(4), nums.get(5), nums.get(8)) {
+        // At most the pixels the reader reads an image with.
+        (Some(&w), Some(&h), Some(&a)) if a > 0.0 && w >= 1.0 && h >= 1.0 && w * h <= (1u64 << 25) as f64 => (w * h) as usize,
+        _ => 0,
+    }
+}
+
+/// Where in `w` the `%%EndData` that ends an image's samples starts: the first one on a line whose
+/// next line is `XH` (`%_XH` in a hidden object), as an image's is; else the first one that a line
+/// end, or the end of `w`, follows.
+fn end_data(w: &[u8]) -> Option<usize> {
+    const MARK: &[u8] = b"%%EndData";
+    let mut first = None;
+    let mut at = 0;
+    while let Some(i) = w.get(at..).and_then(|r| find(r, MARK)) {
+        let i = at + i;
+        let rest = w.get(i + MARK.len()..).unwrap_or_default();
+        if rest.first().is_none_or(|b| matches!(b, b'\r' | b'\n')) {
+            let next = rest.strip_prefix(b"\r").unwrap_or(rest);
+            let next = next.strip_prefix(b"\n").unwrap_or(next);
+            let next = next.strip_prefix(b"%_").unwrap_or(next);
+            if next.starts_with(b"XH") {
+                return Some(i);
+            }
+            first = first.or(Some(i));
+        }
+        at = i + 1;
+    }
+    first
+}
+
 fn is_space(b: u8) -> bool {
     matches!(b, b' ' | b'\t' | b'\r' | b'\n' | b'\x0c' | b'\0')
 }
@@ -232,12 +282,18 @@ impl<'a> Lexer<'a> {
             (Some(b'\r' | b'\n'), _) => data += 1,
             _ => {}
         }
-        // The count leaves out an alpha channel: the data ends where `%%EndData` starts.
+        // The count leaves out an alpha channel: the data ends where `%%EndData` starts, the first one
+        // that a line end or the end of the data follows (samples can hold the marker's bytes).
         let declared = from.saturating_add(n).min(self.src.len()).max(data);
-        let window =
-            self.src.get(declared.saturating_sub(4).max(data)..declared.saturating_add(n.saturating_mul(2)).saturating_add(64).min(self.src.len()));
-        let end = match window.and_then(|w| find(w, b"%%EndData")) {
-            Some(i) => declared.saturating_sub(4).max(data) + i,
+        // The alpha channel the line before gives the image (its `XI` operands) follows the counted
+        // samples: the marker is looked for after it.
+        let line_start = self.pos.saturating_sub(line.len());
+        let line_start = if line_start >= 2 && self.src.get(line_start - 2..line_start) == Some(b"%_") { line_start - 2 } else { line_start };
+        let alpha = previous_line(self.src, line_start).map_or(0, alpha_bytes);
+        let start = if alpha > 0 { declared.saturating_add(alpha).saturating_sub(2) } else { declared.saturating_sub(4) }.max(data);
+        let stop = declared.saturating_add(n.saturating_mul(2)).saturating_add(64).max(start.saturating_add(64)).min(self.src.len());
+        let end = match self.src.get(start..stop).and_then(end_data) {
+            Some(i) => start + i,
             None => declared,
         };
         self.pos = end;

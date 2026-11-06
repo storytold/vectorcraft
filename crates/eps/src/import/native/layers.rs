@@ -7,8 +7,8 @@ use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect
 /// hidden ones too), groups, compound paths, clipping groups and artboards, with the text and the
 /// strokes around it of the page. When the file has no editing copy, `visible` as it was; when it
 /// has one that can't be used, `visible` with a warning that says why, with the swatches of the
-/// editing copy's palette ([`use_palette`]) and its variable library ([`use_variables`]) when it
-/// could be read, and with its layer tree, empty,
+/// editing copy's palette ([`use_palette`]), its graphic styles ([`use_styles`]) and its variable
+/// library ([`use_variables`]) when it could be read, and with its layer tree, empty,
 /// below the page's layer when that could be read (#2033). A program in the legacy format without
 /// layers (`illustrator`, see [`program_alone`]) is read with its art on one layer; when that
 /// can't be used, the file is `visible` as it was.
@@ -40,6 +40,7 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illus
                 let have = v.document.patterns.len();
                 use_palette(data, &mut v.document);
                 use_brushes(data, &mut v.document, have, &mut v.warnings);
+                use_styles(data, &mut v.document, true, 1.0, None);
                 use_variables(data, &mut v.document, &mut v.warnings);
             }
             if tree.is_empty() {
@@ -99,11 +100,12 @@ fn layer_tree(nodes: &[Arc<Node>]) -> Vec<Arc<Node>> {
 /// notes, or a note saying why the layers weren't read when the editing data can't be decompressed
 /// or its layers can't be read. The flag returned is `true` when the document is the one read from
 /// the layers; else the document is `visible`, its pages moved by `place_pages` when the editing
-/// data was decompressed but its layers can't be read, and its swatches, brushes and variables those
-/// of the editing data's palette ([`use_palette`]), brushes ([`use_brushes`]) and variable library
-/// ([`use_variables`]) when it was
-/// decompressed. `outlined`: the PDF part's type was read as
-/// outlines (a file whose type shows then comes in as its PDF part).
+/// data was decompressed but its layers can't be read, and its swatches, brushes, graphic styles and
+/// variables those of the editing data's palette ([`use_palette`]), brushes ([`use_brushes`]), styles
+/// ([`use_styles`]) and variable library ([`use_variables`]) when it was decompressed: a graphic
+/// style library, which has no layers, opens with its styles, and editing data with no layers opens
+/// on the page of its active artboard under the checks of `place_pages`. `outlined`: the PDF part's type was
+/// read as outlines (a file whose type shows then comes in as its PDF part).
 /// `trust`: layers that draw differently from the PDF part are used all the same, with a warning.
 /// `unit`: the size in points of a unit of the PDF part's user space, its first page's `UserUnit`,
 /// by which its art came in scaled. Editing data whose artboard matches the page only in those
@@ -133,19 +135,26 @@ pub fn layered_ai_from(
     };
     if !has_layers(&data) {
         let (mut visible, mut warnings) = (visible, warnings);
+        let (boards, active) = ai::artboards(&data);
+        if board_scale(&boards, &visible, unit).is_some() {
+            visible.opened_artboard = active_page(active, &visible);
+        }
         let have = visible.patterns.len();
         use_palette(&data, &mut visible);
         use_brushes(&data, &mut visible, have, &mut warnings);
+        use_styles(&data, &mut visible, false, unit, Some(&boards));
         use_variables(&data, &mut visible, &mut warnings);
         return (visible, warnings, false);
     }
     // The PDF part, its pages placed and named as the editing data's artboards are, when the
     // layers can't be used (`why`).
     let from_pdf_part = |mut visible: Document, mut warnings: Vec<String>, why: &str| {
-        place_pages(&ai::artboards(&data), &mut visible, unit);
+        let (boards, active) = ai::artboards(&data);
+        place_pages(&boards, active, &mut visible, unit);
         let have = visible.patterns.len();
         use_palette(&data, &mut visible);
         use_brushes(&data, &mut visible, have, &mut warnings);
+        use_styles(&data, &mut visible, false, unit, Some(&boards));
         let mut all = unread(warnings, why);
         use_variables(&data, &mut visible, &mut all);
         (visible, all, false)
@@ -275,15 +284,46 @@ fn use_brushes(data: &[u8], doc: &mut Document, have: usize, warnings: &mut Vec<
     warnings.extend(note.filter(|n| !warnings.contains(n)));
 }
 
-/// The pages of `doc` (a `.ai` read as its PDF part: a page per artboard, in a row) named as
-/// `boards` (the artboards of its editing data, in art space) name them, and moved, with the art on
-/// each, to where they are, so the artboards keep their names and layout when the layers can't be
-/// read (#1068). Left as they are unless there are as many artboards as pages, each the size of its
-/// page in points, or, when `unit` is above 1, each the size of its page in units of `unit` points:
-/// then the layout is drawn `unit` times as large.
-fn place_pages(boards: &[(String, Rect)], doc: &mut Document, unit: f64) {
-    if boards.is_empty() || boards.len() != doc.artboards.len() {
+/// `doc` (a file read as its page or PDF part, in place of its layers) with the graphic styles of
+/// its editing data `data` in place of the default ones, as [`build`] gives a document read from
+/// the layers ([`ai::graphic_styles`], `large_canvas` as it takes it). Unless `large_canvas` is set,
+/// their strokes and effects are drawn `unit` times as large when the editing data's artboards are
+/// the size of `doc`'s pages in units of `unit` points, else as many times as large as the data's
+/// declared large canvas scale when they are the pages' size at that scale ([`board_scale`]).
+/// `boards`: the editing data's artboards when they were already read. Left as it is when the
+/// editing data has no style this reads.
+fn use_styles(data: &[u8], doc: &mut Document, large_canvas: bool, unit: f64, boards: Option<&[(String, Rect)]>) {
+    let (mut styles, canvas) = ai::graphic_styles(data, large_canvas);
+    if styles.is_empty() {
         return;
+    }
+    if !large_canvas && (unit != 1.0 || canvas != 1.0) {
+        let read;
+        let boards = match boards {
+            Some(b) => b,
+            None => {
+                read = ai::artboards(data).0;
+                &read
+            }
+        };
+        let k = board_scale(boards, doc, unit).or_else(|| board_scale(boards, doc, canvas));
+        if let Some(k) = k.filter(|k| *k != 1.0) {
+            for g in &mut styles {
+                g.appearance.scale_strokes(k);
+                g.appearance.scale_effects(k, vectorcraft_effects::scale_effect);
+            }
+        }
+    }
+    doc.graphic_styles = styles.into();
+}
+
+/// How many points a unit of `boards` (the artboards of a file's editing data, in art space) is in
+/// `doc` (the file read as its PDF part: a page per artboard): 1 when there are as many artboards as
+/// pages, each the size of its page in points, or `unit` when `unit` is above 1 and each is the size
+/// of its page in units of `unit` points. `None` otherwise.
+fn board_scale(boards: &[(String, Rect)], doc: &Document, unit: f64) -> Option<f64> {
+    if boards.is_empty() || boards.len() != doc.artboards.len() {
+        return None;
     }
     let differ = |k: f64| {
         boards
@@ -291,16 +331,28 @@ fn place_pages(boards: &[(String, Rect)], doc: &mut Document, unit: f64) {
             .zip(&doc.artboards)
             .any(|((_, b), a)| (b.width() - a.rect.width() / k).abs() > 0.5 || (b.height() - a.rect.height() / k).abs() > 0.5)
     };
-    let k = if !differ(1.0) {
-        1.0
+    if !differ(1.0) {
+        Some(1.0)
     } else if unit.is_finite() && unit > 1.0 && !differ(unit) {
-        unit
+        Some(unit)
     } else {
-        return;
-    };
+        None
+    }
+}
+
+/// The pages of `doc` (a `.ai` read as its PDF part: a page per artboard, in a row) named as
+/// `boards` (the artboards of its editing data, in art space) name them, and moved, with the art on
+/// each, to where they are, so the artboards keep their names and layout when the layers can't be
+/// read (#1068); the page of the artboard at `active` (the active one) is the active artboard. Left
+/// as they are unless there are as many artboards as pages, each the size of its page in points,
+/// or, when `unit` is above 1, each the size of its page in units of `unit` points: then the layout
+/// is drawn `unit` times as large.
+fn place_pages(boards: &[(String, Rect)], active: Option<usize>, doc: &mut Document, unit: f64) {
+    let Some(k) = board_scale(boards, doc, unit) else { return };
     for ((name, _), a) in boards.iter().zip(&mut doc.artboards) {
         a.name.clone_from(name);
     }
+    doc.opened_artboard = active_page(active, doc);
     let [(_, first), _, ..] = boards else { return };
     // Art space (y up) → the document, the first artboard's top left at the origin, as `read` has it,
     // `k` points a unit.
@@ -313,6 +365,13 @@ fn place_pages(boards: &[(String, Rect)], doc: &mut Document, unit: f64) {
     for (a, v) in doc.artboards.iter_mut().zip(&moves) {
         a.rect = a.rect + *v;
     }
+}
+
+/// The id of the page of `doc` (a `.ai` read as its PDF part: a page per artboard) for the artboard
+/// at `active` among those of its editing data, to open the file on: `None` for the first, which a
+/// file opens on anyway, or when `doc` has no such page.
+fn active_page(active: Option<usize>, doc: &Document) -> Option<u32> {
+    active.filter(|i| *i > 0).and_then(|i| doc.artboards.get(i)).map(|a| a.id)
 }
 
 /// The objects in `layer` (and its sublayers) moved by the move of the page they are on.

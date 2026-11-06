@@ -2748,7 +2748,9 @@ digits	Malayalam	Malaiala
 	Stroke Options	Opções de Traçado
 	Stroke Weight	Peso do Traçado
 	Character:	Caractere:
+	Paragraph:	Parágrafo:
 	Character options	Opções de caractere
+	Paragraph options	Opções de parágrafo
 	Stroke options	Opções de traçado
 	Transform options	Opções de transformação
 	Stroke:	Traçado:
@@ -3573,6 +3575,7 @@ axis	Both	Ambos
 @msg	Create from Selection: the selection has no area	Criar a partir da seleção: a seleção não tem área
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	A recuperação de dados não tem onde guardar cópias: defina Preferências → Manipulação de arquivos → Recuperação de dados → Pasta (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	A recuperação de dados não pode guardar cópias em {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Não é possível carregar plug-ins de {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecione diretamente os pontos de ancoragem onde cortar (não as extremidades de traçados abertos)
 @msg	Divide Objects Below: select a path	Dividir objetos abaixo: selecione um traçado
 @msg	Divide Objects Below: select exactly one path	Dividir objetos abaixo: selecione exatamente um traçado
@@ -3909,6 +3912,8 @@ axis	Both	Ambos
 @msg	no such saved selection	seleção salva inexistente
 @msg	no such segment	segmento inexistente
 @msg	no such spine point	ponto da coluna inexistente
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` deve ser uma lista de no máximo 10000 índices de pontos da coluna
+@msg	`with` moves points, not a handle	`with` move pontos, não uma alça
 @msg	no such spine segment	segmento da coluna inexistente
 @msg	no such subpath	subtraçado inexistente
 @msg	no such user library	biblioteca do usuário inexistente
@@ -4900,6 +4905,9 @@ axis	Both	Ambos
 @msg	object {id} is not a selected top-level object	o objeto {id} não é um objeto selecionado de nível superior
 @msg	{path}: not a file	{path}: não é um arquivo
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	as imagens vinculadas mostram a visualização de baixa resolução salva no arquivo até que seus arquivos sejam encontrados: revincule-as no painel Links
+@msg	linked type areas past VectorCraft's limits were left out	as áreas de texto encadeadas além dos limites do VectorCraft foram omitidas
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	o texto usado como máscara em áreas encadeadas, texto com quebra ou um caminho composto não recorta
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	as imagens vinculadas sem visualização no arquivo mostram um espaço reservado até que seus arquivos sejam encontrados: revincule-as no painel Links
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	o texto de área em molduras baixas demais para uma linha da fonte em que aparece recebeu molduras mais altas ({_1}): senão o texto não apareceria
 @msg	every numbered name for {name} is taken in the document's folder	todos os nomes numerados para {name} já existem na pasta do documento
 @msg	No linked files to look for	Nenhum arquivo vinculado para procurar
@@ -6015,6 +6023,9 @@ anchor	Points:	Pontos:
 	Find Nearest Swatch…	Localizar Amostra Mais Próxima…
 	Find Nearest Swatch	Localizar Amostra Mais Próxima
 	Apply Nearest Swatch	Aplicar Amostra Mais Próxima
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Aplicar Preenchimento ao Traçado
+	Apply Stroke to Fill	Aplicar Traçado ao Preenchimento
 	Select objects to find the swatches nearest their colors.	Selecione objetos para localizar as amostras mais próximas de suas cores.
 @msg	select objects or give `color`	selecione objetos ou informe `color`
 @msg	`color` is not a colour	`color` não é uma cor
@@ -6408,6 +6419,10 @@ swatch	Yellow Green	Verde-amarelado
 	Bow	Arco
 	Spike	Pico
 	Skip Spaces	Ignorar espaços
+	Release Type on a Path…	Liberar Texto em um Caminho…
+	Release Type on a Path	Liberar Texto em um Caminho
+	Text and Path	Texto e caminho
+	Path Only	Somente caminho
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	A arte é grande demais para ser copiada como imagem: outros aplicativos não recebem um PNG dela
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6419,3 +6434,43 @@ swatch	Yellow Green	Verde-amarelado
 	Fully Outside	Totalmente fora
 	No artboards match.	Nenhuma mesa de trabalho corresponde.
 	Chosen: {n} of {total}	Escolhidas: {n} de {total}
+
+# Contour add-on
+	Contour	Contorno
+	Contour Tool	Ferramenta Contorno
+	Sharp	Pontiagudo
+	Bake	Expandir
+	Turn the Contour into plain paths	Transforma o contorno em caminhos simples
+	Set Corners…	Definir Cantos…
+	All Anchors	Todas as Âncoras
+	Odd-Numbered Anchors	Âncoras Ímpares
+	Even-Numbered Anchors	Âncoras Pares
+	Minimum angle	Ângulo Mínimo
+	Maximum angle	Ângulo Máximo
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Selecionar vinculadas
+	Select Embedded	Selecionar incorporadas
+	Select Missing	Selecionar ausentes
+	Select Modified	Selecionar modificadas
+	Select by Link Status	Selecionar por status do vínculo
+	Select by Link Status…	Selecionar por status do vínculo…
+	Search images	Pesquisar imagens
+	No images match.	Nenhuma imagem corresponde.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} imagem vinculada selecionada|{n} imagens vinculadas selecionadas
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} imagem incorporada selecionada|{n} imagens incorporadas selecionadas
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} imagem ausente selecionada|{n} imagens ausentes selecionadas
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} imagem modificada selecionada|{n} imagens modificadas selecionadas
+@msgplural	Selected {n} image|Selected {n} images	{n} imagem selecionada|{n} imagens selecionadas
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; mais {n} está oculta ou bloqueada|{selected}; mais {n} estão ocultas ou bloqueadas
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; mais {n} está em uma camada de modelo|{selected}; mais {n} estão em camadas de modelo
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; mais {n} está fora do grupo isolado|{selected}; mais {n} estão fora do grupo isolado
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; mais {n} não pode ser selecionada agora|{selected}; mais {n} não podem ser selecionadas agora
+
+# Compound Shapes add-on
+	Compound Shapes	Formas Compostas
+	Shape Mode Buttons Make Compound Shapes	Os Botões de Modo de Forma Criam Formas Compostas
+
+# 3D Box add-on
+	3D Box	Caixa 3D
+	3D Box Tool	Ferramenta Caixa 3D

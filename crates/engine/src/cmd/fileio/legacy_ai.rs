@@ -20,7 +20,9 @@
 //! pixels, or opacity or a blending mode on the image, the fill, the shape or a group it is in) is
 //! expanded into its tiles first so its images flatten too. With `omit` the images with
 //! see-through pixels, opacity or a blending mode of their own are left out, and pattern fills stay
-//! as the writer draws them (their tiles opaque over white). An image that can't be decoded is
+//! as the writer draws them (their tiles opaque over white). A colorized image is flattened or
+//! left out the same way, unless its pixels are all black or white: the writer writes that one as
+//! a 1-bit image mask in its color, which keeps its white pixels clear. An image that can't be decoded is
 //! missing from the images that flattening and expanding raster effects draw, and the warnings
 //! then carry the raster exports' note once.
 //!
@@ -179,8 +181,10 @@ fn expand_image_patterns(d: &mut Document) -> Result<()> {
 }
 
 /// The images of `d` a legacy `.ai` can't hold, in paint order with their places in it (as
-/// [`Document::walk`] counts). These have see-through pixels or a colorize paint, or have opacity
-/// or a blending mode of their own or, with `flatten`, of a group they are in.
+/// [`Document::walk`] counts). These have see-through pixels or a colorize paint (except the
+/// colorized images the writer writes as image masks, clear pixels included,
+/// [`vectorcraft_eps::writes_image_mask`]), or
+/// have opacity or a blending mode of their own or, with `flatten`, of a group they are in.
 /// With `flatten` only visible images are returned, because a hidden one (which the hidden objects
 /// option may write) is written over white. With `omit` all of them are returned.
 fn see_through_images(d: &Document, mode: SeeThrough) -> Vec<(usize, NodeId)> {
@@ -189,8 +193,7 @@ fn see_through_images(d: &Document, mode: SeeThrough) -> Vec<(usize, NodeId)> {
     let mut at = 0;
     d.walk(|n| {
         if let NodeKind::Image(im) = &n.kind
-            && (keys.contains(&im.key)
-                || n.extras().colorize.is_some()
+            && (((keys.contains(&im.key) || n.extras().colorize.is_some()) && !vectorcraft_eps::writes_image_mask(d, n))
                 || n.opacity < 1.0
                 || n.blend != BlendMode::Normal
                 || (mode == SeeThrough::Flatten && transparent(d, n.id)))

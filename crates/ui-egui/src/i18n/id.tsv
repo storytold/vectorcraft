@@ -1403,7 +1403,9 @@ digits	Malayalam	Malayalam
 	Standard Vertical Roman Alignment	Perataan Romawi vertikal standar
 	Strikethrough	Coret
 	Character:	Karakter:
+	Paragraph:	Paragraf:
 	Character options	Opsi karakter
+	Paragraph options	Opsi paragraf
 	Subscript	Subskrip
 	Subscript (on the roadmap)	Subskrip (masih dalam roadmap)
 	Superscript	Superskrip
@@ -4611,6 +4613,9 @@ imageTrace	Outline	Kontur
 @msg	an image VectorCraft can't read was left out	gambar yang tidak dapat dibaca VectorCraft tidak disertakan
 @msg	an image whose data is cut short was left out	gambar yang datanya terpotong tidak disertakan
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gambar tertaut menampilkan pratinjau resolusi rendah yang tersimpan dalam berkas sampai berkasnya ditemukan: tautkan ulang di panel Tautan
+@msg	linked type areas past VectorCraft's limits were left out	area teks tertaut di luar batas VectorCraft dihilangkan
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	teks yang digunakan sebagai masker di area tertaut, teks terbungkus, atau jalur majemuk tidak memotong
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	gambar tertaut tanpa pratinjau dalam berkas menampilkan penanda tempat sampai berkasnya ditemukan: tautkan ulang di panel Tautan
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	teks area dalam bingkai yang terlalu pendek untuk satu baris font yang ditampilkannya mendapat bingkai yang lebih tinggi ({_1}): tanpa itu teksnya tidak akan tampil
 @msg	its editing data doesn't say where its art is	data pengeditannya tidak menyatakan di mana karya seninya berada
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	berkas ini disimpan tanpa kompatibilitas PDF, dan data pengeditannya tidak dapat dibaca ({why})
@@ -5966,6 +5971,9 @@ anchor	Points:	Titik:
 	Find Nearest Swatch…	Cari Swatch Terdekat…
 	Find Nearest Swatch	Cari Swatch Terdekat
 	Apply Nearest Swatch	Terapkan Swatch Terdekat
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Terapkan isian ke guratan
+	Apply Stroke to Fill	Terapkan guratan ke isian
 	Select objects to find the swatches nearest their colors.	Pilih objek untuk menemukan swatch yang paling dekat dengan warnanya.
 @msg	select objects or give `color`	pilih objek atau berikan `color`
 @msg	`color` is not a colour	`color` bukan warna
@@ -6202,6 +6210,10 @@ breakText	Glyphs	Glif
 	Bow	Busur
 	Spike	Puncak
 	Skip Spaces	Lewati Spasi
+	Release Type on a Path…	Lepaskan Teks pada Jalur…
+	Release Type on a Path	Lepaskan Teks pada Jalur
+	Text and Path	Teks dan jalur
+	Path Only	Hanya jalur
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Gambar terlalu besar untuk disalin sebagai gambar: aplikasi lain tidak mendapatkan PNG darinya
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6213,3 +6225,43 @@ breakText	Glyphs	Glif
 	Fully Outside	Sepenuhnya di luar
 	No artboards match.	Tidak ada artboard yang cocok.
 	Chosen: {n} of {total}	Dipilih: {n} dari {total}
+
+# Contour add-on
+	Contour	Kontur
+	Contour Tool	Alat kontur
+	Sharp	Tajam
+	Bake	Perluas
+	Turn the Contour into plain paths	Ubah kontur menjadi jalur biasa
+	Set Corners…	Atur sudut…
+	All Anchors	Semua jangkar
+	Odd-Numbered Anchors	Jangkar bernomor ganjil
+	Even-Numbered Anchors	Jangkar bernomor genap
+	Minimum angle	Sudut minimum
+	Maximum angle	Sudut maksimum
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Pilih yang Tertaut
+	Select Embedded	Pilih yang Tersemat
+	Select Missing	Pilih yang Hilang
+	Select Modified	Pilih yang Diubah
+	Select by Link Status	Pilih menurut Status Tautan
+	Select by Link Status…	Pilih menurut Status Tautan…
+	Search images	Cari gambar
+	No images match.	Tidak ada gambar yang cocok.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Telah memilih {n} gambar tertaut
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Telah memilih {n} gambar tersemat
+@msgplural	Selected {n} missing image|Selected {n} missing images	Telah memilih {n} gambar yang hilang
+@msgplural	Selected {n} modified image|Selected {n} modified images	Telah memilih {n} gambar yang diubah
+@msgplural	Selected {n} image|Selected {n} images	Telah memilih {n} gambar
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} lainnya tersembunyi atau terkunci
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} lainnya berada di layer templat
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} lainnya berada di luar grup yang diisolasi
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} lainnya tidak dapat dipilih sekarang
+
+# Compound Shapes add-on
+	Compound Shapes	Bentuk majemuk
+	Shape Mode Buttons Make Compound Shapes	Tombol mode bentuk membuat bentuk majemuk
+
+# 3D Box add-on
+	3D Box	Kotak 3D
+	3D Box Tool	Alat Kotak 3D

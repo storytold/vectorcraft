@@ -119,6 +119,7 @@ zbus = "=5.19.0"
 winresource = "0.1"
 
 [dev-dependencies]
+tempfile = "3"
 # Bound socket buffers in real loopback transport deadline regressions.
 socket2 = { workspace = true }
 # src/portal_save.rs's tests build and read the portal's D-Bus values on every system.

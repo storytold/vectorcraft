@@ -3,6 +3,35 @@ use super::*;
 
 const ZH: fn() -> Lang = || Lang::from_code("zh-hant").expect("zh-hant registered");
 
+#[test]
+fn hindi_resolves_locales_and_uses_zero_one_plurals() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    for tag in ["hi", "hi-IN", "hi_IN.UTF-8", "HI-in", "hi-Deva-IN"] {
+        assert_eq!(lang_from_tag(tag), Some(hi), "{tag}");
+    }
+    assert_eq!(hi.name(), "हिन्दी");
+    assert_eq!([0, 1, 2, 21, u64::MAX].map(hi.0.plural), [0, 0, 1, 1, 1]);
+    assert_eq!(tr(hi, "Save"), "सेव");
+    assert_eq!(tr(hi, "Save As…"), "सेव ऐज़…");
+    assert_eq!(tr(hi, "Path"), "पाथ");
+    assert_eq!(tr(hi, "Selection"), "सिलेक्शन");
+    assert_eq!(tr(hi, "Properties"), "प्रॉपर्टीज़");
+    assert_eq!(tr(hi, "Options"), "ऑप्शन्स");
+    assert_eq!(tr(hi, "Open"), "ओपन");
+    let (entries, errors) = parse_entries(hi.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    for (ctx, src, translation) in entries.iter().filter(|(ctx, _, _)| ctx == "@plural" || ctx == "@msgplural") {
+        let (one, other) = src.split_once('|').expect("one|other source");
+        let forms: Vec<_> = translation.split('|').collect();
+        assert_eq!(forms.len(), 2, "{ctx}: {src}");
+        if ctx == "@plural" {
+            for (n, index) in [(0, 0), (1, 0), (2, 1), (21, 1)] {
+                assert_eq!(trn(hi, n, one, other), forms[index].replace("{n}", &n.to_string()));
+            }
+        }
+    }
+}
+
 /// Locale tags name their language by region or script (in either case, with an encoding or
 /// modifier), and a tag that names no language resolves to none.
 #[test]
@@ -404,6 +433,11 @@ fn is_georgian(c: char) -> bool {
     matches!(c as u32, 0x10A0..=0x10FF | 0x1C90..=0x1CBF | 0x2D00..=0x2D2F)
 }
 
+#[cfg(feature = "interface-fonts")]
+fn is_devanagari(c: char) -> bool {
+    matches!(c as u32, 0x0900..=0x097F | 0x1CD0..=0x1CFF | 0xA8E0..=0xA8FF)
+}
+
 /// The UI fonts draw every character the catalogs use, in every family the UI draws text with
 /// (the web build has no system fonts to fall back to). Chinese and Japanese characters come from
 /// the craft-fonts build input, which is optional: without it they are left to the installed
@@ -416,6 +450,7 @@ fn is_georgian(c: char) -> bool {
 fn bundled_fonts_cover_the_catalogs() {
     let japanese_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_japanese());
     let georgian_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_georgian());
+    let devanagari_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Deva"));
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -434,7 +469,12 @@ fn bundled_fonts_cover_the_catalogs() {
             let chars: std::collections::BTreeSet<char> = entries
                 .iter()
                 .flat_map(|(_, _, tr)| tr.chars())
-                .filter(|c| !c.is_whitespace() && (cjk_checked || !is_cjk(*c)) && (georgian_ui_font || !is_georgian(*c)))
+                .filter(|c| {
+                    !c.is_whitespace()
+                        && (cjk_checked || !is_cjk(*c))
+                        && (georgian_ui_font || !is_georgian(*c))
+                        && (devanagari_ui_font || !is_devanagari(*c))
+                })
                 .collect();
             for family in &families {
                 let font = egui::FontId::new(13.0, family.clone());
@@ -1082,8 +1122,8 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 19] =
-    ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca"];
+const KEEPS_MENU_NAMES: [&str; 20] =
+    ["cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -1823,6 +1863,12 @@ fn blend_spine_param_errors_say_what_is_wrong() {
         ("object.blend.spine.moveAnchor", json!({"anchor": 0, "x": 1e12, "y": 0}), "x and y must be finite"),
         ("object.blend.spine.moveAnchor", json!({"anchor": 0, "x": 0, "y": 0, "handle": "up"}), "handle must be in or out"),
         ("object.blend.spine.moveAnchor", json!({"anchor": 5, "x": 0, "y": 0}), "no such spine point"),
+        (
+            "object.blend.spine.moveAnchor",
+            json!({"anchor": 0, "x": 0, "y": 0, "with": "1"}),
+            "`with` must be a list of at most 10000 spine point indexes",
+        ),
+        ("object.blend.spine.moveAnchor", json!({"anchor": 0, "x": 0, "y": 0, "with": [1], "handle": "in"}), "`with` moves points, not a handle"),
         ("object.blend.spine.moveAnchor", json!({"id": other, "anchor": 0, "x": 0, "y": 0}), "not a blend"),
         ("object.blend.spine.reshapeSegment", json!({"segment": 0, "dx": 1e12}), "t, dx and dy must be finite"),
         ("object.blend.spine.reshapeSegment", json!({"segment": 5, "dy": 10}), "no such spine segment"),
@@ -2018,8 +2064,9 @@ fn shared_param_check_errors_show_their_values_as_given() {
 
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
 /// the messages each one lacks.
-const COMPLETE_MESSAGES: &[&str] =
-    &["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca"];
+const COMPLETE_MESSAGES: &[&str] = &[
+    "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
+];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];

@@ -13,7 +13,7 @@ use vectorcraft_geom::{Affine, Point, Vec2};
 use vectorcraft_text::{FontDb, FontMatch, TextLayout, edit};
 
 use crate::cmd::fonts::{edit_symbol_texts, symbol_texts};
-use crate::cmd::textedit::editing_range;
+use crate::cmd::textedit::{editing_range, editing_story};
 use crate::cmd::typecmd::refresh_bounds;
 use crate::cmd::{CommandSpec, bad, checked_ids_or_selection, cmd, has_doc, has_selection, switch_or, text_param};
 use crate::{EngineError, Result, Session};
@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Breaks",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{kind: \"line\"|\"paragraph\", ids?: [id…]} remove the forced line breaks (line) or paragraph returns (paragraph) in the characters selected with a Type tool, else in all the text of the selected type, as one undo step; a break between two words becomes a space → {ids, removed}",
+            "{kind: \"line\"|\"paragraph\", ids?: [id…]} remove the forced line breaks (line) or paragraph returns (paragraph) in the characters selected with a Type tool (after Select All in a frame of threaded text, in the text of every frame of the story), else in all the text of the selected type, as one undo step; a break between two words becomes a space, the frames of a threaded story selected all together being read as one text → {ids, removed}",
             has_selection,
             remove_breaks
         ),
@@ -730,12 +730,11 @@ fn join_text(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0, "joined": joined, "lines": count }))
 }
 
-/// Remove the breaks `brk` in bytes `a..b` of `t`: one between two words becomes a space → how many
-/// went.
-fn strip_breaks(t: &mut TextObject, a: usize, b: usize, brk: char) -> usize {
-    let text = t.plain_text();
-    let (a, b) = (edit::floor_char(&text, a), edit::floor_char(&text, b));
-    let Some(range) = text.get(a..b) else { return 0 };
+/// The breaks `brk` in bytes `a..b` of `text`, each with whether it becomes a space (it is between
+/// two words).
+fn break_cuts(text: &str, a: usize, b: usize, brk: char) -> Vec<(usize, bool)> {
+    let (a, b) = (edit::floor_char(text, a), edit::floor_char(text, b));
+    let Some(range) = text.get(a..b) else { return vec![] };
     let mut prev = text.get(..a).and_then(|s| s.chars().next_back());
     let mut cuts = vec![];
     for (i, c) in range.char_indices() {
@@ -753,6 +752,12 @@ fn strip_breaks(t: &mut TextObject, a: usize, b: usize, brk: char) -> usize {
         }
         cuts.push((at, space));
     }
+    cuts
+}
+
+/// Remove the breaks `brk` at the bytes of `cuts` from `t`, each one that `cuts` marks becoming a
+/// space → how many went.
+fn apply_cuts(t: &mut TextObject, cuts: &[(usize, bool)], brk: char) -> usize {
     for &(at, space) in cuts.iter().rev() {
         let insert = if space { " " } else { "" };
         let end = at + brk.len_utf8();
@@ -763,6 +768,30 @@ fn strip_breaks(t: &mut TextObject, a: usize, b: usize, brk: char) -> usize {
     cuts.len()
 }
 
+/// The breaks `brk` in the text of the frames of `story`, read as one text: a break at the end or
+/// start of a frame between words of the frames on either side becomes a space. Each editable frame
+/// comes with its own breaks, at its own bytes.
+fn story_cuts(d: &Document, story: &[NodeId], brk: char) -> Vec<(NodeId, Vec<(usize, bool)>)> {
+    let texts: Vec<(NodeId, String)> = story.iter().filter_map(|id| Some((*id, text_of(d, *id)?.plain_text()))).collect();
+    let joined: String = texts.iter().map(|(_, t)| t.as_str()).collect();
+    // The breaks in story order, handed to the frames in one pass.
+    let mut cuts = break_cuts(&joined, 0, joined.len(), brk).into_iter().peekable();
+    let mut out = vec![];
+    let mut start = 0;
+    for (id, text) in texts {
+        let end = start + text.len();
+        let mut own = vec![];
+        while let Some((at, space)) = cuts.next_if(|(at, _)| *at < end) {
+            own.push((at - start, space));
+        }
+        if d.is_editable(id) {
+            out.push((id, own));
+        }
+        start = end;
+    }
+    out
+}
+
 fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.cleanup.removeBreaks";
     let (brk, label, none) = match text_param(p, "kind", C)? {
@@ -771,21 +800,41 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
         Some(other) => return Err(bad(C, format!("`kind` must be \"line\" or \"paragraph\", not {other:?}"))),
         None => return Err(bad(C, "missing `kind`")),
     };
-    // The characters a Type tool has selected, else all the text of the selected type.
+    // The characters a Type tool has selected (after Select All in threaded text, all the text of
+    // every frame of the story), else all the text of the selected type.
     let editing = if p.get("ids").is_some() { None } else { editing_range(s)?.filter(|(_, a, b)| a != b) };
+    let story = if editing.is_some() { editing_story(s) } else { vec![] };
     let d = &s.doc()?.doc;
-    let targets: Vec<(NodeId, usize, usize)> = match editing {
-        Some((id, a, b)) => vec![(id, a.min(b), a.max(b))].into_iter().filter(|(id, ..)| d.is_editable(*id)).collect(),
-        None => texts_under(d, &checked_ids_or_selection(s, p, C)?)?.into_iter().map(|id| (id, 0, usize::MAX)).collect(),
+    // Each type object with the breaks that go from it.
+    let targets: Vec<(NodeId, Vec<(usize, bool)>)> = match editing {
+        Some(_) if !story.is_empty() => story_cuts(d, &story, brk),
+        Some((id, a, b)) => vec![(id, a.min(b), a.max(b))]
+            .into_iter()
+            .filter(|(id, ..)| d.is_editable(*id))
+            .filter_map(|(id, a, b)| Some((id, break_cuts(&text_of(d, id)?.plain_text(), a, b, brk))))
+            .collect(),
+        None => {
+            let ids = texts_under(d, &checked_ids_or_selection(s, p, C)?)?;
+            // A threaded story whose frames are all among them is read as one text, once.
+            let named: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
+            let mut done = std::collections::HashSet::new();
+            let mut out: Vec<(NodeId, Vec<(usize, bool)>)> = vec![];
+            for &id in &ids {
+                if !done.insert(id) {
+                    continue;
+                }
+                let story = crate::cmd::threads::story_of(d, id);
+                if !story.is_empty() && story.iter().all(|f| named.contains(f)) {
+                    done.extend(story.iter().copied());
+                    out.extend(story_cuts(d, &story, brk));
+                } else if let Some(t) = text_of(d, id) {
+                    out.push((id, break_cuts(&t.plain_text(), 0, usize::MAX, brk)));
+                }
+            }
+            out
+        }
     };
-    let count: usize = targets
-        .iter()
-        .filter_map(|(id, a, b)| {
-            let text = text_of(d, *id)?.plain_text();
-            let (a, b) = (edit::floor_char(&text, *a), edit::floor_char(&text, *b));
-            Some(text.get(a..b)?.matches(brk).count())
-        })
-        .sum();
+    let count: usize = targets.iter().map(|(_, cuts)| cuts.len()).sum();
     if count == 0 {
         return Err(EngineError::Other(none.into()));
     }
@@ -794,9 +843,9 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let (removed, ids) = s.edit(label, |d, _| {
         let (mut removed, mut ids) = (0, vec![]);
-        for (id, a, b) in targets {
+        for (id, cuts) in targets {
             let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { continue };
-            let n = strip_breaks(t, a, b, brk);
+            let n = apply_cuts(t, &cuts, brk);
             if n > 0 {
                 refresh_bounds(t);
                 removed += n;

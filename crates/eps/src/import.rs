@@ -70,6 +70,7 @@ use graphics::{GState, Out};
 use interp::{Fault, Interp};
 use obj::PsError;
 
+pub(crate) use ai::MAX_GRADIENT_STOPS;
 pub(crate) use native::scale_document;
 pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_layers_alone, is_loss, layered_ai, layered_ai_from};
 pub use text::family_style;

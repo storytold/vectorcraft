@@ -142,6 +142,27 @@ fn colorize_dims_with_the_grays() {
     assert!(px[1].abs_diff(128) <= 3 && px[2].abs_diff(127) <= 3 && px[0] <= 2, "got {px:?}");
 }
 
+/// A linked image showing the missing-link placeholder draws it in its own colors though it keeps
+/// a colorize paint for its file; a grayscale preview still draws colorized.
+#[test]
+fn a_colorized_missing_link_placeholder_draws_in_its_own_colors() {
+    let proxy = |bytes: Vec<u8>| {
+        let bytes = std::sync::Arc::new(bytes);
+        ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) }
+    };
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let sharp = RenderOptions { smooth_images: false, ..Default::default() };
+    let placeholder = proxy(vectorcraft_doc::links::missing_placeholder().unwrap());
+    // 64 pixels at 0.5 pt: (16, 5) is the light tile, (5, 5) the cross.
+    let d = doc_of(placeholder, Some(blue.clone()), (64, 64), 0.5);
+    let out = Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &sharp);
+    assert!(near(out.pixel(16, 5), [236, 236, 236, 255], 2), "the light tile, got {:?}", out.pixel(16, 5));
+    assert!(near(out.pixel(5, 5), [200, 60, 60, 255], 2), "the red cross, got {:?}", out.pixel(5, 5));
+    let d = doc(proxy(gray_png()), Some(blue));
+    let px = Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &sharp).pixel(10, 10);
+    assert!(px[2] >= 250 && px[0] <= 5 && px[1] <= 5, "a grayscale preview takes the color, got {px:?}");
+}
+
 /// Separations Preview shows a spot-colorized image on its ink's plate only.
 #[test]
 fn separations_preview_shows_the_image_on_its_spot_plate() {

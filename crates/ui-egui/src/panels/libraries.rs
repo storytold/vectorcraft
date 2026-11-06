@@ -130,13 +130,22 @@ fn grabbed(drag: &PanelDrag, library: &str) -> Option<Grab> {
 }
 
 /// The kind and `library.add` params of what `drag` holds, to add to library `library`: a color
-/// (not one of that library's own), or a gradient or pattern swatch, by its name.
+/// (not one of that library's own; a spot colour with its swatch's name), or a gradient or pattern
+/// swatch, by its name.
 fn swatch_add(drag: &PanelDrag, library: &str) -> Option<(ItemKind, Value)> {
     let PanelDrag::Paint { paint, params, library: from, .. } = drag else { return None };
     let swatch = || params.get("swatch").and_then(Value::as_str);
     match paint {
         Paint::Solid { color, .. } if from.as_ref().is_none_or(|(l, _)| l != library) => {
-            Some((ItemKind::Color, json!({ "kind": "fillColor", "color": color })))
+            // A spot swatch's name (and tint) come along, so the library keeps the ink.
+            let mut add = json!({ "kind": "fillColor", "color": color });
+            if let Some(s) = swatch() {
+                add["swatch"] = json!(s);
+                if let Some(t) = params.get("tint") {
+                    add["tint"] = t.clone();
+                }
+            }
+            Some((ItemKind::Color, add))
         }
         Paint::Gradient(_) => swatch().map(|s| (ItemKind::Gradient, json!({ "kind": "fillGradient", "swatch": s }))),
         Paint::Pattern { .. } => swatch().map(|s| (ItemKind::Pattern, json!({ "kind": "fillPattern", "swatch": s }))),

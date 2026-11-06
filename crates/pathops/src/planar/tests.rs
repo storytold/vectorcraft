@@ -445,6 +445,31 @@ fn shape_builder_keeps_the_pieces_of_a_line_under_an_outline_in_front() {
 }
 
 #[test]
+fn shape_builder_gives_each_coincident_line_its_pieces() {
+    // Two lines along the same stretch, whose left half lies under the bottom edge of a rectangle
+    // in front of them: each has its own pieces, under the edge and beyond it. Beyond the edge the
+    // front line's piece is the edge, and the back line's lies under it.
+    let s = [line((0.0, 50.0), (200.0, 50.0), 0), line((0.0, 50.0), (200.0, 50.0), 1), rect(0.0, 0.0, 100.0, 50.0, 2)];
+    let BuilderArrangement { lines, lines_under, .. } = shape_builder(&s, false);
+    let spans = |pieces: &[Shape], key: u64| {
+        let mut v: Vec<_> = pieces.iter().filter(|l| l.key == key).filter_map(|l| l.path.bounds().map(|b| (b.x0, b.x1))).collect();
+        v.sort_by(|a, b| a.0.total_cmp(&b.0));
+        v
+    };
+    assert_eq!(spans(&lines, 1), [(100.0, 200.0)], "{lines:?}");
+    assert_eq!(spans(&lines_under, 1), [(0.0, 100.0)], "{lines_under:?}");
+    assert_eq!(spans(&lines, 0), [], "{lines:?}");
+    assert_eq!(spans(&lines_under, 0), [(0.0, 100.0), (100.0, 200.0)], "{lines_under:?}");
+    // Without the rectangle, both lines are cut where the line across them crosses.
+    let s = [line((0.0, 50.0), (200.0, 50.0), 0), line((0.0, 50.0), (200.0, 50.0), 1), line((100.0, 0.0), (100.0, 100.0), 2)];
+    let BuilderArrangement { lines, lines_under, .. } = shape_builder(&s, false);
+    assert_eq!(spans(&lines, 1), [(0.0, 100.0), (100.0, 200.0)], "{lines:?}");
+    assert_eq!(spans(&lines_under, 0), [(0.0, 100.0), (100.0, 200.0)], "{lines_under:?}");
+    // Live Paint's edges stay one per stretch, the front line's.
+    assert_eq!(live_paint(&s).1.iter().filter(|e| e.key == 0).count(), 0);
+}
+
+#[test]
 fn shape_builder_merges_adjacent_gap_closed_faces_without_keeping_bridges() {
     let outline = Shape::new(
         PathData::single(SubPath::polyline(

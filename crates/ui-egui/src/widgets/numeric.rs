@@ -20,10 +20,12 @@ pub(crate) fn typed_unit(ctx: &egui::Context, unit: Unit) -> Unit {
 }
 
 /// `text` typed in a numeric field, with a decimal comma read as a point: `0,1 mm` is `0.1 mm`
-/// (#3837). Text with a point keeps its commas, so `1,000.5` is still refused rather than read
-/// with two decimal separators, and so does a number that reads as thousands ([`thousands`]).
+/// (#3837), and each number of a sum reads its own separator, so `100.5 mm-0,5` (a comma typed
+/// after the value the field shows) is 100 mm (#5684). A number written with both separators has
+/// two points once read, so `1,000.5` and `1.234,5` are refused rather than guessed at; so is a
+/// number that reads as thousands ([`thousands`]).
 pub(super) fn decimal_point(text: &str) -> std::borrow::Cow<'_, str> {
-    if text.contains(',') && !text.contains('.') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
+    if text.contains(',') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
 }
 
 /// Is `text` a number written with a thousands comma, as `1,000` or `12,500 mm`: one to three
@@ -619,6 +621,53 @@ pub fn spin_field_stops_named(
         unit_field(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets, false, "")
     })
     .and_then(SpinPick::value)
+}
+
+/// A distance field with spinner arrows kept within `bounds` (points), as the Drop Shadow and
+/// Outer Glow dialogs show their offsets and blur: the spinner steps one `unit` at a time
+/// (Shift ×10, Ctrl/Cmd ÷10), and it, ↑/↓, the wheel, a scrub and a typed value stop at both
+/// ends. Returns the committed or stepped value in points.
+pub fn spin_length_within(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + Copy,
+    value: Option<f64>,
+    unit: Unit,
+    width: f32,
+    bounds: RangeInclusive<f64>,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    let step = Some(unit.to_pt(1.0)).filter(|s| s.is_finite() && *s > 0.0).unwrap_or(1.0);
+    let field = bounds.clone();
+    spin_generic(ui, label, value, None, None, None, width, step, *bounds.start(), &[], &[], &|v| unit.format(v), &mut |ui, fw, label| {
+        unit_field(ui, id, label, None, value, unit, fw, false, field.clone(), &[], false, "")
+    })
+    .and_then(SpinPick::value)
+    .map(|v| within(v, &bounds))
+}
+
+/// [`range_field`] with spinner arrows (Opacity and Darkness in the Drop Shadow and Outer Glow
+/// dialogs): the spinner steps by `step` (Shift ×10, Ctrl/Cmd ÷10) and, like ↑/↓, the wheel, a
+/// scrub and a typed value, stops at the ends of `range`.
+#[allow(clippy::too_many_arguments)]
+pub fn spin_range(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + Copy,
+    value: Option<f64>,
+    range: RangeInclusive<f64>,
+    suffix: &str,
+    decimals: usize,
+    width: f32,
+    step: f64,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    let places = decimals.min(6) as i32;
+    let value = value.map(|v| within(v, &range));
+    let fmt = |v: f64| format!("{v}{suffix}");
+    spin_generic(ui, label, value, None, None, None, width, step, *range.start(), &[], &[], &fmt, &mut |ui, fw, label| {
+        bounded_field(ui, id, label, None, value, suffix, decimals, fw, &range, None, false, false)
+    })
+    .and_then(SpinPick::value)
+    .map(|v| within(round_to(v, places), &range))
 }
 
 /// What a [`spin_field_auto`] returns: a value (points), or its Auto entry.

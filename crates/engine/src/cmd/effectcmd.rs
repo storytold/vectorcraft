@@ -16,7 +16,7 @@ use vectorcraft_render::effects;
 use super::appearance::{ItemTarget, aligned, appearance_targets, index_param, item_indices, item_target, item_target_at};
 use super::expand::has_seeded;
 use super::rasterfx;
-use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, fileio, has_doc, str_param};
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, fileio, has_doc, str_param, switch_or};
 
 /// The effect commands of the Effect menu and the Appearance panel.
 pub fn specs() -> Vec<CommandSpec> {
@@ -116,12 +116,13 @@ pub(crate) fn effect_targets(s: &Session, p: &Value, item: ItemTarget, index: us
     // Whether `item` names an item in the stack it is a row of (else the edit is object-level there).
     let anchor = roots.get(item.anchor(s, &roots)).and_then(|a| d.node(*a));
     let anchor_level = anchor.map(|a| item.effects_item(&a.appearance, cmd)).transpose()?.flatten();
+    let aligned = aligned(p, cmd)?;
     let mut out = Vec::with_capacity(roots.len());
     for (id, item) in roots.iter().zip(per) {
         let (Some(item), Some(n)) = (item, d.node(*id)) else { continue };
         let at = item.effects_item(&n.appearance, cmd)?;
         // An object-level effect this target shares with the first is where it is in this target.
-        let index = match (first.filter(|_| aligned(p)), at, anchor_level) {
+        let index = match (first.filter(|_| aligned), at, anchor_level) {
             (Some(f), None, None) => SharedStack::of(&[&*f.appearance, &*n.appearance]).effect_in(index, 1).unwrap_or(index),
             _ => index,
         };
@@ -236,6 +237,7 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let effect = effects::new_effect(id, &params).ok_or_else(|| bad(C, format!("unknown effect `{id}`")))?;
     let label = effects::effect_info(id).map(|e| e.label.trim_end_matches('…').to_string()).unwrap_or_default();
+    aligned(p, C)?;
     if let Some(loose) = loose_for_pathfinder(s, p, id)? {
         let gid = s.edit(&label, |d, sel| {
             let gid = super::object::group_nodes(d, &loose)?;
@@ -375,10 +377,10 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
     let to = index_param(p, "to", C)?;
     let src = item_target_at(s, p, "fromItem", C)?;
     let dst = if p.get("toItem").is_some() { item_target_at(s, p, "toItem", C)? } else { src };
-    let copy = p.get("copy").and_then(Value::as_bool).unwrap_or(false);
+    let copy = switch_or(p, "copy", false, C)?;
     let roots = appearance_targets(s, p)?;
     // Where an aligned effect would go in each of several different stacks isn't one place.
-    if aligned(p) && super::appearance::appearances_differ(&s.doc()?.doc, &roots) {
+    if aligned(p, C)? && super::appearance::appearances_differ(&s.doc()?.doc, &roots) {
         return Err(bad(C, "effects of objects whose appearances differ can't be moved together"));
     }
     // Where the effect landed in each object it moved in, in the order of `ids`.
@@ -758,11 +760,15 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
                     members = expand_pieces(d, &mut m, false, brushes, &mut stroke_art);
                     m
                 })
-            } else if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && !effects::has_transform_art(&v) {
+            } else if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+                && !effects::has_transform_art(&v)
+                && !effects::has_transform_copies(&v)
+            {
                 effects::expand_leaf(d, &v, &mut stroke_art)
             } else {
                 // Type, images, symbol instances, live objects (and paths whose Transform effect copies
-                // them with a gradient or changes their fills and strokes): through their outlines.
+                // them, each copy an object of its own, or changes their fills and strokes): through
+                // their outlines.
                 let symbol = match &n.kind {
                     NodeKind::SymbolInstance { symbol, .. } => {
                         d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_render::instance_art(&s.art, &n))

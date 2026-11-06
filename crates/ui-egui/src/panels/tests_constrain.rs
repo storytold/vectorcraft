@@ -256,6 +256,21 @@ fn a_thousands_comma_in_a_percentage_is_refused_in_a_size_field() {
     }
 }
 
+/// Arithmetic with a decimal comma works in W (#5684), also after a value shown with a point; a
+/// number with both separators is refused and leaves the size as it was.
+#[test]
+fn arithmetic_with_a_decimal_comma_works_in_a_size_field() {
+    let surfaces: [(&str, Draw); 3] =
+        [("Transform panel", transform::show), ("Properties", properties::transform_section), ("Control bar", crate::chrome::control_bar)];
+    for (name, draw) in surfaces {
+        for (text, want) in [("100,5-20,5", 80.0), ("90-0,5*20", 80.0), ("10,5*2", 21.0), ("100.5 pt-20,5", 80.0), ("1.234,5", 100.0)] {
+            let mut app = rect_app();
+            set_field(&mut app, draw, "100 pt", text, End::Enter(Modifiers::NONE));
+            assert_eq!(size(&app), (want, 50.0), "{name}, {text}");
+        }
+    }
+}
+
 /// A length field of the New Document dialog keeps the focus on Ctrl/Cmd+Enter, and the dialog
 /// creates no document.
 #[test]

@@ -3207,7 +3207,9 @@ digits	Malayalam	Малаялам
 	Patterns	Мостри
 	Stroke Options	Опции на щриха
 	Character:	Знак:
+	Paragraph:	Абзац:
 	Character options	Опции на знака
+	Paragraph options	Опции за абзац
 	Stroke options	Опции на щриха
 	Transform options	Опции за трансформации
 	Stroke Weight	Дебелина на щриха
@@ -4194,6 +4196,8 @@ axis	Both	И двете
 @msg	no such saved selection	няма такава запазена селекция
 @msg	no such segment	няма такъв сегмент
 @msg	no such spine point	няма такава точка от оста
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` трябва да е списък с най-много 10000 индекса на точки от оста
+@msg	`with` moves points, not a handle	`with` мести точки, не дръжка
 @msg	no such spine segment	няма такъв сегмент от оста
 @msg	no such subpath	няма такъв подпът
 @msg	no such user library	няма такава потребителска библиотека
@@ -4524,6 +4528,9 @@ axis	Both	И двете
 @msg	an image VectorCraft can't read was left out	изображение, което VectorCraft не може да разчете, беше пропуснато
 @msg	an image whose data is cut short was left out	изображение с непълни данни беше пропуснато
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	свързаните картини показват записания във файла предварителен преглед с ниска резолюция, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
+@msg	linked type areas past VectorCraft's limits were left out	свързаните текстови области извън ограниченията на VectorCraft бяха пропуснати
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, използван като маска в свързани области, обтичащ текст или съставен път, не изрязва
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	свързаните картини без предварителен преглед във файла показват заместител, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текстовите рамки за област в редове, твърде къси за шрифта, в който се показват, получиха по-високи рамки ({_1}): текстът им иначе нямаше да се види
 @msg	its editing data doesn't say where its art is	данните му за редактиране не посочват къде се намира неговата графика
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	този файл е записан без съвместимост с PDF и данните му за редактиране не могат да бъдат прочетени ({why})
@@ -5949,6 +5956,9 @@ anchor	Points:	Точки:
 	Find Nearest Swatch…	Намиране на най-близкия образец…
 	Find Nearest Swatch	Намиране на най-близкия образец
 	Apply Nearest Swatch	Прилагане на най-близкия образец
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Прилагане на запълването към щриха
+	Apply Stroke to Fill	Прилагане на щриха към запълването
 	Select objects to find the swatches nearest their colors.	Изберете обекти, за да намерите най-близките до цветовете им образци.
 @msg	select objects or give `color`	изберете обекти или задайте `color`
 @msg	`color` is not a colour	`color` не е цвят
@@ -6186,6 +6196,10 @@ breakText	Glyphs	Глифи
 	Bow	Дъга
 	Spike	Връх
 	Skip Spaces	Пропускане на интервалите
+	Release Type on a Path…	Освобождаване на текст по пътя…
+	Release Type on a Path	Освобождаване на текст по пътя
+	Text and Path	Текст и път
+	Path Only	Само път
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Графиката е твърде голяма, за да се копира като изображение: другите приложения не получават PNG от нея
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
@@ -6197,3 +6211,43 @@ breakText	Glyphs	Глифи
 	Fully Outside	Изцяло извън
 	No artboards match.	Няма съвпадащи работни области.
 	Chosen: {n} of {total}	Избрани: {n} от {total}
+
+# Contour add-on
+	Contour	Очертание
+	Contour Tool	Инструмент „Очертание“
+	Sharp	Заостряне
+	Bake	Разшири
+	Turn the Contour into plain paths	Превръща очертанието в обикновени пътища
+	Set Corners…	Задаване на ъгли…
+	All Anchors	Всички опорни точки
+	Odd-Numbered Anchors	Нечетни опорни точки
+	Even-Numbered Anchors	Четни опорни точки
+	Minimum angle	Минимален ъгъл
+	Maximum angle	Максимален ъгъл
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Избиране на свързаните
+	Select Embedded	Избиране на вградените
+	Select Missing	Избиране на липсващите
+	Select Modified	Избиране на модифицираните
+	Select by Link Status	Избиране по състояние на връзката
+	Select by Link Status…	Избиране по състояние на връзката…
+	Search images	Търсене на изображения
+	No images match.	Няма съвпадащи изображения.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Избрано е {n} свързано изображение|Избрани са {n} свързани изображения
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Избрано е {n} вградено изображение|Избрани са {n} вградени изображения
+@msgplural	Selected {n} missing image|Selected {n} missing images	Избрано е {n} липсващо изображение|Избрани са {n} липсващи изображения
+@msgplural	Selected {n} modified image|Selected {n} modified images	Избрано е {n} модифицирано изображение|Избрани са {n} модифицирани изображения
+@msgplural	Selected {n} image|Selected {n} images	Избрано е {n} изображение|Избрани са {n} изображения
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; още {n} е скрито или заключено|{selected}; още {n} са скрити или заключени
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; още {n} е в шаблонен слой|{selected}; още {n} са в шаблонни слоеве
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; още {n} е извън изолираната група|{selected}; още {n} са извън изолираната група
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; още {n} не може да бъде избрано сега|{selected}; още {n} не могат да бъдат избрани сега
+
+# Compound Shapes add-on
+	Compound Shapes	Съставни фигури
+	Shape Mode Buttons Make Compound Shapes	Бутоните за режими на фигури създават съставни фигури
+
+# 3D Box add-on
+	3D Box	3D кутия
+	3D Box Tool	Инструмент за 3D кутия
