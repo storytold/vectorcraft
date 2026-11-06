@@ -28,6 +28,9 @@ log = { workspace = true }
 chrono = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The control channel's per-launch token (src/control_server.rs, #3603). MIT OR Apache-2.0, already
+# in Cargo.lock through vectorcraft-pdf.
+getrandom = "0.4"
 rfd = { workspace = true }
 # wayland-data-control: native Wayland clipboard (Linux; X11 through XWayland only sees what X11 apps copied).
 arboard = { workspace = true, features = ["image-data", "wayland-data-control"] }

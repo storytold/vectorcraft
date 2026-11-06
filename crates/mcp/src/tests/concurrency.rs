@@ -359,7 +359,7 @@ fn a_remote_call_stops_waiting_for_the_app_when_cancelled() {
         let _ = held.recv_timeout(WAIT);
         drop(conn);
     });
-    let mut remote = crate::Remote::connect(&addr).unwrap();
+    let mut remote = crate::Remote::connect(&addr, None).unwrap();
     let token = cancel::CancelToken::new();
     let raise = token.clone();
     std::thread::spawn(move || {

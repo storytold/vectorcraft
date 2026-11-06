@@ -88,6 +88,14 @@ window is open before you start the MCP client. With `--connect`, a server that 
 prints `vectorcraft-cli: cannot connect to 127.0.0.1:7979: ` followed by the system's connection error, for
 example `connection timed out`.
 
+The app requires a per-launch token on its control port ([Control protocol](control-protocol.md#authentication)).
+`vectorcraft-cli mcp` reads it from the `control-<port>.token` file the app writes next to its settings, so
+nothing needs configuring when both run as the same user with the same settings folder (the same
+`VECTORCRAFT_CONFIG_DIR`, if set). Otherwise set `VECTORCRAFT_CONTROL_TOKEN_FILE` or
+`VECTORCRAFT_CONTROL_TOKEN` for the server. With `--connect`, a token that can't be found or that the app
+refuses stops the server with the reason (`cannot connect to 127.0.0.1:7979: no control token (…)` or
+`… the app refused the control token: …`); with no flag, the server runs headless instead.
+
 ## Confining file access
 
 ```sh
