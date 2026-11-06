@@ -662,8 +662,8 @@ pub fn spin_length_within(
     let label = take_previous_label(ui);
     let step = Some(unit.to_pt(1.0)).filter(|s| s.is_finite() && *s > 0.0).unwrap_or(1.0);
     let field = bounds.clone();
-    spin_generic(ui, label, value, None, None, None, width, step, *bounds.start(), &[], &[], &|v| unit.format(v), &mut |ui, fw, label| {
-        unit_field(ui, id, label, None, value, unit, fw, false, field.clone(), &[], false, "")
+    spin_generic(ui, label, value, None, None, None, width, step, *bounds.start(), &[], &[], &|v| unit.format(v), &mut |ui, fw, corners, label| {
+        unit_field(ui, id, label, None, value, unit, fw, false, field.clone(), &[], corners, false, "")
     })
     .and_then(SpinPick::value)
     .map(|v| within(v, &bounds))
@@ -687,8 +687,8 @@ pub fn spin_range(
     let places = decimals.min(6) as i32;
     let value = value.map(|v| within(v, &range));
     let fmt = |v: f64| format!("{v}{suffix}");
-    spin_generic(ui, label, value, None, None, None, width, step, *range.start(), &[], &[], &fmt, &mut |ui, fw, label| {
-        bounded_field(ui, id, label, None, value, suffix, decimals, fw, &range, None, false, false)
+    spin_generic(ui, label, value, None, None, None, width, step, *range.start(), &[], &[], &fmt, &mut |ui, fw, corners, label| {
+        bounded_field(ui, id, label, None, value, suffix, decimals, fw, &range, None, corners, false, false)
     })
     .and_then(SpinPick::value)
     .map(|v| within(round_to(v, places), &range))
