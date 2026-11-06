@@ -469,8 +469,21 @@ pub fn selection_box(cx: &ToolContext) -> Option<OrientedBox> {
 /// [`selection_box`] while the canvas shows it (View › Show Bounding Box, and no anchors selected
 /// on their own): its handles take a press only then. A path the Pen is drawing keeps its end
 /// anchor selected, so Cmd/Ctrl lending the Selection tool doesn't scale it by hidden handles (#4980).
-fn shown_box(cx: &ToolContext) -> Option<OrientedBox> {
+/// The shape tools press it too (#5477).
+pub(crate) fn shown_box(cx: &ToolContext) -> Option<OrientedBox> {
     (cx.show_bbox && cx.selection.anchors.is_empty()).then(|| selection_box(cx)).flatten()
+}
+
+/// The selected object whose centre point (Attributes panel › Show Center), drawn while it is
+/// selected, is within `tol` of `p`: (object, where the point is). A press there grabs the object
+/// by that point — it moves the selection even where no art is painted (an unfilled shape) — as
+/// Direct Selection's does (#4891).
+pub(crate) fn hit_center(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, Point)> {
+    let (symbols, editable) = (cx.doc.symbol_boxes(), cx.doc.editable());
+    cx.selection.objects.iter().copied().filter(|id| editable(*id) && crate::direct::in_scope(cx.doc, cx.isolation, *id)).find_map(|id| {
+        let c = cx.doc.node(id).filter(|n| n.shows_center())?.geometric_bounds_with(&symbols)?.center();
+        (c.distance(p) <= tol).then_some((id, c))
+    })
 }
 
 /// The bounds of object `id`, measured as [`selection_bounds`] measures the selection.
@@ -822,6 +835,18 @@ impl Tool for SelectionTool {
                     self.state = State::Idle;
                     return out;
                 }
+                // 2b. A selected object's centre point (Attributes › Show Center), drawn while it
+                // is selected: a drag from it moves the selection, also where no art is painted
+                // (an unfilled shape), which a press there would otherwise take for a marquee. A
+                // click there is a click on that object, so it makes it the key object too.
+                if !m.shift
+                    && !m.cmd
+                    && let Some((id, center)) = hit_center(cx, p, cx.point_tol())
+                {
+                    let key = ((cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.alt).then_some(id);
+                    self.state = State::Moving { start: p, press: p, hold: center, began: false, deselect: None, key, exclude: None };
+                    return vec![];
+                }
                 // 3. Objects: Cmd/Ctrl-click selects the one under the selected one (cycling).
                 if m.cmd
                     && cx.select_behind
@@ -1070,6 +1095,11 @@ impl Tool for SelectionTool {
         }
         if near_selected && pie::over_widget(cx, p) {
             return Cursor::ArrowHollow;
+        }
+        // A selected object's centre point (Show Center): a press there moves it, where the art
+        // may not reach.
+        if near_selected && hit_center(cx, p, cx.point_tol()).is_some() {
+            return Cursor::Move;
         }
         if over_rotate_all(cx, p) {
             return Cursor::Rotate;

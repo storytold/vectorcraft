@@ -94,6 +94,7 @@ id = "Move"
 group = "Selection"
 shown_when = [
     "The Selection tool over a selected object, or over any object with Alt held (once an Alt-drag starts, SelectionCopy shows).",
+    "The shape tools over a selected object's centre point (Attributes › Show Center), and while dragging it.",
     "Reshape over a path or while dragging.",
     "Inside the Free Transform and Crop Image boxes.",
     "Puppet Warp over a pin.",
@@ -376,7 +377,9 @@ look = "An arc with an arrowhead at each end. RotateToward is the same arc, turn
 [[cursor]]
 id = "RotateToward"
 group = "Transform and resize"
-shown_when = ["Selection and Free Transform in the rotate zone just outside a bounding-box corner, and while rotating there. The Rotate, Gradient and Puppet Warp rotate cursors don't turn."]
+shown_when = [
+    "Selection, Free Transform and the shape tools (Rectangle, Rounded Rectangle, Ellipse, Polygon, Star) in the rotate zone just outside a bounding-box corner, and while rotating there. The Rotate, Gradient and Puppet Warp rotate cursors don't turn.",
+]
 hotspot = "Below the arc, in its empty middle, as for Rotate."
 look = "The Rotate arc drawn for the top-right corner (direction 1). VectorCraft turns it in 45° steps so it wraps whichever corner the pointer is at."
 

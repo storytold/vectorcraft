@@ -2139,3 +2139,33 @@ fn a_double_click_on_a_symbol_instance_edits_its_symbol() {
     assert_eq!(double(&d, Some(l), 300.0, 300.0), vec![]);
     assert_eq!(double(&d, Some(l), 450.0, 50.0), vec![Action::Exec("object.exitIsolation".into(), json!({}))]);
 }
+
+/// #4891 for the Selection tool: a press on a selected object's centre point (Attributes › Show
+/// Center) moves the selection, also where no art is painted (an unfilled shape), which the press
+/// would otherwise take for a marquee; anywhere else a press still starts one.
+#[test]
+fn a_press_on_the_centre_point_moves_an_unfilled_shape() {
+    let (d, id) = doc_with_live_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let centre = Point::new(150.0, 150.0);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, centre, Mods::default()), Cursor::Move);
+    assert!(t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y)).is_empty());
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 170.0, 160.0));
+    assert_eq!(a.first(), Some(&Action::Begin("Move".into())), "{a:?}");
+    assert!(
+        matches!(a.last(), Some(Action::Preview(cmd, v)) if cmd == "object.transform" && v["matrix"] == json!([1.0, 0.0, 0.0, 1.0, 20.0, 10.0])),
+        "{a:?}"
+    );
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 170.0, 160.0)), vec![Action::Commit]);
+    // Empty canvas away from it: a marquee, as before.
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, Point::new(400.0, 400.0), Mods::default()), Cursor::Arrow);
+    t.pointer(&c, &ev(PointerKind::Down, 400.0, 400.0));
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 450.0, 450.0));
+    assert!(a.is_empty(), "{a:?}");
+    assert!(matches!(t.overlays(&c).first(), Some(Overlay::Marquee(_))), "a marquee");
+}
