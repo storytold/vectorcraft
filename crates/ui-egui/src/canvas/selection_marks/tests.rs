@@ -268,10 +268,10 @@ fn paint(marks: &mut SelectionMarks, app: &VectorcraftApp, p: &egui::Painter, xf
 }
 
 /// Kept marks, marks built from nothing and plain shapes all draw the same pixels. Kept marks may
-/// differ at up to 1 pixel in 1,000: at a corner of exactly 90 degrees on a rotated view, the
-/// tessellator picks a miter or a cut corner by a rounding error of the corner's position, and
-/// moved triangles keep the corner they were built with. An anchor square left stale covers more
-/// than this limit.
+/// differ at up to 1 pixel in 1,000: at a corner of exactly 90 degrees on a rotated view, plain
+/// shapes take a miter or a cut corner by a rounding error of the corner's position, which a pan
+/// changes, and moved triangles keep the corner they were built with. An anchor square left stale
+/// covers more than this limit.
 #[track_caller]
 fn assert_matches_plain(ctx: &egui::Context, marks: &mut SelectionMarks, app: &VectorcraftApp, xf: &Xf, pixels_per_point: f32, what: &str) {
     let want = picture(ctx, pixels_per_point, |p| plain(app, p, xf, false));
@@ -309,16 +309,18 @@ fn marks_draw_the_same_pixels_as_plain_shapes_at_each_view() {
 fn a_pan_moves_the_marks_without_building_them() {
     let (mut app, _) = scene();
     let ctx = egui::Context::default();
-    app.select_tool("directSelection");
-    for (pixels_per_point, rot) in [(1.0, 0.0), (1.25, 0.0), (2.0, 30.0)] {
-        let mut marks = SelectionMarks::default();
-        assert_matches_plain(&ctx, &mut marks, &app, &xf(1.5, VIEW, rot), pixels_per_point, "before the pan");
-        let builds = marks.builds;
-        for (dx, dy) in [(10.0, 0.0), (3.0, 7.0), (0.37, 0.61), (-31.3, 12.9), (160.0, 90.0)] {
-            let view = xf(1.5, (VIEW.0 + dx, VIEW.1 + dy), rot);
-            assert_matches_plain(&ctx, &mut marks, &app, &view, pixels_per_point, &format!("{pixels_per_point}x pan {dx} {dy}"));
+    for tool in ["selection", "directSelection"] {
+        app.select_tool(tool);
+        for (pixels_per_point, rot) in [(1.0, 0.0), (1.25, 0.0), (2.0, 30.0)] {
+            let mut marks = SelectionMarks::default();
+            assert_matches_plain(&ctx, &mut marks, &app, &xf(1.5, VIEW, rot), pixels_per_point, &format!("{tool}, before the pan"));
+            let builds = marks.builds;
+            for (dx, dy) in [(10.0, 0.0), (3.0, 7.0), (0.37, 0.61), (-31.3, 12.9), (160.0, 90.0)] {
+                let view = xf(1.5, (VIEW.0 + dx, VIEW.1 + dy), rot);
+                assert_matches_plain(&ctx, &mut marks, &app, &view, pixels_per_point, &format!("{tool}, {pixels_per_point}x pan {dx} {dy}"));
+            }
+            assert_eq!(marks.builds, builds, "{tool}: a pan builds nothing");
         }
-        assert_eq!(marks.builds, builds, "a pan builds nothing");
     }
 }
 
@@ -331,7 +333,7 @@ fn a_long_pan_at_high_zoom_builds_the_marks_again_and_stays_exact() {
     let zoom = 2_000.0;
     assert_matches_plain(&ctx, &mut marks, &app, &xf(zoom, (180.0, 41.0), 0.0), 1.0, "the top of the curve's straight end");
     let builds = marks.builds;
-    assert_matches_plain(&ctx, &mut marks, &app, &xf(zoom, (180.0, 89.0), 0.0), 1.0, "96,000 px along the straight end");
+    assert_matches_plain(&ctx, &mut marks, &app, &xf(zoom, (180.0, 89.0), 0.0), 1.0, "96,000 points along the straight end");
     assert!(marks.builds > builds, "a pan past MAX_PAN builds the marks again");
 }
 

@@ -1,13 +1,16 @@
-//! The selected objects' outlines, anchors and handles, kept between frames as triangles.
+//! The selected objects' outlines, anchors and handles, kept between frames.
 //!
-//! Each selected object has an [`ObjectMarks`], valid for one node (by [`Arc`] identity), layer
-//! color and set of selected anchors. The marks of all objects are joined into one mesh, in the
-//! order they are drawn. A frame with nothing changed draws that mesh again. A pan moves the
-//! triangles of outlines and handles, and places the anchor squares again, because a square's edges
-//! are rounded to whole pixels where it lands. Each subpath, handle and square is tested against the
-//! view on its own: one out of view adds nothing to the mesh, and a subpath or handle gets its
-//! triangles the first time it is in view. A frame with a new zoom, rotation or display scale draws
-//! plain shapes and keeps nothing, and the next frame with the same view builds the marks.
+//! Outlines, handles and slanted lines are kept as triangles. Anchor squares, and level or upright
+//! lines that are not handles, are kept as document points. Each selected object has an
+//! [`ObjectMarks`], valid for one node (by [`Arc`] identity), layer color and set of selected
+//! anchors, for the document and revision if the object uses symbols, and within [`MAX_PAN`]. The
+//! marks of all objects are joined into one mesh, in the order they are drawn. A frame with nothing
+//! changed draws that mesh again. A pan moves the triangles of outlines and handles, and places the
+//! anchor squares again, because a square's edges are rounded to whole pixels where it lands. Each
+//! subpath, handle and square is tested against the view on its own: one out of view adds nothing
+//! to the mesh, and a subpath or handle gets its triangles the first time it is in view. A frame
+//! with a new zoom, rotation or display scale draws plain shapes and keeps nothing, and the next
+//! frame with the same view builds the marks.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ops::Range;
@@ -22,9 +25,9 @@ use super::outline::{KEY_OUTLINE, c32, node_outline, to_screen_path, walk_drawn}
 use super::overlays::{HandleLook, anchor_square, selected_anchor};
 use super::{BezPath, Color32, Node, NodeKind, Point, Pos2, Shape, Stroke, StrokeKind, SymbolBoxes, Xf, pos2, vec2};
 
-/// How far a pan moves kept triangles before their object is built again. Screen coordinates are
-/// `f32`, which holds a coordinate under 2^16 to within 1/256 px, and a point farther out than this
-/// plus the width of a window stays off screen.
+/// How far a pan moves an object's kept marks, on either axis, before the object is built again.
+/// Screen coordinates are `f32`, which holds a coordinate under 2^16 to within 1/256 px, and a point
+/// farther out than this plus the width of a window stays off screen.
 const MAX_PAN: f64 = 16_384.0;
 
 /// The most points and vertices kept. Past this the marks are dropped after the frame that built
@@ -616,7 +619,9 @@ impl SelectionMarks {
                 }
             }
         }
+        let kept = self.objects.len();
         self.objects.retain(|_, entry| entry.seen == pass);
+        changed |= self.objects.len() != kept;
         let shown = Shown { at: map.at, clip: p.clip_rect(), all_handles: options.all_handles };
         if changed || self.shown.as_ref() != Some(&shown) || self.order != objects {
             self.order.clear();
