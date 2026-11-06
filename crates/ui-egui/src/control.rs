@@ -232,7 +232,7 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "windows": crate::doc_windows::windows(app),
         "currentWindow": crate::doc_windows::current(app),
         "window": [r.width(), r.height()],
-        "documents": app.session.documents().iter().map(|d| json!({"title": d.title(), "dirty": d.is_dirty()})).collect::<Vec<_>>(),
+        "documents": app.session.documents().iter().map(|d| json!({"uid": d.uid, "title": d.title(), "path": d.path, "dirty": d.is_dirty()})).collect::<Vec<_>>(),
         "activeDocument": app.session.active_index(),
         "perf": {"frameMs": app.perf.frame_ms, "renderMs": app.perf.render_ms, "fps": app.perf.fps},
         "graphicsAdapter": app.graphics_adapter,
@@ -283,16 +283,67 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
     match req.method.as_str() {
         "engine.execute" | "ui.menu.invoke" | "command" => {
             let Some(id) = s("command").or(s("id")) else { return err("missing `command`") };
+            let target = match p.get("document") {
+                None => None,
+                Some(v) => match v.as_u64() {
+                    Some(uid) => Some(uid),
+                    None => return err("document requires an integer UID"),
+                },
+            };
+            let mut guard = None;
+            if let Some(expected) = p.get("expected") {
+                let snapshot = id == "file.saveCopy" && p.pointer("/params/path").is_none();
+                if req.method != "engine.execute" || !(id == "object.setProps" || snapshot) {
+                    return err("capability: conditional execution supports object.setProps and byte-only file.saveCopy");
+                }
+                let (Some(document), Some(revision)) =
+                    (expected.get("document").and_then(Value::as_u64), expected.get("revision").and_then(Value::as_u64))
+                else {
+                    return err("expected requires integer document and revision");
+                };
+                if let Some(target) = p.get("document")
+                    && target.as_u64() != Some(document)
+                {
+                    return err("conflict: target document differs from expected document");
+                }
+                if let Err(e) = app.session.check_property_revision(document, revision) {
+                    return err(e.to_string());
+                }
+                guard = Some((document, revision));
+            }
             let params = p.get("params").cloned().unwrap_or(json!({}));
             let params = if params.is_null() { json!({}) } else { params };
             // A key the command's description doesn't name is an error, not a default (#1442).
             if let Err(e) = crate::menus::check_params(&app.session, id, &params) {
                 return err(e);
             }
+            if let Some(document) = target.or(guard.map(|g| g.0))
+                && (guard.is_some() || Some(document) != app.session.active().map(|d| d.uid))
+            {
+                if req.method != "engine.execute" {
+                    return err("capability: background routing requires engine.execute");
+                }
+                return wrap(app.session.execute_document(document, guard.map(|g| g.1), id, &params).map_err(|e| e.to_string()));
+            }
+            // The engine's documented no-path copy returns bytes. Automation
+            // must not open a native Save dialog or change the document's path.
+            if req.method == "engine.execute" && id == "file.saveCopy" && params.get("path").is_none() {
+                return wrap(app.session.execute(id, &params).map_err(|e| e.to_string()));
+            }
             wrap(app.run(id, params))
         }
         "engine.commands" => ok(all_commands(app)),
-        "document.inspect" => wrap(app.run("document.inspect", p.clone())),
+        "document.inspect" => {
+            let mut params = p.clone();
+            if let Some(fields) = params.as_object_mut() {
+                fields.remove("document");
+            }
+            if let Some(target) = p.get("document") {
+                let Some(document) = target.as_u64() else { return err("document requires an integer UID") };
+                return wrap(app.session.execute_document(document, None, "document.inspect", &params).map_err(|e| e.to_string()));
+            }
+            wrap(app.run("document.inspect", params))
+        }
         "ui.inspect" => ok(inspect(app, ctx)),
         "ui.docking" => ok(crate::panel_docking::inspect(app, ctx)),
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),

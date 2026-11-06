@@ -334,6 +334,7 @@ impl Session {
         // A preview that left the document as it was records no Transform Again either (as
         // `keep_interaction` records no undo step): the last real transformation stands.
         let changed = !Arc::ptr_eq(&it.doc, &st.doc);
+        let content_changed = changed && *it.doc != *st.doc;
         // How far a drag of direct-selected anchors moved them (`path.moveAnchors`).
         let moved = vectorcraft_geom::Vec2::new(
             preview.1.get("dx").and_then(Value::as_f64).unwrap_or(0.0),
@@ -374,6 +375,15 @@ impl Session {
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         self.journal.push(preview);
         self.journal_in_undo_groups(doc, &grouped, journal);
+        // Direct tool releases and panel preview commits do not pass through
+        // execute's outer boundary. Emit once, after the native undo step is kept;
+        // commands/batches publish at their own successful outer boundary instead.
+        if self.depth == 0
+            && content_changed
+            && let Some(st) = self.active()
+        {
+            self.changes.publish(st.uid, st.revision, "interaction.commit");
+        }
         Ok(())
     }
 
