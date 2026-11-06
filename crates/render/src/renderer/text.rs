@@ -151,18 +151,48 @@ impl Renderer {
         let fonts = vectorcraft_text::FontDb::global().generation();
         if fonts != self.text_fonts {
             self.texts.clear();
+            self.text_ids.clear();
             self.char_strokes.clear();
             self.text_fonts = fonts;
         }
         let key = Arc::as_ptr(a) as usize;
-        if let Some((node, g)) = self.texts.get(&key, self.stamp)
-            && Arc::ptr_eq(node, a)
-        {
+        if let Some((_, g)) = self.texts.get_if(&key, self.stamp, |(node, _)| Arc::ptr_eq(node, a)) {
             return (g.clone(), true);
         }
+        if let Some(&previous) = self.text_ids.get(&a.id)
+            && let Some(g) = self
+                .texts
+                .get_if(&previous, self.stamp, |(node, _)| {
+                    let NodeKind::Text(old) = &node.kind else { return false };
+                    // Layout and character stroke outlines are in text space. Only the transform
+                    // changed when the remaining text attributes still compare equal.
+                    let mut comparable = (**old).clone();
+                    comparable.xf = t.xf;
+                    comparable == *t
+                })
+                .map(|(_, g)| g.clone())
+        {
+            // Kept under this node from here on: the next frames find it without comparing.
+            self.texts.remove(&previous);
+            let kept = self.keep_text(a, g.clone());
+            return (g, kept);
+        }
         let g = Arc::new(text_geom(t));
-        let kept = self.texts.insert(key, (a.clone(), g.clone()), g.bytes(), self.stamp);
+        let kept = self.keep_text(a, g.clone());
         (g, kept)
+    }
+
+    /// Keep glyph geometry `g` of text node `a`, as the latest of its id. Whether it was kept.
+    fn keep_text(&mut self, a: &Arc<Node>, g: Arc<TextGeom>) -> bool {
+        let key = Arc::as_ptr(a) as usize;
+        let bytes = g.bytes();
+        let kept = self.texts.insert(key, (a.clone(), g), bytes, self.stamp);
+        if kept {
+            self.text_ids.insert(a.id, key);
+        } else {
+            self.text_ids.remove(&a.id);
+        }
+        kept
     }
 
     /// Draw type `n` (`t`, laid out in `g`). The outlines of its character strokes are cached
