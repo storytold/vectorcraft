@@ -145,7 +145,10 @@ impl Importer {
         let url = self.links.get(g.id()).cloned();
         let mut n = match self.instance(g, acc) {
             Some(n) => n,
-            None => self.group_node(g, acc)?,
+            None => {
+                let n = self.group_node(g, acc)?;
+                self.filter_regions(g, acc * aff(g.transform()), n)?
+            }
         };
         if let Some(url) = url {
             link(&mut n, &url);
@@ -361,6 +364,58 @@ impl Importer {
         Some(n)
     }
 
+    /// `n`, made of group `g` (whose user space `ts` maps to the document), clipped to the regions
+    /// of the filters it imported as effects: SVG 1.1 §15.5
+    /// (<https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion>) cuts a filter's result at
+    /// its region. A filter that didn't import (drawn without it) clips nothing.
+    fn filter_regions(&mut self, g: &usvg::Group, ts: Affine, mut n: Node) -> Option<Node> {
+        if g.filters().is_empty() || fx::effects(g.filters(), ts, &self.blends).is_none() {
+            return Some(n);
+        }
+        for f in g.filters() {
+            n = self.region_clipped(n, f.rect(), ts)?;
+        }
+        Some(n)
+    }
+
+    /// `n` in a clip group cut to `region` (a filter's or mask's, in the user space `ts` maps to
+    /// the document), unless all it paints (its visual bounds, grown by the reach of its effects)
+    /// lies inside the region. `None` only past the object limit.
+    fn region_clipped(&mut self, n: Node, region: usvg::NonZeroRect, ts: Affine) -> Option<Node> {
+        let r = Rect::new(region.left() as f64, region.top() as f64, region.right() as f64, region.bottom() as f64);
+        let det = ts.determinant();
+        let Some(bounds) = n.visual_bounds_with(&self.doc.symbol_boxes()) else { return Some(n) };
+        if !det.is_finite() || det.abs() < 1e-12 {
+            return Some(n);
+        }
+        // A clip group paints inside its clipping path; anything else as far as its effects reach
+        // (as export sizes the filter regions it writes: an Outer Glow grows by a quarter of a
+        // raster pixel first).
+        let reach = if matches!(n.kind, NodeKind::Group { clip: true, .. }) {
+            0.0
+        } else {
+            let grow = 18.0 / self.doc.raster_ppi();
+            vectorcraft_effects::raster_effects(&n.appearance.effects)
+                .iter()
+                .map(|f| f.outset(bounds) + if matches!(f, vectorcraft_effects::RasterFx::OuterGlow { .. }) { grow } else { 0.0 })
+                .sum()
+        };
+        let painted = bounds.inflate(reach, reach);
+        let to_user = ts.inverse();
+        let eps = 1e-6 * (1.0 + r.width().max(r.height()));
+        let inside =
+            [(painted.x0, painted.y0), (painted.x1, painted.y0), (painted.x1, painted.y1), (painted.x0, painted.y1)].into_iter().all(|(x, y)| {
+                let p = to_user * Point::new(x, y);
+                p.x >= r.x0 - eps && p.x <= r.x1 + eps && p.y >= r.y0 - eps && p.y <= r.y1 + eps
+            });
+        if inside {
+            return Some(n);
+        }
+        let path = shapes::rectangle(r).transformed(ts);
+        let clip = self.named("", NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: true, guide: false })?;
+        self.named("", NodeKind::Group { children: vec![Arc::new(clip), Arc::new(n)], clip: true })
+    }
+
     /// `<mask>` → opacity mask. An alpha mask's art comes in white with its opacity kept, so its
     /// luminance is its alpha (images in it keep their colours, with a warning). A mask our export wrote gets its
     /// options back ([`mask_flags`]) and its art without what stands for them: the inverting
@@ -370,6 +425,7 @@ impl Importer {
             self.warn(format!("nested mask on {label} ignored"));
         }
         let (clip, invert) = self.mask_flags.get(m.id()).copied().unwrap_or((true, false));
+        let user = ts;
         let (mut nodes, mut ts) = (m.root().children(), ts);
         if invert
             && let [usvg::Node::Group(g)] = nodes
@@ -397,6 +453,9 @@ impl Importer {
             1 => Arc::unwrap_or_clone(children.pop()?),
             _ => self.named("", NodeKind::Group { children, clip: false })?,
         };
+        // SVG 1.1 §14.4 (https://www.w3.org/TR/SVG11/masking.html#MaskElement): the mask's art
+        // counts only inside its region.
+        let art = self.region_clipped(art, m.rect(), user)?;
         let mut mask = vectorcraft_doc::OpacityMask::new(art, clip);
         mask.invert = invert;
         Some(Box::new(mask))
