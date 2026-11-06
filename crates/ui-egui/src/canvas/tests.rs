@@ -9304,3 +9304,13 @@ fn direct_selection_shows_the_bounding_box_while_cmd_is_held() {
     assert!(!handle_drawn(&mut app, egui::Modifiers::NONE), "gone once Cmd is released");
     assert!(app.ui.view.bounding_box, "View › Show Bounding Box is unchanged");
 }
+
+#[test]
+fn home_shows_the_discord_button_unless_the_preference_is_off() {
+    use crate::community::tests::discord_buttons;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let rect = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(1200.0, 2000.0));
+    assert_eq!(discord_buttons(|ui| home(&mut app, ui, rect)), 1, "on by default");
+    app.ui.show_discord_button = false;
+    assert_eq!(discord_buttons(|ui| home(&mut app, ui, rect)), 0, "hidden when turned off");
+}
