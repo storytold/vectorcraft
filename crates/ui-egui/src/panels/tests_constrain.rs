@@ -321,11 +321,55 @@ fn one_tab_moves_from_a_field_to_the_next() {
     let mut app = rect_app();
     tab_then_type(&mut app, crate::chrome::control_bar, "100 pt", "200");
     assert_eq!(size(&app), (100.0, 200.0), "Control bar: Tab went from W to H");
+    // Shift+Tab goes back one field, one press too: from W to X in the panels.
+    for (name, draw) in [("Transform panel", transform::show as Draw), ("Properties", properties::transform_section as Draw)] {
+        let mut app = rect_app();
+        shift_tab_then_type(&mut app, draw, "100 pt", "200");
+        let st = app.session.active().unwrap();
+        let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
+        assert_eq!((b.width().round(), b.x0.round()), (100.0, 150.0), "{name}: Shift+Tab went from W to X");
+    }
+}
+
+/// A click on the Control bar's W/H link toggles Constrain Width and Height Proportions, and the
+/// link comes after the fields in the tab order, so Tab still moves from W to H.
+#[test]
+fn the_control_bar_link_toggles_by_click() {
+    let mut app = rect_app();
+    assert!(!app.session.prefs.constrain_proportions);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut time = 0.0;
+    let mut frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+        time += 1.0;
+        frame_raw(&ctx, app, egui::RawInput { events, time: Some(time), ..Default::default() }, crate::chrome::control_bar)
+    };
+    frame(&mut app, vec![]);
+    let shown = frame(&mut app, vec![]);
+    let at = |text: &str| shown.iter().find(|(t, _)| t == text).map(|(_, r)| *r).unwrap_or_else(|| panic!("no `{text}` in {shown:?}"));
+    let (w, h) = (at("100 pt"), at("50 pt"));
+    // The link's button fills the gap between the W and H fields.
+    let link = egui::pos2((w.right() + h.left()) / 2.0, w.center().y);
+    let button = |pressed| Event::PointerButton { pos: link, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    for events in [vec![Event::PointerMoved(link), button(true), button(false)], vec![]] {
+        frame(&mut app, events);
+    }
+    assert!(app.session.prefs.constrain_proportions, "the click toggled the link");
 }
 
 /// Type `value` into the field of what `draw` shows that shows `field` after one Tab, and press
 /// Enter. The field the Tab moved to takes the value; the one pressed keeps its own.
 fn tab_then_type(app: &mut VectorcraftApp, draw: Draw, field: &str, value: &str) {
+    tab_then_type_with(app, draw, field, value, Modifiers::NONE);
+}
+
+/// [`tab_then_type`] with Shift+Tab, which goes back one field.
+fn shift_tab_then_type(app: &mut VectorcraftApp, draw: Draw, field: &str, value: &str) {
+    tab_then_type_with(app, draw, field, value, Modifiers::SHIFT);
+}
+
+/// [`tab_then_type`], the Tab key held with `modifiers`.
+fn tab_then_type_with(app: &mut VectorcraftApp, draw: Draw, field: &str, value: &str, modifiers: Modifiers) {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let mut time = 0.0;
@@ -337,7 +381,7 @@ fn tab_then_type(app: &mut VectorcraftApp, draw: Draw, field: &str, value: &str)
     let shown = frame(app, vec![]);
     let at = shown.iter().filter(|(s, _)| s == field).map(|(_, r)| r.center()).next().unwrap_or_else(|| panic!("no {field} field in {shown:?}"));
     let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
-    let tab = Event::Key { key: Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    let tab = Event::Key { key: Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers };
     for events in [vec![Event::PointerMoved(at), button(at, true), button(at, false)], vec![], vec![tab], vec![]] {
         frame(app, events);
     }
