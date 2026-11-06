@@ -164,6 +164,9 @@ pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
     ("Polish", "pl", Quotes { double: ['„', '”'], single: ['‚', '’'] }),
     ("Czech", "cs", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
     ("Russian", "ru", Quotes { double: ['«', '»'], single: ['„', '“'] }),
+    // „…“ at either level: CLDR (https://github.com/unicode-org/cldr/blob/main/common/main/bg.xml,
+    // `delimiters`). Shaped as `bg`, fonts draw their Bulgarian forms (`locl` for `BGR`, #5945).
+    ("Bulgarian", "bg", Quotes { double: ['„', '“'], single: ['„', '“'] }),
     // „…” outside, ’…’ inside: Pravopis srpskoga jezika (Matica srpska, 2010, ISBN
     // 978-86-7946-079-0, т. 168, pp. 133–135) and CLDR
     // (https://github.com/unicode-org/cldr/blob/main/common/main/sr.xml, `delimiters`).
@@ -385,6 +388,10 @@ mod tests {
         assert_eq!(char_language("Serbian: Cyrillic"), Ok(Some("sr-Cyrl")));
         assert_eq!(char_language("sr-latn"), Ok(Some("sr-Latn")));
         assert_eq!(char_language("Croatian"), Ok(Some("hr")));
+        // Bulgarian (#5945), by name or tag.
+        assert_eq!(char_language("Bulgarian"), Ok(Some("bg")));
+        assert_eq!(char_language("BG"), Ok(Some("bg")));
+        assert_eq!(char_language_name(Some("bg")), Some("Bulgarian"));
         assert_eq!(char_language_name(Some("sr-Cyrl")), Some("Serbian: Cyrillic"));
         // Every entry has a tag of its own, and a name of its own.
         for (i, (n, t, _)) in LANGUAGES.iter().enumerate() {
@@ -409,6 +416,9 @@ mod tests {
         }
         let mut prev = None;
         assert_eq!(language_quotes("croatian").unwrap().apply("\"a 'b' c\"", &mut prev), "„a ‚b‘ c“");
+        // Bulgarian: „…“ at either level, as CLDR has it.
+        let mut prev = None;
+        assert_eq!(language_quotes("bulgarian").unwrap().apply("\"a 'b' c\"", &mut prev), "„a „b“ c“");
         // Converting in pieces keeps the context.
         let mut prev = None;
         let a = Quotes::ENGLISH.apply("\"", &mut prev);
