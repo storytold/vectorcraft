@@ -294,6 +294,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
             ("kn", "Kannada"),
             ("ml", "Malayalam"),
             ("or", "Odia"),
+            ("as", "Assamese"),
+            ("sa", "Sanskrit"),
             ("ur", "Urdu")
         ])
     ),

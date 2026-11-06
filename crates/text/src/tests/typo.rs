@@ -918,6 +918,55 @@ fn natural_width(s: &str, size: f64) -> f64 {
     l.lines[0].x1 - l.lines[0].x0
 }
 
+/// Installed fonts exercise run-language routing, source boundaries and hyphen limits end to end.
+#[test]
+fn indic_language_runs_hyphenate_with_both_composers() {
+    let db = FontDb::global();
+    for (tag, syllable) in [
+        ("hi", "कि"),
+        ("mr", "कि"),
+        ("gu", "કિ"),
+        ("bn", "কি"),
+        ("pa", "ਕਿ"),
+        ("ta", "கி"),
+        ("te", "కి"),
+        ("kn", "ಕಿ"),
+        ("ml", "കി"),
+        ("or", "କି"),
+        ("as", "কি"),
+    ] {
+        let Some(face) = syllable.chars().next().and_then(|ch| db.face_covering(ch)).filter(|f| syllable.chars().all(|ch| f.covers(ch))) else {
+            eprintln!("SKIPPED: indic hyphenation layout {tag}; no installed font covers {syllable}");
+            continue;
+        };
+        let style = CharStyle {
+            font_family: face.family.clone(),
+            font_style: face.style.clone(),
+            size: 12.0,
+            language: Some(tag.into()),
+            ..Default::default()
+        };
+        let prefix = layout(db, &TextObject::point(Point::ZERO, &format!("{}-", syllable.repeat(3)), style.clone()));
+        let width = prefix.glyphs.iter().map(|g| g.advance).sum::<f64>() + 0.5;
+        for composer in [Composer::SingleLine, Composer::EveryLine] {
+            let text = syllable.repeat(20);
+            let mut t = area(&text, style.clone(), Rect::new(0.0, 0.0, width, 2000.0), Justify::Left);
+            t.para.composer = composer;
+            t.para.hyphenate = true;
+            let l = layout(db, &t);
+            assert!(!l.overflow, "{tag} {composer:?}");
+            assert!(hyphen_run(&l) > 0, "{tag} {composer:?}: no automatic hyphens");
+            assert!(l.lines.iter().all(|line| line.end % syllable.len() == 0), "{tag} {composer:?}: split syllable");
+            assert_eq!(l.lines.last().map(|line| line.end), Some(text.len()));
+            t.para.hyphenation.hyphen_limit = 1;
+            assert!(hyphen_run(&layout(db, &t)) <= 1, "{tag} {composer:?}: hyphen limit");
+            t.runs.iter_mut().for_each(|run| run.style.language = Some("zz".into()));
+            assert_eq!(hyphen_run(&layout(db, &t)), 0, "unknown language must not use Indic patterns");
+        }
+        eprintln!("ASSERTIONS RUN: indic hyphenation layout {tag}, {} {}", face.family, face.style);
+    }
+}
+
 /// The text of each line.
 fn line_texts(t: &TextObject, l: &TextLayout) -> Vec<String> {
     let text = t.plain_text();

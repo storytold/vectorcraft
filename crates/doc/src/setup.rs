@@ -188,6 +188,8 @@ pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
     ("Kannada", "kn", Quotes::ENGLISH),
     ("Malayalam", "ml", Quotes::ENGLISH),
     ("Odia", "or", Quotes::ENGLISH),
+    ("Assamese", "as", Quotes::ENGLISH),
+    ("Sanskrit", "sa", Quotes::ENGLISH),
     ("Urdu", "ur", Quotes::ENGLISH),
 ];
 
@@ -377,6 +379,8 @@ mod tests {
     fn char_languages_are_stored_by_tag() {
         assert_eq!(char_language("Turkish"), Ok(Some("tr")));
         assert_eq!(char_language("MR"), Ok(Some("mr")));
+        assert_eq!(char_language("Assamese"), Ok(Some("as")));
+        assert_eq!(char_language("Sanskrit"), Ok(Some("sa")));
         assert_eq!(char_language("english: usa"), Ok(None));
         assert_eq!(char_language("en-US"), Ok(None));
         assert!(char_language("Klingon").is_err() && char_language("").is_err());
