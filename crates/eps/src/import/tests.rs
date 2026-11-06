@@ -1032,6 +1032,21 @@ fn dictstack_and_internaldict_answer() {
     check("<< /MaxPatternItem currentsystemparams /MaxPatternCache get >> setuserparams currentuserparams /MaxFontItem known");
 }
 
+/// `bind` makes the procedures it goes into read-only and leaves read-only procedures alone (PLRM
+/// 3rd ed., `bind` in chapter 8), so a later `bind` of a procedure holding one doesn't turn a name
+/// it kept into an operator defined since: here `M` stays the procedure's own variable, as in the
+/// prologs that keep `M` for `setmiterlimit` and also as the name of a variable.
+#[test]
+fn bind_leaves_procedures_it_already_bound_alone() {
+    let get = "/Get { 4 dict begin /M 7 def { M } exec end } bind def /M /setmiterlimit load def";
+    check(&format!("{get} /Outer {{ //Get exec }} bind def Outer 7 eq"));
+    // Nor does it go into one made read-only.
+    check("/I { M } readonly def /P { //I exec } def /M /setmiterlimit load def /P load bind pop /M 3 def P 3 eq");
+    check("/P { M } readonly def /M /setmiterlimit load def /P load bind pop /M 3 def P 3 eq");
+    // A procedure bound on its own is still bound again (only those inside are read-only).
+    check("/P { M } bind def /M /setmiterlimit load def /P load bind 0 get type /operatortype eq");
+}
+
 #[test]
 fn an_executable_filter_runs_its_data_as_a_program() {
     // A string run as a program through a filter (0 and an empty string set no end of data).
