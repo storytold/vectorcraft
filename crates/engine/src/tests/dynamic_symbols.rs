@@ -993,6 +993,24 @@ fn read_only_commands_read_the_instance_of_a_picked_object() {
     s.execute("attributes.info", &json!({})).unwrap();
 }
 
+/// Export CSS writes a file and changes nothing in the document, so it reads the instance of a
+/// picked object as it reads an instance selected whole, and the next edit is refused as before.
+#[test]
+fn css_export_reads_the_instance_of_a_picked_object() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    s.execute("select.set", &json!({"ids": [inst.0]})).unwrap();
+    let whole = s.execute("css.export", &json!({})).unwrap();
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let picked = s.execute("css.export", &json!({})).unwrap();
+    assert_eq!(picked["rules"], 1);
+    assert_eq!(picked["data"], whole["data"]);
+    assert!(s.doc().unwrap().doc == doc, "the document changed");
+    assert!(s.doc().unwrap().selection.symbol_part.is_some());
+    assert!(s.execute("object.hide", &json!({})).is_err());
+}
+
 /// A drag that moved nothing leaves Transform Again repeating the last real transformation.
 #[test]
 fn a_refused_drag_of_a_picked_object_is_not_kept_for_transform_again() {

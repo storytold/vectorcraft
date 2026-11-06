@@ -161,8 +161,9 @@ pub struct Session {
     /// has inherited the selection's appearance: the documents ([`DocState::uid`]) whose newest
     /// history step takes the colors the batch finally left.
     pub(crate) batch_paint_docs: Vec<u64>,
-    /// While a command that changes nothing in the document runs ([`cmd::CommandSpec::journal`] is
-    /// false): it reads the instance of an object selected in a symbol instance's art.
+    /// While a command that changes nothing in the document runs (a query, or one of
+    /// [`command_sets::JOURNALED_READS`]): it reads the instance of an object selected in a symbol
+    /// instance's art.
     pub(crate) reading: bool,
     /// While [`Session::place_read`] runs `file.place`: the file read for it, which the command
     /// places instead of reading the file; `None` otherwise.
