@@ -79,7 +79,15 @@ pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Valu
         super::character::end_typing(app);
         match super::character::text_story(app) {
             // After Select All in threaded text: every paragraph of every frame.
-            Some(story) => p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>()),
+            Some(story) => {
+                let state = app.session.active().ok_or("no active document")?;
+                let editable = state.doc.editable();
+                let ids: Vec<_> = story.into_iter().filter(|id| editable(*id)).map(|id| id.0).collect();
+                if ids.is_empty() {
+                    return Err("no editable text frames in the story".into());
+                }
+                p["ids"] = json!(ids);
+            }
             None => {
                 p["ids"] = json!([id.0]);
                 p["start"] = json!(a);
@@ -175,9 +183,11 @@ fn collect_text_alignment(text: &vectorcraft_doc::TextObject, range: Option<(usi
 fn story_texts(app: &VectorcraftApp) -> Option<Vec<&vectorcraft_doc::TextObject>> {
     let st = app.session.active()?;
     let story = super::character::text_story(app)?;
+    let editable = st.doc.editable();
     Some(
         story
             .into_iter()
+            .filter(|id| editable(*id))
             .filter_map(|id| match st.doc.node(id).map(|n| &n.kind) {
                 Some(NodeKind::Text(t)) => Some(t.as_ref()),
                 _ => None,

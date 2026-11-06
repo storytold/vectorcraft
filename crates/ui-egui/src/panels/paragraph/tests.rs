@@ -54,6 +54,58 @@ fn select_range(app: &mut VectorcraftApp, start: usize, end: usize) {
 }
 
 #[test]
+fn paragraph_story_command_skips_locked_and_hidden_frames() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 30, "text": "First"})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("text.create", json!({"x": 20, "y": 70, "text": "Locked"})).unwrap()["id"].as_u64().unwrap();
+    let c = app.run("text.create", json!({"x": 20, "y": 110, "text": "Hidden"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    assert!(app.session.active().unwrap().doc.is_editable(NodeId(a)));
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+    assert_eq!(super::super::character::text_editing(&app).map(|(id, _, _)| id), Some(NodeId(a)));
+    app.session.set_tool_option("selectAll", &json!({"story": [a, b, c], "editing": a}));
+    let result = run_on_paragraphs(&mut app, "text.setFormat", json!({"hyphenate": true})).unwrap();
+    assert_eq!(result["ids"], json!([a]), "{result:?}");
+    let hyphenates = |app: &VectorcraftApp, id| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (t.plain_text(), t.para_at(0).hyphenate),
+        _ => panic!("text frame"),
+    };
+    let after = (hyphenates(&app, a), hyphenates(&app, b), hyphenates(&app, c));
+    assert!(after.0.1, "{after:?}");
+    assert!(!after.1.1, "locked frame: {after:?}");
+    assert!(!after.2.1, "hidden frame: {after:?}");
+}
+
+#[test]
+fn paragraph_story_state_ignores_locked_and_hidden_frames() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 30, "text": "First"})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("text.create", json!({"x": 20, "y": 70, "text": "Locked"})).unwrap()["id"].as_u64().unwrap();
+    let c = app.run("text.create", json!({"x": 20, "y": 110, "text": "Hidden"})).unwrap()["id"].as_u64().unwrap();
+    app.run("text.setFormat", json!({"ids": [a], "hyphenate": true})).unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+    app.session.set_tool_option("selectAll", &json!({"story": [a, b, c], "editing": a}));
+    assert_eq!(shared_hyphenate(&app), Some(true), "the panel reads only the editable frame");
+    assert_eq!(toggle_hyphenate(&mut app).unwrap(), json!(false));
+    let style = match &app.session.active().unwrap().doc.node(NodeId(a)).unwrap().kind {
+        NodeKind::Text(t) => t.para_at(0).hyphenate,
+        _ => panic!("text frame"),
+    };
+    assert!(!style, "the editable frame toggles off");
+}
+
+#[test]
 fn paragraph_mixed_direction_buttons_show_neither() {
     let (mut app, id) = editing_text("A\nB");
     app.session.prefs.show_indic_options = true;
