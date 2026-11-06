@@ -36,6 +36,7 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | View › Show Missing Links (and the Links panel menu) marks each visible linked image and placed document whose file can't be found with a red outline and a ? badge on the canvas only, never printed, exported, saved or undoable; the markers follow relinking, embedding and files going missing, and `view.missingLinks {on?}` reports which are marked (#5547, a VectorCraft addition); scores and estimates unchanged (estimated). |
 | 2026-11-05 | minor | Effect dialogs: a colour swatch beside a hex colour field follows typed values, and a double-click opens the Color Picker over the dialog, whose OK fills the field (#5365); scores and estimates unchanged. |
 | 2026-11-05 | minor | Selection Tools add-on: Select Linked, Embedded, Missing and Modified select the images and placed documents with that link status (Object › Plug-ins › Selection Tools and the Links panel menu; Shift adds), and Select by Link Status… lists them by name, status and format to pick from, optionally zooming to them; what is hidden, locked, on a template layer or outside the isolated group is left out and the status bar says how many (#5526, a VectorCraft addition); scores and estimates unchanged (estimated). |
 | 2026-11-05 | minor | Pencil and Paintbrush: a new stroke with Keep selected off leaves nothing selected, the earlier selection included, while Keep selected on selects only the new path (#5752); scores and estimates unchanged. |

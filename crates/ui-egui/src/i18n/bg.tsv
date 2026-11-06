@@ -1237,6 +1237,8 @@ font-technology	Variable	Променливи
 	Close Gaps With Paths	Затваряне на пролуките с пътища
 	Show Live Paint Gaps	Показване на пролуките на динамичното оцветяване
 	Hide Live Paint Gaps	Скриване на пролуките на динамичното оцветяване
+	Show Missing Links	Показване на липсващите връзки
+	Hide Missing Links	Скриване на липсващите връзки
 	Select Fills	Избиране на запълвания
 	Select Strokes	Избиране на щрихове
 	Paint Fills	Боядисване на запълвания

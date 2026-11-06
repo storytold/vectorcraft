@@ -26,6 +26,7 @@ fn view_toggle_label(app: &VectorcraftApp, id: &str) -> Option<String> {
         "type.hiddenCharacters" => if v.hidden_chars { "Hide Hidden Characters" } else { "Show Hidden Characters" }.into(),
         "view.gradientAnnotator" => if v.gradient_annotator { "Hide Gradient Annotator" } else { "Show Gradient Annotator" }.into(),
         "view.livePaintGaps" => if v.live_paint_gaps { "Hide Live Paint Gaps" } else { "Show Live Paint Gaps" }.into(),
+        "view.missingLinks" => if v.missing_links { "Hide Missing Links" } else { "Show Missing Links" }.into(),
         _ => return None,
     };
     Some(text)
@@ -258,6 +259,8 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Show Gradient Annotator",
     "Hide Live Paint Gaps",
     "Show Live Paint Gaps",
+    "Hide Missing Links",
+    "Show Missing Links",
     "Hide Artboards",
     "Show Artboards",
     "Hide Rulers",

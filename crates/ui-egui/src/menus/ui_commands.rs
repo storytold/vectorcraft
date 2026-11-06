@@ -205,6 +205,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} toggle drawing the gaps of the selected Live Paint groups (those livePaint.info lists) in each group's Gap Preview Color while edges show → true when on",
     ),
+    (
+        "view.missingLinks",
+        "Show Missing Links",
+        "",
+        "{on?: bool (default: toggle)} mark each visible linked image and placed document whose file can't be found (links.list status missing) on the canvas with a red outline round its bounds and a ? badge; never printed, exported, saved, selectable or undoable; a marker goes when its image is relinked, updated or embedded, and comes when its file goes missing (looked at every 2 s) → {on, marked: [ids]} (none while off; pass on with the current state to ask which are marked)",
+    ),
     ("type.hiddenCharacters", "Show Hidden Characters", "Cmd+Alt+I", "{} toggle markers for spaces, paragraph ends and story ends"),
     ("type.alignLeft", "Align left", "Cmd+Shift+L", "{} align the selected type's paragraphs (or those the Type tool's selection touches) left"),
     (

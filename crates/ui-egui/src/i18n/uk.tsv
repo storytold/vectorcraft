@@ -1292,6 +1292,8 @@ file-filter	Templates	Шаблони
 	Close Gaps With Paths	Закрити проміжки контурами
 	Show Live Paint Gaps	Показати проміжки швидкої заливки
 	Hide Live Paint Gaps	Приховати проміжки швидкої заливки
+	Show Missing Links	Показати відсутні зв'язки
+	Hide Missing Links	Приховати відсутні зв'язки
 	Select Fills	Виділяти заливки
 	Select Strokes	Виділяти обведення
 	Paint Fills	Фарбувати заливки
