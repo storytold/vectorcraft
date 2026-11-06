@@ -1213,9 +1213,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     set_pstate(ui.ctx(), SELECTED, selected);
     app.ui.action_set = current;
     app.ui.action_sets_selected = sets_selected;
-    widgets::divider(ui);
+    if app.ui.action_sets.is_empty() {
+        dim_label(ui, tl!("No actions. Press ● to record."));
+    }
     // Bottom bar: stop, record, play, new set, new action, delete.
-    ui.horizontal(|ui| {
+    widgets::bottom_bar(ui, |ui| {
         let recording = app.ui.recording.is_some();
         if widgets::icon_button(ui, "square", tl!("Stop Playing/Recording"), false, 24.0).clicked()
             && let Err(e) = app.run(STOP_RECORDING, json!({}))
@@ -1256,9 +1258,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.status(e);
     }
     let _ = icons::exists;
-    if app.ui.action_sets.is_empty() {
-        dim_label(ui, tl!("No actions. Press ● to record."));
-    }
 }
 
 #[cfg(test)]

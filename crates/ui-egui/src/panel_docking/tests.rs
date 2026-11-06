@@ -12,13 +12,15 @@ struct Harness {
     app: VectorcraftApp,
     ctx: egui::Context,
     time: f64,
+    cursor: egui::CursorIcon,
+    nodes: Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>,
 }
 
 impl Harness {
     fn new() -> Self {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let mut h = Self { app, ctx: egui::Context::default(), time: 0.0 };
+        let mut h = Self { app, ctx: egui::Context::default(), time: 0.0, cursor: egui::CursorIcon::Default, nodes: Vec::new() };
         for _ in 0..3 {
             h.frame(vec![]);
         }
@@ -47,6 +49,8 @@ impl Harness {
             app.ui(ui);
         });
         out.textures_delta.clear();
+        self.cursor = out.platform_output.cursor_icon;
+        self.nodes = out.platform_output.accesskit_update.map_or_else(Vec::new, |update| update.nodes);
     }
 
     fn hit(&self, hit: &Hit<String>) -> Option<Rect> {
@@ -136,6 +140,120 @@ fn an_icon_opens_its_flyout_and_open_panel_follows() {
     h.app.run("window.panel", json!({"panel": "brushes"})).unwrap();
     h.frame(vec![]);
     assert_eq!(craft_ui::docking::flyout::<String>(&h.ctx, area_id()), None);
+}
+
+/// #5713: real Glyphs and Artboards bodies must retain a flyout resize through
+/// content fitting, closing/reopening and serialization of the workspace layout.
+#[test]
+fn glyphs_and_artboards_flyouts_keep_user_sizes() {
+    for panel in ["glyphs", "artboards"] {
+        let mut h = Harness::new();
+        let icon = h.hit(&Hit::Icon(panel.into())).unwrap().center();
+        h.click(icon);
+        // Glyphs reserves space from the available height, so its untouched auto-fit
+        // converges over several frames before the first user resize.
+        for _ in 0..30 {
+            h.frame(vec![]);
+        }
+        // Area memory can include a panel body's minimum allocation beyond its clip.
+        // The frame's actual edge widgets describe the visible, resizable rectangle.
+        let rect = |h: &Harness| {
+            let id = area_id().with("flyout");
+            let left = h.ctx.read_response(id.with("resize-left")).unwrap().rect;
+            let bottom = h.ctx.read_response(id.with("resize-bottom")).unwrap().rect;
+            Rect::from_min_max(pos2(left.left(), left.top() - 12.0), pos2(bottom.right() + 12.0, bottom.bottom()))
+        };
+        let before = rect(&h);
+        for (at, cursor) in [
+            (before.left_center() + vec2(2.0, 0.0), egui::CursorIcon::ResizeHorizontal),
+            (before.center_bottom() - vec2(0.0, 2.0), egui::CursorIcon::ResizeVertical),
+        ] {
+            h.frame(vec![Event::PointerMoved(at)]);
+            h.frame(vec![]);
+            assert_eq!(h.cursor, cursor, "{panel} at {at:?}, frame {before:?}");
+        }
+        let from = before.left_bottom() + vec2(2.0, -2.0);
+        h.drag(from, from + vec2(-100.0, 150.0));
+        for _ in 0..3 {
+            h.frame(vec![]);
+        }
+        let grown = rect(&h);
+        assert!((grown.width() - before.width() - 100.0).abs() < 1.0, "{panel}: {before:?} -> {grown:?}");
+        assert!((grown.height() - before.height() - 150.0).abs() < 1.0, "{panel}: {before:?} -> {grown:?}");
+        assert_eq!(grown.right(), before.right(), "the icon-column edge stays anchored");
+        h.click(icon);
+        assert_eq!(craft_ui::docking::flyout::<String>(&h.ctx, area_id()), None);
+        h.click(icon);
+        for _ in 0..3 {
+            h.frame(vec![]);
+        }
+        assert_eq!(rect(&h).size(), grown.size());
+        let saved = serde_json::to_string(&h.layout()).unwrap();
+        let mut restored = Harness::new();
+        restored.app.ui.docking = Some(serde_json::from_str(&saved).unwrap());
+        for _ in 0..3 {
+            restored.frame(vec![]);
+        }
+        restored.click(restored.hit(&Hit::Icon(panel.into())).unwrap().center());
+        for _ in 0..3 {
+            restored.frame(vec![]);
+        }
+        assert_eq!(rect(&restored).size(), grown.size(), "{panel} saved layout");
+    }
+}
+
+/// Footer controls stay at the resized panel's bottom, including empty or short lists.
+/// The same shared footer is used by the other icon panels and library windows.
+#[test]
+fn expanded_panel_footers_stay_at_the_bottom_with_short_and_long_lists() {
+    for (panel, label, artboards) in [
+        ("artboards", "New Artboard", 1),
+        ("artboards", "New Artboard", 30),
+        ("brushes", "New Brush", 1),
+        ("swatches", "New Swatch", 1),
+        ("symbols", "New Symbol", 1),
+        ("graphicStyles", "New Graphic Style (Alt-click to name it)", 1),
+        ("appearance", "Add New Stroke", 1),
+        ("charStyles", "Create New Character Style", 1),
+        ("paraStyles", "Create New Paragraph Style", 1),
+        ("colorGuide", "Save color group to Swatch panel", 1),
+        ("links", "Show Link Info", 1),
+        ("actions", "Create New Action", 1),
+        ("variables", "Capture Data Set", 1),
+        ("assetExport", "Export for Screens…", 1),
+        ("cssProperties", "Generate CSS: the whole document's CSS while nothing is selected", 1),
+        ("svgInteractivity", "Link JavaScript Files…", 1),
+        ("colorThemes", "Add to Swatches", 1),
+        ("glyphs", "Zoom In", 1),
+    ] {
+        let mut h = Harness::new();
+        h.ctx.enable_accesskit();
+        for _ in 1..artboards {
+            h.app.run("artboard.new", json!({})).unwrap();
+        }
+        h.app.run("window.panel.dock", json!({"panel":panel,"icon":true})).unwrap();
+        let mut layout = h.layout();
+        layout.apply(Action::ResizeGroup { panel: panel.into(), height: Some(540.0) }).unwrap();
+        layout.apply(Action::ResizeFlyoutWidth { panel: panel.into(), width: Some(420.0) }).unwrap();
+        h.app.ui.docking = Some(layout);
+        h.app.ui.open_panel = Some(panel.into());
+        for _ in 0..5 {
+            h.frame(vec![]);
+        }
+        let bottom = h.ctx.read_response(area_id().with("flyout").with("resize-bottom")).unwrap().rect.bottom();
+        let control = h
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some(label))
+            .and_then(|(_, node)| node.bounds())
+            .unwrap_or_else(|| panic!("missing {label} in {panel}"));
+        assert!((control.y1 as f32 - (bottom - 10.0)).abs() < 2.0, "{panel}/{artboards}: footer {control:?}, bottom {bottom}");
+        if panel == "artboards" && artboards == 1 {
+            let at = pos2(((control.x0 + control.x1) * 0.5) as f32, ((control.y0 + control.y1) * 0.5) as f32);
+            h.click(at);
+            assert_eq!(h.app.session.active().unwrap().doc.artboards.len(), 2, "the pinned New button works");
+        }
+    }
 }
 
 #[test]

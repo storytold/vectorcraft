@@ -209,46 +209,49 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     // The bottom bar: make the selection dynamic, define and delete what the lists show, and
     // lock the variables.
-    ui.separator();
-    ui.horizontal(|ui| {
-        if widgets::icon_button_enabled(ui, "type", tl!("Make Text Dynamic"), false, single_type && !locked, 24.0).clicked() {
-            app.run("variable.makeTextDynamic", json!({})).ok();
-        }
-        if widgets::icon_button_enabled(ui, "eye", tl!("Make Visibility Dynamic"), false, has_selection && !locked, 24.0).clicked() {
-            app.run("variable.makeVisibilityDynamic", json!({})).ok();
-        }
-        if widgets::icon_button_enabled(ui, "image", tl!("Make Image Dynamic"), false, single_image && !locked, 24.0).clicked() {
-            app.run("variable.makeImageDynamic", json!({})).ok();
-        }
-        if widgets::icon_button_enabled(ui, "chart-column", tl!("Make Graph Dynamic"), false, selection_graph && !locked, 24.0).clicked() {
-            app.run("variable.makeGraphDynamic", json!({})).ok();
-        }
-        if widgets::icon_button_enabled(ui, "plus", tl!("New Variable…"), false, !locked, 24.0).clicked() {
-            crate::menus::invoke(app, "variable.define", json!({}));
-        }
-        if widgets::icon_button_enabled(ui, "link-2-off", tl!("Unbind Variable"), false, selection_bound, 24.0).clicked() {
-            app.run("variable.unbind", json!({"ids": selected})).ok();
-        }
-        // The bin deletes the highlighted variable only, as the reference panel's does.
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Variable"), false, highlighted.is_some() && !locked, 24.0).clicked() {
-            delete_highlighted(app);
-        }
-        // The lock button is drawn pressed while the variables are locked.
-        let tip = if locked { tl!("Unlock Variables") } else { tl!("Lock Variables") };
-        if widgets::icon_button(ui, "lock", tip, locked, 24.0).clicked() {
-            app.run("variable.lock", json!({})).ok();
-        }
-    });
-    ui.horizontal(|ui| {
-        // Capture records what the art holds now as a new row (paste: take it in); Update
-        // writes the art back into the row that is active (save: write it out).
-        if widgets::icon_button(ui, "clipboard-paste", tl!("Capture Data Set"), false, 24.0).clicked() {
-            app.run("dataset.capture", json!({})).ok();
-        }
-        let can_update = active.is_some();
-        if widgets::icon_button_enabled(ui, "save", tl!("Update Data Set"), false, can_update, 24.0).clicked() {
-            app.run("dataset.update", json!({})).ok();
-        }
+    let footer_height = 48.0 + 2.0 * ui.spacing().item_spacing.y + 1.0;
+    widgets::panel_footer(ui, footer_height, |ui| {
+        ui.add(egui::Separator::default().spacing(1.0));
+        ui.horizontal(|ui| {
+            if widgets::icon_button_enabled(ui, "type", tl!("Make Text Dynamic"), false, single_type && !locked, 24.0).clicked() {
+                app.run("variable.makeTextDynamic", json!({})).ok();
+            }
+            if widgets::icon_button_enabled(ui, "eye", tl!("Make Visibility Dynamic"), false, has_selection && !locked, 24.0).clicked() {
+                app.run("variable.makeVisibilityDynamic", json!({})).ok();
+            }
+            if widgets::icon_button_enabled(ui, "image", tl!("Make Image Dynamic"), false, single_image && !locked, 24.0).clicked() {
+                app.run("variable.makeImageDynamic", json!({})).ok();
+            }
+            if widgets::icon_button_enabled(ui, "chart-column", tl!("Make Graph Dynamic"), false, selection_graph && !locked, 24.0).clicked() {
+                app.run("variable.makeGraphDynamic", json!({})).ok();
+            }
+            if widgets::icon_button_enabled(ui, "plus", tl!("New Variable…"), false, !locked, 24.0).clicked() {
+                crate::menus::invoke(app, "variable.define", json!({}));
+            }
+            if widgets::icon_button_enabled(ui, "link-2-off", tl!("Unbind Variable"), false, selection_bound, 24.0).clicked() {
+                app.run("variable.unbind", json!({"ids": selected})).ok();
+            }
+            // The bin deletes the highlighted variable only, as the reference panel's does.
+            if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Variable"), false, highlighted.is_some() && !locked, 24.0).clicked() {
+                delete_highlighted(app);
+            }
+            // The lock button is drawn pressed while the variables are locked.
+            let tip = if locked { tl!("Unlock Variables") } else { tl!("Lock Variables") };
+            if widgets::icon_button(ui, "lock", tip, locked, 24.0).clicked() {
+                app.run("variable.lock", json!({})).ok();
+            }
+        });
+        ui.horizontal(|ui| {
+            // Capture records what the art holds now as a new row (paste: take it in); Update
+            // writes the art back into the row that is active (save: write it out).
+            if widgets::icon_button(ui, "clipboard-paste", tl!("Capture Data Set"), false, 24.0).clicked() {
+                app.run("dataset.capture", json!({})).ok();
+            }
+            let can_update = active.is_some();
+            if widgets::icon_button_enabled(ui, "save", tl!("Update Data Set"), false, can_update, 24.0).clicked() {
+                app.run("dataset.update", json!({})).ok();
+            }
+        });
     });
 }
 

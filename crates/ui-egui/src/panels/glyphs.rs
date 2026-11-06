@@ -244,7 +244,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let cols = ((w / cell).floor() as usize).max(1);
     let rows = chars.len().div_ceil(cols);
     let px = (cell * ui.ctx().pixels_per_point()).round().clamp(8.0, 256.0) as u32;
-    let list_h = (ui.available_height() - 64.0).max(cell * 3.0);
+    let list_h = widgets::panel_list_height(ui, (ui.available_height() - 64.0).max(cell * 3.0), 33.0);
     let hover_id = egui::Id::unique("gl-hover");
     let selected = selected_char(app);
     // The selected character and the rows shown last frame: the grid scrolls to the selected glyph
@@ -308,6 +308,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The family and style menus of the font the panel browses, and Zoom Out and Zoom In.
 fn font_row(app: &mut VectorcraftApp, ui: &mut Ui, family: &str, style: &str, w: f32) {
     let db = FontDb::global();
+    widgets::panel_footer_space(ui, 24.0);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         // Picks the font the panel browses only: nothing is previewed on the document.
@@ -371,7 +372,7 @@ fn alternates(app: &mut VectorcraftApp, ui: &mut Ui, w: f32) {
     let cols = ((w / cell).floor() as usize).max(1);
     let rows = list.len().div_ceil(cols);
     let px = (cell * ui.ctx().pixels_per_point()).round().clamp(8.0, 256.0) as u32;
-    let list_h = (ui.available_height() - 64.0).max(cell * 3.0);
+    let list_h = widgets::panel_list_height(ui, (ui.available_height() - 64.0).max(cell * 3.0), 33.0);
     let mut pick = None;
     // A scroll position of its own for each character, so the grid starts at the top for another.
     let area = egui::ScrollArea::vertical().id_salt(("gl-alternates", id.0, byte)).max_height(list_h).auto_shrink([false, false]);
