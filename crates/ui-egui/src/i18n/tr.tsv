@@ -5432,6 +5432,8 @@ theme	Appearance	Görünüm
 @msg	mask art ends outside a mask dictionary	maske çizimi bir maske sözlüğünün dışında bitiyor
 @msg	missing number `{key}`	`{key}` sayısı eksik
 @msg	no such spine point	böyle bir omurga noktası yok
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` en fazla 10000 omurga noktası dizininden oluşan bir liste olmalıdır
+@msg	`with` moves points, not a handle	`with` noktaları taşır, tutamacı değil
 @msg	no such spine segment	böyle bir omurga segmenti yok
 @msg	not a blend	bir karışım değil
 @msg	select a blend or give `id`	bir karışım seçin veya `id` belirtin

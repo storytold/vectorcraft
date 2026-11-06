@@ -4661,6 +4661,8 @@ theme	Appearance	Giao diện
 @msg	no such saved selection	không có vùng chọn đã lưu như vậy
 @msg	no such segment	không có đoạn như vậy
 @msg	no such spine point	không có điểm trục như vậy
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` phải là danh sách tối đa 10000 chỉ số điểm trục
+@msg	`with` moves points, not a handle	`with` di chuyển các điểm, không phải tay nắm
 @msg	no such spine segment	không có đoạn trục như vậy
 @msg	no such subpath	không có nhánh con như vậy
 @msg	no such user library	không có thư viện người dùng như vậy

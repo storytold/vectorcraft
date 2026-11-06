@@ -2856,6 +2856,8 @@ file-filter	Templates	範本
 @msg	the blend has no spine	漸變物件沒有脊線
 @msg	the spine has no segments	脊線沒有線段
 @msg	no such spine point	沒有這個脊線點
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` 必須是最多 10000 個脊線點索引的清單
+@msg	`with` moves points, not a handle	`with` 移動的是點，不是控制把手
 @msg	no such spine segment	沒有這個脊線線段
 @msg	a key object sits on that point	該點上有關鍵物件
 @msg	a spine keeps at least two points	脊線至少要保留兩個點

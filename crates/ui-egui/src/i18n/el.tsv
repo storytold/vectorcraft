@@ -4287,6 +4287,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no such saved selection	δεν υπάρχει τέτοια αποθηκευμένη επιλογή
 @msg	no such segment	δεν υπάρχει τέτοιο τμήμα
 @msg	no such spine point	δεν υπάρχει τέτοιο σημείο κεντρικής καμπύλης
+@msg	`with` must be a list of at most 10000 spine point indexes	το `with` πρέπει να είναι λίστα με έως 10000 δείκτες σημείων κεντρικής καμπύλης
+@msg	`with` moves points, not a handle	το `with` μετακινεί σημεία, όχι λαβή
 @msg	no such spine segment	δεν υπάρχει τέτοιο τμήμα κεντρικής καμπύλης
 @msg	no such subpath	δεν υπάρχει τέτοια υποδιαδρομή
 @msg	no such user library	δεν υπάρχει τέτοια βιβλιοθήκη χρήστη
