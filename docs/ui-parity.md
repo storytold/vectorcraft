@@ -38,6 +38,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | Scrubby labels: the Control bar's Stroke: and Opacity: and the Properties panel's Stroke, links to their panels, scrub the field after them as other labels do; a click still opens the panel (#4088); scores and estimates unchanged |
 | 2026-11-05 | minor | Direct Selection: Shift-click picks several points of a blend's spine and dragging one moves them all, with the key objects on them, in one undo step (#5285); scores and estimates unchanged |
 | 2026-11-05 | minor | Direct Selection: Cmd/Ctrl held lends the Selection tool, whose bounding box shows while the key is down over objects selected whole; its handles scale and rotate, and a Cmd drag moves the whole object with its direct-selected anchors kept (#3901); scores and estimates unchanged |
 | 2026-11-05 | minor | Join tool: scrubbing over the ends of two crossing open paths that run past the crossing trims those ends and joins the paths there with a corner, instead of drawing a segment between the ends (#5844); scores and estimates unchanged |
@@ -252,7 +253,7 @@ tools, never checked side by side) isn't captured row by row.
 | Units: pt, pc, in, mm, cm, px, ft-in, m, yd, ft; General/Stroke/Type units | done | units preference reverting to points on SVG output reported (#864) |
 | Units › East Asian Type (Q and Ha) | done | #394: `unitsAsianType` offers every unit and Q and Ha, a quarter of a millimetre each ([Scripting Guide's Measurement Units](https://ai-scripting.docsforadobe.dev/scripting/measurementUnits/): 0.709 pt per Q; [InDesign's unit notation](https://helpx.adobe.com/in/indesign/desktop/layout-and-grid-tools/rulers-and-measure-tools/change-ruler-measurement-units.html): `q`, `h`); only it lists Q and Ha. The public pages do not say which fields use it, so no field uses it yet and that waits for a source. Tests `q_and_ha_are_a_quarter_millimetre`, `east_asian_type_unit_*` |
 | Field precision: 3 decimals for steps; values kept as f64 | done | |
-| Scrubby labels (beyond Illustrator) | done | #400 |
+| Scrubby labels (beyond Illustrator) | done | #400; the labels that are links (the Control bar's Stroke: and Opacity:, the Properties panel's Stroke) scrub too, and a click on them still opens their panel (#4088) |
 | 3D Lighting Color picker, preview, reset dot and Reset all | initial | One to ten opaque RGB lights for Revolve, Extrude & Bevel, Inflate and Rotate; select, add or delete a light and edit its settings or gizmo; Standard, Diffuse, Top Left and Right select original rigs, with Custom for manual changes; Cancel restores all lights |
 | Dialogs open with the first field focused and selected; Enter confirms | done | on every open, not only the first (#1367); a first field that starts greyed out takes the focus once enabled (#1395) |
 | Value fields: selected text readable in every brightness; a focused field follows its value when a slider or preview changes it | partial | #1490 (part of #1465: the wheel over a hovered, unfocused field still scrolls the panel), #1457 |
