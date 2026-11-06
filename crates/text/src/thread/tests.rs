@@ -163,6 +163,39 @@ fn empty_frames_do_not_replace_an_earlier_paragraph_style() {
     assert_eq!(story_paras(&[&first, &restyled_middle, &last], &[false, true, false])[0].justify, Justify::Center);
 }
 
+/// When the earlier frame ends with a paragraph break, a restyled empty frame keeps its style
+/// against an unedited empty frame after it. An unedited empty frame before it, a frame with
+/// text after it, or a restyled frame after it still gives the paragraph its own style.
+#[test]
+fn a_restyled_empty_frame_keeps_its_style_after_a_paragraph_break() {
+    let style = |j| ParaStyle { justify: j, ..Default::default() };
+    let mut first = frame(0.0);
+    first.runs = vec![TextRun { text: "First\n".into(), style: CharStyle::default(), inline: None }];
+    first.set_all_paras(style(Justify::Right));
+    let mut restyled = frame(200.0);
+    restyled.set_all_paras(style(Justify::Center));
+    let empty = frame(400.0);
+    let tail_style = |frames: &[&TextObject], wins: &[bool]| story_paras(frames, wins).last().map(|p| p.justify);
+
+    assert_eq!(tail_style(&[&first, &restyled, &empty], &[false, true, false]), Some(Justify::Center));
+    assert_eq!(tail_style(&[&first, &restyled, &empty, &empty], &[false, true, false, false]), Some(Justify::Center));
+    // An unedited empty frame before the restyled one gives way to it.
+    assert_eq!(tail_style(&[&first, &empty, &restyled, &empty], &[false, false, true, false]), Some(Justify::Center));
+    // A restyled first frame of an empty thread keeps its style as well.
+    assert_eq!(tail_style(&[&restyled, &empty, &empty], &[true, false, false]), Some(Justify::Center));
+
+    // Without an edit, the last empty frame still gives the empty paragraph its style.
+    assert_eq!(tail_style(&[&first, &restyled, &empty], &[false, false, false]), Some(Justify::Left));
+    // A later frame with text still gives the paragraph it holds its style.
+    let mut with_text = empty.clone();
+    with_text.runs = vec![TextRun { text: "Tail".into(), style: CharStyle::default(), inline: None }];
+    assert_eq!(tail_style(&[&first, &restyled, &with_text], &[false, true, false]), Some(Justify::Left));
+    // A later restyled frame wins over the earlier one.
+    let mut right = empty.clone();
+    right.set_all_paras(style(Justify::Right));
+    assert_eq!(tail_style(&[&first, &restyled, &right], &[false, true, true]), Some(Justify::Right));
+}
+
 /// Numbered list paragraphs count on from one frame to the next: the second frame's first
 /// whole paragraph takes the next number. A paragraph split between the frames has its number
 /// in the first frame only, and the paragraph after it takes the next number.
