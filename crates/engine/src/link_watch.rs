@@ -27,9 +27,16 @@ use crate::{Result, Session};
 /// A file's size and modification time (nanoseconds since 1970).
 pub type Stamp = (u64, u128);
 
-/// Stamps of a document's linked files taken on a worker thread: (document uid, [(file,
-/// object ids, stamp)]), the condition the worker signals when it ends, and whether it has.
-pub type LinkScan = Arc<(Mutex<Option<(u64, Vec<(String, Vec<u64>, Option<Stamp>)>)>>, Condvar, AtomicBool)>;
+/// A document's linked-file scan, the condition the worker signals when it ends, and whether
+/// it has. Includes missing-link marker ids when their view toggle is enabled.
+pub type LinkScan = Arc<(Mutex<Option<LinkScanResult>>, Condvar, AtomicBool)>;
+
+/// A worker's stamps and optional missing-link overlay scan of the same document snapshot.
+pub struct LinkScanResult {
+    uid: u64,
+    stamps: Vec<(String, Vec<u64>, Option<Stamp>)>,
+    markers: Option<(Arc<vectorcraft_doc::Document>, Vec<vectorcraft_doc::NodeId>)>,
+}
 
 /// Held by a look's worker: marks the look as ended and wakes [`Session::wait_link_scan`] when
 /// dropped, whether the worker returned or unwound.
@@ -86,7 +93,11 @@ impl Session {
         // A confined caller's roots, else what the caller that opened the document may read (the
         // desktop frame is unconfined).
         let opened_by = st.opened_by.clone();
+        let marker_doc = st.show_missing_links.then(|| st.doc.clone());
         if files.is_empty() {
+            if let Some(st) = self.docs.iter_mut().find(|st| st.uid == uid) {
+                st.missing_link_markers = None;
+            }
             return;
         }
         let slot: LinkScan = Arc::default();
@@ -95,12 +106,17 @@ impl Session {
         let spawned = std::thread::Builder::new().name("link-watch".into()).spawn(move || {
             // Marks the look as ended when the worker returns or unwinds.
             let _ended = Ended(out.clone());
-            let stamps = scope.run(|| {
+            let (stamps, markers) = scope.run(|| {
                 crate::file_access::confine(crate::file_access::current().or(opened_by).as_ref(), || {
-                    files.into_iter().map(|(p, ids)| (p.clone(), ids, stamp(&p, doc_path.as_deref()))).collect()
+                    let stamps = files.into_iter().map(|(p, ids)| (p.clone(), ids, stamp(&p, doc_path.as_deref()))).collect();
+                    let markers = marker_doc.map(|doc| {
+                        let ids = crate::cmd::links::missing_markers(&doc, doc_path.as_deref());
+                        (doc, ids)
+                    });
+                    (stamps, markers)
                 })
             });
-            *out.0.lock().unwrap_or_else(PoisonError::into_inner) = Some((uid, stamps));
+            *out.0.lock().unwrap_or_else(PoisonError::into_inner) = Some(LinkScanResult { uid, stamps, markers });
         });
         if spawned.is_ok() {
             self.link_scan = Some(slot);
@@ -110,8 +126,15 @@ impl Session {
     /// Apply a finished look (`None` while there is none, or it is still running): see
     /// [`Session::apply_link_stamps`].
     pub fn poll_link_scan(&mut self) -> Option<Result<Value>> {
-        let (uid, stamps) = self.link_scan.as_ref()?.0.lock().unwrap_or_else(PoisonError::into_inner).take()?;
+        let LinkScanResult { uid, stamps, markers } = self.link_scan.as_ref()?.0.lock().unwrap_or_else(PoisonError::into_inner).take()?;
         self.link_scan = None;
+        if let Some(st) = self.docs.iter_mut().find(|st| st.uid == uid)
+            && st.show_missing_links
+            && let Some((doc, ids)) = markers
+            && Arc::ptr_eq(&st.doc, &doc)
+        {
+            st.missing_link_markers = Some((doc, ids));
+        }
         Some(self.apply_link_stamps(uid, stamps, false))
     }
 

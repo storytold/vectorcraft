@@ -48,6 +48,9 @@ fn window_toggle_label(app: &VectorcraftApp, id: &str) -> Option<String> {
         "view.transparencyGrid" => {
             if app.session.active().is_some_and(|d| d.transparency_grid) { "Hide Transparency Grid" } else { "Show Transparency Grid" }.into()
         }
+        "view.showMissingLinks" => {
+            if app.session.active().is_some_and(|d| d.show_missing_links) { "Hide Missing Links" } else { "Show Missing Links" }.into()
+        }
         "view.guides" => if v.guides { "Hide Guides" } else { "Show Guides" }.into(),
         "view.grid" => if v.grid { "Hide Grid" } else { "Show Grid" }.into(),
         "view.guides.lock" => if app.session.guides_locked() { "Unlock Guides" } else { "Lock Guides" }.into(),
@@ -270,6 +273,8 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Show Bounding Box",
     "Hide Transparency Grid",
     "Show Transparency Grid",
+    "Show Missing Links",
+    "Hide Missing Links",
     "Hide Guides",
     "Show Guides",
     "Hide Grid",

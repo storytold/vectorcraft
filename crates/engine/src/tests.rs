@@ -95,6 +95,7 @@ mod live;
 mod livecorners;
 mod maskview;
 pub(super) mod menucmds;
+mod missing_links;
 mod nativefile;
 mod newart;
 mod newdoc;

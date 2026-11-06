@@ -27,8 +27,17 @@ fn headless_links_report_missing_files_and_relink() {
     let r = run(&mut h, "document.open", json!({"path": file("doc.vectorcraft")}));
     assert_eq!(r["missingLinks"][0]["ids"], json!([id]), "{r}");
     assert_eq!(run(&mut h, "links.check", json!({}))["missing"], 1);
+    assert_eq!(run(&mut h, "links.marked", json!({})), json!({"on": false, "images": []}));
+    assert_eq!(run(&mut h, "view.showMissingLinks", json!({"on": true})), json!({"on": true}));
+    let markers = run(&mut h, "links.marked", json!({}));
+    assert_eq!(markers["images"][0]["id"], id);
+    assert_eq!(markers["images"][0]["bounds"].as_array().unwrap().len(), 4);
+    run(&mut h, "view.showMissingLinks", json!({"on": false}));
+    assert_eq!(run(&mut h, "links.marked", json!({}))["images"], json!([]));
+    run(&mut h, "view.showMissingLinks", json!({"on": true}));
     let r = run(&mut h, "links.relink", json!({"ids": [id], "path": file("b.png")}));
     assert_eq!(r["relinked"], json!([id]));
     assert_eq!(run(&mut h, "links.check", json!({}))["links"][0]["status"], "ok");
+    assert_eq!(run(&mut h, "links.marked", json!({}))["images"], json!([]));
     let _ = std::fs::remove_dir_all(dir);
 }

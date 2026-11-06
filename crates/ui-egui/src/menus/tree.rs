@@ -560,6 +560,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 c("Hide Bounding Box", "view.boundingBox"),
                 c("Show Transparency Grid", "view.transparencyGrid"),
+                c("Show Missing Links", "view.showMissingLinks"),
                 c("Hide Text Threads", "view.textThreads"),
                 c("Hide Gradient Annotator", "view.gradientAnnotator"),
                 c("Hide Corner Widget", "view.cornerWidget"),

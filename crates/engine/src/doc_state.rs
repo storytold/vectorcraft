@@ -60,6 +60,10 @@ pub struct DocState {
     pub mask_view: Option<NodeId>,
     /// View → Show Transparency Grid, per document (saved view state, not undoable).
     pub transparency_grid: bool,
+    /// View → Show Missing Links: transient canvas decoration, never document artwork.
+    pub show_missing_links: bool,
+    /// Last worker scan, tied to the exact document snapshot it inspected.
+    pub missing_link_markers: Option<(Arc<Document>, Vec<NodeId>)>,
     /// The format Save writes ([`cmd::fileio::SAVE_FORMATS`]): the one the document was opened
     /// from or last saved as.
     pub format: &'static str,
@@ -230,6 +234,30 @@ impl SameContent {
 }
 
 impl DocState {
+    /// Cached missing links still present and visible in the current art. Geometry-only edits
+    /// keep their markers moving with the objects; relinking or embedding drops them immediately.
+    pub fn marked_missing_links(&self) -> Vec<NodeId> {
+        if !self.show_missing_links {
+            return vec![];
+        }
+        let Some((before, ids)) = &self.missing_link_markers else { return vec![] };
+        fn link(n: &vectorcraft_doc::Node) -> Option<&vectorcraft_doc::LinkInfo> {
+            match &n.kind {
+                NodeKind::Image(im) => im.link.as_ref(),
+                NodeKind::PlacedDocument(p) => Some(&p.link),
+                _ => None,
+            }
+        }
+        ids.iter()
+            .copied()
+            .filter(|id| {
+                let old = before.node(*id).and_then(link);
+                let now = self.doc.node(*id).and_then(link);
+                now.is_some() && now == old && self.doc.is_visible(*id)
+            })
+            .collect()
+    }
+
     pub fn new(mut doc: Document, path: Option<String>) -> Self {
         let active_layer = doc.default_layer();
         // Saved view state lives here while the document is open (saves write it back).
@@ -261,6 +289,8 @@ impl DocState {
             opened_as_tab: true,
             mask_view: None,
             transparency_grid,
+            show_missing_links: false,
+            missing_link_markers: None,
             format: "vectorcraft",
             save_options: Default::default(),
             save_artboards: vec![],

@@ -323,6 +323,7 @@ pub(crate) fn pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) 
     if app.ui.view.edges {
         selected_objects(st, &painter, &xf);
     }
+    super::missing_links::paint(st, &painter, &xf, &t);
     if app.ui.view.rulers && app.ui.screen_mode < 3 {
         rulers(ui, full, &xf, None, RulerScale::document(app.session.general_unit(), st.doc.ruler_origin_for(v.artboard)), &t);
     }
