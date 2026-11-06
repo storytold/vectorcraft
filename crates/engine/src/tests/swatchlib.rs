@@ -792,6 +792,20 @@ fn a_library_named_like_a_device_keeps_the_library_with_its_file_name() {
     }
 }
 
+/// `.ase` keeps no title, so a library named like a device is saved over its own file again, not
+/// beside it.
+#[test]
+fn a_device_named_library_without_a_title_is_not_copied_on_every_save() {
+    let dir = temp_dir("device-ase");
+    let mut s = session();
+    s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+    let p = json!({"user": true, "name": "COM¹", "format": "ase"});
+    let first = run(&mut s, "swatch.library.save", p.clone())["library"].clone();
+    assert_eq!(run(&mut s, "swatch.library.save", p)["library"], first);
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// #3602: a library titled with a Windows device name is saved under a name that is not one.
 #[test]
 fn a_library_file_name_is_never_a_windows_device_name() {

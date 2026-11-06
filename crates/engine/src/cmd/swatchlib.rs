@@ -218,10 +218,13 @@ impl<L: LibraryFile> Libraries<L> {
             let device = crate::file_access::is_device_name;
             let id = format!("user/{file}").to_lowercase();
             let fallback = |other: &str| library_file_name(other, ext).to_lowercase() != file.to_lowercase();
-            if self
-                .extra
-                .iter()
-                .any(|e| e.info.id.to_lowercase() == id && e.lib.name() != name && (device(name) || device(e.lib.name()) || fallback(e.lib.name())))
+            // A format that keeps no title (`.ase`) reads its name from the file name, so the same
+            // library saved again looks like another one, and only the file name tells them apart.
+            let titled = L::read(bytes, stem(&file)).is_ok_and(|lib| lib.name() == name);
+            if titled
+                && self.extra.iter().any(|e| {
+                    e.info.id.to_lowercase() == id && e.lib.name() != name && (device(name) || device(e.lib.name()) || fallback(e.lib.name()))
+                })
             {
                 // Saved again, it goes back to the file it was given the first time.
                 let own = self.extra.iter().find(|e| e.info.category == "user" && e.lib.name() == name && extension(&e.info.id) == extension(&file));
