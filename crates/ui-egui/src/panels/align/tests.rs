@@ -150,34 +150,60 @@ fn align_to_key_object_makes_the_topmost_object_the_key() {
     assert_eq!(key_object(&app), back.as_u64(), "a key already set");
 }
 
-/// Align to Key Object stores no Align To choice: once the key object is cleared, by Cancel
-/// Key Object, by a click on the key or by another selection, Align To shows the stored
-/// choice again.
+/// A key set by a click on an object (no Align To Key Object chosen) is a one-off: once it is
+/// cleared, by Cancel Key Object, by a click on the key or by another selection, Align To shows
+/// the stored choice again.
 #[test]
-fn align_to_shows_its_choice_again_once_the_key_is_cleared() {
+fn align_to_shows_its_choice_again_once_a_clicked_key_is_cleared() {
     let (mut app, back, front) = back_and_front();
     let ctx = egui::Context::default();
-    let ([_, key, artboard], _) = panel_buttons(&mut app, &ctx);
+    let ([_, _, artboard], _) = panel_buttons(&mut app, &ctx);
     click(&ctx, &mut app, artboard.center(), show);
-    click(&ctx, &mut app, key.center(), show);
+    app.run("select.key", json!({"id": front})).unwrap();
     assert_eq!(align_to(&app), AlignTo::Key);
     let cancel = text_rect(&frame_events(&ctx, &mut app, vec![], menu), "   Cancel Key Object");
     click(&ctx, &mut app, cancel.center(), menu);
     assert!(!has_key(&app));
     assert_eq!(align_to(&app), AlignTo::Artboard, "Cancel Key Object");
-    // The Selection tool's click on the key object runs `select.key {}`.
-    click(&ctx, &mut app, key.center(), show);
-    assert!(has_key(&app));
+    app.run("select.key", json!({"id": front})).unwrap();
     app.run("select.key", json!({})).unwrap();
     assert_eq!(align_to(&app), AlignTo::Artboard, "a click on the key");
-    click(&ctx, &mut app, key.center(), show);
-    assert!(has_key(&app));
+    app.run("select.key", json!({"id": front})).unwrap();
     app.run("select.set", json!({"ids": [back, front]})).unwrap();
     assert_eq!(align_to(&app), AlignTo::Artboard, "another selection");
 }
 
+/// #3718: Align To Key Object stays the choice when the selection changes: clicking off the
+/// objects and selecting them again shows it, and the next Align makes the topmost object the
+/// key and aligns to it. Cancel Key Object goes back to Align to Selection.
+#[test]
+fn align_to_key_object_stays_chosen_across_selections() {
+    let (mut app, back, front) = back_and_front();
+    let ctx = egui::Context::default();
+    let ([selection, key, _], left) = panel_buttons(&mut app, &ctx);
+    click(&ctx, &mut app, key.center(), show);
+    assert_eq!(app.ui.align_to, AlignTo::Key);
+    app.run("select.set", json!({"ids": []})).unwrap();
+    assert_eq!(chosen_align_to(&mut app, &ctx), [key], "nothing selected");
+    app.run("select.set", json!({"ids": [back, front]})).unwrap();
+    assert!(!has_key(&app), "a new selection has no key yet");
+    assert_eq!(chosen_align_to(&mut app, &ctx), [key], "two objects");
+    click(&ctx, &mut app, left.center(), show);
+    assert_eq!(app.session.active().unwrap().selection.key.map(|k| k.0), front.as_u64(), "the topmost became the key");
+    assert_eq!((left_edge(&app, &back), left_edge(&app, &front)), (80.0, 80.0), "to the key's left edge: {}", app.ui.status);
+    // Object > Align (the menu command) makes a key too.
+    app.run("select.set", json!({"ids": []})).unwrap();
+    app.run("select.set", json!({"ids": [back, front]})).unwrap();
+    crate::menus::invoke(&mut app, "object.align", json!({"horizontal": "right"}));
+    assert!(has_key(&app), "Object > Align");
+    let cancel = text_rect(&frame_events(&ctx, &mut app, vec![], menu), "   Cancel Key Object");
+    click(&ctx, &mut app, cancel.center(), menu);
+    assert_eq!((app.ui.align_to, has_key(&app)), (AlignTo::Selection, false));
+    assert_eq!(chosen_align_to(&mut app, &ctx), [selection]);
+}
+
 /// The Align To choice is kept with the UI state, which the app saves with its preferences and
-/// `ui.inspect` reports. A saved value other than "artboard" reads as Selection, and the rest of
+/// `ui.inspect` reports. A saved value other than "artboard" or "key" reads as Selection, and the rest of
 /// the state still loads.
 #[test]
 fn the_align_to_choice_is_kept_with_the_ui_state() {
@@ -188,7 +214,9 @@ fn the_align_to_choice_is_kept_with_the_ui_state() {
     assert_eq!(crate::control::inspect(&app, &ctx)["ui"]["align_to"], "artboard");
     let back: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
     assert_eq!(back.align_to, AlignTo::Artboard);
-    for v in [json!("key"), json!("Artboard"), json!(3), Value::Null] {
+    let key: crate::UiState = serde_json::from_value(json!({"align_to": "key"})).unwrap();
+    assert_eq!(key.align_to, AlignTo::Key, "Align To Key Object is kept too (#3718)");
+    for v in [json!("Artboard"), json!(3), Value::Null] {
         let ui: crate::UiState = serde_json::from_value(json!({"align_to": v, "place_link": false})).unwrap();
         assert_eq!((ui.align_to, ui.place_link), (AlignTo::Selection, false), "{v}");
     }
