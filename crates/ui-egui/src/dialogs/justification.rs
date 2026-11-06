@@ -196,16 +196,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// `text.setFormat` parameters: the fields that differ from the values the dialog opened with,
 /// on the dialog's type and range. After Select All in threaded text the type is every frame of
 /// the edited frame's thread as the document holds it now; when that frame is no longer threaded,
-/// the range in that frame.
+/// every paragraph in that frame.
 fn params(app: &VectorcraftApp, d: &Dialog) -> Map<String, Value> {
     let initial = d.fields.get(INITIAL).and_then(Value::as_object);
     let was = |key: &str| initial.and_then(|m| m.get(key)).and_then(Value::as_f64);
     let mut p = d.fields.get(TARGETS).and_then(Value::as_object).cloned().unwrap_or_default();
     if let (Some(id), Some(st)) = (d.fields.get(STORY).and_then(Value::as_u64), app.session.active()) {
         let story = st.doc.story_of(vectorcraft_doc::NodeId(id));
+        p.remove("start");
+        p.remove("end");
         if story.len() >= 2 {
-            p.remove("start");
-            p.remove("end");
             p.insert("ids".into(), json!(story.iter().map(|f| f.0).collect::<Vec<_>>()));
         }
     }
@@ -396,6 +396,31 @@ mod tests {
             assert_eq!(paras(&app, id).0.justification.auto_leading, 140.0, "frame {id} takes the change");
         }
         assert_eq!(paras(&app, c).0.justification.auto_leading, 120.0, "the frame that left keeps its paragraphs");
+    }
+
+    /// After Select All in threaded text, a thread broken after the edited frame while the dialog is
+    /// open leaves the whole story in that frame, and OK changes every paragraph it now holds.
+    #[test]
+    fn justification_dialog_takes_the_story_into_a_frame_that_left_its_thread() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame.\n".repeat(6);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 400]})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+        app.run("select.all", json!({})).unwrap();
+        app.run("ui.justification", json!({})).unwrap();
+        app.run("text.thread.break", json!({"id": a, "port": "out"})).unwrap();
+        set(&mut app, "autoLeading", json!(140));
+        super::super::confirm(&mut app).unwrap();
+        let NodeKind::Text(t) = &app.session.active().unwrap().doc.node(NodeId(a)).unwrap().kind else { panic!("not text") };
+        assert!(t.paragraph_count() >= 6, "the story flows into the frame: {} paragraphs", t.paragraph_count());
+        for i in 0..t.paragraph_count() {
+            assert_eq!(t.para_at(i).justification.auto_leading, 140.0, "paragraph {i}");
+        }
     }
 
     /// When paragraphs in scope disagree, only shared justification values are filled in.
