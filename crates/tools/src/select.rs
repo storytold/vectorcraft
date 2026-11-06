@@ -1133,8 +1133,9 @@ impl Tool for SelectionTool {
         }
         // A selected object's centre point (Show Center): a press there moves it, where the art
         // may not reach. The box's handles and the ruler guides take a press before it, so they
-        // take the pointer too (on a thin box the centre lies within a handle's reach).
-        if near_selected && hit_center(cx, p, cx.point_tol()).is_some() {
+        // take the pointer too (on a thin box the centre lies within a handle's reach), and with
+        // Cmd/Ctrl held the press selects the object behind instead.
+        if near_selected && !m.cmd && hit_center(cx, p, cx.point_tol()).is_some() {
             return Cursor::Move;
         }
         // View → Snap to Point: over an anchor a press would grab the object by, the arrow turns

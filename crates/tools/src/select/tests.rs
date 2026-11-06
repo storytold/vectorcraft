@@ -2153,6 +2153,8 @@ fn a_press_on_the_centre_point_moves_an_unfilled_shape() {
     let centre = Point::new(150.0, 150.0);
     let mut t = SelectionTool::default();
     assert_eq!(t.cursor(&c, centre, Mods::default()), Cursor::Move);
+    // Cmd/Ctrl selects the object behind, not the centre point, so the pointer says neither.
+    assert_ne!(t.cursor(&c, centre, Mods { cmd: true, ..Mods::default() }), Cursor::Move);
     assert!(t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y)).is_empty());
     let a = t.pointer(&c, &ev(PointerKind::Drag, 170.0, 160.0));
     assert_eq!(a.first(), Some(&Action::Begin("Move".into())), "{a:?}");
