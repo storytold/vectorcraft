@@ -3633,8 +3633,8 @@ proptest! {
     }
 }
 
-/// Editing data with two symbols (S2's art holds an instance of S1), the symbol list and a layer of
-/// instances, as the format writes them.
+/// Editing data with symbols (S2's art holds an instance of S1, F's holds non-native art), the
+/// symbol list and a layer of instances, as the format writes them.
 fn symbols_text() -> String {
     use vectorcraft_testkit::ai;
     let def = |name: &str, art: &str, reg: u32| {
@@ -3643,7 +3643,12 @@ fn symbols_text() -> String {
         )
     };
     let inst = |name: &str, m: &str| format!("/SymbolInstance :\n({name}) /SymbolRef ,\n{m} /RTransformMatrix\n;\n9 () XW\n");
-    let defs = def("S1", "0 1 1 0 1 0 0 Xa\n-2 -2 m\n2 -2 L\n2 2 L\n-2 2 L\nf\n", 5) + &def("S2", &inst("S1", "1 0 0 -1 -8081 8237"), 1);
+    // Non-native art keeps ASCII85 data in comment lines, some of them `%_` lines holding a `(`.
+    let foreign = "/ForeignObject :\n1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data ,\n\
+                   %,u@!!/MSk8%41#ocdN=10d&\n%_O%*mGn(RduU.]4`[u[.f\n%_;(]<[%\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n";
+    let defs = def("F", &format!("{foreign}-2 -2 m\n2 -2 L\n2 2 L\nf\n"), 5)
+        + &def("S1", "0 1 1 0 1 0 0 Xa\n-2 -2 m\n2 -2 L\n2 2 L\n-2 2 L\nf\n", 5)
+        + &def("S2", &inst("S1", "1 0 0 -1 -8081 8237"), 1);
     let list = "%AI24_BeginSymbolList\n(S2)\n(S1)\n%AI24_EndSymbolList\n";
     let page = ai::layer(
         "L",
@@ -3668,7 +3673,7 @@ fn the_symbols_fuzz_data_opens_live() {
     let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&symbols_text())].concat();
     let (doc, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
     assert!(layered, "{warnings:?}");
-    let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
+    let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).filter(|n| *n != "F").collect();
     assert_eq!(names, ["S2", "S1"]);
     let mut instances = 0;
     doc.walk(|n| instances += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })));
@@ -4165,6 +4170,7 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%_/AI11Text :\n%_0 /StoryIndex ,\n%_;\n",
             "/SymbolInstance :",
             "/Binary : /ASCII85Decode ,",
+            "/AI11TextDocument : /ASCII85Decode ,",
             "~>",
             "p",
             "P",

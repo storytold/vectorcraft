@@ -279,6 +279,8 @@ fn swatch_names(data: &[u8]) -> ShownNames {
     let (mut palette_at, mut palette) = (None, None);
     // A pattern's name is the first string of its definition.
     let mut head = false;
+    // ASCII85 data in comment lines is skipped past, as the reader skips it.
+    let mut dictionaries = ops::Dictionaries::default();
     loop {
         let before = lex.offset();
         let Some(t) = lex.next_token() else {
@@ -291,6 +293,8 @@ fn swatch_names(data: &[u8]) -> ShownNames {
                 _ => break,
             }
         };
+        let end = skip.map(|s| s.1).or(palette_at.map(|_| "EndPalette")).or(section.map(|s| s.1));
+        dictionaries.pass(&t.tok, &mut lex, end);
         match &t.tok {
             Tok::Comment(c) => {
                 let line = String::from_utf8_lossy(c);

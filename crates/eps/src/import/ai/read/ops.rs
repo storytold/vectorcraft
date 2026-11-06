@@ -34,10 +34,11 @@ impl<'a> Reader<'a> {
             // of it may start with `%_` and read as hidden tokens: a `(` there would open
             // a string that swallows the rest of the layer.
             let key = o.entries.last().and_then(|(k, _)| k.as_deref());
-            if o.ty == "Binary" && key == Some("ASCII85Decode") {
-                self.lex.skip_past(b"~>");
-            } else if o.ty == "ForeignObject" && key == Some("Data") {
-                self.foreign_data = Some(self.lex.skip_past(b"~>").to_vec());
+            if ascii85_follows(&o.ty, key) {
+                let data = self.lex.skip_past(b"~>");
+                if o.ty == "ForeignObject" {
+                    self.foreign_data = Some(data.to_vec());
+                }
             }
         }
     }
@@ -1119,6 +1120,94 @@ fn strip(n: &mut Node, hidden: &HashSet<NodeId>) {
         for c in children.iter_mut() {
             strip(Arc::make_mut(c), hidden);
         }
+    }
+}
+
+/// Whether ASCII85 data in comment lines, up to its `~>`, follows the entry keyed `key` of a
+/// dictionary of type `ty`: the `/ASCII85Decode` of a `/Binary` dictionary or a text document, or a
+/// non-native art object's (`/ForeignObject`'s) `/Data`.
+pub(super) fn ascii85_follows(ty: &str, key: Option<&str>) -> bool {
+    matches!((ty, key), ("Binary" | "AI11TextDocument" | "AI11UndoFreeTextDocument", Some("ASCII85Decode")) | ("ForeignObject", Some("Data")))
+}
+
+/// The dictionaries (`/Type :` … `;`) a scan of tokens passes that the reader doesn't read, kept to
+/// tell where an entry's ASCII85 data follows ([`ascii85_follows`]), so the scan can skip past it
+/// as the reader does: a `(` on a `%_` line of the data would otherwise open a string.
+#[derive(Default)]
+pub(super) struct Dictionaries<'s> {
+    /// The open dictionaries' types, innermost last, up to [`MAX_DEPTH`].
+    types: Vec<&'s [u8]>,
+    /// How many more are open inside the last of `types`.
+    deeper: usize,
+    /// The name just before the token taken.
+    name: Option<&'s [u8]>,
+    /// Whether the string just before the token taken is a key that ASCII85 data follows.
+    string_key: bool,
+    /// Data that starts before this offset has no `~>`, so it isn't searched for again.
+    no_end_before: usize,
+}
+
+/// The offset just past the `~>` of ASCII85 data at the start of `rest`. `Err` holds the offset of
+/// the comment with marker `end` that comes first, or the end of `rest`. A line of the data that
+/// reads as that marker counts as the marker.
+fn data_end(rest: &[u8], end: Option<&str>) -> Result<usize, usize> {
+    let mut at = 0;
+    for line in rest.split(|b| matches!(b, b'\r' | b'\n')) {
+        let comment = line.strip_prefix(b"%").and_then(|c| std::str::from_utf8(c).ok());
+        if comment.is_some_and(|c| Some(super::marker(c)) == end) {
+            return Err(at);
+        }
+        if let Some(i) = line.windows(2).position(|w| w == b"~>") {
+            return Ok(at + i + 2);
+        }
+        at += line.len() + 1;
+    }
+    Err(rest.len())
+}
+
+impl<'s> Dictionaries<'s> {
+    /// Take `tok`, the token `lex` just gave, and skip past the ASCII85 data that follows it. Data
+    /// without its `~>` before `end`, the end marker of the section being scanned ([`data_end`]),
+    /// isn't skipped, so the scan still finds that marker.
+    pub(super) fn pass(&mut self, tok: &super::Tok<'s>, lex: &mut super::Lexer<'s>, end: Option<&str>) {
+        let at = lex.offset();
+        if self.data_follows(tok) && at >= self.no_end_before {
+            match data_end(lex.rest(), end) {
+                Ok(end) => lex.seek(at + end),
+                Err(stop) => self.no_end_before = at + stop,
+            }
+        }
+    }
+
+    /// Take the next token → whether ASCII85 data follows it.
+    fn data_follows(&mut self, tok: &super::Tok<'s>) -> bool {
+        // Comments between a name and what follows it are passed over, as the reader passes them.
+        if matches!(tok, super::Tok::Comment(_)) {
+            return false;
+        }
+        let name = self.name.take();
+        let string_key = std::mem::take(&mut self.string_key);
+        match tok {
+            super::Tok::Name(n) => self.name = Some(n),
+            // A string keys an entry as a name does, but gives a dictionary no type.
+            super::Tok::Str(s) | super::Tok::Hex(s) => self.string_key = self.keys_data(s),
+            super::Tok::Word(b":") if self.types.len() < MAX_DEPTH => self.types.push(name.unwrap_or_default()),
+            super::Tok::Word(b":") => self.deeper = self.deeper.saturating_add(1),
+            super::Tok::Word(b";") if self.deeper > 0 => self.deeper -= 1,
+            super::Tok::Word(b";") => {
+                self.types.pop();
+            }
+            super::Tok::Word(b",") => return string_key || name.is_some_and(|key| self.keys_data(key)),
+            _ => {}
+        }
+        false
+    }
+
+    /// Whether ASCII85 data follows an entry keyed `key` of the innermost dictionary.
+    fn keys_data(&self, key: &[u8]) -> bool {
+        let Some(ty) = self.types.last().filter(|_| self.deeper == 0) else { return false };
+        let (Ok(ty), Ok(key)) = (std::str::from_utf8(ty), std::str::from_utf8(key)) else { return false };
+        ascii85_follows(ty, Some(key))
     }
 }
 
