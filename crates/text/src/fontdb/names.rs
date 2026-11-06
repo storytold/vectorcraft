@@ -27,7 +27,7 @@ pub const THAI_FAMILIES: &[&str] = &[
 ];
 
 /// The families tried first for character `c`, in a script whose text only fonts made for it set
-/// well (Thai, Lao, Khmer, Myanmar); none for other characters.
+/// well (Thai, Lao, Khmer, Myanmar, Devanagari); none for other characters.
 pub(super) fn script_families(c: char) -> &'static [&'static str] {
     use unicode_script::{Script, UnicodeScript};
     match c.script() {
@@ -35,6 +35,15 @@ pub(super) fn script_families(c: char) -> &'static [&'static str] {
         Script::Lao => &["Lao UI", "Leelawadee UI", "Lao Sangam MN", "Noto Sans Lao", "Noto Sans Lao UI", "Phetsarath OT"],
         Script::Khmer => &["Khmer UI", "Khmer Sangam MN", "Noto Sans Khmer", "Noto Sans Khmer UI", "Khmer OS"],
         Script::Myanmar => &["Myanmar Text", "Myanmar Sangam MN", "Noto Sans Myanmar", "Noto Sans Myanmar UI", "Padauk"],
+        Script::Devanagari => &[
+            "Nirmala UI",
+            "Kohinoor Devanagari",
+            "Devanagari Sangam MN",
+            "Noto Sans Devanagari",
+            "Noto Sans Devanagari UI",
+            "Lohit Devanagari",
+            "Mangal",
+        ],
         _ => &[],
     }
 }
@@ -137,6 +146,14 @@ pub(super) fn norm(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Devanagari takes a font made for it, not whichever face covering it loaded first.
+    #[test]
+    fn devanagari_prefers_fonts_made_for_it() {
+        assert_eq!(script_families('ह').first(), Some(&"Nirmala UI"));
+        assert!(script_families('ह').contains(&"Noto Sans Devanagari"));
+        assert!(script_families('a').is_empty());
+    }
 
     #[test]
     fn a_name_table_of_many_records_is_cut_short() {

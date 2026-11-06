@@ -10,7 +10,7 @@ use vectorcraft_pdf::{TileOrigin, TilingPage};
 
 use super::fileio::pdf::pdf_error;
 use super::print::{settings, to_json};
-use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc, index};
+use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc, index, switch_or};
 
 const SET: &str = "print.tiling.set";
 
@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
 
 fn show(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
-    st.print_tiling = p.get("on").and_then(Value::as_bool).unwrap_or(!st.print_tiling);
+    st.print_tiling = switch_or(p, "on", !st.print_tiling, "view.printTiling")?;
     Ok(json!({ "on": st.print_tiling }))
 }
 

@@ -11,7 +11,7 @@ use super::clipboard::SwatchChoices;
 use super::{
     CommandSpec, Result, Session, always, bad, bool_or, can_clear_history, can_redo, can_undo, checked_ids_param, cmd, f64_or, f64_req,
     finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, id_param, index, ok,
-    point_param, str_param,
+    point_param, str_param, switch_or,
 };
 use crate::{Clipboard, EngineError, inspect};
 
@@ -817,6 +817,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
 }
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
+    let guides = switch_or(p, "guides", false, "edit.clear")?;
     let explicit = if p.get("ids").is_some() { Some(checked_ids_param(s, p, "ids", "edit.clear")?) } else { None };
     // Direct-selected anchors or segments: remove those, and any objects selected whole with them.
     if explicit.is_none() && (!s.doc()?.selection.anchors.is_empty() || !s.doc()?.selection.segments.is_empty()) {
@@ -829,7 +830,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     // Guides selected with the art go with it (not when ids are given, unless `guides` says so:
     // Cut, which names the objects it copied).
-    let with_guides = explicit.is_none() || bool_or(p, "guides", false);
+    let with_guides = explicit.is_none() || guides;
     let is_explicit = explicit.is_some();
     let targets = explicit.unwrap_or_else(|| st.selection.in_paint_order(&st.doc));
     // Keep the selected ids themselves, without promoting compound members. Delete a selected

@@ -14,7 +14,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, MaskEdit, Node, NodeId, NodeKind, Selection};
 
-use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_doc, id_param};
+use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_doc, id_param, switch_or};
 
 /// Name of the temporary mask-editing layer.
 pub const MASK_EDIT_LAYER: &str = "Opacity Mask Editing";
@@ -138,7 +138,7 @@ fn view_mask(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "transparency.viewOpacityMask";
     let st = s.doc()?;
     let editing = st.doc.mask_edit.map(|m| m.object);
-    if !p.get("on").and_then(Value::as_bool).unwrap_or(st.shown_mask().is_none()) {
+    if !switch_or(p, "on", st.shown_mask().is_none(), C)? {
         let st = s.doc_mut()?;
         let id = st.mask_view.take();
         st.revision += 1;

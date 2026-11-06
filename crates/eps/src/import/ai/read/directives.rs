@@ -377,7 +377,9 @@ impl<'a> Reader<'a> {
         sub.global_names = std::mem::take(&mut self.global_names);
         sub.nodes = self.nodes;
         sub.template = self.template;
+        self.lend_budgets(&mut sub);
         let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
+        self.take_back_budgets(&mut sub);
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
         self.global_names = std::mem::take(&mut sub.global_names);
@@ -402,6 +404,7 @@ impl<'a> Reader<'a> {
         sub.global_names = std::mem::take(&mut self.global_names);
         sub.nodes = self.nodes;
         sub.template = self.template;
+        self.lend_budgets(&mut sub);
         let mut read = sub.open(Kind::Group, false);
         for layer in &def.layers {
             if read.is_err() {
@@ -409,6 +412,7 @@ impl<'a> Reader<'a> {
             }
             read = sub.pattern_layer(layer, def.tile);
         }
+        self.take_back_budgets(&mut sub);
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
         self.global_names = std::mem::take(&mut sub.global_names);
@@ -543,7 +547,9 @@ impl<'a> Reader<'a> {
         sub.pattern_tiles = std::mem::take(&mut self.pattern_tiles);
         sub.v7_patterns.clone_from(&self.v7_patterns);
         sub.nodes = self.nodes;
+        self.lend_budgets(&mut sub);
         let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
+        self.take_back_budgets(&mut sub);
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
         self.global_names = std::mem::take(&mut sub.global_names);
@@ -723,7 +729,9 @@ impl<'a> Reader<'a> {
         sub.global_names = std::mem::take(&mut self.global_names);
         sub.nodes = self.nodes;
         sub.template = self.template;
+        self.lend_budgets(&mut sub);
         let read = sub.open(Kind::Group, false).and_then(|()| sub.run());
+        self.take_back_budgets(&mut sub);
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
         self.pattern_tiles = std::mem::take(&mut sub.pattern_tiles);
@@ -747,6 +755,21 @@ impl<'a> Reader<'a> {
         };
         let Some(node) = node else { return };
         self.brush_art.insert(name, node);
+    }
+
+    /// Lend `sub`, a reader of a definition, what this import may still spend on laying out blends
+    /// and checking envelopes ([`Reader::take_back_budgets`] takes back what is left).
+    fn lend_budgets(&mut self, sub: &mut Reader<'_>) {
+        sub.blend_budget = self.blend_budget;
+        sub.envelope_checks = self.envelope_checks;
+        sub.envelope_spent = std::mem::take(&mut self.envelope_spent);
+    }
+
+    /// Take back from `sub` what [`Self::lend_budgets`] lent it, less what it spent.
+    fn take_back_budgets(&mut self, sub: &mut Reader<'_>) {
+        self.blend_budget = sub.blend_budget;
+        self.envelope_checks = sub.envelope_checks;
+        self.envelope_spent = std::mem::take(&mut sub.envelope_spent);
     }
 
     /// In a pattern's definition, the operands of its first operator start with its head,
@@ -1106,5 +1129,67 @@ mod tests {
             reader.define_brush_art(art.as_bytes());
             assert!(reader.brush_art.is_empty(), "{placed:?}");
         }
+    }
+
+    /// A blend of two keys along a straight spine, with its drawn steps and its record.
+    fn blend() -> String {
+        use crate::import::ai::tests::{blend_file, blend_record};
+        blend_file("%_10 50 m\n%_110 50 L\n", [Some("A"), Some("B")], &blend_record(&['A', 'B']))
+    }
+
+    /// A symbol's definition named `name` whose art is `art`.
+    fn symbol_section(name: &str, art: &str) -> String {
+        format!("({name})\n0 A\n0 Xw\n0 Ae\nu\n{art}U\n")
+    }
+
+    /// Whether `n` or an object in it is a live blend.
+    fn holds_blend(n: &Node) -> bool {
+        matches!(n.kind, NodeKind::Blend { .. }) || n.children().is_some_and(|c| c.iter().any(|k| holds_blend(k)))
+    }
+
+    /// Blends in symbols' definitions lay out their objects from the import's one budget: once a
+    /// definition has spent it, the next definition's blend keeps its drawn steps.
+    #[test]
+    fn blends_in_symbol_definitions_spend_the_imports_budget() {
+        let mut reader = Reader::new(b"");
+        reader.define_symbol(symbol_section("One", &blend()).as_bytes());
+        let one = super::super::types::BLEND_BUDGET - reader.blend_budget;
+        assert!(one > 0, "the definition's blend spends from the reader's budget");
+        let mut reader = Reader::new(b"");
+        reader.blend_budget = one;
+        reader.define_symbol(symbol_section("One", &blend()).as_bytes());
+        reader.define_symbol(symbol_section("Two", &blend()).as_bytes());
+        assert_eq!(reader.blend_budget, 0);
+        let live: Vec<bool> = reader.doc.symbols.iter().map(|s| holds_blend(&s.art)).collect();
+        assert_eq!(live, [true, false]);
+    }
+
+    /// Blends in patterns' and brushes' art spend from the same budget.
+    #[test]
+    fn blends_in_pattern_and_brush_art_spend_the_imports_budget() {
+        let mut reader = Reader::new(b"");
+        reader.define_pattern(format!("(P) 0 0 200 100\n0 A\n0 Xw\n0 Ae\n{}E\n", blend()).as_bytes());
+        assert!(reader.blend_budget < super::super::types::BLEND_BUDGET, "a pattern's blend");
+        let mut reader = Reader::new(b"");
+        reader.define_brush_art(format!("(A)\n0 A\n{}", blend()).as_bytes());
+        assert!(reader.blend_budget < super::super::types::BLEND_BUDGET, "a brush's blend");
+    }
+
+    /// Envelopes in symbols' definitions are checked within the import's one count of checks.
+    #[test]
+    fn envelopes_in_symbol_definitions_spend_the_imports_checks() {
+        use crate::import::ai::tests::{drawn_content, envelope_content, envelope_of, straight_mesh, warp_keys};
+        use vectorcraft_doc::live::EnvelopeKind;
+        let want = EnvelopeKind::Warp { style: "arc".into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true };
+        let envelope =
+            envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &warp_keys(1, 0.5, 0.0, 0.0, 0), &envelope_content(), 1, &drawn_content(&want));
+        let mut reader = Reader::new(b"");
+        reader.define_symbol(symbol_section("One", &envelope).as_bytes());
+        assert_eq!(reader.envelope_checks, crate::import::ai::envelope::MAX_CHECKED - 1);
+        let mut reader = Reader::new(b"");
+        reader.envelope_checks = 1;
+        reader.define_symbol(symbol_section("One", &envelope).as_bytes());
+        reader.define_symbol(symbol_section("Two", &envelope).as_bytes());
+        assert_eq!(reader.envelope_checks, 0);
     }
 }
