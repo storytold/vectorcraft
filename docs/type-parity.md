@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Snap to Glyph's glyph bounds give corners and turn with rotated type, #5112; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Alt + numeric-keypad codes type their character on Windows, and `type.insert` takes a code, #5108; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -49,6 +49,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Hidden characters (Show Hidden Characters) | done | `type.hiddenCharacters` |
 | Spell check (Check Spelling, Auto Spell Check, custom dictionary) | missing | menu stubs; needs an openly licensed dictionary |
 | Smart Punctuation, Change Case, Find & Replace | done | |
+| Alt + numeric-keypad codes while typing (Windows: `Alt+0176` → °) | partial | #5108: on Windows the character Windows posts when Alt comes up after keypad digits is typed at the caret like any other, in the typing's undo step, and the keypad digits typed with Alt run no shortcut (`windows_alt_codes` tests; not yet tried on a Windows machine). `type.insert {code}` (Windows Alt+0 code, Windows-1252 for 128–159) and `{unicode}` (hex code point) insert a character by its code (`menucmds::insert_a_character_by_its_code`). macOS and Linux have no such system convention and egui reports a keypad digit as the top-row digit, so there it does nothing; a floating panel window doesn't receive the character |
 | Caret: the arrows and Delete step over whole clusters (Thai consonant with its marks, combining accents, emoji); Backspace removes one character | done | in text with right-to-left characters the arrows move in visual order and stop on both sides of a character drawn with no width, such as a zero width non-joiner |
 | Touch Type tool | done | moves, scales and rotates one character through its kerning, baseline shift, scales and rotation (`text.touchType`); a character with a preceding logical character on the same line can move along the line in either reading direction; the first logical character moves only up and down. Positive `dx` follows reading order. These direction rules are VectorCraft's choices. |
 | Retype (identify fonts in outlines/images) | missing | Illustrator's uses a cloud model |
@@ -77,6 +78,7 @@ Character Styles menu New/Redefine and footer New capture the first selected cha
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | Alt + numeric-keypad codes (`Alt+0176` → °) type their character at the caret on Windows, and `type.insert` inserts a character by `code` or `unicode` (#5108); scores and estimates unchanged |
 | 2026-11-06 | minor | Snap to Glyph › Glyph Bounds: each glyph's box gives four corners a drawn point lands on, also on a curved side (`B`), and its box and edges turn with rotated type (#5112); scores and estimates unchanged |
 | 2026-11-05 | minor | Character panel › Show Snap to Glyph Options scrolls the panel down to the Snap to Glyph section, which comes after every character attribute and could sit out of sight, and the section starts with a Snap to Glyph checkbox (View › Snap to Glyph) so its dimmed options can be turned on there (#5273); scores and estimates unchanged |
 | 2026-11-05 | minor | Release Type on a Path joins the Type Tools add-on: type on a path splits into point type and its path (#5532, beyond Illustrator). Scores and estimates unchanged. |
