@@ -1,17 +1,18 @@
-//! Art styles: objects with live effects a plain path can't hold, written as their drawn look, the
-//! object itself on `%_` lines and `1 (style) XW`, and the styles they name in
-//! `%AI9_BeginArtStyles` (see [`crate::ai_editing`] for the form). Each style is read back before it
-//! is written ([`crate::import::read_art_style`]: the `.ai` reader's style parser and its reading of
-//! a graphic style, with the object's own gradient): one that reads back differently is not
-//! written, and the object is written as its drawn look alone.
+//! Art styles: objects whose appearance a plain path can't hold, written as their drawn look, the
+//! object itself on `%_` lines and `1 (style) XW`; the styles they name and the Graphic Styles
+//! panel's styles in `%AI9_BeginArtStyles`, and the panel's order in `%AI9_BeginArtStyleList` (see
+//! [`crate::ai_editing`] for the form). Each style is read back before it is written
+//! ([`crate::import::read_art_style`]: the `.ai` reader's style parser and its reading of a graphic
+//! style, with the object's own gradient): one that reads back differently is not written, and the
+//! object is written as its drawn look alone.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, Knockout, Node, NodeId, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, GraphicStyle, Knockout, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{BezPath, FillRule, Rect, Shape};
 
 use super::{Writer, Xy, blend_code, compound_path, hide};
@@ -19,34 +20,36 @@ use crate::ai_ops;
 use crate::ps;
 
 pub(in crate::ai_editing) const LARGE_CANVAS_STYLES: &str =
-    "on a large canvas, objects with live effects are written as their drawn look in the editing data for other apps";
-pub(in crate::ai_editing) const GRAPHIC_STYLES: &str = "graphic styles and links to them are left out of the editing data for other apps";
+    "on a large canvas, objects with live effects are written as their drawn look and graphic styles are left out of the editing data for other apps";
+pub(in crate::ai_editing) const PANEL_STYLES: &str = "graphic styles with gradient or pattern fills, with fills, strokes or effects the editing data can't hold as a graphic style, with a name another style has, with names over 1,024 bytes, or past 4,096 styles, are left out of the editing data for other apps";
+pub(in crate::ai_editing) const PANEL_EMPTY: &str =
+    "a Graphic Styles panel with no style written opens from the editing data with a new document's styles";
+pub(in crate::ai_editing) const STYLE_LINKS: &str = "links to graphic styles are left out of the editing data for other apps on type, images, symbol instances, knockout shapes and other objects that aren't written with their graphic style";
 
-/// Does `doc` have graphic styles other than a new document's, or an object in its layers, opacity
-/// masks or symbols linked to a graphic style?
-pub(in crate::ai_editing) fn has_graphic_styles(doc: &Document) -> bool {
-    fn linked(n: &Node) -> bool {
-        n.extras().graphic_style.is_some()
-            || n.extras().mask.as_ref().is_some_and(|m| linked(&m.art))
-            || n.children().is_some_and(|c| c.iter().any(|m| linked(m)))
+/// How many objects of `doc`'s layers, opacity masks and symbols are linked to a graphic style.
+pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
+    fn count(n: &Node) -> usize {
+        let own = usize::from(n.extras().graphic_style.is_some());
+        let mask = n.extras().mask.as_ref().map_or(0, |m| count(&m.art));
+        own + mask + n.children().map_or(0, |c| c.iter().map(|m| count(m)).sum())
     }
-    doc.graphic_styles != Document::new(1.0, 1.0).graphic_styles || doc.layers.iter().any(|l| linked(l)) || doc.symbols.iter().any(|s| linked(&s.art))
+    doc.layers.iter().map(|l| count(l)).sum::<usize>() + doc.symbols.iter().map(|s| count(&s.art)).sum::<usize>()
 }
 
 /// The objects of `doc`'s layers that may be written with an art style ([`Writer::styled_object`]),
-/// by id: paths and compound paths with points and groups, with live effects, without Opacity &
-/// Mask Define Knockout Shape (the reader takes an object's transparency from its look, which
-/// doesn't carry it). A group's members are paths, compound paths or such groups, none with effects
-/// or anything baking changes.
+/// by id: paths and compound paths with points and groups, with live effects or linked to a graphic
+/// style, without Opacity & Mask Define Knockout Shape (the reader takes an object's transparency
+/// from its look, which doesn't carry it). A group's members are paths, compound paths or such
+/// groups, none with effects or anything baking changes.
 pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, Arc<Node>> {
     fn walk(nodes: &[Arc<Node>], out: &mut HashMap<NodeId, Arc<Node>>) {
         for n in nodes {
             if candidate(n) {
                 out.insert(n.id, n.clone());
-                continue;
             }
-            // Baking a container with effects of its own changes its members, which keep their ids:
-            // they are written as baking left them.
+            // A group's members are written with a style of their own only when the group is written
+            // without one. Baking a container with effects of its own changes its members, which
+            // keep their ids: they are written as baking left them.
             if let NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } = &n.kind
                 && !bakes_members(n)
             {
@@ -70,7 +73,8 @@ fn bakes_members(n: &Node) -> bool {
 
 /// Whether `n` may be written with an art style ([`styled_objects`]).
 fn candidate(n: &Node) -> bool {
-    if n.appearance.effects.is_empty() || n.knockout_shape {
+    let styled = !n.appearance.effects.is_empty() || n.extras().graphic_style.is_some();
+    if !styled || n.knockout_shape {
         return false;
     }
     match &n.kind {
@@ -97,25 +101,39 @@ fn plain_member(n: &Node) -> bool {
         }
 }
 
-/// The art styles objects name, each with its text after its name (`/ActiveStyle :` to `/Def ;`).
+/// The art styles written: the Graphic Styles panel's (listed, in its order) and those objects
+/// name, each with its text after its name (`/ActiveStyle :` to `/Def ;`).
 #[derive(Default)]
 pub(in crate::ai_editing) struct Styles {
     /// Every style, in the order written: its name and text.
     known: Vec<(String, String)>,
-    /// The name of each style by its text.
+    /// The panel's styles written, by the graphic style's id.
+    panel: HashMap<u32, String>,
+    /// The panel's styles written, in its order.
+    listed: Vec<String>,
+    /// The names styles have, and the name of each object style by its text.
+    names: HashSet<String>,
     by_text: HashMap<String, String>,
     next_anon: u64,
+    /// How many objects were written with the graphic style they are linked to.
+    pub(super) links_written: usize,
 }
 
 impl Styles {
     /// The name of an object style of `text`: a style with the same text already written, else a
-    /// new one named `Anon` and a number.
+    /// new one named `Anon` and a number no other style has.
     fn object_style(&mut self, text: String) -> String {
         if let Some(name) = self.by_text.get(&text) {
             return name.clone();
         }
-        self.next_anon += 1;
-        let name = format!("Anon {}", self.next_anon);
+        let name = loop {
+            self.next_anon += 1;
+            let name = format!("Anon {}", self.next_anon);
+            if !self.names.contains(&name) {
+                break name;
+            }
+        };
+        self.names.insert(name.clone());
         self.by_text.insert(text.clone(), name.clone());
         self.known.push((name.clone(), text));
         name
@@ -287,16 +305,30 @@ impl Writer<'_> {
         (!line.is_empty()).then_some(line)
     }
 
-    /// An appearance item's basic filter. `None` for an item with transparency or effects of its
-    /// own, which the reader doesn't read on an object.
+    /// An appearance item's filter: its basic filter, or a chain of it, its effects and its
+    /// transparency.
     fn item_filter(&mut self, s: &mut String, item: &AppearanceItem, on: Option<(&BezPath, FillRule)>) -> Option<()> {
-        if item.opacity() < 1.0 || item.blend() != BlendMode::Normal || !item.effects().is_empty() {
-            return None;
-        }
+        let plain = item.opacity() >= 1.0 && item.blend() == BlendMode::Normal && item.effects().is_empty();
+        let mut basic_text = String::new();
+        // In a chain, the chain holds the item's visibility.
+        let visible = item.visible() || !plain;
         match item {
-            AppearanceItem::Fill(f) => self.fill_filter(s, f, item.visible(), on),
-            AppearanceItem::Stroke(st) => self.stroke_filter(s, st, item.visible()),
+            AppearanceItem::Fill(f) => self.fill_filter(&mut basic_text, f, visible, on)?,
+            AppearanceItem::Stroke(st) => self.stroke_filter(&mut basic_text, st, visible)?,
         }
+        if plain {
+            s.push_str(&basic_text);
+            return Some(());
+        }
+        let _ = write!(s, "/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n{} /Visible ,\n", u8::from(item.visible()));
+        s.push_str(&basic_text);
+        for e in item.effects() {
+            s.push_str(&self.effect_filter(e)?);
+        }
+        let opacity = if item.opacity().is_finite() { item.opacity().clamp(0.0, 1.0) } else { 1.0 };
+        blend_filter(s, Xy { blend: item.blend(), opacity, ..Xy::OPAQUE });
+        s.push_str(";\n /Part ,\n");
+        Some(())
     }
 
     /// The text of a style of appearance `ap` and transparency `xy` (after its name): the chain
@@ -338,7 +370,13 @@ impl Writer<'_> {
         let p = vectorcraft_effects::merged_params(&e.id, &e.params);
         let mut d = Entries::default();
         let id = e.id.as_str();
-        let name = if id.starts_with("stylize.") { self.stylize_entries(id, &p, &mut d)? } else { Self::path_entries(id, &p, &mut d)? };
+        let name = if id.starts_with("stylize.") {
+            self.stylize_entries(id, &p, &mut d)?
+        } else if id.starts_with("warp.") || id.starts_with("distort.") || id.starts_with("blur.") {
+            Self::distort_entries(id, &p, &mut d)?
+        } else {
+            Self::path_entries(id, &p, &mut d)?
+        };
         let mut s = String::new();
         basic(&mut s, name, true, e.visible);
         s.push_str("/Dictionary : /NotRecorded ,\n");
@@ -461,14 +499,160 @@ impl Writer<'_> {
         })
     }
 
-    /// The style object `orig` (`n` before baking) is written with; `None` when the reader wouldn't
-    /// read the object as it is with it. A gradient fill is placed on `n`'s outline, as the object
-    /// draws it. A style that isn't written leaves no gradient definition or warning behind.
+    /// A Warp, Distort & Transform or Gaussian Blur effect's entries ([`Self::effect_filter`]) and
+    /// its filter's name.
+    fn distort_entries(id: &str, p: &Value, d: &mut Entries) -> Option<&'static str> {
+        Some(match id {
+            id if id.starts_with("warp.") => {
+                let style = crate::import::warp_number(id.strip_prefix("warp.")?)?;
+                d.int("DeformStyle", style);
+                d.real("DeformValue", num(p, "bend")? / 100.0);
+                d.real("DeformHoriz", num(p, "horizontal")? / 100.0);
+                d.real("DeformVert", num(p, "vertical")? / 100.0);
+                d.bool("Rotate", word(p, "orientation").as_deref() == Some("vertical"));
+                "Adobe Deform" // brand-ok: the filter's name in the files
+            }
+            "distort.transform" => {
+                d.real("scaleH_Factor", num(p, "scaleH")? / 100.0);
+                d.real("scaleV_Factor", num(p, "scaleV")? / 100.0);
+                d.real("moveH_Pts", num(p, "moveH")?);
+                // Art space has y up.
+                d.real("moveV_Pts", 0.0 - num(p, "moveV")?);
+                d.real("rotate_Radians", num(p, "rotate")?.to_radians());
+                d.int("numCopies", num(p, "copies")? as i64);
+                d.int("pinPoint", num(p, "reference")? as i64);
+                d.bool("reflectX", flag(p, "reflectX")?);
+                d.bool("reflectY", flag(p, "reflectY")?);
+                d.bool("transformObjects", flag(p, "objects")?);
+                d.bool("scaleLines", flag(p, "strokes")?);
+                d.bool("transformPatterns", flag(p, "patterns")?);
+                d.bool("randomize", false);
+                "Adobe Transform" // brand-ok: the filter's name in the files
+            }
+            "distort.freeDistort" => {
+                let corners = p.get("corners")?.as_array()?;
+                let corner = |i: usize| -> Option<(f64, f64)> {
+                    let c = corners.get(i)?.as_array()?;
+                    Some((c.first()?.as_f64()?, c.get(1)?.as_f64()?))
+                };
+                // The source frame is the unit square (y up); destination corners 0, 1, 3, 2 are
+                // the catalog's top left, top right, bottom right, bottom left (y down).
+                for (i, (h, v)) in [(0.0, 1.0), (1.0, 1.0), (0.0, 0.0), (1.0, 0.0)].into_iter().enumerate() {
+                    d.real(&format!("src{i}h"), h);
+                    d.real(&format!("src{i}v"), v);
+                }
+                for (i, from) in [0, 1, 3, 2].into_iter().enumerate() {
+                    let (x, y) = corner(from)?;
+                    d.real(&format!("dst{i}h"), x);
+                    d.real(&format!("dst{i}v"), 1.0 - y);
+                }
+                "Adobe Free Distort" // brand-ok: the filter's name in the files
+            }
+            "distort.puckerBloat" => {
+                d.real("d_factor", num(p, "amount")?);
+                "Adobe Punk and Bloat" // brand-ok: the filter's name in the files
+            }
+            "distort.twist" => {
+                d.real("angle", num(p, "angle")?);
+                "Adobe Twirl" // brand-ok: the filter's name in the files
+            }
+            "distort.zigZag" => {
+                let relative = flag(p, "relative")?;
+                d.real("absoluteness", if relative { 0.0 } else { 1.0 });
+                d.real(if relative { "relAmount" } else { "amount" }, num(p, "size")?);
+                d.real("ridges", num(p, "ridges")?);
+                d.real("roundness", if word(p, "points").as_deref() == Some("smooth") { 1.0 } else { 0.0 });
+                "Adobe Zigzag" // brand-ok: the filter's name in the files
+            }
+            "blur.gaussian" => {
+                d.real("blur", num(p, "radius")?);
+                "Adobe PSL Gaussian Blur" // brand-ok: the filter's name in the files
+            }
+            _ => return None,
+        })
+    }
+
+    /// The Graphic Styles panel's styles that the reader reads as they are: each checked, and
+    /// the others left out with a warning. Their names are taken before the art's styles are.
+    pub(in crate::ai_editing) fn panel_styles(&mut self) {
+        let doc = self.doc;
+        // A new document's styles are what the reader gives a file without a style list; they are
+        // still written when an object is linked to one of them, so that it keeps its link.
+        let linked = self.styled.values().any(|n| n.extras().graphic_style.is_some());
+        if !linked && doc.graphic_styles == Document::new(1.0, 1.0).graphic_styles {
+            return;
+        }
+        for g in doc.graphic_styles.iter() {
+            self.styles.names.insert(g.name.clone());
+        }
+        let mut readable: Vec<(&GraphicStyle, String)> = vec![];
+        let mut seen: HashSet<&str> = HashSet::new();
+        for g in doc.graphic_styles.iter() {
+            if readable.len() >= crate::import::MAX_LISTED || g.name.len() > crate::import::MAX_LISTED_NAME || seen.contains(g.name.as_str()) {
+                self.warn(PANEL_STYLES);
+                continue;
+            }
+            let xy = Xy { blend: g.blend, opacity: g.opacity.clamp(0.0, 1.0), isolate: g.isolate, knockout: g.knockout, shape: false };
+            let text = self.style_text(&g.appearance, xy, None).filter(|t| panel_reads(g, t));
+            let Some(text) = text else {
+                self.warn(PANEL_STYLES);
+                continue;
+            };
+            seen.insert(g.name.as_str());
+            readable.push((g, text));
+        }
+        // The list as the reader reads it: names too long, and styles past its count, aren't.
+        let list: String = readable.iter().map(|(g, _)| ps::bytes(g.name.as_bytes()) + "\n").collect();
+        let listed: HashSet<String> = crate::import::read_style_list(list.as_bytes()).into_iter().collect();
+        for (g, text) in readable {
+            if !listed.contains(&g.name) {
+                self.warn(PANEL_STYLES);
+                continue;
+            }
+            if g.id != 0 {
+                self.styles.panel.insert(g.id, g.name.clone());
+            }
+            self.styles.listed.push(g.name.clone());
+            self.styles.known.push((g.name.clone(), text));
+        }
+        // The reader gives a file without a style list a new document's styles.
+        if self.styles.listed.is_empty() {
+            self.warn(PANEL_EMPTY);
+        }
+    }
+
+    /// Warn when fewer objects were written with their graphic style than `links` are linked to one.
+    pub(in crate::ai_editing) fn lost_links(&mut self, links: usize) {
+        if self.styles.links_written < links {
+            self.warn(STYLE_LINKS);
+        }
+    }
+
+    /// The style object `orig` (`n` before baking) is written with: the graphic style it is linked
+    /// to when it has that style's appearance and transparency and the panel's style is written,
+    /// else a style of its own; `None` when the reader wouldn't read the object as it is with
+    /// either. A gradient fill is placed on `n`'s outline, as the object draws it. A style of its own
+    /// that isn't written leaves no gradient definition or warning behind.
     pub(super) fn object_style(&mut self, n: &Node, orig: &Node) -> Option<String> {
         if let NodeKind::Group { children, .. } = &orig.kind
             && bakes_members(orig)
             && !children.iter().all(|c| self.member_keeps_outline(c))
         {
+            return None;
+        }
+        let doc = self.doc;
+        if let Some(id) = orig.extras().graphic_style
+            && let Some(name) = self.styles.panel.get(&id).cloned()
+            && let Some(g) = doc.graphic_style_by_id(id)
+            && g.transparency_matches(orig)
+            && g.appearance_on(orig).approx_eq(&orig.appearance)
+            && let Some(text) = self.styles.known.iter().find(|(n, _)| *n == name).map(|(_, t)| t.clone())
+            && object_reads(orig, &text)
+        {
+            self.styles.links_written += 1;
+            return Some(name);
+        }
+        if orig.appearance.effects.is_empty() || !own_style_holds(&orig.appearance) {
             return None;
         }
         let graded = orig.appearance.items.iter().any(|i| matches!(i.paint(), Paint::Gradient(_)));
@@ -583,6 +767,20 @@ impl Writer<'_> {
         }
         s.push_str("%AI9_EndArtStyles\n%AI5_End_NonPrinting--\n");
     }
+
+    /// The panel's styles written, in its order, in a non-printing block:
+    /// `%AI9_BeginArtStyleList`, a name on each line, `%AI9_EndArtStyleList`.
+    pub(in crate::ai_editing) fn art_style_list(&self, s: &mut String) {
+        if self.styles.listed.is_empty() {
+            return;
+        }
+        s.push_str("%AI5_Begin_NonPrinting\nNp\n%AI9_BeginArtStyleList\n");
+        for name in &self.styles.listed {
+            s.push_str(&ps::bytes(name.as_bytes()));
+            s.push('\n');
+        }
+        s.push_str("%AI9_EndArtStyleList\n%AI5_End_NonPrinting--\n");
+    }
 }
 
 /// The outline a path's or compound path's style places a gradient fill on.
@@ -609,15 +807,38 @@ fn object_rule(n: &Node) -> FillRule {
     }
 }
 
+/// Can appearance `ap` be written as a style of an object's own: fills and strokes that paint without
+/// transparency or effects of their own, and no Warp, Distort & Transform or Blur effect? Those
+/// are written only in the Graphic Styles panel's styles.
+fn own_style_holds(ap: &Appearance) -> bool {
+    let plain = |i: &AppearanceItem| i.opacity() >= 1.0 && i.blend() == BlendMode::Normal && i.effects().is_empty();
+    let panel_only = |e: &Effect| ["warp.", "distort.", "blur."].iter().any(|p| e.id.starts_with(p));
+    ap.items.iter().filter(|i| !i.paint().is_none()).all(plain) && !ap.effects.iter().any(panel_only)
+}
+
+/// Does the reader read graphic style `g` from style text `text` as it is?
+fn panel_reads(g: &GraphicStyle, text: &str) -> bool {
+    let section = known_style("x", text);
+    let Some(read) = crate::import::read_art_style(section.as_bytes(), "x", None) else { return false };
+    // The opacity within the written number's precision.
+    read.transparency.is_some_and(|t| (t.0 - g.opacity).abs() <= 1e-4 && (t.1, t.2, t.3) == (g.blend, g.isolate, g.knockout))
+        && same_appearance(&read.appearance, &g.appearance)
+}
+
 /// Does the reader read object `n` written with style text `text` as it is: a path or compound
 /// path with a style it reads on any object, filled by the non-zero rule when the style fills it,
-/// or a group with no fills or strokes of its own?
+/// or a group with no fills or strokes of its own, with effects that move the outline only where the
+/// reader reads them ([`crate::import::style_moves_with`])?
 fn object_reads(n: &Node, text: &str) -> bool {
     let section = known_style("x", text);
     let own = n.appearance.fill().map(|f| &f.paint).filter(|p| matches!(p, Paint::Gradient(_)));
     let Some(mut read) = crate::import::read_art_style(section.as_bytes(), "x", own) else { return false };
     let group = matches!(n.kind, NodeKind::Group { .. });
-    if !read.simple || (group && !read.appearance.items.is_empty()) || (!group && read.pathfinder) {
+    if !read.simple
+        || (group && !read.appearance.items.is_empty())
+        || (!group && read.pathfinder)
+        || !crate::import::style_moves_with(section.as_bytes(), "x", n)
+    {
         return false;
     }
     if !group {

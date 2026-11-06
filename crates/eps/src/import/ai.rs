@@ -41,9 +41,10 @@ pub use read::{
     BindingRef, Brushes, IMAGE_TOO_LARGE, PaletteSwatches, Structure, artboards, bindings_note, brushes, graphic_styles, palette, read, read_beside,
     variables,
 };
-pub(crate) use read::{MAX_SYMBOLS, join_and, read_art_style, slot_frame, slot_of, symbol_art_member};
+pub(crate) use read::{MAX_SYMBOLS, join_and, read_art_style, read_style_list, slot_frame, slot_of, style_moves_with, symbol_art_member};
 
 pub(crate) use read::is_look_slot;
+pub(crate) use style::{MAX_LISTED, MAX_LISTED_NAME, warp_number};
 
 #[cfg(test)]
 mod tests;
