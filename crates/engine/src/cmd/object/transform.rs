@@ -117,8 +117,12 @@ fn apply_transform_moving_guides(
     // A transform of ids that name no object, or an identity transform without a copy, moves
     // nothing: the document and its undo history stay as they are, and Transform Again repeats it.
     // With a copy, the reply lists the copies, and there are none.
+    // An edit normally preserves the tree positions already found here. Settling an active
+    // typing session can change the document before the edit closure runs, so look up again then.
+    let reindex = copy || (!s.previewing && crate::cmd::typing_in_progress(s));
     let d = &s.doc()?.doc;
-    let none = d.index_paths(ids.iter().copied()).is_empty() && !has_guides;
+    let paths = d.index_paths(ids.iter().copied());
+    let none = paths.is_empty() && !has_guides;
     let ids = if anchors && objects && !copy && !s.doc()?.selection.anchors.is_empty() {
         if xf != Affine::IDENTITY {
             crate::cmd::path::transform_anchors(s, label, xf, sc)?;
@@ -154,8 +158,9 @@ fn apply_transform_moving_guides(
                 }
                 None => ids.clone(),
             };
-            // Transforms don't move nodes in the tree, so the paths found up front stay right.
-            let paths = d.index_paths(targets.iter().copied());
+            // Transforms don't move nodes in the tree, so reuse the paths found for the no-copy
+            // case; copies and a settled typing session need paths from the edited document.
+            let paths = if reindex { d.index_paths(targets.iter().copied()) } else { paths };
             for id in &targets {
                 if let Some(n) = paths.get(id).and_then(|p| d.node_mut_at(p))
                     && !(objects && areas && resize_type_area(n, xf))
