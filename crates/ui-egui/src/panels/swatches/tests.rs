@@ -265,6 +265,28 @@ fn delete_asks_then_removes_the_selection_and_unlinks_art() {
     assert_eq!(deletable(&["[None]".into(), REGISTRATION.into(), "Grays".into()]), ["Grays"]);
 }
 
+/// The prompt for several swatches and groups gives the form the language's plural rule picks for the count.
+#[test]
+fn deleting_several_swatches_uses_each_count_form() {
+    let mut app = app();
+    let mut prompt = |code: &str, count: usize| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
+        let names: Vec<String> = (1..=count).map(|n| format!("Swatch {n}")).collect();
+        delete(&mut app, names, false);
+        let message = app.ui.dialog.as_ref().map(|d| d.str("message"));
+        crate::dialogs::cancel(&mut app);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        message
+    };
+    assert_eq!(prompt("pl", 2), Some("Usunąć 2 próbki i grupy?".to_string()));
+    assert_eq!(prompt("pl", 5), Some("Usunąć 5 próbek i grup?".to_string()));
+    assert_eq!(prompt("uk", 21), Some("Видалити зразки та групи (21)?".to_string()));
+    assert_eq!(prompt("ru", 21), Some("Удалить образцы и группы (21)?".to_string()));
+    assert_eq!(prompt("bs", 21), Some("Izbrisati uzorke boja i grupe (21)?".to_string()));
+    assert_eq!(prompt("uk", 22), Some("Видалити 22 зразки та групи?".to_string()));
+    assert_eq!(prompt("uk", 25), Some("Видалити 25 зразків і груп?".to_string()));
+}
+
 #[test]
 fn new_swatch_dialog_prefills_the_active_colour_and_saves_into_the_selected_group() {
     let mut app = app();

@@ -28,8 +28,9 @@ pub use status_bar::status_bar;
 #[cfg(test)]
 use status_bar::{StatusReadoutWidths, status_readouts};
 #[cfg(test)]
-use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_title};
+use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_drop, tab_groups, tab_title};
 pub use tabs::{doc_tabs, isolation_bar, step_document};
+pub(crate) use tabs::{document_window_title, show_document, window_tab};
 
 /// The application bar's height, in points (compact, as in PhotoCraft).
 pub const APP_BAR_HEIGHT: f32 = 32.0;
@@ -101,7 +102,7 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             // Search → command palette (its shortcut opens it too).
             if search {
                 let tip = match menus::shortcut_of("help.commandPalette") {
-                    Some(sc) => format!("{}  ({})", tl!("Search commands and tools"), menus::pretty_shortcut(sc)),
+                    Some(sc) => format!("{}  ({})", tl!("Search commands and tools"), menus::shown_shortcut(sc)),
                     None => tl!("Search commands and tools").to_string(),
                 };
                 if widgets::icon_button(ui, "search", &tip, app.ui.palette_open, icon).clicked() {

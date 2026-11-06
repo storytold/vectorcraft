@@ -119,9 +119,9 @@ fn groups_layers_type_images_and_symbols_keep_their_raster_effects() {
     // A symbol instance with a shadow, and a symbol whose art blurs.
     let mut d = Document::new(200.0, 200.0);
     let art = rect(&mut d, Rect::new(0.0, 0.0, 50.0, 50.0), Color::rgb(0.9, 0.6, 0.0));
-    d.symbols.push(Symbol { name: "Tile".into(), art: Arc::new(art) });
+    d.symbols.push(Symbol { dynamic: false, name: "Tile".into(), art: Arc::new(art) });
     let blurred = with(rect(&mut d, Rect::new(0.0, 0.0, 40.0, 40.0), Color::rgb(0.2, 0.2, 0.8)), blur());
-    d.symbols.push(Symbol { name: "Soft".into(), art: Arc::new(blurred) });
+    d.symbols.push(Symbol { dynamic: false, name: "Soft".into(), art: Arc::new(blurred) });
     let inst = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Tile".into(), xf: Affine::translate((30.0, 30.0)) });
     add(&mut d, with(inst, shadow()));
     let soft = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Soft".into(), xf: Affine::translate((120.0, 120.0)) });

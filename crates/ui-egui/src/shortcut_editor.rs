@@ -124,6 +124,7 @@ pub fn sync(ui: &UiState) {
         GENERATION.fetch_add(1, Ordering::Relaxed);
     }
     crate::workspaces::sync(ui);
+    crate::custom_toolbars::sync(ui);
 }
 
 /// Registry default shortcut of a command (engine or UI command).
@@ -271,6 +272,56 @@ pub fn chord_from_event(key: Key, m: Modifiers) -> Option<String> {
     crate::shortcuts::parse(&s).map(|_| s)
 }
 
+ui_mirror!(fn backtick_store() -> Option<String>);
+
+/// Notes what the backtick key (left of 1) typed in `events`: the last one-character text that
+/// [`crate::shortcuts::typing_presses`] pairs with a press of that key without modifiers, whether
+/// the press comes before its text (egui-winit) or after it (eframe's web build with no text field
+/// focused). egui reports that key as [`Key::Backtick`] on layouts where it types a character egui
+/// has no key for, such as `"` on Turkish Q.
+pub(crate) fn note_backtick_text(events: &[egui::Event]) {
+    let typed_by = crate::shortcuts::typing_presses(events);
+    let typed = events.iter().zip(typed_by).rev().find_map(|(e, by)| match (e, by.and_then(|k| events.get(k))) {
+        (egui::Event::Text(t), Some(egui::Event::Key { key: Key::Backtick, modifiers, .. }))
+            if modifiers.is_none() && t.chars().count() == 1 && !t.chars().any(char::is_whitespace) =>
+        {
+            Some(t.clone())
+        }
+        _ => None,
+    });
+    if let Some(t) = typed
+        && let Ok(mut store) = backtick_store().write()
+        && store.as_deref() != Some(t.as_str())
+    {
+        *store = Some(t);
+    }
+}
+
+/// The character the backtick key types on the layout in use, once a press of it has been seen,
+/// when it is neither `` ` `` nor `~`.
+pub(crate) fn backtick_text() -> Option<String> {
+    backtick_store().read().ok().and_then(|t| t.clone()).filter(|t| t != "`" && t != "~")
+}
+
+/// `text` as the editor shows it: an unshifted backtick key shows the character it types on the
+/// layout in use (`"` on Turkish Q), so it reads as the key the user pressed.
+fn on_layout(text: String, typed: Option<&str>) -> String {
+    let Some(typed) = typed else { return text };
+    match vc_chord(&text) {
+        Some(c) if c.key == craft_keymap::Key::Backtick && !c.mods.shift => match text.strip_suffix('~') {
+            Some(mods) => format!("{mods}{typed}"),
+            None => text,
+        },
+        _ => text,
+    }
+}
+
+/// `text` with the backtick key shown as the character it types on the layout in use
+/// ([`backtick_text`]), as the editor shows it.
+pub(crate) fn as_typed(text: &str) -> String {
+    on_layout(text.to_string(), backtick_text().as_deref())
+}
+
 // ---------- entries & conflicts ----------
 
 #[derive(Clone, Debug)]
@@ -311,6 +362,13 @@ pub fn entries() -> &'static [Entry] {
             group: "Window".into(),
             is_tool: false,
         }));
+        // Each effect of the Effect menu, by its own key: they all run `effect.dialog` (#3296).
+        v.extend(effect_items().iter().map(|e| Entry {
+            key: format!("effect:{}", e.effect),
+            label: e.label.clone(),
+            group: e.group.clone(),
+            is_tool: false,
+        }));
         for (id, label, sc, params) in menus::UI_COMMANDS {
             if !seen.insert(id) || (sc.is_empty() && !params.starts_with("{}") && !params.starts_with("{path")) {
                 continue;
@@ -319,6 +377,55 @@ pub fn entries() -> &'static [Entry] {
         }
         v
     })
+}
+
+/// One Effect menu item a shortcut can be given (#3296): the effect's id, the command its item runs
+/// (`effect.dialog`, or `effect.apply` for an effect without options), its label and its menu path.
+#[derive(Clone, Debug)]
+pub struct EffectItem {
+    pub effect: String,
+    pub command: &'static str,
+    pub label: String,
+    pub group: String,
+}
+
+/// The Effect menu's effect items, in menu order, each once.
+pub fn effect_items() -> &'static [EffectItem] {
+    static E: OnceLock<Vec<EffectItem>> = OnceLock::new();
+    E.get_or_init(|| {
+        fn walk(items: &[menus::Item], path: &mut Vec<String>, seen: &mut HashSet<String>, out: &mut Vec<EffectItem>) {
+            for it in items {
+                match it {
+                    menus::Item::Cmd(label, id @ ("effect.dialog" | "effect.apply"), p) => {
+                        if let Some(effect) = p.get("effect").and_then(serde_json::Value::as_str)
+                            && seen.insert(effect.to_string())
+                        {
+                            out.push(EffectItem { effect: effect.to_string(), command: id, label: label.to_string(), group: path.join(" › ") });
+                        }
+                    }
+                    menus::Item::Sub(name, children) => {
+                        path.push(name.to_string());
+                        walk(children, path, seen, out);
+                        path.pop();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut out = vec![];
+        let mut seen = HashSet::new();
+        for (name, items) in menus::menu_tree() {
+            if name == "Effect" {
+                walk(&items, &mut vec![name.to_string()], &mut seen, &mut out);
+            }
+        }
+        out
+    })
+}
+
+/// Effective shortcut of the Effect menu item of `effect` (`effect:<id>`).
+pub fn effect_shortcut(effect: &str) -> Option<&'static str> {
+    effective(&format!("effect:{effect}"))
 }
 
 /// The group of a command no menu holds: the first part of its id, capitalised (`edit.x` → "Edit").
@@ -341,36 +448,85 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
     !needs_a_value(&e.key) || overrides.get(&crate::keymap::stored_key(&e.key)).is_some_and(|t| !t.is_empty())
 }
 
-/// Is `key` a command with a menu path and no default shortcut that a key press can't run: no
-/// item of the menu bar runs it without params, it opens no dialog when run without them (as the
-/// Variables panel's commands do), and its params doc names a field a call must give (File ›
-/// Document Setup › Units, `{units}`)?
-fn needs_a_value(key: &str) -> bool {
-    fn run_bare(items: &[menus::Item], out: &mut HashSet<&'static str>) {
+/// Commands whose params are all optional that do nothing, or fail, when a key press runs them
+/// with none, and that no item of the menu bar runs: Transparency and Opacity Mask Options need
+/// a value to set, Align and Distribute a direction, Delete Swatch and Move Swatch a swatch name,
+/// and the library and data set loaders a file, which their panel menu items ask for.
+const NEEDS_A_PARAM: [&str; 16] = [
+    "transparency.set",
+    "transparency.setOpacityMask",
+    "stroke.set",
+    "layer.setProps",
+    "object.align",
+    "object.distribute",
+    "swatch.delete",
+    "swatch.move",
+    "swatch.spotOptions",
+    "edit.colors.adjustBalance",
+    "swatch.library.load",
+    "graphicStyle.loadLibrary",
+    "symbol.loadLibrary",
+    "brush.loadLibrary",
+    "dataset.import",
+    "variable.loadLibrary",
+];
+
+/// The (label, params) of each menu bar item, by command id.
+fn menu_bar_items() -> &'static HashMap<&'static str, Vec<(&'static str, Value)>> {
+    fn walk(items: &[menus::Item], out: &mut HashMap<&'static str, Vec<(&'static str, Value)>>) {
         for it in items {
             match it {
-                menus::Item::Cmd(_, id, p) if p.as_object().is_none_or(|o| o.is_empty()) => {
-                    out.insert(id);
-                }
-                menus::Item::Sub(_, children) => run_bare(children, out),
+                menus::Item::Cmd(label, id, p) => out.entry(*id).or_default().push((*label, p.clone())),
+                menus::Item::Sub(_, children) => walk(children, out),
                 _ => {}
             }
         }
     }
+    static ITEMS: OnceLock<HashMap<&'static str, Vec<(&'static str, Value)>>> = OnceLock::new();
+    ITEMS.get_or_init(|| {
+        let mut out = HashMap::new();
+        for (_, items) in menus::menu_tree() {
+            walk(&items, &mut out);
+        }
+        out
+    })
+}
+
+fn is_bare(p: &Value) -> bool {
+    p.as_object().is_none_or(|o| o.is_empty())
+}
+
+/// What a shortcut without params for command `id` runs when no menu bar item runs `id` without
+/// params and every item that runs it gives the same params: what a click on that item runs
+/// ([`menus::click_target`]), so Print Ink Fixes runs with its menu item's params and Clean Up…
+/// opens its dialog.
+pub(crate) fn menu_target(id: &str) -> Option<(String, Value)> {
+    let items = menu_bar_items().get(id)?;
+    let (label, p) = items.first().filter(|(_, p)| !is_bare(p))?;
+    items.iter().all(|(_, q)| q == p).then(|| menus::click_target(label, id, p))
+}
+
+/// Is `key` a command with no default shortcut that a key press can't run: no item of the menu
+/// bar runs it without params or with one set of params ([`menu_target`]), it opens no dialog when
+/// run without them (as the Variables panel's commands do), and it is a query, whose answer a key
+/// press drops (Select All Unused), a command of [`NEEDS_A_PARAM`], or a menu command whose params
+/// doc names a field a call must give (File › Document Setup › Units, `{units}`)?
+fn needs_a_value(key: &str) -> bool {
     static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
     KEYS.get_or_init(|| {
-        let mut bare = HashSet::new();
-        for (_, items) in menus::menu_tree() {
-            run_bare(&items, &mut bare);
-        }
+        // A menu item that runs the command itself with params of its own counts only when the
+        // params doc names no required field: Edit › Find Next gives `find` empty, which it rejects.
+        let runs = |c: &vectorcraft_engine::CommandSpec| {
+            menu_bar_items().get(c.id).is_some_and(|ps| ps.iter().any(|(_, p)| is_bare(p)))
+                || menu_target(c.id).is_some_and(|(id, _)| id != c.id || !names_a_required_field(c.params))
+        };
         vectorcraft_engine::command_specs()
             .iter()
             .filter(|c| {
-                !c.menu.is_empty()
-                    && c.shortcut.is_none()
-                    && !bare.contains(c.id)
+                c.shortcut.is_none()
+                    && !runs(c)
                     && !crate::dialogs::variables::opens(c.id)
-                    && names_a_required_field(c.params)
+                    && (!c.journal || NEEDS_A_PARAM.contains(&c.id) || (!c.menu.is_empty() && names_a_required_field(c.params)))
             })
             .map(|c| c.id)
             .collect()
@@ -506,15 +662,17 @@ pub fn reset_one(overrides: &mut Overrides, key: &str) {
     overrides.remove(&crate::keymap::stored_key(key));
 }
 
-/// Text shown for all active chords in a dialog row.
-fn dialog_shortcuts_with(km: &Keymap, key: &str) -> Option<String> {
+/// Text shown for all active chords in a dialog row, with the backtick key shown as `typed`
+/// ([`backtick_text`]).
+fn dialog_shortcuts_with(km: &Keymap, key: &str, typed: Option<&str>) -> Option<String> {
+    let shown = |s: String| menus::pretty_shortcut(&on_layout(s, typed));
     let bindings = km.bindings(&command_of(key));
     if bindings.len() > 1 {
-        let primary = effective_with(km, key).map(|s| menus::pretty_shortcut(&s))?;
-        let additional = bindings.iter().skip(1).map(|b| menus::pretty_shortcut(&crate::keymap::binding_text(b)));
+        let primary = effective_with(km, key).map(shown)?;
+        let additional = bindings.iter().skip(1).map(|b| shown(crate::keymap::binding_text(b)));
         return Some(std::iter::once(primary).chain(additional).collect::<Vec<_>>().join(" · "));
     }
-    effective_with(km, key).map(|s| menus::pretty_shortcut(&s))
+    effective_with(km, key).map(shown)
 }
 
 /// Overrides of a preset (both presets are the registry defaults for now).
@@ -698,6 +856,8 @@ pub fn is_recording(app: &VectorcraftApp) -> bool {
 struct DialogView {
     /// The dialog's `overrides` field this was built from.
     source: Value,
+    /// The [`backtick_text`] the texts show.
+    backtick: Option<String>,
     keymap: Keymap,
     texts: Vec<Option<String>>,
     conflicts: usize,
@@ -706,17 +866,19 @@ struct DialogView {
 impl DialogView {
     fn new(overrides: Overrides) -> DialogView {
         let keymap = keymap_with(&overrides);
-        let texts = entries().iter().map(|e| dialog_shortcuts_with(&keymap, &e.key)).collect();
+        let backtick = backtick_text();
+        let texts = entries().iter().map(|e| dialog_shortcuts_with(&keymap, &e.key, backtick.as_deref())).collect();
         let conflicts = conflicts_in(&keymap).len();
-        DialogView { source: stored::to_value(keymap.overrides()), keymap, texts, conflicts }
+        DialogView { source: stored::to_value(keymap.overrides()), backtick, keymap, texts, conflicts }
     }
 
-    /// The view of `d`'s working set, from the cache unless the set changed. The dialog's
-    /// `overrides` field is left in its stored form.
+    /// The view of `d`'s working set, from the cache unless the set or the backtick key's
+    /// character changed. The dialog's `overrides` field is left in its stored form.
     fn of(ctx: &egui::Context, d: &mut Dialog) -> Arc<DialogView> {
         let id = egui::Id::unique("dialog-shortcuts-view");
         let source = d.fields.get("overrides").unwrap_or(&Value::Null);
-        if let Some(v) = ctx.data(|m| m.get_temp::<Arc<DialogView>>(id)).filter(|v| v.source == *source) {
+        let backtick = backtick_text();
+        if let Some(v) = ctx.data(|m| m.get_temp::<Arc<DialogView>>(id)).filter(|v| v.source == *source && v.backtick == backtick) {
             return v;
         }
         let v = Arc::new(DialogView::new(dialog_overrides(d)));
@@ -729,6 +891,7 @@ impl DialogView {
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     let t = Tokens::get(ctx);
+    ctx.input(|i| note_backtick_text(&i.events));
     // The working set, as a keymap: copied only by an edit this frame.
     let view = DialogView::of(ctx, &mut d);
     let mut km = Cow::Borrowed(&view.keymap);
@@ -823,7 +986,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 for (i, e) in entries().iter().enumerate().filter(|(_, e)| e.is_tool == tools && listed(km.overrides(), e)) {
                     let sc = match &km {
                         Cow::Borrowed(_) => view.texts.get(i).cloned().flatten(),
-                        Cow::Owned(km) => dialog_shortcuts_with(km, &e.key),
+                        Cow::Owned(km) => dialog_shortcuts_with(km, &e.key, view.backtick.as_deref()),
                     };
                     let matches = e.label.to_lowercase().contains(&q)
                         || tl!(&e.label).to_lowercase().contains(&q)
@@ -1010,7 +1173,10 @@ fn record(d: &mut Dialog, km: &mut Keymap, key: &str, chord: &str) {
                     "__message".into(),
                     json!(crate::i18n::fmt(
                         tl!("⚠ {chord} was already used by {names} — it has been removed there."),
-                        &[("chord", &menus::pretty_shortcut(chord)), ("names", &names.join(", "))]
+                        &[
+                            ("chord", &menus::pretty_shortcut(&on_layout(chord.to_string(), backtick_text().as_deref()))),
+                            ("names", &names.join(", "))
+                        ]
                     )),
                 );
                 d.fields.insert("__conflict".into(), json!(first));
@@ -1126,6 +1292,68 @@ mod tests {
         assert_eq!(crate::keymap::override_text(&dialog_overrides(&d), "tool:groupSelection").as_deref(), Some("Shift+A"));
     }
 
+    /// On Turkish Q the key left of 1 types `"`, which egui reports as the backtick key: the
+    /// recorded shortcut is that key, saved as `~` as before, and its row shows `"`. On a US
+    /// layout the row still shows `~`.
+    #[test]
+    fn the_backtick_key_shows_what_it_types() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        open(&mut app);
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let at = entries().iter().position(|e| e.key == "edit.clear").unwrap();
+        let press = |key| egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE };
+        let text = |t: &str| egui::Event::Text(t.into());
+        let mut record_with = |events: Vec<egui::Event>| {
+            app.ui.dialog.as_mut().unwrap().fields.insert("__recording".into(), json!("edit.clear"));
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            let d = app.ui.dialog.clone().unwrap();
+            let shown = DialogView::new(dialog_overrides(&d)).texts[at].clone();
+            (crate::keymap::override_text(&dialog_overrides(&d), "edit.clear"), shown)
+        };
+        assert_eq!(record_with(vec![press(Key::Backtick), text("\"")]), (Some("~".to_string()), Some("\"".to_string())));
+        assert_eq!(record_with(vec![press(Key::Backtick), text("`")]), (Some("~".to_string()), Some("~".to_string())));
+        // eframe's web build with no text field focused sends the text before its key.
+        assert_eq!(record_with(vec![text("\""), press(Key::Backtick)]), (Some("~".to_string()), Some("\"".to_string())));
+        // A text right after another key's press is that key's.
+        note_backtick_text(&[press(Key::Num2), text("'"), press(Key::Backtick)]);
+        assert_eq!(backtick_text().as_deref(), Some("\""));
+        note_backtick_text(&[text("`"), press(Key::Backtick)]);
+        assert_eq!(backtick_text(), None);
+        // Several keys typed in one frame on the web: each text goes with the press after it.
+        let web = [text("a"), press(Key::A), text("\""), press(Key::Backtick), text("b"), press(Key::B)];
+        note_backtick_text(&web);
+        assert_eq!(backtick_text().as_deref(), Some("\""));
+        note_backtick_text(&[text("`"), press(Key::Backtick)]);
+        note_backtick_text(&[press(Key::A), text("a"), press(Key::Backtick), text("\""), press(Key::B), text("b")]);
+        assert_eq!(backtick_text().as_deref(), Some("\""));
+        // Only the unshifted key types that character.
+        assert_eq!(on_layout("Shift+~".into(), Some("\"")), "Shift+~");
+        assert_eq!(on_layout("Cmd+~".into(), Some("\"")), "Cmd+\"");
+        assert_eq!(on_layout("Cmd+K".into(), Some("\"")), "Cmd+K");
+    }
+
+    #[test]
+    fn menus_and_tooltips_show_the_backtick_key_as_it_types() {
+        let mut ui = UiState::default();
+        // Not Cmd+~: macOS reserves it, so the override would leave Edit › Clear on Delete there.
+        crate::keymap::set_override(&mut ui.shortcut_overrides, "edit.clear", "Alt+~");
+        crate::keymap::set_override(&mut ui.shortcut_overrides, "tool:measure", "~");
+        sync(&ui);
+        let measure = vectorcraft_tools::tool_info("measure").unwrap();
+        let press = |key| egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE };
+        let clear = || menus::shown_shortcut(menus::shortcut_of("edit.clear").unwrap());
+        note_backtick_text(&[press(Key::Backtick), egui::Event::Text("`".into())]);
+        assert_eq!(clear(), menus::pretty_shortcut("Alt+~"));
+        assert!(crate::toolbar::tip(measure).ends_with("(~)"));
+        note_backtick_text(&[press(Key::Backtick), egui::Event::Text("\"".into())]);
+        assert_eq!(clear(), menus::pretty_shortcut("Alt+\""));
+        assert!(crate::toolbar::tip(measure).ends_with("(\")"), "{}", crate::toolbar::tip(measure));
+        assert_eq!(menus::shown_shortcut("Shift+~"), menus::pretty_shortcut("Shift+~"));
+        sync(&UiState::default());
+    }
+
     #[test]
     fn saved_modifier_only_overrides_give_the_default_back() {
         let mut ui = UiState::default();
@@ -1221,6 +1449,35 @@ mod tests {
         assert_eq!(back, ov);
         assert!(import_json(&json!({"overrides": {"x": "Cmd+Nope+Q"}})).is_err());
         assert!(import_json(&json!({})).is_err());
+    }
+
+    /// The dialog's Import… leaves an action its function key when the imported set gives the key
+    /// to a command, through both Cancel and OK.
+    #[test]
+    fn importing_into_the_dialog_preserves_action_keys_on_ok() {
+        use crate::panels::actions::{Action, ActionSet, FunctionKey};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let f15 = FunctionKey { key: 15, cmd: false, shift: false };
+        let mut nudge = Action::new("Nudge", vec![]);
+        nudge.key = Some(f15);
+        app.ui.action_sets.push(ActionSet::new("Mine", vec![nudge]));
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "edit.duplicate", "F15");
+        let bytes = serde_json::to_vec(&export_json("Imported", &ov)).unwrap();
+        app.services.pick_open = Some(Box::new(|_: &crate::FilePick| Some("/sets/Imported.json".to_string())));
+        app.services.read = Some(Box::new(move |_: &str| Ok(bytes.clone())));
+        let key = |app: &VectorcraftApp| app.ui.action_sets.last().and_then(|s| s.actions.first()).and_then(|a| a.key);
+        open(&mut app);
+        import_into_dialog(&mut app);
+        assert_eq!(key(&app), Some(f15), "the import alone keeps the action's key");
+        assert!(app.ui.shortcut_overrides.is_empty(), "the import is only in the dialog");
+        app.ui.dialog = None;
+        assert_eq!(key(&app), Some(f15), "Cancel keeps the action's key");
+        open(&mut app);
+        import_into_dialog(&mut app);
+        assert_eq!(key(&app), Some(f15));
+        confirm(&mut app).unwrap();
+        assert_eq!(key(&app), Some(f15), "OK keeps the action's function key");
     }
 
     #[test]
@@ -1347,6 +1604,77 @@ mod tests {
         ] {
             assert_eq!(names_a_required_field(doc), required, "{doc}");
         }
+    }
+
+    /// Commands whose params are all optional but that a key press can't run are not listed while
+    /// they have no shortcut: Transparency and Opacity Mask Options set nothing without a value,
+    /// Align needs a direction, Other Library… a file, and a query's answer (Select All Unused)
+    /// is dropped. A key saved for one before keeps it listed, where it can be cleared.
+    #[test]
+    fn commands_a_key_press_cannot_run_are_not_listed() {
+        let none = Overrides::new();
+        // Edit › Find Next's menu item gives an empty `find`, which it rejects.
+        let others = ["swatch.unused", "graphicStyle.unused", "document.info", "view.proofSetup", "magicWand.set", "edit.findNext"];
+        for id in NEEDS_A_PARAM.iter().chain(&others) {
+            let e = entry(id).unwrap_or_else(|| panic!("{id} has an entry"));
+            assert!(!listed(&none, e), "{id}");
+            assert_eq!(default_of(id), None, "{id}");
+        }
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "transparency.set", "Cmd+Alt+Shift+F10");
+        assert!(entry("transparency.set").is_some_and(|e| listed(&ov, e)));
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        for id in ["transparency.set", "transparency.setOpacityMask"] {
+            let list = run_command(&mut app, "shortcuts.list", &json!({ "query": id })).unwrap().unwrap();
+            assert_eq!(list, json!([]), "{id}");
+        }
+        // Commands that work without params stay listed: panel menu commands that act on the
+        // selection, toggles, and a menu item that runs with params of its own (Clean Up…).
+        for id in [
+            "transparency.releaseOpacityMask",
+            "transparency.toggleNewMasksClipping",
+            "object.path.cleanUp",
+            "addon.color.printFixes",
+            "edit.findReplace",
+        ] {
+            assert!(entry(id).is_some_and(|e| listed(&none, e)), "{id}");
+        }
+        assert_eq!(menu_target("object.path.cleanUp").map(|(id, _)| id).as_deref(), Some("ui.paramDialog"));
+        assert_eq!(
+            menu_target("addon.color.printFixes").map(|(id, p)| (id, p["command"].clone(), p["params"]["inkLimit"].clone())),
+            Some(("ui.paramDialog".into(), json!("addon.color.printFixes"), json!(300)))
+        );
+        assert_eq!(menu_target("edit.findReplace").map(|(id, _)| id).as_deref(), Some("ui.paramDialog"));
+        assert_eq!(menu_target("object.align"), None, "seven items, each with its own params");
+        assert_eq!(menu_target("edit.undo"), None, "runs without params");
+    }
+
+    /// Every command the editor lists, run as a key press runs it on a document with one or with
+    /// several objects selected, reports no missing param.
+    #[test]
+    fn listed_commands_run_from_a_key_without_a_missing_param() {
+        use vectorcraft_testkit::fixtures::Fixture;
+        // These need a state the fixtures lack: text being edited, a pattern being edited, an
+        // object linked to a graphic style, a plug-ins folder.
+        let context = ["text.insertInline", "pattern.options", "graphicStyle.redefine", "plugin.reload"];
+        let none = Overrides::new();
+        let mut failures = vec![];
+        for e in entries().iter().filter(|e| !e.is_tool && !e.key.starts_with("panel:") && listed(&none, e)) {
+            if ["file.", "app.", "help."].iter().any(|p| e.key.starts_with(p)) || context.contains(&e.key.as_str()) {
+                continue;
+            }
+            for fx in [Fixture::Single, Fixture::Multi] {
+                let mut app = VectorcraftApp::new(fx.session(), Default::default());
+                app.ui.status.clear();
+                let (id, p) = menu_target(&e.key).unwrap_or_else(|| (e.key.clone(), json!({})));
+                menus::invoke(&mut app, &id, p);
+                let s = &app.ui.status;
+                if s.starts_with("invalid parameters for") && (s.contains(": give ") || s.contains(": missing ")) {
+                    failures.push(format!("{} [{fx:?}]: {s}", e.key));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
     }
 
     /// #2991: Enter Isolation Mode has no default key but runs on the selection, so it belongs in

@@ -32,7 +32,9 @@ pub mod community;
 pub mod control;
 pub mod credits;
 pub mod cursors;
+mod custom_toolbars;
 pub mod dialogs;
+pub mod doc_windows;
 pub mod dock;
 mod edit_toolbar;
 pub mod export_progress;
@@ -102,7 +104,7 @@ use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse, Ticket as ControlTicket};
 pub use state::{UiState, View};
-pub use sysclip::{ClipboardProbeFactory, SystemClipboard};
+pub use sysclip::{ClipboardProbeFactory, ClipboardRead, MakeFlavour, SystemClipboard};
 
 mod app;
 mod caches;
@@ -124,6 +126,10 @@ pub struct VectorcraftApp {
     pub session: Session,
     pub ui: UiState,
     pub views: Vec<View>,
+    /// The document ([`vectorcraft_engine::DocState::uid`]) each of `views` belonged to at the last
+    /// [`VectorcraftApp::sync_views`], which puts the views back with their documents after
+    /// `document.move` reorders them (#5663).
+    pub(crate) view_uids: Vec<u64>,
     pub services: Services,
     pub canvas: CanvasCache,
     pub perf: Perf,
@@ -145,6 +151,13 @@ pub struct VectorcraftApp {
     /// moves ([`native_menu::sync`]).
     run_count: u64,
     control_rx: Option<Receiver<ControlRequest>>,
+    /// A `ui.pointer` request taken from the channel while synthetic input sent before it was not
+    /// yet applied: it runs, ahead of the channel, on the first frame after that input is applied.
+    deferred_control: Option<ControlRequest>,
+    /// When synthetic input was last dropped before a UI pass took it, the sequence number of the
+    /// next control request ([`ControlRequest::next_seq`]): a `ui.pointer` request made before it
+    /// came after that input and is answered with an error.
+    synthetic_dropped_before: u64,
     /// Window captures asked for and not answered yet.
     pending_screenshots: Vec<PendingScreenshot>,
     /// Admitted captures whose settled frame has not come yet (issued one at a time).
@@ -267,6 +280,9 @@ pub struct VectorcraftApp {
     pub(crate) ime_discard: bool,
     /// Preferences were confirmed (see [`Self::take_prefs_changed`]).
     pub(crate) prefs_changed: bool,
+    /// The export presets the Asset Export panel lists (`document.exportPresets.list`'s rows), built
+    /// again when the saved presets change ([`dialogs::screen_preset_list`]).
+    pub(crate) asset_export_presets: Value,
     /// Whether the last frame's input reported a touch screen (Preferences › Devices › Touch Workspace).
     pub touch_screen: bool,
     /// A numeric field is being scrubbed: the document's edits meanwhile are one undo step

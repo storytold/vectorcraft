@@ -976,6 +976,27 @@ fn lasso_selects_anchor_subset() {
     assert_eq!(st.selection.partial(a).map(|p| p.len()), Some(2));
 }
 
+/// #5351: a Lasso loop round a gradient mesh's points keeps the mesh selected and picks the
+/// points inside it, so a solid fill colour recolours just those points.
+#[test]
+fn lasso_picks_gradient_mesh_points() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    // Round the top row of points (100,100), (150,100) and (200,100).
+    gesture(&mut s, "lasso", &[(90.0, 90.0), (210.0, 90.0), (210.0, 110.0), (90.0, 110.0), (90.0, 110.0)], Mods::default());
+    let st = s.doc().unwrap();
+    let Some(NodeKind::Mesh(m)) = st.doc.node(a).map(|n| &n.kind) else { panic!("still a gradient mesh") };
+    assert_eq!(m.points.len(), 9);
+    assert_eq!(st.selection.objects, vec![a], "the mesh stays selected");
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let Some(NodeKind::Mesh(m)) = s.doc().unwrap().doc.node(a).map(|n| &n.kind) else { panic!("still a gradient mesh") };
+    let red: Vec<usize> = (0..m.points.len()).filter(|i| m.points[*i].color.to_hex() == "#ff0000").collect();
+    let top: Vec<usize> = (0..3).map(|c| m.idx(0, c)).collect();
+    assert_eq!(red, top, "only the points inside the loop are recoloured");
+}
+
 /// Shift-drag a marquee with the Selection tool (#483): the selected objects it reaches are
 /// deselected and the others selected, the rest of the selection staying as it was.
 #[test]

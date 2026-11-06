@@ -142,9 +142,16 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if !errors.is_empty() {
         return Err(errors.join("; "));
     }
-    app.status(match id {
-        "file.recovery.discard" => format!("Discarded {} recovered document(s)", done.len()),
-        _ => format!("Restored {} recovered document(s): save them to keep them", done.len()),
-    });
+    app.status(recovered_status(id == "file.recovery.discard", done.len()));
     Ok(json!(done))
+}
+
+/// The status bar's line for `n` recovered documents discarded or restored.
+pub(crate) fn recovered_status(discarded: bool, n: usize) -> String {
+    let (one, other) = if discarded {
+        ("Discarded {n} recovered document", "Discarded {n} recovered documents")
+    } else {
+        ("Restored {n} recovered document: save it to keep it", "Restored {n} recovered documents: save them to keep them")
+    };
+    crate::i18n::msg_n(n as u64, one, other, &[])
 }

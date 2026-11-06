@@ -1,13 +1,13 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-30 · **Change:** minor (Bosnian (`bs`): complete catalog; previously minor: Vietnamese text: stacked diacritics tested and attach in every form, #4491; previously: Catalan (`ca`) catalog added, complete under the tests)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-31 · **Change:** minor (Brazilian Portuguese: 154 rows for the strings the sibling catalogs translate — smart-filter and print presets, dimension lines, swatches, canvas messages; previously minor: Bosnian (`bs`): complete catalog; previously minor: Vietnamese text: stacked diacritics tested and attach in every form, #4491; previously: Catalan (`ca`) catalog added, complete under the tests)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
 [target-app-parity.md](target-app-parity.md).
 
 **How it is measured:** rows with a translation in each `crates/ui-egui/src/i18n/<code>.tsv`, counted on
-origin/main `01e165af`, except the rows that give a count date, which were counted on `main` at `cb0a7d9` (2026-10-21).
+origin/main `01e165af`, except the rows that give a count date: those were counted on the `main` commit named in the row (the other dated rows on `main` at `cb0a7d9`, 2026-10-21; the Portuguese row on `main` at `d26dd933a`, 2026-10-31).
 The reference is the French catalog, which was complete when counted: 3,416 interface
 strings (menus, command labels, `tl!` literals: panels, dialogs, tooltips, Preferences) plus 604 `@msg` status and
 error messages, 4,020 in all. A language's % is its rows over 4,020 (capped at 100% per part). A missing
@@ -32,7 +32,7 @@ Chinese by `imachus`). Only Georgian is recorded as reviewed by a native speaker
 | Hindi | `hi` | 0 | none | Devanagari: the document's text shapes (HarfRust), with tests of conjuncts, reph, pre-base matras, nukta forms and caret stops that run when an OpenType Devanagari font is installed, but the egui interface does no complex shaping | no | none | 20–30 |
 | Arabic | `ar` | 0 | none | document text: bidi layout and Paragraph Direction; interface: no right-to-left layout, no Arabic shaping in egui | no | none | 25–40 |
 | French | `fr` | 4,020 / 4,020 (100%) | all | Latin | no | full | — (review) |
-| Portuguese | `pt-br` | 5,194 catalog entries (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/other plurals | all | Latin | contributor is a Brazilian Portuguese speaker; further native review welcome | full | — (review) |
+| Portuguese | `pt-br` | 6,106 catalog entries (counted 2026-10-31 on `main` at `d26dd933a`): menus, `tl!` literals and messages complete when counted; one/other plurals | all | Latin | contributor is a Brazilian Portuguese speaker; further native review welcome | full | — (review) |
 | Indonesian | `id` | 5,279 rows, 750 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one plural form | dialogs and tooltips all; 750 message rows (French has 796) | Latin | no | full | — (review) |
 | Japanese | `ja` | 4,004 / 4,020 (99.6%) | all | CJK UI font as above; Japanese IME; vertical type partial; Japanese crop marks and composition settings | no | full | — (review) |
 | German | `de` | 3,952 / 4,020 (98%; menus, literals and messages complete when counted) | all (602 of 604 message rows; landed 2026-10-10) | Latin | contributor-written, not reviewed | full | — (review) |

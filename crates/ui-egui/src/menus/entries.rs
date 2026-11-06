@@ -88,6 +88,12 @@ pub fn pretty_shortcut(s: &str) -> String {
     }
 }
 
+/// [`pretty_shortcut`] with the backtick key shown as the character it types on the layout in use
+/// (`"` on Turkish Q), as Edit › Keyboard Shortcuts shows it.
+pub fn shown_shortcut(s: &str) -> String {
+    pretty_shortcut(&crate::shortcut_editor::as_typed(s))
+}
+
 #[derive(Serialize)]
 pub struct MenuEntry {
     pub path: Vec<String>,

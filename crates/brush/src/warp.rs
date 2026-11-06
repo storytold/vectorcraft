@@ -8,11 +8,11 @@
 use std::sync::Arc;
 
 use kurbo::ParamCurveNearest;
-use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, PressureProfile};
+use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, PressureProfile, StrokeLayer};
 use vectorcraft_geom::{Affine, BezPath, CubicBez, ParamCurve, PathData, PathEl, Point, Rect, SubPath, Vec2};
 
 use crate::track::{Rng, Track, normal, seed_of, tracks};
-use crate::{ArtBrush, ArtScale, CornerSource, Direction, PatternBrush, PatternFit, Scatter, Variation, tolerance};
+use crate::{ArtBrush, ArtScale, CornerSource, Direction, PatternBrush, PatternFit, PenAt, Scatter, Variation, tolerance};
 
 /// Longest mapped segment (points in document space).
 const MAX_SEG: f64 = 1.5;
@@ -41,7 +41,8 @@ const MASK_STEPS: usize = 32;
 /// space, so the art keeps its curves (#3926). Where that cannot be done in no more anchors than
 /// chords would take, the path is flattened with `flat_tol` (art space) and subdivided so no chord
 /// is longer than `max_du` along x, as it always was. Stroke widths scale by `width_scale`.
-/// Text, images and symbol instances can't bend and are dropped.
+/// Text, images and symbol instances can't bend and are dropped. The art of a linked opacity mask
+/// bends with the object it masks.
 pub(crate) fn warp_node(n: &Node, f: &dyn Fn(Point) -> Point, flat_tol: f64, max_du: f64, doc_tol: f64, width_scale: f64) -> Option<Node> {
     let mut out = n.clone();
     out.appearance.scale_strokes(width_scale);
@@ -63,7 +64,19 @@ pub(crate) fn warp_node(n: &Node, f: &dyn Fn(Point) -> Point, flat_tol: f64, max
         }
         _ => return None,
     }
+    map_mask(&mut out, |art| warp_node(art, f, flat_tol, max_du, doc_tol, width_scale));
     Some(out)
+}
+
+/// Replace the art of `n`'s linked opacity mask, if it has one, with what `map` makes of it. Where
+/// `map` draws nothing, the mask's art becomes an empty group.
+fn map_mask(n: &mut Node, map: impl FnOnce(&Node) -> Option<Node>) {
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut())
+        && m.linked
+    {
+        let id = m.art.id;
+        m.art = Arc::new(map(&m.art).unwrap_or_else(|| Node::group(id, vec![])));
+    }
 }
 
 /// Each subpath of `p` through `f`: fitted cubics when they take no more anchors than the chords
@@ -90,7 +103,7 @@ fn densified(sp: &SubPath, flat_tol: f64, max_du: f64) -> Option<Vec<Point>> {
     let mut bp = BezPath::new();
     sp.to_bezpath_into(&mut bp);
     let mut pts = vec![];
-    kurbo::flatten(bp.iter(), flat_tol.max(1e-4), |e| {
+    vectorcraft_geom::flatten(bp.iter(), flat_tol.max(1e-4), |e| {
         if let PathEl::MoveTo(q) | PathEl::LineTo(q) = e {
             pts.push(q);
         }
@@ -234,6 +247,16 @@ fn oriented(art: &Node, dir: Direction, flip_along: bool, flip_across: bool) -> 
     (b.width() > 1e-9).then_some((a, b))
 }
 
+/// Orient a tile's repeat frame with its art. The frame can be smaller than the art.
+fn oriented_tile(art: &Node, frame: Option<Rect>, flip_along: bool, flip_across: bool) -> Option<(Node, Rect)> {
+    let (node, bounds) = oriented(art, Direction::LeftToRight, flip_along, flip_across)?;
+    let Some(frame) = frame else { return Some((node, bounds)) };
+    let x = if flip_along { (-frame.x1, -frame.x0) } else { (frame.x0, frame.x1) };
+    let y = if flip_across { (-frame.y1, -frame.y0) } else { (frame.y0, frame.y1) };
+    let frame = Rect::new(x.0, y.0, x.1, y.1);
+    (frame.width() > 1e-9 && frame.height() > 1e-9).then_some((node, frame))
+}
+
 /// Piecewise-linear map from art x (offset from the art's left edge) to arc length.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct AlongMap {
@@ -338,7 +361,8 @@ fn affine_fit(f: &dyn Fn(Point) -> Point, b: Rect, tol: f64) -> Option<Affine> {
 /// Everything else matches [`warp_node`] deliberately, so curves are the only difference between
 /// the two routes: the same node kinds are kept and the rest dropped, `live` is cleared on every
 /// path, an empty path or a group left with no children is dropped, and strokes are scaled by
-/// `width_scale` at every level rather than by the transform's own factor.
+/// `width_scale` at every level rather than by the transform's own factor, the art of linked
+/// opacity masks included.
 fn affine_node(n: &Node, a: Affine, width_scale: f64) -> Option<Node> {
     let mut out = prepared(n, width_scale)?;
     out.transform(a, false);
@@ -365,6 +389,7 @@ fn prepared(n: &Node, width_scale: f64) -> Option<Node> {
         }
         _ => return None,
     }
+    map_mask(&mut out, |art| prepared(art, width_scale));
     Some(out)
 }
 
@@ -416,6 +441,7 @@ fn widen_strokes(n: &Node, factor: &dyn Fn(&Node) -> f64) -> Node {
     if let NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Compound { children, .. } = &mut out.kind {
         *children = children.iter().map(|c| Arc::new(widen_strokes(c, factor))).collect();
     }
+    map_mask(&mut out, |art| Some(widen_strokes(art, factor)));
     out
 }
 
@@ -510,18 +536,19 @@ pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&Pre
 }
 
 /// One of a scatter brush's values for the next copy: Fixed takes the first of `(a, b)`, Random a
-/// value between them, Pressure the first at pen pressure 0 and the second at 1. Every value
-/// draws, so a copy's random values stay the same whatever the other modes.
-fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pressure: f64) -> f64 {
+/// value between them, and a mode that follows the pen the first where `pen` reads 0 for it and
+/// the second where it reads 1. Every value draws, so a copy's random values stay the same
+/// whatever the other modes.
+fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pen: PenAt) -> f64 {
     let r = rng.range(a, b);
-    match mode {
-        Variation::Fixed => a,
-        Variation::Random => r,
-        Variation::Pressure => a + (b - a) * pressure.clamp(0.0, 1.0),
+    match pen.control(mode) {
+        Some(c) => a + (b - a) * c,
+        None if mode == Variation::Random => r,
+        None => a,
     }
 }
 
-pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<&PressureProfile>, name: &str) -> Vec<Node> {
+pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, stroke: &StrokeLayer, name: &str) -> Vec<Node> {
     let Some(b) = sc.art.geometric_bounds() else { return vec![] };
     let (aw, ah) = (b.width().max(1e-3), b.height().max(1e-3));
     let mut rng = Rng::new(seed_of(bp, name));
@@ -532,8 +559,8 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
             break;
         }
         let l = t.len();
-        // The pen pressure at arc length `at` (half way without a recorded one).
-        let pressure_at = |at: f64| pressure.map_or(PressureProfile::MID, |p| p.at(if l > 1e-9 { at / l } else { 0.0 }));
+        // What the pen recorded at arc length `at` (the values themselves without a recording).
+        let pen_at = |at: f64| PenAt::of(stroke, if l > 1e-9 { at / l } else { 0.0 });
         let mut s: Option<f64> = None;
         let mut guard = 0;
         loop {
@@ -541,8 +568,8 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
             if guard > 20000 {
                 break;
             }
-            // Size and spacing place the next copy, so they take the pressure at the last one.
-            let p = pressure_at(s.unwrap_or(0.0));
+            // Size and spacing place the next copy, so they take the pen at the last one.
+            let p = pen_at(s.unwrap_or(0.0));
             let size = vary(&mut rng, sc.size, size_mode, p).max(1.0) / 100.0 * weight;
             let spacing = vary(&mut rng, sc.spacing, spacing_mode, p).max(1.0) / 100.0;
             let step = aw * size * spacing;
@@ -554,7 +581,7 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
                 break;
             }
             s = Some(pos);
-            let p = pressure_at(pos);
+            let p = pen_at(pos);
             let off = vary(&mut rng, sc.scatter, scatter_mode, p) / 100.0 * ah * size;
             let rot = vary(&mut rng, sc.rotation, rotation_mode, p).to_radians();
             let (p, tg) = t.frame(pos);
@@ -589,6 +616,9 @@ fn anchors_of(n: &Node) -> usize {
         }
         if let Some(c) = n.children() {
             stack.extend(c.iter().map(Arc::as_ref));
+        }
+        if let Some(m) = &n.extras().mask {
+            stack.push(&m.art);
         }
     }
     total
@@ -781,13 +811,13 @@ fn masked(n: Node, quad: &[Point], p: Point, towards: Vec2) -> Option<Node> {
 }
 
 pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node> {
-    let orient = |n: &Node| oriented(n, Direction::LeftToRight, pb.flip_along, pb.flip_across);
-    let Some(side) = orient(&pb.side) else { return vec![] };
+    let orient = |n: &Node, frame| oriented_tile(n, frame, pb.flip_along, pb.flip_across);
+    let Some(side) = orient(&pb.side, pb.side_frame) else { return vec![] };
     let k = weight * pb.scale.max(1.0) / 100.0;
-    let outer = pb.outer_corner.as_ref().and_then(orient);
-    let inner = pb.inner_corner.as_ref().and_then(orient);
-    let start = pb.start.as_ref().and_then(orient);
-    let end = pb.end.as_ref().and_then(orient);
+    let outer = pb.outer_corner.as_ref().and_then(|n| orient(n, pb.outer_corner_frame));
+    let inner = pb.inner_corner.as_ref().and_then(|n| orient(n, pb.inner_corner_frame));
+    let start = pb.start.as_ref().and_then(|n| orient(n, pb.start_frame));
+    let end = pb.end.as_ref().and_then(|n| orient(n, pb.end_frame));
     let tw = side.1.width() * k;
     let gap = tw * pb.spacing.max(0.0) / 100.0;
     // Each kind of corner takes its own art, else its source, else the other kind's art.
@@ -1132,5 +1162,53 @@ mod tests {
                 (_, None) => panic!("map {i} places most points, so something is drawn"),
             }
         }
+    }
+
+    /// A linked opacity mask on brush art bends and widens with the art, on a bent run and on a
+    /// straight one, so a mask drawn over the art still covers it. An unlinked mask stays put.
+    #[test]
+    fn a_linked_opacity_mask_bends_with_the_art() {
+        let b = Rect::new(0.0, -20.0, 40.0, 20.0);
+        let stroked = |id: u64| {
+            Node::path(
+                NodeId(id),
+                vectorcraft_geom::shapes::ellipse(b),
+                Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    2.0,
+                ),
+            )
+        };
+        let masked = |linked: bool| {
+            let mut n = stroked(0);
+            let mut mask = vectorcraft_doc::OpacityMask::new(stroked(1), true);
+            mask.linked = linked;
+            n.extras_mut().mask = Some(Box::new(mask));
+            n
+        };
+        let round = vectorcraft_geom::shapes::ellipse(Rect::new(0.0, 0.0, 400.0, 400.0)).to_bezpath();
+        let bent_track = tracks(&round, 0.05).remove(0);
+        let mut line = BezPath::new();
+        line.move_to((0.0, 0.0));
+        line.line_to((320.0, 0.0));
+        let straight_track = tracks(&line, 0.01).remove(0);
+        let along = AlongMap::linear(b.width(), 100.0, 140.0);
+        for (name, t) in [("bent", &bent_track), ("straight", &straight_track)] {
+            let out = bend(t, &masked(true), b, along, 2.0).expect("the art is drawn");
+            let mask = out.extras().mask.as_ref().expect("the mask is kept");
+            assert_eq!(mask.art.kind, out.kind, "{name} run: the mask's art bends with the art it was drawn over");
+            assert_eq!(mask.art.appearance, out.appearance, "{name} run: the mask's strokes widen with the art's");
+
+            let out = bend(t, &masked(false), b, along, 2.0).expect("the art is drawn");
+            let mask = out.extras().mask.as_ref().expect("the mask is kept");
+            assert_eq!(*mask.art, stroked(1), "{name} run: an unlinked mask stays where it was");
+
+            let out = bend_widened(t, &masked(true), b, along, 2.0, &|_| 0.5).expect("the art is drawn");
+            let mask = out.extras().mask.as_ref().expect("the mask is kept");
+            assert_eq!(mask.art.kind, out.kind, "{name} run, widened: the mask's art bends with the art");
+            assert_eq!(mask.art.appearance, out.appearance, "{name} run, widened: the mask's strokes narrow with the art's");
+        }
+        assert_eq!(anchors_of(&masked(true)), 8, "the anchor budget counts the mask's art");
     }
 }

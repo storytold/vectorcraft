@@ -33,6 +33,16 @@ fn the_plugins_submenu_selects_the_tools_and_opens_the_anchor_inspector() {
         assert_eq!(e.command.as_deref(), Some("addon.pathtools.crossings"));
         assert_eq!(e.params.get("cut").and_then(|v| v.as_bool()).unwrap_or(false), cut);
     }
+    // Expand Dashes into Paths runs at once: a dashed line becomes its dashes.
+    let line = app.run("path.create", json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}]})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [line]})).unwrap();
+    app.run("stroke.set", json!({"dash": [30, 10]})).unwrap();
+    let expand = under("Expand Dashes into Paths").expect("listed");
+    let (cmd, p) = menus::click_target(&expand.label, expand.command.as_deref().unwrap(), &expand.params);
+    menus::invoke(&mut app, &cmd, p);
+    let selected = app.session.doc().unwrap().selection.objects.len();
+    assert!(selected >= 3, "three dashes selected: {selected}");
+    app.run("edit.undo", json!({})).unwrap();
     // Artwork Cleanup's submenu and Install Plug-in… are still there.
     assert!(entries.iter().any(|e| e.path == ["Object", "Plug-ins", "Artwork Cleanup"]));
     assert!(entries.iter().any(|e| e.path == ["Object", "Plug-ins"] && e.label == "Install Plug-in…"));
@@ -130,6 +140,26 @@ fn the_corner_tool_item_selects_the_tool_and_opens_its_panel_section() {
             && vectorcraft_tools::catalog::all_tools().any(|t| t.id == "slideAnchor")
     );
     assert!(!vectorcraft_tools::TOOL_GROUPS.iter().flat_map(|g| g.iter()).any(|t| t.id == "cornerTool" || t.id == "slideAnchor"));
+}
+
+#[test]
+fn the_shared_edge_item_selects_the_tool_and_opens_its_panel_section() {
+    let mut app = app();
+    let entries = menus::menu_entries(&app);
+    let e = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Shared Edge Merge Tool").expect("listed");
+    assert!(!crate::panel_docking::showing(&app.ui, ID));
+    menus::invoke(&mut app, e.command.as_deref().unwrap(), e.params.clone());
+    assert_eq!(app.session.tool_id(), "sharedEdge");
+    assert!(crate::panel_docking::showing(&app.ui, ID), "the panel opens");
+    // Neither toolbar shows it and it has no shortcut; the All Tools list does.
+    let tool = vectorcraft_tools::catalog::all_tools().find(|t| t.id == "sharedEdge").expect("in All Tools");
+    assert!(tool.shortcut.is_none());
+    assert!(!vectorcraft_tools::TOOL_GROUPS.iter().flat_map(|g| g.iter()).any(|t| t.id == "sharedEdge"));
+    // The panel's section shows the tool's values and its option acts.
+    let text = painted_text(&mut app, show);
+    assert!(text.contains("Shared Edges") && text.contains("Coincidence:") && text.contains("Keep Shared Points Together"), "{text}");
+    app.run("addon.pathtools.movePointsTogether", json!({ "enabled": true })).unwrap();
+    assert_eq!(app.session.tool_options_of("sharedEdge")["together"], json!(true));
 }
 
 #[test]

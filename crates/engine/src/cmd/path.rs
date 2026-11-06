@@ -10,8 +10,8 @@ use super::create::anchor_from_json;
 use super::draw2::usize_opt;
 use super::pathops::Beside;
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_anchors, has_doc, has_selection,
-    id_param, ids_param, index, number_or, ok, str_param, switch_or, targets,
+    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_anchors, has_doc, has_selected_path,
+    has_selection, id_param, ids_param, index, number_or, ok, str_param, switch_or, targets,
 };
 use crate::EngineError;
 
@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             None,
             "{ids?|id?, subpath?: usize (reverse only this subpath of each path, 0 included; default: every subpath), reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path; with subpath, the direction is not read: that subpath is flipped)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step → {changed: paths}",
-            has_doc,
+            has_selected_path,
             reverse
         ),
         cmd!(
@@ -86,7 +86,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             Some("Cmd+J"),
             "{ids?: [path, ...] (default: the selected paths; a compound path ID expands to its open member paths), subpaths?: [usize, usize] (which subpaths to join), ends?: [\"first\"|\"last\", \"first\"|\"last\"] (which end of each path to join, for two paths/subpaths; default without ids: direct-selected ends if any, else the nearest pair; default with ids: the nearest pair), to?: \"corner\"|\"smooth\" (the joined anchor: corner retracts both handles, smooth pulls handles in line with the neighbours)} join two or more open paths/subpaths into one (the first keeps its id, selected), or close a single open path; without ids, direct-selected anchors lying on one another along a path merge into one anchor instead",
-            has_selection,
+            has_selected_path,
             join
         ),
         cmd!(
@@ -95,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             Some("Cmd+Alt+J"),
             "{axis?: \"horizontal\"|\"vertical\"|\"both\"}",
-            has_selection,
+            has_selected_path,
             average
         ),
         cmd!(
@@ -104,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             Some("Cmd+Alt+Shift+J"),
             "{to: \"corner\"|\"smooth\" (the joined anchor: corner retracts both handles, smooth pulls handles in line with the neighbours), ids?: [path, ...] (default: the selection; a compound path ID expands to its open member paths)} move two open path ends to their midpoint and join them there, as one undo step: the two direct-selected anchors when they are open path ends, else the nearest ends of the two open paths in ids or the selection (or both ends of one open path, closing it) → the joined path stays selected",
-            has_selection,
+            has_selected_path,
             average_join
         ),
         cmd!(
@@ -112,7 +112,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Anchor Points",
             [],
             None,
-            "{to: \"corner\"|\"smooth\"} convert the direct-selected anchors (all anchors of fully selected paths) as one undo step: corner retracts both handles, smooth pulls handles in line with the neighbours (smooth anchors keep theirs)",
+            "{to: \"corner\"|\"smooth\"} convert the direct-selected anchors (all anchors of fully selected paths, every point of a selected blend's spine; a spine from Replace Spine changes only its handles, its points and the keys' spread along it staying as they are) as one undo step: corner retracts both handles, smooth pulls handles in line with the neighbours (smooth anchors keep theirs)",
             has_selection,
             convert_anchors
         ),
@@ -1001,8 +1001,21 @@ pub(super) fn anchor_targets(s: &Session) -> Result<AnchorTargets> {
 }
 
 fn average(s: &mut Session, p: &Value) -> Result<Value> {
-    let t = anchor_targets(s)?;
-    let d0 = &s.doc()?.doc;
+    let st = s.doc()?;
+    let t: AnchorTargets = if st.selection.anchors.is_empty() {
+        let editable = st.doc.editable();
+        paths_in(&st.doc, &st.selection.objects)
+            .into_iter()
+            .filter(|id| editable(*id))
+            .filter_map(|id| {
+                let pd = st.doc.node(id)?.path_data()?;
+                Some((id, pd.anchors().map(|(s, a, _)| (s, a)).collect()))
+            })
+            .collect()
+    } else {
+        anchor_targets(s)?
+    };
+    let d0 = &st.doc;
     let pts: Vec<Point> = t
         .iter()
         .flat_map(|(id, v)| v.iter().filter_map(move |(si, ai)| d0.node(*id)?.path_data()?.subpaths.get(*si)?.anchors.get(*ai).map(|a| a.p)))
@@ -1123,7 +1136,11 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
         _ => return Err(bad(C, "`to` must be \"corner\" or \"smooth\"")),
     };
     let t = anchor_targets(s)?;
-    if t.is_empty() {
+    // A selected blend converts every point of its spine, as a path selected whole does.
+    let st = s.doc()?;
+    let blends: Vec<NodeId> =
+        st.selection.objects.iter().copied().filter(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. }))).collect();
+    if t.is_empty() && blends.is_empty() {
         return Err(bad(C, "select paths or anchor points"));
     }
     s.edit("Convert Anchor Points", |d, _| {
@@ -1138,12 +1155,43 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
+        let convert = |sp: &mut SubPath| {
+            for ai in 0..sp.anchors.len() {
+                if smooth {
+                    sp.smooth_anchor(ai);
+                } else if let Some(a) = sp.anchors.get_mut(ai) {
+                    a.retract();
+                }
+            }
+        };
+        for id in &blends {
+            let Some(NodeKind::Blend { children, spec }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            // A spine from Replace Spine keeps its points and its keys spread along it: only the
+            // handles change, and the keys are not pinned to points.
+            if vectorcraft_doc::live::blend_spine(children, spec).is_some_and(|(_, anchors)| anchors.is_none()) {
+                if let Some(sp) = spec.spine.as_mut().and_then(|p| p.subpaths.first_mut()) {
+                    convert(sp);
+                }
+                continue;
+            }
+            let Some((mut path, anchors)) = vectorcraft_doc::live::pin_spine(children, spec) else { continue };
+            let pinned = path.clone();
+            let Some(sp) = path.subpaths.first_mut() else { continue };
+            convert(sp);
+            // A spine the conversion leaves as it was stays as the blend has it.
+            if path != pinned {
+                spec.key_anchors = anchors.iter().map(|a| u32::try_from(*a).unwrap_or(u32::MAX)).collect();
+                spec.spine = Some(path);
+            }
+        }
         Ok(())
     })?;
     ok()
 }
 
-pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
+pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
+    // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
+    let with_guides = p.get("guides").and_then(Value::as_bool).unwrap_or(false);
     let st = s.doc()?;
     let sel = st.selection.anchors.clone();
     let segments = st.selection.segments.clone();
@@ -1151,6 +1199,10 @@ pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
     // also catches part of another path must still delete those whole objects.
     let whole = st.selection.whole();
     s.edit("Clear", |d, selection| {
+        if with_guides {
+            let gone = selection.guides.clone();
+            d.retain_guides(selection, |i, _| !gone.contains(&i));
+        }
         let targets: BTreeSet<NodeId> = whole.into_iter().filter(|id| d.node(*id).is_some_and(|n| !n.is_layer())).collect();
         let whole_ids: Vec<NodeId> = targets
             .iter()

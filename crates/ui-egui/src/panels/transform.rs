@@ -345,23 +345,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && !matches!(**live, vectorcraft_doc::LiveShape::Path { .. })
     {
         widgets::divider(ui);
-        match &**live {
-            vectorcraft_doc::LiveShape::Rectangle { .. } => {
-                widgets::subheader(ui, tl!("Rectangle Properties:"));
-                corner_radius_row(app, ui, &n, "xfp-radius");
-            }
-            vectorcraft_doc::LiveShape::Polygon { .. } => {
-                widgets::subheader(ui, tl!("Polygon Properties:"));
-                polygon_rows(app, ui, &n, live, "xfp-polygon");
-            }
-            vectorcraft_doc::LiveShape::Ellipse { pie, .. } => {
-                widgets::subheader(ui, tl!("Ellipse Properties:"));
-                pie_rows(app, ui, *pie, "xfp-pie");
-            }
-            _ => {
-                widgets::subheader(ui, tl!("Shape Properties:"));
-                widgets::dim_label(ui, tl!(n.kind_label()));
-            }
+        if !live_shape_rows(app, ui, &n, live, "xfp", true) {
+            widgets::subheader(ui, tl!("Shape Properties:"));
+            widgets::dim_label(ui, tl!(n.kind_label()));
         }
     }
     if pstate::<bool>(ui.ctx(), "xf-hide-options") {
@@ -375,6 +361,33 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
         set_pref(app, "scaleStrokes", !ss);
     }
+}
+
+/// A live rectangle's, polygon's or ellipse's properties (Transform and Properties panels, and the
+/// Contextual Task Bar), their widget ids under `id`. `headed` adds the Rectangle and Polygon
+/// Properties headings; an ellipse's heading always shows. Returns false, drawing nothing, for
+/// other live shapes.
+pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShape, id: &str, headed: bool) -> bool {
+    match live {
+        LiveShape::Rectangle { .. } => {
+            if headed {
+                widgets::subheader(ui, tl!("Rectangle Properties:"));
+            }
+            corner_radius_row(app, ui, n, &format!("{id}-radius"));
+        }
+        LiveShape::Polygon { .. } => {
+            if headed {
+                widgets::subheader(ui, tl!("Polygon Properties:"));
+            }
+            polygon_rows(app, ui, n, live, &format!("{id}-polygon"));
+        }
+        LiveShape::Ellipse { pie, .. } => {
+            widgets::subheader(ui, tl!("Ellipse Properties:"));
+            pie_rows(app, ui, *pie, &format!("{id}-pie"));
+        }
+        _ => return false,
+    }
+    true
 }
 
 /// An ellipse's Pie Start and End Angle (degrees, counterclockwise from 3 o'clock; 0 to 360 is the
@@ -448,19 +461,32 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
 /// The Control bar's underlined "Transform" link: a click toggles the Transform panel in a
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let resp = ui.link(egui::RichText::new(tl!("Transform")).size(12.0).color(t.text).underline()).on_hover_text(tl!("Transform options"));
+    let resp = ui.link(link_text(ui)).on_hover_text(tl!("Transform options"));
     widgets::popover(&resp, resp.clicked(), |ui| {
         ui.set_width(300.0);
         show(app, ui);
     });
 }
 
+/// The Transform link's text, as [`link`] draws it and [`link_width`] measures it.
+fn link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Transform")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The width of the Transform [`link`] in `ui`.
+pub fn link_width(ui: &Ui) -> f32 {
+    widgets::text_width(ui, link_text(ui))
+}
+
+/// The width and height of [`constrain_link`]'s button.
+pub const CONSTRAIN_LINK_SIZE: f32 = 22.0;
+
 /// The link between W and H (Transform panel, Properties panel, Control bar): one toggle, the
 /// `constrainProportions` preference, which the size fields pass on as `proportional`.
 pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
     let on = app.session.prefs.constrain_proportions;
-    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, tl!("Constrain Width and Height Proportions"), on, 22.0).clicked() {
+    let tip = tl!("Constrain Width and Height Proportions");
+    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, tip, on, CONSTRAIN_LINK_SIZE).clicked() {
         set_pref(app, "constrainProportions", !on);
     }
 }

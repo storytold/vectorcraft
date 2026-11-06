@@ -62,6 +62,10 @@ impl Renderer {
             Some(e) => {
                 e.stamp = stamp;
                 self.stats.moved += usize::from(e.moved);
+                crate::paint::add_decode_failures(e.failed);
+                if e.image_left_out {
+                    self.image_left_out = self.image_left_out.map(|_| true);
+                }
                 let p = f.view * e.anchor;
                 (e.image.clone(), (p.x + e.rel.0).round(), (p.y + e.rel.1).round(), e.scale, e.moved, e.view.map(|v| v.served(f.view)))
             }
@@ -118,7 +122,13 @@ impl Renderer {
                 let ink = darkness.map_or(f.ink, |d| f.ink.darkened(d));
                 let crop = Frame { mt: false, view, visible, ink, ..*f };
                 let before = self.stats.moved;
+                let decoded = crate::paint::decode_failures();
+                let outer_image_left_out = self.image_left_out.replace(false);
+                let pattern_images_left_out = crate::pattern::images_left_out();
                 self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
+                let failed = crate::paint::decode_failures() - decoded;
+                let image_left_out = self.image_left_out.unwrap_or(false) || crate::pattern::images_left_out() > pattern_images_left_out;
+                self.image_left_out = outer_image_left_out.map(|outer| outer || image_left_out);
                 // A silhouette drawn over moved rasters makes a moved shadow.
                 let moved = self.stats.moved > before;
                 off.flush();
@@ -165,7 +175,10 @@ impl Renderer {
                 let node = Drawn::of(n, owner);
                 let rel = (x0 - p.x, y0 - p.y);
                 let view = cropped.map(|room| ViewCrop::of(f.view, room));
-                self.shadows.insert(key, ShadowEntry { node, linear, anchor, rel, image: image.clone(), scale, view, made, inputs, moved, stamp });
+                self.shadows.insert(
+                    key,
+                    ShadowEntry { node, linear, anchor, rel, image: image.clone(), scale, view, made, inputs, moved, failed, image_left_out, stamp },
+                );
                 self.trim_fx_rasters(FX_RASTER_BUDGET);
                 (image, x0, y0, scale, moved, cropped)
             }
@@ -365,6 +378,9 @@ impl Renderer {
 
     /// What [`Self::draw_object_fx`] draws inside the object's transparency group.
     fn draw_object_fx_art(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
+        if !self.charge_fx_instance(f.doc, a) {
+            return;
+        }
         let art = self.fx_art(f.doc, a, cache);
         // Art the cache did not keep is made again in the next frame.
         let kept = cache && self.fx_arts.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &art));
@@ -395,6 +411,19 @@ impl Renderer {
             _ => self.draw_fx_art(ctx, f, a, &art),
         }
         self.made_again = outer;
+    }
+
+    /// Whether the frame has room for the art of `a` when it is a symbol instance, charged to the
+    /// frame's symbol budget as an instance without effects is (`draw_node`): an instance whose
+    /// effects reshape its art draws through here, and nested instances would otherwise expand
+    /// without a limit. True for any other object.
+    pub(crate) fn charge_fx_instance(&mut self, doc: &vectorcraft_doc::Document, a: &Node) -> bool {
+        let NodeKind::SymbolInstance { symbol, .. } = &a.kind else { return true };
+        let count = doc.symbols.iter().find(|s| &s.name == symbol).map_or(0, |s| s.art.count() as u64);
+        let mut used = self.symbol_nodes;
+        let room = vectorcraft_doc::charge_symbol_art(&mut used, count, || ((), count)).is_some();
+        self.symbol_nodes = used;
+        room
     }
 
     /// The art [`Self::draw_object_fx`] draws for `a` (cached by `Arc` identity when `cache`):
@@ -668,11 +697,48 @@ impl Renderer {
         } else {
             paint(self, ctx, f);
         }
-        // Above the content: inner glows, clipped to its outline.
+        // Above the content: inner glows, clipped to its outline. An image's glow follows its
+        // visible pixels, not its frame (#5308).
         let Some((g, rule)) = content.outline else { return };
+        let pixels = matches!(content.node.kind, NodeKind::Image(_));
         for fx in rfx {
             let RasterFx::InnerGlow { mode, opacity, blur, color, center } = fx else { continue };
             let filter = shadow_filter(0.0, 0.0, *blur, pcolor(f.ink, color));
+            if pixels {
+                self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |r, c, fr, comp| {
+                    if let Some((m, o)) = comp {
+                        c.set_transform(Affine::IDENTITY);
+                        c.push_layer(None, Some(blend_mode(m)), Some(o), None, None);
+                    }
+                    c.set_transform(fr.view);
+                    c.set_fill_rule(fill_rule(rule));
+                    c.push_clip_layer(g);
+                    c.push_layer(None, None, None, None, Some(filter));
+                    if !*center {
+                        // Everything around the visible pixels, so the glow bleeds in from their edges.
+                        let pad = blur * 2.0 + 4.0 * fr.px;
+                        c.set_transform(fr.view);
+                        c.set_paint(peniko::Color::BLACK);
+                        c.fill_rect(&g.bounding_box().inflate(pad, pad));
+                        c.push_layer(None, Some(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::DestOut)), None, None, None);
+                    }
+                    // The glow is cast by the pixels' alpha alone (the filter takes no color from them).
+                    paint(r, c, fr);
+                    if !*center {
+                        c.pop_layer();
+                    }
+                    c.pop_layer();
+                    // Only where the image shows, as much as it shows.
+                    c.push_layer(None, Some(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::DestIn)), None, None, None);
+                    paint(r, c, fr);
+                    c.pop_layer();
+                    c.pop_layer();
+                    if comp.is_some() {
+                        c.pop_layer();
+                    }
+                });
+                continue;
+            }
             self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |_, c, fr, comp| {
                 // The blend layer goes outside the clip: a clip layer is isolated, so a blend
                 // inside it would mix with nothing instead of the content below.

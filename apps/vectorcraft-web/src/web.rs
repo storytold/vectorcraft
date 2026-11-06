@@ -378,6 +378,8 @@ impl eframe::App for WebShell {
     /// shared input hook before egui runs.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         raw.events.extend(self.host.pointers.borrow_mut().take());
+        // A Cmd+V comes as its key and as a Paste: one paste (#5555).
+        crate::keys::drop_paste_key_presses(&mut raw.events);
         if let Some(app) = &mut self.app {
             app.raw_input_hook(ctx, raw);
         }

@@ -24,6 +24,7 @@ pub use paint::{decode_failures, image_decodes, reduced_size};
 mod pattern;
 pub mod placed_document;
 pub mod proof;
+mod stroke;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -60,6 +61,9 @@ pub struct Renderer {
     /// Worker threads for the multithreaded rasterizer (0 = single-threaded).
     pub threads: u16,
     geom: PtrMap<usize, GeomEntry>,
+    /// The paths of long paths and compound paths, by object id (see [`Self::kept_path`]): after
+    /// an edit, `geom` makes the new object's path and bounds from the path kept for its id.
+    kept: PtrMap<NodeId, kept_paths::KeptPath>,
     /// The symbols (name and art) of the document last drawn, which `geom`'s bounds measured
     /// symbol instances by (see [`Self::check_symbols`]). The art is held weakly: the reference
     /// keeps the art's allocation, so no other art can get its address, and does not keep the
@@ -71,6 +75,9 @@ pub struct Renderer {
     /// Expanded stroke outlines keyed by ([`Self::stroke_owner`], stroke layer address, width bits,
     /// tolerance level): panning re-renders reuse them instead of re-expanding every stroke.
     strokes: PtrMap<StrokeKey, StrokeEntry>,
+    /// The key in `strokes` of the latest outline of each stroke of an object, under its
+    /// [`frame::MovedKey`]: a moved copy of the object draws that outline moved ([`Self::moved_outline`]).
+    moved_strokes: PtrMap<frame::MovedKey, StrokeKey>,
     /// Expanded character stroke outlines, with the glyph geometry kept in `texts` they belong to,
     /// keyed by ([`Self::stroke_owner`] of that geometry, run, width bits, tolerance level): type
     /// that doesn't change draws them again instead of expanding its strokes in every frame. Within
@@ -147,6 +154,8 @@ pub struct Renderer {
     /// The picture [`Self::flatten`] started the current context again from, with 8-bit
     /// compositing: [`Self::finish`] renders the context over it.
     picture: Option<Arc<Pixmap>>,
+    /// Whether an image failed to draw while opacity-mask art is being drawn.
+    image_left_out: Option<bool>,
     /// Pixels of the groups being drawn offscreen (contexts and backdrop copies), and the most
     /// they may hold (set from the frame when the first opens, see [`Self::group`]); both reset
     /// at the start of every frame.
@@ -160,7 +169,11 @@ pub struct Renderer {
     clip_paints: FrameCache<usize, ClipPaintEntry>,
     /// Gradients along or across strokes (see [`Self::fill_path_gradient`]), keyed by
     /// ([`Self::stroke_owner`], stroke layer address, tolerance level).
-    stroke_slices: PtrMap<(usize, usize, i32), SliceEntry>,
+    stroke_slices: PtrMap<frame::SliceKey, SliceEntry>,
+    /// The key in `stroke_slices` of the latest slices of each stroke of an object, under its
+    /// [`frame::MovedSliceKey`]: a moved copy of the object draws those slices moved
+    /// ([`Self::moved_slices`]).
+    moved_slices: PtrMap<frame::MovedSliceKey, frame::SliceKey>,
     /// What the image keys colour adjustments give their recoloured images name: the image
     /// recoloured and the adjustment, with its hash (see [`Self::adjusted_image`]).
     adjusts: HashMap<String, (String, u64, vectorcraft_effects::ColorMap)>,
@@ -201,6 +214,7 @@ mod bounds;
 mod clock;
 mod frame;
 mod geometry;
+mod kept_paths;
 mod node_checks;
 mod options;
 mod renderer;
@@ -225,6 +239,6 @@ pub(crate) use text_geom::is_opentype_alternate;
 #[cfg(test)]
 use text_geom::text_geom;
 pub(crate) use threads::single_threaded_context;
-pub use threads::{default_threads, set_default_threads};
+pub use threads::{default_threads, set_default_threads, set_usable_cores};
 #[cfg(test)]
 mod tests;

@@ -90,13 +90,29 @@ fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f
 }
 
 pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
-    // The Selection tool's bounding box (rotated with the objects after a rotation). It hides while
-    // a drag moves or resizes the selection, so only the art is seen going with the pointer (#712).
-    let show_box = app.session.tool_id() == "selection"
-        && !app.session.tool_transforming()
+    // The Selection tool's bounding box (rotated with the objects after a rotation), also shown by
+    // the shape tools that keep a shape just drawn ready to adjust while they draw none (#5477). It
+    // hides while a drag moves or resizes the selection, so only the art is seen going with the
+    // pointer (#712).
+    // With Real-time Drawing off the art waits for the release of a move drag, and the box moves
+    // with the pointer instead.
+    let moved = app.session.deferred_move();
+    let shape_tool = vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id());
+    // A shape tool drawing a shape shows none of this; adjusting a widget, it shows the widgets.
+    let drawing = shape_tool && app.session.tool_busy() && !app.session.tool_transforming();
+    // Cmd held lends the Selection tool to a press (Direct Selection's included, #3901): its box
+    // shows while the key is down, where its handles take that press.
+    let held = super::drag::mods(p.ctx().input(|i| i.modifiers), false);
+    let lends_selection = !app.session.tool_busy() && app.session.lent_tool_id(&held) == Some("selection");
+    let show_box = (app.session.tool_id() == "selection" || lends_selection || (shape_tool && !app.session.tool_busy()))
+        && (!app.session.tool_transforming() || moved.is_some())
         && app.ui.view.bounding_box
         && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
     let bbox = if show_box { app.selection_box() } else { None };
+    let bbox = bbox.map(|b| match moved {
+        Some(d) => vectorcraft_doc::OrientedBox { rect: b.rect + b.to_local(d.to_point()).to_vec2(), ..b },
+        None => b,
+    });
     let st = app.session.active();
     let big = st.is_some_and(|st| too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
     let big_bounds = if big { app.selection_bounds() } else { None };
@@ -243,8 +259,9 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             anchor_square(p, xf.to_screen(a.p), color, false, anchor(direct));
         }
     }
-    // Live Corners widgets (Selection on a live rectangle or polygon, Direct Selection on any path).
-    if matches!(tool, "selection" | "directSelection")
+    // Live Corners widgets (Selection and the shape tools on a live rectangle or polygon, Direct
+    // Selection on any path).
+    if (matches!(tool, "selection" | "directSelection") || (shape_tool && !drawing))
         && let Some(w) = vectorcraft_tools::corners::CornerWidgets::showing(
             &st.doc,
             &st.selection,
@@ -280,7 +297,7 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     }
     // Pie widgets (Selection tool, with View › Show Bounding Box, on live ellipses): each joined
     // by a line to the outline's point at its angle. They stay while one is dragged.
-    if tool == "selection" && app.ui.view.bounding_box {
+    if (tool == "selection" || (shape_tool && !drawing)) && app.ui.view.bounding_box {
         for w in vectorcraft_tools::pie::PieWidget::of(&st.doc, &st.selection, xf.zoom) {
             let (on, c, r, color) = (xf.to_screen(w.on), xf.to_screen(w.at), vectorcraft_tools::pie::RADIUS_PX, c32(st.doc.layer_color(w.id)));
             p.line_segment([on, c], Stroke::new(1.0, color));
@@ -288,6 +305,36 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             p.circle_stroke(c, r, Stroke::new(1.0, color));
         }
     }
+    rotate_all_widget(p, xf, tool, &st.doc, &st.selection);
+}
+
+/// The Rotate All and Space widgets (Selection and Objects on Path tools, one Objects on Path
+/// group selected). The Rotate All widget is joined by a line to the first object's attachment
+/// point. It stays while dragged.
+fn rotate_all_widget(p: &egui::Painter, xf: &Xf, tool: &str, doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection) {
+    use vectorcraft_tools::objects_on_path::{ROTATE_ALL_RADIUS_PX, RotateAllWidget};
+    if !matches!(tool, "selection" | "objectsOnPath") {
+        return;
+    }
+    if let Some(w) = RotateAllWidget::of(doc, selection, xf.zoom) {
+        let (on, c, color) = (xf.to_screen(w.pivot), xf.to_screen(w.at), c32(doc.layer_color(w.group)));
+        p.line_segment([on, c], Stroke::new(1.0, color));
+        p.circle_filled(c, ROTATE_ALL_RADIUS_PX, Color32::WHITE);
+        p.circle_stroke(c, ROTATE_ALL_RADIUS_PX, Stroke::new(1.0, color));
+    }
+    space_widget(p, xf, doc, selection);
+}
+
+/// The Space widget (beside the Rotate All widget, with two or more objects on the path): a square
+/// joined by a line to the last object's attachment point. It stays while dragged.
+fn space_widget(p: &egui::Painter, xf: &Xf, doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection) {
+    use vectorcraft_tools::objects_on_path::{SPACE_HALF_PX, SpaceWidget};
+    let Some(w) = SpaceWidget::of(doc, selection, xf.zoom) else { return };
+    let (on, c, color) = (xf.to_screen(w.last), xf.to_screen(w.at), c32(doc.layer_color(w.group)));
+    let r = egui::Rect::from_center_size(c, vec2(2.0 * SPACE_HALF_PX, 2.0 * SPACE_HALF_PX));
+    p.line_segment([on, c], Stroke::new(1.0, color));
+    p.rect_filled(r, 0.0, Color32::WHITE);
+    p.rect_stroke(r, 0.0, Stroke::new(1.0, color), StrokeKind::Inside);
 }
 
 /// Record where the Type tool's IME candidate window goes this pass, if it has an editor.

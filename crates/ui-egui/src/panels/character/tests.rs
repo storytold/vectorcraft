@@ -89,6 +89,102 @@ fn scaled_character_fields_show_document_sizes_and_mixed_group_values() {
     assert_eq!(shared_effective(&app, |s| s.h_scale), Some(100.0));
 }
 
+/// The Leading field shows the Auto leading the characters are set with, their paragraph's Auto
+/// Leading share (120% by default) of their em size: 20 pt type measuring a 0.7 em cap height
+/// is set at 20 / 0.7 pt. Paragraphs whose Auto leading differs show a blank field, and an
+/// explicit leading shows as it is.
+#[test]
+fn leading_shows_the_auto_leading_of_the_em_size() {
+    use vectorcraft_text::test_fonts::{HEIGHT_CAP, HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 20, "font": HEIGHT_FAMILY})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let near = |l: Option<f64>, want: f64| l.is_some_and(|l| (l - want).abs() < 1e-9);
+    assert!(near(shared_leading(&app), 24.0), "{:?}", shared_leading(&app));
+    app.run("text.setFormat", json!({"fontHeightReference": "capHeight"})).unwrap();
+    let cap = f64::from(HEIGHT_CAP) / 1000.0;
+    assert!(near(shared_leading(&app), 1.2 * 20.0 / cap), "{:?}", shared_leading(&app));
+    app.run("text.setFormat", json!({"autoLeading": 150})).unwrap();
+    assert!(near(shared_leading(&app), 1.5 * 20.0 / cap), "{:?}", shared_leading(&app));
+    // The second paragraph ends in a two-byte character.
+    let two = app.run("text.create", json!({"x": 20, "y": 120, "text": "Hx\nHé", "size": 20, "font": HEIGHT_FAMILY})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [two]})).unwrap();
+    assert!(near(shared_leading(&app), 24.0), "{:?}", shared_leading(&app));
+    app.run("text.setFormat", json!({"id": two, "start": 3, "end": 6, "autoLeading": 150})).unwrap();
+    assert_eq!(shared_leading(&app), None, "the second paragraph's Auto leading is 30 pt");
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("text.setStyle", json!({"leading": 30})).unwrap();
+    assert!(near(shared_leading(&app), 30.0), "{:?}", shared_leading(&app));
+}
+
+/// An inline graphic keeps its size whatever the font height reference, so the Leading field
+/// shows 120% of that size for it: blank for 20 pt Cap Height type with a graphic in it, and
+/// 24 pt for the graphic alone.
+#[test]
+fn leading_of_an_inline_graphic_follows_its_own_size() {
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    vectorcraft_text::FontDb::global().add_font(height_font(true).unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("shape.ellipse", json!({"x": 200, "y": 150, "width": 10, "height": 10})).unwrap();
+    app.run("symbol.new", json!({"name": "Dot"})).unwrap();
+    app.run("edit.clear", json!({})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 20, "font": HEIGHT_FAMILY})).unwrap()["id"].clone();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.run("text.insertInline", json!({"id": id, "at": 2, "symbol": "Dot"})).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 5, "fontHeightReference": "capHeight"})).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 5}));
+    assert_eq!(shared_leading(&app), None, "the type is set with 34.3 pt Auto leading and the graphic with 24 pt");
+    app.session.set_tool_option("select", &json!({"start": 2, "end": 5}));
+    assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((2, 5)));
+    let shown = shared_leading(&app);
+    assert!(shown.is_some_and(|l| (l - 24.0).abs() < 1e-9), "{shown:?}");
+}
+
+/// A selected text object that ends in a line break has an empty last paragraph, which the
+/// Leading field takes in; a Type tool selection of all the text does not.
+#[test]
+fn leading_of_a_whole_object_takes_in_the_empty_last_paragraph() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Ab\n", "size": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let near = |l: Option<f64>, want: f64| l.is_some_and(|l| (l - want).abs() < 1e-9);
+    assert!(near(shared_leading(&app), 24.0), "{:?}", shared_leading(&app));
+    app.run("text.setFormat", json!({"id": id, "start": 3, "end": 3, "autoLeading": 150})).unwrap();
+    assert_eq!(shared_leading(&app), None, "the empty last paragraph's Auto leading is 30 pt");
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 3}));
+    assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((0, 3)));
+    assert!(near(shared_leading(&app), 24.0), "a line break belongs to the paragraph it ends: {:?}", shared_leading(&app));
+}
+
+/// With the Type tool, the Leading field shows the Auto leading of the paragraphs the selection
+/// covers (a line break belongs to the paragraph it ends), and at a caret that of the caret's
+/// paragraph.
+#[test]
+fn leading_follows_the_paragraphs_the_type_tool_selection_covers() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    // é is two bytes, 4..6.
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Ab\nCé", "size": 20})).unwrap()["id"].clone();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 3, "end": 6, "autoLeading": 150})).unwrap();
+    let ranges = [((0, 2), Some(24.0)), ((0, 3), Some(24.0)), ((3, 6), Some(30.0)), ((1, 4), None), ((1, 6), None), ((4, 4), Some(30.0))];
+    for ((start, end), want) in ranges {
+        app.session.set_tool_option("select", &json!({"start": start, "end": end}));
+        assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((start, end)));
+        let shown = shared_leading(&app);
+        assert_eq!(shown.is_some(), want.is_some(), "{start}..{end}: {shown:?}");
+        assert!(shown.zip(want).is_none_or(|(l, w)| (l - w).abs() < 1e-9), "{start}..{end}: {shown:?}");
+    }
+}
+
 #[test]
 fn scaled_range_fields_follow_the_type_tool_selection() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -128,6 +224,73 @@ fn kerning_at_a_caret_sets_the_pair_not_the_whole_text() {
     app.session.set_tool_option("select", &json!({"start": 2, "end": 4}));
     set_kerning(&mut app, json!(30));
     assert_eq!((kerning(&app, 1), kerning(&app, 2), kerning(&app, 3)), (Some(-50.0), Some(30.0), Some(30.0)));
+}
+
+#[test]
+fn character_kerning_setter_and_automatic_pair_value() {
+    let german = crate::i18n::Lang::from_code("de").unwrap();
+    assert!(crate::i18n::has(german, "Optical"));
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 50, "text": "III", "size": 100, "font": "JetBrains Mono"})).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
+    set_kerning(&mut app, json!("optical"));
+    assert!(text_style(&app).unwrap().0.optical_kerning);
+    let ctx = egui::Context::default();
+    let mut shown = None;
+    ctx.run_ui(Default::default(), |ui| {
+        shown = caret_kerning(&app, ui);
+    })
+    .textures_delta
+    .clear();
+    let (value, automatic) = shown.unwrap();
+    assert!(automatic && value != 0.0);
+    set_kerning(&mut app, json!(50));
+    ctx.run_ui(Default::default(), |ui| {
+        shown = caret_kerning(&app, ui);
+    })
+    .textures_delta
+    .clear();
+    assert_eq!(shown, Some((50.0, false)));
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    assert_eq!(shared(&app, |s| (s.optical_kerning, s.kerning)), None, "a mixed range shows a blank Kerning field");
+}
+
+/// The Kerning menu lists Auto and Optical for a selection that mixes kerning modes, with
+/// neither checked, so one mode can be set on all of it.
+#[test]
+fn kerning_menu_lists_auto_and_optical_for_mixed_modes() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "AV", "size": 12})).unwrap()["id"].clone();
+    let b = app.run("text.create", json!({"x": 20, "y": 90, "text": "AV", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [b.clone()]})).unwrap();
+    app.run("text.setFormat", json!({"kerning": "optical"})).unwrap();
+    app.run("select.set", json!({"ids": [a.clone()]})).unwrap();
+    assert_eq!(kerning_methods(shared(&app, |s| (s.optical_kerning, s.kerning))), (Some(true), Some(false)), "Auto");
+    app.run("select.set", json!({"ids": [b.clone()]})).unwrap();
+    assert_eq!(kerning_methods(shared(&app, |s| (s.optical_kerning, s.kerning))), (Some(false), Some(true)), "Optical");
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let mode = shared(&app, |s| (s.optical_kerning, s.kerning));
+    assert_eq!(mode, None, "the selection mixes Auto and Optical");
+    assert_eq!(kerning_methods(mode), (Some(false), Some(false)), "both entries are listed, neither checked");
+}
+
+/// A number typed into the Kerning field after Optical keeps the Optical flag on the type, and
+/// the manual value sets the spacing; the menu then checks neither Auto nor Optical.
+#[test]
+fn kerning_menu_checks_neither_method_for_a_manual_value_after_optical() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "AV", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("text.setFormat", json!({"kerning": "optical"})).unwrap();
+    app.run("text.setFormat", json!({"kerning": 50})).unwrap();
+    let mode = shared(&app, |s| (s.optical_kerning, s.kerning));
+    assert_eq!(mode, Some((true, Some(50.0))), "the manual value keeps the Optical flag");
+    assert_eq!(kerning_methods(mode), (Some(false), Some(false)), "a manual value checks neither method");
 }
 
 /// Highlight Kerning and Highlight Tracking show the Character panel and give its field the
@@ -287,9 +450,17 @@ fn bold_and_italic_pick_the_familys_own_faces() {
 }
 
 /// From one frame of the panel: a point inside each of the Small Caps, Superscript and
-/// Subscript buttons, and which of them are drawn on. The two buttons with a "1" are
-/// Superscript (the "1" up) and Subscript; Small Caps is the button before them.
+/// Subscript buttons, and which of them are drawn on.
 fn script_buttons(ctx: &egui::Context, app: &mut VectorcraftApp) -> ([egui::Pos2; 3], [bool; 3]) {
+    let (points, on) = style_buttons(ctx, app);
+    ([points[1], points[2], points[3]], [on[1], on[2], on[3]])
+}
+
+/// From one frame of the panel: a point inside each of the All Caps, Small Caps, Superscript,
+/// Subscript, Underline and Strikethrough buttons, and which of them are drawn on. The two buttons
+/// with a "1" are Superscript (the "1" up) and Subscript; the others sit one button apart from them
+/// in that order.
+fn style_buttons(ctx: &egui::Context, app: &mut VectorcraftApp) -> ([egui::Pos2; 6], [bool; 6]) {
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
     out.textures_delta.clear();
     fn walk(s: &egui::Shape, on: egui::Color32, ones: &mut Vec<egui::Pos2>, lit: &mut Vec<egui::Rect>) {
@@ -309,7 +480,8 @@ fn script_buttons(ctx: &egui::Context, app: &mut VectorcraftApp) -> ([egui::Pos2
     // Each "1" is drawn 6 points right of its button's center and 5 points above or below it.
     let y = (sup.y + sub.y) / 2.0;
     let (sup, sub) = (egui::pos2(sup.x - 6.0, y), egui::pos2(sub.x - 6.0, y));
-    let points = [sup - vec2(sub.x - sup.x, 0.0), sup, sub];
+    let step = vec2(sub.x - sup.x, 0.0);
+    let points = [sup - step * 2.0, sup - step, sup, sub, sub + step, sub + step * 2.0];
     (points, points.map(|p| lit.iter().any(|r| r.contains(p))))
 }
 
@@ -466,6 +638,48 @@ fn character_alignment_shows_with_the_east_asian_options() {
     assert_eq!(shown(&mut app), (true, true));
 }
 
+/// The panel menu's Show Font Height Options shows the Set Font Height Reference dropdown,
+/// which shows the selected type's reference and sets the one picked (one undo step); Hide
+/// Font Height Options hides it again.
+#[test]
+fn show_font_height_options_shows_the_font_height_reference() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    use vectorcraft_doc::FontHeightReference as R;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let reference = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.font_height_reference).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let texts = |ctx: &egui::Context, app: &mut VectorcraftApp, f: fn(&mut VectorcraftApp, &mut Ui)| {
+        frame_events(ctx, app, vec![], f);
+        frame_events(ctx, app, vec![], f)
+    };
+    // A menu item's label is drawn after its check column (a check mark or spaces).
+    let item = |texts: &[(String, egui::Rect)], s: &str| texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == s).map(|(_, r)| r.center());
+    assert!(item(&texts(&ctx, &mut app, show), "Em Box").is_none());
+    let at = item(&texts(&ctx, &mut app, menu), "Show Font Height Options").unwrap();
+    click(&ctx, &mut app, at, menu);
+    assert!(item(&texts(&ctx, &mut app, menu), "Hide Font Height Options").is_some());
+    let panel = texts(&ctx, &mut app, show);
+    assert!(item(&panel, "Em Box").is_some(), "{panel:?}");
+    // Pick Cap Height from the dropdown.
+    click(&ctx, &mut app, text_rect(&panel, "Em Box").center(), show);
+    let undo = app.session.active().unwrap().history.undo.len();
+    let open = texts(&ctx, &mut app, show);
+    click(&ctx, &mut app, text_rect(&open, "Cap Height").center(), show);
+    assert_eq!(reference(&app), [R::CapHeight]);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    assert!(item(&texts(&ctx, &mut app, show), "Cap Height").is_some());
+    let at = item(&texts(&ctx, &mut app, menu), "Hide Font Height Options").unwrap();
+    click(&ctx, &mut app, at, menu);
+    assert!(item(&texts(&ctx, &mut app, show), "Cap Height").is_none());
+}
+
 /// Tate-chu-yoko is in the panel menu with the East Asian options, and choosing it marks the
 /// selected characters.
 #[test]
@@ -494,6 +708,59 @@ fn tate_chu_yoko_menu_item_shows_with_east_asian_options_and_toggles() {
     assert!(!on(&app));
 }
 
+/// Tate-chu-yoko Settings… is in the panel menu with the East Asian options, and choosing it opens
+/// the dialog on the selected characters.
+#[test]
+fn tate_chu_yoko_settings_menu_item_shows_with_east_asian_options_and_opens_the_dialog() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "2026"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    assert!(!crate::tests_labels::painted_text(&mut app, menu).contains("Tate-chu-yoko Settings…"));
+    app.session.prefs.show_east_asian_options = true;
+    let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], menu);
+    let at = texts.iter().find(|(t, _)| t.trim() == "Tate-chu-yoko Settings…").unwrap_or_else(|| panic!("{texts:?}")).1;
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::tate_chu_yoko::KIND));
+}
+
+/// Standard Vertical Roman Alignment is in the panel menu with the East Asian options. Choosing it
+/// marks the selected characters, one undo step each way; its check shows only while every
+/// selected character has it, and a mixed selection turns it on.
+#[test]
+fn standard_vertical_roman_alignment_menu_item_toggles() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "ABC"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let label = "Standard Vertical Roman Alignment";
+    assert!(!crate::tests_labels::painted_text(&mut app, menu).contains(label));
+    app.session.prefs.show_east_asian_options = true;
+    let on = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().all(|r| r.style.standard_vertical_roman),
+        _ => panic!("text"),
+    };
+    // Only the first letter has it: the item is unchecked.
+    app.session.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 1, "standardVerticalRoman": true})).unwrap();
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let before = undo(&app);
+    assert!(!on(&app));
+    assert!(!crate::tests_labels::painted_text(&mut app, menu).contains(&format!("✓ {label}")));
+    let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], menu);
+    let at = texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap_or_else(|| panic!("{texts:?}")).1;
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(on(&app));
+    assert_eq!(undo(&app), before + 1);
+    assert!(crate::tests_labels::painted_text(&mut app, menu).contains(&format!("✓ {label}")));
+    let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], menu);
+    let at = texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap().1;
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(!on(&app));
+    assert_eq!(undo(&app), before + 2);
+}
+
 /// Digits is in the panel menu with the Middle Eastern (Indic) options only, as Paragraph
 /// Direction is in the Paragraph panel.
 #[test]
@@ -506,6 +773,19 @@ fn digits_show_with_the_indic_options() {
     assert!(!shown(&mut app));
     app.session.prefs.show_indic_options = true;
     assert!(shown(&mut app));
+}
+
+/// The Digits submenu lists Default, the Arabic-script numeral systems and the Indic scripts'
+/// digits (#4942), and checks the selected characters' system.
+#[test]
+fn digits_submenu_lists_the_indic_scripts_and_checks_the_selection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| digits_items(app, ui, Some(vectorcraft_doc::Digits::Tamil)));
+    let items: Vec<_> = text.lines().map(|l| l.trim().trim_start_matches("✓ ")).collect();
+    let want =
+        ["Default", "Arabic", "Hindi", "Farsi", "Devanagari", "Bengali", "Gurmukhi", "Gujarati", "Odia", "Tamil", "Telugu", "Kannada", "Malayalam"];
+    assert!(want.iter().all(|w| items.contains(w)), "{items:?}");
+    assert_eq!(text.lines().filter_map(|l| l.strip_prefix("✓ ")).collect::<Vec<_>>(), ["Tamil"]);
 }
 
 /// Character Direction is in the panel menu with the Middle Eastern (Indic) options, beside
@@ -562,6 +842,24 @@ fn shared_text_flag_optical_margin_three_object_selections() {
     assert_eq!(shared_text_flag(&app, |t| t.optical_margin), Some(true));
 }
 
+#[test]
+fn shared_text_flag_vertical_three_object_selections() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    let v0 = app.run("text.create", json!({"x": 10, "y": 40, "text": "v0", "vertical": true})).unwrap()["id"].clone();
+    let h1 = app.run("text.create", json!({"x": 10, "y": 80, "text": "h1"})).unwrap()["id"].clone();
+    let h2 = app.run("text.create", json!({"x": 10, "y": 120, "text": "h2"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [v0.clone(), h1.clone(), h2.clone()]})).unwrap();
+    assert_eq!(shared_text_flag(&app, |t| t.vertical), None);
+    let h0 = app.run("text.create", json!({"x": 10, "y": 160, "text": "h0"})).unwrap()["id"].clone();
+    let v1 = app.run("text.create", json!({"x": 10, "y": 200, "text": "v1", "vertical": true})).unwrap()["id"].clone();
+    let v2 = app.run("text.create", json!({"x": 10, "y": 240, "text": "v2", "vertical": true})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [h0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(shared_text_flag(&app, |t| t.vertical), None);
+    app.run("select.set", json!({"ids": [v0.clone(), v1.clone(), v2.clone()]})).unwrap();
+    assert_eq!(shared_text_flag(&app, |t| t.vertical), Some(true));
+}
+
 /// Small Caps, Superscript and Subscript buttons and menu items stay off when the selection mixes them.
 #[test]
 fn character_mixed_small_caps_and_position_show_off() {
@@ -581,6 +879,131 @@ fn character_mixed_small_caps_and_position_show_off() {
         ["Small Caps", "Superscript", "Subscript"].map(|l| texts.iter().any(|(t, _)| *t == format!("✓ {l}")))
     };
     assert_eq!(checked(&mut app), [false, false, false]);
+}
+
+/// The All Caps, Underline and Strikethrough buttons are drawn off when only some of the selected
+/// characters have them, and a click turns them on for every character.
+#[test]
+fn mixed_all_caps_underline_and_strikethrough_buttons_show_off_and_turn_on() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "AB", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 1, "allCaps": true, "underline": true, "strikethrough": true})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let flags = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| [r.style.all_caps, r.style.underline, r.style.strikethrough]).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    let ctx = egui::Context::default();
+    let (at, lit) = style_buttons(&ctx, &mut app);
+    assert_eq!([lit[0], lit[4], lit[5]], [false; 3]);
+    for (i, button) in [0, 4, 5].into_iter().enumerate() {
+        super::super::tests_appearance::click(&ctx, &mut app, at[button], show);
+        assert!(flags(&app).iter().all(|f| f[i]), "button {button}: {:?}", flags(&app));
+        assert!(style_buttons(&ctx, &mut app).1[button], "button {button}");
+    }
+}
+
+/// `type.underline` does what the Underline button does: with only some of the selected characters
+/// underlined it underlines all of them, and with all of them underlined it turns underlining off.
+#[test]
+fn underline_command_underlines_a_mixed_selection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "AB", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 1, "underline": true})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let underlined = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.underline).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert_eq!(super::toggle_underline(&mut app), Ok(json!(true)));
+    assert!(underlined(&app).iter().all(|u| *u), "{:?}", underlined(&app));
+    assert_eq!(super::toggle_underline(&mut app), Ok(json!(false)));
+    assert!(underlined(&app).iter().all(|u| !*u), "{:?}", underlined(&app));
+}
+
+/// The panel menu's All Caps, Underline, Strikethrough, Proportional Metrics, Tate-chu-yoko and
+/// No Break are unchecked when only some of the selected characters have them, and choosing one
+/// turns it on for every character.
+#[test]
+fn mixed_check_items_show_unchecked_and_turn_on() {
+    type Attribute = fn(&CharStyle) -> bool;
+    let items: [(&str, &str, Attribute); 6] = [
+        ("All Caps", "allCaps", |s| s.all_caps),
+        ("Underline", "underline", |s| s.underline),
+        ("Strikethrough", "strikethrough", |s| s.strikethrough),
+        ("Proportional Metrics", "proportionalMetrics", |s| s.proportional_metrics),
+        ("Tate-chu-yoko", "tateChuYoko", |s| s.tate_chu_yoko),
+        ("No Break", "noBreak", |s| s.no_break),
+    ];
+    let mut wrong = vec![];
+    for (label, key, has) in items {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.prefs.show_east_asian_options = true;
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "AB"})).unwrap()["id"].as_u64().unwrap();
+        app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 1, key: true})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let on = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.runs.iter().map(|r| has(&r.style)).collect::<Vec<_>>(),
+            _ => panic!("text"),
+        };
+        assert_eq!(on(&app), [true, false], "{label}");
+        let ctx = egui::Context::default();
+        let row = |app: &mut VectorcraftApp| {
+            let texts = super::super::tests_appearance::frame_events(&ctx, app, vec![], menu);
+            texts.into_iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap_or_else(|| panic!("{label} missing"))
+        };
+        let (text, at) = row(&mut app);
+        super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+        let shown = row(&mut app).0;
+        if text.starts_with('✓') || !on(&app).iter().all(|o| *o) || !shown.starts_with('✓') {
+            wrong.push(format!("{label}: shown as {text:?}, then {:?} and {shown:?}", on(&app)));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// The panel menu's Character Alignment and Digits submenus check no item when the selected
+/// characters differ, and check the value they share.
+#[test]
+fn character_alignment_and_digits_check_nothing_for_a_mixed_selection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.show_east_asian_options = true;
+    app.session.prefs.show_indic_options = true;
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "A1"})).unwrap()["id"].as_u64().unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 1, "charAlign": "emBoxTop", "digits": "hindi"})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let press = |pos: egui::Pos2, pressed: bool| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Default::default(),
+    };
+    let ticked = |texts: &[(String, egui::Rect)]| texts.iter().filter_map(|(t, _)| t.strip_prefix("✓ ")).map(str::to_string).collect::<Vec<_>>();
+    // The items checked in the submenu `name` opens (not in the panel menu itself), in a fresh
+    // context, so that no other submenu is open.
+    let checked = |app: &mut VectorcraftApp, name: &str| {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut frame = |events: Vec<egui::Event>| super::super::tests_appearance::frame_events(&ctx, app, events, menu);
+        let texts = frame(vec![]);
+        let before = ticked(&texts);
+        let sub = texts.iter().find(|(t, _)| t.trim() == name).unwrap_or_else(|| panic!("{name} missing from {texts:?}")).1.center();
+        for e in [egui::Event::PointerMoved(sub), press(sub, true), press(sub, false)] {
+            frame(vec![e]);
+        }
+        let texts = frame(vec![]);
+        assert!(texts.iter().any(|(t, _)| t.contains("Roman Baseline") || t.contains("Hindi")), "{name} did not open: {texts:?}");
+        ticked(&texts).into_iter().filter(|t| !before.contains(t)).collect::<Vec<_>>()
+    };
+    let mixed = (checked(&mut app, "Character Alignment"), checked(&mut app, "Digits"));
+    assert_eq!(mixed, (vec![], vec![]));
+    app.run("text.setRangeStyle", json!({"id": id, "charAlign": "emBoxTop", "digits": "hindi"})).unwrap();
+    let same = (checked(&mut app, "Character Alignment"), checked(&mut app, "Digits"));
+    assert_eq!(same, (vec!["Em Box Top/Right".to_string()], vec!["Hindi".to_string()]));
 }
 
 /// At a caret in text the Type tool edits, with no characters selected, the Character
@@ -640,10 +1063,49 @@ fn no_break_menu_item_toggles_the_selected_characters() {
     assert!(!on(&app));
 }
 
+/// Kashidas appears with Middle Eastern options, starts checked, and a mixed selection is
+/// unchecked until the user enables all of its characters.
+#[test]
+fn kashidas_menu_item_handles_default_and_mixed_ranges() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.show_indic_options = true;
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "AB"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let row = |app: &mut VectorcraftApp| {
+        super::super::tests_appearance::frame_events(&ctx, app, vec![], menu)
+            .into_iter()
+            .find(|(text, _)| text.trim_start_matches(['✓', ' ']) == "Kashidas")
+            .expect("Kashidas menu item")
+    };
+    assert!(row(&mut app).0.starts_with('✓'));
+    app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 1, "kashidas": false})).unwrap();
+    assert!(!row(&mut app).0.starts_with('✓'));
+    let at = row(&mut app).1.center();
+    super::super::tests_appearance::click(&ctx, &mut app, at, menu);
+    assert!(row(&mut app).0.starts_with('✓'));
+    let states = match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(states.iter().all(|v| *v));
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
+    let at = row(&mut app).1.center();
+    super::super::tests_appearance::click(&ctx, &mut app, at, menu);
+    let after = match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(after.iter().all(|v| *v), "an empty caret leaves all characters unchanged");
+}
+
 /// Reset Panel sets every character attribute the panel shows, except the font family, style
 /// and size, back to its default (Small Caps, the position, Character Alignment, Proportional
-/// Metrics, Tate-chu-yoko, No Break, Character Direction and Digits included), in the selected
-/// type and in the text the Type tool has selected while it edits.
+/// Metrics, Tate-chu-yoko and its settings, No Break, Character Direction, Digits and the font height reference
+/// included), in the selected type and in the text the Type tool has selected while it edits.
 #[test]
 fn reset_panel_resets_every_attribute_but_the_font() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -670,9 +1132,13 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             s.char_align != d.char_align,
             s.proportional_metrics != d.proportional_metrics,
             s.tate_chu_yoko != d.tate_chu_yoko,
+            s.tcy_up_down != d.tcy_up_down,
+            s.tcy_left_right != d.tcy_left_right,
+            s.standard_vertical_roman != d.standard_vertical_roman,
             s.no_break != d.no_break,
             s.char_direction != d.char_direction,
             s.digits != d.digits,
+            s.font_height_reference != d.font_height_reference,
         ]
     };
     let custom = |app: &mut VectorcraftApp| {
@@ -681,17 +1147,17 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             json!({
                 "id": id, "tracking": 50, "leading": 30, "kerning": 20, "baselineShift": 3, "hScale": 120, "vScale": 90, "rotation": 15,
                 "underline": true, "strikethrough": true, "allCaps": true, "smallCaps": true, "position": "superscript",
-                "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "noBreak": true,
-                "charDirection": "rightToLeft", "digits": "hindi"
+                "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "tcyUpDown": 2, "tcyLeftRight": -3,
+                "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
             }),
         )
         .unwrap();
     };
     let plain = runs(&app)[0].1.clone();
-    assert_eq!(differs(&plain, &CharStyle::default()), [false; 18]);
+    assert_eq!(differs(&plain, &CharStyle::default()), [false; 22]);
     custom(&mut app);
     let styled = runs(&app)[0].1.clone();
-    assert_eq!(differs(&styled, &CharStyle::default()), [true; 18]);
+    assert_eq!(differs(&styled, &CharStyle::default()), [true; 22]);
     app.run("select.set", json!({"ids": [id]})).unwrap();
     reset_panel(&mut app);
     assert_eq!(runs(&app), [("One 12".to_string(), plain.clone())]);
@@ -739,4 +1205,83 @@ fn snap_to_glyph_options_show_from_the_menu_and_set_the_options() {
     assert!(app.session.prefs.glyph_snap.angular);
     toggle(&mut app, "Hide Snap to Glyph Options");
     assert!(!section(&mut app).iter().any(|(t, _)| t == "Proximity Guides"));
+}
+
+/// #5273: the Snap to Glyph options come after every character attribute, so showing them from the
+/// panel menu scrolls a short panel down to them; their first checkbox turns View › Snap to Glyph
+/// on and off, which undims the others.
+#[test]
+fn snap_to_glyph_options_scroll_into_view_and_turn_snapping_on() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Glyphs"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    const VIEW: f32 = 160.0;
+    // The panel as a short dock shows it: in a scroll area.
+    let panel = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+        egui::ScrollArea::vertical().max_height(VIEW).show(ui, |ui| show(app, ui));
+    };
+    let texts = frame_events(&ctx, &mut app, vec![], menu);
+    let item = texts.iter().find(|(t, _)| t.trim() == "Show Snap to Glyph Options").unwrap().1;
+    click(&ctx, &mut app, item.center(), menu);
+    // The scroll is animated: it lands over the next second.
+    let mut texts = vec![];
+    for i in 0..30 {
+        let raw = egui::RawInput { time: Some(10.0 + f64::from(i) * 0.1), ..Default::default() };
+        texts = super::super::tests_appearance::frame_raw(&ctx, &mut app, raw, panel);
+    }
+    for label in ["Snap to Glyph", "Anchor Point"] {
+        let r = text_rect(&texts, label);
+        assert!(r.top() >= 0.0 && r.bottom() <= VIEW + 1.0, "{label} at {r:?} is outside the panel");
+    }
+    assert!(!app.ui.view.snap_to_glyph);
+    click(&ctx, &mut app, text_rect(&texts, "Snap to Glyph").center(), panel);
+    assert!(app.ui.view.snap_to_glyph, "the first checkbox turns Snap to Glyph on");
+    let texts = frame_events(&ctx, &mut app, vec![], panel);
+    click(&ctx, &mut app, text_rect(&texts, "Anchor Point").center(), panel);
+    assert!(!app.session.prefs.glyph_snap.anchors, "the options take clicks once it is on");
+}
+
+/// After Select All in a frame of threaded text, the Character and Paragraph panels and Copy act on
+/// the text of every frame of the story.
+#[test]
+fn select_all_in_threaded_text_formats_and_copies_the_whole_story() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+    let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+    let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": b, "anchor": 0, "caret": 0}));
+    app.run("select.all", json!({})).unwrap();
+    assert_eq!(text_story(&app), Some(vec![NodeId(a), NodeId(b)]));
+    let frame = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("not text"),
+    };
+    format(&mut app, json!({"size": 9}));
+    crate::panels::paragraph::run_on_paragraphs(&mut app, "text.setFormat", json!({"spaceBefore": 4})).unwrap();
+    for id in [a, b] {
+        let t = frame(&app, id);
+        assert!(t.runs.iter().all(|r| (r.style.size - 9.0).abs() < 1e-9), "every character of frame {id} is 9 pt");
+        assert!((t.para_at(0).space_before - 4.0).abs() < 1e-9, "frame {id}'s paragraphs take the space");
+    }
+    assert!(intercept_text_command(&mut app, "edit.copy").is_some());
+    let copied: Vec<String> = app
+        .session
+        .clipboard
+        .nodes
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some(t.plain_text()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(copied, [story]);
 }

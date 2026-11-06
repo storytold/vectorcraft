@@ -107,9 +107,31 @@ impl Session {
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         let open = (self.depth == 0).then(|| self.docs.iter().map(|d| d.uid).collect::<Vec<_>>());
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
+        if r.is_err() && self.depth == 0 {
+            self.batch_paint_docs.clear();
+        }
         let r = r?;
         if self.depth == 0 {
-            self.inherit_new_art();
+            // A color-mode history step restores exact new-art colors; selection inheritance
+            // must not immediately replace that restoration.
+            let restored = self.active().is_some_and(|d| match id {
+                "edit.undo" => d.history.redo.last().is_some_and(|e| e.color_mode_paints.is_some()),
+                "edit.redo" => d.history.undo.last().is_some_and(|e| e.color_mode_paints.is_some()),
+                _ => false,
+            });
+            if !restored {
+                self.inherit_new_art();
+            }
+            for uid in std::mem::take(&mut self.batch_paint_docs) {
+                if let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid)
+                    && let Some(e) = st.history.undo.last_mut()
+                    && let Some((_, after)) = &mut e.color_mode_paints
+                {
+                    after.clone_from(&self.paint);
+                    e.recost_paints();
+                    st.history.trim();
+                }
+            }
         }
         if let Some(open) = open {
             self.open_undo_groups_in_new_documents(&open);
@@ -199,27 +221,31 @@ impl Session {
         r
     }
 
-    /// A top-level command: a panic (a bug) becomes [`EngineError::Internal`] and the active
-    /// document goes back to how it was before the command, instead of crashing the frontend.
+    /// A top-level command: a panic (a bug) becomes [`EngineError::Internal`] and every open
+    /// document goes back to how it was before the command (its art, selection, interaction and
+    /// undo history), and the same document stays active, instead of crashing the frontend.
     pub(crate) fn run_guarded(&mut self, id: &str, f: impl FnOnce(&mut Self) -> Result<Value>) -> Result<Value> {
-        let snapshot = self.active().map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone()));
-        let active = self.active;
+        let snapshot: Vec<_> =
+            self.docs.iter().map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone(), d.history.clone())).collect();
+        let active = self.active().map(|d| d.uid);
         let r = match guard::catch_panic(|| self.run_nested(f)) {
             Ok(r) => r,
             Err(msg) => {
                 self.depth = 0;
                 self.journal_note.clear();
-                if let Some((uid, doc, selection, interaction)) = snapshot
-                    && let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid)
-                {
+                for (uid, doc, selection, interaction, history) in snapshot {
+                    // A document the command closed stays closed.
+                    let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid) else { continue };
                     st.doc = doc;
                     st.selection = selection;
                     st.interaction = interaction;
+                    st.history = history;
                     cmd::globaledit::follow_history(st);
+                    st.drop_stale_variables_highlight();
                     st.revision += 1;
                 }
-                if active.is_some_and(|i| i < self.docs.len()) {
-                    self.active = active;
+                if let Some(i) = active.and_then(|uid| self.docs.iter().position(|d| d.uid == uid)) {
+                    self.active = Some(i);
                 }
                 Err(EngineError::Internal { cmd: id.to_string(), msg })
             }
