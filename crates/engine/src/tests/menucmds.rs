@@ -3539,6 +3539,23 @@ fn ruler_guides_and_lock() {
     assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
 }
 
+#[test]
+fn invalid_guide_lock_parameters_keep_guides_selected() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let before_undo = s.doc().unwrap().history.undo.len();
+    for params in [json!({"locked": "false"}), json!({"locked": 1})] {
+        assert!(s.execute("view.guides.lock", &params).is_err(), "accepted {params}");
+        assert!(!s.guides_locked(), "locked guides for {params}");
+        assert_eq!(s.doc().unwrap().selection.guides, vec![0], "cleared selection for {params}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), before_undo, "recorded undo for {params}");
+    }
+    // Left out, or null as for every command, it toggles.
+    assert_eq!(s.execute("view.guides.lock", &json!(null)).unwrap(), json!({"locked": true}));
+    assert_eq!(s.execute("view.guides.lock", &json!({"locked": null})).unwrap(), json!({"locked": false}));
+}
+
 /// #1534: Lock Guides locks the paths made into guides too: they can't be selected (so neither
 /// moved, reshaped nor deleted), by a click, a marquee or Select All, and locking lets them go.
 #[test]
