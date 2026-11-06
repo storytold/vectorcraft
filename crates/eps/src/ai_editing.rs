@@ -100,6 +100,17 @@
 //!   instance with isolation, knockout or knockout shape of its own is written as its art). The
 //!   definitions are at most the reader's 4,096. In a symbol's art, an instance's matrix and
 //!   a gradient's take the art to the canvas's space turned y up about art space's origin there.
+//! - Art styles, as the reader reads them (`style.rs`, `read/ops.rs`): a path, compound path or
+//!   group with live effects is written as its drawn look (`u`, its vector art as its geometry
+//!   effects leave it, without shadows, glows or feathers, `U`, its transparency, `0 0 Xd`,
+//!   `6 () XW`), then the object itself on `%_` lines (its points painted
+//!   with nothing, or with its gradient fill; a group with its members) with its name and opacity
+//!   mask, then `1 (style) XW`. The styles are written in a non-printing block after the symbols
+//!   (`%AI9_BeginArtStyles`, each `/KnownStyle :` with its name and a filter tree: a chain of the
+//!   stack of fills and strokes with the contents among them, the effects and the blend filter). A
+//!   fill filter fills by the non-zero rule (`0 /Bool (UseEvenOdd)`), so a filled object that fills by
+//!   the even-odd rule is written as its drawn look. A style is written only when the reader reads it
+//!   back as the object's appearance.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
@@ -133,7 +144,9 @@
 //! as their filled outlines, several fills or strokes as a group of a path for each, freeform
 //! gradient swatches, gradient swatches of more than 256 stops, swatches of patterns written as
 //! tiles and the placement of pattern swatches that move, turn or scale their pattern, the opacity and blending modes of single fills and strokes, opacity masks on
-//! layers and opacity masks nested too deep, and live effects other than geometry effects left out.
+//! layers and opacity masks nested too deep, and, on objects written without an art style, live
+//! effects other than geometry effects left out; graphic styles, links to them and every art style
+//! on a large canvas are left out.
 //!
 //! The data streams hold the program compressed with Zstandard after `%AI24_ZStandard_Data`, with
 //! the version numbers of the newest files users sent ([`private_data`]).
@@ -210,11 +223,15 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
     }
+    // Artboards that don't fit on the canvas are written on a large canvas, at 1/scale.
+    let scale = canvas_scale(doc);
+    // The objects that may keep their effects in an art style, as they are before baking (not on
+    // a large canvas, whose scale the styles' strokes and effects would need).
+    let styled = writer::styled_objects(doc);
+    let graphic_styles = writer::has_graphic_styles(doc);
     // Live geometry effects as their result, as the PDF part draws them.
     let baked = baked(doc);
     let doc = baked.as_ref().unwrap_or(doc);
-    // Artboards that don't fit on the canvas are written on a large canvas, at 1/scale.
-    let scale = canvas_scale(doc);
     let reduced = (scale != 1.0).then(|| {
         let mut d = doc.clone();
         crate::import::scale_document(&mut d, 1.0 / scale, true);
@@ -243,6 +260,14 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     w.symbols_live = scale == 1.0;
     w.symbol_doc = symbol_doc;
     w.reserve_swatch_gradients();
+    if scale == 1.0 {
+        w.styled = styled;
+    } else if !styled.is_empty() {
+        w.warnings.push(writer::LARGE_CANVAS_STYLES.to_string());
+    }
+    if graphic_styles {
+        w.warnings.push(writer::GRAPHIC_STYLES.to_string());
+    }
     for layer in &doc.layers {
         w.layer(layer);
     }
@@ -266,6 +291,7 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     s.push_str("%%BeginProlog\n%%EndProlog\n%%BeginSetup\n");
     w.definitions(&mut s);
     w.symbol_definitions(&mut s);
+    w.art_styles(&mut s);
     s.push_str(&palette);
     w.symbol_list(&mut s);
     artboards(&mut s, doc, to_art, origin);

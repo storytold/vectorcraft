@@ -85,7 +85,15 @@ private editing data. VectorCraft:
   instances that scale their symbol more than 100 times and instances on the layers of a large canvas are written as their art, pattern fills in a
   symbol's art are written as their tiles cut to the shape, symbols past 4,096 are written only as their
   instances' art, and symbols' 9-slice guides, export types and dynamic type are left out, each with a
-  warning.
+  warning. Paths, compound paths and groups with live effects keep them as art styles: the drawn look, the object
+  itself and the style it names, for a fill and a stroke at most in solid colors or the object's gradient (a stroke
+  with its variable-width profile), filled by the non-zero rule, with Drop Shadow, Inner Glow, Outer Glow, Feather,
+  Round Corners, Scribble, Convert to Shape, Offset Path, Outline Object or Outline Stroke, and groups with Pathfinder ›
+  Add. Groups keep them when their members are paths, compound paths or such groups, without effects of their own; when the
+  group's effects change its members' outlines, a member's strokes are plain lines, and its fills are not pattern
+  fills written as tiles or gradients that fit their object. The look holds the object's vector art, without the shadow, glow or feather. Other objects are
+  written as their drawn look with a warning. Graphic styles and links to them are left out with a warning. No art style is written on a large
+  canvas.
   Point type, area type (with its rows, columns,
   gutters and first baseline, threaded frames included) and type on a path are written as text: a text object for
   each, naming its story in the text document, with the characters, fonts, sizes, leading, tracking, baseline shift,
@@ -100,7 +108,8 @@ private editing data. VectorCraft:
   color, each with a warning. Gradients that dither or mix their colors perceptually are written as classic
   gradients, and gradient stops linked to global process colors as their colors, each with a warning. The opacity
   and blending mode of single fills and strokes, opacity masks on layers, the placement of pattern swatches that
-  move, turn or scale their pattern, and effects other than geometry effects are left out.
+  move, turn or scale their pattern, and the effects of objects written without an art style, other than geometry
+  effects, are left out.
 - **Writes** a legacy `.ai` of version 7 (Save As › `ai` › Version: Legacy (version 7), `aiVersion: "7"`): the
   PostScript form, from the published *Adobe Illustrator File Format Specification* version 7.0
   ([PRONOM fmt/423](https://www.nationalarchives.gov.uk/PRONOM/fmt/423)), which apps reading `.ai` open with its

@@ -103,6 +103,22 @@ impl Writer<'_> {
         name
     }
 
+    /// The gradient definitions' state, for [`Self::gradient_rollback`]: their count, which ones the
+    /// art uses, and the next name's number.
+    pub(super) fn gradient_mark(&self) -> (usize, Vec<bool>, u64) {
+        (self.gradients.len(), self.gradients.iter().map(|d| d.used).collect(), self.next_gradient)
+    }
+
+    /// The gradient definitions as they were at `mark` ([`Self::gradient_mark`]).
+    pub(super) fn gradient_rollback(&mut self, mark: (usize, Vec<bool>, u64)) {
+        let (len, used, next) = mark;
+        self.gradients.truncate(len);
+        for (d, u) in self.gradients.iter_mut().zip(used) {
+            d.used = u;
+        }
+        self.next_gradient = next;
+    }
+
     /// `p` as the paint of a fill or stroke whose gradient is placed on `bounds`: a gradient is
     /// placed there (it then no longer depends on the shape it paints, which may be cut); one the
     /// data can't hold is its average color, with a warning.
@@ -222,24 +238,11 @@ impl Writer<'_> {
     /// last stop; a radial one's `… Bm` (the unit circle onto its extent ellipse).
     fn instance(&mut self, g: &GradientPaint, stroke: bool, clip: bool, path: &BezPath) {
         let Some(geom) = g.geom else { return };
-        let name = self.define_gradient(&g.gradient, g.swatch.as_deref());
         self.line(if stroke { "1 Bb" } else { "Bb" });
+        self.instance_head(g, clip, path);
         let m = self.grad_space;
         let u = geom.end - geom.start;
         let radial = g.gradient.kind == GradientKind::Radial;
-        let place = placement(&geom, radial, &(self.canvas * path.clone()), self.canvas);
-        if radial {
-            let c = m * geom.start;
-            let off = geom.focal.map_or(Vec2::ZERO, |f| m * f - c);
-            let (angle, fraction) = if off.hypot() > 1e-9 { place.focal } else { (0.0, 0.0) };
-            let off = if fraction > 0.0 { off } else { Vec2::ZERO };
-            ps::push_nums(&mut self.body, &[off.x, off.y, angle, fraction]);
-            self.line("Bh");
-        }
-        let _ = write!(self.body, "{} {} ", u8::from(!clip), ps::bytes(name.as_bytes()));
-        ps::push_nums(&mut self.body, &place.bg);
-        ps::push_nums(&mut self.body, &place.transform.as_coeffs());
-        self.line("1 Bg");
         // The unit vector along the gradient, and across it as long.
         let frame = |from: f64, to: f64| {
             let p = geom.start + u * from;
@@ -265,6 +268,28 @@ impl Writer<'_> {
             }
         }
         matrix(frame(last, last + CAP / len), "Bc");
+    }
+
+    /// A gradient instance's focal point (`Bh`, radial gradients only) and its `Bg` line, as
+    /// [`Self::instance`] writes them; also what a fill's art style holds after its `Bb`.
+    pub(super) fn instance_head(&mut self, g: &GradientPaint, clip: bool, path: &BezPath) {
+        let Some(geom) = g.geom else { return };
+        let name = self.define_gradient(&g.gradient, g.swatch.as_deref());
+        let m = self.grad_space;
+        let radial = g.gradient.kind == GradientKind::Radial;
+        let place = placement(&geom, radial, &(self.canvas * path.clone()), self.canvas);
+        if radial {
+            let c = m * geom.start;
+            let off = geom.focal.map_or(Vec2::ZERO, |f| m * f - c);
+            let (angle, fraction) = if off.hypot() > 1e-9 { place.focal } else { (0.0, 0.0) };
+            let off = if fraction > 0.0 { off } else { Vec2::ZERO };
+            ps::push_nums(&mut self.body, &[off.x, off.y, angle, fraction]);
+            self.line("Bh");
+        }
+        let _ = write!(self.body, "{} {} ", u8::from(!clip), ps::bytes(name.as_bytes()));
+        ps::push_nums(&mut self.body, &place.bg);
+        ps::push_nums(&mut self.body, &place.transform.as_coeffs());
+        self.line("1 Bg");
     }
 
     /// A gradient definition: `%AI5_BeginGradient: (name)`, `(name) type stops Bd` (type 0 linear,
@@ -390,9 +415,12 @@ impl Writer<'_> {
         self.line("n\n%_/ArtDictionary :\n%_1 /Bool (AIPattern_Editor_Backing_Tile_Rect) ,\n%_;\n%_");
         self.nest += 1;
         self.hidden += 1;
+        // The tile's effects are its own, not those of a drawn look that first uses it.
+        let in_look = std::mem::take(&mut self.in_look);
         for a in &def.art {
             self.node(a);
         }
+        self.in_look = in_look;
         self.hidden -= 1;
         self.nest -= 1;
         let art;

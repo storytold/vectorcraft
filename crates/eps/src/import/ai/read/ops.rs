@@ -1121,6 +1121,37 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle)
     Some(Appearance { items, effects: st.effects.clone(), contents_index: st.contents_index })
 }
 
+/// What the reader makes of art style `name` in `section` (the text between `%AI9_BeginArtStyles`
+/// and its end), for writers that check a style before they write it.
+#[derive(Clone, Debug)]
+pub(crate) struct StyleRead {
+    /// The style's appearance: a gradient fill is the object's own gradient.
+    pub appearance: Appearance,
+    /// An object other than type is read with it ([`crate::import::ai::style::ArtStyle::simple`]).
+    pub simple: bool,
+    /// It has Effect › Pathfinder effects, which only a group with no fills or strokes is read with.
+    pub pathfinder: bool,
+}
+
+/// Art style `name` of `section` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`],
+/// with a style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads
+/// it on objects other than type. `None` when the section doesn't define it, the reader doesn't read
+/// it, or it paints with a pattern, a brush or a gradient that isn't the object's own.
+pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&Paint>) -> Option<StyleRead> {
+    use crate::import::ai::style::StyleItem;
+    let mut st = crate::import::ai::style::art_styles(section).remove(name)?;
+    if st.items.iter().filter(|i| matches!(i, StyleItem::Gradient { .. })).count() == 1 {
+        let own = own_gradient?;
+        for item in &mut st.items {
+            if matches!(item, StyleItem::Gradient { .. }) {
+                *item = StyleItem::Fill(own.clone());
+            }
+        }
+    }
+    let appearance = appearance_from_art_style(&st)?;
+    Some(StyleRead { appearance, simple: st.simple, pathfinder: st.pathfinder })
+}
+
 /// A style's stroke as an appearance item (`None` for a fill).
 fn stroke_layer(item: &crate::import::ai::style::StyleItem) -> Option<AppearanceItem> {
     let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, brush } = item else { return None };

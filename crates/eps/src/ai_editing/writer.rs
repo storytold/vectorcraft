@@ -17,8 +17,13 @@ use crate::ps;
 
 mod images;
 mod paints;
+mod styles;
 mod symbols;
 mod texts;
+
+#[cfg(test)]
+pub(super) use styles::same_appearance;
+pub(super) use styles::{GRAPHIC_STYLES, LARGE_CANVAS_STYLES, has_graphic_styles, styled_objects};
 
 pub(super) use images::PAYLOAD;
 #[cfg(test)]
@@ -208,6 +213,14 @@ pub(super) struct Writer<'a> {
     symbol_scales: HashMap<String, f64>,
     /// The entries a symbol's dictionary adds to its art's dictionary, and the art's id.
     root_entries: Option<(vectorcraft_doc::NodeId, String)>,
+    /// The objects that may be written with an art style, as they were before baking, by id
+    /// ([`styles::styled_objects`]).
+    pub(super) styled: HashMap<NodeId, Arc<Node>>,
+    /// The art styles written ([`styles`]).
+    styles: styles::Styles,
+    /// An object's drawn look is being written: no object in it is written with a style, and its
+    /// effects are the style's.
+    in_look: bool,
 }
 
 impl<'a> Writer<'a> {
@@ -257,6 +270,9 @@ impl<'a> Writer<'a> {
             inner_scale: 1.0,
             symbol_scales: HashMap::new(),
             root_entries: None,
+            styled: HashMap::new(),
+            styles: styles::Styles::default(),
+            in_look: false,
         }
     }
 
@@ -445,6 +461,9 @@ impl<'a> Writer<'a> {
 
     /// Warn when `n` has effects the data leaves out.
     fn effects(&mut self, n: &Node) {
+        if self.in_look {
+            return;
+        }
         let items = n.appearance.items.iter().filter(|i| i.visible()).flat_map(|i| i.effects());
         if n.appearance.effects.iter().chain(items).any(|e| e.visible) {
             self.warn(EFFECTS);
@@ -458,6 +477,17 @@ impl<'a> Writer<'a> {
         }
         if self.in_symbol {
             self.wrote_fixed |= symbols::redrawn(n);
+        }
+        // On the layers, outside art cut to a clipping object: with its art style, when it has one.
+        if !self.in_look
+            && self.hidden == 0
+            && self.nest == 0
+            && self.clip.is_none()
+            && !self.in_symbol
+            && let Some(orig) = self.styled.get(&n.id).cloned()
+            && let Some(name) = self.object_style(n, &orig)
+        {
+            return self.styled_object(n, &orig, &name);
         }
         self.effects(n);
         self.state(n.locked, !n.visible);
