@@ -38,6 +38,39 @@ fn unfilled_interior_misses() {
     assert!(hit_test(&d, Point::new(50.5, 25.0), HitOptions::default()).is_some());
 }
 
+#[test]
+fn long_plain_stroke_hits_its_middle_and_curved_end() {
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut sp = vectorcraft_geom::SubPath::polyline(&(0..=4097).map(|i| Point::new(i as f64 * 10.0, 0.0)).collect::<Vec<_>>(), false);
+    sp.anchors[4096].h_out = Point::new(40960.0, 100.0);
+    sp.anchors[4097].h_in = Point::new(40970.0, 100.0);
+    sp.anchors.push(vectorcraft_geom::Anchor::corner(Point::new(40970.0, 100.0)));
+    sp.anchors.push(vectorcraft_geom::Anchor::corner(Point::new(0.0, 100.0)));
+    let path = vectorcraft_geom::PathData::single(sp);
+    let look = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    d.insert(Some(l), 0, Node::path(id, path, look)).unwrap();
+    let outline = HitOptions { outline: true, ..Default::default() };
+    for point in [Point::new(20485.0, 0.0), Point::new(40965.0, 75.0)] {
+        assert_eq!(hit_test(&d, point, HitOptions::default()).map(|h| h.kind), Some(HitKind::Stroke));
+        assert_eq!(hit_test(&d, point, outline).map(|h| h.kind), Some(HitKind::Outline));
+    }
+    assert!(hit_test(&d, Point::new(20485.0, 50.0), HitOptions::default()).is_none());
+}
+
+#[test]
+fn coincident_anchors_remain_hittable_as_an_outline() {
+    let mut d = Document::new(200.0, 200.0);
+    let id = d.alloc_id();
+    let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(50.0, 50.0); 2], false));
+    let look = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    d.insert(d.layers.first().map(|l| l.id), 0, Node::path(id, path, look)).unwrap();
+    let at = Point::new(50.0, 50.0);
+    assert_eq!(hit_test(&d, at, HitOptions::default()).map(|h| h.kind), Some(HitKind::Outline));
+    assert_eq!(hit_test(&d, at, HitOptions { outline: true, ..Default::default() }).map(|h| h.kind), Some(HitKind::Outline));
+}
+
 /// #1103: a marquee drawn over a background picks what is on it, not the background, whose
 /// outline it doesn't touch.
 #[test]

@@ -31,6 +31,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | A nearby hit on a plain long stroke or outline avoids assembling its whole path. A hit near the middle of a 200,000-anchor path took about 11–13 ms before and 1.0–1.4 ms after in paired runs on a busy Windows machine; a miss inside the path's box fell from 18.7 ms to 1.6 ms, while a distant miss was unchanged. Other stroke styles and fill hits keep their existing checks. Scores and estimates unchanged; idle performance budgets remain unverified. |
 | 2026-11-05 | minor | Translating a type object without changing its text or formatting reuses glyph geometry and expanded character-stroke outlines between frames. The text appears at its new position with unchanged pixels. Scaling the type, editing its content or formatting, or changing installed fonts rebuilds the geometry; scores and estimates unchanged. |
 | 2026-11-05 | minor | Moving a large selection reuses the object locations found during command validation. A 20,000-object nudge took 58.07 ms before and 51.26 ms after in paired median runs; object positions, selection, and undo behavior stay the same. Scores and estimates unchanged. |
 | 2026-11-05 | minor | Canvas: an image drawn larger than 1,024 pixels at the size it shows, with its colours made again (separated into ink planes, colorized or shown through Separations Preview), has them made only for the 1,024-pixel tiles in view, each kept for later frames (#4155). Zooming in to 50%, 100% and 200% on the file of #4155 went from 8.6–9.0 s to 0.78 s, 0.05 s and 0.05 s (measured, M3 Pro, one run each), with the same pixels. Scores and estimates unchanged. |
@@ -360,7 +361,7 @@ what keeps it from beta, not from alpha.
 | File formats | 75% | 15–30 | estimated | [file-format-parity.md](file-format-parity.md) |
 | Hardware (GPU, pen, touch, displays) | 35% | 25–45 | estimated | [hardware-parity.md](hardware-parity.md) |
 | Localization (the 12 key languages, equally weighted) | 74% | 50–85 | measured from catalogs | [localization-parity.md](localization-parity.md) |
-| Performance | ~60% | 15–25 | estimated (unverified budgets) | [gaps.md](gaps.md) |
+| Performance | ~60% | 15–25 | estimated (unverified budgets; measured long-path hits and large-selection nudges) | [gaps.md](gaps.md) |
 | Stability | ~60% | 30–50 | estimated | [gaps.md](gaps.md) |
 | Platforms (macOS, Windows x64/arm64, Linux, FreeBSD, web) | 80% | 15–25 | estimated | [gaps.md](gaps.md) |
 | Ecosystem and plug-ins (scripting, third-party plug-ins) | 15% | 30–60 | estimated | [gaps.md](gaps.md) |
