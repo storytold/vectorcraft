@@ -502,6 +502,32 @@ fn a_file_read_for_opening_has_its_links_read_and_its_type_laid_out() {
     }
 }
 
+/// Opening lays out each type object with the plans the objects before it left on the font's
+/// face: its bounds and baselines are those of a layout in a font database that holds no plans.
+#[test]
+fn type_read_for_opening_has_the_layout_of_a_font_database_with_no_plans() {
+    let dir = Folder::new("read-for-open-plans");
+    let mut s = session();
+    for (i, text) in ["AVATAR", "To Wa", "123 ...", "office", "\u{645}\u{631}\u{62d}\u{628}\u{627}"].iter().enumerate() {
+        s.execute("text.create", &json!({"x": 20, "y": 40 + i * 20, "text": text})).unwrap();
+    }
+    let doc_path = dir.file("type.vectorcraft");
+    save(&mut s, &doc_path);
+    let bytes = std::fs::read(&doc_path).unwrap();
+    let file = cmd::fileio::read_for_open(&doc_path, &bytes, Some(doc_path.clone()), &Value::Null, false, false).unwrap();
+    let new_db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let mut seen = 0;
+    file.document().walk(|node| {
+        if let NodeKind::Text(t) = &node.kind {
+            let fresh = vectorcraft_text::layout(&new_db, t);
+            assert_eq!(t.cached_bounds, Some(fresh.bounds), "{:?}", t.plain_text());
+            assert_eq!(t.cached_baselines, fresh.baselines(), "{:?}", t.plain_text());
+            seen += 1;
+        }
+    });
+    assert_eq!(seen, 5);
+}
+
 #[test]
 fn links_from_older_files_load_and_keep_their_pixels() {
     let dir = Folder::new("legacy");
