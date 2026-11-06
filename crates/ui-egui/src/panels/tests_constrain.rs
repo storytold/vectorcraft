@@ -296,3 +296,53 @@ fn the_link_is_a_preference_agents_can_read_and_set() {
     run(&mut app, "object.setBounds", json!({"height": 100, "reference": 4, "proportional": true}));
     assert_eq!(size(&app), (200.0, 100.0));
 }
+
+/// One Tab moves from a field to the next field: neither a field's label (its scrub zone) nor the
+/// W/H link between two fields is a tab stop of its own. In the Transform panel and the Properties
+/// panel the fields run X, W, Y, H (a grid, two to a row); in the Control bar X, Y, W, H.
+#[test]
+fn one_tab_moves_from_a_field_to_the_next() {
+    // From X (the selection's centre, 60 pt) the next field is W in the panels and Y in the bar.
+    for (name, draw, next) in [
+        ("Transform panel", transform::show as Draw, "width"),
+        ("Properties", properties::transform_section as Draw, "width"),
+        ("Control bar", crate::chrome::control_bar as Draw, "y"),
+    ] {
+        let mut app = rect_app();
+        tab_then_type(&mut app, draw, "60 pt", "200");
+        let st = app.session.active().unwrap();
+        let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
+        match next {
+            "width" => assert_eq!(size(&app), (200.0, 50.0), "{name}: Tab went from X to W"),
+            _ => assert_eq!((b.width().round(), b.y0.round()), (100.0, 175.0), "{name}: Tab went from X to Y"),
+        }
+    }
+    // In the Control bar the W/H link sits between W and H: Tab goes from W straight to H.
+    let mut app = rect_app();
+    tab_then_type(&mut app, crate::chrome::control_bar, "100 pt", "200");
+    assert_eq!(size(&app), (100.0, 200.0), "Control bar: Tab went from W to H");
+}
+
+/// Type `value` into the field of what `draw` shows that shows `field` after one Tab, and press
+/// Enter. The field the Tab moved to takes the value; the one pressed keeps its own.
+fn tab_then_type(app: &mut VectorcraftApp, draw: Draw, field: &str, value: &str) {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut time = 0.0;
+    let mut frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+        time += 1.0;
+        frame_raw(&ctx, app, egui::RawInput { events, time: Some(time), ..Default::default() }, draw)
+    };
+    frame(app, vec![]);
+    let shown = frame(app, vec![]);
+    let at = shown.iter().filter(|(s, _)| s == field).map(|(_, r)| r.center()).next().unwrap_or_else(|| panic!("no {field} field in {shown:?}"));
+    let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    let tab = Event::Key { key: Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    for events in [vec![Event::PointerMoved(at), button(at, true), button(at, false)], vec![], vec![tab], vec![]] {
+        frame(app, events);
+    }
+    let enter = Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    for events in [vec![Event::Text(value.into())], vec![enter], vec![]] {
+        frame(app, events);
+    }
+}
