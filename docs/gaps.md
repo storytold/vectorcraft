@@ -36,6 +36,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | Show Missing Links in View and the Links panel marks missing linked images and placed documents on the canvas; transient overlays stay out of artwork, export and undo history; command API controls and lists markers (#5547). Regression, visual and full CI checks passed; scores and estimates unchanged. |
 | 2026-11-05 | minor | G15: long open strokes with an undashed width profile are outlined near the view while keeping profile positions on the full path; a 200,000-segment outline took 59.95 ms before and 8.44 ms after in local median runs. Closed and dashed profile strokes remain whole; estimate unchanged. |
 | 2026-11-05 | minor | G15: Direct Selection reuses one document hit result when choosing the cursor over a path; a 200,000-anchor path's segment cursor took 58.15 ms before and 29.33 ms after in local median runs. Cursor behavior is unchanged; estimate unchanged. |
 | 2026-11-05 | minor | G15: Selection skips building corner and pie widgets when the pointer is well outside a large selection; empty-canvas hover with 20,000 selected paths took 28.72 ms before and 16.41 ms after in local median runs. Other cursor targets remain active; estimate unchanged. |

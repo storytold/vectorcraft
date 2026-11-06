@@ -538,6 +538,11 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
 /// The panel's flyout menu: the link commands for the selected rows, Select Linked / Embedded /
 /// Missing / Modified for the whole document, and the Show, Sort and thumbnail options.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let on = app.session.active().is_some_and(|st| st.show_missing_links);
+    if menu_item(ui, tl!("Show Missing Links"), app.session.active().is_some(), on) {
+        crate::menus::invoke(app, "view.showMissingLinks", json!({"on": !on}));
+    }
+    ui.separator();
     let o = options(ui.ctx());
     // The rows the panel shows (the menu opens from it).
     let list = pstate::<Cache>(ui.ctx(), "links-cache").list;

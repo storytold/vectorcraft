@@ -223,6 +223,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | Show Missing Links in View and the Links panel marks missing linked images and placed documents on the canvas; transient overlays stay out of artwork, export and undo history; command API controls and lists markers (#5547). Regression, visual and full CI checks passed; scores and estimates unchanged. |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-05 | minor | Progress log row for the Type Tools add-on's Release Type on a Path (#5532); headline numbers unchanged. |
 | 2026-11-03 | minor | Progress log row for the Type Tools add-on's Text Tweaker (#4924); headline numbers unchanged. |

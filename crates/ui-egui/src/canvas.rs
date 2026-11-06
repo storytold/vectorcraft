@@ -24,6 +24,7 @@ mod fill;
 mod grid;
 mod home;
 mod input;
+mod missing_links;
 mod outline;
 mod overlays;
 mod panes;
@@ -340,6 +341,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
+        }
+        if let Some(st) = app.session.active() {
+            missing_links::paint(st, &painter, &xf, &t);
         }
     }
     ime_geometry(app, ui.ctx(), &xf);

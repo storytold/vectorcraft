@@ -35,6 +35,12 @@ use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_do
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
+        cmd!(query "view.showMissingLinks", "Show Missing Links", ["View"], None,
+            "{on?: bool (default: toggle)} show non-printing red outlines and badges on missing linked images and placed documents in the active document; transient view state, no undo step → {on}",
+            has_doc, show_missing_links),
+        cmd!(query "links.marked", "Marked Missing Links", [], None,
+            "{} inspect missing links now; only visible image objects and placed documents are marked, and none when the toggle is off → {on, images: [{id, bounds: [x0, y0, x1, y1]}]}",
+            has_doc, marked),
         cmd!(
             query "links.check",
             "Check Links",
@@ -895,6 +901,7 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
     if !reads.is_empty() {
         s.edit("Update Links", |d, _| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, None)))?;
     }
+    clear_markers(s, &updated)?;
     Ok(json!({ "updated": updated, "missing": missing }))
 }
 
@@ -1015,6 +1022,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     }
     not_found.sort();
     not_found.dedup();
+    clear_markers(s, &relinked)?;
     let mut out = json!({ "relinked": relinked, "notFound": not_found });
     if copy_to.is_some() {
         out["copied"] = json!(copied);
@@ -1119,6 +1127,56 @@ pub(crate) fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option
         out.extend(g.ids.iter().map(|id| (*id, (status, found.clone(), preview))));
     }
     out
+}
+
+/// Missing, visible placed objects, using the same file resolution as the Links panel.
+/// Also used on the link watch worker, away from the UI thread.
+pub(crate) fn missing_markers(doc: &Document, path: Option<&str>) -> Vec<NodeId> {
+    groups(doc, None)
+        .iter()
+        .filter(|g| !g.ids.is_empty() && probe(g, path).0 == Status::Missing)
+        .flat_map(|g| g.ids.iter().copied())
+        .filter(|id| doc.is_visible(*id))
+        .collect()
+}
+
+fn show_missing_links(s: &mut Session, p: &Value) -> Result<Value> {
+    let st = s.doc_mut()?;
+    let on = super::switch_or(p, "on", !st.show_missing_links, "view.showMissingLinks")?;
+    // An explicit command answers immediately. Subsequent external changes are scanned by
+    // the existing link watch worker, even when the Links panel is closed.
+    if on {
+        st.missing_link_markers = Some((st.doc.clone(), missing_markers(&st.doc, st.path.as_deref())));
+    } else {
+        st.missing_link_markers = None;
+    }
+    st.show_missing_links = on;
+    Ok(json!({"on": on}))
+}
+
+fn marked(s: &mut Session, _: &Value) -> Result<Value> {
+    let st = s.doc_mut()?;
+    let ids = if st.show_missing_links { missing_markers(&st.doc, st.path.as_deref()) } else { vec![] };
+    let images: Vec<Value> = ids
+        .iter()
+        .filter_map(|id| {
+            let b = st.doc.node(*id)?.geometric_bounds()?;
+            Some(json!({"id": id.0, "bounds": [b.x0, b.y0, b.x1, b.y1]}))
+        })
+        .collect();
+    st.missing_link_markers = Some((st.doc.clone(), ids));
+    Ok(json!({"on": st.show_missing_links, "images": images}))
+}
+
+/// Successful repair clears its decoration even when the file's metadata is unchanged.
+fn clear_markers(s: &mut Session, repaired: &[u64]) -> Result<()> {
+    if !repaired.is_empty()
+        && let Some((_, ids)) = &mut s.doc_mut()?.missing_link_markers
+    {
+        let repaired: std::collections::HashSet<_> = repaired.iter().copied().collect();
+        ids.retain(|id| !repaired.contains(&id.0));
+    }
+    Ok(())
 }
 
 /// The format of the file image `im` of `d` shows: its link's extension, else its pixels' type.

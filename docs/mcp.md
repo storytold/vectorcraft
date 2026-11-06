@@ -14,6 +14,26 @@ It has two backends:
 With no flag, the server tries `127.0.0.1:7979` and falls back to headless. Logs go to stderr; stdout carries
 only protocol messages.
 
+## Missing-link canvas markers
+
+Use `run_command` (or its `command_run` alias) with these engine commands:
+
+```json
+{"command":"view.showMissingLinks","params":{"on":true}}
+{"command":"links.marked","params":{}}
+{"command":"view.showMissingLinks","params":{"on":false}}
+```
+
+`links.marked` refreshes file status and returns `{on, images: [{id, bounds: [x0, y0,
+x1, y1]}]}` for visible missing linked images and placed documents in the active document.
+When the toggle is off, `images` is empty; `links.list {show: "missing"}` still lists missing
+links independently. Neither command changes selection or undo history. The desktop canvas
+draws a red outline and badge, checks files in the background about every two seconds even
+with the Links panel closed, and removes markers after repair. The toggle is per open
+document and starts off on reopen. Markers are never saved as artwork, rendered into exports
+or printing, or exposed as selectable objects. Headless mode exposes the same state and
+queries; it has no canvas on which to draw decorations.
+
 ## Install and register
 
 From the repository root, with Rust 1.95+ and the platform's source-build prerequisites installed:
