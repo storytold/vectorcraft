@@ -244,6 +244,10 @@ impl FontFace {
         language: Option<&harfrust::Language>,
         features: &[harfrust::Feature],
     ) -> Arc<harfrust::ShapePlan> {
+        #[cfg(any(test, feature = "test-fonts"))]
+        if !crate::test_fonts::keeps_shape_plans() {
+            return Arc::new(harfrust::ShapePlan::new(shaper, direction, script, language, features));
+        }
         let key = harfrust::ShapePlanKey::new(script, direction).language(language).instance(self.instance.as_ref()).features(features);
         let kept = |plans: &[Arc<harfrust::ShapePlan>]| plans.iter().rev().find(|p| key.matches(p)).cloned();
         if let Some(plan) = kept(&self.plans.lock().unwrap_or_else(|e| e.into_inner())) {
