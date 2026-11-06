@@ -113,8 +113,8 @@ pub(super) fn warp_style(n: i64) -> Option<&'static str> {
 
 /// The Effect › Pathfinder effects by the `Command` number of their filter. `Command` 0 is Add
 /// (https://community.adobe.com/questions-652/liveeffect-xml-effect-is-added-under-the-object-795137);
-/// the numbers 1 to 10 are VectorCraft's own reader rules, learned from saved files, and 11 (Soft
-/// Mix) is VectorCraft's own reader rule. Trap (12) isn't read.
+/// the numbers 1 to 11 are VectorCraft's own reader rules, learned from saved files. Trap (12) isn't
+/// read.
 const PATHFINDER_COMMANDS: [&str; 12] = [
     "pathfinder.add",
     "pathfinder.intersect",
@@ -134,7 +134,8 @@ const PATHFINDER_COMMANDS: [&str; 12] = [
 /// each with the kind and the one value read: its Pathfinder Options, Soft Mix's mix and the Trap
 /// settings. Every operation needs each of them at this value, even where the operation doesn't use
 /// it, except that Soft Mix reads a `Mix` from 0.01 to 1 as its Mixing Rate (VectorCraft's own
-/// reading: the rate is `Mix` times 100, within the effect's 1 to 100).
+/// reader rule, learned from saved files: the rate is `Mix` times 100, within the effect's 1 to 100;
+/// a saved `Mix` outside that range keeps the drawn look).
 const PATHFINDER_OPTIONS: [(&str, Kind, f64); 12] = [
     ("ConvertCustom", Kind::Bool, 1.0),
     ("ExtractUnpainted", Kind::Bool, 1.0),
