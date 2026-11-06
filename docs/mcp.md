@@ -5019,8 +5019,8 @@ one undo step. A caret move or a click ends the story selection. Switching to th
 and switching back to a Type tool restores it. `appearance.copyFrom` and `paint.sampleColor` then apply to the text of
 every frame as one undo step, and `appearance.copyFrom` leaves out a frame that is its `source`. While the story stays
 selected, its frames are the ones threaded with the edited frame at that moment: a frame that `text.thread.add` adds is
-highlighted and takes the edit, and a frame that leaves the thread is not highlighted and keeps its text. Once a thread
-is removed, typing replaces the text of the edited frame only.
+highlighted and takes the edit, and a frame that leaves the thread is not highlighted and keeps its text. The story
+stays selected when a frame added before the edited frame takes all of its text. Once a thread is removed, typing replaces the text of the edited frame only.
 
 ```json
 {"name":"press_key","arguments":{"key":"A","mods":{"cmd":true}}}

@@ -1757,6 +1757,84 @@ fn a_frame_threaded_into_the_selected_story_is_highlighted_and_takes_the_edit() 
     }
 }
 
+/// After Select All in the story of [`threaded_story_edited_in_its_second_frame`], a frame threaded
+/// in before the edited one takes the whole story, and the edited frame holds no text.
+fn selected_story_moved_into_a_new_frame(s: &mut Session, a: NodeId, b: NodeId) -> NodeId {
+    let rect = [THREADED_AT[0], THREADED_AT[1], 400.0, 600.0];
+    let c = NodeId(s.execute("text.thread.add", &json!({"from": a.0, "before": true, "rect": rect})).unwrap()["id"].as_u64().unwrap());
+    assert!(obj(s, a).plain_text().is_empty() && obj(s, b).plain_text().is_empty(), "the new frame holds the whole story");
+    assert!(!obj(s, c).plain_text().is_empty());
+    c
+}
+
+#[test]
+fn a_story_that_left_the_edited_frame_is_highlighted_and_typing_replaces_it() {
+    for through_eyedropper in [false, true] {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        s.execute("select.all", &json!({})).unwrap();
+        if through_eyedropper {
+            s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        }
+        let c = selected_story_moved_into_a_new_frame(&mut s, a, b);
+        assert!(third_frame_highlighted(&mut s), "through the Eyedropper: {through_eyedropper}");
+        if through_eyedropper {
+            s.select_tool("type", ViewInfo::default()).unwrap();
+            assert!(third_frame_highlighted(&mut s), "back in the Type tool");
+        }
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        assert_eq!([a, b, c].map(|f| obj(&s, f).plain_text()).concat(), "x", "through the Eyedropper: {through_eyedropper}");
+    }
+}
+
+#[test]
+fn delete_replaces_a_story_that_left_the_edited_frame() {
+    for k in [ToolKey::Backspace, ToolKey::Delete] {
+        let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+        s.execute("select.all", &json!({})).unwrap();
+        let c = selected_story_moved_into_a_new_frame(&mut s, a, b);
+        let steps = undo_labels(&s).len();
+        key(&mut s, k, Mods::default());
+        key(&mut s, ToolKey::Escape, Mods::default());
+        assert_eq!([a, b, c].map(|f| obj(&s, f).plain_text()).concat(), "", "{k:?} empties every frame");
+        assert_eq!(undo_labels(&s).len(), steps + 1, "{k:?}: one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!([a, b, c].map(|f| obj(&s, f).plain_text()).concat(), story);
+    }
+}
+
+#[test]
+fn delete_in_a_story_that_holds_no_text_records_no_undo_step() {
+    for k in [ToolKey::Backspace, ToolKey::Delete] {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        s.execute("select.all", &json!({})).unwrap();
+        key(&mut s, ToolKey::Delete, Mods::default());
+        s.execute("select.all", &json!({})).unwrap();
+        assert_eq!(s.tool_options()["story"], json!([a.0, b.0]));
+        let steps = undo_labels(&s).len();
+        key(&mut s, k, Mods::default());
+        key(&mut s, ToolKey::Escape, Mods::default());
+        assert_eq!(undo_labels(&s).len(), steps, "{k:?}");
+    }
+}
+
+#[test]
+fn a_type_step_keeps_a_story_that_left_the_edited_frame_selected() {
+    let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let c = selected_story_moved_into_a_new_frame(&mut s, a, b);
+    // Alt+Right steps the tracking of the selected text, not the kerning at a caret.
+    key(&mut s, ToolKey::Right, Mods { alt: true, ..Mods::default() });
+    assert!(obj(&s, c).runs.iter().all(|r| r.style.tracking > 0.0), "every character of the story takes the step");
+    // A key that does nothing leaves it selected as well.
+    key(&mut s, ToolKey::BracketLeft, Mods::default());
+    assert!(third_frame_highlighted(&mut s));
+    // The story stays the target of a fill and of a switch to the Eyedropper.
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    assert!(all_red(&s, c), "the fill reaches the story");
+    s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+    assert!(third_frame_highlighted(&mut s), "the Eyedropper keeps the story");
+}
+
 #[test]
 fn a_frame_that_left_the_selected_story_is_not_highlighted_and_leaves_the_edit() {
     for mods in eyedropper_picks() {
