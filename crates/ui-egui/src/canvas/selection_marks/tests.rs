@@ -335,6 +335,22 @@ fn a_long_pan_at_high_zoom_builds_the_marks_again_and_stays_exact() {
     assert!(marks.builds > builds, "a pan past MAX_PAN builds the marks again");
 }
 
+/// Marks land exactly where the rest of the canvas puts a point, also at the canvas's far edge at
+/// the highest zoom.
+#[test]
+fn marks_are_placed_exactly_where_the_view_puts_a_point() {
+    let far = vectorcraft_doc::MAX_COORD - 1.0;
+    for (center, zoom, rot) in [(VIEW, 1.0, 0.0), (VIEW, 2.37, 30.0), ((far, far), 640.0, 0.0), ((far, -far), 640.0, 30.0)] {
+        let view = xf(zoom, center, rot);
+        let map = ViewMap::new(&view);
+        for i in 0..2_000 {
+            let t = f64::from(i) / 7.0;
+            let p = Point::new(center.0 + t.sin() * 0.3, center.1 + t.cos() * 0.2);
+            assert_eq!(map.to_screen(p), view.to_screen(p), "{p:?} at zoom {zoom}, rotation {rot}");
+        }
+    }
+}
+
 #[test]
 fn an_idle_frame_draws_the_mesh_it_joined() {
     let (app, _) = scene();

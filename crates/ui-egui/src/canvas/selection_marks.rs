@@ -69,38 +69,48 @@ pub(super) struct MarkOptions<'a> {
     pub all_handles: bool,
 }
 
-/// [`Xf`] with its rotation worked out, split into a linear part and an offset.
+/// A view's position: the document point at the middle of the canvas, and that middle on screen.
+#[derive(Clone, Copy, PartialEq)]
+struct ViewAt {
+    origin: Pos2,
+    center: Point,
+}
+
+/// [`Xf`] with its rotation worked out.
 struct ViewMap {
     sin: f64,
     cos: f64,
     zoom: f64,
-    origin: Pos2,
-    center: [f64; 2],
-    offset: [f64; 2],
+    at: ViewAt,
 }
 
 impl ViewMap {
     fn new(xf: &Xf) -> Self {
         let (sin, cos) = xf.rot.sin_cos();
-        let origin = xf.rect.center();
-        let mut map = Self { sin, cos, zoom: xf.zoom, origin, center: [0.0; 2], offset: [0.0; 2] };
-        map.center = map.view(xf.center);
-        map.offset = [f64::from(origin.x) - map.center[0], f64::from(origin.y) - map.center[1]];
-        map
+        Self { sin, cos, zoom: xf.zoom, at: ViewAt { origin: xf.rect.center(), center: xf.center } }
     }
 
-    /// `p` scaled and rotated by the view, without its position.
-    fn view(&self, p: Point) -> [f64; 2] {
-        let (x, y) = (p.x * self.zoom, p.y * self.zoom);
+    /// A distance in the document, scaled and rotated by the view.
+    fn turned(&self, dx: f64, dy: f64) -> [f64; 2] {
+        let (x, y) = (dx * self.zoom, dy * self.zoom);
         [x * self.cos - y * self.sin, x * self.sin + y * self.cos]
     }
 
-    fn screen(&self, v: [f64; 2]) -> Pos2 {
-        pos2(self.origin.x + (v[0] - self.center[0]) as f32, self.origin.y + (v[1] - self.center[1]) as f32)
+    /// The same result as [`Xf::to_screen`].
+    fn to_screen(&self, p: Point) -> Pos2 {
+        let [x, y] = self.turned(p.x - self.at.center.x, p.y - self.at.center.y);
+        pos2(self.at.origin.x + x as f32, self.at.origin.y + y as f32)
     }
 
-    fn to_screen(&self, p: Point) -> Pos2 {
-        self.screen(self.view(p))
+    /// How far on screen a point moves between the view position `from` and this one.
+    fn moved_from(&self, from: ViewAt) -> [f64; 2] {
+        let [x, y] = self.turned(from.center.x - self.at.center.x, from.center.y - self.at.center.y);
+        [x + f64::from(self.at.origin.x - from.origin.x), y + f64::from(self.at.origin.y - from.origin.y)]
+    }
+
+    fn moved_vec(&self, from: ViewAt) -> Vec2 {
+        let [x, y] = self.moved_from(from);
+        vec2(x as f32, y as f32)
     }
 }
 
@@ -122,13 +132,13 @@ struct RigidPiece {
 
 /// A direction handle in a [`Mark::Handles`]: the line from its anchor and the dot at its end.
 struct HandleLine {
-    from: [f64; 2],
-    to: [f64; 2],
+    from: Point,
+    to: Point,
     /// Whether the line is, or is nearly, level or upright. Its triangles then move only by whole
     /// pixels, and any other move draws it again.
     rounded: bool,
-    /// The offset its triangles were drawn for.
-    at: [f64; 2],
+    /// The view position its triangles were drawn for.
+    at: ViewAt,
     /// Its triangles, from the first time it is on screen.
     span: Option<Span>,
 }
@@ -140,10 +150,10 @@ enum Mark {
     Rigid { pieces: Vec<RigidPiece>, mesh: Mesh, points: usize },
     /// Direction handles of one color. `mesh` holds the triangles of those that have been on screen.
     Handles { color: Color32, lines: Vec<HandleLine>, mesh: Mesh },
-    /// Anchor squares in one style, at positions from [`ViewMap::view`].
-    Squares { color: Color32, filled: bool, size: f32, at: Vec<[f64; 2]> },
+    /// Anchor squares in one style, at these document points.
+    Squares { color: Color32, filled: bool, size: f32, at: Vec<Point> },
     /// A line that is, or is nearly, level or upright: the tessellator rounds those to whole pixels.
-    Segment { a: [f64; 2], b: [f64; 2], stroke: Stroke },
+    Segment { a: Point, b: Point, stroke: Stroke },
 }
 
 impl Mark {
@@ -184,9 +194,8 @@ impl<'a> MarkList<'a> {
 
     /// A direction handle: its line from `from` and the dot at `to`.
     fn handle(&mut self, from: Point, to: Point, color: Color32) {
-        let (a, b) = (self.map.view(from), self.map.view(to));
-        let rounded = is_rounded_line(self.map.screen(a), self.map.screen(b));
-        let line = HandleLine { from: a, to: b, rounded, at: [0.0; 2], span: None };
+        let rounded = is_rounded_line(self.map.to_screen(from), self.map.to_screen(to));
+        let line = HandleLine { from, to, rounded, at: self.map.at, span: None };
         if let Some(Mark::Handles { color: c, lines, .. }) = self.marks.last_mut()
             && *c == color
         {
@@ -203,21 +212,19 @@ impl<'a> MarkList<'a> {
     }
 
     fn square(&mut self, p: Point, color: Color32, filled: bool, size: f32) {
-        let v = self.map.view(p);
         if let Some(Mark::Squares { color: c, filled: f, size: s, at }) = self.marks.last_mut()
             && (*c, *f, *s) == (color, filled, size)
         {
-            at.push(v);
+            at.push(p);
         } else {
-            self.marks.push(Mark::Squares { color, filled, size, at: vec![v] });
+            self.marks.push(Mark::Squares { color, filled, size, at: vec![p] });
         }
     }
 
     fn line(&mut self, from: Point, to: Point, stroke: Stroke) {
-        let (a, b) = (self.map.view(from), self.map.view(to));
-        let (sa, sb) = (self.map.screen(a), self.map.screen(b));
+        let (sa, sb) = (self.map.to_screen(from), self.map.to_screen(to));
         if is_rounded_line(sa, sb) {
-            self.marks.push(Mark::Segment { a, b, stroke });
+            self.marks.push(Mark::Segment { a: from, b: to, stroke });
         } else {
             self.rigid(Shape::line_segment([sa, sb], stroke));
         }
@@ -238,8 +245,8 @@ struct ObjectMarks {
     partial: Option<BTreeSet<AnchorRef>>,
     /// The document and revision, for an object that measures symbols' art.
     symbols: Option<(u64, u64)>,
-    /// [`ViewMap::offset`] when the marks were built.
-    base: [f64; 2],
+    /// The view position when the marks were built.
+    base: ViewAt,
     marks: Vec<Mark>,
     handles: Vec<Mark>,
     /// The anchors whose handles `handles` shows.
@@ -249,12 +256,13 @@ struct ObjectMarks {
 
 impl ObjectMarks {
     fn current(&self, node: &Arc<Node>, color: Color32, partial: Option<&BTreeSet<AnchorRef>>, source: (u64, u64), map: &ViewMap) -> bool {
+        let [x, y] = map.moved_from(self.base);
         Weak::as_ptr(&self.node) == Arc::as_ptr(node)
             && self.color == color
             && self.partial.as_ref() == partial
             && self.symbols.is_none_or(|s| s == source)
-            && (map.offset[0] - self.base[0]).abs() <= MAX_PAN
-            && (map.offset[1] - self.base[1]).abs() <= MAX_PAN
+            && x.abs() <= MAX_PAN
+            && y.abs() <= MAX_PAN
     }
 }
 
@@ -369,8 +377,8 @@ fn drawn_span(mesh: &mut Mesh, draw: impl FnOnce(&mut Mesh)) -> Span {
 }
 
 impl Composer<'_> {
-    fn marks(&mut self, marks: &mut [Mark], base: [f64; 2]) {
-        let delta = vec2((self.map.offset[0] - base[0]) as f32, (self.map.offset[1] - base[1]) as f32);
+    fn marks(&mut self, marks: &mut [Mark], base: ViewAt) {
+        let delta = self.map.moved_vec(base);
         let margin = 2.0 / self.pixels_per_point;
         for mark in marks {
             match mark {
@@ -388,7 +396,7 @@ impl Composer<'_> {
                 Mark::Handles { color, lines, mesh } => self.handles(*color, lines, mesh),
                 Mark::Squares { color, filled, size, at } => self.squares(*color, *filled, *size, at),
                 Mark::Segment { a, b, stroke } => {
-                    let points = [self.map.screen(*a), self.map.screen(*b)];
+                    let points = [self.map.to_screen(*a), self.map.to_screen(*b)];
                     self.tessellator.tessellate_line_segment(points, *stroke, &mut self.out);
                 }
             }
@@ -441,11 +449,11 @@ impl Composer<'_> {
         let stroke = Stroke::new(1.0, color);
         let reach = HANDLE_REACH + self.look.grow.max(0.0) / 2.0;
         for line in lines {
-            let (from, to) = (self.map.screen(line.from), self.map.screen(line.to));
+            let (from, to) = (self.map.to_screen(line.from), self.map.to_screen(line.to));
             if !egui::Rect::from_two_pos(from, to).expand(reach).intersects(self.clip) {
                 continue;
             }
-            let moved = vec2((self.map.offset[0] - line.at[0]) as f32, (self.map.offset[1] - line.at[1]) as f32);
+            let moved = self.map.moved_vec(line.at);
             let whole_pixels = (moved * self.pixels_per_point).round() == moved * self.pixels_per_point;
             let keeper = &mut self.keeper;
             let mut draw = |mesh: &mut Mesh| {
@@ -458,19 +466,19 @@ impl Composer<'_> {
                 None => {
                     let span = drawn_span(mesh, draw);
                     stamp_span(&mut self.out, mesh, &span, Vec2::ZERO);
-                    line.at = self.map.offset;
+                    line.at = self.map.at;
                     line.span = Some(span);
                 }
             }
         }
     }
 
-    fn squares(&mut self, color: Color32, filled: bool, size: f32, at: &[[f64; 2]]) {
+    fn squares(&mut self, color: Color32, filled: bool, size: f32, at: &[Point]) {
         let stamps = self.rounds_rects && size > self.thin;
         let mut template = None;
         let mut last = None;
-        for v in at {
-            let rect = egui::Rect::from_center_size(self.map.screen(*v), vec2(size, size));
+        for p in at {
+            let rect = egui::Rect::from_center_size(self.map.to_screen(*p), vec2(size, size));
             if !rect.intersects(self.clip) {
                 continue;
             }
@@ -526,7 +534,7 @@ impl Composer<'_> {
 /// What the frame's mesh was joined for.
 #[derive(PartialEq)]
 struct Shown {
-    offset: [f64; 2],
+    at: ViewAt,
     clip: egui::Rect,
     all_handles: bool,
 }
@@ -609,7 +617,7 @@ impl SelectionMarks {
             }
         }
         self.objects.retain(|_, entry| entry.seen == pass);
-        let shown = Shown { offset: map.offset, clip: p.clip_rect(), all_handles: options.all_handles };
+        let shown = Shown { at: map.at, clip: p.clip_rect(), all_handles: options.all_handles };
         if changed || self.shown.as_ref() != Some(&shown) || self.order != objects {
             self.order.clear();
             self.order.extend_from_slice(objects);
@@ -744,7 +752,7 @@ fn key_marks(node: &Arc<Node>, color: Color32, source: (u64, u64), xf: &Xf, map:
         color,
         partial: None,
         symbols: uses_symbols(node).then_some(source),
-        base: map.offset,
+        base: map.at,
         marks: list.marks,
         handles: vec![],
         with_handles: 0,
@@ -786,18 +794,18 @@ fn add_marks(p: &egui::Painter, map: &ViewMap, look: HandleLook, marks: Vec<Mark
             }
             Mark::Handles { color, lines, .. } => {
                 for line in lines {
-                    let (from, to) = (map.screen(line.from), map.screen(line.to));
+                    let (from, to) = (map.to_screen(line.from), map.to_screen(line.to));
                     p.line_segment([from, to], Stroke::new(1.0, color));
                     look.draw(p, to, color);
                 }
             }
             Mark::Squares { color, filled, size, at } => {
-                for v in at {
-                    anchor_square(p, map.screen(v), color, filled, size);
+                for point in at {
+                    anchor_square(p, map.to_screen(point), color, filled, size);
                 }
             }
             Mark::Segment { a, b, stroke } => {
-                p.line_segment([map.screen(a), map.screen(b)], stroke);
+                p.line_segment([map.to_screen(a), map.to_screen(b)], stroke);
             }
         }
     }
@@ -916,7 +924,7 @@ fn object_marks(
         color,
         partial: partial.cloned(),
         symbols: uses_symbols(n).then_some(source),
-        base: map.offset,
+        base: map.at,
         marks: marks.marks,
         handles: handles.marks,
         with_handles,
