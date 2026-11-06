@@ -11,6 +11,7 @@ pub mod action_batch;
 pub mod action_new;
 pub mod action_playback;
 pub mod action_set_options;
+pub mod action_stop;
 pub mod artboard_options;
 pub mod blend_options;
 mod brush_art_options;
@@ -371,6 +372,8 @@ registry! {
     ActionSetOptions: [action_set_options::KIND] => action_set_options::SPEC,
     ActionNew: [action_new::KIND] => action_new::SPEC,
     ActionPlayback: [action_playback::KIND] => action_playback::SPEC,
+    ActionStopRecord: [action_stop::RECORD_KIND] => action_stop::RECORD_SPEC,
+    ActionStopMessage: [action_stop::MESSAGE_KIND] => action_stop::MESSAGE_SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,

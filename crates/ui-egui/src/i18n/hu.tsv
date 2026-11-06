@@ -5774,6 +5774,18 @@ axis	Y Axis	Y tengely
 	Action Options…	Művelet beállításai…
 	Action Options	Művelet beállításai
 	Playback Options…	Lejátszási beállítások…
+	Insert Stop…	Megállás beszúrása…
+	Insert Stop	Megállás beszúrása
+	Record Stop	Megállás rögzítése
+	Allow Continue	Folytatás engedélyezése
+	Continue	Folytatás
+	Continue Action	Művelet folytatása
+	Press Play Current Selection in the Actions panel to go on.	A folytatáshoz nyomja meg a Műveletek panelen a Kijelölt művelet lejátszása gombot.
+	Stop: {message}	Megállás: {message}
+@msg	no action is waiting at a stop	egyetlen művelet sem várakozik megállásnál
+@msg	message must be text	message: szöveg kell
+@msg	allowContinue must be true or false	allowContinue: true vagy false kell
+@msg	Batch cannot play an action with a stop	A kötegelt feldolgozás nem játszhat le megállást tartalmazó műveletet
 	Playback Options	Lejátszási beállítások
 	Accelerated	Gyorsított
 	Step by Step	Lépésenként

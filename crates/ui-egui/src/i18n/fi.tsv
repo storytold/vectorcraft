@@ -5821,6 +5821,18 @@ axis	Y Axis	Y-akseli
 	Action Options…	Toiminnon asetukset…
 	Action Options	Toiminnon asetukset
 	Playback Options…	Toistoasetukset…
+	Insert Stop…	Lisää pysäytys…
+	Insert Stop	Lisää pysäytys
+	Record Stop	Nauhoita pysäytys
+	Allow Continue	Salli jatkaminen
+	Continue	Jatka
+	Continue Action	Jatka toimintoa
+	Press Play Current Selection in the Actions panel to go on.	Jatka valitsemalla Toiminnot-paneelista Toista nykyinen valinta.
+	Stop: {message}	Pysäytys: {message}
+@msg	no action is waiting at a stop	mikään toiminto ei odota pysäytyksessä
+@msg	message must be text	message on oltava tekstiä
+@msg	allowContinue must be true or false	allowContinue on oltava true tai false
+@msg	Batch cannot play an action with a stop	Erä ei voi toistaa toimintoa, jossa on pysäytys
 	Playback Options	Toistoasetukset
 	Accelerated	Nopeutettu
 	Step by Step	Vaihe kerrallaan

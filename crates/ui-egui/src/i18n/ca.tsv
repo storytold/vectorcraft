@@ -3799,6 +3799,18 @@ digits	Malayalam	Malaiàlam
 	Action Options…	Opcions de l’acció…
 	Action Options	Opcions de l’acció
 	Playback Options…	Opcions de reproducció…
+	Insert Stop…	Insereix una aturada…
+	Insert Stop	Insereix una aturada
+	Record Stop	Enregistra una aturada
+	Allow Continue	Permet continuar
+	Continue	Continua
+	Continue Action	Continua l’acció
+	Press Play Current Selection in the Actions panel to go on.	Per continuar, premeu «Reprodueix la selecció actual» al tauler Accions.
+	Stop: {message}	Aturada: {message}
+@msg	no action is waiting at a stop	cap acció no espera en una aturada
+@msg	message must be text	message ha de ser text
+@msg	allowContinue must be true or false	allowContinue ha de ser true o false
+@msg	Batch cannot play an action with a stop	Lot no pot reproduir una acció amb una aturada
 	Playback Options	Opcions de reproducció
 	Accelerated	Accelerada
 	Step by Step	Pas a pas

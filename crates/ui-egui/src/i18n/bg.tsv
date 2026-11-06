@@ -5675,6 +5675,18 @@ axis	Y Axis	Y ос
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
 	Playback Options…	Опции за възпроизвеждане…
+	Insert Stop…	Вмъкване на спиране…
+	Insert Stop	Вмъкване на спиране
+	Record Stop	Записване на спиране
+	Allow Continue	Разрешаване на продължаване
+	Continue	Продължаване
+	Continue Action	Продължаване на действието
+	Press Play Current Selection in the Actions panel to go on.	За да продължите, натиснете „Изпълнение на текущия избор“ в панела „Действия“.
+	Stop: {message}	Спиране: {message}
+@msg	no action is waiting at a stop	няма действие, което чака при спиране
+@msg	message must be text	message трябва да бъде текст
+@msg	allowContinue must be true or false	allowContinue трябва да бъде true или false
+@msg	Batch cannot play an action with a stop	Пакет не може да изпълни действие със спиране
 	Playback Options	Опции за възпроизвеждане
 	Accelerated	Ускорено
 	Step by Step	Стъпка по стъпка

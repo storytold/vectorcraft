@@ -5706,6 +5706,18 @@ axis	Y Axis	Eixo Y
 	Action Options…	Opções da Ação…
 	Action Options	Opções da Ação
 	Playback Options…	Opções de Reprodução…
+	Insert Stop…	Inserir Parada…
+	Insert Stop	Inserir Parada
+	Record Stop	Gravar Parada
+	Allow Continue	Permitir Continuar
+	Continue	Continuar
+	Continue Action	Continuar Ação
+	Press Play Current Selection in the Actions panel to go on.	Para continuar, pressione Reproduzir Seleção Atual no painel Ações.
+	Stop: {message}	Parada: {message}
+@msg	no action is waiting at a stop	nenhuma ação está aguardando em uma parada
+@msg	message must be text	message deve ser texto
+@msg	allowContinue must be true or false	allowContinue deve ser true ou false
+@msg	Batch cannot play an action with a stop	Lote não pode reproduzir uma ação com uma parada
 	Playback Options	Opções de Reprodução
 	Accelerated	Acelerada
 	Step by Step	Passo a Passo

@@ -23,6 +23,9 @@ pub fn open(app: &mut VectorcraftApp, set: usize, action: usize) -> Result<Value
     if a.steps.iter().enumerate().all(|(i, _)| a.excluded_steps.contains(&i)) {
         return Err("the action has no included steps".into());
     }
+    if crate::panels::actions::has_stop(&a.included_commands()) {
+        return Err("Batch cannot play an action with a stop".into());
+    }
     let name = a.name.clone();
     app.ui.dialog = Some(Dialog::new(KIND, initial_fields(set, action, &name)));
     Ok(Value::Null)
@@ -99,6 +102,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let commands = a.included_commands();
     if commands.is_empty() {
         return Err("the action has no included steps".into());
+    }
+    if crate::panels::actions::has_stop(&commands) {
+        return Err("Batch cannot play an action with a stop".into());
     }
     let source = d.str("source");
     if source == "folder" && d.str("folder").trim().is_empty() {

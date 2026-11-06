@@ -5748,6 +5748,18 @@ axis	Y Axis	Y ekseni
 	Action Options…	Eylem Seçenekleri…
 	Action Options	Eylem Seçenekleri
 	Playback Options…	Oynatma Seçenekleri…
+	Insert Stop…	Durak Ekle…
+	Insert Stop	Durak Ekle
+	Record Stop	Durak Kaydet
+	Allow Continue	Devam Etmeye İzin Ver
+	Continue	Devam Et
+	Continue Action	Eyleme Devam Et
+	Press Play Current Selection in the Actions panel to go on.	Devam etmek için Eylemler panelinde Geçerli Seçimi Oynat'a basın.
+	Stop: {message}	Durak: {message}
+@msg	no action is waiting at a stop	durakta bekleyen eylem yok
+@msg	message must be text	"message" metin olmalıdır
+@msg	allowContinue must be true or false	"allowContinue" true veya false olmalıdır
+@msg	Batch cannot play an action with a stop	Toplu işlem durak içeren bir eylemi oynatamaz
 	Playback Options	Oynatma Seçenekleri
 	Accelerated	Hızlandırılmış
 	Step by Step	Adım Adım

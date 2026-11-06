@@ -1,12 +1,14 @@
 //! Action set files: the Actions panel menu's Save Actions… and Load Actions….
 //!
-//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1 or 2, "name",
+//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1, 2 or 3, "name",
 //! "actions": [{"name", "steps": [{"command", "params", "excluded"?}], "key"?, "color"?}]}`. Each step is a
-//! command id and its params, as `command.batch` takes them. `key` is the action's function key
+//! command id and its params, as `command.batch` takes them, or a stop: the command `action.stop`
+//! with `{"message", "allowContinue"}`. `key` is the action's function key
 //! (`{"key": 1 to 15, "cmd", "shift"}`) and `color` its Button Mode color; an action without them,
 //! or with a value that is not one, has none. `excluded: true` keeps a step but skips it during
 //! playback. Sets with exclusions use version 2 so older builds refuse them rather than replay
-//! excluded steps. Sets without exclusions use version 1, and earlier version 1 files still work.
+//! excluded steps, and sets with stops use version 3 so older builds refuse them rather than fail
+//! at a stop. Other sets use version 1, and earlier version 1 and 2 files still work.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -67,6 +69,19 @@ fn is_false(value: &bool) -> bool {
     !value
 }
 
+/// The params of the stops in a step: a stop's own, or those of the stops a `command.batch` step
+/// holds, which playback runs as its own steps.
+fn stops_in<'a>(command: &str, params: &'a Value) -> Vec<&'a Value> {
+    if command == super::STOP_STEP {
+        return vec![params];
+    }
+    if command != "command.batch" {
+        return vec![];
+    }
+    let steps = params.get("commands").and_then(Value::as_array).into_iter().flatten();
+    steps.filter(|step| super::is_stop(step)).map(|step| step.get("params").unwrap_or(&Value::Null)).collect()
+}
+
 /// `set` as the text of an action set file.
 pub fn write_set(set: &ActionSet) -> String {
     let actions = set
@@ -84,7 +99,12 @@ pub fn write_set(set: &ActionSet) -> String {
             color: a.color.clone(),
         })
         .collect();
-    let version = if set.actions.iter().any(|a| !a.excluded_steps.is_empty()) { 2 } else { 1 };
+    let has_stop = set.actions.iter().flat_map(|a| &a.steps).any(|(command, params)| !stops_in(command, params).is_empty());
+    let version = match (has_stop, set.actions.iter().any(|a| !a.excluded_steps.is_empty())) {
+        (true, _) => 3,
+        (false, true) => 2,
+        (false, false) => 1,
+    };
     let file = SetFile { format: ACTIONS_EXT.into(), version, name: set.name.clone(), actions };
     serde_json::to_string_pretty(&file).unwrap_or_default()
 }
@@ -98,7 +118,7 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     if f.format != ACTIONS_EXT {
         return Err("not an action set file".into());
     }
-    if !matches!(f.version, 1 | 2) {
+    if !matches!(f.version, 1..=3) {
         return Err("the action set file needs a later version of VectorCraft".into());
     }
     if f.actions.len() > MAX_SET_ACTIONS {
@@ -106,6 +126,10 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     }
     if f.actions.iter().any(|a| a.steps.len() > MAX_ACTION_STEPS) {
         return Err("an action in the action set file has more than 10,000 steps".into());
+    }
+    let mut stops = f.actions.iter().flat_map(|a| &a.steps).flat_map(|s| stops_in(&s.command, &s.params));
+    if stops.any(|p| !(p.is_null() || p.is_object()) || super::stop_params(p).is_err()) {
+        return Err("not an action set file".into());
     }
     let actions = f
         .actions

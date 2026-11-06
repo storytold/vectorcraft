@@ -61,6 +61,14 @@ impl Action {
         }
     }
 
+    /// Puts `step` at index `at`; the steps from there on keep whether they are excluded. An
+    /// exclusion past the last step, which saved preferences can hold, goes.
+    fn insert_step(&mut self, at: usize, step: (String, Value)) {
+        let len = self.steps.len();
+        self.steps.insert(at, step);
+        self.excluded_steps = self.excluded_steps.iter().filter(|&&i| i < len).map(|&i| if i >= at { i + 1 } else { i }).collect();
+    }
+
     /// The included steps as `command.batch` takes them. A recorded `command.batch` step (an action
     /// played, or a panel operation that runs as one batch, while recording) gives its own steps,
     /// since batches do not nest.
@@ -214,6 +222,10 @@ pub fn default_sets() -> Vec<ActionSet> {
 /// returns. Step by Step and Pause For run the first step now, each as its own undo step, and leave
 /// the rest to [`tick_playback`] → {results: [the first step's result], pending: the steps left}.
 /// While a paced playback is in progress, another action does not play.
+///
+/// An action with an included stop ([`STOP_STEP`]) plays up to the stop and waits there at any speed
+/// ([`continue_playback`]). At Accelerated, the steps between two stops are one undo step. → {results:
+/// [the results of the steps run], pending: the steps left, stops included, atStop: true when it waits}
 pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, String> {
     let Some(a) = app.ui.action_sets.get(set).and_then(|s| s.actions.get(idx)).cloned() else { return Err("no such action".into()) };
     let commands = a.included_commands();
@@ -224,29 +236,167 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
         return Err("an action is already playing".into());
     }
     let options = app.ui.action_playback;
-    if options.speed == PlaybackSpeed::Accelerated {
+    if options.speed == PlaybackSpeed::Accelerated && !has_stop(&commands) {
         return app.run("command.batch", json!({"label": a.name, "commands": commands}));
     }
     let mut steps: std::collections::VecDeque<Value> = commands.into();
-    let Some(first) = steps.pop_front() else { return Err("the action has no included steps".into()) };
-    let result = play_step(app, &a.name, first)?;
-    let pending = steps.len();
-    if pending > 0 {
-        let hold = options.speed == PlaybackSpeed::Step;
-        let doc = active_doc(app);
-        let played_in = app.tick_iteration.filter(|&t| t == app.host_iteration);
-        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None, hold, doc, played_in });
-        if let Some(ctx) = &app.ui_ctx {
-            ctx.request_repaint();
-        }
+    let run = next_run(&mut steps, options.speed);
+    let ran = !run.is_empty();
+    let results = if ran { play_steps(app, &a.name, run)? } else { vec![] };
+    if !steps.is_empty() {
+        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None, hold: false, doc: None, played_in: None, stop: None });
+        after_run(app, ran);
     }
-    Ok(json!({"results": [result], "pending": pending}))
+    Ok(playback_result(app, results))
 }
 
-/// Runs one step of a paced playback as its own undo step, named `label` → the step's result.
-fn play_step(app: &mut VectorcraftApp, label: &str, step: Value) -> Result<Value, String> {
-    let r = app.run("command.batch", json!({"label": label, "commands": [step]}))?;
-    Ok(r.get("results").and_then(|r| r.get(0)).cloned().unwrap_or(Value::Null))
+/// Runs steps of a playback as one undo step, named `label` → the steps' results.
+fn play_steps(app: &mut VectorcraftApp, label: &str, steps: Vec<Value>) -> Result<Vec<Value>, String> {
+    let r = app.run("command.batch", json!({"label": label, "commands": steps}))?;
+    Ok(r.get("results").and_then(Value::as_array).cloned().unwrap_or_default())
+}
+
+/// Takes the steps that run next as one undo step off the front of `steps`: at Accelerated all of
+/// them up to the next stop, at the other speeds one. None when a stop comes next.
+fn next_run(steps: &mut std::collections::VecDeque<Value>, speed: PlaybackSpeed) -> Vec<Value> {
+    let mut run = vec![];
+    while steps.front().is_some_and(|s| !is_stop(s)) {
+        run.extend(steps.pop_front());
+        if speed != PlaybackSpeed::Accelerated {
+            break;
+        }
+    }
+    run
+}
+
+/// Sets up the playback in progress after steps ran (`ran`), or none did: the next pause and frame
+/// start over, and a stop that comes next at Accelerated, or with no step run before it, holds now.
+fn after_run(app: &mut VectorcraftApp, ran: bool) {
+    let doc = active_doc(app);
+    let played_in = app.tick_iteration.filter(|&t| t == app.host_iteration);
+    let Some(playing) = app.ui.action_playing.as_mut() else { return };
+    playing.doc = doc;
+    playing.played_in = played_in;
+    playing.next_at = None;
+    playing.hold = ran && playing.options.speed == PlaybackSpeed::Step;
+    if (!ran || playing.options.speed == PlaybackSpeed::Accelerated) && playing.steps.front().is_some_and(is_stop) {
+        hold_at_stop(app);
+    }
+    if let Some(ctx) = &app.ui_ctx {
+        ctx.request_repaint();
+    }
+}
+
+/// What [`play`] and [`continue_playback`] return.
+fn playback_result(app: &VectorcraftApp, results: Vec<Value>) -> Value {
+    let pending = app.ui.action_playing.as_ref().map_or(0, |p| p.steps.len());
+    let mut result = json!({"results": results, "pending": pending});
+    if waiting_at_stop(app) {
+        result["atStop"] = json!(true);
+    }
+    result
+}
+
+/// The command id of a stop in [`Action::steps`], with {message, allowContinue} as its params. No
+/// command runs under this id: playback holds where the step is.
+pub const STOP_STEP: &str = "action.stop";
+
+/// Whether a step as [`Action::included_commands`] gives it is a stop.
+fn is_stop(step: &Value) -> bool {
+    step.get("command").and_then(Value::as_str) == Some(STOP_STEP)
+}
+
+/// Whether one of the steps as [`Action::included_commands`] gives them is a stop.
+pub(crate) fn has_stop(commands: &[Value]) -> bool {
+    commands.iter().any(is_stop)
+}
+
+/// The message and Allow Continue setting in a stop's params; each may be left out. A value of
+/// another type is an error.
+pub(crate) fn stop_params(p: &Value) -> Result<(String, bool), String> {
+    let message = match p.get("message") {
+        None => "",
+        Some(v) => v.as_str().ok_or("message must be text")?,
+    };
+    let allow_continue = match p.get("allowContinue") {
+        None => false,
+        Some(v) => v.as_bool().ok_or("allowContinue must be true or false")?,
+    };
+    Ok((message.to_string(), allow_continue))
+}
+
+/// The stop a playback waits at. A saved value of the wrong type reads as left out.
+#[derive(Clone, Debug)]
+struct AtStop {
+    message: String,
+    allow_continue: bool,
+    /// Whether the message box was shown. It waits for a dialog already open to close.
+    shown: bool,
+}
+
+/// Takes the stop at the front of the playback's steps and waits there. A recording in progress
+/// records the stop too.
+fn hold_at_stop(app: &mut VectorcraftApp) {
+    let Some(playing) = app.ui.action_playing.as_mut() else { return };
+    let Some(step) = playing.steps.pop_front() else { return };
+    let params = step.get("params").cloned().unwrap_or(Value::Null);
+    let message = params.get("message").and_then(Value::as_str).unwrap_or_default().to_string();
+    let allow_continue = params.get("allowContinue").and_then(Value::as_bool).unwrap_or(false);
+    playing.stop = Some(AtStop { message, allow_continue, shown: false });
+    playing.hold = false;
+    if app.ui.recording.is_some() {
+        app.session.journal.push((STOP_STEP.to_string(), params));
+    }
+    show_stop_message(app);
+}
+
+/// Opens the message box of the stop the playback waits at, once, when no other dialog is open.
+fn show_stop_message(app: &mut VectorcraftApp) {
+    if app.ui.dialog.is_some() {
+        return;
+    }
+    let Some(playing) = app.ui.action_playing.as_mut() else { return };
+    let label = playing.label.clone();
+    let Some(stop) = playing.stop.as_mut().filter(|s| !s.shown) else { return };
+    stop.shown = true;
+    let (message, allow_continue) = (stop.message.clone(), stop.allow_continue);
+    crate::dialogs::action_stop::open_message(app, &label, &message, allow_continue);
+}
+
+/// Closes the message box of a stop, if it is open.
+fn close_stop_message(app: &mut VectorcraftApp) {
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::action_stop::MESSAGE_KIND) {
+        app.ui.dialog = None;
+    }
+}
+
+/// Whether the playback in progress waits at a stop.
+pub fn waiting_at_stop(app: &VectorcraftApp) -> bool {
+    app.ui.action_playing.as_ref().is_some_and(|p| p.stop.is_some())
+}
+
+/// The command that plays on from a stop ([`continue_playback`]).
+pub const CONTINUE_PLAYBACK: &str = "ui.action.continue";
+
+/// `ui.action.continue {}`: plays on from the stop the playback waits at, on the document active
+/// now, and closes the stop's message box. The next step runs at once, or at Accelerated the steps
+/// up to the next stop as one undo step; a failing step ends the playback with its error. With no
+/// playback waiting at a stop it is an error. → {results, pending, atStop?}, as [`play`]
+pub fn continue_playback(app: &mut VectorcraftApp, _: &Value) -> Result<Value, String> {
+    let Some(playing) = app.ui.action_playing.as_mut().filter(|p| p.stop.is_some()) else {
+        return Err("no action is waiting at a stop".into());
+    };
+    playing.stop = None;
+    let run = next_run(&mut playing.steps, playing.options.speed);
+    let label = playing.label.clone();
+    if playing.steps.is_empty() {
+        app.ui.action_playing = None;
+    }
+    close_stop_message(app);
+    let ran = !run.is_empty();
+    let results = if ran { play_steps(app, &label, run).inspect_err(|_| app.ui.action_playing = None)? } else { vec![] };
+    after_run(app, ran);
+    Ok(playback_result(app, results))
 }
 
 /// The speed actions play at (Actions panel menu › Playback Options…).
@@ -311,6 +461,9 @@ pub struct Playing {
     ///
     /// [`tick`]: VectorcraftApp::tick
     played_in: Option<u64>,
+    /// The stop the playback waits at, if any: no step runs until [`continue_playback`] or
+    /// [`stop`].
+    stop: Option<AtStop>,
 }
 
 fn active_doc(app: &VectorcraftApp) -> Option<u64> {
@@ -329,6 +482,10 @@ fn active_doc(app: &VectorcraftApp) -> Option<u64> {
 pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     let doc = active_doc(app);
     let playing = app.ui.action_playing.as_mut()?;
+    if playing.stop.is_some() {
+        show_stop_message(app);
+        return None;
+    }
     if playing.hold {
         return None;
     }
@@ -347,6 +504,10 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
         app.status("the action stopped playing: its document is no longer active");
         return None;
     }
+    if playing.steps.front().is_some_and(is_stop) {
+        hold_at_stop(app);
+        return None;
+    }
     let Some(step) = playing.steps.pop_front() else {
         app.ui.action_playing = None;
         return None;
@@ -355,7 +516,7 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     if playing.steps.is_empty() {
         app.ui.action_playing = None;
     }
-    if let Err(e) = play_step(app, &label, step) {
+    if let Err(e) = play_steps(app, &label, vec![step]) {
         app.ui.action_playing = None;
         app.status(e);
         return None;
@@ -649,14 +810,63 @@ pub fn record(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 
 /// `ui.action.stop {}`: ends the recording in progress and keeps its steps, in the action New
 /// Action made for it, else in a new action after the last action of its set, as the bottom bar's
-/// Stop Playing/Recording does. It also ends a playback at Step by Step or Pause For: the steps
-/// already played stay, and the rest do not run. With nothing recording or playing it changes
-/// nothing. → {stopped}
+/// Stop Playing/Recording does. It also ends a playback at Step by Step or Pause For, or one that
+/// waits at a stop, whose message box closes: the steps already played stay, and the rest do not
+/// run. With nothing recording or playing it changes nothing. → {stopped}
 pub fn stop(app: &mut VectorcraftApp, _: &Value) -> Result<Value, String> {
     let playing = app.ui.action_playing.take().is_some();
+    close_stop_message(app);
     let recording = app.ui.recording.is_some();
     stop_recording(app);
     Ok(json!({ "stopped": recording || playing }))
+}
+
+/// The command that inserts a stop ([`insert_stop`]).
+pub const INSERT_STOP: &str = "ui.action.insertStop";
+
+/// The panel state that holds the selected step as (the action's [`Action::id`], the step's index).
+const SELECTED_STEP: &str = "actions-selected-step";
+
+/// `ui.action.insertStop {set?, action?, step?, message?, allowContinue?}`: inserts a stop. With `set`
+/// and `action`, it goes into that action, after step `step`, else after its last step. Without
+/// them, it goes into the recording in progress, after the steps recorded so far. `message` is
+/// the text playback shows (default: none), and `allowContinue` offers Continue in the message box
+/// (default: false). An index past the last set, action or step, a param of another type, or no
+/// action and no recording is an error, and then nothing changes. Record Stop's OK runs this, and
+/// the new stop is the selected step. → {set, action, step}, or {recording: true}
+pub fn insert_stop(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let (message, allow_continue) = stop_params(p)?;
+    let step = (STOP_STEP.to_string(), json!({"message": message, "allowContinue": allow_continue}));
+    let index = |k: &str| p.get(k).and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
+    if p.get("set").is_none() && p.get("action").is_none() && p.get("step").is_none() {
+        if app.ui.recording.is_none() {
+            return Err("no such action".into());
+        }
+        app.session.journal.push(step);
+        return Ok(json!({"recording": true}));
+    }
+    let (set, at) = index("set").zip(index("action")).ok_or("no such action")?;
+    let action = app.ui.action_sets.get_mut(set).and_then(|s| s.actions.get_mut(at)).ok_or("no such action")?;
+    let after = match p.get("step") {
+        None => action.steps.len(),
+        Some(_) => index("step").filter(|&s| s < action.steps.len()).ok_or("no such action step")? + 1,
+    };
+    action.insert_step(after, step);
+    let id = action.id;
+    if let Some(ctx) = app.ui_ctx.clone() {
+        set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, Some((id, after)));
+        let mut expanded: BTreeSet<u64> = pstate(&ctx, "actions-expanded");
+        expanded.insert(id);
+        set_pstate(&ctx, "actions-expanded", expanded);
+    }
+    Ok(json!({"set": set, "action": at, "step": after}))
+}
+
+/// The selected step of the action `selected`, if it has one.
+fn selected_step(app: &VectorcraftApp, ctx: &egui::Context, selected: Option<(usize, usize)>) -> Option<usize> {
+    let (s, a) = selected?;
+    let action = app.ui.action_sets.get(s)?.actions.get(a)?;
+    pstate::<Option<(u64, usize)>>(ctx, SELECTED_STEP).filter(|&(id, step)| id == action.id && step < action.steps.len()).map(|(_, step)| step)
 }
 
 /// The command that `chord` runs under `km`, pressed once or pressed twice.
@@ -885,6 +1095,7 @@ pub fn delete_sets(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
 fn holds_set(d: &crate::state::Dialog) -> bool {
     d.kind == crate::dialogs::action_batch::KIND
         || d.kind == crate::dialogs::action_new::KIND
+        || d.kind == crate::dialogs::action_stop::RECORD_KIND
         || (d.kind == crate::dialogs::action_set_options::KIND && d.fields.contains_key("set"))
 }
 
@@ -934,8 +1145,9 @@ pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         let Some(mut copy) = src.actions.get(a).map(Action::copy) else { return Err("no such action".into()) };
         copy.name = format!("{} copy", copy.name);
         src.actions.insert(a + 1, copy);
-        // A Batch dialog open on a later action of the set follows it down.
-        if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == crate::dialogs::action_batch::KIND)
+        // A Batch or Record Stop dialog open on a later action of the set follows it down.
+        if let Some(d) =
+            app.ui.dialog.as_mut().filter(|d| d.kind == crate::dialogs::action_batch::KIND || d.kind == crate::dialogs::action_stop::RECORD_KIND)
             && d.fields.get("set").and_then(index) == Some(set)
             && let Some(da) = d.fields.get("action").and_then(index).filter(|&da| da > a)
         {
@@ -998,11 +1210,17 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     {
         app.status(e);
     }
-    if widgets::menu_item(ui, tl!("Play Current Selection"), has, false)
-        && let Some((s, a)) = selected
-        && let Err(e) = play(app, s, a)
-    {
-        app.status(e);
+    let waiting = waiting_at_stop(app);
+    if widgets::menu_item(ui, tl!("Play Current Selection"), has || waiting, false) {
+        let played = if waiting { app.run(CONTINUE_PLAYBACK, json!({})) } else { selected.map_or(Ok(Value::Null), |(s, a)| play(app, s, a)) };
+        if let Err(e) = played {
+            app.status(e);
+        }
+    }
+    let recording = app.ui.recording.is_some();
+    if widgets::menu_item(ui, tl!("Insert Stop…"), recording || has, false) {
+        let step = selected_step(app, ui.ctx(), selected);
+        crate::dialogs::action_stop::open_record(app, if recording { None } else { selected }, step);
     }
     if widgets::menu_item(ui, tl!("Action Options…"), has, false)
         && let Some((s, a)) = selected
@@ -1075,6 +1293,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if selected.is_some_and(|(s, _)| app.ui.action_set != Some(s)) {
         selected = None;
     }
+    // The selected step as (the action's id, the step), of the selected action only.
+    let mut step_selected =
+        selected_step(app, ui.ctx(), selected).zip(selected).and_then(|(step, (s, a))| Some((app.ui.action_sets[s].actions.get(a)?.id, step)));
     let mut current = app.ui.action_set;
     let mut sets_selected = selected_sets(app);
     let shift = ui.input(|i| i.modifiers.shift);
@@ -1115,6 +1336,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                     }
                 }
                 selected = None;
+                step_selected = None;
             }
             for (ai, a) in set.actions.iter().enumerate() {
                 let sel = selected == Some((si, ai));
@@ -1158,6 +1380,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 );
                 if resp.clicked() && !resp.interact_pointer_pos().is_some_and(|p| check_rect.contains(p) || disclosure.contains(p)) {
                     selected = Some((si, ai));
+                    step_selected = None;
                     current = Some(si);
                     sets_selected = vec![si];
                 }
@@ -1166,18 +1389,34 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 }
                 if open {
                     for (step, (command, params)) in a.steps.iter().enumerate() {
-                        let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 20.0), egui::Sense::hover());
-                        if resp.hovered() {
+                        let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 20.0), egui::Sense::click());
+                        if step_selected == Some((a.id, step)) {
+                            ui.painter().rect_filled(r, 0.0, t.row_selected);
+                        } else if resp.hovered() {
                             ui.painter().rect_filled(r, 0.0, t.hover);
                         }
-                        let (clicked, _) = inclusion_box(ui, r, 55.0, ("step-inclusion", a.id, step), !a.excluded_steps.contains(&step), false);
+                        let (clicked, check_rect) =
+                            inclusion_box(ui, r, 55.0, ("step-inclusion", a.id, step), !a.excluded_steps.contains(&step), false);
                         if clicked {
                             inclusion_changes.push(InclusionChange::Step(si, ai, step, alt));
                         }
+                        if resp.clicked() && !resp.interact_pointer_pos().is_some_and(|p| check_rect.contains(p)) {
+                            selected = Some((si, ai));
+                            step_selected = Some((a.id, step));
+                            current = Some(si);
+                            sets_selected = vec![si];
+                        }
+                        // A stop's row shows its message; other steps show their command.
+                        let shown = if command == STOP_STEP {
+                            let message = params.get("message").and_then(Value::as_str).and_then(|m| m.lines().next()).unwrap_or_default();
+                            crate::i18n::fmt(tl!("Stop: {message}"), &[("message", message)])
+                        } else {
+                            command.clone()
+                        };
                         ui.painter().text(
                             r.left_center() + egui::vec2(70.0, 0.0),
                             egui::Align2::LEFT_CENTER,
-                            command,
+                            shown,
                             egui::FontId::proportional(11.0),
                             t.text_dim,
                         );
@@ -1211,6 +1450,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     }
     set_pstate(ui.ctx(), "actions-expanded", expanded);
     set_pstate(ui.ctx(), SELECTED, selected);
+    set_pstate(ui.ctx(), SELECTED_STEP, step_selected);
     app.ui.action_set = current;
     app.ui.action_sets_selected = sets_selected;
     widgets::divider(ui);
@@ -1230,10 +1470,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         {
             app.status(e);
         }
-        if widgets::icon_button(ui, "dc-actions", tl!("Play Current Selection"), false, 24.0).clicked()
-            && let Some(s) = selected
-        {
-            play_req = Some(s);
+        if widgets::icon_button(ui, "dc-actions", tl!("Play Current Selection"), false, 24.0).clicked() {
+            if waiting_at_stop(app) {
+                if let Err(e) = app.run(CONTINUE_PLAYBACK, json!({})) {
+                    app.status(e);
+                }
+            } else if let Some(s) = selected {
+                play_req = Some(s);
+            }
         }
         if widgets::icon_button(ui, "dc-folder", tl!("Create New Set"), false, 24.0).clicked() {
             crate::dialogs::action_set_options::open_new(app);
@@ -1256,6 +1500,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.status(e);
     }
     let _ = icons::exists;
+    if waiting_at_stop(app) {
+        dim_label(ui, tl!("Press Play Current Selection in the Actions panel to go on."));
+    }
     if app.ui.action_sets.is_empty() {
         dim_label(ui, tl!("No actions. Press ● to record."));
     }
@@ -2280,7 +2527,7 @@ mod tests {
             (json!(long.to_string()), "an action in the action set file has more than 10,000 steps"),
             (json!(" ".repeat(files::MAX_SET_FILE + 1)), "the action set file is larger than 8 MiB"),
             (
-                json!("{\"format\": \"vcactions\", \"version\": 3, \"name\": \"S\", \"actions\": []}"),
+                json!("{\"format\": \"vcactions\", \"version\": 4, \"name\": \"S\", \"actions\": []}"),
                 "the action set file needs a later version of VectorCraft",
             ),
         ] {
@@ -3293,5 +3540,436 @@ mod tests {
         assert!(!app.ui.status.is_empty(), "the step's error shows");
         assert_eq!(frame(&mut app, 0.0), None);
         assert_eq!(x(&app), 1.0, "the step after the failing one does not run");
+    }
+
+    /// [`app_with_three_moves`] with a stop after the first move.
+    fn app_with_a_stop(allow_continue: bool) -> (VectorcraftApp, impl Fn(&VectorcraftApp) -> f64) {
+        let (mut app, x) = app_with_three_moves();
+        let params = json!({"set": 0, "action": 0, "step": 0, "message": "Paint it", "allowContinue": allow_continue});
+        assert_eq!(app.run(INSERT_STOP, params).unwrap(), json!({"set": 0, "action": 0, "step": 1}));
+        (app, x)
+    }
+
+    fn open_kind(app: &VectorcraftApp) -> Option<&str> {
+        app.ui.dialog.as_ref().map(|d| d.kind.as_str())
+    }
+
+    #[test]
+    fn insert_stop_goes_after_the_given_step_or_at_the_end_and_keeps_exclusions() {
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_sets[0].actions[0].excluded_steps = BTreeSet::from([0, 2]);
+        app.run(INSERT_STOP, json!({"set": 0, "action": 0, "step": 0, "message": "After the first"})).unwrap();
+        app.run(INSERT_STOP, json!({"set": 0, "action": 0})).unwrap();
+        let action = &app.ui.action_sets[0].actions[0];
+        let ids: Vec<&str> = action.steps.iter().map(|(c, _)| c.as_str()).collect();
+        assert_eq!(ids, ["object.move", STOP_STEP, "object.move", "object.move", STOP_STEP]);
+        assert_eq!(action.steps[1].1, json!({"message": "After the first", "allowContinue": false}));
+        assert_eq!(action.steps[4].1, json!({"message": "", "allowContinue": false}), "the message and Allow Continue are optional");
+        assert_eq!(action.excluded_steps, BTreeSet::from([0, 3]), "the step excluded after the insertion point moved with it");
+
+        app.ui.action_sets[0].actions[0].excluded_steps = BTreeSet::from([1, usize::MAX]);
+        app.run(INSERT_STOP, json!({"set": 0, "action": 0, "step": 0})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions[0].excluded_steps, BTreeSet::from([2]), "an exclusion past the last step is dropped");
+    }
+
+    #[test]
+    fn insert_stop_refuses_bad_params_and_changes_nothing() {
+        let (mut app, _) = app_with_three_moves();
+        for (params, want) in [
+            (json!({"message": "m"}), "no such action"),
+            (json!({"set": 0}), "no such action"),
+            (json!({"action": 0}), "no such action"),
+            (json!({"step": 0}), "no such action"),
+            (json!({"set": 1, "action": 0}), "no such action"),
+            (json!({"set": 0, "action": 1}), "no such action"),
+            (json!({"set": "0", "action": 0}), "no such action"),
+            (json!({"set": 0, "action": null}), "no such action"),
+            (json!({"set": 0, "action": 0, "step": 3}), "no such action step"),
+            (json!({"set": 0, "action": 0, "step": -1}), "no such action step"),
+            (json!({"set": 0, "action": 0, "step": null}), "no such action step"),
+            (json!({"set": 0, "action": 0, "message": 5}), "message must be text"),
+            (json!({"set": 0, "action": 0, "message": null}), "message must be text"),
+            (json!({"set": 0, "action": 0, "allowContinue": "yes"}), "allowContinue must be true or false"),
+        ] {
+            assert_eq!(app.run(INSERT_STOP, params.clone()).unwrap_err(), want, "{params}");
+            assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "{params}");
+        }
+        app.run(START_RECORDING, json!({})).unwrap();
+        assert_eq!(app.run(INSERT_STOP, json!({"message": 5})).unwrap_err(), "message must be text");
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert!(app.ui.action_sets[0].actions.last().unwrap().steps.is_empty(), "the refused stop is not recorded");
+    }
+
+    #[test]
+    fn a_stop_inserted_while_recording_goes_at_the_recording_position() {
+        let (mut app, _) = app_with_three_moves();
+        app.run(START_RECORDING, json!({})).unwrap();
+        app.run("object.move", json!({"dx": 1, "dy": 0})).unwrap();
+        assert_eq!(app.run(INSERT_STOP, json!({"message": "Now", "allowContinue": true})).unwrap(), json!({"recording": true}));
+        app.run("object.move", json!({"dx": 2, "dy": 0})).unwrap();
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        let recorded = app.ui.action_sets[0].actions.last().unwrap();
+        let ids: Vec<&str> = recorded.steps.iter().map(|(c, _)| c.as_str()).collect();
+        assert_eq!(ids, ["object.move", STOP_STEP, "object.move"]);
+        assert_eq!(recorded.steps[1].1, json!({"message": "Now", "allowContinue": true}));
+    }
+
+    #[test]
+    fn accelerated_playback_holds_at_a_stop_and_play_plays_the_rest() {
+        let (mut app, x) = app_with_a_stop(false);
+        let undo = undo_steps(&app);
+        let r = play(&mut app, 0, 0).unwrap();
+        assert_eq!((r["pending"].clone(), r["atStop"].clone(), r["results"].as_array().map(Vec::len)), (json!(2), json!(true), Some(1)));
+        assert_eq!(x(&app), 1.0, "the step before the stop runs");
+        let d = app.ui.dialog.as_ref().expect("the stop shows its message");
+        assert_eq!(
+            (d.kind.as_str(), d.str("action"), d.str("message"), d.bool("allowContinue")),
+            (crate::dialogs::action_stop::MESSAGE_KIND, "Three Moves".to_string(), "Paint it".to_string(), false)
+        );
+        for now in [0.0, 100.0, 1000.0] {
+            assert_eq!(frame(&mut app, now), None);
+            assert_eq!(x(&app), 1.0, "no later step runs while the action waits");
+        }
+        assert_eq!(play(&mut app, 0, 0).unwrap_err(), "an action is already playing");
+        let r = app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
+        assert_eq!((r["pending"].clone(), r["atStop"].clone()), (json!(0), Value::Null));
+        assert_eq!(x(&app), 7.0, "Play runs every step after the stop");
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(open_kind(&app), None, "the message box closes");
+        assert_eq!(undo_steps(&app), undo + 2, "the steps on each side of the stop are one undo step each");
+        assert_eq!(app.run(CONTINUE_PLAYBACK, json!({})).unwrap_err(), "no action is waiting at a stop");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(x(&app), 1.0, "one undo takes back the steps after the stop");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(x(&app), 0.0, "and one more the steps before it");
+    }
+
+    #[test]
+    fn step_by_step_and_pause_for_hold_at_a_stop() {
+        for (speed, seconds) in [("step", 1), ("pause", 2)] {
+            let (mut app, x) = app_with_a_stop(false);
+            app.run(PLAYBACK_OPTIONS, json!({"speed": speed, "seconds": seconds})).unwrap();
+            let r = play(&mut app, 0, 0).unwrap();
+            assert_eq!((r["pending"].clone(), r["atStop"].clone()), (json!(3), Value::Null), "{speed}");
+            assert_eq!(open_kind(&app), None, "{speed}: the stop comes after the step before it is shown");
+            let mut now = 0.0;
+            while !waiting_at_stop(&app) {
+                assert!(now < 100.0, "{speed}: the playback reaches the stop");
+                frame(&mut app, now);
+                now += 1.0;
+            }
+            assert_eq!(open_kind(&app), Some(crate::dialogs::action_stop::MESSAGE_KIND), "{speed}");
+            for _ in 0..5 {
+                assert_eq!(frame(&mut app, now + 1000.0), None, "{speed}");
+                assert_eq!(x(&app), 1.0, "{speed}: no later step runs while the action waits");
+            }
+            let r = app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
+            assert_eq!(r["pending"], json!(1), "{speed}: Play runs the next step, and the last stays for its turn");
+            assert_eq!(x(&app), 3.0, "{speed}");
+            for _ in 0..20 {
+                if app.ui.action_playing.is_none() {
+                    break;
+                }
+                frame(&mut app, now);
+                now += 10.0;
+            }
+            assert_eq!(x(&app), 7.0, "{speed}: the paced playback goes on to the end");
+            assert!(app.ui.action_playing.is_none(), "{speed}");
+        }
+    }
+
+    #[test]
+    fn allow_continue_offers_continue_and_stop_closes_the_box_and_keeps_waiting() {
+        let (mut app, x) = app_with_a_stop(true);
+        play(&mut app, 0, 0).unwrap();
+        assert!(dialog_texts(&mut app).iter().any(|s| s == "Continue"), "Allow Continue shows Continue");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(x(&app), 7.0, "Continue plays the rest");
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(open_kind(&app), None);
+
+        let (mut app, x) = app_with_a_stop(false);
+        play(&mut app, 0, 0).unwrap();
+        let texts = dialog_texts(&mut app);
+        assert!(!texts.iter().any(|s| s == "Continue"), "without Allow Continue there is no Continue: {texts:?}");
+        assert!(texts.iter().any(|s| s == "Paint it") && texts.iter().any(|s| s == "Stop"), "{texts:?}");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(open_kind(&app), None, "the box's only button closes it");
+        assert!(waiting_at_stop(&app), "the action waits for the manual task");
+        assert_eq!(x(&app), 1.0);
+        frame(&mut app, 100.0);
+        assert_eq!(open_kind(&app), None, "the box does not open again");
+        app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
+        assert_eq!(x(&app), 7.0);
+
+        let (mut app, x) = app_with_a_stop(true);
+        play(&mut app, 0, 0).unwrap();
+        crate::dialogs::cancel(&mut app);
+        assert!(waiting_at_stop(&app), "Stop closes the box and the action waits");
+        assert_eq!(x(&app), 1.0);
+    }
+
+    #[test]
+    fn play_in_the_panel_plays_on_from_a_stop_with_nothing_selected() {
+        use super::super::tests_appearance::{click, frame_events};
+        let (mut app, x) = app_with_a_stop(false);
+        play(&mut app, 0, 0).unwrap();
+        crate::dialogs::cancel(&mut app);
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        assert!(texts.iter().any(|(s, _)| s.contains("Play Current Selection")), "the panel says how to go on: {texts:?}");
+        let mut bar = crate::toolbar::tests::widget_rects(&ctx, egui::vec2(24.0, 24.0));
+        bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        let [_, _, play_button, _, _, _] = bar[..] else { panic!("the bottom bar: {bar:?}") };
+        click(&ctx, &mut app, play_button.center(), show);
+        assert_eq!(x(&app), 7.0);
+        assert!(app.ui.action_playing.is_none());
+
+        let (mut app, x) = app_with_a_stop(false);
+        play(&mut app, 0, 0).unwrap();
+        crate::dialogs::cancel(&mut app);
+        let texts = frame_events(&ctx, &mut app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Play Current Selection").map(|(_, r)| *r).expect("the item in the menu");
+        click(&ctx, &mut app, item.center(), menu);
+        assert_eq!(x(&app), 7.0, "the panel menu's item plays on too, with nothing selected");
+    }
+
+    #[test]
+    fn stop_at_a_stop_ends_the_playback_and_keeps_the_steps_run() {
+        let (mut app, x) = app_with_a_stop(false);
+        let undo = undo_steps(&app);
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(app.run(STOP_RECORDING, json!({})).unwrap(), json!({"stopped": true}));
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(open_kind(&app), None, "the message box closes");
+        assert_eq!(frame(&mut app, 100.0), None);
+        assert_eq!(x(&app), 1.0, "the steps after the stop do not run; the one played stays");
+        assert_eq!(undo_steps(&app), undo + 1);
+        assert_eq!(app.run(CONTINUE_PLAYBACK, json!({})).unwrap_err(), "no action is waiting at a stop");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(x(&app), 0.0, "the step played undoes");
+        play(&mut app, 0, 0).unwrap();
+        assert!(waiting_at_stop(&app), "the action plays again after Stop");
+    }
+
+    #[test]
+    fn stops_first_last_and_in_a_row_each_wait() {
+        let (mut app, x) = app_with_three_moves();
+        let stop = |message: &str| (STOP_STEP.to_string(), json!({"message": message, "allowContinue": false}));
+        let moved = ("object.move".to_string(), json!({"dx": 1, "dy": 0}));
+        app.ui.action_sets[0].actions[0].steps = vec![stop("first"), stop("second"), moved, stop("last")];
+        let message = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.str("message"));
+        assert_eq!(play(&mut app, 0, 0).unwrap()["atStop"], json!(true));
+        assert_eq!((message(&app).as_deref(), x(&app)), (Some("first"), 0.0));
+        assert_eq!(app.run(CONTINUE_PLAYBACK, json!({})).unwrap()["atStop"], json!(true));
+        assert_eq!((message(&app).as_deref(), x(&app)), (Some("second"), 0.0));
+        assert_eq!(app.run(CONTINUE_PLAYBACK, json!({})).unwrap()["atStop"], json!(true));
+        assert_eq!((message(&app).as_deref(), x(&app)), (Some("last"), 1.0));
+        assert_eq!(app.run(CONTINUE_PLAYBACK, json!({})).unwrap(), json!({"results": [], "pending": 0}));
+        assert!(app.ui.action_playing.is_none(), "after the last stop the playback ends");
+        assert_eq!(message(&app), None);
+    }
+
+    #[test]
+    fn a_stop_with_an_empty_message_still_waits() {
+        let (mut app, x) = app_with_three_moves();
+        app.run(INSERT_STOP, json!({"set": 0, "action": 0, "step": 0})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert!(waiting_at_stop(&app));
+        assert_eq!(x(&app), 1.0);
+        assert_eq!(open_kind(&app), Some(crate::dialogs::action_stop::MESSAGE_KIND));
+    }
+
+    #[test]
+    fn an_excluded_stop_does_not_hold_and_batch_refuses_an_included_one() {
+        let (mut app, x) = app_with_a_stop(false);
+        assert_eq!(crate::dialogs::action_batch::open(&mut app, 0, 0).unwrap_err(), "Batch cannot play an action with a stop");
+        assert_eq!(open_kind(&app), None);
+        app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "step": 1, "included": false})).unwrap();
+        crate::dialogs::action_batch::open(&mut app, 0, 0).unwrap();
+        let d = app.ui.dialog.take().unwrap();
+        app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "step": 1, "included": true})).unwrap();
+        app.ui.dialog = Some(d);
+        assert_eq!(crate::dialogs::confirm(&mut app).unwrap_err(), "Batch cannot play an action with a stop", "a stop included since it opened");
+        app.ui.dialog = None;
+        app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "step": 1, "included": false})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(x(&app), 7.0, "the excluded stop does not hold the playback");
+    }
+
+    #[test]
+    fn a_stop_nested_in_a_recorded_batch_holds_too() {
+        let (mut app, x) = app_with_three_moves();
+        let moved = json!({"command": "object.move", "params": {"dx": 1, "dy": 0}});
+        let stop = json!({"command": STOP_STEP, "params": {"message": "Inner", "allowContinue": false}});
+        app.ui.action_sets[0].actions[0].steps = vec![("command.batch".into(), json!({"commands": [moved, stop, moved]}))];
+        play(&mut app, 0, 0).unwrap();
+        assert!(waiting_at_stop(&app));
+        assert_eq!(x(&app), 1.0);
+        app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
+        assert_eq!(x(&app), 2.0);
+    }
+
+    #[test]
+    fn a_stop_reached_while_recording_is_recorded() {
+        let (mut app, _) = app_with_a_stop(false);
+        app.run(START_RECORDING, json!({})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        let recorded = app.ui.action_sets[0].actions.last().unwrap();
+        let ids: Vec<&str> = recorded.steps.iter().map(|(c, _)| c.as_str()).collect();
+        assert_eq!(ids, ["command.batch", STOP_STEP, "command.batch"]);
+        assert_eq!(recorded.steps[1].1, json!({"message": "Paint it", "allowContinue": false}));
+    }
+
+    #[test]
+    fn the_message_waits_for_a_dialog_already_open() {
+        let (mut app, _) = app_with_a_stop(false);
+        crate::dialogs::action_playback::open(&mut app);
+        play(&mut app, 0, 0).unwrap();
+        assert!(waiting_at_stop(&app));
+        frame(&mut app, 0.0);
+        assert_eq!(open_kind(&app), Some(crate::dialogs::action_playback::KIND), "the open dialog stays");
+        crate::dialogs::cancel(&mut app);
+        frame(&mut app, 0.0);
+        assert_eq!(open_kind(&app), Some(crate::dialogs::action_stop::MESSAGE_KIND), "the message shows once it closes");
+    }
+
+    #[test]
+    fn play_on_from_a_stop_uses_the_document_active_then() {
+        let (mut app, x) = app_with_a_stop(false);
+        play(&mut app, 0, 0).unwrap();
+        app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
+        assert_eq!(x(&app), 7.0);
+        let (mut app, _) = app_with_a_stop(false);
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        frame(&mut app, 0.0);
+        frame(&mut app, 0.0);
+        assert!(waiting_at_stop(&app));
+        app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
+        assert!(app.ui.action_playing.is_some(), "a document opened at the stop does not end the playback");
+        let bounds = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+        assert_eq!(bounds.x0, 2.0, "the next step runs on the document active now");
+    }
+
+    #[test]
+    fn a_saved_stop_survives_and_older_files_still_load() {
+        let (mut app, _) = app_with_a_stop(true);
+        let saved = files::write_set(&app.ui.action_sets[0]);
+        let file: Value = serde_json::from_str(&saved).unwrap();
+        assert_eq!(file["version"], json!(3), "older builds must refuse a stop");
+        let steps = file["actions"][0]["steps"].clone();
+        assert_eq!(steps[1], json!({"command": "action.stop", "params": {"message": "Paint it", "allowContinue": true}}));
+        let loaded = files::read_set(&saved, "Test").unwrap();
+        assert_eq!(loaded.actions[0].steps, app.ui.action_sets[0].actions[0].steps);
+        let kept: Action = serde_json::from_value(serde_json::to_value(&loaded.actions[0]).unwrap()).unwrap();
+        assert_eq!(kept.steps[1].1, json!({"message": "Paint it", "allowContinue": true}), "the preferences keep it too");
+        app.ui.action_sets[0].actions[0].steps.remove(1);
+        let without = files::write_set(&app.ui.action_sets[0]);
+        assert_eq!(serde_json::from_str::<Value>(&without).unwrap()["version"], json!(1), "a set with no stop stays version 1");
+        for version in [1, 2] {
+            let old =
+                json!({"format": "vcactions", "version": version, "name": "Old", "actions": [{"name": "A", "steps": [{"command": "object.move"}]}]});
+            assert_eq!(files::read_set(&old.to_string(), "Test").unwrap().actions[0].steps.len(), 1, "version {version}");
+        }
+        let later = json!({"format": "vcactions", "version": 4, "name": "New", "actions": []});
+        assert_eq!(files::read_set(&later.to_string(), "Test").unwrap_err(), "the action set file needs a later version of VectorCraft");
+        for params in [json!({"message": 5}), json!({"allowContinue": "yes"}), json!(42)] {
+            let stop = json!({"command": "action.stop", "params": params});
+            for step in [stop.clone(), json!({"command": "command.batch", "params": {"commands": [stop]}})] {
+                let bad = json!({"format": "vcactions", "version": 3, "name": "Bad", "actions": [{"name": "A", "steps": [step]}]});
+                assert_eq!(files::read_set(&bad.to_string(), "Test").unwrap_err(), "not an action set file", "{step}");
+            }
+        }
+        let bare = json!({"format": "vcactions", "version": 3, "name": "Bare", "actions": [{"name": "A", "steps": [{"command": "action.stop"}]}]});
+        assert!(files::read_set(&bare.to_string(), "Test").is_ok(), "a stop may leave its params out");
+        let nested = json!({"commands": [{"command": "action.stop", "params": {"message": "Inner"}}]});
+        let set = ActionSet::new("Nested", vec![Action::new("A", vec![("command.batch".into(), nested)])]);
+        assert_eq!(serde_json::from_str::<Value>(&files::write_set(&set)).unwrap()["version"], json!(3), "a stop in a recorded batch counts");
+    }
+
+    /// The panel menu's Insert Stop…, with Record Stop's fields as given, and OK.
+    fn menu_insert_stop(ctx: &egui::Context, app: &mut VectorcraftApp, message: &str, allow_continue: bool) {
+        use super::super::tests_appearance::{click, frame_events};
+        let texts = frame_events(ctx, app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Insert Stop…").map(|(_, r)| *r).expect("Insert Stop… in the menu");
+        click(ctx, app, item.center(), menu);
+        let d = app.ui.dialog.as_mut().expect("Insert Stop… opens Record Stop");
+        assert_eq!(d.kind, crate::dialogs::action_stop::RECORD_KIND);
+        d.fields.insert("message".into(), json!(message));
+        d.fields.insert("allowContinue".into(), json!(allow_continue));
+        crate::dialogs::confirm(app).unwrap();
+        assert!(app.ui.dialog.is_none(), "OK closes Record Stop");
+    }
+
+    #[test]
+    fn insert_stop_in_the_menu_goes_after_the_selected_step_or_action() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        let label = text_rect(&texts, "Three Moves");
+        click(&ctx, &mut app, label.center(), show);
+        menu_insert_stop(&ctx, &mut app, "At the end", false);
+        let ids = |app: &VectorcraftApp| app.ui.action_sets[0].actions[0].steps.iter().map(|(c, _)| c.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&app).iter().position(|c| c == STOP_STEP), Some(3), "the action selected: the stop goes at its end");
+        assert!(pstate::<BTreeSet<u64>>(&ctx, "actions-expanded").contains(&app.ui.action_sets[0].actions[0].id), "the action opens to show it");
+
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        assert!(texts.iter().any(|(s, _)| s == "Stop: At the end"), "the step's row shows the message: {texts:?}");
+        let first = texts.iter().filter(|(s, _)| s == "object.move").map(|(_, r)| *r).min_by(|a, b| a.top().total_cmp(&b.top())).unwrap();
+        click(&ctx, &mut app, first.center(), show);
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((0, 0)), "a click on a step selects its action");
+        menu_insert_stop(&ctx, &mut app, "After the first", true);
+        assert_eq!(app.ui.action_sets[0].actions[0].steps[1].1, json!({"message": "After the first", "allowContinue": true}));
+
+        menu_insert_stop(&ctx, &mut app, "Next", false);
+        assert_eq!(app.ui.action_sets[0].actions[0].steps[2].1["message"], json!("Next"), "the new stop was the selected step");
+
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "Three Moves").center(), show);
+        menu_insert_stop(&ctx, &mut app, "End again", false);
+        assert_eq!(app.ui.action_sets[0].actions[0].steps.last().unwrap().1["message"], json!("End again"), "a click on the action clears the step");
+    }
+
+    #[test]
+    fn insert_stop_in_the_menu_goes_into_the_recording_and_needs_something_to_go_into() {
+        use super::super::tests_appearance::{click, frame_events};
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Insert Stop…").map(|(_, r)| *r).expect("Insert Stop… in the menu");
+        click(&ctx, &mut app, item.center(), menu);
+        assert!(app.ui.dialog.is_none(), "nothing selected and nothing recording: the item is off");
+
+        app.run(START_RECORDING, json!({})).unwrap();
+        menu_insert_stop(&ctx, &mut app, "While recording", false);
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        let recorded = app.ui.action_sets[0].actions.last().unwrap();
+        assert_eq!(recorded.steps, [(STOP_STEP.to_string(), json!({"message": "While recording", "allowContinue": false}))]);
+        assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3);
+    }
+
+    #[test]
+    fn set_edits_keep_an_open_record_stop_on_its_action() {
+        let mut app = app_with_sets();
+        crate::dialogs::action_stop::open_record(&mut app, Some((1, 0)), None);
+        app.run(DUPLICATE, json!({"set": 0})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["set"], json!(2), "a copied set above moves it down");
+        app.run(DELETE_SETS, json!({"sets": [0]})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["set"], json!(1), "a deleted set above moves it up");
+        app.run(DELETE_SETS, json!({"sets": [1]})).unwrap();
+        assert_eq!(open_kind(&app), None, "deleting its set closes it");
     }
 }

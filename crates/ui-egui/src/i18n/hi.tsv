@@ -3289,6 +3289,18 @@
 	Play Action	खेल कार्रवाई
 	Play Current Selection	वर्तमान सिलेक्शन
 	Play:	चलाएँ:
+	Insert Stop…	स्टॉप जोड़ें…
+	Insert Stop	स्टॉप जोड़ें
+	Record Stop	स्टॉप रिकॉर्ड करें
+	Allow Continue	जारी रखने दें
+	Continue	जारी रखें
+	Continue Action	एक्शन जारी रखें
+	Press Play Current Selection in the Actions panel to go on.	आगे बढ़ने के लिए एक्शन्स पैनल में वर्तमान सिलेक्शन प्ले करें दबाएँ।
+	Stop: {message}	स्टॉप: {message}
+@msg	no action is waiting at a stop	कोई एक्शन स्टॉप पर प्रतीक्षा नहीं कर रहा है
+@msg	message must be text	message टेक्स्ट होना चाहिए
+@msg	allowContinue must be true or false	allowContinue true या false होना चाहिए
+@msg	Batch cannot play an action with a stop	बैच स्टॉप वाला एक्शन नहीं चला सकता
 	Playback Options	प्लेबैक ऑप्शन्स
 	Playback Options…	प्लेबैक ऑप्शन्स…
 	Plug-in Info	प्लगइन जानकारी

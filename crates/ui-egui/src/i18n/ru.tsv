@@ -5402,6 +5402,18 @@ axis	Y Axis	Ось Y
 	Action Options…	Параметры действия…
 	Action Options	Параметры действия
 	Playback Options…	Параметры воспроизведения…
+	Insert Stop…	Вставить остановку…
+	Insert Stop	Вставить остановку
+	Record Stop	Записать остановку
+	Allow Continue	Разрешить продолжение
+	Continue	Продолжить
+	Continue Action	Продолжить действие
+	Press Play Current Selection in the Actions panel to go on.	Чтобы продолжить, нажмите «Воспроизвести текущее выделение» на панели «Действия».
+	Stop: {message}	Остановка: {message}
+@msg	no action is waiting at a stop	ни одно действие не ожидает на остановке
+@msg	message must be text	message должно быть текстом
+@msg	allowContinue must be true or false	allowContinue должно быть true или false
+@msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
 	Playback Options	Параметры воспроизведения
 	Accelerated	Ускоренно
 	Step by Step	Пошагово
