@@ -4583,6 +4583,55 @@ fn data_without_its_end_does_not_hide_the_sections_end() {
     }
 }
 
+/// Data without its `~>` is skipped up to the section's end marker: its `%_` line with a `(` opens
+/// no string, so the section ends there and the art after it comes in. A `%` right after the key
+/// starts no marker, so it doesn't end the data.
+#[test]
+fn data_without_its_end_holding_a_string_ends_at_the_sections_end() {
+    let art_layer = layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"));
+    for document in [
+        "%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n%,u@!!/MSk8\n%_(]<[%\n%AI11_EndTextDocument\n",
+        "%AI11_BeginTextDocument\r\n/AI11TextDocument : /ASCII85Decode ,\r\n%_(]<[%\r\n%AI11_EndTextDocument\r\n",
+        "%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,%AI11_EndTextDocument\n%_(]<[%\n%AI11_EndTextDocument\n",
+    ] {
+        let s = read_ok(&format!("{document}{art_layer}"));
+        assert_eq!(art(&s.doc).len(), 1, "{document}");
+    }
+}
+
+/// Data without its `~>` stops at the start of a section of the same kind nested after it too, so
+/// the outer section still ends at its own end marker and not at the nested one's.
+#[test]
+fn data_without_its_end_stops_at_a_nested_sections_start() {
+    let square = rect_path(0.0, 0.0, 1.0, 1.0) + "f\n";
+    let body = format!(
+        "%AI17_Begin_Content_if_version_gt:24 4\n%AI17_Alternate_Content\n/Binary : /ASCII85Decode ,\n%_(]<[%\n\
+         %AI17_Begin_Content_if_version_gt:23 1\nfrobnicate\n%AI17_End_Versioned_Content\n{square}%AI17_End_Versioned_Content\n{}",
+        layer(&square)
+    );
+    let s = read_ok(&body);
+    assert_eq!(art(&s.doc).len(), 1);
+    assert!(!s.warnings.iter().any(|w| w == read::VERSIONED_UNENDED), "{:?}", s.warnings);
+}
+
+/// Versioned content that doesn't end is scanned again for the swatches' names: data with its `~>`
+/// is still skipped, though data with none comes after it, and the dictionary open where the
+/// content starts still counts.
+#[test]
+fn swatch_names_are_found_past_data_in_versioned_content_that_does_not_end() {
+    let entries = "1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data ,\n%,u@!!/MSk8%41#ocdN=10d&\n%_O%*mGn(RduU.]4`[u[.f\n%_;(]<[%\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n0 0 Xd\n6 () XW\n0 Ae\n";
+    let alternate = "%AI17_Begin_Content_if_version_gt:24 4\n%AI17_Alternate_Content\n";
+    let sea = format!("0 1 1 0 (Sea) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let unended = "%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n%,u@!!/MSk8\n%AI11_EndTextDocument\n";
+    for art_text in [format!("{alternate}/ForeignObject :\n{entries}{sea}{unended}"), format!("/ForeignObject :\n{alternate}{entries}{sea}{unended}")]
+    {
+        let body = format!("{}{}", DOTS.replace("(Dots)", "(Sea\\n1)"), layer(&art_text));
+        let d = read(stream(&body).as_bytes()).unwrap().doc;
+        let names: Vec<&str> = d.patterns.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["Sea 2"], "{art_text}");
+    }
+}
+
 /// The names the swatches take are found past the same data: a named color after it still takes
 /// its name first, and the pattern named after it is numbered.
 #[test]

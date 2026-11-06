@@ -281,6 +281,8 @@ fn swatch_names(data: &[u8]) -> ShownNames {
     let mut head = false;
     // ASCII85 data in comment lines is skipped past, as the reader skips it.
     let mut dictionaries = ops::Dictionaries::default();
+    // The scan's state where the versioned content being skipped starts, to go back to.
+    let mut versioned = None;
     loop {
         let before = lex.offset();
         let Some(t) = lex.next_token() else {
@@ -288,13 +290,14 @@ fn swatch_names(data: &[u8]) -> ShownNames {
             match skip.take() {
                 Some((.., Some(at))) => {
                     lex.seek(at);
+                    dictionaries = versioned.take().unwrap_or_default();
                     continue;
                 }
                 _ => break,
             }
         };
-        let end = skip.map(|s| s.1).or(palette_at.map(|_| "EndPalette")).or(section.map(|s| s.1));
-        dictionaries.pass(&t.tok, &mut lex, end);
+        let markers = skip.map(|s| (s.0, s.1)).or(palette_at.map(|_| ("", "EndPalette"))).or(section.map(|s| (s.0, s.1)));
+        dictionaries.pass(&t.tok, &mut lex, markers);
         match &t.tok {
             Tok::Comment(c) => {
                 let line = String::from_utf8_lossy(c);
@@ -310,6 +313,7 @@ fn swatch_names(data: &[u8]) -> ShownNames {
                     }
                 } else if m.starts_with("Alternate_Content") && section.is_none_or(|s| s.3) {
                     skip = Some(("Begin_Content_if_version_gt", "End_Versioned_Content", 0, Some(lex.offset())));
+                    versioned = Some(dictionaries.clone());
                 } else if m == "%BeginProlog" {
                     skip = Some(("", "%EndProlog", 0, None));
                 } else if m == "%BeginResource" {

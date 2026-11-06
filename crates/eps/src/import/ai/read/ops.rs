@@ -1133,7 +1133,7 @@ pub(super) fn ascii85_follows(ty: &str, key: Option<&str>) -> bool {
 /// The dictionaries (`/Type :` … `;`) a scan of tokens passes that the reader doesn't read, kept to
 /// tell where an entry's ASCII85 data follows ([`ascii85_follows`]), so the scan can skip past it
 /// as the reader does: a `(` on a `%_` line of the data would otherwise open a string.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(super) struct Dictionaries<'s> {
     /// The open dictionaries' types, innermost last, up to [`MAX_DEPTH`].
     types: Vec<&'s [u8]>,
@@ -1143,38 +1143,43 @@ pub(super) struct Dictionaries<'s> {
     name: Option<&'s [u8]>,
     /// Whether the string just before the token taken is a key that ASCII85 data follows.
     string_key: bool,
-    /// Data that starts before this offset has no `~>`, so it isn't searched for again.
-    no_end_before: usize,
+    /// The rest of the data has no `~>` or marker to stop at, so they aren't searched for again.
+    no_end: bool,
 }
 
-/// The offset just past the `~>` of ASCII85 data at the start of `rest`. `Err` holds the offset of
-/// the comment with marker `end` that comes first, or the end of `rest`. A line of the data that
-/// reads as that marker counts as the marker.
-fn data_end(rest: &[u8], end: Option<&str>) -> Result<usize, usize> {
+/// Where the ASCII85 data at the start of `rest` stops: just past its `~>`, or at the comment that
+/// comes first with a marker of `section`, the begin and end markers of the section being scanned
+/// (no begin marker when it's empty). A line of the data that reads as one of them counts as the
+/// marker. `None` when `rest` has neither.
+fn data_end(rest: &[u8], section: Option<(&str, &str)>) -> Option<usize> {
     let mut at = 0;
     for line in rest.split(|b| matches!(b, b'\r' | b'\n')) {
-        let comment = line.strip_prefix(b"%").and_then(|c| std::str::from_utf8(c).ok());
-        if comment.is_some_and(|c| Some(super::marker(c)) == end) {
-            return Err(at);
+        // The first line is what is left of the key's line, where a `%` starts no marker.
+        if at > 0
+            && let Some((comment, (begin, end))) = line.strip_prefix(b"%").zip(section)
+        {
+            let comment = String::from_utf8_lossy(comment);
+            let marker = super::marker(&comment);
+            if marker == end || (!begin.is_empty() && marker == begin) {
+                return Some(at);
+            }
         }
         if let Some(i) = line.windows(2).position(|w| w == b"~>") {
-            return Ok(at + i + 2);
+            return Some(at + i + 2);
         }
         at += line.len() + 1;
     }
-    Err(rest.len())
+    None
 }
 
 impl<'s> Dictionaries<'s> {
-    /// Take `tok`, the token `lex` just gave, and skip past the ASCII85 data that follows it. Data
-    /// without its `~>` before `end`, the end marker of the section being scanned ([`data_end`]),
-    /// isn't skipped, so the scan still finds that marker.
-    pub(super) fn pass(&mut self, tok: &super::Tok<'s>, lex: &mut super::Lexer<'s>, end: Option<&str>) {
-        let at = lex.offset();
-        if self.data_follows(tok) && at >= self.no_end_before {
-            match data_end(lex.rest(), end) {
-                Ok(end) => lex.seek(at + end),
-                Err(stop) => self.no_end_before = at + stop,
+    /// Take `tok`, the token `lex` just gave, and skip the ASCII85 data that follows it, up to where
+    /// [`data_end`] stops for `section`, so the scan still finds that section's markers.
+    pub(super) fn pass(&mut self, tok: &super::Tok<'s>, lex: &mut super::Lexer<'s>, section: Option<(&str, &str)>) {
+        if self.data_follows(tok) && !self.no_end {
+            match data_end(lex.rest(), section) {
+                Some(stop) => lex.seek(lex.offset() + stop),
+                None => self.no_end = true,
             }
         }
     }
@@ -1219,6 +1224,20 @@ mod tests {
 
     fn square(id: u64, fill: Paint) -> Arc<Node> {
         Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, Paint::None, 0.0)))
+    }
+
+    #[test]
+    fn data_stops_at_its_end_or_a_marker_of_the_section() {
+        let section = Some(("BeginTextDocument", "EndTextDocument"));
+        assert_eq!(data_end(b"\n%_(a~>\n%AI11_EndTextDocument\n", section), Some(7));
+        assert_eq!(data_end(b"\n%_(a\n%AI11_EndTextDocument\n", section), Some(6));
+        assert_eq!(data_end(b"\n%_(a\n%AI11_BeginTextDocument\n", section), Some(6));
+        // Bytes that aren't UTF-8 after the marker, as the scan reads a comment.
+        assert_eq!(data_end(b"\n%_(a\n%AI11_EndTextDocument \xff\n", section), Some(6));
+        // Right after the key a `%` starts no marker, and an empty begin marker matches no comment.
+        assert_eq!(data_end(b"%AI11_EndTextDocument\n%_(a\n", section), None);
+        assert_eq!(data_end(b"\n%\n", Some(("", "EndPalette"))), None);
+        assert_eq!(data_end(b"\n%AI11_EndTextDocument\n", None), None);
     }
 
     #[test]

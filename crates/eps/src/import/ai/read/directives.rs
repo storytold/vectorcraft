@@ -342,7 +342,7 @@ impl<'a> Reader<'a> {
         loop {
             let before = self.lex.offset();
             let Some(t) = self.lex.next_token() else { break };
-            dictionaries.pass(&t.tok, &mut self.lex, Some(end));
+            dictionaries.pass(&t.tok, &mut self.lex, Some((begin, end)));
             if let Tok::Comment(c) = t.tok {
                 let line = String::from_utf8_lossy(c);
                 let m = marker(&line);
