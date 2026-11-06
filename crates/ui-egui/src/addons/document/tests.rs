@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use serde_json::json;
 use vectorcraft_engine::Session;
 
-use super::SAVE_COPY;
+use super::{EXPORT_ALL, SAVE_COPY};
 use crate::{VectorcraftApp, menus};
 
 /// A new, empty folder of its own for test `name`.
@@ -44,6 +44,31 @@ fn save_a_timestamped_copy_writes_beside_the_document() {
     assert!(names.iter().any(|n| n.starts_with("card_20") && n.ends_with(".vectorcraft")), "{names:?}");
     assert!(app.ui.status.starts_with("Saved "), "{}", app.ui.status);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A `.ai` timestamped copy, and a `.ai` copy Export All Open Documents writes, name the view's
+/// active artboard as their active one.
+#[test]
+fn ai_copies_name_the_views_active_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+    app.sync_views();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let opts = vectorcraft_engine::cmd::fileio::LoadOptions { native: false, ..Default::default() };
+    for (i, (cmd, artboard)) in [(SAVE_COPY, 2), (EXPORT_ALL, 1)].into_iter().enumerate() {
+        let dir = folder(&format!("active-artboard-{i}"));
+        if let Some(v) = app.view_mut() {
+            v.artboard = artboard;
+        }
+        app.run(cmd, json!({"folder": dir, "format": "ai"})).unwrap();
+        let names = files(&dir);
+        assert_eq!(names.len(), 1, "{cmd}: {names:?}");
+        let bytes = std::fs::read(dir.join(&names[0])).unwrap();
+        let l = vectorcraft_engine::cmd::fileio::load_with("a.ai", &bytes, &opts).unwrap();
+        assert!(l.editing_data && !l.restored, "{cmd}: {:?}", l.warnings);
+        assert_eq!(l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id)), Some(artboard), "{cmd}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 #[test]
