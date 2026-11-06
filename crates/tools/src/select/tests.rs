@@ -2169,3 +2169,33 @@ fn a_press_on_the_centre_point_moves_an_unfilled_shape() {
     assert!(a.is_empty(), "{a:?}");
     assert!(matches!(t.overlays(&c).first(), Some(Overlay::Marquee(_))), "a marquee");
 }
+
+/// A Shift-press on a selected object's centre point moves the selection too, held to 45° steps,
+/// and a Shift-click there (no drag) takes the object out of the selection, as a Shift-press on
+/// the object itself does.
+#[test]
+fn a_shift_press_on_the_centre_point_moves_or_deselects() {
+    let (d, id) = doc_with_live_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let centre = Point::new(150.0, 150.0);
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y).with_mods(shift)).is_empty());
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 170.0, 160.0).with_mods(shift));
+    assert_eq!(a.first(), Some(&Action::Begin("Move".into())), "{a:?}");
+    let Some(Action::Preview(cmd, v)) = a.last().filter(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")) else { panic!("{a:?}") };
+    assert_eq!(cmd, "object.transform");
+    let [_, _, _, _, dx, dy] = [0, 1, 2, 3, 4, 5].map(|i| v["matrix"][i].as_f64().unwrap_or_default());
+    assert!(dx != 0.0 && dx == dy, "held to 45°: {dx} {dy}");
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 170.0, 160.0).with_mods(shift)), vec![Action::Commit]);
+    // A Shift-click there takes the object out of the selection on release.
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y).with_mods(shift)).is_empty());
+    assert_eq!(
+        t.pointer(&c, &ev(PointerKind::Up, centre.x, centre.y).with_mods(shift)),
+        vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))]
+    );
+}

@@ -469,9 +469,15 @@ fn a_shape_tool_moves_the_selection_by_its_centre_point_and_turns_it_from_a_corn
     t.pointer(&hidden, &PointerEvent::new(PointerKind::Down, centre.x, centre.y));
     let a = t.pointer(&hidden, &PointerEvent::new(PointerKind::Drag, 170.0, 160.0));
     assert_eq!(a.first(), Some(&Action::Begin("Move".into())), "{a:?}");
-    // Just outside the bottom-right corner (7.07 pt away, past the corner widget's 5): a press
-    // there turns the selection about its centre.
-    let outside = Point::new(205.0, 205.0);
+    // On the corner's bounding-box handle, and on the corner widget itself, no turn: those keep
+    // their own gestures (the widget rounds the corner, the handle scales with the Selection tool).
+    for on_handle in [Point::new(205.0, 205.0), Point::new(200.0, 200.0)] {
+        let t = ShapeTool::new("rectangle");
+        assert_ne!(t.cursor(&c, on_handle, Mods::default()), Cursor::rotate_about(centre, on_handle), "{on_handle:?}");
+    }
+    // Just outside the bottom-right corner, past the handle's 5 pt square and within the 18 pt
+    // zone (8.49 pt away): a press there turns the selection about its centre.
+    let outside = Point::new(206.0, 206.0);
     let mut t = ShapeTool::new("rectangle");
     assert_eq!(t.cursor(&c, outside, Mods::default()), Cursor::rotate_about(centre, outside));
     // A turn begins with the press, as the Selection tool's does (its drags preview into it).

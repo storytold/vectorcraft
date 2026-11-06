@@ -94,7 +94,7 @@ id = "Move"
 group = "Selection"
 shown_when = [
     "The Selection tool over a selected object, or over any object with Alt held (once an Alt-drag starts, SelectionCopy shows).",
-    "The shape tools over a selected object's centre point (Attributes › Show Center), and while dragging it.",
+    "The shape tools over a selected object's centre point (Attributes › Show Center), and while dragging it (SelectionCopy with Alt, ArrowHollow while it snaps).",
     "Reshape over a path or while dragging.",
     "Inside the Free Transform and Crop Image boxes.",
     "Puppet Warp over a pin.",

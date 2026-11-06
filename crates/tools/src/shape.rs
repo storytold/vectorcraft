@@ -18,21 +18,17 @@
 use serde_json::{Value, json};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
-use crate::bbox::{in_rotate_zone, move_delta, rotate_for_drag};
+use crate::bbox::{move_delta, rotate_for_drag};
 use crate::corners::{self, CornerDrag};
 use crate::guides::{DrawSnap, Leave, square};
 use crate::pie::{self, PieDrag};
-use crate::select::{MoveSnap, hit_center, matrix_json, shown_box};
+use crate::select::{MoveSnap, hit_center, matrix_json, rotate_zone, shown_box};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// The largest corner radius the Rounded Rectangle tool draws, points: the range of General ›
 /// Corner Radius, which the tool's radius is (its `prefs.list` spec), so ↑ and a Tool Options
 /// value stop there too.
 pub const MAX_CORNER_RADIUS: f64 = 1296.0;
-
-/// How far (screen points) outside a corner of the selection's box a press with a shape tool turns
-/// the selection, as the Selection tool's rotate zone does.
-const ROTATE_ZONE: f64 = 18.0;
 
 /// Does tool `id` keep the selection's bounding box and Live Shape widgets on show and let its
 /// corner and pie widgets be dragged (#5477)? The shape tools that draw a box: not Line Segment.
@@ -83,6 +79,9 @@ pub struct ShapeTool {
     guides: Vec<Overlay>,
     /// The measurement label of a move or a turn: where it goes and what it reads.
     measure: Option<(Point, String)>,
+    /// The move of the selection snapped to a point, a guide or the grid at its last step: the
+    /// arrow turns hollow, as the Selection tool's does.
+    snapped: bool,
 }
 
 /// The inner-to-outer radius ratio that keeps a star of `points` points' shoulders straight (each
@@ -122,6 +121,7 @@ impl ShapeTool {
             selection: None,
             guides: vec![],
             measure: None,
+            snapped: false,
         }
     }
 
@@ -145,11 +145,11 @@ impl ShapeTool {
         shows_shape_widgets(self.id).then(|| shown_box(cx)).flatten()
     }
 
-    /// Is `p` just outside a corner of the selection's box, where a press turns the selection about
-    /// its centre ([`ROTATE_ZONE`])? On the corner itself the Live Corners widget rounds it (#5477).
+    /// Is `p` in the zone just outside a corner of the selection's box, where a press turns the
+    /// selection about its centre ([`crate::select::rotate_zone`])? On the corner itself the Live
+    /// Corners widget rounds it (#5477).
     fn over_rotate(&self, cx: &ToolContext, p: Point) -> Option<Point> {
-        let bx = self.box_of(cx)?;
-        in_rotate_zone(bx.rect, bx.to_local(p), cx.tol(5.0), cx.tol(ROTATE_ZONE)).map(|_| bx.center())
+        rotate_zone(cx, &self.box_of(cx)?, p)
     }
 
     /// Is `p` over the centre point of a selected object (Attributes › Show Center), where a press
@@ -194,11 +194,11 @@ impl ShapeTool {
                     out.push(Action::Begin(if ev.mods.alt { "Copy".into() } else { "Move".into() }));
                 }
                 let shift = ev.mods.shift;
-                let (delta, guides) = if shift {
-                    snap.snap_along(cx, *hold, move_delta(*start, ev.pos, true, cx.constrain_angle), ev.mods.alt)
-                } else {
-                    snap.snap(cx, *hold, ev.pos - *start, ev.mods.alt)
-                };
+                let unsnapped = move_delta(*start, ev.pos, shift, cx.constrain_angle);
+                let (delta, guides) =
+                    if shift { snap.snap_along(cx, *hold, unsnapped, ev.mods.alt) } else { snap.snap(cx, *hold, unsnapped, ev.mods.alt) };
+                // Shift has already constrained the move: any change is a snap.
+                self.snapped = (delta - unsnapped).hypot() > 1e-9;
                 self.guides = guides;
                 self.measure = cx.measurement_labels.then(|| (ev.pos, cx.offset_label(delta.x, delta.y)));
                 out.push(Action::Preview("object.transform".into(), json!({"matrix": matrix_json(Affine::translate(delta)), "copy": ev.mods.alt})));
@@ -214,6 +214,7 @@ impl ShapeTool {
                 self.selection = None;
                 self.guides.clear();
                 self.measure = None;
+                self.snapped = false;
                 if began { vec![Action::Commit] } else { vec![] }
             }
             (PointerKind::Up, SelectionDrag::Rotate { .. }) => {
@@ -231,6 +232,7 @@ impl ShapeTool {
         self.selection = None;
         self.guides.clear();
         self.measure = None;
+        self.snapped = false;
         vec![Action::Cancel]
     }
 
@@ -586,7 +588,7 @@ impl Tool for ShapeTool {
         }
         o
     }
-    fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
+    fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         // Over a widget a press would drag (or dragging one), the Selection tool's pointer for it.
         let idle = self.start.is_none();
         match &self.widget {
@@ -594,25 +596,29 @@ impl Tool for ShapeTool {
             Some(WidgetDrag::Pie(_)) => return Cursor::ArrowHollow,
             None => {}
         }
+        // Alt-dragging the selection leaves a copy behind; otherwise the arrow, hollow while the
+        // move snaps, as the Selection tool's.
         match &self.selection {
             Some(SelectionDrag::Rotate { center, .. }) => return Cursor::rotate_about_in_view(*center, p, cx.view_angle()),
+            Some(SelectionDrag::Move { began: true, .. }) if m.alt => return Cursor::SelectionCopy,
+            Some(SelectionDrag::Move { began: true, .. }) => return if self.snapped { Cursor::ArrowHollow } else { Cursor::Arrow },
             Some(_) => return Cursor::Arrow,
             None => {}
         }
-        // The selection's centre point moves it and the zone just outside a corner turns it;
-        // everywhere else a press draws a new shape.
+        // A press takes the corner and pie widgets first, then the centre point, then the zone
+        // just outside a corner; everywhere else it draws a new shape.
         if idle {
-            if self.over_center(cx, p) {
-                return Cursor::Move;
-            }
-            if let Some(center) = self.over_rotate(cx, p) {
-                return Cursor::rotate_about_in_view(center, p, cx.view_angle());
-            }
             if shows_shape_widgets(self.id) && corners::over_widget(cx, p, false) {
                 return Cursor::CornerRadius;
             }
             if self.over_widget(cx, p) {
                 return Cursor::ArrowHollow;
+            }
+            if self.over_center(cx, p) {
+                return Cursor::Move;
+            }
+            if let Some(center) = self.over_rotate(cx, p) {
+                return Cursor::rotate_about_in_view(center, p, cx.view_angle());
             }
         }
         Cursor::Crosshair

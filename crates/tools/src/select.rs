@@ -527,13 +527,25 @@ enum BoxHit {
     Rotate,
 }
 
+/// How far (screen points) outside a corner of the bounding box a press turns the selection: the
+/// Selection tool's rotate zone, and the shape tools' (#5477).
+pub(crate) const ROTATE_ZONE: f64 = 18.0;
+
+/// Where a press at `p` just outside a corner of box `b` turns the selection about its centre, as
+/// the Selection tool's rotate zone does: the box's centre. None on a handle, on the corner itself
+/// or away from every corner.
+pub(crate) fn rotate_zone(cx: &ToolContext, b: &OrientedBox, p: Point) -> Option<Point> {
+    let (tol, lp) = (cx.tol(5.0), b.to_local(p));
+    (hit_handle(b.rect, lp, tol).is_none() && in_rotate_zone(b.rect, lp, tol, cx.tol(ROTATE_ZONE)).is_some()).then(|| b.center())
+}
+
 /// The bounding-box handle or rotate zone under `p`.
 fn box_hit(cx: &ToolContext, b: &OrientedBox, p: Point) -> Option<BoxHit> {
     let (tol, lp) = (cx.tol(5.0), b.to_local(p));
     if let Some(h) = hit_handle(b.rect, lp, tol) {
         return Some(BoxHit::Handle(h));
     }
-    in_rotate_zone(b.rect, lp, tol, cx.tol(18.0)).map(|_| BoxHit::Rotate)
+    in_rotate_zone(b.rect, lp, tol, cx.tol(ROTATE_ZONE)).map(|_| BoxHit::Rotate)
 }
 
 /// Whether the current selection's bounding-box handle is under `p`, using the same geometry as
@@ -838,13 +850,14 @@ impl Tool for SelectionTool {
                 // 2b. A selected object's centre point (Attributes › Show Center), drawn while it
                 // is selected: a drag from it moves the selection, also where no art is painted
                 // (an unfilled shape), which a press there would otherwise take for a marquee. A
-                // click there is a click on that object, so it makes it the key object too.
-                if !m.shift
-                    && !m.cmd
+                // click there is a click on that object: it makes it the key object of several,
+                // and a Shift-click takes it out of the selection on release.
+                if !m.cmd
                     && let Some((id, center)) = hit_center(cx, p, cx.point_tol())
                 {
-                    let key = ((cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.alt).then_some(id);
-                    self.state = State::Moving { start: p, press: p, hold: center, began: false, deselect: None, key, exclude: None };
+                    let several = cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty();
+                    let (deselect, key) = if m.shift { (Some(id), None) } else { (None, (several && !m.alt).then_some(id)) };
+                    self.state = State::Moving { start: p, press: p, hold: center, began: false, deselect, key, exclude: None };
                     return vec![];
                 }
                 // 3. Objects: Cmd/Ctrl-click selects the one under the selected one (cycling).
