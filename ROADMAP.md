@@ -1,7 +1,5 @@
 # VectorCraft Roadmap
 
-**#5547 local feature draft — 2026-11-06:** Show Missing Links in View and the Links panel decorates missing linked images and placed documents with a red outline and badge. Markers are transient canvas state; `view.showMissingLinks {on}` controls them and `links.marked` lists their ids and bounds. File checks refresh on the link watch worker with the panel closed; repair clears markers, and artwork rendering, save and undo stay separate. Engine, canvas and MCP focused regressions pass; headless canvas renders with markers on and off were inspected. All 12 `cargo xtask ci` steps pass, including WebAssembly. Scores and estimates unchanged.
-
 - Contour add-on (beyond Illustrator): drag a selected shape's edge outward or inward for a live, editable offset copy, with a floating bar for distance and Sharp, Round or Square corners; Bake turns it into paths. Scores and estimates unchanged.
 - Compound Shapes add-on (beyond Illustrator): a menu for Make, Release and Expand Compound Shape and a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons create compound shapes on a click. Scores and estimates unchanged.
 
@@ -16,7 +14,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x) · **Local draft:** #5547; full CI and headless visual check pass; scores unchanged
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -225,7 +223,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-06 | minor | #5547: missing-link canvas markers, View/Links toggles and command API drafted locally; focused engine/canvas/MCP regressions, headless visual check and full CI (including WebAssembly) pass; scores and estimates unchanged. |
+| 2026-11-06 | minor | Show Missing Links in View and the Links panel marks missing linked images and placed documents on the canvas; transient overlays stay out of artwork, export and undo history; command API controls and lists markers (#5547). Regression, visual and full CI checks passed; scores and estimates unchanged. |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-05 | minor | Progress log row for the Type Tools add-on's Release Type on a Path (#5532); headline numbers unchanged. |
 | 2026-11-03 | minor | Progress log row for the Type Tools add-on's Text Tweaker (#4924); headline numbers unchanged. |
