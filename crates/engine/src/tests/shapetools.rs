@@ -9,22 +9,26 @@ use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
 use crate::*;
 
+/// A new 400 × 400 pt document.
 fn new_doc() -> Session {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
     s
 }
 
+/// The view the gestures run in: page coordinates, with Smart Guides off so nothing snaps.
 fn view() -> ViewInfo {
     ViewInfo { smart_guides: false, ..ViewInfo::default() }
 }
 
+/// Feed the pointer events `(kind, x, y)`, all with `mods` held, to the active tool.
 fn gesture(s: &mut Session, mods: Mods, events: &[(PointerKind, f64, f64)]) {
     for (k, x, y) in events {
         s.pointer(&PointerEvent::new(*k, *x, *y).with_mods(mods), view()).unwrap();
     }
 }
 
+/// No modifier held.
 const NONE: Mods = Mods { shift: false, alt: false, cmd: false, ctrl: false, space: false };
 
 /// A 100 × 80 pt rectangle drawn from (100, 100) to (200, 180) with the Rectangle tool, still
@@ -35,14 +39,17 @@ fn drawn_rect(s: &mut Session) -> NodeId {
     *s.doc().unwrap().selection.objects.first().expect("the drawn rectangle is selected")
 }
 
+/// The geometric bounds of `id`.
 fn bounds(s: &Session, id: NodeId) -> Rect {
     s.doc().unwrap().doc.bounds_of(&[id], false).expect("bounds")
 }
 
+/// The angle of `id`'s bounding box, in degrees counter-clockwise: 0 for art square to the page.
 fn angle(s: &Session, id: NodeId) -> f64 {
     s.doc().unwrap().doc.oriented_bounds(&[id], false).map_or(0.0, |b| b.angle)
 }
 
+/// How many undo steps the active document's history holds.
 fn undo_steps(s: &Session) -> usize {
     s.doc().unwrap().history.undo.len()
 }

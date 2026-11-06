@@ -2191,7 +2191,8 @@ fn a_shift_press_on_the_centre_point_moves_or_deselects() {
     let Some(Action::Preview(cmd, v)) = a.last().filter(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")) else { panic!("{a:?}") };
     assert_eq!(cmd, "object.transform");
     let [_, _, _, _, dx, dy] = [0, 1, 2, 3, 4, 5].map(|i| v["matrix"][i].as_f64().unwrap_or_default());
-    assert!(dx != 0.0 && dx == dy, "held to 45°: {dx} {dy}");
+    // A 45° move, within the rounding of the matrix's own floats.
+    assert!(dx != 0.0 && (dx - dy).abs() < 1e-9, "held to 45°: {dx} {dy}");
     assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 170.0, 160.0).with_mods(shift)), vec![Action::Commit]);
     // A Shift-click there takes the object out of the selection on release.
     let mut t = SelectionTool::default();
