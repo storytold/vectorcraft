@@ -1068,10 +1068,15 @@ A command that takes its own date (`file.new {created}`, a save's `modified`) st
 variable. A blank, negative or non-numeric value is ignored and the clock decides, so an export is
 never refused over the environment. SVG output carries no time and was already reproducible.
 
-Two things stay on the real clock and are not pinned by the variable: the recovery heartbeat, and
-the random seed PDF encryption draws on. **A PDF exported with a password therefore still differs
-between runs** whatever `SOURCE_DATE_EPOCH` says, because that seed supplies its AES
-initialisation vectors and its file `/ID`. Reproducible output means an unencrypted export.
+Two things are not pinned by the variable: the recovery heartbeat, which stays on the real clock,
+and the random seed PDF encryption draws on, which mixes the OS random source with the clock. **A
+PDF exported with a password at PDF 1.4 or later therefore still differs between runs** whatever
+`SOURCE_DATE_EPOCH` says, because that seed supplies random bytes in its encryption dictionary and,
+at PDF 1.6 and later, its AES initialization vectors. Encryption at PDF 1.3 (RC4 40-bit) draws
+nothing from the seed, so that export repeats with the variable set. Encryption keeps the file `/ID`
+the export already wrote, which also repeats with the variable set; the seed supplies an `/ID` only
+for a file that has none. Reproducible output means an unencrypted export or a password-protected
+PDF 1.3 export.
 
 ### Parameter keys
 
