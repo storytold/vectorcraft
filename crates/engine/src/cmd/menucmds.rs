@@ -178,7 +178,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rearrange All Artboards…",
             ["Object", "Artboards"],
             None,
-            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with prefs moveLockedWithArtboard), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
+            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with lockedAndHidden), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (default: prefs moveLockedWithArtboard), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
             has_doc,
             rearrange_artboards
         ),
@@ -1274,7 +1274,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
     let move_art = switch_or(p, "moveArtwork", true, CMD)?;
     check_switches(p, &["patterns"], CMD)?;
-    let locked_and_hidden = s.prefs.move_locked_with_artboard;
+    let locked_and_hidden = super::panelcmds::locked_and_hidden(s, p, move_art, CMD)?;
     let d = &s.doc()?.doc;
     let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
     let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
@@ -1291,7 +1291,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     // With moveArtwork, each top-level object (a child of a layer or sublayer) moves with the
     // artboard its center is on, with symbol instances measured by their art as
     // `Document::art_on_artboard` measures them; locked and hidden art, and art on a locked
-    // artboard, moves only when prefs moveLockedWithArtboard is on.
+    // artboard, moves only with `locked_and_hidden`.
     fn objects<'a>(n: &'a Node, all: bool, out: &mut Vec<&'a Node>) {
         for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
             if c.is_layer() { objects(c, all, out) } else { out.push(c) }

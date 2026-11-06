@@ -139,7 +139,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut",
             ["Edit"],
             Some("Cmd+X"),
-            "{} (selected ruler guides go too; the Artboard tool chosen: artboard.cut)",
+            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (selected ruler guides go too; the Artboard tool chosen: artboard.cut)",
             has_selection_guides_or_artboard_tool,
             cut
         ),
@@ -148,7 +148,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy → {copied, guides}",
+            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -701,10 +701,15 @@ fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     Ok((direct, roots))
 }
 
-fn copy(s: &mut Session, _: &Value) -> Result<Value> {
+/// The params edit.copy and edit.cut pass on to `artboard.copy` and `artboard.cut`.
+fn artboard_clipboard_params(p: &Value) -> Value {
+    p.get("lockedAndHidden").map_or_else(|| json!({}), |v| json!({ "lockedAndHidden": v }))
+}
+
+fn copy(s: &mut Session, p: &Value) -> Result<Value> {
     // The Artboard tool copies its artboard (and the art on it).
     if s.tool_id() == "artboard" {
-        return super::panelcmds::artboard_copy(s, &json!({}), false);
+        return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), false);
     }
     let (direct, targets) = copy_cut_targets(s)?;
     let st = s.doc()?;
@@ -744,7 +749,7 @@ fn copy(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn cut(s: &mut Session, p: &Value) -> Result<Value> {
     if s.tool_id() == "artboard" {
-        return super::panelcmds::artboard_copy(s, &json!({}), true);
+        return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), true);
     }
     // Ruler guides selected on their own: Copy takes them, Clear removes them.
     if s.doc()?.selection.is_empty() {

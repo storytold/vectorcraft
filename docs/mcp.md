@@ -1155,7 +1155,7 @@ These Object menu commands refuse a string, a number or another value that is no
 `` `copy` must be true or false ``, naming the key, and change nothing: `reflectX`, `reflectY`, `random`, `copy`,
 `relative`, `strokes`, `corners`, `objects` and `patterns` in `object.transformEach`; `gray` and `deleteRaster` in
 `object.createObjectMosaic`; `trim` in `object.cropImage`; `allArtboards` in `object.createTrimMarks`; and `byColumn`,
-`moveArtwork` and `patterns` in `artboard.rearrange`. A null is read as a key left out. `object.createTrimMarks`
+`moveArtwork`, `patterns` and `lockedAndHidden` in `artboard.rearrange`. A null is read as a key left out. `object.createTrimMarks`
 refuses a `style` that is not a string, such as `5`, with `` `style` must be roman or japanese ``, the message it gives
 for a string that names no style.
 
@@ -3475,7 +3475,8 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   guide that near.
 - `moveLockedWithArtboard`: `artboard.move {moveArt: true}`, the Artboard tool and `artboard.rearrange` move locked and
   hidden art, and art that is also on a locked artboard, with the artboard too, and `artboard.setProps {scaleArt: true}`
-  scales it too; off (the default) it stays where it is.
+  scales it too; off (the default) it stays where it is. `artboard.duplicate`, `artboard.copy` and `artboard.cut` copy or
+  cut locked and hidden art only with it on. A `lockedAndHidden` param on any of these commands takes its place.
 - `penRubberBand`, `curvatureRubberBand` (on by default): off, the Pen and Curvature tools draw no preview segment to
   the pointer.
 - `showHandlesMultipleAnchors` (on by default): off, Direct Selection (and the Anchor Point tool, and the Pen with Alt)
@@ -3929,8 +3930,8 @@ isolation mode.
 
 Artboards copy with their art. `artboard.copy {index? | indices?, art?}` puts artboards on the clipboard together
 with the art fully inside each (`index` and `indices` default to the artboards the Artboard tool has selected; `art`
-defaults to the tool's `moveArt` option, Move/Copy Artwork with Artboard; locked and hidden art only with prefs
-`moveLockedWithArtboard`); with the Artboard tool chosen, `edit.copy` does this for the tool's selected artboards and
+defaults to the tool's `moveArt` option, Move/Copy Artwork with Artboard; locked and hidden art only with
+`lockedAndHidden: true`, default: prefs `moveLockedWithArtboard`); with the Artboard tool chosen, `edit.copy` does this for the tool's selected artboards and
 `edit.cut` runs `artboard.cut`, which also deletes them (one artboard is always left: a cut of every artboard fails).
 Then `edit.paste` adds a copy of each artboard, together right of the last one and placed as they lay, with their art
 in the layers it came from, in one undo step (`edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack` put
@@ -3942,6 +3943,9 @@ active one) as `indices`, and a row dragged onto New Artboard passes its artboar
 `artboard.move {copy: true, moveArt: true}` is the Artboard tool's Alt-drag. `artboard.duplicate` and `artboard.move`
 also move the pattern tiles of the copies when `patterns` is true (default: prefs `transformPatternTiles`);
 `edit.paste` leaves the tiles of a pasted artboard's art where they were.
+`artboard.duplicate`, `artboard.copy`, `artboard.cut`, `artboard.move` and `artboard.rearrange` take `lockedAndHidden?`
+(default: prefs `moveLockedWithArtboard`), and with the Artboard tool chosen `edit.copy` and `edit.cut` pass it on. When
+art goes along, the journal records the value, so a replay under another preference takes the same art.
 Every artboard command that takes an `index` fails with `no such artboard` when the `index` is not the
 0-based index of an artboard (past the last one, negative, fractional, a string or null), and the document and the
 clipboard stay as they were.
@@ -3949,8 +3953,8 @@ These artboard commands refuse a string, a number or another value that is not t
 `` `art` must be true or false ``, naming the key, and leave the document, its undo history and the clipboard as they
 were: `moveArt`, `scaleArt`, `strokes`, `corners`, `patterns`, `lockedAndHidden` and an artboard's `locked`,
 `showCenterMark`, `showCrossHairs` and `showVideoSafeAreas` in `artboard.setProps`; `showCenterMark`, `showCrossHairs`
-and `showVideoSafeAreas` in `artboard.new`; `moveArt`, `copy` and `patterns` in `artboard.move`; `art` and `patterns` in `artboard.duplicate`;
-and `art` in `artboard.copy` and `artboard.cut`. `artboard.setProps` refuses an artboard's `x`, `y`, `width` or
+and `showVideoSafeAreas` in `artboard.new`; `moveArt`, `copy`, `patterns` and `lockedAndHidden` in `artboard.move`; `art`, `patterns` and `lockedAndHidden` in `artboard.duplicate`;
+and `art` and `lockedAndHidden` in `artboard.copy` and `artboard.cut`. `artboard.setProps` refuses an artboard's `x`, `y`, `width` or
 `height` that is not a number, and `artboard.move` refuses such a `dx` or `dy`, with
 `` `dx` must be a number, not "10" ``. A null is read as a key left out.
 `artboard.new` refuses an `x`, `y`, `width` or `height` that is not a number with the same message, and
@@ -4012,7 +4016,7 @@ editable until a selection leaves it out or an edit moves it off the locked artb
 other art on it. `edit.undo`, `edit.redo` and a failed `command.batch` bring back the selection a step had, with that
 art selected and editable when it was. When another artboard moves, scales or is cut (`artboard.move`,
 `artboard.setProps`, `artboard.cut`, `artboard.rearrange`), art that is also on a locked artboard stays where it is
-unless prefs `moveLockedWithArtboard` is on (`lockedAndHidden` for `artboard.setProps`); a copy of an artboard copies
+unless `lockedAndHidden` is true (default: prefs `moveLockedWithArtboard`); a copy of an artboard copies
 it. With the Artboard tool, a click
 selects a locked artboard, but a drag doesn't move or copy it, it shows no handles, Delete leaves it, and a
 double-click on its name above the canvas doesn't edit the name (`artboard.setProps {name}` and the Artboards panel
