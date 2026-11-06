@@ -1726,6 +1726,58 @@ fn an_eyedropper_pick_from_a_frame_of_the_selected_story_styles_the_other_frames
     }
 }
 
+/// Whether a character in the frame that `text.thread.add` places at [`THREADED_AT`] is highlighted.
+fn third_frame_highlighted(s: &mut Session) -> bool {
+    let in_frame = |o: &vectorcraft_tools::Overlay| matches!(o, vectorcraft_tools::Overlay::Highlight { quad, color: [60, 120, 255, 90] } if quad.iter().all(|p| p.x > 690.0));
+    s.overlays(ViewInfo::default()).iter().any(in_frame)
+}
+
+/// Where a third frame of the story of [`threaded_story_edited_in_its_second_frame`] goes, clear
+/// of its other frames.
+const THREADED_AT: [f64; 2] = [700.0, 10.0];
+
+#[test]
+fn a_frame_threaded_into_the_selected_story_is_highlighted_and_takes_the_edit() {
+    for mods in eyedropper_picks() {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        red_source(&mut s, b);
+        s.execute("select.all", &json!({})).unwrap();
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        let c = s.execute("text.thread.add", &json!({"from": a.0, "before": true, "at": THREADED_AT})).unwrap()["id"].as_u64().unwrap();
+        let c = NodeId(c);
+        assert!(!obj(&s, c).plain_text().is_empty(), "the story starts in the new frame");
+        assert!(third_frame_highlighted(&mut s), "the new frame's text is highlighted");
+        pick_red_source(&mut s, mods);
+        assert!(all_red(&s, a) && all_red(&s, b) && all_red(&s, c), "every frame takes the pick");
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        assert!(third_frame_highlighted(&mut s), "back in the Type tool too");
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        let text = [a, b, c].map(|f| obj(&s, f).plain_text()).concat();
+        assert_eq!(text, "x", "typing replaces the text of every frame");
+    }
+}
+
+#[test]
+fn a_frame_that_left_the_selected_story_is_not_highlighted_and_leaves_the_edit() {
+    for mods in eyedropper_picks() {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        let c = s.execute("text.thread.add", &json!({"from": b.0, "at": THREADED_AT})).unwrap()["id"].as_u64().unwrap();
+        let c = NodeId(c);
+        red_source(&mut s, b);
+        assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0, c.0]));
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        s.execute("text.thread.break", &json!({"id": b.0, "port": "out"})).unwrap();
+        s.execute("text.setText", &json!({"id": c.0, "text": "Kept"})).unwrap();
+        assert!(!third_frame_highlighted(&mut s), "the frame that left has no highlight");
+        pick_red_source(&mut s, mods);
+        assert!(all_red(&s, a) && all_red(&s, b), "the frames still threaded take the pick");
+        assert!(!any_red(&s, c), "the frame that left stays as it is");
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        assert_eq!(obj(&s, c).plain_text(), "Kept", "typing leaves the frame that left");
+    }
+}
+
 #[test]
 fn typing_after_a_thread_is_removed_leaves_the_frame_that_left_the_story() {
     for through_eyedropper in [false, true] {

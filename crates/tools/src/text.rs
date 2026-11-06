@@ -174,9 +174,10 @@ pub struct TypeTool {
     /// Caret and selection anchor (byte offsets into the plain text).
     caret: usize,
     anchor: usize,
-    /// After Select All in a frame of threaded text: the story's frames in thread order, the edited
-    /// one included. While the selection is the edited frame's whole text, the text of the other
-    /// frames is selected too. Empty otherwise.
+    /// After Select All in a frame of threaded text: the story's frames in thread order then, the
+    /// edited one included. While the selection is the edited frame's whole text and this holds the
+    /// edited frame, the text of the other frames of its current thread is selected too. Empty
+    /// otherwise.
     story: Vec<NodeId>,
     /// Horizontal position kept by Up/Down (text space).
     goal_x: Option<f64>,
@@ -441,8 +442,8 @@ impl TypeTool {
     }
 
     /// The other frames whose whole text is selected along with the edited frame's after Select
-    /// All in threaded text ([`Self::story`]) that are still threaded with it: none once the
-    /// selection is not all of the edited frame's text.
+    /// All in threaded text ([`Self::story`]), read from the document's current thread: none once
+    /// the selection is not all of the edited frame's text.
     fn story_others(&self, cx: &ToolContext) -> Vec<NodeId> {
         let Some(id) = self.editing.filter(|id| self.story.contains(id)) else { return vec![] };
         let Some(t) = Self::text(cx, id) else { return vec![] };
@@ -450,8 +451,7 @@ impl TypeTool {
         if a != 0 || b < edit::runs_len(&t.runs) {
             return vec![];
         }
-        let Some(thread) = cx.doc.text_threads.iter().find(|t| t.contains(&id)) else { return vec![] };
-        self.story.iter().copied().filter(|f| *f != id && thread.contains(f) && Self::text(cx, *f).is_some()).collect()
+        cx.doc.story_of(id).into_iter().filter(|f| *f != id).collect()
     }
 
     /// Move the caret (Shift keeps the anchor). Moving ends the typing session.

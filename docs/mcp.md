@@ -5017,8 +5017,10 @@ every frame (the Character panel sends `text.setRangeStyle {id, story: true}`, w
 undo step). Remove Line Breaks, Remove Paragraph Breaks and Convert to Text also act on the text of every frame, as
 one undo step. A caret move or a click ends the story selection. Switching to the Eyedropper keeps the story selected,
 and switching back to a Type tool restores it. `appearance.copyFrom` and `paint.sampleColor` then apply to the text of
-every frame as one undo step, and `appearance.copyFrom` leaves out a frame that is its `source`. Once a thread is
-removed, typing replaces the text of the edited frame only.
+every frame as one undo step, and `appearance.copyFrom` leaves out a frame that is its `source`. While the story stays
+selected, its frames are the ones threaded with the edited frame at that moment: a frame that `text.thread.add` adds is
+highlighted and takes the edit, and a frame that leaves the thread is not highlighted and keeps its text. Once a thread
+is removed, typing replaces the text of the edited frame only.
 
 ```json
 {"name":"press_key","arguments":{"key":"A","mods":{"cmd":true}}}
