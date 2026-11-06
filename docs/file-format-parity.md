@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (`.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (SVG import: `color-interpolation="linearRGB"` gradients, #5878) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/formats.rs`). Illustrator's list comes from its public
@@ -189,6 +189,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | SVG import: a gradient with `color-interpolation="linearRGB"` (on it, inherited, or from a style sheet) mixes its stops in linear light, as SVG 1.1 §11.7.1 asks: the document gradient gets extra stops wherever display-RGB mixing would stray by half a colour level or more, so black to white is about 188/255 mid-way instead of 128 (#5878). A gradient several objects share is mixed so on every one. Opacity still mixes evenly; at most 4096 stops per gradient. Tests `import::linear_rgb`, `gradients::linear_rgb_*` (crate `vectorcraft-svg`); scores unchanged |
 | 2026-11-05 | minor | `.ai` import (#372): a path with a Calligraphic brush comes in as the path with the brush on its stroke (its weight scales the brush) when its art style's brush settings are the brush's own and its angle is on the page, else as its drawn look; a Calligraphic brush's Tilt, Bearing and Rotation codes come in as those channels instead of Random. Checked against a user's file of 6D Art Pen strokes (used locally, not committed); synthetic tests in `import::ai::tests` |
 | 2026-11-05 | minor | PDF import: the stops of an axial or radial shading in a DeviceN space of one spot ink and process plates link to the ink's swatch and keep the plates (`GradientStop.plates` in the native format); PDF and EPS export write them in a DeviceN space again (#3235) |
 | 2026-11-04 | minor | Raster/PSD export uses document resolution unless ppi or scale is supplied; CLI run/convert accept --ppi. Synthetic engine, CLI and MCP regressions cover dimensions and override precedence; scores and hours unchanged. |
