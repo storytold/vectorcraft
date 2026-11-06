@@ -252,6 +252,147 @@ fn clip_path_children_unite_under_their_own_rules() {
     assert!(matches!(children[1].kind, NodeKind::Compound { rule: vectorcraft_geom::FillRule::EvenOdd, .. }));
 }
 
+/// SVG 1.1 §14.3.5: a child of a clipPath element with its own clip-path is clipped by it before
+/// contributing to the clip (https://www.w3.org/TR/SVG11/masking.html#EstablishingANewClippingPath).
+#[test]
+fn clip_path_child_clip_path_clips_child() {
+    let page = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+      <defs>
+        <clipPath id="inner"><rect width="50" height="200"/></clipPath>
+        <clipPath id="outer">
+          <rect width="200" height="200" clip-path="url(#inner)"/>
+        </clipPath>
+      </defs>
+      <rect width="200" height="200" fill="#f00" clip-path="url(#outer)"/>
+    </svg>"##;
+    let (d, w) = import_with_report(page).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    let mine = render_artboard(&d);
+    assert_similar(&mine, &resvg_render(page, 200, 200), 24.0, 0.003);
+    assert_eq!(mine.over_white(25, 25), [255, 0, 0], "the left strip is clipped in");
+    assert_eq!(mine.over_white(100, 100), [255, 255, 255], "the right side is cut by inner clip");
+    // Written back out, the clip stays identical.
+    let out = vectorcraft_svg::export(&d, &Default::default());
+    assert_similar(&render_artboard(&vectorcraft_svg::import(&out).unwrap()), &mine, 24.0, 0.003);
+}
+
+#[test]
+fn clip_path_child_with_chained_clip_path_intersects() {
+    let page = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+      <defs>
+        <clipPath id="base"><rect y="0" width="200" height="100"/></clipPath>
+        <clipPath id="inner" clip-path="url(#base)"><rect x="0" width="50" height="200"/></clipPath>
+        <clipPath id="outer">
+          <rect width="200" height="200" clip-path="url(#inner)"/>
+        </clipPath>
+      </defs>
+      <rect width="200" height="200" fill="#f00" clip-path="url(#outer)"/>
+    </svg>"##;
+    let (d, w) = import_with_report(page).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    let mine = render_artboard(&d);
+    assert_similar(&mine, &resvg_render(page, 200, 200), 24.0, 0.003);
+    assert_eq!(mine.over_white(25, 25), [255, 0, 0], "top left quadrant is inside both clips");
+    assert_eq!(mine.over_white(25, 150), [255, 255, 255], "bottom left is cut by base clip");
+    assert_eq!(mine.over_white(100, 25), [255, 255, 255], "top right is cut by inner clip");
+}
+
+/// Clip paths are shared, so children that each name the next one multiply at every level: ten
+/// children on seven levels would take 10^7 reads unbounded. The import must still finish.
+#[test]
+fn clip_paths_whose_children_fan_out_still_import() {
+    let mut defs = String::from(r#"<clipPath id="c0"><rect width="10" height="10"/></clipPath>"#);
+    for n in 1..8 {
+        let kids = format!(r#"<rect width="10" height="10" clip-path="url(#c{})"/>"#, n - 1).repeat(10);
+        defs += &format!(r#"<clipPath id="c{n}">{kids}</clipPath>"#);
+    }
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><defs>{defs}</defs><rect width="20" height="20" clip-path="url(#c7)"/></svg>"#
+    );
+    assert!(import_with_report(&svg).is_ok());
+}
+
+#[test]
+fn clip_path_deep_chain_preserves_art() {
+    let mut defs = String::from(r#"<clipPath id="c0"><rect width="100" height="100"/></clipPath>"#);
+    for n in 1..=20 {
+        defs += &format!(r#"<clipPath id="c{n}" clip-path="url(#c{})"><rect width="100" height="100"/></clipPath>"#, n - 1);
+    }
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{defs}</defs><rect width="100" height="100" fill="#f00" clip-path="url(#c20)"/></svg>"##
+    );
+    let (d, w) = import_with_report(&svg).unwrap();
+    assert!(!w.is_empty(), "expected warning about deep clip nesting");
+    let mine = render_artboard(&d);
+    assert_eq!(mine.over_white(50, 50), [255, 0, 0], "red rect should be preserved despite depth limit");
+}
+
+#[test]
+fn clip_path_child_deep_chain_preserves_art() {
+    let mut defs = String::from(r#"<clipPath id="c0"><rect width="100" height="100"/></clipPath>"#);
+    for n in 1..=20 {
+        defs += &format!(r#"<clipPath id="c{n}" clip-path="url(#c{})"><rect width="100" height="100"/></clipPath>"#, n - 1);
+    }
+    defs += r#"<clipPath id="outer"><rect width="100" height="100" clip-path="url(#c20)"/></clipPath>"#;
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{defs}</defs><rect width="100" height="100" fill="#f00" clip-path="url(#outer)"/></svg>"##
+    );
+    let (d, _w) = import_with_report(&svg).unwrap();
+    let mine = render_artboard(&d);
+    assert_eq!(mine.over_white(50, 50), [255, 0, 0], "red rect should be preserved despite depth limit in child clip");
+}
+
+#[test]
+fn clip_path_preserves_union_when_read_budget_exhausted() {
+    let mut defs = String::from(r#"<clipPath id="tile"><rect width="10" height="10"/></clipPath>"#);
+    let mut kids = String::new();
+    for i in 0..1100 {
+        let x = (i % 20) * 10;
+        let y = (i / 20) * 10;
+        kids += &format!(r##"<rect x="{x}" y="{y}" width="10" height="10" clip-path="url(#tile)"/>"##);
+    }
+    defs += &format!(r#"<clipPath id="many">{kids}</clipPath>"#);
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="600"><defs>{defs}</defs><rect width="200" height="600" fill="#f00" clip-path="url(#many)"/></svg>"##
+    );
+    let (d, _w) = import_with_report(&svg).unwrap();
+    let mine = render_artboard(&d);
+    // Early tiles processed within the 1024 read budget must be preserved in the union.
+    assert_eq!(mine.over_white(5, 5), [255, 0, 0], "early tile inside read budget is preserved");
+}
+
+#[test]
+fn clip_path_empty_clips_everything() {
+    let page = r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+      <defs>
+        <clipPath id="empty"/>
+      </defs>
+      <rect width="100" height="100" fill="#f00" clip-path="url(#empty)"/>
+    </svg>"##;
+    let (d, _w) = import_with_report(page).unwrap();
+    let mine = render_artboard(&d);
+    assert_eq!(mine.over_white(50, 50), [255, 255, 255], "genuinely empty clip path clips away all art");
+}
+
+#[test]
+fn clip_path_child_with_empty_linked_clip_clips_everything() {
+    let page = r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+      <defs>
+        <clipPath id="empty"/>
+        <clipPath id="inner" clip-path="url(#empty)">
+          <rect width="100" height="100"/>
+        </clipPath>
+        <clipPath id="outer">
+          <rect width="100" height="100" clip-path="url(#inner)"/>
+        </clipPath>
+      </defs>
+      <rect width="100" height="100" fill="#f00" clip-path="url(#outer)"/>
+    </svg>"##;
+    let (d, _w) = import_with_report(page).unwrap();
+    let mine = render_artboard(&d);
+    assert_eq!(mine.over_white(50, 50), [255, 255, 255], "empty linked clip path clips away all art");
+}
+
 #[test]
 fn undisplayed_objects_import_hidden() {
     let body = r##"<rect width="10" height="10" display="none"/><g style="display:none"><circle cx="50" cy="50" r="5"/></g>
