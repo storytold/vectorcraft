@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Show Print Tiling",
             ["View"],
             None,
-            "{on?: bool (default: toggle)} show the pages of the document's print settings on the canvas (each document has its own setting; the Print Tiling tool shows them too) → {on}",
+            "{on?: bool (default: toggle; a non-boolean value returns an error)} show the pages of the document's print settings on the canvas (each document has its own setting; the Print Tiling tool shows them too) → {on}",
             has_doc,
             show
         ),
@@ -47,9 +47,22 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn show(s: &mut Session, p: &Value) -> Result<Value> {
-    let st = s.doc_mut()?;
-    st.print_tiling = p.get("on").and_then(Value::as_bool).unwrap_or(!st.print_tiling);
-    Ok(json!({ "on": st.print_tiling }))
+    const C: &str = "view.printTiling";
+    if !p.is_object() && !p.is_null() {
+        return Err(bad(C, "parameters must be an object"));
+    }
+    if let Some(fields) = p.as_object()
+        && let Some(other) = fields.keys().find(|name| name.as_str() != "on")
+    {
+        return Err(bad(C, format!("unknown parameter `{other}`")));
+    }
+    let on = match p.get("on") {
+        None => !s.doc()?.print_tiling,
+        Some(Value::Bool(on)) => *on,
+        Some(_) => return Err(bad(C, "`on` must be true or false")),
+    };
+    s.doc_mut()?.print_tiling = on;
+    Ok(json!({ "on": on }))
 }
 
 /// The pages of `doc`'s print settings in document space (what View → Show Print Tiling draws);
@@ -113,4 +126,18 @@ fn set_origin(s: &mut Session, p: &Value) -> Result<Value> {
         })?;
     }
     Ok(json!({ "tileOrigin": set.tile_origin }))
+}
+
+#[cfg(test)]
+mod show_param_tests {
+    use super::*;
+
+    #[test]
+    fn unknown_print_tiling_key_is_an_error_without_test_only_param_checks() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        assert!(show(&mut s, &json!({"onn": true})).is_err());
+        assert!(show(&mut s, &json!({"on": false, "unused": true})).is_err());
+        assert!(!s.doc().unwrap().print_tiling);
+    }
 }

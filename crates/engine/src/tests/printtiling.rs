@@ -16,6 +16,19 @@ fn session() -> Session {
     s
 }
 
+#[test]
+fn invalid_print_tiling_parameters_leave_the_view_unchanged() {
+    let mut s = session();
+    let undo = s.doc().unwrap().history.undo.len();
+    for params in [json!({"on": "false"}), json!({"on": null}), json!({"on": 1}), json!("on")] {
+        assert!(s.execute("view.printTiling", &params).is_err(), "accepted {params}");
+        let st = s.doc().unwrap();
+        assert!(!st.print_tiling, "changed print tiling for {params}");
+        assert_eq!(st.history.undo.len(), undo, "recorded undo for {params}");
+    }
+    assert_eq!(s.execute("view.printTiling", &json!(null)).unwrap(), json!({"on": true}));
+}
+
 fn rect(v: &Value) -> [f64; 4] {
     let a: Vec<f64> = v.as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
     [a[0], a[1], a[2], a[3]]

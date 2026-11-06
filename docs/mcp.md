@@ -4940,6 +4940,9 @@ what is drawn, from the layout `print.preview` and both writers (PDF and PostScr
 printed job agree: `{tileOrigin, pages: [{artboard, number, printed, page, imageable}]}` (`[x0, y0, x1, y1]` in document space; every tile when tiling, else
 each page once, not once per ink).
 
+`view.printTiling` rejects a supplied `on` value that is not a boolean, an unknown key, or a parameter payload other
+than an object or `null`. Omitting `on` toggles the current value.
+
 Dragging with the tool puts the top-left corner of the first page's imageable area where the pointer is (snapping to
 the artboard's edges): `print.tiling.set {origin: [x, y], artboard?}` saves it with the print settings as
 `tileOrigin: {placed: true, x, y}`, measured from the artboard's top-left corner (one undo step). It replaces the
