@@ -222,14 +222,23 @@ impl<L: LibraryFile> Libraries<L> {
             let device = crate::file_access::is_device_name;
             let id = format!("user/{file}").to_lowercase();
             let fallback = |other: &str| library_file_name(other, ext).to_lowercase() != file.to_lowercase();
-            let owner = |e: &Extra<L>| self.saved_as.get(&e.info.id.to_lowercase()).map_or(e.lib.name(), String::as_str).to_string();
+            // A format with no title reads its name from the file name, so a file a device name could
+            // have made has no known owner until it is saved here.
+            let untitled = L::read(bytes, "\0").is_ok_and(|lib| lib.name() == "\0");
+            let owner = |e: &Extra<L>| match self.saved_as.get(&e.info.id.to_lowercase()) {
+                Some(saved) => Some(saved.clone()),
+                None if untitled && device_file_name(e.lib.name()) => None,
+                None => Some(e.lib.name().to_string()),
+            };
             let held = self.extra.iter().any(|e| {
-                let other = owner(e);
-                e.info.id.to_lowercase() == id && other != name && (device(name) || device(&other) || fallback(&other))
+                e.info.id.to_lowercase() == id && owner(e).is_none_or(|other| other != name && (device(name) || device(&other) || fallback(&other)))
             });
             if held {
                 // Saved again, it goes back to the file it was given the first time.
-                let own = self.extra.iter().find(|e| e.info.category == "user" && owner(e) == name && extension(&e.info.id) == extension(&file));
+                let own = self
+                    .extra
+                    .iter()
+                    .find(|e| e.info.category == "user" && owner(e).as_deref() == Some(name) && extension(&e.info.id) == extension(&file));
                 file = match own.and_then(|e| e.info.id.strip_prefix("user/")) {
                     Some(own) => own.to_string(),
                     None => {
@@ -377,6 +386,13 @@ pub fn library_file_name(name: &str, ext: &str) -> String {
     } else {
         format!("{base}.{ext}")
     }
+}
+
+/// Is `stem` a file name [`library_file_name`] gives a device name (`COM¹-`, `COM¹-.x`), or one of
+/// those with the number [`free_name`] adds (`COM¹- 2`)?
+fn device_file_name(stem: &str) -> bool {
+    let base = stem.rsplit_once(' ').filter(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).map_or(stem, |(base, _)| base);
+    base.split('.').next().and_then(|first| first.strip_suffix('-')).is_some_and(crate::file_access::is_device_name)
 }
 
 /// The library files with extensions `exts` in folder `dir`, sorted by name.

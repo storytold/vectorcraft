@@ -794,7 +794,7 @@ fn a_library_named_like_a_device_keeps_the_library_with_its_file_name() {
 
 /// `.ase` keeps no title, so a library's name comes back from its file name. Whichever is saved
 /// first, `COM¹` and `COM¹-` keep a file each, and saving either again replaces only itself. After
-/// a restart `COM¹` can't be told from `COM¹-`, and gets a new file, not the other's.
+/// a restart neither can be told from the other, so each gets a new file and replaces neither.
 #[test]
 fn device_named_libraries_without_a_title_keep_their_own_files() {
     for (first, second) in [("COM¹", "COM¹-"), ("COM¹-", "COM¹")] {
@@ -813,9 +813,21 @@ fn device_named_libraries_without_a_title_keep_their_own_files() {
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
         // The next time the app starts.
         s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
-        let again = save(&mut s, "COM¹");
-        assert!(again != a && again != b, "{again}");
-        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 3);
+        for (name, count) in [(first, 3), (second, 4)] {
+            let again = save(&mut s, name);
+            assert!(again != a && again != b, "{name}: {again}");
+            assert_eq!(save(&mut s, name), again, "saving {name} again replaces {name}");
+            assert_eq!(std::fs::read_dir(&dir).unwrap().count(), count);
+        }
+        // The numbered file is as unknown as the first.
+        s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+        let numbered = b.strip_prefix("user/").unwrap().strip_suffix(".ase").unwrap().to_string();
+        assert_ne!(save(&mut s, &numbered), b);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 5);
+        // Any other name goes on replacing its own file after a restart.
+        let other = save(&mut s, "Greys");
+        s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+        assert_eq!(save(&mut s, "Greys"), other);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
