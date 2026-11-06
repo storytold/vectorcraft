@@ -6,7 +6,7 @@ use super::types::{
     FLIP, GState, Kind, MAX_DEPTH, MAX_HEX, MAX_LISTED, MAX_NODES, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, MAX_SYMBOLS,
     PatternHead, Place, Raster, SKIPPED, SymbolHead, VERSIONED_UNENDED,
 };
-use super::{Arc, Global, Lexer, Node, NodeKind, PatternDef, Reader, Rect, Tok, V, marker, obj};
+use super::{Arc, BrushArtColors, Global, Lexer, Node, NodeKind, PatternDef, Reader, Rect, Tok, V, marker, obj};
 use vectorcraft_doc::{NodeId, Symbol, SymbolRegistration};
 
 impl<'a> Reader<'a> {
@@ -709,7 +709,9 @@ impl<'a> Reader<'a> {
 
     /// A brush's art (`section`: what follows `%AI8_BeginBrushPattern`, its name as a string, then
     /// the art), read by a reader of its own as a pattern's is, in a space with y down. Art it can't
-    /// read whole isn't kept: the brushes that use it aren't read.
+    /// read whole isn't kept: the brushes that use it aren't read. Kept art's colors are kept with
+    /// it, and count as the page's once a brush that is kept uses the art
+    /// ([`Reader::count_brush_art_colors`]).
     fn define_brush_art(&mut self, section: &[u8]) {
         if self.brush_art_sections >= brush::MAX_BRUSH_ART || self.subreader_depth >= MAX_SUBREADERS {
             return;
@@ -754,7 +756,9 @@ impl<'a> Reader<'a> {
             _ => Some(Node::group(self.doc.alloc_id(), art)),
         };
         let Some(node) = node else { return };
-        self.brush_art.insert(name, node);
+        self.brush_art.insert(name.clone(), node);
+        let colors = BrushArtColors { spots: sub.spots, stop_spots: sub.stop_spots, cmyk: sub.cmyk_colors, rgb: sub.rgb_colors };
+        self.brush_art_colors.insert(name, colors);
     }
 
     /// Lend `sub`, a reader of a definition, what this import may still spend on laying out blends

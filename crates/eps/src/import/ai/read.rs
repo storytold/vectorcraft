@@ -137,7 +137,7 @@ use art::preview_png;
 pub use document::{BindingRef, Brushes, PaletteSwatches, VariableRead, artboards, bindings_note, brushes, graphic_styles, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
-use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
+use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
@@ -552,6 +552,8 @@ struct Reader<'a> {
     brush_drafts: Vec<super::brush::BrushDraft>,
     /// The art of the brushes (`%AI8_BeginBrushPattern`), by name.
     brush_art: HashMap<String, Node>,
+    /// The colors of the art in [`Reader::brush_art`], by name.
+    brush_art_colors: HashMap<String, BrushArtColors>,
     /// The brush art sections read so far, repeated names included.
     brush_art_sections: usize,
     /// Brush objects that weren't read.
@@ -693,6 +695,7 @@ impl<'a> Reader<'a> {
             brush_order: None,
             brush_drafts: Vec::new(),
             brush_art: HashMap::new(),
+            brush_art_colors: HashMap::new(),
             brush_art_sections: 0,
             brushes_unread: 0,
             graph: None,

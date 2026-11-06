@@ -924,6 +924,22 @@ impl<'a> Reader<'a> {
         Some((lib, left_out + self.brushes_unread))
     }
 
+    /// Count the colors of the brush art that the brushes `lib` use after the colors read so far,
+    /// in the order the art was read: its spot colors make swatches, and its colors count toward
+    /// the color mode. Art that no brush of `lib` uses brings none of its colors.
+    fn count_brush_art_colors(&mut self, lib: &[vectorcraft_brush::Brush]) {
+        let used: std::collections::HashSet<NodeId> = lib.iter().flat_map(|b| b.art()).map(|a| a.id).collect();
+        let mut names: Vec<(NodeId, String)> = self.brush_art.iter().filter(|(_, a)| used.contains(&a.id)).map(|(n, a)| (a.id, n.clone())).collect();
+        names.sort();
+        for (_, name) in names {
+            let Some(colors) = self.brush_art_colors.remove(&name) else { continue };
+            self.spots.extend(colors.spots);
+            self.stop_spots.extend(colors.stop_spots);
+            self.cmyk_colors += colors.cmyk;
+            self.rgb_colors += colors.rgb;
+        }
+    }
+
     /// The graphic styles of the style list, in its order: each listed name the art styles define with
     /// an appearance [`appearance_from_art_style`] reads, once (a name listed again, empty or not
     /// defined is left out), with ids from 1. Also the id of each kept name.
@@ -1034,6 +1050,10 @@ impl<'a> Reader<'a> {
             };
             take_ruler_guides(&mut doc.layers, &pick, &mut doc.guides, 0);
         }
+        let mut brushes = self.brush_library();
+        if let Some((lib, _)) = &brushes {
+            self.count_brush_art_colors(lib);
+        }
         if self.color_model.unwrap_or(self.cmyk_colors > self.rgb_colors) {
             doc.color_mode = ColorMode::Cmyk;
             let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
@@ -1054,7 +1074,6 @@ impl<'a> Reader<'a> {
         if let Some(author) = self.author.take() {
             doc.metadata.author = author;
         }
-        let mut brushes = self.brush_library();
         // The file's graphic styles in place of the defaults, and the objects linked to them.
         let (styles, ids) = self.graphic_styles();
         let styles_read = !styles.is_empty();

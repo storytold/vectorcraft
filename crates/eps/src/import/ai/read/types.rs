@@ -1,4 +1,4 @@
-use super::{Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Node, Obj, Paint, Rect, V};
+use super::{Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Named, Node, Obj, Paint, Rect, V};
 
 /// Deepest nesting of layers, groups and dictionaries.
 pub(super) const MAX_DEPTH: usize = 256;
@@ -247,6 +247,18 @@ pub(super) struct SymbolHead {
     /// path paints it.
     pub(super) missing_fill: bool,
     pub(super) missing_stroke: bool,
+}
+
+/// The colors a brush's art uses, counted as the page's are once a brush that is kept uses the art.
+#[derive(Debug, Default)]
+pub(super) struct BrushArtColors {
+    /// The named colors its color operators define.
+    pub(super) spots: Vec<Named>,
+    /// The named colors its gradient stops name.
+    pub(super) stop_spots: Vec<Named>,
+    /// Its colors set in each model.
+    pub(super) cmyk: usize,
+    pub(super) rgb: usize,
 }
 
 /// An image's operands, from `XN` and before `XI`.
