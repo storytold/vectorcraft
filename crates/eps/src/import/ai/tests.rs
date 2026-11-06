@@ -5154,10 +5154,68 @@ fn a_group_with_a_pathfinder_effect_keeps_its_members_and_the_effect() {
 }
 
 #[test]
+fn each_pathfinder_operation_on_a_group_draws_as_vectorcraft_draws_it() {
+    // GUARDS: only Add (`Command` 0) was read; the other operations came in as the drawn look's one path.
+    let ops = [
+        (1, "pathfinder.intersect"),
+        (2, "pathfinder.exclude"),
+        (3, "pathfinder.subtract"),
+        (4, "pathfinder.minusBack"),
+        (5, "pathfinder.divide"),
+        (6, "pathfinder.outline"),
+        (7, "pathfinder.trim"),
+        (8, "pathfinder.merge"),
+        (9, "pathfinder.crop"),
+        (10, "pathfinder.hardMix"),
+        (11, "pathfinder.softMix"),
+    ];
+    for (command, id) in ops {
+        let mix = if command == 11 { 0.3 } else { 0.5 };
+        let r = read_ok(&format!("{}{}", pathfinder_styles(command, mix), layer(&pathfinder_group())));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{command}: {a:#?}");
+        let members = a[0].children().cloned().unwrap_or_default();
+        assert_eq!(members.len(), 2, "{command}: the squares, not the look: {a:#?}");
+        let [e] = a[0].appearance.effects.as_slice() else { panic!("{command}: {:?}", a[0].appearance) };
+        assert_eq!((e.id.as_str(), e.visible), (id, true), "{command}");
+        let params = if command == 11 { serde_json::json!({"mixingRate": 30.0}) } else { serde_json::json!({}) };
+        assert_eq!(e.params, params, "{command}");
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{command}: {:?}", r.warnings);
+        // The same squares in a group made in VectorCraft, with the effect of that operation.
+        let square = |m: &Arc<Node>| {
+            let bounds = m.geometric_bounds().unwrap();
+            Arc::new(Node::path(m.id, vectorcraft_geom::shapes::rectangle(bounds), vectorcraft_doc::Appearance::basic(fill(m), Paint::None, 0.0)))
+        };
+        let mut own = Node::group(a[0].id, members.iter().map(square).collect());
+        own.appearance.effects.push(vectorcraft_doc::Effect { id: id.into(), params: params.clone(), visible: true });
+        // Each result's box and paints; Outline's lines start where each square's path starts, so
+        // the results are compared in a sorted order.
+        let faces = |g: &Node| -> Vec<String> {
+            let mut faces: Vec<String> = vectorcraft_effects::pathfinder_children(g, None)
+                .unwrap()
+                .iter()
+                .map(|n| {
+                    let b = n.geometric_bounds().unwrap_or_default();
+                    let round = |v: f64| (v * 1000.0).round() / 1000.0;
+                    let paints = (n.appearance.fill_paint().color(), n.appearance.stroke_paint().color());
+                    format!("{:?} {paints:?}", Rect::new(round(b.x0), round(b.y0), round(b.x1), round(b.y1)))
+                })
+                .collect();
+            faces.sort();
+            faces
+        };
+        let (opened, made) = (faces(&a[0]), faces(&own));
+        assert!(!made.is_empty(), "{command}");
+        assert_eq!(opened, made, "{command}");
+    }
+}
+
+#[test]
 fn a_pathfinder_style_this_does_not_read_keeps_the_drawn_look() {
-    // Another command (Intersect, Trap), and a Precision other than the one read.
+    // Trap, and a Precision other than the one read.
     let other = pathfinder_styles(0, 0.5).replace("10 /Real (Precision)", "5 /Real (Precision)");
-    for styles in [pathfinder_styles(1, 0.5), pathfinder_styles(12, 0.5), other] {
+    let intersect = pathfinder_styles(1, 0.5).replace("10 /Real (Precision)", "5 /Real (Precision)");
+    for styles in [pathfinder_styles(12, 0.5), other, intersect] {
         let r = read_ok(&format!("{styles}{}", layer(&pathfinder_group())));
         let a = art(&r.doc);
         assert_eq!(a.len(), 1, "{a:#?}");
