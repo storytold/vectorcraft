@@ -2,7 +2,8 @@
 //! the selected ones are deselected, the others selected), move (Alt copies, Shift constrains; Smart
 //! Guides, or with them off View › Snap to Point, snap it),
 //! bounding-box scale (Shift proportional, Alt from center; Snap to Grid, Snap to Pixel, Smart
-//! Guides and Snap to Point snap what the handle moves) and rotate (outside corners, Shift 45°),
+//! Guides and Snap to Point snap what the handle moves; Cmd/Ctrl-dragging a handle moves the
+//! selection instead, snapping the handle as the grabbed point, #5482) and rotate (outside corners, Shift 45°),
 //! drag a live rectangle's or polygon's corner widget to round its corners (Alt-click cycles their kind,
 //! double-click opens the Corners dialog), drag a live ellipse's pie widgets to set its pie angles
 //! (double-click makes it whole again: [`crate::pie`]), double-click a group or an object to enter isolation
@@ -1085,6 +1086,8 @@ impl Tool for SelectionTool {
         }
         if let Some(bx) = shown_box(cx) {
             match box_hit(cx, &bx, p) {
+                // Cmd/Ctrl over a handle: a drag moves the selection by it.
+                Some(BoxHit::Handle(_)) if m.cmd => return Cursor::Move,
                 Some(BoxHit::Handle(h)) => return handle_cursor(h, bx.angle - cx.view_angle()),
                 Some(BoxHit::Rotate) => return Cursor::rotate_about_in_view(bx.center(), p, cx.view_angle()),
                 None => {}
@@ -1452,6 +1455,14 @@ impl SelectionTool {
         }
         if let Some(bx) = shown_box(cx) {
             match box_hit(cx, &bx, p) {
+                // Cmd/Ctrl-dragging a handle moves the selection by that handle instead: the
+                // handle (not the pointer, which may be a few pixels off it) is the point that
+                // snaps, so it lands exactly on a point or guide (#5482).
+                Some(BoxHit::Handle(handle)) if ev.mods.cmd => {
+                    let at = bx.to_doc() * handle.pos(bx.rect);
+                    self.state = State::Moving { start: p, press: p, hold: at, began: false, deselect: None, key: None, exclude: None };
+                    return Some(vec![]);
+                }
                 Some(BoxHit::Handle(handle)) => {
                     let is_area = |id: &NodeId| cx.doc.node(*id).is_some_and(is_area_type);
                     let areas = cx.selection.objects.iter().any(is_area);

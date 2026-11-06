@@ -3588,7 +3588,8 @@ know or a value that isn't a boolean is refused and changes nothing.
 With Smart Guides on, a bounding-box handle dragged with the Selection or Free Transform tool (`mods.shift`
 proportional, `mods.alt` from the centre) lands on another object's anchor or centre (labelled "anchor" or
 "center"), else its corners and side line up with the edges and centres of the other objects and the artboards (a
-line and "align"). The Rotate, Scale, Shear and Reflect tools start a drag from the anchor or centre they grab and
+line and "align"). With `mods.cmd` (Cmd on macOS, Ctrl elsewhere) the handle drag moves the selection instead,
+unscaled, and the handle is the point that snaps (#5482). The Rotate, Scale, Shear and Reflect tools start a drag from the anchor or centre they grab and
 snap the pointer as drawing tools do, so dragging a corner onto another object's anchor scales exactly onto it:
 
 ```json
