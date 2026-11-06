@@ -879,7 +879,9 @@ document, takes the PDF options and keeps its path when reopened, so Save writes
 without giving the document a path. `options: {aiVersion: "7"}` writes legacy `.ai` files of version 7 instead (the
 PostScript form, which keeps layers, groups, compound paths and clipping groups in apps that read it), one per artboard
 of `range` (default all; `{name}-{artboard}.ai` when several, listed in the result's `files`), with
-`transparentImages: "flatten"` (default) or `"omit"` for images with see-through pixels, opacity or a blending mode,
+`transparentImages: "flatten"` (default) or `"omit"` for images with see-through pixels, opacity, a blending mode
+or a colorize color (except a colorized image of black and white pixels, which is written as a 1-bit image mask in
+its color with its white pixels clear),
 `hiddenObjects: "layer"` (default: a hidden layer of each layer's hidden objects), `"omit"` or `"visible"`, and
 `outlineText: true` to write type as outlines instead of text objects. Type with rotated characters (Character
 Rotation) is always written as outlines, which keep the rotation; without `outlineText: true` this gives the warning "type with rotated characters is

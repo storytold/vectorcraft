@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (SVG import: `color-interpolation="linearRGB"` gradients, #5878) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (SVG import: `color-interpolation="linearRGB"` gradients, #5878; `.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/formats.rs`). Illustrator's list comes from its public
@@ -82,7 +82,9 @@ private editing data. VectorCraft:
   PostScript form, from the published *Adobe Illustrator File Format Specification* version 7.0
   ([PRONOM fmt/423](https://www.nationalarchives.gov.uk/PRONOM/fmt/423)), which apps reading `.ai` open with its
   structure (#868). It keeps layers (names, order, visibility, lock), groups, compound paths, clipping groups,
-  solid colours, linear and radial gradients and RGB images. The format has one artboard: each artboard chosen in
+  solid colours, linear and radial gradients and RGB images. A colorized image whose pixels are all black or white
+  is written as a 1-bit image mask (ImageMask 1) in its color, with its white pixels clear, and opens colorized
+  again; other colorized images are flattened or omitted as the Transparent Images setting below says. The format has one artboard: each artboard chosen in
   the options dialog's artboard picker (thumbnails to check, default all) is a file of its own,
   `{name}-{artboard}.ai` when there are several. It has no transparency: objects are written opaque, and images
   with see-through pixels, opacity or a blending mode are flattened (an opaque image of themselves and the art

@@ -272,7 +272,11 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Image(im) => {
                 self.lock(locked);
-                self.image(self.doc.image_blob(im), im.width, im.height, im.xf);
+                let blob = self.doc.image_blob(im);
+                // A colorize color the renderer draws the image in.
+                let colorize =
+                    n.extras().colorize.as_deref().filter(|p| matches!(p, Paint::Solid { .. }) && blob.is_some_and(ImageBlob::takes_colorize));
+                self.image(blob, im.width, im.height, im.xf, colorize);
             }
             NodeKind::SymbolInstance { symbol, xf } => {
                 self.warn(LIVE);
@@ -835,7 +839,7 @@ impl<'a> Writer<'a> {
         // Colour bitmap glyphs (emoji): their images, which the runs' paint doesn't paint.
         for g in &layout.glyphs {
             if let Some((image, to_text)) = g.placed_image() {
-                self.image(Some(&image.blob), image.width, image.height, t.xf * to_text);
+                self.image(Some(&image.blob), image.width, image.height, t.xf * to_text, None);
             }
             // COLR glyphs: their layers, as art.
             if let Some(art) = g.placed_colour(t.xf) {
@@ -853,8 +857,12 @@ impl<'a> Writer<'a> {
     /// `%AI5_EndRaster`, then `F`. §8.4's examples have no `F`; without it, an app reading the file
     /// can leave out an image in a clipping group and the art after it. No path is open there, so
     /// the `F` paints nothing. `blob` holds the pixels, placed as a grid of `width` × `height`
-    /// by `xf`.
-    fn image(&mut self, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine) {
+    /// by `xf`, and `colorize` is the solid color the image is colorized with. A colorized image
+    /// whose pixels are all black or white is written as an image mask (ImageMask 1, §8.1): its
+    /// color as the fill, then 1-bit samples, a 0 bit for each black pixel, which takes the color,
+    /// and a 1 bit for each white pixel, which is clear. Another colorized image is written with
+    /// its color in its pixels.
+    fn image(&mut self, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine, colorize: Option<&Paint>) {
         let flip = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
         let m = self.to_art * xf * flip;
         if !invertible(m) {
@@ -876,25 +884,61 @@ impl<'a> Writer<'a> {
         // The object places the image's own pixel grid (its width × height) wherever the file's is.
         let fit = Affine::scale_non_uniform(f64::from(width.max(1)) / f64::from(w), f64::from(height.max(1)) / f64::from(h));
         let m = self.to_art * xf * fit * flip;
+        // Over white.
+        let over = |c: u8, a: u8| ((u32::from(c) * u32::from(a) + 255 * (255 - u32::from(a)) + 127) / 255) as u8;
+        if let Some(paint) = colorize {
+            let Some((_, _, coverage)) = blob.and_then(ImageBlob::coverage).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
+                self.warn(UNDECODED);
+                return;
+            };
+            if coverage.iter().all(|&v| v == 0 || v == 255) {
+                let stride = (w as usize).div_ceil(8);
+                let mut bits = vec![0xFF; stride.saturating_mul(h as usize)];
+                for (i, _) in coverage.iter().enumerate().filter(|(_, v)| **v == 255) {
+                    let (x, y) = (i % w as usize, i / w as usize);
+                    if let Some(byte) = bits.get_mut(y * stride + x / 8) {
+                        *byte &= !(0x80 >> (x % 8));
+                    }
+                }
+                self.color(paint, false);
+                self.raster(m, &format!("0 0 {w} {h} {w} {h} 1 1 0 0 0 1"), &bits);
+                return;
+            }
+            let rgb = paint.color().map_or([0; 3], |c| c.to_rgb().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8));
+            let samples: Vec<u8> = coverage.iter().flat_map(|&a| rgb.map(|c| over(c, a))).collect();
+            self.warn(IMAGE_ALPHA);
+            self.raster(m, &format!("0 0 {w} {h} {w} {h} 8 3 0 0 0 0"), &samples);
+            return;
+        }
         let rgba = img.to_rgba8();
-        let mut hex = String::with_capacity(rgba.len() / 4 * 7);
-        hex.push('%');
-        let mut on_line = 0;
+        let mut samples = Vec::with_capacity(rgba.len() / 4 * 3);
         let mut see_through = false;
         for px in rgba.pixels() {
             let [r, g, b, a] = px.0;
             if a < 255 {
                 see_through = true;
             }
-            // Over white.
-            let over = |c: u8| ((u32::from(c) * u32::from(a) + 255 * (255 - u32::from(a)) + 127) / 255) as u8;
-            for c in [over(r), over(g), over(b)] {
-                let _ = write!(hex, "{c:02X}");
-                on_line += 2;
-                if on_line >= HEX_LINE {
-                    hex.push_str("\n%");
-                    on_line = 0;
-                }
+            samples.extend([over(r, a), over(g, a), over(b, a)]);
+        }
+        if see_through {
+            self.warn(IMAGE_ALPHA);
+        }
+        self.raster(m, &format!("0 0 {w} {h} {w} {h} 8 3 0 0 0 0"), &samples);
+    }
+
+    /// An image's lines (§8.4): `%AI5_File:`, `%AI5_BeginRaster`, matrix `m` as `[ a b c d tx ty ]`
+    /// and the numbers `operands` with `XI`, `samples` in hex on comment lines of [`HEX_LINE`]
+    /// digits, `%AI5_EndRaster`, then `F`.
+    fn raster(&mut self, m: Affine, operands: &str, samples: &[u8]) {
+        let mut hex = String::with_capacity(samples.len() * 2 + samples.len() / HEX_LINE * 2 + 2);
+        hex.push('%');
+        let mut on_line = 0;
+        for c in samples {
+            let _ = write!(hex, "{c:02X}");
+            on_line += 2;
+            if on_line >= HEX_LINE {
+                hex.push_str("\n%");
+                on_line = 0;
             }
         }
         if hex.ends_with('%') {
@@ -902,14 +946,11 @@ impl<'a> Writer<'a> {
         } else {
             hex.push('\n');
         }
-        if see_through {
-            self.warn(IMAGE_ALPHA);
-        }
         let [a, b, c, d, e, f] = m.as_coeffs();
         let s = &mut self.body;
         s.push_str("%AI5_File:\n%AI5_BeginRaster\n[ ");
         ps::push_nums(s, &[a, b, c, d, e, f]);
-        let _ = writeln!(s, "] 0 0 {w} {h} {w} {h} 8 3 0 0 0 0 XI");
+        let _ = writeln!(s, "] {operands} XI");
         s.push_str(&hex);
         s.push_str("%AI5_EndRaster\nF\n");
     }
