@@ -9287,7 +9287,8 @@ fn direct_selection_shows_the_bounding_box_while_cmd_is_held() {
     let handle_drawn = |app: &mut VectorcraftApp, modifiers: egui::Modifiers| {
         let screen = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)));
         let raw = egui::RawInput { screen_rect: screen, events: vec![egui::Event::ModifiersChanged(modifiers)], ..Default::default() };
-        let out = ctx.run_ui(raw, |ui| show(app, ui));
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear(); // the render worker's frame can land in any of these
         fn flat(s: Shape, out: &mut Vec<Shape>) {
             match s {
                 Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, out)),
