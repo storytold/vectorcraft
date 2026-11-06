@@ -886,11 +886,12 @@ impl TextDoc {
         }
         let packed: String = ps::ascii85(&bytes).chars().filter(|c| !c.is_whitespace()).collect();
         let mut s = String::from("%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n");
-        // Each line starts with `%`, and no line's data starts with `_` (a `%_` line is content).
+        // Each line starts with `%`, no line's data starts with `_` (a `%_` line is content), and the
+        // end marker `~>` stays on one line (the reader looks for it before it joins the lines).
         let mut col = 0;
         s.push('%');
         for ch in packed.chars() {
-            if col >= LINE && ch != '_' {
+            if col >= LINE && ch != '_' && !(ch == '>' && s.ends_with('~')) {
                 s.push_str("\n%");
                 col = 0;
             }

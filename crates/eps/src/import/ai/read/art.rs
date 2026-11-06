@@ -36,6 +36,8 @@ impl<'a> Reader<'a> {
         n.opacity = gs.opacity;
         n.blend = gs.blend;
         n.knockout_shape = gs.knockout_shape;
+        // An `Xy` before the text object was the object's, not its layer's, when the layer's `LB` follows.
+        self.layer_state = None;
         let hidden = self.obj_hidden;
         self.add(n, hidden)
     }

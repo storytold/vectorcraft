@@ -32,7 +32,7 @@ pub(super) use texts::TYPE_ATTRIBUTES;
 /// [`vectorcraft_doc::MAX_DEPTH`].
 const MAX_NEST: u32 = 8;
 
-pub(super) const TYPE: &str = "type in opacity masks, pattern tiles and art cut to a clipping object, mirrored type, area type and type on a path that is turned or unevenly scaled or whose frame or path has several parts, area type that flows around a text wrap, threads whose frames differ in orientation or hold a frame written as outlines, type of sizes past what the reader reads, stories past what the reader reads (1,048,576 bytes a story, 16,777,216 bytes in all, and the size of text document it reads), and type with inline graphics, ruby, gradient or pattern paint, or fills, strokes, effects or an opacity mask of the object's own, is written as its outlines in the editing data for other apps";
+pub(super) const TYPE: &str = "type in opacity masks, pattern tiles and art cut to a clipping object, mirrored type, area type and type on a path that is turned or unevenly scaled or whose frame or path has several parts, area type in an open frame, type on an open path whose ends meet, area type that flows around a text wrap, type of only white space, threads of type on a path, threads whose frames differ in orientation or hold a frame written as outlines, type of sizes past what the reader reads, stories past what the reader reads (1,048,576 bytes a story, 16,777,216 bytes in all, and the size of text document it reads), and type with inline graphics, ruby, gradient or pattern paint, or fills, strokes, effects or an opacity mask of the object's own, is written as its outlines in the editing data for other apps";
 pub(super) const PATTERNS: &str = "pattern fills whose tiles aren't a grid or whose art reaches past the tile, pattern fills in another pattern's tile and pattern fills nested more than 8 deep are written as their tiles cut to the shape in the editing data for other apps";
 pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fill places are written filled gray in the editing data for other apps";
 pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose clipping object isn't a path, and the clipping groups inside them, are written as their art cut to that object in the editing data for other apps";
@@ -338,6 +338,16 @@ impl<'a> Writer<'a> {
         }
     }
 
+    /// [`Self::set_xy`] for an object that writes no paint before its transparency (type, an image,
+    /// a guide): `XR` comes first, as in [`Self::paint_state`], because an `Xy` right after a compound
+    /// path or a text object would be theirs.
+    fn set_object_xy(&mut self, xy: Xy) {
+        if self.gs != Some(xy) {
+            self.line("0 XR");
+            self.write_xy(xy);
+        }
+    }
+
     /// `mode opacity isolate knockout shape Xy`.
     fn write_xy(&mut self, xy: Xy) {
         let knockout = match xy.knockout {
@@ -356,6 +366,11 @@ impl<'a> Writer<'a> {
     /// dictionary goes between the two ([`Self::node`]).
     fn end_group(&mut self, close: &str, xy: Xy) {
         self.line(close);
+        self.state_block(xy);
+    }
+
+    /// The state block of the group or text object just written ([`Self::end_group`]).
+    fn state_block(&mut self, xy: Xy) {
         self.block_start = self.body.len();
         if xy == Xy::PLAIN {
             self.line("9 () XW");
@@ -397,7 +412,7 @@ impl<'a> Writer<'a> {
                 if *guide {
                     // Its own transparency, not the one the object before it set.
                     if path.subpaths.iter().any(|sp| !sp.anchors.is_empty()) {
-                        self.set_xy(xy.object());
+                        self.set_object_xy(xy.object());
                     }
                     ai_ops::guide(&mut self.body, self.to_art, path, true);
                 } else {
@@ -836,7 +851,7 @@ impl<'a> Writer<'a> {
 
     /// The paint of a path of transparency `xy` filled by `rule`: its fill color and `O`, its stroke
     /// color and `R`, `Xy`, the line style, `XR`. Without paint, `XR` comes first: an `Xy` right
-    /// after a group or compound path would be theirs.
+    /// after a compound path or a text object would be theirs.
     fn paint_state(&mut self, fill: Option<&FillLayer>, stroke: Option<&StrokeLayer>, xy: Xy, rule: FillRule) {
         let rule = if rule == FillRule::EvenOdd { "1 XR" } else { "0 XR" };
         if let Some(f) = fill {
@@ -908,9 +923,13 @@ impl<'a> Writer<'a> {
         if lost {
             self.warn(texts::TYPE_ATTRIBUTES);
         }
-        // The stub takes the transparency set before it, as a path does.
-        self.set_xy(xy.object());
+        // The stub takes the transparency set before it, as a path does. Its isolation and knockout
+        // are read only from a state block after it, as a group's are.
+        self.set_object_xy(xy.object());
         texts::stub(&mut self.body, story, frame, t, self.to_art);
+        if xy.isolate || xy.knockout != Knockout::Neutral {
+            self.state_block(xy);
+        }
     }
 
     /// Type `n` as a group of what Type › Create Outlines makes of it
@@ -1183,9 +1202,6 @@ fn compound_path(n: &Node) -> PathData {
     PathData::new(subpaths)
 }
 
-/// The outline and fill rule a clipping path or compound path `n` clips by; `None` for other
-/// clipping objects and for a path without points (it clips everything away, see
-/// [`Writer::clip_contents`]).
 /// Is object `id` of `doc` in (or inside) a clipping group or clipping layer whose clipping object
 /// isn't a path or compound path (its art is written cut to that object, [`Writer::clip_group`])?
 /// Type that is a clipping object is one of these: it isn't a path.
@@ -1198,6 +1214,9 @@ fn cut_to_clipping_object(doc: &Document, id: NodeId) -> bool {
     })
 }
 
+/// The outline and fill rule a clipping path or compound path `n` clips by; `None` for other
+/// clipping objects and for a path without points (it clips everything away, see
+/// [`Writer::clip_contents`]).
 fn clip_path(n: &Node) -> Option<(PathData, FillRule)> {
     let (path, rule) = match &n.kind {
         NodeKind::Path { path, rule, guide: false, .. } => (path.clone(), *rule),

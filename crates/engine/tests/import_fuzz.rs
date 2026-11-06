@@ -3413,9 +3413,9 @@ proptest! {
         survive("hostile .ai images and placed files", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
-    /// A `.ai` whose type (point type turned, area type and type on a path, their stubs with the
-    /// frames' paths, and the text document they name, as the `.ai` writer writes them) is damaged:
-    /// read from its editing data alone and beside a page.
+    /// A `.ai` whose type (point type turned, vertical type, area type, threaded area type and type
+    /// on a path, their stubs with the frames' paths, and the text document they name, as the `.ai`
+    /// writer writes them) is damaged: read from its editing data alone and beside a page.
     #[test]
     fn ai_text_documents_never_panic(
         cut in 0usize..30_000,
@@ -3433,12 +3433,29 @@ proptest! {
         let mut on_path = TextObject::point(Point::ZERO, "On a path", CharStyle::default());
         on_path.kind = TextKind::OnPath { path: shapes::ellipse(Rect::new(100.0, 20.0, 180.0, 80.0)), start: 0.25, end: None };
         on_path.xf = Affine::IDENTITY;
-        for t in [point, area, on_path] {
+        let mut down = TextObject::point(Point::new(190.0, 10.0), "Down", CharStyle::default());
+        down.vertical = true;
+        let mut down_area = area.clone();
+        down_area.vertical = true;
+        down_area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(150.0, 40.0, 180.0, 90.0)) };
+        let mut first = area.clone();
+        first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(20.0, 5.0, 50.0, 35.0)) };
+        first.runs = vec![vectorcraft_doc::TextRun::new("A story through two frames", CharStyle::default())];
+        let mut second = first.clone();
+        second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(60.0, 5.0, 90.0, 35.0)) };
+        second.runs = vec![vectorcraft_doc::TextRun::new("", CharStyle::default())];
+        for t in [point, area, on_path, down, down_area] {
             let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
             doc.insert(Some(layer), usize::MAX, n).unwrap();
         }
+        let (first, second) = (Node::new(doc.alloc_id(), NodeKind::Text(Box::new(first))), Node::new(doc.alloc_id(), NodeKind::Text(Box::new(second))));
+        doc.text_threads.push(vec![first.id, second.id]);
+        doc.insert(Some(layer), usize::MAX, first).unwrap();
+        doc.insert(Some(layer), usize::MAX, second).unwrap();
         let program = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap().program;
-        let text = mutate_text(&String::from_utf8_lossy(&program), cut, &edits);
+        let written = String::from_utf8_lossy(&program);
+        prop_assert_eq!(written.matches("/AI11Text :").count(), 7, "every text object is written as text");
+        let text = mutate_text(&written, cut, &edits);
         let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
         survive("hostile .ai type", || vectorcraft_eps::ai_alone(&private).ok().map(|r| r.0))?;
         survive("hostile .ai type beside a page", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;

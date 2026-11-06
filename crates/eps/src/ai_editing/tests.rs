@@ -3725,6 +3725,168 @@ fn the_knockout_shape_of_type_comes_back() {
     assert_eq!((n.opacity, n.knockout_shape), (0.5, true));
 }
 
+/// The kinds of object that write no paint before their `Xy` or no state block after them, and a
+/// group, which writes a state block.
+#[derive(Clone, Copy, Debug)]
+enum Beside {
+    Type,
+    Compound,
+    Image,
+    Guide,
+    Group,
+}
+
+/// An object of `kind` at `x`, with opacity, blending mode and knockout shape flag `state`.
+fn beside(doc: &mut Document, kind: Beside, x: f64, state: (f32, BlendMode, bool)) -> Node {
+    let r = Rect::new(x, 10.0, x + 20.0, 30.0);
+    let mut n = match kind {
+        Beside::Type => {
+            let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(x, 40.0), "Hi", style(10.0, Color::BLACK));
+            text_node(doc, t)
+        }
+        Beside::Compound => {
+            let outer = Node::path(doc.alloc_id(), shapes::rectangle(r), Appearance::default());
+            let inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(x + 5.0, 15.0, x + 15.0, 25.0)), Appearance::default());
+            let mut ring =
+                Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::EvenOdd });
+            ring.appearance = Appearance::basic(solid(BRAND), Paint::None, 0.0).into();
+            ring
+        }
+        Beside::Image => {
+            let mut png = vec![];
+            let img = image::RgbaImage::from_raw(1, 1, vec![255, 0, 0, 255]).unwrap();
+            img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+            let blob = ImageBlob::new("image/png", png);
+            let key = blob.content_key();
+            doc.images.insert(key.clone(), blob);
+            let xf = Affine::new([10.0, 0.0, 0.0, 10.0, x, 10.0]);
+            let im = ImageObject { key, width: 1, height: 1, xf, link: None, placement: Default::default(), pixels: None };
+            Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im)))
+        }
+        Beside::Guide => Node::new(
+            doc.alloc_id(),
+            NodeKind::Path { path: shapes::rectangle(r), rule: FillRule::NonZero, live: None, clipping: false, guide: true },
+        ),
+        Beside::Group => {
+            let member = square(doc, r, BRAND);
+            group(doc, vec![member], false)
+        }
+    };
+    (n.opacity, n.blend, n.knockout_shape) = state;
+    n
+}
+
+/// Two objects next to each other come back with their own opacity, blending mode and knockout
+/// shape flag, whichever is first and whichever is opaque: an `Xy` right after a text object or a
+/// compound path is theirs when no other operator comes between. The layer's stays its own.
+#[test]
+fn objects_next_to_each_other_keep_their_own_transparency() {
+    use Beside::{Compound, Group, Guide, Image, Type};
+    let (clear, screen, plain) = ((0.5, BlendMode::Multiply, true), (0.25, BlendMode::Screen, false), (1.0, BlendMode::Normal, false));
+    let pairs = [
+        (Type, Type),
+        (Compound, Type),
+        (Group, Type),
+        (Type, Group),
+        (Type, Compound),
+        (Type, Image),
+        (Type, Guide),
+        (Compound, Image),
+        (Compound, Guide),
+    ];
+    for (a, b) in pairs {
+        for (first, second) in [(clear, plain), (plain, clear), (clear, screen), (clear, clear)] {
+            let mut doc = Document::new(200.0, 100.0);
+            let layer = doc.layers[0].id;
+            let (x, y) = (beside(&mut doc, a, 10.0, first), beside(&mut doc, b, 60.0, second));
+            doc.insert(Some(layer), usize::MAX, x).unwrap();
+            doc.insert(Some(layer), usize::MAX, y).unwrap();
+            let back = read_back(&doc);
+            let at = format!("{a:?} {first:?} then {b:?} {second:?}");
+            let kids = back.layers[0].children().unwrap();
+            assert_eq!(kids.len(), 2, "{at}");
+            for (n, (kind, want)) in kids.iter().zip([(a, first), (b, second)]) {
+                // The reader takes no knockout shape flag for an image.
+                let want = if matches!(kind, Image) { (want.0, want.1, false) } else { want };
+                assert_eq!((n.opacity, n.blend, n.knockout_shape), want, "{at}");
+            }
+            let l = &back.layers[0];
+            assert_eq!((l.opacity, l.blend, l.knockout_shape), plain, "the layer's own: {at}");
+        }
+    }
+}
+
+/// A layer whose last object is type keeps its own transparency, and the type keeps its.
+#[test]
+fn type_last_in_a_transparent_layer_keeps_its_own_transparency() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let text = beside(&mut doc, Beside::Type, 10.0, (0.5, BlendMode::Multiply, true));
+    doc.insert(Some(layer), usize::MAX, text).unwrap();
+    let l = Arc::make_mut(&mut doc.layers[0]);
+    (l.opacity, l.blend) = (0.75, BlendMode::Screen);
+    let back = read_back(&doc);
+    let (l, n) = (&back.layers[0], &back.layers[0].children().unwrap()[0]);
+    assert_eq!((l.opacity, l.blend), (0.75, BlendMode::Screen));
+    assert_eq!((n.opacity, n.blend, n.knockout_shape), (0.5, BlendMode::Multiply, true));
+}
+
+/// Isolate Blending and the Knockout Group state of type come back, named or not and whatever
+/// follows it, as outlines kept them on their group, and are written again as the same bytes.
+#[test]
+fn the_isolation_and_knockout_of_type_come_back() {
+    for name in [None, Some("Title")] {
+        let cases = [(true, Knockout::On), (false, Knockout::On), (false, Knockout::Off), (true, Knockout::Neutral), (false, Knockout::Neutral)];
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        for (i, (isolate, knockout)) in cases.into_iter().enumerate() {
+            let mut n = beside(&mut doc, Beside::Type, 10.0 + 30.0 * i as f64, (0.5, BlendMode::Multiply, false));
+            (n.isolate, n.knockout) = (isolate, knockout);
+            n.name = name.map(|s| format!("{s} {i}"));
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+        let after = beside(&mut doc, Beside::Compound, 170.0, (1.0, BlendMode::Normal, false));
+        doc.insert(Some(layer), usize::MAX, after).unwrap();
+        let back = read_back(&doc);
+        let kids = back.layers[0].children().unwrap();
+        assert_eq!(kids.len(), cases.len() + 1);
+        for (i, (n, (isolate, knockout))) in kids.iter().zip(cases).enumerate() {
+            assert!(matches!(n.kind, NodeKind::Text(_)));
+            assert_eq!((n.isolate, n.knockout, n.opacity, n.blend), (isolate, knockout, 0.5, BlendMode::Multiply), "{i}");
+            assert_eq!(n.name, name.map(|s| format!("{s} {i}")));
+        }
+        assert_eq!(kids[cases.len()].opacity, 1.0);
+        let art = |d: &Document| program(d).split_once("%%EndSetup").map(|(_, art)| art.to_string()).unwrap();
+        assert_eq!(art(&back), art(&doc));
+    }
+}
+
+/// The end marker of the text document stays on one line wherever the ASCII85 ends: the reader
+/// looks for `~>` in the lines as they are, before it joins them.
+#[test]
+fn the_end_marker_of_the_text_document_stays_on_one_line() {
+    let mut at_the_boundary = 0;
+    // A character is two bytes: sizes of more digits reach the lengths that characters don't.
+    for size in [10.0, 10.25, 10.125, 10.0625] {
+        for len in 1..=60 {
+            let mut doc = Document::new(200.0, 100.0);
+            let layer = doc.layers[0].id;
+            let text = "x".repeat(len);
+            let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 40.0), &text, style(size, Color::BLACK));
+            let t = text_node(&mut doc, t);
+            doc.insert(Some(layer), usize::MAX, t).unwrap();
+            let p = program(&doc);
+            assert!(!p.contains("~\n%>"), "{size} {len}");
+            // A full line (`%` and 100 characters) that the `>` goes past.
+            at_the_boundary += usize::from(p.lines().any(|l| l.len() == 102 && l.ends_with("~>")));
+            let back = read_back(&doc);
+            let NodeKind::Text(read) = &back.layers[0].children().unwrap()[0].kind else { panic!("{size} {len}: not type") };
+            assert_eq!(read.plain_text(), text);
+        }
+    }
+    assert!(at_the_boundary > 0, "no length put the `~` at the end of a line");
+}
+
 /// An empty frame after a slice that ends with a paragraph break holds the story's last paragraph,
 /// and that paragraph comes back with the empty frame's style.
 #[test]
