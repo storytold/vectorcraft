@@ -1687,7 +1687,7 @@ fn a_selection_inside_one_threaded_frame_stays_in_that_frame_under_the_eyedroppe
 }
 
 #[test]
-fn an_eyedropper_pick_on_the_whole_story_leaves_locked_and_hidden_frames() {
+fn an_eyedropper_pick_on_the_whole_story_styles_locked_and_hidden_frames() {
     for command in ["object.lock", "object.hide"] {
         for held_first in [false, true] {
             for mods in eyedropper_picks() {
@@ -1699,8 +1699,8 @@ fn an_eyedropper_pick_on_the_whole_story_leaves_locked_and_hidden_frames() {
                 s.select_tool("eyedropper", ViewInfo::default()).unwrap();
                 let undo = s.doc().unwrap().history.undo.len();
                 pick_red_source(&mut s, mods);
-                assert!(all_red(&s, other), "{command}: the editable frame takes the pick");
-                assert!(!any_red(&s, held), "{command}: the held frame stays as it is");
+                assert!(all_red(&s, other), "{command}: the other frame takes the pick");
+                assert!(all_red(&s, held), "{command}: the held frame takes the pick");
                 assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{command}: one undo step");
             }
         }
