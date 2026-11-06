@@ -625,27 +625,49 @@ fn is_word(c: char) -> bool {
 
 /// Byte ranges of `needle` in `hay`.
 pub(crate) fn find_all(hay: &str, needle: &str, match_case: bool, whole_word: bool) -> Vec<(usize, usize)> {
+    find_within(hay, 0, hay.len(), needle, match_case, whole_word)
+}
+
+/// Byte ranges (offsets into `hay`) of `needle` lying wholly inside `hay[from..to]`. A whole-word
+/// match checks its neighbours in all of `hay`, not just the slice: a style run ends inside a word as
+/// often as between words (`cat` red in `catfish`), and that is no word boundary.
+fn find_within(hay: &str, from: usize, to: usize, needle: &str, match_case: bool, whole_word: bool) -> Vec<(usize, usize)> {
     let nc: Vec<char> = needle.chars().collect();
+    let Some(part) = hay.get(from..to) else { return vec![] };
     if nc.is_empty() {
         return vec![];
     }
-    let hc: Vec<(usize, char)> = hay.char_indices().collect();
+    let hc: Vec<(usize, char)> = part.char_indices().collect();
     let eq = |a: char, b: char| if match_case { a == b } else { a == b || a.to_lowercase().eq(b.to_lowercase()) };
     let mut out = vec![];
     let mut i = 0;
     while i + nc.len() <= hc.len() {
-        if (0..nc.len()).all(|k| eq(hc[i + k].1, nc[k])) {
-            let before = i.checked_sub(1).map(|j| hc[j].1);
-            let after = hc.get(i + nc.len()).map(|x| x.1);
+        if (0..nc.len()).all(|k| hc.get(i + k).is_some_and(|c| eq(c.1, nc[k]))) {
+            let start = hc.get(i).map_or(part.len(), |x| x.0);
+            let end = hc.get(i + nc.len()).map_or(part.len(), |x| x.0);
+            let before = hay.get(..from + start).and_then(|h| h.chars().next_back());
+            let after = hay.get(from + end..).and_then(|h| h.chars().next());
             if !whole_word || (!before.is_some_and(is_word) && !after.is_some_and(is_word)) {
-                let start = hc[i].0;
-                let end = hc.get(i + nc.len()).map(|x| x.0).unwrap_or(hay.len());
-                out.push((start, end));
+                out.push((from + start, from + end));
                 i += nc.len();
                 continue;
             }
         }
         i += 1;
+    }
+    out
+}
+
+/// Matches of `needle` in each style run of `t`, as (run, start, end) with byte offsets inside the
+/// run. Matches never span runs, but whole-word boundaries are judged on the whole text.
+fn find_in_runs(t: &TextObject, needle: &str, match_case: bool, whole_word: bool) -> Vec<(usize, usize, usize)> {
+    let hay = t.plain_text();
+    let mut out = vec![];
+    let mut base = 0;
+    for (ri, r) in t.runs.iter().enumerate() {
+        let end = base + r.text.len();
+        out.extend(find_within(&hay, base, end, needle, match_case, whole_word).into_iter().map(|(a, b)| (ri, a - base, b - base)));
+        base = end;
     }
     out
 }
@@ -676,7 +698,7 @@ fn find_replace(s: &mut Session, p: &Value) -> Result<Value> {
     let total: usize = ids
         .iter()
         .filter_map(|id| match &st.doc.node(*id)?.kind {
-            NodeKind::Text(t) => Some(t.runs.iter().map(|r| find_all(&r.text, &find, mc, ww).len()).sum::<usize>()),
+            NodeKind::Text(t) => Some(find_in_runs(t, &find, mc, ww).len()),
             _ => None,
         })
         .sum();
@@ -689,17 +711,13 @@ fn find_replace(s: &mut Session, p: &Value) -> Result<Value> {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             // Matches as (run, start, end) with offsets inside the run. Inline graphics are art, not
             // characters to rewrite.
+            let bases: Vec<usize> = t.runs.iter().scan(0, |acc, r| Some(std::mem::replace(acc, *acc + r.text.len()))).collect();
             let mut hits = vec![];
-            let mut base = 0;
-            for (ri, r) in t.runs.iter().enumerate() {
-                if r.inline.is_none() {
-                    for (a, b) in find_all(&r.text, &find, mc, ww) {
-                        if r.text.get(a..b) != Some(rep.as_str()) {
-                            hits.push((ri, base + a, base + b, a, b));
-                        }
-                    }
+            for (ri, a, b) in find_in_runs(t, &find, mc, ww) {
+                let (Some(r), Some(&base)) = (t.runs.get(ri), bases.get(ri)) else { continue };
+                if r.inline.is_none() && r.text.get(a..b) != Some(rep.as_str()) {
+                    hits.push((ri, base + a, base + b, a, b));
                 }
-                base += r.text.len();
             }
             if hits.is_empty() {
                 continue;

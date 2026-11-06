@@ -1989,6 +1989,22 @@ fn find_and_replace_options() {
     assert!(s.execute("edit.findReplace", &json!({"find": ""})).is_err());
 }
 
+/// Whole Word judges a match's neighbours across style runs: `cat` coloured red in `catfish` (or
+/// `cat` in a black run after a red `bob`) is still inside a word, so it isn't replaced (#5901).
+#[test]
+fn find_whole_word_ignores_style_run_boundaries_inside_a_word() {
+    let mut s = session();
+    let a = text(&mut s, "catfish");
+    s.execute("text.setRangeStyle", &json!({"id": a.0, "start": 0, "end": 3, "fill": "#ff0000"})).unwrap();
+    let b = text(&mut s, "bobcat");
+    s.execute("text.setRangeStyle", &json!({"id": b.0, "start": 0, "end": 3, "fill": "#ff0000"})).unwrap();
+    let c = text(&mut s, "cat fish");
+    s.execute("text.setRangeStyle", &json!({"id": c.0, "start": 0, "end": 3, "fill": "#ff0000"})).unwrap();
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "DOG", "wholeWord": true})).unwrap();
+    assert_eq!(r["count"], 1);
+    assert_eq!((plain(&s, a), plain(&s, b), plain(&s, c)), ("catfish".into(), "bobcat".into(), "DOG fish".into()));
+}
+
 /// Find and Replace with no ids leaves the type on a locked artboard as it is.
 #[test]
 fn find_and_replace_leaves_type_on_a_locked_artboard() {

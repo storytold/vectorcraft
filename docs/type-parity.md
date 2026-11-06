@@ -1,6 +1,6 @@
 # Type parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Show Snap to Glyph Options scrolls to the options, with a Snap to Glyph checkbox, #5273; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Find and Replace › Whole Word no longer matches inside a word with two style runs, #5901; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Type is Illustrator's largest single area by use (weight 13 of 105 across "Type core" and "Type advanced" in
 [target-app-parity.md](target-app-parity.md)). This checklist lists the features one by one. Status is from the
@@ -48,7 +48,7 @@ against Illustrator's public documentation; **estimated** unless noted.
 | Tab stops and leaders; Tabs panel | partial | Tabs panel and stops with leaders in the model (`text.tabs.set`); a stop drags from where the press landed (#1458); leaders fill the tab's gap, repeated on a grid so they line up from line to line (#1877); Ctrl-dragging a stop (Command on macOS) moves all the stops together |
 | Hidden characters (Show Hidden Characters) | done | `type.hiddenCharacters` |
 | Spell check (Check Spelling, Auto Spell Check, custom dictionary) | missing | menu stubs; needs an openly licensed dictionary |
-| Smart Punctuation, Change Case, Find & Replace | done | |
+| Smart Punctuation, Change Case, Find & Replace | done | Whole Word judges a match's neighbours across style runs, so `cat` coloured apart inside `catfish` isn't a whole word (#5901; `menucmds::find_whole_word_ignores_style_run_boundaries_inside_a_word`) |
 | Caret: the arrows and Delete step over whole clusters (Thai consonant with its marks, combining accents, emoji); Backspace removes one character | done | in text with right-to-left characters the arrows move in visual order and stop on both sides of a character drawn with no width, such as a zero width non-joiner |
 | Touch Type tool | done | moves, scales and rotates one character through its kerning, baseline shift, scales and rotation (`text.touchType`); a character with a preceding logical character on the same line can move along the line in either reading direction; the first logical character moves only up and down. Positive `dx` follows reading order. These direction rules are VectorCraft's choices. |
 | Retype (identify fonts in outlines/images) | missing | Illustrator's uses a cloud model |
@@ -77,6 +77,7 @@ Character Styles menu New/Redefine and footer New capture the first selected cha
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | Find and Replace with Whole Word judges word boundaries on the whole text, not each style run, so it no longer replaces `cat` inside `catfish` when `cat` is styled apart (#5901); scores and estimates unchanged |
 | 2026-11-05 | minor | Character panel › Show Snap to Glyph Options scrolls the panel down to the Snap to Glyph section, which comes after every character attribute and could sit out of sight, and the section starts with a Snap to Glyph checkbox (View › Snap to Glyph) so its dimmed options can be turned on there (#5273); scores and estimates unchanged |
 | 2026-11-05 | minor | Release Type on a Path joins the Type Tools add-on: type on a path splits into point type and its path (#5532, beyond Illustrator). Scores and estimates unchanged. |
 | 2026-11-04 | minor | A Type-range Copy or Cut publishes styled art alongside plain text, so a later canvas Paste keeps its character formatting after editing ends (#5636). Scores and estimates unchanged. |
