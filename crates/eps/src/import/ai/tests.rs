@@ -3313,6 +3313,44 @@ fn legacy_tab_definitions_skipped_capped_and_left_open() {
     assert!(texts[1].para_at(0).tabs.is_empty(), "the next object's `To` ends the open definition");
 }
 
+/// Point type whose 1024 tab stops are followed by 2048 paragraph breaks, each after `attrs(i)`.
+fn paragraphs_after_many_tabs(attrs: impl Fn(usize) -> String) -> String {
+    let many: String = (0..1024).map(|i| format!("0 0 1 {i} Xe\n")).collect();
+    let breaks: String = (0..2048).map(|i| format!("{}(x\\r) Tx\n", attrs(i))).collect();
+    point_type(&format!("36 1024 Xb\n{many}XB"), "A").replace("TO\n", &format!("{breaks}TO\n"))
+}
+
+/// Paragraphs that start with the same attributes all keep the same tab stops, however many
+/// there are, also when an attribute is set again to the value it has.
+#[test]
+fn legacy_tab_stops_last_through_many_paragraphs() {
+    for again in ["", "0 Ta\n"] {
+        let r = legacy_read(&paragraphs_after_many_tabs(|_| again.to_string()));
+        let texts = art_texts(&r.doc);
+        let [t] = texts.as_slice() else { panic!("{texts:?}") };
+        assert_eq!(t.paragraph_count(), 2049);
+        assert!((0..2049).all(|i| t.para_at(i).tabs.len() == 1024), "{again}");
+        assert!(r.warnings.is_empty(), "{again}: {:?}", r.warnings);
+    }
+}
+
+/// Each paragraph whose attributes differ from the paragraph before it holds its own copy of its
+/// tab stops, and a text object's paragraphs hold no more than 1,048,576 stops: the paragraphs
+/// past them take the default stops and keep their other attributes, with a warning.
+#[test]
+fn legacy_tab_stops_copied_into_paragraphs_are_capped() {
+    let r = legacy_read(&paragraphs_after_many_tabs(|i| format!("{} Ta\n", i % 2)));
+    let texts = art_texts(&r.doc);
+    let [t] = texts.as_slice() else { panic!("{texts:?}") };
+    let paras = t.paragraph_styles();
+    assert_eq!(paras.len(), 2049);
+    assert_eq!(paras.iter().map(|p| p.tabs.len()).sum::<usize>(), 1 << 20);
+    assert!(paras[..1024].iter().all(|p| p.tabs.len() == 1024));
+    assert!(paras[1024..].iter().all(|p| p.tabs.is_empty()));
+    assert_eq!((paras[2046].justify, paras[2047].justify), (vectorcraft_doc::Justify::Left, vectorcraft_doc::Justify::Center));
+    assert_eq!(r.warnings, ["tab stops past VectorCraft's limits were left out"]);
+}
+
 /// `Te` (end render, §22.6) reads in a text object with no operands and with four, inside a tab
 /// definition too, and keeps nothing; so does `TM` (pop text matrix, §22.6).
 #[test]
@@ -3623,6 +3661,23 @@ fn legacy_area_type_reads_up_to_its_limit_of_linked_areas() {
     assert_eq!(r.doc.text_threads.iter().map(Vec::len).collect::<Vec<_>>(), [LIMIT]);
     assert_eq!(frames[0].1.plain_text(), "ab");
     assert_eq!(r.warnings, [LINKED_AREAS_LEFT_OUT]);
+}
+
+/// The frames of linked areas after the first copy the story's last paragraph attributes, and
+/// those copies hold no more than 1,048,576 tab stops: the frames past them take the default
+/// stops, with a warning.
+#[test]
+fn legacy_linked_area_frames_cap_their_copied_tab_stops() {
+    let many: String = (0..1024).map(|i| format!("0 0 1 {i} Xe\n")).collect();
+    let area = format!("1 0 0 1 0 0 0 Tp\n{}n\nTP\n", rect_path(0.0, 0.0, 50.0, 40.0));
+    let text = format!("1 To\n{}0 Tr\n36 1024 Xb\n{many}XB\n(a) Tx\nTO\n", area.repeat(4096));
+    let r = legacy_read(&text);
+    let frames = art_frames(&r.doc);
+    assert_eq!(frames.len(), 4096);
+    let stops: Vec<usize> = frames.iter().map(|(_, f)| f.para_at(0).tabs.len()).collect();
+    assert_eq!(stops.iter().filter(|&&n| n == 1024).count(), 1025);
+    assert_eq!(stops.iter().filter(|&&n| n == 0).count(), 3071);
+    assert_eq!(r.warnings, ["tab stops past VectorCraft's limits were left out"]);
 }
 
 /// The warning when linked areas are left out.

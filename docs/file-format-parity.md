@@ -109,7 +109,10 @@ private editing data. VectorCraft:
   open live); legacy `.ai` without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868; guides
   open as ruler guides and guide paths since #5057 (#779).
   Legacy `.ai` type keeps its paragraphs' letter and word spacing (`TC`, `TW`), hanging punctuation (`Tq`) and
-  hyphenation (`Th`); its tab definitions (`Xb` … `XB`) set its paragraphs' tab stops; its special characters
+  hyphenation (`Th`); its tab definitions (`Xb` … `XB`) set its paragraphs' tab stops. Paragraphs in a row with
+  the same attributes share one copy of them while the text object is read, and those copies hold at most
+  1,048,576 stops. The paragraphs and linked frames of one text object then get at most 1,048,576 more copied
+  stops. Paragraphs and frames past either limit take the default stops, with a warning. Its special characters
   (`TS`) join the story, and end render (`Te`) and pop text matrix (`TM`) are read and ignored. Its type in a
   font re-encoded with encoding pairs of its own (`TZ`) is decoded with those pairs, and with the file's encoding
   (`TE`) for the codes they leave out unless the `TZ` sets `useDefault` to 0.
