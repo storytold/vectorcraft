@@ -630,6 +630,19 @@ fn rows_can_have_a_gutter_of_their_own() {
     assert_eq!(layout(db(), &t).frames.get(1).map(|f| f.y0), Some(160.0));
 }
 
+/// A gutter so huge that a line's height no longer moves the baseline past it: the cells beyond it
+/// have no room, and looking down all 10,000 of them for a line must not freeze the layout.
+#[test]
+fn a_gutter_too_huge_to_step_past_has_no_room_for_lines() {
+    let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 420.0, 300.0), Justify::Left);
+    (t.area.rows, t.area.row_gutter) = (2, Some(1e300));
+    let l = layout(db(), &t);
+    assert!(l.lines.is_empty() && l.overflow);
+    (t.area.rows, t.area.columns, t.area.gutter, t.area.row_gutter) = (100, 100, 1e300, None);
+    let l = layout(db(), &t);
+    assert!(l.lines.is_empty() && l.overflow);
+}
+
 // ---------- area flow ----------
 
 #[test]
