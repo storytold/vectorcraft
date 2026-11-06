@@ -1095,7 +1095,7 @@ fn known(action: &Action<String>) -> bool {
     }
 }
 
-/// Draw the canvas and the panels in the space left by the bars and the Tools panel, and apply
+/// Draw the canvas, its docked Tools panel and the other panels below the bars, and apply
 /// what the user did to them.
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let area = area_id();
@@ -1345,6 +1345,7 @@ struct PanelContent<'a> {
 impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     fn body(&mut self, ui: &mut egui::Ui, id: &String) {
         if id == CANVAS {
+            crate::toolbar::show_beside_canvas(self.app, ui);
             self.app.canvas_area(ui);
             return;
         }
@@ -1388,7 +1389,8 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     }
 
     fn limits(&self, id: &String) -> craft_ui::docking::PanelLimits {
-        let min = if id == CANVAS { egui::vec2(200.0, 120.0) } else { egui::vec2(PANEL_MIN_WIDTH, 80.0) };
+        let min =
+            if id == CANVAS { egui::vec2(200.0 + crate::toolbar::docked_width(&self.app.ui), 120.0) } else { egui::vec2(PANEL_MIN_WIDTH, 80.0) };
         craft_ui::docking::PanelLimits { min, ..Default::default() }
     }
 
