@@ -297,9 +297,10 @@ fn the_link_is_a_preference_agents_can_read_and_set() {
     assert_eq!(size(&app), (200.0, 100.0));
 }
 
-/// One Tab moves from a field to the next field: neither a field's label (its scrub zone) nor the
-/// W/H link between two fields is a tab stop of its own. In the Transform panel and the Properties
-/// panel the fields run X, W, Y, H (a grid, two to a row); in the Control bar X, Y, W, H.
+/// One Tab moves from a field to the next field: a field's label (its scrub zone) is not a tab
+/// stop of its own, and the W/H link between W and H, which is still focusable, comes after the
+/// fields. In the Transform panel and the Properties panel the fields run X, W, Y, H (a grid, two
+/// to a row); in the Control bar X, Y, W, H.
 #[test]
 fn one_tab_moves_from_a_field_to_the_next() {
     // From X (the selection's centre, 60 pt) the next field is W in the panels and Y in the bar.
