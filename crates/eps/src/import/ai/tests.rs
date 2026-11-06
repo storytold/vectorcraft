@@ -5495,7 +5495,7 @@ fn envelope_parts(before: &str, keys: &str, block: &str, kind: u32, drawn: &str)
 
 /// An envelope of `content` (in the plain group the editing data puts round it) shaped by the mesh
 /// `shape`.
-fn envelope_of(shape: &str, keys: &str, content: &str, kind: u32, drawn: &str) -> String {
+pub(super) fn envelope_of(shape: &str, keys: &str, content: &str, kind: u32, drawn: &str) -> String {
     envelope_parts(shape, keys, &format!("u\n{content}U\n9 () XW\n"), kind, drawn)
 }
 
@@ -5527,7 +5527,7 @@ fn mesh_text(cols: usize, rows: usize, at: MeshAt<'_>, handle: MeshHandle<'_>, a
 }
 
 /// A grid in art space, its points `step` apart from (40, 20), handles a third of the way.
-fn straight_mesh(cols: usize, rows: usize, step: (f64, f64)) -> String {
+pub(super) fn straight_mesh(cols: usize, rows: usize, step: (f64, f64)) -> String {
     let at = move |(i, j): (usize, usize)| (40.0 + i as f64 * step.0, 20.0 + j as f64 * step.1);
     let third = move |p: (usize, usize), q: (usize, usize)| {
         let ((x, y), (u, v)) = (at(p), at(q));
@@ -5537,13 +5537,13 @@ fn straight_mesh(cols: usize, rows: usize, step: (f64, f64)) -> String {
 }
 
 /// The red rectangle 40 20 160 80 in art space, which is the same box in the document's.
-fn envelope_content() -> String {
+pub(super) fn envelope_content() -> String {
     format!("{RED}{}f\n", rect_path(40.0, 20.0, 160.0, 80.0))
 }
 
 /// What envelope `kind` draws of [`envelope_content`]: the rectangle's edges, many points to a
 /// side, mapped as VectorCraft maps them, as a red path in art space.
-fn drawn_content(kind: &vectorcraft_doc::live::EnvelopeKind) -> String {
+pub(super) fn drawn_content(kind: &vectorcraft_doc::live::EnvelopeKind) -> String {
     let rect = Rect::new(40.0, 20.0, 160.0, 80.0);
     let map = vectorcraft_doc::live::envelope_mapper(kind, rect);
     let corners = [Point::new(40.0, 20.0), Point::new(160.0, 20.0), Point::new(160.0, 80.0), Point::new(40.0, 80.0)];
@@ -5571,7 +5571,7 @@ fn live_envelope(n: &Node) -> (&[Arc<Node>], &vectorcraft_doc::live::EnvelopeKin
 
 /// A warp's dictionary keys: style number `style`, bend, horizontal and vertical distortion as
 /// fractions, and the orientation (vertical with `rotate` 1).
-fn warp_keys(style: u32, bend: f64, h: f64, v: f64, rotate: u32) -> String {
+pub(super) fn warp_keys(style: u32, bend: f64, h: f64, v: f64, rotate: u32) -> String {
     format!(
         "{ENVELOPE_KEYS}{style} /Int (DeformStyle) ,\n{h} /Real (DeformHoriz) ,\n{bend} /Real (DeformValue) ,\n{v} /Real (DeformVert) ,\n{rotate} /Bool (Rotate) ,\n(Warp) /UnicodeString (DisplayString) ,\n"
     )
@@ -6209,7 +6209,7 @@ fn layer_options_of_nine_to_twelve_operands() {
 /// A blend's record as the editing data writes it after `(Adobe Path Blends) 1 0 n XP`: `DCBA`,
 /// Specified Steps, then (as far as the reader reads it) the number of keys at word 10 and a record
 /// of six words per key starting with its id. Hand-written; the other words are zero.
-fn blend_record(ids: &[char]) -> String {
+pub(super) fn blend_record(ids: &[char]) -> String {
     blend_record_spaced(ids, 1, 0.0, 0)
 }
 
@@ -6241,7 +6241,7 @@ fn blend_part(kind: &str, id: Option<&str>) -> String {
 /// A blend of two 20 pt squares, red on the left (key `A`) and blue on the right (`B`), along
 /// `spine` (path operators, `%_` lines), with its drawn steps (three between the keys) and the
 /// record `record`.
-fn blend_file(spine: &str, ids: [Option<&str>; 2], record: &str) -> String {
+pub(super) fn blend_file(spine: &str, ids: [Option<&str>; 2], record: &str) -> String {
     blend_file_colored(spine, ids, record, [1.0, 0.0, 0.0], [0.0, 0.0, 1.0])
 }
 
