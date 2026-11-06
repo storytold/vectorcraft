@@ -3083,8 +3083,13 @@ the path it had begun while that stays selected. Its reply's `tool` is the tool 
 `object.path.simplify` takes the amount as `tolerance` (points, 1 by default) or as the Simplify slider's `level`, a whole
 number from 0 (the fewest anchor points) to 100 (the closest fit). Level 50 is a tolerance of 1 pt, and every 10 levels
 halve or double it, so level 0 is 32 pt and level 100 is 1/32 pt. `auto: true` (Auto-Simplify) uses the lowest level
-whose tolerance is at most 1/400 of the selection's longer side, or level 100 when that side is under 12.5 pt. With
-`level` or `auto`, the reply also has the `level` used:
+whose tolerance is at most 1/400 of the selection's longer side, or level 100 when that side is under 12.5 pt. The
+result and the original path stay within `tolerance` of each other, except that a closed subpath that refits to one curve
+is dropped, so a small circle in a compound path can be removed at a large `tolerance`. A segment that would need more
+than 65,536 samples at that tolerance stays as it is, and so does a segment after a run's first 16,777,216 samples or
+2,097,152 result segments. With `straightLines`, such a segment becomes evenly spaced lines, up to 65,536, and past those
+limits the lines can be farther than `tolerance` from the segment. With `level` or `auto`, the reply also has the `level`
+used:
 
 ```json
 {"name":"run_command","arguments":{"command":"object.path.simplify","params":{"auto":true}}}

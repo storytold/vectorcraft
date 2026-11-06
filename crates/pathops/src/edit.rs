@@ -8,7 +8,7 @@ use vectorcraft_geom::path::measured_arclen;
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
 use crate::boolean::{Seg, segs_to_subpath};
-use crate::fit::{end_tangent, fit_cubics, fit_single, fit_single_from, is_straight, sample, start_tangent};
+use crate::fit::{end_tangent, fit_cubics, fit_single, fit_single_from, is_straight, largest_second_difference, sample, start_tangent, unit};
 
 /// Options for [`simplify_with`].
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -96,14 +96,66 @@ fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
         let k = (0..n).find(|&i| turn_deg(&segs[(i + n - 1) % n], &segs[i]) > opts.corner_angle_deg).unwrap_or(0);
         segs.rotate_left(k);
     }
-    let result = simplify_run(&segs, opts);
+    // A smoothed loop with no corner is fitted along one direction across its start, when no segment
+    // stays as it is and the fit has one part. A nearly straight first or last curve becomes a line
+    // along its chord, and `no_worse` can return the original subpath, so the start can keep a kink.
+    let across = if sp.closed && opts.smooth > 0.0 { unit(end_tangent(&segs[n - 1].c) + start_tangent(&segs[0].c)) } else { None };
+    let across = across.filter(|_| (0..n).all(|i| turn_deg(&segs[(i + n - 1) % n], &segs[i]) <= opts.corner_angle_deg));
+    let result = simplify_run_within(&segs, opts, MAX_RUN_SAMPLES, across);
     let s = segs_to_subpath(&result, sp.closed)?;
     Some(if opts.straight_lines { s } else { no_worse(sp, s) })
+}
+
+/// How far a segment may be from the lines between its samples, as a share of the tolerance.
+const SAMPLE_GAP: f64 = 0.005;
+
+/// Most samples of one segment. A segment that needs more stays as it is.
+const MAX_SEGMENT_SAMPLES: usize = 1 << 16;
+
+/// Most samples of one fit, which limits the memory a fit holds. A run with more is fitted in parts,
+/// with an anchor between them.
+pub(crate) const MAX_FIT_SAMPLES: usize = 1 << 20;
+
+/// Most samples of one run, which limits its time. The segments after the run reaches this stay as
+/// they are.
+const MAX_RUN_SAMPLES: usize = 1 << 24;
+
+/// Most segments of the result of one run before its other segments stay as they are, which limits
+/// the memory it holds. A fit under way can add up to [`MAX_FIT_SAMPLES`] more.
+pub(crate) const MAX_RUN_RESULT: usize = 1 << 21;
+
+/// How many evenly spaced steps along `c` keep it within [`SAMPLE_GAP`] of `tol` from the lines
+/// between its samples. Over a step of `1 / m`, a curve stays within `0.75 * s / (m * m)` of the line
+/// between its ends, where `s` is its largest second difference. The samples of a straight segment
+/// are on its line, so their spacing follows its length and `tol`, up to 256.
+pub(crate) fn sample_steps(c: &CubicBez, tol: f64) -> usize {
+    // Guarded: kurbo subdivides without end on huge finite coordinates.
+    let len = measured_arclen(&PathSeg::Cubic(*c), 1e-6);
+    let by_length = ((len / (tol * 0.5)).ceil() as usize).clamp(4, 256);
+    if is_straight(c, tol * SAMPLE_GAP * 0.5) {
+        return by_length;
+    }
+    by_length.max((0.75 * largest_second_difference(c) / (tol * SAMPLE_GAP)).sqrt().ceil() as usize)
+}
+
+/// How many evenly spaced straight lines keep `c` within `tol` of them.
+fn line_steps(c: &CubicBez, tol: f64) -> usize {
+    (0.75 * largest_second_difference(c) / tol).sqrt().ceil() as usize
 }
 
 /// The refit of the consecutive segments `run`, split at its corners sharper than the threshold:
 /// it starts and ends where `run` does, leaving the same way.
 fn simplify_run(run: &[Seg], opts: &SimplifyOptions) -> Vec<Seg> {
+    simplify_run_within(run, opts, MAX_RUN_SAMPLES, None)
+}
+
+/// [`simplify_run`] with at most `budget` samples. A segment that needs more samples than
+/// [`MAX_SEGMENT_SAMPLES`] or than the budget has left, or that comes after [`MAX_RUN_RESULT`] segments
+/// of result, stays as it is, and the segments on each side of it are refitted without it. With
+/// `straight_lines` such a segment becomes [`line_steps`] lines, or as many as those limits allow when
+/// that is fewer, and then it can pass the tolerance. `ends`, when the whole run is refitted as one
+/// part, is the direction the refit leaves and arrives along.
+pub(crate) fn simplify_run_within(run: &[Seg], opts: &SimplifyOptions, mut budget: usize, ends: Option<Vec2>) -> Vec<Seg> {
     let tol = opts.tolerance.max(1e-6);
     let mut cuts: Vec<usize> = (1..run.len()).filter(|&i| turn_deg(&run[i - 1], &run[i]) > opts.corner_angle_deg).collect();
     cuts.insert(0, 0);
@@ -111,32 +163,65 @@ fn simplify_run(run: &[Seg], opts: &SimplifyOptions) -> Vec<Seg> {
     let mut result: Vec<Seg> = Vec::new();
     for w in cuts.windows(2) {
         let piece = &run[w[0]..w[1]];
-        if piece.is_empty() {
-            continue;
+        let mut part: Vec<(&Seg, usize)> = Vec::new();
+        let mut part_samples = 0;
+        for s in piece {
+            let steps = sample_steps(&s.c, tol);
+            if steps <= budget.min(MAX_SEGMENT_SAMPLES) && result.len() < MAX_RUN_RESULT {
+                if part_samples + steps > MAX_FIT_SAMPLES {
+                    refit_part(&part, opts, tol, None, &mut result);
+                    part.clear();
+                    part_samples = 0;
+                }
+                budget -= steps;
+                part_samples += steps;
+                part.push((s, steps));
+            } else {
+                part_samples = 0;
+                refit_part(&part, opts, tol, None, &mut result);
+                part.clear();
+                if opts.straight_lines {
+                    let room = MAX_RUN_RESULT.saturating_sub(result.len());
+                    let lines = line_steps(&s.c, tol).min(budget.min(MAX_SEGMENT_SAMPLES)).min(room).max(1);
+                    budget = budget.saturating_sub(lines);
+                    let mut pts = Vec::new();
+                    sample(&s.c, lines, &mut pts, true);
+                    result.extend(pts.windows(2).map(|p| Seg::line(p[0], p[1])));
+                } else {
+                    result.push(*s);
+                }
+            }
         }
-        let mut pts = Vec::new();
-        for (k, s) in piece.iter().enumerate() {
-            // Guarded: kurbo subdivides without end on huge finite coordinates.
-            let len = measured_arclen(&PathSeg::Cubic(s.c), 1e-6);
-            let m = ((len / (tol * 0.5)).ceil() as usize).clamp(4, 256);
-            sample(&s.c, m, &mut pts, k == 0);
-        }
-        if opts.smooth > 0.0 {
-            pts = smooth_points(&pts, opts.smooth);
-        }
-        if opts.straight_lines {
-            let keep = rdp(&pts, tol);
-            result.extend(keep.windows(2).map(|p| Seg::line(p[0], p[1])));
-            continue;
-        }
-        let t0 = start_tangent(&piece[0].c);
-        let t1 = end_tangent(&piece[piece.len() - 1].c);
-        for c in fit_cubics(&pts, t0, t1, tol) {
-            let line = is_straight(&c, tol * 0.02);
-            result.push(if line { Seg::line(c.p0, c.p3) } else { Seg { c, line } });
-        }
+        refit_part(&part, opts, tol, ends.filter(|_| part.len() == run.len()), &mut result);
     }
     result
+}
+
+/// Adds the refit of `part`, consecutive segments with no corner between them and the steps to
+/// sample each one with, to `result`. `ends` is the direction it leaves and arrives along, when not
+/// those of its first and last segments.
+fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, ends: Option<Vec2>, result: &mut Vec<Seg>) {
+    let (Some((first, _)), Some((last, _))) = (part.first(), part.last()) else { return };
+    let mut pts = Vec::new();
+    for (k, (s, steps)) in part.iter().enumerate() {
+        sample(&s.c, *steps, &mut pts, k == 0);
+    }
+    if opts.smooth > 0.0 {
+        pts = smooth_points(&pts, opts.smooth);
+    }
+    if opts.straight_lines {
+        let keep = rdp(&pts, tol * (1.0 - SAMPLE_GAP));
+        result.extend(keep.windows(2).map(|p| Seg::line(p[0], p[1])));
+        return;
+    }
+    // The fit may be `tol * 0.98` from the lines between the samples, those lines may be
+    // `SAMPLE_GAP` of `tol` from the path, and the curve the test below turns into a line moves by up
+    // to 1.5% of `tol`: 3/4 of how far its handles may be from the line.
+    let (t0, t1) = ends.map_or((start_tangent(&first.c), end_tangent(&last.c)), |d| (d, d));
+    for c in fit_cubics(&pts, t0, t1, tol * 0.98) {
+        let line = is_straight(&c, tol * 0.02);
+        result.push(if line { Seg::line(c.p0, c.p3) } else { Seg { c, line } });
+    }
 }
 
 /// `pts` (a run's samples, in order) smoothed along the path: each point becomes the Gaussian-weighted
