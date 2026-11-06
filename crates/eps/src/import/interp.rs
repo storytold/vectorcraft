@@ -12,7 +12,7 @@ use vectorcraft_geom::Affine;
 
 use super::data::Stream;
 use super::graphics::{GState, Out};
-use super::lex::{IMMEDIATE, Lexer};
+use super::lex::{IMMEDIATE, Lexer, number};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
 
 /// Most operations one file may run.
@@ -775,7 +775,7 @@ impl<'a> Interp<'a> {
             },
             Cvi => {
                 let v = match self.pop()? {
-                    Obj::Str(s) => String::from_utf8_lossy(&s.borrow()).trim().parse::<f64>().map_err(|_| PsError::Ps("typecheck", String::new()))?,
+                    Obj::Str(s) => string_number(&s.borrow())?,
                     o => o.as_num().ok_or(PsError::Ps("typecheck", String::new()))?,
                 };
                 if !(v.is_finite() && v.abs() < 9e15) {
@@ -785,7 +785,7 @@ impl<'a> Interp<'a> {
             }
             Cvr => {
                 let v = match self.pop()? {
-                    Obj::Str(s) => String::from_utf8_lossy(&s.borrow()).trim().parse::<f64>().map_err(|_| PsError::Ps("typecheck", String::new()))?,
+                    Obj::Str(s) => string_number(&s.borrow())?,
                     o => o.as_num().ok_or(PsError::Ps("typecheck", String::new()))?,
                 };
                 self.push_num(v)?;
@@ -1471,6 +1471,17 @@ impl<'a> Interp<'a> {
 }
 
 /// An array or string index.
+/// The number a string holds by the PostScript syntax (`cvi`, `cvr`: PLRM 3rd ed., chapter 8),
+/// radix numbers such as `16#20` included.
+fn string_number(s: &[u8]) -> Res<f64> {
+    let text = String::from_utf8_lossy(s);
+    match number(text.trim_matches(|c: char| c.is_ascii_whitespace() || c == '\0')) {
+        Some(Obj::Int(i)) => Ok(i as f64),
+        Some(Obj::Real(r)) => Ok(r),
+        _ => ps_err("typecheck", ""),
+    }
+}
+
 fn index(k: &Obj) -> Res<usize> {
     match *k {
         Obj::Int(i) if i >= 0 => Ok(i as usize),

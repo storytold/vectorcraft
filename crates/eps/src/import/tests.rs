@@ -1022,6 +1022,18 @@ fn known_answers_false_for_keys_no_dictionary_holds() {
     check("{ 1 dict null known } stopped");
 }
 
+/// `cvi` and `cvr` read a string as the PostScript syntax reads a number (PLRM 3rd ed., chapter
+/// 8), radix numbers included: prologs turn a name's `#20` escape back into its character with
+/// `(16#20) cvi`.
+#[test]
+fn cvi_and_cvr_read_radix_numbers() {
+    check("(16#20) cvi 32 eq (8#17) cvi 15 eq and ( 2#101 ) cvi 5 eq and (36#Z) cvi 35 eq and");
+    check("(16#ff) cvr 255 eq (3.7) cvi 3 eq and (-2.5e1) cvr -25 eq and (12) cvr 12 eq and");
+    check("{ (16#zz) cvi } stopped { (inf) cvr } stopped and { (16#-1) cvi } stopped and { () cvi } stopped and");
+    // A name's escapes, as a prolog undoes them for a spot colour named `PANTONE 300 C`.
+    check("(PANTONE#20300) dup 7 3 getinterval (16#--) dup 3 4 -1 roll 1 2 getinterval putinterval cvi 32 eq exch pop");
+}
+
 #[test]
 fn dictstack_and_internaldict_answer() {
     check("10 array dictstack length countdictstack eq");
