@@ -792,18 +792,32 @@ fn a_library_named_like_a_device_keeps_the_library_with_its_file_name() {
     }
 }
 
-/// `.ase` keeps no title, so a library named like a device is saved over its own file again, not
-/// beside it.
+/// `.ase` keeps no title, so a library's name comes back from its file name. Whichever is saved
+/// first, `COM¹` and `COM¹-` keep a file each, and saving either again replaces only itself. After
+/// a restart `COM¹` can't be told from `COM¹-`, and gets a new file, not the other's.
 #[test]
-fn a_device_named_library_without_a_title_is_not_copied_on_every_save() {
-    let dir = temp_dir("device-ase");
-    let mut s = session();
-    s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
-    let p = json!({"user": true, "name": "COM¹", "format": "ase"});
-    let first = run(&mut s, "swatch.library.save", p.clone())["library"].clone();
-    assert_eq!(run(&mut s, "swatch.library.save", p)["library"], first);
-    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
-    let _ = std::fs::remove_dir_all(&dir);
+fn device_named_libraries_without_a_title_keep_their_own_files() {
+    for (first, second) in [("COM¹", "COM¹-"), ("COM¹-", "COM¹")] {
+        let dir = temp_dir("device-ase");
+        let mut s = session();
+        s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+        let save = |s: &mut Session, name: &str| {
+            run(s, "swatch.library.save", json!({"user": true, "name": name, "format": "ase"}))["library"].as_str().unwrap().to_string()
+        };
+        let a = save(&mut s, first);
+        assert_eq!(save(&mut s, first), a, "saving {first} again replaces {first}");
+        let b = save(&mut s, second);
+        assert_ne!(a, b);
+        assert_eq!(save(&mut s, first), a, "saving {first} again replaces {first}");
+        assert_eq!(save(&mut s, second), b, "saving {second} again replaces {second}");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+        // The next time the app starts.
+        s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+        let again = save(&mut s, "COM¹");
+        assert!(again != a && again != b, "{again}");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 3);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 /// #3602: a library titled with a Windows device name is saved under a name that is not one.

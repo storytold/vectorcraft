@@ -6,7 +6,7 @@
 //! pattern) into the document; `swatch.library.save` writes the document's ([`palette_io`]).
 //! `swatch.library.copyToUser` copies a loaded library into the user library folder.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -104,6 +104,9 @@ pub struct Libraries<L = SwatchLibrary> {
     /// Loaded libraries copied into the user library folder ([`Libraries::copy_to_user`]): the
     /// loaded id and the User Defined id [`Libraries::get`] finds for it.
     copied: Vec<(String, String)>,
+    /// The name each User Defined file was saved under ([`Libraries::write`]), lower case id first:
+    /// a format that keeps no title (`.ase`) reads its name from the file name instead.
+    saved_as: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug)]
@@ -152,6 +155,7 @@ impl<L: LibraryFile> Libraries<L> {
     /// Set the user library folder and list its libraries.
     pub fn set_user_dir(&mut self, dir: Option<String>) {
         self.user_dir = dir;
+        self.saved_as.clear();
         self.rescan();
     }
 
@@ -218,16 +222,14 @@ impl<L: LibraryFile> Libraries<L> {
             let device = crate::file_access::is_device_name;
             let id = format!("user/{file}").to_lowercase();
             let fallback = |other: &str| library_file_name(other, ext).to_lowercase() != file.to_lowercase();
-            // A format that keeps no title (`.ase`) reads its name from the file name, so the same
-            // library saved again looks like another one, and only the file name tells them apart.
-            let titled = L::read(bytes, stem(&file)).is_ok_and(|lib| lib.name() == name);
-            if titled
-                && self.extra.iter().any(|e| {
-                    e.info.id.to_lowercase() == id && e.lib.name() != name && (device(name) || device(e.lib.name()) || fallback(e.lib.name()))
-                })
-            {
+            let owner = |e: &Extra<L>| self.saved_as.get(&e.info.id.to_lowercase()).map_or(e.lib.name(), String::as_str).to_string();
+            let held = self.extra.iter().any(|e| {
+                let other = owner(e);
+                e.info.id.to_lowercase() == id && other != name && (device(name) || device(&other) || fallback(&other))
+            });
+            if held {
                 // Saved again, it goes back to the file it was given the first time.
-                let own = self.extra.iter().find(|e| e.info.category == "user" && e.lib.name() == name && extension(&e.info.id) == extension(&file));
+                let own = self.extra.iter().find(|e| e.info.category == "user" && owner(e) == name && extension(&e.info.id) == extension(&file));
                 file = match own.and_then(|e| e.info.id.strip_prefix("user/")) {
                     Some(own) => own.to_string(),
                     None => {
@@ -239,6 +241,7 @@ impl<L: LibraryFile> Libraries<L> {
             let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
             // The app's own folder, under a name made safe: no root applies.
             crate::file_access::unconfined(|| create_dir(&dir).and_then(|()| write_file(&path, bytes)))?;
+            self.saved_as.insert(format!("user/{file}").to_lowercase(), name.to_string());
             self.rescan();
             out["path"] = json!(path);
             out["library"] = json!(format!("user/{file}"));
