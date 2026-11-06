@@ -2,9 +2,9 @@
 //! take every stroke option, as path strokes do.
 
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::text::{CharStyle, TextObject};
-use vectorcraft_doc::{AppearanceItem, Dash, LineJoin, Node, NodeKind};
-use vectorcraft_geom::Point;
+use vectorcraft_doc::text::{CharStyle, TextKind, TextObject};
+use vectorcraft_doc::{AppearanceItem, AreaFit, Dash, LineJoin, Node, NodeKind};
+use vectorcraft_geom::{PathData, Point};
 
 use crate::tests_fontchange::fonts_steady;
 use crate::*;
@@ -184,6 +184,27 @@ fn moving_type_reuses_character_strokes_without_changing_pixels() {
     let node = d.node_arc(id).unwrap();
     assert!(r.texts.contains_key(&(Arc::as_ptr(node) as usize)), "kept under the moved node");
     assert_eq!(r.texts.len(), 1, "and not also under the old one");
+}
+
+#[test]
+fn scaling_fitted_area_type_rebuilds_its_glyph_geometry() {
+    let _fonts = fonts_steady();
+    let (mut d, id) = stroked_text_doc("A long story that must shrink to fit in a small area of type");
+    if let Some(Node { kind: NodeKind::Text(t), .. }) = d.node_mut(id) {
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 100.0, 45.0).to_path(0.1)) };
+        t.area.fit = AreaFit::ShrinkText { min_percent: 30.0 };
+    }
+    let opts = RenderOptions::default();
+    let mut r = Renderer::new();
+    r.render(&d, SIZE, SIZE, Affine::IDENTITY, &opts);
+    let first = r.texts.used_in(r.stamp).next().unwrap().1.clone();
+    if let Some(Node { kind: NodeKind::Text(t), .. }) = d.node_mut(id) {
+        t.xf = Affine::scale(1.2) * t.xf;
+    }
+    let scaled = r.render(&d, SIZE, SIZE, Affine::IDENTITY, &opts);
+    let again = r.texts.used_in(r.stamp).next().unwrap().1.clone();
+    assert!(!Arc::ptr_eq(&first, &again), "changing area type's scale lays it out again");
+    assert_eq!(scaled.pixels, Renderer::new().render(&d, SIZE, SIZE, Affine::IDENTITY, &opts).pixels);
 }
 
 /// Frames that draw character strokes from the cache draw the same pixels, and what a renderer
