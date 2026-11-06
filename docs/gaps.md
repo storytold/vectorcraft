@@ -651,6 +651,12 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G15 Performance budgets and a GPU renderer
 
+- **Improved (2026-11-05):** hovering over a nearby plain stroke or path outline checks the
+  candidate segments directly. On a 200,000-anchor open path, a hit near its middle took about
+  11–13 ms before and 1.0–1.4 ms after in paired runs on a busy Windows machine. A miss between
+  two long strokes, inside their box, took 18.7 ms before and 1.6 ms after; a distant miss stayed
+  about 0.7 ms. Other stroke styles and fill hits retain the full-path check; the idle
+  performance-budget run is still open.
 - **Improved (2026-11-05):** moving a large selection reuses the object locations found while
   validating the transform command. A 20,000-object nudge took 58.07 ms before and 51.26 ms after
   in paired median runs on a busy Windows machine; copies and active typing still look up their
@@ -775,6 +781,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | G15: nearby hits on plain long strokes and outlines check their candidate segments directly; a 200,000-anchor middle hit took about 11–13 ms before and 1.0–1.4 ms after in paired runs. An inside-bounds miss fell from 18.7 ms to 1.6 ms. Estimate unchanged; idle budget run still open. |
 | 2026-11-05 | minor | G15: an image zoomed in on is separated, colorized or proofed only for the tiles in view (#4155); 100% zoom on that file 8.6 s → 0.05 s. Estimate unchanged. |
 | 2026-11-05 | minor | G15: a document's first frame renders on the render worker (#4155); the longest UI-thread stall opening that file went from 8.7 s to 64 ms. Estimate unchanged. |
 | 2026-11-05 | minor | G15: a reduced image is shrunk before it is separated into ink planes (#4155); first frame 9.2 s → 1.6 s, sharp frame after a pan 3.9 s → 8 ms on that file. Estimate unchanged. |
