@@ -64,7 +64,8 @@ private editing data. VectorCraft:
   their fills and strokes (a compound path as one path of all its subpaths), process, spot and global colors, swatches and color groups, guides,
   hidden and locked objects, object names, every artboard with its name, the active artboard (`CropAreaActive`: the
   view's active artboard when the app saves or exports the file, else the one the document opened on, else the first;
-  the reader opens the file on it), the transparency of objects and layers
+  the reader opens the file on it, and so does the restore of the native document a file VectorCraft saved carries),
+  the transparency of objects and layers
   (opacity, blending mode, isolation, knockout and knockout shape), objects' opacity masks, and clipping groups and
   clipping layers clipped by a path or compound path, linear and radial gradients on fills and strokes (with their
   stops' opacity, midpoints and spot colors, elliptical radials and focal points) and gradient swatches, and

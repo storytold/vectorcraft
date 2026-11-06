@@ -1007,6 +1007,26 @@ fn the_active_artboard_follows_the_artboards() {
     }
 }
 
+/// The copy's active artboard read on its own, for a document restored from the file beside the
+/// copy: `None` for the first, and when the copy names an artboard that document doesn't have or
+/// can't be decoded.
+#[test]
+fn a_restored_document_opens_on_the_artboard_the_copy_names() {
+    let mut doc = Document::new(200.0, 100.0);
+    for (id, x0) in [(2, 250.0), (3, 500.0)] {
+        doc.artboards.push(Artboard { id, rect: Rect::new(x0, 0.0, x0 + 200.0, 100.0), ..doc.artboards[0].clone() });
+    }
+    let mut one_artboard = doc.clone();
+    one_artboard.artboards.truncate(1);
+    for (opened, read) in [(Some(3), Some(3)), (Some(2), Some(2)), (Some(1), None), (None, None), (Some(9), None)] {
+        doc.opened_artboard = opened;
+        let data = private_data(&doc, &opts()).unwrap().0.data;
+        assert_eq!(crate::ai_opened_artboard(&data, &doc), read, "{opened:?}");
+        assert_eq!(crate::ai_opened_artboard(&data, &one_artboard), None, "{opened:?}");
+    }
+    assert_eq!(crate::ai_opened_artboard(b"%AI24_ZStandard_Data not zstd", &doc), None);
+}
+
 /// A guide is its path followed by `(n) *` (closed) or `(N) *` (open), with no `(N) *` before
 /// it, and reads back as the same guide.
 #[test]

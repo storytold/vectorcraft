@@ -875,6 +875,8 @@ document exactly (`restored: true`); when another app changed the pages, or the 
 imported instead and the first warning says why. Choosing a standard turns it off (PDF/A refuses it). Save to a `.ai`
 path (`document.save {path: "art.ai"}` or `{format: "ai"}`) writes a PDF-compatible file that always carries the
 document, takes the PDF options and keeps its path when reopened, so Save writes `.ai` again; a `.ait` opens untitled.
+The restored document opens on the artboard its editing copy names as active. A file saved with `editingData: false` has
+no editing copy and opens on the first artboard.
 `document.export` / `serialize` to `.ai` (and the CLI's `run --export x.ai` and `convert in.svg out.ai`) write the same file
 without giving the document a path. `options: {aiVersion: "7"}` writes legacy `.ai` files of version 7 instead (the
 PostScript form, which keeps layers, groups, compound paths and clipping groups in apps that read it), one per artboard
@@ -4685,8 +4687,7 @@ or in `options` (`file.formatOptions {format}` lists them with their values):
 - The editing copy of a `.ai` or `.ait` file (`editingData`) names its active artboard (`CropAreaActive`): the active
   artboard of the app's view when the app saves or exports the file, otherwise the artboard the document opened on (the
   active artboard of the `.ai` file it was opened from), else the first. A `.ai` file read from its editing copy
-  opens on that artboard. VectorCraft opens a `.ai` file it saved from the native document the file carries, on the
-  first artboard.
+  opens on that artboard, and so does a `.ai` file restored from the native document it carries.
 
 File → Save As asks for these in the save options dialog (VectorCraft Options) after the save panel, and Save a Copy
 does too for a `.ai` file; Save, Save a Copy to a native file and Save as Template reuse the options as last saved (or Use Compression).
