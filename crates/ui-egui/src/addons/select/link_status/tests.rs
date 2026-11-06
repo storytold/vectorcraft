@@ -199,3 +199,45 @@ fn the_dialog_lists_filters_and_selects_with_zoom() {
     assert_eq!(selected(&app), vec![harbour]);
     assert_eq!(app.view().unwrap().zoom, zoom);
 }
+
+/// #5547: View › Show Missing Links marks the missing images (`marked`), follows the files (a
+/// file found again, or relinked or embedded, unmarks its image; one going missing marks it), is
+/// in the Links panel's menu, and is kept with the interface state.
+#[test]
+fn missing_link_markers_follow_the_links() {
+    let dir = Folder::new("markers");
+    let (mut app, river, harbour, _) = app(&dir);
+    refresh(&mut app, 0.0);
+    assert!(super::marked(&app).is_empty(), "off");
+    assert_eq!(app.run("view.missingLinks", json!({"on": true})).unwrap(), json!({"on": true, "marked": [harbour]}));
+    assert_eq!(app.run("view.missingLinks", json!({"on": true})).unwrap(), json!({"on": true, "marked": [harbour]}), "on stays on");
+    assert!(app.run("view.missingLinks", json!({"on": "yes"})).is_err());
+    assert!(super::wake_after(&app).is_some(), "an idle window is woken to look at the files again");
+    // The river file goes missing too: marked at the next look.
+    let river_path = dir.0.join("river.png");
+    std::fs::remove_file(&river_path).unwrap();
+    refresh(&mut app, 0.5);
+    assert_eq!(super::marked(&app), [harbour], "not looked at again yet");
+    refresh(&mut app, 2.5);
+    let mut both = super::marked(&app);
+    both.sort_unstable();
+    assert_eq!(both, [river.min(harbour), river.max(harbour)]);
+    // Found again: unmarked.
+    std::fs::write(&river_path, png(40, 30)).unwrap();
+    refresh(&mut app, 5.0);
+    assert_eq!(super::marked(&app), [harbour]);
+    // Embedded (relinked to a file and embedded): unmarked.
+    let again = dir.file("harbour2.png", &png(30, 20));
+    app.run("links.relink", json!({"ids": [harbour], "path": again})).unwrap();
+    app.run("links.embed", json!({"ids": [harbour]})).unwrap();
+    refresh(&mut app, 5.6);
+    assert!(super::marked(&app).is_empty());
+    // The Links panel's menu has the toggle.
+    let shown = painted_text(&mut app, crate::panels::links::menu);
+    assert!(shown.contains("Show Missing Links"), "{shown}");
+    // Kept with the interface state; a state saved before it existed loads with it off.
+    let mut saved = serde_json::to_value(&app.ui).unwrap();
+    assert_eq!(saved["view"]["missing_links"], json!(true));
+    saved["view"].as_object_mut().unwrap().remove("missing_links");
+    assert!(!serde_json::from_value::<crate::UiState>(saved).unwrap().view.missing_links);
+}

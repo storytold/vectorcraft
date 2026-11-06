@@ -298,6 +298,8 @@ digits	Malayalam	マラヤーラム数字
 	Close Gaps With Paths	パスで間隔を閉じる
 	Show Live Paint Gaps	ライブペイントの間隔を表示
 	Hide Live Paint Gaps	ライブペイントの間隔を隠す
+	Show Missing Links	見つからないリンクを表示
+	Hide Missing Links	見つからないリンクを隠す
 	Select Fills	塗りを選択
 	Select Strokes	線を選択
 	Paint Fills	塗りをペイント

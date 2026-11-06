@@ -274,7 +274,7 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
 }
 
 /// UI commands, part 4.
-fn run_ui_part4(app: &mut VectorcraftApp, id: &str, _p: &Value) -> Option<Result<Value, String>> {
+fn run_ui_part4(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     let flag = |b: &mut bool| {
         *b = !*b;
         Ok(json!(*b))
@@ -284,6 +284,7 @@ fn run_ui_part4(app: &mut VectorcraftApp, id: &str, _p: &Value) -> Option<Result
         id if let Some(b) = crate::panels::align::button(id) => crate::panels::align::run_button(app, b),
         "view.gradientAnnotator" => flag(&mut app.ui.view.gradient_annotator),
         "view.livePaintGaps" => flag(&mut app.ui.view.live_paint_gaps),
+        "view.missingLinks" => crate::addons::select::link_status::show_missing(app, p),
         "effect.last" => match app.last_effect.clone() {
             Some((e, params)) => {
                 let label = vectorcraft_effects::effect_info(&e).map(|i| i.label.trim_end_matches('…').to_string()).unwrap_or_else(|| e.clone());

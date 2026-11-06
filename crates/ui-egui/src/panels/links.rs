@@ -610,6 +610,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             crate::menus::invoke(app, link_status::COMMAND, p);
         }
     }
+    // View › Show Missing Links, checked while the canvas marks them.
+    if menu_item(ui, tl!("Show Missing Links"), true, app.ui.view.missing_links) {
+        crate::menus::invoke(app, "view.missingLinks", json!({}));
+    }
     ui.separator();
     for (id, label) in SHOW {
         if menu_item(ui, tl!(label), true, o.show == id) {

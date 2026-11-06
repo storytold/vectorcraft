@@ -320,6 +320,9 @@ impl VectorcraftApp {
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
         crate::addons::select::link_status::refresh(self, now);
+        if let Some(secs) = crate::addons::select::link_status::wake_after(self) {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(secs));
+        }
         if !self.background.jobs.is_empty()
             || !self.opening.pending.is_empty()
             || !self.plugin_runs.running.is_empty()

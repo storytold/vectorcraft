@@ -9304,3 +9304,58 @@ fn direct_selection_shows_the_bounding_box_while_cmd_is_held() {
     assert!(!handle_drawn(&mut app, egui::Modifiers::NONE), "gone once Cmd is released");
     assert!(app.ui.view.bounding_box, "View › Show Bounding Box is unchanged");
 }
+
+/// #5547: View › Show Missing Links marks each visible image whose linked file can't be found
+/// with a red outline and a ? badge, on the canvas only; a found or embedded image has none, and
+/// the marker goes when the image is hidden or the view is turned off.
+#[test]
+fn show_missing_links_marks_the_missing_images_on_the_canvas() {
+    let dir = std::env::temp_dir().join(format!("vectorcraft-canvas-missing-links-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let png = |name: &str| {
+        let p = dir.join(name);
+        image::RgbaImage::from_pixel(30, 20, image::Rgba([40, 90, 200, 255])).save(&p).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let place = |app: &mut VectorcraftApp, path: &str, at: [u32; 2], link: bool| {
+        app.run("file.place", json!({"path": path, "at": at, "link": link})).unwrap()["ids"][0].as_u64().unwrap()
+    };
+    let (found, gone, stamp) = (png("found.png"), png("gone.png"), png("stamp.png"));
+    place(&mut app, &found, [100, 100], true);
+    let missing = place(&mut app, &gone, [250, 100], true);
+    place(&mut app, &stamp, [200, 220], false);
+    std::fs::remove_file(&gone).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    let error = Tokens::get(&ctx).error;
+    let marks = |app: &mut VectorcraftApp| {
+        let all = shapes(app, &ctx);
+        let outlines = all
+            .iter()
+            .filter(|s| matches!(s, Shape::Path(p) if p.closed && p.stroke.width == 2.0 && p.stroke.color == egui::epaint::ColorMode::Solid(error)))
+            .count();
+        let badges = all.iter().filter(|s| matches!(s, Shape::Circle(c) if c.fill == error)).count();
+        (outlines, badges)
+    };
+    assert_eq!(marks(&mut app), (0, 0), "off by default");
+    let tree = crate::menus::menu_tree();
+    let (_, view) = tree.iter().find(|(t, _)| *t == "View").unwrap();
+    assert!(view.iter().any(|i| matches!(i, crate::menus::Item::Cmd("Show Missing Links", "view.missingLinks", _))), "{view:?}");
+    let undo = app.session.active().unwrap().history.undo.len();
+    let r = app.run("view.missingLinks", json!({})).unwrap();
+    assert_eq!(r, json!({"on": true, "marked": [missing]}));
+    assert_eq!(marks(&mut app), (1, 1), "the missing image only: not the found or the embedded one");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "no undo step");
+    assert_eq!(crate::menus::dynamic_label(&app, "view.missingLinks", "Show Missing Links"), "Hide Missing Links");
+    app.run("select.set", json!({"ids": [missing]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    assert_eq!(marks(&mut app), (0, 0), "a hidden image is not marked");
+    app.run("object.showAll", json!({})).unwrap();
+    assert_eq!(marks(&mut app), (1, 1));
+    assert_eq!(app.run("view.missingLinks", json!({"on": false})).unwrap(), json!({"on": false, "marked": []}));
+    assert_eq!(marks(&mut app), (0, 0), "Hide Missing Links clears every marker");
+    let _ = std::fs::remove_dir_all(&dir);
+}

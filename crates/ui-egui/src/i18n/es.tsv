@@ -1286,6 +1286,8 @@ font-technology	Variable	Variables
 	Close Gaps With Paths	Cerrar huecos con trazados
 	Show Live Paint Gaps	Mostrar huecos de pintura interactiva
 	Hide Live Paint Gaps	Ocultar huecos de pintura interactiva
+	Show Missing Links	Mostrar vínculos faltantes
+	Hide Missing Links	Ocultar vínculos faltantes
 	Select Fills	Seleccionar rellenos
 	Select Strokes	Seleccionar trazos
 	Paint Fills	Pintar rellenos

@@ -1298,6 +1298,8 @@ file-filter	Templates	Modelli
 	Close Gaps With Paths	Chiudi spazi vuoti con tracciati
 	Show Live Paint Gaps	Mostra spazi vuoti pittura dinamica
 	Hide Live Paint Gaps	Nascondi spazi vuoti pittura dinamica
+	Show Missing Links	Mostra collegamenti mancanti
+	Hide Missing Links	Nascondi collegamenti mancanti
 	Select Fills	Seleziona riempimenti
 	Select Strokes	Seleziona tracce
 	Paint Fills	Colora riempimenti

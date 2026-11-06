@@ -262,6 +262,10 @@ pub struct ViewFlags {
     /// Preview Color.
     #[serde(default)]
     pub live_paint_gaps: bool,
+    /// View › Show/Hide Missing Links: mark each visible linked image and placed document whose
+    /// file can't be found with a red outline and a ? badge (#5547). On the canvas only.
+    #[serde(default)]
+    pub missing_links: bool,
     /// Type → Show Hidden Characters.
     pub hidden_chars: bool,
     /// View → Hide/Show Template: template layers drawn (dimmed) or left out of the canvas.
@@ -290,6 +294,7 @@ impl Default for ViewFlags {
             text_threads: true,
             gradient_annotator: true,
             live_paint_gaps: false,
+            missing_links: false,
             hidden_chars: false,
             templates: true,
         }
