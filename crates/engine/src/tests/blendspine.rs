@@ -76,6 +76,7 @@ fn spine_points_move_together() {
     let before = spec(&s, g);
     assert!(s.execute("object.blend.spine.moveAnchor", &json!({"anchor": 1, "x": 55, "y": 45, "with": [9]})).is_err());
     assert!(s.execute("object.blend.spine.moveAnchor", &json!({"anchor": 1, "x": 55, "y": 45, "with": [2], "handle": "in"})).is_err());
+    assert!(s.execute("object.blend.spine.moveAnchor", &json!({"anchor": 1, "x": 55, "y": 45, "with": [], "handle": "in"})).is_err());
     assert!(s.execute("object.blend.spine.moveAnchor", &json!({"anchor": 1, "x": 55, "y": 45, "with": "2"})).is_err());
     assert_eq!(spec(&s, g), before, "refused requests change nothing");
     s.execute("object.blend.spine.moveAnchor", &json!({"anchor": 1, "x": 55, "y": 45, "with": [2, 1]})).unwrap();

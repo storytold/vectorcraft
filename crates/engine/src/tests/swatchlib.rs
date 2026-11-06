@@ -769,9 +769,17 @@ fn a_pattern_library_adds_only_the_picked_pattern_and_it_undoes_and_saves() {
 #[test]
 fn a_library_file_name_is_never_a_windows_device_name() {
     use crate::cmd::swatchlib::library_file_name;
-    for (title, ext) in
-        [("CON", "json"), ("nul", "json"), ("Com1", "acb"), ("LPT9", "ase"), ("aux.", "json"), ("CON.txt", "json"), ("nul.tar.gz", "acb")]
-    {
+    for (title, ext) in [
+        ("CON", "json"),
+        ("nul", "json"),
+        ("Com1", "acb"),
+        ("LPT9", "ase"),
+        ("aux.", "json"),
+        ("CON.txt", "json"),
+        ("nul.tar.gz", "acb"),
+        ("COM¹", "json"),
+        ("lpt³.x", "ase"),
+    ] {
         let file = library_file_name(title, ext);
         assert!(!crate::file_access::is_device_name(&file), "{title}: {file}");
         assert!(

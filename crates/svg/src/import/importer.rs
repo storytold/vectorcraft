@@ -104,9 +104,10 @@ impl Importer {
         }
     }
 
-    /// A gradient's stops, midpoints restored.
+    /// A gradient's stops, midpoints restored, and mixed in linear light when it asks for that.
     fn stops(&self, g: &usvg::BaseGradient) -> Vec<GradientStop> {
-        gradient_stops(g, self.midpoints.get(g.id()).map(Vec::as_slice))
+        let stops = gradient_stops(g, self.midpoints.get(g.id()).map(Vec::as_slice));
+        if self.linear_rgb.contains(g.id()) { super::linear_rgb::bake(stops) } else { stops }
     }
 
     /// The object name for an element id: its label (see [`labels`]), else the id itself.
@@ -728,6 +729,7 @@ mod tests {
             slots: TextSlots::default(),
             patterns: HashMap::new(),
             midpoints: HashMap::new(),
+            linear_rgb: HashSet::new(),
             labels: HashMap::new(),
             hidden: HashSet::new(),
             uses: HashMap::new(),

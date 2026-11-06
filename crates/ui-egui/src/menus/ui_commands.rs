@@ -856,6 +856,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step); for several rows it sends only the fields set in the dialog",
     ),
     (
+        "ui.rename",
+        "Rename",
+        "",
+        "{id?} open the Layers panel's name field on the row of layer, group or object id, as double-clicking the row's name does (the panel is shown and the layers around the row open): Enter renames it with layer.setProps (one undo step), Escape keeps the name. Without id: the highlighted row when a Layers panel row was clicked last, else the one selected object or group, else the one highlighted row, else the current layer. Several rows or objects, or a row the panel's search, filter or Show Layers Only hides, is an error and nothing opens → {id, name}",
+    ),
+    (
         "ui.newLayer",
         "New Layer Options…",
         "Cmd+Alt+L",
