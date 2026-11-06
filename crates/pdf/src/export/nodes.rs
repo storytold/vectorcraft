@@ -14,7 +14,7 @@ struct Measured {
 
 #[cfg(test)]
 std::thread_local! {
-    /// The objects this thread has measured for the walk (tests).
+    /// The objects this thread has measured for the walk and for the links (tests).
     pub(crate) static MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
