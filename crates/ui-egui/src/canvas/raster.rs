@@ -164,43 +164,57 @@ fn moved_pixels(pixels: &[u8], w: u32, h: u32, (dx, dy): (i64, i64)) -> Vec<u8> 
     out
 }
 
+/// The frame of `job` from `pixels`, the last frame's moved by the pan, and the exposed `parts`
+/// rendered on their own, with its [`vectorcraft_render::FrameStats::moved`]. None when a part draws
+/// art in a way that depends on the frame's size ([`vectorcraft_render::FrameStats::view_sized`]).
+fn composed_frame(
+    r: &mut vectorcraft_render::Renderer,
+    mut pixels: Vec<u8>,
+    parts: Vec<[u32; 4]>,
+    job: &crate::render_worker::Job,
+) -> Option<(vectorcraft_render::Rendered, usize)> {
+    let mut moved = 0;
+    let stride = job.w as usize * 4;
+    for [x0, y0, x1, y1] in parts {
+        let view = Affine::translate((-f64::from(x0), -f64::from(y0))) * job.view;
+        let part = r.render(&job.doc, x1 - x0, y1 - y0, view, &job.opts);
+        if r.stats.view_sized > 0 {
+            return None;
+        }
+        moved += r.stats.moved;
+        let row = (x1 - x0) as usize * 4;
+        for (i, line) in part.pixels.chunks_exact(row).enumerate() {
+            let to = (y0 as usize + i) * stride + x0 as usize * 4;
+            pixels[to..to + row].copy_from_slice(line);
+        }
+    }
+    Some((vectorcraft_render::Rendered { width: job.w, height: job.h, pixels }, moved))
+}
+
 /// Render the frame of `job`. A pan by whole device pixels copies the pixels that stay on screen
-/// from `kept`, the frame before it, and renders only the parts it exposes; any other frame renders
-/// whole. A copied pixel can differ by one level from the same pixel rendered whole, because the
-/// art's edges are computed from coordinates at the new position, so the canvas renders a frame
-/// whole once the view has stopped ([`crate::CanvasCache::reused`]). `kept` becomes this frame
-/// when `job` allows keeping it, it is at most [`MAX_KEPT_BYTES`], and it draws no raster from
-/// before its object moved. A frame that renders whole once the view has stopped is kept too, so
-/// the first step of the next pan copies from it.
+/// from `kept`, the frame before it, and renders only the parts it exposes. Any other frame renders
+/// whole, and so does a pan when a part it exposes draws art in a way that depends on the frame's
+/// size ([`vectorcraft_render::FrameStats::view_sized`]). A copied frame is within one level of the
+/// same frame rendered whole, because the art's edges are computed from coordinates at the new
+/// position, so the canvas renders a frame whole once the view has stopped
+/// ([`crate::CanvasCache::reused`]). `kept` becomes this frame when `job` allows keeping it, it is
+/// at most [`MAX_KEPT_BYTES`], it draws no raster from before its object moved, and it draws nothing
+/// in a way that depends on its size. A frame that renders whole once the view has stopped is kept
+/// too, so the first step of the next pan copies from it.
 pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option<KeptFrame>, job: &crate::render_worker::Job) -> WorkerFrame {
     let copied = kept.as_ref().and_then(|k| {
         let pan = whole_pixel_pan(k, job)?;
         let parts = exposed_parts(job.w, job.h, pan)?;
-        Some((moved_pixels(&k.pixels, job.w, job.h, pan), parts))
+        composed_frame(r, moved_pixels(&k.pixels, job.w, job.h, pan), parts, job)
     });
     let reused = copied.is_some();
-    let (img, moved) = match copied {
-        Some((mut pixels, parts)) => {
-            let mut moved = 0;
-            let stride = job.w as usize * 4;
-            for [x0, y0, x1, y1] in parts {
-                let view = Affine::translate((-f64::from(x0), -f64::from(y0))) * job.view;
-                let part = r.render(&job.doc, x1 - x0, y1 - y0, view, &job.opts);
-                moved += r.stats.moved;
-                let row = (x1 - x0) as usize * 4;
-                for (i, line) in part.pixels.chunks_exact(row).enumerate() {
-                    let to = (y0 as usize + i) * stride + x0 as usize * 4;
-                    pixels[to..to + row].copy_from_slice(line);
-                }
-            }
-            (vectorcraft_render::Rendered { width: job.w, height: job.h, pixels }, moved)
-        }
-        None => {
-            let img = r.render(&job.doc, job.w, job.h, job.view, &job.opts);
-            (img, r.stats.moved)
-        }
-    };
-    let keeps = job.may_keep && moved == 0 && img.pixels.len() <= MAX_KEPT_BYTES && (img.width, img.height) == (job.w, job.h);
+    let (img, moved) = copied.unwrap_or_else(|| {
+        let img = r.render(&job.doc, job.w, job.h, job.view, &job.opts);
+        let moved = r.stats.moved;
+        (img, moved)
+    });
+    let keeps =
+        job.may_keep && moved == 0 && r.stats.view_sized == 0 && img.pixels.len() <= MAX_KEPT_BYTES && (img.width, img.height) == (job.w, job.h);
     *kept = keeps.then(|| KeptFrame { key: job.key.clone(), opts: job.opts.clone(), view: job.view, pixels: img.pixels.clone() });
     WorkerFrame { img, moved, reused }
 }

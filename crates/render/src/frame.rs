@@ -137,6 +137,12 @@ pub struct FrameStats {
     /// The filtered contents, shadows and glows the frame drew at a drag's lower resolution
     /// ([`RenderOptions::dragging`]). [`Self::moved`] counts them too.
     pub previewed: usize,
+    /// What the frame drew in a way that depends on the frame's size: effect rasters and filter
+    /// layers cropped to it or made at a lower resolution, blending groups drawn as layers past its
+    /// offscreen budget, gradient meshes drawn quad by quad past the mesh buffer, and, on a
+    /// single-threaded renderer, every filter layer. A part of the frame rendered on its own can
+    /// draw that art with other pixels than the whole frame does.
+    pub view_sized: usize,
     /// How many threads composed the frame from its two ink planes, in a CMYK document that shows
     /// transparency; 0 for other frames.
     pub ink_threads: usize,

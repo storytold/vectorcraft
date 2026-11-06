@@ -9466,6 +9466,42 @@ fn worker_frames_match_a_fresh_render_through_a_session() {
     }
 }
 
+/// A pan over art the frame's size decides stays within one level of a fresh render of the frame,
+/// because it renders whole: a full-page raster effect whose raster a part of the frame would make
+/// at another scale, and which the worker does not keep for the pan to copy from.
+#[test]
+fn a_pan_over_art_the_frame_size_decides_renders_whole() {
+    let (_, key) = pan_doc();
+    let cases = [
+        ("Gaussian Blur 500 pt", "blur.gaussian", json!({"radius": 500}), 2.0, (1440, 870)),
+        ("Craquelure", "texture.craquelure", json!({}), 10.0, (3840, 2160)),
+    ];
+    for (name, effect, params, zoom, (w, h)) in cases {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 595, "height": 842})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 595, "height": 842})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": "#1a4de6"})).unwrap();
+        app.run("effect.apply", json!({"effect": effect, "ids": [id], "params": params})).unwrap();
+        let doc = app.session.active().unwrap().doc.clone();
+        let job = |dx: f64| {
+            let mut job = pan_job(&doc, &key, (dx, 0.0));
+            (job.key.w, job.key.h, job.w, job.h, job.key.zoom) = (w, h, w, h, zoom);
+            job.view = Affine::translate((-200.0 + dx, -200.0)) * Affine::scale(zoom);
+            job
+        };
+        let mut r = vectorcraft_render::Renderer::new();
+        let mut kept = None;
+        render_job(&mut r, &mut kept, &job(0.0));
+        let pan = job(-40.0);
+        let frame = render_job(&mut r, &mut kept, &pan);
+        let whole = vectorcraft_render::Renderer::new().render(&pan.doc, pan.w, pan.h, pan.view, &pan.opts);
+        let off = frame.img.pixels.iter().zip(&whole.pixels).map(|(a, b)| a.abs_diff(*b)).max();
+        assert!(off.is_some_and(|d| d <= 1), "{name}: a channel differs by {off:?}");
+        assert!(!frame.reused, "{name}: the pan renders whole");
+        assert!(kept.is_none(), "{name}: the frame is not kept");
+    }
+}
+
 /// Runs `test`, whose canvas key holds the global placed-document bitmap clock, which tests on
 /// other threads move: a frame whose key changed by more than the view renders whole. An attempt
 /// that fails while the clock moved runs again; one that fails while it stood still is a real
