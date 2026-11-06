@@ -1989,6 +1989,36 @@ fn find_and_replace_options() {
     assert!(s.execute("edit.findReplace", &json!({"find": ""})).is_err());
 }
 
+/// Whole Word looks past a change of style: `cat` coloured red inside `catfish`, or at the end of
+/// `bobcat`, is part of a word, not a word of its own (#5901). A real word next to a run's end
+/// still matches, and without Whole Word the part is replaced as before.
+#[test]
+fn find_whole_word_is_not_fooled_by_a_style_change_inside_a_word() {
+    let styled = |s: &mut Session, t: &str, a: usize, b: usize| {
+        let id = text(s, t);
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": a, "end": b, "fill": "#ff0000"})).unwrap();
+        let NodeKind::Text(tt) = &node(s, id).kind else { panic!() };
+        assert!(tt.runs.len() >= 2, "{t}: two runs");
+        id
+    };
+    let mut s = session();
+    let fish = styled(&mut s, "catfish", 0, 3);
+    let bob = styled(&mut s, "bobcat", 3, 6);
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "DOG", "wholeWord": true})).unwrap();
+    assert_eq!((r["count"].as_u64(), plain(&s, fish), plain(&s, bob)), (Some(0), "catfish".to_string(), "bobcat".to_string()));
+    // A word that ends where its run does, at a space or the text's end, is still a word.
+    let mut s = session();
+    let spaced = styled(&mut s, "cat fish", 0, 3);
+    let tail = styled(&mut s, "a cat", 2, 5);
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "DOG", "wholeWord": true})).unwrap();
+    assert_eq!((r["count"].as_u64(), plain(&s, spaced), plain(&s, tail)), (Some(2), "DOG fish".to_string(), "a DOG".to_string()));
+    // Without Whole Word, the part inside the word is found as before.
+    let mut s = session();
+    let fish = styled(&mut s, "catfish", 0, 3);
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "DOG"})).unwrap();
+    assert_eq!((r["count"].as_u64(), plain(&s, fish)), (Some(1), "DOGfish".to_string()));
+}
+
 /// Find and Replace with no ids leaves the type on a locked artboard as it is.
 #[test]
 fn find_and_replace_leaves_type_on_a_locked_artboard() {
