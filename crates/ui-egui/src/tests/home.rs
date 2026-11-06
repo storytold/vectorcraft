@@ -452,7 +452,7 @@ fn text_centre_x(app: &mut VectorcraftApp, text: &str) -> Option<(f32, f32)> {
     app.canvas_rect = None;
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 700.0));
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 900.0));
     let raw = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
     out.textures_delta.clear();
