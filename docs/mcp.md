@@ -6053,7 +6053,9 @@ a stroke when it has `rect`. With both `rect` and `points`, the command also tou
 ## Perspective grid
 
 The grid is document data (`perspective.grid.set` edits the model directly). `perspective.grid.get` reads it:
-`grid` (the model), `define` (the Define Grid fields), `station` (the viewer: `x` the centre of vision on the
+`grid` (the model), `define` (the Define Grid fields; its `name` is the preset only while the grid still has that
+preset's fields, else `""` for a custom grid, so dragging the horizon, a vanishing point or the station point clears it
+and moving a plane does not), `station` (the viewer: `x` the centre of vision on the
 horizon `y`, `distance` from the picture plane, in points) and `defined` (false while the document uses the default
 grid). `perspective.grid.define` sets the grid from the Define Grid fields: `kind`, `units`, `scale`
 (`[artboard, real world]`), `gridline`, `angle` (the viewing angle, 0–90°), `distance` (the viewing distance),
