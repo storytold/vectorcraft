@@ -281,7 +281,8 @@ impl<'a> Reader<'a> {
             _ => {
                 let rule = clip.first().map_or(FillRule::NonZero, |(_, n)| path_rule(n));
                 // The compound path keeps the clipping paths' stroke, opacity and blend mode when they all have the same
-                // ones: it has one appearance for all its paths.
+                // ones, and the knockout shape flag when they all have it: it has one appearance for all its paths.
+                let shape = clip.iter().all(|(_, n)| n.knockout_shape);
                 let look = |n: &Node| (n.appearance.clone(), n.opacity, n.blend);
                 let shared =
                     clip.split_first().and_then(|((_, first), others)| others.iter().all(|(_, n)| look(n) == look(first)).then(|| look(first)));
@@ -292,6 +293,7 @@ impl<'a> Reader<'a> {
                     n.opacity = opacity;
                     n.blend = blend;
                 }
+                n.knockout_shape = shape;
                 Some(n)
             }
         };

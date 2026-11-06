@@ -1309,6 +1309,26 @@ fn a_clipping_paths_stroke_stays_on_the_clipping_path() {
     assert_eq!(strokes("", "5 w\n"), [plain, (Some((blue, 5.0)), 1.0, BlendMode::Normal)], "strokes that differ");
 }
 
+/// Clipping paths in a compound path that holds a drawn look become one compound path, which keeps the knockout shape
+/// flag when they all have it.
+#[test]
+fn the_compound_of_clipping_paths_keeps_their_knockout_shape() {
+    let (under, over) = (rect_path(0.0, 0.0, 30.0, 30.0), rect_path(5.0, 5.0, 25.0, 25.0));
+    let (a, b) = (rect_path(0.0, 0.0, 10.0, 10.0), rect_path(5.0, 0.0, 20.0, 10.0));
+    let clipping = |first: &str, second: &str| {
+        let look = format!("0 Ae\nu\n{RED}{under}f\n0 0 0 0 0 0 1 Xa\n{over}f\nU\n9 () XW\n");
+        let doc = read_ok(&layer(&format!("0 Ae\n*u\n{look}{first}{a}h\nW\nn\n{second}{b}h\nW\nn\n*U\n"))).doc;
+        let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+        assert!(matches!(children[0].kind, NodeKind::Compound { .. }), "{:?}", children[0].kind);
+        (children[0].opacity, children[0].knockout_shape)
+    };
+    let shape = "0 0.5 0 0 1 Xy\n";
+    assert_eq!(clipping(shape, ""), (0.5, true));
+    assert_eq!(clipping("", ""), (1.0, false));
+    assert_eq!(clipping(shape, "0 0.5 0 0 0 Xy\n"), (0.5, false), "the flag on one of them only");
+    assert_eq!(clipping(shape, "0 0.8 0 0 1 Xy\n"), (1.0, true), "opacities that differ");
+}
+
 /// Several clipping paths in a clipping group, a layer or an opacity mask's art clip to their intersection: each `W`
 /// reduces the clip set by the ones before it (AI7 spec §5.6.2). Each clipping path after the first clips a clipping
 /// group inside the one before it, and the innermost one holds the art; a clipping path's painted fill stays at its own
