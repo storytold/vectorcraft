@@ -54,7 +54,8 @@ pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit}
 pub use numeric::{
     SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_within, num_field_within_empty, opt_field,
     opt_field_named, plain_field_live, range_field, range_field_live, range_field_named, range_field_stepped, size_field, size_field_named, slider,
-    spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_field_stops_named, spin_kerning, spin_plain, spin_plain_named,
+    spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_field_stops_named, spin_kerning, spin_length_within, spin_plain,
+    spin_plain_named, spin_range,
 };
 #[cfg(test)]
 use numeric::{decimal_point, field_number, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};
