@@ -106,7 +106,8 @@ pub(super) fn fill_uncovered(
             view,
             opts,
             scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
-            reuse: false,
+            may_copy: false,
+            may_keep: false,
         });
     }
     let Some(f) = app.canvas.fill.as_ref().filter(|f| usable(&f.key)) else { return };

@@ -682,8 +682,9 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     let first = app.canvas.texture.is_none() || !same_doc;
     let heavy = first || app.canvas.last_ms > 8.0 || settling || staying;
     let changed = changed_pixels(app, key, doc, &opts, view, w, h);
-    // A new view can copy from the worker's last frame. The frame shown asked for again renders whole.
-    let reuse = app.canvas.key.as_ref() != Some(key);
+    // A new view can copy from the worker's last frame. The frame shown asked for again renders
+    // whole. The worker keeps either one for the next pan to copy from.
+    let may_copy = app.canvas.key.as_ref() != Some(key);
     let mut landed = None;
     match (&mut app.canvas.worker, heavy, changed) {
         // Only the document changed since the frame shown, in a part of it: that part is
@@ -710,7 +711,8 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
                 view,
                 opts,
                 scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
-                reuse,
+                may_copy,
+                may_keep: true,
             });
             // A light document's first frame is ready within the grace and shows in this frame,
             // with no frame of bare paper. Waited for once, when the frame is queued.

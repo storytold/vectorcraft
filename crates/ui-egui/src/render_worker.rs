@@ -26,7 +26,10 @@ pub struct Job {
     pub scope: ScopeHandle,
     /// The render may copy pixels from the worker's last frame ([`crate::canvas::render_job`]).
     /// Off: it renders the whole frame.
-    pub reuse: bool,
+    pub may_copy: bool,
+    /// The worker may keep the frame for its next frame to copy from
+    /// ([`crate::canvas::render_job`]). Off: the worker holds no frame after this one.
+    pub may_keep: bool,
 }
 
 pub struct Done {

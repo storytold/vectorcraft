@@ -114,7 +114,7 @@ pub(crate) struct WorkerFrame {
 fn whole_pixel_pan(kept: &KeptFrame, job: &crate::render_worker::Job) -> Option<(i64, i64)> {
     let (a, b) = (&kept.key, &job.key);
     let same_scale = a.zoom == b.zoom && a.rot == b.rot && a.ppp == b.ppp && (a.w, a.h) == (b.w, b.h) && (job.w, job.h) == (b.w, b.h);
-    if !job.reuse || !same_scale || !super::cursor::only_view_differs(a, b) || a.pixel.is_some() || b.pixel.is_some() {
+    if !job.may_copy || !same_scale || !super::cursor::only_view_differs(a, b) || a.pixel.is_some() || b.pixel.is_some() {
         return None;
     }
     if kept.opts != job.opts || job.opts.mask_view.is_some() {
@@ -169,8 +169,9 @@ fn moved_pixels(pixels: &[u8], w: u32, h: u32, (dx, dy): (i64, i64)) -> Vec<u8> 
 /// whole. A copied pixel can differ by one level from the same pixel rendered whole, because the
 /// art's edges are computed from coordinates at the new position, so the canvas renders a frame
 /// whole once the view has stopped ([`crate::CanvasCache::reused`]). `kept` becomes this frame
-/// when `job` allows reuse, it is at most [`MAX_KEPT_BYTES`], and it draws no raster from before
-/// its object moved.
+/// when `job` allows keeping it, it is at most [`MAX_KEPT_BYTES`], and it draws no raster from
+/// before its object moved. A frame that renders whole once the view has stopped is kept too, so
+/// the first step of the next pan copies from it.
 pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option<KeptFrame>, job: &crate::render_worker::Job) -> WorkerFrame {
     let copied = kept.as_ref().and_then(|k| {
         let pan = whole_pixel_pan(k, job)?;
@@ -199,7 +200,7 @@ pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option
             (img, r.stats.moved)
         }
     };
-    let keeps = job.reuse && moved == 0 && img.pixels.len() <= MAX_KEPT_BYTES && (img.width, img.height) == (job.w, job.h);
+    let keeps = job.may_keep && moved == 0 && img.pixels.len() <= MAX_KEPT_BYTES && (img.width, img.height) == (job.w, job.h);
     *kept = keeps.then(|| KeptFrame { key: job.key.clone(), opts: job.opts.clone(), view: job.view, pixels: img.pixels.clone() });
     WorkerFrame { img, moved, reused }
 }
