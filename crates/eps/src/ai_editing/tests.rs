@@ -3516,6 +3516,30 @@ fn an_open_frame_whose_ends_meet_is_written_as_its_outlines() {
     assert!(!program(&doc).contains("/AI11Text"));
 }
 
+/// A thread with a frame in a clipping group whose clipping object is a path stays type, every frame
+/// of it, and comes back as one thread: the art of such a group isn't cut.
+#[test]
+fn a_thread_with_a_frame_in_a_clipping_group_stays_type() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut first = TextObject::point(vectorcraft_geom::Point::ZERO, "A story in two frames", style(10.0, Color::BLACK));
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+    first.xf = Affine::IDENTITY;
+    let mut second = first.clone();
+    second.runs[0].text.clear();
+    second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(110.0, 10.0, 190.0, 40.0)) };
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    let clipper = clipping(&mut doc, shapes::rectangle(Rect::new(100.0, 0.0, 200.0, 50.0)));
+    let clipped = group(&mut doc, vec![clipper, second], true);
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, clipped).unwrap();
+    assert!(export_ai_editing(&doc, &opts()).unwrap().warnings.is_empty());
+    assert_eq!(program(&doc).matches("/AI11Text :").count(), 2);
+    assert_eq!(read_back(&doc).text_threads.len(), 1);
+}
+
 /// A thread with a frame in art cut to a clipping object that isn't a path is written as its
 /// outlines, every frame of it; so is type whose size is past what the reader reads.
 #[test]
