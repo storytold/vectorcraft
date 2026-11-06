@@ -5,12 +5,13 @@
 //! and `%AI11_EndTextDocument`, ASCII85 of nested dictionaries with numbers for keys. A text object
 //! in a layer is only a stub naming its story in it (`/StoryIndex`).
 //!
-//! The format isn't documented. What is read here was worked out from the files of the project's
-//! users, used locally and never committed, by comparing it with the type their pages draw: the
-//! meaning of each key below was checked against the page's own type in more than a thousand text
-//! objects, and it is only used for the keys that matched. Point type, area type and type on a path
-//! are read; a story in a frame of any other kind is left alone: it has no text, and the importer
-//! says so.
+//! The format isn't documented. Most of what is read here was worked out from the files of the
+//! project's users, used locally and never committed, by comparing it with the type their pages
+//! draw: the meaning of those keys was checked against the page's own type in more than a thousand
+//! text objects, and it is only used for the keys that matched. The Type on a Path Options of key
+//! 11 of a frame come from test files saved with one option changed at a time, used locally and
+//! never committed. Point type, area type and type on a path are read; a story in a frame of any
+//! other kind is left alone: it has no text, and the importer says so.
 //!
 //! Where type sits: a story lays its lines out round a point `F` (the anchor: the start of a line of
 //! left-aligned type, the middle of a centred one, the end of a right-aligned one), each line with an
@@ -24,7 +25,7 @@ use std::collections::BTreeMap;
 
 use kurbo::{BezPath, CubicBez, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{CharStyle, Justify, Node, NodeId, NodeKind, ParaDirection, ParaStyle, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, Justify, Node, NodeId, NodeKind, ParaDirection, ParaStyle, PathAlign, PathEffect, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
 /// Longest story read (bytes).
@@ -254,7 +255,46 @@ enum FrameKind {
     /// Area Type Options the frame keeps.
     Area(Vec<[f64; 8]>, AreaFrame),
     /// Type on a path, from `start` to `end` (segment index and the place in that segment).
-    OnPath { segments: Vec<[f64; 8]>, start: f64, end: f64 },
+    OnPath { segments: Vec<[f64; 8]>, start: f64, end: f64, options: PathFrame },
+}
+
+/// The Type on a Path Options a frame of type on a path keeps at key 11. Each stays at its default
+/// where the frame leaves the key out or keeps a value that can't be read. A frame with key 6 true
+/// keeps its defaults: what that state stores for these options isn't known.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct PathFrame {
+    /// Key 1: 1 Skew, 2 3D Ribbon, 3 Stair Step, 4 Gravity. Rainbow is the key left out.
+    effect: PathEffect,
+    /// Key 2: 0 Ascender, 1 Descender, 2 Center. Baseline is the key left out.
+    align: PathAlign,
+    /// Key 0: the type is flipped across its path. The frame's path runs as it did before the flip,
+    /// from the start of its range.
+    flip: bool,
+}
+
+impl PathFrame {
+    /// The options frame data `carries` keeps.
+    fn read(carries: &Val) -> PathFrame {
+        let Some(options) = carries.get("11") else { return PathFrame::default() };
+        if matches!(options.get("6"), Some(Val::Bool(true))) {
+            return PathFrame::default();
+        }
+        let code = |k: &str| options.get(k).and_then(Val::num);
+        let effect = match code("1") {
+            Some(1.0) => PathEffect::Skew,
+            Some(2.0) => PathEffect::Ribbon3d,
+            Some(3.0) => PathEffect::StairStep,
+            Some(4.0) => PathEffect::Gravity,
+            _ => PathEffect::Rainbow,
+        };
+        let align = match code("2") {
+            Some(0.0) => PathAlign::Ascender,
+            Some(1.0) => PathAlign::Descender,
+            Some(2.0) => PathAlign::Center,
+            _ => PathAlign::Baseline,
+        };
+        PathFrame { effect, align, flip: matches!(options.get("0"), Some(Val::Bool(true))) }
+    }
 }
 
 /// The Area Type Options an area frame keeps, in the units of the text document: each `None`
@@ -484,7 +524,7 @@ impl Texts {
                     let start = finite(range.first()).unwrap_or(0.0).clamp(0.0, n);
                     (start, finite(range.get(1)).unwrap_or(n).clamp(start, n))
                 };
-                Some(FrameKind::OnPath { segments, start, end })
+                Some(FrameKind::OnPath { segments, start, end, options: PathFrame::read(carries) })
             }
             _ => None,
         }
@@ -527,8 +567,10 @@ impl Texts {
         if let Some(f) = view.get("2").and_then(|l| find_node(l, "F")) {
             // Vertical type on a path turns its glyphs across the path: their matrices don't give
             // the spacing.
-            if matches!(frames.first(), Some(FrameKind::OnPath { .. })) && !vertical {
-                path_spacing = self::path_spacing(f);
+            if let Some(FrameKind::OnPath { options, .. }) = frames.first()
+                && !vertical
+            {
+                path_spacing = self::path_spacing(f, options.effect);
             }
             if let Some(a) = f.get("0").and_then(|a| a.get("0")).and_then(Val::nums)
                 && let [x, y, ..] = a.as_slice()
@@ -721,11 +763,21 @@ fn length_fraction(segments: &[[f64; 8]], t: f64) -> f64 {
 /// (`vectorcraft_text`'s `path_steps`): between two glyphs' centres, the path's length `s`, their
 /// advances' mean `a` and how far it turns `t` (away from their tops) make `s + t × spacing = a`.
 /// Fitted over every pair of the layout's glyphs; none where the path doesn't turn under them.
-fn path_spacing(f: &Val) -> f64 {
+/// The length `s` is on the path: Align to Path moves the baselines off it, by the distance `G`
+/// keeps. Under 3D Ribbon the glyphs' baselines stay level, so their feet show how the path turns.
+fn path_spacing(f: &Val, effect: PathEffect) -> f64 {
     let mut found = vec![];
     find_nodes(f, "G", &mut found);
     let (mut sum, mut turns) = (0.0, 0.0);
     for g in found {
+        // How far the baseline lies from the path, towards the glyphs' feet. Only Rainbow's and 3D
+        // Ribbon's feet are square to the path; Skew's are upright, so its alignment moves every
+        // baseline the same way and leaves the distances between them.
+        let offset = if matches!(effect, PathEffect::Rainbow | PathEffect::Ribbon3d) {
+            g.get("0").and_then(|o| o.get("0")).and_then(Val::nums).and_then(|o| o.get(1).copied()).filter(|o| o.is_finite()).unwrap_or(0.0)
+        } else {
+            0.0
+        };
         // Each glyph's origin, its matrix (along its baseline, then towards its foot) and where it
         // ends along the line; the lists end with where the line ends.
         let Some(at) = g.get("21") else { continue };
@@ -743,12 +795,18 @@ fn path_spacing(f: &Val) -> f64 {
             })
             .collect();
         for w in glyphs.windows(2) {
-            let [(p, a0, along, foot), (q, a1, next, _)] = w else { continue };
-            let turn = next.dot(*foot).atan2(next.dot(*along));
+            let [(p, a0, along, foot), (q, a1, next, next_foot)] = w else { continue };
+            let (along, next) = if effect == PathEffect::Ribbon3d {
+                (kurbo::Vec2::new(foot.y, -foot.x), kurbo::Vec2::new(next_foot.y, -next_foot.x))
+            } else {
+                (*along, *next)
+            };
+            let turn = next.dot(*foot).atan2(next.dot(along));
             // The length of the arc between the centres (the path is taken to be round there). A
             // corner (a turn of more than a radian between two glyphs) isn't round: left out.
             let half = turn.abs() * 0.5;
-            let length = if half > 1e-9 { (*q - *p).hypot() * half / half.sin() } else { (*q - *p).hypot() };
+            let chord = (*q - *p).hypot();
+            let length = if half > 1e-9 { chord * half / half.sin() } else { chord } + turn * offset;
             if turn.abs() <= 1.0 && length.is_finite() && a0.is_finite() && a1.is_finite() {
                 sum += ((a0 + a1) * 0.5 - length) * turn;
                 turns += turn * turn;
@@ -850,11 +908,12 @@ impl Story {
                 (scale, Affine::new([a / scale, b / scale, c / scale, d / scale, at.x, at.y]), TextKind::Point)
             }
             FrameKind::Area(s, _) => (1.0, Affine::IDENTITY, TextKind::Area { frame: path_of(s, template, to_doc) }),
-            FrameKind::OnPath { segments, start, end } => {
+            FrameKind::OnPath { segments, start, end, options } => {
                 let n = segments.len() as f64;
                 // A closed path keeps its end bracket wherever it is (the same place as the start: a
-                // full turn, see `TextKind::path_span`); an open one's end at its end is none.
-                let end = (closed(segments) || *end < n - 0.02).then(|| length_fraction(segments, *end));
+                // full turn, see `TextKind::path_span`); an open one's end at its end is none, unless
+                // a flip makes it the place the type starts.
+                let end = (closed(segments) || options.flip || *end < n - 0.02).then(|| length_fraction(segments, *end));
                 (1.0, Affine::IDENTITY, TextKind::OnPath { path: path_of(segments, template, to_doc), start: length_fraction(segments, *start), end })
             }
         };
@@ -913,13 +972,29 @@ impl Story {
             t.path_spacing = self.path_spacing * scale;
         }
         // Each frame of a thread keeps its own options.
-        if let Some(FrameKind::Area(_, options)) = self.frames.get(frame) {
-            options.apply(&mut t.area, scale);
+        match self.frames.get(frame) {
+            Some(FrameKind::Area(_, options)) => options.apply(&mut t.area, scale),
+            Some(FrameKind::OnPath { options, .. }) => {
+                t.path_effect = options.effect;
+                t.path_align = options.align;
+            }
+            _ => {}
         }
         t.vertical = self.vertical;
         t.kind = kind;
         t.xf = xf;
         Some(Node::new(id, NodeKind::Text(Box::new(t))))
+    }
+
+    /// Flips type on a path (`node`, made from frame `frame`) when its frame keeps Flip on. The
+    /// frame's path runs as it did before the flip, so this runs once, on the path the object ends
+    /// up with.
+    pub(super) fn flip_on_path(&self, node: &mut Node, frame: usize) {
+        if let Some(FrameKind::OnPath { options: PathFrame { flip: true, .. }, .. }) = self.frames.get(frame)
+            && let NodeKind::Text(t) = &mut node.kind
+        {
+            t.flip_on_path();
+        }
     }
 
     /// Area type that the file lays lines out in, in a frame too short for its first line as it is
@@ -1241,9 +1316,14 @@ mod tests {
     /// A text document's frame on a path of `segments` (each `x0 y0 x1 y1 x2 y2 x3 y3`) with the
     /// range `range`, written by hand.
     fn on_path_frame(segments: &[[f64; 8]], range: [f64; 2]) -> Option<FrameKind> {
+        on_path_frame_with(segments, range, "")
+    }
+
+    /// The same with `options` in the frame data too.
+    fn on_path_frame_with(segments: &[[f64; 8]], range: [f64; 2], options: &str) -> Option<FrameKind> {
         let nums = |v: &[f64]| v.iter().map(|n| format!("{n}")).collect::<Vec<_>>().join(" ");
         let all: Vec<f64> = segments.iter().flatten().copied().collect();
-        let doc = format!("/0 << /1 << /0 [ {} ] >> /2 << /0 2 /6 [ {} ] >> >>", nums(&all), nums(&range));
+        let doc = format!("/0 << /1 << /0 [ {} ] >> /2 << /0 2 /6 [ {} ] {options} >> >>", nums(&all), nums(&range));
         let texts = Texts {
             stories: vec![],
             fonts: vec![],
@@ -1275,6 +1355,123 @@ mod tests {
         let NodeKind::Text(t) = node.kind else { panic!("not type") };
         let (a, b) = t.kind.path_span().unwrap();
         (*t, b - a)
+    }
+
+    /// Key 11's codes for the effect and the alignment, each read on its own. The defaults are the
+    /// keys left out.
+    #[test]
+    fn type_on_a_path_keeps_its_effect_and_alignment() {
+        use PathAlign as A;
+        use PathEffect as E;
+        let read = |options: &str| {
+            let (t, _) = on_path("type", on_path_frame_with(&circle(), [0.0, 3.99], options).unwrap());
+            (t.path_effect, t.path_align)
+        };
+        assert_eq!(read(""), (E::Rainbow, A::Baseline));
+        assert_eq!(read("/11 << /4 21 /18 21.0 /6 false /22 0.025 >>"), (E::Rainbow, A::Baseline));
+        for (code, effect) in [(1, E::Skew), (2, E::Ribbon3d), (3, E::StairStep), (4, E::Gravity)] {
+            assert_eq!(read(&format!("/11 << /1 {code} >>")), (effect, A::Baseline), "effect {code}");
+        }
+        for (code, align) in [(0, A::Ascender), (1, A::Descender), (2, A::Center)] {
+            assert_eq!(read(&format!("/11 << /2 {code} >>")), (E::Rainbow, align), "alignment {code}");
+        }
+        assert_eq!(read("/11 << /1 3 /2 1 >>"), (E::StairStep, A::Descender));
+    }
+
+    /// A frame with key 6 true keeps the defaults, Flip included.
+    #[test]
+    fn type_on_a_path_with_key_6_true_keeps_the_defaults() {
+        let Some(FrameKind::OnPath { options, .. }) = on_path_frame_with(&circle(), [0.0, 3.99], "/11 << /6 true /0 true /1 1 /2 0 >>") else {
+            panic!("on a path")
+        };
+        assert_eq!(options, PathFrame::default());
+    }
+
+    /// Key 11 where it can't be read leaves the options at their defaults, each on its own.
+    #[test]
+    fn type_on_a_path_options_that_cannot_be_read_keep_their_defaults() {
+        let bad = ["5", "-1", "1.5", "1e300", "(1)", "true", "/Skew", "[ 1 ]", "<< /0 1 >>"];
+        for value in bad {
+            for key in ["1", "2", "0"] {
+                let Some(FrameKind::OnPath { options, .. }) = on_path_frame_with(&circle(), [0.0, 3.99], &format!("/11 << /{key} {value} >>")) else {
+                    panic!("on a path")
+                };
+                let expected = PathFrame { flip: key == "0" && value == "true", ..PathFrame::default() };
+                assert_eq!(options, expected, "key {key} value {value}");
+            }
+        }
+        for whole in ["3", "true", "(x)", "[ /1 1 ]"] {
+            let Some(FrameKind::OnPath { options, .. }) = on_path_frame_with(&circle(), [0.0, 3.99], &format!("/11 {whole}")) else {
+                panic!("on a path")
+            };
+            assert_eq!(options, PathFrame::default(), "{whole}");
+        }
+        // One option that can't be read leaves the other as the frame keeps it.
+        let Some(FrameKind::OnPath { options, .. }) = on_path_frame_with(&circle(), [0.0, 3.99], "/11 << /1 9 /2 2 >>") else { panic!("on a path") };
+        assert_eq!((options.effect, options.align), (PathEffect::Rainbow, PathAlign::Center));
+    }
+
+    /// The first point of type on a path's path, and its span.
+    fn flipped_on_path(frames: Vec<FrameKind>, frame: usize) -> (f64, (f64, f64)) {
+        let mut st = story("type", &[0.0], &Para::default());
+        st.frames = frames;
+        let mut node = st.node(NodeId(1), frame, (0.0, 0.0), Affine::IDENTITY).unwrap();
+        st.flip_on_path(&mut node, frame);
+        let NodeKind::Text(t) = node.kind else { panic!("not type") };
+        let vectorcraft_doc::TextKind::OnPath { path, .. } = &t.kind else { panic!("type on a path") };
+        let Some(kurbo::PathEl::MoveTo(first)) = path.to_bezpath().elements().first().copied() else { panic!("a path") };
+        (first.x + CANVAS_CENTRE, t.kind.path_span().unwrap())
+    }
+
+    /// Flip is a flag: the frame's path and range run as before the flip, so the type flips once,
+    /// keeps its stretch of the path, and the path runs from its far end.
+    #[test]
+    fn flipped_type_on_a_path_runs_the_path_the_other_way_once() {
+        let open = [[0.0, 0.0, 30.0, 0.0, 70.0, 0.0, 100.0, 0.0], [100.0, 0.0, 130.0, 0.0, 170.0, 0.0, 200.0, 0.0]];
+        let frame = |options: &str| vec![on_path_frame_with(&open, [0.5, 1.5], options).unwrap()];
+        let (first, (from, to)) = flipped_on_path(frame("/11 << /0 false >>"), 0);
+        assert_eq!(first, 0.0);
+        assert!((from - 0.25).abs() < 1e-3 && (to - 0.75).abs() < 1e-3, "{from} {to}");
+        let (first, (from, to)) = flipped_on_path(frame("/11 << /0 true >>"), 0);
+        assert_eq!(first, 200.0, "from the path's far end");
+        assert!((from - 0.25).abs() < 1e-3 && (to - 0.75).abs() < 1e-3, "the same stretch: {from} {to}");
+    }
+
+    /// The end of an open path's range, which doesn't move unflipped type, is where flipped type
+    /// starts: a range that ends just short of the path's end starts the type that far from it.
+    #[test]
+    fn flipped_type_on_an_open_path_starts_at_the_end_of_its_range() {
+        let third = 100.0 / 3.0;
+        let line = [[0.0, 0.0, third, 0.0, 2.0 * third, 0.0, 100.0, 0.0]];
+        let frame = |options: &str| vec![on_path_frame_with(&line, [0.0, 0.99], options).unwrap()];
+        let (_, (from, to)) = flipped_on_path(frame("/11 << /0 true >>"), 0);
+        assert!((from - 0.01).abs() < 1e-3 && (to - 1.0).abs() < 1e-3, "{from} {to}");
+        let (_, (from, to)) = flipped_on_path(frame(""), 0);
+        assert!(from.abs() < 1e-3 && (to - 1.0).abs() < 1e-3, "unflipped: {from} {to}");
+    }
+
+    /// Round a closed path, a flip keeps the stretch too, and each frame of a thread keeps its own
+    /// options.
+    #[test]
+    fn each_frame_of_type_on_a_path_keeps_its_options() {
+        let mut st = story("type", &[0.0], &Para::default());
+        st.frames = vec![
+            on_path_frame_with(&circle(), [0.5, 2.5], "/11 << /0 true /1 1 >>").unwrap(),
+            on_path_frame_with(&circle(), [0.0, 3.99], "/11 << /2 0 >>").unwrap(),
+        ];
+        let mut first = st.node(NodeId(1), 0, (0.0, 0.0), Affine::IDENTITY).unwrap();
+        let mut second = st.node(NodeId(2), 1, (0.0, 0.0), Affine::IDENTITY).unwrap();
+        let before = first.clone();
+        st.flip_on_path(&mut first, 0);
+        assert_ne!(before, first, "the first frame flips");
+        let before = second.clone();
+        st.flip_on_path(&mut second, 1);
+        assert_eq!(before, second, "the second frame doesn't");
+        let (NodeKind::Text(a), NodeKind::Text(b)) = (&first.kind, &second.kind) else { panic!("not type") };
+        assert_eq!((a.path_effect, a.path_align), (PathEffect::Skew, PathAlign::Baseline));
+        assert_eq!((b.path_effect, b.path_align), (PathEffect::Rainbow, PathAlign::Ascender));
+        let (from, to) = a.kind.path_span().unwrap();
+        assert!((to - from - 0.5).abs() < 1e-3, "{from} {to}");
     }
 
     /// Round a closed path the file writes the end bracket unwrapped, past the last segment (the
@@ -1355,6 +1552,12 @@ mod tests {
     /// outside it (their feet towards its centre) or inside it, the length of the circle between
     /// their centres `fraction` of their advances' mean.
     fn round_layout(advances: &[f64], radius: f64, outside: bool, fraction: f64) -> Val {
+        round_layout_with(advances, radius, outside, fraction, "", false)
+    }
+
+    /// The same with `extra` in the line's `G`, and baselines that stay level as 3D Ribbon's do when
+    /// `level`.
+    fn round_layout_with(advances: &[f64], radius: f64, outside: bool, fraction: f64, extra: &str, level: bool) -> Val {
         let sign = if outside { 1.0 } else { -1.0 };
         let (mut xs, mut ys, mut matrices, mut ends) = (vec![], vec![], vec![], vec![0.0]);
         let mut angle = std::f64::consts::PI;
@@ -1365,14 +1568,15 @@ mod tests {
             // Outside, clockwise on the page (y down); inside, the other way round.
             let along = (-angle.sin() * sign, angle.cos() * sign);
             let centre = (radius * angle.cos(), radius * angle.sin());
-            xs.push(centre.0 - along.0 * a * 0.5);
-            ys.push(centre.1 - along.1 * a * 0.5);
-            matrices.extend([along.0, along.1, -along.1, along.0, 0.0, 0.0]);
+            let baseline = if level { (1.0, 0.0) } else { along };
+            xs.push(centre.0 - baseline.0 * a * 0.5);
+            ys.push(centre.1 - baseline.1 * a * 0.5);
+            matrices.extend([baseline.0, baseline.1, -along.1, along.0, 0.0, 0.0]);
             ends.push(ends[i] + a);
         }
         let nums = |v: &[f64]| v.iter().map(|n| format!("{n}")).collect::<Vec<_>>().join(" ");
         let doc = format!(
-            "/0 << /99 /F /6 [ << /99 /L /6 [ << /99 /S /6 [ << /99 /G /21 << /1 [ {} ] /2 [ {} ] /3 [ {} ] /4 [ {} ] >> >> ] >> ] >> ] >>",
+            "/0 << /99 /F /6 [ << /99 /L /6 [ << /99 /S /6 [ << /99 /G {extra} /21 << /1 [ {} ] /2 [ {} ] /3 [ {} ] /4 [ {} ] >> >> ] >> ] >> ] >>",
             nums(&xs),
             nums(&ys),
             nums(&matrices),
@@ -1388,18 +1592,59 @@ mod tests {
     fn the_layout_of_type_on_a_path_gives_its_spacing() {
         let advances = [20.0, 30.0, 10.0, 25.0, 20.0];
         // Outside a circle of radius 100, 10 above the path: the centres are 100/110 of the advances apart.
-        let spacing = path_spacing(&round_layout(&advances, 100.0, true, 100.0 / 110.0));
+        let rainbow = PathEffect::Rainbow;
+        let spacing = path_spacing(&round_layout(&advances, 100.0, true, 100.0 / 110.0), rainbow);
         assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
         // Inside it, 20 above the path: 100/80 of them.
-        let spacing = path_spacing(&round_layout(&advances, 100.0, false, 100.0 / 80.0));
+        let spacing = path_spacing(&round_layout(&advances, 100.0, false, 100.0 / 80.0), rainbow);
         assert!((spacing - 20.0).abs() < 1e-6, "{spacing}");
         // At their advances: none.
-        assert!(path_spacing(&round_layout(&advances, 100.0, true, 1.0)).abs() < 1e-6);
+        assert!(path_spacing(&round_layout(&advances, 100.0, true, 1.0), rainbow).abs() < 1e-6);
         // Corners (here a turn of about four radians from glyph to glyph) aren't taken for a curve.
-        assert_eq!(path_spacing(&round_layout(&advances, 5.0, true, 1.0)), 0.0);
+        assert_eq!(path_spacing(&round_layout(&advances, 5.0, true, 1.0), rainbow), 0.0);
         // A straight line turns nowhere, and a layout without glyphs says nothing.
-        assert_eq!(path_spacing(&round_layout(&advances, 1e12, true, 0.9)), 0.0);
-        assert_eq!(path_spacing(&read(b"/99 /F").unwrap()), 0.0);
+        assert_eq!(path_spacing(&round_layout(&advances, 1e12, true, 0.9), rainbow), 0.0);
+        assert_eq!(path_spacing(&read(b"/99 /F").unwrap(), rainbow), 0.0);
+    }
+
+    /// Align to Path moves the baselines off the path, and the spacing is the one on the path. On a
+    /// circle of radius 100 with spacing 10, the path's length between two centres is 100/110 of
+    /// their advances. Baselines on a smaller or larger circle are that much closer or further.
+    #[test]
+    fn the_spacing_of_aligned_type_is_measured_on_its_path() {
+        let advances = [20.0, 30.0, 10.0, 25.0, 20.0];
+        let fit =
+            |radius: f64, extra: &str| path_spacing(&round_layout_with(&advances, radius, true, radius / 110.0, extra, false), PathEffect::Rainbow);
+        // 20 towards the feet: Ascender.
+        let spacing = fit(80.0, "/0 << /0 [ 0 20 ] >>");
+        assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
+        // 8 away from them: Descender.
+        let spacing = fit(108.0, "/0 << /0 [ 0 -8 ] >>");
+        assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
+        // A distance that can't be read counts as none.
+        for bad in ["/0 3", "/0 << /0 (x) >>", "/0 << /0 [ 0 ] >>"] {
+            let spacing = fit(100.0, bad);
+            assert!((spacing - 10.0).abs() < 1e-6, "{bad}: {spacing}");
+        }
+        // Skew's feet are upright: its alignment moves the baselines without changing their
+        // lengths, so the distance doesn't count.
+        let layout = |extra: &str| round_layout_with(&advances, 100.0, true, 100.0 / 110.0, extra, false);
+        let plain = path_spacing(&layout(""), PathEffect::Skew);
+        let aligned = path_spacing(&layout("/0 << /0 [ 0 20 ] >>"), PathEffect::Skew);
+        assert!((aligned - plain).abs() < 1e-9, "{plain} {aligned}");
+        // 3D Ribbon's feet are square to the path, as Rainbow's are.
+        let level = round_layout_with(&advances, 80.0, true, 80.0 / 110.0, "/0 << /0 [ 0 20 ] >>", true);
+        let spacing = path_spacing(&level, PathEffect::Ribbon3d);
+        assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
+    }
+
+    /// 3D Ribbon keeps its baselines level, so its glyphs' feet show how the path turns.
+    #[test]
+    fn the_spacing_of_3d_ribbon_type_follows_the_feet_of_its_glyphs() {
+        let advances = [20.0, 30.0, 10.0, 25.0, 20.0];
+        let layout = round_layout_with(&advances, 100.0, true, 100.0 / 110.0, "", true);
+        let spacing = path_spacing(&layout, PathEffect::Ribbon3d);
+        assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
     }
 
     /// The leading of the text object a story comes in as.
