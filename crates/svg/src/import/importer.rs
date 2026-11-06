@@ -7,6 +7,7 @@ use super::{
     StrokeLayer, Vec2, fnv1a, fx, shapes, spread, text, vector_effect,
 };
 use crate::SvgError;
+use kurbo::BezPath;
 
 /// How many clip paths deep (`<clipPath clip-path>`) an object's clip is read.
 const MAX_CLIP_NEST: usize = 16;
@@ -446,19 +447,32 @@ impl Importer {
     }
 
     fn clip_node(&mut self, cp: &usvg::ClipPath, ts: Affine) -> Option<Node> {
-        let shapes = clip_shapes(cp, ts);
-        if shapes.is_empty() {
+        let mut shapes = clip_shapes(cp, ts);
+        let id = cp.id().to_string();
+        if shapes.len() == 1 {
+            let (bp, r) = shapes.pop()?;
+            let kind = self.clip_shape(&bp, r, true)?;
+            return self.named(&id, kind);
+        }
+        // SVG 1.1 §14.3.5: the clip is the union of the children's silhouettes, each under its own
+        // clip-rule, so they don't cancel or share one rule: a group of them, which clips to that
+        // union (`Node::clip_shapes`).
+        let mut children = Vec::with_capacity(shapes.len());
+        for (bp, r) in &shapes {
+            let kind = self.clip_shape(bp, *r, false)?;
+            children.push(Arc::new(Node::new(self.alloc_id()?, kind)));
+        }
+        if children.is_empty() {
             return None;
         }
-        let r = shapes[0].1;
-        let mut subs = Vec::new();
-        for (bp, _) in &shapes {
-            subs.extend(PathData::from_bezpath(bp).subpaths);
-        }
-        let id = cp.id().to_string();
+        self.named(&id, NodeKind::Group { children, clip: false })
+    }
+
+    /// One clip path child: a path, or a compound path of its subpaths when it has several.
+    fn clip_shape(&mut self, bp: &BezPath, r: FillRule, clipping: bool) -> Option<NodeKind> {
+        let subs = PathData::from_bezpath(bp).subpaths;
         if subs.len() == 1 {
-            let path = PathData::new(subs);
-            return self.named(&id, NodeKind::Path { path, rule: r, live: None, clipping: true, guide: false });
+            return Some(NodeKind::Path { path: PathData::new(subs), rule: r, live: None, clipping, guide: false });
         }
         let mut children = Vec::with_capacity(subs.len());
         for sp in subs {
@@ -466,7 +480,7 @@ impl Importer {
             children
                 .push(Arc::new(Node::new(nid, NodeKind::Path { path: PathData::single(sp), rule: r, live: None, clipping: false, guide: false })));
         }
-        self.named(&id, NodeKind::Compound { children, rule: r })
+        Some(NodeKind::Compound { children, rule: r })
     }
 
     /// A usvg paint mapped by `m`, for art covering `area` (after `m`: where a reflected or

@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use super::common::{
     DEFAULT_DISTANCE, DEFAULT_STEPS, ease_param, fix_ids, ids_json, is_blend, orientation_param, percent_param, roots_param, selected_of,
     spacing_param, starts_param, wrap,
@@ -180,6 +182,17 @@ fn finite_point(p: &Value, cmd: &str) -> Result<Point> {
     if q.x.is_finite() && q.y.is_finite() && q.x.abs() < 1e9 && q.y.abs() < 1e9 { Ok(q) } else { Err(bad(cmd, "x and y must be finite")) }
 }
 
+/// Most spine points `with` names.
+const MAX_SPINE_POINTS: usize = 10_000;
+
+/// The optional `with` list of spine point indexes (empty when absent).
+fn spine_points_param(p: &Value, cmd: &str) -> Result<Vec<usize>> {
+    let Some(v) = p.get("with").filter(|v| !v.is_null()) else { return Ok(vec![]) };
+    let wrong = || bad(cmd, "`with` must be a list of at most 10000 spine point indexes");
+    let list = v.as_array().filter(|l| l.len() <= MAX_SPINE_POINTS).ok_or_else(wrong)?;
+    list.iter().map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok()).ok_or_else(wrong)).collect()
+}
+
 pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.blend.spine.moveAnchor";
     let index = index_param(p, "anchor", C)?;
@@ -191,6 +204,10 @@ pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) => return Err(bad(C, "handle must be in or out")),
     };
     let independent = switch_or(p, "independent", false, C)?;
+    let with = spine_points_param(p, C)?;
+    if handle.is_some() && !with.is_empty() {
+        return Err(bad(C, "`with` moves points, not a handle"));
+    }
     edit_spine(s, p, C, "Reshape Spine", |sp, anchors, keys| {
         let a = sp.anchors.get_mut(index).ok_or_else(|| bad(C, "no such spine point"))?;
         if let Some(out) = handle {
@@ -198,9 +215,13 @@ pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
             return Ok(());
         }
         let delta = q - a.p;
-        a.translate(delta);
-        // The key objects on the point move with it.
-        for (k, _) in anchors.iter().enumerate().filter(|(_, a)| **a == index) {
+        // The other points selected with it (#5285) move as far.
+        let moved: BTreeSet<usize> = with.iter().copied().chain([index]).collect();
+        for &i in &moved {
+            sp.anchors.get_mut(i).ok_or_else(|| bad(C, "no such spine point"))?.translate(delta);
+        }
+        // The key objects on the points move with them.
+        for (k, _) in anchors.iter().enumerate().filter(|(_, a)| moved.contains(*a)) {
             if let Some(key) = keys.get_mut(k) {
                 Arc::make_mut(key).transform(Affine::translate(delta), false);
             }

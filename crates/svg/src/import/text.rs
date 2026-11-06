@@ -503,6 +503,53 @@ impl Ctx {
         out.spans[slot].1 = start..out.chars.len();
     }
 
+    /// `textLength` and `lengthAdjust` (SVG 1.1 §10.9.1,
+    /// https://www.w3.org/TR/SVG11/text.html#TextElementTextLengthAttribute): the characters of
+    /// each element with a `textLength` are fitted to that advance, by adding the difference evenly
+    /// between them (`spacing`, the default; it becomes kerning) or by stretching them
+    /// (`spacingAndGlyphs`; it becomes horizontal scale, kept within 1–10000%). Innermost elements
+    /// first, so an element's length takes in its children's. Vertical type is spaced out only.
+    fn fit_lengths(&self, spans: &[(XNode, Range<usize>)], cells: &mut [Cell], vertical: bool, label: &str, warnings: &mut Vec<String>) {
+        let n = cells.len();
+        for (el, r) in spans.iter().rev() {
+            let Some(want) = el.attribute("textLength").and_then(|v| self.length(v, self.font_size(*el), self.viewport.0)).filter(|w| *w >= 0.0)
+            else {
+                continue;
+            };
+            // Past the largest coordinate, the characters would only be out of reach.
+            let want = want.min(vectorcraft_doc::MAX_COORD);
+            let Some(part) = cells.get_mut(r.start.min(n)..r.end.min(n)) else { continue };
+            let Some(gaps) = part.len().checked_sub(1) else { continue };
+            let stretch = el.attribute("lengthAdjust").map(str::trim) == Some("spacingAndGlyphs");
+            if stretch && vertical {
+                warnings.push(format!("{label}: lengthAdjust=\"spacingAndGlyphs\" on vertical text spaces the characters out instead"));
+            }
+            // Kerning and scale change shaping (manual kerning turns pair kerning off): measure again.
+            for _ in 0..4 {
+                let have = advance(&point_text(part));
+                if !have.is_finite() || (want - have).abs() < 0.01 {
+                    break;
+                }
+                if stretch && !vertical {
+                    let k = want / have;
+                    if !k.is_finite() || k <= 0.0 {
+                        break;
+                    }
+                    for c in part.iter_mut() {
+                        c.style.h_scale = (c.style.h_scale * k).clamp(1.0, 10_000.0);
+                    }
+                } else if gaps > 0 {
+                    let d = (want - have) / gaps as f64;
+                    for c in part.iter_mut().take(gaps) {
+                        c.kern += d;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
     /// The path a `<textPath>` follows, in the text's user space.
     fn text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<BezPath> {
         let mut bp = match tp.attribute("path") {
@@ -730,6 +777,7 @@ impl Ctx {
             }
         });
         let vertical = self.css.prop(t, "writing-mode").is_some_and(|m| m.starts_with("tb") || m.starts_with("vertical"));
+        self.fit_lengths(&cs.spans, &mut cells, vertical, label, warnings);
         let mut obj = TextObject::point(Point::ZERO, "", CharStyle::default());
         let mut breaks: Vec<Break> = vec![];
         let mut para_styles: Vec<ParaStyle> = vec![];

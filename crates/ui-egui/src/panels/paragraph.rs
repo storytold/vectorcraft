@@ -380,12 +380,64 @@ fn selected_alignment(app: &VectorcraftApp, fallback: &ParaStyle) -> Option<Just
 /// The seven alignment buttons shared by Paragraph and Properties; no button is selected
 /// when the paragraphs they act on have differing displayed alignments.
 pub fn alignment_buttons(app: &mut VectorcraftApp, ui: &mut Ui, para: &ParaStyle, size: f32) {
+    first_alignment_buttons(app, ui, para, size, ALIGNMENTS.len());
+}
+
+/// The first `count` of the [`ALIGNMENTS`] buttons.
+fn first_alignment_buttons(app: &mut VectorcraftApp, ui: &mut Ui, para: &ParaStyle, size: f32, count: usize) {
     let shown = selected_alignment(app, para);
-    for (j, icon, tip, id) in ALIGNMENTS {
+    for (j, icon, tip, id) in ALIGNMENTS.into_iter().take(count) {
         if widgets::icon_button(ui, icon, tip, shown == Some(j), size).clicked() {
             para_cmd(app, "text.setStyle", json!({"justify": id}));
         }
     }
+}
+
+/// The Control bar's alignment buttons: Align left, Align center and Align right. The public
+/// documentation has the Control panel format paragraphs while type is selected, with a way to the
+/// Paragraph panel (<https://helpx.adobe.com/illustrator/using/formatting-paragraphs.html>), and
+/// its alignment buttons align text as the Paragraph panel's do
+/// (<https://helpx.adobe.com/illustrator/using/align-text.html>). The bar keeps to the three that
+/// don't justify, for its room; all seven are in the Paragraph options the link opens.
+const CONTROL_BAR_ALIGNMENTS: usize = 3;
+
+/// The spacing between the Control bar's alignment buttons, as in the Paragraph panel's row.
+const CONTROL_BAR_BUTTON_SPACING: f32 = 3.0;
+
+/// The width of the Paragraph panel in the Control bar's popover, as the Character panel's.
+const CONTROL_BAR_POPOVER_WIDTH: f32 = 260.0;
+
+/// The Control bar's Paragraph link, as it is drawn and measured.
+fn control_bar_link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Paragraph:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The Control bar's paragraph controls while type is selected or edited (#5372), after its
+/// Character controls: the Paragraph link, which opens the Paragraph panel in a popover under it,
+/// and the Align left, Align center and Align right buttons, `size` points square as the bar's others. `reserve` gives the room the controls
+/// after them keep, asked only when type is selected: short of room, the buttons are left out,
+/// then the link too. Returns whether the link shows.
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, reserve: impl FnOnce(&Ui) -> f32) -> bool {
+    let Some((_, para)) = text_style(app) else { return false };
+    let text = control_bar_link_text(ui);
+    let link_width = widgets::text_width(ui, text.clone());
+    let room = ui.available_width() - reserve(ui);
+    let link_room = link_width + ui.spacing().item_spacing.x;
+    if room < link_room {
+        return false;
+    }
+    let link = ui.link(text).on_hover_text(tl!("Paragraph options"));
+    widgets::popover(&link, link.clicked(), |ui| {
+        ui.set_width(CONTROL_BAR_POPOVER_WIDTH);
+        show(app, ui);
+    });
+    if room >= link_room + (size + CONTROL_BAR_BUTTON_SPACING) * CONTROL_BAR_ALIGNMENTS as f32 {
+        let spacing = ui.spacing().item_spacing.x;
+        ui.spacing_mut().item_spacing.x = CONTROL_BAR_BUTTON_SPACING;
+        first_alignment_buttons(app, ui, &para, size, CONTROL_BAR_ALIGNMENTS);
+        ui.spacing_mut().item_spacing.x = spacing;
+    }
+    true
 }
 
 /// Type › Bullets and Numbering › Apply Bullets (`type.applyBullets {bullet?}`): the paragraphs of
