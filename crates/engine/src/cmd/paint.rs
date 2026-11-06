@@ -488,7 +488,7 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     }
     // An object of a dynamic symbol instance's art selected with Direct Selection: a solid color or
     // none changes that object for this instance only, and anything else is refused.
-    if let Some((id, path)) = selected_part_target(s, p)? {
+    if let Some((id, path)) = selected_part_target(s, p, cmd)? {
         if !part_takes(&paint) {
             return Err(super::brushsym::part_only());
         }
@@ -604,12 +604,16 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
 
 /// The instance whose object is selected with Direct Selection, and that object's path
 /// ([`super::brushsym::selected_part`]), when `p` names no `ids`, `id` or `item`: the paint commands
-/// then change that object.
-fn selected_part_target(s: &Session, p: &Value) -> Result<Option<(NodeId, Vec<u32>)>> {
+/// then change that object. A bad `target` or `aligned` is refused as it is for any other selection.
+fn selected_part_target(s: &Session, p: &Value, cmd: &str) -> Result<Option<(NodeId, Vec<u32>)>> {
     if p.get("ids").is_some() || p.get("id").is_some() || p.get("item").is_some() {
         return Ok(None);
     }
-    super::brushsym::selected_part(s)
+    let part = super::brushsym::selected_part(s)?;
+    if part.is_some() {
+        item_target(s, p, cmd)?;
+    }
+    Ok(part)
 }
 
 /// Can an object of a dynamic symbol instance's art selected with Direct Selection take `paint`? A
@@ -889,7 +893,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
     // An object of a dynamic symbol instance's art selected with Direct Selection: the solid color
     // it shows is recolored for this instance only. A gradient or pattern is refused, and so is type
     // whose characters differ in that paint, since one change holds one paint.
-    if let Some((id, path)) = selected_part_target(s, p)? {
+    if let Some((id, path)) = selected_part_target(s, p, cmd)? {
         let part = s.doc()?.selected_symbol_part();
         let mut paint = part.as_ref().map_or(Paint::None, |n| proxy_paint(n, stroke, None));
         let runs_differ = match part.as_ref().map(|n| &n.kind) {

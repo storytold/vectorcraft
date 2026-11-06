@@ -359,7 +359,10 @@ fn commands_on_the_selection_leave_a_picked_objects_instance_alone() {
         ("paint.swap", json!({})),
         ("stroke.set", json!({"weight": 3})),
         ("path.moveAnchors", json!({"dx": 5, "dy": 5})),
-        ("file.place", json!({"name": "a.svg", "dataBase64": vectorcraft_format::base64_encode(b"<svg xmlns='http://www.w3.org/2000/svg' width='9' height='9'><rect width='9' height='9'/></svg>"), "replace": true})),
+        (
+            "file.place",
+            json!({"name": "a.svg", "dataBase64": vectorcraft_format::base64_encode(b"<svg xmlns='http://www.w3.org/2000/svg' width='9' height='9'><rect width='9' height='9'/></svg>"), "replace": true}),
+        ),
         ("object.intertwine.arrange", json!({"at": [80, 30]})),
         ("transparency.editOpacityMask", json!({"id": null})),
         ("transparency.viewOpacityMask", json!({"on": true, "id": null})),
@@ -957,6 +960,27 @@ fn a_lent_selection_tool_moves_the_instance_of_a_picked_object() {
     // A plain Direct Selection click picks the object again once the tool is back.
     direct(&mut s, (80.0, 30.0), (80.0, 30.0), Mods::default());
     assert!(s.doc().unwrap().selection.symbol_part.is_some());
+}
+
+/// A bad `target` or `aligned` on a paint command is refused with an object picked too.
+#[test]
+fn bad_paint_parameters_leave_a_picked_object_alone() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();
+    let undo = undo_steps(&s);
+    for (cmd, p) in [
+        ("paint.setFill", json!({"color": "#ff0000", "target": "bogus"})),
+        ("paint.setStroke", json!({"color": "#ff0000", "target": "bogus"})),
+        ("paint.invert", json!({"target": "bogus"})),
+        ("paint.complement", json!({"target": "bogus"})),
+        ("paint.setFill", json!({"color": "#ff0000", "aligned": "yes"})),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains("`target` must") || e.contains("aligned"), "{cmd} {p}: {e}");
+        assert_eq!(overrides(&s, inst), 0, "{cmd} {p}");
+    }
+    assert_eq!(undo_steps(&s), undo, "no undo step");
 }
 
 /// An object picked while Replace read its file: the instance selected when Place started is
