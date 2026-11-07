@@ -1939,7 +1939,8 @@ fn the_control_bar_shows_the_global_edit_options() {
 
 /// At any width the Control bar shows the inline X, Y, W and H fields whole inside its right margin,
 /// or leaves all four out and keeps the Transform link; a wider bar never leaves them out once a
-/// narrower one showed them.
+/// narrower one showed them. The Align buttons, and for two objects the Distribute buttons, are
+/// trimmed the same way ahead of the Transform link (#5372).
 #[test]
 fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
     crate::i18n::set_current(crate::i18n::Lang::EN);
@@ -1954,6 +1955,33 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
         ctx.enable_accesskit();
         crate::theme::install_fonts(&ctx);
         let mut seen = false;
+        // The Align group, then for two objects the Distribute group (#5372): each by its controls.
+        let mut groups: Vec<(&str, Vec<&str>)> = vec![(
+            "Align",
+            vec![
+                "Horizontal Align Left",
+                "Horizontal Align Center",
+                "Horizontal Align Right",
+                "Horizontal & Vertical Align Center",
+                "Vertical Align Top",
+                "Vertical Align Center",
+                "Vertical Align Bottom",
+            ],
+        )];
+        if count == 2 {
+            groups.push((
+                "Distribute",
+                vec![
+                    "Vertical Distribute Top",
+                    "Vertical Distribute Center",
+                    "Vertical Distribute Bottom",
+                    "Horizontal Distribute Left",
+                    "Horizontal Distribute Center",
+                    "Horizontal Distribute Right",
+                ],
+            ));
+        }
+        let mut groups_seen = vec![false; groups.len()];
         for width in (600..=2400).step_by(10) {
             let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
             let mut nodes = Vec::new();
@@ -1980,7 +2008,24 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
             }
             assert!(!seen || fields[3].is_some(), "{count} objects, {width}: left out after a narrower bar showed them");
             seen |= fields[3].is_some();
+            // The Align and Distribute buttons show whole inside the margin, with the Transform
+            // link after them, or are left out; once shown, a wider bar keeps them.
+            let end = |name: &str| nodes.iter().find(|(_, n)| n.label() == Some(name)).and_then(|(_, n)| n.bounds()).map(|b| b.x1);
+            let inside = |x: f64| x <= f64::from(width) - 10.0;
+            for ((group, names), was) in groups.iter().zip(groups_seen.iter_mut()) {
+                let ends: Vec<Option<f64>> = names.iter().map(|n| end(n)).collect();
+                let shown = ends.iter().all(Option::is_some);
+                assert!(shown || ends.iter().all(Option::is_none), "{count} objects, {width}: {group} {ends:?}");
+                if let Some(Some(last)) = ends.last() {
+                    assert!(inside(*last), "{count} objects, {width}: {group} ends at {last}");
+                    let transform = end("Transform");
+                    assert!(transform.is_some_and(inside), "{count} objects, {width}: Transform after {group} ends at {transform:?}");
+                }
+                assert!(!*was || shown, "{count} objects, {width}: {group} left out after a narrower bar showed it");
+                *was |= shown;
+            }
         }
         assert!(seen, "{count} objects: a wide bar has room for the fields");
+        assert!(groups_seen.iter().all(|s| *s), "{count} objects: a wide bar shows every group: {groups_seen:?}");
     }
 }

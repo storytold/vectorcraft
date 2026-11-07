@@ -182,6 +182,45 @@ fn dragging_a_spine_point_moves_it() {
     assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Anchor { filled: true, .. })), "the clicked point shows");
 }
 
+/// #5285: Shift-click picks several points of a blend's spine, as of a path; dragging one of them
+/// moves them all (`with`), and Shift-click on a picked point takes it away again.
+#[test]
+fn shift_click_picks_several_spine_points_which_drag_together() {
+    let (mut d, g, _) = blend_doc();
+    let sp = vectorcraft_geom::SubPath::polyline(&[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)], false);
+    let Some(NodeKind::Blend { spec, .. }) = d.node_mut(g).map(|n| &mut n.kind) else { panic!("blend") };
+    (spec.spine, spec.key_anchors) = (Some(PathData::single(sp)), vec![0, 2]);
+    let mut s = Selection::default();
+    s.set([g]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let filled = |t: &DirectSelectionTool| t.overlays(&cx).iter().filter(|o| matches!(o, Overlay::Anchor { filled: true, .. })).count();
+    let mut t = DirectSelectionTool::new(false);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 210.0, 310.0).with_mods(shift));
+    assert_eq!(filled(&t), 2, "both picked points show");
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 210.0, 330.0));
+    assert_eq!(
+        a.last(),
+        Some(&Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": g.0, "anchor": 2, "x": 210.0, "y": 330.0, "with": [1]})))
+    );
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 210.0, 330.0)), vec![Action::Commit]);
+    // A plain press on a picked point keeps both.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 160.0, 300.0));
+    assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["anchor"] == 1 && v["with"] == json!([2])), "{a:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 300.0));
+    // Shift-click takes one away; a plain click on another point picks it alone.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 210.0, 310.0).with_mods(shift));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 210.0, 310.0).with_mods(shift));
+    assert_eq!(filled(&t), 1);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 110.0, 310.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 110.0, 330.0));
+    assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["anchor"] == 0 && v.get("with").is_none()), "{a:?}");
+}
+
 /// #1111: the Anchor Point tool bends a selected blend's straight spine; Direct Selection
 /// reshapes a curved spine segment and leaves a straight one alone, as it does a path's.
 #[test]
@@ -1821,6 +1860,29 @@ fn a_move_of_objects_lands_an_edge_on_the_grid() {
         let (v, _) = drag(&mut t, &c, (110.0, 110.0), (132.0, 110.0), Mods::default());
         assert_eq!(v["matrix"], json!([1.0, 0.0, 0.0, 1.0, 18.0, 0.0]), "group: {group}");
     }
+}
+
+/// #3835: with Snap to Grid on, a straight segment dragged by a point along it lands its anchors
+/// on the grid, not that point. B's top edge, (300, 300)–(400, 300), pressed at (350, 300) and
+/// dragged by (22, 23), moves its anchors to 322–422 across and 323 down: the right end is nearest
+/// the gridline 423 and the edge nearest 324, so the move is (23, 24). Snapping the pressed point
+/// instead would move it by (19, 24), onto the intersection (369, 324), leaving both anchors off
+/// the grid. An anchor pressed on still lands on an intersection itself.
+#[test]
+fn a_dragged_segment_lands_its_anchors_on_the_grid() {
+    let (d, _, b) = two_squares();
+    let p = paint();
+    let mut s = anchors_of(b, &[(0, 0), (0, 1)]);
+    s.segments.insert(b, [(0, 0)].into_iter().collect());
+    let c = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(drag(&mut t, &c, (350.0, 300.0), (372.0, 323.0), Mods::default()).0, json!({"dx": 23.0, "dy": 24.0}));
+    let (v, _) = drag(&mut t, &c, (350.0, 300.0), (363.0, 301.0), Mods { shift: true, ..Mods::default() });
+    let (x, y) = (v["dx"].as_f64().unwrap(), v["dy"].as_f64().unwrap());
+    assert!((x - 14.0).abs() < 1e-9 && y.abs() < 1e-9, "{v}");
+    let one = anchors_of(b, &[(0, 0)]);
+    let c = ToolContext { snap_to_grid: true, ..cx(&d, &one, &p) };
+    assert_eq!(drag(&mut t, &c, (300.0, 300.0), (322.0, 323.0), Mods::default()).0, json!({"dx": 24.0, "dy": 24.0}));
 }
 
 /// Group Selection and Direct Selection on a whole path keep a Shift-constrained move on its

@@ -17,6 +17,7 @@ vectorcraft-doc = { workspace = true }
 vectorcraft-effects = { workspace = true }
 vectorcraft-brush = { workspace = true }
 vectorcraft-text = { workspace = true }
+vectorcraft-pathops = { workspace = true }
 kurbo = { workspace = true }
 usvg = { workspace = true }
 thiserror = { workspace = true }

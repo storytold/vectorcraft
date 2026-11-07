@@ -1329,7 +1329,9 @@ digits	Malayalam	მალაიალამური
 	Standard Vertical Roman Alignment	სტანდარტული ვერტიკალური ლათინური სწორება
 	Strikethrough	გადახაზული
 	Character:	სიმბოლო:
+	Paragraph:	აბზაცი:
 	Character options	სიმბოლოს პარამეტრები
+	Paragraph options	აბზაცის პარამეტრები
 	Subscript	ქვედა ინდექსი
 	Subscript (on the roadmap)	ქვედა ინდექსი (სამომავლო გეგმაშია)
 	Superscript	ზედა ინდექსი
@@ -1664,6 +1666,9 @@ digits	Malayalam	მალაიალამური
 	More Paragraph options	აბზაცის სხვა პარამეტრები
 	No document open	დოკუმენტი გახსნილი არ არის
 	Quick Actions	სწრაფი მოქმედებები
+	Rearrange	გადალაგება
+	Select All Artboards	ყველა სამუშაო დაფის მონიშვნა
+	Switch Orientation	ორიენტაციის გადართვა
 	Rearrange All	ყველას გადალაგება
 	Rulers & Grids	სახაზავები და ბადეები
 	Select a text object	მონიშნეთ ტექსტური ობიექტი
@@ -3045,6 +3050,7 @@ theme	Appearance	იერსახე
 	Character / Paragraph	სიმბოლო / აბზაცი
 	Copy Artboard	სამუშაო დაფის კოპირება
 	Cut Artboard	სამუშაო დაფის ამოჭრა
+	Rename Artboards	სამუშაო დაფების სახელის შეცვლა
 	Move Artboard Up/Down	სამუშაო დაფის აწევა/ჩამოწევა
 	Add Anchor (Pen)	საყრდენი წერტილის დამატება (კალამი)
 	Add Anchor Point	საყრდენი წერტილის დამატება
@@ -4782,6 +4788,7 @@ font-technology	Variable	ცვლადი
 	Stacked	დასტად
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები ფაილში შენახულ დაბალი გარჩევადობის მინიატურას აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft-ის ლიმიტების მიღმა დაკავშირებული ტექსტის არეები გამოტოვებულია
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	ტექსტი, რომელიც ტექსტური ობიექტის შიგნით ცვლის წერის მიმართულებას, იხსნება მისი პირველი სიმბოლოს მიმართულებით
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	დაკავშირებულ არეებში, გარსშემოვლებულ ტექსტში ან შედგენილ ტრაექტორიაში ნიღბად გამოყენებული ტექსტი არ ჭრის
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები, რომელთა მინიატურაც ფაილში არ არის, ადგილის შემნახველს აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	არის ტექსტს ჩარჩოებში, რომლებიც მისი შრიფტის ერთი სტრიქონისთვის ზედმეტად დაბალი იყო, ჩარჩოები გაეზარდა ({_1}): სხვაგვარად ტექსტი არ გამოჩნდებოდა
@@ -5528,6 +5535,8 @@ imageTrace	Outline	კონტური
 @msg	missing number `{key}`	აკლია რიცხვი `{key}`
 @msg	missing integer `{key}`	აკლია მთელი რიცხვი `{key}`
 @msg	no such spine point	ხერხემლის ასეთი წერტილი არ არსებობს
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` უნდა იყოს ხერხემლის წერტილების არაუმეტეს 10000 ინდექსის სია
+@msg	`with` moves points, not a handle	`with` წერტილებს გადაადგილებს და არა სახელურს
 @msg	no such spine segment	ხერხემლის ასეთი სეგმენტი არ არსებობს
 @msg	not a blend	ეს გადასვლა არ არის
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	ბრაუზერში მხოლოდ http, https და mailto URL-ები იხსნება და არა „{url}“

@@ -5,8 +5,8 @@ use super::types::{
     line_width,
 };
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
-    Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, BrushesKept, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, Graph, HashMap,
+    HashSet, Instance, Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
 };
 
 impl<'a> Reader<'a> {
@@ -34,10 +34,11 @@ impl<'a> Reader<'a> {
             // of it may start with `%_` and read as hidden tokens: a `(` there would open
             // a string that swallows the rest of the layer.
             let key = o.entries.last().and_then(|(k, _)| k.as_deref());
-            if o.ty == "Binary" && key == Some("ASCII85Decode") {
-                self.lex.skip_past(b"~>");
-            } else if o.ty == "ForeignObject" && key == Some("Data") {
-                self.foreign_data = Some(self.lex.skip_past(b"~>").to_vec());
+            if ascii85_follows(&o.ty, key) {
+                let data = self.lex.skip_past(b"~>");
+                if o.ty == "ForeignObject" {
+                    self.foreign_data = Some(data.to_vec());
+                }
             }
         }
     }
@@ -359,10 +360,13 @@ impl<'a> Reader<'a> {
             "TO" => self.end_text(hidden)?,
             // `(text) justified TS`, special characters (§22.6): the reader adds its characters like `Tx`.
             "Tx" | "Tj" | "TX" | "TS" => self.text_body(w, &vals),
-            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" | "TC" | "TW" | "Tq" | "Th" | "Xb" | "Xe" | "XB" => self.text_attr(w, &vals),
-            // Attributes the reader doesn't keep (kerning pairs, Far-Eastern type) and final-form
-            // positions (§15.3).
-            "Tk" | "TK" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TV" | "Tv" | "Ty" | "TY" | "TG" | "Tg" | "Tu" | "Xu" => {}
+            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" | "TC" | "TW" | "Tq" | "Th" | "TV" | "Tv" | "Ty" | "TY" | "Xb" | "Xe"
+            | "XB" => {
+                self.text_attr(w, &vals);
+            }
+            // Attributes the reader doesn't keep (kerning pairs, line breaking, binding punctuation
+            // and Japanese layout rules) and final-form positions (§15.3).
+            "Tk" | "TK" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TG" | "Tg" | "Tu" | "Xu" => {}
             // `TM` (pop text matrix) and `Te` (end render), listed in §22.6, keep nothing either; the
             // reader takes `Te` with any number of operands.
             "TM" | "Te" => {}
@@ -520,10 +524,16 @@ impl<'a> Reader<'a> {
             self.gs.fill = p;
             self.pending_fill = None;
             self.pending_unread_fill = false;
+            if let Some(head) = self.symbol.as_mut() {
+                head.missing_fill = false;
+            }
         } else {
             self.gs.stroke = p;
             self.pending_stroke = None;
             self.pending_unread_stroke = false;
+            if let Some(head) = self.symbol.as_mut() {
+                head.missing_stroke = false;
+            }
         }
     }
 
@@ -585,14 +595,18 @@ impl<'a> Reader<'a> {
         let gs = &self.gs;
         let state = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
         let Some(Frame { kind: Kind::Layer(_), children, .. }) = self.frames.last_mut() else { return };
-        let Some(n) = children.last_mut().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) else { return };
+        let Some(n) =
+            children.last_mut().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. } | NodeKind::SymbolInstance { .. }))
+        else {
+            return;
+        };
         (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = before;
         self.layer_state = Some(state);
     }
 
-    /// `mode opacity isolate knockout shape Xy`; after a group's end, the group's too, and right
-    /// after a gradient mesh's `/End X!` or a blend's record (before their `Xd` and `6 () XW`),
-    /// theirs, unless the layer's `LB` follows: then it is the layer's (see `end_layer`).
+    /// `mode opacity isolate knockout shape Xy`; after a group's end or a symbol instance, theirs
+    /// too, and right after a gradient mesh's `/End X!` or a blend's record (before their `Xd` and
+    /// `6 () XW`), theirs, unless the layer's `LB` follows: then it is the layer's (see `end_layer`).
     fn transparency(&mut self, vals: &[V], mesh_ended: bool) {
         let n = Self::nums(vals);
         let [mode, opacity, rest @ ..] = n.as_slice() else { return };
@@ -612,14 +626,20 @@ impl<'a> Reader<'a> {
             self.last_object().filter(|n| (mesh_ended && matches!(n.kind, NodeKind::Mesh(_))) || matches!(n.kind, NodeKind::Blend { .. }))
         {
             // The mesh's or blend's, or the layer's when it is the layer's last object: kept for either.
-            let before = (n.opacity, n.blend, n.isolate, n.knockout);
-            (n.opacity, n.blend, n.isolate, n.knockout) = (gs.opacity, gs.blend, gs.isolate, gs.knockout);
+            let before = (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape);
+            (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
             self.mesh_undo = Some(before);
             self.layer_state = in_layer.then_some((gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape));
         } else if let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Compound { .. })) {
             let before = (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape);
             (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
             // The layer's instead when the layer's `7 () XW` follows (`layer_state_block`).
+            self.container_undo = in_layer.then_some(before);
+            self.layer_state = None;
+        } else if let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })) {
+            // A symbol instance's, as a group's.
+            let before = (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape);
+            (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape) = (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape);
             self.container_undo = in_layer.then_some(before);
             self.layer_state = None;
         } else {
@@ -650,6 +670,19 @@ impl<'a> Reader<'a> {
         let gs = &mut self.gs;
         (gs.opacity, gs.blend, gs.isolate, gs.knockout, gs.knockout_shape) = state;
         self.note_state();
+    }
+
+    /// Brings [`Reader::brushes_kept`] up to date with the brushes and brush art read so far.
+    fn note_brushes_kept(&mut self) {
+        use super::super::brush;
+        let read = (self.brush_drafts.len(), self.brush_art_sections);
+        if self.brushes_kept.read != read {
+            self.brushes_kept = BrushesKept {
+                read,
+                kept: brush::kept(&self.brush_drafts, &self.brush_art),
+                bending: brush::bending_art(&self.brush_drafts, &self.brush_art),
+            };
+        }
     }
 
     /// `n (style) XW` after an object: `1 (style)` after the object written on `%_` lines, its
@@ -688,6 +721,7 @@ impl<'a> Reader<'a> {
             return;
         }
         let space = self.space();
+        self.note_brushes_kept();
         let Some(f) = self.frames.last_mut() else { return };
         let n = f.children.len();
         let (Some(object), Some(look)) = (n.checked_sub(1).and_then(|i| f.children.get(i)), n.checked_sub(2).and_then(|i| f.children.get(i))) else {
@@ -713,6 +747,8 @@ impl<'a> Reader<'a> {
                     names: &self.global_names,
                     v7_patterns: &self.v7_patterns,
                     brushes: &self.brush_drafts,
+                    kept: &self.brushes_kept.kept,
+                    bending: &self.brushes_kept.bending,
                     space,
                 },
             )
@@ -730,7 +766,8 @@ impl<'a> Reader<'a> {
             }
             object.appearance = appearance.into();
             // The object's transparency is written on its look, after the look's group ends.
-            (object.opacity, object.blend, object.isolate, object.knockout) = (look.opacity, look.blend, look.isolate, look.knockout);
+            (object.opacity, object.blend, object.isolate, object.knockout, object.knockout_shape) =
+                (look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape);
             // Now the object itself, not a copy an enclosing look's `strip` would remove.
             self.hidden_ids.remove(&object.id);
             // Linked to the style when the style list has its name ([`Reader::finish`]).
@@ -751,8 +788,9 @@ impl<'a> Reader<'a> {
             // A text object stays the type it is: over what else its look draws, or in place of a
             // look that was only its type. Its transparency is written on its look.
             let empty = look.children().is_some_and(|c| c.is_empty());
-            if empty || (look.opacity >= 1.0 && look.blend == BlendMode::Normal && !look.isolate) {
-                (object.opacity, object.blend, object.isolate, object.knockout) = (look.opacity, look.blend, look.isolate, look.knockout);
+            if empty || (look.opacity >= 1.0 && look.blend == BlendMode::Normal && !look.isolate && !look.knockout_shape) {
+                (object.opacity, object.blend, object.isolate, object.knockout, object.knockout_shape) =
+                    (look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape);
                 if empty {
                     *look = object;
                 } else {
@@ -762,11 +800,11 @@ impl<'a> Reader<'a> {
             }
             // The look and the type go into a group that has the transparency.
             let Some(mut look) = f.children.pop() else { return };
-            let state = (look.opacity, look.blend, look.isolate, look.knockout);
-            (look.opacity, look.blend, look.isolate, look.knockout) = (1.0, BlendMode::Normal, false, Knockout::Neutral);
-            (object.opacity, object.blend, object.isolate) = (1.0, BlendMode::Normal, false);
+            let state = (look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape);
+            (look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape) = (1.0, BlendMode::Normal, false, Knockout::Neutral, false);
+            (object.opacity, object.blend, object.isolate, object.knockout_shape) = (1.0, BlendMode::Normal, false, false);
             let mut group = Node::group(self.doc.alloc_id(), vec![Arc::new(look), Arc::new(object)]);
-            (group.opacity, group.blend, group.isolate, group.knockout) = state;
+            (group.opacity, group.blend, group.isolate, group.knockout, group.knockout_shape) = state;
             self.text_looks.insert(group.id);
             if let Some(f) = self.frames.last_mut() {
                 f.children.push(group);
@@ -857,6 +895,10 @@ struct StylePaints<'a> {
     v7_patterns: &'a HashSet<String>,
     /// The brushes the file defines, which a brushed stroke names.
     brushes: &'a [super::super::brush::BrushDraft],
+    /// Which of [`Self::brushes`] are kept as brushes ([`super::super::brush::kept`]).
+    kept: &'a [bool],
+    /// The art an Art brush draws as the file does ([`super::super::brush::bending_art`]).
+    bending: &'a HashSet<String>,
     space: Affine,
 }
 
@@ -895,21 +937,88 @@ fn placed_paints(look: &Node, out: &mut HashMap<String, Paint>, depth: usize) {
     }
 }
 
+/// Is `n` a path, a compound path or a group without a clip, with no opacity mask, the objects
+/// whose outline the effects that move it (Transform, Twist, Free Distort) are read on? Images,
+/// type (and a text object's slot, filled with type placed where the page has it) and live objects
+/// draw more than their outline, and a mask stays where it is.
+fn outlines_only(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Group { clip: false, .. })
+        && n.extras().mask.is_none()
+        && slot_of(n.name.as_deref()).is_none()
+}
+
+/// Does `n`, inside an object whose outline an effect moves, move with it: is it and everything in
+/// it [`outlines_only`], painting with no gradient or pattern (which stay where they are placed)
+/// and with no effects of its own (drawn after the outer effect, not before)? Deeper than
+/// [`MAX_DEPTH`] counts as no.
+fn moves_alike(n: &Node, depth: usize) -> bool {
+    depth <= MAX_DEPTH
+        && outlines_only(n)
+        && n.appearance.effects.is_empty()
+        && n.appearance.items.iter().all(|i| i.effects().is_empty() && !matches!(i.paint(), Paint::Gradient(_) | Paint::Pattern { .. }))
+        && n.children().into_iter().flatten().all(|c| moves_alike(c, depth + 1))
+}
+
+/// Does `n` or anything in it (to [`MAX_DEPTH`]) have a stroke that paints?
+fn strokes(n: &Node, depth: usize) -> bool {
+    depth > MAX_DEPTH
+        || n.appearance.items.iter().any(|i| !i.is_fill() && !i.paint().is_none())
+        || n.children().into_iter().flatten().any(|c| strokes(c, depth + 1))
+}
+
+/// Are all of path or compound path `n`'s segments straight, each anchor's handles on it?
+fn straight(n: &Node) -> bool {
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| a.h_in == a.p && a.h_out == a.p),
+        NodeKind::Compound { children, .. } => children.iter().all(|c| matches!(c.kind, NodeKind::Path { .. }) && straight(c)),
+        _ => false,
+    }
+}
+
+/// Is `object` one that style `st`, whose effect moves the outline, is read on? It and everything
+/// in it [`moves_alike`], and the style paints no gradient. Twist is read only on an unstroked path
+/// or compound path with straight segments, and Transform that scales, turns or reflects only when
+/// nothing is stroked (its reference point lies on the bounds without strokes).
+fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
+    use crate::import::ai::style::StyleItem;
+    let stroked = st.items.iter().any(|i| matches!(i, StyleItem::Stroke { paint, .. } if !paint.is_none()))
+        || object.children().into_iter().flatten().any(|c| strokes(c, 1));
+    !st.items.iter().any(|i| matches!(i, StyleItem::Gradient { .. }))
+        && outlines_only(object)
+        && object.children().into_iter().flatten().all(|c| moves_alike(c, 1))
+        && st.effects.iter().all(|e| match e.id.as_str() {
+            "distort.twist" => !stroked && matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && straight(object),
+            "distort.transform" => {
+                let p = &e.params;
+                !stroked
+                    || (p["scaleH"].as_f64() == Some(100.0)
+                        && p["scaleV"].as_f64() == Some(100.0)
+                        && p["rotate"].as_f64() == Some(0.0)
+                        && p["reflectX"].as_bool() == Some(false)
+                        && p["reflectY"].as_bool() == Some(false))
+            }
+            _ => true,
+        })
+}
+
 /// What [`placed_paints`] keys a pattern's name with, apart from the gradients' names.
 const PATTERN_KEY: &str = "\u{1}pattern ";
 
 /// `object`'s appearance with style `st`, its drawn look `look`: `None` when the style isn't one
-/// this reads, asks a group for fills or strokes, or has Pathfinder effects on anything but a group
-/// with no fills or strokes.
+/// this reads, asks a group for fills or strokes, has Pathfinder effects on anything but a group
+/// with no fills or strokes, or moves the outline of an object it isn't read on ([`moves_with`]).
 fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, paints: &StylePaints) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
     // A text object's slot (an empty group standing for it) takes the style as the type will.
     let slot = slot_of(object.name.as_deref()).is_some();
+    // A symbol instance draws its symbol's art: it keeps its drawn look.
     if !st.plain
+        || matches!(object.kind, NodeKind::SymbolInstance { .. })
         || (!slot && !st.simple)
         || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
         || (st.pathfinder
             && (slot || !st.items.is_empty() || object.is_compound_shape() || !matches!(object.kind, NodeKind::Group { clip: false, .. })))
+        || (!slot && st.moves_outline() && !moves_with(object, st))
     {
         return None;
     }
@@ -954,11 +1063,21 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                 }
             },
             StyleItem::Stroke { brush, .. } => {
-                // A brushed stroke draws as its look only with the brush the file defines (the
-                // first of its name, as the Brushes panel keeps it) at the object's settings.
+                // A brushed stroke draws as its look only with the brush the Brushes panel keeps
+                // under its name, at the object's settings, on a path, a compound path or type (an
+                // image draws no stroke). An Art brush is read on a path or a compound path with
+                // no effects.
                 if let Some((name, settings)) = brush {
-                    let draft = paints.brushes.iter().find(|d| &d.name == name)?;
-                    if !super::super::brush::draws_as(draft, settings) {
+                    let (draft, _) = paints.brushes.iter().zip(paints.kept).find(|(d, kept)| **kept && &d.name == name)?;
+                    if !super::super::brush::draws_as(draft, settings, paints.bending) {
+                        return None;
+                    }
+                    let art = matches!(settings, super::super::brush::PathBrush::Art);
+                    let on_a_path = matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
+                    if !on_a_path && (art || !slot) {
+                        return None;
+                    }
+                    if art && !st.effects.is_empty() {
                         return None;
                     }
                 }
@@ -1036,5 +1155,219 @@ fn strip(n: &mut Node, hidden: &HashSet<NodeId>) {
         for c in children.iter_mut() {
             strip(Arc::make_mut(c), hidden);
         }
+    }
+}
+
+/// Whether ASCII85 data in comment lines, up to its `~>`, follows the entry keyed `key` of a
+/// dictionary of type `ty`: the `/ASCII85Decode` of a `/Binary` dictionary or a text document, or a
+/// non-native art object's (`/ForeignObject`'s) `/Data`.
+pub(super) fn ascii85_follows(ty: &str, key: Option<&str>) -> bool {
+    matches!((ty, key), ("Binary" | "AI11TextDocument" | "AI11UndoFreeTextDocument", Some("ASCII85Decode")) | ("ForeignObject", Some("Data")))
+}
+
+/// The dictionaries (`/Type :` … `;`) a scan of tokens passes that the reader doesn't read, kept to
+/// tell where an entry's ASCII85 data follows ([`ascii85_follows`]), so the scan can skip past it
+/// as the reader does: a `(` on a `%_` line of the data would otherwise open a string.
+#[derive(Clone, Default)]
+pub(super) struct Dictionaries<'s> {
+    /// The open dictionaries' types, innermost last, up to [`MAX_DEPTH`].
+    types: Vec<&'s [u8]>,
+    /// How many more are open inside the last of `types`.
+    deeper: usize,
+    /// The name just before the token taken.
+    name: Option<&'s [u8]>,
+    /// Whether the string just before the token taken is a key that ASCII85 data follows.
+    string_key: bool,
+    /// The end markers of the sections being scanned (`None`: no section) where the rest of the data
+    /// had no `~>` or marker to stop at, so they aren't searched for again in those sections.
+    no_end: Vec<Option<String>>,
+}
+
+/// Where the ASCII85 data at the start of `rest` stops: just past its `~>`, or at the comment that
+/// comes first with a marker of `section`, the begin and end markers of the section being scanned
+/// (no begin marker when it's empty). A line of the data that reads as one of them counts as the
+/// marker. `None` when `rest` has neither.
+fn data_end(rest: &[u8], section: Option<(&str, &str)>) -> Option<usize> {
+    let mut at = 0;
+    for line in rest.split(|b| matches!(b, b'\r' | b'\n')) {
+        // The first line is what is left of the key's line, where a `%` starts no marker.
+        if at > 0
+            && let Some((comment, (begin, end))) = line.strip_prefix(b"%").zip(section)
+        {
+            let comment = String::from_utf8_lossy(comment);
+            let marker = super::marker(&comment);
+            if marker == end || (!begin.is_empty() && marker == begin) {
+                return Some(at);
+            }
+        }
+        if let Some(i) = line.windows(2).position(|w| w == b"~>") {
+            return Some(at + i + 2);
+        }
+        at += line.len() + 1;
+    }
+    None
+}
+
+impl<'s> Dictionaries<'s> {
+    /// Take `tok`, the token `lex` just gave, and skip the ASCII85 data that follows it, up to where
+    /// [`data_end`] stops for `section`, so the scan still finds that section's markers.
+    pub(super) fn pass(&mut self, tok: &super::Tok<'s>, lex: &mut super::Lexer<'s>, section: Option<(&str, &str)>) {
+        let end = section.map(|(_, end)| end);
+        if self.data_follows(tok) && !self.no_end.iter().any(|e| e.as_deref() == end) {
+            match data_end(lex.rest(), section) {
+                Some(stop) => lex.seek(lex.offset() + stop),
+                None => self.no_end.push(end.map(str::to_owned)),
+            }
+        }
+    }
+
+    /// Take the next token → whether ASCII85 data follows it.
+    fn data_follows(&mut self, tok: &super::Tok<'s>) -> bool {
+        // Comments between a name and what follows it are passed over, as the reader passes them.
+        if matches!(tok, super::Tok::Comment(_)) {
+            return false;
+        }
+        let name = self.name.take();
+        let string_key = std::mem::take(&mut self.string_key);
+        match tok {
+            super::Tok::Name(n) => self.name = Some(n),
+            // A string keys an entry as a name does, but gives a dictionary no type.
+            super::Tok::Str(s) | super::Tok::Hex(s) => self.string_key = self.keys_data(s),
+            super::Tok::Word(b":") if self.types.len() < MAX_DEPTH => self.types.push(name.unwrap_or_default()),
+            super::Tok::Word(b":") => self.deeper = self.deeper.saturating_add(1),
+            super::Tok::Word(b";") if self.deeper > 0 => self.deeper -= 1,
+            super::Tok::Word(b";") => {
+                self.types.pop();
+            }
+            super::Tok::Word(b",") => return string_key || name.is_some_and(|key| self.keys_data(key)),
+            _ => {}
+        }
+        false
+    }
+
+    /// Whether ASCII85 data follows an entry keyed `key` of the innermost dictionary.
+    fn keys_data(&self, key: &[u8]) -> bool {
+        let Some(ty) = self.types.last().filter(|_| self.deeper == 0) else { return false };
+        let (Ok(ty), Ok(key)) = (std::str::from_utf8(ty), std::str::from_utf8(key)) else { return false };
+        ascii85_follows(ty, Some(key))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vectorcraft_doc::ImageObject;
+    use vectorcraft_geom::shapes;
+
+    fn square(id: u64, fill: Paint) -> Arc<Node> {
+        Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, Paint::None, 0.0)))
+    }
+
+    /// An image draws no stroke, so an image with a brush in its art style keeps its drawn look.
+    #[test]
+    fn an_image_with_a_brush_keeps_its_drawn_look() {
+        use super::super::super::brush::{Tool, parse_tool_object};
+        let tool = "Adobe Calligraphic Brush Tool"; // brand-ok: the filter's name in the files
+        let text = format!(
+            "%AI9_BeginArtStyles\n/KnownStyle :\n(Inked) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n({tool}) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+             /StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n\
+             6 /Real (Diameter) ,\n2 /Real (DiameterVariation) ,\n2 /Int (DiameterDependsOn) ,\n\
+             40 /Real (Roundness) ,\n10 /Real (RoundnessVariation) ,\n5 /Int (RoundnessDependsOn) ,\n\
+             30 /Real (Angle) ,\n180 /Real (AngleVariation) ,\n6 /Int (AngleDependsOn) ,\n0 /Int (AngleRelativeTo) ,\n\
+             /GObjRef : (N) ({tool}) /PluginObject ; (Brush) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+        );
+        let styles = crate::import::ai::style::art_styles(text.as_bytes());
+        let st = &styles["Inked"];
+        let brushes = [parse_tool_object(Tool::Calligraphic, "N", "1 4 8 30 50 -150 210 2 5 6 0").unwrap()];
+        let (gradients, patterns, names, v7_patterns, bending) =
+            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashSet::new());
+        let paints = StylePaints {
+            gradients: &gradients,
+            patterns: &patterns,
+            names: &names,
+            v7_patterns: &v7_patterns,
+            brushes: &brushes,
+            kept: &[true],
+            bending: &bending,
+            space: Affine::IDENTITY,
+        };
+        let look = Node::group(NodeId(1), vec![square(2, Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)))]);
+        assert!(styled(&square(3, Paint::None), &look, st, &paints).is_some(), "a path takes the style");
+        let image =
+            ImageObject { key: "a".into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+        assert!(styled(&Node::new(NodeId(4), NodeKind::Image(Box::new(image))), &look, st, &paints).is_none());
+    }
+
+    #[test]
+    fn data_stops_at_its_end_or_a_marker_of_the_section() {
+        let section = Some(("BeginTextDocument", "EndTextDocument"));
+        assert_eq!(data_end(b"\n%_(a~>\n%AI11_EndTextDocument\n", section), Some(7));
+        assert_eq!(data_end(b"\n%_(a\n%AI11_EndTextDocument\n", section), Some(6));
+        assert_eq!(data_end(b"\n%_(a\n%AI11_BeginTextDocument\n", section), Some(6));
+        // Bytes that aren't UTF-8 after the marker, as the scan reads a comment.
+        assert_eq!(data_end(b"\n%_(a\n%AI11_EndTextDocument \xff\n", section), Some(6));
+        // Right after the key a `%` starts no marker, and an empty begin marker matches no comment.
+        assert_eq!(data_end(b"%AI11_EndTextDocument\n%_(a\n", section), None);
+        assert_eq!(data_end(b"\n%\n", Some(("", "EndPalette"))), None);
+        assert_eq!(data_end(b"\n%AI11_EndTextDocument\n", None), None);
+    }
+
+    #[test]
+    fn only_outlines_without_gradients_move_alike() {
+        // GUARDS: an image's pixels and a placed gradient stay behind when an effect moves the outline.
+        let solid = || square(2, Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)));
+        assert!(moves_alike(&Node::group(NodeId(1), vec![solid(), solid()]), 1));
+        let gradient = square(3, Paint::Gradient(Box::new(vectorcraft_color::gradient::GradientPaint::new(Gradient::default()))));
+        assert!(!moves_alike(&Node::group(NodeId(1), vec![solid(), gradient]), 1));
+        let image =
+            ImageObject { key: "a".into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+        let image = Arc::new(Node::new(NodeId(4), NodeKind::Image(Box::new(image))));
+        assert!(!moves_alike(&Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(5), vec![image.clone()]))]), 1));
+        assert!(!outlines_only(&image));
+        // A text object's slot, and a member with an opacity mask.
+        let mut slot = Node::group(NodeId(6), vec![]);
+        slot.name = Some(format!("{}0", super::super::document::TEXT_SLOT));
+        assert!(!moves_alike(&Node::group(NodeId(1), vec![solid(), Arc::new(slot)]), 1));
+        let mut masked = Node::clone(&solid());
+        masked.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(Node::group(NodeId(7), vec![]), true)));
+        assert!(!moves_alike(&Node::group(NodeId(1), vec![solid(), Arc::new(masked)]), 1));
+        // A member with an effect of its own.
+        let mut turned = Node::clone(&solid());
+        turned.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "distort.twist".into(),
+            params: serde_json::json!({"angle": 30.0}),
+            visible: true,
+        });
+        assert!(!moves_alike(&Node::group(NodeId(1), vec![solid(), Arc::new(turned)]), 1));
+        // A member painting a pattern, whose tiles stay where they are, and a clipping group.
+        let tiled = square(8, Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY });
+        assert!(!moves_alike(&Node::group(NodeId(1), vec![solid(), tiled]), 1));
+        let mut clipped = Node::group(NodeId(9), vec![solid(), solid()]);
+        if let NodeKind::Group { clip, .. } = &mut clipped.kind {
+            *clip = true;
+        }
+        assert!(!moves_alike(&Node::group(NodeId(1), vec![Arc::new(clipped)]), 1));
+    }
+
+    #[test]
+    fn an_outline_moves_with_its_effect_only_on_outlines() {
+        // GUARDS: a top-level image or masked path took an effect that moves the outline.
+        use crate::import::ai::style::ArtStyle;
+        let effect = |id: &str, params| vectorcraft_doc::Effect { id: id.into(), params, visible: true };
+        let style = |e| ArtStyle { effects: vec![e], ..ArtStyle::default() };
+        let twist = style(effect("distort.twist", serde_json::json!({"angle": 30.0})));
+        let path = square(2, Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)));
+        assert!(moves_with(&path, &twist));
+        let mut masked = Node::clone(&path);
+        masked.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(Node::group(NodeId(7), vec![]), true)));
+        assert!(!moves_with(&masked, &twist));
+        let image =
+            ImageObject { key: "a".into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+        let image = Node::new(NodeId(4), NodeKind::Image(Box::new(image)));
+        let distort = style(effect("distort.freeDistort", serde_json::json!({"corners": [[0.1, 0.0], [1.1, 0.0], [1.0, 1.0], [0.0, 1.0]]})));
+        assert!(!moves_with(&image, &distort));
+        assert!(moves_with(&path, &distort));
     }
 }

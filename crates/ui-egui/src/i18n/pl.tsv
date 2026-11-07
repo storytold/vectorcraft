@@ -1406,7 +1406,9 @@ digits	Malayalam	Malajalam
 	Standard Vertical Roman Alignment	Standardowe pionowe wyrównanie łacińskie
 	Strikethrough	Przekreślenie
 	Character:	Znak:
+	Paragraph:	Akapit:
 	Character options	Opcje znaków
+	Paragraph options	Opcje akapitu
 	Subscript	Indeks dolny
 	Subscript (on the roadmap)	Indeks dolny (w planach)
 	Superscript	Indeks górny
@@ -1867,6 +1869,9 @@ digits	Malayalam	Malajalam
 	More Paragraph options	Więcej opcji akapitu
 	No document open	Brak otwartego dokumentu
 	Quick Actions	Szybkie operacje
+	Rearrange	Przestaw
+	Select All Artboards	Zaznacz wszystkie obszary kompozycji
+	Switch Orientation	Przełącz orientację
 	Rearrange All	Przestaw wszystkie
 	Rulers & Grids	Linijki i siatki
 	Select a text object	Zaznacz obiekt tekstowy
@@ -3362,6 +3367,7 @@ theme	Appearance	Wygląd
 	Character / Paragraph	Znak / akapit
 	Copy Artboard	Kopiuj obszar kompozycji
 	Cut Artboard	Wytnij obszar kompozycji
+	Rename Artboards	Zmień nazwy obszarów kompozycji
 	Move Artboard Up/Down	Przesuń obszar kompozycji w górę/dół
 	Add Anchor (Pen)	Dodaj punkt (pióro)
 	Add Anchor Point	Dodaj punkt kontrolny
@@ -4461,6 +4467,8 @@ imageTrace	Outline	Kontur
 @msg	no such saved selection	brak takiego zapisanego zaznaczenia
 @msg	no such segment	brak takiego segmentu
 @msg	no such spine point	brak takiego punktu grzbietu
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` musi być listą co najwyżej 10000 indeksów punktów grzbietu
+@msg	`with` moves points, not a handle	`with` przesuwa punkty, nie uchwyt
 @msg	no such spine segment	brak takiego segmentu grzbietu
 @msg	no such subpath	brak takiej ścieżki podrzędnej
 @msg	no such user library	brak takiej biblioteki użytkownika
@@ -4809,6 +4817,7 @@ imageTrace	Outline	Kontur
 @msg	an image whose data is cut short was left out	pominięto obraz z uciętymi danymi
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	połączone obrazy pokazują zapisany w pliku podgląd niskiej rozdzielczości, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
 @msg	linked type areas past VectorCraft's limits were left out	połączone obszary tekstu poza limitami VectorCraft zostały pominięte
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst zmieniający kierunek pisania wewnątrz obiektu tekstowego otwiera się w kierunku swojego pierwszego znaku
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst użyty jako maska w połączonych obszarach, oblewanym tekście lub ścieżce złożonej nie przycina
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	połączone obrazy bez podglądu w pliku pokazują symbol zastępczy, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	tekst akapitowy w ramkach niższych niż wiersz wyświetlanej czcionki otrzymał wyższe ramki ({_1}): inaczej tekst nie byłby widoczny

@@ -829,6 +829,7 @@
 	Duplicate Artboard	复制画板
 	Copy Artboard	拷贝画板
 	Cut Artboard	剪切画板
+	Rename Artboards	重命名画板
 	Duplicate Artboards	复制画板
 	Duplicate Brush	复制画笔
 	Duplicate Character Style	制作字符样式副本
@@ -1883,6 +1884,8 @@ file-filter	Templates	模板
 @msg	the blend has no spine	混合对象没有脊线
 @msg	the spine has no segments	脊线没有线段
 @msg	no such spine point	没有此脊线点
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` 必须是最多 10000 个脊线点索引的列表
+@msg	`with` moves points, not a handle	`with` 移动的是点，不是手柄
 @msg	no such spine segment	没有此脊线线段
 @msg	a key object sits on that point	该点上有关键对象
 @msg	a spine keeps at least two points	脊线至少保留两个点
@@ -2476,6 +2479,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Real World:	真实世界：
 	Real-time Drawing and Editing	实时绘图和编辑
 	Rearrange All Artboards	重新排列所有画板
+	Rearrange	重新排列
+	Select All Artboards	选择所有画板
+	Switch Orientation	切换方向
 	Rearrange All	全部重新排列
 	Layout Order:	布局顺序：
 	Change to Left-to-Right Layout	更改为由左至右版面配置
@@ -3159,7 +3165,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Patterns	图案
 	Stroke Options	描边选项
 	Character:	字符：
+	Paragraph:	段落：
 	Character options	字符选项
+	Paragraph options	段落选项
 	Stroke options	描边选项
 	Transform options	变换选项
 	Stroke Weight	描边粗细
@@ -3466,6 +3474,7 @@ digits	Malayalam	马拉雅拉姆数字
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	有 {n} 个链接图像已在磁盘上更改。要显示新版本吗？
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	链接的图片在找到其文件之前显示文件中存储的低分辨率预览：请在“链接”面板中重新链接
 @msg	linked type areas past VectorCraft's limits were left out	超出 VectorCraft 限制的串接文字区域已省略
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	在文字对象内更改书写方向的文字按其第一个字符的方向打开
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	在串接区域、绕排文字或复合路径中用作蒙版的文字不会剪切
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	文件中没有预览的链接图片在找到其文件之前显示占位符：请在“链接”面板中重新链接
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	框架高度不足以容纳所显示字体一行的区域文字已加高框架 ({_1})：否则文字不会显示

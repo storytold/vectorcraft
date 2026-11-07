@@ -139,6 +139,23 @@ pub(super) fn object_boxes(doc: &Document, moving: &[NodeId]) -> Vec<Rect> {
     out
 }
 
+/// The corners of glyph `g`'s bounding box in text space, clockwise from its top left as drawn:
+/// the box of its outline in its own frame (font units), through `g.xf`, so it turns, slants and
+/// scales with the glyph. `bb` is the outline's box in text space, used as it is for a glyph bent
+/// along a path or with a frame that can't be undone.
+fn glyph_box(g: &vectorcraft_text::PositionedGlyph, bb: &Rect) -> [Point; 4] {
+    let corners = |r: Rect| [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)];
+    let det = g.xf.determinant();
+    if g.bend.is_some() || !(det.is_finite() && det.abs() > 1e-12) {
+        return corners(*bb);
+    }
+    let local = (g.xf.inverse() * g.outline.clone()).bounding_box();
+    if !(local.is_finite() && local.width() > 0.0 && local.height() > 0.0) {
+        return corners(*bb);
+    }
+    corners(local).map(|p| g.xf * p)
+}
+
 impl Targets {
     pub fn collect(doc: &Document, exclude: &[NodeId], visible: Option<Rect>) -> Self {
         Self::collect_inner(doc, exclude, None, visible, Gather::Bounds)
@@ -337,10 +354,14 @@ impl Targets {
                     }
                 }
                 if o.bounds {
-                    let r = t.xf.transform_rect_bbox(bb);
-                    for p in [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)] {
-                        self.xs.push((p.x, p, kind));
-                        self.ys.push((p.y, p, kind));
+                    // The glyph's box in its own frame (font units), placed as the glyph is: its
+                    // corners are points to land on, even where the outline curves (the right of
+                    // `B`), and its edges guides, which turn with rotated or slanted type.
+                    let corners = glyph_box(g, &bb).map(to_doc);
+                    for (i, c) in corners.iter().enumerate() {
+                        self.points.push((*c, kind));
+                        let next = corners.get((i + 1) % 4).copied().unwrap_or(*c);
+                        self.push_glyph_line(*c, next - *c, o.angular);
                     }
                 }
             }

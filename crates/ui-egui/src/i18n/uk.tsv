@@ -881,6 +881,7 @@ font-technology	Variable	Варіативні
 	Duplicate Artboard	Дублювати монтажну область
 	Copy Artboard	Копіювати монтажну область
 	Cut Artboard	Вирізати монтажну область
+	Rename Artboards	Перейменувати монтажні області
 	Duplicate Artboards	Дублювати монтажні області
 	Duplicate Brush	Дублювати пензель
 	Duplicate Character Style	Дублювати стиль символу
@@ -2597,6 +2598,9 @@ digits	Malayalam	Малаялам
 	Real World:	Реальний світ:
 	Real-time Drawing and Editing	Малювання та редагування у реальному часі
 	Rearrange All Artboards	Переставити всі монтажні області
+	Rearrange	Переставити
+	Select All Artboards	Виділити всі монтажні області
+	Switch Orientation	Переключити орієнтацію
 	Rearrange All	Переставити все
 	Layout Order:	Порядок макету:
 	Change to Left-to-Right Layout	Переключити на макет зліва направо
@@ -3321,7 +3325,9 @@ effect	Points	Точки
 	Patterns	Візерунки
 	Stroke Options	Параметри обведення
 	Character:	Символ:
+	Paragraph:	Абзац:
 	Character options	Параметри символу
+	Paragraph options	Параметри абзацу
 	Stroke options	Параметри обведення
 	Transform options	Параметри трансформування
 	Stroke Weight	Товщина обведення
@@ -4357,6 +4363,8 @@ axis	Both	Обидві
 @msg	no such saved selection	такого збереженого виділення немає
 @msg	no such segment	такого сегменту немає
 @msg	no such spine point	такої точки осі немає
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` має бути списком щонайбільше з 10000 індексів точок осі
+@msg	`with` moves points, not a handle	`with` переміщує точки, а не маркер
 @msg	no such spine segment	такого сегмента осі немає
 @msg	no such subpath	такого вкладеного контуру немає
 @msg	no such user library	такої користувацької бібліотеки немає
@@ -4703,6 +4711,7 @@ axis	Both	Обидві
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	пов’язані зображення показуються як збережений у файлі перегляд низької роздільності, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
 @msg	linked type areas past VectorCraft's limits were left out	пов’язані текстові області понад обмеження VectorCraft пропущено
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, що змінює напрямок письма всередині текстового об’єкта, відкривається в напрямку свого першого символу
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, використаний як маска у пов’язаних областях, тексті з обтіканням або складеному контурі, не обрізає
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	пов’язані зображення без перегляду у файлі показуються як заповнювач, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в області в рамках, занизьких для рядка шрифту, яким він показується, отримав вищі рамки ({_1}): інакше його не було б видно

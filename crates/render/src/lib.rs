@@ -53,6 +53,9 @@ pub use vello_cpu;
 pub struct Renderer {
     /// Glyph geometry per text object, keyed by `Arc` identity like `geom` (see [`Self::text_geom_of`]).
     texts: FrameCache<usize, (Arc<Node>, Arc<TextGeom>)>,
+    /// The latest cached glyph geometry for each text object id. A move changes the node's Arc
+    /// but not its glyphs in text space, so the old geometry can still be used after comparison.
+    text_ids: PtrMap<NodeId, usize>,
     /// The [`vectorcraft_text::FontDb::generation`] `texts` was laid out with: type lays out
     /// again when fonts are added or rescanned.
     text_fonts: u64,

@@ -42,6 +42,31 @@ pub fn has_gradient_copies(n: &Node) -> bool {
     (n.appearance.has_unplaced_gradient() || n.appearance.has_placed_gradient()) && has_transform_copies(n)
 }
 
+/// Is `n` a path or compound path with a visible Transform effect that makes copies and fills and
+/// strokes that paint the copies differently as one path than as separate objects
+/// ([`paints_copies_apart`])? Such an object is drawn through its art ([`outline_art`]), each copy
+/// an object of its own above the one before ([`copy_leaf`]), as Expand Appearance makes it
+/// (#5920).
+pub(crate) fn has_layered_copies(n: &Node) -> bool {
+    leaf_geometry(n).is_some_and(|(_, rule)| paints_copies_apart(&n.appearance, rule)) && has_transform_copies(n)
+}
+
+/// Do the fills and strokes `a` of a path with fill rule `rule` paint a Transform effect's copies
+/// differently when the copies are one path than when each is an object of its own? They do
+/// unless they paint once, in full and in Normal mode, with a stroke or a nonzero fill: then the
+/// one path paints what the copies paint together. A fill and a stroke paint each copy's stroke
+/// under the fills of the copies above it, a second fill or stroke likewise, the even-odd rule
+/// leaves holes where copies overlap, and a partly transparent or blended fill or stroke paints
+/// overlapping copies twice (#5920).
+fn paints_copies_apart(a: &Appearance, rule: FillRule) -> bool {
+    let mut painting = a.items.iter().filter(|i| crate::paints(i));
+    let (Some(one), None) = (painting.next(), painting.next()) else {
+        // None paints (nothing to draw either way), or several do.
+        return a.items.iter().any(crate::paints);
+    };
+    one.opacity() < 1.0 || one.blend() != Default::default() || (one.is_fill() && rule != FillRule::NonZero)
+}
+
 /// Is `n` a path or compound path with a visible Transform effect that makes copies? Expand
 /// Appearance makes each copy an object of its own ([`expand_outlined`]).
 pub fn has_transform_copies(n: &Node) -> bool {
@@ -77,10 +102,10 @@ fn reaches_appearance(e: &Effect) -> bool {
 }
 
 /// Is `n` a path or compound path that its Transform effects make into art of separate objects
-/// ([`has_gradient_copies`], [`has_transform_options`])? It is drawn, baked and expanded through
+/// ([`has_gradient_copies`], [`has_layered_copies`], [`has_transform_options`])? It is drawn, baked and expanded through
 /// that art ([`reshape`]).
 pub fn has_transform_art(n: &Node) -> bool {
-    has_gradient_copies(n) || has_transform_options(n)
+    has_gradient_copies(n) || has_layered_copies(n) || has_transform_options(n)
 }
 
 /// Is `n` type without inline graphics that has a fill or stroke of its own that paints and has a
@@ -636,7 +661,12 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
                 // Transform Patterns and Scale Strokes & Effects change each copy's fills and
                 // strokes; a gradient paints each copy by itself, not the one piece the copies
                 // make together; and Expand Appearance (`apart`) makes each copy an object.
-                let separate = copies > 0 && (apart || leaf.appearance.has_unplaced_gradient() || leaf.appearance.has_placed_gradient());
+                // Fills and strokes that stack paint each copy above the one before (#5920).
+                let separate = copies > 0
+                    && (apart
+                        || leaf.appearance.has_unplaced_gradient()
+                        || leaf.appearance.has_placed_gradient()
+                        || paints_copies_apart(&leaf.appearance, rule));
                 if options.reach_appearance() {
                     let made = transform_leaf(leaf, &path, map, copies, options, room);
                     used = used.minus(before).plus(made);

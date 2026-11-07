@@ -1403,7 +1403,9 @@ digits	Malayalam	Malayalam
 	Standard Vertical Roman Alignment	Perataan Romawi vertikal standar
 	Strikethrough	Coret
 	Character:	Karakter:
+	Paragraph:	Paragraf:
 	Character options	Opsi karakter
+	Paragraph options	Opsi paragraf
 	Subscript	Subskrip
 	Subscript (on the roadmap)	Subskrip (masih dalam roadmap)
 	Superscript	Superskrip
@@ -1754,6 +1756,9 @@ digits	Malayalam	Malayalam
 	More Paragraph options	Opsi paragraf lainnya
 	No document open	Tidak ada dokumen terbuka
 	Quick Actions	Tindakan cepat
+	Rearrange	Atur ulang
+	Select All Artboards	Seleksi semua artboard
+	Switch Orientation	Ganti orientasi
 	Rearrange All	Atur ulang semua
 	Rulers & Grids	Penggaris & kisi
 	Select a text object	Pilih objek teks
@@ -3225,6 +3230,7 @@ theme	Appearance	Tampilan
 	Character / Paragraph	Karakter / Paragraf
 	Copy Artboard	Salin artboard
 	Cut Artboard	Potong artboard
+	Rename Artboards	Ganti nama artboard
 	Move Artboard Up/Down	Pindahkan artboard ke atas/bawah
 	Add Anchor (Pen)	Tambah jangkar (pena)
 	Add Anchor Point	Tambahkan titik jangkar
@@ -4613,6 +4619,7 @@ imageTrace	Outline	Kontur
 @msg	an image whose data is cut short was left out	gambar yang datanya terpotong tidak disertakan
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gambar tertaut menampilkan pratinjau resolusi rendah yang tersimpan dalam berkas sampai berkasnya ditemukan: tautkan ulang di panel Tautan
 @msg	linked type areas past VectorCraft's limits were left out	area teks tertaut di luar batas VectorCraft dihilangkan
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	teks yang mengubah arah penulisan di dalam objek teks dibuka dengan arah karakter pertamanya
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	teks yang digunakan sebagai masker di area tertaut, teks terbungkus, atau jalur majemuk tidak memotong
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	gambar tertaut tanpa pratinjau dalam berkas menampilkan penanda tempat sampai berkasnya ditemukan: tautkan ulang di panel Tautan
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	teks area dalam bingkai yang terlalu pendek untuk satu baris font yang ditampilkannya mendapat bingkai yang lebih tinggi ({_1}): tanpa itu teksnya tidak akan tampil

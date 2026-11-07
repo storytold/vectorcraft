@@ -7,7 +7,7 @@ use super::{
     Affine, Arc, Artboard, CANVAS_CENTRE, ColorMode, Document, Global, HashMap, Node, NodeId, NodeKind, Obj, OpacityMask, Paint, Point, Reader, Rect,
     Structure, Swatch, Unit, V, obj,
 };
-use vectorcraft_doc::{DataSet, DataValue, GraphicStyle, Guide, ImageBlob, PatternDef, TextWrap, Variable, VariableKind, Variables};
+use vectorcraft_doc::{DataSet, DataValue, GraphicStyle, Guide, ImageBlob, PatternDef, Symbol, TextWrap, Variable, VariableKind, Variables};
 
 /// `%AI5_RulerUnits` → [`Unit`] (Illustrator 7 spec table 3; centimeters is 4; pixels is 6 in later files).
 fn ruler_unit(v: u8) -> Option<Unit> {
@@ -20,6 +20,19 @@ fn ruler_unit(v: u8) -> Option<Unit> {
         6 => Unit::Pixels,
         _ => return None,
     })
+}
+
+/// `base`, or the first of "base 2", "base 3"… not in `taken`, as [`Document::free_swatch_name`]
+/// gives it when `taken` holds the document's swatch and colour group names; `taken` takes the
+/// name returned.
+fn free_swatch_name(taken: &mut std::collections::HashSet<String>, base: &str) -> String {
+    let name = if taken.contains(base) {
+        (2..).map(|i| format!("{base} {i}")).find(|n| !taken.contains(n)).unwrap_or_else(|| base.to_string())
+    } else {
+        base.to_string()
+    };
+    taken.insert(name.clone());
+    name
 }
 
 /// An artboard of the `/Document`'s `ArtboardArray`: its name, its rect in art space and its
@@ -361,6 +374,22 @@ pub fn brushes(data: &[u8], patterns: &[PatternDef]) -> Option<Brushes> {
     Some(Brushes { brushes: lib, patterns: added, images, note: (unread > 0).then(|| brush::left_out_note(unread)) })
 }
 
+/// The graphic styles of the editing data `data`, for a file whose layers aren't read (a graphic
+/// style library has none), as [`read`] makes them, with ids from 1, and the data's declared large
+/// canvas scale (1 when it declares none). `large_canvas`: as [`read`] takes it. The styles are
+/// those the list names before reading stops, and none when the data has no style list or lists no
+/// style this reads.
+pub fn graphic_styles(data: &[u8], large_canvas: bool) -> (Vec<GraphicStyle>, f64) {
+    if crate::import::ai::find(data, b"BeginArtStyleList").is_none() {
+        return (vec![], 1.0);
+    }
+    let mut r = Reader::with_names(data);
+    r.large_canvas = large_canvas.then_some(1.0);
+    // The styles come before the art, so an error in the art leaves them read.
+    let _ = r.run();
+    (r.graphic_styles().0, r.canvas_scale)
+}
+
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
 /// those of a `/Document` still open when it stopped (its art can be what stopped it).
 fn artboards_read(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
@@ -560,6 +589,13 @@ impl<'a> Reader<'a> {
             f.children.pop();
             return;
         }
+        // The dictionary after a symbol's art: its registration point.
+        if self.frames.len() == 1
+            && let Some(head) = self.symbol.as_mut()
+            && let Some(r) = o.nums("AI13PatternRegistrationType").first()
+        {
+            head.registration = Some(*r);
+        }
         self.constraint_art(o);
         // A blend's key object or spine.
         if let Some(kind) = o.text("ShapeBlendPathType")
@@ -709,9 +745,50 @@ impl<'a> Reader<'a> {
     }
 
     /// Art space → where the art being read goes: the document, or while a pattern's definition is
-    /// read, the pattern's space (y down).
+    /// read, the pattern's space (y down). A symbol's definition is written in the symbol's space.
     pub(crate) fn space(&mut self) -> Affine {
-        if self.pattern.is_some() { FLIP } else { self.ensure_space() }
+        if self.pattern.is_some() {
+            FLIP
+        } else if self.symbol.is_some() {
+            Affine::IDENTITY
+        } else {
+            self.ensure_space()
+        }
+    }
+
+    /// The space an image's matrix is in → where the art being read goes: [`Self::space`], and in a
+    /// symbol's art (outside a pattern's definition) the canvas's space turned y up about art space's
+    /// origin there, as an instance's matrix in it is; `None` there without a template box.
+    pub(super) fn image_space(&mut self) -> Option<Affine> {
+        if self.pattern.is_none() && self.symbol.is_some() {
+            return self.canvas_origin().map(|o| Affine::new([1.0, 0.0, 0.0, -1.0, o.x, o.y]));
+        }
+        Some(self.space())
+    }
+
+    /// The canvas point of art space's origin, from the template box's center (the canvas's): what
+    /// a pattern's gradients and the instances in a symbol's art are written about.
+    pub(super) fn canvas_origin(&self) -> Option<Point> {
+        let t = self.template?;
+        let (cx, cy) = ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0);
+        let origin = Point::new(CANVAS_CENTRE - cx, CANVAS_CENTRE + cy);
+        (origin.x.is_finite() && origin.y.is_finite()).then_some(origin)
+    }
+
+    /// The symbols in the symbol list's order, those it doesn't name after them as they were
+    /// defined; names it has twice or that no symbol has don't count.
+    fn order_symbols(&mut self) {
+        let Some(list) = self.symbol_list.take() else { return };
+        let mut slots: Vec<Option<Symbol>> = std::mem::take(&mut self.doc.symbols).into_iter().map(Some).collect();
+        let at: HashMap<String, usize> = slots.iter().enumerate().filter_map(|(i, s)| s.as_ref().map(|s| (s.name.clone(), i))).collect();
+        let mut ordered = Vec::with_capacity(slots.len());
+        for name in &list {
+            if let Some(s) = self.symbol_names.get(name).and_then(|named| at.get(named)).and_then(|i| slots.get_mut(*i)).and_then(Option::take) {
+                ordered.push(s);
+            }
+        }
+        ordered.extend(slots.into_iter().flatten());
+        self.doc.symbols = ordered;
     }
 
     /// The swatches of the palette, `[None]` first, in its order, and its color groups; a gradient
@@ -756,14 +833,101 @@ impl<'a> Reader<'a> {
         Some((swatches, groups))
     }
 
+    /// The swatches of the file's named colors and patterns, added to `doc`'s, and the new name of
+    /// each color that took a numbered one.
+    ///
+    /// The colour operators' definitions come first: a gradient, defined before the art, names a
+    /// global process colour as a stop and would otherwise make it an ink (#1771). The header's
+    /// custom colors follow. The first definition of a name makes its swatch, and takes the place
+    /// of a default swatch of that name when the file has no palette of its own (`own_palette`; a
+    /// reserved name in brackets, such as `[None]`, keeps its swatch). Then each pattern gets a
+    /// swatch. A color whose name a gradient or pattern swatch of the palette has, and a pattern
+    /// whose name another swatch has, take the first free "Name 2", "Name 3"…
+    /// ([`Document::free_swatch_name`]) once the other colors and the patterns have their swatches;
+    /// a pattern a swatch already paints with gets no other.
+    fn file_swatches(&self, doc: &mut Document, own_palette: bool) -> HashMap<String, String> {
+        let mut defined = std::collections::HashSet::new();
+        let mut clashes = vec![];
+        // The swatch names there are, looked up rather than scanned for each name a file defines
+        // (`Document::swatch` also knows the registration colour).
+        let mut have: std::collections::HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).collect();
+        have.insert(vectorcraft_color::swatch::REGISTRATION.to_string());
+        // The names a swatch of another kind than a gradient or pattern has.
+        let mut solid: std::collections::HashSet<String> =
+            doc.swatches_iter().filter(|s| !matches!(s.paint, Paint::Gradient(_) | Paint::Pattern { .. })).map(|s| s.name.clone()).collect();
+        let colors = self.spots.iter().chain(&self.stop_spots).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
+        for (n, spot) in colors {
+            let first = defined.insert(n.name.clone());
+            let swatch = Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot };
+            let reserved = n.name.starts_with('[') && n.name.ends_with(']');
+            if have.insert(n.name.clone()) {
+                solid.insert(n.name.clone());
+                doc.swatches.push(swatch);
+            } else if first && !reserved {
+                if !own_palette && let Some(default) = doc.swatch_mut(&n.name) {
+                    *default = swatch;
+                    solid.insert(n.name.clone());
+                } else if !solid.contains(&n.name) {
+                    clashes.push(swatch);
+                }
+            }
+        }
+        let mut unnamed = vec![];
+        for pattern in doc.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>() {
+            if have.insert(pattern.clone()) {
+                doc.swatches.push(Swatch {
+                    paint: Paint::Pattern { pattern: pattern.clone(), xf: Affine::IDENTITY },
+                    name: pattern,
+                    global: false,
+                    spot: false,
+                });
+            } else {
+                unnamed.push(pattern);
+            }
+        }
+        // Every color and pattern name now has a swatch, so a numbered name takes none of them. The
+        // names taken and the patterns painted with are looked up rather than scanned for each one.
+        let mut taken: std::collections::HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).collect();
+        taken.extend(doc.swatch_groups.iter().map(|g| g.name.clone()));
+        taken.insert(vectorcraft_color::swatch::REGISTRATION.to_string());
+        let mut painted: std::collections::HashSet<String> = doc
+            .swatches_iter()
+            .filter_map(|s| match &s.paint {
+                Paint::Pattern { pattern, .. } => Some(pattern.clone()),
+                _ => None,
+            })
+            .collect();
+        let mut renamed = HashMap::new();
+        for swatch in clashes {
+            let name = free_swatch_name(&mut taken, &swatch.name);
+            renamed.insert(swatch.name.clone(), name.clone());
+            doc.swatches.push(Swatch { name, ..swatch });
+        }
+        for pattern in unnamed {
+            if !painted.insert(pattern.clone()) {
+                continue;
+            }
+            let name = free_swatch_name(&mut taken, &pattern);
+            doc.swatches.push(Swatch { paint: Paint::Pattern { pattern, xf: Affine::IDENTITY }, name, global: false, spot: false });
+        }
+        renamed
+    }
+
     /// The brushes read ([`brush::finish_brushes`]) and how many weren't; `None` when the file has
-    /// no brush objects (the document keeps the default brushes).
+    /// no brush objects (the document keeps the default brushes). The objects read as their drawn
+    /// look in the art the brushes use count toward the note on drawn looks, once for each art.
     fn brush_library(&mut self) -> Option<(Vec<vectorcraft_brush::Brush>, usize)> {
         if !self.brush_objects {
             return None;
         }
         let drafts = std::mem::take(&mut self.brush_drafts);
         let (lib, left_out) = brush::finish_brushes(drafts, &self.brush_art, self.brush_order.as_deref());
+        let used: std::collections::HashSet<NodeId> = lib.iter().flat_map(|b| b.art()).map(|a| a.id).collect();
+        for (name, art) in &self.brush_art {
+            if used.contains(&art.id) {
+                self.drawn_looks += self.brush_art_looks.get(name).copied().unwrap_or(0);
+            }
+        }
         Some((lib, left_out + self.brushes_unread))
     }
 
@@ -818,6 +982,8 @@ impl<'a> Reader<'a> {
         }
         let to_doc = self.ensure_space();
         let artboard = self.first_board();
+        self.check_symbols();
+        self.order_symbols();
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
         super::on_path::apply(&mut self.doc, &self.on_path);
         let mut doc = std::mem::replace(&mut self.doc, Document::new(1.0, 1.0));
@@ -891,39 +1057,11 @@ impl<'a> Reader<'a> {
             }
             None => false,
         };
-        // The colour operators' definitions first: a gradient, defined before the art, names a
-        // global process colour as a stop and would otherwise make it an ink (#1771). The header's
-        // custom colors follow. The first definition of a name makes its swatch, and takes the place
-        // of a default swatch of that name when the file has no palette of its own (a reserved name
-        // in brackets, such as `[None]`, keeps its swatch).
-        let mut defined = std::collections::HashSet::new();
-        // The swatch names there are, looked up rather than scanned for each name a file defines
-        // (`Document::swatch` also knows the registration colour).
-        let mut have: std::collections::HashSet<String> = doc.swatches_iter().map(|s| s.name.clone()).collect();
-        have.insert(vectorcraft_color::swatch::REGISTRATION.to_string());
-        let colors = self.spots.iter().chain(&self.stop_spots).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
-        for (n, spot) in colors {
-            let first = defined.insert(n.name.clone());
-            let swatch = Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot };
-            if have.insert(n.name.clone()) {
-                doc.swatches.push(swatch);
-            } else if first
-                && !own_palette
-                && !(n.name.starts_with('[') && n.name.ends_with(']'))
-                && let Some(default) = doc.swatch_mut(&n.name)
-            {
-                *default = swatch;
-            }
-        }
+        let renamed = self.file_swatches(&mut doc, own_palette);
         if let Some(author) = self.author.take() {
             doc.metadata.author = author;
         }
-        for name in doc.patterns.iter().map(|p| p.name.clone()).collect::<Vec<_>>() {
-            if have.insert(name.clone()) {
-                doc.swatches.push(Swatch { paint: Paint::Pattern { pattern: name.clone(), xf: Affine::IDENTITY }, name, global: false, spot: false });
-            }
-        }
-        let brushes = self.brush_library();
+        let mut brushes = self.brush_library();
         // The file's graphic styles in place of the defaults, and the objects linked to them.
         let (styles, ids) = self.graphic_styles();
         let styles_read = !styles.is_empty();
@@ -931,8 +1069,23 @@ impl<'a> Reader<'a> {
             let links: HashMap<NodeId, u32> = self.style_links.iter().filter_map(|(node, name)| Some((*node, *ids.get(name)?))).collect();
             if !links.is_empty() {
                 link_styles(&mut doc.layers, &links, &styles, 0);
+                for symbol in &mut doc.symbols {
+                    link_styles(std::slice::from_mut(&mut symbol.art), &links, &styles, 0);
+                }
             }
             doc.graphic_styles = styles.into();
+        }
+        // The colors linked to a color that took a free name follow it.
+        if !renamed.is_empty() {
+            let mut follow = |_: &mut vectorcraft_color::Color, link: &mut Option<String>, _: &mut f32| {
+                let Some(new) = link.as_ref().and_then(|l| renamed.get(l)) else { return false };
+                *link = Some(new.clone());
+                true
+            };
+            doc.map_solid_paints(&mut follow);
+            for a in brushes.iter_mut().flat_map(|(lib, _)| lib.iter_mut().flat_map(|b| b.art_mut())) {
+                vectorcraft_doc::swatches::map_node_solid_paints(a, &mut follow);
+            }
         }
         let mut warnings = self.warnings;
         if let Some((lib, unread)) = brushes {
@@ -941,6 +1094,7 @@ impl<'a> Reader<'a> {
                 warnings.push(brush::left_out_note(unread));
             }
         }
+        self.drawn_looks += self.pattern_looks.values().sum::<usize>();
         if self.drawn_looks > 0 {
             warnings.push(format!(
                 "objects with several fills or strokes, effects or brushes came in as their drawn look ({}): their appearance isn't editable yet",
@@ -953,6 +1107,11 @@ impl<'a> Reader<'a> {
             doc.variables = variables.variables.into();
         }
         let (bindings, bindings_skipped) = (variables.bindings, variables.bindings_skipped);
+        // Symbols that hold instances of themselves can't be drawn: those instances go before the
+        // layers are compared with the page.
+        if !doc.symbols.is_empty() {
+            doc.limit_depth_noting(&mut warnings);
+        }
         Ok(Structure {
             doc,
             to_doc,

@@ -1,7 +1,9 @@
 use super::document::slot_of;
 use super::ops::{paints_apart, path_rule};
 use super::types::{Frame, GState, Kind, MAX_DEPTH, MAX_NODES, PendingEnvelope};
-use super::{AppearanceItem, Arc, BezPath, BlendMode, FillRule, HashSet, LayerColor, Node, NodeId, NodeKind, Obj, Paint, PathEl, Rc, Reader, V, obj};
+use super::{
+    AppearanceItem, Arc, BezPath, BlendMode, FillRule, HashMap, HashSet, LayerColor, Node, NodeId, NodeKind, Obj, Paint, PathEl, Rc, Reader, V, obj,
+};
 use vectorcraft_doc::TextWrap;
 
 impl<'a> Reader<'a> {
@@ -13,6 +15,7 @@ impl<'a> Reader<'a> {
         }
         if matches!(kind, Kind::Layer(_)) {
             self.ensure_space();
+            self.check_symbols();
         }
         let base = if matches!(kind, Kind::Obj(_)) { self.stack.len() } else { self.frames.last().map_or(0, |f| f.base) };
         self.frames.push(Frame {
@@ -95,7 +98,14 @@ impl<'a> Reader<'a> {
             ..
         } = f;
         if matches!(kind, Kind::Clip) {
+            // `Q` restores the painting state, not the transparency: the writer sets `Xy` only when
+            // the next object's differs from the last one written, wherever that was, so a state set
+            // inside a clipping group stays after it (a glow set to Screen, then a clipping path set
+            // back to Normal: the type after the group has no `Xy` and is Normal).
+            let now = &self.gs;
+            let transparency = (now.opacity, now.blend, now.isolate, now.knockout, now.knockout_shape);
             self.gs = gs.clone();
+            (self.gs.opacity, self.gs.blend, self.gs.isolate, self.gs.knockout, self.gs.knockout_shape) = transparency;
             self.pending_unread_fill = pending_unread_fill;
             self.pending_unread_stroke = pending_unread_stroke;
         }
@@ -278,7 +288,8 @@ impl<'a> Reader<'a> {
             _ => {
                 let rule = clip.first().map_or(FillRule::NonZero, |(_, n)| path_rule(n));
                 // The compound path keeps the clipping paths' stroke, opacity and blend mode when they all have the same
-                // ones: it has one appearance for all its paths.
+                // ones, and the knockout shape flag when they all have it: it has one appearance for all its paths.
+                let shape = clip.iter().all(|(_, n)| n.knockout_shape);
                 let look = |n: &Node| (n.appearance.clone(), n.opacity, n.blend);
                 let shared =
                     clip.split_first().and_then(|((_, first), others)| others.iter().all(|(_, n)| look(n) == look(first)).then(|| look(first)));
@@ -289,6 +300,7 @@ impl<'a> Reader<'a> {
                     n.opacity = opacity;
                     n.blend = blend;
                 }
+                n.knockout_shape = shape;
                 Some(n)
             }
         };
@@ -309,7 +321,7 @@ impl<'a> Reader<'a> {
         if let (Some(_), Some(before)) = (state, self.mesh_undo.take())
             && let Some(mesh) = f.children.last_mut().filter(|n| matches!(n.kind, NodeKind::Mesh(_) | NodeKind::Blend { .. }))
         {
-            (mesh.opacity, mesh.blend, mesh.isolate, mesh.knockout) = before;
+            (mesh.opacity, mesh.blend, mesh.isolate, mesh.knockout, mesh.knockout_shape) = before;
         }
         let Kind::Layer(a) = f.kind else { return Ok(()) };
         let (children, clip) = self.clip_first(f.children, &f.clips, false, self.nesting() + 1)?;
@@ -376,7 +388,12 @@ impl<'a> Reader<'a> {
         let f = self.close("X+", |k| matches!(k, Kind::Mask))?;
         // The mask's art is one level under the object it masks.
         let (children, clip) = self.clip_first(f.children, &f.clips, false, self.nesting() + 2)?;
-        let art = self.new_node(NodeKind::Group { children, clip }, &f.gs);
+        // One shown object is the art itself. A hidden object or a guide stays in a group: the canvas draws the art's root
+        // whether it is shown or not and whether guides show, and a group doesn't draw a hidden member or a left-out guide.
+        let art = match children.as_slice() {
+            [only] if !clip && only.visible && !matches!(only.kind, NodeKind::Path { guide: true, .. }) => only.clone(),
+            _ => Arc::new(self.new_node(NodeKind::Group { children, clip }, &f.gs)),
+        };
         self.gs = f.gs;
         self.pending_unread_fill = f.pending_unread_fill;
         self.pending_unread_stroke = f.pending_unread_stroke;
@@ -385,7 +402,7 @@ impl<'a> Reader<'a> {
         let Some(Frame { kind: Kind::Obj(o), .. }) = self.frames.last_mut() else {
             return Err("mask art ends outside a mask dictionary".into());
         };
-        if o.art.replace(Arc::new(art)).is_some() {
+        if o.art.replace(art).is_some() {
             return Err("a mask has more than one art block".into());
         }
         o.unread = f.unread;
@@ -548,24 +565,141 @@ impl<'a> Reader<'a> {
         Ok(Some(id))
     }
 
+    /// A symbol instance (`/SymbolInstance`): the symbol its `SymbolRef` names, placed by its
+    /// `RTransformMatrix`, hidden and locked as the state says. In a symbol's art the matrix is
+    /// written about the canvas point of art space's origin, and the name is the file's until the
+    /// symbols are checked ([`Self::check_symbols`]). An instance of a symbol that wasn't read, one
+    /// whose appearance differs from its symbol's, or one placed only by a `Matrix` or `Transform`,
+    /// comes in as the page draws it, within the symbol's box placed by the matrix when the box is
+    /// known.
     fn symbol_instance(&mut self, o: &Obj) -> Result<(), String> {
-        let bounds = o.get("SymbolRef").and_then(|v| v.iter().find_map(V::text)).and_then(|name| self.symbol_bounds.get(&name).copied());
-        let matrix = o
-            .get("Matrix")
-            .or_else(|| o.get("Transform"))
-            .map(|v| v.iter().find_map(|item| if let V::Arr(a) = item { Some(Self::nums(a)) } else { None }).unwrap_or_else(|| Self::nums(v)));
-        let box_at_canvas = match (bounds, matrix.as_deref()) {
-            (Some(b), Some([a, c, d, e, x, y])) if [*a, *c, *d, *e, *x, *y].iter().all(|n| n.is_finite()) => {
-                Some(self.space().transform_rect_bbox(super::Affine::new([*a, *c, *d, *e, *x, *y]).transform_rect_bbox(b)))
-            }
+        let name = o.text("SymbolRef");
+        let affine = |n: &[f64]| match n {
+            [a, b, c, d, e, f] if [a, b, c, d, e, f].iter().all(|v| v.is_finite()) => Some(super::Affine::new([*a, *b, *c, *d, *e, *f])),
             _ => None,
         };
-        match box_at_canvas {
-            Some(b) => self.unread_box("symbols", b, self.obj_hidden).map(|_| ()),
-            None => {
-                self.unreadable("symbols", self.obj_hidden);
-                Ok(())
+        let live = affine(&o.nums("RTransformMatrix"));
+        let boxed_only = live.is_none();
+        let matrix = live.or_else(|| {
+            o.get("Matrix")
+                .or_else(|| o.get("Transform"))
+                .map(|v| v.iter().find_map(|item| if let V::Arr(a) = item { Some(Self::nums(a)) } else { None }).unwrap_or_else(|| Self::nums(v)))
+                .and_then(|n| affine(&n))
+        });
+        let hidden = self.obj_hidden;
+        let place = if self.symbol.is_some() {
+            self.canvas_origin().map(|o| super::Affine::new([1.0, 0.0, 0.0, -1.0, o.x, o.y]))
+        } else {
+            Some(self.space())
+        };
+        let (Some(name), Some(m), Some(place)) = (name, matrix, place) else {
+            self.unreadable("symbols", hidden);
+            return Ok(());
+        };
+        let xf = place * m;
+        let usable = xf.determinant().abs() >= 1e-12 && xf.as_coeffs().iter().all(|v| v.is_finite());
+        let symbol = if self.symbol.is_some() { Some(name.clone()) } else { self.symbol_names.get(&name).cloned() };
+        match symbol.filter(|_| usable && !boxed_only && !overrides(o)) {
+            Some(symbol) => {
+                // Its transparency is the `Xy` after it, as a group's is.
+                let gs = self.gs.clone();
+                let node = self.new_node(NodeKind::SymbolInstance { symbol, xf }, &gs);
+                self.add(node, hidden)
             }
+            None => {
+                let bounds = self.symbol_art_bounds(&name).or_else(|| self.symbol_bounds.get(&name).copied());
+                match bounds.map(|b| xf.transform_rect_bbox(b)).filter(|_| usable && self.symbol.is_none()) {
+                    Some(b) => self.unread_box("symbols", b, hidden).map(|_| ()),
+                    None => {
+                        self.unreadable("symbols", hidden);
+                        Ok(())
+                    }
+                }
+            }
+        }
+    }
+
+    /// The art box (symbol space) of the symbol read under `name` (its name in the file), measured
+    /// once.
+    fn symbol_art_bounds(&mut self, name: &str) -> Option<super::Rect> {
+        if let Some(b) = self.symbol_art_bounds.get(name) {
+            return *b;
+        }
+        let named = self.symbol_names.get(name)?;
+        let boxes = self.doc.symbol_boxes();
+        let b = self.doc.symbols.iter().find(|s| &s.name == named).and_then(|s| s.art.visual_bounds_with(&boxes));
+        drop(boxes);
+        self.symbol_art_bounds.insert(name.to_string(), b);
+        b
+    }
+
+    /// Check the symbols read for instances in their art of symbols the file doesn't have, before
+    /// the first layer: a symbol with one isn't kept, and so on for the symbols holding its
+    /// instances. The instances in the art kept then name the symbols as the document does.
+    pub(super) fn check_symbols(&mut self) {
+        if std::mem::replace(&mut self.symbols_checked, true) {
+            return;
+        }
+        // Each symbol's name in the file (none for one named as an earlier one), and the names its
+        // instances use.
+        let files: HashMap<&str, &str> = self.symbol_names.iter().map(|(file, named)| (named.as_str(), file.as_str())).collect();
+        let defs: Vec<(Option<String>, Vec<String>)> = self
+            .doc
+            .symbols
+            .iter()
+            .map(|s| {
+                let mut uses = vec![];
+                symbol_uses(&s.art, &mut uses, 0);
+                (files.get(s.name.as_str()).map(|f| f.to_string()), uses.into_iter().map(str::to_string).collect())
+            })
+            .collect();
+        // A symbol goes when one of its instances names a symbol that isn't kept: first those
+        // naming one the file doesn't have, then, one at a time, those using a symbol that went.
+        let mut kept: Vec<bool> = vec![true; defs.len()];
+        let mut users: HashMap<&str, Vec<usize>> = HashMap::new();
+        let mut going: Vec<usize> = vec![];
+        for (i, (_, uses)) in defs.iter().enumerate() {
+            for u in uses {
+                users.entry(u.as_str()).or_default().push(i);
+            }
+            if uses.iter().any(|u| !self.symbol_names.contains_key(u)) {
+                going.push(i);
+            }
+        }
+        while let Some(i) = going.pop() {
+            match kept.get_mut(i) {
+                Some(k) if *k => *k = false,
+                _ => continue,
+            }
+            if let Some(file) = defs.get(i).and_then(|(file, _)| file.as_deref()) {
+                going.extend(users.get(file).into_iter().flatten().copied().filter(|j| kept.get(*j).copied().unwrap_or(false)));
+            }
+        }
+        drop(users);
+        if kept.iter().any(|k| !k) {
+            let left: Vec<(Option<String>, String)> = defs
+                .iter()
+                .zip(&self.doc.symbols)
+                .zip(&kept)
+                .filter(|(_, k)| !**k)
+                .map(|(((file, _), s), _)| (file.clone(), s.name.clone()))
+                .collect();
+            let mut i = 0;
+            self.doc.symbols.retain(|_| {
+                i += 1;
+                kept.get(i - 1).copied().unwrap_or(false)
+            });
+            // Their art's box isn't known (the instances that made them go have none), so their
+            // instances have no box either.
+            for (file, named) in left {
+                self.doc.set_symbol_registration(&named, vectorcraft_doc::SymbolRegistration::CENTER);
+                let Some(file) = file else { continue };
+                self.symbol_names.remove(&file);
+            }
+        }
+        let names = self.symbol_names.clone();
+        for s in &mut self.doc.symbols {
+            rename_uses(Arc::make_mut(&mut s.art), &names, 0);
         }
     }
 
@@ -640,7 +774,8 @@ impl<'a> Reader<'a> {
                 // did (they were counted as read).
                 let mut blend = Node::new(self.doc.alloc_id(), kind);
                 (blend.name, blend.visible, blend.locked) = (steps.name.take(), steps.visible, steps.locked);
-                (blend.opacity, blend.blend, blend.isolate, blend.knockout) = (steps.opacity, steps.blend, steps.isolate, steps.knockout);
+                (blend.opacity, blend.blend, blend.isolate, blend.knockout, blend.knockout_shape) =
+                    (steps.opacity, steps.blend, steps.isolate, steps.knockout, steps.knockout_shape);
                 // Its note, URL and data (object tags) too.
                 blend.extras_mut().attrs = steps.extras_mut().attrs.take();
                 f.children.push(blend);
@@ -792,6 +927,68 @@ pub(super) fn drop_commented_copies(layers: &mut [Arc<Node>], hidden: &HashSet<N
 
 /// A node and its index among its siblings.
 type Indexed = (usize, Node);
+
+/// The names of the symbols the instances in `node`, and in the art of its opacity masks, use.
+fn symbol_uses<'n>(node: &'n Node, out: &mut Vec<&'n str>, depth: usize) {
+    if depth > MAX_DEPTH {
+        return;
+    }
+    if let NodeKind::SymbolInstance { symbol, .. } = &node.kind {
+        out.push(symbol);
+    }
+    if let Some(m) = &node.extras().mask {
+        symbol_uses(&m.art, out, depth + 1);
+    }
+    for c in node.children().into_iter().flatten() {
+        symbol_uses(c, out, depth + 1);
+    }
+}
+
+/// The instances in `node`, and in the art of its opacity masks, named by `names` (a name in the
+/// file → the symbol's in the document).
+fn rename_uses(node: &mut Node, names: &HashMap<String, String>, depth: usize) {
+    if depth > MAX_DEPTH {
+        return;
+    }
+    if let NodeKind::SymbolInstance { symbol, .. } = &mut node.kind
+        && let Some(named) = names.get(symbol.as_str())
+    {
+        symbol.clone_from(named);
+    }
+    if let Some(m) = node.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        rename_uses(Arc::make_mut(&mut m.art), names, depth + 1);
+    }
+    for c in node.children_mut().into_iter().flatten() {
+        rename_uses(Arc::make_mut(c), names, depth + 1);
+    }
+}
+
+/// Whether a symbol instance's dictionary carries appearance of its own (a dynamic symbol's
+/// edits), which isn't read.
+fn overrides(o: &Obj) -> bool {
+    const KEYS: [&str; 5] = [
+        "AI19SymbolAppearanceMap",
+        "AI19SymbolOverriddenSymbolMap",
+        "AI Local Art of Symbol Instance",
+        "AI15 Layer In Symbol",
+        "AI15 Color Of Layer In Symbol",
+    ];
+    // In a dictionary or array nested in it, as a keyed entry's value, in an array or among the
+    // values closed without a key.
+    fn has(o: &Obj, depth: usize) -> bool {
+        depth <= 8
+            && (o.entries.iter().any(|(k, v)| k.as_deref().is_some_and(|k| KEYS.contains(&k)) || v.iter().any(|v| in_value(v, depth + 1)))
+                || o.content.iter().any(|v| in_value(v, depth + 1)))
+    }
+    fn in_value(v: &V, depth: usize) -> bool {
+        match v {
+            V::Obj(c) => has(c, depth),
+            V::Arr(items) => depth <= 8 && items.iter().any(|v| in_value(v, depth + 1)),
+            _ => false,
+        }
+    }
+    has(o, 0)
+}
 
 /// Close the subpath `bp` ends with, if it has one open.
 pub(super) fn close(bp: &mut BezPath) {

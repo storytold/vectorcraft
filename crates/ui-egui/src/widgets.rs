@@ -28,7 +28,7 @@ pub use buttons::{
     SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
     primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
-pub(crate) use buttons::{icon_button_info, primary_button_width, secondary_button_width};
+pub(crate) use buttons::{button_width, icon_button_info, primary_button_width, secondary_button_width};
 #[cfg(test)]
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
@@ -49,12 +49,13 @@ pub use dropdowns::{
     panel_scroll, popover, set_menu_floor, strip_scroll,
 };
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
-pub(crate) use labels::{label_field, take_previous_label};
+pub(crate) use labels::{label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
     SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_within, num_field_within_empty, opt_field,
     opt_field_named, plain_field_live, range_field, range_field_live, range_field_named, range_field_stepped, size_field, size_field_named, slider,
-    spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_field_stops_named, spin_kerning, spin_plain, spin_plain_named,
+    spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_field_stops_named, spin_kerning, spin_length_within, spin_plain,
+    spin_plain_named, spin_range,
 };
 #[cfg(test)]
 use numeric::{decimal_point, field_number, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};

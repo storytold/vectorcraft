@@ -554,12 +554,14 @@ font-technology	Variable	Változó
 	Character / Paragraph	Karakter / bekezdés
 	Character Alignment	Karakterigazítás
 	Character options	Karakterbeállítások
+	Paragraph options	Bekezdésbeállítások
 	Character Rotation	Karakterforgatás
 	Character Set:	Karakterkészlet:
 	Character Style	Karakterstílus
 	Character Style Options	Karakterstílus beállításai
 	Character Styles	Karakterstílusok
 	Character:	Karakter:
+	Paragraph:	Bekezdés:
 	Check Links	Csatolások ellenőrzése
 # Check Script (File › Scripts) and the report it shows on a script written for the reference app.
 	Check Script	Szkript ellenőrzése
@@ -901,6 +903,7 @@ font-technology	Variable	Változó
 	Customize…	Testreszabás…
 	Cut	Kivágás
 	Cut Artboard	Rajztábla kivágása
+	Rename Artboards	Rajztáblák átnevezése
 	Cut Path	Útvonal elvágása
 	Cut Path at Selected Anchor Points	Útvonal elvágása a kijelölt horgonypontoknál
 	Cyan	Cián
@@ -3112,6 +3115,9 @@ mark-style	Japanese	Japán
 	Real name	Valódi név
 	Real World:	Valós méret:
 	Real-time Drawing and Editing	Valós idejű rajzolás és szerkesztés
+	Rearrange	Átrendezés
+	Select All Artboards	Összes rajztábla kijelölése
+	Switch Orientation	Tájolás váltása
 	Rearrange All	Összes átrendezése
 	Rearrange All Artboards	Összes rajztábla átrendezése
 	Rearrange All Artboards…	Összes rajztábla átrendezése…
@@ -4691,6 +4697,7 @@ imageTrace	Outline	Körvonal
 @msg	an image whose data is cut short was left out	kimaradt egy csonka adatú kép
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	a csatolt képek a fájlban mentett kis felbontású előnézetet mutatják, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
 @msg	linked type areas past VectorCraft's limits were left out	a VectorCraft korlátain túli csatolt szövegterületek kimaradtak
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	a szövegobjektumon belül írásirányt váltó szöveg az első karakterének irányában nyílik meg
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	a csatolt területeken, körbefuttatott szövegben vagy összetett útvonalban maszkként használt szöveg nem vág ki
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	a fájlban előnézet nélküli csatolt képek helyőrzőt mutatnak, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	a túl alacsony keretben lévő területszöveg, amelybe a megjelenítő betűtípus egy sora sem fér el, magasabb keretet kapott ({_1}): különben nem látszana
@@ -5008,6 +5015,8 @@ imageTrace	Outline	Körvonal
 @msg	no such saved selection	nincs ilyen mentett kijelölés
 @msg	no such segment	nincs ilyen szakasz
 @msg	no such spine point	nincs ilyen gerincpont
+@msg	`with` must be a list of at most 10000 spine point indexes	`with`: legfeljebb 10000 gerincpont-indexből álló lista kell
+@msg	`with` moves points, not a handle	`with` pontokat mozgat, nem fogantyút
 @msg	no such spine segment	nincs ilyen gerincszakasz
 @msg	no such subpath	nincs ilyen részútvonal
 @msg	no such user library	nincs ilyen felhasználói könyvtár
