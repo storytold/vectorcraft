@@ -116,7 +116,7 @@ fn deleting_separated_anchors_splits_an_open_path_and_keeps_cubic_handles() {
     check_session(&s).unwrap();
 }
 
-/// Existing multi-subpath paths and explicit compound members retain their object structure.
+/// Existing multi-subpath paths and explicit compound members retain structure and exact geometry.
 #[test]
 fn deletion_preserves_intentional_multi_subpaths_and_compound_members() {
     for command in ["edit.clear", "edit.cut"] {
@@ -124,21 +124,33 @@ fn deletion_preserves_intentional_multi_subpaths_and_compound_members() {
             let mut s = session();
             let id = rectangle(&mut s);
             let other = rectangle(&mut s);
+            std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(other).unwrap().transform(Affine::translate((110.0, 0.0)), true);
+            let extra = s.doc().unwrap().doc.node(other).unwrap().path_data().unwrap().subpaths[0].clone();
+            let original = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].clone();
+            assert_ne!(extra, original, "the untouched contour must be distinguishable from the edited one");
             let container = if compound {
                 s.execute("select.set", &json!({"ids": [id.0, other.0]})).unwrap();
                 NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap())
             } else {
-                let extra = s.doc().unwrap().doc.node(other).unwrap().path_data().unwrap().subpaths[0].clone();
-                std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().path_data_mut().unwrap().subpaths.push(extra);
+                std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().path_data_mut().unwrap().subpaths.push(extra.clone());
                 s.doc().unwrap().doc.parent_of(id).unwrap()
             };
             let children = s.doc().unwrap().doc.node(container).unwrap().children().unwrap().len();
             let sibling = s.doc().unwrap().doc.node(other).unwrap().clone();
+            let original = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].clone();
+            let mut expected = vec![
+                SubPath::new(vec![original.anchors[2], original.anchors[3]], false),
+                SubPath::new(vec![original.anchors[0], original.anchors[1]], false),
+            ];
+            if !compound {
+                expected.push(extra);
+            }
             s.execute("select.segments", &json!({"id": id.0, "segments": [[0, 1], [0, 3]]})).unwrap();
             s.execute(command, &json!({})).unwrap();
             let st = s.doc().unwrap();
             assert_eq!(st.doc.node(container).unwrap().children().unwrap().len(), children);
             assert_eq!(st.doc.node(id).unwrap().path_data().unwrap().subpaths.len(), if compound { 2 } else { 3 });
+            assert_eq!(st.doc.node(id).unwrap().path_data().unwrap().subpaths, expected, "{command}, compound: {compound}");
             assert_eq!(st.doc.node(other).unwrap(), &sibling);
             assert_eq!(st.selection.objects, [id]);
             check_session(&s).unwrap();
