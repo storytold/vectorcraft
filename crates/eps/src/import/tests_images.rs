@@ -517,34 +517,117 @@ fn tiff_predicted_rows_at_every_depth() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
-/// An image too large to read is left out, and its data is skipped, as reading it would leave
-/// the program: the art after it is read, not the data as PostScript. Here the data ends at its
-/// `~>` (an inline image of a content stream run as a file, as PDF-reading prologs write it), at
-/// a `SubFileDecode` end string, and at the end of compressed data that is read whole.
+/// An image over the reader's pixel cap is read at a lower resolution, or when its data is too
+/// large to hold left out with its data skipped; either way the program goes on after the data,
+/// as reading the whole image would leave it: the art after it is read, not the data as
+/// PostScript. Here the data ends at its `~>` (an inline image of a content stream run as a file,
+/// as PDF-reading prologs write it), at a `SubFileDecode` end string, and at the end of
+/// compressed data that is read whole.
 #[test]
 fn the_data_of_an_image_too_large_to_read_is_skipped() {
     let after = "0 0 1 setrgbcolor 10 10 80 80 rectfill";
+    let packed = crate::ps::ascii85(&crate::ps::deflate(&[0u8; 64]));
     for program in [
         format!(
             "/ID {{ << /ImageType 1 /Width 10000 /Height 10000 /BitsPerComponent 8 /Decode [0 1 0 1 0 1] /ImageMatrix [1 0 0 1 0 0] \
-             /DataSource currentfile 0 (~>) /SubFileDecode filter /ASCII85Decode filter /LZWDecode filter >> \
+             /DataSource currentfile 0 (~>) /SubFileDecode filter /ASCII85Decode filter /FlateDecode filter >> \
              /DeviceRGB setcolorspace image }} def\n\
-             currentfile 0 (endstream) /SubFileDecode filter cvx exec\nID\nJ1_V7fG\"r'\"b]2#:hXAd)~>\n{after}\nendstream\n"
+             currentfile 0 (endstream) /SubFileDecode filter cvx exec\nID\n{packed}\n{after}\nendstream\n"
         ),
         format!("10000 10000 8 [1 0 0 1 0 0] currentfile /ASCIIHexDecode filter false 3 colorimage\n0a1b 2c3d 4e5f>\n{after}"),
         format!(
-            "10000 10000 8 [1 0 0 1 0 0] currentfile 0 (%%EndData) /SubFileDecode filter /FlateDecode filter image\n\
-             x\u{9c}garbage\n%%EndData\n{after}"
+            "10000 10000 8 [1 0 0 1 0 0] currentfile 0 (%%EndData) /SubFileDecode filter /ASCII85Decode filter /FlateDecode filter image\n\
+             {packed}\n%%EndData\n{after}"
         ),
-        format!(
-            "10000 10000 true [1 0 0 1 0 0] currentfile /ASCII85Decode filter imagemask\n{}\n{after}",
-            crate::ps::ascii85(&crate::ps::deflate(&[0u8; 64]))
-        ),
+        format!("10000 10000 true [1 0 0 1 0 0] currentfile /ASCII85Decode filter imagemask\n{packed}\n{after}"),
     ] {
         let r = read(&program);
-        assert!(r.warnings.iter().any(|w| w.contains("too large to read")), "{program}: {:?}", r.warnings);
+        assert!(r.warnings.iter().any(|w| w.contains("too large to read") || w.contains("lower resolution")), "{program}: {:?}", r.warnings);
         let o = super::tests::objects(&r.document);
-        assert_eq!(o.len(), 1, "{program}: {:?}", r.warnings);
-        assert_eq!(super::tests::fill(&o[0]), Some(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))), "{program}");
+        let last = o.last().expect("the art after the image");
+        assert_eq!(super::tests::fill(last), Some(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))), "{program}");
+    }
+}
+
+/// An image of more pixels than the reader's cap (2^26) is read at a lower resolution, every
+/// second sample of every second row here, over the same area, with a note; not left out.
+#[test]
+fn an_image_over_the_pixel_cap_is_read_at_a_lower_resolution() {
+    // 9000 × 8000 one-bit samples, every row the same: its left half ones, painted.
+    let row = format!("{}{}", "ff".repeat(563), "00".repeat(562));
+    let r = read(&format!("0 0 1 setrgbcolor 90 80 scale 9000 8000 true [9000 0 0 -8000 0 8000] <{row}> imagemask"));
+    assert!(r.warnings.iter().any(|w| w.contains("lower resolution")), "{:?}", r.warnings);
+    let NodeKind::Image(im) = &all(&r.document).into_iter().find(|n| matches!(n.kind, NodeKind::Image(_))).expect("an image").kind else {
+        panic!("an image")
+    };
+    assert_eq!((im.width, im.height), (4500, 4000));
+    // Its 4500 × 4000 pixels cover the 90 × 80 points the image does.
+    let corner = im.xf * kurbo::Point::new(4500.0, 4000.0);
+    let origin = im.xf * kurbo::Point::ZERO;
+    assert!(((corner - origin).x.abs() - 90.0).abs() < 1e-6 && ((corner - origin).y.abs() - 80.0).abs() < 1e-6, "{:?}", im.xf);
+    // Left half painted, right half clear.
+    assert_eq!(pixel(&r.document, 100, 2000)[3], 255);
+    assert_eq!(pixel(&r.document, 4400, 2000)[3], 0);
+}
+
+/// An image over the pixel cap whose samples are more data than the reader holds (9500 × 9500
+/// RGB is 270 MB) is read at a lower resolution too when Flate or LZW compresses it last: only
+/// the rows it reads are kept as they are decoded.
+#[test]
+fn an_image_of_more_data_than_the_reader_holds_keeps_only_the_rows_it_reads() {
+    let (w, h) = (9500usize, 9500usize);
+    let mut samples = Vec::with_capacity(w * h * 3);
+    for y in 0..h {
+        let px: [u8; 3] = if y < h / 2 { [255, 0, 0] } else { [0, 0, 255] };
+        samples.extend(std::iter::repeat_n(px, w).flatten());
+    }
+    let data = crate::ps::ascii85(&crate::ps::deflate(&samples));
+    drop(samples);
+    let r = read(&format!(
+        "95 95 scale {w} {h} 8 [{w} 0 0 -{h} 0 {h}] currentfile /ASCII85Decode filter /FlateDecode filter false 3 colorimage\n{data}\n\
+         0 1 0 setrgbcolor 0 0 0.1 0.1 rectfill"
+    ));
+    assert!(r.warnings.iter().any(|w| w.contains("lower resolution")), "{:?}", r.warnings);
+    let NodeKind::Image(im) = &all(&r.document).into_iter().find(|n| matches!(n.kind, NodeKind::Image(_))).expect("an image").kind else {
+        panic!("an image")
+    };
+    assert_eq!((im.width, im.height), (4750, 4750));
+    // The rows read from the top half are red, from the bottom half blue.
+    assert_eq!(pixel(&r.document, 10, 10), [255, 0, 0, 255]);
+    assert_eq!(pixel(&r.document, 10, 4740), [0, 0, 255, 255]);
+    // The art after the data is read.
+    assert_eq!(super::tests::objects(&r.document).len(), 2);
+}
+
+/// An image too large to read even at a lower resolution (its samples are more data than the
+/// reader holds) is left out, and its data is skipped: when a procedure reads it, the procedure
+/// is called until the data ends; when its first filter decompresses to more than the reader
+/// holds (and can't be read a row at a time), the compressed data is measured without keeping it.
+#[test]
+fn the_data_of_an_image_too_large_to_hold_is_skipped() {
+    let after = "0 0 1 setrgbcolor 10 10 80 80 rectfill";
+    let zeros = crate::ps::deflate(&vec![0u8; 300 << 20]);
+    // Predicted rows aren't decoded a row at a time: such an image is left out.
+    let mut flate =
+        b"10000 10000 8 [1 0 0 1 0 0] currentfile << /Predictor 15 /Colors 3 /Columns 10000 >> /FlateDecode filter false 3 colorimage\n".to_vec();
+    flate.extend(&zeros);
+    flate.extend(format!("\n{after}").as_bytes());
+    for program in [
+        format!(
+            "/F currentfile 0 (%%EndData) /SubFileDecode filter def \
+             10000 10000 8 [1 0 0 1 0 0] {{ F 4096 string readstring pop }} false 3 colorimage\n@@@@ not PostScript @@@@\n%%EndData\n{after}"
+        )
+        .into_bytes(),
+        flate,
+    ] {
+        let text = String::from_utf8_lossy(program.get(..120).unwrap_or(&program)).into_owned();
+        let mut file = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n".to_vec();
+        file.extend(&program);
+        file.extend(b"\nshowpage\n%%EOF\n");
+        let r = import(&file).unwrap();
+        assert!(r.warnings.iter().any(|w| w.contains("too large to read")), "{text}: {:?}", r.warnings);
+        let o = super::tests::objects(&r.document);
+        assert_eq!(o.len(), 1, "{text}: {:?}", r.warnings);
+        assert_eq!(super::tests::fill(&o[0]), Some(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))), "{text}");
     }
 }
