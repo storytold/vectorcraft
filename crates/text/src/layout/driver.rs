@@ -202,6 +202,22 @@ pub fn scaled(t: &TextObject, f: f64) -> TextObject {
     s
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Set while [`layout_faces_per_call`] lays text out: layout keeps no run faces.
+    static FACES_PER_CALL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// [`layout`] keeping no run faces, so that every lookup of a face asks [`FontDb::style_face`]
+/// again: the reference the faces kept per run are compared with.
+#[cfg(test)]
+pub(crate) fn layout_faces_per_call(db: &FontDb, t: &TextObject) -> TextLayout {
+    FACES_PER_CALL.set(true);
+    let l = layout(db, t);
+    FACES_PER_CALL.set(false);
+    l
+}
+
 /// One layout pass, without fitting.
 fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
     let text = t.plain_text();
@@ -232,10 +248,14 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
     } else {
         opts
     };
+    let faces = runs.iter().map(|_| std::cell::OnceCell::new()).collect();
+    #[cfg(test)]
+    let faces = if FACES_PER_CALL.get() { Vec::new() } else { faces };
     let mut cx = Ctx {
         on_path: is_on_path,
         db,
         text: &text,
+        faces,
         runs,
         inlines,
         default: CharStyle::default(),
@@ -254,7 +274,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         TextKind::OnPath { .. } => Affine::IDENTITY,
         TextKind::Point => {
             let first = cx.style_at(0);
-            let centre = db.style_face(first).map_or(EM_CENTER, |f| f.ideographic_centre());
+            let centre = cx.face_at(0).map_or(EM_CENTER, |f| f.ideographic_centre());
             Affine::translate((-centre * first.size, 0.0)) * QUARTER_TURN
         }
         _ => QUARTER_TURN,
