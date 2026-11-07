@@ -462,8 +462,8 @@ fn parameters_are_validated_and_lengths_scale_with_the_object() {
     let n = square_node();
     assert!(validate_solid(&n, EXTRUDE, &json!({"bevel": "rounded", "depth": 80})).is_ok());
     assert!(validate_solid(&n, EXTRUDE, &json!({"bevel": "fancy"})).unwrap_err().contains("bevel must be"));
-    let text = Node::group(NodeId(2), vec![]);
-    assert!(validate_solid(&text, INFLATE, &json!({})).unwrap_err().contains("requires a path"));
+    let empty = Node::group(NodeId(2), vec![]);
+    assert!(validate_solid(&empty, INFLATE, &json!({})).unwrap_err().contains("requires a group holding a shape"));
     for (id, key) in [(EXTRUDE, "depth"), (EXTRUDE, "bevelWidth"), (EXTRUDE, "bevelHeight"), (INFLATE, "depth")] {
         assert!(crate::is_length(id, key, false), "{id} {key}");
     }
@@ -539,4 +539,59 @@ fn colored_solid_inflate_batches_channels_and_clips_once_per_surface() {
     assert_eq!(surfaces, 2);
     assert_eq!(clips, surfaces);
     assert_eq!(groups, 1 + 6 * surfaces, "group count must not grow with triangle count");
+}
+
+/// `square_node` moved right by `dx`, with id `id` and fill `fill`.
+fn square_at(id: u64, dx: f64, fill: Color) -> Node {
+    let mut n = square_node();
+    n.id = NodeId(id);
+    n.transform(Affine::translate((dx, 0.0)), false);
+    n.appearance.items = Appearance::basic(Paint::solid(fill), Paint::None, 0.0).items;
+    n
+}
+
+#[test]
+fn a_3d_effect_on_a_group_turns_every_member_about_one_shared_axis() {
+    // Two squares side by side, 100 pt apart, in a group: 100–200 and 300–400 across.
+    let group = |id: &str, params: Value| {
+        let mut g = Node::group(NodeId(9), vec![Arc::new(square_at(1, 0.0, RED)), Arc::new(square_at(2, 200.0, BLUE))]);
+        g.appearance.effects.push(fx(id, params));
+        g
+    };
+    let turned = json!({"rotationX": 0, "rotationY": 60, "rotationZ": 0});
+    for id in SOLIDS {
+        let g = group(id, json!({}));
+        assert!(validate_solid(&g, id, &json!({})).is_ok(), "{id}");
+        let art = solid_art(&g).unwrap_or_else(|| panic!("{id}"));
+        assert_eq!(art.id, NodeId(9), "{id}: the art is the group's");
+        assert!(art.appearance.effects.iter().all(|e| !is_three_d(&e.id)), "{id}");
+        // Both members draw, each in its own fill.
+        let mut colours = vec![];
+        art.walk(&mut |c| {
+            if c.path_data().is_some() {
+                colours.push(fill_rgb(c));
+            }
+        });
+        assert!(colours.iter().any(|c| c[2] > c[0]) && colours.iter().any(|c| c[0] > c[2]), "{id}: red and blue faces");
+    }
+    // Turned 60° about y, the members turn together about the group's centre (x = 250): the
+    // pair spans half its width; turned each about its own centre they would stay 100 pt apart.
+    let b = solid_art(&group(ROTATE, turned.clone())).unwrap().visual_bounds().unwrap();
+    assert!((b.center().x - 250.0).abs() < 1e-3, "{b:?}");
+    assert!((b.width() - 300.0 * 0.5).abs() < 1.0, "{b:?}");
+    let mut alone = square_at(2, 200.0, BLUE);
+    alone.appearance.effects.push(fx(ROTATE, turned));
+    let own = solid_art(&alone).unwrap().visual_bounds().unwrap();
+    assert!((own.center().x - 350.0).abs() < 1e-3, "{own:?}");
+    // Hidden members and guides are left out; a group holding what can't become a solid is
+    // refused with what to do.
+    let mut g = group(EXTRUDE, json!({}));
+    let mut clip = Node::group(NodeId(5), vec![Arc::new(square_at(6, 0.0, RED))]);
+    clip.kind = NodeKind::Group { children: clip.children().unwrap().clone(), clip: true };
+    if let NodeKind::Group { children, .. } = &mut g.kind {
+        children.push(Arc::new(clip));
+    }
+    let err = validate_solid(&g, EXTRUDE, &json!({})).unwrap_err();
+    assert!(err.contains("clipping groups"), "{err}");
+    assert!(solid_art(&g).is_none(), "drawn as the group it is");
 }

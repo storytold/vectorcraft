@@ -93,6 +93,9 @@ impl VectorcraftApp {
         if cfg!(debug_assertions) {
             menus::check_params(&self.session, id, &params)?;
         }
+        // A `.ai` file a command writes (a save, an export, a timestamped copy, a batch's save) names
+        // the view's active artboard.
+        io::remember_active_artboard(self);
         let artboards = self.artboard_tool_state();
         if let Some(r) = menus::run_ui_command(self, id, &params) {
             self.follow_artboard_tool(artboards);

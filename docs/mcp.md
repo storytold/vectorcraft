@@ -3576,7 +3576,7 @@ Guides change where a snapped point lands:
 The Snap to Glyph options (the desktop app's Character panel menu › Show Snap to Glyph Options; View › Snap to Glyph
 is the desktop app's): `view.snapToGlyph.options {baseline?, xHeight?, bounds?, proximity?, angular?, anchors?}` (or
 `prefs.get`/`prefs.set` with key `glyphSnap`, a partial object) reads and sets which guides Snap to Glyph gives, all on
-by default: the baseline and the x-height of a single line of type, the glyph bounds (each glyph's edges), the
+by default: the baseline and the x-height of a single line of type, the glyph bounds (each glyph's edges and corners, turning with rotated type), the
 proximity guides at both edges of each character's width, the angular guides (along a glyph's slanted strokes, and
 every guide of rotated type, which runs at its angle) and the glyphs' anchor points. `{}` reads them; a key it doesn't
 know or a value that isn't a boolean is refused and changes nothing.
@@ -4308,7 +4308,9 @@ layer's objects hidden, or the page's objects when `document.open` would not use
 compatibility comes in from its editing data the same way with or without `editingData`), `clipboard.importEps
 {dataBase64}` (an EPS or other PostScript picture's objects, as `document.open` reads one, a hidden layer's objects
 hidden), `clipboard.importImage {dataBase64, mime?}` (an embedded image at 100% of its physical size) or
-`clipboard.importText {text}` (point text in the default type style), each centred on `center`
+`clipboard.importText {text, table?}` (point text in the default type style; cells copied from a spreadsheet,
+tab-separated rows with the same number of cells, become a group `Table` of point type per cell over 0.5 pt
+`Gridlines`, unless `table: false`), each centred on `center`
 (default: the first artboard); then any `edit.paste*` command pastes it. The desktop app does this itself: Copy and
 Cut publish the formats to the system clipboard, and a Paste outside text editing first reads what another app
 copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG). A background thread makes the
@@ -4682,6 +4684,11 @@ or in `options` (`file.formatOptions {format}` lists them with their values):
 - `pdfCompatible`: native files (default false) also carry a PDF of every artboard (`pdf` in the file); `.ai` files
   (default true) with false write blank pages around the native document (smaller; other apps show empty pages).
 - `.ai` only: `compress` (default true) is the PDF option `compression.compressText`.
+- The editing copy of a `.ai` or `.ait` file (`editingData`) names its active artboard (`CropAreaActive`): the active
+  artboard of the app's view when the app saves or exports the file, otherwise the artboard the document opened on (the
+  active artboard of the `.ai` file it was opened from), else the first. A `.ai` file read from its editing copy
+  opens on that artboard. VectorCraft opens a `.ai` file it saved from the native document the file carries, on the
+  first artboard.
 
 File → Save As asks for these in the save options dialog (VectorCraft Options) after the save panel, and Save a Copy
 does too for a `.ai` file; Save, Save a Copy to a native file and Save as Template reuse the options as last saved (or Use Compression).
@@ -5008,7 +5015,12 @@ and Cut take. Typing, Delete and Cut replace the whole story as one undo step (`
 frames whose text goes), and a fill, stroke, `type.step` or Character or Paragraph panel change applies to the text of
 every frame (the Character panel sends `text.setRangeStyle {id, story: true}`, which styles every frame's text in one
 undo step). Remove Line Breaks, Remove Paragraph Breaks and Convert to Text also act on the text of every frame, as
-one undo step. A caret move or a click ends the story selection.
+one undo step. A caret move or a click ends the story selection. Switching to the Eyedropper keeps the story selected,
+and switching back to a Type tool restores it. `appearance.copyFrom` and `paint.sampleColor` then apply to the text of
+every frame as one undo step, and `appearance.copyFrom` leaves out a frame that is its `source`. While the story stays
+selected, its frames are the ones threaded with the edited frame at that moment: a frame that `text.thread.add` adds is
+highlighted and takes the edit, and a frame that leaves the thread is not highlighted and keeps its text. The story
+stays selected when a frame added before the edited frame takes all of its text. Once a thread is removed, typing replaces the text of the edited frame only.
 
 ```json
 {"name":"press_key","arguments":{"key":"A","mods":{"cmd":true}}}
@@ -6053,7 +6065,9 @@ a stroke when it has `rect`. With both `rect` and `points`, the command also tou
 ## Perspective grid
 
 The grid is document data (`perspective.grid.set` edits the model directly). `perspective.grid.get` reads it:
-`grid` (the model), `define` (the Define Grid fields), `station` (the viewer: `x` the centre of vision on the
+`grid` (the model), `define` (the Define Grid fields; its `name` is the preset only while the grid still has that
+preset's fields, else `""` for a custom grid, so dragging the horizon, a vanishing point or the station point clears it
+and moving a plane does not), `station` (the viewer: `x` the centre of vision on the
 horizon `y`, `distance` from the picture plane, in points) and `defined` (false while the document uses the default
 grid). `perspective.grid.define` sets the grid from the Define Grid fields: `kind`, `units`, `scale`
 (`[artboard, real world]`), `gridline`, `angle` (the viewing angle, 0–90°), `distance` (the viewing distance),
@@ -6122,6 +6136,13 @@ them with `image-rendering: pixelated` and PDF export writes them without `/Inte
 `transparency`, each piece of a distorted image is the image with a white opacity mask in the piece's shape instead
 of a clip group, after Expand too. New envelopes start with Distort Appearance on, as in the reference app; envelopes saved before these
 options existed keep their old look (appearance applied after the distortion).
+
+An envelope opened from a `.ai` can have margins, written to native files as `boundsMargin` and reported by
+`object.envelope.info` when they are not zero: `[top, bottom, left, right]`, as shares of the content's height and
+width. While `distortAppearance` is on, the content maps from its geometric bounds grown by the margins, and while it
+is off, the content maps from its geometric bounds. Leaving Edit Contents measures the margins again when the content's
+strokes reach differently than when Edit Contents began, and always for an envelope whose file opened in Edit Contents.
+New envelopes have no margins, and no command sets them.
 
 `object.envelope.release` gives back the content and the envelope's shape (a grey gradient mesh for warp and mesh
 envelopes, the path for a top-object envelope); the content keeps the envelope's opacity, blend mode and opacity mask

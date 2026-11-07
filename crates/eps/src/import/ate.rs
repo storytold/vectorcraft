@@ -18,8 +18,8 @@
 //! offset from it. A right-to-left paragraph (key `33` of its attributes) swaps the two: its
 //! "left"-aligned lines end at the anchor and its "right"-aligned ones start there. The frame of the
 //! story gives a matrix that carries that layout onto the canvas of the app, which is 16383 points a
-//! side; the canvas's centre, 8191.5, is the centre of the file's `%AI3_TemplateBox`. See
-//! [`Story::place`].
+//! side; the canvas's centre, 8191.5, is the centre of the file's `%AI3_TemplateBox`. A story without
+//! a layout has its point type's anchor at its frame's point. See [`Story::place`].
 
 use std::collections::BTreeMap;
 
@@ -29,13 +29,13 @@ use vectorcraft_doc::{CharStyle, Justify, Node, NodeId, NodeKind, ParaDirection,
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
 /// Longest story read (bytes).
-const MAX_STORY: usize = 1 << 20;
+pub(crate) const MAX_STORY: usize = 1 << 20;
 /// Biggest text document read (bytes, decoded).
-const MAX_BYTES: usize = 64 << 20;
+pub(crate) const MAX_BYTES: usize = 64 << 20;
 /// Deepest nesting read.
 const MAX_DEPTH: usize = 64;
 /// Most values read.
-const MAX_VALUES: usize = 4_000_000;
+pub(crate) const MAX_VALUES: usize = 4_000_000;
 /// The centre of the app's canvas, in the units of its text document.
 pub(super) const CANVAS_CENTRE: f64 = 8191.5;
 
@@ -242,8 +242,8 @@ const MAX_SHEETS: usize = 4096;
 const MAX_SHEETS_BASED_ON: usize = 16;
 
 /// Most frames read of one story, and most path segments of a frame.
-const MAX_FRAMES: usize = 4096;
-const MAX_SEGMENTS: usize = 1 << 16;
+pub(crate) const MAX_FRAMES: usize = 4096;
+pub(crate) const MAX_SEGMENTS: usize = 1 << 16;
 
 /// Where a frame puts its story's text.
 #[derive(Debug, Clone, PartialEq)]
@@ -553,8 +553,17 @@ impl Texts {
         if indices.iter().any(|n| self.frame_vertical(*n) != vertical) {
             return None;
         }
-        // The first frame's layout, when the file keeps one: where its lines start.
-        let (mut anchor, mut lines, mut path_spacing) = ((0.0, 0.0), vec![], 0.0);
+        // The first frame's layout, when the file keeps one: where its lines start. Without one, the
+        // anchor of point type is its frame's point (key 0, where the layout's anchor is too).
+        let point = indices.first().and_then(|n| self.frames.get(*n)).and_then(|f| f.get("0")).and_then(|f| f.get("0")).and_then(Val::nums);
+        let (mut anchor, mut lines, mut path_spacing) = (
+            match point.as_deref() {
+                Some([x, y]) if matches!(frames.first(), Some(FrameKind::Point(_))) => (*x, *y),
+                _ => (0.0, 0.0),
+            },
+            vec![],
+            0.0,
+        );
         if let Some(f) = view.get("2").and_then(|l| find_node(l, "F")) {
             // Vertical type on a path turns its glyphs across the path: their matrices don't give
             // the spacing.
@@ -913,8 +922,11 @@ impl Story {
         let text: String = if threaded {
             String::new()
         } else {
+            // The `\r` that ends the story's last paragraph; one before it ends a paragraph, and the
+            // empty paragraph after it is the story's last.
             self.text
-                .trim_end_matches('\r')
+                .strip_suffix('\r')
+                .unwrap_or(&self.text)
                 .chars()
                 .map(|c| match c {
                     '\r' => '\n',
