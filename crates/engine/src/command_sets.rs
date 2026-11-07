@@ -25,9 +25,10 @@ pub const FIT_ACTIVE_ARTBOARD: [&str; 2] = ["artboard.fitToArt", "artboard.fitTo
 /// `(command, param)` pairs the journal records only so a replay reproduces the original run
 /// (dates from the clock: `cmd::clock_date`; the artboards the app passes to the
 /// [`ON_ACTIVE_ARTBOARD`] and [`FIT_ACTIVE_ARTBOARD`] commands and to a batch; the artboards the
-/// Artboard tool had selected for its commands; the view's center the app passes to Edit Symbol);
-/// an action leaves them out ([`Session::journal_for_action`]).
-const REPLAY_ONLY: [(&str, &str); 21] = [
+/// Artboard tool had selected for its commands; the artboards and art Cut and Copy took with that
+/// tool chosen; the view's center the app passes to Edit Symbol); an action leaves them out
+/// ([`Session::journal_for_action`]).
+const REPLAY_ONLY: [(&str, &str); 25] = [
     ("file.new", "created"),
     ("document.save", "modified"),
     ("file.saveAs", "modified"),
@@ -45,6 +46,10 @@ const REPLAY_ONLY: [(&str, &str); 21] = [
     ("artboard.cut", "selectedArtboards"),
     ("artboard.rename", "selectedArtboards"),
     ("artboard.switchOrientation", "selectedArtboards"),
+    ("edit.copy", "selectedArtboards"),
+    ("edit.copy", "art"),
+    ("edit.cut", "selectedArtboards"),
+    ("edit.cut", "art"),
     ("select.allOnArtboard", "artboard"),
     ("symbol.edit", "artboard"),
     ("symbol.edit", "viewCenter"),
