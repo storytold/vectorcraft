@@ -107,9 +107,31 @@ impl Session {
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         let open = (self.depth == 0).then(|| self.docs.iter().map(|d| d.uid).collect::<Vec<_>>());
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
+        if r.is_err() && self.depth == 0 {
+            self.batch_paint_docs.clear();
+        }
         let r = r?;
         if self.depth == 0 {
-            self.inherit_new_art();
+            // A color-mode history step restores exact new-art colors; selection inheritance
+            // must not immediately replace that restoration.
+            let restored = self.active().is_some_and(|d| match id {
+                "edit.undo" => d.history.redo.last().is_some_and(|e| e.color_mode_paints.is_some()),
+                "edit.redo" => d.history.undo.last().is_some_and(|e| e.color_mode_paints.is_some()),
+                _ => false,
+            });
+            if !restored {
+                self.inherit_new_art();
+            }
+            for uid in std::mem::take(&mut self.batch_paint_docs) {
+                if let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid)
+                    && let Some(e) = st.history.undo.last_mut()
+                    && let Some((_, after)) = &mut e.color_mode_paints
+                {
+                    after.clone_from(&self.paint);
+                    e.recost_paints();
+                    st.history.trim();
+                }
+            }
         }
         if let Some(open) = open {
             self.open_undo_groups_in_new_documents(&open);
@@ -219,6 +241,7 @@ impl Session {
                     st.interaction = interaction;
                     st.history = history;
                     cmd::globaledit::follow_history(st);
+                    st.drop_stale_variables_highlight();
                     st.revision += 1;
                 }
                 if let Some(i) = active.and_then(|uid| self.docs.iter().position(|d| d.uid == uid)) {

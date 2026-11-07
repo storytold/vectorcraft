@@ -41,6 +41,9 @@ fn align_id(a: TabAlign) -> &'static str {
 /// The panel body's margin and the ruler's own inset: the ruler's 0 is this far right of the panel.
 const RULER_LEFT: f32 = 10.0 + 4.0;
 
+/// The most ticks the ruler draws.
+const MAX_TICKS: usize = 10_000;
+
 /// The largest stop position `text.tabs.set` takes, in points.
 const MAX_STOP: f64 = 100_000.0;
 
@@ -69,11 +72,18 @@ fn append_indent_targets(node: &Node, range: std::ops::Range<usize>, targets: &m
     }));
 }
 
-/// Paragraphs touched by the Type selection, or all paragraphs of selected text objects.
+/// Paragraphs touched by the Type selection (every paragraph of every frame after Select All in
+/// threaded text), or all paragraphs of selected text objects.
 fn indent_targets(app: &VectorcraftApp, node: &Node) -> Vec<IndentTarget> {
     let mut targets = Vec::new();
     if let Some((_, a, b)) = super::character::text_editing(app) {
-        if let NodeKind::Text(text) = &node.kind {
+        if let (Some(story), Some(st)) = (super::character::text_story(app), app.session.active()) {
+            for frame in story.iter().filter_map(|id| st.doc.node(*id)) {
+                if let NodeKind::Text(text) = &frame.kind {
+                    append_indent_targets(frame, 0..text.paragraph_count(), &mut targets);
+                }
+            }
+        } else if let NodeKind::Text(text) = &node.kind {
             append_indent_targets(node, text.paragraphs_in(a, b), &mut targets);
         }
     } else if let Some(st) = app.session.active() {
@@ -171,7 +181,9 @@ fn paint_markers(ui: &mut Ui, painter: &egui::Painter, tokens: &Tokens, view: Ma
     }
 }
 
-/// Apply an absolute ruler position through paragraph-format commands.
+/// Apply an absolute ruler position through paragraph-format commands. Paragraphs that need values
+/// of their own get one command each, the story's last paragraph first: threaded text re-flows
+/// after each command, and a re-flow moves only text after the paragraph that changed.
 fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para: &ParaStyle, span: f64, targets: &[IndentTarget], both: bool) {
     if targets.is_empty() || !target.is_finite() {
         return;
@@ -186,6 +198,7 @@ fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para:
             super::character::end_typing(app);
             let commands: Vec<Value> = targets
                 .iter()
+                .rev()
                 .map(|p| {
                     json!({"command": "text.setFormat", "params": {
                         "ids": [p.id], "start": p.start, "end": p.start, "firstLineIndent": target - p.left
@@ -212,6 +225,7 @@ fn set_marker(app: &mut VectorcraftApp, marker: IndentMarker, target: f64, para:
         super::character::end_typing(app);
         let commands: Vec<Value> = targets
             .iter()
+            .rev()
             .map(|p| {
                 json!({"command": "text.setFormat", "params": {
                     "ids": [p.id], "start": p.start, "end": p.start,
@@ -248,6 +262,27 @@ fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
     Some((n, para, span.max(72.0)))
 }
 
+/// [`above_text`], then note the active document and text `n`. A floating panel is
+/// at least [`crate::panel_docking::PANEL_MIN_WIDTH`] wide, so for narrow text at a low zoom the
+/// panel comes out wider than asked; the ruler then draws text `n` at [`screen_scale`] and runs
+/// on past the text's width.
+fn place_above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, span: f64) {
+    if above_text(app, ctx, n, span).is_some() {
+        set_pstate(ctx, "tabs-above", app.session.active().map(|doc| (doc.uid, n.id)));
+    }
+}
+
+/// Screen points per point of text `n` at the canvas zoom, as [`above_text`] sizes the ruler:
+/// across the frame for area type, the zoom for point type.
+fn screen_scale(app: &VectorcraftApp, n: &Node, span: f64) -> Option<f64> {
+    let xf = crate::canvas::Xf::new(app.canvas_rect?, app.view()?);
+    let per = match &n.kind {
+        NodeKind::Text(t) if matches!(t.kind, TextKind::Area { .. }) => f64::from(xf.rect_to_screen(n.geometric_bounds()?).width()) / span,
+        _ => xf.zoom,
+    };
+    (per.is_finite() && per > 0.0).then_some(per)
+}
+
 /// Position Panel Above Text: float the panel just above text `n`, as wide as its ruler needs to
 /// put 0 on the text's left edge and its marks at the canvas zoom, so each stop sits over the
 /// column it sets (#729). `span`: the ruler's length in the text's points.
@@ -264,10 +299,26 @@ fn above_text(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, span: f64
         return None;
     }
     let width = span as f32 * per + RULER_LEFT * 2.0;
-    let height = crate::panel_docking::layout_of(&app.ui).floating.iter().find(|w| w.contains(&"tabs".to_string())).map_or(240.0, |w| w.rect[3]);
-    let pos = egui::pos2(on_screen.left() - RULER_LEFT, on_screen.top() - height - 6.0);
-    let _ = ctx;
-    crate::panel_docking::place_floating(app, "tabs", pos, width).ok()?;
+    let height = crate::panel_docking::layout_of(&app.ui)
+        .floating
+        .iter()
+        .find(|w| w.contains(&"tabs".to_string()))
+        .map_or(crate::panel_docking::floating_size("tabs").y, |w| w.rect[3]);
+    // Text near the top of the window: the panel goes just below the text when that place is in
+    // the window and the panel fits there in the canvas, else at the window's top, so its bar
+    // stays where it can be grabbed rather than above the screen.
+    let above = on_screen.top() - height - 6.0;
+    let below = on_screen.bottom() + 6.0;
+    let top = if above >= 0.0 {
+        above
+    } else if below >= 0.0 && below + height <= app.canvas_rect.map_or(f32::NEG_INFINITY, |c| c.bottom()) {
+        below
+    } else {
+        0.0
+    };
+    let pos = egui::pos2(on_screen.left() - RULER_LEFT, top);
+    let origin = ctx.input(|i| i.raw.viewports.get(&egui::ViewportId::ROOT).and_then(|v| v.inner_rect)).map(|r| r.min);
+    crate::panel_docking::place_floating(app, "tabs", pos, width, origin).ok()?;
     Some(())
 }
 
@@ -284,7 +335,12 @@ fn stops_json(stops: &[TabStop]) -> Value {
 fn apply(app: &mut VectorcraftApp, stops: &[TabStop]) -> bool {
     if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
-        app.run("text.tabs.set", json!({"stops": stops_json(stops), "ids": [id.0], "start": a, "end": b})).is_ok()
+        let p = match super::character::text_story(app) {
+            // After Select All in threaded text: every paragraph of every frame.
+            Some(story) => json!({"stops": stops_json(stops), "ids": story.iter().map(|f| f.0).collect::<Vec<_>>()}),
+            None => json!({"stops": stops_json(stops), "ids": [id.0], "start": a, "end": b}),
+        };
+        app.run("text.tabs.set", p).is_ok()
     } else {
         app.run("text.tabs.set", json!({"stops": stops_json(stops)})).is_ok()
     }
@@ -367,7 +423,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button(tl!("Above Text")).on_hover_text(tl!("Position Panel Above Text")).clicked() {
-                above_text(app, ui.ctx(), &node, span);
+                place_above_text(app, ui.ctx(), &node, span);
             }
         });
     });
@@ -414,7 +470,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let p = ui.painter_at(rect.expand(2.0));
     p.rect_filled(rect, 2.0, t.input);
     p.rect_stroke(rect, 2.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-    let scale = (w as f64 - 8.0) / span;
+    // After Position Panel Above Text on this text, while the panel floats no wider than the
+    // narrowest floating window, a ruler wider than the text is on screen draws the text at its
+    // screen scale and runs on past its width. Any other ruler fits the span to its width.
+    let above: Option<(u64, vectorcraft_doc::NodeId)> = pstate(ui.ctx(), "tabs-above");
+    let narrowest = || {
+        let floating = app.ui.docking.as_ref().and_then(|l| l.floating.iter().find(|f| f.contains(&"tabs".to_string())));
+        floating.is_some_and(|f| f.rect[2] <= crate::panel_docking::PANEL_MIN_WIDTH + 0.5)
+    };
+    let scale = above
+        .filter(|at| Some(*at) == app.session.active().map(|doc| (doc.uid, node.id)) && narrowest())
+        .and_then(|_| screen_scale(app, &node, span))
+        .filter(|per| span * per + 8.0 < w as f64 - 0.5)
+        .unwrap_or((w as f64 - 8.0) / span);
+    let length = span.max((w as f64 - 8.0) / scale);
     let to_x = |pt: f64| rect.left() + 4.0 + (pt * scale) as f32;
     let to_pt = |x: f32| (((x - rect.left() - 4.0) as f64) / scale).max(0.0);
     // The ruler is numbered in the General unit, with the canvas rulers' label step at its scale
@@ -422,7 +491,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let unit = app.session.general_unit();
     let step = unit.ruler_step(scale);
     let minor = step / 10.0;
-    for k in 0..=(unit.from_pt(span) / minor + 1e-6).floor() as usize {
+    for k in 0..=((unit.from_pt(length) / minor + 1e-6).floor() as usize).min(MAX_TICKS) {
         let v = k as f64 * minor;
         let x = to_x(unit.to_pt(v));
         let len = match k % 10 {

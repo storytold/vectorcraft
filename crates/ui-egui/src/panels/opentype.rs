@@ -1,11 +1,13 @@
 //! OpenType panel: per-character OpenType features (ligatures, alternates, swashes, small caps,
-//! ordinals, fractions, figure style) for the selected text or the Type tool's selected characters.
+//! ordinals, fractions, figure style, position) for the selected text or the Type tool's selected
+//! characters.
 
 use egui::Ui;
 use serde_json::json;
-use vectorcraft_text::{EXTRA_FEATURES, OtFeatures};
+use vectorcraft_doc::{CharStyle, NodeKind};
+use vectorcraft_text::{EXTRA_FEATURES, FontDb, OtFeatures, StylisticSet};
 
-use super::character::{text_editing, text_style};
+use super::character::{shared, text_editing, text_style};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
@@ -19,7 +21,12 @@ enum Flag {
 /// A checkbox row: label and the feature it toggles.
 type Toggle = (&'static str, Flag);
 
-const FIGURES: [&str; 5] = ["Default Figure", "Tabular Lining", "Proportional Lining", "Proportional Oldstyle", "Tabular Oldstyle"];
+pub(crate) const FIGURES: [&str; 5] = ["Default Figure", "Tabular Lining", "Proportional Lining", "Proportional Oldstyle", "Tabular Oldstyle"];
+
+pub(crate) const POSITIONS: [&str; 5] = ["Default Position", "Superscript", "Subscript", "Numerator", "Denominator"];
+
+/// The features the Position menu's entries after Default Position turn on, in menu order.
+pub(crate) const POSITION_TAGS: [&str; 4] = ["sups", "subs", "numr", "dnom"];
 
 /// The bit of [`OtFeatures::extra`] that turns `tag` on (0 for a tag outside [`EXTRA_FEATURES`]).
 fn extra_bit(tag: &str) -> u32 {
@@ -45,7 +52,7 @@ impl Flag {
 
 /// The Figure menu entry `f` shows: Default Figure, Tabular Lining, Proportional Lining
 /// (`pnum` and `lnum`), Proportional Oldstyle or Tabular Oldstyle.
-fn figure(f: &OtFeatures) -> usize {
+pub(crate) fn figure(f: &OtFeatures) -> usize {
     let proportional_lining = extra_bit("pnum") | extra_bit("lnum");
     match (f.tabular_figures, f.oldstyle_figures) {
         (false, false) if f.extra & proportional_lining == proportional_lining => 2,
@@ -72,15 +79,102 @@ fn set_figure(f: &mut OtFeatures, i: usize) {
     }
 }
 
+/// The Position menu entry `f` shows: Superscript (`sups`), Subscript (`subs`), Numerator
+/// (`numr`) or Denominator (`dnom`) when `f` turns that one on, Default Position when it turns
+/// none of them on, and `None` when it turns on more than one.
+pub(crate) fn position(f: &OtFeatures) -> Option<usize> {
+    let mut on = POSITION_TAGS.iter().enumerate().filter(|(_, t)| f.extra & extra_bit(t) != 0).map(|(i, _)| i + 1);
+    match (on.next(), on.next()) {
+        (None, _) => Some(0),
+        (Some(i), None) => Some(i),
+        (Some(_), Some(_)) => None,
+    }
+}
+
+/// `f` with Position menu entry `i` chosen: the entry's feature on and the other three off.
+/// Default Position turns all four off.
+fn set_position(f: &mut OtFeatures, i: usize) {
+    for (k, tag) in POSITION_TAGS.iter().enumerate() {
+        if k + 1 == i {
+            f.extra |= extra_bit(tag);
+        } else {
+            f.extra &= !extra_bit(tag);
+        }
+    }
+}
+
+/// The Position menu entry for the characters the panel acts on, or `None` when they differ or
+/// one of them turns on more than one position.
+fn shown_position(app: &VectorcraftApp) -> Option<usize> {
+    shared(app, |s| position(&OtFeatures::from_tags(s.features.iter().map(String::as_str)))).flatten()
+}
+
+/// The Position menu's text for entry `shown`: Mixed when the characters differ.
+fn position_label(shown: Option<usize>) -> &'static str {
+    shown.and_then(|i| POSITIONS.get(i).copied()).unwrap_or("Mixed")
+}
+
+/// A change one of the panel's controls makes to the features of each character it acts on.
+#[derive(Clone, Copy)]
+enum Change {
+    /// The Figure menu entry chosen.
+    Figure(usize),
+    /// The Position menu entry chosen.
+    Position(usize),
+    /// A checkbox row turned on or off.
+    Toggle(Flag, bool),
+}
+
+impl Change {
+    fn apply(self, f: &mut OtFeatures) {
+        match self {
+            Change::Figure(i) => set_figure(f, i),
+            Change::Position(i) => set_position(f, i),
+            Change::Toggle(flag, on) => flag.put(f, on),
+        }
+    }
+}
+
+/// Make `change` to the features of each character the panel acts on, from the character's own
+/// features (`featureChanges`), unless it changes none of them. At a Type tool caret the
+/// command styles all the text, so every character of the text is checked.
+fn edit(app: &mut VectorcraftApp, change: Change) {
+    let same = |s: &CharStyle| {
+        let before = OtFeatures::from_tags(s.features.iter().map(String::as_str));
+        let mut after = before;
+        change.apply(&mut after);
+        after == before
+    };
+    let unchanged = match text_editing(app) {
+        Some((id, a, b)) if b <= a => match app.session.active().and_then(|st| st.doc.node(id)).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => Some(t.runs.iter().all(|r| same(&r.style))),
+            _ => None,
+        },
+        _ => shared(app, same),
+    };
+    if unchanged != Some(true) {
+        run_features(app, "featureChanges", OtFeatures::changes(|f| change.apply(f)));
+    }
+}
+
 /// Apply `f` to the selection's features (the Type tool range, or whole objects).
 fn set(app: &mut VectorcraftApp, f: OtFeatures) {
-    let tags = f.to_tags();
-    let r = match text_editing(app) {
-        Some((id, a, b)) if b > a => app.run("text.setRangeStyle", json!({ "id": id.0, "start": a, "end": b, "features": tags })),
-        Some((id, _, _)) => app.run("text.setRangeStyle", json!({ "id": id.0, "features": tags })),
-        None => app.run("text.setStyle", json!({ "features": tags })),
+    run_features(app, "features", f.to_tags());
+}
+
+/// Send `tags` as the `key` param (`features` or `featureChanges`) for the Type tool's range or
+/// caret, or else for the selected type.
+fn run_features(app: &mut VectorcraftApp, key: &str, tags: Vec<String>) {
+    // After Select All in threaded text: every frame of the story.
+    let story = super::character::text_story(app).and_then(|story| story.first().copied());
+    let (cmd, mut p) = match (text_editing(app), story) {
+        (Some(_), Some(first)) => ("text.setRangeStyle", json!({ "id": first.0, "story": true })),
+        (Some((id, a, b)), None) if b > a => ("text.setRangeStyle", json!({ "id": id.0, "start": a, "end": b })),
+        (Some((id, _, _)), None) => ("text.setRangeStyle", json!({ "id": id.0 })),
+        (None, _) => ("text.setStyle", json!({})),
     };
-    if let Err(e) = r {
+    p[key] = json!(tags);
+    if let Err(e) = app.run(cmd, p) {
         app.ui.status = e;
     }
 }
@@ -91,26 +185,72 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let cur = OtFeatures::from_tags(st.features.iter().map(String::as_str));
-    let mut next = cur;
+    let mut change = None;
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Figure:"));
         let fig = figure(&cur);
         if let Some(i) = widgets::dropdown(ui, "ot-figure", FIGURES[fig], &FIGURES, 170.0) {
-            set_figure(&mut next, i);
+            change = Some(Change::Figure(i));
+        }
+    });
+    let shown = shown_position(app);
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, tl!("Position:"));
+        if let Some(i) = widgets::dropdown(ui, "ot-position", position_label(shown), &POSITIONS, 170.0) {
+            change = Some(Change::Position(i));
         }
     });
     widgets::divider(ui);
+    let mut next = cur;
+    if let Some(c) = change {
+        c.apply(&mut next);
+    }
     for (label, flag) in rows() {
         let on = flag.get(&next);
         if widgets::check(ui, label, on, true) {
-            flag.put(&mut next, !on);
+            change = Some(Change::Toggle(flag, !on));
         }
     }
+    // The font, not the text, decides which numbered sets can be offered. Each set is an
+    // independent feature, so the menu permits several at once. A font's own label wins over
+    // the numbered fallback. See the public Stylistic Sets help page.
+    let sets = offered_sets(&st);
+    ui.add_enabled_ui(!sets.is_empty(), |ui| {
+        ui.menu_button(tl!("Stylistic Sets"), |ui| {
+            for set in &sets {
+                let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
+                let on = flag.get(&next);
+                if widgets::check_name(ui, &set_label(set), on) {
+                    change = Some(Change::Toggle(flag, !on));
+                }
+            }
+        });
+    });
     if cur.ligatures && vectorcraft_text::ligatures_suppressed_by(st.tracking) && !vectorcraft_text::explicit_ligatures(&st.features) {
         widgets::dim_label(ui, tl!("Ligatures are off while the text is tracked."));
     }
-    if next != cur {
-        set(app, next);
+    if let Some(c) = change {
+        edit(app, c);
+    }
+}
+
+/// The stylistic sets of the font `st` names. A font that is not available offers none, rather than
+/// the sets of the face drawn in its place.
+fn offered_sets(st: &vectorcraft_doc::CharStyle) -> Vec<StylisticSet> {
+    let db = FontDb::global();
+    let (family, _) = db.canonical(&st.font_family, &st.font_style);
+    if !db.has_family(&family) {
+        return Vec::new();
+    }
+    db.style_face(st).map(|face| face.stylistic_sets()).unwrap_or_default()
+}
+
+/// A Stylistic Sets menu entry: the font's own name for the set, shown as the font gives it, or
+/// `Set 1` through `Set 20` in the UI language.
+fn set_label(set: &StylisticSet) -> String {
+    match &set.name {
+        Some(name) => name.clone(),
+        None => crate::i18n::fmt(tl!("Set {n}"), &[("n", &set.number.to_string())]),
     }
 }
 
@@ -137,6 +277,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
+
     use super::*;
 
     #[test]
@@ -187,6 +329,46 @@ mod tests {
             set(&mut app, f);
             assert!(text_style(&app).unwrap().0.features.is_empty(), "{label} off");
         }
+    }
+
+    /// Stylistic sets are independent: selecting a second set keeps the first, and clearing one
+    /// keeps the other. The command reaches the selected text's stored OpenType feature tags.
+    #[test]
+    fn multiple_stylistic_sets_stay_independent() {
+        let mut app = selected_text();
+        edit(&mut app, Change::Toggle(Flag::Extra("ss01"), true));
+        edit(&mut app, Change::Toggle(Flag::Extra("ss03"), true));
+        assert_eq!(text_style(&app).unwrap().0.features, ["ss01", "ss03"]);
+        edit(&mut app, Change::Toggle(Flag::Extra("ss01"), false));
+        assert_eq!(text_style(&app).unwrap().0.features, ["ss03"]);
+    }
+
+    /// A set the font names keeps the font's name; a set without one gets the numbered label in
+    /// the UI language.
+    #[test]
+    fn stylistic_set_labels_follow_the_ui_language() {
+        let named = StylisticSet { number: 1, name: Some("Curved Capitals".into()) };
+        let numbered = StylisticSet { number: 3, name: None };
+        assert_eq!(set_label(&numbered), "Set 3");
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let (named_de, numbered_de) = (set_label(&named), set_label(&numbered));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(named_de, "Curved Capitals");
+        assert_eq!(numbered_de, "Satz 3");
+    }
+
+    /// A font that is not available offers no sets, even though the face drawn in its place has
+    /// some.
+    #[test]
+    fn a_missing_font_offers_no_stylistic_sets() {
+        let fallback = vectorcraft_doc::CharStyle { font_family: vectorcraft_text::FALLBACK_FAMILY.into(), ..Default::default() };
+        // Builds without the bundled fonts have no fallback face to draw in a missing font's place.
+        if FontDb::global().has_family(vectorcraft_text::FALLBACK_FAMILY) {
+            assert!(!offered_sets(&fallback).is_empty(), "the fallback face lists its sets");
+        }
+        let missing = vectorcraft_doc::CharStyle { font_family: "No Such Family Zq".into(), ..fallback };
+        assert!(offered_sets(&missing).is_empty());
     }
 
     /// The Figure menu lists its five entries in order; Proportional Lining sets `pnum` and
@@ -244,5 +426,134 @@ mod tests {
             assert_eq!(text_style(&app).unwrap().0.features, ["tnum", "lnum"], "{start:?}");
             assert_eq!(figure(&features(&app)), 1);
         }
+    }
+
+    /// The Position menu lists its five entries in order; Superscript, Subscript, Numerator and
+    /// Denominator each set their feature and clear the other three, and Default Position clears
+    /// all four, on the selected type.
+    #[test]
+    fn position_menu_sets_one_position() {
+        assert_eq!(POSITIONS, ["Default Position", "Superscript", "Subscript", "Numerator", "Denominator"]);
+        let mut app = selected_text();
+        assert_eq!(shown_position(&app), Some(0));
+        set(&mut app, OtFeatures::from_tags(["sups", "subs", "numr", "dnom", "smcp"]));
+        for (i, tag) in [(1, "sups"), (2, "subs"), (3, "numr"), (4, "dnom")] {
+            edit(&mut app, Change::Position(i));
+            assert_eq!(text_style(&app).unwrap().0.features, ["smcp", tag], "{}", POSITIONS[i]);
+            assert_eq!(position_label(shown_position(&app)), POSITIONS[i]);
+        }
+        edit(&mut app, Change::Position(0));
+        assert_eq!(text_style(&app).unwrap().0.features, ["smcp"]);
+        assert_eq!(shown_position(&app), Some(0));
+    }
+
+    fn undo_steps(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().history.undo.len()
+    }
+
+    /// Selected objects whose positions differ show the Position menu as mixed; an entry chosen
+    /// then applies to every one, the one the panel reads its features from included, in one undo
+    /// step, and each keeps its other features.
+    #[test]
+    fn mixed_positions_show_mixed_and_take_the_choice() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let a = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "x2"})).unwrap()["id"].clone();
+        let b = app.session.execute("text.create", &json!({"x": 10, "y": 80, "text": "y2"})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [a]})).unwrap();
+        set(&mut app, OtFeatures::from_tags(["sups"]));
+        app.session.execute("select.set", &json!({"ids": [b]})).unwrap();
+        set(&mut app, OtFeatures::from_tags(["smcp"]));
+        app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        assert_eq!(shown_position(&app), None);
+        assert_eq!(position_label(shown_position(&app)), "Mixed");
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+        assert_eq!(position(&features(&app)), Some(1), "the panel reads the first object");
+        let undo = undo_steps(&app);
+        edit(&mut app, Change::Position(1));
+        assert_eq!(undo_steps(&app), undo + 1);
+        assert_eq!(shown_position(&app), Some(1));
+        for (id, want) in [(&a, vec!["sups"]), (&b, vec!["smcp", "sups"])] {
+            app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+            assert_eq!(text_style(&app).unwrap().0.features, want);
+        }
+    }
+
+    /// Type with two positions turned on shows the Position menu as mixed, and the entry of one
+    /// of them turns the other off.
+    #[test]
+    fn two_positions_show_mixed_and_one_is_chosen() {
+        let mut app = selected_text();
+        set(&mut app, OtFeatures::from_tags(["sups", "numr"]));
+        assert_eq!(shown_position(&app), None);
+        edit(&mut app, Change::Position(1));
+        assert_eq!(text_style(&app).unwrap().0.features, ["sups"]);
+        assert_eq!(shown_position(&app), Some(1));
+    }
+
+    /// The runs of `id`'s characters `0..end`, each as its text and its features.
+    fn run_features(app: &mut VectorcraftApp, id: &Value, end: usize) -> Vec<(String, Value)> {
+        let runs = app.session.execute("text.getRange", &json!({"id": id, "start": 0, "end": end})).unwrap()["runs"].clone();
+        runs.as_array().unwrap().iter().map(|r| (r["text"].as_str().unwrap_or("").to_string(), r["style"]["features"].clone())).collect()
+    }
+
+    /// The Type tool's selected characters show mixed when only some are numerators; Denominator
+    /// then applies to those characters alone, each run keeping its other features, and the
+    /// Figure menu and the checkboxes also keep each run's other features.
+    #[test]
+    fn mixed_range_takes_the_choice() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "1/23"})).unwrap()["id"].clone();
+        app.session.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 1, "features": ["numr"]})).unwrap();
+        app.session.execute("text.setRangeStyle", &json!({"id": id, "start": 1, "end": 3, "features": ["smcp"]})).unwrap();
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 0, "end": 3}));
+        assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((0, 3)));
+        assert_eq!(shown_position(&app), None);
+        let undo = undo_steps(&app);
+        edit(&mut app, Change::Position(4));
+        assert_eq!(undo_steps(&app), undo + 1);
+        assert_eq!(shown_position(&app), Some(4));
+        let none = Value::Null;
+        assert_eq!(
+            run_features(&mut app, &id, 4),
+            [("1".to_string(), json!(["dnom"])), ("/2".to_string(), json!(["smcp", "dnom"])), ("3".to_string(), none.clone())]
+        );
+        edit(&mut app, Change::Figure(4));
+        edit(&mut app, Change::Toggle(Flag::Field(|f| &mut f.swash), true));
+        assert_eq!(
+            run_features(&mut app, &id, 4),
+            [
+                ("1".to_string(), json!(["dnom", "onum", "tnum", "swsh"])),
+                ("/2".to_string(), json!(["smcp", "dnom", "onum", "tnum", "swsh"])),
+                ("3".to_string(), none)
+            ]
+        );
+    }
+
+    /// At a caret whose insertion style is already a denominator, Denominator still reaches the
+    /// characters the command styles at a caret (all of them) in one undo step; chosen again once
+    /// every character has it, it adds no undo step.
+    #[test]
+    fn caret_with_the_same_position_still_applies_it() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "1/23"})).unwrap()["id"].clone();
+        app.session.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 1, "features": ["dnom"]})).unwrap();
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
+        assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((1, 1)));
+        assert_eq!(shown_position(&app), Some(4));
+        let undo = undo_steps(&app);
+        edit(&mut app, Change::Position(4));
+        assert_eq!(undo_steps(&app), undo + 1);
+        assert_eq!(run_features(&mut app, &id, 4), [("1/23".to_string(), json!(["dnom"]))]);
+        edit(&mut app, Change::Position(4));
+        assert_eq!(undo_steps(&app), undo + 1);
     }
 }

@@ -28,7 +28,13 @@ fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Op
     }
     const CELLS: usize = 48;
     let cell = size / CELLS as f64;
-    let (nx, ny) = (((bounds.width() / cell).ceil() as usize).max(1), ((bounds.height() / cell).ceil() as usize).max(1));
+    // A subnormal size gives cells of no size (the grid would be `usize::MAX` cells wide), and a
+    // subnormal cell underflows the solver's stencil products.
+    if !cell.is_normal() {
+        return Ok(None);
+    }
+    let side = |len: f64| ((len / cell).ceil() as usize).clamp(1, CELLS + 1);
+    let (nx, ny) = (side(bounds.width()), side(bounds.height()));
     let edges = Edges::new(&rings);
     let m = Membrane::solve(&rings, &edges, bounds.origin(), cell, nx + 1, ny + 1);
     // A circle of radius r puffs into a half sphere of radius r at 50 % (its membrane peaks at r²/4).

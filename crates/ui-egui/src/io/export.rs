@@ -1,6 +1,6 @@
 use super::save::{
-    ask_before_losing, export_path, is_web, report_saved, report_write_error, saved_status, target_path, target_path_keeping, view_file,
-    write_encoded, write_named, write_reporting,
+    ask_before_losing, export_path, is_web, remember_active_artboard, report_saved, report_write_error, saved_status, target_path,
+    target_path_keeping, view_file, write_encoded, write_named, write_reporting,
 };
 use super::{EngineError, Progress, Value, VectorcraftApp, Writer, background, cancel, fileio, json, progress};
 
@@ -33,8 +33,10 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // encoder (an exporter plug-in is told the file it writes).
     let params = &if params.is_object() { params.clone() } else { json!({}) };
     let f = fileio::writable_format(format, path.as_deref())?;
+    // A `.ai` file names the view's active artboard.
+    remember_active_artboard(app);
     let st = app.session.active().ok_or("no document")?;
-    let doc = match fileio::export_source(st, params).map_err(|e| e.to_string())? {
+    let doc = match fileio::export_doc(st, f, params).map_err(|e| e.to_string())? {
         std::borrow::Cow::Borrowed(_) => st.doc.clone(),
         std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
     };
@@ -217,11 +219,27 @@ pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), St
     app.services.open_file.as_mut().ok_or("no app to open files here")?(path)
 }
 
+/// Edit Original: open `path` in the system's default app for it, or with Preferences › File
+/// Handling › Use System Defaults for Edit Original off, in the app that made it (#5236): PhotoCraft
+/// for a raster image where it is installed. Any other file, or no PhotoCraft, uses the system's app.
+pub(crate) fn open_original(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
+    let ext = std::path::Path::new(path).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+    let raster = vectorcraft_engine::cmd::fileio::readable_format(&ext).is_some_and(|f| f.raster);
+    if !app.session.prefs.edit_original_system_defaults
+        && raster
+        && let Some(open) = app.services.open_in_photocraft.as_mut()
+        && open(path)?
+    {
+        return Ok(());
+    }
+    open_in_app(app, path)
+}
+
 /// File → Export for Screens with `document.exportForScreens` params: the files go into `folder`;
 /// without one the web downloads them (the ZIP, or each file) and the other frontends get them
 /// back as base64. With `openLocation`, the file manager shows the first file written. When an
 /// export into a folder or a download has warnings, the status bar shows the first as
-/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n note(s): …".
+/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n notes: …".
 pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     export_files(app, "document.exportForScreens", params)
 }

@@ -1,5 +1,5 @@
 //! Symbols panel: the document's symbols as rendered thumbnails or a list. Click selects a symbol
-//! (it becomes the Symbol Sprayer's current symbol); double-click places an instance. Symbol
+//! (it becomes the Symbol Sprayer's current symbol); double-click opens it in symbol editing mode. Symbol
 //! libraries open in library panels ([`SymbolLibraries`]).
 
 use std::cell::RefCell;
@@ -977,6 +977,106 @@ mod tests {
         ]);
         app.run("command.batch", json!({ "commands": steps })).unwrap();
         assert_eq!(editing_art(&app), Some([585.0, 35.0, 615.0, 65.0]));
+    }
+
+    /// The symbol in symbol editing mode, if any.
+    fn editing(app: &VectorcraftApp) -> Option<String> {
+        app.session.active()?.doc.symbol_edit.as_ref().map(|e| e.symbol.clone())
+    }
+
+    /// The first instance of symbol `name` in the active document.
+    fn instance_of(app: &VectorcraftApp, name: &str) -> Option<NodeId> {
+        let mut found = None;
+        for l in &app.session.active()?.doc.layers {
+            l.walk(&mut |n| {
+                if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+                    && symbol == name
+                    && found.is_none()
+                {
+                    found = Some(n.id);
+                }
+            });
+        }
+        found
+    }
+
+    fn double_click(at: Pos2) -> Vec<egui::Event> {
+        vec![egui::Event::PointerMoved(at), button(at, true), button(at, false), button(at, true), button(at, false)]
+    }
+
+    /// A double-click on a symbol in the panel, in Thumbnail View and in List View, opens it in
+    /// symbol editing mode and places no instance; a single click only makes it current.
+    #[test]
+    fn double_clicking_a_symbol_in_the_panel_edits_it_in_either_view() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        // Thumbnail View: the first tile is Leaf's.
+        let tile = pos2(26.0, 26.0);
+        frame(&ctx, &mut app, vec![]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true), button(tile, false)]);
+        assert_eq!((editing(&app), current(&mut app)), (None, Some("Leaf".into())), "a click makes it current");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        frame(&ctx, &mut app, vec![]);
+        frame(&ctx, &mut app, double_click(tile));
+        assert_eq!(editing(&app).as_deref(), Some("Leaf"));
+        assert_eq!(art(&app, "Leaf").0, 1, "no instance is placed");
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        // List View: the row named Dot.
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        set_pstate(&ctx, "sym-list", true);
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 400.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+        let labels = crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
+        let row = labels.iter().find(|(t, _)| t.trim() == "Dot").map(|(_, r)| r.center()).expect("a row named Dot");
+        frame(&ctx, &mut app, double_click(row));
+        assert_eq!(editing(&app).as_deref(), Some("Dot"));
+        assert_eq!(art(&app, "Dot").0, 0, "no instance is placed");
+    }
+
+    /// The panel menu's Edit Symbol edits the selected instance's symbol, and with no instance
+    /// selected the symbol current in the panel.
+    #[test]
+    fn the_panel_menus_edit_symbol_edits_the_instances_symbol_or_the_panels() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        click_menu(&ctx, &mut app, "Edit Symbol");
+        assert_eq!(editing(&app).as_deref(), Some("Dot"), "no instance selected: the panel's symbol");
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        let leaf = instance_of(&app, "Leaf").expect("a Leaf instance");
+        app.run("select.set", json!({"ids": [leaf.0]})).unwrap();
+        click_menu(&ctx, &mut app, "Edit Symbol");
+        assert_eq!(editing(&app).as_deref(), Some("Leaf"), "the selected instance's symbol");
+        assert_eq!(instance_of(&app, "Leaf"), Some(leaf), "the instance keeps its link");
+    }
+
+    /// With instances of one symbol selected, the Control bar's Edit Symbol opens that symbol in
+    /// symbol editing mode and keeps the instance linked.
+    #[test]
+    fn the_control_bars_edit_symbol_edits_the_selected_instances_symbol() {
+        let mut app = leaf_and_dot();
+        let leaf = instance_of(&app, "Leaf").expect("a Leaf instance");
+        app.run("select.set", json!({"ids": [leaf.0]})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        ctx.enable_accesskit();
+        let bar = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 400.0))), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                ui.horizontal(|ui| control_bar(app, ui));
+            });
+            out.textures_delta.clear();
+            out
+        };
+        let out = bar(&mut app, vec![]);
+        let at = clickable(&out).into_iter().find(|(l, _)| l == "Edit Symbol").expect("an Edit Symbol button").1;
+        bar(&mut app, vec![egui::Event::PointerMoved(at), button(at, true), button(at, false)]);
+        assert_eq!(editing(&app).as_deref(), Some("Leaf"));
+        assert_eq!(instance_of(&app, "Leaf"), Some(leaf), "the instance keeps its link");
     }
 
     fn dialog_kind(app: &VectorcraftApp) -> Option<&str> {

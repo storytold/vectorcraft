@@ -8,7 +8,9 @@ use vectorcraft_geom::shapes;
 use crate::*;
 
 /// Every file reads as a 40×20 artboard filled blue; a file whose bytes start with `loop` also
-/// places itself (the same key) in its middle, and one whose bytes start with `bad` can't be read.
+/// places itself (the same key) in its middle, one whose bytes start with `cut` also shows an
+/// image whose pixels can't be decoded over its left half, and one whose bytes start with `bad`
+/// can't be read.
 fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
     if bytes.starts_with(b"bad") {
         return None;
@@ -17,6 +19,19 @@ fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)>
     d.layers.clear();
     let blue = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
     let mut children = vec![Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 20.0)), blue))];
+    if bytes.starts_with(b"cut") {
+        d.images.insert("cut-image".into(), ImageBlob::new("image/png", b"not a PNG: placed document".to_vec()));
+        let im = vectorcraft_doc::ImageObject {
+            key: "cut-image".into(),
+            width: 20,
+            height: 20,
+            xf: Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        children.push(Arc::new(Node::new(NodeId(3), NodeKind::Image(Box::new(im)))));
+    }
     if bytes.starts_with(b"loop") {
         d.images.insert(p.key.clone(), ImageBlob::new("application/json", bytes.to_vec()));
         let me = PlacedDocument { xf: Affine::translate((10.0, 5.0)) * Affine::scale(0.5), ..p.clone() };
@@ -27,7 +42,7 @@ fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)>
 
 /// A 100×100 document showing one placed file (`bytes` under `key`) in the box (10, 10)–(90, 50).
 fn doc_with(key: &str, bytes: &[u8]) -> Document {
-    vectorcraft_doc::placed_document::set_loader(blue_page);
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
     let mut d = Document::new(100.0, 100.0);
     d.images.insert(key.into(), ImageBlob::new("application/json", bytes.to_vec()));
     let l = d.layers[0].id;
@@ -48,6 +63,36 @@ fn placed_node(id: u64, key: &str, width: f64, height: f64, xf: Affine) -> Node 
         placement: Default::default(),
     };
     Node::new(NodeId(id), NodeKind::PlacedDocument(Box::new(p)))
+}
+
+/// Held shut, [`gated_blue_page`] makes the background worker wait before reading a file, so a
+/// frame drawn meanwhile shows the placeholders whatever the scheduler does (#5152: a fast worker
+/// could finish between scheduling a bitmap and the frame looking it up again).
+static GATE_SHUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// The thread drawing while the gate is shut: it never waits (a file read there is drawn exactly).
+static GATE_HOLDER: std::sync::Mutex<Option<std::thread::ThreadId>> = std::sync::Mutex::new(None);
+
+/// [`blue_page`] once the gate opens (at most 10 s), except on the thread that shut it. Every test
+/// here registers it: the first registration stays, so all of them must agree (open, it is
+/// `blue_page`).
+fn gated_blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
+    let here = std::thread::current().id();
+    let holder = *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let t = std::time::Instant::now();
+    while holder != Some(here) && GATE_SHUT.load(std::sync::atomic::Ordering::SeqCst) && t.elapsed().as_secs() < 10 {
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    blue_page(p, bytes)
+}
+
+/// Shut the gate for the calling thread's frames.
+fn shut_gate() {
+    *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(std::thread::current().id());
+    GATE_SHUT.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn open_gate() {
+    GATE_SHUT.store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// Held by the tests that draw placed documents from bitmaps, which share the bitmaps, their
@@ -173,7 +218,7 @@ fn copies_of_one_placed_document_share_its_bitmap() {
 #[test]
 fn nine_large_bitmaps_on_screen_are_not_made_again() {
     let _serial = serial();
-    vectorcraft_doc::placed_document::set_loader(blue_page);
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
     let mut d = Document::new(100.0, 100.0);
     let l = d.layers[0].id;
     let keys: Vec<String> = (0..9).map(|i| format!("nine-{i}")).collect();
@@ -224,6 +269,36 @@ fn a_bitmap_that_cant_be_made_is_not_asked_for_again() {
     assert!(shown != [255, 255, 255] && shown != [0, 0, 255], "the placeholder: {shown:?}");
 }
 
+/// A bitmap made for a frame that marks images whose pixels can't be decoded shows such an image
+/// in the file as a crossed box; one made for a frame that does not shows the art under it.
+#[test]
+fn a_bitmap_marks_undecoded_images_when_the_frame_does() {
+    let d = doc_with("cut-1", b"cut");
+    let Some(NodeKind::PlacedDocument(p)) = d.node(NodeId(50)).map(|n| &n.kind) else { panic!("a placed document") };
+    let Some(blob) = d.images.get("cut-1") else { panic!("the file's bytes") };
+    for mark in [false, true] {
+        // 40 × 20 pixels at one pixel a point; the image covers x 0 to 20.
+        let Some(pm) = placed_document::bitmap(p, blob, 1.0, mark) else { panic!("a bitmap") };
+        let pixel = |x: usize, y: usize| pm.data_as_u8_slice()[(y * 40 + x) * 4..][..4].to_vec();
+        assert_eq!(pixel(30, 10), [0, 0, 255, 255], "mark {mark}: the art beside the image");
+        assert_eq!(pixel(5, 10) != [0, 0, 255, 255], mark, "mark {mark}: the crossed box over the art: {:?}", pixel(5, 10));
+    }
+}
+
+/// Frames with and without marks on undecoded images ask for bitmaps of their own, so a bitmap
+/// made for one is not shown in the other. The file can't be read, so no bitmap is made after
+/// the test ends.
+#[test]
+fn bitmaps_with_and_without_undecoded_marks_are_asked_for_apart() {
+    let _serial = serial();
+    let d = doc_with("marks-1", b"bad");
+    for mark in [false, true] {
+        let opts = RenderOptions { progressive_placed: true, mark_undecoded_images: mark, ..Default::default() };
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    }
+    assert_eq!(placed_document::scheduled("marks-1"), 2, "one for each");
+}
+
 /// Once bitmaps are ready, drawing again where [`placed_area`] says gives what drawing the whole
 /// frame again gives. The area of a file covers every object showing it (a group's member and
 /// an object with a drop shadow too) and no object showing another file; art of a brush or a
@@ -231,7 +306,7 @@ fn a_bitmap_that_cant_be_made_is_not_asked_for_again() {
 #[test]
 fn a_ready_bitmap_draws_again_where_its_file_shows() {
     let _serial = serial();
-    vectorcraft_doc::placed_document::set_loader(blue_page);
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
     let mut d = Document::new(100.0, 100.0);
     for key in ["area-a", "area-b"] {
         d.images.insert(key.into(), ImageBlob::new("application/json", format!("{{\"doc\": \"{key}\"}}").into_bytes()));
@@ -251,7 +326,10 @@ fn a_ready_bitmap_draws_again_where_its_file_shows() {
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), progressive_placed: true, ..Default::default() };
     let mut r = Renderer::new();
     let generation = placed_document::generation();
+    // The first frame shows the placeholders: the worker waits until it is drawn.
+    shut_gate();
     let before = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    open_gate();
     settle();
     let made = placed_document::made_between(generation, placed_document::generation()).expect("known");
     let files = |keys: &[&str]| keys.iter().map(|k| k.to_string()).collect::<std::collections::HashSet<_>>();

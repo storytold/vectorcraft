@@ -18,6 +18,7 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             adv,
             dx: 0.0,
             dy: 0.0,
+            kern_shift: 0.0,
             sx: 1.0,
             sy: 1.0,
             bshift: 0.0,
@@ -38,6 +39,7 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             no_break: false,
             vertical_roman: false,
             cursive: false,
+            hyphen_language: crate::hyphen::Language::English,
         })
         .collect()
 }
@@ -46,6 +48,97 @@ fn source_range(glyphs: &[SGlyph], start: usize, end: usize) -> Range<usize> {
     let first = glyphs.get(start).expect("nonempty source range");
     let last = glyphs.get(end - 1).expect("nonempty source range");
     first.byte..last.byte + last.len
+}
+
+/// Both composers consume language-specific points even when a font subdivides vowel signs.
+#[test]
+fn indic_hyphenation_reaches_both_composers_without_splitting_marks() {
+    let opts = HyphenationOptions { words_longer_than: 0, after_first: 1, before_last: 1, ..Default::default() };
+    for (tag, syllable) in [
+        ("hi", "कि"),
+        ("mr", "कि"),
+        ("gu", "કિ"),
+        ("bn", "কি"),
+        ("pa", "ਕਿ"),
+        ("ta", "கி"),
+        ("te", "కి"),
+        ("kn", "ಕಿ"),
+        ("ml", "കി"),
+        ("or", "କି"),
+        ("as", "কি"),
+    ] {
+        let text = syllable.repeat(8);
+        // Deliberately subdivide each grapheme, as a fallback font may do. Marks are word
+        // characters but must never become a break, even at a shaping cluster boundary.
+        let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), 1.0, ch)).collect();
+        let mut glyphs = synthetic_glyphs(&specs);
+        for glyph in &mut glyphs {
+            glyph.hyphen_language = crate::hyphen::Language::from_tag(Some(tag));
+            glyph.sx = 0.001;
+        }
+        let cands = candidates(&text, &glyphs, Some(&opts), Kinsoku::None);
+        assert_eq!(cands.iter().filter(|b| b.hyphen > 0.0).map(|b| b.end).collect::<Vec<_>>(), (2..16).step_by(2).collect::<Vec<_>>(), "{tag}");
+        let (end, hyphen) = break_line(&text, &glyphs, 0, 4.5, &[], 0.0, Some((&opts, 0.0)), Burasagari::None, Kinsoku::None);
+        assert_eq!((end, hyphen), (4, true), "{tag}");
+        let params = Params { justify_last: false, ragged: true, tolerance: 1.0, uniform_from: 0, hyphen_limit: 0 };
+        let lines = compose(&glyphs, &|_| 4.5, &|_| 0.0, &cands, &[], &params).expect("every-line composition");
+        assert!(lines.iter().any(|(_, hyphen)| *hyphen), "{tag}");
+        assert!(lines.iter().all(|(end, _)| end % 2 == 0), "{tag}: {lines:?}");
+        let limited = Params { hyphen_limit: 1, ..params };
+        if let Some(lines) = compose(&glyphs, &|_| 4.5, &|_| 0.0, &cands, &[], &limited) {
+            assert!(lines.windows(2).all(|pair| !pair[0].1 || !pair[1].1), "{tag}: {lines:?}");
+        }
+    }
+}
+
+#[test]
+fn composition_trim_stays_along_the_line_when_a_character_rotates() {
+    let db = FontDb::with_font_dirs(vec![]);
+    let style = CharStyle::default();
+    let opts = LayoutOptions::default();
+    for angle in [0.0_f64, std::f64::consts::FRAC_PI_4, std::f64::consts::FRAC_PI_2] {
+        let origin = Point::new(100.0, 80.0);
+        let pre = Affine::translate(origin.to_vec2()) * Affine::rotate(angle);
+        let draw = |rotation: f64, lead: f64| {
+            let mut glyph = synthetic_glyphs(&[(0, 1, 30.0, 'A')]).remove(0);
+            glyph.sx = 0.02;
+            glyph.sy = 0.02;
+            glyph.dx = 2.0;
+            glyph.dy = -1.0;
+            glyph.bshift = 4.0;
+            glyph.kern_shift = 3.0;
+            glyph.rotation = rotation;
+            glyph.lead = lead;
+            let mut cx = Ctx {
+                on_path: angle != 0.0,
+                db: &db,
+                text: "A",
+                runs: vec![(0..1, &style)],
+                inlines: vec![None],
+                default: style.clone(),
+                opts: &opts,
+                vertical: false,
+                system_layout: false,
+                fractional_widths: true,
+                upright_cluster: None,
+                out: TextLayout::default(),
+            };
+            cx.emit(&glyph, pre, origin, angle, 30.0 - lead, 0);
+            cx.out.glyphs.remove(0)
+        };
+        let expected = Vec2::new(-angle.cos(), -angle.sin()) * 5.0;
+        for rotation in [0.0, 45.0, 90.0, -90.0] {
+            let (plain, trimmed) = (draw(rotation, 0.0), draw(rotation, 5.0));
+            assert!(!trimmed.outline.elements().is_empty(), "fixture has drawn geometry");
+            let shift = trimmed.xf * Point::ZERO - plain.xf * Point::ZERO;
+            assert!((shift - expected).hypot() < 1e-9, "line {angle}, character {rotation}: {shift:?} versus {expected:?}");
+            let pivot_shift = trimmed.xf * trimmed.pivot - plain.xf * plain.pivot;
+            assert!((pivot_shift - expected).hypot() < 1e-9, "composition moves the turning point along the line: {pivot_shift:?}");
+            let unrotated = draw(0.0, 5.0);
+            let actual = (trimmed.xf * trimmed.unturned).as_coeffs();
+            assert!(actual.iter().zip(unrotated.xf.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-9), "removing rotation keeps composition placement");
+        }
+    }
 }
 
 #[test]

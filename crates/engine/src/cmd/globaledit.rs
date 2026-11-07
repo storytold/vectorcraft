@@ -39,8 +39,8 @@
 //! - of its fills and strokes, each setting that changed (paint, weight, opacity, blending,
 //!   effects, caps, dashes, arrowheads …), as it is: it goes to the member's fill or stroke of the
 //!   same rank (the second fill from the bottom to the second fill), and a member without one is
-//!   left without it. A weight set to 4 pt is 4 pt on a smaller member too. The pen pressure a
-//!   stroke was drawn with stays each member's own;
+//!   left without it. A weight set to 4 pt is 4 pt on a smaller member too. The pen pressure,
+//!   tilt, bearing and rotation a stroke was drawn with stay each member's own;
 //! - a fill or stroke added or removed: a member whose fills and strokes lie in the model's
 //!   former order gains the same item at the same place (or loses the one at that place). A
 //!   member with another order, and any other change to the list (items moved, or several added
@@ -59,8 +59,15 @@
 //! opacity, blending, fills and effects). When the model group gains or loses objects, or one of
 //! them becomes another kind of object, each member takes the model's objects at that level
 //! whole, keeping its own ids in order. At most [`MAX_MEMBERS`] objects are taken, so that a huge
-//! document can't stall the start or every edit. Rotated copies and excluding a member with a
-//! Shift-click are not covered.
+//! document can't stall the start or every edit.
+//!
+//! In the how-to above, a Shift-click on one of the found objects takes it out of the edit. Here a
+//! Shift-click (not a Shift-drag) with the Selection tool on a highlighted member, or on an object
+//! inside it, leaves that member out (`select.globalEditExclude`): it is no longer highlighted,
+//! and later edits leave it as it is.
+//! The object the edit started from can't be left out (a Shift-click on it selects it or
+//! deselects it as before), Global Edit ends when fewer than two members are left, and leaving
+//! one out is not an undo step. Rotated copies are not covered.
 
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -68,10 +75,11 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, Nod
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect, Shape};
 
 use super::wand::{fill_of, stroke_of};
-use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc};
+use super::{CommandSpec, Result, Session, bad, bool_or, checked_id, cmd, has_doc};
 
 const C: &str = "select.globalEdit";
 const OPTIONS: &str = "select.globalEditOptions";
+const EXCLUDE: &str = "select.globalEditExclude";
 /// The most objects a Global Edit takes, the selected one included.
 pub const MAX_MEMBERS: usize = 10_000;
 const UNSUPPORTED: &str = "Global Edit works on paths, compound paths, symbol instances and groups of them";
@@ -95,6 +103,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{appearance?: bool, size?: bool, artboards?: \"all\" | range such as \"1, 3-5\", includeCanvas?: bool} set the options Start Global Edit matches with (defaults: shape only, all artboards, objects on the canvas included) → {appearance, size, artboards, includeCanvas, count: the objects Start Global Edit would take now (0 unless one supported object is selected)}",
             has_doc,
             set_options
+        ),
+        cmd!(
+            "select.globalEditExclude",
+            "Leave Out of Global Edit",
+            [],
+            None,
+            "{id} while Global Edit is on: leave the object `id` of the Global Edit (not the one it started from) out of it, as a Shift-click on it with the Selection tool does: it is no longer highlighted and later edits leave it as it is; with fewer than two objects left, Global Edit ends; not an undo step → {active, count, ids} (the objects left in it; none once it has ended)",
+            is_on,
+            exclude
         ),
     ]
 }
@@ -245,7 +262,59 @@ impl Form {
 /// type, linked files, objects with an opacity mask, clipping paths or guides (the help page lists
 /// images, text, masks and links as unsupported).
 fn supported(n: &Node) -> bool {
-    n.extras().mask.is_none() && Form::of(n).is_some()
+    n.extras().mask.is_none() && has_form(n)
+}
+
+/// Does [`Form::of`] give `n` a form? The same walk and the same box, without collecting the
+/// points or placing them in a unit box.
+fn has_form(n: &Node) -> bool {
+    let mut b = None;
+    form_box(n, 0, &mut b).is_some()
+        && b.is_some_and(|b: Rect| {
+            let side = b.width().max(b.height());
+            side.is_finite() && side > 1e-9
+        })
+}
+
+/// [`Form::add`] without the form: `b` grows by each point it would add; `None` when `n` isn't
+/// supported.
+fn form_box(n: &Node, depth: usize, b: &mut Option<Rect>) -> Option<()> {
+    match &n.kind {
+        NodeKind::Path { path, clipping, guide: false, .. } if !*clipping || depth > 0 => grow_by_path(b, path),
+        NodeKind::Compound { children, .. } => {
+            for c in children {
+                grow_by_path(b, c.path_data()?);
+            }
+        }
+        NodeKind::SymbolInstance { xf, .. } => {
+            for p in [*xf * Point::ZERO, *xf * Point::new(1.0, 0.0), *xf * Point::new(0.0, 1.0)] {
+                grow(b, p);
+            }
+        }
+        NodeKind::Group { children, .. } if plain_group(n) && depth < vectorcraft_doc::MAX_DEPTH => {
+            for c in children {
+                if c.extras().mask.is_some() {
+                    return None;
+                }
+                form_box(c, depth + 1, b)?;
+            }
+        }
+        _ => return None,
+    }
+    Some(())
+}
+
+fn grow_by_path(b: &mut Option<Rect>, path: &PathData) {
+    for a in path.subpaths.iter().flat_map(|sp| &sp.anchors) {
+        for p in [a.p, a.h_in, a.h_out] {
+            grow(b, p);
+        }
+    }
+}
+
+/// `b` grown to take in `p`, as [`Form::of`] measures its points.
+fn grow(b: &mut Option<Rect>, p: Point) {
+    *b = Some(b.unwrap_or(Rect::from_points(p, p)).union_pt(p));
 }
 
 /// A plain group (a clip group too), not one that is live art (a graph, Shaper group, dimension,
@@ -357,8 +426,9 @@ fn can_toggle(s: &Session) -> std::result::Result<(), String> {
     let [id] = st.selection.objects.as_slice() else {
         return Err(if st.selection.is_empty() { "nothing selected" } else { "select one object" }.into());
     };
-    // A group's contents are checked when Global Edit starts: building its shape here would walk
-    // every object in it each time the menu or the Properties panel asks.
+    // A group's contents are checked when Global Edit starts: measuring them here would walk
+    // every object in it each time the menu or the Properties panel asks. Other objects are
+    // measured ([`supported`]), not reduced to their form: the Control bar asks every frame.
     match st.doc.node(*id) {
         Some(n) if n.extras().mask.is_none() && plain_group(n) => Ok(()),
         Some(n) if supported(n) => Ok(()),
@@ -385,13 +455,42 @@ fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "active": true, "count": ids.len(), "ids": ids }))
 }
 
+fn is_on(s: &Session) -> std::result::Result<(), String> {
+    match s.active() {
+        None => Err("no document open".into()),
+        Some(st) if st.global_edit.is_none() => Err("Global Edit is off".into()),
+        Some(_) => Ok(()),
+    }
+}
+
+/// Leave one object out of the Global Edit (a Shift-click on it): not the object it started from.
+fn exclude(s: &mut Session, p: &Value) -> Result<Value> {
+    let id = checked_id(s, p.get("id").ok_or_else(|| bad(EXCLUDE, "missing id"))?, EXCLUDE)?;
+    let st = s.doc_mut()?;
+    let Some(ge) = &mut st.global_edit else { return Err(bad(EXCLUDE, "Global Edit is off")) };
+    match ge.members.iter().position(|(m, _)| *m == id) {
+        Some(i) if i > 0 => {
+            ge.members.remove(i);
+        }
+        _ => return Err(bad(EXCLUDE, "only an object of the Global Edit other than the one it started from can be left out")),
+    }
+    let ids: Vec<u64> = if ge.members.len() < 2 {
+        st.global_edit = None;
+        vec![]
+    } else {
+        ge.members.iter().map(|(id, _)| id.0).collect()
+    };
+    st.revision += 1;
+    Ok(json!({ "active": !ids.is_empty(), "count": ids.len(), "ids": ids }))
+}
+
 fn set_options(s: &mut Session, p: &Value) -> Result<Value> {
     let o = s.global_edit_options.with(p, &s.doc()?.doc, OPTIONS)?;
     s.global_edit_options = o.clone();
     Ok(o.json(match_count(s)))
 }
 
-/// How many objects Start Global Edit would take now with the session's options (the Result(s)
+/// How many objects Start Global Edit would take now with the session's options (the Results
 /// line of the options): 0 unless one supported object is selected.
 pub fn match_count(s: &Session) -> usize {
     match s.active() {
@@ -559,7 +658,8 @@ fn give_appearance(a: &Appearance, b: &Appearance, m: &Appearance, n: &mut Share
 }
 
 /// Give the member's fill or stroke `n` the settings of the model's that changed from `a` to `b`,
-/// with the values of `m` (`b` placed on the member). A stroke's pen pressure stays its own.
+/// with the values of `m` (`b` placed on the member). A stroke's pen pressure, tilt, bearing and
+/// rotation stay its own.
 fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut AppearanceItem) {
     use AppearanceItem::{Fill, Stroke};
     match (a, b, m, n) {
@@ -589,6 +689,9 @@ fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut
                 overprint,
                 gradient_mode,
                 pressure: _,
+                tilt: _,
+                bearing: _,
+                rotation: _,
             } = m;
             give_fields!(a, b, n: paint, width, cap, join, miter_limit, align, dash, start_arrow, end_arrow, arrow_scale, profile, brush, opacity, blend, visible, effects, arrow_align, overprint, gradient_mode);
         }
@@ -670,8 +773,9 @@ pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, se
     edited
 }
 
-/// The outlines of the members of the active document's Global Edit that are not selected, in
-/// their layer's colour: the canvas highlights them while Global Edit is on.
+/// The outlines of the members of the active document's Global Edit that are not selected, hold
+/// no selected object and sit inside no selected object, in their layer's colour: the canvas
+/// highlights them while Global Edit is on.
 pub fn highlights(s: &Session) -> Outlines {
     let Some(st) = s.active() else { return vec![] };
     let Some(ge) = &st.global_edit else { return vec![] };
@@ -686,6 +790,9 @@ pub fn highlights(s: &Session) -> Outlines {
         .iter()
         .filter_map(|(id, _)| {
             let n = st.doc.node(*id).filter(|n| !holds(n, &st.selection.objects))?;
+            if st.doc.ancestry(*id).is_some_and(|a| a.iter().any(|p| st.selection.objects.contains(p))) {
+                return None;
+            }
             let path = match n.stroke_path() {
                 Some(p) => p,
                 None => n.geometric_bounds_with(&symbols)?.to_path(0.1),
@@ -695,4 +802,196 @@ pub fn highlights(s: &Session) -> Outlines {
         .collect();
     *ge.outlines.borrow_mut() = Some((st.revision, out.clone()));
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use vectorcraft_doc::OpacityMask;
+    use vectorcraft_geom::{Anchor, SubPath};
+
+    /// Global Edit's support as it was decided by building the form.
+    fn by_form(n: &Node) -> bool {
+        n.extras().mask.is_none() && Form::of(n).is_some()
+    }
+
+    /// A small seeded generator (xorshift64*), so that a failure repeats.
+    struct Rng(u64);
+
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 >> 12;
+            self.0 ^= self.0 << 25;
+            self.0 ^= self.0 >> 27;
+            self.0.wrapping_mul(0x2545_f491_4f6c_dd1d)
+        }
+        fn below(&mut self, n: u64) -> u64 {
+            self.next() % n
+        }
+        fn unit(&mut self) -> f64 {
+            (self.next() >> 11) as f64 / (1u64 << 53) as f64
+        }
+        /// A spread for the points of one object: none, below and around the smallest size a form
+        /// takes, ordinary, or past every bound.
+        fn spread(&mut self) -> f64 {
+            [0.0, 1e-10, 5e-10, 1e-9, 2e-9, 1.0, 1.0, 100.0, 100.0, 100.0, f64::INFINITY, f64::NAN][self.below(12) as usize]
+        }
+        fn point(&mut self, base: Point, spread: f64) -> Point {
+            let mut c = |b: f64| match self.below(400) {
+                0 => f64::NAN,
+                1 => f64::INFINITY,
+                2 => f64::NEG_INFINITY,
+                _ => b + (self.unit() - 0.5) * spread,
+            };
+            Point::new(c(base.x), c(base.y))
+        }
+    }
+
+    fn path_data(r: &mut Rng) -> PathData {
+        let (base, spread) = (Point::new(r.unit() * 200.0, r.unit() * 200.0), r.spread());
+        let subpaths = (0..r.below(3))
+            .map(|_| {
+                let anchors = (0..r.below(4))
+                    .map(|_| Anchor { p: r.point(base, spread), h_in: r.point(base, spread), h_out: r.point(base, spread), ..Anchor::corner(base) })
+                    .collect();
+                SubPath::new(anchors, r.below(2) == 0)
+            })
+            .collect();
+        PathData::new(subpaths)
+    }
+
+    /// A random object: paths (clipping paths and guides too), compound paths, symbol instances,
+    /// groups (clip groups, live art, members with an opacity mask), type, blends and intertwined
+    /// objects, any of them with an opacity mask.
+    fn object(r: &mut Rng, d: &mut Document, text: &Node, depth: usize) -> Node {
+        let leaf = depth >= 3;
+        let mut n = match r.below(if leaf { 4 } else { 8 }) {
+            0 | 1 => {
+                let mut n = Node::path(d.alloc_id(), path_data(r), Appearance::default());
+                if let NodeKind::Path { clipping, guide, .. } = &mut n.kind {
+                    *clipping = r.below(6) == 0;
+                    *guide = r.below(8) == 0;
+                }
+                n
+            }
+            2 => {
+                let xf = match r.below(4) {
+                    0 => Affine::scale(0.0),
+                    1 => Affine::scale(1e-10),
+                    _ => Affine::translate((r.unit() * 100.0, r.unit() * 100.0)) * Affine::scale(r.spread()),
+                };
+                Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "s".into(), xf })
+            }
+            3 => {
+                let mut t = text.clone();
+                t.id = d.alloc_id();
+                t
+            }
+            4 => {
+                let children = (0..r.below(4))
+                    .map(|_| match r.below(5) {
+                        0 => Arc::new(object(r, d, text, depth + 1)),
+                        _ => Arc::new(Node::path(d.alloc_id(), path_data(r), Appearance::default())),
+                    })
+                    .collect();
+                Node::new(d.alloc_id(), NodeKind::Compound { children, rule: vectorcraft_geom::FillRule::NonZero })
+            }
+            5 => {
+                let children = (0..r.below(3)).map(|_| Arc::new(object(r, d, text, depth + 1))).collect();
+                Node::new(d.alloc_id(), NodeKind::Blend { children, spec: Box::default() })
+            }
+            _ => {
+                let children = (0..r.below(4)).map(|_| Arc::new(object(r, d, text, depth + 1))).collect();
+                let mut g = Node::new(d.alloc_id(), NodeKind::Group { children, clip: r.below(3) == 0 });
+                if r.below(8) == 0 {
+                    g.extras_mut().trace = Some(Box::new(Value::Null));
+                }
+                g
+            }
+        };
+        if r.below(10) == 0 {
+            n.extras_mut().mask = Some(Box::new(OpacityMask::new(Node::path(d.alloc_id(), path_data(r), Appearance::default()), true)));
+        }
+        n
+    }
+
+    /// `n` and every object in it.
+    fn every(n: &Node) -> Vec<Node> {
+        let mut out = vec![];
+        n.walk(&mut |c| out.push(c.clone()));
+        out
+    }
+
+    #[test]
+    fn support_is_decided_as_building_the_form_decides() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+        let t = NodeId(s.execute("text.create", &json!({"x": 50, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+        let text = s.doc().unwrap().doc.node(t).unwrap().clone();
+        let layer = s.doc().unwrap().doc.layers[0].id;
+        let (mut checked, mut taken, mut asked) = (0, 0, 0);
+        for seed in 1..=400u64 {
+            let mut r = Rng(seed.wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1);
+            let n = object(&mut r, Arc::make_mut(&mut s.doc_mut().unwrap().doc), &text, 0);
+            for c in every(&n) {
+                assert_eq!(supported(&c), by_form(&c), "seed {seed}: {c:?}");
+                checked += 1;
+                taken += usize::from(by_form(&c));
+            }
+            // The enabled check of Start Global Edit on it, and Start Global Edit itself.
+            let id = Arc::make_mut(&mut s.doc_mut().unwrap().doc).insert(Some(layer), usize::MAX, n.clone()).unwrap();
+            s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+            if s.doc().unwrap().selection.objects != [id] {
+                continue;
+            }
+            asked += 1;
+            let today = n.extras().mask.is_none() && plain_group(&n) || by_form(&n);
+            assert_eq!(can_toggle(&s).is_ok(), today, "seed {seed}");
+            match s.execute(C, &json!({})) {
+                Ok(_) => {
+                    assert!(by_form(&n), "seed {seed}");
+                    s.execute(C, &json!({})).unwrap();
+                }
+                Err(e) => assert_eq!(e.to_string().contains(UNSUPPORTED), !by_form(&n), "seed {seed}: {e}"),
+            }
+        }
+        // Both answers came up often, and most objects could be selected alone.
+        assert!(taken > 100 && checked - taken > 100 && asked > 200, "{taken} of {checked}, {asked} selected");
+    }
+
+    #[test]
+    fn support_of_empty_degenerate_and_deep_objects_is_decided_as_building_the_form_decides() {
+        let mut d = Document::new(800.0, 600.0);
+        let corner = |x: f64, y: f64| Anchor::corner(Point::new(x, y));
+        let path = |d: &mut Document, subpaths: Vec<SubPath>| Node::path(d.alloc_id(), PathData::new(subpaths), Appearance::default());
+        let mut cases = vec![
+            path(&mut d, vec![]),
+            path(&mut d, vec![SubPath::new(vec![], true)]),
+            path(&mut d, vec![SubPath::new(vec![corner(5.0, 5.0)], false)]),
+            path(&mut d, vec![SubPath::new(vec![corner(0.0, 0.0), corner(0.0, 1e-9)], false)]),
+            path(&mut d, vec![SubPath::new(vec![corner(0.0, 0.0), corner(0.0, 2e-9)], false)]),
+            path(&mut d, vec![SubPath::new(vec![corner(0.0, 0.0), corner(f64::INFINITY, 0.0)], false)]),
+            path(&mut d, vec![SubPath::new(vec![corner(f64::NAN, 0.0), corner(10.0, 0.0), corner(0.0, 0.0)], false)]),
+            path(&mut d, vec![SubPath::new(vec![corner(f64::NAN, f64::NAN)], false)]),
+            Node::new(d.alloc_id(), NodeKind::Compound { children: vec![], rule: Default::default() }),
+            Node::group(d.alloc_id(), vec![]),
+            Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "s".into(), xf: Affine::scale(0.0) }),
+            Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "s".into(), xf: Affine::IDENTITY }),
+        ];
+        // A group as deep as the walk goes, and one level deeper.
+        let mut deep = path(&mut d, vec![SubPath::new(vec![corner(0.0, 0.0), corner(10.0, 10.0)], false)]);
+        for _ in 0..=vectorcraft_doc::MAX_DEPTH {
+            deep = Node::group(d.alloc_id(), vec![Arc::new(deep)]);
+            cases.push(deep.clone());
+        }
+        let expected = [false, false, false, false, true, false, true, false, false, false, false, true];
+        for (i, n) in cases.iter().enumerate() {
+            assert_eq!(supported(n), by_form(n), "case {i}: {n:?}");
+            if let Some(e) = expected.get(i) {
+                assert_eq!(supported(n), *e, "case {i}");
+            }
+        }
+        assert!(supported(&cases[cases.len() - 2]) && !supported(&cases[cases.len() - 1]));
+    }
 }

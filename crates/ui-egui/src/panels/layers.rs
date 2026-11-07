@@ -69,7 +69,7 @@ use model::{push_rows, rows_of_doc};
 use rows::{drag_ghost, key, rename_id, resolve_click, row};
 #[cfg(test)]
 use thumbs::THUMBS;
-pub(crate) use thumbs::{ThumbSource, node_arc, real_thumb, thumb_options};
+pub(crate) use thumbs::{ThumbSource, node_arc, real_thumb, retain_open_thumbs, show_thumbs_of, thumb_options};
 
 /// Width of the eye and the lock columns.
 const COLUMN: f32 = 25.0;
@@ -178,8 +178,13 @@ struct Out {
     toggle: Vec<(NodeId, bool)>,
 }
 
+/// The panel state that says the Layers panel's rows have the keyboard ([`super::has_row_keys`]).
+pub(crate) const ROW_KEYS: &str = "ly-keys";
+
+/// The Layers panel: the layer tree with its click, drag and rename rules and the bottom buttons; Delete/Backspace after a row click delete the highlighted rows.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
+    show_thumbs_of(app.session.active().map(|st| st.uid));
     let Some(st) = app.session.active() else { return };
     // A rename belongs to the document it started in (node ids are per document): drop it when
     // another document shows, so it can't rename that document's node with the same id.
@@ -245,7 +250,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(id) = located {
         open_around(app, &doc, &[id]);
     }
-    let reveal = located.or(reveal);
+    // A row Rename (`ui.rename`) opened the name field of comes into view first.
+    let renamed = ui.data_mut(|d| d.remove_temp::<NodeId>(key("rename-reveal")));
+    let reveal = renamed.or(located).or(reveal);
     let Some(st) = app.session.active() else { return };
     let list = rows_of_doc(ui, st, &app.ui.layers_panel, &query, &app.ui.layers_filter);
     let view = View {
@@ -346,18 +353,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !released
         && let Some(drag) = egui::DragAndDrop::payload::<LayersDrag>(ui.ctx())
         && let LayersDrag::Rows(ids) = &*drag
-        && let Some(src) = ids.first()
+        && let Some(&grabbed) = ui.data(|d| d.get_temp::<NodeId>(key("grabbed"))).as_ref().or(ids.first())
         && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
     {
-        drag_ghost(ui, &view, *src, pos);
+        drag_ghost(ui, &view, widgets::ghost_row(ids, grabbed), pos);
     }
     // Keyboard: Delete removes the highlighted rows while the panel has the keyboard (a row was
     // clicked last, not the canvas).
+    // The panel keeps it while it is drawn ([`super::has_row_keys`]); the app's shortcuts leave
+    // Delete and Backspace to it meanwhile ([`super::rows_take_delete`]).
     let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));
-    if pressed_outside {
-        ui.data_mut(|d| d.insert_temp(key("focus"), false));
-    }
-    let focus: bool = ui.data(|d| d.get_temp(key("focus"))).unwrap_or(false);
+    let focus = super::has_row_keys(ui.ctx(), ROW_KEYS) && !pressed_outside;
+    super::set_row_keys(ui.ctx(), ROW_KEYS, focus);
     if focus
         && !view.rows.is_empty()
         && ui.ctx().memory(|m| m.focused().is_none())
@@ -370,6 +377,58 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run(&c, p).ok();
     }
     see_selection(app, ui, selected);
+}
+
+/// The search typed into the Layers panel's Search All field, as the panel matches it.
+fn search_query(ctx: &egui::Context) -> String {
+    ctx.data(|d| d.get_temp::<String>(egui::Id::unique("layers-search"))).unwrap_or_default().trim().to_lowercase()
+}
+
+/// `ui.rename {id?}`: open the Layers panel's name field on the row of layer, group or object
+/// `id`, as double-clicking the row's name does: Enter renames it (`layer.setProps`, one undo
+/// step), Escape leaves the name as it was. Without `id`, the row Rename names is the Layers
+/// panel's highlighted row when a row was clicked last, else the one selected object or group,
+/// else the one highlighted row, else the current layer. Several of them, or a row the panel's
+/// search, filter or Show Layers Only leaves out, is an error that opens nothing.
+pub fn rename(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let ctx = app.ui_ctx.clone().ok_or("the Layers panel is not shown")?;
+    let st = app.session.active().ok_or("no document open")?;
+    let one = |ids: &[NodeId]| match ids {
+        [id] => Ok(*id),
+        _ => Err("select one layer, group or object to rename".to_string()),
+    };
+    let id = match p.get("id") {
+        Some(v) => {
+            let id = NodeId(v.as_u64().ok_or_else(|| format!("`id` is an object id, not {v}"))?);
+            st.doc.node(id).map(|_| id).ok_or("no such layer or object")?
+        }
+        None => {
+            let rows = st.highlighted_rows();
+            let selected = &st.selection.objects;
+            let rows_first = super::has_row_keys(&ctx, ROW_KEYS) || selected.is_empty();
+            if rows_first && !rows.is_empty() {
+                one(&rows)?
+            } else if !selected.is_empty() {
+                one(selected)?
+            } else {
+                st.current_layer().ok_or("no layer to rename")?
+            }
+        }
+    };
+    let doc = st.doc.clone();
+    let node = doc.node(id).ok_or("no such layer or object")?;
+    if !listed_when_opened(&doc, &st.layers_open, &app.ui.layers_panel, &search_query(&ctx), &app.ui.layers_filter, id) {
+        return Err("the Layers panel's search, filter or Show Layers Only hides its row".into());
+    }
+    let name = node.identify_label(app.session.prefs.identify_objects_by == "xmlId");
+    crate::panel_docking::reveal_panel(app, "layers")?;
+    open_around(app, &doc, &[id]);
+    ctx.data_mut(|d| {
+        d.insert_temp(rename_id(), (id.0, name.clone()));
+        d.insert_temp(key("rename-reveal"), id);
+    });
+    ctx.request_repaint();
+    Ok(json!({ "id": id.0, "name": name }))
 }
 
 /// Open the layers and groups around rows `ids`.

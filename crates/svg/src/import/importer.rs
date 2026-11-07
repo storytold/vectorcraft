@@ -1,4 +1,4 @@
-use super::convert::{aff, bezpath, blend, clip_shapes, gradient_stops, is_plain, made_up, rule, uncut, unique_name, without_ids};
+use super::convert::{aff, bezpath, blend, clip_shapes, drawn_ellipse, gradient_stops, is_plain, made_up, rule, uncut, unique_name, without_ids};
 use super::layers::filter_names;
 use super::prepass::link;
 use super::{
@@ -7,6 +7,7 @@ use super::{
     StrokeLayer, Vec2, fnv1a, fx, shapes, spread, text, vector_effect,
 };
 use crate::SvgError;
+use kurbo::BezPath;
 
 /// How many clip paths deep (`<clipPath clip-path>`) an object's clip is read.
 const MAX_CLIP_NEST: usize = 16;
@@ -103,9 +104,10 @@ impl Importer {
         }
     }
 
-    /// A gradient's stops, midpoints restored.
+    /// A gradient's stops, midpoints restored, and mixed in linear light when it asks for that.
     fn stops(&self, g: &usvg::BaseGradient) -> Vec<GradientStop> {
-        gradient_stops(g, self.midpoints.get(g.id()).map(Vec::as_slice))
+        let stops = gradient_stops(g, self.midpoints.get(g.id()).map(Vec::as_slice));
+        if self.linear_rgb.contains(g.id()) { super::linear_rgb::bake(stops) } else { stops }
     }
 
     /// The object name for an element id: its label (see [`labels`]), else the id itself.
@@ -143,7 +145,10 @@ impl Importer {
         let url = self.links.get(g.id()).cloned();
         let mut n = match self.instance(g, acc) {
             Some(n) => n,
-            None => self.group_node(g, acc)?,
+            None => {
+                let n = self.group_node(g, acc)?;
+                self.filter_regions(g, acc * aff(g.transform()), n)?
+            }
         };
         if let Some(url) = url {
             link(&mut n, &url);
@@ -183,7 +188,10 @@ impl Importer {
             Some(made) if whole && made.art == without_ids(&art) && made.reuse.allows(xf) => made.name.clone(),
             Some(_) => return None,
             None => {
-                let name = unique_name(self.name_of(&sym), |n| self.doc.symbols.iter().any(|s| s.name == n));
+                let base = self.name_of(&sym).to_string();
+                let names = &self.symbol_names;
+                let name = unique_name(&base, &mut self.symbol_suffixes, |n| names.contains(n));
+                self.symbol_names.insert(name.clone());
                 let reuse = Reuse::of(&self.doc, &art);
                 let made = SymbolMade { name: name.clone(), art: without_ids(&art), reuse };
                 self.doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
@@ -356,6 +364,58 @@ impl Importer {
         Some(n)
     }
 
+    /// `n`, made of group `g` (whose user space `ts` maps to the document), clipped to the regions
+    /// of the filters it imported as effects: SVG 1.1 §15.5
+    /// (<https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion>) cuts a filter's result at
+    /// its region. A filter that didn't import (drawn without it) clips nothing.
+    fn filter_regions(&mut self, g: &usvg::Group, ts: Affine, mut n: Node) -> Option<Node> {
+        if g.filters().is_empty() || fx::effects(g.filters(), ts, &self.blends).is_none() {
+            return Some(n);
+        }
+        for f in g.filters() {
+            n = self.region_clipped(n, f.rect(), ts)?;
+        }
+        Some(n)
+    }
+
+    /// `n` in a clip group cut to `region` (a filter's or mask's, in the user space `ts` maps to
+    /// the document), unless all it paints (its visual bounds, grown by the reach of its effects)
+    /// lies inside the region. `None` only past the object limit.
+    fn region_clipped(&mut self, n: Node, region: usvg::NonZeroRect, ts: Affine) -> Option<Node> {
+        let r = Rect::new(region.left() as f64, region.top() as f64, region.right() as f64, region.bottom() as f64);
+        let det = ts.determinant();
+        let Some(bounds) = n.visual_bounds_with(&self.doc.symbol_boxes()) else { return Some(n) };
+        if !det.is_finite() || det.abs() < 1e-12 {
+            return Some(n);
+        }
+        // A clip group paints inside its clipping path; anything else as far as its effects reach
+        // (as export sizes the filter regions it writes: an Outer Glow grows by a quarter of a
+        // raster pixel first).
+        let reach = if matches!(n.kind, NodeKind::Group { clip: true, .. }) {
+            0.0
+        } else {
+            let grow = 18.0 / self.doc.raster_ppi();
+            vectorcraft_effects::raster_effects(&n.appearance.effects)
+                .iter()
+                .map(|f| f.outset(bounds) + if matches!(f, vectorcraft_effects::RasterFx::OuterGlow { .. }) { grow } else { 0.0 })
+                .sum()
+        };
+        let painted = bounds.inflate(reach, reach);
+        let to_user = ts.inverse();
+        let eps = 1e-6 * (1.0 + r.width().max(r.height()));
+        let inside =
+            [(painted.x0, painted.y0), (painted.x1, painted.y0), (painted.x1, painted.y1), (painted.x0, painted.y1)].into_iter().all(|(x, y)| {
+                let p = to_user * Point::new(x, y);
+                p.x >= r.x0 - eps && p.x <= r.x1 + eps && p.y >= r.y0 - eps && p.y <= r.y1 + eps
+            });
+        if inside {
+            return Some(n);
+        }
+        let path = shapes::rectangle(r).transformed(ts);
+        let clip = self.named("", NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: true, guide: false })?;
+        self.named("", NodeKind::Group { children: vec![Arc::new(clip), Arc::new(n)], clip: true })
+    }
+
     /// `<mask>` → opacity mask. An alpha mask's art comes in white with its opacity kept, so its
     /// luminance is its alpha (images in it keep their colours, with a warning). A mask our export wrote gets its
     /// options back ([`mask_flags`]) and its art without what stands for them: the inverting
@@ -365,6 +425,7 @@ impl Importer {
             self.warn(format!("nested mask on {label} ignored"));
         }
         let (clip, invert) = self.mask_flags.get(m.id()).copied().unwrap_or((true, false));
+        let user = ts;
         let (mut nodes, mut ts) = (m.root().children(), ts);
         if invert
             && let [usvg::Node::Group(g)] = nodes
@@ -392,6 +453,9 @@ impl Importer {
             1 => Arc::unwrap_or_clone(children.pop()?),
             _ => self.named("", NodeKind::Group { children, clip: false })?,
         };
+        // SVG 1.1 §14.4 (https://www.w3.org/TR/SVG11/masking.html#MaskElement): the mask's art
+        // counts only inside its region.
+        let art = self.region_clipped(art, m.rect(), user)?;
         let mut mask = vectorcraft_doc::OpacityMask::new(art, clip);
         mask.invert = invert;
         Some(Box::new(mask))
@@ -443,19 +507,32 @@ impl Importer {
     }
 
     fn clip_node(&mut self, cp: &usvg::ClipPath, ts: Affine) -> Option<Node> {
-        let shapes = clip_shapes(cp, ts);
-        if shapes.is_empty() {
+        let mut shapes = clip_shapes(cp, ts);
+        let id = cp.id().to_string();
+        if shapes.len() == 1 {
+            let (bp, r) = shapes.pop()?;
+            let kind = self.clip_shape(&bp, r, true)?;
+            return self.named(&id, kind);
+        }
+        // SVG 1.1 §14.3.5: the clip is the union of the children's silhouettes, each under its own
+        // clip-rule, so they don't cancel or share one rule: a group of them, which clips to that
+        // union (`Node::clip_shapes`).
+        let mut children = Vec::with_capacity(shapes.len());
+        for (bp, r) in &shapes {
+            let kind = self.clip_shape(bp, *r, false)?;
+            children.push(Arc::new(Node::new(self.alloc_id()?, kind)));
+        }
+        if children.is_empty() {
             return None;
         }
-        let r = shapes[0].1;
-        let mut subs = Vec::new();
-        for (bp, _) in &shapes {
-            subs.extend(PathData::from_bezpath(bp).subpaths);
-        }
-        let id = cp.id().to_string();
+        self.named(&id, NodeKind::Group { children, clip: false })
+    }
+
+    /// One clip path child: a path, or a compound path of its subpaths when it has several.
+    fn clip_shape(&mut self, bp: &BezPath, r: FillRule, clipping: bool) -> Option<NodeKind> {
+        let subs = PathData::from_bezpath(bp).subpaths;
         if subs.len() == 1 {
-            let path = PathData::new(subs);
-            return self.named(&id, NodeKind::Path { path, rule: r, live: None, clipping: true, guide: false });
+            return Some(NodeKind::Path { path: PathData::new(subs), rule: r, live: None, clipping, guide: false });
         }
         let mut children = Vec::with_capacity(subs.len());
         for sp in subs {
@@ -463,7 +540,7 @@ impl Importer {
             children
                 .push(Arc::new(Node::new(nid, NodeKind::Path { path: PathData::single(sp), rule: r, live: None, clipping: false, guide: false })));
         }
-        self.named(&id, NodeKind::Compound { children, rule: r })
+        Some(NodeKind::Compound { children, rule: r })
     }
 
     /// A usvg paint mapped by `m`, for art covering `area` (after `m`: where a reflected or
@@ -541,7 +618,8 @@ impl Importer {
         let art = self.named("", NodeKind::Group { children, clip: true });
         let Some(art) = art else { return Paint::None };
         let base = if pt.id().is_empty() { "Pattern" } else { pt.id() };
-        let name = unique_name(base, |n| self.doc.pattern(n).is_some());
+        let doc = &self.doc;
+        let name = unique_name(base, &mut self.pattern_suffixes, |n| doc.pattern(n).is_some());
         let mut def = PatternDef::new(&name, vec![Arc::new(art)]);
         def.tile = tile;
         self.doc.patterns.push(def);
@@ -601,7 +679,8 @@ impl Importer {
         if !p.is_visible() {
             return None;
         }
-        let path = PathData::from_bezpath(&bezpath(p.data(), acc));
+        let ellipse = if self.ellipses.contains(p.id()) { drawn_ellipse(p.data()) } else { None };
+        let path = ellipse.map_or_else(|| PathData::from_bezpath(&bezpath(p.data(), acc)), |e| e.transformed(acc));
         if path.is_empty() {
             return None;
         }
@@ -683,9 +762,10 @@ impl Importer {
             std::mem::take(&mut self.non_scaling),
             std::mem::take(&mut self.data),
             std::mem::take(&mut self.events),
+            std::mem::take(&mut self.ellipses),
         );
         let art = self.group_node(tree.root(), acc);
-        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events) = outer;
+        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events, self.ellipses) = outer;
         art
     }
 }
@@ -708,10 +788,14 @@ mod tests {
             slots: TextSlots::default(),
             patterns: HashMap::new(),
             midpoints: HashMap::new(),
+            linear_rgb: HashSet::new(),
             labels: HashMap::new(),
             hidden: HashSet::new(),
             uses: HashMap::new(),
             symbols: HashMap::new(),
+            symbol_names: HashSet::new(),
+            symbol_suffixes: HashMap::new(),
+            pattern_suffixes: HashMap::new(),
             blends: HashMap::new(),
             files: Files::default(),
             non_scaling: HashSet::new(),
@@ -720,6 +804,7 @@ mod tests {
             foreign: HashMap::new(),
             sublayers: HashSet::new(),
             sublayer_groups: HashSet::new(),
+            ellipses: HashSet::new(),
             screen: 1.0,
             converted_nodes: 0,
             max_nodes: 1000,

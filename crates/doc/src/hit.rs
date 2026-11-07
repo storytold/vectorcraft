@@ -6,9 +6,10 @@ use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
 use vectorcraft_geom::hit::{fill_contains, stroke_contains};
-use vectorcraft_geom::{BezPath, FillRule, Point, Rect};
+use vectorcraft_geom::kurbo::ParamCurveNearest;
+use vectorcraft_geom::{BezPath, FillRule, PathData, PathSeg, Point, Rect};
 
-use crate::{AppearanceItem, Document, Node, NodeId, NodeKind, SymbolBoxes};
+use crate::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, SymbolBoxes};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HitKind {
@@ -508,8 +509,9 @@ fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(No
         && let Some(isolated) = doc.node(scope)
         && let Some(mut chain) = doc.ancestry(scope)
     {
-        // Isolated before its artboard was locked: nothing in it hits.
-        if locks.holds_id(scope) {
+        // Isolated before its artboard, or its layer or a group around it, was locked or hidden:
+        // nothing in it hits (#5309).
+        if !doc.is_editable_with(&locks, scope) {
             return None;
         }
         if isolated.is_container() {
@@ -577,7 +579,41 @@ fn may_hit(parent: &Node, i: usize, c: &Node, p: Point, opt: HitOptions, symbols
     // (An envelope's content sits where it was, not where the envelope draws it.)
     edits_contents(c)
         || c.extras().shaper.is_some() && source_of(c, opt.scope)
-        || c.reach_bounds_with(symbols).is_none_or(|b| b.inflate(opt.tol, opt.tol).contains(p))
+        || cull_reach(c, symbols).is_none_or(|b| b.inflate(opt.tol, opt.tol).contains(p))
+}
+
+/// A box round everything `c` can paint, for culling clicks: [`Node::reach_bounds_with`], except
+/// that paths and compound paths are measured by their control points ([`PathData::control_bounds`],
+/// which hold the curves) instead of along their curves, which a compound path of thousands of
+/// members takes milliseconds to do on every click and hover. The box only rules points out, and it
+/// is at least as large, so the same objects are hit.
+///
+/// [`PathData::control_bounds`]: vectorcraft_geom::PathData::control_bounds
+fn cull_reach(c: &Node, symbols: &SymbolBoxes) -> Option<Rect> {
+    let control = match &c.kind {
+        NodeKind::Path { path, .. } => path.control_bounds(),
+        NodeKind::Compound { children, .. } if children.iter().all(|m| m.path_data().is_some()) => {
+            children.iter().filter_map(|m| m.path_data().and_then(vectorcraft_geom::PathData::control_bounds)).reduce(|a, b| a.union(b))
+        }
+        _ => return c.reach_bounds_with(symbols),
+    };
+    let o = c.appearance.outset();
+    control.map(|b| b.inflate(o, o))
+}
+
+/// The members of compound path `children` that a click at `p` within `tol` can touch, as one
+/// path: those whose control points' box, grown by `tol`, holds `p` (edges included). A member
+/// outside that box is farther than `tol` from `p` and winds zero times round it, so this path's
+/// outline and fill answer a click as the whole compound path's do, without assembling it.
+fn compound_members_near(children: &[std::sync::Arc<Node>], p: Point, tol: f64) -> vectorcraft_geom::BezPath {
+    let near = |b: Rect| b.x0 - tol <= p.x && p.x <= b.x1 + tol && b.y0 - tol <= p.y && p.y <= b.y1 + tol;
+    let mut bp = vectorcraft_geom::BezPath::new();
+    for pd in children.iter().filter_map(|m| m.path_data()) {
+        if pd.control_bounds().is_some_and(near) {
+            bp.extend(pd.to_bezpath());
+        }
+    }
+    bp
 }
 
 /// Is the first child of `n` the isolated container `scope`?
@@ -689,6 +725,43 @@ fn hit_stroke(n: &Node, bp: &vectorcraft_geom::BezPath, rule: vectorcraft_geom::
     stroke_contains(bp, 0.0, opt.tol, p).then_some(HitKind::Outline)
 }
 
+/// Check the body without assembling a `BezPath`. A miss near a joint or cap may still hit a
+/// miter or square cap, so the caller falls back to the full stroke check there.
+fn near_path_body(path: &PathData, p: Point, radius: f64, decoration_reach: f64) -> Option<(bool, bool)> {
+    if !radius.is_finite() || radius < 0.0 || !decoration_reach.is_finite() || decoration_reach < 0.0 {
+        return None;
+    }
+    let radius_sq = radius * radius;
+    let decoration_sq = decoration_reach * decoration_reach;
+    let mut near_decoration = false;
+    for sp in &path.subpaths {
+        for i in 0..sp.segment_count() {
+            let c = sp.segment(i);
+            if decoration_reach > 0.0 && !near_decoration && ([c.p0, c.p3].iter().any(|q| (*q - p).hypot2() <= decoration_sq)) {
+                near_decoration = true;
+            }
+            let controls = [c.p0, c.p1, c.p2, c.p3];
+            if controls.iter().all(|q| q.x < p.x - radius)
+                || controls.iter().all(|q| q.x > p.x + radius)
+                || controls.iter().all(|q| q.y < p.y - radius)
+                || controls.iter().all(|q| q.y > p.y + radius)
+            {
+                continue;
+            }
+            let seg = if sp.segment_is_line(i) { PathSeg::Line(vectorcraft_geom::kurbo::Line::new(c.p0, c.p3)) } else { PathSeg::Cubic(c) };
+            if seg.nearest(p, 1e-9).distance_sq <= radius_sq {
+                if vectorcraft_geom::bez::has_length(&seg) {
+                    return Some((true, near_decoration));
+                }
+                // A zero-length segment can still hit as an outline, though a painted stroke
+                // needs a segment with direction. Let the existing check decide its hit kind.
+                near_decoration = true;
+            }
+        }
+    }
+    Some((false, near_decoration))
+}
+
 #[cfg(test)]
 thread_local! {
     /// How many objects [`hit_leaf`] tested on this thread.
@@ -700,6 +773,43 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
     LEAVES_TESTED.with(|c| c.set(c.get() + 1));
     match &n.kind {
         NodeKind::Path { path, rule, .. } => {
+            if opt.outline
+                && let Some((hit, needs_full_check)) = near_path_body(path, p, opt.tol, 0.0)
+            {
+                if hit {
+                    return Some(HitKind::Outline);
+                }
+                if !needs_full_check {
+                    return None;
+                }
+            }
+            let mut strokes = n.appearance.painted_strokes();
+            if !opt.outline
+                && n.appearance.fill().is_none_or(|f| f.paint.is_none())
+                && let Some(s) = strokes.next()
+                && strokes.next().is_none()
+                && s.align == StrokeAlign::Center
+                && s.width.is_finite()
+                && s.width > 0.0
+                && s.dash.as_ref().is_none_or(|d| !d.is_dashed())
+                && s.profile.is_none()
+                && s.start_arrow.is_none()
+                && s.end_arrow.is_none()
+                && s.brush.is_none()
+                && let Some((hit, near_decoration)) = near_path_body(
+                    path,
+                    p,
+                    s.width / 2.0 + opt.tol,
+                    if s.join == crate::LineJoin::Miter || s.cap == crate::LineCap::Square { s.reach() + opt.tol } else { 0.0 },
+                )
+            {
+                if hit {
+                    return Some(HitKind::Stroke);
+                }
+                if !near_decoration {
+                    return None;
+                }
+            }
             let bp = path.to_bezpath();
             if let Some(k) = hit_stroke(n, &bp, *rule, p, opt) {
                 return Some(k);
@@ -710,12 +820,23 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             }
             None
         }
-        NodeKind::Compound { rule, .. } => {
-            let bp = n.stroke_path()?;
-            if let Some(k) = hit_stroke(n, &bp, *rule, p, opt) {
-                return Some(k);
+        NodeKind::Compound { children, rule } => {
+            // Painted strokes follow the whole compound path (alignment, dashes, width profiles):
+            // they are measured along all of it, as before.
+            if !opt.outline && n.appearance.painted_strokes().next().is_some() {
+                let bp = n.stroke_path()?;
+                if n.appearance.stroke_hit(&bp, *rule, p, opt.tol) {
+                    return Some(HitKind::Stroke);
+                }
             }
-            (!opt.outline && !opt.path_only && fill_contains(&bp, *rule, p)).then_some(HitKind::Fill)
+            // The outline and the fill only need the members near `p`. (Measured without
+            // `stroke_contains`'s box check: the box of the members near `p` is smaller than the
+            // whole path's, and its far edges would turn away points exactly `tol` away.)
+            let near = compound_members_near(children, p, opt.tol);
+            if vectorcraft_geom::hit::distance_to_outline(&near, p) <= opt.tol {
+                return Some(HitKind::Outline);
+            }
+            (!opt.outline && !opt.path_only && fill_contains(&near, *rule, p)).then_some(HitKind::Fill)
         }
         // The type path lies within the bounds: they rule out the rest before it is measured.
         NodeKind::Text(t) if opt.type_path_only => {
@@ -835,9 +956,22 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
 /// clipping mask counts only when the marquee meets the region its clipping path clips to, and then
 /// only within that region's bounds.
 pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> Vec<NodeId> {
+    marquee_with(doc, r, scope, leaves, false)
+}
+
+/// Candidates for whole-object enclosure by a loop bounded by `r`. Eligibility and group
+/// traversal follow [`marquee`]; compounds contribute the complete path they paint.
+pub fn enclosure_candidates(doc: &Document, r: Rect, scope: Option<NodeId>) -> Vec<NodeId> {
+    marquee_with(doc, r, scope, true, true)
+}
+
+fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, whole_compounds: bool) -> Vec<NodeId> {
     let mut out = Vec::new();
     // `tops` pairs each object with the part of `r` in which the marquee can touch it.
     let tops: Vec<(&std::sync::Arc<Node>, Rect)> = match scope.and_then(|s| doc.node(s)) {
+        // Isolated art whose layer, or a group around it, was locked or hidden afterwards: the
+        // marquee touches none of it, as clicks don't (#5309).
+        Some(s) if !doc.is_editable(s.id) => vec![],
         Some(s) => match (s.children(), marquee_in(s, r)) {
             (Some(c), Some(r)) => c.iter().enumerate().filter(|(i, _)| !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
             (Some(_), None) => vec![],
@@ -879,13 +1013,19 @@ pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> 
     /// ([`shaper_hides`]). An Intertwine group is touched by its members, and a repeat is touched
     /// by the copies it draws, as clicks hit them. Objects of every other kind except paths,
     /// compound paths, layers and groups are touched by their box.
-    fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>) -> bool {
+    fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool) -> bool {
         match &n.kind {
             NodeKind::Path { path, .. } => vectorcraft_geom::hit::intersects_rect(path, r),
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => marquee_in(n, r)
-                .is_some_and(|r| children.iter().enumerate().any(|(i, c)| c.visible && !shaper_hides(n, i, scope) && touches(c, s, r, scope))),
-            NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope)),
-            NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope)),
+            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => {
+                marquee_in(n, r).is_some_and(|r| {
+                    children.iter().enumerate().any(|(i, c)| c.visible && !shaper_hides(n, i, scope) && touches(c, s, r, scope, whole_compounds))
+                })
+            }
+            NodeKind::Compound { children, .. } if whole_compounds => {
+                children.iter().filter_map(|c| c.path_data()).any(|path| vectorcraft_geom::hit::intersects_rect(path, r))
+            }
+            NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, whole_compounds)),
+            NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, whole_compounds)),
             // A box with no width or no height (an instance of a symbol that draws a straight
             // line) is touched where the marquee crosses it.
             _ => n.geometric_bounds_with(s).is_some_and(|b| {
@@ -894,18 +1034,18 @@ pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> 
             }),
         }
     }
-    fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, out: &mut Vec<NodeId>) {
+    fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, out: &mut Vec<NodeId>) {
         match &n.kind {
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => {
                 let Some(r) = marquee_in(n, r) else { return };
                 for (i, c) in children.iter().enumerate() {
                     if c.visible && !c.locked && !shaper_hides(n, i, scope) {
-                        collect_leaves(c, s, r, scope, out);
+                        collect_leaves(c, s, r, scope, whole_compounds, out);
                     }
                 }
             }
             _ => {
-                if touches(n, s, r, scope) {
+                if touches(n, s, r, scope, whole_compounds) {
                     out.push(n.id);
                 }
             }
@@ -918,8 +1058,8 @@ pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> 
             continue;
         }
         if leaves {
-            collect_leaves(t, &symbols, r, scope, &mut out);
-        } else if touches(t, &symbols, r, scope) {
+            collect_leaves(t, &symbols, r, scope, whole_compounds, &mut out);
+        } else if touches(t, &symbols, r, scope, whole_compounds) {
             out.push(t.id);
         }
     }

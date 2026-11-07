@@ -3,7 +3,8 @@
 //! preferences. OK sets them with `tool.setOption {tool, values}`. The Pencil also has `liveFit`
 //! (Live curve fitting, on: its preview fits the stroke while it is drawn).
 //!
-//! Fields: `tool`; `fidelity` (points; Pencil, Paintbrush, Smooth and Blob Brush), `fill` (Pencil and
+//! Fields: `tool`; `fidelity` (screen pixels for the Pencil and Paintbrush, points for Smooth and
+//! Blob Brush), `fill` (Pencil and
 //! Paintbrush), `keepSelected` (Pencil, Paintbrush and Blob Brush), `mergeOnlySelection` (Blob
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush),
 //! `angle` (degrees) and `roundness` (percent; Blob Brush and Eraser), `livePreview` (Pencil: the stroke shows
@@ -166,16 +167,19 @@ fn blob_size(ui: &mut egui::Ui, d: &mut Dialog) {
 fn fidelity(ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
     let v = d.f64("fidelity", 1.5);
-    let rail = (vectorcraft_tools::draw2::min_fidelity(&d.str("tool")), FIDELITY_MAX);
+    let tool = d.str("tool");
+    let rail = (vectorcraft_tools::draw2::min_fidelity(&tool), FIDELITY_MAX);
+    // The Pencil's and the Paintbrush's Fidelity is on screen, the same at any zoom (#5729).
+    let unit = if matches!(tool.as_str(), "pencil" | "paintbrush") { "px" } else { "pt" };
     let rail_w = label_w(ui);
     let mut new = None;
     ui.label(egui::RichText::new(tl!("Fidelity:")).size(12.5).color(t.text));
     ui.horizontal(|ui| {
-        let shown = widgets::SliderValue::field(v, rail.0..=rail.1, "pt", 2).with_step(fidelity_step);
+        let shown = widgets::SliderValue::field(v, rail.0..=rail.1, unit, 2).with_step(fidelity_step);
         let (x, _, keyed) =
             widgets::color_slider_stepped(ui, "freehand-fidelity", tl!("Fidelity:"), Some(shown), fidelity_at(v, rail), rail_w, &|_| t.input_border);
         new = x.map(|x| fidelity_from(x, rail)).or(keyed);
-        if let Some(x) = widgets::range_field_stepped(ui, "freehand-fidelity-field", v, rail.0..=100.0, "pt", 2, FIELD_W, fidelity_step) {
+        if let Some(x) = widgets::range_field_stepped(ui, "freehand-fidelity-field", v, rail.0..=100.0, unit, 2, FIELD_W, fidelity_step) {
             new = Some(x);
         }
     });

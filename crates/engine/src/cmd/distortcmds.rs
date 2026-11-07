@@ -16,7 +16,7 @@ use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, project
 use super::edit::{duplicate_in, outermost, selected_roots};
 use super::{
     CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, id_param,
-    ids_param, matrix_param, number_or, ok, point_indices, point_param, str_param, switch_or, targets,
+    matrix_param, named_id, named_ids, number_or, ok, point_indices, point_param, str_param, switch_or, targets,
 };
 use crate::EngineError;
 
@@ -658,7 +658,7 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
     if pts.iter().any(|(q, f)| !q.x.is_finite() || !q.y.is_finite() || !f.is_finite()) {
         return Err(bad(C, "points must be finite"));
     }
-    let roots = match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    let roots = match named_ids(p)? {
         Some(v) => v,
         None => s.doc()?.selection.objects.clone(),
     };
@@ -708,7 +708,7 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The objects a Puppet Warp command works on: `id`/`ids`, else `default`.
 fn puppet_ids(p: &Value, default: impl FnOnce() -> Result<Vec<NodeId>>) -> Result<Vec<NodeId>> {
-    let ids = match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
+    let ids = match named_ids(p)? {
         Some(v) => v,
         None => default()?,
     };

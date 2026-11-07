@@ -796,6 +796,32 @@ fn a_moved_group_draws_the_shadow_of_the_instance_art_in_it_while_interacting() 
     }
 }
 
+/// A gradient bar with a drop shadow in a symbol with 9-slice guides, across the guides of an
+/// instance scaled twice across: the bar is drawn cell by cell, and its shadow still shows past
+/// the bar's right end, where the right cell ends.
+#[test]
+fn a_shadow_on_art_across_nine_slice_guides_reaches_past_the_outer_cells() {
+    let _fonts = fonts_steady();
+    let mut d = Document::new(300.0, 200.0);
+    let gradient = Paint::Gradient(Box::new(vectorcraft_doc::color::GradientPaint::new(Default::default())));
+    let frame = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+    let mut bar = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 40.0, 100.0, 60.0)), Appearance::basic(gradient, Paint::None, 0.0));
+    let shadow = json!({"x": 8, "y": 0, "blur": 0, "opacity": 100});
+    bar.appearance.effects.push(Effect { id: "stylize.dropShadow".into(), params: shadow, visible: true });
+    let art = Node::group(d.alloc_id(), vec![std::sync::Arc::new(frame), std::sync::Arc::new(bar)]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bar".into(), art: std::sync::Arc::new(art) });
+    d.set_symbol_nine_slice("Bar", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let xf = Affine::translate((20.0, 20.0)) * Affine::scale_non_uniform(2.0, 1.0);
+    let instance = Node::new(d.alloc_id(), vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Bar".into(), xf });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, instance).unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let out = Renderer::new().render(&d, 300, 200, Affine::IDENTITY, &opts);
+    // The bar runs from x 20 to 220 and y 60 to 80; its shadow, 8 pt to the right, to x 228.
+    assert!(lum(out.pixel(224, 70)) < WHITE, "{:?}", out.pixel(224, 70));
+    assert_eq!(lum(out.pixel(232, 70)), WHITE, "{:?}", out.pixel(232, 70));
+}
+
 /// While interacting, a raster moves with its object only when the content's pixels (for a
 /// shadow, their alpha) and the effects stayed the same (#1257): a new fill color under
 /// Craquelure, other effect settings, a pattern fill that stays on the page, a resized object,
@@ -1048,5 +1074,46 @@ fn photoshop_filters_on_content_larger_than_the_budget() {
         assert!(lum(img.pixel(40, 100)) < 600, "{id}: inside {:?}", img.pixel(40, 100));
         // (Smart Blur's wide samples read a blurred copy: a faint fringe under its threshold.)
         assert!(lum(img.pixel(190, 100)) >= WHITE - 3 * 25, "{id}: outside {:?}", img.pixel(190, 100));
+    }
+}
+
+/// #5308: an image's Inner Glow follows its visible pixels, not its frame. A 40 × 40 image whose
+/// left half is transparent and right half opaque black, on a black page, with a white glow from
+/// the edges: the transparent half stays black, and the glow lights the opaque half's left edge
+/// (inside the frame), on the single-threaded and the multithreaded renderer alike.
+#[test]
+fn an_image_inner_glow_follows_its_visible_pixels() {
+    use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind};
+    let rgba: Vec<u8> = (0..40 * 40).flat_map(|i| if i % 40 < 20 { [0, 0, 0, 0] } else { [0, 0, 0, 255] }).collect();
+    let png = crate::encode::png::encode(&rgba, 40, 40, &Default::default()).unwrap();
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("half".into(), ImageBlob::new("image/png", png));
+    let im = ImageObject {
+        key: "half".into(),
+        width: 40,
+        height: 40,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    n.appearance.effects = vec![Effect {
+        id: "stylize.innerGlow".into(),
+        params: json!({"color": "#ffffff", "mode": "normal", "opacity": 100, "blur": 4}),
+        visible: true,
+    }];
+    d.insert(Some(d.layers[0].id), 0, n).unwrap();
+    let opts = RenderOptions { background: Some([0, 0, 0, 255]), ..Default::default() };
+    for threads in [0, 3] {
+        let mut r = Renderer::new();
+        r.threads = threads;
+        let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+        for (x, y) in [(31, 50), (40, 31), (45, 50)] {
+            assert!(lum(img.pixel(x, y)) < 10, "threads {threads}: no glow on the transparent pixels at ({x}, {y}): {:?}", img.pixel(x, y));
+        }
+        assert!(lum(img.pixel(51, 50)) > 60, "threads {threads}: the glow lights the visible pixels' edge: {:?}", img.pixel(51, 50));
+        assert!(lum(img.pixel(68, 50)) > 60, "threads {threads}: and the frame's edge where the pixels reach it: {:?}", img.pixel(68, 50));
+        assert!(lum(img.pixel(60, 50)) < lum(img.pixel(51, 50)), "threads {threads}: fading inward");
     }
 }

@@ -5,6 +5,7 @@ use vectorcraft_geom::Point;
 use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 
 pub(super) mod adjust;
+mod ai_open_path;
 mod appearance;
 mod areafit;
 mod assets;
@@ -40,6 +41,7 @@ mod cut;
 mod dashalign;
 mod distort;
 mod docsetup;
+mod document_move;
 mod draw2;
 mod dynamic_symbols;
 mod editcolors;
@@ -49,6 +51,7 @@ mod envelope;
 mod envelope_distort;
 mod envelope_edit;
 pub(super) mod expand;
+mod expand_symbols;
 mod eyedropper;
 mod file;
 mod fileinfo;
@@ -65,6 +68,7 @@ mod gradient;
 mod gradpanel;
 mod gradpresets;
 mod gradspan;
+mod guide_clipboard;
 mod halftone;
 mod history_mem;
 mod ids_without_selection;
@@ -105,6 +109,7 @@ mod paintproxy;
 mod panelcmds;
 mod paragraphs;
 mod params;
+mod path_menu_enabled;
 mod pathops;
 mod pathtype;
 mod pattern;
@@ -135,12 +140,14 @@ mod recolor;
 mod recovery;
 mod reflecthit;
 mod registration;
+mod repeat_edit;
 mod save;
 mod saveoptions;
 mod scalestrokes;
 mod scripts;
 mod select_ids_first;
 mod shaper;
+mod shapetools;
 mod shortcutset;
 mod simplify_part;
 mod slices;
@@ -157,6 +164,7 @@ mod styles;
 mod swatchcmds;
 mod swatches;
 mod swatchlib;
+mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
 mod symbollib;
@@ -3605,6 +3613,50 @@ fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
     s.execute("select.all", &json!({})).unwrap();
     assert!(s.execute("text.setRangeStyle", &json!({"start": 0, "end": 3, "size": 40})).is_err(), "two type objects: which one?");
     assert!(s.execute("text.setRangeStyle", &json!({"id": "two", "size": 40})).is_err());
+}
+
+/// #785: commands whose `ids` or `id` the shared check doesn't read (it reads `id` where it stands
+/// for `ids` of one) refuse one that isn't an object id. They don't act on the selection or the
+/// current layer instead, and the document and its undo history stay as they are.
+#[test]
+fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 80.0, 60.0);
+    let b = rect(&mut s, 140.0, 120.0, 80.0, 60.0);
+    let graph = s.execute("graph.create", &json!({"type": "column", "x": 400, "y": 300, "width": 120, "height": 80, "rows": [[1, 2]]})).unwrap();
+    let ids = [json!([a.0, "x"]), json!(3)];
+    let id = [json!("2"), json!("$1.id"), json!(2.5)];
+    let commands = [
+        ("object.blend.make", json!({}), "ids", &ids[..], json!([a.0, b.0])),
+        ("object.envelope.makeWithWarp", json!({}), "ids", &ids[..], json!([a.0, b.0])),
+        ("graph.setData", json!({"rows": [[3, 4]]}), "id", &id[..], json!([graph["id"]])),
+        ("imageTrace.make", json!({}), "id", &id[..], json!([a.0])),
+        ("perspective.plane.matchObject", json!({}), "id", &id[..], json!([a.0])),
+        ("perspective.editText", json!({}), "id", &id[..], json!([a.0])),
+        ("layer.clippingMask.toggle", json!({}), "id", &id[..], json!([a.0, b.0])),
+        ("layer.newSublayer", json!({}), "parent", &id[..], json!([a.0])),
+    ];
+    let mut wrong = vec![];
+    for (cmd, params, key, values, selected) in commands {
+        s.execute("select.set", &json!({"ids": selected})).unwrap();
+        for bad in values {
+            let mut p = params.clone();
+            if let Some(p) = p.as_object_mut() {
+                p.insert(key.into(), bad.clone());
+            }
+            let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+            let r = s.execute(cmd, &p);
+            let refused = r.as_ref().err().map(|e| e.to_string()).is_some_and(|e| e.contains("object id") || e.contains("step reference"));
+            let same = s.doc().unwrap().doc == doc && s.doc().unwrap().history.undo.len() == undo;
+            if !(refused && same) {
+                wrong.push(format!("{cmd} {p}: {r:?}, document unchanged: {same}"));
+            }
+            if !same {
+                s.execute("edit.undo", &json!({})).ok();
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
 #[test]

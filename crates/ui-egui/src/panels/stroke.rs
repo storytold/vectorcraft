@@ -23,7 +23,7 @@ pub fn weight_presets(unit: Unit) -> [f64; 22] {
         Unit::Inches => IN_PRESETS,
         Unit::Pixels => PX_PRESETS,
         Unit::Picas => return PC_PRESETS,
-        Unit::Points | Unit::FeetInches | Unit::Feet | Unit::Meters | Unit::Yards => return PT_PRESETS,
+        Unit::Points | Unit::FeetInches | Unit::Feet | Unit::Meters | Unit::Yards | Unit::Q | Unit::Ha => return PT_PRESETS,
     };
     native.map(|v| unit.to_pt(v))
 }
@@ -137,10 +137,12 @@ pub(crate) fn weight_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, weig
 }
 
 /// The underlined Stroke link (`label`: the Control bar's "Stroke:", the Properties panel's
-/// "Stroke"): a click toggles the Stroke panel in a popover under it.
+/// "Stroke"): a click toggles the Stroke panel in a popover under it, and a drag scrubs the weight
+/// field after it ([`crate::scrub`]).
 pub(crate) fn link(app: &mut VectorcraftApp, ui: &mut Ui, label: &str) {
     let t = Tokens::get(ui.ctx());
-    let resp = ui.link(egui::RichText::new(label).size(12.0).color(t.text).underline()).on_hover_text(tl!("Stroke options"));
+    // A drag on it scrubs the weight field after it (#4088).
+    let resp = crate::scrub::link_label(ui, egui::RichText::new(label).size(12.0).color(t.text).underline()).on_hover_text(tl!("Stroke options"));
     widgets::popover(&resp, resp.clicked(), |ui| {
         ui.set_width(260.0);
         show(app, ui);

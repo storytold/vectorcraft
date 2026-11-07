@@ -56,6 +56,7 @@ mod system_fonts;
 mod tablet;
 mod window;
 mod window_frame;
+mod windows_alt_codes;
 #[cfg(windows)]
 mod windows_cores;
 mod windows_stylus;
@@ -314,13 +315,18 @@ fn main() -> std::process::ExitCode {
     };
     // With Windows Ink, winit reports a pen as a touch and drops its barrel button and which end
     // is down; the message hook notes each pointer contact and whether it starts with the barrel
-    // button held, and writes the pen's end into the pen feed (`windows_stylus`).
+    // button held, and writes the pen's end into the pen feed (`windows_stylus`). It also notes the
+    // characters Alt + keypad codes type (`windows_alt_codes`).
     #[cfg(windows)]
     let options = {
         use winit::platform::windows::EventLoopBuilderExtWindows as _;
         let mut options = options;
         options.event_loop_builder = Some(Box::new(|builder| {
-            builder.with_msg_hook(windows_stylus::msg_hook);
+            builder.with_msg_hook(|msg| {
+                // Alt + keypad codes (#5108), which winit drops; neither hook consumes a message.
+                windows_alt_codes::msg_hook(msg);
+                windows_stylus::msg_hook(msg)
+            });
         }));
         options
     };

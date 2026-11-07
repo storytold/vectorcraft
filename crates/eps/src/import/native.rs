@@ -23,7 +23,9 @@
 //! before; on a layer that doesn't show it is left out of that layer, with a warning. The page is
 //! also the safety net: when the layers' art looks different from it (one draws an object the
 //! other doesn't, or much of it differs; an EPS whose page is its art's box has nothing printed
-//! outside it), the page is used.
+//! outside it), the page is used. A `.ai` whose text document makes all of its type, with no
+//! object unread and nothing else that the page would decide, opens from its layers without its
+//! PDF part being imported, so nothing is compared ([`ai_layers_alone`]).
 //!
 //! Where a file doesn't match what this module expects, it is left alone and its page is imported.
 
@@ -32,7 +34,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, Scaling, TextKind, Unit};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, Scaling, TextKind, Unit, VariableKind};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, Vec2};
 
 use super::Imported;
@@ -45,14 +47,16 @@ mod layers;
 mod plan;
 mod slots;
 
+pub(crate) use build::scale_document;
 #[cfg(test)]
 use build::{Frame, MADE, prune_unseen};
 #[cfg(test)]
 use compare::{
     MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, Shares, compare, compared, comparison_render, comparison_samples, differ, differ_in_colour,
 };
-pub use layers::{ai_alone, layered_ai};
+pub use layers::{AiLayers, ai_alone, ai_alone_on_page, ai_layers_alone, layered_ai, layered_ai_from};
 pub(super) use layers::{layered, program_alone};
+pub(crate) use slots::MAX_TEXT;
 pub use slots::is_loss;
 #[cfg(test)]
 use slots::join_pieces;
@@ -90,7 +94,7 @@ mod tests {
         ring(&mut layers, Some(MADE), red, 6.0, square);
         ring(&mut layers, Some(MADE), red, 2.0, Rect::new(40.0, 40.0, 60.0, 60.0));
         let rect = page.artboards[0].rect;
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let mut view = PageView::new(&frame);
         assert_eq!(prune_unseen(&frame, &mut view, &mut layers, false), 1, "only the ring the page doesn't draw");
         let widths: Vec<f64> = layers.layers[0].children().unwrap().iter().filter_map(|n| n.appearance.stroke().map(|s| s.width)).collect();
@@ -192,11 +196,73 @@ mod tests {
         let a = comparison_render(&mut renderer, &page, rect, 0.4, 1);
         let b = comparison_render(&mut vectorcraft_render::Renderer::new(), &vector, rect, 0.4, 1);
         assert!(compared(&a, &b, &[], &[]).solid > MAX_SOLID_DIFFERENCE, "the old point sampling falsely refused this page");
-        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)] };
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
         let mut view = PageView::new(&frame);
         assert!(compare(&frame, &mut view, &vector, false).is_ok());
         assert!(compare(&frame, &mut view, &Document::new(1000.0, 500.0), false).is_err(), "missing artwork remains an error");
         let shifted = Rect::new(0.0, 0.0, 500.0, 500.0);
-        assert!(view.difference(&vector, shifted, false).any > MAX_DIFFERENCE, "wrong framing remains an error");
+        assert!(view.difference_on_every_page(&vector, shifted, false).any > MAX_DIFFERENCE, "wrong framing remains an error");
+    }
+
+    /// The boxes `solid_regions_on_every_page` gives for a page of images are in the page's points: the
+    /// comparison is drawn at a multiple of the scale and resized, and the two sizes round
+    /// differently on the short side, so a box at the far edge does not drift out of the object
+    /// that makes it.
+    #[test]
+    fn solid_regions_of_a_raster_page_lie_in_the_object_that_differs() {
+        for bottom in (884..=900).map(f64::from) {
+            let object = Rect::new(1000.0, 0.0, 3000.0, bottom);
+            for r in raster_page_regions(object, 4000.0, 1006.0) {
+                assert!(
+                    r.x0 >= object.x0 - 1.0 && r.y0 >= object.y0 - 1.0 && r.x1 <= object.x1 + 1.0 && r.y1 <= object.y1 + 1.0,
+                    "{r:?} lies outside {object:?}"
+                );
+            }
+        }
+    }
+
+    /// The boxes `solid_regions_on_every_page` gives for a `width` × `height` page that is one image of a black
+    /// `object`, compared with layers that hold nothing.
+    fn raster_page_regions(object: Rect, width: f64, height: f64) -> Vec<Rect> {
+        use vectorcraft_color::{Color, Paint};
+        use vectorcraft_doc::{Appearance, ImageBlob, ImageObject};
+        let mut vector = Document::new(width, height);
+        let layer = vector.layers[0].id;
+        let n = Node::path(
+            vector.alloc_id(),
+            vectorcraft_geom::shapes::rectangle(object),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        vector.insert(Some(layer), usize::MAX, n).unwrap();
+        let rect = vector.artboards[0].rect;
+        let source = vectorcraft_render::Renderer::new().render_region(&vector, rect, 1.0, true);
+        let mut png = Vec::new();
+        image::RgbaImage::from_raw(source.width, source.height, source.to_straight())
+            .unwrap()
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let blob = ImageBlob::new("image/png", png);
+        let key = blob.content_key();
+        let mut page = Document::new(width, height);
+        page.images.insert(key.clone(), blob);
+        let image = Node::new(
+            page.alloc_id(),
+            NodeKind::Image(Box::new(ImageObject {
+                key,
+                width: source.width,
+                height: source.height,
+                xf: Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            })),
+        );
+        page.insert(Some(page.layers[0].id), usize::MAX, image).unwrap();
+        assert_eq!(comparison_samples(&page), 4);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
+        let mut view = PageView::new(&frame);
+        let (_, regions) = view.solid_regions_on_every_page(&Document::new(width, height), false).unwrap();
+        assert!(!regions.is_empty());
+        regions
     }
 }

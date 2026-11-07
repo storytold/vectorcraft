@@ -4,7 +4,7 @@
 use crate::*;
 use kurbo::{Affine, Shape};
 use vectorcraft_doc::text::Kashida;
-use vectorcraft_doc::{CharStyle, JustificationOptions, Justify, SingleWordJustify, TextKind};
+use vectorcraft_doc::{CharStyle, JustificationOptions, Justify, SingleWordJustify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
 fn db() -> &'static FontDb {
@@ -280,6 +280,30 @@ fn justified_arabic_lines_take_their_room_on_kashidas() {
         }
         assert!((measure(&half) - 300.0).abs() < 1e-6, "{kind:?} at 50%: {}", measure(&half));
     }
+}
+
+/// A character with Kashidas off prevents insertion at either of its joined edges. Other
+/// eligible pairs in the word remain available; old text defaults to allowing them.
+#[test]
+fn character_kashidas_filter_joined_pairs() {
+    let Some(face) = arabic_face("character_kashidas_filter_joined_pairs") else { return };
+    let text = "كتب ورد محمد";
+    let mut t = arabic_area(&face, text, Justify::JustifyAll, Kashida::Medium);
+    let default_bytes = kashidas(&layout(db(), &t), &face).into_iter().map(|g| g.byte).collect::<Vec<_>>();
+    assert!(default_bytes.contains(&("كت".len())));
+    let mut off = t.runs[0].style.clone();
+    off.kashidas = false;
+    let on = t.runs[0].style.clone();
+    t.runs = vec![TextRun::new("كت", on.clone()), TextRun::new("ب", off.clone()), TextRun::new(" ورد محمد", on.clone())];
+    let one_off = layout(db(), &t);
+    let bytes = kashidas(&one_off, &face).into_iter().map(|g| g.byte).collect::<Vec<_>>();
+    assert!(!bytes.contains(&("كت".len())), "the disabled beh has no kashida before it");
+    assert!(bytes.contains(&("ك".len())), "the earlier eligible pair remains");
+    t.runs = vec![TextRun::new("ك", on.clone()), TextRun::new("تب", off), TextRun::new(" ورد محمد", on)];
+    let both_off = layout(db(), &t);
+    let bytes = kashidas(&both_off, &face).into_iter().map(|g| g.byte).collect::<Vec<_>>();
+    assert!(!bytes.contains(&("ك".len())) && !bytes.contains(&("كت".len())));
+    assert!(bytes.contains(&(text.len() - 'د'.len_utf8())), "another word still takes its kashida");
 }
 
 /// Where the kashida before the cluster at byte `b` starts, where the letter before it in the text

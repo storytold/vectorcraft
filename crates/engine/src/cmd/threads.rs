@@ -93,14 +93,29 @@ thread_local! {
 /// makes "changed" a pointer comparison). Deleted frames' text flows into the remaining ones; a
 /// frame that is now point type leaves its thread with the text it holds.
 pub(crate) fn reflow(before: &Document, doc: &mut Document) {
-    let threads = std::mem::take(&mut doc.text_threads);
+    // A frame is in one thread, once: a file that lists it again (in its thread or another) would
+    // copy its text into the story each time, and write the grown story back for the next thread
+    // to copy again. Only its first place counts.
+    let mut seen = std::collections::HashSet::new();
+    // A thread that lost a frame that way is flowed again: its frames' layout was made for the
+    // thread as listed (a frame left alone must lose its threaded continuation).
+    let threads: Vec<(Vec<NodeId>, bool)> = std::mem::take(&mut doc.text_threads)
+        .into_iter()
+        .map(|t| {
+            let listed = t.len();
+            let t: Vec<NodeId> = t.into_iter().filter(|id| seen.insert(*id)).collect();
+            let lost = t.len() != listed;
+            (t, lost)
+        })
+        .collect();
     let mut kept = vec![];
-    for thread in threads {
-        let changed = thread.iter().any(|id| match (before.node(*id), doc.node(*id)) {
-            (Some(a), Some(b)) => !std::ptr::eq(a, b),
-            (None, None) => false,
-            _ => true,
-        });
+    for (thread, lost) in threads {
+        let changed = lost
+            || thread.iter().any(|id| match (before.node(*id), doc.node(*id)) {
+                (Some(a), Some(b)) => !std::ptr::eq(a, b),
+                (None, None) => false,
+                _ => true,
+            });
         // When no frame changed, the thread keeps its area-type frames and their text is not copied.
         if !changed {
             let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
@@ -259,6 +274,14 @@ pub(crate) fn mark_continued(doc: &mut Document) {
             }
         }
     }
+}
+
+/// The frames of the thread that `id` is a frame of, in thread order, each area type or type on a
+/// path; empty when `id` is in no thread or the thread has fewer than two such frames.
+pub(crate) fn story_of(d: &Document, id: NodeId) -> Vec<NodeId> {
+    let Some(thread) = d.text_threads.iter().find(|t| t.contains(&id)) else { return vec![] };
+    let frames: Vec<NodeId> = thread.iter().copied().filter(|f| text_of(d, *f).is_some()).collect();
+    if frames.len() >= 2 && frames.contains(&id) { frames } else { vec![] }
 }
 
 /// `ids` followed by the other frames of the threads they are in, each once, in thread order.

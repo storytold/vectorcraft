@@ -44,6 +44,7 @@ pub mod pngtext;
 pub mod ppi;
 pub mod progress;
 pub mod psdread;
+mod pxrread;
 mod save;
 mod screens;
 mod svg;
@@ -56,9 +57,9 @@ use serde_json::{Value, json};
 pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
-pub use export::export_source;
 pub(crate) use export::with_artboard_fills;
 pub(crate) use export::{export_crop, isolated};
+pub use export::{export_doc, export_source};
 pub(crate) use load::check_not_lossy_overwrite;
 use load::err;
 pub(crate) use load::import_svg;
@@ -83,12 +84,14 @@ pub use save::{
     templates_folder,
 };
 pub use screens::{
-    PRESET_KEYS as SCREEN_EXPORT_PRESET_KEYS, PRESETS as SCREEN_PRESETS, ScreenExport, ScreenExportPreset, ScreenSize,
-    builtin_presets as screen_export_builtin_presets, first_file as screen_first_file, preset_rows as screen_preset_rows,
+    PRESET_FILE_EXTS as SCREEN_EXPORT_PRESET_EXTS, PRESET_FILE_FORMAT as SCREEN_EXPORT_PRESET_FORMAT, PRESET_KEYS as SCREEN_EXPORT_PRESET_KEYS,
+    PRESETS as SCREEN_PRESETS, SHARED_KEYS as SCREEN_SETTINGS_KEYS, ScreenExport, ScreenExportPreset, ScreenSize,
+    builtin_presets as screen_export_builtin_presets, first_file as screen_first_file, preset_list as screen_export_preset_list,
+    preset_rows as screen_preset_rows,
 };
 pub(crate) use screens::{
-    SHARED_KEYS as SCREEN_SETTINGS_KEYS, check_settings as check_screen_settings, export as export_screens, safe_file_name,
-    store_settings as store_screen_settings,
+    check_settings as check_screen_settings, export as export_screens, safe_file_name, store_settings as store_screen_settings,
+    with_export_preset as with_screen_export_preset,
 };
 pub use svg::options_map as svg_options;
 /// Atomic file writes (a temporary file renamed over the target: a failed write never damages the
@@ -105,7 +108,7 @@ mod export_names;
 mod formats;
 
 #[cfg(not(target_arch = "wasm32"))]
-use access::list_dir;
+pub(crate) use access::list_dir;
 pub use access::write_file_with;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use access::{Placed, copy_new, file_metadata};
@@ -117,16 +120,16 @@ pub(crate) use access::{drive_share_of, share_of};
 #[cfg(test)]
 pub(crate) use access::{drive_share_path, share_path, touched};
 #[cfg(not(target_arch = "wasm32"))]
-use access::{may_read, may_write};
+pub(crate) use access::{may_read, may_write};
 pub use commands::specs;
 pub use export_names::artboard_file_names;
 pub(crate) use export_names::{default_name, merge, unique_file_names, with_black_output, write_or_return};
 use export_names::{distinct_names_by, write_encoded};
-use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, writable};
+use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{
     DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, export_extensions, extension,
-    file_stem, format, format_for_name, has_own_title, library_open_filters, open_filters, place_filters, plugin_formats, titled_for_export,
-    writable_format,
+    file_stem, format, format_for_name, has_own_title, library_open_filters, open_filters, place_filters, plugin_formats, read_extensions,
+    readable_format, readable_format_for_name, titled_for_export, writable_format,
 };
 
 #[cfg(test)]
@@ -203,6 +206,8 @@ mod tests_psdread;
 mod tests_jp2read;
 #[cfg(test)]
 mod tests_pcxread;
+#[cfg(test)]
+mod tests_pxrread;
 
 #[cfg(test)]
 mod tests_epsimport;
