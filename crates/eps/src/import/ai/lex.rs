@@ -5,7 +5,8 @@
 //! - Any other line starting with `%` is a [`Tok::Comment`] (the section markers).
 //! - `%_` later in a line starts tokens too, hidden (a pseudo-comment operator after its
 //!   operands, as a gradient stop's `… 50 100 %_Bs`: AI7 spec §1.4.3); any other `%` later in a
-//!   line starts a comment that is skipped.
+//!   line starts a comment that is skipped, but for a line of hex digits after `%_` (a hidden
+//!   blend's record), a hidden [`Tok::Comment`].
 //! - The binary image data after `%%BeginData:` is one [`Tok::Data`]; the binary preview of a placed
 //!   file is one [`Tok::Preview`].
 //! - A document included whole (`%%BeginDocument:` … `%%EndDocument` lines, DSC 3.0 p. 68, nested
@@ -221,6 +222,12 @@ impl<'a> Lexer<'a> {
                 // hidden path's note.
                 if prefixed && PLACE.iter().chain(&NOTES).chain(&RELATIVE).any(|m| line.starts_with(m)) {
                     return Some(Token { tok: Tok::Comment(line.get(1..).unwrap_or_default()), hidden: true });
+                }
+                // And a line of hex digits, as a hidden blend's record is written (`%_%4443…`
+                // after its `XP`), like the plain one on `%` lines.
+                let digits = line.get(1..).unwrap_or_default();
+                if prefixed && !digits.trim_ascii_end().is_empty() && digits.trim_ascii_end().iter().all(u8::is_ascii_hexdigit) {
+                    return Some(Token { tok: Tok::Comment(digits), hidden: true });
                 }
                 // A comment later in a line.
                 continue;
@@ -470,6 +477,10 @@ mod tests {
         let toks = all(b"1 % a note (\n2 %_Bs\n3 %_ 4\n");
         let words: Vec<_> = toks.iter().map(|t| (t.tok.clone(), t.hidden)).collect();
         assert_eq!(words, [(Tok::Num(1.0), false), (Tok::Num(2.0), false), (Tok::Word(b"Bs"), true), (Tok::Num(3.0), false)]);
+        // A hidden line of hex digits (a hidden blend's record) is a comment; other text after
+        // `%_%` stays skipped.
+        let toks = all(b"%_%44434241\n%_% not hex\n%_%\n1\n");
+        assert_eq!(toks, [t(Tok::Comment(b"44434241"), true), t(Tok::Num(1.0), false)]);
     }
 
     #[test]
