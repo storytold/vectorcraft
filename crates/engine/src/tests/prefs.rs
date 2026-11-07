@@ -814,6 +814,37 @@ fn invoke_distance_guides_measures_the_selection_to_the_object_under_alt() {
     assert!(shown(&mut s, v).is_empty(), "Invoke Distance Guides off");
 }
 
+/// Smart Guides › Snap to Last Location (off by default): on, a square dragged 6 pt right and 5 pt
+/// down with a 10 px Snapping Tolerance goes back to where it was; dragged 12 pt away, or with the
+/// option or View › Smart Guides off, it lands where it is dragged. A value that is not a boolean
+/// is refused.
+#[test]
+fn snap_to_last_location_puts_a_dragged_square_back() {
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let mut s = new_doc();
+    // Its edges and center stay out of reach of the 400 pt artboard's.
+    let m = square(&mut s, 100.0, 250.0);
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let drag = |s: &mut Session, v: ViewInfo, to: (f64, f64)| {
+        gesture(s, v, &[(Down, 125.0, 275.0), (Drag, 140.0, 290.0), (Drag, to.0, to.1), (Up, to.0, to.1)]);
+        let at = top_left(s, m);
+        if at != (100.0, 250.0) {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        at
+    };
+    set_pref(&mut s, "snappingTolerance", json!(10));
+    assert_eq!(drag(&mut s, v, (131.0, 280.0)), (106.0, 255.0), "off by default");
+    set_pref(&mut s, "snapToLastLocation", json!(true));
+    assert_eq!(drag(&mut s, v, (131.0, 280.0)), (100.0, 250.0), "7.8 pt away: back where it was");
+    assert_eq!(drag(&mut s, v, (134.0, 283.0)), (109.0, 258.0), "12 pt away");
+    assert_eq!(drag(&mut s, ViewInfo { smart_guides: false, ..v }, (131.0, 280.0)), (106.0, 255.0), "View › Smart Guides off");
+    let refused = s.execute("prefs.set", &json!({"key": "snapToLastLocation", "value": "yes"}));
+    assert!(refused.is_err(), "{refused:?}");
+    assert_eq!(s.execute("prefs.get", &json!({"key": "snapToLastLocation"})).unwrap(), json!(true), "unchanged");
+}
+
 /// Preferences › Smart Guides (#394): Color, Alignment Guides, Anchor/Path Labels, Measurement
 /// Labels, Transform Tools and Snapping Tolerance change what the Selection tool shows while a
 /// square is dragged into line with another, and how far the pull reaches; a hidden guide still
