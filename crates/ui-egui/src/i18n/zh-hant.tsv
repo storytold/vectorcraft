@@ -2331,6 +2331,7 @@ file-filter	Templates	範本
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	無法解碼 {n} 張影像：它們顯示為打叉的方框
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	有 {n} 個連結影像已在磁碟上變更：「更新連結」可顯示新版本
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	已更新 {n} 個在磁碟上變更的連結檔案
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	文件設定了出血，但此 PDF/X 檔案未包含：請開啟「使用文件的出血設定」
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	已匯出 {what}，附有 {n} 則註解：{first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個字體檔案現已位於 {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個字體檔案現已位於 {folder}；有 {failed} 個無法加入：{reason}

@@ -4453,6 +4453,7 @@ imageTrace	Outline	轮廓
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	无法解码 {n} 张图像：它们显示为打叉的方框
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	有 {n} 个链接图像已在磁盘上更改：“更新链接”可显示新版本
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	已更新 {n} 个在磁盘上更改的链接文件
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	文档设置了出血，但此 PDF/X 文件未包含：请打开“使用文档的出血设置”
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	已导出 {what}，有 {n} 条注释：{first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 个字体文件现已位于 {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 个字体文件现已位于 {folder}；有 {failed} 个无法添加：{reason}
