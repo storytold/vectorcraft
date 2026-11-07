@@ -27,7 +27,7 @@ pub use edit::{
     split_into_grid,
 };
 pub use offset::{Cap, Join, MAX_OFFSET_SEGMENT_PAIRS, offset_path, outline_stroke, stroke_region, try_offset_path};
-pub use pathfinder::{FaceMerger, PathfinderOp, Region, Shape, merge_regions, pathfinder, pathfinder_with, region_at, regions};
+pub use pathfinder::{FaceMerger, PathfinderOp, Region, Shape, merge_regions, pathfinder, pathfinder_with, region_at, regions, regions_within};
 pub use planar::{
     BuilderArrangement, SHAPE_BUILDER_MAX_GAP, SHAPE_BUILDER_MAX_SEGMENTS, cut_out, encloses_area, find_gaps, has_open_path, interior_point,
     live_paint, live_paint_with_gaps, run_around, shape_builder, shape_builder_with_gap,
