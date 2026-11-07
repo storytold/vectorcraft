@@ -102,6 +102,12 @@
             env = pkgs.lib.optionalAttrs (craft-fonts != null) {
               CRAFT_FONTS_DIR = "${craft-fonts}";
             };
+            postPatch = ''
+              substituteInPlace Cargo.toml \
+                --replace-fail 'egui_demo_lib = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }' "" \
+                --replace-fail 'egui_inspection = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }' "" \
+                --replace-fail 'egui_system_font_provider = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }' ""
+            '';
             postInstall = if craft-fonts != null then ''
               mkdir -p "$out/share/doc/vectorcraft"
               shopt -s nullglob
