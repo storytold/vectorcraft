@@ -4070,7 +4070,7 @@ imageTrace	Outline	Kontur
 @plural	{n} stroke|{n} strokes	{n} obrys|{n} obrysy|{n} obrysów
 @msg	no library `{id}`	brak biblioteki `{id}`
 @msg	select some type first	najpierw zaznacz tekst
-@msg	kerning must be a number, "auto", or "optical"	Kerning musi być liczbą, „auto” lub „optical”
+@msg	kerning must be a number, "auto", or "optical"	kerning musi być liczbą, „auto” lub „optical”
 @msg	the selection has no gradient fill	zaznaczenie nie ma gradientu wypełnienia
 @msg	the selection has no gradient stroke	zaznaczenie nie ma gradientu obrysu
 @msg	the selection has no pattern fill	zaznaczenie nie ma wzorka wypełnienia
@@ -4282,7 +4282,7 @@ imageTrace	Outline	Kontur
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art lub type
 @msg	artboard {0} does not exist	obszar kompozycji {0} nie istnieje
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	w tej skali rysunek ma {w} × {h} pt, więcej niż mieści płótno: wybierz mniejszą skalę lub dopasuj go do obszaru kompozycji
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	oś musi mieć wartość "vertical", "horizontal" lub kąt w stopniach, nie `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis musi mieć wartość "vertical", "horizontal" lub kąt w stopniach, nie `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	tło {other}: transparent, white, black lub kolor, np. "#ff8800"
 @msg	bad color {v}	nieprawidłowy kolor {v}
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musi być liczbą od 0,1 do 10
@@ -4296,9 +4296,9 @@ imageTrace	Outline	Kontur
 @msg	bad shortcut	nieprawidłowy skrót
 @msg	bad stream length	nieprawidłowa długość strumienia
 @msg	bad trailer	nieprawidłowa sekcja trailer
-@msg	balance must be between 0 and 100	równowaga musi mieścić się w zakresie od 0 do 100
+@msg	balance must be between 0 and 100	balance musi mieścić się w zakresie od 0 do 100
 @msg	batch step {_1} (`{id}`) failed: {e}	krok wsadowy {_1} (`{id}`) nie powiódł się: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	jasność musi mieć wartość dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness musi mieć wartość dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	nie można zakodować dokumentu: {0}
 @msg	can't parse shortcut `{c}`	nie można przeanalizować skrótu `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	nie można przeanalizować skrótu `{s}` dla `{k}`
@@ -4323,7 +4323,7 @@ imageTrace	Outline	Kontur
 @msg	compound paths can only contain paths	ścieżki złożone mogą zawierać tylko ścieżki
 @msg	compressed (RLE) bitmaps can't be read yet	skompresowanych bitmap (RLE) nie można jeszcze odczytać
 @msg	damaged	uszkodzony
-@msg	decimals must be {_1}–{_2} (got {_3})	liczba miejsc dziesiętnych musi wynosić {_1}–{_2} (podano {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals musi wynosić {_1}–{_2} (podano {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	podziel na od 1 do {MAX_PIECES} plasterków
 @msg	effect {k} is `{_1}`, not `{id}`	efekt {k} to `{_1}`, nie `{id}`
 @msg	empty brush stroke	puste pociągnięcie pędzla
@@ -4341,9 +4341,9 @@ imageTrace	Outline	Kontur
 @msg	an image has no pixels and was left out	pominięto obraz bez pikseli
 @msg	image data `{_1}` is missing	brak danych obrazu `{_1}`
 @msg	image would be too large; lower the resolution	obraz byłby zbyt duży; zmniejsz rozdzielczość
-@msg	index must be a number or first, previous, next or last	indeks musi być liczbą lub first, previous, next albo last
-@msg	index must be a number or first, previous, next or last, not `{other}`	indeks musi być liczbą lub first, previous, next albo last, nie `{other}`
-@msg	index must be ≥ 0	indeks nie może być ujemny
+@msg	index must be a number or first, previous, next or last	index musi być liczbą lub first, previous, next albo last
+@msg	index must be a number or first, previous, next or last, not `{other}`	index musi być liczbą lub first, previous, next albo last, nie `{other}`
+@msg	index must be ≥ 0	index musi być ≥ 0
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	instalacja ze ścieżki nie jest dostępna w wersji webowej; przekaż moduł jako `dataBase64`
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	błąd wewnętrzny w `{cmd}`: {msg} (dokument pozostał bez zmian; zgłoś ten błąd)
 @msg	internal error: {msg} (please report this bug)	błąd wewnętrzny: {msg} (zgłoś ten błąd)
@@ -4522,9 +4522,9 @@ imageTrace	Outline	Kontur
 @msg	replace: the object to replace was changed or deleted	replace: obiekt do zastąpienia został zmieniony lub usunięty
 @msg	pattern missing	brak wzorka
 @msg	patterns nested too deeply are filled with mid-grey	zbyt głęboko zagnieżdżone wzorki są wypełniane średnią szarością
-@msg	percent must be above 0 and at most 6400, not {p}	procent musi być większy od 0 i nie większy niż 6400, nie {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent musi być większy od 0 i nie większy niż 6400, nie {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	wybierz kolor, gradient lub wzorek do zapisania jako próbka
-@msg	plane must be left, right or ground	płaszczyzna musi mieć wartość left, right lub ground
+@msg	plane must be left, right or ground	plane musi mieć wartość left, right lub ground
 @msg	plug-in ABI: {0}	ABI wtyczki: {0}
 @msg	plug-in exceeded its {0}	wtyczka przekroczyła swój limit: {0}
 @msg	plug-in failed: {0}	wtyczka zawiodła: {0}
@@ -4543,8 +4543,8 @@ imageTrace	Outline	Kontur
 @msg	result would exceed the canvas (coordinates out of range)	wynik wykroczyłby poza płótno (współrzędne poza zakresem)
 @msg	objects can't be nested more than 32 deep	obiektów nie można zagnieżdżać głębiej niż na 32 poziomy
 @msg	the SVG's elements are nested more than {0} deep	elementy SVG są zagnieżdżone głębiej niż na {0} poziomów
-@msg	scale must be a number from {_1} to {_2}, not {_3}	skala musi być liczbą od {_1} do {_2}, nie {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	skala musi być liczbą od {_1} do {_2}, nie {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale musi być liczbą od {_1} do {_2}, nie {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale musi być liczbą od {_1} do {_2}, nie {s}
 @msg	select (or target) objects whose appearance isn't basic	zaznacz (lub wskaż) obiekty, których wygląd nie jest podstawowy
 @msg	select a Live Paint group	zaznacz grupę aktywnego malowania
 @msg	select a blend	zaznacz przejście

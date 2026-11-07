@@ -4786,7 +4786,7 @@ imageTrace	Outline	Körvonal
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Az adat-helyreállításnak nincs hova mentenie a másolatokat: állítsd be a Beállítások → Fájlkezelés → Adat-helyreállítás → Mappa értéket (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Az adat-helyreállítás nem tud másolatokat menteni ide: {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Innen nem tölthetők be bővítmények: {path}: {e}
-@msg	decimals must be {_1}–{_2} (got {_3})	a tizedesjegyek száma {_1}–{_2} lehet (kapott érték: {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	a decimals értéke {_1}–{_2} lehet (kapott érték: {_3})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	jelöld ki közvetlen kijelöléssel a vágási horgonypontokat (nyitott útvonal végpontja nem lehet)
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Elvetett helyreállított dokumentumok: {n}
 @msg	divide into 1 to {MAX_PIECES} slices	a felosztás 1 és {MAX_PIECES} közötti szeletre lehetséges
@@ -5155,8 +5155,8 @@ imageTrace	Outline	Körvonal
 @msg	Saving	Mentés
 @msg	Saving recovery data for {_1}	Helyreállítási adatok mentése: {_1}
 @msg	Saving {_1}	Mentés: {_1}
-@msg	scale must be a number from {_1} to {_2}, not {_3}	a méretarány {_1} és {_2} közötti szám lehet, ez nem az: {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	a méretarány {_1} és {_2} közötti szám lehet, ez nem az: {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	a scale {_1} és {_2} közötti szám lehet, ez nem az: {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	a scale {_1} és {_2} közötti szám lehet, ez nem az: {s}
 @msg	searching a folder isn't available on the web	a webes változatban nem lehet mappában keresni
 @msg	select (or target) objects whose appearance isn't basic	jelölj ki (vagy célozz meg) olyan objektumokat, amelyeknek nem alapmegjelenésük van
 @msg	select a blend	jelölj ki egy összemosást
@@ -5188,7 +5188,7 @@ imageTrace	Outline	Körvonal
 @msg	select paths or anchor points	jelölj ki útvonalakat vagy horgonypontokat
 @msg	select paths to join	jelöld ki az összekapcsolandó útvonalakat
 @msg	select some type first	előbb jelölj ki szöveget
-@msg	kerning must be a number, "auto", or "optical"	Az alávágás szám, „auto” vagy „optical” lehet
+@msg	kerning must be a number, "auto", or "optical"	a kerning szám, „auto” vagy „optical” lehet
 @msg	the selection has no gradient fill	a kijelölésnek nincs színátmenetes kitöltése
 @msg	the selection has no gradient stroke	a kijelölésnek nincs színátmenetes körvonala
 @msg	the selection has no pattern fill	a kijelölésnek nincs mintázatos kitöltése

@@ -3962,7 +3962,7 @@ imageTrace	Outline	Kontur
 @plural	{n} stroke|{n} strokes	{n} goresan
 @msg	no library `{id}`	tidak ada pustaka `{id}`
 @msg	select some type first	pilih beberapa teks terlebih dahulu
-@msg	kerning must be a number, "auto", or "optical"	Kerning harus berupa angka, “auto”, atau “optical”
+@msg	kerning must be a number, "auto", or "optical"	kerning harus berupa angka, “auto”, atau “optical”
 @msg	{_1} has no {_2} style	{_1} tidak memiliki gaya {_2}
 @msg	a layer couldn't be read	satu lapisan tidak dapat dibaca
 @msg	it has more than one artboard	memiliki lebih dari satu artboard
@@ -4137,7 +4137,7 @@ imageTrace	Outline	Kontur
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art, atau type
 @msg	artboard {0} does not exist	artboard {0} tidak ada
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	pada skala ini gambar berukuran {w} × {h} pt, melebihi kapasitas kanvas: pilih skala yang lebih kecil atau paskan ke artboard
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	sumbu harus "vertical", "horizontal", atau sudut dalam derajat, bukan `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis harus "vertical", "horizontal", atau sudut dalam derajat, bukan `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	background {other}: transparan, putih, hitam, atau warna seperti "#ff8800"
 @msg	bad color {v}	warna tidak valid {v}
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio harus berupa angka dari 0,1 sampai 10
@@ -4351,9 +4351,9 @@ imageTrace	Outline	Kontur
 @msg	replace: the object to replace was changed or deleted	ganti: objek yang akan diganti telah diubah atau dihapus
 @msg	pattern missing	pola hilang
 @msg	patterns nested too deeply are filled with mid-grey	pola yang bersarang terlalu dalam diisi dengan abu-abu tengah
-@msg	percent must be above 0 and at most 6400, not {p}	persen harus di atas 0 dan paling banyak 6400, bukan {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent harus di atas 0 dan paling banyak 6400, bukan {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	pilih warna, gradien, atau pola untuk disimpan sebagai swatch
-@msg	plane must be left, right or ground	bidang harus kiri, kanan, atau tanah
+@msg	plane must be left, right or ground	plane harus left, right, atau ground
 @msg	plug-in ABI: {0}	ABI plug-in: {0}
 @msg	plug-in exceeded its {0}	plug-in melampaui {0}-nya
 @msg	plug-in failed: {0}	plug-in gagal: {0}
@@ -4372,8 +4372,8 @@ imageTrace	Outline	Kontur
 @msg	result would exceed the canvas (coordinates out of range)	hasil akan melampaui kanvas (koordinat di luar rentang)
 @msg	objects can't be nested more than 32 deep	objek tidak dapat bersarang lebih dari 32 tingkat
 @msg	the SVG's elements are nested more than {0} deep	elemen SVG bersarang lebih dari {0} tingkat
-@msg	scale must be a number from {_1} to {_2}, not {_3}	skala harus berupa angka dari {_1} sampai {_2}, bukan {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	skala harus berupa angka dari {_1} sampai {_2}, bukan {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale harus berupa angka dari {_1} sampai {_2}, bukan {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale harus berupa angka dari {_1} sampai {_2}, bukan {s}
 @msg	select (or target) objects whose appearance isn't basic	pilih (atau jadikan target) objek yang penampilannya bukan dasar
 @msg	select a Live Paint group	pilih grup Live Paint
 @msg	select a blend	pilih blend

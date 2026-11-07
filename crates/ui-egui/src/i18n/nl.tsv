@@ -3976,7 +3976,7 @@ imageTrace	Outline	Contour
 @plural	{n} stroke|{n} strokes	{n} lijn|{n} lijnen
 @msg	no library `{id}`	geen bibliotheek `{id}`
 @msg	select some type first	selecteer eerst wat tekst
-@msg	kerning must be a number, "auto", or "optical"	Kerning moet een getal, ‘auto’ of ‘optical’ zijn
+@msg	kerning must be a number, "auto", or "optical"	kerning moet een getal, ‘auto’ of ‘optical’ zijn
 @msg	{_1} has no {_2} style	{_1} heeft geen {_2}stijl
 @msg	a layer couldn't be read	een laag kon niet worden gelezen
 @msg	it has more than one artboard	het heeft meer dan één tekengebied
@@ -4151,7 +4151,7 @@ imageTrace	Outline	Contour
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art of type
 @msg	artboard {0} does not exist	tekengebied {0} bestaat niet
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	bij deze schaal is de tekening {w} × {h} pt, meer dan het canvas kan bevatten: kies een kleinere schaal of pas de tekening aan op het tekengebied
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	as moet "vertical", "horizontal" of een hoek in graden zijn, niet `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis moet "vertical", "horizontal" of een hoek in graden zijn, niet `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	achtergrond {other}: transparant, wit, zwart of een kleur zoals "#ff8800"
 @msg	bad color {v}	onjuiste kleur {v}
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio moet een getal van 0,1 tot 10 zijn
@@ -4160,9 +4160,9 @@ imageTrace	Outline	Contour
 @msg	bad shortcut	onjuiste sneltoets
 @msg	bad stream length	onjuiste streamlengte
 @msg	bad trailer	onjuiste trailer
-@msg	balance must be between 0 and 100	balans moet tussen 0 en 100 liggen
+@msg	balance must be between 0 and 100	balance moet tussen 0 en 100 liggen
 @msg	batch step {_1} (`{id}`) failed: {e}	batchstap {_1} (`{id}`) is mislukt: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	helderheid moet dark|mediumDark|mediumLight|light zijn
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness moet dark|mediumDark|mediumLight|light zijn
 @msg	can't encode the document: {0}	kan het document niet coderen: {0}
 @msg	can't parse shortcut `{c}`	kan sneltoets `{c}` niet parseren
 @msg	can't parse shortcut `{s}` for `{k}`	kan sneltoets `{s}` voor `{k}` niet parseren
@@ -4185,7 +4185,7 @@ imageTrace	Outline	Contour
 @msg	compound paths can only contain paths	samengestelde paden kunnen alleen paden bevatten
 @msg	compressed (RLE) bitmaps can't be read yet	gecomprimeerde (RLE) bitmaps kunnen nog niet gelezen worden
 @msg	damaged	beschadigd
-@msg	decimals must be {_1}–{_2} (got {_3})	decimalen moeten {_1}–{_2} zijn (kreeg {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals moet {_1}–{_2} zijn (kreeg {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	deel op in 1 tot {MAX_PIECES} slices
 @msg	effect {k} is `{_1}`, not `{id}`	effect {k} is `{_1}`, niet `{id}`
 @msg	empty brush stroke	lege penseelstreek
@@ -4363,9 +4363,9 @@ imageTrace	Outline	Contour
 @msg	replace: the object to replace was changed or deleted	vervangen: het te vervangen object is gewijzigd of verwijderd
 @msg	pattern missing	patroon ontbreekt
 @msg	patterns nested too deeply are filled with mid-grey	patronen die te diep genest zijn, worden gevuld met middelgrijs
-@msg	percent must be above 0 and at most 6400, not {p}	procent moet boven 0 en maximaal 6400 zijn, niet {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent moet boven 0 en maximaal 6400 zijn, niet {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	kies een kleur, verloop of patroon om als staal op te slaan
-@msg	plane must be left, right or ground	vlak moet links, rechts of grond zijn
+@msg	plane must be left, right or ground	plane moet left, right of ground zijn
 @msg	plug-in ABI: {0}	plug-in-ABI: {0}
 @msg	plug-in exceeded its {0}	plug-in overschreed zijn {0}
 @msg	plug-in failed: {0}	plug-in mislukt: {0}
@@ -4384,8 +4384,8 @@ imageTrace	Outline	Contour
 @msg	result would exceed the canvas (coordinates out of range)	het resultaat zou het canvas overschrijden (coördinaten buiten bereik)
 @msg	objects can't be nested more than 32 deep	objecten kunnen niet dieper dan 32 niveaus worden genest
 @msg	the SVG's elements are nested more than {0} deep	de elementen van de SVG zijn dieper dan {0} niveaus genest
-@msg	scale must be a number from {_1} to {_2}, not {_3}	schaal moet een getal van {_1} tot {_2} zijn, niet {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	schaal moet een getal van {_1} tot {_2} zijn, niet {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale moet een getal van {_1} tot {_2} zijn, niet {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale moet een getal van {_1} tot {_2} zijn, niet {s}
 @msg	select (or target) objects whose appearance isn't basic	selecteer (of richt je op) objecten waarvan de vormgeving niet basis is
 @msg	select a Live Paint group	selecteer een Live Paint-groep
 @msg	select a blend	selecteer een vermenging
@@ -4686,12 +4686,12 @@ imageTrace	Outline	Contour
 @msg	the PSD file's image data can't be read: {e}	de afbeeldingsgegevens van het PSD-bestand kunnen niet worden gelezen: {e}
 @msg	Imported library {name}	Bibliotheek {name} geïmporteerd
 @msg	Invalid panel layout; restored the default dock	Ongeldige paneelindeling; het standaarddok is hersteld
-@msg	action is required	actie is vereist
+@msg	action is required	action is vereist
 @msg	anchor must name a registered panel	anchor moet een geregistreerd paneel benoemen
 @msg	before must name a panel	before moet een paneel benoemen
 @msg	docking action contains an unknown panel or an excessive split path	dokactie bevat een onbekend paneel of een overmatig splitspad
 @msg	group must be true or false	group moet true of false zijn
-@msg	panel is not in a dock group	paneel staat niet in een dockgroep
+@msg	panel is not in a dock group	panel staat niet in een dockgroep
 @msg	only a dock group above or below others collapses, not one beside another	alleen een dockgroep boven of onder andere vouwt samen, niet een ernaast
 @msg	icon must be true or false	icon moet true of false zijn
 @msg	icon only docks a panel in the icon column, with no anchor	icon dockt een paneel alleen in de pictogramkolom, zonder anchor

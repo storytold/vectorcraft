@@ -4379,7 +4379,7 @@ theme	Appearance	Giao diện
 @msg	bad shortcut	phím tắt không hợp lệ
 @msg	bad stream length	độ dài luồng không hợp lệ
 @msg	bad trailer	trailer không hợp lệ
-@msg	balance must be between 0 and 100	cân bằng phải nằm trong khoảng 0 đến 100
+@msg	balance must be between 0 and 100	balance phải nằm trong khoảng 0 đến 100
 @msg	batch step {_1} (`{id}`) failed: {e}	bước hàng loạt {_1} (`{id}`) thất bại: {e}
 @msg	before must name a panel	before phải đặt tên bảng
 @msg	below and above must name a panel floating in another group	below và above phải đặt tên bảng đang thả nổi trong nhóm khác
@@ -4434,7 +4434,7 @@ theme	Appearance	Giao diện
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Phục hồi dữ liệu không có nơi lưu bản sao: đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Phục hồi dữ liệu không thể lưu bản sao vào {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Không thể tải plug-in từ {path}: {e}
-@msg	decimals must be {_1}–{_2} (got {_3})	số thập phân phải từ {_1}–{_2} (nhận được {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals phải từ {_1}–{_2} (nhận được {_3})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	chọn trực tiếp các điểm neo để cắt (không phải điểm cuối của đường dẫn mở)
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Đã loại bỏ {n} tài liệu đã phục hồi
 @msg	divide into 1 to {MAX_PIECES} slices	chia thành 1 đến {MAX_PIECES} lát cắt
@@ -4474,7 +4474,7 @@ theme	Appearance	Giao diện
 @msg	icon must be true or false	icon phải là true hoặc false
 @msg	icon only docks a panel in the icon column, with no anchor	icon chỉ neo bảng vào cột biểu tượng, không có anchor
 @msg	column docks a set as a dock column, with no anchor or icon	column neo một bộ thành cột neo, không có anchor hay icon
-@msg	panel is not in a dock group	bảng không thuộc nhóm nào của dock
+@msg	panel is not in a dock group	panel không thuộc nhóm nào của dock
 @msg	only a dock group above or below others collapses, not one beside another	chỉ thu gọn được nhóm dock nằm trên hoặc dưới các nhóm khác, không phải nhóm nằm cạnh
 @msg	guides are locked	đường căn bị khóa
 @msg	handle must be in or out	handle phải là in hoặc out
@@ -4485,9 +4485,9 @@ theme	Appearance	Giao diện
 @msg	image would be too large; lower the resolution	ảnh sẽ quá lớn; hãy giảm độ phân giải
 @msg	Imported library {name}	Đã nhập thư viện {name}
 @msg	Imported {what}: {_1}	Đã nhập {what}: {_1}
-@msg	index must be a number or first, previous, next or last	chỉ mục phải là số hoặc first, previous, next hoặc last
-@msg	index must be a number or first, previous, next or last, not `{other}`	chỉ mục phải là số hoặc first, previous, next hoặc last, không phải `{other}`
-@msg	index must be ≥ 0	chỉ mục không được âm
+@msg	index must be a number or first, previous, next or last	index phải là số hoặc first, previous, next hoặc last
+@msg	index must be a number or first, previous, next or last, not `{other}`	index phải là số hoặc first, previous, next hoặc last, không phải `{other}`
+@msg	index must be ≥ 0	index phải ≥ 0
 @msg	Installed plug-in {_1}	Đã cài đặt plug-in {_1}
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	cài đặt từ đường dẫn không khả dụng trên web; hãy truyền mô-đun dưới dạng `dataBase64`
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	lỗi nội bộ trong `{cmd}`: {msg} (tài liệu được giữ nguyên; vui lòng báo cáo lỗi này)
@@ -4746,9 +4746,9 @@ theme	Appearance	Giao diện
 @msg	PDF settings are not an object	Cài đặt PDF không phải là đối tượng
 @msg	PDF security settings are not an object	Cài đặt bảo mật PDF không phải là đối tượng
 @msg	PDF writer error: {0}	Lỗi ghi PDF: {0}
-@msg	percent must be above 0 and at most 6400, not {p}	phần trăm phải lớn hơn 0 và tối đa 6400, không phải {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent phải lớn hơn 0 và tối đa 6400, không phải {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	hãy chọn màu, chuyển sắc hoặc họa tiết để lưu làm mẫu màu
-@msg	plane must be left, right or ground	mặt phẳng phải là left, right hoặc ground
+@msg	plane must be left, right or ground	plane phải là left, right hoặc ground
 @msg	plug-in ABI: {0}	ABI plug-in: {0}
 @msg	plug-in exceeded its {0}	plug-in đã vượt quá {0}
 @msg	plug-in failed: {0}	plug-in thất bại: {0}
@@ -4809,8 +4809,8 @@ theme	Appearance	Giao diện
 @msg	Saving	Đang lưu
 @msg	Saving recovery data for {_1}	Đang lưu dữ liệu phục hồi cho {_1}
 @msg	Saving {_1}	Đang lưu {_1}
-@msg	scale must be a number from {_1} to {_2}, not {_3}	tỷ lệ phải là số từ {_1} đến {_2}, không phải {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	tỷ lệ phải là số từ {_1} đến {_2}, không phải {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale phải là số từ {_1} đến {_2}, không phải {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale phải là số từ {_1} đến {_2}, không phải {s}
 @msg	searching a folder isn't available on the web	tìm kiếm trong thư mục không khả dụng trên web
 @msg	select (or target) objects whose appearance isn't basic	chọn (hoặc đặt mục tiêu) đối tượng có diện mạo không cơ bản
 @msg	select a blend	hãy chọn một đối tượng hòa trộn
@@ -4842,7 +4842,7 @@ theme	Appearance	Giao diện
 @msg	select paths or anchor points	chọn đường dẫn hoặc điểm neo
 @msg	select paths to join	hãy chọn đường dẫn để nối
 @msg	select some type first	hãy chọn chữ trước
-@msg	kerning must be a number, "auto", or "optical"	Kerning phải là số, “auto” hoặc “optical”
+@msg	kerning must be a number, "auto", or "optical"	kerning phải là số, “auto” hoặc “optical”
 @msg	the selection has no gradient fill	vùng chọn không có tô chuyển sắc
 @msg	the selection has no gradient stroke	vùng chọn không có nét chuyển sắc
 @msg	the selection has no pattern fill	vùng chọn không có tô họa tiết

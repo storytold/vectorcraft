@@ -4162,7 +4162,7 @@ imageTrace	Outline	Ääriviiva
 @plural	{n} stroke|{n} strokes	{n} viiva|{n} viivaa
 @msg	no library `{id}`	ei kirjastoa `{id}`
 @msg	select some type first	valitse ensin tekstiä
-@msg	kerning must be a number, "auto", or "optical"	Parivälistyksen on oltava luku, ”auto” tai ”optical”
+@msg	kerning must be a number, "auto", or "optical"	kerning-arvon on oltava luku, ”auto” tai ”optical”
 @msg	the selection has no gradient fill	valinnalla ei ole liukuväritäyttöä
 @msg	the selection has no gradient stroke	valinnalla ei ole liukuväriviivaa
 @msg	the selection has no pattern fill	valinnalla ei ole kuviotäyttöä
@@ -4372,7 +4372,7 @@ imageTrace	Outline	Ääriviiva
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art tai type
 @msg	artboard {0} does not exist	piirtoalustaa {0} ei ole olemassa
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	tässä mittakaavassa piirustus on {w} × {h} pt, enemmän kuin kankaalle mahtuu: valitse pienempi mittakaava tai sovita se piirtoalustaan
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	akselin on oltava "vertical", "horizontal" tai kulma asteina, ei `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis-arvon on oltava "vertical", "horizontal" tai kulma asteina, ei `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	tausta {other}: transparent, white, black tai väri, kuten "#ff8800"
 @msg	bad color {v}	virheellinen väri {v}
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio on oltava luku väliltä 0,1–10
@@ -4381,9 +4381,9 @@ imageTrace	Outline	Ääriviiva
 @msg	bad shortcut	virheellinen pikanäppäin
 @msg	bad stream length	virheellinen virran pituus
 @msg	bad trailer	virheellinen trailer
-@msg	balance must be between 0 and 100	tasapainon on oltava väliltä 0–100
+@msg	balance must be between 0 and 100	balance-arvon on oltava väliltä 0–100
 @msg	batch step {_1} (`{id}`) failed: {e}	erävaihe {_1} (`{id}`) epäonnistui: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	kirkkauden on oltava dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness-arvon on oltava dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	asiakirjaa ei voi koodata: {0}
 @msg	can't parse shortcut `{c}`	pikanäppäintä `{c}` ei voi jäsentää
 @msg	can't parse shortcut `{s}` for `{k}`	pikanäppäintä `{s}` kohteelle `{k}` ei voi jäsentää
@@ -4408,7 +4408,7 @@ imageTrace	Outline	Ääriviiva
 @msg	compound paths can only contain paths	yhdistelmäpolut voivat sisältää vain polkuja
 @msg	compressed (RLE) bitmaps can't be read yet	pakattuja (RLE) bittikarttoja ei voi vielä lukea
 @msg	damaged	vaurioitunut
-@msg	decimals must be {_1}–{_2} (got {_3})	desimaalien on oltava {_1}–{_2} (saatiin {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals-arvon on oltava {_1}–{_2} (saatiin {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	jaa 1–{MAX_PIECES} viipaleeseen
 @msg	effect {k} is `{_1}`, not `{id}`	tehoste {k} on `{_1}`, ei `{id}`
 @msg	empty brush stroke	tyhjä sivellinviiva
@@ -4426,9 +4426,9 @@ imageTrace	Outline	Ääriviiva
 @msg	an image has no pixels and was left out	kuva, jossa ei ole pikseleitä, jätettiin pois
 @msg	image data `{_1}` is missing	kuvan data `{_1}` puuttuu
 @msg	image would be too large; lower the resolution	kuvasta tulisi liian suuri; pienennä tarkkuutta
-@msg	index must be a number or first, previous, next or last	indeksin on oltava luku tai first, previous, next tai last
-@msg	index must be a number or first, previous, next or last, not `{other}`	indeksin on oltava luku tai first, previous, next tai last, ei `{other}`
-@msg	index must be ≥ 0	indeksi ei voi olla negatiivinen
+@msg	index must be a number or first, previous, next or last	index-arvon on oltava luku tai first, previous, next tai last
+@msg	index must be a number or first, previous, next or last, not `{other}`	index-arvon on oltava luku tai first, previous, next tai last, ei `{other}`
+@msg	index must be ≥ 0	index-arvon on oltava ≥ 0
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	polusta asentaminen ei ole käytettävissä verkossa; välitä moduuli muodossa `dataBase64`
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	sisäinen virhe kohteessa `{cmd}`: {msg} (asiakirja jätettiin ennalleen; ilmoita tästä virheestä)
 @msg	internal error: {msg} (please report this bug)	sisäinen virhe: {msg} (ilmoita tästä virheestä)
@@ -4605,9 +4605,9 @@ imageTrace	Outline	Ääriviiva
 @msg	replace: the object to replace was changed or deleted	replace: korvattavaa objektia on muutettu tai se on poistettu
 @msg	pattern missing	kuvio puuttuu
 @msg	patterns nested too deeply are filled with mid-grey	liian syvälle sisäkkäiset kuviot täytetään keskiharmaalla
-@msg	percent must be above 0 and at most 6400, not {p}	prosenttiarvon on oltava yli 0 ja enintään 6400, ei {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent-arvon on oltava yli 0 ja enintään 6400, ei {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	valitse väri, liukuväri tai kuvio tallennettavaksi värimalliksi
-@msg	plane must be left, right or ground	tason on oltava left, right tai ground
+@msg	plane must be left, right or ground	plane-arvon on oltava left, right tai ground
 @msg	plug-in ABI: {0}	laajennuksen ABI: {0}
 @msg	plug-in exceeded its {0}	laajennus ylitti rajan: {0}
 @msg	plug-in failed: {0}	laajennus epäonnistui: {0}
@@ -4626,8 +4626,8 @@ imageTrace	Outline	Ääriviiva
 @msg	result would exceed the canvas (coordinates out of range)	tulos ylittäisi kankaan (koordinaatit alueen ulkopuolella)
 @msg	objects can't be nested more than 32 deep	objekteja ei voi sisäkkäistää yli 32 tason syvyyteen
 @msg	the SVG's elements are nested more than {0} deep	elementit ovat SVG-tiedostossa sisäkkäin yli {0} tason syvyydessä
-@msg	scale must be a number from {_1} to {_2}, not {_3}	mittakaavan on oltava luku väliltä {_1}–{_2}, ei {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	mittakaavan on oltava luku väliltä {_1}–{_2}, ei {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {s}
 @msg	select (or target) objects whose appearance isn't basic	valitse (tai kohdista) objektit, joiden ulkoasu ei ole perusulkoasu
 @msg	select a Live Paint group	valitse elävän maalauksen ryhmä
 @msg	select a blend	valitse sulautus
@@ -4963,7 +4963,7 @@ imageTrace	Outline	Ääriviiva
 @msg	before must name a panel	before-arvon on nimettävä paneeli
 @msg	docking action contains an unknown panel or an excessive split path	telakointitoiminto sisältää tuntemattoman paneelin tai liian pitkän jakopolun
 @msg	group must be true or false	group-arvon on oltava true tai false
-@msg	panel is not in a dock group	paneeli ei ole telakkaryhmässä
+@msg	panel is not in a dock group	panel ei ole telakkaryhmässä
 @msg	only a dock group above or below others collapses, not one beside another	vain muiden ylä- tai alapuolella oleva telakkaryhmä kutistuu, ei toisen vieressä oleva
 @msg	icon must be true or false	icon-arvon on oltava true tai false
 @msg	icon only docks a panel in the icon column, with no anchor	icon telakoi paneelin vain kuvakesarakkeeseen, ilman anchor-arvoa

@@ -5238,12 +5238,12 @@
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} बहुत लंबा है (अधिकांश {MAX_TEXT} वर्णों पर)
 @msg	{k} must be {{size?, position?}}	{k} को {{size?, position?}} होना चाहिए
 @msg	{k} must be > 0	{k} होना चाहिए > 0
-@msg	{k} must be a number (pt) or a length such as "210 mm"	{k} को एक नंबर (pt) या "210 मिमी" जैसी लंबाई होना चाहिए।
+@msg	{k} must be a number (pt) or a length such as "210 mm"	{k} को एक नंबर (pt) या "210 mm" जैसी लंबाई होना चाहिए।
 @msg	{k} must be a number from {min} to {max}	{k} को {min} से {max} के बीच की संख्या होना चाहिए
-@msg	{k} must be a number or "auto"	{k} एक नंबर या "ऑटो" होना चाहिए।
+@msg	{k} must be a number or "auto"	{k} एक नंबर या "auto" होना चाहिए।
 @msg	{k} must be a string	{k} एक स्ट्रिंग होना चाहिए
 @msg	{k} must be text	{k} को टेक्स्ट होना चाहिए
-@msg	{k} must be true or false	{k} को सच या झूठा होना चाहिए
+@msg	{k} must be true or false	{k} को true या false होना चाहिए
 @msg	{k}: can't read `{s}` as a length	{k}: `{s}` को लंबाई के रूप में नहीं पढ़ा जा सकता
 @msg	{key} must be [x, y] with finite coordinates	{key} को [x, y] होना चाहिए, जिसमें परिमित निर्देशांक होंगे।
 @msg	{key} must be [x,y]	{key} होना चाहिए [x,y]]
@@ -5330,7 +5330,7 @@
 @msg	`{id}` isn't a loaded library	`{id}` एक लोड लाइब्रेरी नहीं है
 @msg	`{k}.family` is required	`{k}.family` की आवश्यकता है
 @msg	`{k}` is a number 0..1	`{k}` एक नंबर 0..1 है।
-@msg	`{k}` is true or false	`{k}` सही या झूठ है
+@msg	`{k}` is true or false	`{k}` true या false है
 @msg	`{k}` isn't an export setting: {_1}	`{k}` एक निर्यात सेटिंग नहीं है: {_1}
 @msg	`{k}` must be [x, y]	`{k}` होना चाहिए [x, y]
 @msg	`{k}` must be {what}	`{k}` होना चाहिए {what}
@@ -5374,7 +5374,7 @@
 @msg	`{key}` must be from {lo} to {hi}	`{key}` को {lo} से {hi} होना चाहिए।
 @msg	`{key}` must be from 0 to 180 degrees, not {a}	`{key}` 0 से 180 डिग्री तक होना चाहिए, नहीं {a}
 @msg	`{key}` must be one of {_1}	`{key}` को {_1} में से एक होना चाहिए
-@msg	`{key}` must be true or false	`{key}` को सच या झूठ होना चाहिए
+@msg	`{key}` must be true or false	`{key}` को true या false होना चाहिए
 @msg	`{key}`: not a colour: {v}	`{key}`: कोई रंग नहीं: {v}
 @msg	`{l}` isn't a global or spot colour	`{l}` एक वैश्विक या स्पॉट रंग नहीं है
 @msg	`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText	`{m}` एक बिटमैप नहीं है: clipboard.importSvg, importPdf या importText का उपयोग करें
@@ -5430,7 +5430,7 @@
 @msg	`{what}` must be text	`{what}` को टेक्स्ट होना चाहिए
 @msg	`a` and `b` must be two different paths	`a` और `b` को दो अलग-अलग पाथ होना चाहिए
 @msg	`align` is start, center or end	`align` शुरू, केंद्र या अंत है
-@msg	`align` must be "left", "center" or "right", not {other}	`align` होना चाहिए "left", "सेंटर" या "right", नहीं {other}
+@msg	`align` must be "left", "center" or "right", not {other}	`align` होना चाहिए "left", "center" या "right", नहीं {other}
 @msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` को [subpath, एंकर] जोड़े की एक सारणी होना चाहिए
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` में एंकर इंडेक्स (0, 1, 2…) की सूची होनी चाहिए, {k} नहीं
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` में एंकर इंडेक्स (0, 1, 2…) की सूची होनी चाहिए, {v} नहीं
@@ -5481,18 +5481,18 @@
 @msg	`diameter` must be from 0.1 to 2500 pt	`diameter` को 0.1 से 2500 pt होना चाहिए
 @msg	`diameter` must be from 0.25 to 200 pt	`diameter` को 0.25 से 200 pt होना चाहिए
 @msg	`digits` must be one of {_1}	`digits` को {_1} में से एक होना चाहिए
-@msg	`dimImages` is a percentage or false	`dimImages` एक प्रतिशत या झूठी है
-@msg	`direction` must be "auto", "leftToRight" or "rightToLeft"	`direction` को "ऑटो", "leftToRight" या "rightToLeft" होना चाहिए
+@msg	`dimImages` is a percentage or false	`dimImages` एक प्रतिशत या false है
+@msg	`direction` must be "auto", "leftToRight" or "rightToLeft"	`direction` को "auto", "leftToRight" या "rightToLeft" होना चाहिए
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gradient fills (paint.setFill) पर लागू होता है
-@msg	`dither` applies to gradient fills (stroke: false)	`dither` gradient fills (स्ट्रोक: झूठी) पर लागू होता है
-@msg	`dither` must be true or false	`dither` को सच या झूठा होना चाहिए
+@msg	`dither` applies to gradient fills (stroke: false)	`dither` ग्रेडिएंट फ़िल (stroke: false) पर लागू होता है
+@msg	`dither` must be true or false	`dither` को true या false होना चाहिए
 @msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` {size} bytes (limit {MAX_DOCUMENT_DATA}) है।
 @msg	`each` is the value one design stands for, more than 0	`each` एक डिज़ाइन का मान है, जो 0 से अधिक होना चाहिए
-@msg	`end` must be "start" or "end"	`end` को " start" या "end" होना चाहिए।
+@msg	`end` must be "start" or "end"	`end` को "start" या "end" होना चाहिए।
 @msg	`ends` applies to joining exactly two paths	`ends` वास्तव में दो पाथ में शामिल होने के लिए लागू होता है
 @msg	`event` must be one of {_1}	`event` is one of the {_1}
 @msg	`every` must be "all", "odd" or "even", not {v}	`every` होना चाहिए "all", "odd" या "even", नहीं {v}
-@msg	`expand` must be true or false	`expand` को सच या झूठ होना चाहिए
+@msg	`expand` must be true or false	`expand` को true या false होना चाहिए
 @msg	`exportPreset` is the name of a preset of document.exportPresets.list	`exportPreset`, document.exportPresets.list के किसी प्रीसेट का नाम है
 @msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` में पिछली text.findFontFiles सर्च में मिली फ़ॉन्ट फ़ाइलों के 1 से 1000 पाथ होने चाहिए
 @msg	`folder` must be an absolute folder path	`folder` एक पूर्ण फ़ोल्डर पाथ होना चाहिए
@@ -5546,14 +5546,14 @@
 @msg	`kind` must be one of: rectangle, ellipse, polygon, star, ring, arrow, cross, heart, gear, bubble	`kind` में से एक होना चाहिए: आयत, अंडाकार, बहुभुज, स्टार, रिंग, तीर, क्रॉस, दिल, गियर, बुलबुला
 @msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` को spotColors, colorEffects, rgbImages, cmykImages या grayImages होना चाहिए
 @msg	`kinds` must be a list of issue kinds	`kinds` को जारी करने के प्रकार की सूची होना चाहिए
-@msg	`kinsoku` must be "none", "hard" or "soft"	`kinsoku` होना चाहिए "one", "hard" या "soft" होना चाहिए।
+@msg	`kinsoku` must be "none", "hard" or "soft"	`kinsoku` "none", "hard" या "soft" होना चाहिए।
 @msg	`label` must be a non-empty name of at most 200 characters	`label` को 200 वर्णों में से एक गैर-खाली नाम होना चाहिए
-@msg	`language` must be a language name or tag, such as "Turkish" or "tr"	`language` एक भाषा का नाम या टैग होना चाहिए, जैसे "तुर्की" या "tr"
-@msg	`leading` must be from 0.1 to 5000, or null for Auto	`leading` को 0.1 से 5000 तक होना चाहिए, या ऑटो के लिए शून्य होना चाहिए
+@msg	`language` must be a language name or tag, such as "Turkish" or "tr"	`language` एक भाषा का नाम या टैग होना चाहिए, जैसे "Turkish" या "tr"
+@msg	`leading` must be from 0.1 to 5000, or null for Auto	`leading` को 0.1 से 5000 तक होना चाहिए, या ऑटो के लिए null होना चाहिए
 @msg	`leadingModel` must be "romanBaseline" or "emBoxTop"	`leadingModel` को "romanBaseline" या "emBoxTop" होना चाहिए
 @msg	`length` must be a number of at most 1000000 pt either way	`length` को 1000000 pt में से एक होना चाहिए।
 @msg	`library` is a library id or name (see {list})	`library` एक लाइब्रेरी आईडी या नाम है ( {list} देखें)
-@msg	`line` must be true or false	`line` को सही या झूठा होना चाहिए
+@msg	`line` must be true or false	`line` को true या false होना चाहिए
 @msg	`method` must be classic or perceptual	`method` क्लासिक या अवधारणात्मक होना चाहिए
 @msg	`min` is greater than `max`	`min` अधिकतम `max` से अधिक है
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` और `maxAnchors` पूरे नंबर होना चाहिए
@@ -5591,25 +5591,25 @@
 @msg	`ratio` must be from 0.1 to 0.5	`ratio` को 0.1 से 0.5 तक होना चाहिए
 @msg	`rect` must be [x, y, width, height] with a positive size	`rect` होना चाहिए [x, y, चौड़ाई, ऊंचाई] एक सकारात्मक आकार के साथ
 @msg	`relation` must be overlap, inside or outside	`relation` को ओवरलैप, अंदर या बाहर होना चाहिए
-@msg	`reversed` must be true or false	`reversed` को सच या झूठ होना चाहिए
+@msg	`reversed` must be true or false	`reversed` को true या false होना चाहिए
 @msg	`rotate` must be a finite number	`rotate` एक परिमित संख्या होना चाहिए
 @msg	`rule` must be nonZero or evenOdd	`rule` होना चाहिए nonZero or evenOdd होना चाहिए
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` होना चाहिए 1, 3 या 5
 @msg	`scale` must be a number in (0, 100]	`scale` को (0, 100] के बीच की संख्या होना चाहिए
-@msg	`scope` must be "selection" or "document", not {other}	`scope` को "सिलेक्शन" या "दस्ताव" होना चाहिए, न कि {other}
+@msg	`scope` must be "selection" or "document", not {other}	`scope` को "selection" या "document" होना चाहिए, न कि {other}
 @msg	`script` must be a string	`script` एक स्ट्रिंग होना चाहिए
-@msg	`segment` must be "straight" or "curved"	`segment` को "सीधे" या "ठीक" होना चाहिए।
+@msg	`segment` must be "straight" or "curved"	`segment` को "straight" या "curved" होना चाहिए।
 @msg	`select` must be true or false	`select` को true या false होना चाहिए
 @msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` श्रृंखला सूचकांकों की एक गैर-खाली सूची है
 @msg	`seriesIndexes` needs a `type` or a `valueAxis`	`seriesIndexes` को `type` या `valueAxis` की आवश्यकता होती है
 @msg	`shift` must be a number of points	`shift` को कई अंक होना चाहिए
-@msg	`showCenter` must be true or false	`showCenter` को सच या झूठ होना चाहिए
+@msg	`showCenter` must be true or false	`showCenter` को true या false होना चाहिए
 @msg	`singleWordJustification` must be "fullJustify", "alignLeft", "alignCenter" or "alignRight"	`singleWordJustification` को "fullJustify", "alignLeft", "alignCenter" या "alignRight" होना चाहिए।
 @msg	`size` is a percentage of the base text's size, 1 to 100	`size` आधार टेक्स्ट के आकार का एक प्रतिशत है, 1 से 100
 @msg	`source` and `target` are the same object	`source` और `target` एक ही ऑब्जेक्ट है
 @msg	`source` must be `folder` or `datasets`	`source` होना चाहिए `folder` या `datasets` होना चाहिए
 @msg	`spacing` must be a number	`spacing` होना चाहिए
-@msg	`spacing` must be a number of points, 0 or more, or "auto"	`spacing` को कई अंक, 0 या उससे अधिक, या "ऑटो" होना चाहिए।
+@msg	`spacing` must be a number of points, 0 or more, or "auto"	`spacing` को कई अंक, 0 या उससे अधिक, या "auto" होना चाहिए।
 @msg	`start` must be a finite number	`start` को परिमित संख्या होना चाहिए
 @msg	`starts` must be an array of anchor indices (or nulls)	`starts` को एंकर इंडेक्स (या null) की ऐरे होना चाहिए
 @msg	`status` must be linked, embedded, missing or modified, or a list of them	`status` को लिंक, एम्बेडेड, लापता या संशोधित किया जाना चाहिए, या उनमें से एक सूची
@@ -5617,29 +5617,29 @@
 @msg	`stops` must be an array	`stops` एक सारणी होना चाहिए
 @msg	`story` styles the whole story: give no `start` or `end`	`story` पूरी स्टोरी को स्टाइल करता है: `start` या `end` न दें
 @msg	`story` takes the whole story: give no `start` or `end`	`story` पूरी स्टोरी लेता है: `start` या `end` न दें
-@msg	`strokeMode` applies to strokes (stroke: true)	`strokeMode` स्ट्रोक पर लागू होता है (स्ट्रोक: सच)
+@msg	`strokeMode` applies to strokes (stroke: true)	`strokeMode` स्ट्रोक पर लागू होता है (stroke: true)
 @msg	`style` must be roman or japanese	`style` को रोमन या जापानी होना चाहिए
 @msg	`subpaths` must be two integer indices	`subpaths` होना चाहिए दो पूर्णांक सूचकांक
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` को SVG ऑप्शन्स का ऑब्जेक्ट होना चाहिए (document.formats देखें)
 @msg	`symbol` must be a symbol name	`symbol` एक सिंबल नाम होना चाहिए
 @msg	`t` must be a number from -0.98 to 0.98	`t` को -0.98 से 0.98 के बीच की संख्या होना चाहिए
 @msg	`t` must be from 0 to 1	`t` 0 से 1 तक होना चाहिए
-@msg	`target` must be "object" or "contents", not {v}	`target` को "object" या "content" होना चाहिए, नहीं {v}
+@msg	`target` must be "object" or "contents", not {v}	`target` को "object" या "contents" होना चाहिए, नहीं {v}
 @msg	`tint` applies to global and spot colours	`tint` वैश्विक और स्पॉट रंगों पर लागू होता है
 @msg	`tint` goes with a global or spot `swatch`	`tint` एक वैश्विक या स्थान `swatch` के साथ चला जाता है
 @msg	`tint` must be a number (%)	`tint` एक नंबर होना चाहिए (%)
 @msg	`tint` needs a global or spot colour	`tint` को वैश्विक या स्पॉट रंग की आवश्यकता होती है
 @msg	`to` is already threaded	`to` पहले से ही पिरोया है
 @msg	`to` is the design's new name	`to` डिजाइन का नया नाम है
-@msg	`to` must be "corner" or "smooth"	`to` होना चाहिए "कॉर्नर" या "चिकना" होना चाहिए।
+@msg	`to` must be "corner" or "smooth"	`to` "corner" या "smooth" होना चाहिए।
 @msg	`to` must be [x, y]	`to` होना चाहिए [x, y]]
 @msg	`to` must be a closed path, area type or type on a path other than `from`	`to` को बंद पाथ, एरिया टाइप या पाथ पर टाइप होना चाहिए और `from` से अलग होना चाहिए
 @msg	`to` must be a whole number	`to` एक पूरी संख्या होना चाहिए
 @msg	`to` takes the rows of one object's stack, not aligned rows	`to` एक ऑब्जेक्ट के स्टैक की पंक्तियों को लेता है, पंक्तियां संरेखित नहीं है
 @msg	`tolerance` must be from 0 to 3 pt	`tolerance` को 0 से 3 pt के बीच होना चाहिए
 @msg	`tolerance` must be from 1 to 100	`tolerance` को 1 से 100 के बीच होना चाहिए
-@msg	`top` and `below` can't both be true	`top` और `below` दोनों सच नहीं हो सकते
-@msg	`useLab` must be true or false	`useLab` को सही या झूठ होना चाहिए
+@msg	`top` and `below` can't both be true	`top` और `below` दोनों true नहीं हो सकते
+@msg	`useLab` must be true or false	`useLab` को true या false होना चाहिए
 @msg	`vAlign` must be default, top, middle, baseline or bottom	`vAlign` डिफ़ॉल्ट, शीर्ष, मध्य, बेसलाइन या नीचे होना चाहिए
 @msg	`values` must be a list	`values` एक सूची होना चाहिए
 @msg	`values` must be an object	`values` एक ऑब्जेक्ट होना चाहिए
@@ -5674,7 +5674,7 @@
 @msg	a document links at most {MAX_SVG_SCRIPTS} JavaScript files	अधिकांश {MAX_SVG_SCRIPTS} जावास्क्रिप्ट फ़ाइलों पर एक डॉक्यूमेंट लिंक
 @msg	a document needs at least one artboard	कम से कम एक आर्टबोर्ड की आवश्यकता होती है
 @msg	a document needs at least one layer	डॉक्यूमेंट की कम से कम एक लेयर की आवश्यकता होती है
-@msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	एक DXF ड्राइंग एक मूल है: पास useArtboards: कलाबोर्ड प्रति एक ड्राइंग के लिए सच
+@msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	एक DXF ड्राइंग का एक मूल होता है: हर आर्टबोर्ड के लिए एक ड्राइंग के लिए useArtboards: true दें
 @msg	a feConvolveMatrix filter's order is {x}×{y}, which overflows the kernel-size multiply usvg makes	एक feConvolveMatrix फिल्टर का आदेश {x} ×{y} है, जो कर्नेल-आकार की बहुप्लाई usvg को ओवरफ्लो करता है।
 @msg	a freeform gradient keeps at least one point	एक freeform ग्रेडिएंट कम से कम एक बिंदु रखता है
 @msg	a gradient needs at least two stops	कम से कम दो स्टॉप की आवश्यकता होती है
@@ -5697,7 +5697,7 @@
 @msg	a mask that covers several layers comes in as a clipping group in each layer it covers	एक मास्क जो कई लेयर्स को कवर करता है, प्रत्येक लेयर में एक क्लिपिंग समूह के रूप में आता है, यह कवर करता है
 @msg	a multi-layer mask needs one clipping path	बहुलेयर मास्क को एक क्लिपिंग पाथ की आवश्यकता होती है
 @msg	a multi-layer mask's operators are out of order	बहुलेयर मास्क ऑपरेटर क्रम से बाहर हैं
-@msg	a name names one asset: give multiple: false, or one object	नाम एक परिसंपत्ति: एकाधिक देना: झूठा, या एक ऑब्जेक्ट
+@msg	a name names one asset: give multiple: false, or one object	एक नाम एक ही एसेट को दर्शाता है: multiple: false दें, या एक ऑब्जेक्ट
 @msg	a new document refuses this file because of these variables: {names}	एक नया डॉक्यूमेंट इन चरों के कारण इस फ़ाइल को मना कर देता है: {names}
 @msg	a new document won't read these variables back with their kind: {names}	नया डॉक्यूमेंट इन वेरिएबल्स का प्रकार वापस नहीं पढ़ पाएगा: {names}
 @msg	a page can't be read	एक पेज पढ़ा नहीं जा सकता
@@ -5746,7 +5746,7 @@
 @msg	a symbol can't hold an instance of itself	एक सिंबल खुद का एक उदाहरण नहीं पकड़ सकता है
 @msg	a symbol named `{n}` already exists	पहले से ही `{n}` नाम का सिंबल मौजूद है
 @msg	a theme has 1 to {THEME_SIZE} colours	थीम में 1 से {THEME_SIZE} रंग होते हैं
-@msg	a theme is already called {name} (replace: "{name}" overwrites it)	एक विषय को पहले से ही {name} कहा जाता है (प्रतिस्थापन: "{name}" इसे ओवरराइट करता है)
+@msg	a theme is already called {name} (replace: "{name}" overwrites it)	{name} नाम की थीम पहले से है (replace: "{name}" उसे ओवरराइट करता है)
 @msg	a toolbar name has at most {MAX_NAME} characters	टूलबार नाम में सबसे {MAX_NAME} वर्ण हैं
 @msg	a value has the wrong type for the operator	एक मूल्य ऑपरेटर के लिए गलत प्रकार है
 @msg	a value is outside the range the operator takes	एक मूल्य सीमा के बाहर है जो ऑपरेटर लेता है
@@ -5756,7 +5756,7 @@
 @msg	a view named `{name}` exists	`{name}` नामक दृश्य मौजूद है
 @msg	a workspace keeps at most {MAX} toolbars	एक वर्कस्पेस सबसे {MAX} टूलबार में रहता है
 @msg	a wraparound group is inside a compound path	एक रैपराउंड समूह एक मिश्रित पाथ के अंदर है
-@msg	action is required	कार्रवाई की आवश्यकता है
+@msg	action is required	action आवश्यक है
 @msg	add a format to export	निर्यात करने के लिए एक फ़ॉर्मैट जोड़ें
 @msg	Add Points at Crossings: a path went missing	क्रॉसिंग्स में अंक जोड़ें: एक पाथ गायब हो गया
 @msg	aiVersion {v}: "pdf" (PDF-compatible, the default) or "7" (legacy .ai, version 7)	aiVersion {v}: "pdf" (PDF-संगत, डिफ़ॉल्ट) या "7" (पुरानी .ai, संस्करण 7)
@@ -5803,7 +5803,7 @@
 @msg	Angles require two straight segments	कोणों को दो सीधे खंडों की आवश्यकता होती है
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art या type
 @msg	appearance must be flat|center|edge	appearance को flat|center|edge होना चाहिए
-@msg	apply is "fill" or "stroke", not `{other}`	लागू "भर" या "स्ट्रोक" है, नहीं `{other}`
+@msg	apply is "fill" or "stroke", not `{other}`	apply "fill" या "stroke" है, नहीं `{other}`
 @msg	area must be a closed polygon of 3 to 100000 [x, y] points	area: क्षेत्र 3 से 100000 [x, y] अंक के एक बंद बहुभुज होना चाहिए
 @msg	area type {_1} is named twice	क्षेत्र के प्रकार {_1} को दो बार नाम दिया गया है
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	फ्रेम में क्षेत्र प्रकार फ़ॉन्ट की एक पंक्ति के लिए बहुत कम है, यह लंबा फ्रेम ({_1}) में दिखाता है: उनका प्रकार अन्यथा नहीं दिखाई देगा
@@ -5949,12 +5949,12 @@
 @msg	Choose two non-parallel straight segments	दो गैर-parallel सीधे खंड चुनें
 @msg	Choose two nonzero angle arms	दो nonzero कोण हथियार चुनें
 @msg	Click in type with a Type tool to split it	इसे विभाजित करने के लिए टाइप टूल के साथ टाइप करें
-@msg	clip must be true or false	clip: क्लिप को सच या झूठा होना चाहिए
+@msg	clip must be true or false	clip को true या false होना चाहिए
 @msg	clipboard is empty	क्लिपबोर्ड खाली है
 @msg	clippingMask must be true or false	clippingMask को true या false होना चाहिए
 @msg	closed must be a boolean	closed: बंद होना चाहिए एक boolean
 @msg	closing needs three anchors	closing: बंद करने की जरूरत है तीन एंकर
-@msg	collapsed must be true or false	collapsed: पतन सच होना चाहिए या गलत होना चाहिए
+@msg	collapsed must be true or false	collapsed को true या false होना चाहिए
 @msg	color.profile: no RGB or CMYK profile is called “{profile}”	Color.profile: कोई RGB या CMYK प्रोफ़ाइल को "{profile}" कहा जाता है।
 @msg	colorMode must be rgb or cmyk, not `{m}`	colorMode को rgb या cmyk होना चाहिए, `{m}` नहीं
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel को {own} (डॉक्यूमेंट का मोड), grayscale या bitmap होना चाहिए
@@ -5967,8 +5967,8 @@
 @msg	column {column}: `{cell}` names no variable	कॉलम {column}: `{cell}` नाम कोई चर नहीं
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	कॉलम {column}: चर नाम {MAX_NAME} अक्षरों से लंबा है
 @msg	column docks a set as a dock column, with no anchor or icon	कॉलम एक डॉक कॉलम के रूप में सेट करता है, जिसमें कोई एंकर या आइकन नहीं होता है
-@msg	column must be true or a number from 1	column: कॉलम सही होना चाहिए या 1 से एक नंबर होना चाहिए
-@msg	column: true floats the whole column and takes no onto, above or below	स्तंभ: सच पूरे स्तंभ को तैरता है और ऊपर या नीचे नहीं लेता है
+@msg	column must be true or a number from 1	column को true या 1 या उससे बड़ी संख्या होना चाहिए
+@msg	column: true floats the whole column and takes no onto, above or below	column: true पूरे कॉलम को फ़्लोट करता है और onto, above या below नहीं लेता
 @msg	columns {first} and {column} both name the variable `{name}`	कॉलम {first} और {column} दोनों नाम चर `{name}`
 @msg	Combine Slices: the slices have no bounds	स्लाइस को मिलाएं: स्लाइस में कोई सीमा नहीं है
 @msg	command `{0}` is not available right now: {1}	आदेश `{0}` अभी उपलब्ध नहीं है: {1}
@@ -5979,7 +5979,7 @@
 @msg	compound paths can only contain paths	यौगिक पाथ में केवल पाथ हो सकते हैं
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	मिश्रित आकार पाथ, यौगिक पाथ, समूह, मिश्रित आकार, प्रकार, मिश्रण और लिफाफे लेते हैं
 @msg	compressed (RLE) bitmaps can't be read yet	संकुचित (RLE) bitmaps अभी तक पढ़ा नहीं जा सकता है
-@msg	connect end must be "start" or "end"	कनेक्ट अंत "शुरू" या "अंत" होना चाहिए
+@msg	connect end must be "start" or "end"	कनेक्ट अंत "start" या "end" होना चाहिए
 @msg	connect needs a path other than the one extended	connect: कनेक्ट एक विस्तारित के अलावा एक पाथ की जरूरत है
 @msg	connect needs id	connect: कनेक्ट करने की जरूरत आईडी
 @msg	connect path has no open end	कनेक्ट पाथ का कोई खुला अंत नहीं है
@@ -6044,7 +6044,7 @@
 @msg	decimals must be {_1}–{_2} (got {_3})	decimals: दशमलव होना चाहिए {_1}-{_2} ({_3})
 @msg	decoded data is too large	डीकोडेड डेटा बहुत बड़ा है
 @msg	define a variable first	पहले एक चर को परिभाषित करना
-@msg	detect must be true or false	detect: पता लगाना सही या गलत होना चाहिए
+@msg	detect must be true or false	detect को true या false होना चाहिए
 @msg	Dimension is locked or hidden	आयाम बंद या छिपा हुआ है
 @msg	Dimension mode does not match its source	आयाम मोड अपने स्रोत से मेल नहीं खाता है
 @msg	Dimension point is outside the canvas	आयाम बिंदु कैनवास के बाहर है
@@ -6091,7 +6091,7 @@
 @msg	empty header in column {_1}	कॉलम में खाली हैडर {_1}
 @msg	empty path	खाली पाथ
 @msg	encoding `{_1}`: utf8 or utf16	एन्कोडिंग `{_1}`: utf8 or utf16
-@msg	ends must be two of "first" and "last"	ends: समाप्त होता है दो "पहली" और "अंतिम" होना चाहिए।
+@msg	ends must be two of "first" and "last"	ends: समाप्त होता है दो "first" और "last" होना चाहिए।
 @msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
 @msg	EPS flattener: {e}	ईपीएस flattener: {e}
 @msg	EPS options: {e}	ईपीएस ऑप्शन्स: {e}
@@ -6205,7 +6205,7 @@
 @msg	give one of assets, layers, selection or fullDocument	assets, layers, selection या fullDocument में से एक दें
 @msg	give only one of onto, above, below, icon and a column place	केवल ऊपर, नीचे, आइकन और एक स्तंभ स्थान देने के लिए
 @msg	give only one of onto, below and above	नीचे और ऊपर केवल एक देना
-@msg	give origin: [x, y], or reset: true	मूल देना: [x, y], या रीसेट करें: सच
+@msg	give origin: [x, y], or reset: true	origin: [x, y] दें, या reset: true
 @msg	give overprintFill, overprintStroke, showCenter, imageMap, url or note	overprintFill, overprintStroke, showCenter, imageMap, url या नोट
 @msg	give path (a file) or folder	पाथ (एक फ़ाइल) या फ़ोल्डर देना
 @msg	give path, or name and dataBase64	path या name और dataBase64 दें
@@ -6226,17 +6226,17 @@
 @msg	give x, y, or a handle's length or angle	x, y, या एक हैंडल की लंबाई या कोण देना
 @msg	Global Edit is off	ग्लोबल एडिट बंद है
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	ग्लोबल एडिट पाथ, मिश्रित पाथ, सिंबल उदाहरणों और उनके समूहों पर काम करता है
-@msg	global must be true or false	global: वैश्विक होना चाहिए या गलत होना चाहिए
+@msg	global must be true or false	global को true या false होना चाहिए
 @msg	glyph {_1} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)	Glyph {_1} चरित्र की स्टाइल (जैसे सभी कैप्स, छोटे कैप्स या एक संख्यात्मक प्रणाली) के साथ {ch} के लिए तैयार नहीं है।
 @msg	glyph {g} is not an alternate of {ch} in {_1} {_2}	Glyph {g} {_1} {_2} में {ch} का एक वैकल्पिक नहीं है।
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	ग्रेडिएंट "{name}" को फ़ाइल में परिभाषित नहीं किया गया है: इसके लिए एक सादे रंग खड़ा है
 @msg	gradient must be "objects" or "mesh"	gradient: ग्रेडिएंट "objects" या "mesh" होना चाहिए
 @msg	graphs come in as plain art, without their data or settings	ग्राफ़ अपने डेटा या सेटिंग्स के बिना सादे कला के रूप में आते हैं
-@msg	grays must be "profile" or "black", not `{g}`	grays: ग्रे "प्रोफ़ाइल" या "काला" होना चाहिए, नहीं `{g}`
+@msg	grays must be "profile" or "black", not `{g}`	grays: ग्रे "profile" या "black" होना चाहिए, नहीं `{g}`
 @msg	gridColors must be a preset name or two colours	gridColors को प्रीसेट नाम या दो रंग होना चाहिए
 @msg	gridSize must be small, medium or large	gridSize को small, medium या large होना चाहिए
 @msg	group must be the id of a Shaper Group	group: समूह को एक शेपर ग्रुप का आईडी होना चाहिए
-@msg	group must be true or false	group: समूह को सच या झूठा होना चाहिए
+@msg	group must be true or false	group को true या false होना चाहिए
 @msg	guide {g} is not selected	गाइड {g} नहीं चुना गया है
 @msg	guides are locked	गाइड लॉक कर रहे हैं
 @msg	handle must be 0..3	handle को 0..3 होना चाहिए
@@ -6248,7 +6248,7 @@
 @msg	highlight two or more rows to merge	दो या अधिक पंक्तियों को मर्ज करने के लिए हाइलाइट करें
 @msg	HTML Text applies to object slices of type only	एचटीएमएल टेक्स्ट केवल टाइप के ऑब्जेक्ट स्लाइस पर लागू होता है
 @msg	icon docks a panel in the icon column: use window.panel.dock	आइकन कॉलम में एक पैनल डॉक करता है: विंडो का उपयोग करें.पैनल.dock
-@msg	icon must be true or false	icon: आइकन सही या झूठी होना चाहिए
+@msg	icon must be true or false	icon को true या false होना चाहिए
 @msg	icon only docks a panel in the icon column, with no anchor	आइकन केवल आइकन कॉलम में एक पैनल को डॉक करता है, जिसमें कोई एंकर नहीं होता है
 @msg	id {value} is a layer, not an object	Id {value} एक लेयर है, कोई ऑब्जेक्ट नहीं है
 @msg	id {value} is a layer, not an object; move layers with layer.move	Id {value} एक लेयर है, कोई ऑब्जेक्ट नहीं है; लेयर के साथ लेयर्स को स्थानांतरित करें।
@@ -6269,7 +6269,7 @@
 @msg	imageMap `{m}`: none, client or server	imageMap `{m}`: none, client या server
 @msg	Imported {what}: {_1}	आयात {what}: {_1}
 @msg	Imported library {name}	आयातित लाइब्रेरी {name}
-@msg	included must be true or false	included: इसमें सही या गलत होना चाहिए
+@msg	included must be true or false	included को true या false होना चाहिए
 @msg	index must be ≥ 0	index: सूचकांक होना चाहिए ≥ 0
 @msg	index must be a number or first, previous, next or last	index: सूचकांक एक नंबर या पहले होना चाहिए, पिछले, अगले या आखिरी
 @msg	index must be a number or first, previous, next or last, not `{other}`	index: सूचकांक एक नंबर या पहले होना चाहिए, पिछले, अगले या आखिरी, नहीं `{other}`
@@ -6351,12 +6351,12 @@
 @msg	Join: a subpath went missing	जॉइन: कोई सबपाथ नहीं मिला
 @msg	justify must be auto|left|center|right|justifyAll	justify को auto|left|center|right|justifyAll होना चाहिए
 @msg	kbps must be a positive number, not {kbps}	kbps एक सकारात्मक संख्या होना चाहिए, नहीं {kbps}
-@msg	kerning must be a number, "auto", or "optical"	kerning एक संख्या, "ऑटो", या "ऑप्टिकल" होना चाहिए
+@msg	kerning must be a number, "auto", or "optical"	kerning एक संख्या, "auto", या "optical" होना चाहिए
 @msg	keywords must be a list of words or a comma-separated string	keywords: कीवर्ड शब्दों की एक सूची होना चाहिए या एक अल्पसंख्यक स्ट्रिंग होना चाहिए
 @msg	keywords must be at most {MAX_KEYWORD} characters, without control characters	keywords: कीवर्ड नियंत्रण वर्णों के बिना, अधिकांश {MAX_KEYWORD} वर्णों पर होना चाहिए
 @msg	kind must be 1, 2 or 3, or give a preset `name` (see perspective.presets.list)	kind: टाइप 1, 2 या 3 होना चाहिए, या प्रीसेट `name` देना चाहिए (see पर्सपेक्टिव.presets.list)
 @msg	kind must be graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle or paraStyle	kind को graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle या paraStyle होना चाहिए
-@msg	knockout must be "on", "off", "neutral" or a bool, not {v}	knockout: नॉकआउट को "on", "off", "न्यूट्रल" या एक बोल, न {v} होना चाहिए
+@msg	knockout must be "on", "off", "neutral" or a bool, not {v}	knockout: नॉकआउट को "on", "off", "neutral" या एक बोल, न {v} होना चाहिए
 @msg	lang must be one of {_1}	lang: लैंग को {_1} में से एक होना चाहिए
 @msg	larger than 256 MB	256 MB से अधिक
 @msg	layer `{name}` has no art to export	लेयर `{name}` को निर्यात करने के लिए कोई कला नहीं है
@@ -6364,9 +6364,9 @@
 @msg	layers can't be intertwined: select the objects in them	लेयर्स में हस्तक्षेप नहीं किया जा सकता है: उनमें ऑब्जेक्ट्स सिलेक्ट करें
 @msg	layers can't be wrap objects	लेयर्स को लपेटा नहीं जा सकता
 @msg	layers go only at the top level or in layers, objects in layers and groups	लेयरें केवल शीर्ष स्तर पर या लेयर्स में, लेयर्स और समूहों में ऑब्जेक्टएं
-@msg	layers must be true or false	layers: लेयरें सत्य या झूठी होनी चाहिए
+@msg	layers must be true or false	layers को true या false होना चाहिए
 @msg	layout must be gridByRow, gridByColumn, row or column	layout को gridByRow, gridByColumn, row या column होना चाहिए
-@msg	leading must be a number or "auto"	leading: अग्रणी एक नंबर या "ऑटो" होना चाहिए
+@msg	leading must be a number or "auto"	leading: अग्रणी एक नंबर या "auto" होना चाहिए
 @msg	left/right must be non-negative widths	बाएं / दाएं गैर-नकारात्मक चौड़ाई होना चाहिए
 @msg	level `{t}`: 2 or 3	स्तर `{t}`: 2 या 3
 @msg	library panel `{given}` isn't missing its library	लाइब्रेरी पैनल `{given}` अपने लाइब्रेरी को याद नहीं कर रहा है
@@ -6374,7 +6374,7 @@
 @msg	line {line}: more than {MAX_CSV_COLS} columns	लाइन {line}: {MAX_CSV_COLS} कॉलम से अधिक
 @msg	line {line}: unclosed quote	लाइन {line}: unclosed उद्धरण
 @msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	लाइन {line}: `{var}` के लिए मूल्य {MAX_GRAPH_CSV} बाइट्स से अधिक है
-@msg	line {line}: value for `{var}` must be true or false	लाइन {line}: `{var}` के लिए मान सही या झूठ होना चाहिए
+@msg	line {line}: value for `{var}` must be true or false	लाइन {line}: `{var}` के लिए मान true या false होना चाहिए
 @msg	line {line}: value for `{var}` must match its variable kind	लाइन {line}: `{var}` के लिए मान इसके परिवर्तनीय प्रकार से मेल खाता होना चाहिए
 @msg	lineEndings `{other}`: lf or crlf	lineEndings `{other}`: lf या crlf
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	लिंक किए गए चित्रों से पता चलता है कि फ़ाइल में सेव किए जाने वाले निम्न-रिज़ॉल्यूशन प्रीव्यू को उनकी फ़ाइलों को मिलने तक: लिंक पैनल में उन्हें फिर से लिंक करें
@@ -6398,7 +6398,7 @@
 @msg	matte: {e}	मैट: {e}
 @msg	Measured anchor no longer exists	मापने वाला एंकर अब मौजूद नहीं है
 @msg	Measured segment no longer exists	मापदंड अब मौजूद नहीं है
-@msg	member is for order front, forward, backward or back	सदस्य ऑर्डर फ्रंट, फॉरवर्ड, बैकवर्ड या बैक के लिए है
+@msg	member is for order front, forward, backward or back	member केवल order front, forward, backward या back के लिए है
 @msg	memory budget (the selection is too large to hand over)	स्मृति बजट (चुनाव बहुत बड़ा है)
 @msg	missing `{k}`	लापता `{k}`
 @msg	missing `{key}`	लापता `{key}`
@@ -6483,7 +6483,7 @@
 @msg	missing target	लापता लक्ष्य
 @msg	missing to	याद करना
 @msg	missing x, y	लापता xy
-@msg	mode is set, add or toggle, not `{other}`	मोड सेट, ऐड या टॉगल है, नहीं `{other}`
+@msg	mode is set, add or toggle, not `{other}`	mode set, add या toggle है, `{other}` नहीं
 @msg	mode must be "cmyk" or "rgb"	mode: मोड "cmyk" या "rgb" होना चाहिए
 @msg	mode must be area|onPath, got {o}	mode: मोड होना चाहिए क्षेत्रफल (onPath), {o} मिला
 @msg	module is {_1} bytes (limit {_2})	मॉड्यूल {_1} बाइट्स (सीम {_2}) है।
@@ -6507,7 +6507,7 @@
 @msg	name is empty	नाम खाली है
 @msg	name must be a toolbar's name	name: नाम एक टूलबार का नाम होना चाहिए
 @msg	name the file	फ़ाइल नाम
-@msg	names is empty	नाम खाली है
+@msg	names is empty	names खाली है
 @msg	names must be an array of symbol names	names: नाम सिंबल नामों की एक सरणी होना चाहिए
 @msg	need `anchor` or `segment` + `t`	की जरूरत `anchor` या `segment` + `t`
 @msg	need at least one anchor	कम से कम एक एंकर की जरूरत है
@@ -6853,7 +6853,7 @@
 @msg	Offset Path: select paths	ऑफसेट पाथ: सिलेक्शन पाथ
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ऑफसेट पाथ: ऑफ़सेट सिलेक्टेड पाथ की कुछ भी नहीं छोड़ता है (आकार की तुलना में एक निर्धारित बड़ा)
 @msg	Offset Path: the path is too complex to offset	ऑफसेट पाथ: पाथ ऑफसेट करने के लिए बहुत जटिल है
-@msg	on must be true or false	on: पर सच होना चाहिए या गलत होना चाहिए
+@msg	on must be true or false	on को true या false होना चाहिए
 @msg	only a dock group above or below others collapses, not one beside another	केवल दूसरों के ऊपर या नीचे एक डॉक समूह गिर जाता है, एक दूसरे के बगल में नहीं
 @msg	only an exporter declares `extensions`	केवल निर्यातक `extensions` घोषित करता है
 @msg	only an object of the Global Edit other than the one it started from can be left out	केवल ग्लोबल एडिट का एक ऑब्जेक्ट, इसके अलावा इसे शुरू किया जा सकता है, छोड़ दिया जा सकता है
@@ -6875,7 +6875,7 @@
 @msg	options must be an object (see file.formatOptions)	options: ऑप्शन्स एक ऑब्जेक्ट होना चाहिए (file.formatOptions देखें)
 @msg	order must be leftToRight or rightToLeft	order को leftToRight या rightToLeft होना चाहिए
 @msg	orientation must be portrait or landscape, not `{o}`	orientation: अभिविन्यास चित्र या परिदृश्य होना चाहिए, नहीं `{o}`
-@msg	others must be true or false	others: दूसरों को सच होना चाहिए या गलत होना चाहिए
+@msg	others must be true or false	others को true या false होना चाहिए
 @msg	Outline Stroke: no stroked paths selected	आउटलाइन स्ट्रोक: सिलेक्टेड कोई स्ट्रोक पाथ नहीं
 @msg	outlineText {v}: true or false	outlineText {v}: true या false
 @msg	output intent profile: {e}	उत्पादन आशय प्रोफ़ाइल: {e}
@@ -6986,7 +6986,7 @@
 @msg	procedures nest too deeply	प्रक्रियाओं घोंसला बहुत गहराई से
 @msg	procedures nested too deeply	प्रक्रियाओं ने बहुत गहराई से घोंसले
 @msg	quotes must be {double?, single?}	quotes को {double?, single?} होना चाहिए
-@msg	quotes.{k} must be an opening and a closing quote, e.g. "“”"	उद्धरण.{k} एक उद्घाटन और एक समापन उद्धरण होना चाहिए, उदाहरण के लिए """""
+@msg	quotes.{k} must be an opening and a closing quote, e.g. "“”"	उद्धरण.{k} एक उद्घाटन और एक समापन उद्धरण होना चाहिए, उदाहरण के लिए "“”"
 @msg	range `{s}` is empty	श्रेणी `{s}` खाली है
 @msg	range `{s}`: `{part}` names no number	सीमा `{s}`: `{part}` कोई संख्या नहीं बताता
 @msg	range `{s}`: `{part}` runs backwards	रेंज `{s}`: `{part}` पीछे चल रहा है
@@ -6997,7 +6997,7 @@
 @msg	recovery copy `{file}`: {e}	वसूली प्रतिलिपि `{file}`: {e}
 @msg	rect and {k} contradict each other: give the area or the artboards	सही और {k} एक दूसरे के विपरीत: क्षेत्र या आर्टबोर्ड देना
 @msg	rect applies to raster formats, not {_1}	सही रेस्टर फ़ॉर्मैट्स पर लागू होता है, न कि {_1}
-@msg	rect is [x, y, width, height] in points	सही [x, y, चौड़ाई, ऊंचाई] अंक में है
+@msg	rect is [x, y, width, height] in points	rect पॉइंट में [x, y, width, height] है
 @msg	rect must be [x, y, width, height]	rect: [x, y, चौड़ाई, ऊंचाई] होना चाहिए
 @msg	rect must be [x, y, width, height] with a positive width and height	rect: सही होना चाहिए [x, y, चौड़ाई, ऊंचाई] सकारात्मक चौड़ाई और ऊंचाई के साथ
 @msg	rect needs finite numbers and a positive width and height	rect: सही की जरूरत परिमित संख्या और सकारात्मक चौड़ाई और ऊंचाई
@@ -7165,9 +7165,9 @@
 @msg	shortcut for `{k}` must be a string	`{k}` के लिए शॉर्टकट एक स्ट्रिंग होना चाहिए
 @msg	show `{show}`: all, missing, modified or embedded	`{show}``: सभी, लापता, संशोधित या एम्बेडेड
 @msg	Show All Hidden Attributes: nothing is hidden	Show all Hidden Attributes: कुछ भी छिपा नहीं है
-@msg	show must be true or false	show: प्रदर्शन को सच या झूठा होना चाहिए
+@msg	show must be true or false	show को true या false होना चाहिए
 @msg	Simplify Anchors: the paths have too many anchors to simplify at once	एंकर को सरलीकृत करें: पाथ में एक बार में सरल बनाने के लिए कई एंकर हैं
-@msg	size must be "small", "medium", "large" or a number of points over 0 up to {_1}	size: आकार "छोटा", "मध्यम", "बड़ा" या 0 से अधिक अंक {_1} तक होना चाहिए
+@msg	size must be "small", "medium", "large" or a number of points over 0 up to {_1}	size: आकार "small", "medium", "large" या 0 से अधिक अंक {_1} तक होना चाहिए
 @msg	size must be positive	size: आकार सकारात्मक होना चाहिए
 @msg	sizeMode is "fixed" or "pressure", not {other}	sizeMode को "fixed" या "pressure" होना चाहिए, {other} नहीं
 @msg	sizeMode is "fixed" or "pressure", not `{other}`	sizeMode को "fixed" या "pressure" होना चाहिए, `{other}` नहीं
@@ -7177,10 +7177,10 @@
 @msg	sort `{x}`: name, kind or status	टाइप `{x}`: नाम, प्रकार या स्थिति
 @msg	source must be the id of a Shaper Group's original shape	source: स्रोत एक शेपर ग्रुप के मूल आकार का आईडी होना चाहिए
 @msg	source paths are too large for Shaper	स्रोत पाथ शेपर के लिए बहुत बड़े हैं
-@msg	span must be "object" or "selection", got {v}	span: स्पैन को "ऑब्जेक्ट" या "सिलेक्शन" होना चाहिए, {v} मिला
+@msg	span must be "object" or "selection", got {v}	span: स्पैन को "object" या "selection" होना चाहिए, {v} मिला
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" एक `gradient` रखता है, स्वॉच नहीं
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" ग्रेडिएंट रखता है: `gradient` दें
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	स्पैन: "सिलेक्शन" एक रैखिक या रेडियल ग्रेडिएंट रखता है, एक फ्रीफॉर्म नहीं एक
+@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" एक रैखिक या रेडियल ग्रेडिएंट रखता है, फ्रीफॉर्म ग्रेडिएंट नहीं
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" खुद ग्रेडिएंट रखता है: `start` और `end` न दें (वे उसे डॉक्यूमेंट निर्देशांकों पर रख देते हैं)
 @msg	speed must be accelerated, step or pause	speed: गति को तेज, कदम या रोकें होना चाहिए
 @msg	Split Into Grid: select paths large enough for the grid	स्प्लिट इनो ग्रिड: ग्रिड के लिए काफी बड़े पाथ सिलेक्ट करें
@@ -7522,7 +7522,7 @@
 @msg	tileRange of {what}: {e}	{what} का tileRange: {e}
 @msg	time budget	समय बजट
 @msg	tintReduction must be from 0 to 100 %	tintReduction 0 से 100 % तक होना चाहिए
-@msg	title can't be empty	शीर्षक खाली नहीं हो सकता है
+@msg	title can't be empty	title खाली नहीं हो सकता
 @msg	to (the new name) is required	(नया नाम) के लिए आवश्यक है
 @msg	to must be fill or stroke	to: होना चाहिए भरने या स्ट्रोक होना चाहिए
 @msg	to must be smooth or corner	to: होना चाहिए चिकनी या कोने होना
@@ -7687,7 +7687,7 @@
 @msg	VectorCraft's Fonts folder isn't set here: the desktop app and vectorcraft-cli set it	VectorCraft के फ़ॉन्ट फ़ोल्डर यहां सेट नहीं है: डेस्कटॉप ऐप और VectorCraft-क्लाई ने इसे सेट किया
 @msg	version {0} files can't be compressed: only version {COMPRESSED_SINCE} and later open compressed files	संस्करण {0} की फ़ाइलें संपीड़ित नहीं हो सकतीं: केवल संस्करण {COMPRESSED_SINCE} और बाद के संस्करण संपीड़ित फ़ाइलें खोलते हैं
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio को 0.1 से 10 के बीच संख्या होना चाहिए
-@msg	view is required	देखने की आवश्यकता है
+@msg	view is required	view आवश्यक है
 @msg	view must be one of {_1}	view: राय होना चाहिए {_1}
 @msg	warpStyle can only edit an applied Warp effect	warpStyle केवल लागू वार्प इफ़ेक्ट एडिट कर सकता है
 @msg	width and height are at least 1 pixel	चौड़ाई और ऊंचाई कम से कम 1 पिक्सेल हैं

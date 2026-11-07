@@ -3851,7 +3851,7 @@ axis	Both	Båda
 	Float Tool Group	Gör verktygsgruppen flytande
 @msg	no library `{id}`	inget bibliotek `{id}`
 @msg	select some type first	markera någon text först
-@msg	kerning must be a number, "auto", or "optical"	Kerning måste vara ett tal, ”auto” eller ”optical”
+@msg	kerning must be a number, "auto", or "optical"	kerning måste vara ett tal, ”auto” eller ”optical”
 @msg	the selection has no gradient fill	markeringen har ingen fyllnadsgradient
 @msg	the selection has no gradient stroke	markeringen har ingen konturgradient
 @msg	the selection has no pattern fill	markeringen har inget fyllnadsmönster
@@ -4071,7 +4071,7 @@ axis	Both	Båda
 @msg	bad shortcut	ogiltigt kortkommando
 @msg	bad stream length	ogiltig strömlängd
 @msg	bad trailer	ogiltig trailer
-@msg	balance must be between 0 and 100	balansen måste vara mellan 0 och 100
+@msg	balance must be between 0 and 100	balance måste vara mellan 0 och 100
 @msg	batch step {_1} (`{id}`) failed: {e}	batchsteg {_1} (`{id}`) misslyckades: {e}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness måste vara dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	kan inte koda dokumentet: {0}
@@ -4098,7 +4098,7 @@ axis	Both	Båda
 @msg	compound paths can only contain paths	sammansatta banor kan bara innehålla banor
 @msg	compressed (RLE) bitmaps can't be read yet	komprimerade (RLE) bitmappar kan inte läsas än
 @msg	damaged	skadad
-@msg	decimals must be {_1}–{_2} (got {_3})	decimaler måste vara {_1}–{_2} (fick {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals måste vara {_1}–{_2} (fick {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	dela i 1 till {MAX_PIECES} skivor
 @msg	effect {k} is `{_1}`, not `{id}`	effekt {k} är `{_1}`, inte `{id}`
 @msg	empty brush stroke	tomt penseldrag
@@ -4296,7 +4296,7 @@ axis	Both	Båda
 @msg	replace: the object to replace was changed or deleted	replace: objektet som skulle ersättas har ändrats eller tagits bort
 @msg	pattern missing	mönster saknas
 @msg	patterns nested too deeply are filled with mid-grey	mönster som är kapslade för djupt fylls med mellangrått
-@msg	percent must be above 0 and at most 6400, not {p}	procent måste vara över 0 och högst 6400, inte {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent måste vara över 0 och högst 6400, inte {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	välj en färg, gradient eller ett mönster att spara som färgruta
 @msg	plane must be left, right or ground	plane måste vara left, right eller ground
 @msg	plug-in ABI: {0}	pluginets ABI: {0}
@@ -4317,8 +4317,8 @@ axis	Both	Båda
 @msg	result would exceed the canvas (coordinates out of range)	resultatet skulle hamna utanför arbetsytan (koordinater utanför intervallet)
 @msg	objects can't be nested more than 32 deep	objekt kan inte kapslas djupare än 32 nivåer
 @msg	the SVG's elements are nested more than {0} deep	SVG-filens element är nästlade mer än {0} nivåer djupt
-@msg	scale must be a number from {_1} to {_2}, not {_3}	skala måste vara ett tal från {_1} till {_2}, inte {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	skala måste vara ett tal från {_1} till {_2}, inte {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale måste vara ett tal från {_1} till {_2}, inte {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale måste vara ett tal från {_1} till {_2}, inte {s}
 @msg	select (or target) objects whose appearance isn't basic	markera (eller ange som mål) objekt vars utseende inte är grundläggande
 @msg	select a Live Paint group	markera en Live Paint-grupp
 @msg	select a blend	markera en blandning
@@ -4792,7 +4792,7 @@ effect	Soft	Mjuk
 @msg	before must name a panel	before måste ange en panel
 @msg	docking action contains an unknown panel or an excessive split path	dockningsåtgärden innehåller en okänd panel eller en alltför djup delningssökväg
 @msg	group must be true or false	group måste vara true eller false
-@msg	panel is not in a dock group	panelen ligger inte i en dockningsgrupp
+@msg	panel is not in a dock group	panel ligger inte i en dockningsgrupp
 @msg	only a dock group above or below others collapses, not one beside another	bara en dockningsgrupp ovanför eller under andra komprimeras, inte en bredvid en annan
 @msg	icon must be true or false	icon måste vara true eller false
 @msg	icon only docks a panel in the icon column, with no anchor	icon dockar bara en panel i ikonkolumnen, utan anchor
@@ -7480,7 +7480,7 @@ digits	Hindi	Hindi
 @msg	page art is missing image data for {key}	sidans bildmaterial saknar bilddata för {key}
 @msg	page art is missing pattern {name}	sidans bildmaterial saknar mönstret {name}
 @msg	page art is missing swatch {name}	sidans bildmaterial saknar färgrutan {name}
-@msg	page must be a whole number from 1	sidan måste vara ett heltal från och med 1
+@msg	page must be a whole number from 1	page måste vara ett heltal från och med 1
 @msg	page thumbnail: {e}	sidminiatyr: {e}
 @msg	pages must be a range such as "2-3" or a page number, not {v}	pages måste vara ett intervall som "2-3" eller ett sidnummer, inte {v}
 @msg	pages: {e}	sidor: {e}
@@ -7490,7 +7490,7 @@ digits	Hindi	Hindi
 @msg	parameters must be an object	parametrarna måste vara ett objekt
 @msg	passwords can have up to {MAX_PASSWORD} bytes	lösenord får vara högst {MAX_PASSWORD} byte
 @msg	path has no open end	banan har ingen öppen ände
-@msg	paths must be strings	sökvägar måste vara strängar
+@msg	paths must be strings	paths måste vara strängar
 @msg	PDF content is incomplete or exceeds the reader's limits; no document was imported	PDF-innehållet är ofullständigt eller överskrider läsarens gränser; inget dokument importerades
 @msg	PDF flattener: {e}	PDF-plattning: {e}
 @msg	PDF options: {e}	PDF-alternativ: {e}
@@ -7780,7 +7780,7 @@ digits	Hindi	Hindi
 @msg	thumbnail: no page {v} (the {what} has {count})	miniatyr: ingen sida {v} ({what} har {count})
 @msg	tileRange of {what}: {e}	tileRange för {what}: {e}
 @msg	time budget	tidsbudget
-@msg	title can't be empty	titeln får inte vara tom
+@msg	title can't be empty	title får inte vara tom
 @msg	to (the new name) is required	to (det nya namnet) krävs
 @msg	to must be fill or stroke	to måste vara fill eller stroke
 @msg	to must be smooth or corner	to måste vara smooth eller corner
@@ -7886,7 +7886,7 @@ digits	Hindi	Hindi
 @msg	view must be one of {_1}	view måste vara något av {_1}
 @msg	warpStyle can only edit an applied Warp effect	warpStyle kan bara redigera en tillämpad Förvräng-effekt
 @msg	width factors must be finite	breddfaktorerna måste vara ändliga
-@msg	width must be positive	bredden måste vara positiv
+@msg	width must be positive	width måste vara positiv
 @msg	width out of range	bredden ligger utanför tillåtet omfång
 @msg	width/height must be > 0	bredd/höjd måste vara > 0
 @msg	width/height must be positive and within the canvas	bredd/höjd måste vara positiva och inom arbetsytan
