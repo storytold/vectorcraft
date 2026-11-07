@@ -2725,6 +2725,35 @@ fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
     assert_eq!(pasted(&mut s), [2]);
 }
 
+/// #6123: with the other tools, Cmd (Ctrl) lends the selection tool chosen last. Direct Selection
+/// lent picks anchors, which Copy takes, as with the Curvature tool, which Cmd lends Direct
+/// Selection until a selection tool is chosen; the Selection tool lent selects the path whole.
+#[test]
+fn cmd_selected_anchors_with_other_tools_are_what_copy_takes() {
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let copied = |tool: &str, last_selection: Option<&str>| {
+        let mut s = session();
+        let anchors = json!([{"x": 100, "y": 300}, {"x": 200, "y": 300}, {"x": 300, "y": 300}, {"x": 400, "y": 300}]);
+        s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        if let Some(t) = last_selection {
+            s.select_tool(t, v).unwrap();
+        }
+        s.select_tool(tool, v).unwrap();
+        gesture(&mut s, &[(150.0, 250.0), (350.0, 350.0)], cmd);
+        assert_eq!(s.tool_id(), tool);
+        s.execute("edit.copy", &json!({})).unwrap();
+        let ids = s.execute("edit.paste", &json!({})).unwrap()["ids"].clone();
+        let id = NodeId(ids[0].as_u64().unwrap());
+        path(&s, id).subpaths[0].anchors.len()
+    };
+    assert_eq!(copied("rectangle", Some("directSelection")), 2);
+    assert_eq!(copied("ellipse", Some("directSelection")), 2);
+    assert_eq!(copied("curvature", None), 2);
+    assert_eq!(copied("rectangle", None), 4, "the Selection tool lent selects the path whole");
+}
+
 /// #4980: Cmd/Ctrl held with the Pen drags as Direct Selection: an anchor of the path being drawn
 /// moves on its own and the Pen goes on drawing that path from it; another path's straight segment
 /// moves both its ends and a curved one bends; each drag is one undo step and the pointer is the
