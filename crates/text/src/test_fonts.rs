@@ -836,6 +836,44 @@ pub fn vertical_ligature_caret_font(caret: i16) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// [`vertical_ligature_caret_font`] with its one caret at y = `caret` font units, f + i joined by
+/// `ccmp` (which shaping applies top to bottom too, unlike `liga`), and its `GPOS` replaced by a
+/// `vpal` single adjustment that changes the ligature glyph's advance down the column by
+/// `y_advance` font units. `None` when it can't be built.
+pub fn proportional_vertical_ligature_caret_font(caret: i16, y_advance: i16) -> Option<Vec<u8>> {
+    use write_fonts::tables::gpos::{Gpos, PositionLookup, PositionLookupList, SinglePos, ValueRecord};
+    use write_fonts::tables::gsub::{Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SubstitutionLookup, SubstitutionLookupList};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    let base = vertical_ligature_caret_font(caret)?;
+    let font = skrifa::FontRef::new(&base).ok()?;
+    let gid = |c| Some(GlyphId16::new(source_sans_gid(c)?));
+    let ligature = gid(LIGATURE_CARET_GLYPH)?;
+    let langsys = || Script::new(Some(LangSys::new(vec![0])), vec![]);
+    let scripts = || ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), langsys()), ScriptRecord::new(Tag::new(b"latn"), langsys())]);
+    let subst = LigatureSubstFormat1::new(
+        CoverageFormat1::new(vec![gid('f')?]).into(),
+        vec![LigatureSet::new(vec![Ligature::new(ligature, vec![gid('i')?])])],
+    );
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"ccmp"), Feature::new(None, vec![0]))]);
+    let lookups = SubstitutionLookupList::new(vec![SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![subst]))]);
+    let gsub = Gsub::new(scripts(), features, lookups);
+    let pos = SinglePos::format_1(CoverageFormat1::new(vec![ligature]).into(), ValueRecord::new().with_y_advance(y_advance));
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"vpal"), Feature::new(None, vec![0]))]);
+    let lookups = PositionLookupList::new(vec![PositionLookup::Single(Lookup::new(Default::default(), vec![pos]))]);
+    let mut builder = FontBuilder::new();
+    builder.add_table(&gsub).ok()?;
+    builder.add_table(&Gpos::new(scripts(), features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`variable_ligature_caret_font`].
 pub const VARIABLE_LIGATURE_CARET_FAMILY: &str = "Varicaret Sans";
 
