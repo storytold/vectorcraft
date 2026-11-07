@@ -321,6 +321,9 @@ fn numeric_literals() {
     assert_eq!(number("0x1F;"), 31.0);
     assert_eq!(number("0XfF;"), 255.0);
     assert_eq!(number("0x20000000000001;"), 9007199254740992.0);
+    // 2^136 + 2^83 + 1 and 2^150 + 2^97 + 1: a set bit past 128 bits rounds the half-way case up.
+    assert_eq!(number(&format!("0x1{}8{}1;", "0".repeat(13), "0".repeat(19))), 2f64.powi(136) + 2f64.powi(84));
+    assert_eq!(number(&format!("01{}2{}1;", "0".repeat(17), "0".repeat(31))), 2f64.powi(150) + 2f64.powi(98));
     assert_eq!(number("017;"), 15.0);
     assert_eq!(number("08;"), 8.0);
     assert_eq!(number("09.5;"), 9.5);

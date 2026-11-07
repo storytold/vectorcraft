@@ -222,7 +222,7 @@ pub(crate) fn string_to_number(units: &[u16]) -> f64 {
         if hex.is_empty() || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
             return f64::NAN;
         }
-        return hex.bytes().fold(0.0, |acc, b| acc * 16.0 + f64::from((b as char).to_digit(16).unwrap_or(0)));
+        return crate::chars::radix_value(hex.bytes().filter_map(|b| crate::chars::hex_value(u32::from(b))), 16).unwrap_or(f64::NAN);
     }
     let (sign, body) = match s.as_bytes().first() {
         Some(b'+') => (1.0, &s[1..]),
@@ -336,6 +336,14 @@ mod tests {
         for s in ["inf", "nan", "1_0", "0x", "1e", ".", "--1", "0x-1", "infinity", "1 2"] {
             assert!(string_to_number(&u(s)).is_nan(), "{s:?}");
         }
+    }
+
+    #[test]
+    fn hex_strings_round_once_to_the_nearest_number() {
+        assert_eq!(string_to_number(&u("0xc83ce80553ee648")), 0xc83_ce80_553e_e648_u64 as f64);
+        // 2^136 + 2^83 + 1: a set bit past 128 bits rounds the half-way case up.
+        let digits = format!("0x1{}8{}1", "0".repeat(13), "0".repeat(19));
+        assert_eq!(string_to_number(&u(&digits)), 2f64.powi(136) + 2f64.powi(84));
     }
 
     #[test]
