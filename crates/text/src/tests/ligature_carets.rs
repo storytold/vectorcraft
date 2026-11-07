@@ -8,7 +8,8 @@ use vectorcraft_geom::PathData;
 
 use crate::test_fonts::{
     LIGATURE_CARET_FAMILY, LIGATURE_CARET_GLYPH, VARIABLE_LIGATURE_CARET_FAMILY, VERTICAL_LIGATURE_CARET_FAMILY, lam_alef_family, lam_alef_font,
-    ligature_caret_font, placed_ligature_caret_font, source_sans_gid, variable_ligature_caret_font, vertical_ligature_caret_font,
+    ligature_caret_font, placed_ligature_caret_font, proportional_vertical_ligature_caret_font, source_sans_gid, variable_ligature_caret_font,
+    vertical_ligature_caret_font,
 };
 use crate::*;
 
@@ -751,6 +752,36 @@ fn an_upright_ligature_on_a_path_reads_along_it_in_order() {
     let right = Vec2::new(-tangent.y, tangent.x);
     let (pen, up, ahead) = (s.xf * Point::ZERO, s.xf * Point::new(0.0, -500.0), s.xf * Point::new(500.0, 0.0));
     assert!((up - pen).dot(tangent) > 1.0 && (ahead - pen).dot(right) > 1.0, "{pen:?} {up:?} {ahead:?}");
+}
+
+/// On a path, an upright ligature whose cell Proportional Metrics shortens (`vpal`, from 1000 units
+/// to 800) keeps its font caret (600 units down the cell) where it is drawn: the inner stop lies at
+/// 600 / 800 of its width, and the caret stands at the drawn stop.
+#[test]
+fn an_upright_ligature_on_a_path_keeps_its_font_caret_on_a_proportional_cell() {
+    use vectorcraft_doc::PathEffect;
+    let db = db_with(proportional_vertical_ligature_caret_font(280, -200));
+    let mut t = point("fi", VERTICAL_LIGATURE_CARET_FAMILY);
+    t.vertical = true;
+    t.runs[0].style.standard_vertical_roman = true;
+    t.runs[0].style.proportional_metrics = true;
+    let mut line = BezPath::new();
+    line.move_to((0.0, 0.0));
+    line.line_to((1000.0, 0.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    t.path_effect = PathEffect::Rainbow;
+    let l = layout(&db, &t);
+    let Some(g) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+    assert!((g.width - 80.0).abs() < 1e-6, "the cell is 800 units at 100 pt: {}", g.width);
+    let &[(1, f)] = g.carets.as_slice() else { panic!("one inner stop: {:?}", g.carets) };
+    assert!((f - 0.75).abs() < 1e-9, "{f}");
+    let tangent = Vec2::new(g.angle.cos(), g.angle.sin());
+    let along = |p: Point| (p - g.origin).dot(tangent);
+    let (top, drawn) = (along(g.xf * Point::new(0.0, -880.0)), along(g.xf * Point::new(0.0, -280.0)));
+    assert!((top - g.width_start).abs() < 1e-6 && (drawn - top - 60.0).abs() < 1e-6, "{top} {drawn} {}", g.width_start);
+    let (a, b) = caret_position(&l, 1);
+    let caret = along(a.midpoint(b));
+    assert!((caret - drawn).abs() < 1e-6, "the caret stands at the drawn stop: {caret} against {drawn}");
 }
 
 /// Tracking that makes an upright ligature's advance negative leaves it upright: it keeps its
