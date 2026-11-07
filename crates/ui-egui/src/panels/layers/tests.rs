@@ -469,6 +469,66 @@ fn shift_enter_renames_a_layer_and_keeps_the_field_open() {
     assert!(ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())).is_none(), "and closes the field");
 }
 
+/// Rename (`ui.rename`, F2) opens the name field on the selected object's row, as a
+/// double-click on the name does: Enter renames it in one undo step.
+#[test]
+fn rename_opens_the_name_field_of_the_selected_object() {
+    let (mut app, _, [a, _]) = two_rects();
+    let ctx = egui::Context::default();
+    app.ui_ctx = Some(ctx.clone());
+    let name = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(a).unwrap().display_name();
+    let before = name(&app);
+    app.session.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let opened = app.run("ui.rename", json!({})).unwrap();
+    assert_eq!(opened, json!({"id": a.0, "name": before}));
+    assert_eq!(ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())), Some((a.0, before.clone())), "the field opens on its row");
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame(&mut app, &ctx, vec![], false);
+    frame(&mut app, &ctx, vec![], false);
+    assert!(ctx.memory(|m| m.has_focus(rename_id().with("field"))), "with the keyboard");
+    frame(&mut app, &ctx, vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("Sun".into())], false);
+    frame(&mut app, &ctx, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], false);
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(name(&app), "Sun");
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(name(&app), before, "one undo step");
+}
+
+/// Rename (`ui.rename`) has no default key, F2 being free: it is listed in Keyboard Shortcuts,
+/// where a key can be assigned to it.
+#[test]
+fn rename_has_no_default_key() {
+    use crate::shortcut_editor::{command_for_key, default_command_shortcut};
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+    assert_eq!(default_command_shortcut("ui.rename"), None);
+    assert_eq!(command_for_key("F2"), None);
+    let (mut app, _, _) = two_rects();
+    let listed = app.run("shortcuts.list", json!({"query": "ui.rename"})).unwrap();
+    let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| r["label"].clone()).collect();
+    assert_eq!(rows, [json!("Rename")], "Keyboard Shortcuts lists it");
+}
+
+/// Without a selection Rename names the current layer; it refuses several objects and a row the
+/// panel doesn't list, and opens nothing then.
+#[test]
+fn rename_names_the_current_layer_and_refuses_several_or_hidden_rows() {
+    let (mut app, layer, [a, b]) = two_rects();
+    let ctx = egui::Context::default();
+    app.ui_ctx = Some(ctx.clone());
+    let open = |ctx: &egui::Context| ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())).map(|r| r.0);
+    assert_eq!(app.run("ui.rename", json!({})).unwrap()["id"], json!(layer.0), "nothing selected: the current layer");
+    ctx.data_mut(|d| d.remove::<(u64, String)>(rename_id()));
+    app.session.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    assert!(app.run("ui.rename", json!({})).is_err(), "two objects");
+    assert_eq!(open(&ctx), None);
+    app.ui.layers_panel.layers_only = true;
+    assert!(app.run("ui.rename", json!({"id": a.0})).is_err(), "Show Layers Only lists no object rows");
+    assert_eq!(open(&ctx), None);
+    assert!(app.run("ui.rename", json!({"id": 999_999})).is_err(), "no such object");
+    assert_eq!(app.run("ui.rename", json!({"id": layer.0})).unwrap()["id"], json!(layer.0));
+    assert_eq!(open(&ctx), Some(layer.0));
+}
+
 #[test]
 fn an_open_rename_does_not_follow_into_another_document() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

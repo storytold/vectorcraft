@@ -1035,7 +1035,7 @@ fn contents_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, label: &str, se
     if characters {
         for (k, stroke) in [false, true].into_iter().enumerate() {
             let cr = Rect::from_min_size(pos2(r.left() + EYE_W + 100.0 + 24.0 * k as f32, r.center().y - 9.0), vec2(18.0, 18.0));
-            chip(ui, cr, n.proxy_paint(stroke, None).map_or(&Paint::None, |(p, ..)| p), false);
+            chip(ui, cr, n.proxy_paint_only(stroke, None).unwrap_or(&Paint::None), false);
         }
     }
     // An image's row has no members to target.

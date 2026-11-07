@@ -368,6 +368,54 @@ fn a_transparent_image_is_flattened_with_the_art_under_it_which_stays() {
     assert_eq!(colour_at(page, 10.0, 20.0), [255, 0, 0], "the square outside the image");
 }
 
+/// A `size`×`size` PNG of a black disk of radius `r` pixels with an anti-aliased edge, clear
+/// around it, 72 ppi.
+fn disk(size: u32, r: f64) -> Vec<u8> {
+    let c = f64::from(size) / 2.0;
+    let img = image::RgbaImage::from_fn(size, size, |x, y| {
+        let d = (f64::from(x) + 0.5 - c).hypot(f64::from(y) + 0.5 - c);
+        image::Rgba([0, 0, 0, ((r + 0.5 - d).clamp(0.0, 1.0) * 255.0).round() as u8])
+    });
+    let mut out = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out
+}
+
+/// #5264: the clip around a flattened image follows its edge smoothly: a disk's clip is a ring of
+/// sloped segments close to the disk's edge, not a staircase of horizontal and vertical steps.
+#[test]
+fn a_flattened_images_clip_follows_its_edge_smoothly() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 180, "height": 80})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let p = json!({"name": "disk.png", "dataBase64": vectorcraft_format::base64_encode(&disk(64, 25.0)), "at": [100, 50]});
+    s.execute("file.place", &p).unwrap();
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7"})).unwrap();
+    s.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let mut clips = vec![];
+    d.walk(|n| {
+        if let (vectorcraft_doc::NodeKind::Path { clipping: true, .. }, Some(pd)) = (&n.kind, n.path_data()) {
+            clips.push(pd.clone());
+        }
+    });
+    assert_eq!(clips.len(), 1, "{clips:?}");
+    let sub = &clips[0].subpaths;
+    assert_eq!(sub.len(), 1);
+    let pts: Vec<_> = sub[0].anchors.iter().map(|a| a.p).collect();
+    assert!(pts.len() >= 16, "{pts:?}");
+    // Its centre: the file's page may sit elsewhere than the artboard.
+    let n = pts.len() as f64;
+    let (cx, cy) = (pts.iter().map(|p| p.x).sum::<f64>() / n, pts.iter().map(|p| p.y).sum::<f64>() / n);
+    for p in &pts {
+        let r = (p.x - cx).hypot(p.y - cy);
+        assert!((24.5..=27.5).contains(&r), "an anchor {r} pt from the centre: {pts:?}");
+    }
+    let sloped = pts.iter().zip(pts.iter().cycle().skip(1)).filter(|(a, b)| (a.x - b.x).abs() > 0.1 && (a.y - b.y).abs() > 0.1).count();
+    assert!(sloped * 2 >= pts.len(), "{sloped} of {} segments are sloped: {pts:?}", pts.len());
+}
+
 /// How many of reply `r`'s warnings say that an image couldn't be decoded, as raster exports do.
 fn undecoded_notes(r: &Value) -> usize {
     warnings(r).iter().filter(|w| *w == "an image couldn't be decoded and is missing from the picture").count()
@@ -445,6 +493,100 @@ fn transparent_images_can_be_left_out_and_opacity_makes_one_transparent() {
     assert!(s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "transparentImages": "blur"})).is_err());
     let v = s.execute("file.formatOptions", &json!({"format": "ai"})).unwrap();
     assert_eq!(v["options"]["transparentImages"]["value"], "flatten", "{v}");
+}
+
+/// A red square (10–50 × 10–50) half under a 4 × 2 black-and-white image (30–70 × 10–30) that the
+/// spot color `Ink` colorizes. Returns the session and the image's pixels.
+fn colorized_bitmap_over_square() -> (Session, Vec<u8>) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": {"c": 100, "m": 0, "y": 0, "k": 0}, "spot": true})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let gray = vec![0, 255, 0, 255, 255, 0, 255, 0];
+    let mut bytes = vec![];
+    image::GrayImage::from_raw(4, 2, gray.clone()).unwrap().write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    let p = json!({"name": "b.png", "dataBase64": vectorcraft_format::base64_encode(&bytes), "rect": [30, 10, 40, 20]});
+    s.execute("file.place", &p).unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+    (s, gray)
+}
+
+/// An image's pixels' coverage and its colorize paint.
+type Colorized = (Option<(u32, u32, Vec<u8>)>, Option<vectorcraft_color::Paint>);
+
+/// The colorized image of each image node of `d`, with its pixels' coverage.
+fn colorized(d: &vectorcraft_doc::Document) -> Vec<Colorized> {
+    let mut out = vec![];
+    d.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
+            out.push((d.image_blob(im).and_then(vectorcraft_doc::ImageBlob::coverage), n.extras().colorize.as_deref().cloned()));
+        }
+    });
+    out
+}
+
+/// A colorized image of black and white pixels is neither flattened nor left out: it is written as
+/// a 1-bit image mask in its color, with either setting of `transparentImages`, and opens again
+/// colorized with that color, its white pixels clear over the square, and the square as it was.
+#[test]
+fn a_colorized_black_and_white_image_is_written_as_an_image_mask() {
+    let (mut s, gray) = colorized_bitmap_over_square();
+    let before = colorized(&s.doc().unwrap().doc);
+    let want: Vec<u8> = gray.iter().map(|v| 255 - v).collect();
+    assert!(matches!(before.as_slice(), [(Some((4, 2, c)), Some(_))] if *c == want), "{before:?}");
+    for mode in ["flatten", "omit"] {
+        let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "transparentImages": mode})).unwrap();
+        assert!(!warnings(&r).iter().any(|w| w.contains("transparent images") || w.contains("flattened")), "{mode}: {r}");
+        let mut t = Session::new();
+        t.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+        let d = &t.doc().unwrap().doc;
+        let after = colorized(d);
+        assert_eq!(after.len(), 1, "{mode}: {after:?}");
+        assert_eq!(after[0].0, before[0].0, "{mode}");
+        let (Some(a), Some(b)) = (&after[0].1, &before[0].1) else { panic!("{mode}: {after:?}") };
+        let rgb = |p: &vectorcraft_color::Paint| p.color().map(|c| c.to_rgb()).unwrap();
+        assert!(rgb(a).iter().zip(rgb(b)).all(|(x, y)| (x - y).abs() < 0.01), "{mode}: {a:?} {b:?}");
+        assert_eq!(images(d), (1, 0), "{mode}");
+        // The first row draws as before: black (the color) and white (clear) over the square, then
+        // black and white (clear) over the page.
+        let src = &s.doc().unwrap().doc;
+        for x in [35.0, 45.0, 55.0, 65.0] {
+            let (now, was) = (colour_at(d, x, 15.0), colour_at(src, x, 15.0));
+            assert!(now.iter().zip(was).all(|(a, b)| a.abs_diff(b) <= 3), "{mode} at {x}: {now:?} {was:?}");
+        }
+        assert_ne!(colour_at(src, 35.0, 15.0), colour_at(src, 45.0, 15.0), "{mode}");
+        assert_ne!(colour_at(src, 55.0, 15.0), colour_at(src, 65.0, 15.0), "{mode}");
+    }
+}
+
+/// A colorized image of black and clear pixels is written as an image mask too, its clear pixels
+/// clear, instead of being flattened or left out for its see-through pixels.
+#[test]
+fn a_colorized_image_of_black_and_clear_pixels_is_written_as_an_image_mask() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": {"c": 100, "m": 0, "y": 0, "k": 0}, "spot": true})).unwrap();
+    let mut bytes = vec![];
+    image::GrayAlphaImage::from_raw(2, 1, vec![0, 255, 0, 0])
+        .unwrap()
+        .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+        .unwrap();
+    let p = json!({"name": "c.png", "dataBase64": vectorcraft_format::base64_encode(&bytes), "rect": [30, 10, 20, 10]});
+    s.execute("file.place", &p).unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+    let before = colorized(&s.doc().unwrap().doc);
+    assert!(matches!(before.as_slice(), [(Some((2, 1, c)), Some(_))] if *c == [255, 0]), "{before:?}");
+    for mode in ["flatten", "omit"] {
+        let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7", "transparentImages": mode})).unwrap();
+        assert!(!warnings(&r).iter().any(|w| w.contains("transparent images") || w.contains("flattened")), "{mode}: {r}");
+        let mut t = Session::new();
+        t.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+        let after = colorized(&t.doc().unwrap().doc);
+        assert_eq!(after.len(), 1, "{mode}: {after:?}");
+        assert_eq!(after[0].0, before[0].0, "{mode}");
+        assert!(after[0].1.is_some(), "{mode}: {after:?}");
+    }
 }
 
 /// #2692's file, an image clipped to a circle inside a circle's stroke, and #2830's, an image with
@@ -639,7 +781,8 @@ fn colorized_grayscale_image_pattern_keeps_its_colors_in_legacy_ai() {
     for (a, b) in before.iter().zip(&after) {
         assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(*b) <= 3), "before {before:?} after {after:?}");
     }
-    assert!(saved_warnings.iter().any(|w| w.contains("flattened with the art under them")), "{saved_warnings:?}");
+    // The tile's pixels are black or white: its images are written as image masks, not flattened.
+    assert!(!saved_warnings.iter().any(|w| w.contains("flattened with the art under them")), "{saved_warnings:?}");
 }
 
 /// #3666: a pattern fill whose tile is an image, under opacity, is flattened with the art under it

@@ -177,7 +177,7 @@ pub(super) fn colour_swatch_id(key: &str) -> egui::Id {
 /// The colour swatch beside the colour field `key`, showing `colour`: a double-click asks for the
 /// Color Picker over this dialog, whose OK fills the field ([`super::color_picker::over_effect`]).
 /// Returns whether the picker was asked for.
-fn colour_swatch(ui: &mut egui::Ui, key: &str, colour: Color) -> bool {
+pub(super) fn colour_swatch(ui: &mut egui::Ui, key: &str, colour: Color) -> bool {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(egui::vec2(20.0, 18.0), egui::Sense::hover());
     let resp = ui.interact(rect, colour_swatch_id(key), egui::Sense::click());
@@ -410,10 +410,16 @@ pub(crate) fn params(d: &Dialog) -> Value {
 /// The (label, value) choices of a parameter that picks one of some values.
 pub(super) type Choices = &'static [(&'static str, &'static str)];
 
+/// Effects whose dialogs give their number fields spinner arrows (#5367, #5368): Drop Shadow's
+/// and the glows' Opacity, offsets and Blur, which are stepped more than typed.
+pub(super) fn has_spinners(effect: &str) -> bool {
+    matches!(effect, "stylize.dropShadow" | "stylize.outerGlow" | "stylize.innerGlow")
+}
+
 /// Generic editor for command/effect parameters: numbers, booleans, strings and colours; the
 /// parameters `is_length` names are distances shown and typed in `unit`, those `choices` gives
 /// choices for are dropdowns. Fields come in `rank` order (by name among equals). Returns true when
-/// a value changed.
+/// a value changed. The fields of [`has_spinners`]' effects carry spinner arrows.
 pub(super) fn param_fields(
     ui: &mut egui::Ui,
     d: &mut Dialog,
@@ -425,6 +431,7 @@ pub(super) fn param_fields(
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     let mut pick: Option<(String, Color)> = None;
+    let spinners = has_spinners(&d.str("__effect"));
     egui::Grid::new("fxgrid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
         let mut keys: Vec<(String, Value)> =
             d.fields.iter().filter(|(k, _)| !k.starts_with("__") && k.as_str() != "preview").map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -446,7 +453,16 @@ pub(super) fn param_fields(
                 if is_length(&k) {
                     // An effect's documented range keeps the field to the distance it applies.
                     let range = vectorcraft_effects::length_range(&d.str("__effect"), &k);
-                    changed |= length_within(ui, d, &k, unit, 140.0, range);
+                    if spinners {
+                        let bounds = range.unwrap_or(if k == "blur" { 0.0..=f64::INFINITY } else { crate::widgets::ANY });
+                        let value = d.fields.contains_key(&k).then(|| d.f64(&k, 0.0));
+                        if let Some(x) = crate::widgets::spin_length_within(ui, ("dlg-len", k.as_str()), value, unit, 140.0, bounds) {
+                            d.fields.insert(k.clone(), json!(x));
+                            changed = true;
+                        }
+                    } else {
+                        changed |= length_within(ui, d, &k, unit, 140.0, range);
+                    }
                     return;
                 }
                 // A size in pixels of the raster effects resolution (Color Halftone's Max Radius)
@@ -472,6 +488,13 @@ pub(super) fn param_fields(
                     return;
                 }
                 match v {
+                    Value::Number(n) if spinners => {
+                        let range = if k == "opacity" { 0.0..=100.0 } else { crate::widgets::ANY };
+                        if let Some(x) = crate::widgets::spin_range(ui, ("fx-num", k.as_str()), n.as_f64(), range, "", 3, 140.0, 1.0) {
+                            d.fields.insert(k.clone(), typed_number(x));
+                            changed = true;
+                        }
+                    }
                     Value::Number(n) => {
                         if let Some(x) = crate::widgets::plain_field(ui, ("fx-num", &k), n.as_f64().unwrap_or(0.0), "", 3, 140.0) {
                             d.fields.insert(k.clone(), typed_number(x));

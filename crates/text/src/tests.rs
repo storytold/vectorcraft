@@ -20,6 +20,7 @@ mod ligature_carets;
 mod path_joins;
 mod ruby;
 mod scripts;
+mod shape_plans;
 mod snap;
 mod svg_glyphs;
 mod sysfonts;

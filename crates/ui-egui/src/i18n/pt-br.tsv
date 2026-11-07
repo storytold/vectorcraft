@@ -790,6 +790,7 @@
 	Duplicate Artboard	Duplicar Mesa de Trabalho
 	Copy Artboard	Copiar Mesa de Trabalho
 	Cut Artboard	Recortar Mesa de Trabalho
+	Rename Artboards	Renomear Mesas de Trabalho
 	Duplicate Artboards	Duplicar Mesas de Trabalho
 	Duplicate Brush	Duplicar Pincel
 	Duplicate Character Style	Duplicar Estilo de Caractere
@@ -2139,6 +2140,9 @@ digits	Malayalam	Malaiala
 	Real World:	Mundo Real:
 	Real-time Drawing and Editing	Desenho e Edição em Tempo Real
 	Rearrange All Artboards	Reorganizar Todas as Mesas de Trabalho
+	Rearrange	Reorganizar
+	Select All Artboards	Selecionar Todas as Mesas de Trabalho
+	Switch Orientation	Trocar Orientação
 	Rearrange All	Reorganizar Tudo
 	Layout Order:	Ordem do Layout:
 	Change to Left-to-Right Layout	Mudar para Layout da Esquerda para a Direita
@@ -4906,6 +4910,7 @@ axis	Both	Ambos
 @msg	{path}: not a file	{path}: não é um arquivo
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	as imagens vinculadas mostram a visualização de baixa resolução salva no arquivo até que seus arquivos sejam encontrados: revincule-as no painel Links
 @msg	linked type areas past VectorCraft's limits were left out	as áreas de texto encadeadas além dos limites do VectorCraft foram omitidas
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	o texto que muda de direção de escrita dentro de um objeto de texto abre na direção do primeiro caractere
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	o texto usado como máscara em áreas encadeadas, texto com quebra ou um caminho composto não recorta
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	as imagens vinculadas sem visualização no arquivo mostram um espaço reservado até que seus arquivos sejam encontrados: revincule-as no painel Links
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	o texto de área em molduras baixas demais para uma linha da fonte em que aparece recebeu molduras mais altas ({_1}): senão o texto não apareceria
