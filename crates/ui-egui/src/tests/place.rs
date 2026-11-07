@@ -781,8 +781,6 @@ fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> std::ti
 /// for) or until `done` → whether it was.
 fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64, done: &dyn Fn(&VectorcraftApp) -> bool) -> bool {
     let end = *time + secs;
-    // The look last waited for: one that a frame after the wait still holds ended without stamps.
-    let mut waited: Option<vectorcraft_engine::link_watch::LinkScan> = None;
     loop {
         let wait = frame_at(app, ctx, *time);
         if done(app) {
@@ -795,11 +793,8 @@ fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64
         }
         // The look runs on a worker thread, in real time: the clock waits for it to finish, else a
         // busy machine's slow look outlasts the simulated seconds and the test fails at random.
-        if let Some(scan) = app.session.link_scan.clone()
-            && !waited.as_ref().is_some_and(|w| std::sync::Arc::ptr_eq(w, &scan))
-        {
+        if app.session.link_scan.is_some() {
             app.session.wait_link_scan();
-            waited = Some(scan);
             continue;
         }
         *time = next;
@@ -829,6 +824,48 @@ fn a_file_placed_while_idle_follows_its_changes() {
     app.run("file.place", json!({"path": path})).unwrap();
     let id = app.session.active().unwrap().selection.objects[0];
     idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
+    let stamp = std::fs::metadata(&path).unwrap().modified().unwrap();
+    let changed = png(60, 30, 72.0);
+    std::fs::write(&path, &changed).unwrap();
+    // The rewritten file is dated 2 s later, however fast it was written.
+    let later = std::fs::FileTimes::new().set_modified(stamp + std::time::Duration::from_secs(2));
+    std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_times(later).unwrap();
+    let hash = vectorcraft_doc::links::hash_bytes(&changed);
+    let updated = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        matches!(&st.doc.node(id).unwrap().kind, NodeKind::Image(im) if im.link.as_ref().and_then(|l| l.hash.as_deref()) == Some(hash.as_str()))
+    };
+    assert!(idle(&mut app, &ctx, &mut time, 10.0, &updated), "the changed file was never read again");
+}
+
+/// A look whose worker ended without stamps is cleared: the app stops asking for a frame every
+/// 100 ms, and the next look, on schedule, reads a changed file again.
+#[test]
+fn a_look_whose_worker_stopped_does_not_stop_later_looks() {
+    let mut app = app();
+    // Every frame renders on this thread: a frame finished by the render worker asks for a repaint.
+    app.canvas.worker_started = true;
+    app.run("prefs.set", json!({"key": "updateLinks", "value": "automatically"})).unwrap();
+    let path = temp_file("stopped-watch.png", &png(40, 30, 72.0));
+    app.run("file.place", json!({"path": path})).unwrap();
+    let id = app.session.active().unwrap().selection.objects[0];
+    let ctx = egui::Context::default();
+    let mut time = 0.0;
+    idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
+    // A look that is due starts in this frame and is applied in the next one, at the same time.
+    time += 3.0;
+    frame_at(&mut app, &ctx, time);
+    app.session.wait_link_scan();
+    frame_at(&mut app, &ctx, time);
+    assert!(app.session.link_scan.is_none());
+    let scan = vectorcraft_engine::link_watch::LinkScan::default();
+    scan.2.store(true, std::sync::atomic::Ordering::SeqCst);
+    app.session.link_scan = Some(scan);
+    // Half a second later, before the next look is due.
+    time += 0.5;
+    let wait = frame_at(&mut app, &ctx, time);
+    assert!(app.session.link_scan.is_none(), "the look ended");
+    assert!(wait > std::time::Duration::from_millis(100), "{wait:?}: {:?}", ctx.repaint_causes());
     let stamp = std::fs::metadata(&path).unwrap().modified().unwrap();
     let changed = png(60, 30, 72.0);
     std::fs::write(&path, &changed).unwrap();
