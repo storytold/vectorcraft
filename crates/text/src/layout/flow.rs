@@ -601,6 +601,9 @@ fn flow_line_flex(glyph: usize, flex: &[Flex], held: &[usize], hung: &[usize]) -
     value
 }
 
+/// How `line` of `paragraph` is aligned: where it starts, what justification adds to its spaces,
+/// gaps and glyphs, its kashidas, and, in right-aligned area type, its last tab, which takes the
+/// text after it to the right edge.
 fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry) -> LineJustification {
     let para = paragraph.para;
     let sg = &paragraph.sg;
@@ -730,6 +733,9 @@ fn tab_glyph<'p>(
     ((line.ax1 + line.opt_r - rest - x).max(0.0), leader)
 }
 
+/// Lay out `line` of `paragraph` as `justification` aligns it: each glyph placed along the
+/// baseline (tabs as [`tab_glyph`] sets them), its hyphen, and the line's record, then the pen
+/// moved on past it.
 fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry, justification: &LineJustification) {
     let para = paragraph.para;
     let sg = &paragraph.sg;
