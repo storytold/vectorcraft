@@ -537,15 +537,22 @@ stroke instead of the whole object: `run_command effect.apply {"effect": "path.o
 On a path directly inside a graph series, `appearance.setItem`, `appearance.addFill`, `appearance.addStroke`,
 `appearance.removeItem`, `appearance.moveItem`, `appearance.duplicateItem`, `appearance.clear`,
 `appearance.reduceToBasic`, `appearance.showAllHidden`, `appearance.transfer`, `appearance.copyFrom`, `paint.default`,
-`graphicStyle.apply` and `graphicStyle.redefine` (on the marks still linked to the style) store the paint, weight and
-opacity of the topmost visible fill and stroke on the graph. `graphicStyle.apply` with `add` stores only the kinds of row
-that are visible in the style. `paint.swap` stores the swapped paints and the stroke weight, keeps the stored opacity,
-and does not store a hidden topmost row that it swaps. The graph does not store the rest of a graphic style's look (more
-fill and stroke rows, effects, the object's opacity and blend mode, and the link to the style), and a mark loses it when
-the graph is drawn again. When the graph is drawn again, columns, bars, wedges, areas, markers and legend swatches take
-the stored fill and stroke. A thin line takes the stored stroke and has no fill. A Filled Lines band takes the stored
-fill, or the stored stroke when no fill is stored and that stroke has paint, and has a 0.25 pt black outline, so these
-commands do not store a stroke for a series that draws a band. Graph designs keep their own paint. A row that had no
+`graphicStyle.apply` and `graphicStyle.redefine` (on the marks still linked to the style) store the paint, weight,
+opacity and blend mode of the topmost visible fill and stroke on the graph. `graphicStyle.apply` with `add` stores only
+the kinds of row that are visible in the style. `paint.swap` stores the swapped paints and the stroke weight, keeps the
+stored opacity and blend mode, and does not store a hidden topmost row that it swaps. `transparency.set` and
+`object.setProps` with an opacity or blend mode for the object, `appearance.clear`, `appearance.transfer`,
+`appearance.copyFrom` with Transparency picked up, `graphicStyle.apply` without `add` and `graphicStyle.redefine` store
+the object's opacity and blend mode on the graph, and the other commands above store them when they change them on a
+mark. The graph stores an opacity and blend mode as a pair, taken from the mark the command edited: a command that sets
+only the opacity of one mark's object or row also stores that mark's blend mode in place of the one another mark
+stored. Every path directly in the series takes the stored values when the graph is drawn again. The graph does not
+store the rest of a graphic style's look (more fill and stroke rows, effects, and the link to the style), and a mark
+loses it when the graph is drawn again. When the graph is drawn again, columns, bars, wedges, areas, markers and legend
+swatches take the stored fill and stroke. A thin line takes the stored stroke and has no fill. A Filled Lines band takes
+the stored fill, or the stored stroke when no fill is stored and that stroke has paint, and has a 0.25 pt black
+outline, so these commands do not store a stroke paint or weight for a series that draws a band. The outline takes the
+stored stroke opacity and blend mode. Graph designs keep their own paint. A row that had no
 paint before the command and has none after it does not change what the graph stores. `paint.setFill`,
 `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other store the topmost row of the kind
 even when it is hidden, and store a stroke set on a band. `stroke.set`, `paint.editGradient` and the recolor commands do
