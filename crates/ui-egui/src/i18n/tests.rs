@@ -2103,6 +2103,72 @@ fn translations_keep_the_backticked_names_of_their_english() {
     assert!(missing.is_empty(), "{} rows drop a backticked name:\n{}", missing.len(), missing.join("\n"));
 }
 
+/// The spans of `s` between pairs of straight double quotes outside its backticked spans, such as
+/// a value a parameter takes; none when those quotes don't pair up.
+fn double_quoted(s: &str) -> Vec<&str> {
+    let outside: Vec<&str> = s.split('`').step_by(2).collect();
+    let quotes: usize = outside.iter().map(|part| part.matches('"').count()).sum();
+    if !quotes.is_multiple_of(2) {
+        return Vec::new();
+    }
+    let mut spans = Vec::new();
+    let mut open = false;
+    for part in outside {
+        for (i, piece) in part.split('"').enumerate() {
+            if i > 0 {
+                open = !open;
+            }
+            if open && !piece.is_empty() {
+                spans.push(piece);
+            }
+        }
+    }
+    spans
+}
+
+/// Whether `text` holds `word` with no letter or digit right before or after it.
+fn holds_word(text: &str, word: &str) -> bool {
+    text.match_indices(word).any(|(at, _)| {
+        let before = text[..at].chars().next_back().is_none_or(|c| !c.is_alphanumeric());
+        let after = text[at + word.len()..].chars().next().is_none_or(|c| !c.is_alphanumeric());
+        before && after
+    })
+}
+
+#[test]
+fn double_quoted_finds_the_spans_between_paired_quotes() {
+    assert_eq!(double_quoted(r#"span must be "object" or "selection", got {v}"#), ["object", "selection"]);
+    assert_eq!(double_quoted(r#"`{"a": 1}` is "left""#), ["left"]);
+    assert_eq!(double_quoted(r#"a lone " quote"#), Vec::<&str>::new());
+    assert!(holds_word("“auto” veya “optical”", "auto"));
+    assert!(!holds_word(r#""content""#, "contents"));
+    assert!(!holds_word(r#""none""#, "one"));
+}
+
+/// A translated status or error message keeps each value its English text puts in double quotes,
+/// spelled as the English spells it, since the value is what a command reads; the quote marks may
+/// be the language's own. Menu and control labels quote names of the interface, which translate.
+#[test]
+fn translated_messages_keep_the_double_quoted_values_of_their_english() {
+    let mut missing = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg" || ctx == "@msgplural") {
+            let plural = ctx == "@msgplural";
+            let english = if plural { src.rsplit('|').next().unwrap_or(src) } else { src.as_str() };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for form in forms {
+                for value in double_quoted(english) {
+                    if !holds_word(form, value) {
+                        missing.push(format!("{}: \"{value}\" in {src:?} -> {form:?}", l.code));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{} rows drop a double-quoted value:\n{}", missing.len(), missing.join("\n"));
+}
+
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
