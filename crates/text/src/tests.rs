@@ -702,6 +702,16 @@ fn right_aligned_area_type_sets_the_text_after_its_last_tab_against_the_edge() {
     assert!(lay.glyphs.first().unwrap().origin.x.abs() < 1e-6, "{}", lay.glyphs.first().unwrap().origin.x);
     let tab = lay.glyphs.iter().find(|g| g.byte == 7).unwrap();
     assert!((tab.origin.x + tab.advance - 336.0).abs() < 1e-6, "the tab ends at {}", tab.origin.x + tab.advance);
+    // Text after the last tab that breaks with a hyphen: the hyphen ends on the edge too.
+    let text = "A\tinternationalization";
+    let mut hyphenated = area(text, style(13.0), Rect::new(0.0, 0.0, 100.0, 200.0), Justify::Right);
+    hyphenated.para.hyphenate = true;
+    hyphenated.para.composer = vectorcraft_doc::Composer::SingleLine;
+    let lay = layout(db(), &hyphenated);
+    let line = &lay.lines[0];
+    assert!(line.end > 2 && line.end < text.len(), "the first line breaks inside the word: {line:?}");
+    let last = lay.glyphs.get(line.glyph_end - 1).unwrap();
+    assert!((last.origin.x + last.advance - 100.0).abs() < 1e-6, "the hyphen ends at {}", last.origin.x + last.advance);
     // Without a tab, the line is right aligned as a whole.
     let lay = layout(db(), &area("Name", style(13.0), frame, Justify::Right));
     assert!(lay.glyphs.first().unwrap().origin.x > 200.0);

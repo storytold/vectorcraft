@@ -719,9 +719,11 @@ fn tab_glyph<'p>(
     if justification.last_tab != Some(glyph_index) {
         return (advance, leader);
     }
-    // The width of what follows up to the line's end (nothing, when the tab ends the line).
+    // The width of what follows up to the line's end (nothing, when the tab ends the line), with
+    // the hyphen a hyphenated line ends with.
     let after = sg.get(glyph_index + 1..line.trimmed).unwrap_or_default();
-    let rest = if after.is_empty() { 0.0 } else { after.iter().map(|g| g.adv).sum::<f64>() - line.end_trim };
+    let hyphen = line.hyphen.as_ref().map_or(0.0, |g| g.adv);
+    let rest = if after.is_empty() { 0.0 } else { after.iter().map(|g| g.adv).sum::<f64>() - line.end_trim + hyphen };
     ((line.ax1 + line.opt_r - rest - x).max(0.0), leader)
 }
 
