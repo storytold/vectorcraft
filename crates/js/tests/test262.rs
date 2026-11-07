@@ -203,6 +203,9 @@ const MISSING_BUILTINS: &str = "Array String Number Boolean Math JSON Date RegEx
     fromCharCode substring substr split replace match search exec test toUpperCase toLowerCase trim toFixed toPrecision toExponential \
     bind now isArray compareArray verifyProperty fnGlobalObject";
 
+/// The stand-in for `String` that the harness's failure messages call.
+const HARNESS_STRING: &str = "function String(value) { return '' + value; }";
+
 /// The source names a missing built-in, as an identifier, a property name or a word inside a
 /// string literal (code passed to `eval` or `Function`), or does not parse as ES5 (the tests that
 /// use `let` and `const`).
@@ -251,7 +254,10 @@ fn run_language_subset(dir: &Path) {
     let harness_dir = dir.join("harness");
     // A file that cannot be read gives an empty source.
     let read = |p: &Path| String::from_utf8_lossy(&std::fs::read(p).unwrap_or_default()).into_owned();
-    let prelude = format!("{}\n{}\n", read(&harness_dir.join("assert.js")), read(&harness_dir.join("sta.js")));
+    // `assert.js` formats a failed assertion's message with the global `String`, which the
+    // interpreter does not provide yet; the stand-in converts with `+` so a failure reports the
+    // assertion's message instead of a ReferenceError.
+    let prelude = format!("{HARNESS_STRING}\n{}\n{}\n", read(&harness_dir.join("assert.js")), read(&harness_dir.join("sta.js")));
     let missing: HashSet<&str> = MISSING_BUILTINS.split_whitespace().collect();
     let verbose = std::env::var_os("VECTORCRAFT_TEST262_VERBOSE").is_some();
     let (mut tests, mut skipped, mut passed, mut failed, mut panicked) = (0usize, 0usize, 0usize, 0usize, 0usize);
