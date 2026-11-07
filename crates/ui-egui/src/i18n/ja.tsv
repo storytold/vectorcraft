@@ -488,6 +488,17 @@ digits	Malayalam	マラヤーラム数字
 	Vector Effects	ベクター効果
 	3D and Materials	3D とマテリアル
 	Extrude & Bevel…	押し出しとベベル…
+	3D (Classic)	3D（クラシック）
+	Extrude & Bevel (Classic)…	押し出しとベベル（クラシック）…
+	Surface	表面
+	Wireframe	ワイヤーフレーム
+	No Shading	陰影なし
+	Plastic	プラスチック
+	Highlight Intensity	ハイライトの強さ
+	Highlight Size	ハイライトのサイズ
+	Blend Steps	ブレンドの階調
+	Shading Color	陰影のカラー
+	Draw Hidden Faces	隠れた面を描画
 	Revolve…	回転体…
 	Inflate…	膨張…
 	Materials…	マテリアル…

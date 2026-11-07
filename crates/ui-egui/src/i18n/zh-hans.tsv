@@ -1049,6 +1049,17 @@
 	Exporting {}	正在导出 {}
 	Export…	导出…
 	Extrude & Bevel…	突出与斜角…
+	3D (Classic)	3D (经典)
+	Extrude & Bevel (Classic)…	突出与斜角 (经典)…
+	Surface	表面
+	Wireframe	线框
+	No Shading	无底纹
+	Plastic	塑料
+	Highlight Intensity	高光强度
+	Highlight Size	高光大小
+	Blend Steps	混合步骤
+	Shading Color	底纹颜色
+	Draw Hidden Faces	绘制隐藏表面
 	Eyedropper	吸管
 	Sample Color from Screen	从屏幕取样颜色
 	This system has no screen color sampler	此系统没有屏幕取色工具

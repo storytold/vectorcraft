@@ -77,6 +77,28 @@ fn no_depth_is_the_flat_shape_and_no_cap_shows_the_inside() {
 }
 
 #[test]
+fn hidden_faces_draw_every_face_of_the_solid_behind_the_visible_ones() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let v = View { rotation_x: 20.0, rotation_y: 30.0, ..front() };
+    let shown = extrude(&p, FillRule::EvenOdd, b, Extrude::default(), v).unwrap();
+    let all = extrude(&p, FillRule::EvenOdd, b, Extrude { hidden: true, ..Extrude::default() }, v).unwrap();
+    // A box: the three faces turned to the viewer, then the three turned away, drawn first.
+    assert_eq!(shown.len(), 3);
+    assert_eq!(all.len(), 6);
+    assert!(all.windows(2).all(|w| w[0].depth <= w[1].depth));
+    // The faces turned away keep their outward normals, so a light behind the solid lights them.
+    assert!(all[..3].iter().all(|f| f.normal[2] < 0.0), "{:?}", all.iter().map(|f| f.normal).collect::<Vec<_>>());
+    for f in shown.iter().chain(&all) {
+        let [x, y, z] = f.normal;
+        assert!(close(x.hypot(y).hypot(z), 1.0, 1e-9), "{:?}", f.normal);
+    }
+    // The visible faces keep their normals and their place at the front.
+    for (front, kept) in shown.iter().rev().zip(all.iter().rev()) {
+        assert_eq!(front.normal, kept.normal);
+    }
+}
+
+#[test]
 fn taper_shrinks_the_back_and_twist_turns_it() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
     let side = View { rotation_y: 90.0, ..front() };
@@ -232,6 +254,7 @@ fn malformed_and_degenerate_input_is_bounded() {
         taper: -3.0,
         cap: true,
         bevel: Some(Bevel { width: f64::NAN, height: 1e12, repeat: usize::MAX, space: 7.0, ..Bevel::default() }),
+        hidden: false,
     };
     let f = extrude(&p, FillRule::EvenOdd, b, wild, View { rotation_x: f64::NAN, perspective: 900.0, ..front() }).unwrap();
     assert!(f.iter().flat_map(|f| f.contours.iter().flatten()).all(|q| q.x.is_finite() && q.y.is_finite()));

@@ -346,15 +346,20 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
 
 /// The parameters whose dialogs list their values in their own bodies, as (label, value), each
 /// label as that dialog passes it to its dropdown or radio buttons, which translate it into the UI
-/// language: Revolve's edge, Extrude & Bevel's bevel (Rounded translated in the "3d" context
-/// first), every Warp style's orientation, Rasterize's Color Model (its `document` value labeled
+/// language: Revolve's edge, the bevel of both Extrude & Bevels (Rounded translated in the "3d"
+/// context first), Extrude & Bevel (Classic)'s surface and shading color, every Warp style's
+/// orientation, Rasterize's Color Model (its `document` value labeled
 /// CMYK when `cmyk`, for a document in CMYK, and RGB otherwise), Background and Anti-aliasing, and
 /// the channel of Levels and Curves.
 pub(super) fn own_choices(effect: &str, key: &str, cmyk: bool) -> Option<Vec<(&'static str, &'static str)>> {
     let c3 = |s: &'static str| crate::i18n::tr_ctx(crate::i18n::current(), "3d", s);
     Some(match (effect, key) {
         (vectorcraft_effects::REVOLVE, "edge") => vec![(tl!("Left"), "left"), (tl!("Right"), "right")],
-        (vectorcraft_effects::EXTRUDE, "bevel") => vec![
+        (vectorcraft_effects::CLASSIC_EXTRUDE, "surface") => {
+            vec![(tl!("Wireframe"), "wireframe"), (tl!("No Shading"), "none"), (tl!("Diffuse"), "diffuse"), (tl!("Plastic"), "plastic")]
+        }
+        (vectorcraft_effects::CLASSIC_EXTRUDE, "shadingColor") => vec![(tl!("Black"), "black"), (tl!("Custom"), "custom"), (tl!("None"), "none")],
+        (vectorcraft_effects::EXTRUDE | vectorcraft_effects::CLASSIC_EXTRUDE, "bevel") => vec![
             (tl!("None"), "none"),
             (tl!("Classic"), "classic"),
             (c3("Rounded"), "rounded"),
@@ -915,6 +920,9 @@ mod tests {
         for (effect, key) in [
             (vectorcraft_effects::REVOLVE, "edge"),
             (vectorcraft_effects::EXTRUDE, "bevel"),
+            (vectorcraft_effects::CLASSIC_EXTRUDE, "bevel"),
+            (vectorcraft_effects::CLASSIC_EXTRUDE, "surface"),
+            (vectorcraft_effects::CLASSIC_EXTRUDE, "shadingColor"),
             ("warp.arc", "orientation"),
             ("warp.twist", "orientation"),
             (vectorcraft_effects::RASTERIZE, "background"),

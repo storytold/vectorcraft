@@ -47,6 +47,9 @@ pub(super) struct Builder<'a> {
     /// A closed solid hides the faces turned away from the viewer; an open one shows their
     /// insides.
     pub(super) closed: bool,
+    /// A closed solid keeps the faces turned away from the viewer too, with their outward normals,
+    /// drawn behind the others.
+    pub(super) hidden: bool,
     pub(super) facets: Vec<Facet>,
 }
 
@@ -83,7 +86,7 @@ impl Builder<'_> {
         // leave gaps.
         let (n, behind) = if facing > 0.0 {
             (n, false)
-        } else if self.closed && facing > -0.02 {
+        } else if self.closed && (facing > -0.02 || self.hidden) {
             (n, true)
         } else if self.closed {
             return Ok(());
@@ -111,6 +114,7 @@ impl Builder<'_> {
             depth,
             brightness: self.camera.brightness(n),
             illumination: crate::illumination(&self.camera.view, n, self.camera.light),
+            normal: [n.0, n.1, n.2],
             rgb_gradient: None,
             #[cfg(test)]
             view,
@@ -378,7 +382,7 @@ pub fn extrude(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, 
     }
     let rings = rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
     let camera = Camera::new(view, bounds, o.depth);
-    let mut b = Builder { camera: &camera, closed: o.cap, facets: vec![] };
+    let mut b = Builder { camera: &camera, closed: o.cap, hidden: o.hidden, facets: vec![] };
     let steps = steps(&o);
     let z = |t: f64| o.depth / 2.0 - o.depth * t;
     let ring_at =
@@ -431,7 +435,7 @@ pub fn plane(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Resul
     check_bounds(bounds)?;
     let rings = rings(path, rule, bounds.width().max(bounds.height()), MAX_PLANE_POINTS)?;
     let camera = Camera::new(view, bounds, 0.0);
-    let mut b = Builder { camera: &camera, closed: false, facets: vec![] };
+    let mut b = Builder { camera: &camera, closed: false, hidden: false, facets: vec![] };
     let contours: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(*p, 0.0)).collect()).collect();
     // A plane is one flat face, seen from either side. Its normal is turned toward the viewer, so
     // it is drawn last, as a cap is, and planes drawn in one order keep the order they are given in.

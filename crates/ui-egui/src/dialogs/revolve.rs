@@ -1,11 +1,12 @@
-//! Compact controls for the 3D and Materials effects: Extrude & Bevel, Revolve, Inflate and Rotate.
-//! The object and the rotation and light gizmos live on the artboard. All document changes run
-//! through the effect dialog's existing preview/commit commands.
+//! Compact controls for the 3D and Materials effects: Extrude & Bevel, Revolve, Inflate and Rotate,
+//! and Extrude & Bevel (Classic), whose own controls are in `three_d_classic`. The object and the
+//! rotation and light gizmos live on the artboard. All document changes run through the effect
+//! dialog's existing preview/commit commands.
 
 use egui::{Align2, FontId, Id, Pos2, Sense, Stroke, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
-use vectorcraft_effects::{EXTRUDE, INFLATE, REVOLVE, ROTATION_PRESETS};
+use vectorcraft_effects::{CLASSIC_EXTRUDE, EXTRUDE, INFLATE, REVOLVE, ROTATION_PRESETS};
 
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -136,14 +137,15 @@ fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 /// `s` as the 3D effects mean it (a solid's cap, not a stroke's; a bevelled edge, not a join).
-fn c3(s: &'static str) -> &'static str {
+pub(super) fn c3(s: &'static str) -> &'static str {
     crate::i18n::tr_ctx(crate::i18n::current(), "3d", s)
 }
 
-/// Extrude & Bevel and Inflate: Object, Rotation and Lighting tabs (Rotate has no Object tab).
-/// The rotation gizmo shows on the first two, the light gizmo on Lighting.
+/// Extrude & Bevel, Inflate and Extrude & Bevel (Classic): Object, Rotation and Lighting tabs
+/// (Rotate has no Object tab). The rotation gizmo shows on the first two, the light gizmo on
+/// Lighting.
 fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
-    let object = id == EXTRUDE || id == INFLATE;
+    let object = id == EXTRUDE || id == INFLATE || id == CLASSIC_EXTRUDE;
     let mut tabs = vec![];
     if object {
         tabs.push(tl!("Object"));
@@ -163,10 +165,16 @@ fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &
     }
     ui.add_space(8.0);
     if super::revolve_gizmo::lighting(d) {
-        lighting_controls(ui, d);
+        if id == CLASSIC_EXTRUDE {
+            super::three_d_classic::surface_controls(ui, d);
+        } else {
+            lighting_controls(ui, d);
+        }
     } else if object && d.str("__tab") != "rotation" {
         let unit = app.session.general_unit();
-        if id == EXTRUDE {
+        if id == CLASSIC_EXTRUDE {
+            super::three_d_classic::object_controls(ui, d, unit);
+        } else if id == EXTRUDE {
             extrude_controls(ui, d, unit);
         } else {
             heading(ui, tl!("Object"));
@@ -245,7 +253,7 @@ fn view_controls(ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 /// A dropdown of `options` (value, label) for `key`, with its reset dot.
-fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, options: &[(Value, &str)]) {
+pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, options: &[(Value, &str)]) {
     let id = d.str("__effect");
     let default = vectorcraft_effects::default_params(&id).and_then(|p| p.get(key).cloned()).unwrap_or(Value::Null);
     let value = d.fields.get(key).cloned().unwrap_or_else(|| default.clone());
@@ -268,7 +276,7 @@ fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, options: &[(
 }
 
 /// A checkbox for `key`, with its reset dot.
-fn toggle(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, default: bool) {
+pub(super) fn toggle(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, default: bool) {
     ui.horizontal(|ui| {
         let on = d.bool(key);
         if widgets::check(ui, name, on, ui.is_enabled()) {
@@ -370,11 +378,11 @@ pub(super) fn light_options(d: &Dialog) -> vectorcraft_three_d::Revolve {
     vectorcraft_effects::revolve_options(&super::form::params(&selected_light(d)))
 }
 
-fn light_record(d: &Dialog) -> Value {
+pub(super) fn light_record(d: &Dialog) -> Value {
     Value::Object(LIGHT_KEYS.iter().filter_map(|(key, field)| d.fields.get(*field).map(|v| ((*key).into(), v.clone()))).collect())
 }
 
-fn store_selected(d: &mut Dialog, selected: &Dialog) {
+pub(super) fn store_selected(d: &mut Dialog, selected: &Dialog) {
     if let Some(list) = explicit_lights(d) {
         let index = light_index(d, list.len());
         let mut list = list.clone();
@@ -397,7 +405,7 @@ pub(super) fn set_light_value(d: &mut Dialog, key: &str, value: Value) {
     store_selected(d, &selected);
 }
 
-fn light_list(ui: &mut egui::Ui, d: &mut Dialog) {
+pub(super) fn light_list(ui: &mut egui::Ui, d: &mut Dialog) {
     let mut list = explicit_lights(d).cloned().unwrap_or_else(|| vec![light_record(d)]);
     let mut index = light_index(d, list.len());
     let names: Vec<_> = (1..=list.len()).map(|i| format!("{} {i}", c3("Light"))).collect();
@@ -464,12 +472,12 @@ fn light_color(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-fn heading(ui: &mut egui::Ui, text: &str) {
+pub(super) fn heading(ui: &mut egui::Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(text).font(crate::theme::semibold(13.0)).color(t.text));
 }
 
-fn label(ui: &mut egui::Ui, name: &str) {
+pub(super) fn label(ui: &mut egui::Ui, name: &str) {
     let t = Tokens::get(ui.ctx());
     let (r, _) = ui.allocate_exact_size(vec2(LABEL_W, 24.0), Sense::hover());
     ui.put(r, egui::Label::new(egui::RichText::new(name).size(12.5).color(t.text)).halign(egui::Align::Min).truncate()).on_hover_text(name);
@@ -482,7 +490,7 @@ fn rail_width(ui: &egui::Ui) -> f32 {
 
 /// A value can be typed, dragged, scrubbed by its label, or moved on its slider.
 #[allow(clippy::too_many_arguments)]
-fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, range: (f64, f64), suffix: &str, decimals: usize, unit: Option<Unit>) {
+pub(super) fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, range: (f64, f64), suffix: &str, decimals: usize, unit: Option<Unit>) {
     let default = vectorcraft_effects::default_params(&d.str("__effect")).and_then(|p| p.get(key).and_then(Value::as_f64)).unwrap_or(0.0);
     let from = |n| unit.map_or(n, |u| u.from_pt(n));
     let to = |n| unit.map_or(n, |u| u.to_pt(n));
@@ -570,7 +578,7 @@ fn dot(ui: &egui::Ui, p: Pos2, changed: bool) {
     }
 }
 
-fn reset_dot(ui: &mut egui::Ui, key: &str, changed: bool, default: &str) -> bool {
+pub(super) fn reset_dot(ui: &mut egui::Ui, key: &str, changed: bool, default: &str) -> bool {
     let (r, _) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::hover());
     let response = ui.interact(r, Id::unique(("revolve-reset", key)), Sense::click());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset to default")));

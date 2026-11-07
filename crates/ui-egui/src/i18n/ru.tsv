@@ -1106,6 +1106,17 @@ font-technology	Variable	Вариативные
 	Exporting {}	Экспорт {}
 	Export…	Экспорт…
 	Extrude & Bevel…	Выдавливание и фаска…
+	3D (Classic)	3D (классические)
+	Extrude & Bevel (Classic)…	Выдавливание и фаска (классическое)…
+	Surface	Поверхность
+	Wireframe	Каркас
+	No Shading	Без затенения
+	Plastic	Пластик
+	Highlight Intensity	Интенсивность блика
+	Highlight Size	Размер блика
+	Blend Steps	Шаги перехода
+	Shading Color	Цвет затенения
+	Draw Hidden Faces	Рисовать скрытые грани
 	Eyedropper	Пипетка
 	Sample Color from Screen	Взять цвет с экрана
 	This system has no screen color sampler	В этой системе нет средства выбора цвета с экрана

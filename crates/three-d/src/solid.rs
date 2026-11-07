@@ -201,11 +201,14 @@ pub struct Extrude {
     /// Closed ends (a solid) or open ones (a hollow tube).
     pub cap: bool,
     pub bevel: Option<Bevel>,
+    /// Keep the faces of a closed solid that are turned away from the viewer (Draw Hidden Faces,
+    /// and the classic Wireframe surface), drawn behind the faces turned toward it.
+    pub hidden: bool,
 }
 
 impl Default for Extrude {
     fn default() -> Self {
-        Self { depth: 50.0, twist: 0.0, taper: 1.0, cap: true, bevel: None }
+        Self { depth: 50.0, twist: 0.0, taper: 1.0, cap: true, bevel: None, hidden: false }
     }
 }
 
@@ -239,6 +242,9 @@ pub struct Facet {
     pub depth: f64,
     pub brightness: f64,
     pub illumination: [f64; 3],
+    /// The face's unit normal in view space (x right, y down, z toward the viewer), turned to the
+    /// side the viewer sees.
+    pub normal: [f64; 3],
     /// Smooth lighting on an inflated triangle, before clipping individual RGB channels.
     pub rgb_gradient: Option<crate::RgbGradient>,
     /// The contours in view space, before projection, for tests that measure depths.

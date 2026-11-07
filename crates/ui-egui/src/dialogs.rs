@@ -120,6 +120,7 @@ pub mod symbolism_options;
 pub mod tate_chu_yoko;
 mod text_export;
 pub mod text_import;
+mod three_d_classic;
 mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;

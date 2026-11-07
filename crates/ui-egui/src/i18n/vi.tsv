@@ -1265,6 +1265,17 @@ font-technology	Variable	Biến thiên
 	Exporting {}	Đang xuất {}
 	Export…	Xuất…
 	Extrude & Bevel…	Kéo dài & vát…
+	3D (Classic)	3D (cổ điển)
+	Extrude & Bevel (Classic)…	Kéo dài & vát (cổ điển)…
+	Surface	Bề mặt
+	Wireframe	Khung dây
+	No Shading	Không tô bóng
+	Plastic	Nhựa
+	Highlight Intensity	Cường độ điểm sáng
+	Highlight Size	Kích thước điểm sáng
+	Blend Steps	Số bước hòa trộn
+	Shading Color	Màu tô bóng
+	Draw Hidden Faces	Vẽ các mặt ẩn
 	Eyedropper	Ống hút màu
 	Sample Color from Screen	Lấy mẫu màu từ màn hình
 	This system has no screen color sampler	Hệ thống này không có công cụ lấy mẫu màu trên màn hình

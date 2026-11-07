@@ -1103,6 +1103,17 @@ font-technology	Variable	Варіативні
 	Exporting {}	Експорт {}
 	Export…	Експорт…
 	Extrude & Bevel…	Видавлювання та фаска…
+	3D (Classic)	3D (класичні)
+	Extrude & Bevel (Classic)…	Видавлювання та фаска (класичне)…
+	Surface	Поверхня
+	Wireframe	Каркас
+	No Shading	Без затінення
+	Plastic	Пластик
+	Highlight Intensity	Інтенсивність відблиску
+	Highlight Size	Розмір відблиску
+	Blend Steps	Кроки переходу
+	Shading Color	Колір затінення
+	Draw Hidden Faces	Малювати приховані грані
 	Eyedropper	Піпетка
 	Sample Color from Screen	Взяти колір з екрана
 	This system has no screen color sampler	У цій системі немає засобу вибору кольору з екрана

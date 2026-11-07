@@ -1,5 +1,5 @@
-//! Extrude & Bevel, Inflate and Rotate as live, shaded vector art, shared by the canvas and every
-//! exporter. Like Revolve, the source path stays editable and the effect draws its 3D faces.
+//! Extrude & Bevel, Inflate, Rotate and Extrude & Bevel (Classic) as live, shaded vector art,
+//! shared by the canvas and every exporter. Like Revolve, the source path stays editable and the effect draws its 3D faces.
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -14,11 +14,14 @@ use vectorcraft_doc::color::Color;
 use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry};
 
+mod classic;
+pub use classic::{CLASSIC_EXTRUDE, SHADING_COLORS, classic_extrude_options, classic_shading};
+
 pub const EXTRUDE: &str = "threeD.extrude";
 pub const INFLATE: &str = "threeD.inflate";
 pub const ROTATE: &str = "threeD.rotate";
 /// The 3D effects this module draws (Revolve has its own).
-pub const SOLIDS: [&str; 3] = [EXTRUDE, INFLATE, ROTATE];
+pub const SOLIDS: [&str; 4] = [EXTRUDE, INFLATE, ROTATE, CLASSIC_EXTRUDE];
 
 /// Is `id` one of the 3D and Materials effects (Revolve included)?
 pub fn is_three_d(id: &str) -> bool {
@@ -93,6 +96,7 @@ pub fn extrude_options(p: &Value) -> Extrude {
             inside: flag(p, "bevelInside", false),
             both_sides: flag(p, "bevelBothSides", false),
         }),
+        hidden: false,
     }
 }
 
@@ -146,6 +150,7 @@ fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) ->
     let view = view_options(p);
     match id {
         EXTRUDE => vectorcraft_three_d::extrude(path, rule, bounds, extrude_options(p), view),
+        CLASSIC_EXTRUDE => vectorcraft_three_d::extrude(path, rule, bounds, classic_extrude_options(p), view),
         INFLATE => vectorcraft_three_d::inflate(path, rule, bounds, inflate_options(p), view),
         _ => vectorcraft_three_d::plane(path, rule, bounds, view),
     }
@@ -153,6 +158,9 @@ fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) ->
 
 /// Validate before a command changes the document; the evaluator bounds loaded files too.
 pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
+    if id == CLASSIC_EXTRUDE {
+        classic::validate(p)?;
+    }
     crate::lighting::validate(p)?;
     let label = crate::effect_info(id).map_or("This effect", |e| e.label.trim_end_matches('…'));
     if let Some(v) = p.get("bevel")
@@ -322,7 +330,8 @@ fn region(path: &PathData, rule: FillRule, item: &AppearanceItem) -> (PathData, 
 fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> {
     let b = union_bounds(shapes)?;
     let p = crate::merged_params(&fx.id, &fx.params);
-    let colored = view_options(&p).has_colored_lights();
+    let classic = fx.id == CLASSIC_EXTRUDE;
+    let colored = !classic && view_options(&p).has_colored_lights();
     if fx.id == ROTATE {
         // Every part turns about the centre of the object's own bounds (a group's members about
         // the centre of theirs), so they stay together.
@@ -383,7 +392,8 @@ fn art_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Node>>> 
         .map(|(item, member, f)| {
             let depths: Vec<f64> = f.iter().map(|f| f.depth).collect();
             let (paint, opacity, blend) = paint_of(item, member);
-            (depths, surface(n, f, &paint, opacity, blend, colored))
+            let art = if classic { classic::surface(n, f, &paint, opacity, blend, &p) } else { surface(n, f, &paint, opacity, blend, colored) };
+            (depths, art)
         })
         .collect();
     // One order takes a plain group of faces from each solid, one face for each facet. With
