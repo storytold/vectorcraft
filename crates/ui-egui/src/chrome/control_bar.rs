@@ -381,10 +381,12 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     let link = crate::panels::transform::proportional(app, ui);
                     let copy = crate::panels::transform::alt_enter_copies(app, ui);
                     let values = [(c.x, origin.x), (c.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
+                    // The W/H link sits between W and H, but is made after H so Tab goes from W
+                    // straight to H and finds the link after it.
+                    let mut link_room = None;
                     for ((k, lbl), (v, offset)) in INLINE_FIELDS.into_iter().zip(values) {
-                        // The W/H link sits between W and H.
                         if k == "height" {
-                            crate::panels::transform::constrain_link(app, ui);
+                            link_room = Some(crate::panels::transform::constrain_link_room(ui));
                         }
                         widgets::field_label(ui, inline_label(&t, lbl));
                         let (id, shown) = (("cb", k), Some(v - offset));
@@ -396,6 +398,10 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         if let Some(nv) = set {
                             app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link, "copy": copy})).ok();
                         }
+                    }
+                    if let Some(room) = link_room {
+                        let id = ui.scope_id().with("cb-constrain-link");
+                        crate::panels::transform::constrain_link_at(app, ui, ui.interact(room, id, Sense::click()));
                     }
                 }
             });

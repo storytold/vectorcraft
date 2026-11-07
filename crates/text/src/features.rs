@@ -391,6 +391,29 @@ mod tests {
         assert_eq!(per_run, [2, 1]);
     }
 
+    /// Bulgarian text gets the font's Bulgarian forms (`locl` for `BGR`, #5945): in the bundled
+    /// Source Sans 3 Italic, в, д, ж, з, к, л and ю differ from the Russian ones, and letters
+    /// the font draws alike stay alike.
+    #[test]
+    fn bulgarian_gets_the_fonts_bulgarian_forms() {
+        let st = |language: &str| CharStyle {
+            font_family: "Source Sans 3".into(),
+            font_style: "Italic".into(),
+            language: Some(language.to_string()),
+            ..Default::default()
+        };
+        // Each letter laid out on its own, so one letter's advance doesn't move the next.
+        let outline = |c: char, language| {
+            layout(FontDb::global(), &TextObject::point(Point::ZERO, &c.to_string(), st(language)))
+                .glyphs
+                .into_iter()
+                .map(|g| g.outline)
+                .collect::<Vec<_>>()
+        };
+        let differs: String = "вгджзийклптцшщюьъ".chars().filter(|c| outline(*c, "bg") != outline(*c, "ru")).collect();
+        assert_eq!(differs, "вджзклю");
+    }
+
     /// Serbian text gets the font's Serbian forms (`locl` for `SRB`): in the bundled Source Sans
     /// 3 Italic, б, г, д, п, т differ from the Russian ones, in either Serbian list entry.
     #[test]

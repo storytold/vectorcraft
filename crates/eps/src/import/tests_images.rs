@@ -547,4 +547,35 @@ fn coarse_images_without_interpolate_draw_hard_pixels() {
     let cmyk = "100 100 scale /DeviceCMYK setcolorspace << /ImageType 4 /Width 2 /Height 1 /BitsPerComponent 8 \
                 /MaskColor [0 0 0 0] /Decode [0 1 0 1 0 1 0 1] /ImageMatrix [2 0 0 -1 0 1] /DataSource <00000000 ff000000> >> image";
     assert_eq!(pixelated(cmyk), (true, Some(true)));
+
+/// An image too large to read is left out, and its data is skipped, as reading it would leave
+/// the program: the art after it is read, not the data as PostScript. Here the data ends at its
+/// `~>` (an inline image of a content stream run as a file, as PDF-reading prologs write it), at
+/// a `SubFileDecode` end string, and at the end of compressed data that is read whole.
+#[test]
+fn the_data_of_an_image_too_large_to_read_is_skipped() {
+    let after = "0 0 1 setrgbcolor 10 10 80 80 rectfill";
+    for program in [
+        format!(
+            "/ID {{ << /ImageType 1 /Width 10000 /Height 10000 /BitsPerComponent 8 /Decode [0 1 0 1 0 1] /ImageMatrix [1 0 0 1 0 0] \
+             /DataSource currentfile 0 (~>) /SubFileDecode filter /ASCII85Decode filter /LZWDecode filter >> \
+             /DeviceRGB setcolorspace image }} def\n\
+             currentfile 0 (endstream) /SubFileDecode filter cvx exec\nID\nJ1_V7fG\"r'\"b]2#:hXAd)~>\n{after}\nendstream\n"
+        ),
+        format!("10000 10000 8 [1 0 0 1 0 0] currentfile /ASCIIHexDecode filter false 3 colorimage\n0a1b 2c3d 4e5f>\n{after}"),
+        format!(
+            "10000 10000 8 [1 0 0 1 0 0] currentfile 0 (%%EndData) /SubFileDecode filter /FlateDecode filter image\n\
+             x\u{9c}garbage\n%%EndData\n{after}"
+        ),
+        format!(
+            "10000 10000 true [1 0 0 1 0 0] currentfile /ASCII85Decode filter imagemask\n{}\n{after}",
+            crate::ps::ascii85(&crate::ps::deflate(&[0u8; 64]))
+        ),
+    ] {
+        let r = read(&program);
+        assert!(r.warnings.iter().any(|w| w.contains("too large to read")), "{program}: {:?}", r.warnings);
+        let o = super::tests::objects(&r.document);
+        assert_eq!(o.len(), 1, "{program}: {:?}", r.warnings);
+        assert_eq!(super::tests::fill(&o[0]), Some(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))), "{program}");
+    }
 }
