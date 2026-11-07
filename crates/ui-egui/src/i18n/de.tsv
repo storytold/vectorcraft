@@ -835,6 +835,11 @@ font-technology	Variable	Variabel
 	Double-click to edit the characters' paint	Doppelklicken, um die Farbe der Zeichen zu bearbeiten
 	Click to edit	Klicken, um zu bearbeiten
 	Double-click to edit	Doppelklicken, um zu bearbeiten
+	Alternates for Current Selection	Alternativen für aktuelle Auswahl
+	Select a character with the Type tool to see its alternates.	Wählen Sie mit dem Text-Werkzeug ein Zeichen aus, um seine Alternativen zu sehen.
+	The selected character's font is not available.	Die Schrift des ausgewählten Zeichens ist nicht verfügbar.
+	No alternates for the selected character.	Keine Alternativen für das ausgewählte Zeichen.
+	Double-click to replace	Doppelklicken zum Ersetzen
 	Double-click to insert	Doppelklicken zum Einfügen
 	Double-click to rename	Doppelklicken zum Umbenennen
 	Double-click to target the contents	Doppelklicken, um den Inhalt als Ziel auszuwählen
@@ -861,6 +866,7 @@ font-technology	Variable	Variabel
 	Duplicate Artboard	Zeichenfläche duplizieren
 	Copy Artboard	Zeichenfläche kopieren
 	Cut Artboard	Zeichenfläche ausschneiden
+	Rename Artboards	Zeichenflächen umbenennen
 	Duplicate Artboards	Zeichenflächen duplizieren
 	Duplicate Brush	Pinsel duplizieren
 	Duplicate Character Style	Zeichenformat duplizieren
@@ -1642,6 +1648,10 @@ file-filter	Templates	Vorlagen
 	Join Tool	Zusammenfügen-Werkzeug
 	Justification…	Abstände…
 	Justify all lines	Blocksatz, alle Zeilen
+	Align Top	Oben ausrichten
+	Align Center	Mittig ausrichten
+	Align Bottom	Unten ausrichten
+	Justify Vertically	Vertikaler Blocksatz
 	Justify with last line aligned center	Blocksatz, letzte Zeile zentriert
 	Justify with last line aligned left	Blocksatz, letzte Zeile linksbündig
 	Justify with last line aligned right	Blocksatz, letzte Zeile rechtsbündig
@@ -2520,6 +2530,9 @@ digits	Malayalam	Malayalam
 	Real World:	Reale Welt:
 	Real-time Drawing and Editing	Zeichnen und Bearbeiten in Echtzeit
 	Rearrange All Artboards	Alle Zeichenflächen neu anordnen
+	Rearrange	Neu anordnen
+	Select All Artboards	Alle Zeichenflächen auswählen
+	Switch Orientation	Ausrichtung wechseln
 	Rearrange All	Alle neu anordnen
 	Layout Order:	Layoutreihenfolge:
 	Change to Left-to-Right Layout	In Layout von links nach rechts ändern
@@ -3243,7 +3256,9 @@ effect	Points	Punkte
 	Patterns	Muster
 	Stroke Options	Konturoptionen
 	Character:	Zeichen:
+	Paragraph:	Absatz:
 	Character options	Zeichenoptionen
+	Paragraph options	Absatzoptionen
 	Stroke options	Konturoptionen
 	Transform options	Transformationsoptionen
 	Stroke Weight	Konturstärke
@@ -3663,6 +3678,12 @@ effect	Points	Punkte
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} Datei in {folder} {note}. Paketordner anzeigen?|{n} Dateien in {folder} {note}. Paketordner anzeigen?
 @plural	{n} linked file not found|{n} linked files not found	{n} verknüpfte Datei nicht gefunden|{n} verknüpfte Dateien nicht gefunden
 	fonts not copied: {fonts}	nicht kopierte Schriften: {fonts}
+@msgplural	{n} linked file not found|{n} linked files not found	{n} verknüpfte Datei nicht gefunden|{n} verknüpfte Dateien nicht gefunden
+@msg	fonts not copied: {fonts}	nicht kopierte Schriften: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} verknüpfte Datei nicht gefunden)|({n} verknüpfte Dateien nicht gefunden)
+@msg	(fonts not copied: {fonts})	(nicht kopierte Schriften: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} verknüpftes Bild wurde seit dem Speichern dieses Dokuments geändert. Die neue Version anzeigen?|{n} verknüpfte Bilder wurden seit dem Speichern dieses Dokuments geändert. Die neuen Versionen anzeigen?
 @plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} weitere Regel: Der Export schreibt sie.|{n} weitere Regeln: Der Export schreibt alle.
 @plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} unbenanntes Objekt ausgelassen: Benennen Sie es oder aktivieren Sie „Unbenannte Objekte“ im Bedienfeldmenü.|{n} unbenannte Objekte ausgelassen: Benennen Sie sie oder aktivieren Sie „Unbenannte Objekte“ im Bedienfeldmenü.
@@ -3883,6 +3904,8 @@ theme	Appearance	Erscheinungsbild
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Aus Hilfslinien erstellen: Die Hilfslinien ergeben mehr als {MAX_PIECES} Slices
 @msg	Create from Selection: the selection has no area	Aus Auswahl erstellen: Die Auswahl hat keine Fläche
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Die Datenwiederherstellung hat keinen Ort für ihre Kopien: Legen Sie Voreinstellungen → Dateihandhabung → Datenwiederherstellung → Ordner (recoveryFolder) fest
+@msg	Data Recovery can't keep copies in {path}: {e}	Die Datenwiederherstellung kann keine Kopien in {path} ablegen: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Aus {path} können keine Plug-ins geladen werden: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	wählen Sie mit der Direktauswahl die Ankerpunkte aus, an denen geschnitten werden soll (nicht die Endpunkte offener Pfade)
 @msg	Divide Objects Below: select a path	Darunterliegende Objekte aufteilen: Wählen Sie einen Pfad aus
 @msg	Divide Objects Below: select exactly one path	Darunterliegende Objekte aufteilen: Wählen Sie genau einen Pfad aus
@@ -4229,6 +4252,8 @@ theme	Appearance	Erscheinungsbild
 @msg	no such saved selection	keine solche gespeicherte Auswahl
 @msg	no such segment	kein solches Segment
 @msg	no such spine point	kein solcher Achsenpunkt
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` muss eine Liste von höchstens 10000 Achsenpunkt-Indizes sein
+@msg	`with` moves points, not a handle	`with` verschiebt Punkte, keinen Griff
 @msg	no such spine segment	kein solches Achsensegment
 @msg	no such subpath	kein solcher Teilpfad
 @msg	no such user library	keine solche Benutzerbibliothek
@@ -4574,6 +4599,9 @@ theme	Appearance	Erscheinungsbild
 @msg	graphs come in as plain art, without their data or settings	Diagramme werden als einfache Grafik übernommen, ohne ihre Daten und Einstellungen
 @msg	an image whose data is cut short was left out	ein Bild mit abgeschnittenen Daten wurde ausgelassen
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	verknüpfte Bilder zeigen die in der Datei gespeicherte Vorschau in niedriger Auflösung, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
+@msg	linked type areas past VectorCraft's limits were left out	verkettete Textbereiche jenseits der Grenzen von VectorCraft wurden ausgelassen
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	als Maske verwendeter Text in verketteten Bereichen, umfließendem Text oder einem zusammengesetzten Pfad beschneidet nicht
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	verknüpfte Bilder ohne Vorschau in der Datei zeigen einen Platzhalter, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	Flächentext in Rahmen, die für eine Zeile der Schrift, in der er hier erscheint, zu niedrig sind, hat höhere Rahmen bekommen ({_1}): Sonst wäre der Text nicht zu sehen
 @msg	its editing data doesn't say where its art is	seine Bearbeitungsdaten geben nicht an, wo seine Grafik liegt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	diese Datei wurde ohne PDF-Kompatibilität gespeichert, und ihre Bearbeitungsdaten können nicht gelesen werden ({why})
@@ -5166,6 +5194,10 @@ effect	Soft	Weich
 	Movie Clip	Movieclip
 @msg	name is empty	Name ist leer
 @msg	an action is already recording	eine Aktion wird bereits aufgezeichnet
+@msg	an action is already playing	eine Aktion wird bereits abgespielt
+@msg	the action stopped playing: its document is no longer active	die Aktion wurde angehalten: ihr Dokument ist nicht mehr aktiv
+@msg	speed must be accelerated, step or pause	speed muss accelerated, step oder pause sein
+@msg	seconds must be a whole number from 1 to 60	seconds muss eine ganze Zahl von 1 bis 60 sein
 @msg	no such function key	keine solche Funktionstaste
 @msg	no such color	keine solche Farbe
 @msg	{_1} cannot be used on Windows	{_1} kann unter Windows nicht verwendet werden
@@ -5344,6 +5376,11 @@ axis	Y Axis	Y-Achse
 	Set Options	Satzoptionen
 	Action Options…	Aktionsoptionen…
 	Action Options	Aktionsoptionen
+	Playback Options…	Wiedergabeoptionen…
+	Playback Options	Wiedergabeoptionen
+	Accelerated	Beschleunigt
+	Step by Step	Schrittweise
+	Pause For	Pause von
 	Rename Action	Aktion umbenennen
 	New Action…	Neue Aktion…
 	New Action	Neue Aktion
@@ -5659,6 +5696,9 @@ anchor	Points:	Punkte:
 	Find Nearest Swatch…	Ähnlichstes Farbfeld suchen…
 	Find Nearest Swatch	Ähnlichstes Farbfeld suchen
 	Apply Nearest Swatch	Ähnlichstes Farbfeld anwenden
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Fläche auf Kontur anwenden
+	Apply Stroke to Fill	Kontur auf Fläche anwenden
 	Select objects to find the swatches nearest their colors.	Wählen Sie Objekte aus, um die Farbfelder zu finden, die ihren Farben am nächsten kommen.
 @msg	select objects or give `color`	wählen Sie Objekte aus oder geben Sie `color` an
 @msg	`color` is not a colour	`color` ist keine Farbe
@@ -5841,6 +5881,11 @@ breakText	Glyphs	Glyphen
 	Export All Open Documents as SVG	Alle geöffneten Dokumente als SVG exportieren
 @msgplural	Exported {n} document|Exported {n} documents	{n} Dokument exportiert|{n} Dokumente exportiert
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} Dokument exportiert; {title} wurde nicht geschrieben: {error}|{n} Dokumente exportiert; {title} wurde nicht geschrieben: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Ordner stapelweise nachzeichnen
+@msgplural	Traced {n} image|Traced {n} images	{n} Bild nachgezeichnet|{n} Bilder nachgezeichnet
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} Bild konnte nicht nachgezeichnet werden|{n} Bilder konnten nicht nachgezeichnet werden
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} Bild nachgezeichnet; nicht nachgezeichnet: {failed}|{n} Bilder nachgezeichnet; nicht nachgezeichnet: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Symboltyp:
 	Dynamic Symbol	Dynamisches Symbol
@@ -5891,4 +5936,58 @@ breakText	Glyphs	Glyphen
 	Bow	Bogen
 	Spike	Spitze
 	Skip Spaces	Leerzeichen überspringen
+	Release Type on a Path…	Pfadtext zurückwandeln…
+	Release Type on a Path	Pfadtext zurückwandeln
+	Text and Path	Text und Pfad
+	Path Only	Nur Pfad
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Das Bildmaterial ist zu groß, um es als Bild zu kopieren: Andere Apps erhalten kein PNG davon
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Nach Zeichenflächen auswählen
+	Select by Artboards…	Nach Zeichenflächen auswählen…
+	Selection Tools	Auswahlwerkzeuge
+	Search artboards	Zeichenflächen suchen
+	Fully Inside	Vollständig innen
+	Fully Outside	Vollständig außen
+	No artboards match.	Keine Zeichenfläche passt.
+	Chosen: {n} of {total}	Gewählt: {n} von {total}
+
+# Contour add-on
+	Contour	Umriss
+	Contour Tool	Umriss-Werkzeug
+	Sharp	Spitz
+	Bake	Umwandeln
+	Turn the Contour into plain paths	Wandelt den Umriss in einfache Pfade um
+	Set Corners…	Ecken festlegen…
+	All Anchors	Alle Ankerpunkte
+	Odd-Numbered Anchors	Ungerade Ankerpunkte
+	Even-Numbered Anchors	Gerade Ankerpunkte
+	Minimum angle	Minimaler Winkel
+	Maximum angle	Maximaler Winkel
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Verknüpfte auswählen
+	Select Embedded	Eingebettete auswählen
+	Select Missing	Fehlende auswählen
+	Select Modified	Geänderte auswählen
+	Select by Link Status	Nach Verknüpfungsstatus auswählen
+	Select by Link Status…	Nach Verknüpfungsstatus auswählen…
+	Search images	Bilder suchen
+	No images match.	Kein Bild passt.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} verknüpftes Bild ausgewählt|{n} verknüpfte Bilder ausgewählt
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} eingebettetes Bild ausgewählt|{n} eingebettete Bilder ausgewählt
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} fehlendes Bild ausgewählt|{n} fehlende Bilder ausgewählt
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} geändertes Bild ausgewählt|{n} geänderte Bilder ausgewählt
+@msgplural	Selected {n} image|Selected {n} images	{n} Bild ausgewählt|{n} Bilder ausgewählt
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} weiteres ist ausgeblendet oder gesperrt|{selected}; {n} weitere sind ausgeblendet oder gesperrt
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} weiteres liegt auf einer Vorlagenebene|{selected}; {n} weitere liegen auf Vorlagenebenen
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} weiteres liegt außerhalb der isolierten Gruppe|{selected}; {n} weitere liegen außerhalb der isolierten Gruppe
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} weiteres kann gerade nicht ausgewählt werden|{selected}; {n} weitere können gerade nicht ausgewählt werden
+
+# Compound Shapes add-on
+	Compound Shapes	Zusammengesetzte Formen
+	Shape Mode Buttons Make Compound Shapes	Formmodus-Schaltflächen erstellen zusammengesetzte Formen
+
+# 3D Box add-on
+	3D Box	3D-Quader
+	3D Box Tool	3D-Quader-Werkzeug

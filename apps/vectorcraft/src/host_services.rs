@@ -44,19 +44,50 @@ macro_rules! dialog_settings {
 
 dialog_settings!(rfd::FileDialog, rfd::AsyncFileDialog);
 
+/// On Linux and the BSDs the dialog is GTK's or the desktop portal's, which match a file type's
+/// `*.ext` patterns case-sensitively.
+const CASE_SENSITIVE_FILTERS: bool =
+    cfg!(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"));
+
+/// The extensions an open dialog's filter is given for `exts`: with `any_case`, each extension
+/// that has a letter is followed by a pattern with each letter as a `[xX]` pair, so the filter for
+/// `dib` also lists `image.DIB` and `image.Dib`.
+fn open_extensions(exts: &[impl AsRef<str>], any_case: bool) -> Vec<String> {
+    let mut out = Vec::with_capacity(exts.len() * 2);
+    for e in exts {
+        let e = e.as_ref();
+        out.push(e.to_string());
+        if any_case && e.chars().any(|c| c.is_ascii_alphabetic()) {
+            out.push(
+                e.chars()
+                    .map(|c| if c.is_ascii_alphabetic() { format!("[{}{}]", c.to_ascii_lowercase(), c.to_ascii_uppercase()) } else { c.to_string() })
+                    .collect(),
+            );
+        }
+    }
+    out
+}
+
 /// `d` set up for `request`: its title, file types, folder and suggested name.
 fn dialog_for<D: DialogSettings>(d: D, request: &PickRequest) -> D {
     let pick = match request {
         PickRequest::Open(pick) | PickRequest::Save(pick) => pick,
         PickRequest::OpenMany => {
             return fileio::place_filters().fold(d.title(vectorcraft_ui_egui::i18n::t("Place")), |d, (name, exts)| {
-                d.filter(vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name), exts)
+                d.filter(
+                    vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name),
+                    &open_extensions(exts, CASE_SENSITIVE_FILTERS),
+                )
             });
         }
         PickRequest::Folder => return d,
     };
+    let any_case = CASE_SENSITIVE_FILTERS && matches!(request, PickRequest::Open(_));
     let d = pick.filters.iter().fold(d, |d, (name, exts)| {
-        d.filter(vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name.as_str()), exts)
+        d.filter(
+            vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name.as_str()),
+            &open_extensions(exts, any_case),
+        )
     });
     let d = match &pick.folder {
         Some(folder) => d.folder(folder),
@@ -165,6 +196,30 @@ fn read_file_refuses_what_is_not_a_regular_file() {
     assert!(read_file(&std::env::temp_dir().to_string_lossy()).is_err());
     #[cfg(unix)]
     assert!(read_file("/dev/zero").is_err());
+}
+
+/// Read the first `max` bytes of a file (all of it when it is shorter), and nothing past them. Only
+/// a regular file is read.
+fn read_file_head(path: &str, max: usize) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    if !std::fs::metadata(path).map_err(|e| e.to_string())?.is_file() {
+        return Err(format!("{path}: not a file"));
+    }
+    let mut out = vec![];
+    std::fs::File::open(path).and_then(|f| f.take(max as u64).read_to_end(&mut out)).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
+#[cfg(test)]
+#[test]
+fn read_file_head_reads_no_more_than_it_is_asked_for() {
+    use std::io::Write as _;
+    let mut f = tempfile::Builder::new().prefix("vectorcraft-read-head-").tempfile().unwrap();
+    f.write_all(b"0123456789").unwrap();
+    let p = f.path().to_string_lossy();
+    assert_eq!(read_file_head(&p, 4).unwrap(), b"0123");
+    assert_eq!(read_file_head(&p, 20).unwrap(), b"0123456789", "a shorter file is read whole");
+    assert!(read_file_head(&std::env::temp_dir().to_string_lossy(), 4).is_err(), "a folder is not read");
 }
 
 /// Write a file the safe way: a failed write keeps the old file ([`fileio::write_atomic`]).
@@ -294,6 +349,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         #[cfg(windows)]
         stylus: Some(windows_stylus::start()),
         read: Some(Box::new(read_file)),
+        // Load Actions… refuses a file over its size limit without reading all of it.
+        read_head: Some(Box::new(read_file_head)),
         write: Some(Box::new(write_file)),
         exists: Some(Box::new(|p: &str| std::path::Path::new(p).exists())),
         // Background Save and Export write from a worker thread.
@@ -538,22 +595,20 @@ mod open_with_tests {
     use super::{check_app, find_photocraft, photocraft_candidates, registered_path, windows_candidates};
 
     /// A fresh, empty folder under the system's temporary folder.
-    fn scratch(name: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("vc-open-with-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    fn scratch(name: &str) -> tempfile::TempDir {
+        tempfile::Builder::new().prefix(&format!("vc-open-with-{name}-")).tempdir().unwrap()
     }
 
     /// #5236: only an application counts as PhotoCraft, never a document, a folder or a missing
     /// path.
     #[test]
     fn only_applications_are_started() {
-        let d = scratch("check");
+        let temp = scratch("check");
+        let d = temp.path();
         let doc = d.join("notes.txt");
         std::fs::write(&doc, "hi").unwrap();
         assert!(check_app(&doc).is_err(), "a document");
-        assert!(check_app(&d).is_err(), "a folder");
+        assert!(check_app(d).is_err(), "a folder");
         assert!(check_app(&d.join("Missing.app")).is_err(), "a missing path");
         if cfg!(target_os = "macos") {
             let app = d.join("Editor.app");
@@ -569,19 +624,19 @@ mod open_with_tests {
             std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
             assert!(check_app(&tool).is_ok(), "an executable file");
         }
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// PhotoCraft is looked for only where it installs.
     #[test]
     fn photocraft_is_found_where_it_installs() {
-        let d = scratch("find");
+        let temp = scratch("find");
+        let d = temp.path();
         if cfg!(target_os = "macos") {
-            let candidates = photocraft_candidates(Some(&d), None);
+            let candidates = photocraft_candidates(Some(d), None);
             assert_eq!(candidates.first().map(|p| p.to_string_lossy().into_owned()).as_deref(), Some("/Applications/PhotoCraft.app"));
             assert!(candidates.contains(&d.join("Applications/PhotoCraft.app")), "{candidates:?}");
             std::fs::create_dir_all(d.join("Applications/PhotoCraft.app")).unwrap();
-            assert!(find_photocraft(Some(&d), None).unwrap().ends_with("PhotoCraft.app"));
+            assert!(find_photocraft(Some(d), None).unwrap().ends_with("PhotoCraft.app"));
         } else {
             let bin = d.join("bin");
             std::fs::create_dir_all(&bin).unwrap();
@@ -605,7 +660,6 @@ mod open_with_tests {
                 assert_eq!(find_photocraft(None, Some(&path_var)), Some(exe));
             }
         }
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// #5327 review: on Windows PhotoCraft is looked for where its installer puts it: the path it
@@ -661,5 +715,86 @@ mod open_with_tests {
         let _ = std::process::Command::new(&reg).args(["delete", &full, "/f"]).output();
         assert_eq!(read, Some(std::path::PathBuf::from(path)));
         assert_eq!(super::registry_default_path(windows::Win32::System::Registry::HKEY_CURRENT_USER, &key), None, "deleted");
+    }
+}
+
+#[cfg(test)]
+mod dialog_tests {
+    use super::{CASE_SENSITIVE_FILTERS, DialogSettings, FilePick, PickRequest, dialog_for, fileio, open_extensions};
+
+    /// The file types a dialog was given, by label.
+    #[derive(Default)]
+    struct Filters(Vec<(String, Vec<String>)>);
+
+    impl DialogSettings for Filters {
+        fn parent(self, _window: &winit::window::Window) -> Self {
+            self
+        }
+        fn title(self, _title: &str) -> Self {
+            self
+        }
+        fn filter(mut self, name: &str, exts: &[impl ToString]) -> Self {
+            self.0.push((name.to_string(), exts.iter().map(ToString::to_string).collect()));
+            self
+        }
+        fn folder(self, _folder: &str) -> Self {
+            self
+        }
+        fn file_name(self, _name: &str) -> Self {
+            self
+        }
+    }
+
+    /// Does the case-sensitive pattern `*.{ext}` match `name`? `ext` may hold literal characters,
+    /// `*` and `[..]` sets.
+    fn matches(ext: &str, name: &str) -> bool {
+        fn here(p: &[char], n: &[char]) -> bool {
+            match p.split_first() {
+                None => n.is_empty(),
+                Some(('*', rest)) => (0..=n.len()).any(|i| here(rest, &n[i..])),
+                Some(('[', rest)) => {
+                    let Some(end) = rest.iter().position(|&c| c == ']') else { return false };
+                    n.split_first().is_some_and(|(c, n)| rest[..end].contains(c) && here(&rest[end + 1..], n))
+                }
+                Some((c, rest)) => n.split_first().is_some_and(|(d, n)| d == c && here(rest, n)),
+            }
+        }
+        let pattern: Vec<char> = format!("*.{ext}").chars().collect();
+        here(&pattern, &name.chars().collect::<Vec<_>>())
+    }
+
+    /// Where filters match case-sensitively, every extension of File › Open and Place lists files
+    /// whose extension is in capitals or mixed case, `image.DIB` and `image.Pns` included.
+    #[test]
+    fn open_and_place_filters_list_extensions_in_any_case() {
+        let all = fileio::open_filters().chain(fileio::place_filters());
+        for (label, exts) in all {
+            let patterns = open_extensions(exts, true);
+            for ext in exts {
+                let mut mixed = ext.to_ascii_uppercase();
+                mixed.replace_range(..1, &ext[..1]);
+                for name in [format!("a.{ext}"), format!("a.{}", ext.to_ascii_uppercase()), format!("a.{mixed}")] {
+                    assert!(patterns.iter().any(|p| matches(p, &name)), "{label}: {patterns:?} don't match {name}");
+                }
+            }
+        }
+        assert_eq!(open_extensions(&["dib", "jp2", "*"], true), ["dib", "[dD][iI][bB]", "jp2", "[jJ][pP]2", "*"]);
+        assert_eq!(open_extensions(&["dib", "PNS"], false), ["dib", "PNS"]);
+    }
+
+    /// Open and Place dialogs get the any-case patterns on Linux and the BSDs; a save dialog's file
+    /// types stay as listed.
+    #[test]
+    fn open_dialogs_get_any_case_patterns_where_filters_are_case_sensitive() {
+        let dib = vec![FilePick::filter("BMP", &["bmp", "dib"])];
+        let pick = FilePick { filters: dib.clone(), ..Default::default() };
+        let expected = |any_case: bool| open_extensions(&["bmp", "dib"], any_case);
+        let opened = dialog_for(Filters::default(), &PickRequest::Open(pick.clone())).0;
+        assert_eq!(opened[0].1, expected(CASE_SENSITIVE_FILTERS));
+        let saved = dialog_for(Filters::default(), &PickRequest::Save(pick)).0;
+        assert_eq!(saved, dib);
+        let placed = dialog_for(Filters::default(), &PickRequest::OpenMany).0;
+        let first = fileio::place_filters().next().map(|(_, exts)| open_extensions(exts, CASE_SENSITIVE_FILTERS));
+        assert_eq!(placed.first().map(|(_, exts)| exts.clone()), first);
     }
 }

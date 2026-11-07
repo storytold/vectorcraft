@@ -111,6 +111,69 @@ fn colours_come_from_the_selection_and_paint_it() {
     assert!(s.execute("library.use", &json!({"library": lib, "kind": "fillColor", "item": "#nope"})).is_err());
 }
 
+/// The spot swatch of object `id`'s fill: its name, whether it is spot, the paint's tint.
+fn spot_of(s: &Session, id: &Value) -> (String, bool, f32) {
+    match paint_of(s, id, false) {
+        vectorcraft_color::Paint::Solid { swatch: Some(name), tint, .. } => {
+            let spot = s.doc().unwrap().doc.swatch(&name).is_some_and(|w| w.spot);
+            (name, spot, tint)
+        }
+        other => panic!("not linked to a swatch: {other:?}"),
+    }
+}
+
+/// A spot colour added to a library keeps its ink, kept in the library's file: used in a new
+/// document (or after its own was closed) it adds the spot swatch of that name and colour and
+/// links the paint to it, at its tint; one the document has already is reused (#5812).
+#[test]
+fn a_spot_colour_stays_spot_in_another_document() {
+    let dir = std::env::temp_dir().join(format!("vc-libraries-spot-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let folder = dir.to_string_lossy().to_string();
+    let mut s = session();
+    s.libraries.set_dir(Some(folder.clone()));
+    let lib = run(&mut s, "library.create", json!({"name": "Inks"}))["id"].as_str().unwrap().to_string();
+    let ink = vectorcraft_color::Color::cmyk(0.0, 1.0, 0.0, 0.0);
+    run(&mut s, "swatch.new", json!({"name": "Kiss-cut", "color": ink, "spot": true}));
+    let a = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    run(&mut s, "paint.setFill", json!({"swatch": "Kiss-cut", "ids": [a]}));
+    run(&mut s, "select.set", json!({"ids": [a]}));
+    assert_eq!(run(&mut s, "library.add", json!({"library": lib, "kind": "fillColor"}))["name"], "Kiss-cut");
+    // A swatch dropped on the panel: its colour with its spot swatch's name and tint.
+    let r = run(&mut s, "library.add", json!({"library": lib, "kind": "fillColor", "color": ink, "swatch": "Kiss-cut", "tint": 40, "name": "Light"}));
+    assert_eq!(r["existing"], false, "a tint is another colour");
+    // The same colour as a process colour is another item.
+    run(&mut s, "paint.setFill", json!({"color": ink, "ids": [a]}));
+    assert_eq!(run(&mut s, "library.add", json!({"library": lib, "kind": "fillColor"}))["existing"], false);
+    run(&mut s, "file.close", json!({}));
+
+    // Another session reads the library's file into a new document.
+    let mut t = session();
+    t.libraries.set_dir(Some(folder));
+    let got = run(&mut t, "library.get", json!({"library": "Inks"}));
+    assert_eq!(got["colors"][0]["spot"], "Kiss-cut");
+    assert_eq!(got["colors"][2]["spot"], Value::Null);
+    let b = run(&mut t, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    run(&mut t, "select.set", json!({"ids": [b]}));
+    run(&mut t, "library.use", json!({"library": "Inks", "kind": "fillColor", "item": "Kiss-cut"}));
+    assert_eq!(spot_of(&t, &b), ("Kiss-cut".to_string(), true, 1.0));
+    let doc = &t.doc().unwrap().doc;
+    assert_eq!(doc.swatch("Kiss-cut").unwrap().paint.color(), Some(ink), "the ink keeps its values");
+    assert!(doc.spot_names().contains(&"Kiss-cut".to_string()));
+    // Its tint links to the same swatch: none is added again.
+    let swatches = doc.swatches.len();
+    run(&mut t, "library.use", json!({"library": "Inks", "kind": "fillColor", "item": "Light"}));
+    let (name, spot, tint) = spot_of(&t, &b);
+    assert_eq!((name.as_str(), spot), ("Kiss-cut", true));
+    assert!((tint - 0.4).abs() < 1e-4, "{tint}");
+    assert_eq!(t.doc().unwrap().doc.swatches.len(), swatches);
+    // One undo step takes back the new swatch along with the paint.
+    run(&mut t, "edit.undo", json!({}));
+    run(&mut t, "edit.undo", json!({}));
+    assert!(t.doc().unwrap().doc.swatch("Kiss-cut").is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The fill (`stroke`: stroke) paint of object `id`.
 fn paint_of(s: &Session, id: &Value, stroke: bool) -> vectorcraft_color::Paint {
     let n = s.doc().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().clone();
@@ -165,6 +228,66 @@ fn a_gradient_goes_into_a_library_and_paints_another_object() {
     let names: Vec<&str> = got["gradients"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
     assert_eq!(names, ["Gradient", "Sunset"]);
     assert!(s.execute("library.use", &json!({"library": lib, "kind": "fillGradient", "item": "Nope"})).is_err());
+}
+
+/// Compound paths, groups and colorized objects add the paint their Fill proxy shows: a color by
+/// its hex, a gradient with its stops.
+#[test]
+fn colors_and_gradients_come_from_compound_paths_groups_and_colorized_objects() {
+    use std::sync::Arc;
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Node, NodeKind};
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    let solid = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    let graded = run(&mut s, "shape.rectangle", json!({"x": 30, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 0.5, "color": "#00ff00"}, {"offset": 1, "color": "#0000ff"}]);
+    run(&mut s, "paint.setFill", json!({"color": "#123456", "ids": [solid]}));
+    run(&mut s, "paint.setFill", json!({"gradient": {"kind": "linear", "stops": stops}, "ids": [graded]}));
+    let sources = [NodeId(solid.as_u64().unwrap()), NodeId(graded.as_u64().unwrap())];
+    // For each source: a compound path and a group painted as it is, and a gray rectangle
+    // colorized with its fill.
+    let mut made: Vec<(NodeId, bool)> = vec![];
+    s.edit("Make", |d, _| {
+        let l = d.layers[0].id;
+        for (k, src) in sources.into_iter().enumerate() {
+            let source = d.node(src).unwrap().clone();
+            let fill = source.appearance.fill().unwrap().paint.clone();
+            let gradient = matches!(fill, Paint::Gradient(_));
+            let member = |d: &mut vectorcraft_doc::Document| {
+                let mut m = source.clone();
+                (m.id, m.appearance) = (d.alloc_id(), Default::default());
+                Arc::new(m)
+            };
+            let (a, b) = (member(d), member(d));
+            let mut compound = Node::new(d.alloc_id(), NodeKind::Compound { children: vec![a], rule: Default::default() });
+            let mut group = Node::group(d.alloc_id(), vec![b]);
+            compound.appearance = source.appearance.clone();
+            group.appearance = source.appearance.clone();
+            let mut colorized = source.clone();
+            colorized.id = d.alloc_id();
+            colorized.appearance.set_fill(Paint::solid(Color::rgb8(128, 128, 128)));
+            colorized.extras_mut().colorize = Some(Box::new(fill));
+            for (j, n) in [compound, group, colorized].into_iter().enumerate() {
+                made.push((n.id, gradient));
+                d.insert(Some(l), 2 + 3 * k + j, n).unwrap();
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+    for (id, gradient) in made {
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        if gradient {
+            run(&mut s, "library.add", json!({"library": lib, "kind": "fillGradient"}));
+            let got = run(&mut s, "library.get", json!({"library": lib}));
+            let last = &got["gradients"].as_array().unwrap().last().unwrap()["gradient"]["gradient"]["stops"];
+            assert_eq!(last.as_array().map(Vec::len), Some(3), "{id:?}: {got}");
+        } else {
+            let added = run(&mut s, "library.add", json!({"library": lib, "kind": "fillColor"}));
+            assert_eq!(added["name"], "#123456", "{id:?}");
+        }
+    }
 }
 
 /// A gradient added from an object that was rotated keeps the direction it shows there.

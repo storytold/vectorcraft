@@ -278,6 +278,21 @@ fn kerning_menu_lists_auto_and_optical_for_mixed_modes() {
     assert_eq!(kerning_methods(mode), (Some(false), Some(false)), "both entries are listed, neither checked");
 }
 
+/// A number typed into the Kerning field after Optical keeps the Optical flag on the type, and
+/// the manual value sets the spacing; the menu then checks neither Auto nor Optical.
+#[test]
+fn kerning_menu_checks_neither_method_for_a_manual_value_after_optical() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "AV", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("text.setFormat", json!({"kerning": "optical"})).unwrap();
+    app.run("text.setFormat", json!({"kerning": 50})).unwrap();
+    let mode = shared(&app, |s| (s.optical_kerning, s.kerning));
+    assert_eq!(mode, Some((true, Some(50.0))), "the manual value keeps the Optical flag");
+    assert_eq!(kerning_methods(mode), (Some(false), Some(false)), "a manual value checks neither method");
+}
+
 /// Highlight Kerning and Highlight Tracking show the Character panel and give its field the
 /// keyboard focus with the value selected: what is typed replaces it, and Enter applies it.
 /// Highlight Font Name opens the font family menu with its search field focused. Without
@@ -1190,6 +1205,87 @@ fn snap_to_glyph_options_show_from_the_menu_and_set_the_options() {
     assert!(app.session.prefs.glyph_snap.angular);
     toggle(&mut app, "Hide Snap to Glyph Options");
     assert!(!section(&mut app).iter().any(|(t, _)| t == "Proximity Guides"));
+}
+
+/// #5273: the Snap to Glyph options come after every character attribute, so showing them from the
+/// panel menu scrolls a short panel down to them; their first checkbox turns View › Snap to Glyph
+/// on and off, which undims the others.
+#[test]
+fn snap_to_glyph_options_scroll_into_view_and_turn_snapping_on() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Glyphs"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    const VIEW: f32 = 160.0;
+    // The panel as a short dock shows it: in a scroll area.
+    let panel = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+        egui::ScrollArea::vertical().max_height(VIEW).show(ui, |ui| show(app, ui));
+    };
+    let texts = frame_events(&ctx, &mut app, vec![], menu);
+    let item = texts.iter().find(|(t, _)| t.trim() == "Show Snap to Glyph Options").unwrap().1;
+    click(&ctx, &mut app, item.center(), menu);
+    // The scroll is animated: it lands over the next second.
+    let mut texts = vec![];
+    for i in 0..30 {
+        let raw = egui::RawInput { time: Some(10.0 + f64::from(i) * 0.1), ..Default::default() };
+        texts = super::super::tests_appearance::frame_raw(&ctx, &mut app, raw, panel);
+    }
+    for label in ["Snap to Glyph", "Anchor Point"] {
+        let r = text_rect(&texts, label);
+        assert!(r.top() >= 0.0 && r.bottom() <= VIEW + 1.0, "{label} at {r:?} is outside the panel");
+    }
+    assert!(!app.ui.view.snap_to_glyph);
+    click(&ctx, &mut app, text_rect(&texts, "Snap to Glyph").center(), panel);
+    assert!(app.ui.view.snap_to_glyph, "the first checkbox turns Snap to Glyph on");
+    let texts = frame_events(&ctx, &mut app, vec![], panel);
+    click(&ctx, &mut app, text_rect(&texts, "Anchor Point").center(), panel);
+    assert!(!app.session.prefs.glyph_snap.anchors, "the options take clicks once it is on");
+}
+
+/// Copy and Cut take a selected story after a frame threaded in before the edited one took its whole
+/// text.
+#[test]
+fn copy_and_cut_take_a_story_that_left_the_edited_frame() {
+    for cut in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        app.run("text.thread.create", json!({})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+        app.run("select.all", json!({})).unwrap();
+        let c = app.run("text.thread.add", json!({"from": a, "before": true, "rect": [700, 10, 400, 600]})).unwrap()["id"].as_u64().unwrap();
+        let text = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        };
+        assert_eq!((text(&app, a), text(&app, b), text(&app, c)), (String::new(), String::new(), story.clone()));
+        assert!(intercept_text_command(&mut app, if cut { "edit.cut" } else { "edit.copy" }).is_some());
+        let copied: Vec<String> = app
+            .session
+            .clipboard
+            .nodes
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.plain_text()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(copied, std::slice::from_ref(&story), "cut: {cut}");
+        assert_eq!(text(&app, c).is_empty(), cut);
+        if cut {
+            // A story that holds no text has nothing to copy, so Cut does not run its delete.
+            app.run("select.all", json!({})).unwrap();
+            assert_eq!(text_story(&app).map(|frames| frames.len()), Some(3));
+            assert!(!text_copy(&mut app));
+        }
+    }
 }
 
 /// After Select All in a frame of threaded text, the Character and Paragraph panels and Copy act on

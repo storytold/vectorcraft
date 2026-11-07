@@ -323,6 +323,36 @@ fn add_fill_copies_the_active_fill_row_right_above_it() {
     assert_eq!(s.appearance_item(), Some(0));
 }
 
+/// With a fill row active, Add New Fill given `id` alone also puts a copy of the top fill on top,
+/// and the active row stays.
+#[test]
+fn add_fill_with_id_leaves_the_active_fill_row_alone() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 2, "color": "#0000ff"})); // [red, Stroke, blue]
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "appearance.addFill", json!({"id": id.0}));
+    let n = node(&s, id);
+    assert_eq!(n.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "stroke", "fill", "fill"]);
+    assert_eq!(fill_paint(&n, 0).color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(fill_paint(&n, 3).color().unwrap().to_hex(), "#0000ff");
+    assert_eq!(s.appearance_item(), Some(0));
+}
+
+/// Add New Stroke copies the top stroke's weight but makes the new stroke at least 1 pt.
+#[test]
+fn add_stroke_is_at_least_one_point() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "stroke.set", json!({"weight": 0.5}));
+    run(&mut s, "appearance.addStroke", json!({})); // [Fill, Stroke, Stroke]
+    let n = node(&s, id);
+    assert_eq!(stroke(&n, 1).width, 0.5);
+    assert_eq!(stroke(&n, 2).width, 1.0);
+}
+
 /// The new fill above the active fill row takes only the row's paint: the row's opacity, blend
 /// mode, visibility, overprint and effects are not copied (Duplicate Item copies those).
 #[test]
@@ -522,6 +552,49 @@ fn add_fill_copies_the_active_row_in_each_object_that_has_it() {
         assert_eq!(fill_paint(&n, 1).color().unwrap().to_hex(), "#00ff00", "{:?}", n.appearance);
         assert_eq!(fill_paint(&n, 3).color().unwrap().to_hex(), "#ff0000", "{:?}", n.appearance);
     }
+}
+
+/// A paint edit of the active row changes the equal row of each object that has one, even when
+/// another selected object has none; that object's row stands for itself, as with only it and the
+/// first selected object selected.
+#[test]
+fn paint_edits_change_the_active_row_in_each_object_that_has_it() {
+    let mut s = session();
+    let [a, b, c] = [rect(&mut s, 50.0), rect(&mut s, 200.0), rect(&mut s, 300.0)];
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0, c.0]}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "color": "#00ff00"}));
+    run(&mut s, "appearance.setItem", json!({"index": 2, "color": "#ff0000"})); // [Fill green, Stroke, Fill red]
+    // b gets a yellow fill below the others: [Fill yellow, Fill green, Stroke, Fill red].
+    run(&mut s, "appearance.addFill", json!({"ids": [b.0]}));
+    run(&mut s, "appearance.moveItem", json!({"ids": [b.0], "from": 3, "to": 0}));
+    run(&mut s, "appearance.setItem", json!({"ids": [b.0], "index": 0, "color": "#ffff00"}));
+    run(&mut s, "appearance.setItem", json!({"ids": [c.0], "index": 0, "color": "#0000ff"})); // [Fill blue, Stroke, Fill red]
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0, c.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff00ff"}));
+    let (na, nb, nc) = (node(&s, a), node(&s, b), node(&s, c));
+    assert_eq!(fill_paint(&na, 0).color().unwrap().to_hex(), "#ff00ff");
+    assert_eq!(fill_paint(&nb, 1).color().unwrap().to_hex(), "#ff00ff", "{:?}", nb.appearance);
+    assert_eq!(fill_paint(&nb, 0).color().unwrap().to_hex(), "#ffff00", "{:?}", nb.appearance);
+    assert_eq!(fill_paint(&nc, 0).color().unwrap().to_hex(), "#ff00ff", "{:?}", nc.appearance);
+}
+
+/// An object-level effect is removed from each object that has an equal one, even when another
+/// selected object has none.
+#[test]
+fn removing_an_effect_reaches_each_object_that_has_it() {
+    let mut s = session();
+    let [a, b, c] = [rect(&mut s, 50.0), rect(&mut s, 200.0), rect(&mut s, 300.0)];
+    run(&mut s, "effect.apply", json!({"ids": [a.0], "effect": "stylize.feather", "item": null}));
+    run(&mut s, "effect.apply", json!({"ids": [a.0, b.0], "effect": "distort.twist", "item": null}));
+    // a has [feather, twist], b [twist], c none.
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0, c.0]}));
+    run(&mut s, "effect.remove", json!({"index": 1, "item": null, "aligned": true}));
+    let ids = |id: NodeId| node(&s, id).appearance.effects.iter().map(|e| e.id.clone()).collect::<Vec<_>>();
+    assert_eq!(ids(a), ["stylize.feather"]);
+    assert!(ids(b).is_empty(), "b loses its twist: {:?}", ids(b));
+    assert!(ids(c).is_empty());
 }
 
 /// b `[Fill red, Fill white, Stroke]` above a `[Fill white, Stroke]`, selected b first: b's rows 1
@@ -886,6 +959,16 @@ fn shared_effects_and_new_fills_reach_every_selected_object() {
     assert!(s.execute("appearance.moveItem", &json!({"from": 1, "to": 0, "aligned": true})).is_err());
 }
 
+/// An effect applied to the first object's stroke row goes on the equal stroke of the other
+/// object, which sits lower in a longer stack there.
+#[test]
+fn an_effect_on_a_shared_row_reaches_it_at_another_index() {
+    let mut s = session();
+    let (a, b) = mixed_circles(&mut s, true);
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist", "item": 1, "aligned": true}));
+    assert_eq!((stroke(&node(&s, a), 1).effects.len(), stroke(&node(&s, b), 2).effects.len()), (1, 1));
+}
+
 /// Rows deleted together, one shared (the stroke) and one not (a's fill): each object loses its
 /// own copy of the shared row, and the other object keeps the items at those indices of a's stack.
 #[test]
@@ -897,4 +980,37 @@ fn removing_shared_and_unshared_rows_removes_only_the_shared_ones_elsewhere() {
     run(&mut s, "appearance.removeItem", json!({"indices": [0, 1], "aligned": true}));
     assert!(node(&s, a).appearance.items.is_empty(), "a loses both");
     assert_eq!(node(&s, b).appearance.items, fills_b, "b loses only its stroke, keeping both fills");
+}
+
+#[test]
+fn invalid_aligned_flags_leave_the_appearance_alone() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist"}));
+    let before = node(&s, id);
+    let before_undo = s.doc().unwrap().history.undo.len();
+    for (command, params) in [
+        ("appearance.setItem", json!({"index": 0, "opacity": 50, "aligned": "true"})),
+        ("appearance.removeItem", json!({"index": 0, "aligned": 1})),
+        ("appearance.duplicateItem", json!({"index": 0, "aligned": "false"})),
+        ("appearance.moveItem", json!({"from": 0, "to": 1, "aligned": 0})),
+        ("stroke.set", json!({"item": 1, "weight": 5, "aligned": "true"})),
+        ("stroke.set", json!({"weight": 5, "aligned": "true"})),
+        ("transparency.set", json!({"item": 0, "opacity": 50, "aligned": "true"})),
+        ("effect.apply", json!({"effect": "distort.roughen", "item": 0, "aligned": "true"})),
+        ("effect.remove", json!({"index": 0, "aligned": "true"})),
+    ] {
+        assert!(s.execute(command, &params).is_err(), "{command} accepted {params}");
+        assert_eq!(node(&s, id), before, "{command} changed the object");
+        assert_eq!(s.doc().unwrap().history.undo.len(), before_undo, "{command} recorded an undo step");
+    }
+    // Null, as for every command, is the same as leaving `aligned` out.
+    run(&mut s, "appearance.removeItem", json!({"index": 0, "aligned": null}));
+    assert_eq!(node(&s, id).appearance.items.len(), before.appearance.items.len() - 1);
+    // A Pathfinder effect on loose objects groups them first: the flag is checked before that.
+    let other = rect(&mut s, 250.0);
+    run(&mut s, "select.set", json!({"ids": [id.0, other.0]}));
+    let before_undo = s.doc().unwrap().history.undo.len();
+    assert!(s.execute("effect.apply", &json!({"effect": "pathfinder.add", "aligned": "true"})).is_err());
+    assert_eq!(s.doc().unwrap().history.undo.len(), before_undo, "grouped the objects");
 }

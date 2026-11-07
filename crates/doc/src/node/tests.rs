@@ -21,6 +21,7 @@ fn extras_are_written_flat_in_order() {
         e.live_paint_gaps = Some(Box::default());
         e.compound_shape = true;
         e.shape_mode = crate::ShapeMode::Exclude;
+        e.envelope_edit_margin = Some([0.5, 0.5, 0.25, 0.25]);
     }
     /// The top-level keys of a JSON object, in the order written.
     struct Keys(Vec<String>);
@@ -65,6 +66,7 @@ fn extras_are_written_flat_in_order() {
         "live_paint_gaps",
         "compound_shape",
         "shape_mode",
+        "envelope_edit_margin",
     ];
     assert_eq!(keys, order);
     assert_eq!(v["shape_mode"], "exclude");
@@ -441,6 +443,20 @@ fn visual_bounds_include_stroke() {
     let mut p = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
     p.appearance.stroke_mut().unwrap().join = crate::appearance::LineJoin::Round;
     assert_eq!(p.visual_bounds(), Some(Rect::new(-0.5, -0.5, 10.5, 10.5)));
+}
+
+/// A group's box from its members' boxes grows by the group's own strokes, leaves out members
+/// without a box, and is `None` when none has one.
+#[test]
+fn visual_of_members_unions_the_members_and_grows_by_the_group_stroke() {
+    let mut g = Node::group(NodeId(1), vec![]);
+    g.appearance = Appearance::default_art().into();
+    let (a, b) = (Rect::new(0.0, 0.0, 10.0, 10.0), Rect::new(20.0, 5.0, 30.0, 8.0));
+    let o = g.appearance.outset();
+    assert!(o > 0.0);
+    assert_eq!(g.visual_of_members([Some(a), None, Some(b)].into_iter()), Some(Rect::new(0.0, 0.0, 30.0, 10.0).inflate(o, o)));
+    assert_eq!(g.visual_of_members([None, None].into_iter()), None);
+    assert_eq!(g.visual_of_members([].into_iter()), None);
 }
 
 /// Type's visual bounds grow by how far its character strokes paint past the glyphs: half the

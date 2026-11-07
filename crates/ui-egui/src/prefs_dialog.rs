@@ -6,7 +6,7 @@
 
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
-use vectorcraft_engine::cmd::prefscmds::{GPU_PREFERENCES, PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind};
+use vectorcraft_engine::cmd::prefscmds::{GPU_PREFERENCES, PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind, folder_check};
 
 use crate::state::Dialog;
 use crate::theme::{self, Accent, Brightness, Scheme, Tokens};
@@ -212,7 +212,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ui.label(egui::RichText::new(tl!(cat)).font(theme::semibold(14.0)).color(t.text_strong));
                 ui.add_space(8.0);
                 egui::ScrollArea::vertical().id_salt(("prefs", cat)).max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
-                    category_fields(ui, &mut d, cat);
+                    category_fields(ui, app, &mut d, cat);
                 });
             });
         });
@@ -256,7 +256,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
-fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
+fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, cat: &str) {
     let t = Tokens::get(ui.ctx());
     let mut section = "";
     let mut first = true;
@@ -386,6 +386,20 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                     }
                 });
             }
+            // File Handling › Data Recovery › Folder and Plug-ins & Scratch Disks › Additional
+            // Plug-ins Folder: typed, or picked with Choose… where the host has a folder picker
+            // (not on the web).
+            PrefKind::Text if folder_check(sp.key).is_some() => {
+                labeled(ui, sp.label, |ui| {
+                    let mut s = v.as_str().unwrap_or("").to_string();
+                    if ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(200.0)).changed() {
+                        d.fields.insert(sp.key.into(), json!(s));
+                    }
+                    if app.services.pick_folder.is_some() && ui.button(tl!("Choose…")).clicked() {
+                        choose_folder(app, d, sp.key);
+                    }
+                });
+            }
             PrefKind::Text => {
                 labeled(ui, sp.label, |ui| {
                     let mut s = v.as_str().unwrap_or("").to_string();
@@ -395,6 +409,23 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 });
             }
         }
+    }
+}
+
+/// Choose… beside the folder preference `key`: the folder picked becomes the field's value when it
+/// passes the preference's [`folder_check`]. Otherwise the status bar says why and the field keeps
+/// its value, as it does when the picker is canceled. The answer fills the field even when the
+/// active document closed while the picker was open.
+fn choose_folder(app: &mut VectorcraftApp, d: &mut Dialog, key: &'static str) {
+    let Some(check) = folder_check(key) else { return };
+    let r = crate::picks::in_app_dialog(app, d, move |app, d| {
+        let Some(path) = crate::picks::folder(app) else { return Ok(()) };
+        check(&path)?;
+        d.fields.insert(key.into(), json!(path));
+        Ok(())
+    });
+    if let Err(e) = r {
+        app.status(e);
     }
 }
 

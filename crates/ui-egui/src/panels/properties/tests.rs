@@ -433,11 +433,11 @@ fn boards(app: &VectorcraftApp) -> Vec<(f64, f64, f64, f64)> {
 }
 
 /// #1482: with Artboards 1 and 3 selected, a W typed into Properties or the Transform panel
-/// resizes both in one undo step, and Artboard 2 keeps its size. Properties keeps each top-left
-/// corner; the Transform panel resizes each about its own center, its default reference point.
+/// resizes both in one undo step, and Artboard 2 keeps its size. Both resize each about its own
+/// center, their shared default reference point (#5219).
 #[test]
 fn artboard_width_resizes_every_selected_artboard_in_properties_and_transform() {
-    for (draw, centered) in [(show as fn(&mut VectorcraftApp, &mut Ui), false), (super::super::transform::show, true)] {
+    for (draw, centered) in [(show as fn(&mut VectorcraftApp, &mut Ui), true), (super::super::transform::show, true)] {
         let mut app = two_selected_artboards();
         let before = boards(&app);
         let undo = app.session.doc().unwrap().history.undo.len();
@@ -497,6 +497,31 @@ fn properties_variable_font_button_for_variable_type() {
     assert!(!frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Variable Font"));
     app.run("select.set", json!({"ids": [id]})).unwrap();
     assert!(frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Variable Font"));
+}
+
+/// #5219: Edit Artboards starts with a Transform section (the reference point, X, Y, W and H, the
+/// preset and orientation) above the Artboards section (the name, Artboard Options and Fill), as in
+/// the reference app; X and Y are the reference point's, which the Transform panel shares.
+#[test]
+fn edit_artboards_shows_transform_above_the_artboard_options() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let texts = frame(&mut app, &ctx, vec![]);
+    let y = |label: &str| texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center().y).unwrap_or_else(|| panic!("{label} in {texts:?}"));
+    let (transform, artboards) = (y("Transform"), y("Artboards"));
+    assert!(transform < artboards, "{texts:?}");
+    for label in ["X:", "Y:", "W:", "H:"] {
+        assert!((transform..artboards).contains(&y(label)), "{label} is in the Transform section: {texts:?}");
+    }
+    for label in ["Artboard 1", "Fill:"] {
+        assert!(y(label) > artboards, "{label} is in the Artboards section: {texts:?}");
+    }
+    // X and Y read the shared reference point, the center by default, as the Transform panel does.
+    // (100 pt is X and H, 50 pt is Y.)
+    assert!(texts.iter().filter(|(t, _)| t == "100 pt").count() == 2 && texts.iter().any(|(t, _)| t == "50 pt"), "{texts:?}");
 }
 
 #[test]
@@ -663,6 +688,25 @@ fn edit_artboards_fill_sets_the_background_color() {
     frame(&mut app, &ctx, vec![Event::PointerMoved(chip), press(true)]);
     frame(&mut app, &ctx, vec![press(false)]);
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields.get("artboard")), Some(Some(&json!(1))), "the chip opens it too");
+}
+
+/// #5698: with Artboards 1 and 3 selected, a Fill chosen in Edit Artboards goes to both, in one
+/// command and one undo step; Artboard 2 keeps none.
+#[test]
+fn edit_artboards_fill_sets_every_selected_artboard() {
+    let mut app = two_selected_artboards();
+    let colors = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards.iter().map(|a| a.color).collect::<Vec<_>>();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let texts = frame(&mut app, &ctx, vec![]);
+    click(&mut app, &ctx, &texts, "None");
+    let texts = frame(&mut app, &ctx, vec![]);
+    let commands = app.run_count;
+    click(&mut app, &ctx, &texts, "Black");
+    assert_eq!(app.run_count.wrapping_sub(commands), 1, "one command");
+    assert_eq!(colors(&app), [Some(Color::BLACK), None, Some(Color::BLACK)]);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
 }
 
 fn artboard_deletion_app(count: usize) -> VectorcraftApp {
@@ -1320,6 +1364,34 @@ fn blend_options_is_a_quick_action_for_one_blend() {
     assert!(!shows(&tall(&mut app, &ctx, vec![]), "Blend Options"), "a rectangle");
 }
 
+/// One selected repeat, radial, grid or mirror, has Repeat Options in Quick Actions (#5181), which
+/// opens the Repeat Options dialog with its values; a plain rectangle, or a repeat selected with
+/// another object, does not.
+#[test]
+fn repeat_options_is_a_quick_action_for_one_repeat() {
+    let ctx = egui::Context::default();
+    for (cmd, field) in [("object.repeat.radial", "instances"), ("object.repeat.grid", "rows"), ("object.repeat.mirror", "angle")] {
+        let mut app = new_app();
+        let a = rect(&mut app, 20.0, 20.0, 40.0, 40.0);
+        let repeat = app.run(cmd, json!({"ids": [a]})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [repeat]})).unwrap();
+        let texts = tall(&mut app, &ctx, vec![]);
+        assert!(shows(&texts, "Repeat Options"), "{cmd}");
+        let depth = undo_depth(&app);
+        press(&mut app, &ctx, text_at(&texts, "Repeat Options").center());
+        let d = app.ui.dialog.as_ref().expect("the Repeat Options dialog opens");
+        assert_eq!(d.kind, "command", "{cmd}");
+        assert!(d.fields.contains_key(field), "{cmd}: the dialog has the repeat's {field}");
+        assert_eq!(undo_depth(&app), depth, "opening the dialog changes nothing");
+        app.ui.dialog = None;
+        let c = rect(&mut app, 20.0, 200.0, 40.0, 40.0);
+        app.run("select.set", json!({"ids": [repeat, c]})).unwrap();
+        assert!(!shows(&tall(&mut app, &ctx, vec![]), "Repeat Options"), "{cmd}: a repeat and another object");
+        app.run("select.set", json!({"ids": [c]})).unwrap();
+        assert!(!shows(&tall(&mut app, &ctx, vec![]), "Repeat Options"), "a rectangle");
+    }
+}
+
 /// Quick Actions offer Lock for a selected member in isolation and for a selected group outside it.
 #[test]
 fn lock_is_a_quick_action_in_and_outside_isolation_mode() {
@@ -1791,4 +1863,72 @@ fn objects_on_path_options_set_pivot_and_rotate_in_one_undo_step() {
     click_named(&mut app, &ctx, objects_on_path_options, "Bottom Right");
     assert_eq!((pivot_rotate(&app, &group), pivot_rotate(&app, &other)), ((8, 30.0), (8, 45.0)), "both groups' Pivot");
     assert_eq!(undo_depth(&app), depth + 1, "one undo step for both groups");
+}
+
+/// #3759: with area type selected, the Properties panel's Paragraph section shows Align Top, Align
+/// Center, Align Bottom and Justify Vertically; a click sets the alignment on every selected frame
+/// in one undo step. Point type shows none; frames with rows or columns and threaded frames turn
+/// the buttons off, as the public documentation limits vertical alignment to them.
+#[test]
+fn vertical_alignment_buttons_align_the_selected_area_type() {
+    use vectorcraft_doc::{NodeId, VerticalAlign};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 500, "height": 400})).unwrap();
+    let make = |app: &mut VectorcraftApp, x: f64, y: f64| {
+        app.run("text.create", json!({"x": x, "y": y, "text": "Panel", "area": {"width": 100, "height": 120}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (make(&mut app, 10.0, 10.0), make(&mut app, 200.0, 10.0));
+    let point = app.run("text.create", json!({"x": 10, "y": 350, "text": "Point"})).unwrap()["id"].as_u64().unwrap();
+    let align = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.vertical_align,
+        k => panic!("{k:?}"),
+    };
+    app.run("select.set", json!({"ids": [point]})).unwrap();
+    assert_eq!(vertical_align::shown(&app), None, "point type: no buttons");
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(vertical_align::shown(&app), Some(vertical_align::Shown { shared: Some(VerticalAlign::Top), enabled: true }));
+    // The buttons sit in the panel's Paragraph section: click Align Center (the second).
+    let ctx = egui::Context::default();
+    let mut row = Rect::NOTHING;
+    let draw = |app: &mut VectorcraftApp, ui: &mut Ui, row: &mut Rect| {
+        *row = ui
+            .horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 3.0;
+                vertical_align::buttons(app, ui, 24.0);
+            })
+            .response
+            .rect;
+    };
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| draw(&mut app, ui, &mut row));
+    out.textures_delta.clear();
+    let texts = panel_frame(&mut app, &ctx, vec![], type_sections);
+    assert!(texts.iter().any(|(t, _)| t == "Paragraph"), "{texts:?}");
+    let undo = app.session.active().unwrap().history.undo.len();
+    let center = row.min + vec2(12.0 + 27.0, 12.0);
+    super::super::tests_appearance::click(&ctx, &mut app, center, |app, ui| {
+        let mut r = Rect::NOTHING;
+        draw(app, ui, &mut r);
+    });
+    assert_eq!((align(&app, a), align(&app, b)), (VerticalAlign::Center, VerticalAlign::Center));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step for both frames");
+    // Differing alignments show none selected.
+    app.run("text.areaOptions", json!({"ids": [b], "verticalAlign": "bottom"})).unwrap();
+    assert_eq!(vertical_align::shown(&app).map(|s| s.shared), Some(None));
+    // Columns turn the buttons off, and a click does nothing.
+    app.run("text.areaOptions", json!({"ids": [b], "columns": 2})).unwrap();
+    assert_eq!(vertical_align::shown(&app).map(|s| s.enabled), Some(false));
+    let undo = app.session.active().unwrap().history.undo.len();
+    super::super::tests_appearance::click(&ctx, &mut app, center, |app, ui| {
+        let mut r = Rect::NOTHING;
+        draw(app, ui, &mut r);
+    });
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "turned off: no change");
+    assert_eq!(align(&app, a), VerticalAlign::Center);
+    // So does threading: a and c threaded, b left out of the selection.
+    let c = make(&mut app, 10.0, 200.0);
+    app.run("select.set", json!({"ids": [a, c]})).unwrap();
+    assert_eq!(vertical_align::shown(&app).map(|s| s.enabled), Some(true));
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(vertical_align::shown(&app).map(|s| s.enabled), Some(false));
 }

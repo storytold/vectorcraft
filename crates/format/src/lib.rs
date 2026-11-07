@@ -257,8 +257,11 @@ fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
     if version < 3 {
         d.store_legacy_color_profiles();
     }
-    // Apps that read only older file versions predate 0.21.0 and turn Twist the other way.
+    // Apps before this one's version take Color Halftone's Max Radius in points (#3260), and
+    // predate 0.21.0, turning Twist the other way. The radii first: their conversion runs only on
+    // a document of version 3 or later, and the Twist one then marks it version 1.
     if version < VERSION {
+        d.halftone_radii_to_points();
         d.store_legacy_twist_angles();
     }
     let v1 = if version == 1 {
@@ -550,12 +553,18 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
         }
         doc.images.insert(k, blob);
     }
-    // Saved mid-edit by an older version: drop the opacity-mask editing layer.
+    // Saved mid-edit by an older version: drop the opacity-mask editing layer. Those versions
+    // removed it only as a top-level layer, so an id naming anything else is ignored.
+    if doc.mask_edit.is_some_and(|me| !doc.layers.iter().any(|l| l.id == me.layer)) {
+        doc.mask_edit = None;
+    }
     doc.drop_edit_modes();
     // Saved before per-fill/stroke overprint: the Overprint Black list becomes overprint flags.
     doc.migrate_overprint_black();
     // Saved before v3: the assigned profiles move out of `unknown`.
     doc.migrate_color_profiles();
+    // A document before version 3: Color Halftone's Max Radius in points becomes pixels (#3260).
+    doc.migrate_halftone_radii();
     doc.fix_next_id();
     // Untrusted: the bleed and type proportions, within the ranges Document Setup takes.
     doc.setup.keep_in_range();
@@ -976,6 +985,49 @@ mod tests {
     use vectorcraft_doc::{Appearance, ImageObject, Node, NodeKind};
     use vectorcraft_geom::{Affine, Rect, shapes};
 
+    /// Color Halftone's Max Radius is in pixels of the raster effects resolution since document
+    /// version 3 (#3260): a file from before (version 1, or version 2 from 0.21.0 on) opens with
+    /// its radius in points converted, one saved since opens as it was. At 72 ppi a point is a
+    /// pixel, so the number stays.
+    #[test]
+    fn halftone_radii_of_older_documents_open_in_pixels() {
+        for ppi in [72.0, 300.0] {
+            let mut d = Document::new(100.0, 100.0);
+            d.raster_effects_ppi = ppi;
+            let (l, id) = (d.layers[0].id, d.alloc_id());
+            let mut look = Appearance::default_art();
+            look.effects.push(vectorcraft_doc::Effect {
+                id: "pixelate.colorHalftone".into(),
+                params: serde_json::json!({"maxRadius": 8.0}),
+                visible: true,
+            });
+            d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), look)).unwrap();
+            let radius = |d: &Document| d.node(id).unwrap().appearance.effects[0].params["maxRadius"].as_f64().unwrap();
+            assert_eq!(radius(&load(&save(&d, false)).unwrap()), 8.0, "{ppi} ppi: saved in pixels, opened in pixels");
+            // Version 2 (0.21.0's Twist) still held the radius in points.
+            d.version = 2;
+            let v2 = load(&save(&d, false)).unwrap();
+            assert!((radius(&v2) - 8.0 * ppi / 72.0).abs() < 1e-9, "version 2, 8 pt at {ppi} ppi: {}", radius(&v2));
+            d.version = 1;
+            let old = load(&save(&d, false)).unwrap();
+            assert_eq!(old.version, vectorcraft_doc::FORMAT_VERSION);
+            assert!((radius(&old) - 8.0 * ppi / 72.0).abs() < 1e-9, "8 pt at {ppi} ppi: {}", radius(&old));
+            // Saved for an older app, in every older version: the radius in points, which opens
+            // here in pixels again.
+            let px = radius(&old);
+            for version in MIN_VERSION..VERSION {
+                let bytes = save_with(&old, &SaveOptions { version, ..SaveOptions::default() }).unwrap();
+                let json = String::from_utf8(unpack::Unpacked::new(&bytes).unwrap().json().to_vec()).unwrap();
+                let at = json.find("\"maxRadius\":").unwrap() + "\"maxRadius\":".len();
+                let saved: f64 = json[at..].split([',', '}']).next().unwrap().trim().parse().unwrap();
+                assert!((saved - 8.0).abs() < 1e-9, "{ppi} ppi, version {version} holds 8 pt: {saved}");
+                let back = load(&bytes).unwrap();
+                assert!((radius(&back) - px).abs() < 1e-9, "{ppi} ppi, version {version}: {}", radius(&back));
+            }
+            assert_eq!(radius(&old), px, "{ppi} ppi: saving leaves the open document as it is");
+        }
+    }
+
     #[test]
     fn roundtrip() {
         let mut d = Document::new(100.0, 100.0);
@@ -1046,8 +1098,8 @@ mod tests {
 
     /// A version 1 document written before VectorCraft 0.21.0 (or by an app the file does not
     /// name) has its Twist angles negated when it opens; one written by 0.21.0 or later, and a
-    /// version 2 document, keep them. Each opens as version 2. A save for an older file version
-    /// negates them back.
+    /// later document, keep them. Each opens as the current version. A save for an older file
+    /// version negates them back.
     #[test]
     fn twist_angles_follow_the_document_version_and_generator() {
         use vectorcraft_doc::Effect;
@@ -1058,9 +1110,14 @@ mod tests {
         a.effects.push(Effect { id: "distort.twist".into(), params: serde_json::json!({"angle": 30.0}), visible: true });
         d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), a)).unwrap();
         let angle = |d: &Document| d.node(id).and_then(|n| n.appearance.effects[0].params["angle"].as_f64());
+        let now = vectorcraft_doc::FORMAT_VERSION;
         let current = save(&d, false);
         let back = load(&current).unwrap();
-        assert_eq!((back.version, angle(&back)), (2, Some(30.0)), "a version 2 document is read as saved");
+        assert_eq!((back.version, angle(&back)), (now, Some(30.0)), "a current document is read as saved");
+        let mut v2: serde_json::Value = serde_json::from_slice(&current).unwrap();
+        v2["document"]["version"] = 2.into();
+        let back = load(&serde_json::to_vec(&v2).unwrap()).unwrap();
+        assert_eq!((back.version, angle(&back)), (now, Some(30.0)), "a version 2 document keeps its angles");
         let opened = |generator: Option<&str>| {
             let mut v: serde_json::Value = serde_json::from_slice(&current).unwrap();
             v["document"]["version"] = 1.into();
@@ -1074,10 +1131,10 @@ mod tests {
             (d.version, angle(&d))
         };
         for g in [Some("VectorCraft 0.20.0"), Some("VectorCraft 0.9.12"), Some("DrawCraft 0.1.0"), Some("VectorCraft"), None] {
-            assert_eq!(opened(g), (2, Some(-30.0)), "{g:?}");
+            assert_eq!(opened(g), (now, Some(-30.0)), "{g:?}");
         }
         for g in ["VectorCraft 0.21.0", "VectorCraft 0.21.3", "VectorCraft 1.0.0"] {
-            assert_eq!(opened(Some(g)), (2, Some(30.0)), "{g}");
+            assert_eq!(opened(Some(g)), (now, Some(30.0)), "{g}");
         }
         // A file may repeat `generator`: the first one names the app.
         let mut v: serde_json::Value = serde_json::from_slice(&current).unwrap();
@@ -1091,7 +1148,7 @@ mod tests {
         v["generator"] = "VectorCraft 0.20.0".into();
         let old = load(&serde_json::to_vec(&v).unwrap()).unwrap();
         let again = load(&save(&old, false)).unwrap();
-        assert_eq!((again.version, angle(&again)), (2, Some(-30.0)), "saved again, it is version 2");
+        assert_eq!((again.version, angle(&again)), (now, Some(-30.0)), "saved again, it is the current version");
         // Saved for an older file version (apps before 0.21.0): version 1 with the angle negated
         // back, whatever the generator, and it reopens as it was.
         for version in MIN_VERSION..VERSION {
@@ -1100,7 +1157,7 @@ mod tests {
             assert_eq!(v["document"]["version"], 1, "file version {version}");
             assert!(String::from_utf8_lossy(&bytes).contains(r#""angle":-30.0"#), "file version {version}");
             let back = load(&bytes).unwrap();
-            assert_eq!((back.version, angle(&back)), (2, Some(30.0)), "file version {version}");
+            assert_eq!((back.version, angle(&back)), (now, Some(30.0)), "file version {version}");
         }
     }
 

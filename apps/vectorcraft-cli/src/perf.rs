@@ -242,6 +242,48 @@ fn budget_row(name: &str, ms: f64, budget: f64, ok: bool) -> String {
     format!("  {name:<42} {ms:>8.2} ms {budget:>7.0} ms  {}", if ok { "ok" } else { "OVER" })
 }
 
+/// Tracked rows for pointing at things in an n-path document: what hovering, clicking, marquee
+/// selection and snapping cost when nothing narrows the search.
+fn pointing(n: usize, rows: &mut Vec<(String, f64)>) -> Result<(), String> {
+    use vectorcraft_engine::tools::{Mods, PointerEvent, PointerKind};
+    let err = |e: vectorcraft_engine::EngineError| e.to_string();
+    let mut s = vectorcraft_engine::Session::new();
+    s.add_document(synthetic(n)?, None);
+    let view = vectorcraft_engine::ViewInfo { zoom: 1.0, ..Default::default() };
+    s.select_tool("selection", view).map_err(err)?;
+    // Off the art (nothing under the pointer), the case every hover over empty canvas pays.
+    let off = Point::new(-200.0, -200.0);
+    let hover = |s: &mut vectorcraft_engine::Session| {
+        let _ = s.pointer(&PointerEvent::new(PointerKind::Move, off.x, off.y), view);
+        let _ = s.cursor(off, Mods::default(), view);
+    };
+    rows.push((format!("hover over empty canvas ({n} paths)"), median_ms(5, || hover(&mut s))));
+    s.execute("select.all", &json!({})).map_err(err)?;
+    rows.push((format!("hover over empty canvas, all selected ({n} paths)"), median_ms(5, || hover(&mut s))));
+    let doc = s.doc().map_err(err)?.doc.clone();
+    rows.push((format!("hit test, a miss ({n} paths)"), median_ms(5, || drop(hit::hit_test(&doc, off, hit::HitOptions::default())))));
+    let r = Rect::new(600.0, 450.0, 1000.0, 750.0);
+    rows.push((format!("marquee 400×300 ({n} paths)"), median_ms(5, || drop(hit::marquee(&doc, r, None, false)))));
+    let view_rect = Rect::new(0.0, 0.0, 1600.0, 1200.0);
+    rows.push((
+        format!("smart guide targets in view ({n} paths)"),
+        median_ms(5, || drop(vectorcraft_engine::tools::guides::Targets::collect(&doc, &[], Some(view_rect)))),
+    ));
+    // Adding one more object to a selection of half the document: the command a shift-click ends
+    // in, without the pointer handling and hit test before it.
+    let ids: Vec<u64> = doc.layers[0].children().map(|c| c.iter().map(|n| n.id.0).collect()).unwrap_or_default();
+    s.execute("select.set", &json!({"ids": ids[..ids.len() / 2]})).map_err(err)?;
+    let mut k = ids.len() / 2;
+    rows.push((
+        format!("select.toggle in a {}-object selection", ids.len() / 2),
+        median_ms(5, || {
+            k += 1;
+            let _ = s.execute("select.toggle", &json!({"id": ids[k % ids.len()]}));
+        }),
+    ));
+    Ok(())
+}
+
 /// `--deep`: tracked rows (no budget yet) for work the budgets above don't reach: editing a whole
 /// selection, live effects, every Pathfinder operation, typing in a long story, and memory, with
 /// the peak so far where `rss_mb` reads one.
@@ -337,6 +379,8 @@ fn deep(n: usize) -> Result<(), String> {
         }),
     ));
     note("after typing");
+    pointing(n, &mut rows)?;
+    note("after pointing");
     // Four embedded 24 MP photos drawn at fit page by three renderers, as the app's canvas, render
     // worker and a panel each draw them.
     {

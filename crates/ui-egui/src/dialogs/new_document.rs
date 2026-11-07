@@ -41,7 +41,8 @@ const PARAMS: [&str; 12] = [
     "rasterEffectsPpi",
     "previewMode",
 ];
-/// The preset the fields were last filled from (its fields as `apply` set them).
+/// The preset the fields were last filled from, as `apply` set them; a Recent or Saved card keeps
+/// its own units here, which the units chosen in Preset Details don't change.
 const APPLIED: &str = "__applied";
 /// Save Preset's name field is showing.
 const SAVING: &str = "__saving";
@@ -257,21 +258,50 @@ fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(12.0, 12.0);
             let (w, h, preset, units) = (d.f64("width", 0.0), d.f64("height", 0.0), d.str("preset"), unit(d));
+            // The fields were last filled from this preset's card; Recent keeps one entry per size
+            // and units, so the units tell two entries of one size apart.
+            let chosen = d
+                .fields
+                .get(APPLIED)
+                .filter(|a| a.get("preset").and_then(Value::as_str) == Some(preset.as_str()))
+                .and_then(Value::as_object)
+                .cloned();
             for s in &list {
-                // The built-in presets' cards show the chosen orientation (square sizes have none)
-                // and the units chosen in Preset Details; choosing one keeps both. Recent and Saved
-                // show each entry as it was made, so a portrait and a landscape A3 are two cards
-                // (#2860).
-                let mut s = DocSettings { units, ..s.clone() };
-                if cat > 1 && ((w > h && s.height > s.width) || (h > w && s.width > s.height)) {
-                    std::mem::swap(&mut s.width, &mut s.height);
+                // The built-in presets' cards show the chosen orientation (square sizes have none);
+                // Recent and Saved show each entry as it was made, so a portrait and a landscape A3
+                // are two cards (#2860).
+                let mut card = s.clone();
+                if cat > 1 && ((w > h && card.height > card.width) || (h > w && card.width > card.height)) {
+                    std::mem::swap(&mut card.width, &mut card.height);
                 }
-                let selected = d.fields.contains_key(APPLIED) && s.name == preset && s.width == w && s.height == h;
-                let card = preset_card(ui, &s, selected);
-                if card.clicked() || card.double_clicked() {
-                    apply(d, &s);
+                // The built-in presets all share the units chosen in Preset Details.
+                if cat > 1 {
+                    card.units = units;
                 }
-                create |= card.double_clicked();
+                let selected = chosen.as_ref().is_some_and(|a| {
+                    a.get("preset").and_then(Value::as_str) == Some(card.name.as_str())
+                        && a.get("width").and_then(Value::as_f64) == Some(card.width)
+                        && a.get("height").and_then(Value::as_f64) == Some(card.height)
+                        && (cat > 1 || a.get("units").and_then(Value::as_str) == Some(s.units.label()))
+                });
+                // The chosen card shows the units chosen in Preset Details, which the new document
+                // will have (#2078); the others keep their own, so choosing one document's units
+                // doesn't restyle the whole tab.
+                if selected {
+                    card.units = units;
+                }
+                let resp = preset_card(ui, &card, selected);
+                if resp.clicked() || resp.double_clicked() {
+                    apply(d, &card);
+                    // The card is still the entry it was, whatever units it shows: its own units say
+                    // which entry it is, so a chosen card stays chosen after a units change.
+                    if cat < 2
+                        && let Some(Value::Object(a)) = d.fields.get_mut(APPLIED)
+                    {
+                        a.insert("units".into(), json!(s.units.label()));
+                    }
+                }
+                create |= resp.double_clicked();
             }
         });
     });

@@ -1070,6 +1070,61 @@ fn transform_each_scales_each_about_its_own_center() {
     assert_eq!(undo_len(&s), n + 1);
 }
 
+/// The dialog's Absolute (`relative: false`): `scaleH` and `scaleV` are the width and height each
+/// object becomes, measured on its own bounds, so objects of different sizes come out alike about
+/// their own reference points. A side left out keeps its size, a side of 0 (a line) stays 0, and
+/// Absolute already at the size the objects have changes nothing and records no undo step.
+#[test]
+fn transform_each_absolute_takes_each_object_to_the_size_given() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    let b = rect(&mut s, 200.0, 0.0, 40.0, 80.0);
+    sel(&mut s, &[a, b]);
+    let n = undo_len(&s);
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 60, "scaleV": 20})).unwrap();
+    assert_eq!(bounds(&s, a), Rect::new(20.0, 15.0, 80.0, 35.0));
+    assert_eq!(bounds(&s, b), Rect::new(190.0, 30.0, 250.0, 50.0));
+    assert_eq!(undo_len(&s), n + 1);
+    // A side left out keeps its size, and the reference point still holds the new size in place.
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 30, "reference": 0})).unwrap();
+    assert_eq!((bounds(&s, a), bounds(&s, b)), (Rect::new(20.0, 15.0, 50.0, 35.0), Rect::new(190.0, 30.0, 220.0, 50.0)));
+    let before = (undo_len(&s), bounds(&s, a), bounds(&s, b));
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 30, "scaleV": 20})).unwrap();
+    assert_eq!((undo_len(&s), bounds(&s, a), bounds(&s, b)), before, "already the size given");
+    // A line has no height to take: its side stays as it is.
+    let line = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 10}, {"x": 100, "y": 10}], "closed": false})).unwrap());
+    sel(&mut s, &[line]);
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 50, "scaleV": 80})).unwrap();
+    assert_eq!(bounds(&s, line), Rect::new(25.0, 10.0, 75.0, 10.0));
+    // A scale of 0 is refused in either mode, as it collapses the object.
+    for p in [json!({"relative": false, "scaleH": 0}), json!({"scaleH": 0})] {
+        let r = s.execute("object.transformEach", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg: m, .. }) if m == "scale must be non-zero"), "{p}: {r:?}");
+    }
+}
+
+/// Absolute measures each object's own box, rotated with it, as the Transform panel shows it: a
+/// square turned 45° keeps its size when the size it shows is applied, and a width applied is the
+/// square's own width, not its bounding box's.
+#[test]
+fn transform_each_absolute_measures_a_rotated_object_its_own_way() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let own = |s: &Session| s.doc().unwrap().doc.oriented_bounds(&[a], false).unwrap().rect;
+    let bbox = |s: &Session| bounds(s, a);
+    assert!((own(&s).width() - 100.0).abs() < 1e-6 && (bbox(&s).width() - 141.421).abs() < 0.01, "turned 45°");
+    // The size it shows, applied, changes nothing and records no undo step.
+    let before = (undo_len(&s), bbox(&s));
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 100, "scaleV": 100})).unwrap();
+    assert_eq!((undo_len(&s), bbox(&s)), before, "already the size it shows");
+    // A width is the square's own width.
+    s.execute("object.transformEach", &json!({"relative": false, "scaleH": 200})).unwrap();
+    assert!((own(&s).width() - 200.0).abs() < 1e-6, "200 wide: {:?}", own(&s));
+    assert!((own(&s).height() - 100.0).abs() < 1e-6, "its height kept: {:?}", own(&s));
+}
+
 #[test]
 fn transform_each_move_reference_and_copy() {
     let mut s = session();
@@ -1144,9 +1199,10 @@ fn transform_each_refuses_a_number_given_as_text() {
     assert_eq!(bounds(&s, a), Rect::new(35.0, 25.0, 85.0, 75.0));
 }
 
-/// Transform Each refuses Reflect X, Reflect Y, Random, Copy, Scale Strokes & Effects, Scale
-/// Corners, Transform Objects or Transform Patterns given as text or as another value that is not
-/// true or false, and the object stays as it was and is not copied; true, false and null still work.
+/// Transform Each refuses Reflect X, Reflect Y, Random, Copy, Relative, Scale Strokes & Effects,
+/// Scale Corners, Transform Objects or Transform Patterns given as text or as another value that is
+/// not true or false, and the object stays as it was and is not copied; true, false and null still
+/// work.
 #[test]
 fn transform_each_refuses_a_boolean_given_as_text() {
     let mut s = session();
@@ -1160,6 +1216,8 @@ fn transform_each_refuses_a_boolean_given_as_text() {
         ("random", json!({"moveH": 10, "random": "false"})),
         ("copy", json!({"copy": "true"})),
         ("copy", json!({"moveH": 10, "copy": [true]})),
+        ("relative", json!({"relative": "false"})),
+        ("relative", json!({"relative": 0})),
         ("strokes", json!({"scaleH": 50, "scaleV": 50, "strokes": "false"})),
         ("corners", json!({"scaleH": 50, "corners": 1})),
         ("objects", json!({"moveH": 10, "objects": "false"})),
@@ -1931,6 +1989,36 @@ fn find_and_replace_options() {
     assert!(s.execute("edit.findReplace", &json!({"find": ""})).is_err());
 }
 
+/// Whole Word looks past a change of style: `cat` coloured red inside `catfish`, or at the end of
+/// `bobcat`, is part of a word, not a word of its own (#5901). A real word next to a run's end
+/// still matches, and without Whole Word the part is replaced as before.
+#[test]
+fn find_whole_word_is_not_fooled_by_a_style_change_inside_a_word() {
+    let styled = |s: &mut Session, t: &str, a: usize, b: usize| {
+        let id = text(s, t);
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": a, "end": b, "fill": "#ff0000"})).unwrap();
+        let NodeKind::Text(tt) = &node(s, id).kind else { panic!() };
+        assert!(tt.runs.len() >= 2, "{t}: two runs");
+        id
+    };
+    let mut s = session();
+    let fish = styled(&mut s, "catfish", 0, 3);
+    let bob = styled(&mut s, "bobcat", 3, 6);
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "DOG", "wholeWord": true})).unwrap();
+    assert_eq!((r["count"].as_u64(), plain(&s, fish), plain(&s, bob)), (Some(0), "catfish".to_string(), "bobcat".to_string()));
+    // A word that ends where its run does, at a space or the text's end, is still a word.
+    let mut s = session();
+    let spaced = styled(&mut s, "cat fish", 0, 3);
+    let tail = styled(&mut s, "a cat", 2, 5);
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "DOG", "wholeWord": true})).unwrap();
+    assert_eq!((r["count"].as_u64(), plain(&s, spaced), plain(&s, tail)), (Some(2), "DOG fish".to_string(), "a DOG".to_string()));
+    // Without Whole Word, the part inside the word is found as before.
+    let mut s = session();
+    let fish = styled(&mut s, "catfish", 0, 3);
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "DOG"})).unwrap();
+    assert_eq!((r["count"].as_u64(), plain(&s, fish)), (Some(1), "DOGfish".to_string()));
+}
+
 /// Find and Replace with no ids leaves the type on a locked artboard as it is.
 #[test]
 fn find_and_replace_leaves_type_on_a_locked_artboard() {
@@ -1957,6 +2045,32 @@ fn find_and_replace_that_changes_nothing_records_no_undo_step() {
     assert_eq!((history(&s), plain(&s, a)), (before, "cat cat".to_string()));
     assert_eq!(s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap(), json!({"count": 2}));
     assert_eq!((history(&s), plain(&s, a)), ((before.0 + 1, 0, true), "dog dog".to_string()));
+}
+
+/// Find and Replace with no ids leaves the type inside a locked or hidden group as it is, however
+/// deep, as it does for type locked or hidden itself or by its layer (#5900). Find Next skips it
+/// too. Unlocked and shown again, the group's type is found and replaced.
+#[test]
+fn find_and_replace_leaves_type_in_a_locked_or_hidden_group() {
+    for prop in ["locked", "hidden"] {
+        let mut s = session();
+        let free = text(&mut s, "Audit cat");
+        let inner = text(&mut s, "Audit cat");
+        sel(&mut s, &[inner]);
+        let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+        sel(&mut s, &[g]);
+        let outer = id_of(&s.execute("object.group", &json!({})).unwrap());
+        let props = |on: bool| if prop == "locked" { json!({"id": outer.0, "locked": on}) } else { json!({"id": outer.0, "visible": !on}) };
+        s.execute("object.setProps", &props(true)).unwrap();
+        assert!(node(&s, inner).visible && !node(&s, inner).locked, "{prop}: the type itself is shown and unlocked");
+        let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap();
+        assert_eq!((r["count"].as_u64(), plain(&s, free), plain(&s, inner)), (Some(1), "Audit dog".to_string(), "Audit cat".to_string()), "{prop}");
+        s.execute("select.none", &json!({})).unwrap();
+        assert!(s.execute("edit.findNext", &json!({"find": "cat"})).unwrap()["id"].is_null(), "{prop}: Find Next skips it");
+        s.execute("object.setProps", &props(false)).unwrap();
+        let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap();
+        assert_eq!((r["count"].as_u64(), plain(&s, inner)), (Some(1), "Audit dog".to_string()), "{prop}: once the group is {prop} no more");
+    }
 }
 
 #[test]
@@ -2545,6 +2659,8 @@ fn select_color_matches_fill_and_stroke_without_a_selection() {
     assert_eq!(pick(&mut s, json!({"fill": "#000000"})), vec![a, t, empty]);
     assert!(s.execute("select.color", &json!({})).is_err());
     assert!(s.execute("select.color", &json!({"fill": "not a colour"})).is_err());
+    assert!(s.execute("select.color", &json!({"fill": "#00000080"})).is_err(), "a hex color with an alpha part");
+    assert!(s.execute("select.color", &json!({"stroke": "#ff000080"})).is_err(), "a hex color with an alpha part");
 }
 
 #[test]
@@ -2797,6 +2913,50 @@ fn select_menu_commands_leave_out_an_isolated_group_hidden_or_locked_since() {
     s.execute("object.setProps", &json!({"ids": [g.0], "locked": true})).unwrap();
     s.execute("select.object.openPaths", &json!({})).unwrap();
     assert_eq!(selected(&s), vec![]);
+}
+
+/// All on Same Layers takes the layers only of the selected objects that can be selected: an
+/// object that is hidden or locked, on a template layer, or outside the isolated group adds no
+/// layer. When the selection holds no such object, the command selects nothing.
+#[test]
+fn select_all_on_same_layers_skips_objects_that_cannot_be_selected() {
+    let mut s = session();
+    let [hidden, a] = [0.0, 20.0].map(|x| rect(&mut s, x, 0.0, 10.0, 10.0));
+    s.execute("layer.new", &json!({"top": true})).unwrap();
+    let [b, c, d] = [0.0, 20.0, 40.0].map(|x| rect(&mut s, x, 40.0, 10.0, 10.0));
+    let same = |s: &mut Session, from: &[NodeId]| {
+        sel(s, from);
+        assert_eq!(selected(s), from, "select.set keeps {from:?}");
+        s.execute("select.object.allOnSameLayers", &json!({})).unwrap();
+        let mut v = selected(s);
+        v.sort();
+        v
+    };
+    assert_eq!(same(&mut s, &[a, b]), vec![hidden, a, b, c, d]);
+    // A hidden or locked object on the first layer adds no layer.
+    for (on, off) in [
+        (json!({"id": hidden.0, "visible": false}), json!({"id": hidden.0, "visible": true})),
+        (json!({"id": hidden.0, "locked": true}), json!({"id": hidden.0, "locked": false})),
+    ] {
+        s.execute("layer.setProps", &on).unwrap();
+        assert_eq!(same(&mut s, &[hidden, b]), vec![b, c, d], "{on}");
+        s.execute("layer.setProps", &off).unwrap();
+    }
+    // An object on a template layer adds no layer.
+    let l3 = id_of(&s.execute("layer.new", &json!({"top": true})).unwrap());
+    let on_template = rect(&mut s, 0.0, 80.0, 10.0, 10.0);
+    s.execute("layer.setProps", &json!({"id": l3.0, "template": true})).unwrap();
+    assert_eq!(same(&mut s, &[on_template, b]), vec![b, c, d]);
+    // An object outside the isolated group adds no layer, even though its layer holds the group.
+    sel(&mut s, &[c, d]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    assert_eq!(same(&mut s, &[b]), vec![]);
+    assert_eq!(same(&mut s, &[c]), vec![c, d]);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    // With no object that can be selected, nothing is selected.
+    s.execute("layer.setProps", &json!({"id": hidden.0, "visible": false})).unwrap();
+    assert_eq!(same(&mut s, &[hidden, on_template]), vec![]);
 }
 
 /// The selection after command `c` runs with nothing selected.
@@ -3302,6 +3462,39 @@ fn placeholder_and_insert_characters() {
     assert!(s.execute("type.insert", &json!({"char": "nope"})).is_err());
 }
 
+/// `type.insert` by code (#5108): `code` as a Windows Alt+0 code types (Windows-1252 for
+/// 128–159, the code point otherwise), `unicode` as a hex code point.
+#[test]
+fn insert_a_character_by_its_code() {
+    let mut s = session();
+    let t = text(&mut s, "");
+    sel(&mut s, &[t]);
+    for p in [
+        json!({"code": 176}),
+        json!({"code": 177}),
+        json!({"code": 151}),
+        json!({"code": 215}),
+        json!({"code": 8364}),
+        json!({"unicode": "00B0"}),
+        json!({"unicode": "U+2014"}),
+    ] {
+        s.execute("type.insert", &p).unwrap();
+    }
+    assert_eq!(plain(&s, t), "°±—×€°—");
+    for p in [
+        json!({"code": 129}),
+        json!({"code": 7}),
+        json!({"code": -1}),
+        json!({"code": 1_114_112}),
+        json!({"unicode": "D800"}),
+        json!({"unicode": "zz"}),
+        json!({}),
+    ] {
+        assert!(s.execute("type.insert", &p).is_err(), "{p}");
+    }
+    assert_eq!(plain(&s, t), "°±—×€°—");
+}
+
 #[test]
 fn area_placeholder_fills_frame() {
     let mut s = session();
@@ -3433,6 +3626,23 @@ fn ruler_guides_and_lock() {
     s.execute("guide.remove", &json!({"index": 0})).unwrap();
     assert!(s.doc().unwrap().doc.guides.is_empty());
     assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
+}
+
+#[test]
+fn invalid_guide_lock_parameters_keep_guides_selected() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let before_undo = s.doc().unwrap().history.undo.len();
+    for params in [json!({"locked": "false"}), json!({"locked": 1})] {
+        assert!(s.execute("view.guides.lock", &params).is_err(), "accepted {params}");
+        assert!(!s.guides_locked(), "locked guides for {params}");
+        assert_eq!(s.doc().unwrap().selection.guides, vec![0], "cleared selection for {params}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), before_undo, "recorded undo for {params}");
+    }
+    // Left out, or null as for every command, it toggles.
+    assert_eq!(s.execute("view.guides.lock", &json!(null)).unwrap(), json!({"locked": true}));
+    assert_eq!(s.execute("view.guides.lock", &json!({"locked": null})).unwrap(), json!({"locked": false}));
 }
 
 /// #1534: Lock Guides locks the paths made into guides too: they can't be selected (so neither
@@ -3704,6 +3914,30 @@ fn guides_and_art_are_shift_selected_together() {
     s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
     s.execute("edit.clear", &json!({"ids": [b.0]})).unwrap();
     assert_eq!(guides(&s).len(), 2);
+}
+
+#[test]
+fn invalid_clear_guides_parameters_delete_nothing() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 40.0, 20.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    let n = undo_len(&s);
+    for params in [json!({"ids": [a.0], "guides": "true"}), json!({"guides": 1})] {
+        assert!(s.execute("edit.clear", &params).is_err(), "accepted {params}");
+        assert!(s.doc().unwrap().doc.node(a).is_some(), "deleted the art for {params}");
+        assert_eq!((guides(&s).len(), undo_len(&s)), (1, n), "changed the document for {params}");
+    }
+    // Direct-selected anchors take the same check.
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    assert!(s.execute("edit.clear", &json!({"guides": "false"})).is_err());
+    assert!(!s.doc().unwrap().selection.anchors.is_empty());
+    assert_eq!(undo_len(&s), n);
+    // Null, as for every command, is the same as leaving `guides` out: with ids, the guides stay.
+    s.execute("edit.clear", &json!({"ids": [a.0], "guides": null})).unwrap();
+    assert!(s.doc().unwrap().doc.node(a).is_none());
+    assert_eq!(guides(&s).len(), 1);
 }
 
 /// When ruler guides and art are selected together, moving the art moves the guides as well;
