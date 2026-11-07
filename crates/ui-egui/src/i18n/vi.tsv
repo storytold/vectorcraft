@@ -3033,6 +3033,7 @@ mark-style	Japanese	Kiểu Nhật
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Thay thế bằng tệp khác hoặc bỏ qua: ảnh của nó vẫn hiển thị bản xem trước đã lưu cùng tài liệu.
 	Replace Spine	Thay thế trục
 	Replace Symbol	Thay thế ký hiệu
+	Reset Transformation	Đặt lại biến đổi
 	Replace With Font	Thay thế bằng phông chữ
 	Replace With Font From	Thay thế bằng phông chữ từ
 	System	Hệ thống

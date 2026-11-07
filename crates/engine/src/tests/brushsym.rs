@@ -1343,6 +1343,138 @@ fn delete_duplicate_and_replace_symbols() {
     assert!(s.execute("symbol.delete", &json!({"name": "Small"})).is_err());
 }
 
+fn xf_of(s: &Session, id: NodeId) -> vectorcraft_geom::Affine {
+    match node(s, id).kind {
+        NodeKind::SymbolInstance { xf, .. } => xf,
+        _ => panic!("{id:?} is not a symbol instance"),
+    }
+}
+
+fn close_xf(a: vectorcraft_geom::Affine, b: vectorcraft_geom::Affine) -> bool {
+    a.as_coeffs().iter().zip(b.as_coeffs()).all(|(x, y)| (x - y).abs() < 1e-9)
+}
+
+fn undo_len(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+/// Reset Transformation gives rotated, scaled, sheared and reflected instances (in a group too)
+/// their symbol's own scale again, each keeping the center of its bounding box, as one undo step.
+#[test]
+fn reset_transformation_restores_the_symbols_scale_and_keeps_the_center() {
+    let mut s = session();
+    let (a, name, placed) = make_symbol(&mut s);
+    let b = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    let c = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 100, "y": 220})).unwrap()["id"].as_u64().unwrap());
+    let master = xf_of(&s, b).with_translation(vectorcraft_geom::Vec2::ZERO);
+    select(&mut s, &[a]);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    s.execute("object.scale", &json!({"sx": 150, "sy": 50})).unwrap();
+    select(&mut s, &[b]);
+    s.execute("object.shear", &json!({"angle": 20})).unwrap();
+    select(&mut s, &[c]);
+    s.execute("object.reflect", &json!({"axis": "vertical"})).unwrap();
+    let turned: Vec<_> = [a, b, c].iter().map(|id| xf_of(&s, *id)).collect();
+    let centers: Vec<_> = [a, b, c].iter().map(|id| bounds(&s, *id).center()).collect();
+    let plain = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[b, c]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    select(&mut s, &[a, group, plain]);
+    let plain_before = node(&s, plain);
+    let before = undo_len(&s);
+    let r = s.execute("symbol.instance.resetTransform", &json!({})).unwrap();
+    assert_eq!(r["ids"], json!([a.0, b.0, c.0]));
+    assert_eq!(undo_len(&s), before + 1, "one undo step");
+    for (id, center) in [a, b, c].into_iter().zip(&centers) {
+        let got = bounds(&s, id);
+        assert!((got.width() - placed.width()).abs() < 1e-9 && (got.height() - placed.height()).abs() < 1e-9, "{id:?}: {got:?}");
+        assert!((got.center() - *center).hypot() < 1e-9, "{id:?} keeps its center: {got:?} vs {center:?}");
+        let xf = xf_of(&s, id);
+        assert!(close_xf(xf.with_translation(vectorcraft_geom::Vec2::ZERO), master), "{id:?}: {xf:?}");
+    }
+    assert!(node(&s, plain) == plain_before, "other objects are left as they are");
+    s.execute("edit.undo", &json!({})).unwrap();
+    for (id, xf) in [a, b, c].into_iter().zip(turned) {
+        assert!(close_xf(xf_of(&s, id), xf), "Undo gives {id:?} its own transform back");
+    }
+}
+
+/// An instance of a symbol whose art lies away from the symbol's origin (as imported symbols can)
+/// keeps the center of the box its art fills when Reset Transformation turns it back.
+#[test]
+fn reset_transformation_keeps_the_center_of_art_away_from_the_origin() {
+    let mut s = session();
+    let r = rect(&mut s, 300.0, 10.0, 20.0, 20.0);
+    let art = node(&s, r);
+    s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Off".into(), art: std::sync::Arc::new(art) });
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::translate((100.0, 100.0)) * vectorcraft_geom::Affine::rotate(0.5);
+    d.insert(Some(layer), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Off".into(), xf })).unwrap();
+    let measured = |s: &Session| s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    let before = measured(&s);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [id.0]})).unwrap()["ids"], json!([id.0]));
+    let after = measured(&s);
+    assert!((after.center() - before.center()).hypot() < 1e-9, "{after:?} vs {before:?}");
+    assert!((after.width() - 20.0).abs() < 1e-9 && (after.height() - 20.0).abs() < 1e-9, "{after:?}");
+}
+
+/// A stored natural size that is not positive (from a damaged file) does not flatten the instance:
+/// Reset Transformation gives it the art's own size, as drawing the symbol does.
+#[test]
+fn reset_transformation_ignores_a_stored_size_that_is_not_positive() {
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let art = node(&s, r);
+    s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Flat".into(), art: std::sync::Arc::new(art) });
+    d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.to_string(), json!({"Flat": [0.0, 20.0]}));
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::translate((100.0, 100.0)) * vectorcraft_geom::Affine::rotate(0.5);
+    d.insert(Some(layer), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Flat".into(), xf })).unwrap();
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [id.0]})).unwrap()["ids"], json!([id.0]));
+    let after = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    assert!((after.width() - 20.0).abs() < 1e-9 && (after.height() - 20.0).abs() < 1e-9, "{after:?}");
+}
+
+/// Reset Transformation adds no undo step for an instance already at its symbol's scale or for
+/// one in perspective, and refuses an id naming no object and objects without an instance,
+/// changing nothing.
+#[test]
+fn reset_transformation_leaves_unchanged_instances_and_refuses_bad_ids() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 1000, "height": 800})).unwrap();
+    let (inst, name, _) = make_symbol(&mut s);
+    let before = undo_len(&s);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [inst.0]})).unwrap()["ids"], json!([]));
+    assert_eq!(undo_len(&s), before, "nothing changed: no undo step");
+    let plain = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[inst]);
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let turned = s.doc().unwrap().doc.clone();
+    let before = undo_len(&s);
+    for bad in [json!({"ids": [inst.0, 999_999]}), json!({"id": 999_999}), json!({"ids": [plain.0]}), json!({"ids": "x"})] {
+        assert!(s.execute("symbol.instance.resetTransform", &bad).is_err(), "{bad}");
+    }
+    assert!(*s.doc().unwrap().doc == *turned && undo_len(&s) == before, "the refusals change nothing");
+    // An instance in perspective is left as it is.
+    s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+    let projected = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 500, "y": 350})).unwrap()["id"].as_u64().unwrap());
+    select(&mut s, &[projected]);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    s.execute("perspective.attach", &json!({"ids": [projected.0], "plane": "right"})).unwrap();
+    let xf = xf_of(&s, projected);
+    let before = undo_len(&s);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [projected.0]})).unwrap()["ids"], json!([]));
+    assert!(undo_len(&s) == before && close_xf(xf_of(&s, projected), xf), "an instance in perspective stays as it was");
+}
+
 /// New Symbol and Duplicate Symbol trim the name they are given, as Symbol Options trims
 /// `newName`; the trimmed name is the one compared with the symbols there are.
 #[test]
