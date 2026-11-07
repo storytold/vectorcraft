@@ -48,7 +48,9 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let doc = baked.as_ref().unwrap_or(doc);
     let pages = pages(doc, opts)?;
 
-    let title = crate::pdfx::title(set.standard, opts.title.clone().unwrap_or_else(|| doc.title.clone()));
+    // The file's Title is File Info's; the page information names the document, as its tab does.
+    let title = crate::pdfx::title(set.standard, opts.title.clone().unwrap_or_else(|| doc.info_title().to_owned()));
+    let name = opts.title.as_deref().unwrap_or(&doc.title);
     // The time of writing (none on the web) dates the editing data and the page information.
     let now = vectorcraft_doc::metadata::output_time();
     let created_at = opts.created.or(now);
@@ -96,7 +98,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
         vectorcraft_doc::cancel::check().map_err(|_| PdfError::Cancelled)?;
         vectorcraft_doc::cancel::progress(written as u64 + 1, total, &format!("Writing page {} of {total}", written + 1));
         let (m, r) = (boxes.media, boxes.bleed);
-        let info = if marks.page_info { crate::marks::page_info(doc, &title, i, now) } else { String::new() };
+        let info = if marks.page_info { crate::marks::page_info(doc, name, i, now) } else { String::new() };
         let art = crate::marks::art(doc, &marks, &boxes, bleed, &info);
         // The page is the media box, y down from its top-left corner (like ours), in units of
         // `unit` points.

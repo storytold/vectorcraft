@@ -783,13 +783,20 @@ pub(crate) fn import_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
 /// (the title PDF, PNG and SVG metadata carry). A title of its own stays, and native files keep
 /// the stored title.
 pub fn has_own_title(doc: &vectorcraft_doc::Document) -> bool {
-    !doc.title.trim().is_empty() && !doc.title.strip_prefix("Untitled-").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+    is_own_title(doc.info_title())
+}
+
+/// Is `title` one a person or a file gave, not blank and not the Untitled-N name New gives?
+pub(crate) fn is_own_title(title: &str) -> bool {
+    !title.trim().is_empty() && !title.strip_prefix("Untitled-").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 pub fn titled_for_export(doc: &vectorcraft_doc::Document, path: Option<&str>, format: &str) -> Option<vectorcraft_doc::Document> {
     let path = path.filter(|_| !has_own_title(doc) && !matches!(format, "vectorcraft" | "template" | "ai"))?;
     let mut d = doc.clone();
     d.title = file_stem(path);
+    // A File Info title that is no title of its own (blank, or an Untitled-N name) would hide it.
+    d.metadata.title = None;
     Some(d)
 }
 

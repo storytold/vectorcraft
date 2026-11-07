@@ -161,7 +161,8 @@ fn an_exported_pdf_opens_with_its_file_info() {
     assert_eq!(back["description"], "A poster\nfor the fair");
     assert_eq!(back["keywords"], json!(["fair", "Poster", "print"]));
     assert!(back["created"].as_str().is_some_and(|c| c.ends_with('Z')), "the file's creation date: {}", back["created"]);
-    assert_eq!(back["title"], "poster.pdf", "the title stays the file name");
+    assert_eq!(back["title"], "Poster", "File Info shows the title the PDF carries");
+    assert_eq!(s.doc().unwrap().title(), "poster.pdf", "the document stays named after the file");
     assert_eq!(back["copyrightStatus"], "copyrighted");
     assert_eq!(back["copyrightNotice"], "(c) 2026 Ada");
     assert_eq!(back["copyrightUrl"], "https://example.com/rights");
@@ -275,6 +276,161 @@ fn a_pdf_compatible_ai_opens_with_the_file_info_of_its_xmp_packet() {
     assert_eq!((m.copyright_status, m.copyright_notice.as_str()), (CopyrightStatus::PublicDomain, "No rights reserved"));
     // A URL with a space is one `file.info` refuses: it is left out.
     assert_eq!(m.copyright_url, "");
+}
+
+/// A one-page PDF whose trailer names an information dictionary with the entries `info`, and whose
+/// catalog has a metadata stream holding an XMP `dc:title` of `xmp_title`.
+fn pdf_titled(info: Option<&str>, xmp_title: Option<&str>) -> Vec<u8> {
+    use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with_catalog};
+    let first = first_extra(1);
+    let mut objects = vec![];
+    let mut catalog = String::new();
+    if let Some(t) = xmp_title {
+        let xmp = format!(
+            "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\
+             <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\
+             <dc:title><rdf:Alt><rdf:li xml:lang=\"de\">Zugangswege</rdf:li><rdf:li xml:lang=\"x-default\">{t}</rdf:li></rdf:Alt></dc:title>\
+             </rdf:Description></rdf:RDF></x:xmpmeta>"
+        );
+        objects.push(format!("<< /Type /Metadata /Subtype /XML /Length {} >>\nstream\n{xmp}\nendstream", xmp.len()));
+        catalog = format!("/Metadata {first} 0 R ");
+    }
+    let info_at = first + objects.len();
+    if let Some(i) = info {
+        objects.push(format!("<< {i} >>"));
+    }
+    let refs: Vec<&str> = objects.iter().map(String::as_str).collect();
+    let bytes = pdf_with_catalog(&[PdfPage::new(100.0, 100.0, "0 0 1 rg 10 10 50 50 re f")], &refs, &catalog, None);
+    if info.is_none() {
+        return bytes;
+    }
+    // The trailer follows the cross-reference table, so a longer trailer moves no object.
+    String::from_utf8(bytes).unwrap().replacen("/Root 1 0 R", &format!("/Root 1 0 R /Info {info_at} 0 R"), 1).into_bytes()
+}
+
+/// A document called `name` with content `bytes` opened (as `document.open` with no path: the tab
+/// shows the document's name), `s` holding it.
+fn open_named(s: &mut Session, name: &str, bytes: &[u8]) -> Value {
+    s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)})).unwrap()
+}
+
+/// The document's name (its tab) and its File Info title.
+fn titles(s: &mut Session) -> [String; 2] {
+    let info = s.execute("file.info", &json!({})).unwrap();
+    [s.doc().unwrap().title(), info["title"].as_str().unwrap().to_string()]
+}
+
+/// What opening `bytes` as a file called `name` gives: the document's name and its File Info title.
+fn opened(name: &str, bytes: &[u8]) -> [String; 2] {
+    let mut s = Session::new();
+    let r = open_named(&mut s, name, bytes);
+    let t = titles(&mut s);
+    assert_eq!((r["title"].as_str(), r["fileInfoTitle"].as_str()), (Some(t[0].as_str()), Some(t[1].as_str())), "the open reply");
+    assert_eq!(s.doc().unwrap().doc.title, t[0], "the tab is the document's title");
+    t
+}
+
+fn svg_titled(inner: &str) -> String {
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\">{inner}<rect width=\"5\" height=\"5\"><title>Tooltip</title></rect></svg>"
+    )
+}
+
+#[test]
+fn import_puts_the_files_own_title_in_file_info_only() {
+    // SVG: the root's `<title>`, its white space made single spaces (not a shape's tooltip), is the
+    // File Info title; the document keeps the file's name, with its extension.
+    assert_eq!(opened("box.svg", svg_titled("<title>\n  Access\n  paths </title>").as_bytes()), ["box.svg", "Access paths"]);
+    assert_eq!(
+        opened("/work/box.svg", svg_titled("<title>Zugangswege Rechenzentrum – Prüfdiagramm</title>").as_bytes()),
+        ["box.svg", "Zugangswege Rechenzentrum – Prüfdiagramm"]
+    );
+    // PDF: the XMP `dc:title` (its `x-default` item) beats the Info `Title`; the Info `Title` stands alone.
+    assert_eq!(opened("plan.pdf", &pdf_titled(Some("/Title (Info title)"), Some("XMP title"))), ["plan.pdf", "XMP title"]);
+    assert_eq!(opened("plan.pdf", &pdf_titled(None, Some("XMP title"))), ["plan.pdf", "XMP title"]);
+    assert_eq!(opened("plan.pdf", &pdf_titled(Some("/Title (Info title)"), None)), ["plan.pdf", "Info title"]);
+    assert_eq!(opened("plan.ai", &pdf_titled(Some("/Title (Info title)"), None)), ["plan.ai", "Info title"]);
+    // Compressed SVG too.
+    let svgz = |inner: &str| vectorcraft_svg::compress(&svg_titled(inner));
+    assert_eq!(opened("box.svgz", &svgz("<title>Access paths</title>")), ["box.svgz", "Access paths"]);
+    // A file that gives none (or a blank one) gives File Info the document's name.
+    assert_eq!(opened("box.svg", svg_titled("").as_bytes()), ["box.svg", "box.svg"]);
+    assert_eq!(opened("box.svg", svg_titled("<title>  </title>").as_bytes()), ["box.svg", "box.svg"]);
+    assert_eq!(opened("plan.pdf", &pdf_titled(None, None)), ["plan.pdf", "plan.pdf"]);
+    assert_eq!(opened("plan.pdf", &pdf_titled(Some("/Author (Ada)"), None)), ["plan.pdf", "plan.pdf"]);
+    // The Untitled-N name New gives is no title (a document that never had one writes it).
+    assert_eq!(opened("plan.pdf", &pdf_titled(Some("/Title (Untitled-2)"), None)), ["plan.pdf", "plan.pdf"]);
+    // A template opens as a new untitled document, whatever title its file gave.
+    let [name, info] = opened("plan.ait", &pdf_titled(Some("/Title (Info title)"), None));
+    assert!(name.starts_with("Untitled-") && info == name, "{name} / {info}");
+}
+
+#[test]
+fn a_file_with_a_title_opened_from_a_path_is_named_after_the_file() {
+    let dir = std::env::temp_dir().join(format!("vc-infotitle-open-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("box.svg");
+    std::fs::write(&path, svg_titled("<title>Access paths</title>")).unwrap();
+    let mut s = Session::new();
+    let r = s.execute("document.open", &json!({"path": path.to_str().unwrap()})).unwrap();
+    assert_eq!((r["title"].as_str(), r["fileInfoTitle"].as_str()), (Some("box.svg"), Some("Access paths")));
+    let r = s.execute("document.inspect", &json!({"depth": 0})).unwrap();
+    assert_eq!((r["title"].as_str(), r["fileInfoTitle"].as_str()), (Some("box.svg"), Some("Access paths")));
+    // The default names of what the document exports are made from the file's name, not its title.
+    assert_eq!(s.doc().unwrap().doc.title, "box.svg");
+    assert_eq!(crate::cmd::fileio::default_name(&s.doc().unwrap().doc, "png"), "box.png");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn file_info_edits_a_files_own_title_and_the_document_follows() {
+    let mut s = Session::new();
+    open_named(&mut s, "box.svg", svg_titled("<title>Access paths</title>").as_bytes());
+    // The dialog sends back the title it was given: nothing changes (no undo step).
+    let before = s.doc().unwrap().revision;
+    let shown = s.execute("file.info", &json!({})).unwrap();
+    s.execute("file.info", &shown).unwrap();
+    assert_eq!(s.doc().unwrap().revision, before, "the title it gave is no edit");
+    assert_eq!(titles(&mut s), ["box.svg", "Access paths"]);
+    // Another title is the document's own, as ever, and the file's is gone.
+    let r = s.execute("file.info", &json!({"title": "Plan B"})).unwrap();
+    assert_eq!(r["title"], "Plan B");
+    assert_eq!(titles(&mut s), ["Plan B", "Plan B"]);
+    assert_eq!(s.doc().unwrap().doc.metadata.title, None);
+    // Undo brings the file's title back, and the name.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(titles(&mut s), ["box.svg", "Access paths"]);
+}
+
+#[test]
+fn the_files_own_title_is_kept_by_saves_and_written_by_exports() {
+    let mut s = Session::new();
+    open_named(&mut s, "box.svg", svg_titled("<title>Access paths</title>").as_bytes());
+    // The native file: its own title is the document's name, the File Info title survives.
+    let native = b64(&s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap());
+    let mut t = Session::new();
+    open_named(&mut t, "other.vectorcraft", &native);
+    assert_eq!(titles(&mut t), ["box.svg", "Access paths"]);
+    // An SVG with the editing data it carries, reopened under another name.
+    let svg = s.execute("document.serialize", &json!({"format": "svg", "preserveEditing": true, "metadata": true})).unwrap()["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(svg.contains("<title>Access paths</title>") && svg.contains("<dc:title>Access paths</dc:title>"), "{svg}");
+    let mut u = Session::new();
+    let r = open_named(&mut u, "again.svg", svg.as_bytes());
+    assert_eq!(r["restored"], true);
+    assert_eq!(titles(&mut u), ["again.svg", "Access paths"]);
+    // PDF: the Info `Title` and the XMP `dc:title`, shown by the viewer.
+    for pdf in pdf_texts(&mut s) {
+        assert!(pdf.contains("/Title(Access paths)") && xmp_title(&pdf).contains("Access paths"), "{}", xmp_title(&pdf));
+        assert!(pdf.contains("/ViewerPreferences<</DisplayDocTitle true>>"), "{pdf}");
+    }
+    // PNG text.
+    let png = b64(&s.execute("document.export", &json!({"format": "png"})).unwrap());
+    assert!(crate::cmd::fileio::pngtext::text(&png).iter().any(|(k, v)| k == "Title" && v == "Access paths"));
+    // The default file names are made from the document's name.
+    assert_eq!(crate::cmd::fileio::default_name(&s.doc().unwrap().doc, "pdf"), "box.pdf");
 }
 
 #[test]

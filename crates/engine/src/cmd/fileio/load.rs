@@ -7,6 +7,7 @@ use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
 use vectorcraft_render::effects::pixel::LoadedTexture;
 
+use super::super::fileinfo::imported_title;
 use super::super::{Result, Session, bad, bool_or, clipboard, parse_range, str_param};
 use super::pdfimport::LoadOptions;
 use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, psdread, read_file, readable_format_for_name};
@@ -480,6 +481,13 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
         super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
+    // The title the file gives itself (an SVG's `<title>`, a PDF's, `.ai`'s or `.ait`'s XMP `dc:title`
+    // or Info `Title`, which the readers put in File Info; the one a native document holds) is the
+    // File Info title, cleaned as `file.info` takes one. A file restored from the editing data it
+    // carries gives the title that document had, unless that is the file's name. The document's own
+    // name stays what it has always been: the file's name (#3626).
+    let held = restored.then_some(doc.title.as_str()).filter(|t| *t != title);
+    doc.metadata.title = doc.metadata.title.as_deref().or(held).and_then(imported_title);
     // Imports are named after the file; a native document keeps its own title (the tab shows the
     // file name once it has a path).
     if !matches!(format.id, "vectorcraft" | "template") || doc.title.is_empty() {
@@ -600,6 +608,7 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     if template {
         doc.template = false;
         doc.title = s.next_untitled();
+        doc.metadata.title = None;
     }
     // A .ai (or .ait) another app wrote carries no open Layers rows we read: all of them start
     // closed, its top-level layers as its groups (#1475). Ours carry their own.
@@ -628,7 +637,7 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     st.imported_from = source_path;
     st.import_losses = losses;
     let opened = &s.documents()[index];
-    let (title, file_info_title) = (opened.title(), opened.doc.title.clone());
+    let (title, file_info_title) = (opened.title(), opened.doc.info_title().to_string());
     Ok(super::merge(
         json!({ "index": index, "title": title, "fileInfoTitle": file_info_title, "format": format.id, "warnings": warnings, "restored": restored }),
         links.to_json(),

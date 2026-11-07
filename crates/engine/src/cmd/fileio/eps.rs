@@ -326,7 +326,7 @@ fn encode_document(doc: &Document, p: &Value, saving: bool) -> Result<Encoded> {
         let o = EpsOptions {
             region,
             origin,
-            title: doc.title.clone(),
+            title: doc.info_title().to_owned(),
             created,
             native: Some(native(&editing, if saving { None } else { board }, set.include_linked)),
             ..set.eps.clone()
