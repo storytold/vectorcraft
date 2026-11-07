@@ -5371,6 +5371,32 @@ fn a_style_the_list_does_not_have_is_no_link() {
 }
 
 #[test]
+fn a_group_with_its_own_fill_comes_in_as_the_group_with_that_fill() {
+    // GUARDS: a group whose style gives it a fill of its own came in as its drawn look.
+    let hidden = |x: f64| rect_path(x, 0.0, x + 10.0, 10.0).replace('\n', "\n%_");
+    // The look: both squares in the group's blue; the group itself: red squares.
+    let look = format!("0 0 0 0 0 0 1 Xa\n{}f\n{}f\n", rect_path(0.0, 0.0, 10.0, 10.0), rect_path(20.0, 0.0, 30.0, 10.0));
+    let group = |style: &str| format!("0 Ae\nu\n{look}U\n%_0 Ae\n%_u\n%_{RED}%_{}f\n%_{}f\n%_U\n1 ({style}) XW\n", hidden(0.0), hidden(20.0));
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{}", fill_style("Blue", "0 0 0 0 0 0 1 Xa\n"), layer(&group("Blue"))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { clip: false, .. }), "the group, not its look: {a:#?}");
+    let members = a[0].children().unwrap();
+    assert_eq!(members.len(), 2, "{a:#?}");
+    assert!(members.iter().all(|m| fill(m).color() == Some(Color::rgb(1.0, 0.0, 0.0))), "the members keep their own paint: {members:#?}");
+    assert_eq!(a[0].appearance.items.len(), 1);
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)), "the group's own fill");
+    assert_eq!(a[0].appearance.contents_index, None, "listed above the contents, it paints over the members");
+    // A group's gradient: where it lies across the group isn't read, so the drawn look stays.
+    let defs =
+        "%AI5_BeginGradient: (A)\n(A) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let style = fill_style("Shade", "1 (A) 0 0 0 1 1 0 0 1 0 0 Bg\n");
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{defs}{}", layer(&group("Shade"))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+#[test]
 fn a_group_with_a_listed_style_is_linked() {
     let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
     let group = format!("0 Ae\nu\n{RED}{}f\nU\n%_0 Ae\n%_u\n%_{hidden_rect}f\n%_U\n1 (Shadow) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
