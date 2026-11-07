@@ -90,12 +90,12 @@ const MAX_KEPT_BYTES: usize = 64 << 20;
 /// pixels to be copied.
 const WHOLE_PIXEL: f64 = 1e-6;
 
-/// The render worker's last frame, which its next frame can copy pixels from.
+/// The render worker's last frame, which its next frame can copy pixels from when it holds them.
 pub(crate) struct KeptFrame {
     key: CacheKey,
     opts: vectorcraft_render::RenderOptions,
     view: Affine,
-    pub(crate) pixels: Vec<u8>,
+    pub(crate) pixels: Option<Vec<u8>>,
 }
 
 /// A frame the render worker finished.
@@ -107,23 +107,29 @@ pub(crate) struct WorkerFrame {
     pub(crate) reused: bool,
 }
 
-/// How many whole device pixels the art moves between the frame `kept` and the job `job`, when
-/// `job` can copy pixels from it: `job` allows it, nothing but the position of the view differs
-/// between their keys and render options, the frame is not Pixel Preview's and shows no opacity
-/// mask, and the art moves by whole device pixels.
-fn whole_pixel_pan(kept: &KeptFrame, job: &crate::render_worker::Job) -> Option<(i64, i64)> {
+/// Nothing but the position of the view differs between the frame `kept` and the job `job`, in
+/// their keys, render options and views, and the frame is not Pixel Preview's and shows no opacity
+/// mask.
+fn only_position_differs(kept: &KeptFrame, job: &crate::render_worker::Job) -> bool {
     let (a, b) = (&kept.key, &job.key);
     let same_scale = a.zoom == b.zoom && a.rot == b.rot && a.ppp == b.ppp && (a.w, a.h) == (b.w, b.h) && (job.w, job.h) == (b.w, b.h);
-    if !job.may_copy || !same_scale || !super::cursor::only_view_differs(a, b) || a.pixel.is_some() || b.pixel.is_some() {
-        return None;
-    }
-    if kept.opts != job.opts || job.opts.mask_view.is_some() {
+    same_scale
+        && super::cursor::only_view_differs(a, b)
+        && a.pixel.is_none()
+        && b.pixel.is_none()
+        && kept.opts == job.opts
+        && job.opts.mask_view.is_none()
+        && kept.view.as_coeffs()[..4] == job.view.as_coeffs()[..4]
+}
+
+/// How many whole device pixels the art moves between the frame `kept` and the job `job`, when
+/// `job` can copy pixels from it: `job` allows it, nothing but the position of the view differs
+/// ([`only_position_differs`]), and the art moves by whole device pixels.
+fn whole_pixel_pan(kept: &KeptFrame, job: &crate::render_worker::Job) -> Option<(i64, i64)> {
+    if !job.may_copy || !only_position_differs(kept, job) {
         return None;
     }
     let (from, to) = (kept.view.as_coeffs(), job.view.as_coeffs());
-    if from[..4] != to[..4] {
-        return None;
-    }
     let whole = |d: f64| (d.is_finite() && (d - d.round()).abs() <= WHOLE_PIXEL && d.abs() < f64::from(u16::MAX)).then_some(d.round() as i64);
     Some((whole(to[4] - from[4])?, whole(to[5] - from[5])?))
 }
@@ -199,12 +205,16 @@ fn composed_frame(
 /// once the view has stopped ([`crate::CanvasCache::reused`]). `kept` becomes this frame when `job`
 /// allows keeping it, it is at most [`MAX_KEPT_BYTES`], it draws no raster from before its object
 /// moved, and it draws nothing in a way that depends on its size. A frame that renders whole once
-/// the view has stopped is kept too, so the first step of the next pan copies from it.
+/// the view has stopped is kept too, so the first step of the next pan copies from it. A kept frame
+/// holds its pixels only when it is the worker's first or nothing but the position of the view
+/// differs from the frame before it. A frame after a zoom or an edit holds none, so it costs no
+/// copy, and the first pan step after it renders whole.
 pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option<KeptFrame>, job: &crate::render_worker::Job) -> WorkerFrame {
+    let holds_pixels = kept.as_ref().is_none_or(|k| only_position_differs(k, job));
     let copied = kept.as_ref().and_then(|k| {
         let pan = whole_pixel_pan(k, job)?;
         let parts = exposed_parts(job.w, job.h, pan)?;
-        composed_frame(r, moved_pixels(&k.pixels, job.w, job.h, pan), parts, job)
+        composed_frame(r, moved_pixels(k.pixels.as_ref()?, job.w, job.h, pan), parts, job)
     });
     let reused = copied.is_some();
     let (img, moved) = copied.unwrap_or_else(|| {
@@ -214,7 +224,8 @@ pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option
     });
     let keeps =
         job.may_keep && moved == 0 && r.stats.view_sized == 0 && img.pixels.len() <= MAX_KEPT_BYTES && (img.width, img.height) == (job.w, job.h);
-    *kept = keeps.then(|| KeptFrame { key: job.key.clone(), opts: job.opts.clone(), view: job.view, pixels: img.pixels.clone() });
+    *kept =
+        keeps.then(|| KeptFrame { key: job.key.clone(), opts: job.opts.clone(), view: job.view, pixels: holds_pixels.then(|| img.pixels.clone()) });
     WorkerFrame { img, moved, reused }
 }
 

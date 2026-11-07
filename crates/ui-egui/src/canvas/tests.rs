@@ -9251,9 +9251,9 @@ fn a_whole_pixel_pan_copies_the_pixels_that_stay_on_screen() {
         let mut kept = None;
         let first = render_job(&mut r, &mut kept, &pan_job(&doc, &key, (0.0, 0.0)));
         assert!(!first.reused, "the first frame renders whole");
-        let k = kept.as_mut().expect("the frame is kept");
+        let k = kept.as_mut().and_then(|k| k.pixels.as_mut()).expect("the frame holds its pixels");
         // The middle of the frame, which stays on screen.
-        k.pixels[(64 * 256 + 128) * 4..(64 * 256 + 128) * 4 + 4].copy_from_slice(&[1, 2, 3, 4]);
+        k[(64 * 256 + 128) * 4..(64 * 256 + 128) * 4 + 4].copy_from_slice(&[1, 2, 3, 4]);
         let job = pan_job(&doc, &key, pan);
         let frame = render_job(&mut r, &mut kept, &job);
         assert!(frame.reused, "{pan:?}");
@@ -9266,8 +9266,10 @@ fn a_whole_pixel_pan_copies_the_pixels_that_stay_on_screen() {
     }
 }
 
-/// A frame does not copy from the last one when anything but the position of the view changes the
-/// pixels, or the view moves by part of a pixel: each such frame matches a whole render.
+/// A frame does not copy from the last one when the view moves by part of a pixel or over half the
+/// frame, when copying is not allowed, or when a listed key field, render option, zoom, rotation,
+/// canvas size or device scale differs. Each such frame has the job's size. The session test
+/// compares such frames with a fresh render pixel by pixel.
 #[test]
 fn a_frame_renders_whole_when_anything_but_a_whole_pixel_pan_changed() {
     let (doc, key) = pan_doc();
@@ -9341,7 +9343,7 @@ fn a_frame_renders_whole_when_anything_but_a_whole_pixel_pan_changed() {
     assert!(copied.is_empty(), "copied from the last frame: {copied:?}");
 }
 
-/// The worker keeps its last frame only when the next one can copy it: a frame that does not allow
+/// The worker keeps a frame only when a later one can copy from it: a frame that does not allow
 /// keeping, a frame over the limit and a frame that drew a raster from before its object moved are
 /// not kept. A frame that may not copy can still be kept.
 #[test]
@@ -9408,6 +9410,9 @@ fn worker_frames_match_a_fresh_render_through_a_session() {
         ("pan back", pan((3.0, -4.0)), true),
         ("part of a pixel", pan((3.5, -4.0)), false),
         ("whole again", pan((4.5, -4.0)), true),
+        ("settled", changed(&|j| j.may_copy = false), false),
+        ("pan after settling", pan((5.5, -4.0)), true),
+        ("back before the edit", pan((4.5, -4.0)), true),
         (
             "edit",
             changed(&|j| {
@@ -9448,8 +9453,9 @@ fn worker_frames_match_a_fresh_render_through_a_session() {
             }),
             false,
         ),
-        ("settled", changed(&|j| j.may_copy = false), false),
-        ("pan after settling", pan((5.5, -4.0)), true),
+        ("setting back", pan((4.5, -4.0)), false),
+        ("first pan after the setting", pan((5.5, -4.0)), false),
+        ("next pan", pan((6.5, -4.0)), true),
     ];
     let mut r = vectorcraft_render::Renderer::new();
     let mut kept = None;
@@ -9628,6 +9634,11 @@ fn pan_after_the_settling_frame_copies() {
     frame(&mut app, 1.5);
 
     app.view_mut().unwrap().center.x += 5.0;
+    frame(&mut app, 1.75);
+    render("the first pan after the zoom", false);
+    frame(&mut app, 1.75);
+
+    app.view_mut().unwrap().center.x += 5.0;
     frame(&mut app, 2.0);
     render("the pan", true);
     frame(&mut app, 3.0);
@@ -9640,19 +9651,46 @@ fn pan_after_the_settling_frame_copies() {
     render("the next pan", true);
 }
 
+/// A frame after a zoom or an edit holds no pixels, and the frame before it lets its pixels go. The
+/// first pan step after it renders whole and holds its pixels, and the next step copies them.
+#[test]
+fn a_frame_after_a_zoom_or_an_edit_holds_no_pixels() {
+    let (doc, key) = pan_doc();
+    let mut edited = (*doc).clone();
+    edited.layers.reverse();
+    let edited = std::sync::Arc::new(edited);
+    let zoomed = |key: &CacheKey, at: f64, zoom: f64| {
+        let mut job = pan_job(&doc, key, (at, 0.0));
+        job.key.zoom = zoom;
+        job.view = Affine::translate((at, 0.0)) * Affine::scale(zoom);
+        job
+    };
+    let revised = CacheKey { revision: key.revision + 1, ..key.clone() };
+    let steps: Vec<(&str, crate::render_worker::Job, bool, bool)> = vec![
+        ("the first frame", pan_job(&doc, &key, (0.0, 0.0)), false, true),
+        ("a zoom", zoomed(&key, 0.0, 2.0), false, false),
+        ("another zoom", zoomed(&key, 0.0, 1.5), false, false),
+        ("the first pan after the zoom", zoomed(&key, 10.0, 1.5), false, true),
+        ("the next pan", zoomed(&key, 20.0, 1.5), true, true),
+        ("an edit", crate::render_worker::Job { doc: edited.clone(), ..pan_job(&doc, &revised, (0.0, 0.0)) }, false, false),
+        ("the first pan after the edit", crate::render_worker::Job { doc: edited.clone(), ..pan_job(&doc, &revised, (10.0, 0.0)) }, false, true),
+        ("the next pan after the edit", crate::render_worker::Job { doc: edited.clone(), ..pan_job(&doc, &revised, (20.0, 0.0)) }, true, true),
+    ];
+    let mut r = vectorcraft_render::Renderer::new();
+    let mut kept = None;
+    for (name, job, copies, holds) in steps {
+        assert_eq!(render_job(&mut r, &mut kept, &job).reused, copies, "{name}: copied");
+        assert_eq!(kept.as_ref().is_some_and(|k| k.pixels.is_some()), holds, "{name}: holds its pixels");
+    }
+}
+
 /// The worker thread itself copies pixels on a pan and reports it.
 #[test]
 fn the_render_worker_thread_copies_a_pan() {
     let (doc, key) = pan_doc();
     let mut worker = crate::render_worker::Worker::spawn(egui::Context::default()).expect("a worker");
-    let wait = |worker: &mut crate::render_worker::Worker| {
-        for _ in 0..600 {
-            if let Some(done) = worker.wait(std::time::Duration::from_millis(100)) {
-                return done;
-            }
-        }
-        panic!("the worker finished no frame");
-    };
+    // Blocks until the worker sends its frame. A worker thread that stopped gives None.
+    let wait = |worker: &mut crate::render_worker::Worker| worker.wait(std::time::Duration::MAX).expect("the worker sends the frame");
     worker.submit(pan_job(&doc, &key, (0.0, 0.0)));
     assert!(!wait(&mut worker).reused);
     worker.submit(pan_job(&doc, &key, (10.0, 0.0)));
