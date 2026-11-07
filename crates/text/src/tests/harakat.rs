@@ -90,17 +90,28 @@ fn run_of<'a>(t: &'a TextObject, g: &PositionedGlyph) -> &'a vectorcraft_doc::Te
     t.runs.get(g.run).unwrap_or_else(|| panic!("glyph {} at byte {} names missing run {}", g.gid, g.byte, g.run))
 }
 
-/// Expected fill for an authored glyph from the source runs that cover its shaping-cluster bytes,
-/// independent of the glyph's assigned `run` index: a harakat in the cluster span wins when the
-/// glyph looks like a mark (no advance before kashida, or run text is harakat-only is not used
-/// here). For ownership checks we map by whether every authored character in `[byte, byte+len)`
-/// that is a harakat should paint the glyph when the glyph has zero advance; letters use the
-/// fill of the first non-harakat character in the span (the cluster start).
-fn expected_fill(t: &TextObject, text: &str, g: &PositionedGlyph) -> Paint {
+type LetterGlyphs = std::collections::HashSet<(u32, u32)>;
+
+/// Glyphs drawn by the fixture's bare letters, including separately shaped letter dots.
+/// Include the face id: glyph ids are only meaningful within their own font.
+fn letter_glyphs(text: &str, family: &str) -> LetterGlyphs {
+    let bare: String = text.chars().filter(|&c| !is_harakat(c)).collect();
+    layout(FontDb::global(), &text_with_harakat(&bare, family, None)).glyphs.iter().map(|g| (g.font_id, g.gid)).collect()
+}
+
+fn fixture_mark(g: &PositionedGlyph, letters: &LetterGlyphs) -> bool {
+    // Some fonts draw a letter's dots as zero-advance GDEF marks. They keep the letter's paint.
+    g.advance.abs() < 1e-6 && !letters.contains(&(g.font_id, g.gid))
+}
+
+/// Expected fill from the fixture's source runs, independent of the glyph's assigned `run`:
+/// zero-advance glyphs absent from the bare letters take the first harakat's fill in their
+/// cluster; letter glyphs (including their dots) take the cluster-start fill.
+fn expected_fill(t: &TextObject, text: &str, g: &PositionedGlyph, letters: &LetterGlyphs) -> Paint {
     let end = (g.byte + g.len).min(text.len());
     let span = text.get(g.byte..end).unwrap_or("");
     let letter_fill = style_fill_at(t, g.byte);
-    if g.advance.abs() < 1e-6 && span.chars().any(is_harakat) {
+    if fixture_mark(g, letters) && span.chars().any(is_harakat) {
         // Mark glyph: first harakat in the cluster span.
         let off = span.char_indices().find(|(_, c)| is_harakat(*c)).map(|(i, _)| g.byte + i).unwrap_or(g.byte);
         return style_fill_at(t, off);
@@ -237,7 +248,8 @@ fn repeated_glyphs_take_their_own_harakat_colour() {
     assert_eq!(geometry(&a), geometry(&b), "joining and mark positions unchanged");
     assert_authored_ownership(&coloured, WORD, &b, "repeated");
     let fill = |g: &PositionedGlyph| run_of(&coloured, g).style.fill.clone();
-    let marks: Vec<&PositionedGlyph> = b.glyphs.iter().filter(|g| g.advance.abs() < 1e-6 && !g.outline.is_empty()).collect();
+    let letters = letter_glyphs(WORD, &face.family);
+    let marks: Vec<&PositionedGlyph> = b.glyphs.iter().filter(|g| fixture_mark(g, &letters) && !g.outline.is_empty()).collect();
     assert_eq!(marks.len(), 2, "two fathas");
     assert_eq!(marks[0].gid, marks[1].gid, "the same glyph id twice");
     for m in &marks {
@@ -245,8 +257,8 @@ fn repeated_glyphs_take_their_own_harakat_colour() {
         assert!(m.byte == 0 || m.byte == 4, "a fatha in its letter's cluster: {}", m.byte);
         assert_eq!(fill(m), want, "the fatha of the letter at {} keeps its own colour", m.byte);
     }
-    let letters = plain.runs[0].style.fill.clone();
-    assert!(b.glyphs.iter().filter(|g| g.advance.abs() >= 1e-6).all(|g| fill(g) == letters), "letters keep theirs");
+    let letter_fill = plain.runs[0].style.fill.clone();
+    assert!(b.glyphs.iter().filter(|g| letters.contains(&(g.font_id, g.gid))).all(|g| fill(g) == letter_fill), "letters keep theirs");
 }
 
 /// Coloured harakat: the letters keep their joining and the marks their attachment, glyph for
@@ -263,7 +275,8 @@ fn harakat_coloured_apart_keep_every_glyph_and_take_their_own_colour() {
     assert!(coloured.runs.len() > 1);
     let (a, b) = (layout(db, &plain), layout(db, &coloured));
     assert_eq!(geometry(&a), geometry(&b), "joining and mark positions unchanged");
-    let marks = b.glyphs.iter().filter(|g| g.advance.abs() < 1e-6 && !g.outline.is_empty()).count();
+    let letters = letter_glyphs(VOCALIZED, family);
+    let marks = b.glyphs.iter().filter(|g| fixture_mark(g, &letters) && !g.outline.is_empty()).count();
     assert!(marks > 0, "vocalized text has mark glyphs");
     assert_eq!(painted(&coloured, &b, &red()), marks);
     assert_authored_ownership(&coloured, VOCALIZED, &b, "coloured");
@@ -348,12 +361,13 @@ fn stretched_words_with_harakat(text: &str, l: &TextLayout, tat: u32) -> usize {
 
 /// Authored glyphs paint as the independent expected fill from source runs; run indices must exist.
 fn assert_authored_ownership(t: &TextObject, text: &str, l: &TextLayout, what: &str) {
+    let letters = letter_glyphs(text, &t.runs[0].style.font_family);
     for g in &l.glyphs {
         if g.len == 0 {
             continue;
         }
         let actual = &run_of(t, g).style.fill;
-        let want = expected_fill(t, text, g);
+        let want = expected_fill(t, text, g, &letters);
         assert_eq!(actual, &want, "{what}: glyph {} at {} len {} adv {}", g.gid, g.byte, g.len, g.advance);
     }
 }
