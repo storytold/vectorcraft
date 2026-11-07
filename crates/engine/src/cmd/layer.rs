@@ -955,7 +955,7 @@ fn any_empty_artboards(d: &Document) -> bool {
 
 fn has_empty_artboards(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
-    if any_empty_artboards(&st.doc) { Ok(()) } else { Err("no empty artboards to delete".into()) }
+    if st.any_empty_artboards(any_empty_artboards) { Ok(()) } else { Err("no empty artboards to delete".into()) }
 }
 
 fn artboard_delete_empty(s: &mut Session, _: &Value) -> Result<Value> {
