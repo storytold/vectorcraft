@@ -67,12 +67,14 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 enum State {
     Idle,
     /// Dragging the selected anchors, which move alike: `grab` is where the anchor pressed on (or
-    /// the point of a straight segment nearest the pointer pressed on it) was, the point that
-    /// snaps.
+    /// the point of a straight segment nearest the pointer pressed on it, `segment`) was, the
+    /// point that snaps. With Snap to Grid or Snap to Pixel, a segment's drag snaps its anchors
+    /// instead (#3835).
     MoveAnchors {
         start: Point,
         grab: Point,
         began: bool,
+        segment: bool,
     },
     /// Moving (Alt: copying) the selected objects; `grab`: the anchor an Alt-press picked the
     /// path by, which snaps as a dragged anchor does; else `hold`, where the press took hold of
@@ -849,7 +851,9 @@ impl Tool for DirectSelectionTool {
                 self.state = State::Marquee { start: p, cur: p, toggle: ev.mods.shift, enclosed: false, whole: ev.mods.alt };
                 vec![]
             }
-            (PointerKind::Drag, State::MoveAnchors { start, grab, began }) => self.drag_move_anchors(cx, ev, p, (start, grab, began)),
+            (PointerKind::Drag, State::MoveAnchors { start, grab, began, segment }) => {
+                self.drag_move_anchors(cx, ev, p, (start, grab, began, segment))
+            }
             (PointerKind::Drag, State::Segment { id, si, seg, t, start, began }) => {
                 let mut out = vec![];
                 if !began {
@@ -1288,7 +1292,7 @@ impl DirectSelectionTool {
         self.state = if already && cx.selection.anchors.is_empty() {
             State::MoveObject { start: p, grab: Some(grab), hold: grab, began: false, deselect: None }
         } else {
-            State::MoveAnchors { start: p, grab, began: false }
+            State::MoveAnchors { start: p, grab, began: false, segment: false }
         };
         if ev.mods.shift {
             return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "toggle"}))];
@@ -1354,7 +1358,7 @@ impl DirectSelectionTool {
                 } else {
                     // Held by the segment itself, so the segment is what lands on a
                     // ruler guide or lines up, not the pressed spot beside it (#3701).
-                    State::MoveAnchors { start: p, grab: hold_point(cx, &h, p), began: false }
+                    State::MoveAnchors { start: p, grab: hold_point(cx, &h, p), began: false, segment: true }
                 };
                 if ev.mods.shift {
                     return vec![Action::Exec("select.segments".into(), json!({"id": h.leaf.0, "segments": [[s.si, s.seg]], "mode": "toggle"}))];
@@ -1381,23 +1385,36 @@ impl DirectSelectionTool {
         }
         vec![]
     }
-    fn drag_move_anchors(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point, (start, grab, began): (Point, Point, bool)) -> Vec<Action> {
+    fn drag_move_anchors(
+        &mut self,
+        cx: &ToolContext,
+        ev: &PointerEvent,
+        p: Point,
+        (start, grab, began, segment): (Point, Point, bool, bool),
+    ) -> Vec<Action> {
         let mut out = vec![];
         if !began {
             if p.distance(start) < cx.tol(3.0) {
                 return out;
             }
             out.push(Action::Begin("Move".into()));
-            self.state = State::MoveAnchors { start, grab, began: true };
+            self.state = State::MoveAnchors { start, grab, began: true, segment };
             self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
             self.line_end = line_end_leave(cx, grab);
+            // A segment held by a point along it lands its anchors on the grid (the box round
+            // them, an edge on a gridline on each axis), not that point (#3835).
+            let grid = segment && (cx.snap_to_grid || cx.snap_to_pixel);
+            self.partial_grid =
+                grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds(cx.selection, cx.doc, cx.preview_bounds)));
         }
         let mut d = move_delta(start, p, ev.mods.shift, cx.constrain_angle);
         let unsnapped = d;
         // The grabbed anchor snaps and the others follow it. Shift keeps the move at its
         // angle, and the anchor slides along it onto what Smart Guides find there (#886).
         self.guides.clear();
-        if let Some(snap) = &self.anchor_snap {
+        if segment && let Some(grid) = &self.partial_grid {
+            (d, self.guides) = if ev.mods.shift { grid.snap_along(cx, grab, d, false) } else { grid.snap(cx, grab, d, false) };
+        } else if let Some(snap) = &self.anchor_snap {
             let shift = ev.mods.shift.then(|| Leave::segment(cx, grab, true));
             let (q, guides) = snap.snap_from(cx, grab + (p - start), shift.as_ref().or(self.line_end.as_ref()));
             (d, self.guides) = (q - grab, guides);
