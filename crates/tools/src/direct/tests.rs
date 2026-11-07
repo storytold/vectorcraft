@@ -581,6 +581,34 @@ fn snap_to_last_location_puts_a_path_moved_by_its_anchor_back() {
     assert!((stays - Vec2::new(6.0, 5.0)).hypot() < 1e-9, "{stays:?}: the option off");
 }
 
+/// View › Snap to Pixel wins over Smart Guides › Snap to Last Location for a path selected whole
+/// that Direct Selection moves held by an anchor: a short move puts the held anchor, off the
+/// pixel grid before, on whole pixels and shows no "last location" label.
+#[test]
+fn snap_to_pixel_wins_over_snap_to_last_location_for_a_path_moved_by_its_anchor() {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(100.3, 100.4, 200.3, 200.4));
+    d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, square, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let c = ToolContext { snap_to_pixel: true, snap_to_last_location: true, snapping_tolerance: 10.0, ..cx(&d, &s, &p) };
+    let mut t = DirectSelectionTool::new(false);
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.3, 100.4)).is_empty());
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 106.3, 105.4));
+    let Some(Action::Preview(command, v)) = a.last() else { panic!("{a:?}") };
+    assert_eq!(command, "object.transform");
+    let m = Vec2::new(v["matrix"][4].as_f64().unwrap_or(f64::NAN), v["matrix"][5].as_f64().unwrap_or(f64::NAN));
+    // The held anchor (106.3, 105.4) rounds to (106, 105).
+    assert!((m - Vec2::new(5.7, 4.6)).hypot() < 1e-9, "{m:?}");
+    let labels: Vec<String> =
+        t.overlays(&c).into_iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text) } else { None }).collect();
+    assert!(labels.is_empty(), "{labels:?}");
+}
+
 /// A click (no drag) on an anchor that is selected with others, whether the whole path is or
 /// some of its anchors, selects that anchor alone, as in Illustrator: a press keeps the
 /// selection so a drag moves it all, the release without a drag narrows it. Shift still

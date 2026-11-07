@@ -3581,7 +3581,8 @@ Guides change where a snapped point lands:
 - `snapToLastLocation` (Snap to Last Location, off by default): with Smart Guides on, a selection moved by dragging
   (Selection, Group Selection or Direct Selection tool / `pointer_gesture` with `selection`, Shift too) goes back to
   where the move began while the move is no longer than `snappingTolerance`, labeled "last location"; farther, it
-  snaps as before. An Alt copy is not pulled back onto its original. A value that is not a boolean is refused.
+  snaps as before. An Alt copy is not pulled back onto its original, and with View › Snap to Grid or Snap to Pixel on
+  the move snaps to the grid or to whole pixels instead. A value that is not a boolean is refused.
 
 The Snap to Glyph options (the desktop app's Character panel menu › Show Snap to Glyph Options; View › Snap to Glyph
 is the desktop app's): `view.snapToGlyph.options {baseline?, xHeight?, bounds?, proximity?, angular?, anchors?}` (or

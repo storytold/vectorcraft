@@ -823,6 +823,39 @@ fn snap_to_last_location_puts_a_move_back_where_it_began() {
     assert_eq!((copy, labels.contains(&"last location".to_string())), (moved(&off, (156.0, 155.0), alt).0, false), "{labels:?}");
 }
 
+/// View › Snap to Pixel wins over Smart Guides › Snap to Last Location, as over every other
+/// snap: a short move of a square whose top-left is off the pixel grid puts that corner on whole
+/// pixels, a Shift move on its own axis, and shows no "last location" label.
+#[test]
+fn snap_to_pixel_wins_over_snap_to_last_location() {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(100.3, 100.4, 200.3, 200.4));
+    d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, square, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = ToolContext { snap_to_pixel: true, snap_to_last_location: true, snapping_tolerance: 10.0, ..cx(&d, &s, &p) };
+    let moved = |to: (f64, f64), m: Mods| {
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0).with_mods(m));
+        let a = t.pointer(&c, &ev(PointerKind::Drag, to.0, to.1).with_mods(m));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        let labels: Vec<String> =
+            t.overlays(&c).into_iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text) } else { None }).collect();
+        (Vec2::new(v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap()), labels)
+    };
+    // By (6, 5) the top-left (106.3, 105.4) rounds to (106, 105).
+    let (m, labels) = moved((156.0, 155.0), Mods::default());
+    assert!(moved_by(m, (5.7, 4.6)), "{m:?}");
+    assert!(labels.is_empty(), "{labels:?}");
+    let (m, labels) = moved((157.0, 150.0), Mods { shift: true, ..Mods::default() });
+    assert!(moved_by(m, (6.7, 0.0)), "{m:?}: a Shift move");
+    assert!(labels.is_empty(), "{labels:?}");
+}
+
 /// A move shows the filled arrow, hollow while it snaps (here B's left side onto A's right
 /// one); Alt, which leaves a copy behind, the double arrowhead.
 #[test]
