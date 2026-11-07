@@ -666,25 +666,26 @@ fn a_leading_tab_takes_its_width_in_the_line_and_the_justification() {
 
 /// Right-aligned area type with tabs: the text before the last tab sits at its stops, measured from
 /// the frame's left edge, and the text after the last tab against the right edge, as Illustrator's
-/// own layout in a user's `.ai` (used locally, not committed) sets a price list: "Name<tab>950
-/// Ft<tab>1 750 Ft" with a right stop at 269.29 and a left one at 272.13 puts the name at 0, the
-/// first price ending at 269.29 and the second ending on the edge.
+/// own layout in a user's `.ai` (used locally, not committed) sets a list of an item and two
+/// prices: with a right stop at 269.29 and a left one at 272.13, the item starts at 0, the first
+/// price ends at 269.29 and the second ends on the edge.
 #[test]
 fn right_aligned_area_type_sets_the_text_after_its_last_tab_against_the_edge() {
     use vectorcraft_doc::{TabAlign, TabStop};
     let stop = |position: f64, align: TabAlign| TabStop { position, align, leader: String::new(), align_on: '.' };
     let frame = Rect::new(0.0, 0.0, 336.0, 100.0);
-    let mut t = area("Name\t950 Ft\t1 750 Ft", style(13.0), frame, Justify::Right);
+    let mut t = area("Item\t12.50\t24.00", style(13.0), frame, Justify::Right);
     t.para.tabs = vec![stop(269.29, TabAlign::Right), stop(272.13, TabAlign::Left)];
     let lay = layout(db(), &t);
     let glyph = |byte: usize| lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
     let end = |byte: usize| glyph(byte).origin.x + glyph(byte).advance;
-    assert!(glyph(0).origin.x.abs() < 1e-6, "the name starts at the left edge: {}", glyph(0).origin.x);
-    assert!((end(10) - 269.29).abs() < 1e-6, "the first price ends on its right stop: {}", end(10));
+    assert!(glyph(0).origin.x.abs() < 1e-6, "the item starts at the left edge: {}", glyph(0).origin.x);
+    let first_price_end = "Item\t12.50".len() - 1;
+    assert!((end(first_price_end) - 269.29).abs() < 1e-6, "the first price ends on its right stop: {}", end(first_price_end));
     let last = t.plain_text().len() - 1;
     assert!((end(last) - 336.0).abs() < 1e-6, "the last price ends on the edge: {}", end(last));
     // One tab: the text after it is against the edge, whatever its stop.
-    let mut one = area("Cseles Spritz\t2 350 Ft", style(13.0), frame, Justify::Right);
+    let mut one = area("Another item\t8.00", style(13.0), frame, Justify::Right);
     one.para.tabs = t.para.tabs.clone();
     let lay = layout(db(), &one);
     let first = lay.glyphs.first().unwrap();
@@ -695,8 +696,8 @@ fn right_aligned_area_type_sets_the_text_after_its_last_tab_against_the_edge() {
         first.origin.x,
         last.origin.x + last.advance
     );
-    // A tab ending the line (a heading "Sör<tab>" in the user's file): the text before it at the
-    // left edge, the tab to the right edge.
+    // A tab ending the line (a heading in the user's file): the text before it at the left edge,
+    // the tab to the right edge.
     let lay = layout(db(), &area("Heading\t\nNext", style(13.0), frame, Justify::Right));
     assert!(lay.glyphs.first().unwrap().origin.x.abs() < 1e-6, "{}", lay.glyphs.first().unwrap().origin.x);
     let tab = lay.glyphs.iter().find(|g| g.byte == 7).unwrap();
