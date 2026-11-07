@@ -277,6 +277,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
             ("pl", "Polish"),
             ("cs", "Czech"),
             ("ru", "Russian"),
+            ("bg", "Bulgarian"),
             ("sr-Cyrl", "Serbian: Cyrillic"),
             ("sr-Latn", "Serbian: Latin"),
             ("hr", "Croatian"),
@@ -293,6 +294,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
             ("kn", "Kannada"),
             ("ml", "Malayalam"),
             ("or", "Odia"),
+            ("as", "Assamese"),
+            ("sa", "Sanskrit"),
             ("ur", "Urdu")
         ])
     ),
@@ -517,6 +520,50 @@ fn in_range(key: &str, x: Option<f64>, min: f64, max: f64) -> std::result::Resul
     }
 }
 
+/// A check of a folder path: `Err` says why the folder can't be the preference's value.
+pub type FolderCheck = fn(&str) -> std::result::Result<(), String>;
+
+/// The check a folder preference with a Choose… button gives a folder before it becomes the
+/// preference's value: Data Recovery keeps its copies in its folder, and the Additional Plug-ins
+/// Folder is read for plug-ins. `None` for any other preference.
+pub fn folder_check(key: &str) -> Option<FolderCheck> {
+    match key {
+        "recoveryFolder" => Some(writable_folder),
+        "pluginsFolder" => Some(plugins_folder),
+        _ => None,
+    }
+}
+
+/// `Ok` when `path` is a folder whose contents can be listed, as the plug-ins in it are found by
+/// listing it. A folder outside the automation roots in force is refused before it is looked at.
+fn plugins_folder(path: &str) -> std::result::Result<(), String> {
+    crate::file_access::check_read(path)?;
+    let dir = std::path::Path::new(path);
+    if !dir.is_dir() {
+        return Err(format!("{path} is not a folder"));
+    }
+    std::fs::read_dir(dir).map(drop).map_err(|e| format!("Plug-ins can't be loaded from {path}: {e}"))
+}
+
+/// `Ok` when `path` is a folder that can be listed and that a folder can be created in, as the
+/// recovery store lists its folders there and makes its own: the folder is listed, and an empty
+/// folder is made there and removed. A folder that can't be removed again is an error too. A
+/// folder outside the automation roots in force is refused before it is looked at.
+fn writable_folder(path: &str) -> std::result::Result<(), String> {
+    crate::file_access::check_write(path)?;
+    crate::file_access::check_read(path)?;
+    let dir = std::path::Path::new(path);
+    if !dir.is_dir() {
+        return Err(format!("{path} is not a folder"));
+    }
+    let refused = |e: std::io::Error| format!("Data Recovery can't keep copies in {path}: {e}");
+    std::fs::read_dir(dir).map_err(refused)?;
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |t| t.as_nanos());
+    let check = dir.join(format!(".vectorcraft-write-check-{}-{nanos}", std::process::id()));
+    std::fs::create_dir(&check).map_err(refused)?;
+    std::fs::remove_dir(&check).map_err(refused)
+}
+
 impl Prefs {
     pub fn to_json(&self) -> Value {
         serde_json::to_value(self).unwrap_or(Value::Null)
@@ -563,6 +610,25 @@ impl Prefs {
             }
         }
         refused
+    }
+
+    /// The [`folder_check`] of each folder preference in `values`. An empty value (the default
+    /// folder) and a folder the preference already holds are not checked. The web has no folders to
+    /// check.
+    fn check_folders(&self, values: &Map<String, Value>) -> std::result::Result<(), String> {
+        if cfg!(target_arch = "wasm32") {
+            return Ok(());
+        }
+        let saved = self.to_json();
+        for (key, v) in values {
+            let (Some(check), Some(path)) = (folder_check(key), v.as_str()) else { continue };
+            let path = path.trim();
+            if path.is_empty() || saved[key.as_str()].as_str().is_some_and(|s| s.trim() == path) {
+                continue;
+            }
+            check(path)?;
+        }
+        Ok(())
     }
 
     /// Values of one category (`None` = all) reset to defaults.
@@ -666,7 +732,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Preference",
             [],
             None,
-            "{key, value} or {values: {key: value, …}} set preferences (validated; see prefs.list; lengths in pt or strings with a unit; unitsGeneral also sets the active document's units, one undo step; the eyedropper group takes a partial object, as eyedropper.setOptions)",
+            "{key, value} or {values: {key: value, …}} set preferences (validated; see prefs.list; lengths in pt or strings with a unit; unitsGeneral also sets the active document's units, one undo step; the eyedropper group takes a partial object, as eyedropper.setOptions; a new recoveryFolder must be a folder that can be listed and written in, and a new pluginsFolder a folder that can be listed: otherwise an error, and nothing changes; an empty value is not checked)",
             always,
             set
         ),
@@ -697,6 +763,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(e) = s.prefs.keep_folders(&mut next).into_iter().next() {
         return Err(EngineError::Other(e));
     }
+    s.prefs.check_folders(&values).map_err(EngineError::Other)?;
     s.apply_prefs(next);
     // Units ▸ General is also the open document's units (as Document Setup sets them).
     if values.contains_key("unitsGeneral") && s.active().is_some() {
