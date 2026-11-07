@@ -466,6 +466,23 @@ mod tests {
     }
 
     #[test]
+    fn a_path_that_turns_back_past_its_end_converted_to_straight_lines_keeps_its_tip() {
+        // A line to (100, 0), a smooth 0.2 pt U-turn and a line back to (50, 0.2): every point is
+        // within 0.4 pt of the line through the ends, but the tip is 50 pt past the end.
+        let k = 0.2 * 2.0 / 3.0;
+        let (a, b) = (Point::new(100.0, 0.0), Point::new(100.0, 0.2));
+        let anchors = vec![
+            Anchor::corner(Point::new(0.0, 0.0)),
+            Anchor::with_handles(a, a, Point::new(100.0 + k, 0.0)),
+            Anchor::with_handles(b, Point::new(100.0 + k, 0.2), b),
+            Anchor::corner(Point::new(50.0, 0.2)),
+        ];
+        let path = PathData::single(SubPath::new(anchors, false));
+        let out = crate::simplify_with(&path, &crate::SimplifyOptions { tolerance: 1.0, straight_lines: true, ..Default::default() });
+        assert_within(&cubics(&path), &cubics(&out), 1.0, "a U-turn past the end");
+    }
+
+    #[test]
     fn long_and_short_segments_stay_within_the_tolerance() {
         for (r, tol) in [(50_000.0, 2.0), (50_000.0, 1.0 / 32.0), (8_000.0, 0.01), (500.0, 0.5)] {
             let mut anchors = Vec::new();

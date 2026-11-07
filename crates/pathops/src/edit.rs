@@ -476,7 +476,8 @@ fn with_handle(a: Anchor, out: bool, h: Point) -> Anchor {
     Anchor { p: a.p, h_in, h_out, kind }
 }
 
-/// Ramer–Douglas–Peucker polyline reduction.
+/// Ramer–Douglas–Peucker polyline reduction. Each point dropped is within `tol` of the line segment
+/// that replaces it: a point beyond either end of the segment is measured to that end.
 fn rdp(pts: &[Point], tol: f64) -> Vec<Point> {
     if pts.len() < 3 {
         return pts.to_vec();
@@ -498,10 +499,10 @@ fn rdp(pts: &[Point], tol: f64) -> Vec<Point> {
         };
         let (pa, pb) = (pts[a], pts[b]);
         let chord = pb - pa;
-        let len = chord.hypot();
+        let len2 = chord.hypot2();
         let mut best = (0.0, a);
         for (i, &p) in pts.iter().enumerate().take(b).skip(a + 1) {
-            let d = if len < 1e-12 { p.distance(pa) } else { (p - pa).cross(chord).abs() / len };
+            let d = if len2 < 1e-24 { p.distance(pa) } else { p.distance(pa + chord * ((p - pa).dot(chord) / len2).clamp(0.0, 1.0)) };
             if d > best.0 {
                 best = (d, i);
             }
