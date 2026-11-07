@@ -5809,7 +5809,7 @@ fn a_path_with_zig_zag_comes_in_as_itself_where_its_look_has_that_outline() {
         let start = square.subpaths[0].anchors[0].p;
         Point::new(p.x - start.x + 20.0, start.y - p.y + 20.0)
     };
-    let outline = vectorcraft_effects::apply_geometry(&[zig], &square, square.bounds().unwrap());
+    let outline = vectorcraft_effects::apply_geometry(std::slice::from_ref(&zig), &square, square.bounds().unwrap());
     // The look: the outline the effect draws, as straight segments.
     let ops = |shift: f64| -> String {
         let mut out = String::new();
@@ -5838,6 +5838,31 @@ fn a_path_with_zig_zag_comes_in_as_itself_where_its_look_has_that_outline() {
     let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(1.0)))));
     assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
     assert!(matches!(art(&r.doc)[0].kind, NodeKind::Group { .. }));
+    // An open path (filled without closing it, `F`): its look's outline matches, and a look whose
+    // last point lies 3 pt away from where the effect ends it keeps the drawn look.
+    let open_path = "20 20 m\n60 20 L\n60 50 L\n";
+    let plain = read_ok(&layer(&format!("{RED}{open_path}F\n")));
+    let open = art(&plain.doc)[0].path_data().unwrap().clone();
+    assert!(!open.subpaths[0].closed);
+    let start = open.subpaths[0].anchors[0].p;
+    let outline = vectorcraft_effects::apply_geometry(std::slice::from_ref(&zig), &open, open.bounds().unwrap());
+    let ops = |last_shift: f64| -> String {
+        let mut out = String::new();
+        for sp in &outline.subpaths {
+            for (i, a) in sp.anchors.iter().enumerate() {
+                let shift = if i + 1 == sp.anchors.len() { last_shift } else { 0.0 };
+                let p = Point::new(a.p.x - start.x + 20.0 + shift, start.y - a.p.y + 20.0);
+                out.push_str(&format!("{:.4} {:.4} {}\n", p.x, p.y, if i == 0 { "m" } else { "L" }));
+            }
+        }
+        out
+    };
+    let hidden_open = open_path.replace('\n', "\n%_");
+    let object = |look: &str| format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{look}F\nU\n%_{hidden_open}F\n1 (Bent) XW\n");
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(0.0)))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(3.0)))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
 /// The gradient `G`, white to black, defined for a document.

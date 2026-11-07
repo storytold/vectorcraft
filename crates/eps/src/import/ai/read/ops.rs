@@ -1164,10 +1164,12 @@ fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bo
         }
         (!over && !out.is_empty()).then_some(out)
     }
-    /// Does every end of segments `a` lie within the tolerance of segments `b`?
+    /// Does every end of segments `a` lie within the tolerance of segments `b`? Both ends: the last
+    /// point of an open outline starts no segment.
     fn near(a: &[kurbo::Line], b: &[kurbo::Line]) -> bool {
         use kurbo::ParamCurveNearest;
-        a.iter().all(|s| b.iter().any(|t| t.nearest(s.p0, 1e-6).distance_sq <= OUTLINE_TOLERANCE * OUTLINE_TOLERANCE))
+        let close = |p: kurbo::Point| b.iter().any(|t| t.nearest(p, 1e-6).distance_sq <= OUTLINE_TOLERANCE * OUTLINE_TOLERANCE);
+        a.iter().all(|s| close(s.p0) && close(s.p1))
     }
     let (mut ours, mut theirs) = (vec![], vec![]);
     if !matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) || !leaves(object, &mut ours, 0) || !leaves(look, &mut theirs, 0) {
