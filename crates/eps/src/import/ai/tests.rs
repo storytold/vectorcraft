@@ -5277,6 +5277,76 @@ fn an_object_with_a_style_this_reads_comes_in_as_itself() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// An art style named `name`: a blue fill under a red 2 pt stroke written as a Stroke Offset filter
+/// whose `StrokeOffsetInside` entry is `inside` (`None`: left out).
+fn offset_stroke_style(name: &str, inside: Option<u8>) -> String {
+    let switch = inside.map(|v| format!("{v} /Bool (StrokeOffsetInside) ,\n")).unwrap_or_default();
+    format!(
+        "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Adobe Stroke Offset) 1 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n{switch}(Side) /String (DisplayString) ,\n\
+         /StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n"
+    )
+}
+
+#[test]
+fn a_stroke_offset_filter_is_a_stroke_aligned_inside_or_outside() {
+    // GUARDS: a style's stroke aligned inside or outside (Stroke panel › Align Stroke) left the object as its drawn look.
+    use vectorcraft_doc::StrokeAlign;
+    for (inside, align) in [(Some(1), Some(StrokeAlign::Inside)), (Some(0), Some(StrokeAlign::Outside)), (None, None)] {
+        let r = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{}", offset_stroke_style("Edge", inside), layer(&styled_square("Edge"))));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{a:#?}");
+        let stroke = a[0].appearance.stroke().map(|s| (s.align, s.width, s.paint.color()));
+        match align {
+            Some(align) => {
+                assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+                assert_eq!(stroke, Some((align, 2.0, Some(Color::rgb(1.0, 0.0, 0.0)))));
+                assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+                assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+            }
+            // Without the switch, which side it paints isn't known: the drawn look stays.
+            None => assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings),
+        }
+    }
+}
+
+#[test]
+fn a_gradient_stroke_paints_its_swatch_where_its_look_places_it() {
+    // GUARDS: an art style's stroke painting with a gradient left the object as its drawn look.
+    let defs =
+        "%AI5_BeginGradient: (B)\n(B) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 0 1 0 2 1 6 50 0 Bs\n%_0 0 0 0 1 1 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let style = offset_stroke_style("Edge", Some(1)).replace("0 1 1 0 1 0 0 XA\n", "1 (B) 0 0 0 1 1 0 0 1 0 0 Bg\n");
+    let rect = rect_path(0.0, 0.0, 10.0, 10.0);
+    let hidden_rect = rect.replace('\n', "\n%_");
+    // The look: the blue fill, then the stroke's outline filled with the gradient where the app placed it.
+    let square = |stroke: &str| format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{rect}f\n{stroke}U\n%_{hidden_rect}f\n1 (Edge) XW\n");
+    let placed = format!("{}Bb\n1 (B) 2 5 0 6 1 0 0 1 0 0 Bg\nf\n0 BB\n", rect_path(1.0, 1.0, 9.0, 9.0));
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{defs}{}", layer(&square(&placed))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    let stroke = a[0].appearance.stroke().unwrap();
+    assert_eq!((stroke.align, stroke.width), (vectorcraft_doc::StrokeAlign::Inside, 2.0));
+    match &stroke.paint {
+        Paint::Gradient(g) => {
+            assert_eq!(g.swatch.as_deref(), Some("B"));
+            assert_eq!(g.geom.map(|g| g.start.x), Some(2.0), "placed as the look has it");
+        }
+        p => panic!("{p:?}"),
+    }
+    assert_eq!(stroke.gradient_mode, vectorcraft_doc::StrokeGradientMode::Within);
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    // A look that doesn't paint the gradient: where it lies isn't known, so the drawn look stays.
+    let flat = format!("{RED}{}f\n", rect_path(1.0, 1.0, 9.0, 9.0));
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{defs}{}", layer(&square(&flat))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
 #[test]
 fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
     // GUARDS: objects in a symbol defined ahead of `%AI9_BeginArtStyles` (as Illustrator 24 writes
