@@ -1513,6 +1513,44 @@ fn crop_image_to_rect() {
     assert!(s.execute("object.cropImage", &json!({})).is_err());
 }
 
+/// 100 × 80 px of a busy pattern, opened as an image and scaled to 2 pt a pixel; returns the session, the image and its pixels.
+fn busy_image_at_two_points_a_pixel() -> (Session, NodeId, image::RgbaImage) {
+    let mut px = image::RgbaImage::new(100, 80);
+    for (x, y, p) in px.enumerate_pixels_mut() {
+        *p = image::Rgba([(x * 37 % 256) as u8, (y * 91 % 256) as u8, ((x ^ y) * 13 % 256) as u8, 255]);
+    }
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "art.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    (s, img, px)
+}
+
+#[test]
+fn crop_image_to_rect_copies_the_pixels_without_resampling() {
+    let (mut s, img, px) = busy_image_at_two_points_a_pixel();
+    // Pixels (10, 5) to (40, 25), as points: on the pixel grid, so the cut copies them as they are.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40]})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (30, 20), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 20.0) && close(b.y0, 10.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert_eq!(out, image::imageops::crop_imm(&px, 10, 5, 30, 20).to_image());
+}
+
+#[test]
+fn crop_image_to_a_rect_between_pixels_keeps_the_rect() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    // Pixels (10.5, 5.5) to (40.5, 25.5): off the pixel grid, so the cut is drawn and lands on the rect, not on whole pixels.
+    s.execute("object.cropImage", &json!({"rect": [21, 11, 60, 40]})).unwrap();
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+}
+
 /// Crop Image refuses a `rect` that is not an array, such as text, and the image stays as it was; a
 /// null `rect` crops to the artboard as a missing one does.
 #[test]
