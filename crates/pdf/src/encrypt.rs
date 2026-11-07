@@ -3,12 +3,13 @@
 //!
 //! The export writes a plain file; [`protect`] then encrypts every string and stream in it (the
 //! XMP metadata stays readable with Plaintext Metadata) and adds the encryption dictionary. The
-//! algorithm follows the compatibility ([`Encryption`]): 40-bit RC4 for PDF 1.3 (revision 2),
-//! 128-bit RC4 for PDF 1.4 (revision 3) and 1.5 (revision 4), 128-bit AES for 1.6 (revision 4) and
-//! 256-bit AES for 1.7 and 2.0 (revision 6). The random file key, salts and initialisation vectors
-//! come from a SHA-256 stream seeded with the process's random hash keys, the time and the file
-//! itself. A linearised file is encrypted between its two steps ([`protect_keeping`]): what
-//! encrypted it then encrypts the hint stream written last ([`Cipher`]).
+//! algorithm follows the compatibility ([`Encryption`]): 128-bit RC4 for PDF 1.4 (revision 3) and
+//! 1.5 (revision 4), 128-bit AES for 1.6 (revision 4) and 256-bit AES for 1.7 and 2.0 (revision 6).
+//! PDF 1.3 files are not password-protected: its 40-bit RC4 (revision 2) is only read. The random
+//! file key, salts and initialisation vectors come from a SHA-256 stream seeded with the process's
+//! random hash keys, the time and the file itself. A linearised file is encrypted between its two
+//! steps ([`protect_keeping`]): what encrypted it then encrypts the hint stream written last
+//! ([`Cipher`]).
 //!
 //! Reading: [`user_password`] turns the permissions (owner) password of a file encrypted with RC4
 //! or 128-bit AES into its open (user) password, so either password opens it.
@@ -117,10 +118,10 @@ impl SecuritySettings {
                 standard.label()
             )));
         }
-        // Revision 2 has one printing bit: it can't say "low resolution only".
-        if revision(c) == 2 && self.printing == Printing::Low && !self.permissions_password.is_empty() {
+        // Revision 2's 40-bit file key can be searched offline in minutes, whatever the passwords.
+        if revision(c) == 2 {
             return Err(PdfError::BadSetting(format!(
-                "{} can't limit printing to low resolution: choose PDF 1.4 or later, or allow high-resolution printing",
+                "{} encrypts with a 40-bit key, which can be searched in minutes: choose PDF 1.6 or later to password-protect the file",
                 c.label()
             )));
         }
@@ -156,12 +157,6 @@ pub(crate) fn warnings(set: &PdfSettings) -> Vec<String> {
     let mut out = vec![];
     if s.protected() && s.plaintext_metadata && revision(set.compatibility) <= 3 {
         out.push(format!("{} encryption covers the metadata too: plaintext metadata needs PDF 1.5 or later", set.compatibility.label()));
-    }
-    if s.protected() && set.compatibility == Compatibility::Pdf13 {
-        out.push(format!(
-            "{} encrypts with a 40-bit key, which can be searched in minutes: choose PDF 1.6 or later for stronger protection",
-            set.compatibility.label()
-        ));
     }
     out
 }
