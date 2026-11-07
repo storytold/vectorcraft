@@ -4911,6 +4911,43 @@ fn an_object_with_a_style_this_reads_comes_in_as_itself() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// An art style named `name`: a blue fill under a red 2 pt stroke written as a Stroke Offset filter
+/// whose `StrokeOffsetInside` entry is `inside` (`None`: left out).
+fn offset_stroke_style(name: &str, inside: Option<u8>) -> String {
+    let switch = inside.map(|v| format!("{v} /Bool (StrokeOffsetInside) ,\n")).unwrap_or_default();
+    format!(
+        "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Adobe Stroke Offset) 1 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n{switch}(Side) /String (DisplayString) ,\n\
+         /StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n"
+    )
+}
+
+#[test]
+fn a_stroke_offset_filter_is_a_stroke_aligned_inside_or_outside() {
+    // GUARDS: a style's stroke aligned inside or outside (Stroke panel › Align Stroke) left the object as its drawn look.
+    use vectorcraft_doc::StrokeAlign;
+    for (inside, align) in [(Some(1), Some(StrokeAlign::Inside)), (Some(0), Some(StrokeAlign::Outside)), (None, None)] {
+        let r = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{}", offset_stroke_style("Edge", inside), layer(&styled_square("Edge"))));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{a:#?}");
+        let stroke = a[0].appearance.stroke().map(|s| (s.align, s.width, s.paint.color()));
+        match align {
+            Some(align) => {
+                assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+                assert_eq!(stroke, Some((align, 2.0, Some(Color::rgb(1.0, 0.0, 0.0)))));
+                assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+                assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+            }
+            // Without the switch, which side it paints isn't known: the drawn look stays.
+            None => assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings),
+        }
+    }
+}
+
 /// An art style named `name` (its bytes as written) that fills with colour `xa` (`c m y k r g b Xa`).
 fn fill_style(name: &str, xa: &str) -> String {
     fill_style_with(name, xa, "")
