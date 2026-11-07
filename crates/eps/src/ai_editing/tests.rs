@@ -4573,6 +4573,48 @@ fn symbols_painting_patterns_through_brush_art_are_placed_as_art() {
     assert_eq!(instances(&back.layers[0]), 0, "the instance is its art");
 }
 
+/// A symbol first defined from the drawn look of a group with a style, through a member's scatter
+/// brush, still warns that its art's own effects are left out, and so does a later instance of it.
+#[test]
+fn a_symbol_defined_inside_a_drawn_look_warns_of_its_own_effects() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut shadowed = square(&mut doc, Rect::new(0.0, 0.0, 6.0, 6.0), Color::BLACK);
+    shadowed.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(black_fill(), Paint::None, 0.0) }.into();
+    doc.symbols.push(Symbol { dynamic: false, name: "Shadowed".into(), art: Arc::new(shadowed) });
+    let dot = square(&mut doc, Rect::new(0.0, 0.0, 6.0, 6.0), Color::BLACK);
+    let placed = instance(&mut doc, "Shadowed", Affine::translate((8.0, 0.0)));
+    let art = group(&mut doc, vec![dot, placed], false);
+    let brush = vectorcraft_brush::Brush {
+        name: "Scattered".into(),
+        kind: vectorcraft_brush::BrushKind::Scatter(vectorcraft_brush::Scatter {
+            art,
+            size: (100.0, 100.0),
+            spacing: (100.0, 100.0),
+            scatter: (0.0, 0.0),
+            rotation: (0.0, 0.0),
+            colorization: vectorcraft_brush::Colorization::None,
+            ..Default::default()
+        }),
+    };
+    vectorcraft_brush::store(&mut doc, &[brush]);
+    let mut line =
+        Node::path(doc.alloc_id(), shapes::line((10.0, 50.0).into(), (90.0, 50.0).into()), Appearance::basic(Paint::None, solid(Color::BLACK), 1.0));
+    line.appearance.stroke_mut().unwrap().brush = Some("Scattered".into());
+    let edge = square(&mut doc, Rect::new(10.0, 60.0, 30.0, 80.0), LEAF);
+    let mut styled = group(&mut doc, vec![line, edge], false);
+    styled.appearance = Appearance { effects: vec![drop_shadow()], ..Appearance::default() }.into();
+    put(&mut doc, named(styled, "Styled"));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    let p = shown(&out.program);
+    assert!(p.contains("%AI14_BeginSymbol") && p.contains("1 (Anon 1) XW"), "{p}");
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+
+    let later = instance(&mut doc, "Shadowed", Affine::translate((150.0, 20.0)));
+    put(&mut doc, later);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+}
+
 /// A symbol whose stroke is written as its outline (an outside stroke): a scaled instance, a scaled
 /// instance of a symbol holding it and a turned and mirrored instance are written as their art,
 /// which keeps the stroke the canvas draws; a moved instance stays an instance.
