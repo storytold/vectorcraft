@@ -155,14 +155,6 @@ pub(super) fn identity(name: &str, vertical: bool) -> Obj {
     d.insert(Key::name("CMapName"), Obj::name(name));
     d.insert(Key::name("CMapType"), Obj::Int(1));
     d.insert(Key::name("WMode"), Obj::Int(i64::from(vertical)));
-    d.insert(
-        Key::name("CIDSystemInfo"),
-        Obj::dict(Dict::from([
-            (Key::name("Registry"), Obj::string(b"Adobe".to_vec())),
-            (Key::name("Ordering"), Obj::string(b"Identity".to_vec())),
-            (Key::name("Supplement"), Obj::Int(0)),
-        ])),
-    );
     d.insert(Key::name(CODESPACE), Obj::array(vec![zero(), full()]));
     d.insert(Key::name(CIDS), Obj::array(vec![zero(), full(), Obj::Int(0), Obj::Int(0)]));
     Obj::dict(d)
