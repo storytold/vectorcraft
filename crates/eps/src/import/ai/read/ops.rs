@@ -5,8 +5,8 @@ use super::types::{
     line_width,
 };
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BlendMode, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, Graph, HashMap, HashSet, Instance,
-    Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, BrushesKept, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, Graph, HashMap,
+    HashSet, Instance, Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
 };
 
 impl<'a> Reader<'a> {
@@ -669,6 +669,19 @@ impl<'a> Reader<'a> {
         self.note_state();
     }
 
+    /// Brings [`Reader::brushes_kept`] up to date with the brushes and brush art read so far.
+    fn note_brushes_kept(&mut self) {
+        use super::super::brush;
+        let read = (self.brush_drafts.len(), self.brush_art_sections);
+        if self.brushes_kept.read != read {
+            self.brushes_kept = BrushesKept {
+                read,
+                kept: brush::kept(&self.brush_drafts, &self.brush_art),
+                bending: brush::bending_art(&self.brush_drafts, &self.brush_art),
+            };
+        }
+    }
+
     /// `n (style) XW` after an object: `1 (style)` after the object written on `%_` lines, its
     /// drawn look before it (all on `%_` lines inside another such object). Other markers end what
     /// follows an object.
@@ -705,6 +718,7 @@ impl<'a> Reader<'a> {
             return;
         }
         let space = self.space();
+        self.note_brushes_kept();
         let Some(f) = self.frames.last_mut() else { return };
         let n = f.children.len();
         let (Some(object), Some(look)) = (n.checked_sub(1).and_then(|i| f.children.get(i)), n.checked_sub(2).and_then(|i| f.children.get(i))) else {
@@ -730,6 +744,8 @@ impl<'a> Reader<'a> {
                     names: &self.global_names,
                     v7_patterns: &self.v7_patterns,
                     brushes: &self.brush_drafts,
+                    kept: &self.brushes_kept.kept,
+                    bending: &self.brushes_kept.bending,
                     space,
                 },
             )
@@ -874,6 +890,10 @@ struct StylePaints<'a> {
     v7_patterns: &'a HashSet<String>,
     /// The brushes the file defines, which a brushed stroke names.
     brushes: &'a [super::super::brush::BrushDraft],
+    /// Which of [`Self::brushes`] are kept as brushes ([`super::super::brush::kept`]).
+    kept: &'a [bool],
+    /// The art an Art brush draws as the file does ([`super::super::brush::bending_art`]).
+    bending: &'a HashSet<String>,
     space: Affine,
 }
 
@@ -1038,11 +1058,21 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                 }
             },
             StyleItem::Stroke { brush, .. } => {
-                // A brushed stroke draws as its look only with the brush the file defines (the
-                // first of its name, as the Brushes panel keeps it) at the object's settings.
+                // A brushed stroke draws as its look only with the brush the Brushes panel keeps
+                // under its name, at the object's settings, on a path, a compound path or type (an
+                // image draws no stroke). An Art brush is read on a path or a compound path with
+                // no effects.
                 if let Some((name, settings)) = brush {
-                    let draft = paints.brushes.iter().find(|d| &d.name == name)?;
-                    if !super::super::brush::draws_as(draft, settings) {
+                    let (draft, _) = paints.brushes.iter().zip(paints.kept).find(|(d, kept)| **kept && &d.name == name)?;
+                    if !super::super::brush::draws_as(draft, settings, paints.bending) {
+                        return None;
+                    }
+                    let art = matches!(settings, super::super::brush::PathBrush::Art);
+                    let on_a_path = matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
+                    if !on_a_path && (art || !slot) {
+                        return None;
+                    }
+                    if art && !st.effects.is_empty() {
                         return None;
                     }
                 }
@@ -1226,6 +1256,43 @@ mod tests {
 
     fn square(id: u64, fill: Paint) -> Arc<Node> {
         Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, Paint::None, 0.0)))
+    }
+
+    /// An image draws no stroke, so an image with a brush in its art style keeps its drawn look.
+    #[test]
+    fn an_image_with_a_brush_keeps_its_drawn_look() {
+        use super::super::super::brush::{Tool, parse_tool_object};
+        let tool = "Adobe Calligraphic Brush Tool"; // brand-ok: the filter's name in the files
+        let text = format!(
+            "%AI9_BeginArtStyles\n/KnownStyle :\n(Inked) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n({tool}) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+             /StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n\
+             6 /Real (Diameter) ,\n2 /Real (DiameterVariation) ,\n2 /Int (DiameterDependsOn) ,\n\
+             40 /Real (Roundness) ,\n10 /Real (RoundnessVariation) ,\n5 /Int (RoundnessDependsOn) ,\n\
+             30 /Real (Angle) ,\n180 /Real (AngleVariation) ,\n6 /Int (AngleDependsOn) ,\n0 /Int (AngleRelativeTo) ,\n\
+             /GObjRef : (N) ({tool}) /PluginObject ; (Brush) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+        );
+        let styles = crate::import::ai::style::art_styles(text.as_bytes());
+        let st = &styles["Inked"];
+        let brushes = [parse_tool_object(Tool::Calligraphic, "N", "1 4 8 30 50 -150 210 2 5 6 0").unwrap()];
+        let (gradients, patterns, names, v7_patterns, bending) =
+            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashSet::new());
+        let paints = StylePaints {
+            gradients: &gradients,
+            patterns: &patterns,
+            names: &names,
+            v7_patterns: &v7_patterns,
+            brushes: &brushes,
+            kept: &[true],
+            bending: &bending,
+            space: Affine::IDENTITY,
+        };
+        let look = Node::group(NodeId(1), vec![square(2, Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)))]);
+        assert!(styled(&square(3, Paint::None), &look, st, &paints).is_some(), "a path takes the style");
+        let image =
+            ImageObject { key: "a".into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+        assert!(styled(&Node::new(NodeId(4), NodeKind::Image(Box::new(image))), &look, st, &paints).is_none());
     }
 
     #[test]

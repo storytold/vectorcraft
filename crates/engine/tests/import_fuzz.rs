@@ -3587,6 +3587,15 @@ proptest! {
         }
     }
 
+    /// A `.ai` whose Art brushed path is damaged or hostile: the brush's object and art, the style's
+    /// entries and the path, cut short or edited, read and drawn.
+    #[test]
+    fn ai_art_brushed_paths_never_panic(cut in 0usize..1_600, edits in prop::collection::vec((0usize..1_600, prop::sample::select(vec!['0', '9', '-', '.', 'e', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', 'u', 'U', 'A', 'Z'])), 0..12)) {
+        let text = mutate_text(&art_brushed_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai Art brushed path", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// Brush objects of every kind with any parameters, the brush manager's order with any names,
     /// and brush art sections nested or cut short: read with the layers, or as a library without
     /// them, the brushes kept within their ranges.
@@ -3748,6 +3757,36 @@ fn the_objects_on_path_fuzz_data_opens_live() {
     let (doc, warnings, _) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
     let g = doc.layers.first().and_then(|l| l.children()).and_then(|c| c.first()).unwrap_or_else(|| panic!("{warnings:?}"));
     assert!(g.extras().objects_on_path.is_some(), "{g:?}");
+}
+
+/// Editing data with an Art brush, its art, and a path with its drawn look and the brush in its art
+/// style, as the format writes them.
+fn art_brushed_text() -> String {
+    use vectorcraft_testkit::ai;
+    let tool = "Adobe ArtOnPath Brush Tool";
+    let object = format!(
+        "%AI8_BeginPluginObject\n({tool})\n(R)\n(2 / A/ / / / / 0 0/ 5 0 0 0 /  1) -\n( 1 1 0 1 0 0 0 1 1 0 0 0 0 1) .\n%AI8_EndPluginObject\n"
+    );
+    let art = "%AI8_BeginBrushPattern\n(A)\n0 A\n0 g\n0 0 m\n40 0 L\n40 8 L\nf\n%AI8_EndBrushPattern\n";
+    let style = format!(
+        "%AI9_BeginArtStyles\n/KnownStyle :\n(S) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n({tool}) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+         0 /Bool (Proportional) ,\n0 /Bool (Segmented) ,\n1 /Real (Scaling) ,\n1 /Real (MinScaling) ,\n1 /Real (MaxScaling) ,\n1 /Int (Adjustment) ,\n1 /Bool (FoldAdjustment) ,\n1 /Int (Colorization) ,\n\
+         /StrokeStyle : 0 R\n0 0 0 1 K\n0 1 0 0 0 Xy\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n/GObjRef : (R) ({tool}) /PluginObject ; (Brush) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+    );
+    let path = "0 Ae\nu\n0 g\n10 10 m\n90 10 L\n90 30 L\nf\nU\n0 0 Xd\n6 () XW\n%_10 20 m\n%_90 20 L\n%_90 80 L\n%_n\n1 (S) XW\n";
+    ai::editing_data(100.0, 100.0, &format!("{object}{art}{style}{}", ai::layer("L", path)))
+}
+
+/// The data [`ai_art_brushed_paths_never_panic`] damages, as it is, opens with its path live and the
+/// brush on its stroke.
+#[test]
+fn the_art_brushed_fuzz_data_opens_live() {
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&art_brushed_text())].concat();
+    // Trusted: the empty page it is read beside isn't compared with its art.
+    let (doc, warnings, _) = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0);
+    let n = doc.layers.first().and_then(|l| l.children()).and_then(|c| c.first()).unwrap_or_else(|| panic!("{warnings:?}"));
+    assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some("R"), "{warnings:?} {n:?}");
 }
 
 /// The ids of the objects of an Objects on Path group in the fuzz cases.
