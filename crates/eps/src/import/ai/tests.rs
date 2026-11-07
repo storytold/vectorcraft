@@ -3381,6 +3381,106 @@ fn legacy_type_keeps_its_spacing_hanging_punctuation_and_hyphenation() {
     assert_eq!(texts[1].para_at(0), two);
 }
 
+/// `TV` (§15.3.4) sets the writing direction of point type, area type, type on a path and linked
+/// areas, and lasts into the next text object until it changes.
+#[test]
+fn legacy_type_keeps_its_writing_direction() {
+    let frame = "10 10 m\n110 10 L\n110 110 L\n10 110 L\nN";
+    let area = format!("1 To\n1 0 0 1 10 110 0 Tp\n{frame}\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(Area) Tx\nTO\n");
+    let on_path = "2 To\n1 0 0 1 0 0 0 Tp\n10 10 m\n110 10 L\nN\nTP\n(Path) Tx\nTO\n";
+    let linked = format!("1 To\n1 0 0 1 10 110 0 Tp\n{frame}\nTP\n1 0 0 1 200 110 0 Tp\n{frame}\nTP\n(Linked) Tx\nTO\n");
+    let art = format!("{}{area}{on_path}{linked}{}", point_type("1 TV", "Point"), point_type("0 TV", "Flat"));
+    let texts = legacy_texts(&art);
+    let vertical: Vec<bool> = texts.iter().map(|t| t.vertical).collect();
+    assert_eq!(vertical, [true, true, true, true, true, false]);
+    assert!(matches!(texts[1].kind, vectorcraft_doc::TextKind::Area { .. }));
+    assert!(matches!(texts[2].kind, vectorcraft_doc::TextKind::OnPath { .. }));
+    // Vertical point type runs down the canvas from `Tp`'s origin (10, 50), which opens at document
+    // (10, 50) on the 100 pt tall artboard, on the column's center line.
+    let long = &legacy_texts(&point_type("1 TV", "Point type"))[0];
+    let bounds = long.xf.transform_rect_bbox(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), long).bounds);
+    assert!(bounds.height() > bounds.width(), "{bounds:?}");
+    assert!(bounds.x0 < 10.0 && bounds.x1 > 10.0, "{bounds:?}");
+    assert!((bounds.y0 - 50.0).abs() < 1.0 && bounds.y1 > 60.0, "{bounds:?}");
+    // A text object keeps the direction in force at its first character, with a warning when a later
+    // character has another; the mode lasts into the next text object.
+    let changed = point_type("1 TV", "First").replace("TO\n", "0 TV\n(Second) Tx\nTO\n");
+    let r = legacy_read(&format!("{changed}{}", point_type("", "Next")));
+    let changed = art_texts(&r.doc);
+    assert!(changed[0].vertical);
+    assert_eq!(changed[0].plain_text(), "FirstSecond");
+    assert!(!changed[1].vertical);
+    assert_eq!(r.warnings, [DIRECTION_CHANGE_LEFT_OUT]);
+    // A direction that changes and changes back also warns.
+    let back = point_type("", "a").replace("TO\n", "1 TV\n(b) Tx\n0 TV\n(c) Tx\nTO\n");
+    assert_eq!(legacy_read(&back).warnings, [DIRECTION_CHANGE_LEFT_OUT]);
+    // A `TV` that no character follows does not warn, and an object with no characters opens no
+    // type, while its `TV` lasts into the next object.
+    let trailing = point_type("", "a").replace("TO\n", "1 TV\nTO\n");
+    assert!(legacy_read(&trailing).warnings.is_empty());
+    let empty = legacy_texts(&format!("0 To\n1 0 0 1 10 50 0 Tp\nTP\n1 TV\nTO\n{}", point_type("", "Next")));
+    assert_eq!((empty.len(), empty[0].vertical), (1, true));
+    // `TV` before `To` counts, and `TV` after the last character only reaches the next object.
+    let before = legacy_texts(&format!("1 TV\n{}", point_type("", "Hi")));
+    assert!(before[0].vertical);
+    let after = point_type("", "Hi").replace("TO\n", "1 TV\nTO\n");
+    let after = legacy_texts(&format!("{after}{}", point_type("", "Next")));
+    assert_eq!((after[0].vertical, after[1].vertical), (false, true));
+}
+
+/// The glyph origins of a legacy-format text object.
+fn legacy_origins(t: &vectorcraft_doc::TextObject) -> Vec<(f64, f64)> {
+    vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).glyphs.iter().map(|g| (g.origin.x, g.origin.y)).collect()
+}
+
+/// `Ty` (§15.3.4) marks the characters of a Kumi block in vertical and in horizontal type, `TY`
+/// marks them in horizontal type, and `Tv` keeps Roman characters upright in vertical type; `Tv`
+/// may come inside the text path. All three last into the next text object.
+#[test]
+fn legacy_type_keeps_kumi_blocks_and_upright_roman_characters() {
+    let runs = |art: &str| -> Vec<(String, bool, bool)> {
+        let texts = legacy_texts(art);
+        texts[0].runs.iter().map(|r| (r.text.clone(), r.style.tate_chu_yoko, r.style.standard_vertical_roman)).collect()
+    };
+    let kumi = |begin: &str, end: &str| point_type(&format!("(A) Tx\n{begin}\n(12) Tx\n{end}"), "B");
+    let marked = vec![("A".to_string(), false, false), ("12".to_string(), true, false), ("B".to_string(), false, false)];
+    assert_eq!(runs(&format!("1 TV\n{}", kumi("1 Ty", "0 Ty"))), marked);
+    assert_eq!(runs(&kumi("1 Ty", "0 Ty")), marked);
+    assert_eq!(runs(&kumi("1 TY", "0 TY")), marked);
+    assert!(!legacy_texts(&kumi("1 TY", "0 TY"))[0].vertical);
+    // `TY` records a block that the set text doesn't show: vertical type opens without it, and the
+    // block starts again in the next horizontal object.
+    let unmarked = vec![("A12B".to_string(), false, false)];
+    assert_eq!(runs(&format!("1 TV\n{}", kumi("1 TY", "0 TY"))), unmarked);
+    let recorded = legacy_texts(&format!("1 TV\n1 TY\n{}0 TV\n{}", point_type("", "A"), point_type("", "B")));
+    assert_eq!((recorded[0].runs[0].style.tate_chu_yoko, recorded[1].runs[0].style.tate_chu_yoko), (false, true));
+    let upright = point_type("(a) Tx\n1 Tv", "b");
+    assert_eq!(runs(&format!("1 TV\n{upright}")), [("a".to_string(), false, false), ("b".to_string(), false, true)]);
+    let in_path = point_type("", "c").replace("0 Tp\nTP", "0 Tp\n1 Tv\nTP");
+    assert_eq!(runs(&in_path), [("c".to_string(), false, true)]);
+    assert_eq!(runs(&point_type("1 Tv\n(a) Tx\n0 Tv", "b")), [("a".to_string(), false, true), ("b".to_string(), false, false)]);
+    // Each one lasts into the next text object.
+    for (op, kept) in [("Ty", (true, false)), ("TY", (true, false)), ("Tv", (false, true))] {
+        let texts = legacy_texts(&format!("{}{}", point_type(&format!("1 {op}"), "a"), point_type("", "b")));
+        let st = &texts[1].runs[0].style;
+        assert_eq!((st.tate_chu_yoko, st.standard_vertical_roman), kept, "{op}");
+    }
+    // Horizontal type keeps the mark and doesn't move the characters.
+    let plain = &legacy_texts(&point_type("", "A12B"))[0];
+    let in_horizontal = &legacy_texts(&kumi("1 Ty", "0 Ty"))[0];
+    assert_eq!(legacy_origins(in_horizontal), legacy_origins(plain));
+    // Two blocks with nothing between them open as one block.
+    let vertical = |attrs: &str, text: &str| legacy_texts(&format!("1 TV\n{}", point_type(attrs, text))).remove(0);
+    let two = vertical("1 Ty\n(AB) Tx\n0 Ty\n1 Ty", "CD");
+    let one = vertical("1 Ty", "ABCD");
+    assert_eq!(legacy_origins(&two), legacy_origins(&one));
+    // Two or three digits that no block marks are set across the column by the layout's own rule.
+    let digits = vertical("", "12");
+    assert!(!digits.runs[0].style.tate_chu_yoko);
+    assert_eq!(legacy_origins(&digits), legacy_origins(&vertical("1 Ty", "12")));
+    assert_ne!(legacy_origins(&vertical("", "AB")), legacy_origins(&vertical("1 Ty", "AB")));
+}
+
 /// A legacy attribute whose operands are missing, are not numbers, or are flags other than 0 and
 /// 1 leaves the attribute as it was, and operands are read by their place.
 #[test]
@@ -3396,6 +3496,15 @@ fn legacy_type_attributes_with_bad_operands_stay_as_they_were() {
     assert_eq!(p.justify, vectorcraft_doc::Justify::Right);
     assert_eq!((p.first_line_indent, p.left_indent, p.right_indent), (5.0, 6.0, 7.0));
     assert_eq!(texts[0].runs[0].style.kerning, Some(0.0), "kerning stays off");
+    let texts = legacy_texts(&point_type("1 TV\n1 Tv\n1 Ty\n2 TV\n/x TV\nTV\n-1 Tv\n(x) Tv\n0.5 Ty\n2 TY", "Hi"));
+    let st = &texts[0].runs[0].style;
+    assert!(texts[0].vertical && st.standard_vertical_roman && st.tate_chu_yoko);
+    let texts = legacy_texts(&point_type("2 TV\n-1 TV\n2 Tv\n-1 Tv\n0.5 Ty\n-1 Ty\n2 TY\n-1 TY\n1 TY\n2 TY\n0.5 TY", "Hi"));
+    let st = &texts[0].runs[0].style;
+    assert!(!texts[0].vertical && !st.standard_vertical_roman);
+    assert!(st.tate_chu_yoko, "`TY` stays on");
+    let texts = legacy_texts(&point_type("2 TV\n-1 TV\n2 Tv\n-1 Tv\n0.5 Ty\n-1 Ty\n2 TY\n-1 TY", "Hi"));
+    assert!(!texts[0].runs[0].style.tate_chu_yoko);
     // A scale or leading pair with a bad operand leaves both as they were; one operand is the
     // horizontal scale (or the leading) of the format before version 7.
     let texts = legacy_texts(&point_type("50 80 Tz\n14 3 Tl\n/x 120 Tz\n/x 20 Tl", "Hi"));
@@ -3843,6 +3952,7 @@ fn legacy_linked_area_frames_cap_their_copied_tab_stops() {
 
 /// The warning when linked areas are left out.
 const LINKED_AREAS_LEFT_OUT: &str = "linked type areas past VectorCraft's limits were left out";
+const DIRECTION_CHANGE_LEFT_OUT: &str = "type that changes writing direction inside a text object opens in the direction of its first character";
 
 /// The frames of linked areas times the characters of their story are kept to the reader's
 /// allowance of characters: a story of more than half of it gets one frame, and of a third, two.

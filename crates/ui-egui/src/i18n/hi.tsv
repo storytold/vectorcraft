@@ -7554,6 +7554,7 @@
 @msg	type dimension must be finite	प्रकार आयाम को परिमित होना चाहिए
 @msg	type must be static or dynamic, not {v}	type: प्रकार स्थिर या गतिशील होना चाहिए, न कि {v}
 @msg	type objects can't be isolated	प्रकार ऑब्जेक्ट पृथक नहीं किया जा सकता है
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	टेक्स्ट ऑब्जेक्ट के भीतर लेखन दिशा बदलने वाला टेक्स्ट अपने पहले वर्ण की दिशा में खुलता है
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	प्रकार जुड़े क्षेत्रों में एक मास्क के रूप में इस्तेमाल किया, रैपराउंड टेक्स्ट या एक मिश्रित पाथ क्लिप नहीं करता है
 @msg	Unembedded to {_1}	Unembed to {_1}
 @msg	unexpected host trap	अप्रत्याशित मेजबान जाल
