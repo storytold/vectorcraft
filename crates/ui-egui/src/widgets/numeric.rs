@@ -644,9 +644,11 @@ pub fn spin_field_stops_named(
 ) -> Option<f64> {
     let label = take_previous_label(ui);
     let blank_from = BLANK_WEIGHT_STEPS_FROM;
+    // A blank field steps in points from `blank_from`, whatever the unit's preset ladder (#5349).
+    let stops = if value.is_none() { &BLANK_WEIGHT_STOPS[..] } else { presets };
     let fmt = |v: f64| unit.format(v);
-    spin_generic(ui, label, value, Some(blank_from), None, None, None, width, step, min, presets, presets, &fmt, &mut |ui, fw, label| {
-        unit_field_from(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, presets, false, Some(blank_from), "")
+    spin_generic(ui, label, value, Some(blank_from), None, None, None, width, step, min, presets, stops, &fmt, &mut |ui, fw, label| {
+        unit_field_from(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, stops, false, Some(blank_from), "")
     })
     .and_then(SpinPick::value)
 }
@@ -654,6 +656,10 @@ pub fn spin_field_stops_named(
 /// Where a blank Stroke Weight (the selected objects differ) steps from, in points: up goes to
 /// 0.5 pt and down to 0 pt. This is the behaviour #5349 asks for.
 const BLANK_WEIGHT_STEPS_FROM: f64 = 0.25;
+
+/// The stops a blank Stroke Weight steps through, in points, so that up gives 0.5 pt in every
+/// Units > Stroke, not the first preset of the unit's own ladder above 0.25 pt.
+const BLANK_WEIGHT_STOPS: [f64; 2] = [BLANK_WEIGHT_STEPS_FROM, 0.5];
 
 /// A distance field with spinner arrows kept within `bounds` (points), as the Drop Shadow and
 /// Outer Glow dialogs show their offsets and blur: the spinner steps one `unit` at a time

@@ -245,15 +245,17 @@ fn a_spinner_step_from_a_weight_shown_as_a_preset_moves_past_it() {
 }
 
 /// With objects of different weights selected the Weight field is blank, and its spinner steps
-/// from 0.25 pt as Illustrator does: up gives 0.5 pt and down gives 0 pt, for all of them.
+/// from 0.25 pt (#5349): up gives 0.5 pt and down gives 0 pt, for all of them, whatever the
+/// Units > Stroke.
 #[test]
 fn the_spinner_of_a_blank_weight_steps_from_a_quarter_point() {
     use super::tests_appearance::frame_raw;
 
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    for (up, after) in [(true, 0.5), (false, 0.0)] {
+    for (unit, up, after) in [("points", true, 0.5), ("points", false, 0.0), ("millimeters", true, 0.5), ("millimeters", false, 0.0)] {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
         let mut app = app_with_rect();
+        app.session.prefs.units_stroke = unit.into();
         let a = app.session.active().unwrap().selection.objects[0];
         let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap();
         run(&mut app, "stroke.set", json!({"ids": [b], "weight": 3}));
@@ -268,7 +270,7 @@ fn the_spinner_of_a_blank_weight_steps_from_a_quarter_point() {
         }
         for id in [a.0, b] {
             run(&mut app, "select.set", json!({ "ids": [id] }));
-            assert_eq!(app.session.shown_stroke().unwrap().width, after, "object {id}, up: {up}");
+            assert_eq!(app.session.shown_stroke().unwrap().width, after, "object {id}, up: {up}, {unit}");
         }
     }
 }
@@ -276,9 +278,11 @@ fn the_spinner_of_a_blank_weight_steps_from_a_quarter_point() {
 /// ↑/↓ in the focused blank Weight field step from 0.25 pt too, for every selected object.
 #[test]
 fn the_arrow_keys_in_a_blank_weight_step_from_a_quarter_point() {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
     for (key, after) in [(egui::Key::ArrowUp, 0.5), (egui::Key::ArrowDown, 0.0)] {
+        // A new context each time: the field keeps its text in the context, and the 0.5 pt left by ArrowUp
+        // would make the blank field of the next run start from 0.5 pt.
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
         let mut app = app_with_rect();
         let a = app.session.active().unwrap().selection.objects[0];
         let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap();
