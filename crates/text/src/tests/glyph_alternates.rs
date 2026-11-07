@@ -133,45 +133,111 @@ fn runs_that_differ_only_in_features_shape_as_one_word() {
     assert_eq!(a, b, "the same places");
 }
 
-/// The Kufi Murabba PIIIX of the font's author, when it is installed: the middle letter of a word
-/// takes each of its `salt` alternates and every other letter keeps the glyph it has without one.
+/// Where the owner's Kufi Murabba PIIIX is installed.
+const KUFI_FILE: &str = "Library/Fonts/KufiMurabbaPIIIX-Regular.ttf";
+
+/// The Kufi Murabba PIIIX of the font's author in a font database of its own, `None` when it is not
+/// installed (the test then has nothing to read). When the file is there, a face that does not
+/// load is a failure, never a skip.
+fn kufi() -> Option<(FontDb, std::sync::Arc<FontFace>)> {
+    let path = std::path::Path::new(&std::env::var_os("HOME")?).join(KUFI_FILE);
+    if !path.exists() {
+        eprintln!("skipped: {} is not installed", path.display());
+        return None;
+    }
+    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{} exists but cannot be read: {e}", path.display()));
+    let db = FontDb::with_font_dirs(vec![]);
+    let added = db.add_font(bytes);
+    assert!(added > 0, "{} exists but no face of it loaded", path.display());
+    let face = db.face("Kufi Murabba PIIIX", "Regular").expect("a face");
+    assert_eq!((face.family.as_str(), face.style.as_str()), ("Kufi Murabba PIIIX", "Regular"), "the installed font's face, not a fallback");
+    Some((db, face))
+}
+
+/// The word al-Khwarizmi: alef, lam, khah, waw, alef, reh, zain, meem, farsi yeh. The lam, khah and
+/// waw join (initial, medial, final); the letters around them do not join forward.
+const KHWARIZMI: &str = "الخوارزمی";
+/// The medial khah, the middle letter of the joined lam-khah-waw.
+const KHAH: usize = 2;
+
+/// The word with `features` on the character `at` only, shaped as one piece (the runs differ only
+/// in features), in reading order of the characters.
+fn khwarizmi(db: &FontDb, family: &str, at: usize, features: &[&str]) -> Vec<PositionedGlyph> {
+    let letters: Vec<char> = KHWARIZMI.chars().collect();
+    let part = |r: std::ops::Range<usize>| -> String { letters[r].iter().collect() };
+    let (before, middle, after) = (part(0..at), part(at..at + 1), part(at + 1..letters.len()));
+    set(db, family, &[(&before, &[]), (&middle, features), (&after, &[])])
+}
+
+/// The gap between the drawn outlines of the letters that join (the lam, khah and waw), along the
+/// line: 0 when the ink of one reaches the ink of the next. Unlike [`gaps`], which only checks that
+/// the pen advances by each glyph's advance, this reads the glyphs drawn.
+fn ink_gaps(glyphs: &[PositionedGlyph]) -> Vec<f64> {
+    use kurbo::Shape;
+    let mut spans: Vec<(f64, f64)> = glyphs[KHAH - 1..=KHAH + 1].iter().map(|g| (g.outline.bounding_box().x0, g.outline.bounding_box().x1)).collect();
+    spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+    spans.windows(2).map(|w| w[1].0 - w[0].1).collect()
+}
+
+/// One line of what the shaper made, for a failure message and `--nocapture`.
+fn describe(glyphs: &[PositionedGlyph]) -> String {
+    glyphs.iter().map(|g| format!("{}@{:.1}+{:.1}", g.gid, g.origin.x, g.advance)).collect::<Vec<_>>().join(" ")
+}
+
+/// The Kufi Murabba PIIIX of the font's author, when it is installed: the medial khah of a word
+/// takes each of its `salt` alternates, every other letter keeps the glyph it has without one and
+/// the letters still touch.
 #[test]
 fn kufi_murabba_alternates_keep_the_word_joined() {
-    let Some(path) =
-        std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join("Library/Fonts/KufiMurabbaPIIIX-Regular.ttf")).filter(|p| p.exists())
-    else {
-        return;
-    };
-    let Ok(bytes) = std::fs::read(path) else { return };
-    let db = FontDb::with_font_dirs(vec![]);
-    db.add_font(bytes);
-    let Some(face) = db.face("Kufi Murabba PIIIX", "Regular") else { return };
+    let Some((db, face)) = kufi() else { return };
     let family = face.family.clone();
-    let letters: Vec<char> = "الخوارزمی".chars().collect();
-    let text = |pieces: &[(String, Vec<&str>)]| {
-        let pieces: Vec<(&str, &[&str])> = pieces.iter().map(|(t, f)| (t.as_str(), f.as_slice())).collect();
-        set(&db, &family, &pieces)
-    };
-    let plain = text(&[(letters.iter().collect(), vec![])]);
-    assert_eq!(plain.len(), letters.len(), "one glyph for each letter");
+    let plain = khwarizmi(&db, &family, KHAH, &[]);
+    assert_eq!(plain.len(), KHWARIZMI.chars().count(), "one glyph for each letter: {}", describe(&plain));
     assert!(gaps(&plain).iter().all(|gap| gap.abs() < 1e-3), "the word joins without a gap: {:?}", gaps(&plain));
-    // The medial khah.
-    let at = 2;
-    let default = plain[at].gid;
+    assert!(ink_gaps(&plain).iter().all(|gap| gap.abs() < 1e-3), "the drawn letters touch: {:?}", ink_gaps(&plain));
+    let default = plain[KHAH].gid;
+    assert_eq!(face.glyph_name(default).as_deref(), Some("khah.medi"), "the khah in the middle of the word takes its medial form");
     let salt =
         face.substitutions(default).into_iter().find(|s| &s.feature == b"salt" && s.glyphs.len() >= 2).expect("the medial khah has salt alternates");
     for (i, alternate) in salt.glyphs.iter().enumerate() {
         let value = format!("salt={}", i + 1);
-        let before: String = letters[..at].iter().collect();
-        let after: String = letters[at + 1..].iter().collect();
-        let glyphs = text(&[(before, vec![]), (letters[at].to_string(), vec![value.as_str()]), (after, vec![])]);
-        assert_eq!(glyphs.len(), plain.len(), "{value}");
-        assert_eq!(glyphs[at].gid, *alternate, "{value}: the alternate");
-        for (n, (a, b)) in glyphs.iter().zip(&plain).enumerate().filter(|(n, _)| *n != at) {
-            assert_eq!(a.gid, b.gid, "{value}: the letter {n} keeps its form");
+        let glyphs = khwarizmi(&db, &family, KHAH, &[value.as_str()]);
+        assert_eq!(glyphs.len(), plain.len(), "{value}: {}", describe(&glyphs));
+        assert_eq!(glyphs[KHAH].gid, *alternate, "{value}: the alternate");
+        assert_ne!(glyphs[KHAH].gid, default, "{value}: not the default glyph");
+        assert_eq!(face.glyph_name(*alternate), Some(format!("khah.medi.alt{}", i + 1)), "{value}: an alternate of the medial form");
+        for (n, (a, b)) in glyphs.iter().zip(&plain).enumerate().filter(|(n, _)| *n != KHAH) {
+            assert_eq!(a.gid, b.gid, "{value}: the letter {n} keeps its form: {}", describe(&glyphs));
         }
         assert!(gaps(&glyphs).iter().all(|gap| gap.abs() < 1e-3), "{value}: no gap: {:?}", gaps(&glyphs));
+        assert!(ink_gaps(&glyphs).iter().all(|gap| gap.abs() < 1e-3), "{value}: the drawn letters touch: {:?}", ink_gaps(&glyphs));
     }
+}
+
+/// The stylistic sets `ss01` to `ss05` on a letter in the middle of a joined group: the glyph the
+/// font's set gives its medial form (the default when it has none), the same forms for the others,
+/// no gap.
+#[test]
+fn kufi_murabba_stylistic_sets_on_a_middle_letter_keep_the_word_joined() {
+    let Some((db, face)) = kufi() else { return };
+    let family = face.family.clone();
+    let plain = khwarizmi(&db, &family, KHAH, &[]);
+    let default = plain[KHAH].gid;
+    let mut changed = 0;
+    for set_number in 1..=5 {
+        let tag = format!("ss{set_number:02}");
+        let wanted = face.substitutions(default).into_iter().find(|s| s.feature == tag.as_bytes() && !s.glyphs.is_empty()).map(|s| s.glyphs[0]);
+        let glyphs = khwarizmi(&db, &family, KHAH, &[tag.as_str()]);
+        assert_eq!(glyphs.len(), plain.len(), "{tag}: {}", describe(&glyphs));
+        assert_eq!(glyphs[KHAH].gid, wanted.unwrap_or(default), "{tag}: the set's glyph for the medial khah");
+        changed += usize::from(wanted.is_some_and(|w| w != default));
+        for (n, (a, b)) in glyphs.iter().zip(&plain).enumerate().filter(|(n, _)| *n != KHAH) {
+            assert_eq!(a.gid, b.gid, "{tag}: the letter {n} keeps its form: {}", describe(&glyphs));
+        }
+        assert!(gaps(&glyphs).iter().all(|gap| gap.abs() < 1e-3), "{tag}: no gap: {:?}", gaps(&glyphs));
+        assert!(ink_gaps(&glyphs).iter().all(|gap| gap.abs() < 1e-3), "{tag}: the drawn letters touch: {:?}", ink_gaps(&glyphs));
+    }
+    assert!(changed >= 1, "the font has stylistic sets for the medial khah");
 }
 
 /// The `GSUB` reader gives the alternate set of each glyph (position in the set = the feature's
