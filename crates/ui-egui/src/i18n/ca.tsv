@@ -6248,6 +6248,7 @@ breakText	Glyphs	Glifs
 	Gap 5	Separació 5
 
 @msg	{_1}: they came in as the page's art	{_1}: han entrat com a art de la pàgina
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	objectes de text deformats que han entrat com a art, no com a text editable: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	els objectes que es dibuixaven diferent de la pàgina pròpia del fitxer han entrat com a art de la pàgina: {_1}
 
 @msg	the JPEG 2000 file can't be read	no es pot llegir el fitxer JPEG 2000

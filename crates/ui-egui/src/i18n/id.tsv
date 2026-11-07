@@ -6128,6 +6128,7 @@ breakText	Glyphs	Glif
 	Gap 5	Jarak 5
 
 @msg	{_1}: they came in as the page's art	{_1}: diimpor sebagai gambar halaman
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	objek teks dengan Warp yang diimpor sebagai gambar, bukan sebagai teks yang dapat diedit: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objek yang tergambar berbeda dari halaman file itu sendiri diimpor sebagai gambar halaman: {_1}
 
 @msg	You must choose a side pattern.	Anda harus memilih pola sisi.

@@ -6119,6 +6119,7 @@ breakText	Glyphs	Glify
 	Gap 5	Odstęp 5
 
 @msg	{_1}: they came in as the page's art	{_1}: zaimportowano je jako grafikę strony
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	wypaczone obiekty tekstowe zaimportowane jako grafika, a nie jako edytowalny tekst: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	obiekty rysowane inaczej niż własna strona pliku zaimportowano jako grafikę strony: {_1}
 
 @msg	You must choose a side pattern.	Musisz wybrać wzór boczny.

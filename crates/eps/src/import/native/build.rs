@@ -204,6 +204,7 @@ pub(super) fn build_from(
         placeholders,
         placed_elsewhere,
         envelopes_drawn,
+        warped_type,
         styles_read,
         canvas_scale,
         xml_ids,
@@ -211,7 +212,7 @@ pub(super) fn build_from(
         bindings_skipped,
         warnings,
     } = structure;
-    let restyled = left_out_of_comparisons(page, restyled, placeholders);
+    let mut restyled = left_out_of_comparisons(page, restyled, placeholders);
     // Editing data in the units of the page's user space ([`in_units`]), or at its declared large
     // canvas scale ([`page_scale`]), is compared with the page scaled down to those units, and the
     // document read from it is scaled up by `unit`.
@@ -416,6 +417,7 @@ pub(super) fn build_from(
     }
     // Area type flows around the wrap objects above it before it is compared with the page.
     resolve_text_wrap(&mut doc)?;
+    settle_warped_type(warped_type, &mut doc, &filled, &threaded_frames, &mut restyled, &mut notes);
     if empty > 0 {
         notes.push(format!("{empty} {}", if frame.is_some() { TEXT_LEFT_OUT } else { TYPE_LEFT_OUT }));
     }
@@ -493,6 +495,28 @@ pub(super) fn build_from(
         relayout_wrapped(&mut doc);
     }
     Ok((doc, notes))
+}
+
+/// Warped type stays type where its live warp draws as its look. Elsewhere the look takes its place,
+/// and one note says how many did. `filled` says what each slot became, and the comparisons with the
+/// page leave out the boxes in `restyled`.
+fn settle_warped_type(
+    warped: ai::WarpedType,
+    doc: &mut Document,
+    filled: &std::collections::HashMap<NodeId, Filled>,
+    threaded: &BTreeSet<NodeId>,
+    restyled: &mut Vec<Rect>,
+    notes: &mut Vec<String>,
+) {
+    let made = |slot| match filled.get(&slot).map(|f| f.text.as_slice()) {
+        Some(&[one]) => Some(one),
+        _ => None,
+    };
+    let replaced = warped.settle(doc, made, threaded, restyled);
+    if replaced > 0 {
+        notes.push(format!("{}: {replaced}", ai::WARPED_TYPE_DRAWN));
+        relayout_wrapped(doc);
+    }
 }
 
 /// Bind the objects of `doc` to the variables of its library that `bindings` binds them to, each

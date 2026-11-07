@@ -35,6 +35,9 @@ use super::lex::find;
 use crate::ps;
 
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
+#[cfg(test)]
+pub(crate) use envelope::MAX_CHECKED;
+pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
 pub(crate) use frames::text_frames;
 pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
 pub use read::{

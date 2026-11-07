@@ -6105,6 +6105,7 @@ breakText	Glyphs	字形
 	Gap 5	间隔 5
 
 @msg	{_1}: they came in as the page's art	{_1}：已作为页面图稿导入
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	作为图稿而非可编辑文字导入的变形文字对象：{_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	与文件自身页面绘制不同的对象已作为页面图稿导入：{_1}
 
 @msg	You must choose a side pattern.	必须选择侧边图案。

@@ -6241,6 +6241,7 @@ breakText	Glyphs	Глифы
 	Gap 5	Зазор 5
 
 @msg	{_1}: they came in as the page's art	{_1}: импортированы как графика страницы
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	деформированные текстовые объекты, импортированные как графика, а не как редактируемый текст: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	объекты, которые отрисовывались иначе, чем собственная страница файла, импортированы как графика страницы: {_1}
 
 @msg	You must choose a side pattern.	Выберите боковой узор.

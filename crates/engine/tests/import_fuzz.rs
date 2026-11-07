@@ -3288,6 +3288,40 @@ proptest! {
         survive("hostile .ai envelope", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose warped type is damaged or hostile: any warp style and settings, on the object or
+    /// on a fill, a look that reaches far away or holds type of its own, the text cut short.
+    #[test]
+    fn ai_warped_type_never_panics(
+        style in prop::sample::select(vec![0i64, 1, 8, 15, 16, -3, i64::MAX]),
+        bend in prop::sample::select(vec!["0.5", "0", "1", "-1", "2", "1e308", "-1e308", "nan"]),
+        distort in prop::sample::select(vec!["0", "0.4", "-1", "1e308", "nan"]),
+        reach in prop::sample::select(vec!["90", "16000", "1e7", "1e308", "-1e308", "nan"]),
+        on_fill in any::<bool>(),
+        look_type in any::<bool>(),
+        objects in 1usize..4,
+        cut in 0usize..3_000,
+        edits in prop::collection::vec((0usize..3_000, prop::sample::select(vec!['0', '9', '-', ' ', '\n', '(', ')', '/', ':', ';', ',', '[', ']', '%', '_', 'X', 'u', 'U'])), 0..8),
+    ) {
+        let basic = |name: &str, body: &str| format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n");
+        let chain = |kids: &[String]| format!("/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+        let fill = basic("Fill Style Filter", "/FillStyle : 0 O\n0 1 1 0 1 0 0 Xa\n0 1 0 0 0 Xy\n0 1 Xd\n/Def ;\n (FillStyle) ,\n");
+        let warp = basic("Adobe Deform", &format!("{style} /Int (DeformStyle) ,\n{bend} /Real (DeformValue) ,\n{distort} /Real (DeformHoriz) ,\n{distort} /Real (DeformVert) ,\n0 /Bool (Rotate) ,\n"));
+        let root = if on_fill {
+            let stack = format!("/CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{}{};\n /Part ,\n", chain(&[warp, fill]), basic("Conduit Filter", ""));
+            chain(&[stack])
+        } else {
+            chain(&[fill, warp])
+        };
+        let styles = format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Warped) /Name ,\n/ActiveStyle :\n{root}%AI9_EndArtStyles\n");
+        let slot = if look_type { "/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n" } else { "" };
+        let object = format!(
+            "u\n{slot}0 1 1 0 1 0 0 Xa\n10 10 m\n{reach} 10 L\n{reach} {reach} L\n10 90 L\nf\nU\n9 () XW\n%_/AI11Text :\n%_0 /FreeUndo ,\n%_0 /FrameIndex ,\n%_0 /StoryIndex ,\n%_;\n1 (Warped) XW\n"
+        );
+        let data = mutate_text(&text_editing_of(&vertical_document_text(), &(styles + &object.repeat(objects))), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
+        survive("hostile .ai warped type", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose editing data is damaged or hostile.
     #[test]
     fn ai_editing_data_never_panics(cut in 0usize..3_000, edits in prop::collection::vec((0usize..3_000, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', ':', ';', '[', ']', '%', 'q', 'Q', 'W', 'u', 'U', 'L', 'l', 'c', 'C', 'v', 'V', 'y', 'Y', 'k', 'x'])), 0..12), damage in prop::collection::vec((0usize..4_000, any::<u8>()), 0..4)) {

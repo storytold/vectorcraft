@@ -4794,6 +4794,307 @@ fn type_with_a_stacked_art_style_comes_in_as_type_with_that_appearance() {
     check(&r.document, &r.warnings);
 }
 
+/// Where [`warped_style`] puts its Warp.
+#[derive(Clone, Copy)]
+enum WarpOn {
+    Object,
+    Fill,
+    Stroke,
+}
+
+/// An art style section with style `Warped`: a red fill with Effect › Warp › Arc at `bend` percent on
+/// `on`.
+fn warped_style(bend: f64, on: WarpOn) -> String {
+    let basic = |name: &str, body: &str| {
+        format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n")
+    };
+    let compound = |name: &str, kids: &[String]| format!("/CompoundFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+    let fill = basic("Fill Style Filter", "/FillStyle : 0 O\n0 1 1 0 1 0 0 Xa\n0 1 0 0 0 Xy\n0 1 Xd\n/Def ;\n (FillStyle) ,\n");
+    let warp = basic(
+        "Adobe Deform",
+        &format!(
+            "1 /Int (DeformStyle) ,\n{} /Real (DeformValue) ,\n0 /Real (DeformHoriz) ,\n0 /Real (DeformVert) ,\n0 /Bool (Rotate) ,\n",
+            bend / 100.0
+        ),
+    );
+    let stroke = || {
+        basic("Stroke Style Filter", "/StrokeStyle : 0 1 0 0 0 Xy\n0 J 0 j 2 w 10 M []0 d0 XR\n0 0 0 1 0 0 0 XA\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n")
+    };
+    let conduit = || basic("Conduit Filter", "");
+    let chain = match on {
+        WarpOn::Object => compound("Chain Style Filter", &[fill, warp]),
+        WarpOn::Fill => {
+            compound("Chain Style Filter", &[compound("Stack Style Filter", &[compound("Chain Style Filter", &[warp, fill]), conduit()])])
+        }
+        WarpOn::Stroke => {
+            compound("Chain Style Filter", &[compound("Stack Style Filter", &[compound("Chain Style Filter", &[warp, stroke()]), fill, conduit()])])
+        }
+    };
+    format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Warped) /Name ,\n/ActiveStyle :\n{chain}%AI9_EndArtStyles\n")
+}
+
+/// `outline`, a path in the document's coordinates, as filled paths in a 100 × 100 file's art space,
+/// in the red of [`warped_style`].
+fn drawn_as_operators(outline: &kurbo::BezPath) -> String {
+    use kurbo::PathEl;
+    let mut out = String::from("0 1 1 0 1 0 0 Xa\n");
+    let y = |v: f64| 100.0 - v;
+    let mut last = kurbo::Point::ZERO;
+    for el in outline.elements() {
+        match *el {
+            PathEl::MoveTo(p) => out += &format!("{} {} m\n", p.x, y(p.y)),
+            PathEl::LineTo(p) => out += &format!("{} {} L\n", p.x, y(p.y)),
+            PathEl::QuadTo(c, p) => {
+                let (a, b) = (last + (c - last) * (2.0 / 3.0), p + (c - p) * (2.0 / 3.0));
+                out += &format!("{} {} {} {} {} {} C\n", a.x, y(a.y), b.x, y(b.y), p.x, y(p.y));
+            }
+            PathEl::CurveTo(a, b, p) => out += &format!("{} {} {} {} {} {} C\n", a.x, y(a.y), b.x, y(b.y), p.x, y(p.y)),
+            PathEl::ClosePath => out += "f\n",
+        }
+        last = match *el {
+            PathEl::MoveTo(p) | PathEl::LineTo(p) | PathEl::QuadTo(_, p) | PathEl::CurveTo(_, _, p) => p,
+            PathEl::ClosePath => last,
+        };
+    }
+    out
+}
+
+/// What `n` holds as art, its paths joined, in the document's coordinates.
+fn outlines_of(n: &Node) -> kurbo::BezPath {
+    let mut out = kurbo::BezPath::new();
+    if let NodeKind::Path { path, .. } = &n.kind {
+        out.extend(path.to_bezpath());
+    }
+    for c in n.children().into_iter().flatten() {
+        out.extend(outlines_of(c));
+    }
+    out
+}
+
+/// The editing copy of `objects` text objects of `text` under style `style`, each with the look
+/// `drawing`.
+fn warped_file(style: &str, text: &str, objects: u32, drawing: &str) -> String {
+    let stories: Vec<_> = (0..objects).map(|_| (text, 0u8, (8200.0, 8180.0), (0.0, 0.0), 0.0)).collect();
+    let doc = text_document(&stories);
+    let art: String = (0..objects)
+        .map(|n| {
+            let look = format!("u\n{drawing}\nU\n9 () XW\n");
+            let own: String = text_object(n).lines().map(|l| format!("%_{l}\n")).collect();
+            format!("{look}{own}1 (Warped) XW\n")
+        })
+        .collect();
+    native_with_text(&(style.to_string() + &layer("Art", true, &art)), &doc)
+}
+
+/// The type of `doc`, and whether it has a warp.
+fn warped_texts(doc: &Document) -> Vec<(String, bool)> {
+    let mut out = vec![];
+    doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            out.push((
+                t.plain_text(),
+                n.appearance.effects.iter().chain(n.appearance.items.iter().flat_map(|i| i.effects())).any(|e| e.id.starts_with("warp.")),
+            ));
+        }
+    });
+    out
+}
+
+#[test]
+fn warped_type_that_draws_as_its_look_stays_live_type() {
+    let art = warped_file(&warped_style(40.0, WarpOn::Object), "TILT\r", 1, &plain_warped_look());
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    assert_eq!(warped_texts(&d), [("TILT".to_string(), true)], "{notes:?}");
+    assert!(!notes.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{notes:?}");
+}
+
+/// What the live Arc at 40% draws of the type `TILT` that [`warped_file`] places, as look operators.
+fn plain_warped_look() -> String {
+    let doc = text_document(&[("TILT\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let plain = layer("Art", true, &text_object(0));
+    let (d, notes) = crate::ai_alone(&private(&native_with_text(&plain, &doc))).unwrap();
+    let mut text = None;
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            text = Some(n.clone());
+        }
+    });
+    let mut text = text.unwrap_or_else(|| panic!("no type: {notes:?}"));
+    text.appearance = warped_appearance().into();
+    drawn_as_operators(&outlines_of(&vectorcraft_effects::expand_outlined(None, &text, None).unwrap()))
+}
+
+/// The appearance that [`warped_style`] at 40% on the object reads as.
+fn warped_appearance() -> vectorcraft_doc::Appearance {
+    let art = warped_file(&warped_style(40.0, WarpOn::Object), "TILT\r", 1, "");
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    let mut out = None;
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            out = Some((*n.appearance).clone());
+        }
+    });
+    out.unwrap_or_else(|| panic!("no type: {notes:?}"))
+}
+
+#[test]
+fn warped_type_that_draws_apart_from_its_look_comes_in_as_the_look() {
+    // GUARDS: a warp on type opened live with no check, so a live warp that draws another shape from
+    // the file's moved and resized the type.
+    let drawing = "0 1 1 0 1 0 0 Xa\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    for on in [WarpOn::Object, WarpOn::Fill, WarpOn::Stroke] {
+        let art = warped_file(&warped_style(40.0, on), "TILT\r", 2, drawing);
+        let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+        assert_eq!(warped_texts(&d), [], "{notes:?}");
+        let looks = d.layers[0].children().unwrap();
+        assert_eq!(looks.len(), 2, "{looks:#?}");
+        assert!(looks.iter().all(|l| matches!(l.kind, NodeKind::Group { .. }) && l.visual_bounds().is_some()), "{looks:#?}");
+        // One note, with how many, that counts as a loss.
+        let noted: Vec<&String> = notes.iter().filter(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)).collect();
+        assert_eq!(noted, ["warped text objects that came in as drawn art, not as editable type: 2"], "{notes:?}");
+        assert!(crate::is_loss(noted[0]));
+    }
+}
+
+/// `operators` as the page's content: a red fill of the same paths.
+fn page_of(operators: &str) -> String {
+    let mut page = String::from("1 0 0 setrgbcolor\n");
+    for line in operators.lines() {
+        let (args, op) = line.rsplit_once(' ').unwrap_or(("", line));
+        let op = match op {
+            "m" => "moveto",
+            "L" => "lineto",
+            "C" => "curveto",
+            "f" => "closepath fill",
+            _ => continue,
+        };
+        page += &format!("{args} {op}\n");
+    }
+    page
+}
+
+/// Warped type that opens as its look is compared with the page again, as other art is.
+#[test]
+fn warped_type_that_comes_in_as_its_look_is_held_to_the_page() {
+    let drawing = "0 1 1 0 1 0 0 Xa\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let art = warped_file(&warped_style(40.0, WarpOn::Object), "TILT\r", 1, drawing);
+    let same = import(&eps(&page_of(drawing), &art)).unwrap();
+    assert_eq!(warped_texts(&same.document), [], "{:?}", same.warnings);
+    assert!(same.warnings.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{:?}", same.warnings);
+    assert!(!same.warnings.iter().any(|w| w.contains("drew differently")), "{:?}", same.warnings);
+    // A page that paints only part of the look's box: the box is compared, not left out.
+    let other = page_of("60 60 m\n90 60 L\n90 75 L\n60 75 L\nf");
+    let differs = import(&eps(&other, &art)).map(|r| r.warnings).unwrap_or_else(|why| vec![why.to_string()]);
+    assert!(differs.iter().any(|w| w.contains("differs from the page") || w.contains("drew differently")), "{differs:?}");
+}
+
+/// Warped type spends the page's share of the budget one object after another: with enough of them
+/// the later ones open as their looks, though each draws close enough on its own.
+#[test]
+fn warped_type_shares_the_page_budget() {
+    let look = plain_warped_look();
+    let style = warped_style(40.0, WarpOn::Object);
+    let art = warped_file(&style, "TILT\r", 12, &look);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    assert_eq!(warped_texts(&d).len(), 12, "{notes:?}");
+    // The look draws a small square more than the live warp does.
+    let art = warped_file(&style, "TILT\r", 12, &format!("{look}0 1 1 0 1 0 0 Xa\n2 2 m\n3.5 2 L\n3.5 3.5 L\n2 3.5 L\nf"));
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    let live = warped_texts(&d).len();
+    assert!(live > 0 && live < 12, "{live}: {notes:?}");
+    assert!(notes.iter().any(|w| w == &format!("{}: {}", crate::import::ai::WARPED_TYPE_DRAWN, 12 - live)), "{live}: {notes:?}");
+}
+
+/// Envelopes and warped type share one count of checks: past it, warped type that would pass opens
+/// as its look.
+#[test]
+fn warped_type_past_the_envelopes_checks_comes_in_as_its_look() {
+    let hidden = |s: &str| -> String { s.lines().map(|l| format!("%_{l}\n")).collect() };
+    let rect = "20 5 m\n20 95 L\n80 95 L\n80 5 L\n20 5 L\n";
+    let corner = |x: f64, y: f64, nx: f64, ny: f64, px: f64, py: f64| format!("[0.8 1 {x} {y} {nx} {ny} 1 {px} {py} 1] /N X#\n");
+    let mesh = format!(
+        "/Mesh X!\n2 /Version X#\n/Cartesian /Type X#\n[1 1] /Size X#\n/Data X#\n/DeviceGray /CS X#\n[0 0] /P X#\n{}{}{}{}/E X#\n/End X!\n",
+        corner(20.0, 5.0, 20.0, 35.0, 40.0, 5.0),
+        corner(20.0, 95.0, 40.0, 95.0, 20.0, 65.0),
+        corner(80.0, 95.0, 80.0, 65.0, 60.0, 95.0),
+        corner(80.0, 5.0, 60.0, 5.0, 80.0, 35.0),
+    );
+    let red = "0 1 1 0 1 0 0 Xa\n";
+    let envelope = format!(
+        "{}%_/ArtDictionary :\n%_131073 /Int (AIDeformOptionsKey) ,\n%_50 /Int (AIDeformFidelityKey) ,\n%_0 /Bool (AIDeformEditModeKey) ,\n%_X=\n{}%_X+\n%_ (AIDeformArtKey) ,\n%_2 /Int (AIDeformStyle) ,\n%_;\n%_\nu\n{red}{rect}f\nU\n(Adobe Deform Plugin) 1 0 0 XP\n",
+        hidden(&format!("u\n{mesh}U\n")),
+        hidden(&format!("u\n{red}{rect}f\nU\n")),
+    );
+    let look = format!("u\n{}\nU\n9 () XW\n", plain_warped_look());
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let doc = text_document(&[("TILT\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let file = |envelopes: usize| {
+        let body = format!("{}{look}{own}1 (Warped) XW\n", envelope.repeat(envelopes));
+        native_with_text(&(warped_style(40.0, WarpOn::Object) + &layer("Art", true, &body)), &doc)
+    };
+    let (d, notes) = crate::ai_alone(&private(&file(1))).unwrap();
+    assert_eq!(warped_texts(&d).len(), 1, "{notes:?}");
+    let (d, notes) = crate::ai_alone(&private(&file(crate::import::ai::MAX_CHECKED))).unwrap();
+    assert_eq!(warped_texts(&d), [], "{notes:?}");
+    assert!(notes.iter().any(|w| w == &format!("{}: 1", crate::import::ai::WARPED_TYPE_DRAWN)), "{notes:?}");
+}
+
+#[test]
+fn warped_type_with_a_look_that_draws_nothing_stays_type() {
+    // The look only held the type, which the slot's text object replaces, or a path that paints
+    // nothing: there is no art to stand in.
+    for drawing in ["", LOOK_TYPE, "54 56 m\n100 56 L\n100 80 L\n54 80 L\nn"] {
+        let art = warped_file(&warped_style(40.0, WarpOn::Object), "TILT\r", 1, drawing);
+        let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+        assert_eq!(warped_texts(&d), [("TILT".to_string(), true)], "{notes:?}");
+        assert!(!notes.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{notes:?}");
+    }
+}
+
+/// A look that draws type as well as art is missing the type once the slot's text object takes it,
+/// so it can't stand in: the object stays type, and its letters stay on the page.
+#[test]
+fn warped_type_whose_look_also_draws_type_stays_type() {
+    let drawing = format!("{LOOK_TYPE}0 1 1 0 1 0 0 Xa\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf");
+    let art = warped_file(&warped_style(40.0, WarpOn::Fill), "TILT\r", 1, &drawing);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    assert_eq!(warped_texts(&d), [("TILT".to_string(), true)], "{notes:?}");
+    assert!(!notes.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{notes:?}");
+}
+
+/// A look with an object that wasn't read makes the file open from its page: the look isn't used.
+#[test]
+fn warped_type_whose_look_holds_an_unread_object_opens_from_the_page() {
+    let drawing = "0 1 1 0 1 0 0 Xa\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf\nfrobnicate";
+    let art = warped_file(&warped_style(40.0, WarpOn::Object), "TILT\r", 1, drawing);
+    let page = page_of("54 56 m\n100 56 L\n100 80 L\n54 80 L\nf");
+    let r = import(&eps(&page, &art)).unwrap();
+    assert_eq!(warped_texts(&r.document), [], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("weren't read")), "{:?}", r.warnings);
+}
+
+/// Warped frames of threaded type stay type, and stay one thread, whatever their looks draw.
+#[test]
+fn warped_threaded_type_stays_threaded() {
+    let frames = [
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 >> >> >>", canvas_rect(10.0, 60.0, 40.0, 80.0)),
+        format!("<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 1 >> >> >>", canvas_rect(50.0, 60.0, 80.0, 80.0)),
+    ];
+    let doc = document_of(&frames, &[story("A story in two frames\\r", &[0, 1], "/0 0", "/1 10.0")]);
+    let body: String = (0..2)
+        .map(|frame| {
+            let own: String = frame_object(0, frame).lines().map(|l| format!("%_{l}\n")).collect();
+            format!("u\n0 1 1 0 1 0 0 Xa\n2 2 m\n9 2 L\n9 9 L\n2 9 L\nf\nU\n9 () XW\n{own}1 (Warped) XW\n")
+        })
+        .collect();
+    let art = native_with_text(&(warped_style(40.0, WarpOn::Object) + &layer("Art", true, &body)), &doc);
+    let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+    assert_eq!(d.text_threads.len(), 1, "{notes:?}");
+    assert_eq!(warped_texts(&d).len(), 2, "{notes:?}");
+    assert!(!notes.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{notes:?}");
+}
+
 /// An art style section with style `Add`: Effect › Pathfinder › Add in the object's chain, over a
 /// fill and stroke that paint nothing.
 fn pathfinder_add_style() -> String {

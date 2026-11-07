@@ -6264,6 +6264,7 @@ breakText	Glyphs	Glyfy
 	Gap 5	Mezera 5
 
 @msg	{_1}: they came in as the page's art	{_1}: byly načteny jako kresba ze stránky
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	pokřivené textové objekty načtené jako kresba, ne jako upravitelný text: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objekty, které se vykreslily jinak než vlastní stránka souboru, byly načteny jako kresba ze stránky: {_1}
 
 @msg	You must choose a side pattern.	Musíte zvolit boční vzorek.

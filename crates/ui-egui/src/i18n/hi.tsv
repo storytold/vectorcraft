@@ -6874,6 +6874,7 @@
 @msg	objects can't be nested more than 32 deep	ऑब्जेक्ट्स को 32 से अधिक गहराई तक घोंसला नहीं किया जा सकता है
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	एक मिश्रण, लिफ़ाफ़ाफ़ा, दोहराने या अंतर्जातीय समूह के अंदर ऑब्जेक्ट्स को एक पाथ से जोड़ा नहीं जा सकता है
 @msg	objects must be none, move or copy	objects: ऑब्जेक्टएं कोई नहीं, चाल या प्रतिलिपि होना चाहिए
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	मोड़े गए टेक्स्ट ऑब्जेक्ट जो संपादन योग्य टेक्स्ट के बजाय कला के रूप में आए: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	उन ऑब्जेक्ट्स को जो फ़ाइल के स्वयं के पृष्ठ से अलग-अलग तरीके से आकर्षित होते हैं, उनकी कला के रूप में आया: {_1}
 @msg	objects were left out	ऑब्जेक्ट्स को छोड़ दिया गया था
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है

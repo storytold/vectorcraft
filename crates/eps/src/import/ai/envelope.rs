@@ -23,7 +23,7 @@
 //! one-patch mesh. An envelope whose parts don't read, or that doesn't come out as drawn, keeps its
 //! drawn art.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
@@ -31,7 +31,7 @@ use vectorcraft_doc::live::{
     EnvelopeKind, EnvelopeOptions, GradientMesh, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, default_fidelity, envelope_content_boxes,
     envelope_stroke_margin,
 };
-use vectorcraft_doc::{Document, ImageBlob, LayerColor, Node, NodeId, NodeKind, PatternDef};
+use vectorcraft_doc::{Appearance, Document, Effect, ImageBlob, LayerColor, Node, NodeId, NodeKind, PatternDef};
 use vectorcraft_geom::PathData;
 
 use super::obj::Obj;
@@ -41,10 +41,12 @@ use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, compa
 pub(super) const PLUGIN: &str = "Adobe Deform Plugin"; // brand-ok: the plugin name the files use
 /// The note for an envelope that keeps its drawn art.
 pub(crate) const DRAWN: &str = "an envelope VectorCraft couldn't read as a live envelope comes in as its drawn art";
+/// The note for warped type that keeps its drawn art, before how many.
+pub(crate) const WARPED_TYPE_DRAWN: &str = "warped text objects that came in as drawn art, not as editable type";
 /// The most envelopes waiting for their drawn art at once.
 pub(super) const MAX_PENDING: usize = 64;
-/// The most envelopes one import draws to check; more keep their drawn art.
-pub(super) const MAX_CHECKED: usize = 256;
+/// The most envelopes and warped text objects one import draws to check; more keep their drawn art.
+pub(crate) const MAX_CHECKED: usize = 256;
 /// The most rows or columns of a mesh read (Make with Mesh's own limit).
 const MAX_GRID: u32 = 50;
 /// How far, in points over width and height together, a saved size may lie from the contents'
@@ -343,14 +345,99 @@ fn differing(live: &Document, drawn: &Document, region: Rect, scale: f64) -> Opt
     Some((any, solid, inked))
 }
 
-/// The differences from their drawn art that the live envelopes of one import may add up to, as
-/// shares of the page drawn as the page check draws it: half of what that check allows
-/// ([`MAX_DIFFERENCE`], [`MAX_SOLID_DIFFERENCE`]), so live envelopes never make the file open from
-/// its PDF part instead.
+/// The differences from their drawn art that the live envelopes and warped type of one import may
+/// add up to, as shares of the page drawn as the page check draws it: half of what that check allows
+/// ([`MAX_DIFFERENCE`], [`MAX_SOLID_DIFFERENCE`]), so they never make the file open from its PDF part
+/// instead.
 #[derive(Debug, Default)]
-pub(super) struct Spent {
-    any: f64,
-    solid: f64,
+pub(crate) struct Spent {
+    pub(super) any: f64,
+    pub(super) solid: f64,
+}
+
+/// A text object read with a Warp.
+#[derive(Debug)]
+pub(super) struct WarpedLook {
+    /// The id of its slot.
+    pub(super) slot: NodeId,
+    /// The drawn art its style's look saved.
+    pub(super) look: Node,
+    /// That art's box, when the comparisons with the page leave it out ([`super::Structure::restyled`]).
+    pub(super) left_out: Option<Rect>,
+}
+
+/// The text objects read with a Warp, and what the import has left of the budget for checks
+/// ([`drawn_alike`]). Type is laid out after the layers are read, so these wait for that
+/// ([`Self::settle`]).
+#[derive(Debug, Default)]
+pub struct WarpedType {
+    pub(super) looks: Vec<WarpedLook>,
+    pub(super) checks: usize,
+    pub(super) spent: Spent,
+    pub(super) page: Option<Rect>,
+}
+
+impl WarpedType {
+    /// Replace each warped text object of `doc` that doesn't draw as its saved look (or that the
+    /// budget has no check left for) with that look: `made` gives the text object a slot became. A
+    /// frame in `threaded` stays type, since the frames of a thread share one story. A replaced
+    /// object's box goes back into the comparisons with the page (out of `restyled`), and only what
+    /// `doc` shows counts against the page's share of the budget. Returns how many were replaced.
+    pub(crate) fn settle(
+        self,
+        doc: &mut Document,
+        made: impl Fn(NodeId) -> Option<NodeId>,
+        threaded: &BTreeSet<NodeId>,
+        restyled: &mut Vec<Rect>,
+    ) -> usize {
+        let Self { looks, mut checks, mut spent, page } = self;
+        let mut shown_ids = BTreeSet::new();
+        doc.layers.iter().for_each(|l| collect_shown(l, &mut shown_ids));
+        let mut replaced = 0;
+        for WarpedLook { slot, mut look, left_out } in looks {
+            let Some(id) = made(slot).filter(|id| !threaded.contains(id)) else { continue };
+            let Some(text) = doc.node(id).filter(|n| matches!(n.kind, NodeKind::Text(_)) && warps(&n.appearance)).cloned() else { continue };
+            let mut alike = false;
+            if checks > 0 {
+                checks -= 1;
+                let layer = doc.alloc_id();
+                let shared = Shared { patterns: &doc.patterns, images: &doc.images };
+                let (mut shown, mut plain) = (text.clone(), look.clone());
+                (shown.visible, shown.opacity) = (true, 1.0);
+                (plain.visible, plain.opacity) = (true, 1.0);
+                alike = warped_alike(&shown, &plain, layer, &shared, page.filter(|_| shown_ids.contains(&id)), &mut spent);
+            }
+            if alike {
+                continue;
+            }
+            (look.id, look.name, look.visible, look.locked) = (id, text.name.clone(), text.visible, text.locked);
+            if let Some(wrap) = text.extras().wrap {
+                look.extras_mut().wrap = Some(wrap);
+            }
+            if let Some(n) = doc.node_mut(id) {
+                *n = look;
+                replaced += 1;
+                if let Some(at) = left_out.and_then(|b| restyled.iter().position(|r| *r == b)) {
+                    restyled.remove(at);
+                }
+            }
+        }
+        replaced
+    }
+}
+
+/// Add to `out` the ids of `n` and what is in it, unless hidden.
+fn collect_shown(n: &Node, out: &mut BTreeSet<NodeId>) {
+    if n.visible {
+        out.insert(n.id);
+        n.children().into_iter().flatten().for_each(|c| collect_shown(c, out));
+    }
+}
+
+/// Does `appearance` have a Warp that shows, on the object or on one of its fills or strokes?
+pub(super) fn warps(appearance: &Appearance) -> bool {
+    let warp = |e: &Effect| e.visible && e.id.starts_with("warp.");
+    appearance.effects.iter().any(warp) || appearance.items.iter().any(|i| i.visible() && i.effects().iter().any(warp))
 }
 
 /// Do `live` and `drawn` draw alike: few of the pixels either inks differ, and fewer still where a
@@ -358,7 +445,19 @@ pub(super) struct Spent {
 /// with the differences in `spent` the page check still takes the layers' art (it is added to
 /// `spent` when they do)? Both are drawn on `layer`, a layer id no other node has.
 pub(super) fn drawn_alike(live: &Node, drawn: &Node, layer: NodeId, shared: &Shared<'_>, page: Option<Rect>, spent: &mut Spent) -> bool {
-    let (Some(a), Some(b)) = (live.visual_bounds(), drawn.visual_bounds()) else { return false };
+    alike_within(live, drawn, live.visual_bounds(), layer, shared, page, spent)
+}
+
+/// [`drawn_alike`] for type under a Warp, compared over all that its effects draw, which can reach
+/// past its own box.
+pub(super) fn warped_alike(live: &Node, drawn: &Node, layer: NodeId, shared: &Shared<'_>, page: Option<Rect>, spent: &mut Spent) -> bool {
+    let reach = vectorcraft_render::effect_bounds(&alone(live, layer, shared).symbol_boxes(), live);
+    alike_within(live, drawn, vectorcraft_geom::union_opt(live.visual_bounds(), reach), layer, shared, page, spent)
+}
+
+/// [`drawn_alike`], with `live` measured as `reach`.
+fn alike_within(live: &Node, drawn: &Node, reach: Option<Rect>, layer: NodeId, shared: &Shared<'_>, page: Option<Rect>, spent: &mut Spent) -> bool {
+    let (Some(a), Some(b)) = (reach, drawn.visual_bounds()) else { return false };
     let region = a.union(b).inflate(2.0, 2.0);
     if !(region.is_finite() && region.width() > 0.0 && region.height() > 0.0) || region.width().max(region.height()) > 1e6 {
         return false;
