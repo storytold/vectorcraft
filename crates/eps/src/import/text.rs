@@ -14,6 +14,7 @@ use vectorcraft_text::TextLayout;
 use super::graphics::MAX_APART;
 use super::interp::{Interp, matrix_obj, matrix_of};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, ps_err};
+use super::type1::Embedded;
 
 /// The font a program uses before it sets one.
 const DEFAULT_FONT: &str = "Helvetica";
@@ -428,8 +429,31 @@ impl Interp<'_> {
     /// `s` (read as Latin-1) set in the current font at user point `at`: point type placed there,
     /// its layout in text space, and how far it moves the current point (user space).
     fn set_type(&mut self, s: &[u8], at: Point) -> Res<(TextObject, TextLayout, Vec2)> {
-        let text: String = s.iter().map(|b| char::from(*b)).filter(|c| !c.is_control()).collect();
+        let text: String = self.named_chars(s).into_iter().filter(|c| !c.is_control()).collect();
         self.set_text(&text, at)
+    }
+
+    /// The character each code of `s` stands for in the current font (one found by name, whose
+    /// program isn't in the file): the one its glyph name says (the standard encodings by their
+    /// codes' names), else the code read as Latin-1.
+    fn named_chars(&self, s: &[u8]) -> Vec<char> {
+        let Some(font) = self.g.font.clone() else { return s.iter().map(|b| char::from(*b)).collect() };
+        let f = font.borrow();
+        let standard = f.get(&Key::name("Encoding")).and_then(|e| self.standard_encoding(e));
+        s.iter()
+            .map(|&code| {
+                let mut name = glyph_name(&f, code);
+                if &*name == ".notdef"
+                    && let Some(iso) = standard
+                {
+                    name = Rc::from(standard_name(code, iso));
+                }
+                match &*name {
+                    ".notdef" => char::from(code),
+                    n => named_char(code, n).unwrap_or(char::from(code)),
+                }
+            })
+            .collect()
     }
 
     /// [`Self::set_type`] for the characters `text`.
@@ -485,7 +509,7 @@ impl Interp<'_> {
         // Each code's character, if it has one that shows (control codes don't).
         let chars: Vec<Option<char>> = match &plain {
             Some((_, glyphs)) => glyphs.iter().map(|g| g.ch).collect::<Vec<_>>(),
-            None => s.iter().map(|b| Some(char::from(*b))).collect(),
+            None => self.named_chars(s).into_iter().map(Some).collect(),
         }
         .into_iter()
         .map(|c| c.filter(|c| !c.is_control()))
@@ -585,12 +609,12 @@ impl Interp<'_> {
 
     /// `s` in a Type 42 font, some of whose glyphs stand for no character, drawn from the font's
     /// outlines at the current point (one group), spaced as `spacing` says.
-    fn show_type42_outlines(&mut self, data: &super::type42::Font, glyphs: &[Plain], s: &[u8], spacing: &Spacing, at: Point, f1: Affine) -> Res {
+    fn show_type42_outlines(&mut self, data: &Embedded, glyphs: &[Plain], s: &[u8], spacing: &Spacing, at: Point, f1: Affine) -> Res {
         let start = self.out.drawn.len();
         let mut pen = at;
         let mut text = String::new();
         for (i, (g, &code)) in glyphs.iter().zip(s).enumerate() {
-            if let Some(outline) = super::type42::glyph(&data.data, g.gid).map(|o| o.0) {
+            if let Some(outline) = data.glyph(g.gid).map(|o| o.0) {
                 self.type42_paint(outline, pen, f1, Draw::Fill)?;
             }
             let d = spacing.advance(i, i64::from(code), f1 * Point::new(g.width, 0.0) - f1 * Point::ZERO);
@@ -634,7 +658,7 @@ impl Interp<'_> {
             let (_, f1) = self.font()?;
             let mut pen = self.user_point()?;
             for g in &glyphs {
-                if let Some((outline, _)) = super::type42::glyph(&data.data, g.gid) {
+                if let Some((outline, _)) = data.glyph(g.gid) {
                     self.type42_paint(outline, pen, f1, Draw::Path)?;
                 }
                 pen += f1 * Point::new(g.width, 0.0) - f1 * Point::ZERO;
@@ -835,7 +859,12 @@ impl Interp<'_> {
         if builds {
             return self.type3_glyph_in(&g.font, Glyph::Code(g.code), at, paint == Draw::Fill, g.outer);
         }
-        let fm = g.outer * font_matrix(&g.font.borrow(), 1.0);
+        // An em of the descendant's glyphs: a Type 42 font's matrix maps ems, a Type 1 font's
+        // its 1000-unit glyph space.
+        let fm = {
+            let f = g.font.borrow();
+            if units(&f) == 1.0 { g.outer * font_matrix(&f, 1.0) } else { g.outer * font_matrix(&f, 0.001) * Affine::scale(units(&f)) }
+        };
         if let Some((outline, advance)) = self.type42_glyph(&g.font, g.code)? {
             self.type42_paint(outline, at, fm, paint)?;
             return Ok(fm * Point::new(advance, 0.0) - fm * Point::ZERO);
@@ -892,33 +921,62 @@ impl Interp<'_> {
         Ok(fm * Point::new(w, 0.0) - fm * Point::ZERO)
     }
 
-    /// Glyph `code` of Type 42 font `font` from the TrueType font it carries: its outline and
-    /// width in its glyph space (ems), or `None` when it isn't a Type 42 font with one.
+    /// Glyph `code` of font `font` from the font program it carries (a Type 42 or Type 1 font):
+    /// its outline and width in ems, or `None` when it carries none.
     fn type42_glyph(&mut self, font: &DictRef, code: u8) -> Res<Option<(vectorcraft_geom::BezPath, f64)>> {
-        let Some(data) = self.type42_data(font)? else { return Ok(None) };
-        let gid = {
-            let f = font.borrow();
-            let name = glyph_name(&f, code);
-            char_string(&f, &name).or_else(|| char_string(&f, ".notdef")).unwrap_or(0)
-        };
-        Ok(super::type42::glyph(&data.data, gid))
+        let Some(data) = self.embedded(font)? else { return Ok(None) };
+        let standard = font.borrow().get(&Key::name("Encoding")).and_then(|e| self.standard_encoding(e));
+        let (_, gid) = type42_code(&font.borrow(), &data, code, standard);
+        self.spend(64)?;
+        Ok(data.glyph(gid))
     }
 
-    /// The codes of `s` in the current font when it is a Type 42 font that carries its TrueType
-    /// font (not a descendant of a composite font): the font, and each code's glyph.
-    fn type42_plain(&mut self, s: &[u8]) -> Res<Option<(Rc<super::type42::Font>, Vec<Plain>)>> {
+    /// The codes of `s` in the current font when it is a font that carries its font program (a
+    /// Type 42 font's TrueType font, a Type 1 font's encrypted part), not a descendant of a
+    /// composite font: the font program, and each code's glyph.
+    fn type42_plain(&mut self, s: &[u8]) -> Res<Option<(Embedded, Vec<Plain>)>> {
         let Some(font) = self.g.font.clone() else { return Ok(None) };
-        let Some(data) = self.type42_data(&font)? else { return Ok(None) };
-        self.spend((s.len() as u64).saturating_mul(4))?;
+        let Some(data) = self.embedded(&font)? else { return Ok(None) };
+        self.spend((s.len() as u64).saturating_mul(16))?;
         let f = font.borrow();
+        let standard = f.get(&Key::name("Encoding")).and_then(|e| self.standard_encoding(e));
         let glyphs = s
             .iter()
             .map(|&code| {
-                let (ch, gid) = type42_code(&f, &data, code);
-                Plain { ch, gid, width: super::type42::advance(&data.data, gid) }
+                let (ch, gid) = type42_code(&f, &data, code, standard);
+                Plain { ch, gid, width: data.advance(gid) }
             })
             .collect();
         Ok(Some((data, glyphs)))
+    }
+
+    /// The font program font `font` carries: a Type 42 font's TrueType font, or the Type 1 font
+    /// read from its encrypted part (see `type1`).
+    fn embedded(&mut self, font: &DictRef) -> Res<Option<Embedded>> {
+        if let Some(d) = self.type42_data(font)? {
+            return Ok(Some(Embedded::TrueType(d)));
+        }
+        let strings = match font.borrow().get(&Key::name("CharStrings")) {
+            Some(Obj::Dict(d)) if font_type(&font.borrow()) == Some(1.0) => d.clone(),
+            _ => return Ok(None),
+        };
+        Ok(self.type1.iter().find(|(k, _)| k.same(&strings)).map(|(_, f)| Embedded::Type1(f.clone())))
+    }
+
+    /// Give font dictionary `d` the glyphs of the Type 1 font whose encrypted part is
+    /// `encrypted`: a `CharStrings` dictionary naming each glyph's index, by which it is drawn.
+    pub(super) fn attach_type1(&mut self, d: &DictRef, encrypted: &[u8]) -> Res {
+        if self.type1.len() >= MAX_TYPE1 {
+            return Ok(());
+        }
+        self.alloc(encrypted.len())?;
+        self.spend((encrypted.len() / 256) as u64)?;
+        let Some(font) = super::type1::parse(encrypted) else { return Ok(()) };
+        let strings: Dict = font.glyph_names().map(|(g, n)| (Key::name(n), Obj::Int(i64::from(g.to_u32())))).collect();
+        let strings = DictRef::new(strings);
+        d.borrow_mut().insert(Key::name("CharStrings"), Obj::Dict(strings.clone()));
+        self.type1.push((strings, Rc::new(font)));
+        Ok(())
     }
 
     /// The TrueType font Type 42 font `font` carries (read once for each `sfnts` array), or
@@ -949,8 +1007,8 @@ impl Interp<'_> {
     }
 }
 
-/// A character code of a Type 42 font: the character it stands for (`None` when neither its
-/// glyph name nor the font says), its glyph and the glyph's width (ems).
+/// A character code of a font carrying its program: the character it stands for (`None` when
+/// neither its glyph name nor the font says), its glyph and the glyph's width (ems).
 struct Plain {
     ch: Option<char>,
     gid: u32,
@@ -963,13 +1021,19 @@ fn char_string(f: &Dict, name: &str) -> Option<u32> {
     d.borrow().get(&Key::name(name)).and_then(Obj::as_num).filter(|g| (0.0..=f64::from(u16::MAX)).contains(g)).map(|g| g as u32)
 }
 
-/// The character and glyph of code `code` in Type 42 font `f`, carrying TrueType font `data`:
-/// by the glyph name its `Encoding` gives it (a name such as `A`, `uni20AC` or `Euro` says the
+/// The character and glyph of code `code` in font `f`, carrying font program `data`: by the
+/// glyph name its `Encoding` gives it (a name such as `A`, `uni20AC` or `Euro` says the
 /// character; else the glyph `CharStrings` gives it stands for one in the font's character map
-/// or `post` names). A code the encoding leaves `.notdef` (the standard encodings here have no
-/// names) is read as Latin-1, drawn by that character's glyph.
-fn type42_code(f: &Dict, data: &super::type42::Font, code: u8) -> (Option<char>, u32) {
-    let name = glyph_name(f, code);
+/// or `post` names). The standard encodings (`standard`: whether ISO Latin-1's) have no names
+/// here: the code's name in them is used (PLRM 3rd ed., Appendix E.5 and E.6). A code the
+/// encoding leaves `.notdef` is read as Latin-1, drawn by that character's glyph.
+fn type42_code(f: &Dict, data: &Embedded, code: u8, standard: Option<bool>) -> (Option<char>, u32) {
+    let mut name = glyph_name(f, code);
+    if &*name == ".notdef"
+        && let Some(iso) = standard
+    {
+        name = Rc::from(standard_name(code, iso));
+    }
     if &*name == ".notdef" {
         let c = char::from(code);
         return (Some(c), data.gid_of(c).or_else(|| char_string(f, ".notdef")).unwrap_or(0));
@@ -978,6 +1042,25 @@ fn type42_code(f: &Dict, data: &super::type42::Font, code: u8) -> (Option<char>,
     let gid = char_string(f, &name).or_else(|| named.and_then(|c| data.gid_of(c))).or_else(|| char_string(f, ".notdef")).unwrap_or(0);
     (named.or_else(|| data.char_of(gid)), gid)
 }
+
+/// The name the standard encoding (or, when `iso`, the ISO Latin-1 encoding) gives code `code`:
+/// the same names in the printable ASCII range but for ISO Latin-1's `minus`; ISO Latin-1's
+/// upper half named as Windows-1252 names it, with its soft `hyphen`.
+fn standard_name(code: u8, iso: bool) -> &'static str {
+    use skrifa::raw::ps::encoding::PredefinedEncoding;
+    match (iso, code) {
+        (false, _) => PredefinedEncoding::Standard.name(code),
+        (true, 0x2d) => "minus",
+        (true, 0x20..=0x7e) => PredefinedEncoding::Standard.name(code),
+        (true, 0xad) => "hyphen",
+        (true, 0xa0) => "space",
+        (true, 0xa1..=0xff) => crate::latin::high_name(code).unwrap_or(".notdef"),
+        _ => ".notdef",
+    }
+}
+
+/// Most Type 1 fonts read from their encrypted parts.
+const MAX_TYPE1: usize = 256;
 
 /// The warning for CID-keyed type in a CIDFont the file doesn't carry.
 const MISSING_CID_FONT: &str = "CID-keyed type in a font the file doesn't carry was left out";
@@ -1002,7 +1085,7 @@ fn glyph_name(f: &Dict, code: u8) -> Rc<str> {
 /// The character glyph name `name` (at code `code`) says: a single character or `uniXXXX`; a
 /// name of the standard encoding's printable ASCII range (`hyphen`, `quotedbl`: PLRM 3rd ed.,
 /// Appendix E.6); one of the Windows-1252 names; else `None`.
-fn named_char(code: u8, name: &str) -> Option<char> {
+pub(super) fn named_char(code: u8, name: &str) -> Option<char> {
     match glyph_char(name) {
         '\u{2022}' if name != "bullet" => {}
         c => return Some(c),

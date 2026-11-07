@@ -45,6 +45,7 @@ mod obj;
 mod preview;
 mod shading;
 mod text;
+mod type1;
 mod type42;
 
 #[cfg(test)]
@@ -63,6 +64,8 @@ mod tests_illustrator;
 mod tests_images;
 #[cfg(test)]
 mod tests_native;
+#[cfg(test)]
+mod tests_type1;
 #[cfg(test)]
 mod tests_type42;
 

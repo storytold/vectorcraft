@@ -2277,6 +2277,31 @@ proptest! {
         );
         survive("hostile CID-keyed fonts", || vectorcraft_eps::import(text.as_bytes()).ok().map(|r| r.document))?;
     }
+
+    /// Embedded Type 1 fonts whose encrypted part is damaged or hostile (any bytes, binary or
+    /// hexadecimal), shown, measured and outlined: drawn, or left out.
+    #[test]
+    fn eps_type1_programs_never_panic(
+        part in prop::collection::vec(any::<u8>(), 0..400),
+        hex in any::<bool>(),
+        shown in prop::collection::vec(any::<u8>(), 0..12),
+    ) {
+        let hexed = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+        // Bytes that would end the part early are left out, as `cleartomark` ends it.
+        let part: Vec<u8> = part.into_iter().filter(|b| *b != b'c').collect();
+        let mut bytes = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n\
+            12 dict begin /FontName /T1 def /FontType 1 def /FontMatrix [0.001 0 0 0.001 0 0] def /FontBBox [0 0 1000 1000] def\n\
+            /Encoding StandardEncoding def currentdict end currentfile eexec\n"
+            .to_vec();
+        if hex {
+            bytes.extend(hexed(&part).into_bytes());
+        } else {
+            bytes.extend(part);
+        }
+        bytes.extend(format!("\n{}\ncleartomark\n/T1 findfont 40 scalefont setfont 10 20 moveto <{}> show <{}> stringwidth pop pop\n\
+            10 60 moveto <{}> true charpath fill\nshowpage\n%%EOF\n", "0".repeat(512), hexed(&shown), hexed(&shown), hexed(&shown)).into_bytes());
+        survive("hostile Type 1 programs", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
 }
 
 /// The TrueType font [`type42_composite_eps`] carries.
