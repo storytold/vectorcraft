@@ -1419,10 +1419,10 @@ fn the_planes_of_multi_source_images_are_charged() {
     assert!(r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
 }
 
-/// The planes an image is decoded from, and the strings a procedure gives to fill them, stop
-/// counting against the memory budget once the image is decoded: they are freed then. A procedure
-/// that hands back one large buffer for every image (1 MiB here, for a one-pixel image) charged the
-/// whole buffer each time, and a file of many images came in as its preview.
+/// The planes an image is decoded from, and the decoder's copies of the strings a procedure gives
+/// to fill them, stop counting against the memory budget once the image is decoded: they are freed
+/// then. A procedure that hands back one large buffer for every image (1 MiB here, for a one-pixel
+/// image) charged the whole buffer each time, and a file of many images came in as its preview.
 #[test]
 fn an_images_transient_data_is_not_charged_after_it() {
     let body = "/buf 1048576 string def\n1100 { 1 1 8 [1 0 0 1 0 0] { buf } image } repeat\n";
@@ -1431,6 +1431,17 @@ fn an_images_transient_data_is_not_charged_after_it() {
     let mut images = 0;
     r.document.walk(|n| images += usize::from(matches!(n.kind, NodeKind::Image(_))));
     assert_eq!(images, 1100);
+}
+
+/// What a data source procedure allocates stays counted, whatever image it fills: a procedure
+/// that keeps each new string (in an array here) still runs into the memory budget, however small
+/// the images it fills are.
+#[test]
+fn strings_a_data_source_keeps_stay_charged() {
+    let body = "/keep 1100 array def /i 0 def\n\
+        1100 { 1 1 8 [1 0 0 1 0 0] { keep i 1048576 string put keep i get /i i 1 add def } image } repeat\n";
+    let r = import(&eps(body)).unwrap();
+    assert!(r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
 }
 
 /// #3568: a single sample plane over the data limit is refused.

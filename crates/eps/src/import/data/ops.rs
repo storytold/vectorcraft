@@ -451,6 +451,10 @@ impl Interp<'_> {
                     continue;
                 }
                 let want = step.min(n - o.len());
+                // The bytes of this read's own copy of a procedure's string: counted while it
+                // lives, released once it is appended (the string itself is the program's, and
+                // stays counted as long as the program can hold it).
+                let mut copied = 0;
                 let chunk = match src {
                     Source::File(f) => self.read(f, want)?,
                     // A string gives its bytes over and over.
@@ -462,11 +466,14 @@ impl Interp<'_> {
                         self.call(p.clone())?;
                         let s = self.pop_str()?.to_vec();
                         self.alloc(s.len())?;
+                        copied = s.len();
                         s
                     }
                 };
                 *e = chunk.is_empty();
                 o.extend_from_slice(chunk.get(..chunk.len().min(n - o.len())).unwrap_or_default());
+                drop(chunk);
+                self.unalloc(copied);
             }
         }
         Ok(out)
@@ -549,12 +556,16 @@ impl Interp<'_> {
             }
             return Ok(None);
         }
+        // Interleaved data is read into this decoder's own buffers, split into the two images'
+        // samples: those stop counting once both are decoded (their pixels still count).
+        let mut charged = 0;
         if interleave != 3.0 {
             let src = image.sources.first().cloned().ok_or(PsError::Ps("undefined", "DataSource".into()))?;
             let (pixels, samples) = if interleave == 2.0 {
                 let (mrow, drow) = (stencil.row_bytes(1), image.row_bytes(n));
                 let total = mrow.saturating_mul(stencil.h).saturating_add(drow.saturating_mul(image.h));
                 self.alloc(total)?;
+                charged = total;
                 let raw = self.source_bytes(&src, total.min(MAX_DATA))?;
                 by_rows(&raw, (mrow, stencil.h), (drow, image.h))
             } else {
@@ -562,15 +573,21 @@ impl Interp<'_> {
                 stencil.bpc = image.bpc;
                 (stencil.w, stencil.h) = (image.w, image.h);
                 let row = (image.w * (n + 1) * usize::from(image.bpc)).div_ceil(8);
-                self.alloc(row.saturating_mul(image.h))?;
-                let raw = self.source_bytes(&src, row.saturating_mul(image.h).min(MAX_DATA))?;
+                charged = row.saturating_mul(image.h);
+                self.alloc(charged)?;
+                let raw = self.source_bytes(&src, charged.min(MAX_DATA))?;
                 by_samples(&raw, image.w, image.h, n, image.bpc)
             };
             stencil.sources = vec![Source::Str(pixels)];
             image.sources = vec![Source::Str(samples)];
         }
-        let Some(mut img) = self.decode_image(image)? else { return Ok(None) };
-        let Some(m) = self.decode_image(stencil)? else { return Ok(Some(img)) };
+        let decoded = match self.decode_image(image) {
+            Ok(Some(img)) => self.decode_image(stencil).map(|m| Some((img, m))),
+            other => other.map(|_| None),
+        };
+        self.unalloc(charged);
+        let Some((mut img, m)) = decoded? else { return Ok(None) };
+        let Some(m) = m else { return Ok(Some(img)) };
         let (w, h, mw, mh) = (img.w as usize, img.h as usize, m.w as usize, m.h as usize);
         for (i, px) in img.rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let (x, y) = (i % w, i / w);
@@ -689,12 +706,12 @@ impl Interp<'_> {
             return ps_err("rangecheck", "DataSource");
         }
         let plane = row.checked_mul(s.h).filter(|p| *p <= MAX_DATA).ok_or(PsError::Limit("decoded data is too large"))?;
-        // The planes and the strings a procedure gives to fill them live only while the image is
-        // decoded: they stop counting once it is (the pixels made from them still count).
-        let before = self.allocated();
-        self.alloc(plane.saturating_mul(sources.len()))?;
+        // The sample planes are this decoder's own and live only while the image is decoded: they
+        // stop counting once it is (the pixels made from them still count). What the data source
+        // procedures allocate is the program's and stays counted.
+        let plane_bytes = plane.saturating_mul(sources.len());
+        self.alloc(plane_bytes)?;
         let mut planes = self.read_sources(sources, row * s.h, if multi { row } else { row * s.h })?;
-        let transient = self.allocated().saturating_sub(before);
         for p in &mut planes {
             p.resize(row * s.h, 0);
         }
@@ -771,7 +788,7 @@ impl Interp<'_> {
             }
         }
         drop(planes);
-        self.unalloc(transient);
+        self.unalloc(plane_bytes);
         Ok(Some(Pixels { w: s.w as u32, h: s.h as u32, rgba, inks, matrix: s.matrix }))
     }
 
