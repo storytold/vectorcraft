@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swap Fill and Stroke",
             [],
             Some("Shift+X"),
-            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults",
+            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults. On a path directly in a graph series, the graph also stores the swapped paints and the stroke weight (exceptions: docs/mcp.md)",
             has_doc,
             swap
         ),
@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Default Fill and Stroke",
             [],
             Some("D"),
-            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults; type gets black fill and no stroke",
+            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults; type gets black fill and no stroke. On a path directly in a graph series, the graph also stores the paint and weight of the topmost visible fill and stroke (exceptions: docs/mcp.md)",
             has_doc,
             default_paint
         ),
@@ -783,7 +783,9 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
                 restore_unpainted_stroke(&mut n.appearance, None, &f);
                 n.appearance.set_stroke(f);
             }
-            Ok(super::appearance::count_changed(d, &before, &ids))
+            // The swap writes the paint of the topmost fill and stroke, not their opacity.
+            let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (false, false), true);
+            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept))
         })?;
     }
     if s.paint.stroke.is_none() && !s.paint.fill.is_none() && s.paint.stroke_width == 0.0 {
@@ -811,7 +813,8 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                     _ => n.appearance = Appearance::default_art().into(),
                 }
             }
-            Ok(super::appearance::count_changed(d, &before, &ids))
+            let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false);
+            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept))
         })?;
     }
     super::newart::reset(s);
