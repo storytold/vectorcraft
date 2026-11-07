@@ -405,6 +405,38 @@ fn keyboard_shortcuts_import_and_export_ask_off_the_ui_thread() {
     assert_eq!(*written.borrow(), ["/keys/out.json", "/keys/command.json"]);
 }
 
+/// The Keyboard Shortcuts dialog's Export Text… asks off the UI thread for a `.txt` file and writes
+/// the dialog's working set, as edited so far, as text where the dialog answers.
+#[test]
+fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
+    let (mut app, shown, _) = app();
+    let texts: Rc<RefCell<Vec<(String, String)>>> = Default::default();
+    let t = texts.clone();
+    app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+        t.borrow_mut().push((path.to_string(), String::from_utf8_lossy(b).into_owned()));
+        Ok(())
+    }));
+    let ov = crate::keymap::overrides_from(&[("view.grid", "Ctrl+Alt+G")]);
+    app.run("edit.keyboardShortcuts", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().expect("Keyboard Shortcuts");
+    d.fields.insert("overrides".into(), crate::keymap::stored::to_value(&ov));
+    d.fields.insert("set".into(), json!("Custom"));
+    click(&mut app, "Export Text…", dialogs);
+    match shown.requests().as_slice() {
+        [PickRequest::Save(pick)] => assert_eq!(pick.filters, FilePick::filters([("Text", &["txt"][..])])),
+        other => panic!("{other:?}"),
+    }
+    shown.answer(&["/keys/list.txt"]);
+    poll(&mut app);
+    let texts = texts.borrow();
+    let [(path, text)] = texts.as_slice() else { panic!("{texts:?}") };
+    assert_eq!(path, "/keys/list.txt");
+    assert_eq!(*text, crate::shortcut_editor::export_text("Custom", &ov));
+    assert!(text.contains(&format!("\t{}\n", crate::menus::pretty_shortcut("Ctrl+Alt+G"))), "{text}");
+    assert!(app.ui.shortcut_overrides.is_empty(), "the working set is kept only on OK");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("shortcuts"), "the dialog stays open");
+}
+
 /// Keyboard Shortcuts' Import… opens a shortcut set another app saved as text (`.kys`) in Import
 /// Shortcut Set over the dialog when its file dialog answers, and the dialog's working set stays in
 /// Keyboard Shortcuts, which Cancel shows again.
