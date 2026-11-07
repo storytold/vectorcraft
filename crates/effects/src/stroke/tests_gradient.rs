@@ -216,3 +216,24 @@ fn meshes_colour_the_stroke_as_the_slices_do() {
         }
     }
 }
+
+/// #5964: with ribs only at the path's corners (an Along gradient), an arrowhead whose tip sits on
+/// the end of a long straight leg is covered all the way to where it can reach: the ribs that
+/// reach across it run to the end of its reach, rather than narrowing from its tip towards the
+/// next corner and leaving the corners of its base outside.
+#[test]
+fn slices_cover_an_arrowhead_on_a_long_straight_leg() {
+    let zig = poly(&[(0.0, 0.0), (60.0, 40.0), (0.0, 80.0), (70.0, 90.0), (75.0, 20.0)], false);
+    for profile in [None, WidthProfile::preset("lens"), WidthProfile::preset("taperStart")] {
+        for align in [ArrowAlign::Tip, ArrowAlign::Extend] {
+            for mode in [StrokeGradientMode::Along, StrokeGradientMode::Across] {
+                let mut st = stroke(12.0, mode);
+                st.start_arrow = Some(Arrowhead::Triangle);
+                st.end_arrow = Some(Arrowhead::Triangle);
+                st.arrow_align = align;
+                st.profile = profile.clone();
+                assert_covered(&zig, &st);
+            }
+        }
+    }
+}
