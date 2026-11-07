@@ -2753,6 +2753,7 @@ mark-style	Japanese	日本式
 	Replace:	置換:
 	Replace Font	フォントを置換
 	Replace Symbol	シンボルを置き換え
+	Reset Transformation	変形をリセット
 	Replace With Font	置換するフォント
 	Replace With Font From	置換するフォントの一覧
 	System	システム
