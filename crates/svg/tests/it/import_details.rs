@@ -89,6 +89,23 @@ fn a_linked_png_resolves_against_the_svg_folder_and_stays_linked() {
 }
 
 #[test]
+fn hrefs_spelling_one_file_differently_read_it_once() {
+    let dir = folder("spellings");
+    std::fs::write(dir.join("img").join("a.png"), png(4, 4)).unwrap();
+    let reads = std::sync::atomic::AtomicUsize::new(0);
+    let counting = |path: &str| {
+        reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        read(path)
+    };
+    let folder = dir.to_string_lossy();
+    let body = r#"<image href="img/a.png" width="4" height="4"/><image href="./img/a.png" width="4" height="4"/><image href="img/%61.png" width="4" height="4"/>"#;
+    let (d, w) = import_with(&svg(body), &ImportOptions { folder: Some(&folder), read: Some(&counting) }).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(images(&d).len(), 3);
+    assert_eq!(reads.into_inner(), 1, "one read for the three spellings");
+}
+
+#[test]
 fn a_missing_link_warns_and_keeps_a_placeholder_in_its_box() {
     let dir = folder("missing");
     let (d, w) = open_in(&dir, r#"<image href="img/gone.png" x="10" y="20" width="100" height="50"/>"#);
@@ -103,6 +120,26 @@ fn a_missing_link_warns_and_keeps_a_placeholder_in_its_box() {
     let (d, w) = import_with_report(&svg(r#"<image href="/abs/photo.png" width="10" height="10"/>"#)).unwrap();
     assert_eq!(images(&d)[0].1.link.as_ref().unwrap().path, "/abs/photo.png");
     assert!(!w.is_empty());
+}
+
+#[test]
+fn hrefs_spelling_one_missing_file_differently_each_warn_and_keep_their_own_link() {
+    let dir = folder("missing_twice");
+    let reads = std::sync::atomic::AtomicUsize::new(0);
+    let counting = |path: &str| {
+        reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        read(path)
+    };
+    let folder = dir.to_string_lossy();
+    let body = r#"<image href="img/gone.png" width="4" height="4"/><image href="./img/gone.png" width="4" height="4"/>"#;
+    let (d, w) = import_with(&svg(body), &ImportOptions { folder: Some(&folder), read: Some(&counting) }).unwrap();
+    assert_eq!(w.iter().filter(|w| w.contains("gone.png") && w.contains("not found")).count(), 2, "{w:?}");
+    assert_eq!(reads.into_inner(), 1, "the failed read is cached");
+    let found = images(&d);
+    assert_eq!(found.len(), 2);
+    for (_, im) in found {
+        assert_eq!(Path::new(&im.link.as_ref().unwrap().path), dir.join("img").join("gone.png"));
+    }
 }
 
 #[test]
