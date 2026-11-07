@@ -57,6 +57,9 @@ pub struct Targets {
     pub(super) perpendicular: bool,
     /// How the guides these targets produce look.
     pub(super) style: GuideStyle,
+    /// Smart Guides › Snap to Last Location: a move goes back to where it began when it comes near
+    /// ([`Self::snap_back`]). Set only for moving the selection itself ([`Self::for_move`]).
+    pub(super) last_location: bool,
 }
 
 /// How many anchors, and how many segments, the targets gather at most.
@@ -163,19 +166,30 @@ impl Targets {
 
     /// Targets for moving the selection of `cx`: [`Self::collect`]'s but `exclude` (the selection,
     /// or nothing for a copy, which leaves it behind), styled as `cx` asks, and with Smart Guides ›
-    /// Spacing Guides the objects it spaces itself evenly with ([`Self::snap_rect`]).
+    /// Spacing Guides the objects it spaces itself evenly with ([`Self::snap_rect`]). With Smart
+    /// Guides › Snap to Last Location, a move (not a copy, which has nothing in `exclude`) goes back
+    /// to where it began when it comes near ([`Self::snap_back`]).
     pub fn for_move(cx: &ToolContext, exclude: &[NodeId]) -> Self {
         let mut t = Self::collect(cx.doc, exclude, None).styled(cx);
         if cx.spacing_guides {
             t.boxes = object_boxes(cx.doc, &cx.selection.objects);
         }
+        t.last_location = cx.snap_to_last_location && !exclude.is_empty();
         t
+    }
+
+    /// Smart Guides › Snap to Last Location: a move by `d` that is no farther than `tol` from
+    /// where it began goes back there. Returns the guides for it, a "last location" label at the
+    /// center of `from` (the moved bounds when the move began), or None when the move stays where
+    /// it is: the option is off, the targets are for a copy, or `d` is longer than `tol`.
+    pub fn snap_back(&self, from: Option<Rect>, d: Vec2, tol: f64) -> Option<Vec<Overlay>> {
+        (self.last_location && d.hypot() <= tol).then(|| from.and_then(|r| self.label(r.center(), "last location")).into_iter().collect())
     }
 
     /// Targets for scaling the selection: the other art, styled as `cx` asks, and with Smart Guides ›
     /// Spacing Guides the neighbours whose gaps the moving edge should match ([`Self::snap_scale`]).
     pub fn for_scale(cx: &ToolContext) -> Self {
-        Self::for_move(cx, &cx.selection.objects)
+        Self { last_location: false, ..Self::for_move(cx, &cx.selection.objects) }
     }
 
     /// Targets for a drawn point: the art in `visible` (all of it for None) but `exclude`, its

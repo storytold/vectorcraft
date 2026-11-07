@@ -339,6 +339,7 @@ impl Session {
             transform_tools_guides: self.prefs.transform_tools_guides,
             spacing_guides: self.prefs.spacing_guides,
             distance_guides: self.prefs.distance_guides,
+            snap_to_last_location: self.prefs.snap_to_last_location,
             snapping_tolerance: self.prefs.snapping_tolerance,
             construction_angles: if self.prefs.construction_guides {
                 vectorcraft_tools::guides::construction_angles(&self.prefs.construction_angles)
