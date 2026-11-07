@@ -350,6 +350,12 @@ impl<'a> Interp<'a> {
         Ok(())
     }
 
+    /// Stop counting `bytes` the program no longer holds: buffers an operator made for itself and
+    /// freed before it returned. Never for what the program's own procedures allocated.
+    pub(crate) fn unalloc(&mut self, bytes: usize) {
+        self.allocated = self.allocated.saturating_sub(bytes);
+    }
+
     fn tick(&mut self) -> Res {
         self.spend(1)
     }
