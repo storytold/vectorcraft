@@ -447,20 +447,32 @@ fn is_svg(f: &Format) -> bool {
 }
 
 /// The document as written: native files carry the view to reopen at and the Layers panel's open
-/// rows and transparency grid visibility.
+/// rows and transparency grid visibility; a `.ai` file names the view's active artboard
+/// ([`DocState::active_artboard`]) as its active one.
 fn doc_to_save(st: &DocState, f: &Format) -> Arc<Document> {
     if !is_native(f) {
         return st.doc.clone();
     }
     let open = st.layers_open.saved(&st.doc);
-    if st.doc.last_view == st.view && st.doc.layers_open == open && st.doc.transparency_grid == st.transparency_grid {
+    let active = moved_active_artboard(st, &st.doc, f);
+    if st.doc.last_view == st.view && st.doc.layers_open == open && st.doc.transparency_grid == st.transparency_grid && active.is_none() {
         return st.doc.clone();
     }
     let mut d = (*st.doc).clone();
+    if active.is_some() {
+        d.opened_artboard = active;
+    }
     d.last_view = st.view.clone();
     d.transparency_grid = st.transparency_grid;
     d.layers_open = open;
     Arc::new(d)
+}
+
+/// The artboard a `.ai` or `.ait` file written from `st` (`doc`, the document it writes) names as
+/// its active one, when that is not already the one `doc` opened on: the view's active artboard
+/// ([`DocState::active_artboard`]), if `doc` has it.
+pub(super) fn moved_active_artboard(st: &DocState, doc: &Document, f: &Format) -> Option<u32> {
+    st.active_artboard.filter(|id| matches!(f.id, "ai" | "ait") && doc.artboards.iter().any(|a| a.id == *id) && doc.opened_artboard != Some(*id))
 }
 
 /// What a format loses against a native file (reported whenever a save writes it).
