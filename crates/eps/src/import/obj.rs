@@ -370,6 +370,16 @@ impl<T: Clone + Held> Shared<T> {
     }
 }
 
+/// Equal when [`Shared::same`]: the same storage and run of it (the identity of a PostScript
+/// composite object, not its contents).
+impl<T: Held> PartialEq for Shared<T> {
+    fn eq(&self, o: &Self) -> bool {
+        Rc::ptr_eq(&self.buf, &o.buf) && self.at == o.at && self.len == o.len
+    }
+}
+
+impl<T: Held> Eq for Shared<T> {}
+
 /// Hashes what [`Shared::same`] compares: the storage and the run of it.
 impl<T: Held> Hash for Shared<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {

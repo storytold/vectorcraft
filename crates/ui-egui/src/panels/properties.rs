@@ -507,8 +507,8 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
     ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("New Artboard"), w).clicked() && app.run("artboard.new", json!({})).is_ok() {
-            super::artboards::select(app, n);
+        if widgets::flat_button(ui, tl!("New Artboard"), w).clicked() {
+            super::artboards::add_new(app);
         }
         let deletable = n > 1 && !super::artboards::deletable(app, n).is_empty();
         if ui.add_enabled_ui(deletable, |ui| widgets::flat_button(ui, tl!("Delete Artboard"), w)).inner.clicked() {

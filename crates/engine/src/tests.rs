@@ -147,6 +147,7 @@ mod scalestrokes;
 mod scripts;
 mod select_ids_first;
 mod shaper;
+mod shapetools;
 mod shortcutset;
 mod simplify_part;
 mod slices;
