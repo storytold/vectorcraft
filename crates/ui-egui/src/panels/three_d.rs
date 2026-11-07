@@ -246,7 +246,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// Sets to null each setting in `fields` (the first selected object's 3D effect) that the 3D effect
 /// of another selected object has with another value. The controls then show it at its default
-/// with its reset dot filled, and its reset dot, a menu choice, a checkbox click, or a number other
+/// (a checkbox shows a dash) with its reset dot filled, and its reset dot, a menu choice, a checkbox click, or a number other
 /// than the default shown is a change sent to every effect. The light list (`lights`, where null
 /// is the single light) is left as it is.
 pub(crate) fn mark_mixed(app: &VectorcraftApp, fields: &mut Map<String, Value>) {

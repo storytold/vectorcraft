@@ -33,11 +33,13 @@ pages describe it.
   and ranges, showing the 3D effect of the first selected object (its own effects first, then those of its fills
   and strokes). A changed setting goes to the 3D effect of each selected object whose effect takes that setting;
   other effects and objects without a 3D effect do not change. A setting the selected 3D effects hold with
-  different values shows its default with its reset dot filled. Its reset dot, a choice from its menu or a click
-  on its checkbox sets it on all of them; a typed or dragged number sets it when it differs from the default
-  shown.
+  different values shows its default with its reset dot filled; a checkbox shows a dash instead, and a mixed
+  Shading leaves the light settings available. Its reset dot, a choice from its menu or a click on its checkbox
+  (which turns a mixed one on) sets it on all of them; a typed or dragged number sets it when it differs from the
+  default shown. Other changes leave it as each effect has it.
   The list of lights shows the first object's lights, and an edit to it (Add Light, Delete Light, or a setting
-  of one light in a list) reaches only the objects whose list of lights matches the first object's.
+  of one light in a list) reaches only the objects whose list of lights matches the first object's. Add Light is
+  unavailable while a setting of a single light differs between the selected effects.
 - Each change is one undo step. Dragging a value or a slider previews it on the artboard and records one step
   when the pointer is released; a typed value is recorded when it is entered. Drawing the panel records nothing.
 - The Materials tab, shadows and ray-traced rendering are not built (see below). The rotation and light rings on

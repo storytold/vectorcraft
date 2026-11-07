@@ -337,6 +337,70 @@ fn a_drag_ends_when_the_panel_is_no_longer_drawn() {
     assert_eq!(effect(&app).1["depth"], 90.0);
 }
 
+/// The panel's controls, drawn once with the accessibility tree on.
+fn controls(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<egui::accesskit::Node> {
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+    out.textures_delta.clear();
+    out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
+}
+
+fn named<'a>(nodes: &'a [egui::accesskit::Node], label: &str) -> &'a egui::accesskit::Node {
+    nodes.iter().find(|n| n.label() == Some(label)).unwrap_or_else(|| panic!("no {label:?}"))
+}
+
+/// A checkbox setting the selected effects hold with different values shows a dash, leaves the
+/// controls it guards available, and another change leaves it as each effect has it.
+#[test]
+fn a_mixed_checkbox_shows_a_dash_and_another_change_keeps_each_effects_value() {
+    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"shade": false}})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Lighting").center(), show);
+    let nodes = controls(&mut app, &ctx);
+    assert_eq!(named(&nodes, "Shading").toggled(), Some(egui::accesskit::Toggled::Mixed), "a mixed Shading shows a dash");
+    let behind = named(&nodes, "Light behind the object");
+    assert!(!behind.is_disabled(), "a mixed Shading leaves the light settings available");
+    assert!(!named(&nodes, "Add Light").is_disabled());
+    let at = behind.bounds().map(|r| egui::pos2(((r.x0 + r.x1) / 2.0) as f32, ((r.y0 + r.y1) / 2.0) as f32)).unwrap();
+    let history = undo_len(&app);
+    click(&ctx, &mut app, at, show);
+    assert_eq!(undo_len(&app), history + 1);
+    let params = |id: u64| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params.clone();
+    let merged = |id: u64| vectorcraft_effects::merged_params("threeD.extrude", &params(id));
+    assert_eq!((merged(a)["shade"].clone(), merged(b)["shade"].clone()), (json!(true), json!(false)));
+    assert_eq!((merged(a)["lightBehind"].clone(), merged(b)["lightBehind"].clone()), (json!(true), json!(true)));
+    // A single light whose settings differ: Add Light is off.
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("effect.setParams", json!({"index": 0, "item": null, "params": {"lightIntensity": 40.0}})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert!(named(&controls(&mut app, &ctx), "Add Light").is_disabled());
+}
+
+/// Revolve's Cap checkbox shows a dash when the selected effects disagree on it.
+#[test]
+fn a_mixed_revolve_cap_shows_a_dash() {
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "revolve").unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.revolve", "item": null, "params": {"cap": false}})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let history = undo_len(&app);
+    assert_eq!(named(&controls(&mut app, &ctx), "Cap").toggled(), Some(egui::accesskit::Toggled::Mixed));
+    assert_eq!(undo_len(&app), history);
+}
+
 #[test]
 fn changed_settings_lists_only_new_values() {
     let before = json!({"depth": 50.0, "cap": true, "bevel": "none"});
