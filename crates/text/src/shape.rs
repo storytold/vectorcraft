@@ -8,7 +8,7 @@ use unicode_bidi::Level;
 use unicode_script::{Script, UnicodeScript};
 use unicode_segmentation::UnicodeSegmentation;
 
-use harfrust::{Direction, Feature, ShapeOptions, Tag, UnicodeBuffer};
+use harfrust::{BufferClusterLevel, Direction, Feature, ShapeOptions, Tag, UnicodeBuffer};
 use kurbo::Shape;
 use skrifa::MetadataProvider;
 use skrifa::charmap::Charmap;
@@ -976,6 +976,10 @@ struct Shaped {
     raw: Vec<(u32, u32, i32, i32, i32)>,
     proportional: Vec<bool>,
     vpal: Vec<Option<VAdjust>>,
+    /// Each glyph's own character (cluster at character level), when harakat are styled apart
+    /// from their letters and the character-level pass matches ([`crate::harakat`]); empty
+    /// otherwise (glyphs keep their shaping-cluster start).
+    chars: Vec<u32>,
 }
 
 fn is_mark(c: char) -> bool {
@@ -1042,6 +1046,11 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     if !manual_ends.is_empty() {
         return shape_apart(manual_ends, out);
     }
+    // Harakat styled apart from their letters (paint only): shaped with them, each glyph then
+    // takes its own character's run ([`crate::harakat`]).
+    let styled_marks =
+        boundaries().any(|b| run_at(b - 1).1 != run_at(b).1 && crate::harakat::paint_only_mark_boundary(text, b, run_at(b - 1).1, run_at(b).1));
+    let char_level = std::cell::Cell::new(false);
 
     // Shape the segment as if all of it were in `st`, with the features `more` on top.
     let shape_in = |st: &CharStyle, more: &[Feature]| {
@@ -1052,7 +1061,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             .filter(|l| l.len() <= 35 && l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
             .and_then(|l| l.parse::<harfrust::Language>().ok());
         let mut shaped = Shaped::default();
-        let Shaped { raw, proportional, vpal } = &mut shaped;
+        let Shaped { raw, proportional, vpal, chars } = &mut shaped;
         let hb_shaped = face.hb().map(|hb| {
             let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
             // gid, cluster, x and y advance, x and y offset.
@@ -1072,6 +1081,9 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 }
                 buf.set_direction(direction);
                 buf.guess_segment_properties();
+                if char_level.get() {
+                    buf.set_cluster_level(BufferClusterLevel::Characters);
+                }
                 // The characters' language picks the font's forms for it (`locl`: Turkish keeps fi
                 // apart and the dot on its i).
                 if let Some(l) = &language {
@@ -1100,6 +1112,14 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             *raw = shape(&feats.resolve(st), along).into_iter().map(|(g, c, xa, _, xo, yo)| (g, c, xa, xo, yo)).collect();
             let raw = &*raw;
             let same_glyphs = |v: &[(u32, u32, i32, i32, i32, i32)]| v.len() == raw.len() && v.iter().zip(raw).all(|(a, b)| a.0 == b.0);
+            // The same shaping at character level names each glyph's own character (kept only when
+            // it sets the same glyphs alike, each character in its glyph's cluster).
+            if styled_marks {
+                char_level.set(true);
+                let by_char = shape(&feats.resolve(st), along);
+                char_level.set(false);
+                *chars = crate::harakat::own_chars(raw, &by_char, range.end, text, |gid| crate::harakat::is_gdef_mark(face, gid));
+            }
             if feats.proportional(st) {
                 // `palt` is positioning only: the same glyphs set on their full widths tell which
                 // advances it changed (kerning and the rest change both alike).
@@ -1154,7 +1174,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         shaped
     };
     let first_optical = if optical(range.start) { Some(range.start) } else { boundaries().find(|&b| optical(b)) };
-    let Shaped { raw, proportional, vpal } = if let Some(first) = first_optical.filter(|_| !feats.vertical) {
+    let Shaped { raw, proportional, vpal, chars } = if let Some(first) = first_optical.filter(|_| !feats.vertical) {
         // The pair entering Optical keeps the left character's font kerning. Subsequent
         // Optical pairs use outline spacing, so font pair features stop at its second character.
         let optical_off = if first == range.start {
@@ -1214,7 +1234,11 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     cluster_starts.dedup();
     // A glyph is drawn in one style: where a cluster would take in characters of runs in different
     // styles, the runs are shaped apart, as runs that do not shape alike are.
-    let inside_clusters: Vec<usize> = boundaries().filter(|&b| cluster_starts.binary_search(&b).is_err() && run_at(b - 1).1 != run_at(b).1).collect();
+    // Except at harakat styled apart only in paint ([`crate::harakat`]).
+    let inside_clusters: Vec<usize> = boundaries()
+        .filter(|&b| cluster_starts.binary_search(&b).is_err() && run_at(b - 1).1 != run_at(b).1)
+        .filter(|&b| !crate::harakat::paint_only_mark_boundary(text, b, run_at(b - 1).1, run_at(b).1))
+        .collect();
     if !inside_clusters.is_empty() {
         return shape_apart(inside_clusters, out);
     }
@@ -1274,6 +1298,11 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     for (gi, &(gid, cl, xa, xo, yo)) in raw.iter().enumerate() {
         let cl = cl as usize;
         let (run, gst) = run_at(cl);
+        // A glyph of a harakat styled apart takes its own character's run (paint only).
+        let run = match chars.get(gi).map(|&c| run_at(c as usize)) {
+            Some((own, own_st)) if crate::harakat::paint_only(gst, own_st) => own,
+            _ => run,
+        };
         let end = cluster_end(cl);
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);

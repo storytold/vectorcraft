@@ -19,6 +19,7 @@ pub mod embed;
 mod features;
 mod fontconfig;
 mod fontdb;
+mod harakat;
 pub mod hyphen;
 mod justify;
 mod kashida;
