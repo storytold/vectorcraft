@@ -136,11 +136,19 @@ fn runs_that_differ_only_in_features_shape_as_one_word() {
 /// Where the owner's Kufi Murabba PIIIX is installed.
 const KUFI_FILE: &str = "Library/Fonts/KufiMurabbaPIIIX-Regular.ttf";
 
+/// The owner's Heavy weight of it, the one a final yeh was reported against.
+const KUFI_HEAVY_FILE: &str = "Library/Fonts/KufiMurabbaPIIIX-Heavy.ttf";
+
 /// The Kufi Murabba PIIIX of the font's author in a font database of its own, `None` when it is not
 /// installed (the test then has nothing to read). When the file is there, a face that does not
 /// load is a failure, never a skip.
 fn kufi() -> Option<(FontDb, std::sync::Arc<FontFace>)> {
-    let path = std::path::Path::new(&std::env::var_os("HOME")?).join(KUFI_FILE);
+    kufi_weight(KUFI_FILE, "Regular")
+}
+
+/// [`kufi`] for the installed file `file` (under the home folder), whose face has style `style`.
+fn kufi_weight(file: &str, style: &str) -> Option<(FontDb, std::sync::Arc<FontFace>)> {
+    let path = std::path::Path::new(&std::env::var_os("HOME")?).join(file);
     if !path.exists() {
         eprintln!("skipped: {} is not installed", path.display());
         return None;
@@ -149,8 +157,8 @@ fn kufi() -> Option<(FontDb, std::sync::Arc<FontFace>)> {
     let db = FontDb::with_font_dirs(vec![]);
     let added = db.add_font(bytes);
     assert!(added > 0, "{} exists but no face of it loaded", path.display());
-    let face = db.face("Kufi Murabba PIIIX", "Regular").expect("a face");
-    assert_eq!((face.family.as_str(), face.style.as_str()), ("Kufi Murabba PIIIX", "Regular"), "the installed font's face, not a fallback");
+    let face = db.face("Kufi Murabba PIIIX", style).expect("a face");
+    assert_eq!((face.family.as_str(), face.style.as_str()), ("Kufi Murabba PIIIX", style), "the installed font's face, not a fallback");
     Some((db, face))
 }
 
@@ -356,4 +364,47 @@ fn a_feature_on_a_one_byte_character_reaches_it() {
     ];
     let gids: Vec<u32> = layout(&db, &text).glyphs.iter().map(|g| g.gid).collect();
     assert_eq!(gids, [face.glyph_for('x'), face.glyph_for('b'), face.glyph_for('y')], "salt draws b for the a alone");
+}
+
+/// The owner's Kufi Murabba PIIIX Heavy, with the final letter of al-Khwarizmi as Persian yeh
+/// (U+06CC), Arabic yeh (U+064A) or alef maksura (U+0649): in each the letter takes its own final
+/// form, the byte offset of the last character finds its alternates, `salt` to `salt=6` draw them
+/// on that letter alone with the rest of the word and its joining untouched, and the glyph an
+/// alternate is (`yehfarsi.fina.alt2`) is traced back to its letter and its place in the word.
+#[test]
+fn kufi_murabba_heavy_final_letters_alternates_belong_to_their_letter() {
+    let Some((db, face)) = kufi_weight(KUFI_HEAVY_FILE, "Heavy") else { return };
+    let family = face.family.clone();
+    for (letter, base) in [('\u{06CC}', "yehfarsi"), ('\u{064A}', "yeh"), ('\u{0649}', "alefmaksura")] {
+        let head: String = KHWARIZMI.chars().take(KHWARIZMI.chars().count() - 1).collect();
+        let word = format!("{head}{letter}");
+        let last = word.len() - letter.len_utf8();
+        let letter = letter.to_string();
+        let plain = set(&db, &family, &[(&head, &[]), (&letter, &[])]);
+        assert_eq!(plain.len(), KHWARIZMI.chars().count(), "{base}: one glyph for each letter: {}", describe(&plain));
+        assert_eq!(face.glyph_name(plain[plain.len() - 1].gid), Some(format!("{base}.fina")), "{base}: the letter ends the word in its final form");
+        let mut text = TextObject::point(Point::ZERO, "", style(&family, &[]));
+        text.runs = vec![TextRun { text: word.clone(), style: style(&family, &[]), inline: None }];
+        let found = alternates_in_context(&db, &text, last).expect("the final letter");
+        assert_eq!((found.default, found.current), (plain[plain.len() - 1].gid, plain[plain.len() - 1].gid), "{base}");
+        assert_eq!(found.alternates.len(), 6, "{base}: the six alternates of the final form");
+        for (n, a) in found.alternates.iter().enumerate() {
+            let tag = if n == 0 { "salt".to_string() } else { format!("salt={}", n + 1) };
+            assert_eq!(a.apply.as_deref(), Some(tag.as_str()), "{base}: the feature that draws alternate {}", n + 1);
+            assert_eq!(face.glyph_name(a.gid), Some(format!("{base}.fina.alt{}", n + 1)), "{base}");
+            let glyphs = set(&db, &family, &[(&head, &[]), (&letter, &[tag.as_str()])]);
+            assert_eq!(glyphs.len(), plain.len(), "{base} {tag}: {}", describe(&glyphs));
+            assert_eq!(glyphs[glyphs.len() - 1].gid, a.gid, "{base} {tag}: the alternate");
+            assert!(
+                glyphs.iter().zip(&plain).take(plain.len() - 1).all(|(x, y)| x.gid == y.gid),
+                "{base} {tag}: the rest of the word keeps its forms"
+            );
+            let origin = face.glyph_origin(a.gid).expect("the alternate comes from a letter");
+            assert_eq!(origin.ch.to_string(), letter, "{base}: {} is a form of its own letter", face.glyph_name(a.gid).unwrap_or_default());
+            assert_eq!(origin.position(), Some(JoiningPosition::Final), "{base}: and of its end of a word");
+        }
+    }
+    // Glyph 820 of the owner's file is yehfarsi.fina.alt2: Persian yeh's, at the end of a word.
+    let g820 = face.glyph_origin(820).expect("glyph 820 comes from a letter");
+    assert_eq!((face.glyph_name(820).as_deref(), g820.ch, g820.position()), (Some("yehfarsi.fina.alt2"), '\u{06CC}', Some(JoiningPosition::Final)));
 }

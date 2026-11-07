@@ -1578,8 +1578,18 @@ digits	Malayalam	Malajálamské
 	The selected character's font is not available.	Písmo vybraného znaku není k dispozici.
 	No alternates for the selected character.	Vybraný znak nemá žádné alternativy.
 	Double-click to replace	Dvojklikem nahradíte
+	Select one character with the Type tool first.	Nejprve nástrojem Text vyberte jeden znak.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} je glyf písma {font}, ne písma, kterým je vybraný text nastaven ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} patří znaku {base} (U+{base_code}) {place}; váš výběr je {sel} (U+{code}).
+	at the start of a word	na začátku slova
+	in the middle of a word	uprostřed slova
+	at the end of a word	na konci slova
+	standing alone	když stojí samostatně
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} není alternativou znaku {sel} (U+{code}) tak, jak stojí ve svém slově.
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Žádná funkce OpenType nedává {glyph}, proto ho nelze použít na text.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dvojklikem vložíte {base} (U+{code}): prezentační tvar se nespojuje, písmeno ano.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Vloženo {base} (U+{code}) místo prezentačního tvaru: písmo ho podle polohy spojí se sousedy.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Žádná funkce OpenType tento glyf zde nekreslí, proto nahradí glyf znaku a nemusí se spojit se sousedními znaky.
-	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Tento glyf nemá žádný znak, takže ho nelze vložit. Použijte „Alternativy pro aktuální výběr“.
 	Double-click to insert	Dvojklikem vložíte
 	Entire Font	Celé písmo
 	glyph {id}	glyf {id}

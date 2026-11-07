@@ -861,8 +861,18 @@ font-technology	Variable	Variabili
 	The selected character's font is not available.	Il font del carattere selezionato non è disponibile.
 	No alternates for the selected character.	Nessuna alternativa per il carattere selezionato.
 	Double-click to replace	Fai doppio clic per sostituire
+	Select one character with the Type tool first.	Seleziona prima un carattere con lo strumento Testo.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} è un glifo di {font}, non del font del testo selezionato ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} appartiene a {base} (U+{base_code}) {place}; la tua selezione è {sel} (U+{code}).
+	at the start of a word	all’inizio di una parola
+	in the middle of a word	in mezzo a una parola
+	at the end of a word	alla fine di una parola
+	standing alone	da solo
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} non è un’alternativa di {sel} (U+{code}) così come si trova nella sua parola.
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Nessuna funzione OpenType raggiunge {glyph}, quindi non può essere applicato al testo.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Fai doppio clic per inserire invece {base} (U+{code}): una forma di presentazione non si unisce, la lettera sì.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Inserito {base} (U+{code}) al posto di una forma di presentazione: il font lo unisce ai vicini in base alla posizione.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nessuna funzione OpenType disegna questo glifo qui: sostituisce il glifo del carattere e potrebbe non unirsi ai caratteri vicini.
-	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Questo glifo non ha un carattere e non può essere inserito. Usa «Alternative per la selezione corrente» per applicarlo.
 	Double-click to insert	Fai doppio clic per inserire
 	Double-click to rename	Fai doppio clic per rinominare
 	Double-click to target the contents	Fai doppio clic per impostare il contenuto come destinazione

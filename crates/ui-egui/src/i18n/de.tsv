@@ -840,8 +840,18 @@ font-technology	Variable	Variabel
 	The selected character's font is not available.	Die Schrift des ausgewählten Zeichens ist nicht verfügbar.
 	No alternates for the selected character.	Keine Alternativen für das ausgewählte Zeichen.
 	Double-click to replace	Doppelklicken zum Ersetzen
+	Select one character with the Type tool first.	Wählen Sie zuerst mit dem Text-Werkzeug ein Zeichen aus.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} ist eine Glyphe von {font}, nicht der Schrift, in der der ausgewählte Text gesetzt ist ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} gehört zu {base} (U+{base_code}) {place}; Ihre Auswahl ist {sel} (U+{code}).
+	at the start of a word	am Wortanfang
+	in the middle of a word	in der Wortmitte
+	at the end of a word	am Wortende
+	standing alone	allein stehend
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} ist keine Alternative zu {sel} (U+{code}), so wie es in seinem Wort steht.
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Keine OpenType-Funktion liefert {glyph}, daher lässt es sich nicht auf Text anwenden.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Doppelklicken, um stattdessen {base} (U+{code}) einzufügen: Eine Darstellungsform verbindet sich nicht, der Buchstabe schon.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) statt einer Darstellungsform eingefügt: Die Schrift verbindet es je nach Position mit den Nachbarn.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Keine OpenType-Funktion zeichnet diese Glyphe hier, daher ersetzt sie die Glyphe des Zeichens und verbindet sich möglicherweise nicht mit den Nachbarzeichen.
-	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Diese Glyphe hat kein Zeichen und lässt sich daher nicht einfügen. Verwenden Sie „Alternativen für aktuelle Auswahl“, um sie anzuwenden.
 	Double-click to insert	Doppelklicken zum Einfügen
 	Double-click to rename	Doppelklicken zum Umbenennen
 	Double-click to target the contents	Doppelklicken, um den Inhalt als Ziel auszuwählen

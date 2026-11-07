@@ -1414,8 +1414,18 @@ digits	Malayalam	말라얄람어
 	The selected character's font is not available.	선택한 문자의 글꼴을 사용할 수 없습니다.
 	No alternates for the selected character.	선택한 문자의 대체 글리프가 없습니다.
 	Double-click to replace	더블클릭하여 바꾸기
+	Select one character with the Type tool first.	먼저 문자 도구로 문자 하나를 선택하세요.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph}은(는) {font}의 글리프이며, 선택한 텍스트의 글꼴({text_font})의 것이 아닙니다.
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph}은(는) {base}(U+{base_code})의 {place} 글리프입니다. 선택한 문자는 {sel}(U+{code})입니다.
+	at the start of a word	단어 처음
+	in the middle of a word	단어 중간
+	at the end of a word	단어 끝
+	standing alone	단독일 때
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph}은(는) 단어 안에 있는 {sel}(U+{code})의 대체 글리프가 아닙니다.
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	{glyph}에 도달하는 OpenType 기능이 없으므로 텍스트에 적용할 수 없습니다.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	더블클릭하여 대신 {base}(U+{code}) 삽입: 표시 형태는 연결되지 않지만 글자는 연결됩니다.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	표시 형태 대신 {base}(U+{code})을(를) 삽입했습니다. 글꼴이 위치에 따라 이웃 문자와 연결합니다.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	이 글리프를 그리는 OpenType 기능이 없으므로 문자의 글리프를 대체하며 이웃 문자와 연결되지 않을 수 있습니다.
-	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	이 글리프에는 문자가 없어 삽입할 수 없습니다. 적용하려면 ‘현재 선택 항목의 대체 글리프’를 사용하세요.
 	Double-click to insert	더블클릭하여 삽입
 	Double-click to rename	더블클릭하여 이름 변경
 	Double-click to target the contents	더블클릭하여 내용 선택

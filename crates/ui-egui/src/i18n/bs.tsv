@@ -1554,8 +1554,18 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Font odabranog znaka nije dostupan.
 	No alternates for the selected character.	Nema alternativa za odabrani znak.
 	Double-click to replace	Dvostruki klik za zamjenu
+	Select one character with the Type tool first.	Prvo odaberite jedan znak alatom za tekst.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} je glif fonta {font}, a ne fonta kojim je postavljen odabrani tekst ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pripada znaku {base} (U+{base_code}) {place}; vaš odabir je {sel} (U+{code}).
+	at the start of a word	na početku riječi
+	in the middle of a word	usred riječi
+	at the end of a word	na kraju riječi
+	standing alone	kad stoji sam
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} nije alternativa znaku {sel} (U+{code}) onako kako stoji u svojoj riječi.
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Nijedna OpenType funkcija ne daje {glyph}, pa se ne može primijeniti na tekst.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dvostruki klik za umetanje znaka {base} (U+{code}): oblik za prikaz se ne spaja, slovo se spaja.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Umetnut je znak {base} (U+{code}) umjesto oblika za prikaz: font ga spaja sa susjedima prema položaju.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nijedna OpenType funkcija ne crta ovaj glif ovdje, pa on zamjenjuje glif znaka i možda se neće spajati sa susjednim znakovima.
-	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Ovaj glif nema znak, pa se ne može umetnuti. Koristite „Alternative za trenutni odabir“ da ga primijenite.
 	Double-click to insert	Dvostruki klik za umetanje
 	Entire Font	Cijeli font
 	glyph {id}	glif {id}

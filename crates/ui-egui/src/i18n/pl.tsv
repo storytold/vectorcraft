@@ -1491,8 +1491,18 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Czcionka zaznaczonego znaku jest niedostępna.
 	No alternates for the selected character.	Brak alternatyw dla zaznaczonego znaku.
 	Double-click to replace	Kliknij dwukrotnie, aby zastąpić
+	Select one character with the Type tool first.	Najpierw zaznacz jeden znak narzędziem Tekst.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} to glif czcionki {font}, a nie czcionki zaznaczonego tekstu ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} należy do znaku {base} (U+{base_code}) {place}; Twoje zaznaczenie to {sel} (U+{code}).
+	at the start of a word	na początku wyrazu
+	in the middle of a word	w środku wyrazu
+	at the end of a word	na końcu wyrazu
+	standing alone	gdy stoi osobno
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} nie jest alternatywą znaku {sel} (U+{code}) w takiej postaci, w jakiej stoi w swoim wyrazie.
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Żadna funkcja OpenType nie daje glifu {glyph}, więc nie można go zastosować do tekstu.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Kliknij dwukrotnie, aby wstawić zamiast tego {base} (U+{code}): forma prezentacyjna się nie łączy, litera tak.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Wstawiono {base} (U+{code}) zamiast formy prezentacyjnej: czcionka łączy go z sąsiadami zależnie od pozycji.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Żadna funkcja OpenType nie rysuje tutaj tego glifu, więc zastępuje on glif znaku i może nie łączyć się z sąsiednimi znakami.
-	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Ten glif nie ma znaku, więc nie można go wstawić. Użyj opcji „Alternatywy bieżącego zaznaczenia”, aby go zastosować.
 	Double-click to insert	Kliknij dwukrotnie, aby wstawić
 	Entire Font	Cała czcionka
 	glyph {id}	glif {id}

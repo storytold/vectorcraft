@@ -1551,8 +1551,18 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Valitun merkin fontti ei ole saatavilla.
 	No alternates for the selected character.	Valitulla merkillä ei ole vaihtoehtoja.
 	Double-click to replace	Korvaa kaksoisnapsauttamalla
+	Select one character with the Type tool first.	Valitse ensin yksi merkki tekstityökalulla.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} on fontin {font} glyfi, ei valitun tekstin fontin ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} kuuluu merkille {base} (U+{base_code}) {place}; valintasi on {sel} (U+{code}).
+	at the start of a word	sanan alussa
+	in the middle of a word	sanan keskellä
+	at the end of a word	sanan lopussa
+	standing alone	yksinään
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} ei ole merkin {sel} (U+{code}) vaihtoehto sellaisena kuin se on sanassaan.
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Mikään OpenType-ominaisuus ei tuota glyfiä {glyph}, joten sitä ei voi käyttää tekstiin.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Lisää kaksoisnapsauttamalla sen sijaan {base} (U+{code}): esitysmuoto ei liity, kirjain liittyy.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Lisättiin {base} (U+{code}) esitysmuodon sijaan: fontti liittää sen naapureihin sijainnin mukaan.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Mikään OpenType-ominaisuus ei piirrä tätä glyfiä tässä, joten se korvaa merkin glyfin eikä välttämättä liity viereisiin merkkeihin.
-	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Tällä glyfillä ei ole merkkiä, joten sitä ei voi lisätä. Käytä toimintoa ”Nykyisen valinnan vaihtoehdot” sen käyttöön.
 	Double-click to insert	Lisää kaksoisnapsauttamalla
 	Entire Font	Koko fontti
 	glyph {id}	merkki {id}

@@ -999,8 +999,18 @@ font-technology	Variable	Biến thiên
 	The selected character's font is not available.	Phông chữ của ký tự đã chọn không khả dụng.
 	No alternates for the selected character.	Ký tự đã chọn không có glyph thay thế.
 	Double-click to replace	Bấm đúp để thay thế
+	Select one character with the Type tool first.	Trước hết hãy chọn một ký tự bằng công cụ Chữ.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} là glyph của {font}, không phải của phông chữ mà văn bản đã chọn đang dùng ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} thuộc về {base} (U+{base_code}) {place}; ký tự bạn chọn là {sel} (U+{code}).
+	at the start of a word	ở đầu từ
+	in the middle of a word	ở giữa từ
+	at the end of a word	ở cuối từ
+	standing alone	khi đứng riêng
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} không phải glyph thay thế của {sel} (U+{code}) như ký tự đó đang đứng trong từ của nó.
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Không có tính năng OpenType nào đạt tới {glyph}, nên không thể áp dụng cho văn bản.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Bấm đúp để chèn {base} (U+{code}) thay thế: dạng trình bày không nối, còn chữ cái thì nối.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Đã chèn {base} (U+{code}) thay cho dạng trình bày: phông chữ nối nó với các ký tự bên cạnh theo vị trí.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Không có tính năng OpenType nào vẽ glyph này ở đây, nên nó thay glyph của ký tự và có thể không nối với các ký tự bên cạnh.
-	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Glyph này không có ký tự nên không thể chèn. Hãy dùng “Glyph thay thế cho vùng chọn hiện tại” để áp dụng.
 	Double-click to insert	Bấm đúp để chèn
 	Double-click to rename	Bấm đúp để đổi tên
 	Double-click to target the contents	Bấm đúp để chọn nội dung

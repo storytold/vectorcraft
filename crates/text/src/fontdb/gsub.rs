@@ -83,6 +83,8 @@ impl Substitution {
     }
 }
 
+type Tag = [u8; 4];
+
 /// A face's substitutions, by the glyph they replace and by the glyph they give.
 #[derive(Default)]
 pub(super) struct GsubIndex {
@@ -90,8 +92,8 @@ pub(super) struct GsubIndex {
     /// lookup.
     by_input: HashMap<u32, Vec<Substitution>>,
     /// The first feature, listed ones first, that gives each glyph: by a single, multiple,
-    /// alternate or ligature substitution.
-    reached: HashMap<u32, [u8; 4]>,
+    /// alternate or ligature substitution, and the glyph it replaces (not known for a ligature).
+    reached: HashMap<u32, (Tag, Option<u32>)>,
 }
 
 /// The glyph single substitution `t` puts in place of each glyph its coverage holds.
@@ -209,7 +211,7 @@ impl GsubIndex {
                 let out: Vec<u32> = out.into_iter().filter(|g| *g < glyphs).collect();
                 for g in &out {
                     if *g != input && index.reached.len() < MAX_ENTRIES {
-                        index.reached.entry(*g).or_insert(tag);
+                        index.reached.entry(*g).or_insert((tag, Some(input)));
                     }
                 }
                 if listed && !out.is_empty() && entries < MAX_ENTRIES {
@@ -240,7 +242,7 @@ impl GsubIndex {
                             if covered.insert(input) {
                                 for g in to.into_iter().filter(|g| *g < glyphs && *g != input) {
                                     if index.reached.len() < MAX_ENTRIES {
-                                        index.reached.entry(g).or_insert(tag);
+                                        index.reached.entry(g).or_insert((tag, Some(input)));
                                     }
                                 }
                             }
@@ -251,7 +253,7 @@ impl GsubIndex {
                     for t in s.iter().take(n).inspect(|_| reads -= 1).flatten() {
                         for g in ligature_glyphs(&t, MAX_ENTRIES).into_iter().filter(|g| *g < glyphs) {
                             if index.reached.len() < MAX_ENTRIES {
-                                index.reached.entry(g).or_insert(tag);
+                                index.reached.entry(g).or_insert((tag, None));
                             }
                         }
                     }
@@ -261,6 +263,40 @@ impl GsubIndex {
         }
         index
     }
+}
+
+/// The most substitutions [`FontFace::glyph_origin`] follows back.
+const MAX_ORIGIN_STEPS: usize = 8;
+
+/// The character a glyph comes from ([`FontFace::glyph_origin`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GlyphOrigin {
+    pub ch: char,
+    /// The features from the glyph back to the character's glyph, the glyph's own first.
+    pub features: Vec<[u8; 4]>,
+}
+
+impl GlyphOrigin {
+    /// The place in a word that the glyph's features give it: the first of `init`, `medi`, `fina`
+    /// and `isol` among them, `None` when none is (a letter that does not join).
+    pub fn position(&self) -> Option<crate::JoiningPosition> {
+        self.features.iter().find_map(|f| match f {
+            b"init" => Some(crate::JoiningPosition::Initial),
+            b"medi" => Some(crate::JoiningPosition::Medial),
+            b"fina" => Some(crate::JoiningPosition::Final),
+            b"isol" => Some(crate::JoiningPosition::Isolated),
+            _ => None,
+        })
+    }
+}
+
+/// Where a letter stands in a word, as the `init`, `medi`, `fina` and `isol` features say.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JoiningPosition {
+    Initial,
+    Medial,
+    Final,
+    Isolated,
 }
 
 impl FontFace {
@@ -285,7 +321,32 @@ impl FontFace {
     /// multiple, alternate or ligature substitution), a listed feature ([`Self::substitutions`])
     /// before another (`init`, `liga`), if any does. Not read through a contextual lookup.
     pub fn feature_reaching(&self, gid: u32) -> Option<[u8; 4]> {
-        self.gsub_index().reached.get(&gid).copied()
+        self.gsub_index().reached.get(&gid).map(|r| r.0)
+    }
+
+    /// Where glyph `gid` comes from: the character whose glyph the `GSUB` table's substitutions
+    /// lead to it from, and the features on the way, `gid`'s own first (`aalt`, then `fina` for
+    /// `yehfarsi.fina.alt2`, whose character is U+06CC). The chain follows the first substitution
+    /// that gives each glyph back to a glyph none gives, as far as [`MAX_ORIGIN_STEPS`] steps; a
+    /// presentation-form character that maps a glyph in the chain does not stop it, and the
+    /// character is the lowest one outside the Arabic presentation forms that maps the glyph it
+    /// ends on (the lowest of all when only presentation forms do). `None` when no character maps
+    /// that glyph (a glyph no feature reaches, a ligature).
+    pub fn glyph_origin(&self, gid: u32) -> Option<GlyphOrigin> {
+        let index = self.gsub_index();
+        let mut features = vec![];
+        let mut at = gid;
+        for _ in 0..MAX_ORIGIN_STEPS {
+            let Some((tag, from)) = index.reached.get(&at) else { break };
+            features.push(*tag);
+            at = (*from)?;
+        }
+        let font = self.skrifa()?;
+        let presentation = |c: u32| (0xFB50..=0xFDFF).contains(&c) || (0xFE70..=0xFEFF).contains(&c);
+        let mut chars: Vec<u32> = font.charmap().mappings().filter(|(_, g)| g.to_u32() == at).map(|(c, _)| c).collect();
+        chars.sort_by_key(|c| (presentation(*c), *c));
+        let ch = chars.first().copied().and_then(char::from_u32)?;
+        Some(GlyphOrigin { ch, features })
     }
 
     /// The name of glyph `gid` from the font's `post` or `CFF` table: `None` for a glyph past the
