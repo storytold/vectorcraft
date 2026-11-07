@@ -861,6 +861,8 @@ font-technology	Variable	Variables
 	The selected character's font is not available.	La fuente del carácter seleccionado no está disponible.
 	No alternates for the selected character.	No hay alternativas para el carácter seleccionado.
 	Double-click to replace	Doble clic para reemplazar
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ninguna función OpenType dibuja este glifo aquí, así que sustituye el glifo del carácter y puede que no se una a los caracteres vecinos.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Este glifo no tiene carácter, así que no se puede insertar. Usa «Alternativas para la selección actual» para aplicarlo.
 	Double-click to insert	Doble clic para insertar
 	Double-click to rename	Doble clic para cambiar el nombre
 	Double-click to target the contents	Doble clic para seleccionar el contenido como destino

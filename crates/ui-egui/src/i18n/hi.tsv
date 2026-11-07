@@ -1344,6 +1344,8 @@
 	Double-click to insert	सम्मिलित करने के लिए डबल क्लिक करें
 	Double-click to rename	नाम बदलने के लिए डबल क्लिक करें
 	Double-click to replace	प्रतिस्थापित करने के लिए डबल क्लिक करें
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	यहाँ कोई OpenType फ़ीचर इस ग्लिफ़ को नहीं बनाता, इसलिए यह कैरेक्टर के ग्लिफ़ की जगह लेता है और पड़ोसी कैरेक्टरों से जुड़ नहीं भी सकता।
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	इस ग्लिफ़ का कोई कैरेक्टर नहीं है, इसलिए इसे सम्मिलित नहीं किया जा सकता। इसे लागू करने के लिए “वर्तमान सिलेक्शन के लिए ऑप्शन” का उपयोग करें।
 	Double-click to target the contents	सामग्री को लक्षित करने के लिए डबल क्लिक करें
 	Down (right reading)	नीचे (दाएं पढ़ने)
 	Download	डाउनलोड

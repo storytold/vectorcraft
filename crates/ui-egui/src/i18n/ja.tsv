@@ -1424,6 +1424,8 @@ digits	Malayalam	マラヤーラム数字
 	The selected character's font is not available.	選択した文字のフォントを使用できません。
 	No alternates for the selected character.	選択した文字には異体字がありません。
 	Double-click to replace	ダブルクリックで置換
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	このグリフを表示する OpenType フィーチャーがないため、文字のグリフが置き換わり、前後の文字とつながらないことがあります。
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	このグリフには対応する文字がないため、挿入できません。適用するには「選択文字の異体字」を使用してください。
 	Double-click to insert	ダブルクリックで挿入
 	Double-click to rename	ダブルクリックで名前を変更
 	Double-click to target the contents	ダブルクリックで内容をターゲット

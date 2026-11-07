@@ -1414,6 +1414,8 @@ digits	Malayalam	말라얄람어
 	The selected character's font is not available.	선택한 문자의 글꼴을 사용할 수 없습니다.
 	No alternates for the selected character.	선택한 문자의 대체 글리프가 없습니다.
 	Double-click to replace	더블클릭하여 바꾸기
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	이 글리프를 그리는 OpenType 기능이 없으므로 문자의 글리프를 대체하며 이웃 문자와 연결되지 않을 수 있습니다.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	이 글리프에는 문자가 없어 삽입할 수 없습니다. 적용하려면 ‘현재 선택 항목의 대체 글리프’를 사용하세요.
 	Double-click to insert	더블클릭하여 삽입
 	Double-click to rename	더블클릭하여 이름 변경
 	Double-click to target the contents	더블클릭하여 내용 선택

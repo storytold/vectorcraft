@@ -848,6 +848,8 @@ font-technology	Variable	Variabla
 	The selected character's font is not available.	Typsnittet för det markerade tecknet är inte tillgängligt.
 	No alternates for the selected character.	Inga alternativ för det markerade tecknet.
 	Double-click to replace	Dubbelklicka för att ersätta
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ingen OpenType-funktion ritar den här glyfen här, så den ersätter tecknets glyf och ansluter kanske inte till grannteckenen.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Den här glyfen har inget tecken och kan därför inte infogas. Använd ”Alternativ för aktuell markering” för att tillämpa den.
 	Double-click to insert	Dubbelklicka för att infoga
 	Double-click to rename	Dubbelklicka för att byta namn
 	Double-click to target the contents	Dubbelklicka för att välja innehållet som mål

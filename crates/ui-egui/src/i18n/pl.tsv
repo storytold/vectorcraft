@@ -1491,6 +1491,8 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Czcionka zaznaczonego znaku jest niedostępna.
 	No alternates for the selected character.	Brak alternatyw dla zaznaczonego znaku.
 	Double-click to replace	Kliknij dwukrotnie, aby zastąpić
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Żadna funkcja OpenType nie rysuje tutaj tego glifu, więc zastępuje on glif znaku i może nie łączyć się z sąsiednimi znakami.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Ten glif nie ma znaku, więc nie można go wstawić. Użyj opcji „Alternatywy bieżącego zaznaczenia”, aby go zastosować.
 	Double-click to insert	Kliknij dwukrotnie, aby wstawić
 	Entire Font	Cała czcionka
 	glyph {id}	glif {id}

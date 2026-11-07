@@ -999,6 +999,8 @@ font-technology	Variable	Biến thiên
 	The selected character's font is not available.	Phông chữ của ký tự đã chọn không khả dụng.
 	No alternates for the selected character.	Ký tự đã chọn không có glyph thay thế.
 	Double-click to replace	Bấm đúp để thay thế
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Không có tính năng OpenType nào vẽ glyph này ở đây, nên nó thay glyph của ký tự và có thể không nối với các ký tự bên cạnh.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Glyph này không có ký tự nên không thể chèn. Hãy dùng “Glyph thay thế cho vùng chọn hiện tại” để áp dụng.
 	Double-click to insert	Bấm đúp để chèn
 	Double-click to rename	Bấm đúp để đổi tên
 	Double-click to target the contents	Bấm đúp để chọn nội dung

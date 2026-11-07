@@ -840,6 +840,8 @@ font-technology	Variable	Değişken
 	The selected character's font is not available.	Seçili karakterin yazı tipi kullanılamıyor.
 	No alternates for the selected character.	Seçili karakter için alternatif yok.
 	Double-click to replace	Değiştirmek için çift tıklayın
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Hiçbir OpenType özelliği bu glifi burada çizmez; bu yüzden karakterin glifinin yerine geçer ve komşu karakterlere bağlanmayabilir.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Bu glifin karakteri yok, bu yüzden eklenemez. Uygulamak için “Geçerli Seçim için Alternatifler”i kullanın.
 	Double-click to insert	Eklemek için çift tıklayın
 	Double-click to rename	Yeniden adlandırmak için çift tıklayın
 	Double-click to target the contents	İçeriği hedeflemek için çift tıklayın

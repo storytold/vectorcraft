@@ -1578,6 +1578,8 @@ digits	Malayalam	Malajálamské
 	The selected character's font is not available.	Písmo vybraného znaku není k dispozici.
 	No alternates for the selected character.	Vybraný znak nemá žádné alternativy.
 	Double-click to replace	Dvojklikem nahradíte
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Žádná funkce OpenType tento glyf zde nekreslí, proto nahradí glyf znaku a nemusí se spojit se sousedními znaky.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Tento glyf nemá žádný znak, takže ho nelze vložit. Použijte „Alternativy pro aktuální výběr“.
 	Double-click to insert	Dvojklikem vložíte
 	Entire Font	Celé písmo
 	glyph {id}	glyf {id}

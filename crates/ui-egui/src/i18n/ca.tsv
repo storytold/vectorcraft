@@ -1208,6 +1208,8 @@
 	The selected character's font is not available.	El tipus de lletra del caràcter seleccionat no està disponible.
 	No alternates for the selected character.	No hi ha alternatives per al caràcter seleccionat.
 	Double-click to replace	Feu doble clic per substituir
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Cap funció OpenType dibuixa aquest glif aquí, de manera que substitueix el glif del caràcter i pot no unir-se als caràcters veïns.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Aquest glif no té cap caràcter, de manera que no es pot inserir. Feu servir «Alternatives per a la selecció actual» per aplicar-lo.
 	Double-click to insert	Feu doble clic per inserir
 	Double-click to rename	Feu doble clic per canviar el nom
 	Double-click to target the contents	Feu doble clic per apuntar al contingut

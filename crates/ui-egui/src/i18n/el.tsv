@@ -819,6 +819,8 @@ font-technology	Variable	Μεταβλητές
 	The selected character's font is not available.	Η γραμματοσειρά του επιλεγμένου χαρακτήρα δεν είναι διαθέσιμη.
 	No alternates for the selected character.	Δεν υπάρχουν εναλλακτικοί για τον επιλεγμένο χαρακτήρα.
 	Double-click to replace	Διπλό κλικ για αντικατάσταση
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Καμία λειτουργία OpenType δεν σχεδιάζει αυτόν τον γλύφο εδώ, οπότε αντικαθιστά τον γλύφο του χαρακτήρα και μπορεί να μην συνδέεται με τους γειτονικούς χαρακτήρες.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Αυτός ο γλύφος δεν έχει χαρακτήρα και δεν μπορεί να εισαχθεί. Χρησιμοποιήστε τους «Εναλλακτικούς για την τρέχουσα επιλογή» για να τον εφαρμόσετε.
 	Double-click to insert	Διπλό κλικ για εισαγωγή
 	Double-click to rename	Διπλό κλικ για μετονομασία
 	Double-click to target the contents	Διπλό κλικ για επιλογή του περιεχομένου ως στόχου

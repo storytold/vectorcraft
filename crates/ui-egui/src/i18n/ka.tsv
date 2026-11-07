@@ -1414,6 +1414,8 @@ digits	Malayalam	მალაიალამური
 	The selected character's font is not available.	მონიშნული სიმბოლოს შრიფტი მიუწვდომელია.
 	No alternates for the selected character.	მონიშნულ სიმბოლოს ალტერნატივები არ აქვს.
 	Double-click to replace	ორჯერ დაწკაპეთ ჩასანაცვლებლად
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	აქ არც ერთი OpenType ფუნქცია არ ხატავს ამ გლიფს, ამიტომ ის ანაცვლებს სიმბოლოს გლიფს და შეიძლება არ დაუკავშირდეს მეზობელ სიმბოლოებს.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	ამ გლიფს სიმბოლო არ აქვს, ამიტომ მისი ჩასმა შეუძლებელია. გამოსაყენებლად გამოიყენეთ „მიმდინარე მონიშვნის ალტერნატივები“.
 	Double-click to insert	ორჯერ დაწკაპეთ ჩასასმელად
 	Entire Font	მთელი შრიფტი
 	glyph {id}	გლიფი {id}

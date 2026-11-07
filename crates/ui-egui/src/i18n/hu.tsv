@@ -1114,6 +1114,8 @@ font-technology	Variable	Változó
 	The selected character's font is not available.	A kijelölt karakter betűtípusa nem érhető el.
 	No alternates for the selected character.	A kijelölt karakternek nincsenek változatai.
 	Double-click to replace	Csere dupla kattintással
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Itt egyetlen OpenType-funkció sem rajzolja meg ezt a glifát, ezért a karakter glifáját váltja fel, és előfordulhat, hogy nem kapcsolódik a szomszédos karakterekhez.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Ennek a glifának nincs karaktere, ezért nem szúrható be. Az alkalmazásához használd az „Az aktuális kijelölés változatai” nézetet.
 	Double-click to insert	Beszúrás dupla kattintással
 	Double-click to rename	Dupla kattintással átnevezhető
 	Double-click to target the contents	Dupla kattintással a tartalom lesz a cél

@@ -855,6 +855,8 @@ font-technology	Variable	Варіативні
 	The selected character's font is not available.	Шрифт виділеного символу недоступний.
 	No alternates for the selected character.	Виділений символ не має альтернатив.
 	Double-click to replace	Двічі клацніть для заміни
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Жодна функція OpenType не малює тут цей гліф, тому він замінює гліф символу й може не з’єднуватися із сусідніми символами.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	У цього гліфа немає символу, тому його не можна вставити. Щоб застосувати його, скористайтеся «Альтернативи для поточного виділення».
 	Double-click to insert	Двічі клацніть для вставки
 	Double-click to rename	Двічі клацніть для перейменування
 	Double-click to target the contents	Двічі клацніть, щоб вибрати вміст як об’єкт

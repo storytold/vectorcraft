@@ -859,6 +859,8 @@ font-technology	Variable	Вариативные
 	The selected character's font is not available.	Шрифт выделенного символа недоступен.
 	No alternates for the selected character.	У выделенного символа нет альтернатив.
 	Double-click to replace	Дважды щёлкните для замены
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ни одна функция OpenType не рисует здесь этот глиф, поэтому он заменяет глиф символа и может не соединяться с соседними символами.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	У этого глифа нет символа, поэтому его нельзя вставить. Чтобы применить его, используйте «Альтернативы для текущего выделения».
 	Double-click to insert	Дважды щёлкните для вставки
 	Double-click to rename	Дважды щёлкните для переименования
 	Double-click to target the contents	Дважды щёлкните, чтобы выбрать содержимое как объект

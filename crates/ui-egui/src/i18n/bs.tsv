@@ -1554,6 +1554,8 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Font odabranog znaka nije dostupan.
 	No alternates for the selected character.	Nema alternativa za odabrani znak.
 	Double-click to replace	Dvostruki klik za zamjenu
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nijedna OpenType funkcija ne crta ovaj glif ovdje, pa on zamjenjuje glif znaka i možda se neće spajati sa susjednim znakovima.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Ovaj glif nema znak, pa se ne može umetnuti. Koristite „Alternative za trenutni odabir“ da ga primijenite.
 	Double-click to insert	Dvostruki klik za umetanje
 	Entire Font	Cijeli font
 	glyph {id}	glif {id}

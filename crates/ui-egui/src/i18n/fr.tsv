@@ -864,6 +864,8 @@ font-technology	Variable	Variables
 	The selected character's font is not available.	La police du caractère sélectionné n’est pas disponible.
 	No alternates for the selected character.	Aucune variante pour le caractère sélectionné.
 	Double-click to replace	Double-cliquez pour remplacer
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Aucune fonction OpenType ne dessine ce glyphe ici : il remplace le glyphe du caractère et peut ne pas se lier aux caractères voisins.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Ce glyphe n’a pas de caractère et ne peut donc pas être inséré. Utilisez « Variantes de la sélection » pour l’appliquer.
 	Double-click to insert	Double-cliquez pour insérer
 	Double-click to rename	Double-cliquez pour renommer
 	Double-click to target the contents	Double-cliquez pour cibler le contenu

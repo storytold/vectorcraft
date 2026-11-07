@@ -1502,6 +1502,8 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Het lettertype van het geselecteerde teken is niet beschikbaar.
 	No alternates for the selected character.	Geen alternatieven voor het geselecteerde teken.
 	Double-click to replace	Dubbelklik om te vervangen
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Geen enkele OpenType-functie tekent deze glyph hier, dus hij vervangt de glyph van het teken en sluit mogelijk niet aan op de buurtekens.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Deze glyph heeft geen teken en kan dus niet worden ingevoegd. Gebruik ‘Alternatieven voor huidige selectie’ om hem toe te passen.
 	Double-click to insert	Dubbelklik om in te voegen
 	Entire Font	Volledig lettertype
 	glyph {id}	glyph {id}

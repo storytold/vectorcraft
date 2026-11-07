@@ -771,6 +771,8 @@
 	The selected character's font is not available.	A fonte do caractere selecionado não está disponível.
 	No alternates for the selected character.	Nenhuma alternativa para o caractere selecionado.
 	Double-click to replace	Clique duplo para substituir
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nenhum recurso OpenType desenha este glifo aqui, então ele substitui o glifo do caractere e pode não se unir aos caracteres vizinhos.
+	This glyph has no character, so it can't be inserted. Use Alternates for Current Selection to apply it.	Este glifo não tem caractere e não pode ser inserido. Use “Alternativas para a seleção atual” para aplicá-lo.
 	Double-click to insert	Clique duplo para inserir
 	Double-click to rename	Clique duplo para renomear
 	Double-click to target the contents	Clique duplo para direcionar o conteúdo
