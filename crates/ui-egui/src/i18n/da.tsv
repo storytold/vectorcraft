@@ -3719,6 +3719,7 @@ effect	Regular	Regular
 	Find in Folder…	Find i mappe…
 	Replace With Font	Erstat med skrifttype
 	Replace With Font From	Erstat med skrifttype fra
+	Find In	Søg i
 	System	System
 	  — substituted by {style}	  — erstattet af {style}
 	  — {n} characters from another font	  — {n} tegn fra en anden skrifttype
