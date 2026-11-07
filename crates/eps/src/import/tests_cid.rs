@@ -332,3 +332,47 @@ fn damaged_cff_fontsets_never_panic() {
         }
     }
 }
+
+/// A CMap mapping two-byte codes to base fonts' codes and glyph names (`beginbfchar`,
+/// `beginbfrange`, `usefont`: Adobe Technical Note #5099, "Building CMap Files for CID-Keyed
+/// Fonts"): font 0 a Type 42 font that carries Source Sans 3, font 1 a font found by name.
+const BF_CMAP: &str = "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n\
+    /CMapName /TestBF-H def /CMapType 1 def /WMode 0 def\n\
+    1 begincodespacerange <0000> <ffff> endcodespacerange\n\
+    0 usefont 1 beginbfchar <0001> <01> endbfchar 1 beginbfrange <0002> <0003> [/g2 /g1] endbfrange\n\
+    1 usefont 1 beginbfrange <0010> <0012> <41> endbfrange\n\
+    endcmap CMapName currentdict /CMap defineresource pop end end\n";
+
+#[test]
+fn cmaps_map_codes_to_base_fonts_codes_and_glyph_names() {
+    let (h, wh) = glyph('H');
+    let (i, wi) = glyph('I');
+    // `/Plain42`: codes 1 and 2 are glyphs g1 (H) and g2 (I); g2 is also named outside the encoding.
+    let plain = format!(
+        "10 dict begin /FontName /Plain42 def /FontType 42 def /FontMatrix [1 0 0 1 0 0] def /FontBBox [0 0 1 1] def /PaintType 0 def\n\
+         /Encoding 256 array def 0 1 255 {{ Encoding exch /.notdef put }} for Encoding 1 /g1 put\n\
+         /CharStrings 3 dict def CharStrings begin /.notdef 0 def /g1 {h} def /g2 {i} def end\n\
+         /sfnts [\n{}] def FontName currentdict end definefont pop\n",
+        sfnts()
+    );
+    let body = format!("{plain}{BF_CMAP}/BF /TestBF-H [/Plain42 /Helvetica] composefont 50 scalefont setfont 10 20 moveto <000100020003> show");
+    let r = super::tests::read(&body);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let p = paths(&r);
+    assert_eq!(p.len(), 3, "{p:?}");
+    // H, I, H, each its own width along.
+    assert!(p[0].x0 > 10.0 && p[0].x0 < 18.0, "{p:?}");
+    assert!(p[1].x0 > 10.0 + 50.0 * wh - 1.0 && p[1].x1 < 10.0 + 50.0 * (wh + wi), "{p:?}");
+    assert!(p[2].x0 > 10.0 + 50.0 * (wh + wi) && (p[2].width() - p[0].width()).abs() < 0.01, "{p:?}");
+    // Codes to a font found by name set its characters as type.
+    let body = format!("{plain}{BF_CMAP}/BF /TestBF-H [/Plain42 /Helvetica] composefont 20 scalefont setfont 10 20 moveto <001000110012> show");
+    let r = super::tests::read(&body);
+    let text: String = all(&r.document)
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some(t.plain_text()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(text, "ABC");
+}

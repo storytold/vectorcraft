@@ -11,6 +11,7 @@ use vectorcraft_doc::{CharStyle, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, Point, Vec2};
 use vectorcraft_text::TextLayout;
 
+use super::cid::Base;
 use super::graphics::MAX_APART;
 use super::interp::{Interp, matrix_obj, matrix_of};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, ps_err};
@@ -743,6 +744,8 @@ impl Spacing {
 struct Mapped {
     font: DictRef,
     code: u8,
+    /// The glyph name a CMap maps the character to, when the font's encoding has no code for it.
+    name: Option<Rc<str>>,
     cid: Option<(u32, Option<u32>)>,
     outer: Affine,
     vertical: bool,
@@ -812,7 +815,7 @@ impl Interp<'_> {
             if let Some(Obj::Dict(d)) = index.and_then(|i| fonts.get(i as usize))
                 && font_type(&d.borrow()) != Some(0.0)
             {
-                out.push(Mapped { font: d.clone(), code, cid: None, outer, vertical: false });
+                out.push(Mapped { font: d.clone(), code, name: None, cid: None, outer, vertical: false });
             }
         }
         Ok(Some(out))
@@ -834,8 +837,17 @@ impl Interp<'_> {
         Ok(map
             .decode(s)
             .into_iter()
-            .filter_map(|c| match fonts.get(c.font) {
-                Some(Obj::Dict(d)) => Some(Mapped { font: d.clone(), code: (c.cid & 0xff) as u8, cid: Some((c.cid, c.notdef)), outer, vertical }),
+            .filter_map(|c| match (fonts.get(c.font), c.base) {
+                // A base font's code, or its glyph name (at the code its encoding gives it, if any).
+                (Some(Obj::Dict(d)), Some(Base::Code(code))) => Some(Mapped { font: d.clone(), code, name: None, cid: None, outer, vertical }),
+                (Some(Obj::Dict(d)), Some(Base::Name(name))) => {
+                    let code = encoded(&d.borrow(), &name);
+                    let name = code.is_none().then_some(name);
+                    Some(Mapped { font: d.clone(), code: code.unwrap_or(0), name, cid: None, outer, vertical })
+                }
+                (Some(Obj::Dict(d)), None) => {
+                    Some(Mapped { font: d.clone(), code: (c.cid & 0xff) as u8, name: None, cid: Some((c.cid, c.notdef)), outer, vertical })
+                }
                 _ => None,
             })
             .collect())
@@ -850,7 +862,7 @@ impl Interp<'_> {
             let w = self.composite_glyph(g, at, Draw::Fill)?;
             let d = spacing.advance(i, i64::from(g.code), w);
             self.g.cur = Some(self.xf() * (at + d));
-            let c = code_char(&g.font.borrow(), g.code);
+            let c = g.name.as_deref().map_or_else(|| code_char(&g.font.borrow(), g.code), glyph_char);
             if c != '\u{2022}' {
                 text.push(c);
             }
@@ -876,7 +888,8 @@ impl Interp<'_> {
             return self.cid_glyph_at(g, cid, notdef, at, paint);
         }
         if builds {
-            return self.type3_glyph_in(&g.font, Glyph::Code(g.code), at, paint == Draw::Fill, g.outer);
+            let glyph = g.name.clone().map_or(Glyph::Code(g.code), Glyph::Name);
+            return self.type3_glyph_in(&g.font, glyph, at, paint == Draw::Fill, g.outer);
         }
         // An em of the descendant's glyphs: a Type 42 font's matrix maps ems, a Type 1 font's
         // its 1000-unit glyph space.
@@ -884,12 +897,12 @@ impl Interp<'_> {
             let f = g.font.borrow();
             if units(&f) == 1.0 { g.outer * font_matrix(&f, 1.0) } else { g.outer * font_matrix(&f, 0.001) * Affine::scale(units(&f)) }
         };
-        if let Some((outline, advance)) = self.type42_glyph(&g.font, g.code)? {
+        if let Some((outline, advance)) = self.type42_glyph(&g.font, g.code, g.name.as_deref())? {
             self.type42_paint(outline, at, fm, paint)?;
             return Ok(fm * Point::new(advance, 0.0) - fm * Point::ZERO);
         }
         // Set as type in the descendant's font, under the composite font's matrix.
-        let c = code_char(&g.font.borrow(), g.code);
+        let c = g.name.as_deref().map_or_else(|| code_char(&g.font.borrow(), g.code), |n| named_char(0, n).unwrap_or('\u{2022}'));
         let Ok(byte) = u8::try_from(u32::from(c)) else { return Ok(Vec2::ZERO) };
         let saved = self.g.font.replace(transformed(&g.font, g.outer));
         let r = match paint {
@@ -940,12 +953,18 @@ impl Interp<'_> {
         Ok(fm * Point::new(w, 0.0) - fm * Point::ZERO)
     }
 
-    /// Glyph `code` of font `font` from the font program it carries (a Type 42 or Type 1 font):
-    /// its outline and width in ems, or `None` when it carries none.
-    fn type42_glyph(&mut self, font: &DictRef, code: u8) -> Res<Option<(vectorcraft_geom::BezPath, f64)>> {
+    /// Glyph `code` (or the glyph named `name`) of font `font` from the font program it carries
+    /// (a Type 42 or Type 1 font): its outline and width in ems, or `None` when it carries none.
+    fn type42_glyph(&mut self, font: &DictRef, code: u8, name: Option<&str>) -> Res<Option<(vectorcraft_geom::BezPath, f64)>> {
         let Some(data) = self.embedded(font)? else { return Ok(None) };
         let standard = font.borrow().get(&Key::name("Encoding")).and_then(|e| self.standard_encoding(e));
-        let (_, gid) = type42_code(&font.borrow(), &data, code, standard);
+        let gid = match name {
+            Some(n) => {
+                let f = font.borrow();
+                char_string(&f, n).or_else(|| named_char(0, n).and_then(|c| data.gid_of(c))).or_else(|| char_string(&f, ".notdef")).unwrap_or(0)
+            }
+            None => type42_code(&font.borrow(), &data, code, standard).1,
+        };
         self.spend(64)?;
         Ok(data.glyph(gid))
     }
@@ -1094,6 +1113,12 @@ fn code_char(f: &Dict, code: u8) -> char {
         ".notdef" => char::from(code),
         name => glyph_char(name),
     }
+}
+
+/// The code font `f`'s `Encoding` gives glyph name `name`, if any.
+fn encoded(f: &Dict, name: &str) -> Option<u8> {
+    let items = f.get(&Key::name("Encoding"))?.items()?.to_vec();
+    items.iter().position(|o| o.text().as_deref() == Some(name)).and_then(|i| u8::try_from(i).ok())
 }
 
 /// The glyph name font `f`'s `Encoding` gives code `code` (`.notdef` without one).
