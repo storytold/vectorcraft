@@ -5,6 +5,7 @@
 //! recursing program ends with [`PsError::Limit`] instead of hanging.
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use vectorcraft_geom::Affine;
@@ -26,6 +27,8 @@ pub(crate) const MAX_ALLOC: usize = 1 << 22;
 const MAX_DICTS: usize = 1000;
 /// Most saved graphics states.
 pub(crate) const MAX_GSAVE: usize = 1000;
+/// Most read-only procedures remembered (see `Interp::readonly`); each keeps its procedure.
+const MAX_READONLY: usize = 1 << 16;
 /// Most memory (bytes) a program may ask for in all: strings, arrays, decoded data, images,
 /// saved paths.
 const MAX_MEMORY: usize = 1 << 30;
@@ -71,6 +74,11 @@ pub(crate) struct Interp<'a> {
     /// The program is in the legacy Illustrator format: its group operators `u` … `U` (at the top
     /// level, whatever its prolog defines them as) are groups (see the module docs of `import`).
     pub illustrator: bool,
+    /// Procedures that are read-only: those `bind` went into inside another procedure, and those
+    /// given to `readonly`, `executeonly` or `noaccess`. `bind` leaves them alone (PLRM 3rd ed.,
+    /// `bind` in chapter 8), so a procedure bound when it was defined keeps the names it didn't
+    /// bind then, whatever operators they name by the time a later procedure that holds it is bound.
+    readonly: HashSet<Shared<Obj>>,
 }
 
 /// Where a PostScript error was raised: the operator that raised it (none for an unknown name)
@@ -179,6 +187,7 @@ impl<'a> Interp<'a> {
             saved: vec![],
             out,
             illustrator: false,
+            readonly: HashSet::new(),
         }
     }
 
@@ -928,10 +937,9 @@ impl<'a> Interp<'a> {
                 }
                 self.push_interval(Obj::Str(s), 0, text.len())?;
             }
-            ReadOnly | ExecuteOnly | NoAccess | SetPacking | SetGlobal | SetObjectFormat => {
-                if matches!(op, SetPacking | SetGlobal | SetObjectFormat) {
-                    self.pop()?;
-                }
+            ReadOnly | ExecuteOnly | NoAccess => self.restrict_access(),
+            SetPacking | SetGlobal | SetObjectFormat => {
+                self.pop()?;
             }
             Rcheck | Wcheck => {
                 self.pop()?;
@@ -1327,7 +1335,7 @@ impl<'a> Interp<'a> {
     /// Replace the names in a procedure that stand for operators by the operators, down through
     /// nested procedures.
     fn bind(&mut self, items: &Shared<Obj>, depth: u32) -> Res {
-        if depth > 64 {
+        if depth > 64 || self.readonly.contains(items) {
             return Ok(());
         }
         for i in 0..items.len() {
@@ -1340,11 +1348,32 @@ impl<'a> Interp<'a> {
                         items.write(i, &[o]);
                     }
                 }
-                Some(Obj::Array { items: inner, exec: true }) if !inner.shares(items) => self.bind(&inner, depth + 1)?,
+                Some(Obj::Array { items: inner, exec: true }) if !inner.shares(items) => {
+                    self.bind(&inner, depth + 1)?;
+                    // `bind` makes each procedure it goes into read-only.
+                    self.mark_readonly(inner);
+                }
                 _ => {}
             }
         }
         Ok(())
+    }
+
+    /// `readonly`, `executeonly`, `noaccess`: the object stays on the stack; a procedure is
+    /// recorded as read-only, the only access the reader keeps (for `bind`).
+    fn restrict_access(&mut self) {
+        if let Some(Obj::Array { items, exec: true }) = self.stack.last() {
+            let items = items.clone();
+            self.mark_readonly(items);
+        }
+    }
+
+    /// Record procedure `items` as read-only, for [`Self::bind`]. Past [`MAX_READONLY`] of them
+    /// the rest stay writable: a later `bind` may then bind their names, as it did before.
+    fn mark_readonly(&mut self, items: Shared<Obj>) {
+        if self.readonly.len() < MAX_READONLY {
+            self.readonly.insert(items);
+        }
     }
 
     /// Put `v` under `k` in `d` (`None`: remove it), within [`MAX_ALLOC`] entries; while a `save`
