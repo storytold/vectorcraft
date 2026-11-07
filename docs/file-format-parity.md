@@ -132,6 +132,14 @@ private editing data. VectorCraft:
   (`TE`) for the codes they leave out unless the `TZ` sets `useDefault` to 0.
   Its area type with several linked areas opens as threaded frames, one for each area with its own matrix,
   and the story flows through them.
+  Its writing direction (`TV`) opens as vertical type. VectorCraft keeps one direction for each text object, the
+  one in force at its first character, with a warning when a later character has another. Vertical point type
+  starts at the origin of `Tp`'s matrix on the column's center line, which is VectorCraft's own placement. Its Kumi
+  blocks (`Ty`, and `TY` in horizontal type) open as Tate-chu-yoko runs, which is VectorCraft's own mapping. A `TY`
+  block in vertical type opens unmarked, and two blocks with nothing between them open as one block. Its upright
+  Roman characters (`Tv`) open with Standard Vertical Roman Alignment. VectorCraft's own layout rule also sets a
+  run of two or three half-width digits across the column in vertical type, inside or outside a block and with
+  either `Tv` value.
   Legacy `.ai` type set in rendering modes 4 to 7 (`Tr`, text used as a mask) is a clipping path of its
   clipping group, as a `W` path is, and the mode lasts into later text objects. Type in linked areas, in
   wraparound text or in a compound path doesn't clip, with a warning. A `Tr` operand that is not a whole number
