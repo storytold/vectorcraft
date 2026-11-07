@@ -446,13 +446,14 @@ pub(super) fn shading_extent(sh: &DictRef, m: Affine, area: Rect) -> Option<Vec<
         .map(|i| i.borrow().iter().map(|o| matches!(o, Obj::Bool(true))).collect())
         .unwrap_or_default();
     let (e0, e1) = (extend.first().copied().unwrap_or(false), extend.get(1).copied().unwrap_or(false));
-    if (e0 && e1) || m.determinant().abs() < 1e-12 || !m.as_coeffs().iter().all(|v| v.is_finite()) {
+    if (e0 && e1) || area.width() <= 0.0 || area.height() <= 0.0 || m.determinant().abs() < 1e-12 || !m.as_coeffs().iter().all(|v| v.is_finite()) {
         return None;
     }
     let inv = m.inverse();
     // `area` in the shading's own space, where its axis and circles are.
-    let mut poly: Vec<Point> =
+    let corners: Vec<Point> =
         [(area.x0, area.y0), (area.x1, area.y0), (area.x1, area.y1), (area.x0, area.y1)].map(|(x, y)| inv * Point::new(x, y)).to_vec();
+    let mut poly = corners.clone();
     let c = nums("Coords");
     let at = |i: usize| c.get(i).copied().filter(|v| v.is_finite()).unwrap_or(0.0);
     match d.get(&Key::name("ShadingType")).and_then(Obj::as_num) {
@@ -481,6 +482,10 @@ pub(super) fn shading_extent(sh: &DictRef, m: Affine, area: Rect) -> Option<Vec<
             }
         }
         _ => return None,
+    }
+    // Nothing cut: it paints the whole area.
+    if poly.len() == 4 && poly.iter().zip(&corners).all(|(a, b)| (*a - *b).hypot2() < 1e-18) {
+        return None;
     }
     Some(poly.into_iter().map(|p| m * p).collect())
 }
