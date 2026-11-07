@@ -544,8 +544,10 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
     let mut held = held;
     held.extend(index..paragraph.marker.min(body));
     // A line a soft return ends is justified as a wrapped one is: only the paragraph's last line
-    // keeps the alignment of Justify Left, Center or Right.
-    let last_of_para = position.end >= n;
+    // keeps the alignment of Justify Left, Center or Right. A paragraph that ends in a soft return
+    // ends with the empty line after it (`run_paragraph_lines`).
+    let soft_return = position.end > index && sg.get(position.end - 1).is_some_and(|g| g.ch == '\u{2028}');
+    let last_of_para = position.end >= n && !soft_return;
     LineGeometry {
         position,
         index,
