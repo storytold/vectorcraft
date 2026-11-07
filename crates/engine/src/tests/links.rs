@@ -342,6 +342,48 @@ fn a_symbols_link_to_a_moved_and_modified_file_takes_its_new_path() {
     assert_eq!(images, [new.clone(), new], "the layers' image, then the symbol's");
 }
 
+/// A link inside a symbol that the document records without a relative path, beside a link in the
+/// layers to the same file that has one, takes the file's new path after the folder moves.
+#[test]
+fn a_symbols_link_without_a_relative_path_follows_the_moved_file() {
+    let a = Folder::new("nested-unrelative-a");
+    let b = Folder::new("nested-unrelative-b");
+    let pic = a.file("art/photo.png");
+    write(&pic, &png(20, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    place(&mut s, &pic);
+    let doc_path = a.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    // Removes the relative path of every link under `v` → how many it removed.
+    fn unrelative(v: &mut Value) -> usize {
+        match v {
+            Value::Object(o) => {
+                let own = match o.get_mut("link") {
+                    Some(Value::Object(l)) => usize::from(l.remove("relative").is_some()),
+                    _ => 0,
+                };
+                own + o.values_mut().map(unrelative).sum::<usize>()
+            }
+            Value::Array(a) => a.iter_mut().map(unrelative).sum(),
+            _ => 0,
+        }
+    }
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&doc_path).unwrap()).unwrap();
+    assert_eq!(unrelative(&mut saved["document"]["symbols"]), 1, "the symbol's link");
+    assert_eq!(unrelative(&mut saved["document"]["layers"].clone()), 1, "the layers' link keeps its relative path");
+    std::fs::write(&doc_path, serde_json::to_vec(&saved).unwrap()).unwrap();
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    let r = open(&mut s, &b.file("poster.vectorcraft"));
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    let mut paths = vec![];
+    s.doc().unwrap().doc.visit_images(|_, im| paths.push(PathBuf::from(&im.link.as_ref().unwrap().path)));
+    let moved = PathBuf::from(b.file("art/photo.png"));
+    assert_eq!(paths, [moved.clone(), moved], "the layers' link, then the symbol's");
+}
+
 /// Update Links reads a changed file again for the images inside symbols, patterns and opacity
 /// masks too: those showing the same content as an image in the layers, and those no object in the
 /// layers shows. Each takes the file's place as its own Placement Options say, in one undo step.

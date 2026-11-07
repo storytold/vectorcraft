@@ -858,8 +858,9 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
     // of other keys linking to the same file share them, rather than each reading, decoding and
     // keeping a copy of its own.
     let mut read_images: BTreeMap<String, (ImageBlob, String)> = BTreeMap::new();
-    // (the link as it was, the link now) of each file found away from its path or read again.
-    let mut moved: Vec<(LinkInfo, LinkInfo)> = vec![];
+    // (the path as it was, the content shown, a placed document?, the link now) of each file found
+    // away from its path or read again.
+    let mut moved: Vec<(String, String, bool, LinkInfo)> = vec![];
     for g in groups(d, None) {
         let row = rows(std::iter::once(&g), doc_path);
         let unread = g.document.is_none() && g.link.hash.is_none() && g.link.size.is_none() && previewing(d, &g.key);
@@ -892,7 +893,7 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                         };
                         if link != g.link {
                             set_links(d, &g.ids, &link);
-                            moved.push((g.link.clone(), link));
+                            moved.push((g.link.path.clone(), g.key.clone(), true, link));
                         }
                     }
                 }
@@ -904,7 +905,7 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                     let link = f.link_hashed(hash, &g.link);
                     if link != g.link {
                         set_links(d, &g.ids, &link);
-                        moved.push((g.link.clone(), link));
+                        moved.push((g.link.path.clone(), g.key.clone(), false, link));
                     }
                     continue;
                 }
@@ -930,27 +931,33 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                 };
                 if link != g.link {
                     set_links(d, &g.ids, &link);
-                    moved.push((g.link.clone(), link));
+                    moved.push((g.link.path.clone(), g.key.clone(), false, link));
                 }
             }
             (Status::Ok, None) => {}
         }
     }
-    // The same links in symbols, graph designs, patterns and opacity masks, which have no ids here.
+    // The objects in symbols, graph designs, patterns and opacity masks that show the same file and
+    // content, which have no ids here, whatever else their links hold.
     if !moved.is_empty() {
-        let mut by_path: BTreeMap<String, Vec<(LinkInfo, LinkInfo)>> = BTreeMap::new();
-        for (old, new) in moved {
-            by_path.entry(old.path.clone()).or_default().push((old, new));
+        let mut by_path: BTreeMap<String, Vec<(String, bool, LinkInfo)>> = BTreeMap::new();
+        for (path, key, document, new) in moved {
+            by_path.entry(path).or_default().push((key, document, new));
         }
-        let new = |l: &LinkInfo| by_path.get(&l.path).and_then(|m| m.iter().find(|(old, _)| old == l)).map(|(_, new)| new);
-        d.update_links_where(
-            |l| new(l).is_some(),
-            |l| {
-                if let Some(n) = new(l) {
-                    *l = n.clone();
-                }
-            },
-        );
+        let new = |n: &Node| {
+            let (l, key, document) = linked(n)?;
+            let m = by_path.get(&l.path)?;
+            m.iter().find(|(k, doc, _)| k == key && *doc == document.is_some()).map(|(_, _, new)| new)
+        };
+        let pick = |n: &Node| new(n).is_some();
+        let mut make = |n: &Node| {
+            let mut out = n.clone();
+            if let (Some(link), Some(l)) = (new(n), link_mut(&mut out)) {
+                *l = link.clone();
+            }
+            (out, None)
+        };
+        Nested { pick: &pick, make: &mut make, next: 0 }.run(d);
     }
     out
 }
