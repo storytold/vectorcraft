@@ -226,9 +226,22 @@ fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, ends: Op
 
 /// `pts` (a run's samples, in order) smoothed along the path: each point becomes the Gaussian-weighted
 /// mean of the points around it, `sigma` points of arc length wide, the window narrowing towards the
-/// ends so that the first and last points stay where they are. Most points looked at per point is
-/// bounded by the samples within three spreads of it.
+/// ends so that the first and last points stay where they are. Consecutive samples within
+/// 1/[`SMOOTH_GROUP`] of a spread of each other along the path are weighed together, as their count at
+/// their mean place, so the work per point is bounded by the groups within three spreads of it however
+/// densely the path is sampled.
 fn smooth_points(pts: &[Point], sigma: f64) -> Vec<Point> {
+    smooth_points_counted(pts, sigma, &mut 0)
+}
+
+/// How many groups of samples a spread holds at most in [`smooth_points`]. Weighing them in groups
+/// leaves each smoothed point within a thousandth of a spread of the mean of its samples weighed one
+/// by one.
+const SMOOTH_GROUP: f64 = 16.0;
+
+/// [`smooth_points`], adding the number of sample groups it looks at to `work`.
+fn smooth_points_counted(pts: &[Point], sigma: f64, work: &mut usize) -> Vec<Point> {
+    let Some(&origin) = pts.first() else { return Vec::new() };
     if pts.len() < 3 || !(sigma.is_finite() && sigma > 0.0) {
         return pts.to_vec();
     }
@@ -240,6 +253,7 @@ fn smooth_points(pts: &[Point], sigma: f64) -> Vec<Point> {
         }
         s.push(total);
     }
+    let groups = SampleGroups::new(pts, &s, origin);
     let (mut lo, mut hi) = (0usize, 0usize);
     pts.iter()
         .zip(&s)
@@ -255,15 +269,97 @@ fn smooth_points(pts: &[Point], sigma: f64) -> Vec<Point> {
             while s.get(hi + 1).is_some_and(|&v| v <= si + reach) {
                 hi += 1;
             }
-            let (mut sum, mut weight) = (Vec2::ZERO, 0.0);
-            for (q, &sj) in pts.iter().zip(&s).take(hi + 1).skip(lo) {
-                let w = (-(sj - si) * (sj - si) / (2.0 * spread * spread)).exp();
-                sum += q.to_vec2() * w;
-                weight += w;
-            }
-            if weight > 0.0 { (sum / weight).to_point() } else { p }
+            let window = Window { lo, end: hi + 1, at: si, spread, group: spread / SMOOTH_GROUP };
+            let mut acc = Weighed::default();
+            groups.weigh(0, (0, pts.len()), &window, &mut acc);
+            *work += acc.work;
+            if acc.weight > 0.0 { origin + acc.sum / acc.weight } else { p }
         })
         .collect()
+}
+
+/// The samples [`smooth_points`] weighs for one point: indices `lo..end`, weighed by a Gaussian of
+/// `spread` around arc length `at`, in groups at most `group` long along the path.
+struct Window {
+    lo: usize,
+    end: usize,
+    at: f64,
+    spread: f64,
+    group: f64,
+}
+
+/// The sums of halves, quarters and so on of a run's samples, by index: node 0 holds all of them and
+/// node `k`'s halves are nodes `2k + 1` and `2k + 2`.
+struct SampleGroups<'a> {
+    /// Arc length of each sample.
+    s: &'a [f64],
+    /// Sum of the arc lengths of each node's samples.
+    sum_s: Vec<f64>,
+    /// Sum of each node's samples, measured from the first sample.
+    sum_q: Vec<Vec2>,
+}
+
+impl<'a> SampleGroups<'a> {
+    fn new(pts: &[Point], s: &'a [f64], origin: Point) -> Self {
+        let size = 4 * pts.len();
+        let mut groups = Self { s, sum_s: vec![0.0; size], sum_q: vec![Vec2::ZERO; size] };
+        groups.build(0, 0, pts.len(), pts, origin);
+        groups
+    }
+
+    fn build(&mut self, node: usize, l: usize, r: usize, pts: &[Point], origin: Point) {
+        if r <= l {
+            return;
+        }
+        let (sum_s, sum_q) = if r - l == 1 {
+            (self.s.get(l).copied().unwrap_or(0.0), pts.get(l).map_or(Vec2::ZERO, |&p| p - origin))
+        } else {
+            let m = l + (r - l) / 2;
+            self.build(2 * node + 1, l, m, pts, origin);
+            self.build(2 * node + 2, m, r, pts, origin);
+            let at = |v: &Vec<f64>, k: usize| v.get(k).copied().unwrap_or(0.0);
+            let q = |k: usize| self.sum_q.get(k).copied().unwrap_or(Vec2::ZERO);
+            (at(&self.sum_s, 2 * node + 1) + at(&self.sum_s, 2 * node + 2), q(2 * node + 1) + q(2 * node + 2))
+        };
+        if let Some(a) = self.sum_s.get_mut(node) {
+            *a = sum_s;
+        }
+        if let Some(a) = self.sum_q.get_mut(node) {
+            *a = sum_q;
+        }
+    }
+
+    /// Adds the weighted samples of node `node` (indices `l..r`) that are inside `w` to `acc`: a node
+    /// inside `w` no longer than its groups as its count at its mean arc length, any other node by
+    /// its halves.
+    fn weigh(&self, node: usize, (l, r): (usize, usize), w: &Window, acc: &mut Weighed) {
+        if r <= w.lo || l >= w.end || r <= l {
+            return;
+        }
+        acc.work += 1;
+        let length = self.s.get(r - 1).copied().unwrap_or(0.0) - self.s.get(l).copied().unwrap_or(0.0);
+        // One sample is always a group, even where arc lengths that overflowed leave `length` NaN.
+        if r - l == 1 || (w.lo <= l && r <= w.end && length <= w.group) {
+            let count = (r - l) as f64;
+            let t = self.sum_s.get(node).copied().unwrap_or(0.0) / count - w.at;
+            let g = (-t * t / (2.0 * w.spread * w.spread)).exp();
+            acc.sum += self.sum_q.get(node).copied().unwrap_or(Vec2::ZERO) * g;
+            acc.weight += count * g;
+            return;
+        }
+        let m = l + (r - l) / 2;
+        self.weigh(2 * node + 1, (l, m), w, acc);
+        self.weigh(2 * node + 2, (m, r), w, acc);
+    }
+}
+
+/// What [`SampleGroups::weigh`] has added up: the weighted sum of the samples (from the first
+/// sample), the sum of the weights, and the number of nodes looked at.
+#[derive(Default)]
+struct Weighed {
+    sum: Vec2,
+    weight: f64,
+    work: usize,
 }
 
 /// What [`simplify_part`] made of a path.
@@ -892,4 +988,117 @@ pub fn split_into_grid(rect: Rect, rows: usize, cols: usize, (row_gutter, col_gu
 /// The first (`last == false`) or last anchor point of a subpath.
 fn end_point(sp: &SubPath, last: bool) -> Option<Point> {
     if last { sp.anchors.last() } else { sp.anchors.first() }.map(|a| a.p)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The samples Object › Path › Smooth at `level` smooths for `sp`, a subpath with no corner,
+    /// and the spread it smooths them with.
+    fn smooth_samples(sp: &SubPath, level: f64) -> (Vec<Point>, f64) {
+        let opts = smooth_options(&PathData::single(sp.clone()), level);
+        let mut pts = Vec::new();
+        for (k, s) in subpath_segs(sp).iter().enumerate() {
+            sample(&s.c, sample_steps(&s.c, opts.tolerance), &mut pts, k == 0);
+        }
+        (pts, opts.smooth)
+    }
+
+    /// A traced outline: `n` straight segments around a circle of radius 200, each anchor moved in
+    /// or out by up to 0.5 pt.
+    fn traced_circle(n: usize) -> SubPath {
+        let pts: Vec<Point> = (0..n)
+            .map(|i| {
+                let a = i as f64 / n as f64 * std::f64::consts::TAU;
+                let r = 200.0 + 0.5 * ((i * 7919) % 13) as f64 / 13.0;
+                Point::new(300.0 + r * a.cos(), 300.0 + r * a.sin())
+            })
+            .collect();
+        SubPath::polyline(&pts, true)
+    }
+
+    /// [`smooth_points`] weighing every sample on its own.
+    fn smooth_points_one_by_one(pts: &[Point], sigma: f64) -> Vec<Point> {
+        let mut s = vec![0.0];
+        for w in pts.windows(2) {
+            s.push(s.last().copied().unwrap_or(0.0) + w[0].distance(w[1]));
+        }
+        let total = s.last().copied().unwrap_or(0.0);
+        pts.iter()
+            .zip(&s)
+            .map(|(&p, &si)| {
+                let reach = (3.0 * sigma).min(si).min(total - si);
+                if reach <= 1e-9 {
+                    return p;
+                }
+                let spread = reach / 3.0;
+                let (mut sum, mut weight) = (Vec2::ZERO, 0.0);
+                for (q, &sj) in pts.iter().zip(&s).filter(|(_, sj)| (*sj - si).abs() <= reach) {
+                    let w = (-(sj - si) * (sj - si) / (2.0 * spread * spread)).exp();
+                    sum += (*q - p) * w;
+                    weight += w;
+                }
+                p + sum / weight
+            })
+            .collect()
+    }
+
+    /// Next value in 0..1 of a small linear congruential generator.
+    fn next(seed: &mut u64) -> f64 {
+        *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (*seed >> 11) as f64 / (1u64 << 53) as f64
+    }
+
+    #[test]
+    fn smoothing_work_per_sample_stays_bounded_on_dense_paths() {
+        // Weighing every sample within three spreads took 360 steps per sample for 1,000 anchors and
+        // 2,949 for 16,000: the work grew with the square of the anchor count.
+        for n in [1_000usize, 16_000] {
+            let (pts, sigma) = smooth_samples(&traced_circle(n), 100.0);
+            let mut work = 0;
+            smooth_points_counted(&pts, sigma, &mut work);
+            assert!(work <= 400 * pts.len(), "{n} anchors: {work} steps for {} samples", pts.len());
+        }
+        // A curve sampled at a tiny tolerance and smoothed far beyond its length.
+        let c = CubicBez::new((0.0, 0.0), (0.0, 100.0), (100.0, 100.0), (100.0, 0.0));
+        let mut pts = Vec::new();
+        sample(&c, sample_steps(&c, 0.00001), &mut pts, true);
+        let mut work = 0;
+        smooth_points_counted(&pts, 1000.0, &mut work);
+        assert!(work <= 400 * pts.len(), "{work} steps for {} samples", pts.len());
+    }
+
+    #[test]
+    fn smoothing_points_whose_arc_length_overflows_returns_every_point() {
+        let pts: Vec<Point> = (0..40).map(|i| Point::new(if i % 2 == 0 { -1e308 } else { 1e308 }, f64::from(i))).collect();
+        assert_eq!(smooth_points(&pts, 10.0).len(), pts.len());
+    }
+
+    #[test]
+    fn grouped_smoothing_stays_within_a_thousandth_of_a_spread_of_weighing_one_by_one() {
+        let mut seed = 7u64;
+        for case in 0..300 {
+            let n = 3 + (next(&mut seed) * 2000.0) as usize;
+            let mut p = Point::ZERO;
+            let mut dir: f64 = 0.0;
+            let dense = next(&mut seed) < 0.5;
+            let pts: Vec<Point> = (0..n)
+                .map(|_| {
+                    dir += (next(&mut seed) - 0.5) * 1.5;
+                    let step = if dense { next(&mut seed) * 0.05 } else { next(&mut seed) * 5.0 };
+                    p += Vec2::new(dir.cos(), dir.sin()) * step;
+                    p
+                })
+                .collect();
+            let sigma = 0.01 + next(&mut seed) * 50.0;
+            let exact = smooth_points_one_by_one(&pts, sigma);
+            let grouped = smooth_points(&pts, sigma);
+            assert_eq!(grouped.len(), exact.len());
+            for (i, (a, b)) in exact.iter().zip(&grouped).enumerate() {
+                assert!(a.distance(*b) <= 1e-3 * sigma, "case {case}, point {i}: {a:?} and {b:?}, spread {sigma}");
+            }
+            assert_eq!((grouped.first(), grouped.last()), (pts.first(), pts.last()), "case {case}");
+        }
+    }
 }
