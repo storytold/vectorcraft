@@ -3865,6 +3865,12 @@ with an `index` it closes the document and all its views. `window.nextDocument` 
 through the views in tab order and add `view` to their reply for a document with more than one view. `ui.inspect`
 reports `windows` (every window as `[document index, view number]`, in tab order), `currentWindow` and each pane's
 `view`. Views are not saved.
+`window.control.dock {edge}` (desktop app) docks the Control bar to the top of the window, under the menu bar
+(`edge: "top"`, the default), or to its bottom (`"bottom"`), and returns `{edge}`. The bar's panel menu runs it with
+Dock to Top and Dock to Bottom, the edge in use checked, and so does a drag of the bar's gripper, which docks the bar at
+the edge the pointer is released nearer and shows a band along that edge while it moves. The edge is kept with the
+workspace, and a workspace saved without it docks the bar at the top. Another `edge`, or none, fails with "`edge` must
+be one of top, bottom" and leaves the bar where it is.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}

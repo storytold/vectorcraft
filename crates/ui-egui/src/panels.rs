@@ -242,7 +242,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool
 }
 
 /// The ≡ button drawn into `rect` that opens a panel menu.
-fn menu_button(ui: &mut Ui, id: &str, rect: Rect) -> egui::Response {
+pub(crate) fn menu_button(ui: &mut Ui, id: &str, rect: Rect) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     let resp = ui.interact(rect, ui.scope_id().with(("panel-menu", id)), Sense::click());
     icons::paint(ui, "menu", rect.shrink(1.0), if resp.hovered() { t.text_strong } else { t.text_dim });

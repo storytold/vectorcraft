@@ -3846,6 +3846,9 @@ axis	Both	Båda
 	Put back in the toolbar	Lägg tillbaka i verktygsfältet
 	Float Panel	Gör panelen flytande
 	Dock Panel	Docka panel
+	Dock to Top	Docka överst
+	Dock to Bottom	Docka nederst
+	Dock Control Bar	Docka kontrollfältet
 	Drag to float the toolbar	Dra för att göra verktygsfältet flytande
 	Drag to the window's left edge to dock	Dra till fönstrets vänsterkant för att docka
 	Float Tool Group	Gör verktygsgruppen flytande

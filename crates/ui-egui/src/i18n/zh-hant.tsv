@@ -4844,6 +4844,9 @@ axis	Both	兩者
 	Put back in the toolbar	放回工具列
 	Float Panel	浮動面板
 	Dock Panel	停駐面板
+	Dock to Top	停駐到頂部
+	Dock to Bottom	停駐到底部
+	Dock Control Bar	停駐控制列
 	Drag to float the toolbar	拖曳以浮動工具列
 	Drag to the window's left edge to dock	拖曳到視窗左側邊緣以停駐
 	Float Tool Group	浮動工具組
