@@ -1936,6 +1936,302 @@ fn real_time_drawing_off_draws_the_bounds_of_a_selection_too_big_to_outline() {
     assert!(moved.0 > 1.0 && moved.1 > 1.0 && moved.2.abs() < 1e-6 && moved.3.abs() < 1e-6, "the bounds moved with the drag: {moved:?}");
 }
 
+/// The bounding boxes (left, top, width) of the Real-time Drawing off feedback after a drag by (30, 40)
+/// from (x, y), left to right.
+fn dragged_feedback_boxes(s: &mut Session, x: f64, y: f64) -> Vec<(f64, f64, f64)> {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::draw2::FEEDBACK;
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    set_pref(s, "realTimeDrawing", json!(false));
+    s.pointer(&PointerEvent::new(PointerKind::Down, x, y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, x + 30.0, y + 40.0), v).unwrap();
+    let mut boxes: Vec<_> = s
+        .overlays(v)
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::Path { path, color, .. } if color == FEEDBACK => Some(kurbo::Shape::bounding_box(&path)),
+            _ => None,
+        })
+        .map(|b| ((b.x0 * 1e3).round() / 1e3, (b.y0 * 1e3).round() / 1e3, (b.width() * 1e3).round() / 1e3))
+        .collect();
+    boxes.sort_by(|p, q| p.0.total_cmp(&q.0));
+    boxes
+}
+
+/// With Real-time Drawing off, a dragged group draws the outline of each member, nested groups'
+/// members included, at the dragged position instead of one union of them all.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_group_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let rect = |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let (a, b, c) = (rect(&mut s, 100.0), rect(&mut s, 150.0), rect(&mut s, 200.0));
+    s.execute("select.set", &json!({"ids": [b, c]})).unwrap();
+    let inner = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, inner]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 100.0), (180.0, 140.0, 100.0), (230.0, 140.0, 100.0)], "one moved outline per member");
+}
+
+/// With Real-time Drawing off, a hidden member of a dragged group draws no outline.
+#[test]
+fn real_time_drawing_off_skips_a_hidden_member_of_a_dragged_group() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let rect = |s: &mut Session, x: f64| s.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let (a, b, c) = (rect(&mut s, 100.0), rect(&mut s, 150.0), rect(&mut s, 200.0));
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 100.0), (230.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged blend draws the outline of each of its objects and steps.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_blend_step_by_step() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 300, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.blend.make", &json!({"steps": 3})).unwrap();
+    let lefts: Vec<f64> = dragged_feedback_boxes(&mut s, 120.0, 120.0).iter().map(|b| b.0).collect();
+    assert_eq!(lefts, [130.0, 180.0, 230.0, 280.0, 330.0], "one moved outline per blended object and step");
+}
+
+/// With Real-time Drawing off, a dragged compound shape draws the outline of the area it makes.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_compound_shape_by_its_area() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let shape = s.execute("object.compoundShape.make", &json!({"mode": "intersect"})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [shape]})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 170.0, 120.0), [(180.0, 140.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a dragged group with a Pathfinder effect draws the outline of the area
+/// the effect makes.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_pathfinder_group_by_its_area() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "pathfinder.intersect"})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 170.0, 120.0), [(180.0, 140.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a dragged group with a Drop Shadow draws the outline of each member
+/// instead of one union of them.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_group_with_an_effect_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "item": null})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0), (180.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged clip group draws only its clipping path, as its selection
+/// highlight does.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_clip_group_by_its_clipping_path() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let art = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].clone();
+    let clip = s.execute("shape.rectangle", &json!({"x": 120, "y": 110, "width": 50, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [art, clip]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 140.0, 130.0), [(150.0, 150.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a dragged envelope draws the outline of each object it evaluates to: each
+/// rectangle's fill and its outlined stroke.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_envelope_object_by_object() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.envelope.makeWithMesh", &json!({"rows": 1, "cols": 1})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(129.5, 139.5, 101.0), (130.0, 140.0, 100.0), (179.5, 139.5, 101.0), (180.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged Shaper group draws the outline of its result and not of the
+/// source art it keeps.
+#[test]
+fn real_time_drawing_off_skips_the_source_art_of_a_dragged_shaper_group() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
+    let points = [[125.0, 120.0], [175.0, 135.0], [130.0, 150.0], [225.0, 165.0], [175.0, 180.0], [225.0, 185.0]];
+    let shaper = s.execute("shaper.scribble", &json!({"points": points})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [shaper]})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 150.0), (130.0, 140.0, 150.0)], "the merged result's fill and stroke");
+}
+
+/// With Real-time Drawing off, a dragged symbol instance draws the bounds its selection highlight
+/// shows, alone and as a member of a group.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_symbol_instance_by_its_bounds() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Box"})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0)]);
+    s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 160.0), ViewInfo::default()).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 400, "y": 100, "width": 50, "height": 50})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 150.0, 160.0), [(160.0, 180.0, 100.0), (430.0, 140.0, 50.0)]);
+}
+
+/// With Real-time Drawing off, a handle resize of a group draws each member's outline at its new size.
+#[test]
+fn real_time_drawing_off_outlines_a_resized_group_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 300, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    // The Right handle, dragged 30 pt out: the group goes from 300 pt wide to 330.
+    assert_eq!(dragged_feedback_boxes(&mut s, 400.0, 125.0), [(100.0, 100.0, 110.0), (320.0, 100.0, 110.0)]);
+}
+
+/// With Real-time Drawing off, each copy of a gradient mesh in a dragged repeat draws its mesh lines
+/// once, without the pieces the mesh is drawn with.
+#[test]
+fn real_time_drawing_off_outlines_each_mesh_of_a_dragged_repeat_once() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    s.execute("object.repeat.grid", &json!({"rows": 1, "cols": 2})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes.len(), 2, "one outline per copy: {boxes:?}");
+    assert_eq!(boxes[0], (130.0, 140.0, 100.0), "the first copy's mesh lines, moved");
+    let lines = s.overlays(ViewInfo::default()).into_iter().find_map(|o| match o {
+        vectorcraft_tools::Overlay::Path { path, color, .. } if color == vectorcraft_tools::draw2::FEEDBACK => Some(path),
+        _ => None,
+    });
+    let subpaths = lines.map_or(0, |path| path.elements().iter().filter(|el| matches!(el, kurbo::PathEl::MoveTo(_))).count());
+    assert!(subpaths > 1, "the mesh's lines, not one boundary: {subpaths}");
+}
+
+/// With Real-time Drawing off, a dragged gradient mesh with a Drop Shadow draws its mesh lines as one
+/// outline, without the pieces the mesh is drawn with.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_mesh_with_an_effect_by_its_lines() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "item": null})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged group with a Vector Halftone keeps its own fill, which is what
+/// the effect samples, so an unpainted member still gives an outline.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_halftone_group_with_its_own_fill() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
+    s.execute("paint.setFill", &json!({"ids": [a], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [a], "none": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    let group = s.execute("object.group", &json!({})).unwrap()["id"].clone();
+    s.execute("paint.setFill", &json!({"color": "#000000", "ids": []})).unwrap();
+    s.execute("select.set", &json!({"ids": [group]})).unwrap();
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    let fill = s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(group.as_u64().unwrap())).unwrap().appearance.fill_paint().label();
+    assert_eq!(fill, "#000000", "the group's own fill");
+    s.execute("effect.apply", &json!({"effect": "addon.color.halftone", "item": null})).unwrap();
+    // The Right handle: the unpainted member gives nothing to press on.
+    assert!(!dragged_feedback_boxes(&mut s, 200.0, 150.0).is_empty(), "the halftone's dots are outlined");
+}
+
+/// With Real-time Drawing off, a dragged object with Crop Marks draws the object's outline without its
+/// marks.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_object_without_its_crop_marks() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "cropMarks", "item": null})).unwrap();
+    assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, the objects a dragged repeat evaluates to count toward the limit with
+/// the points of their outlines: 18,000 rectangles have 90,000 points, and with the objects they come
+/// to 108,000.
+#[test]
+fn real_time_drawing_off_draws_the_bounds_of_a_repeat_with_too_many_objects() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 10, "height": 10})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("object.repeat.grid", &json!({"rows": 120, "cols": 150})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 105.0, 105.0);
+    assert_eq!(boxes.len(), 1, "one bounds rectangle: {} boxes", boxes.len());
+}
+
+/// With Real-time Drawing off, a dragged intertwine draws the outline of each member, without the
+/// area one of them is arranged over the other in.
+#[test]
+fn real_time_drawing_off_outlines_a_dragged_intertwine_member_by_member() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let b = s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.intertwine.make", &json!({})).unwrap();
+    s.execute("object.intertwine.arrange", &json!({"at": [175, 125], "order": "back"})).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
+    assert_eq!(boxes, [(130.0, 140.0, 100.0), (180.0, 140.0, 100.0)]);
+}
+
+/// With Real-time Drawing off, a dragged group whose members have more than 100,000 points between
+/// them shows its moved bounds, as a single path of that size does.
+#[test]
+fn real_time_drawing_off_draws_the_bounds_of_a_group_too_big_to_outline() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+    let path = |s: &mut Session, y: f64| {
+        let anchors: Vec<Value> =
+            (0..60_000).map(|i| json!({"x": 100.0 + f64::from(i) * 0.003, "y": if i % 2 == 0 { y } else { y + 50.0 }})).collect();
+        s.execute("path.create", &json!({"anchors": anchors, "closed": false})).unwrap()["id"].clone()
+    };
+    let (a, b) = (path(&mut s, 100.0), path(&mut s, 200.0));
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let at_rest = s.doc().unwrap().doc.bounds_of(&s.doc().unwrap().selection.objects, true).unwrap();
+    let boxes = dragged_feedback_boxes(&mut s, 200.0, 100.0);
+    let [(x, y, width)] = boxes.as_slice() else { panic!("one bounds rectangle, got {boxes:?}") };
+    assert!((x - at_rest.x0 - 30.0).abs() < 1e-2 && (y - at_rest.y0 - 40.0).abs() < 1e-2 && (width - at_rest.width()).abs() < 1e-2, "{boxes:?}");
+}
+
 /// A deferred commit that fails its preview cancels the interaction instead of leaving it open.
 #[test]
 fn deferred_commit_preview_failure_cancels_interaction() {
