@@ -202,20 +202,30 @@ fn set_refuses_a_missing_folder_or_a_file_as_a_recovery_or_plugins_folder() {
 #[test]
 fn set_refuses_a_recovery_or_plugins_folder_it_cannot_use() {
     use std::os::unix::fs::PermissionsExt;
+    /// Gives a folder mode 0o755 again when dropped, also when an assertion fails, so the test
+    /// folder can be removed.
+    struct Unlock(std::path::PathBuf);
+    impl Drop for Unlock {
+        fn drop(&mut self) {
+            let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+        }
+    }
     let folder = crate::tests_links::Folder::new("prefs-set-unusable");
     let mut s = Session::new();
     let before = s.prefs.clone();
     let locked = folder.0.join("locked");
     std::fs::create_dir(&locked).unwrap();
+    let unlock_locked = Unlock(locked.clone());
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
     // An account that may write anyway (root) has nothing to refuse.
     if std::fs::create_dir(locked.join("probe")).is_err() {
         let e = s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": locked.to_string_lossy()})).unwrap_err();
         assert!(e.to_string().starts_with("Data Recovery can't keep copies in "), "{e}");
     }
-    let _ = std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755));
+    drop(unlock_locked);
     let unlisted = folder.0.join("unlisted");
     std::fs::create_dir(&unlisted).unwrap();
+    let unlock_unlisted = Unlock(unlisted.clone());
     std::fs::set_permissions(&unlisted, std::fs::Permissions::from_mode(0o333)).unwrap();
     // An account that may list anyway (root) has nothing to refuse.
     if std::fs::read_dir(&unlisted).is_err() {
@@ -224,7 +234,7 @@ fn set_refuses_a_recovery_or_plugins_folder_it_cannot_use() {
         let e = s.execute("prefs.set", &json!({"key": "pluginsFolder", "value": unlisted.to_string_lossy()})).unwrap_err();
         assert!(e.to_string().starts_with("Plug-ins can't be loaded from "), "{e}");
     }
-    let _ = std::fs::set_permissions(&unlisted, std::fs::Permissions::from_mode(0o755));
+    drop(unlock_unlisted);
     assert_eq!(s.prefs, before);
 }
 
