@@ -207,15 +207,24 @@ fn unused_matches_links_tints_colors_gradients_and_patterns_exactly() {
     set_fill(&mut s, tinted, Paint::Solid { color: teal.tinted(0.4), swatch: Some("Teal".into()), tint: 0.4 });
     let zero = rect_filled(&mut s, json!({"color": "#000000"}));
     set_fill(&mut s, zero, Paint::solid(Color::rgb(-0.0, 128.0 / 255.0, 1.0)));
-    // Sunset's gradient without a link to it, and Ocean's with one stop moved.
+    // Sunset's gradient without a link to it, beside gradients with Sunset's stop colors and a
+    // different midpoint or opacity; Ocean's with one stop moved, and Ocean's with another kind,
+    // method or dither.
     let gradient = |s: &Session, n: &str| match &doc(s).swatch(n).unwrap().paint {
         Paint::Gradient(g) => g.gradient.clone(),
         p => panic!("{p:?}"),
     };
     let sunset = gradient(&s, "Sunset");
-    let mut ocean = gradient(&s, "Ocean");
-    ocean.stops[0].offset += 0.25;
-    for g in [sunset.clone(), sunset, ocean] {
+    let (mut midpoint, mut opacity) = (sunset.clone(), sunset.clone());
+    midpoint.stops[0].midpoint = 0.3;
+    opacity.stops[1].opacity = 0.5;
+    let ocean = gradient(&s, "Ocean");
+    let (mut moved, mut radial, mut perceptual, mut dither) = (ocean.clone(), ocean.clone(), ocean.clone(), ocean);
+    moved.stops[0].offset += 0.25;
+    radial.kind = vectorcraft_color::GradientKind::Radial;
+    perceptual.method = vectorcraft_color::GradientMethod::Perceptual;
+    dither.dither = true;
+    for g in [midpoint, sunset.clone(), opacity, sunset, moved, radial, perceptual, dither] {
         let id = rect_filled(&mut s, json!({"color": "#000000"}));
         set_fill(&mut s, id, Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(g))));
     }

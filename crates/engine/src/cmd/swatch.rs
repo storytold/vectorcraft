@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Gradient, Paint, Swatch, SwatchGroup, tint_percent};
+use vectorcraft_color::{Color, Gradient, GradientKind, GradientMethod, GradientStop, Paint, Swatch, SwatchGroup, tint_percent};
 use vectorcraft_doc::pattern::pattern_paint;
 use vectorcraft_doc::swatches::{LinkFn, color_name, map_node_solid_paints, node_colors};
 use vectorcraft_doc::{Document, NodeId};
@@ -320,10 +320,35 @@ fn float_key(v: f32) -> Option<u32> {
     }
 }
 
-/// The keys of a gradient's stop colors, equal for equal gradients; `None` when a stop's color
-/// equals no color, so the gradient equals no gradient.
-fn gradient_key(g: &Gradient) -> Option<Vec<ColorKey>> {
-    g.stops.iter().map(|s| color_key(&s.color)).collect()
+/// A gradient stop's offset, color, opacity, midpoint, swatch link, tint and process plates, as
+/// keys.
+type StopKey<'a> = (u32, ColorKey, u32, u32, Option<&'a str>, u32, Option<[u32; 4]>);
+
+/// A gradient's kind, method, dither and stops, as keys.
+type GradientKey<'a> = (u8, u8, bool, Vec<StopKey<'a>>);
+
+/// A key that is equal for two gradients exactly when the gradients are equal (`==`); `None` when
+/// any of its numbers is NaN, so the gradient equals no gradient.
+fn gradient_key(g: &Gradient) -> Option<GradientKey<'_>> {
+    let kind = match g.kind {
+        GradientKind::Linear => 0,
+        GradientKind::Radial => 1,
+        GradientKind::Freeform => 2,
+    };
+    let method = match g.method {
+        GradientMethod::Classic => 0,
+        GradientMethod::Perceptual => 1,
+    };
+    Some((kind, method, g.dither, g.stops.iter().map(stop_key).collect::<Option<_>>()?))
+}
+
+/// A stop's key for [`gradient_key`]; `None` when any of its numbers is NaN.
+fn stop_key(s: &GradientStop) -> Option<StopKey<'_>> {
+    let plates = match s.plates {
+        Some(p) => Some([float_key(p[0])?, float_key(p[1])?, float_key(p[2])?, float_key(p[3])?]),
+        None => None,
+    };
+    Some((float_key(s.offset)?, color_key(&s.color)?, float_key(s.opacity)?, float_key(s.midpoint)?, s.swatch.as_deref(), float_key(s.tint)?, plates))
 }
 
 /// Link the solid paints in the subtrees of `ids` whose color is one of `links`' to that swatch
@@ -891,16 +916,7 @@ fn swatch_unused(s: &mut Session, _: &Value) -> Result<Value> {
     let link_tints: HashSet<(&str, u32)> = links.iter().filter_map(|(l, t)| Some((l.as_str(), float_key(*t)?))).collect();
     let colors: HashSet<ColorKey> = colors.iter().filter_map(color_key).collect();
     let patterns: HashSet<&String> = patterns.iter().collect();
-    // Gradients by their stops' colors, each listed once.
-    let mut by_stops: HashMap<Vec<ColorKey>, Vec<&Gradient>> = HashMap::new();
-    for g in &gradients {
-        if let Some(k) = gradient_key(g) {
-            let list = by_stops.entry(k).or_default();
-            if !list.contains(&g) {
-                list.push(g);
-            }
-        }
-    }
+    let gradients: HashSet<GradientKey> = gradients.iter().filter_map(gradient_key).collect();
     let used = |w: &Swatch| {
         gradient_links.contains(&w.name)
             || match w.tint_of() {
@@ -910,7 +926,7 @@ fn swatch_unused(s: &mut Session, _: &Value) -> Result<Value> {
             || match &w.paint {
                 Paint::None => true,
                 Paint::Solid { color, .. } => color_key(color).is_some_and(|k| colors.contains(&k)),
-                Paint::Gradient(g) => gradient_key(&g.gradient).and_then(|k| by_stops.get(&k)).is_some_and(|list| list.contains(&&g.gradient)),
+                Paint::Gradient(g) => gradient_key(&g.gradient).is_some_and(|k| gradients.contains(&k)),
                 Paint::Pattern { pattern, .. } => patterns.contains(pattern),
             }
     };
