@@ -1017,11 +1017,12 @@ fn group_paints(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool 
         && !object.children().into_iter().flatten().any(|c| reshaped(c, 1))
 }
 
-/// Does `n` or anything in it (to [`MAX_DEPTH`]) have a visible effect that reshapes its outline?
-/// Deeper than that counts as yes.
+/// Does `n` or anything in it (to [`MAX_DEPTH`]) have a visible effect that reshapes its outline
+/// (a geometry effect, or Pathfinder, which draws its result instead of the members)? Deeper than
+/// that counts as yes.
 fn reshaped(n: &Node, depth: usize) -> bool {
     depth > MAX_DEPTH
-        || n.appearance.effects.iter().any(|e| e.visible && vectorcraft_effects::is_geometry(&e.id))
+        || n.appearance.effects.iter().any(|e| e.visible && (vectorcraft_effects::is_geometry(&e.id) || vectorcraft_effects::is_pathfinder(&e.id)))
         || n.children().into_iter().flatten().any(|c| reshaped(c, depth + 1))
 }
 
@@ -1297,9 +1298,13 @@ mod tests {
         let plain = Node::group(NodeId(1), vec![square(2, Paint::solid(Color::rgb(1.0, 0.0, 0.0)))]);
         assert!(group_paints(&Node::group(NodeId(3), vec![Arc::new(plain.clone())]), &st));
         let mut moved = plain;
+        let mut merged = moved.clone();
         let transform = vectorcraft_effects::new_effect("distort.transform", &serde_json::json!({ "moveH": 5.0 })).unwrap();
         moved.appearance.effects.push(transform);
         assert!(!group_paints(&Node::group(NodeId(3), vec![Arc::new(moved)]), &st));
+        // Nor one whose member draws a Pathfinder result in place of its own members.
+        merged.appearance.effects.push(vectorcraft_effects::new_effect("pathfinder.add", &serde_json::json!({})).unwrap());
+        assert!(!group_paints(&Node::group(NodeId(3), vec![Arc::new(merged)]), &st));
     }
 
     /// An image draws no stroke, so an image with a brush in its art style keeps its drawn look.
