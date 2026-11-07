@@ -558,7 +558,7 @@ fn an_image_over_the_pixel_cap_is_read_at_a_lower_resolution() {
     let r = read(&format!("0 0 1 setrgbcolor 90 80 scale 9000 8000 true [9000 0 0 -8000 0 8000] <{row}> imagemask"));
     assert!(r.warnings.iter().any(|w| w.contains("lower resolution")), "{:?}", r.warnings);
     let NodeKind::Image(im) = &all(&r.document).into_iter().find(|n| matches!(n.kind, NodeKind::Image(_))).expect("an image").kind else {
-        unreachable!()
+        panic!("an image")
     };
     assert_eq!((im.width, im.height), (4500, 4000));
     // Its 4500 × 4000 pixels cover the 90 × 80 points the image does.
@@ -589,7 +589,7 @@ fn an_image_of_more_data_than_the_reader_holds_keeps_only_the_rows_it_reads() {
     ));
     assert!(r.warnings.iter().any(|w| w.contains("lower resolution")), "{:?}", r.warnings);
     let NodeKind::Image(im) = &all(&r.document).into_iter().find(|n| matches!(n.kind, NodeKind::Image(_))).expect("an image").kind else {
-        unreachable!()
+        panic!("an image")
     };
     assert_eq!((im.width, im.height), (4750, 4750));
     // The rows read from the top half are red, from the bottom half blue.
