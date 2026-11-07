@@ -1621,6 +1621,141 @@ fn delete_empty_artboards_enabled_state_matches_the_command_on_varied_documents(
     assert!(enabled_count > 5 && enabled_count < 55, "both answers come up: {enabled_count} of 60 enabled");
 }
 
+/// Delete Empty Artboards' enabled state, as a menu asks for it, and how many times asking measured
+/// a document on this thread.
+fn delete_empty_enabled_counted(s: &Session) -> (bool, usize) {
+    let spec = crate::cmd::command_specs().iter().find(|c| c.id == "artboard.deleteEmpty").unwrap();
+    let measures = || crate::doc_state::EMPTY_ARTBOARD_MEASURES.with(std::cell::Cell::get);
+    let before = measures();
+    let enabled = (spec.enabled)(s).is_ok();
+    (enabled, measures() - before)
+}
+
+/// A menu asks on every frame while it is open: the first frame measures the document, and the
+/// others, a change of the selection among them, do not.
+#[test]
+fn delete_empty_artboards_check_measures_a_document_once() {
+    let mut s = row_of_artboards(2);
+    let art = box_at(&mut s, 10.0, 20.0);
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "the first frame");
+    for _ in 0..10 {
+        assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "a later frame");
+    }
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "after a change of the selection");
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "after another change of the selection");
+}
+
+/// The enabled state follows an edit, an undo, a redo, an added and a removed artboard, a locked
+/// artboard, and each change measures the document once.
+#[test]
+fn delete_empty_artboards_check_follows_each_change_to_the_document() {
+    let mut s = row_of_artboards(2);
+    box_at(&mut s, 10.0, 20.0);
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "artboard 2 is empty");
+
+    let on_second = box_at(&mut s, 410.0, 20.0);
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "an edit puts art on artboard 2");
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 0));
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "Undo takes the art off artboard 2");
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 0));
+
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "Redo puts it back");
+
+    s.execute("select.set", &json!({"ids": [on_second.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 1000, "dy": 0})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "an edit moves the art off artboard 2");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1));
+
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 200, "height": 150})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "a new artboard is empty");
+
+    s.execute("artboard.setProps", &json!({"index": 2, "locked": true})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "a locked artboard stays");
+    s.execute("artboard.setProps", &json!({"index": 2, "locked": false})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "unlocked, it can go");
+
+    s.execute("artboard.delete", &json!({"index": 2})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "with the empty artboard removed, none is left");
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 0));
+}
+
+/// A change made to the document directly, with nothing else holding it and no new revision, is
+/// measured again too.
+#[test]
+fn delete_empty_artboards_check_follows_a_change_in_place() {
+    let mut s = row_of_artboards(2);
+    box_at(&mut s, 10.0, 20.0);
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1));
+    let st = s.doc_mut().unwrap();
+    assert_eq!(Arc::strong_count(&st.doc), 1, "the undo history holds the document before the edit");
+    let revision = st.revision;
+    Arc::make_mut(&mut st.doc).artboards.truncate(1);
+    assert_eq!(st.revision, revision);
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "one artboard left");
+}
+
+/// Each open document has its own answer: switching documents gives the other's without measuring
+/// again, and an edit to one leaves the other's alone.
+#[test]
+fn delete_empty_artboards_check_follows_a_document_switch() {
+    let mut s = row_of_artboards(2);
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "two empty artboards: the second can go");
+    s.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "the new document has one artboard");
+    assert!(s.set_active(0));
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "the first document's answer stands");
+    assert!(s.set_active(1));
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 0), "the second document's answer stands");
+    s.execute("artboard.new", &json!({"x": 400, "y": 0, "width": 200, "height": 150})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "the second document has an empty artboard now");
+    assert!(s.set_active(0));
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "the edit to the second document leaves the first's answer");
+}
+
+/// On documents made from a fixed seed, after each of a run of changes, the enabled state is what
+/// measuring every artboard of the document gives.
+#[test]
+fn delete_empty_artboards_check_matches_measuring_after_varied_changes() {
+    let mut seed: u64 = 0x0de1_e7e0_e3b7;
+    let mut next = |n: u64| {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (seed >> 33) % n
+    };
+    let mut answers = [0usize; 2];
+    let mut measured = 0;
+    for _ in 0..30 {
+        let mut s = row_of_artboards(1 + next(3) as usize);
+        for _ in 0..12 {
+            let artboards = s.doc().unwrap().doc.artboards.len();
+            let index = next(artboards as u64);
+            // A change can be refused (nothing to undo, a locked artboard): the state still has to match.
+            let _ = match next(7) {
+                0 => s.execute("shape.rectangle", &json!({"x": next(1200) as f64 - 50.0, "y": 10, "width": 20, "height": 20})),
+                1 => s.execute("edit.undo", &json!({})),
+                2 => s.execute("edit.redo", &json!({})),
+                3 => s.execute("artboard.new", &json!({"x": 400 * (artboards + 1), "y": 0, "width": 200, "height": 150})),
+                4 => s.execute("artboard.delete", &json!({"index": index})),
+                5 => s.execute("artboard.setProps", &json!({"index": index, "locked": next(2) == 0})),
+                _ => s.execute("select.all", &json!({})),
+            };
+            let (enabled, count) = delete_empty_enabled_counted(&s);
+            measured += count;
+            answers[usize::from(enabled)] += 1;
+            let d = &s.doc().unwrap().doc;
+            assert_eq!(enabled, d.artboards.len() > 1 && d.artboards.iter().any(|a| !a.locked && !d.artboard_has_art(a.rect)));
+            assert_eq!(delete_empty_enabled_counted(&s), (enabled, 0), "a second frame");
+        }
+    }
+    assert!(answers[0] > 30 && answers[1] > 30, "both answers come up: {answers:?}");
+    assert!(measured < 360, "changes of the selection alone do not measure: {measured} of 360");
+}
+
 /// On paths and compound paths made from a fixed seed (curves, open and closed, with strokes of
 /// every join, cap and alignment, miter limits, arrowheads, width profiles and dashes), an
 /// artboard has art exactly when an object's visual bounds meet it, for artboards just inside,
