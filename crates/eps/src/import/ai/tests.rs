@@ -1679,6 +1679,21 @@ fn a_transparency_set_in_a_dictionary_s_art_stays_after_it() {
 }
 
 #[test]
+fn a_transparency_set_in_a_clipping_group_stays_after_it() {
+    // GUARDS: `Q` ends a clipping group but doesn't take the transparency back to what it was at
+    // its `q`: the writer sets `Xy` only when the next object's state differs from the last one it
+    // wrote. A Screen glow, then a clipping group whose path is set back to Normal, then type with
+    // no `Xy`: restored at `Q`, the type drew in Screen and nearly vanished on a light background.
+    let clip = format!("q\n0 1 0 0 0 Xy\n{}h\nW\nn\n{RED}{}f\nQ\n", rect_path(0.0, 0.0, 200.0, 100.0), rect_path(40.0, 0.0, 50.0, 10.0));
+    let body = format!("2 0.8 0 0 0 Xy\n{RED}{}f\n{clip}{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0), rect_path(20.0, 0.0, 30.0, 10.0));
+    let a = art(&read_ok(&layer(&body)).doc);
+    assert_eq!(a.len(), 3, "{a:#?}");
+    assert_eq!((a[0].opacity, a[0].blend), (0.8, BlendMode::Screen), "the glow's own state");
+    assert!(matches!(a[1].kind, NodeKind::Group { clip: true, .. }), "{:?}", a[1].kind);
+    assert_eq!((a[2].opacity, a[2].blend), (1.0, BlendMode::Normal), "the state set inside the clipping group");
+}
+
+#[test]
 fn gradients() {
     let defs = "%AI5_BeginGradient: (G)\n(G) 1 2 Bd\n[\n<00FF>\n0\n0 0 0 0 1 0 0 2 1 6 %_BS\n\
                 %_0 0 0 0 1 0 0 2 1 6 40 0 Bs\n%_0 0 0 0 0 0 1 2 0.5 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
