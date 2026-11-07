@@ -1557,7 +1557,7 @@ fn a_traced_pixel_that_straightens_to_no_area_is_left_out_of_fills_and_kept_as_a
         mode: Mode::Color,
         palette: Palette::Limited,
         colors: 6,
-        paths: 90.0,
+        paths: 80.0,
         corners: 60.0,
         noise: 1,
         method: Method::Abutting,

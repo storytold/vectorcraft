@@ -397,6 +397,10 @@ pub struct UiState {
     /// is open. Not saved.
     #[serde(skip)]
     pub context_intertwine: Option<(u64, vectorcraft_doc::NodeId, vectorcraft_geom::Point, vectorcraft_doc::NodeId)>,
+    /// What the last right-click on the canvas with the Artboard tool measured, for the context menu
+    /// while it is open ([`crate::panels::artboards::MenuFacts`]). Not saved.
+    #[serde(skip)]
+    pub context_artboards: Option<crate::panels::artboards::MenuFacts>,
     /// Which link statuses the active document's images and placed documents have, for Select ›
     /// Linked, Embedded, Missing and Modified to be on only when some do (refreshed by
     /// [`crate::addons::select::link_status::refresh`]). Not saved.
@@ -965,6 +969,7 @@ impl Default for UiState {
             shape_modes_compound: false,
             context_locked: None,
             context_intertwine: None,
+            context_artboards: None,
             link_statuses: Default::default(),
             slot_tool: Default::default(),
             floating_flyouts: vec![],

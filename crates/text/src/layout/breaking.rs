@@ -1,7 +1,7 @@
 use super::region::Region;
 use super::{
     Affine, BezPath, Breakpoint, Burasagari, EPS, FirstBaseline, FontDb, HyphenationOptions, Kinsoku, LeadingModel, SGlyph, hyphen_glyph,
-    hyphen_points_in, no_line_end, no_line_start, soft_line_start,
+    no_line_end, no_line_start, points_for, soft_line_start,
 };
 
 /// Vertical metrics of a line: (ascent, descent, leading, cap height, x height).
@@ -544,7 +544,7 @@ fn hyphen_breaks(text: &str, g: &[SGlyph], ws: usize, we: usize, opts: &Hyphenat
             starts.entry(g[k].byte).or_insert(k);
         }
     }
-    hyphen_points_in(word, opts, g[a].hyphenates).into_iter().filter_map(|ci| starts.get(offs.get(ci)?).copied()).collect()
+    points_for(word, opts, g[a].hyphen_language).into_iter().filter_map(|ci| starts.get(offs.get(ci)?).copied()).collect()
 }
 
 /// Break candidates for the every-line composer: hyphenation points under `hyphenate` (the
