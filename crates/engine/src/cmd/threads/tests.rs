@@ -21,6 +21,46 @@ fn text(s: &Session, id: u64) -> String {
 }
 
 #[test]
+fn empty_later_frames_keep_the_first_frames_edited_paragraph_style() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "First", "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    let c = s.execute("shape.rectangle", &json!({"x": 400, "y": 10, "width": 150, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    assert_eq!([text(&s, a), text(&s, b), text(&s, c)], ["First", "", ""]);
+    s.execute("text.setFormat", &json!({"ids": [a], "hyphenate": true})).unwrap();
+    let hyphenates = |id| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.para_at(0).hyphenate,
+        _ => panic!("not text"),
+    };
+    assert_eq!([hyphenates(a), hyphenates(b), hyphenates(c)], [true, true, true]);
+}
+
+#[test]
+fn a_restyled_empty_frame_keeps_its_style_before_an_unedited_empty_frame() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "First\n", "area": {"width": 150, "height": 60}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    let c = s.execute("shape.rectangle", &json!({"x": 400, "y": 10, "width": 150, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    assert_eq!([text(&s, a), text(&s, b), text(&s, c)], ["First\n", "", ""]);
+    s.execute("text.setFormat", &json!({"ids": [b], "hyphenate": true})).unwrap();
+    let hyphenates = |id, para| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.para_at(para).hyphenate,
+        _ => panic!("not text"),
+    };
+    // The empty paragraph after the break takes the style; the paragraph "First" keeps its own.
+    assert_eq!([hyphenates(a, 0), hyphenates(a, 1), hyphenates(b, 0), hyphenates(c, 0)], [false, true, true, true]);
+}
+
+#[test]
 fn thread_flows_reflows_on_edit_and_survives_delete() {
     let (mut s, a, b) = setup();
     s.execute("text.thread.create", &json!({})).unwrap();

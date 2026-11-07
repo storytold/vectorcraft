@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Artboard",
             ["Window", "Artboards"],
             None,
-            "{index?: n | indices?: [n…] (default: the artboards the Artboard tool has selected), art?: bool (default: the Artboard tool's moveArt option), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} a copy of each artboard, the copies placed together right of the last artboard as they lay, with copies of the art fully inside each when `art` (locked and hidden art only with prefs moveLockedWithArtboard), in one undo step → {index: the first copy's index, indices: the copies' indices, ids: the art's copies}",
+            "{index?: n | indices?: [n…] (default: the artboards the Artboard tool has selected), selectedArtboards?: [n…] (the journal records that default here, for a replay), art?: bool (default: the Artboard tool's moveArt option), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} a copy of each artboard, the copies placed together right of the last artboard as they lay, with copies of the art fully inside each when `art` (locked and hidden art only with prefs moveLockedWithArtboard), in one undo step → {index: the first copy's index, indices: the copies' indices, ids: the art's copies}",
             has_doc,
             artboard_duplicate
         ),
@@ -25,18 +25,42 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy Artboard",
             [],
             None,
-            "{index? | indices?, art?} (defaults as artboard.duplicate) put the artboards, and the art fully inside each when `art`, on the clipboard: edit.paste adds a copy of each, together right of the last artboard as they lay, edit.pasteInPlace/InFront/InBack where they were, in this or another document (one undo step; edit.pasteOnAllArtboards pastes only the art); edit.copy runs this while the Artboard tool is chosen → {copied: objects}",
+            "{index? | indices?, selectedArtboards?, art?} (as artboard.duplicate) put the artboards, and the art fully inside each when `art`, on the clipboard: edit.paste adds a copy of each, together right of the last artboard as they lay, edit.pasteInPlace/InFront/InBack where they were, in this or another document (one undo step; edit.pasteOnAllArtboards pastes only the art); edit.copy runs this while the Artboard tool is chosen → {copied: objects}",
             has_doc,
-            |s, p| artboard_copy(s, p, false)
+            |s, p| {
+                boards_and_art_noted(s, p, "artboard.copy")?;
+                artboard_copy(s, p, false)
+            }
         ),
         cmd!(
             "artboard.cut",
             "Cut Artboard",
             [],
             None,
-            "{index? | indices?, art?} artboard.copy, then delete the artboards and that art in one undo step (one artboard is always left: the cut fails when it names every artboard, or a locked one; art also on another locked artboard stays, and is left off the clipboard, unless prefs moveLockedWithArtboard); edit.cut runs this while the Artboard tool is chosen → {copied: objects}",
+            "{index? | indices?, selectedArtboards?, art?} artboard.copy, then delete the artboards and that art in one undo step (one artboard is always left: the cut fails when it names every artboard, or a locked one; art also on another locked artboard stays, and is left off the clipboard, unless prefs moveLockedWithArtboard); edit.cut runs this while the Artboard tool is chosen → {copied: objects}",
             has_doc,
-            |s, p| artboard_copy(s, p, true)
+            |s, p| {
+                boards_and_art_noted(s, p, "artboard.cut")?;
+                artboard_copy(s, p, true)
+            }
+        ),
+        cmd!(
+            "artboard.rename",
+            "Rename Artboards",
+            [],
+            None,
+            "{index? | indices?, selectedArtboards?: [n…] (as artboard.duplicate), name} (default: the artboards the Artboard tool has selected, else its active one) rename the artboards in one undo step: one takes `name` (trimmed), and several take it numbered in artboard order, `name-1`, `name-2` and so on; a locked artboard is renamed too. An empty name is an error, and when every artboard already has its new name nothing changes and no undo step is recorded → {renamed: [index…]}",
+            has_doc,
+            artboard_rename
+        ),
+        cmd!(
+            "artboard.switchOrientation",
+            "Switch Orientation",
+            [],
+            None,
+            "{index? | indices?, selectedArtboards?: [n…] (as artboard.duplicate), scaleArt?: bool (default: the Artboard tool's Scale Artwork with Artboard option), patterns?, lockedAndHidden?: bool (as artboard.setProps)} (default: the artboards the Artboard tool has selected, else its active one) each artboard swaps its width and height and keeps its top-left corner, in one undo step; a square artboard and a locked one stay as they are, the call fails with `the artboard is locked` when every artboard it names is locked, and when nothing else changes no undo step is recorded → {switched: [index…]}",
+            has_doc,
+            artboard_switch_orientation
         ),
         cmd!(
             "text.setFormat",
@@ -52,7 +76,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert to Text",
             [],
             None,
-            "{ids?|id?, start?: byte, end?: byte} (Type › Bullets and Numbering › Convert to Text: the paragraphs of the selected type, or of `ids`, or those a start/end range touches) the marker of each list paragraph becomes characters of its text: the bullet, or the number and its period as the paragraph showed it, then a tab, at the start of the paragraph in the marker's font, size and color; the list is turned off. When the marker's tab went to the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, which keeps the text after the tab where it started; when it went to a tab stop and a stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker and that place, the paragraph gets a left-aligned stop without a leader where the marker's tab ended, in place of any stop there and of those right, center and decimal stops before it (past the left indent only in a paragraph with no tab of its own). In threaded type the numbers are those counted through the story's frames, and a paragraph that continues into a later frame is converted where its text starts. An empty list paragraph has no marker and only leaves the list. A paragraph with no direction set gets the direction it ran in when the characters would change it (a letter or roman numeral before right-to-left text). With the Every-line Composer, a paragraph with a tab is broken line by line, so a converted paragraph can break its lines at other places. While the Type tool edits, its typing ends first and its anchor and caret move past the characters inserted at or before them; in threaded type, when the caret's character moved to another frame, the tool edits that frame, which becomes the selection when it was not selected. One undo step → {ids, converted: paragraphs, inserted: [{id, at: byte before the change, length: bytes}]}",
+            "{ids?|id?, start?: byte, end?: byte} (Type › Bullets and Numbering › Convert to Text: the paragraphs of the selected type, or of `ids`, or those a start/end range touches; after Select All in a frame of threaded text, without `ids`, `id` or a range, every paragraph of the story's frames that are neither locked nor hidden; while the story is selected, its locked and hidden frames are not converted even when named, nor a paragraph whose text starts in one) the marker of each list paragraph becomes characters of its text: the bullet, or the number and its period as the paragraph showed it, then a tab, at the start of the paragraph in the marker's font, size and color; the list is turned off. When the marker's tab went to the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, which keeps the text after the tab where it started; when it went to a tab stop and a stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker and that place, the paragraph gets a left-aligned stop without a leader where the marker's tab ended, in place of any stop there and of those right, center and decimal stops before it (past the left indent only in a paragraph with no tab of its own). In threaded type the numbers are those counted through the story's frames, and a paragraph that continues into a later frame is converted where its text starts. An empty list paragraph has no marker and only leaves the list. A paragraph with no direction set gets the direction it ran in when the characters would change it (a letter or roman numeral before right-to-left text). With the Every-line Composer, a paragraph with a tab is broken line by line, so a converted paragraph can break its lines at other places. While the Type tool edits, its typing ends first and its anchor and caret move past the characters inserted at or before them (a whole story that Select All selected stays selected when the call converts all of it); in threaded type, when the caret's character moved to another frame, the tool edits that frame, which becomes the selection when it was not selected. One undo step → {ids, converted: paragraphs, inserted: [{id, at: byte before the change, length: bytes}]}",
             has_doc,
             convert_list_to_text
         ),
@@ -82,24 +106,120 @@ fn artboard_reorder(s: &mut Session, p: &Value) -> Result<Value> {
 /// of them is in the document) and its Move/Copy Artwork with Artboard option.
 fn boards_and_art(s: &Session, p: &Value, cmd: &str) -> Result<(Vec<usize>, bool)> {
     check_switches(p, &["art"], cmd)?;
+    let indices = named_or_selected(s, p, cmd)?;
+    Ok((indices, bool_or(p, "art", s.tool_options_of("artboard")["moveArt"].as_bool().unwrap_or(true))))
+}
+
+/// [`boards_and_art`], with both values added to the running command's journal entry, so a replay
+/// acts on the same artboards and art whatever the Artboard tool's state is then. `edit.cut` and
+/// `edit.copy` call [`artboard_copy`] without this and take no such params.
+fn boards_and_art_noted(s: &mut Session, p: &Value, cmd: &str) -> Result<(Vec<usize>, bool)> {
+    let (indices, art) = boards_and_art(s, p, cmd)?;
+    note_artboards(s, p, &indices);
+    s.note_journal("art", json!(art));
+    Ok((indices, art))
+}
+
+/// Add `selectedArtboards` to the running command's journal entry when `p` names no artboard, so a
+/// replay acts on the artboards the Artboard tool had selected. An action leaves it out
+/// (`REPLAY_ONLY`) and keeps an `index` or `indices` the call gave.
+fn note_artboards(s: &mut Session, p: &Value, indices: &[usize]) {
+    if p.get("index").is_none() && p.get("indices").is_none() {
+        s.note_journal("selectedArtboards", json!(indices));
+    }
+}
+
+/// The artboards `cmd` acts on: `index` or `indices`, else `selectedArtboards` (a replay of the
+/// journal), else those the Artboard tool has selected, else its active one.
+fn named_or_selected(s: &Session, p: &Value, cmd: &str) -> Result<Vec<usize>> {
     let t = s.tool_options_of("artboard");
     let d = &s.doc()?.doc;
-    let indices = if p.get("index").is_some() || p.get("indices").is_some() {
-        artboard_indices(d, p, cmd)?
-    } else {
-        let mut picked: Vec<u64> = t["selected"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_u64)
-            .filter(|i| usize::try_from(*i).is_ok_and(|i| i < d.artboards.len()))
-            .collect();
-        if picked.is_empty() {
-            picked.push(t["active"].as_u64().unwrap_or(0));
-        }
-        artboard_indices(d, &json!({ "indices": picked }), cmd)?
+    if p.get("index").is_some() || p.get("indices").is_some() {
+        return artboard_indices(d, p, cmd);
+    }
+    if let Some(recorded) = p.get("selectedArtboards") {
+        return artboard_indices(d, &json!({ "indices": recorded }), cmd);
+    }
+    let mut picked: Vec<u64> = t["selected"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_u64)
+        .filter(|i| usize::try_from(*i).is_ok_and(|i| i < d.artboards.len()))
+        .collect();
+    if picked.is_empty() {
+        picked.push(t["active"].as_u64().unwrap_or(0));
+    }
+    artboard_indices(d, &json!({ "indices": picked }), cmd)
+}
+
+/// Rename Artboards: one artboard takes the name, and several take it numbered in artboard order, in
+/// one undo step. Nothing runs when each already has its new name.
+fn artboard_rename(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "artboard.rename";
+    let name = match p.get("name") {
+        Some(Value::String(n)) if !n.trim().is_empty() => n.trim(),
+        Some(Value::String(_)) => return Err(bad(C, "`name` must not be empty")),
+        _ => return Err(bad(C, "`name` must be a string")),
     };
-    Ok((indices, bool_or(p, "art", t["moveArt"].as_bool().unwrap_or(true))))
+    let indices = named_or_selected(s, p, C)?;
+    note_artboards(s, p, &indices);
+    let d = &s.doc()?.doc;
+    let several = indices.len() > 1;
+    let entries: Vec<(usize, String)> = indices
+        .iter()
+        .enumerate()
+        .map(|(k, i)| (*i, if several { format!("{name}-{}", k + 1) } else { name.to_string() }))
+        .filter(|(i, new)| d.artboards.get(*i).is_some_and(|a| a.name != *new))
+        .collect();
+    let renamed: Vec<usize> = entries.iter().map(|(i, _)| *i).collect();
+    if !entries.is_empty() {
+        let list: Vec<Value> = entries.iter().map(|(i, new)| json!({"index": i, "name": new})).collect();
+        s.execute("artboard.setProps", &json!({ "artboards": list }))?;
+    }
+    Ok(json!({ "renamed": renamed }))
+}
+
+/// Switch Orientation: each artboard that is neither square nor locked swaps its width and height
+/// and keeps its top-left corner, in one undo step. Nothing runs when none of them changes.
+fn artboard_switch_orientation(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "artboard.switchOrientation";
+    // Swapping width and height keeps the area, so `artboard.setProps` scales no strokes or corners.
+    const FROM_PREFS: [&str; 2] = ["patterns", "lockedAndHidden"];
+    check_switches(p, &["scaleArt"], C)?;
+    check_switches(p, &FROM_PREFS, C)?;
+    let indices = named_or_selected(s, p, C)?;
+    note_artboards(s, p, &indices);
+    let d = &s.doc()?.doc;
+    if indices.iter().all(|i| d.artboards.get(*i).is_some_and(|a| a.locked)) {
+        refuse_locked(d, &indices)?;
+    }
+    let turned: Vec<(usize, Rect)> = indices
+        .iter()
+        .filter_map(|i| d.artboards.get(*i).map(|a| (*i, a)))
+        .filter(|(_, a)| !a.locked && (a.rect.width() - a.rect.height()).abs() > 1e-6)
+        .map(|(i, a)| (i, a.rect))
+        .collect();
+    let switched: Vec<usize> = turned.iter().map(|(i, _)| *i).collect();
+    if !turned.is_empty() {
+        let list: Vec<Value> = turned.iter().map(|(i, r)| json!({"index": i, "width": r.height(), "height": r.width()})).collect();
+        let scale = bool_or(p, "scaleArt", s.tool_options_of("artboard")["scaleArt"].as_bool().unwrap_or(false));
+        s.note_journal("scaleArt", json!(scale));
+        let mut set = json!({ "artboards": list, "scaleArt": scale });
+        for key in FROM_PREFS {
+            if let Some(v) = p.get(key) {
+                set[key] = v.clone();
+            }
+        }
+        // What the step takes from the preferences joins this command's journal entry.
+        let (_, noted) = s.execute_step("artboard.setProps", &set)?;
+        for key in FROM_PREFS {
+            if let Some(v) = noted.get(key) {
+                s.note_journal(key, v.clone());
+            }
+        }
+    }
+    Ok(json!({ "switched": switched }))
 }
 
 /// The one artboard `cmd` acts on: `index`, an artboard of `d`, with the errors of
@@ -170,7 +290,7 @@ pub(crate) fn beside_artboards(d: &vectorcraft_doc::Document, rect: Rect) -> Vec
 /// their places relative to each other, together right of the last artboard.
 fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &["patterns"], "artboard.duplicate")?;
-    let (indices, art) = boards_and_art(s, p, "artboard.duplicate")?;
+    let (indices, art) = boards_and_art_noted(s, p, "artboard.duplicate")?;
     let arts = artboards_art(s, &indices, art, false)?;
     let all: Vec<NodeId> = arts.iter().flat_map(|(_, a)| a.iter().copied()).collect();
     let sc = Scaling { patterns: super::object::transform_patterns(s, p, &all)?, ..Scaling::default() };
@@ -207,7 +327,7 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
     }
     let art = st.doc.paint_order(arts.into_iter().flat_map(|(_, a)| a));
     let boards: Vec<_> = indices.iter().filter_map(|i| st.doc.artboards.get(*i).cloned()).collect();
-    let clip = Clipboard { source_artboard: boards.first().map(|a| a.rect), artboards: boards, ..Clipboard::copy(st, &art) };
+    let clip = Clipboard { source_artboard: boards.first().map(|a| a.rect), artboards: boards, ..Clipboard::copy(st, &art, false) };
     let copied = clip.nodes.len();
     if cut {
         s.edit("Cut Artboard", |d, sel| {
@@ -876,8 +996,23 @@ fn move_editing_selection(
 fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.convertListToText";
     use vectorcraft_doc::text::ParaList;
-    let ids = super::typecmd::text_targets(s, p, C)?;
     let range = super::typecmd::TextRange::parse(p, C)?;
+    // After Select All in a frame of threaded text, a call that names no type and no range takes
+    // every paragraph of the story's editable frames; its locked and hidden frames stay as they are
+    // whichever way they are named.
+    let full = super::textedit::editing_story(s);
+    let story: Vec<NodeId> = full.iter().copied().filter(|f| s.doc().is_ok_and(|st| st.doc.is_editable(*f))).collect();
+    let named = ["ids", "id"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null()));
+    let ids = if !story.is_empty() && !named && range.is_none() {
+        story.clone()
+    } else {
+        super::typecmd::text_targets(s, p, C)?.into_iter().filter(|id| !full.contains(id) || story.contains(id)).collect()
+    };
+    // The selected story's locked and hidden frames: no paragraph whose text starts in one is
+    // converted, and none of their paragraphs is restyled.
+    let held: Vec<NodeId> = full.iter().copied().filter(|f| !story.contains(f)).collect();
+    // Converting the whole story leaves it selected.
+    let whole_story = !story.is_empty() && range.is_none() && story.iter().all(|f| ids.contains(f));
     let editing = match super::textedit::editing_range(s)? {
         Some((id, _, _)) => {
             let options = s.tool_options();
@@ -909,6 +1044,7 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
     let mut converted = 0;
     for story in &stories {
         let frames: Vec<&vectorcraft_doc::TextObject> = story.iter().filter_map(|id| text(*id)).collect();
+        let is_held = |f: usize| story.get(f).is_some_and(|id| held.contains(id));
         let mut paras: Vec<StoryParagraph> = vec![];
         let mut named_parts = vec![];
         let plains: Vec<String> = frames.iter().map(|t| t.plain_text()).collect();
@@ -934,7 +1070,7 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
         }
         for (i, named) in named_parts {
             if let Some(para) = paras.get_mut(i) {
-                let listed = para.main_part().is_some_and(|p| p.list.is_some());
+                let listed = para.main_part().is_some_and(|p| p.list.is_some() && !is_held(p.frame));
                 para.converts |= named && listed;
             }
         }
@@ -1021,7 +1157,7 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
                 let tab = vectorcraft_doc::TabStop { position: x, align: vectorcraft_doc::TabAlign::Left, leader: String::new(), align_on: '.' };
                 style.tabs.insert(i, tab);
             }
-            for part in story_para.parts.iter().filter(|q| std::ptr::eq(*q, para) || q.bytes.is_empty()) {
+            for part in story_para.parts.iter().filter(|q| (std::ptr::eq(*q, para) || q.bytes.is_empty()) && !is_held(q.frame)) {
                 if let Some((stops, _)) = frame_edits.get_mut(part.frame) {
                     stops.push((part.index, style.clone()));
                 }
@@ -1058,7 +1194,8 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
             }
             Ok(())
         })?;
-        if let Some(editing) = editing {
+        // A whole story selected by Select All stays selected, with the characters inserted.
+        if let Some(editing) = editing.filter(|_| !whole_story) {
             move_editing_selection(s, editing, &story_before, &insertions)?;
         }
     }

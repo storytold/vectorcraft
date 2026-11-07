@@ -8,6 +8,9 @@ use super::{Item, Sep, Value, VectorcraftApp, c, cp, json, sub, widgets};
 pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
     use vectorcraft_doc::NodeKind;
     let Some(st) = app.session.active() else { return vec![] };
+    if app.session.tool_id() == "artboard" {
+        return prune(app, artboard_items(app));
+    }
     let roots: Vec<&vectorcraft_doc::Node> = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).collect();
     let any = |f: fn(&NodeKind) -> bool| roots.iter().any(|n| f(&n.kind));
     let several = roots.len() >= 2;
@@ -30,40 +33,7 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
             Sep,
         ]);
     }
-    // Managing artboards from the canvas: with the Artboard tool, the menu locks and unlocks them
-    // (`artboard.setProps` with `locked` for each artboard named; an entry with none to change is left out).
-    if app.session.tool_id() == "artboard" {
-        let n = st.doc.artboards.len();
-        let sel = crate::panels::artboards::picked(app, n);
-        let others: Vec<usize> = (0..n).filter(|i| !sel.contains(i)).collect();
-        let entry = |label, idx: Vec<usize>, locked: bool| {
-            let list: Vec<Value> = idx.iter().map(|i| json!({ "index": i, "locked": locked })).collect();
-            (!list.is_empty()).then(|| cp(label, "artboard.setProps", json!({ "artboards": list })))
-        };
-        let lock: Vec<Item> =
-            [entry("Lock Selected", sel.clone(), true), entry("Lock All Except Selected", others, true), entry("Lock All", (0..n).collect(), true)]
-                .into_iter()
-                .flatten()
-                .collect();
-        let unlock: Vec<Item> = [entry("Unlock Selected", sel, false), entry("Unlock All", (0..n).collect(), false)].into_iter().flatten().collect();
-        for (label, items) in [("Lock Artboards", lock), ("Unlock Artboards", unlock)] {
-            if !items.is_empty() {
-                v.push(sub(label, items));
-            }
-        }
-        v.push(Sep);
-    }
-    // The locked objects under the pointer at the right-click, each unlocked as the Layers panel's
-    // lock column does. `unlock_item_label` shows each object's name.
-    let unlock: Vec<Item> = app
-        .ui
-        .context_locked
-        .iter()
-        .filter(|(uid, _)| *uid == st.uid)
-        .flat_map(|(_, ids)| ids)
-        .filter(|id| st.doc.node(**id).is_some_and(|n| n.locked))
-        .map(|id| cp("Unlock", "layer.setProps", json!({ "ids": [id.0], "locked": false })))
-        .collect();
+    let unlock = unlock_items(app);
     if !unlock.is_empty() {
         v.extend([sub("Unlock", unlock), Sep]);
     }
@@ -140,6 +110,100 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         ]);
     }
     prune(app, v)
+}
+
+/// The locked objects under the pointer at the right-click, each unlocked as the Layers panel's
+/// lock column does. `unlock_item_label` shows each object's name.
+fn unlock_items(app: &VectorcraftApp) -> Vec<Item> {
+    let Some(st) = app.session.active() else { return vec![] };
+    app.ui
+        .context_locked
+        .iter()
+        .filter(|(uid, _)| *uid == st.uid)
+        .flat_map(|(_, ids)| ids)
+        .filter(|id| st.doc.node(**id).is_some_and(|n| n.locked))
+        .map(|id| cp("Unlock", "layer.setProps", json!({ "ids": [id.0], "locked": false })))
+        .collect()
+}
+
+/// The canvas context menu with the Artboard tool, in place of the entries for objects and the view: the list and order of the public
+/// [Use the artboard context menu](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/use-artboard-context-menu.html)
+/// page, with the page's Lock Artboards submenu as two, Lock Artboards and Unlock Artboards. `docs/mcp.md`
+/// names the entries that act on the artboards the tool has selected. Exit Isolation Mode and the
+/// Unlock submenu for locked objects under the pointer follow them.
+fn artboard_items(app: &VectorcraftApp) -> Vec<Item> {
+    use crate::panels::artboards as boards;
+    let Some(st) = app.session.active() else { return vec![] };
+    let all = &st.doc.artboards;
+    let n = all.len();
+    let is_locked = |i: &usize| all.get(*i).is_some_and(|a| a.locked);
+    let sel: Vec<usize> = boards::picked(app, n).into_iter().filter(|i| *i < n).collect();
+    let free: Vec<usize> = sel.iter().copied().filter(|i| !is_locked(i)).collect();
+    let facts = boards::open_menu_facts(app);
+    let mut v = vec![];
+    // Cut refuses a locked artboard and every artboard of the document.
+    if !sel.is_empty() && free.len() == sel.len() && sel.len() < n {
+        v.push(c("Cut", "artboard.cut"));
+    }
+    if !sel.is_empty() {
+        v.push(c("Copy", "artboard.copy"));
+    }
+    v.push(match facts {
+        // Copied artboards go to the right-click's point, and so do copied objects.
+        Some(f) => cp("Paste", "edit.paste", json!({ "center": [f.at.x, f.at.y], "artboardsAt": [f.at.x, f.at.y] })),
+        None => c("Paste", "edit.paste"),
+    });
+    v.extend([Sep, c("Undo", "edit.undo"), c("Redo", "edit.redo"), Sep, c("New Artboard", "artboard.new")]);
+    if !sel.is_empty() {
+        v.extend([c("Duplicate Artboards", "artboard.duplicate"), c("Rename", "artboard.rename")]);
+    }
+    let deleted = boards::delete_targets(app, n);
+    if !deleted.is_empty() {
+        v.push(cp("Delete Artboards", "artboard.delete", json!({ "indices": deleted })));
+    }
+    v.extend([c("Delete Empty Artboards", "artboard.deleteEmpty"), Sep]);
+    if sel.len() < n {
+        v.push(c("Select All Artboards", "artboard.selectAll"));
+    }
+    // `artboard.setProps` with `locked` for each artboard it changes; an entry with none is left out.
+    let others: Vec<usize> = (0..n).filter(|i| !sel.contains(i)).collect();
+    let entry = |label, idx: Vec<usize>, locked: bool| {
+        let list: Vec<Value> = idx.iter().filter(|i| is_locked(i) != locked).map(|i| json!({ "index": i, "locked": locked })).collect();
+        (!list.is_empty()).then(|| cp(label, "artboard.setProps", json!({ "artboards": list })))
+    };
+    let lock: Vec<Item> =
+        [entry("Lock Selected", sel.clone(), true), entry("Lock All Except Selected", others, true), entry("Lock All", (0..n).collect(), true)]
+            .into_iter()
+            .flatten()
+            .collect();
+    let unlock: Vec<Item> =
+        [entry("Unlock Selected", sel.clone(), false), entry("Unlock All", (0..n).collect(), false)].into_iter().flatten().collect();
+    for (label, items) in [("Lock Artboards", lock), ("Unlock Artboards", unlock)] {
+        if !items.is_empty() {
+            v.push(sub(label, items));
+        }
+    }
+    v.push(Sep);
+    if n > 1 {
+        v.push(c("Rearrange", "artboard.rearrange"));
+    }
+    if facts.map_or_else(|| boards::fit_has_art(app, &free), |f| f.any_art) {
+        v.push(c("Fit to Artwork Bounds", "artboard.fitToArt"));
+    }
+    if free.iter().filter_map(|i| all.get(*i)).any(|a| (a.rect.width() - a.rect.height()).abs() > 1e-6) {
+        v.push(c("Switch Orientation", "artboard.switchOrientation"));
+    }
+    if !sel.is_empty() {
+        v.extend([cp("Artboard Options", "tool.options", json!({ "tool": "artboard" })), Sep, c("Export", "file.exportForScreens")]);
+    }
+    if st.isolation.is_some() {
+        v.extend([Sep, c("Exit Isolation Mode", "object.exitIsolation")]);
+    }
+    let locked_art = unlock_items(app);
+    if !locked_art.is_empty() {
+        v.extend([Sep, sub("Unlock", locked_art)]);
+    }
+    v
 }
 
 /// `items` without the commands that can't run now (Undo and Redo stay, greyed out), submenus

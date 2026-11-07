@@ -1,14 +1,24 @@
 use super::flow::flow;
 use super::region::Region;
-use super::{Affine, Ctx, Punct, Range, Rect, SGlyph, Tcy, TextLayout, TextObject, VerticalAlign, is_cjk, punct};
+use super::{Affine, Ctx, Punct, Range, Rect, SGlyph, Tcy, TextLayout, TextObject, VerticalAlign, continues_cluster, is_cjk, punct};
 
 /// System Layout on or Fractional Widths off: each character that takes space advances by a whole
 /// number of points, at least one, so small type does not collapse onto itself. A zero advance (a
-/// tate-chu-yoko continuation, a zero-width mark) stays zero.
+/// tate-chu-yoko continuation, a zero-width mark) stays zero. Right to left, a cluster with manual
+/// kerning moves by the difference the kerning makes to its rounded advance, so the rounding
+/// changes the space before the next character in reading order and not the space after the one
+/// before it.
 pub(super) fn whole_character_widths(glyphs: &mut [SGlyph]) {
-    for g in glyphs {
-        if g.adv.is_finite() && g.adv > 0.0 {
-            g.adv = g.adv.round().max(1.0);
+    let whole = |adv: f64| if adv.is_finite() && adv > 0.0 { adv.round().max(1.0) } else { adv };
+    for cluster in glyphs.chunk_by_mut(|a, b| continues_cluster(Some(a), Some(b))) {
+        // The cluster's last glyph carries the manual kerning in its advance.
+        let (adv, shift) = cluster.last().map_or((0.0, 0.0), |g| (g.adv, g.kern_shift));
+        let rounded_shift = Some(whole(adv) - whole(adv - shift)).filter(|s| s.is_finite()).unwrap_or(shift);
+        for g in cluster {
+            g.adv = whole(g.adv);
+            if shift != 0.0 {
+                g.kern_shift = rounded_shift;
+            }
         }
     }
 }
@@ -133,6 +143,17 @@ fn is_japanese_letter(c: char) -> bool {
         )
         && c != '・'
         && punct(c).is_none()
+}
+
+impl TextLayout {
+    /// Whether Line-end Punctuation Half Width (Mojikumi) can set type laid out as this layout
+    /// differently from Mojikumi None: `text`, the type's plain text, or one of the layout's list
+    /// markers holds Japanese punctuation or a Japanese letter, the only characters it spaces.
+    /// When it holds neither, the type lays out the same with either setting.
+    pub fn mojikumi_applies(&self, text: &str) -> bool {
+        let spaced = |c: char| punct(c).is_some() || is_japanese_letter(c);
+        text.chars().any(spaced) || self.markers.iter().any(|m| m.text.chars().any(spaced))
+    }
 }
 
 /// A Latin letter or digit (or another script's letter), set proportionally.
