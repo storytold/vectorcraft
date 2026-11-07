@@ -311,8 +311,8 @@ fn links_outside_the_layers_find_their_files_after_the_folder_moves() {
 }
 
 /// With Update Links: Automatically, a file in a symbol and in the layers that changed and moved
-/// with the document is read again for the layers' image, and the symbol's link takes its new path
-/// too.
+/// with the document is read again for the layers' image and for the symbol's, and both links take
+/// its new path, size and hash.
 #[test]
 fn a_symbols_link_to_a_moved_and_modified_file_takes_its_new_path() {
     let a = Folder::new("nested-modified-a");
@@ -331,9 +331,72 @@ fn a_symbols_link_to_a_moved_and_modified_file_takes_its_new_path() {
     let r = open(&mut s, &b.file("poster.vectorcraft"));
     assert_eq!((r["modifiedLinks"].clone(), r["updatedLinks"][0]["ids"].clone()), (json!([]), json!([id.0])), "{r}");
     let moved = PathBuf::from(b.file("art/photo.png"));
-    let mut paths = vec![];
-    s.doc().unwrap().doc.visit_images(|_, im| paths.extend(im.link.as_ref().map(|l| PathBuf::from(&l.path))));
-    assert_eq!(paths, [moved.clone(), moved], "the layers' link, then the symbol's");
+    let blue = png(30, 30, BLUE);
+    let mut images = vec![];
+    s.doc().unwrap().doc.visit_images(|_, im| {
+        let l = im.link.as_ref().unwrap();
+        images.push((PathBuf::from(&l.path), l.size, l.hash.clone(), im.width, im.height, im.key.clone()));
+    });
+    let key = image(&s, id).key;
+    let new = (moved, Some(blue.len() as u64), Some(vectorcraft_doc::links::hash_bytes(&blue)), 30, 30, key);
+    assert_eq!(images, [new.clone(), new], "the layers' image, then the symbol's");
+}
+
+/// Update Links reads a changed file again for the images inside symbols, patterns and opacity
+/// masks too: those showing the same content as an image in the layers, and those no object in the
+/// layers shows. Each takes the file's place as its own Placement Options say, in one undo step.
+#[test]
+fn update_links_reads_files_again_inside_symbols_patterns_and_masks() {
+    let dir = Folder::new("nested-update");
+    let (photo, logo) = (dir.file("photo.png"), dir.file("logo.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&logo, &png(20, 10, [200, 200, 20]));
+    let mut s = session();
+    // photo.png in the layers, and in a symbol filling its bounds, clipped to them.
+    let id = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    let id = place(&mut s, &photo);
+    // logo.png only in a pattern and in an opacity mask.
+    let p = place(&mut s, &logo);
+    s.execute("object.pattern.make", &json!({"ids": [p.0], "edit": false})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [p.0]})).unwrap();
+    let masked = super::rect(&mut s, 10.0, 10.0, 60.0, 60.0);
+    let mask = place(&mut s, &logo);
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, mask.0]})).unwrap();
+    // photo.png wider than the symbol's image is: filling its bounds overflows them.
+    let (blue, green) = (png(60, 20, BLUE), png(40, 20, [20, 200, 20]));
+    write(&photo, &blue);
+    write(&logo, &green);
+    let u = s.execute("links.update", &json!({})).unwrap();
+    assert_eq!(u, json!({"updated": [id.0], "missing": []}));
+    // (name, size, hash, pixel size) of each image, which shows its file's pixels.
+    let images = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        let mut out = vec![];
+        d.visit_images(|_, im| {
+            let l = im.link.as_ref().unwrap();
+            assert!(!d.images[&im.key].is_proxy(), "{} shows its preview", l.name());
+            out.push((l.name().to_string(), l.size, l.hash.clone(), (im.width, im.height)));
+        });
+        out.sort();
+        out
+    };
+    let shown = |name: &str, bytes: &[u8], size| (name.to_string(), Some(bytes.len() as u64), Some(vectorcraft_doc::links::hash_bytes(bytes)), size);
+    let logo_now = shown("logo.png", &green, (40, 20));
+    let photo_now = shown("photo.png", &blue, (60, 20));
+    assert_eq!(images(&s), [logo_now.clone(), logo_now, photo_now.clone(), photo_now]);
+    // The symbol's image is clipped to its old bounds.
+    let mut clipped = false;
+    s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| {
+        if let NodeKind::Group { children, clip: true } = &n.kind {
+            clipped |=
+                matches!(&children[..], [c, im] if matches!(c.kind, NodeKind::Path { clipping: true, .. }) && matches!(im.kind, NodeKind::Image(_)));
+        }
+    });
+    assert!(clipped, "{:?}", s.doc().unwrap().doc.symbols[0].art);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(images(&s).iter().all(|(_, _, _, size)| *size == (20, 10)), "{:?}", images(&s));
 }
 
 #[test]

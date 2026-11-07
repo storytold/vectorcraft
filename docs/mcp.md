@@ -4337,7 +4337,11 @@ The result lists `missingLinks`
 path isn't followed) when it isn't. The desktop app also checks the active document's links when its window
 comes back to the front, following the same preference. `links.check` reports every link's `status` (`ok`, `modified`,
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
-another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. A PNG, JPEG,
+another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
+`links.update`, and `document.open` when it reads a modified file, also read the file again for the images and placed
+documents inside symbols, graph designs, patterns and opacity masks that show the same content (by default also for
+those that only that art shows); they have no ids, so the results do not list them. Saving a document also reads it
+again for the placed documents of it inside that art in the other open documents. A PNG, JPEG,
 GIF or WebP file whose pixels can't be read is not shown: `links.relink` fails with "the image's pixels can't be
 read", and `links.update`, or `document.open` when it reads the file, lists it as missing, its images keeping what they
 showed. Without a file system (the web), linked images show their previews. A link whose path has a colon and no `/`
